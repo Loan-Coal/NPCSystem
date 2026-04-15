@@ -1,0 +1,22 @@
+[
+  {"id":"evt_01_fire_market","weight":5,"severity":70,"location_tag":"market","summary_template":"A fire damaged several market stalls.","event_type":"fire"},
+  {"id":"evt_02_tavern_brawl","weight":6,"severity":45,"location_tag":"tavern","summary_template":"A tavern brawl broke out after sunset.","event_type":"brawl"},
+  {"id":"evt_03_dock_smuggling","weight":4,"severity":60,"location_tag":"docks","summary_template":"Guards intercepted contraband at the docks.","event_type":"crime"},
+  {"id":"evt_04_temple_omen","weight":3,"severity":82,"location_tag":"temple","summary_template":"Priests reported a troubling omen at dawn.","event_type":"omen"},
+  {"id":"evt_05_keep_drill","weight":5,"severity":35,"location_tag":"keep","summary_template":"The city guard ran an emergency readiness drill.","event_type":"military"},
+  {"id":"evt_06_tax_riot","weight":3,"severity":77,"location_tag":"market","summary_template":"Merchants protested sudden tax increases.","event_type":"politics"},
+  {"id":"evt_07_mysterious_theft","weight":5,"severity":55,"location_tag":"market","summary_template":"A priceless ledger vanished overnight.","event_type":"crime"},
+  {"id":"evt_08_port_quarantine","weight":2,"severity":84,"location_tag":"docks","summary_template":"The harbor entered quarantine after a sickness scare.","event_type":"plague"},
+  {"id":"evt_09_sacred_relic","weight":2,"severity":68,"location_tag":"temple","summary_template":"A sacred relic surfaced during morning rites.","event_type":"discovery"},
+  {"id":"evt_10_guard_desertion","weight":3,"severity":64,"location_tag":"keep","summary_template":"Two guards deserted their post before dawn.","event_type":"military"},
+  {"id":"evt_11_barrel_explosion","weight":4,"severity":52,"location_tag":"docks","summary_template":"A volatile cargo barrel exploded near pier three.","event_type":"accident"},
+  {"id":"evt_12_market_shortage","weight":4,"severity":58,"location_tag":"market","summary_template":"A grain shortage sent prices soaring by noon.","event_type":"economy"},
+  {"id":"evt_13_drunk_knight","weight":5,"severity":40,"location_tag":"tavern","summary_template":"A drunk knight challenged patrons to duels.","event_type":"social"},
+  {"id":"evt_14_hidden_tunnel","weight":2,"severity":73,"location_tag":"keep","summary_template":"Workers uncovered a hidden tunnel beneath the keep.","event_type":"discovery"},
+  {"id":"evt_15_rain_flood","weight":3,"severity":66,"location_tag":"docks","summary_template":"Heavy rain flooded lower dock warehouses.","event_type":"weather"},
+  {"id":"evt_16_choir_prophecy","weight":2,"severity":71,"location_tag":"temple","summary_template":"Temple singers uttered a cryptic prophecy.","event_type":"omen"},
+  {"id":"evt_17_stolen_horse","weight":4,"severity":48,"location_tag":"tavern","summary_template":"A courier's horse was stolen outside the inn.","event_type":"crime"},
+  {"id":"evt_18_blacksmith_strike","weight":3,"severity":57,"location_tag":"market","summary_template":"Blacksmiths halted work over unfair levies.","event_type":"economy"},
+  {"id":"evt_19_gate_sabotage","weight":2,"severity":79,"location_tag":"keep","summary_template":"Saboteurs damaged the north gate winch.","event_type":"military"},
+  {"id":"evt_20_harbor_festival","weight":4,"severity":30,"location_tag":"docks","summary_template":"A harbor festival drew crowds from every district.","event_type":"festival"}
+]

@@ -1,0 +1,22 @@
+{
+  "merchant": [
+    "Hmm, let me think on that. Come back later.",
+    "I am distracted right now. Ask me again soon.",
+    "Give me a moment to gather my thoughts."
+  ],
+  "guard": [
+    "Move along, citizen.",
+    "I am on duty. Keep moving.",
+    "Not now. We can talk later."
+  ],
+  "elder": [
+    "Patience, child. Return at dusk.",
+    "The answer is not simple. Let me think.",
+    "Come back when the bells ring."
+  ],
+  "default": [
+    "I need a moment to think.",
+    "Let us continue this shortly.",
+    "I am not ready to answer that yet."
+  ]
+}
