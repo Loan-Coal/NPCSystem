@@ -7,6 +7,7 @@ Dependencies injected: AsyncSession.
 """
 
 import json
+from datetime import datetime
 
 from neo4j import AsyncSession
 
@@ -19,6 +20,19 @@ RETURN properties(w) AS world
 """
 
 
+def _coerce_datetime(value: object) -> object:
+    """Convert Neo4j temporal values to Python datetime when available."""
+
+    if isinstance(value, datetime):
+        return value
+    to_native = getattr(value, "to_native", None)
+    if callable(to_native):
+        native = to_native()
+        if isinstance(native, datetime):
+            return native
+    return value
+
+
 async def get_world_state(session: AsyncSession, world_id: str = "world") -> WorldState:
     """Return world state or default model when node does not exist."""
 
@@ -29,4 +43,6 @@ async def get_world_state(session: AsyncSession, world_id: str = "world") -> Wor
     payload = dict(record["world"])
     payload["faction_standings"] = json.loads(payload.get("faction_standings", "{}"))
     payload["active_conditions"] = json.loads(payload.get("active_conditions", "[]"))
+    if "last_updated_at" in payload:
+        payload["last_updated_at"] = _coerce_datetime(payload["last_updated_at"])
     return WorldState(**payload)

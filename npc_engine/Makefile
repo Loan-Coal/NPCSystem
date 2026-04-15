@@ -19,4 +19,4 @@ type:
 check: lint type test
 
 seed:
-	python data/seed.py
+	python -m data.seed
