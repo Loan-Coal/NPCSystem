@@ -20,5 +20,6 @@ class WorldState(BaseModel):
     active_conditions: list[str] = Field(default_factory=list)
     weather: str = "clear"
     last_updated_at: datetime = Field(default_factory=datetime.utcnow)
+    last_graph_updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     model_config = ConfigDict(frozen=True)

@@ -6,19 +6,25 @@ Does NOT: apply mutations or open transactions.
 Dependencies injected: AsyncSession.
 """
 
+from datetime import datetime
+from typing import Any
+
 from neo4j import AsyncSession
 from typing import cast
 
 
 CYPHER_GET_CHARACTER_WITH_RELATIONS = """
 MATCH (c:Character {id: $npc_id})
+WHERE c.is_active = true
 OPTIONAL MATCH (c)-[r:RELATES_TO]->(other:Character)
+WHERE other.is_active = true
 RETURN properties(c) AS character,
        collect({relation: properties(r), character: properties(other)}) AS relations
 """
 
 CYPHER_GET_EVENTS_FOR_NPC = """
 MATCH (c:Character {id: $npc_id})-[k:KNOWS_ABOUT]->(e:Event)
+WHERE c.is_active = true
 RETURN properties(e) AS event,
        k.knowledge_state AS knowledge_state,
        k.distorted_summary AS distorted_summary
@@ -29,11 +35,13 @@ LIMIT $limit
 CYPHER_GET_LOCATION_CONTEXT = """
 MATCH (loc:Location {id: $location_id})
 OPTIONAL MATCH (c:Character)-[:LOCATED_AT]->(loc)
+WHERE c.is_active = true
 RETURN properties(loc) AS location, collect(properties(c)) AS present_npcs
 """
 
 CYPHER_GET_NPC_PLAYER_EDGE = """
 MATCH (npc:Character {id: $npc_id})-[r:RELATES_TO]->(p:Character {id: $player_id})
+WHERE npc.is_active = true
 RETURN properties(r) AS relation
 """
 
@@ -45,14 +53,27 @@ async def get_character_with_relations(session: AsyncSession, npc_id: str) -> di
     record = await result.single()
     if record is None:
         return {"character": None, "relations": []}
-    return {"character": record["character"], "relations": record["relations"]}
+    normalized_relations_raw = _to_native(record["relations"])
+    normalized_relations = []
+    if isinstance(normalized_relations_raw, list):
+        for item in normalized_relations_raw:
+            if not isinstance(item, dict):
+                continue
+            if not isinstance(item.get("character"), dict):
+                continue
+            normalized_relations.append(item)
+
+    return {
+        "character": _to_native(record["character"]),
+        "relations": normalized_relations,
+    }
 
 
 async def get_events_for_npc(session: AsyncSession, npc_id: str, limit: int = 10) -> list[dict]:
     """Fetch event knowledge entries for one NPC."""
 
     result = await session.run(CYPHER_GET_EVENTS_FOR_NPC, npc_id=npc_id, limit=limit)
-    return [record.data() async for record in result]
+    return cast(list[dict], [_to_native(record.data()) async for record in result])
 
 
 async def get_location_context(session: AsyncSession, location_id: str) -> dict:
@@ -62,7 +83,10 @@ async def get_location_context(session: AsyncSession, location_id: str) -> dict:
     record = await result.single()
     if record is None:
         return {"location": None, "present_npcs": []}
-    return {"location": record["location"], "present_npcs": record["present_npcs"]}
+    return {
+        "location": _to_native(record["location"]),
+        "present_npcs": _to_native(record["present_npcs"]),
+    }
 
 
 async def get_npc_player_edge(session: AsyncSession, npc_id: str, player_id: str) -> dict | None:
@@ -72,4 +96,25 @@ async def get_npc_player_edge(session: AsyncSession, npc_id: str, player_id: str
     record = await result.single()
     if record is None:
         return None
-    return cast(dict, record["relation"])
+    return cast(dict, _to_native(record["relation"]))
+
+
+def _to_native(value: Any) -> Any:
+    """Recursively convert Neo4j values to native Python containers/scalars."""
+
+    if isinstance(value, datetime):
+        return value.isoformat()
+
+    if isinstance(value, dict):
+        return {str(key): _to_native(val) for key, val in value.items()}
+    if isinstance(value, list):
+        return [_to_native(item) for item in value]
+
+    to_native = getattr(value, "to_native", None)
+    if callable(to_native):
+        try:
+            return _to_native(to_native())
+        except Exception:
+            return value
+
+    return value

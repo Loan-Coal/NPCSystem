@@ -1,143 +1,123 @@
-# NPC Engine v1.0 Implementation Tracker
+# NPC Engine v1.3 Implementation Tracker
 
-This file tracks staged implementation and allows interruption/resume.
+This file tracks iterative implementation for PROJECT_PLAN_v1.3.xml and supports interruption/resume.
 
 ## How to Resume
-1. Open this file and find the first stage marked IN_PROGRESS or TODO.
-2. Continue from the first unchecked item in that stage.
-3. Run the stage smoke commands listed in the stage section.
-4. Update status, date, and notes.
+1. Find the first stage marked IN_PROGRESS or TODO.
+2. Continue from the first unchecked task in that stage.
+3. Run the listed verification commands.
+4. Update status, dates, and notes before stopping.
 
 ## Status Legend
 - TODO: not started
 - IN_PROGRESS: partially complete
-- DONE: complete and smoke-verified
-- BLOCKED: needs decision
+- DONE: complete and verified
+- BLOCKED: waiting on decision/input
 
 ## Stages
 
-### M0 - Auth and Infra Skeleton
+### M6 - Schema Layer and Route Versioning
 Status: DONE
-Started: 2026-04-14
-Completed: 2026-04-14
-Checkpoint: CP0_BOOTSTRAP
+Started: 2026-04-15
+Completed: 2026-04-15
+Checkpoint: CP6_SCHEMA_ROUTING
 
 Tasks:
-- [x] Create base project structure
-- [x] Add config and shared utilities
-- [x] Add auth middleware and API key validation
-- [x] Add FastAPI app skeleton with health endpoint
-- [x] Add environment template, dependencies, and Make targets
-- [x] Run startup smoke test
+- [x] Add schema layer (`schema_loader`, `schema_models`, `model_factory`, resolvers, enum validator)
+- [x] Add `game_schema.example.yaml`
+- [x] Add v1 route prefix support (`API_V1_PREFIX`) and move non-health routes under `/v1/*`
+- [x] Add `/v1/schema` endpoint
+- [x] Wire schema loading in startup and fail fast on invalid schema
+- [x] Add/adjust tests for schema loading and route prefix behavior
 
-Smoke commands:
+Verification:
 ```bash
 cd npc_engine
-pip install -r requirements.txt
-uvicorn main:app --reload
+make lint
+make type
+pytest -q tests/unit
 ```
 
-Expected checks:
-- GET /health returns status payload
-- Non-health routes require Bearer token
-
 Notes:
-- Smoke verified with FastAPI TestClient:
-	- GET /health -> 200
-	- GET /protected without token -> 401
-	- GET /protected with valid bearer token -> 200
+- Iterative mode enabled: implementation proceeds in small verified slices.
+- Verified with targeted tests: `tests/unit/test_schema_loader.py` and `tests/unit/test_v1_route_versioning.py`.
 
-### M1 - Graph Layer and World State
+### M7 - Graph Edit Contracts and Services
 Status: DONE
-Started: 2026-04-14
-Completed: 2026-04-14
-Checkpoint: CP1_GRAPH
+Started: 2026-04-15
+Completed: 2026-04-15
+Checkpoint: CP7_GRAPH_EDIT
 
 Tasks:
-- [x] Implement graph schemas, readers, writers, and transactions
-- [x] Implement mutation validator and delta log manager
-- [x] Implement world state models and read/write layer
-- [x] Implement idempotent seed logic
+- [x] Add typed graph patch/request models
+- [x] Implement graph edit validator with immutable field checks and extension field validation
+- [x] Implement graph edit service orchestration (node/edge create/patch/delete) (core resources)
+- [x] Add referential integrity checks inside write transactions
+- [x] Add `last_graph_updated_at` updates on graph writes (core models/services)
+- [x] Add GET routes for graph resources
 
-Notes:
-- Added development commands in Makefile: lint, type, test, test-cov, check, seed.
-- Added docker-compose + Dockerfile for app/Neo4j local stack.
-- Added architecture conformance tests under tests/unit.
-- Added strict local .env with valid development API_KEY_SECRET.
-- Validation: ruff check ., mypy ., pytest -q all pass.
+Verification:
+```bash
+cd npc_engine
+make lint
+make type
+pytest -q tests/unit tests/integration -k graph_edit
+```
 
-### M2 - LLM Adapters and Retrieval
+### M8 - Admin, Soft Delete, Reindex, Movement
 Status: DONE
-Started: 2026-04-14
-Completed: 2026-04-14
-Checkpoint: CP2_RETRIEVAL
+Started: 2026-04-15
+Completed: 2026-04-15
+Checkpoint: CP8_ADMIN_OPS
 
 Tasks:
-- [x] Implement LLM protocol/adapters/factory
-- [x] Implement retrieval layers and context pipeline
-- [x] Add token budget enforcement and serialization
+- [x] Implement scope inheritance (`graph_admin` includes `graph_write`)
+- [x] Implement soft delete for characters and engine-side active filtering (reader filters + route/service)
+- [x] Implement admin hard-delete cascade routes/services (core character/event/location)
+- [x] Implement admin absolute and unbounded delta relation routes/services
+- [x] Implement async reindex submission + job polling routes (in-memory job store)
+- [x] Implement admin audit log read endpoint (placeholder response)
+- [x] Implement atomic character move endpoint
+- [x] Implement world state PATCH endpoint (full-replace JSON semantics)
 
-Notes:
-- M2 baseline found in workspace was reviewed and retained.
-- Added Tier-A context enrichment: player relation, nearby NPCs, location context.
-- Removed silent stream fallback in HTTP adapters; now raises typed stream errors.
-- Added top_k validation in vector store/index and corresponding tests.
-- Validation: focused M2 tests (19 passed), ruff scope checks passed, mypy on M2 packages passed.
+Verification:
+```bash
+cd npc_engine
+make lint
+make type
+pytest -q tests/integration -k "admin or cascade or reindex or move"
+```
 
-### M3 - Dialogue Engine and API Routes
+### M9 - Hardening, Docs, CI, Coverage
 Status: DONE
-Started: 2026-04-14
-Completed: 2026-04-14
-Checkpoint: CP3_DIALOGUE
+Started: 2026-04-16
+Completed: 2026-04-16
+Checkpoint: CP9_RELEASE
 
 Tasks:
-- [x] Implement emotion and dialogue submodules
-- [x] Implement dependency composition root
-- [x] Implement REST and WebSocket dialogue routes
+- [x] Add embedding reconciler and startup task wiring
+- [x] Update docs (`ARCHITECTURE.md`, `DATA_MODELS.md`, `README.md`)
+- [x] Update CI targets/workflow for v1.3 test matrix
+- [x] Ensure coverage remains >= 80%
+- [x] Run full verification suite
 
-Notes:
-- Added emotion and dialogue engine modules including session store, parser, mutator, prompt builder, and handler orchestration.
-- Added API schemas, dependency composition root, and routes for dialogue, websocket dialogue, npc state/emotion, and player action report.
-- Added fallback response data file used by dialogue LLM wrapper.
-- M3 hardening pass completed: WebSocket auth enforced, single-pass WS execution, error event emission, action enum alignment, and include_relations/include_events support.
-- Validation: ruff check ., mypy ., pytest -q all pass.
-
-### M4 - Gossip, Events, Scheduler
-Status: DONE
-Started: 2026-04-14
-Completed: 2026-04-14
-Checkpoint: CP4_SIMULATION
-
-Tasks:
-- [x] Implement gossip engine modules
-- [x] Implement event engine modules
-- [x] Implement scheduler and clock/batch routes
-
-Notes:
-- Added M4 gossip/event/scheduler modules and API routes for clock and batch simulation.
-- Hardening applied: scheduler runs handlers before clock advancement, severe-event world updates in event transaction, CAS retries for gossip delta-log writes, and non-fatal embedding index invalidation warnings.
-- Added Neo4j-based distributed tick lease/claim mechanism with scheduler owner+TTL controls.
-- Added scheduler regression coverage for partial-failure retry behavior.
-- Validation: ruff check ., mypy ., pytest -q passed.
-
-### M5 - Tests, CI, and Docs
-Status: DONE
-Started: 2026-04-14
-Completed: 2026-04-14
-Checkpoint: CP5_RELEASE
-
-Tasks:
-- [x] Add unit and integration tests
-- [x] Add CI pipeline with coverage gate
-- [x] Finalize docs and runbook
+Verification:
+```bash
+cd npc_engine
+make check
+pytest --cov=. --cov-report=term-missing
+```
 
 ## Decisions Needed
-- None yet.
+- [x] Auth key-to-scope mapping format (`graph_write` vs `graph_admin`) in config/env.
+- [x] Location hard-delete behavior when residents exist: reject or require replacement location. (Chosen: cascade delete residents)
+- [ ] Reindex job state persistence mode: Neo4j-backed persistent jobs (recommended) vs in-memory temporary jobs.
 
 ## Change Log
-- 2026-04-14: Tracker created.
-- 2026-04-14: M1 completed and validated.
-- 2026-04-14: M2 reviewed, fixed, and completed.
-- 2026-04-14: M3 implemented and validated.
-- 2026-04-14: M4 completed with distributed Neo4j tick lease/claim support.
-- 2026-04-14: M5 completed (tests/docs updated; CI workflow with coverage gate added).
+- 2026-04-15: Tracker reset for v1.3 and M6 started.
+- 2026-04-15: M6 completed (schema layer foundation + v1 route prefix + /v1/schema + startup fail-fast).
+- 2026-04-15: M7/M8 foundation implemented (typed patch models, graph services, graph/admin routes, scope inheritance, soft delete, move, admin relation ops).
+- 2026-04-15: Completed edge create/delete routes, typed move body, referential-integrity edge writes, and async in-memory reindex job states.
+- 2026-04-15: Verification slice passed: `tests/unit/test_graph_v13_routes.py`, `tests/unit/test_graph_edit_service_edges.py`, `tests/unit/test_graph_admin_reindex_jobs.py`, `tests/unit/test_v1_route_versioning.py`, `tests/unit/test_schema_loader.py`, `tests/unit/test_auth_permissions_v13.py`.
+- 2026-04-15: Final verification rerun passed for current v1.3 slice: `ruff check .`, `mypy .`, and the focused unit suite (12 passed).
+- 2026-04-16: M9 completed. Verified `make lint`, `make type`, `make test-v13-contracts`, `make test-v13-graph-admin`, `make test-v13-retrieval`, `make test-cov-v13` (87.21%), `make check`, and `make test-cov-full-report`.

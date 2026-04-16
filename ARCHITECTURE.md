@@ -11,48 +11,68 @@
                         │  HTTP / WebSocket
                         ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    FastAPI Application                          │
-│   ┌──────────┐  ┌────────────┐  ┌──────────┐  ┌────────────┐  │
-│   │  /health │  │ /dialogue  │  │  /clock  │  │   /batch   │  │
-│   │          │  │ /ws/dialog │  │  /action │  │ /npc/{id}  │  │
-│   └──────────┘  └─────┬──────┘  └────┬─────┘  └─────┬──────┘  │
-│                        │              │               │         │
-│   ┌────────────────────▼──────────────▼───────────────▼──────┐ │
-│   │              api/dependencies.py                         │ │
-│   │   (Composition root: wires DB, LLM, embeddings, auth)    │ │
-│   └────────────────────────────────────────────────────────┬─┘ │
-│   ┌─────────────────────────────────────────────────────────▼─┐ │
-│   │                    auth/middleware.py                      │ │
-│   │         Bearer token validation on all routes             │ │
-│   └────────────────────────────────────────────────────────────┘ │
+│                    FastAPI Application  (/v1/*)                  │
+│                                                                 │
+│  ┌──────────┐  ┌────────────┐  ┌──────────┐  ┌────────────┐   │
+│  │  /health │  │ /dialogue  │  │  /clock  │  │   /batch   │   │
+│  │          │  │ /ws/dialog │  │  /action │  │ /npc/{id}  │   │
+│  └──────────┘  └─────┬──────┘  └────┬─────┘  └──────┬─────┘   │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  /v1/graph/*  (graph_write scope)                        │  │
+│  │  POST|PATCH /characters  POST|PATCH /events              │  │
+│  │  POST|PATCH /locations   PATCH /world_state              │  │
+│  │  POST /edges/*           DELETE /edges/type/{s}/{d}      │  │
+│  │  DELETE /characters/{id} (soft-delete)                   │  │
+│  │  POST /characters/{id}/move   GET /schema                │  │
+│  │  GET /characters  GET /events  GET /locations            │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  /v1/graph/admin/*  (graph_admin scope ⊃ graph_write)    │  │
+│  │  DELETE /characters/{id}  DELETE /events/{id}            │  │
+│  │  DELETE /locations/{id}   PUT /relations/absolute        │  │
+│  │  POST /relations/delta    POST /reindex                  │  │
+│  │  GET /reindex/{job_id}    GET /audit_log                 │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│   ┌────────────────────────────────────────────────────────┐   │
+│   │              api/dependencies.py                       │   │
+│   │   (Composition root: wires DB, LLM, embeddings,       │   │
+│   │    auth, loaded GameSchema)                            │   │
+│   └────────────────────────────────────────────────────────┘   │
+│   ┌────────────────────────────────────────────────────────┐   │
+│   │                auth/middleware.py                       │   │
+│   │   Bearer token + scope validation (admin ⊃ write)      │   │
+│   └────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
                         │
-          ┌─────────────┼──────────────────┐
-          ▼             ▼                  ▼
-┌──────────────┐ ┌──────────────┐ ┌──────────────────┐
-│  Dialogue    │ │   Gossip     │ │     Event        │
-│  Engine      │ │   Engine     │ │     Engine       │
-│              │ │              │ │                  │
-│ session_store│ │pair_selector │ │  event_pool      │
-│ context_     │ │gossip_distort│ │  location_scoper │
-│  builder     │ │knowledge_    │ │  awareness_      │
-│ prompt_      │ │  propagator  │ │   seeder         │
-│  builder     │ │edge_updater  │ │  world_writer    │
-│ llm_client   │ └──────┬───────┘ └────────┬─────────┘
-│ response_    │        │                  │
-│  parser      │        └──────┬───────────┘
-│ action_      │               │
-│  resolver    │               ▼
-│ relation_    │    ┌──────────────────┐
-│  mutator     │    │   scheduler/     │
-│ emotion_     │    │  tick_scheduler  │
-│  updater     │    │  game_clock      │
-└──────┬───────┘    └──────────────────┘
+          ┌─────────────┼──────────────────────┐
+          ▼             ▼                      ▼
+┌──────────────┐ ┌──────────────┐  ┌───────────────────┐
+│  Dialogue    │ │   Gossip     │  │      Event        │
+│  Engine      │ │   Engine     │  │      Engine       │
+│              │ │              │  │                   │
+│ session_store│ │pair_selector │  │  event_pool       │
+│ context_     │ │gossip_distort│  │  location_scoper  │
+│  builder     │ │knowledge_    │  │  awareness_seeder │
+│ prompt_      │ │  propagator  │  │  world_writer     │
+│  builder     │ │edge_updater  │  └─────────┬─────────┘
+│ llm_client   │ └──────┬───────┘            │
+│ response_    │        └──────┬─────────────┘
+│  parser      │               │
+│ action_      │               ▼
+│  resolver    │    ┌──────────────────┐
+│ relation_    │    │   scheduler/     │
+│  mutator     │    │  tick_scheduler  │
+│ emotion_     │    │  game_clock      │
+│  updater     │    └──────────────────┘
+└──────┬───────┘
        │
        │  All engines read/write through:
        ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Core Layer                                 │
+│                         Core Layer                              │
 │                                                                 │
 │  ┌────────────────┐   ┌─────────────────────────────────────┐  │
 │  │  retrieval/    │   │             graph/                  │  │
@@ -61,36 +81,155 @@
 │  │  retriever     │   │  ├── character_writer               │  │
 │  │ embedding_     │   │  ├── event_writer                   │  │
 │  │  index         │   │  ├── relation_writer                │  │
-│  │ vector_store   │   │  └── delta_log_writer               │  │
-│  │ context_merger │   │                                     │  │
-│  │ token_budget_  │   │ graph_reader                        │  │
-│  │  enforcer      │   │ node_schemas / edge_schemas         │  │
-│  │ context_       │   └──────────────────┬──────────────────┘  │
-│  │  serializer    │                      │                      │
-│  └────────────────┘                      │                      │
-│                                          │                      │
-│  ┌────────────────┐   ┌──────────────────▼──────────────────┐  │
-│  │    world/      │   │               Neo4j                 │  │
-│  │ world_reader   │   │         Knowledge Graph             │  │
-│  │ world_writer   │   │  Character, Event, Location,        │  │
-│  │ world_state    │   │  WorldState nodes                   │  │
-│  └────────────────┘   │  RELATES_TO, KNOWS_ABOUT edges      │  │
-│                        └─────────────────────────────────────┘  │
+│  │ embedding_     │   │  └── delta_log_writer               │  │
+│  │  reconciler    │   │                                     │  │
+│  │ vector_store   │   │ graph_reader                        │  │
+│  │ context_merger │   │ node_schemas / edge_schemas         │  │
+│  │ token_budget_  │   │                                     │  │
+│  │  enforcer      │   │ graph_edit_service                  │  │
+│  │ context_       │   │ graph_admin_service                 │  │
+│  │  serializer    │   │  └── delegates writes to            │  │
+│  │ context_builder│   │      graph_edit_service             │  │
+│  └────────────────┘   │ graph_edit_validator                │  │
+│                        │ graph_edit_protocols                │  │
+│  ┌────────────────┐   │ cascade_delete_service              │  │
+│  │    world/      │   │ soft_delete_service                 │  │
+│  │ world_reader   │   │ relation_mutation_service           │  │
+│  │ world_writer   │   └──────────────────┬──────────────────┘  │
+│  │ world_state    │                      │                      │
+│  └────────────────┘                      ▼                      │
+│                        ┌─────────────────────────────────────┐  │
+│  ┌────────────────┐   │               Neo4j                 │  │
+│  │   schema/      │   │         Knowledge Graph             │  │
+│  │ schema_loader  │   │  Character, Event, Location,        │  │
+│  │ schema_models  │   │  WorldState, custom node types      │  │
+│  │ model_factory  │   │  RELATES_TO, KNOWS_ABOUT, edges     │  │
+│  │ context_field_ │   │  + custom edge types                │  │
+│  │  resolver      │   └─────────────────────────────────────┘  │
+│  │ gossip_weight_ │                                             │
+│  │  resolver      │   ┌─────────────────────────────────────┐  │
+│  │ enum_validator │   │            engines/llm/             │  │
+│  └────────────────┘   │  LLMClientProtocol                  │  │
+│                        │  ├── MistralAdapter                 │  │
+│  ┌────────────────┐   │  ├── LlamaAdapter                   │  │
+│  │  mutation/     │   │  ├── OllamaAdapter                  │  │
+│  │ delta_log_mgr  │   │  ├── MockAdapter                    │  │
+│  │ bounds_        │   │  └── factory.py                     │  │
+│  │  validator     │   └─────────────────────────────────────┘  │
+│  └────────────────┘                                             │
 │  ┌────────────────┐   ┌─────────────────────────────────────┐  │
-│  │  mutation/     │   │            engines/llm/             │  │
-│  │ delta_log_mgr  │   │  LLMClientProtocol                  │  │
-│  │ bounds_        │   │  ├── MistralAdapter                 │  │
-│  │  validator     │   │  ├── LlamaAdapter                   │  │
-│  └────────────────┘   │  ├── MockAdapter                    │  │
-│                        │  └── factory.py                    │  │
-│  ┌────────────────┐   └─────────────────────────────────────┘  │
-│  │  engines/      │                                             │
-│  │  emotion/      │                                             │
-│  │ emotion_state  │                                             │
-│  │ emotion_updater│                                             │
-│  │ emotion_store  │                                             │
+│  │  engines/      │   │           auth/                     │  │
+│  │  emotion/      │   │  api_key.py                         │  │
+│  │ emotion_state  │   │  middleware.py                      │  │
+│  │ emotion_updater│   │  permissions.py (scope inheritance) │  │
+│  │ emotion_store  │   └─────────────────────────────────────┘  │
 │  └────────────────┘                                             │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Auth Scope Model
+
+Two scopes exist. `graph_admin` is a strict superset of `graph_write`.
+
+```
+graph_admin ⊃ graph_write
+```
+
+| Scope | Routes accessible |
+|---|---|
+| `graph_write` | All `/v1/graph/*` routes (create, patch, soft-delete, move, read) |
+| `graph_admin` | Everything in `graph_write` + all `/v1/graph/admin/*` routes (hard delete, absolute relation, unbounded delta, reindex, audit log) |
+
+Implementation: `auth/permissions.py` declares the scope hierarchy. `auth/middleware.py` checks
+the highest matching scope. A single API key carries one scope value.
+
+---
+
+## Schema Layer — Startup Sequence
+
+```
+Service start
+    │
+    ├── schema_loader.load(GAME_SCHEMA_PATH)
+    │       ├── parse YAML → validate against SchemaConfig (Pydantic meta-schema)
+    │       ├── check required core type declarations
+    │       └── FAIL FAST with specific errors if invalid
+    │
+    ├── model_factory.generate_models(schema)
+    │       └── for each custom_node_type: create_model(...) → cached Pydantic model
+    │
+    ├── enum_validator.build(schema)
+    │       └── merge base Literals + enum_extensions → merged validator per field
+    │
+    ├── context_field_resolver.build(schema)
+    │       └── maps tier → [fields] for subgraph_retriever + context_serializer
+    │
+    ├── gossip_weight_resolver.build(schema)
+    │       └── collects all fields tagged gossip_weight → averaged by pair_selector
+    │
+    ├── Neo4j index auto-creation
+    │       └── for each custom field with indexed: true → CREATE INDEX IF NOT EXISTS
+    │
+    ├── embedding_reconciler.start(interval=EMBEDDING_RECONCILE_INTERVAL_SECONDS)
+    │       ├── scans Character|Event|Location where last_graph_updated_at > last_embedding_indexed_at
+    │       ├── re-embeds stale rows into vector store
+    │       └── persists node.last_embedding_indexed_at after successful upsert
+    │
+    └── Register all routers in main.py with API_V1_PREFIX
+```
+
+---
+
+## game_schema.yaml Format
+
+```yaml
+schema_version: "1.0"
+
+core_types:
+  character:
+    extension_fields:
+      guild_rank:
+        type: int          # str | int | float | bool
+        range: [1, 10]     # optional, int/float only
+        default: 1
+        description: "Character's rank in their guild (1=novice, 10=grandmaster)"
+        semantics: [context_tier_a]     # context_tier_a | context_tier_0 | gossip_weight
+        indexed: false                  # whether to create a Neo4j index
+      bravery:
+        type: int
+        range: [0, 100]
+        default: 50
+        description: "Willingness to take risks; affects gossip pair weighting"
+        semantics: [gossip_weight]
+  world_state:
+    extension_fields:
+      plague_active:
+        type: bool
+        default: false
+        description: "Whether a plague is currently spreading"
+        semantics: [context_tier_0]
+
+custom_node_types:
+  Faction:
+    fields:
+      id:      { type: str,  required: true }
+      name:    { type: str,  required: true }
+      standing:{ type: int,  range: [0, 100], default: 50 }
+
+custom_edge_types:
+  MEMBER_OF:
+    src_type: Character
+    dst_type: Faction
+    cascade_on_delete: [Character]   # edge deleted when Character is hard-deleted
+    directional: true
+    fields:
+      rank: { type: str }
+
+enum_extensions:
+  event_type:         [ritual, coronation, betrayal]
+  participation_role: [spy, mediator]
 ```
 
 ---
@@ -100,35 +239,93 @@
 ```
 Game Client          API Route       DialogueHandler      Neo4j       LLM
     │                    │                 │               │            │
-    │── POST /dialogue──►│                 │               │            │
+    │── POST /v1/dialogue►│                │               │            │
     │                    │── verify auth   │               │            │
     │                    │── get_session ─►│               │            │
-    │                    │                 │── load session turns        │
+    │                    │                 │── load session turns       │
     │                    │                 │               │            │
-    │                    │                 │── Tier A fetch►│            │
-    │                    │                 │◄── character, events, rel ──│
+    │                    │                 │── Tier A fetch►│           │
+    │                    │                 │◄── char(active), events, rel│
     │                    │                 │               │            │
-    │                    │                 │── embed query ──────────────►
-    │                    │                 │◄── Tier B RAG results ───────
+    │                    │                 │── embed query ─────────────►
+    │                    │                 │◄── Tier B RAG results ──────
     │                    │                 │               │            │
-    │                    │                 │── world_reader►│            │
+    │                    │                 │── world_reader►│           │
     │                    │                 │◄── world state ─────────────│
     │                    │                 │               │            │
-    │                    │                 │── context_builder           │
-    │                    │                 │   (merge→budget→serialize)  │
-    │                    │                 │── prompt_builder            │
-    │                    │                 │── llm_client ───────────────►
-    │                    │                 │◄── structured JSON ──────────
+    │                    │                 │── context_field_resolver   │
+    │                    │                 │   (schema-driven field sel)│
+    │                    │                 │── context_builder          │
+    │                    │                 │   (merge→budget→serialize) │
+    │                    │                 │── prompt_builder           │
+    │                    │                 │── llm_client ──────────────►
+    │                    │                 │◄── structured JSON ─────────
     │                    │                 │               │            │
     │                    │                 │── response_parser (validate)│
     │                    │                 │── action_resolver           │
-    │                    │                 │── relation_mutator ─────────►
+    │                    │                 │── relation_mutator (bounded)│─►Neo4j
     │                    │                 │── emotion_updater           │
     │                    │                 │── session_store.append      │
     │                    │                 │               │            │
-    │◄── npc_response ──────────────────────               │            │
-    │    action                           │               │            │
-    │    facial_expression                │               │            │
+    │◄── npc_response ─────────────────────                │            │
+    │    action                            │               │            │
+    │    facial_expression                 │               │            │
+```
+
+---
+
+## Graph Edit Pipeline — Sequence Diagram
+
+```
+Game Client          API Route        GraphEditService     Neo4j     EmbeddingIndex
+    │                    │                  │               │              │
+    │── POST /v1/graph/──►│                 │               │              │
+    │   characters        │                 │               │              │
+    │                    │── verify auth    │               │              │
+    │                    │   (graph_write)  │               │              │
+    │                    │── validate body  │               │              │
+    │                    │   (typed model + │               │              │
+    │                    │    ext_fields)   │               │              │
+    │                    │── graph_edit_    │               │              │
+    │                    │   validator ────►│               │              │
+    │                    │                  │── MATCH loc   │              │
+    │                    │                  │   MERGE char ─►              │
+    │                    │                  │◄── result ─────              │
+    │                    │                  │   (NodeNotFoundError         │
+    │                    │                  │    if loc missing)           │
+    │                    │                  │── SET last_graph_updated_at  │
+    │                    │                  │── commit tx ──►              │
+    │                    │                  │               │── invalidate ►│
+    │◄── 201 Created ──────────────────────                 │              │
+```
+
+---
+
+## Soft-Delete Flow
+
+```
+DELETE /v1/graph/characters/{id}  (graph_write scope)
+    │
+    ├── soft_delete_service.deactivate(character_id)
+    │       ├── MATCH (c:Character {id: $id}) SET c.is_active = false
+    │       ├── SET c.last_graph_updated_at = datetime()
+    │       └── commit (all edges preserved)
+    │
+    └── embedding_index.invalidate(character_id)
+        (reconciler will skip this char in future; gossip/dialogue already filter it)
+
+
+DELETE /v1/graph/admin/characters/{id}  (graph_admin scope, mode=hard)
+    │
+    ├── cascade_delete_service.delete(character_id)
+    │       ├── Read schema.custom_edge_types for cascade rules
+    │       ├── DELETE all RELATES_TO, KNOWS_ABOUT, LOCATED_AT, PARTICIPATED_IN
+    │       ├── DELETE all custom edges where cascade_on_delete includes Character
+    │       ├── DELETE character node
+    │       └── commit (single atomic transaction)
+    │
+    ├── embedding_index.invalidate(character_id)
+    └── return {deleted_node_id, deleted_edges, deleted_nodes, audit_id}
 ```
 
 ---
@@ -138,7 +335,7 @@ Game Client          API Route       DialogueHandler      Neo4j       LLM
 ```
 Game Client                         WS Route                    LLM Stream
     │                                   │                           │
-    │── connect /ws/dialogue ──────────►│                           │
+    │── connect /v1/ws/dialogue ───────►│                           │
     │── send {player_id, npc_id, msg} ─►│                           │
     │                                   │── build context           │
     │                                   │── build prompt            │
@@ -149,7 +346,7 @@ Game Client                         WS Route                    LLM Stream
     │                                   │◄── [stream complete] ──────│
     │                                   │── parse full response      │
     │                                   │── resolve action           │
-    │                                   │── mutate graph             │
+    │                                   │── mutate graph (bounded)   │
     │◄── {type:"action", data:{...}} ───│                           │
     │◄── {type:"expression", data:{}}───│                           │
     │◄── {type:"done"} ────────────────►│                           │
@@ -166,8 +363,8 @@ tick_scheduler
 gossip_handler.run_tick(tick_id)
     │
     ├── pair_selector.select_pairs(tick_id)
-    │       └── Neo4j: query NPCs at shared locations
-    │           → weight by gossipy field
+    │       └── Neo4j: query active NPCs (is_active=true) at shared locations
+    │           → weight by gossip_weight_resolver fields (default: gossipy)
     │           → RNG-sample N pairs (seeded by tick_id)
     │
     ├── For each pair (A, B):
@@ -180,8 +377,8 @@ gossip_handler.run_tick(tick_id)
     │       │   ) → GossipDistortion (pure function, no I/O)
     │       │
     │       ├── knowledge_propagator.propagate(B, event, distortion)
-    │       │       └── Neo4j: MERGE KNOWS_ABOUT edge on B→Event
-    │       │           set knowledge_state, distorted_summary
+    │       │       └── (only if B.is_active = true)
+    │       │           Neo4j: MERGE KNOWS_ABOUT edge on B→Event
     │       │
     │       ├── edge_updater.log_gossip(A, B, tick_id)
     │       │       └── Neo4j: update A→B RELATES_TO delta_log
@@ -201,6 +398,25 @@ gossip_handler.run_tick(tick_id)
 3. Add `OPENAI_API_URL` to `config.py`
 4. **No other file changes**
 
+### Adding a custom NPC personality field
+1. Add field to `game_schema.yaml` under `core_types.character.extension_fields`
+2. Tag with `semantics: [gossip_weight]` if it should affect gossip, `[context_tier_a]` for LLM context
+3. Restart service — schema_loader validates and gossip_weight_resolver/context_field_resolver update automatically
+4. **No code changes**
+
+### Adding a custom node type (e.g. Faction)
+1. Add to `game_schema.yaml` under `custom_node_types`
+2. Declare any custom edge types under `custom_edge_types` with cascade rules
+3. Restart service — model_factory generates Pydantic models; API routes handle the type generically
+4. **No code changes**
+
+### Adding a new relation variable (e.g. `respect`)
+1. Add field to `RelationEdge` in `graph/edge_schemas.py`
+2. Add to `DialogueResponseSchema.relation_deltas`
+3. Add to `modifier_bounds_validator.py` bounds check
+4. Add to `relation_writer.py` Cypher SET clause
+5. **No engine orchestrator changes**
+
 ### Adding a new distortion type
 1. Add new `Literal` value to `GossipDistortion.distortion_type` in edge_schemas
 2. Add template branch in `gossip_distort.py`
@@ -211,25 +427,15 @@ gossip_handler.run_tick(tick_id)
 2. Add `"qdrant"` case to `retrieval/vector_store_factory.py`
 3. **No other file changes**
 
-### Adding a new NPC personality field
-1. Add field to `CharacterNode` in `graph/node_schemas.py`
-2. Add to seed data in `data/seed.py`
-3. Use in relevant engine (e.g., new `cautious` field in `pair_selector.py`)
-4. **No engine orchestrator changes**
-
-### Adding a new relation variable (e.g., `respect`)
-1. Add field to `RelationEdge` in `graph/edge_schemas.py`
-2. Add to `DialogueResponseSchema.relation_deltas`
-3. Add to `modifier_bounds_validator.py` bounds check
-4. Add to `relation_writer.py` Cypher SET clause
-5. **No dialogue handler changes**
-
 ---
 
 ## Deployment Notes
 
 ### Local Development
 ```bash
+# Copy and edit schema config
+cp game_schema.example.yaml game_schema.yaml
+
 # Start Neo4j
 docker run -p 7474:7474 -p 7687:7687 \
   -e NEO4J_AUTH=neo4j/password \
@@ -241,13 +447,23 @@ make seed
 make run
 
 # Test WebSocket
-wscat -c ws://localhost:8000/ws/dialogue \
+wscat -c ws://localhost:8000/v1/ws/dialogue \
   -H "Authorization: Bearer your_key"
+```
+
+### Environment Variables (v1.3 additions)
+```
+GAME_SCHEMA_PATH=/app/game_schema.yaml   # required; path to schema config file
+API_V1_PREFIX=/v1                        # default; prefix for all routes
+API_KEY_GRAPH_WRITE=write_scope_key       # optional; dedicated write-scope key
+API_KEY_GRAPH_ADMIN=admin_scope_key       # optional; dedicated admin-scope key
+EMBEDDING_RECONCILE_INTERVAL_SECONDS=300
 ```
 
 ### Game Engine Integration
 - **Unity:** Use `UnityWebRequest` for REST, `NativeWebSocket` or `websocket-sharp` for WS.
-  Parse JSON responses with `JsonUtility` or `Newtonsoft.Json`.
+  All routes now under `/v1/` prefix. Parse JSON responses with `JsonUtility` or `Newtonsoft.Json`.
+  Call `GET /v1/schema` on SDK initialization to discover available node types and fields.
 - **Unreal:** Use `FHttpModule` for REST, `IWebSocket` (built-in) for streaming.
   Deserialize with `FJsonObjectConverter`.
 
@@ -255,11 +471,9 @@ wscat -c ws://localhost:8000/ws/dialogue \
 - Run behind a reverse proxy (nginx/Caddy) for TLS termination.
 - Use Neo4j Enterprise for causal clustering if graph exceeds 100k nodes.
 - Replace in-memory emotion/session stores with Redis for multi-instance deployments.
-  (`emotion_store.py` and `session_store.py` are designed for easy Redis migration:
-  same interface, swap the backend in the constructor.)
 - Set `LOG_LLM_PROMPTS=false` and `ENV=prod` to prevent prompt logging.
-- Configure `GOSSIP_RNG_SEED` and `EVENT_RNG_SEED` to `null` in production
-  (random seeds) and to a fixed integer in testing (deterministic replays).
+- Mount `game_schema.yaml` as a read-only volume; do not bake it into the image.
+- The embedding reconciler runs as a background asyncio task — no separate process needed.
 
 ---
 
@@ -273,5 +487,12 @@ wscat -c ws://localhost:8000/ws/dialogue \
 | Gossip distortion | Deterministic pure function | Reproducible debugging; no LLM cost for NPC-to-NPC communication |
 | Emotion persistence | In-memory store + graph snapshot | Fast reads during dialogue; survives restarts via Neo4j flush |
 | WebSocket streaming | LLM token streaming | Eliminates perceived latency; players see NPC "thinking" in real time |
-| Mutation bounds | Sliding window validator | Prevents LLM or exploit-driven stat manipulation; enforced independently of engine |
+| Mutation bounds | Sliding window validator (dialogue) / unbounded admin (game events) | Prevents LLM exploit via dialogue; designers need full control for scripted events |
 | Vector store | Protocol + in-memory default | Works out of the box; drop-in Qdrant for large deployments |
+| Schema extensibility | Hybrid: fixed core + config-driven extensions | Engine algorithms always work (semantic deps satisfied); game devs customize without code changes |
+| Soft delete | `is_active` flag on Character | Preserves NPC memory history; hard delete is admin cleanup only |
+| Embedding reconciliation | Timestamp-based background reconciler | Self-healing after crashes; no outbox infrastructure required |
+| Route versioning | All routes under `/v1/` | Clean versioned surface; enables future `/v2/` without breaking existing integrations |
+| Scope inheritance | `graph_admin ⊃ graph_write` | Single privileged key for developers; no dual-key management |
+| Edge DELETE | Path parameters per edge type | RESTful; proxy-safe; no request body on DELETE |
+| PATCH body typing | Typed models + `extension_fields` dict | Core fields statically typed; custom fields dynamically validated against schema |

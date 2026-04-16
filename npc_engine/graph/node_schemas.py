@@ -21,8 +21,10 @@ class CharacterNode(BaseModel):
     biography: str
     current_location_id: str
     is_player: bool = False
+    is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    last_graph_updated_at: datetime = Field(default_factory=datetime.utcnow)
     gossipy: int = Field(default=50, ge=0, le=100)
     credulity: int = Field(default=50, ge=0, le=100)
     honesty: int = Field(default=50, ge=0, le=100)
@@ -43,6 +45,7 @@ class EventNode(BaseModel):
     participants: list[str] = Field(default_factory=list)
     event_type: str
     is_public: bool = True
+    last_graph_updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     model_config = ConfigDict(frozen=True)
 
@@ -55,5 +58,6 @@ class LocationNode(BaseModel):
     region: str | None = None
     location_tag: str
     descriptor: str
+    last_graph_updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     model_config = ConfigDict(frozen=True)

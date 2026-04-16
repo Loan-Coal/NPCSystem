@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     NEO4J_PASSWORD: str = Field(default="password")
 
     API_KEY_SECRET: str
+    API_KEY_GRAPH_WRITE: str | None = None
+    API_KEY_GRAPH_ADMIN: str | None = None
+    API_V1_PREFIX: str = "/v1"
+    GAME_SCHEMA_PATH: str = "game_schema.yaml"
 
     LLM_BACKEND: Literal["mistral7b", "llama8b", "ollama", "mock"] = "mock"
     LLM_TIMEOUT_SECONDS: float = 10.0
@@ -37,6 +41,7 @@ class Settings(BaseSettings):
     VECTOR_STORE_BACKEND: Literal["memory", "qdrant"] = "memory"
     QDRANT_URL: str | None = None
     EMBEDDING_REFRESH_ON_WRITE: bool = True
+    EMBEDDING_RECONCILE_INTERVAL_SECONDS: int = 300
     PROMPT_TOKEN_BUDGET: int = 800
     RAG_TOP_K: int = 5
 
@@ -83,6 +88,37 @@ class Settings(BaseSettings):
         if len(stripped_value) < 16 or stripped_value in blocked_values:
             raise ValueError("API_KEY_SECRET must be a non-placeholder secret with length >= 16")
         return stripped_value
+
+    @field_validator("API_V1_PREFIX")
+    @classmethod
+    def validate_api_v1_prefix(cls, value: str) -> str:
+        """Ensure API prefix is a stable absolute path segment."""
+
+        prefix = value.strip()
+        if not prefix.startswith("/"):
+            raise ValueError("API_V1_PREFIX must start with '/'")
+        if prefix == "/":
+            raise ValueError("API_V1_PREFIX cannot be '/'")
+        return prefix.rstrip("/")
+
+    @field_validator("GAME_SCHEMA_PATH")
+    @classmethod
+    def validate_game_schema_path(cls, value: str) -> str:
+        """Reject empty schema paths so startup can fail fast with clear errors."""
+
+        path = value.strip()
+        if not path:
+            raise ValueError("GAME_SCHEMA_PATH cannot be empty")
+        return path
+
+    @field_validator("EMBEDDING_RECONCILE_INTERVAL_SECONDS")
+    @classmethod
+    def validate_embedding_reconcile_interval_seconds(cls, value: int) -> int:
+        """Ensure reconciler interval is a positive number of seconds."""
+
+        if value <= 0:
+            raise ValueError("EMBEDDING_RECONCILE_INTERVAL_SECONDS must be greater than 0")
+        return value
 
 
 @lru_cache

@@ -65,3 +65,47 @@ class RelationEdgeNotFoundError(NPCSystemError):
 
     def __str__(self) -> str:
         return f"RelationEdgeNotFoundError(src_id={self.src_id}, dst_id={self.dst_id})"
+
+
+@dataclass(frozen=True)
+class SchemaMisconfiguredError(NPCSystemError):
+    """Raised when the schema file path or file content is invalid."""
+
+    schema_path: str
+    detail: str
+
+    def __str__(self) -> str:
+        return f"SchemaMisconfiguredError(schema_path={self.schema_path}, detail={self.detail})"
+
+
+@dataclass(frozen=True)
+class SchemaValidationError(NPCSystemError):
+    """Raised when schema content violates the meta-schema contract."""
+
+    schema_path: str
+    detail: str
+
+    def __str__(self) -> str:
+        return f"SchemaValidationError(schema_path={self.schema_path}, detail={self.detail})"
+
+
+@dataclass(frozen=True)
+class NodeNotFoundError(NPCSystemError):
+    """Raised when a graph node is not found for a requested operation."""
+
+    node_type: str
+    node_id: str
+
+    def __str__(self) -> str:
+        return f"NodeNotFoundError(node_type={self.node_type}, node_id={self.node_id})"
+
+
+@dataclass(frozen=True)
+class ImmutableFieldError(NPCSystemError):
+    """Raised when a patch request tries to change immutable fields."""
+
+    field_name: str
+    node_type: str
+
+    def __str__(self) -> str:
+        return f"ImmutableFieldError(field_name={self.field_name}, node_type={self.node_type})"

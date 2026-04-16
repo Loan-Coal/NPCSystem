@@ -1,6 +1,6 @@
-# NPC Engine (Work In Progress)
+# NPC Engine (v1.3 rollout)
 
-Current stage: M5 (Tests, CI, and Docs)
+Current stage: M9 (Hardening, docs, CI, coverage)
 
 ## Quick Start
 
@@ -28,9 +28,22 @@ make lint
 make type
 make test
 make test-cov
+make test-cov-v13
 make check
+make test-v13-contracts
+make test-v13-graph-admin
+make test-v13-retrieval
+make verify-v13
 make seed
 ```
+
+## v1.3 API and Runtime Notes
+
+- Runtime and graph APIs are versioned under `/v1/*` (except `/health`).
+- Graph write routes require `graph_write` scope.
+- Graph admin routes require `graph_admin`, which is a strict superset of `graph_write`.
+- Startup is fail-fast on schema issues (`GAME_SCHEMA_PATH`).
+- A background embedding reconciler runs every `EMBEDDING_RECONCILE_INTERVAL_SECONDS` and heals stale embedding entries by comparing graph write timestamps.
 
 ## Auth Testing
 
@@ -70,6 +83,19 @@ Environment settings:
 - `TICK_SCHEDULER_ID=main`
 - `TICK_LEASE_OWNER_ID=` (optional; defaults to hostname-pid)
 - `TICK_LEASE_TTL_SECONDS=30`
+
+## Embedding Reconciliation
+
+Embedding staleness is self-healed in the background.
+
+Environment settings:
+- `EMBEDDING_RECONCILE_INTERVAL_SECONDS=300`
+- `EMBEDDING_REFRESH_ON_WRITE=true`
+
+Operational behavior:
+- Reconciler scans graph nodes for stale embedding timestamps.
+- Each stale node is re-embedded and marked with `last_embedding_indexed_at`.
+- Admin route `/v1/graph/admin/reindex` remains available for manual reindex workflows.
 
 Operational behavior:
 - Worker claims per-engine tick (`gossip` or `event`) before running handler logic.

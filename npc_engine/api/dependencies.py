@@ -21,10 +21,14 @@ from engines.events.event_handler import EventHandler
 from engines.gossip.gossip_handler import GossipHandler
 from engines.llm.factory import create_llm_client
 from graph.db import GraphDB
+from graph.graph_admin_service import GraphAdminService
+from graph.graph_edit_service import GraphEditService
 from retrieval.embedding_index import EmbeddingIndex
 from retrieval.vector_store_factory import create_vector_store
 from scheduler.game_clock import GameClock
 from scheduler.tick_scheduler import TickScheduler
+from schema.schema_loader import load_game_schema
+from schema.schema_models import SchemaConfig
 
 
 @lru_cache
@@ -90,6 +94,12 @@ def get_tick_scheduler() -> TickScheduler:
     )
 
 
+@lru_cache
+def get_game_schema() -> SchemaConfig:
+    settings = get_settings()
+    return load_game_schema(schema_path=settings.GAME_SCHEMA_PATH)
+
+
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     graph_db = get_graph_db()
     await graph_db.connect()
@@ -114,3 +124,18 @@ def get_dialogue_handler(
         emotion_updater=get_emotion_updater(),
         embedding_index=get_embedding_index(),
     )
+
+
+def get_graph_edit_service(
+    session: AsyncSession = Depends(get_db_session),
+    schema: SchemaConfig = Depends(get_game_schema),
+) -> GraphEditService:
+    """Build graph edit service bound to current request session and schema."""
+
+    return GraphEditService(session=session, schema=schema)
+
+
+def get_graph_admin_service(session: AsyncSession = Depends(get_db_session)) -> GraphAdminService:
+    """Build admin graph service bound to current request session."""
+
+    return GraphAdminService(session=session)

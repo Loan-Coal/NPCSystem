@@ -12,6 +12,7 @@ import secrets
 from fastapi import Header, HTTPException, status
 
 from config import Settings, get_settings
+from auth.permissions import SCOPE_GRAPH_ADMIN, SCOPE_GRAPH_WRITE
 from utils.errors import AuthError
 
 
@@ -34,6 +35,23 @@ def validate_bearer_token(authorization: str, expected_secret: str) -> None:
         raise AuthError(reason="invalid_secret")
 
 
+def resolve_scope_from_authorization(authorization: str, settings: Settings) -> str:
+    """Resolve token scope from configured secrets, with fallback compatibility."""
+
+    token = _extract_bearer_token(authorization=authorization)
+
+    if settings.API_KEY_GRAPH_ADMIN and secrets.compare_digest(token, settings.API_KEY_GRAPH_ADMIN):
+        return SCOPE_GRAPH_ADMIN
+
+    if settings.API_KEY_GRAPH_WRITE and secrets.compare_digest(token, settings.API_KEY_GRAPH_WRITE):
+        return SCOPE_GRAPH_WRITE
+
+    if secrets.compare_digest(token, settings.API_KEY_SECRET):
+        return SCOPE_GRAPH_ADMIN
+
+    raise AuthError(reason="invalid_secret")
+
+
 def verify_api_key(
     authorization: str = Header(..., alias="Authorization"),
     settings_factory: Callable[[], Settings] = get_settings,
@@ -42,10 +60,7 @@ def verify_api_key(
 
     settings = settings_factory()
     try:
-        validate_bearer_token(
-            authorization=authorization,
-            expected_secret=settings.API_KEY_SECRET,
-        )
+        resolve_scope_from_authorization(authorization=authorization, settings=settings)
     except AuthError as error:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
