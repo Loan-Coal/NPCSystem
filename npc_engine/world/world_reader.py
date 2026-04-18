@@ -33,6 +33,36 @@ def _coerce_datetime(value: object) -> object:
     return value
 
 
+def _coerce_json_mapping(value: object) -> dict[str, int]:
+    """Normalize stored mapping payloads to dict form."""
+
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except ValueError:
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+    return {}
+
+
+def _coerce_json_list(value: object) -> list[str]:
+    """Normalize stored list payloads to list form."""
+
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except ValueError:
+            return []
+        if isinstance(parsed, list):
+            return parsed
+    return []
+
+
 async def get_world_state(session: AsyncSession, world_id: str = "world") -> WorldState:
     """Return world state or default model when node does not exist."""
 
@@ -41,8 +71,9 @@ async def get_world_state(session: AsyncSession, world_id: str = "world") -> Wor
     if record is None:
         return WorldState()
     payload = dict(record["world"])
-    payload["faction_standings"] = json.loads(payload.get("faction_standings", "{}"))
-    payload["active_conditions"] = json.loads(payload.get("active_conditions", "[]"))
-    if "last_updated_at" in payload:
-        payload["last_updated_at"] = _coerce_datetime(payload["last_updated_at"])
+    payload["faction_standings"] = _coerce_json_mapping(payload.get("faction_standings", {}))
+    payload["active_conditions"] = _coerce_json_list(payload.get("active_conditions", []))
+    for field_name in ("last_updated_at", "last_graph_updated_at"):
+        if field_name in payload:
+            payload[field_name] = _coerce_datetime(payload[field_name])
     return WorldState(**payload)

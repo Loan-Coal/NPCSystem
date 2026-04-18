@@ -71,7 +71,8 @@ class DialogueHandler:
             parsed_response = parse_dialogue_response(payload=raw_response)
         except ValidationError:
             increment_metric(metric=LLM_VALIDATION_FAILURES_METRIC, labels={"engine": "dialogue"})
-            raise
+            fallback_payload = self._llm.fallback_response_payload()
+            parsed_response = parse_dialogue_response(payload=fallback_payload)
         resolved_action = resolve_action(action=parsed_response.action)
         final_response = parsed_response.model_copy(
             update={

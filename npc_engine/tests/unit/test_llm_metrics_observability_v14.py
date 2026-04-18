@@ -11,6 +11,7 @@ from typing import Any, AsyncIterator
 import pytest
 
 from engines.dialogue.llm_client import DialogueLLMClient
+from utils.errors import LLMRequestError
 from utils.metrics import get_counter_value, reset_metrics_registry
 
 
@@ -35,6 +36,26 @@ class FakeLLMClient:
 
     def model_name(self) -> str:
         return "mock"
+
+
+class RequestErrorLLMClient(FakeLLMClient):
+    """Fake LLM client that simulates structured request failures."""
+
+    async def generate_structured(self, prompt: str, schema: dict[str, Any], max_tokens: int) -> dict[str, Any]:
+        raise LLMRequestError(model="mock", detail="backend_unavailable")
+
+
+class InvalidStructuredLLMClient(FakeLLMClient):
+    """Fake LLM client that returns invalid structured payload shape."""
+
+    async def generate_structured(self, prompt: str, schema: dict[str, Any], max_tokens: int) -> dict[str, Any]:
+        return {
+            "npc_response": "still speaking",
+            "relation_deltas": {"trust": 0, "fear": 0, "affection": 0},
+            "mood_update": None,
+            "action": {"type": "invalid_action", "target_id": None, "parameters": {}},
+            "facial_expression": {"type": "neutral", "intensity": 200},
+        }
 
 
 def setup_function() -> None:
@@ -78,3 +99,37 @@ async def test_dialogue_llm_stream_emits_call_and_token_metrics() -> None:
     assert calls == 1.0
     assert len(chunks) == 2
     assert tokens_out > 0.0
+
+
+@pytest.mark.asyncio
+async def test_dialogue_llm_generate_response_falls_back_on_request_error() -> None:
+    """Structured request failures should produce deterministic fallback payloads."""
+
+    client = DialogueLLMClient(llm_client=RequestErrorLLMClient(), fallback_path="data/fallback_responses.json")
+
+    response = await client.generate_response(prompt="player says hello")
+
+    assert response["npc_response"] == "I need a moment to think."
+    assert response["action"]["type"] == "speak"
+    fallback_tokens = get_counter_value(
+        "llm_tokens_out_total",
+        labels={"engine": "dialogue", "backend": "mock", "mode": "structured", "fallback": "request_error"},
+    )
+    assert fallback_tokens > 0.0
+
+
+@pytest.mark.asyncio
+async def test_dialogue_llm_generate_response_falls_back_on_invalid_structured_payload() -> None:
+    """Invalid structured payloads should degrade to fallback dialogue responses."""
+
+    client = DialogueLLMClient(llm_client=InvalidStructuredLLMClient(), fallback_path="data/fallback_responses.json")
+
+    response = await client.generate_response(prompt="player says hello")
+
+    assert response["npc_response"] == "I need a moment to think."
+    assert response["facial_expression"]["intensity"] == 20
+    fallback_tokens = get_counter_value(
+        "llm_tokens_out_total",
+        labels={"engine": "dialogue", "backend": "mock", "mode": "structured", "fallback": "validation_error"},
+    )
+    assert fallback_tokens > 0.0

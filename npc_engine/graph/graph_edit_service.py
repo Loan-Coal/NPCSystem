@@ -6,6 +6,7 @@ Does NOT: enforce auth scope policy.
 Dependencies injected: AsyncSession, SchemaConfig.
 """
 
+import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -167,6 +168,9 @@ class GraphEditService:
 
     async def upsert_event(self, event: EventNode) -> None:
         payload = event.model_dump(mode="json")
+        provenance = payload.get("provenance")
+        if isinstance(provenance, dict):
+            payload["provenance"] = json.dumps(provenance, sort_keys=True)
         payload["last_graph_updated_at"] = _now_iso()
         await self._session.run(
             "MERGE (e:Event {id: $id}) "
@@ -224,6 +228,10 @@ class GraphEditService:
         set_payload = body.model_dump(exclude_none=True)
         set_payload.pop("extension_fields", None)
         set_payload.pop("meta", None)
+        if "faction_standings" in set_payload:
+            set_payload["faction_standings"] = json.dumps(set_payload["faction_standings"], sort_keys=True)
+        if "active_conditions" in set_payload:
+            set_payload["active_conditions"] = json.dumps(set_payload["active_conditions"])
         set_payload["last_graph_updated_at"] = _now_iso()
         result = await self._session.run(
             "MERGE (w:WorldState {id: 'world'}) "

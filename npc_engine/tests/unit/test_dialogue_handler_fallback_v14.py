@@ -1,0 +1,97 @@
+"""
+test_dialogue_handler_fallback_v14.py - Unit test for dialogue handler fallback recovery.
+
+Does NOT: call live LLM services.
+
+Dependencies injected: fake LLM client and monkeypatched context/mutation helpers.
+"""
+
+from types import SimpleNamespace
+from typing import Any, AsyncIterator
+from unittest.mock import AsyncMock
+
+import pytest
+
+pytest.importorskip("neo4j")
+
+from api.schemas import DialogueRequest
+from engines.dialogue.dialogue_handler import DialogueHandler, LLM_VALIDATION_FAILURES_METRIC
+from engines.dialogue.session_store import SessionStore
+from utils.metrics import get_counter_value, reset_metrics_registry
+
+
+class MinimalLLMClient:
+    """Minimal fake client for DialogueHandler construction in tests."""
+
+    async def generate(self, prompt: str, max_tokens: int, temperature: float) -> str:
+        return "ok"
+
+    async def generate_structured(self, prompt: str, schema: dict[str, Any], max_tokens: int) -> dict[str, Any]:
+        return {"bad": "payload"}
+
+    async def stream(self, prompt: str, max_tokens: int, temperature: float) -> AsyncIterator[str]:
+        if False:
+            yield ""
+
+    def model_name(self) -> str:
+        return "mock"
+
+
+class FakeEmotionUpdater:
+    """Deterministic emotion updater for dialogue handler tests."""
+
+    def get_state(self, npc_id: str):
+        return SimpleNamespace(label="neutral")
+
+    def apply_dialogue_mood(self, npc_id: str, mood_update: str | None):
+        return SimpleNamespace(label=mood_update or "neutral")
+
+
+def setup_function() -> None:
+    reset_metrics_registry()
+
+
+@pytest.mark.asyncio
+async def test_dialogue_handler_recovers_from_validation_failure(monkeypatch) -> None:
+    """Dialogue handler should return fallback response when parser validation fails."""
+
+    async def fake_build_serialized_context(**kwargs):
+        return "{}"
+
+    async def fake_apply_dialogue_relation_deltas(**kwargs) -> None:
+        return None
+
+    monkeypatch.setattr("engines.dialogue.dialogue_handler.build_serialized_context", fake_build_serialized_context)
+    monkeypatch.setattr(
+        "engines.dialogue.dialogue_handler.build_dialogue_prompt",
+        lambda request, serialized_context: "prompt",
+    )
+    monkeypatch.setattr(
+        "engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas",
+        fake_apply_dialogue_relation_deltas,
+    )
+
+    handler = DialogueHandler(
+        session=None,
+        settings=SimpleNamespace(LLM_FALLBACK_PATH="data/fallback_responses.json"),
+        llm_client=MinimalLLMClient(),
+        llm_config=SimpleNamespace(),
+        session_store=SessionStore(ttl_seconds=300, max_turns=10),
+        emotion_updater=FakeEmotionUpdater(),
+        embedding_index=None,
+    )
+    handler._llm.generate_response = AsyncMock(return_value={"bad": "payload"})
+
+    response = await handler.handle(
+        DialogueRequest(
+            player_id="player_1",
+            npc_id="npc_1",
+            player_message="hello",
+            location_id="loc_1",
+            session_id="session_1",
+        )
+    )
+
+    assert response.npc_response == "I need a moment to think."
+    assert response.session_id == "session_1"
+    assert get_counter_value(LLM_VALIDATION_FAILURES_METRIC, labels={"engine": "dialogue"}) == 1.0
