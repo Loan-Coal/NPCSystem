@@ -11,65 +11,52 @@ from neo4j import AsyncSession
 from utils.errors import NodeNotFoundError
 
 
+def _clamp_percent(value: int) -> int:
+    return max(0, min(100, value))
+
+
 class GraphAdminService:
     """Service for admin graph operations such as hard delete and absolute relation set."""
 
     def __init__(self, session: AsyncSession):
         self._session = session
 
-    async def hard_delete_character(self, character_id: str) -> dict[str, int | str]:
-        """Hard delete a character and all connected edges atomically."""
+    async def _hard_delete_node(self, *, label: str, node_id: str) -> dict[str, int | str]:
+        """Hard delete one node label and all connected edges atomically."""
 
         result = await self._session.run(
-            "MATCH (c:Character {id: $id}) "
-            "OPTIONAL MATCH (c)-[out]-() "
-            "OPTIONAL MATCH ()-[inc]->(c) "
-            "WITH c, collect(out) + collect(inc) AS rels "
+            f"MATCH (n:{label} {{id: $id}}) "
+            "OPTIONAL MATCH (n)-[out]-() "
+            "OPTIONAL MATCH ()-[inc]->(n) "
+            "WITH n, collect(out) + collect(inc) AS rels "
             "FOREACH (r IN rels | DELETE r) "
-            "DELETE c "
+            "DELETE n "
             "RETURN size(rels) AS deleted_edges",
-            id=character_id,
+            id=node_id,
         )
         record = await result.single()
         if record is None:
-            raise NodeNotFoundError(node_type="character", node_id=character_id)
-        return {"deleted_node_id": character_id, "deleted_edges": int(record["deleted_edges"]), "deleted_nodes": 1}
+            raise NodeNotFoundError(node_type=label.lower(), node_id=node_id)
+        return {
+            "deleted_node_id": node_id,
+            "deleted_edges": int(record["deleted_edges"]),
+            "deleted_nodes": 1,
+        }
+
+    async def hard_delete_character(self, character_id: str) -> dict[str, int | str]:
+        """Hard delete a character and all connected edges atomically."""
+
+        return await self._hard_delete_node(label="Character", node_id=character_id)
 
     async def hard_delete_event(self, event_id: str) -> dict[str, int | str]:
         """Hard delete an event and all connected edges atomically."""
 
-        result = await self._session.run(
-            "MATCH (e:Event {id: $id}) "
-            "OPTIONAL MATCH (e)-[out]-() "
-            "OPTIONAL MATCH ()-[inc]->(e) "
-            "WITH e, collect(out) + collect(inc) AS rels "
-            "FOREACH (r IN rels | DELETE r) "
-            "DELETE e "
-            "RETURN size(rels) AS deleted_edges",
-            id=event_id,
-        )
-        record = await result.single()
-        if record is None:
-            raise NodeNotFoundError(node_type="event", node_id=event_id)
-        return {"deleted_node_id": event_id, "deleted_edges": int(record["deleted_edges"]), "deleted_nodes": 1}
+        return await self._hard_delete_node(label="Event", node_id=event_id)
 
     async def hard_delete_location(self, location_id: str) -> dict[str, int | str]:
         """Hard delete a location and connected edges atomically."""
 
-        result = await self._session.run(
-            "MATCH (loc:Location {id: $id}) "
-            "OPTIONAL MATCH (loc)-[out]-() "
-            "OPTIONAL MATCH ()-[inc]->(loc) "
-            "WITH loc, collect(out) + collect(inc) AS rels "
-            "FOREACH (r IN rels | DELETE r) "
-            "DELETE loc "
-            "RETURN size(rels) AS deleted_edges",
-            id=location_id,
-        )
-        record = await result.single()
-        if record is None:
-            raise NodeNotFoundError(node_type="location", node_id=location_id)
-        return {"deleted_node_id": location_id, "deleted_edges": int(record["deleted_edges"]), "deleted_nodes": 1}
+        return await self._hard_delete_node(label="Location", node_id=location_id)
 
     async def set_relation_absolute(self, src_id: str, dst_id: str, trust: int, fear: int, affection: int) -> dict[str, int]:
         """Set absolute RELATES_TO values for one directed edge."""
@@ -80,9 +67,9 @@ class GraphAdminService:
             "RETURN r.trust AS trust, r.fear AS fear, r.affection AS affection",
             src_id=src_id,
             dst_id=dst_id,
-            trust=max(0, min(100, trust)),
-            fear=max(0, min(100, fear)),
-            affection=max(0, min(100, affection)),
+            trust=_clamp_percent(trust),
+            fear=_clamp_percent(fear),
+            affection=_clamp_percent(affection),
         )
         record = await result.single()
         if record is None:
@@ -115,7 +102,7 @@ class GraphAdminService:
             "affection": int(current["affection"]) + affection_delta,
         }
         clamped_fields = [name for name, value in raw.items() if value < 0 or value > 100]
-        new_values = {name: max(0, min(100, value)) for name, value in raw.items()}
+        new_values = {name: _clamp_percent(value) for name, value in raw.items()}
 
         await self._session.run(
             "MATCH (a:Character {id: $src_id})-[r:RELATES_TO]->(b:Character {id: $dst_id}) "

@@ -12,9 +12,11 @@ import json
 from typing import cast
 
 import pytest
+pytest.importorskip("neo4j")
 from neo4j import AsyncSession
 
 from api.schemas import KnowsAboutEdgeBody, MutationMeta, RelatesToEdgeBody, WorldStatePatchBody
+from api.schemas import CharacterPatchBody
 from graph.graph_edit_service import GraphEditService
 from graph.node_schemas import EventNode
 from schema.schema_models import EnumExtensions, SchemaConfig
@@ -159,3 +161,26 @@ async def test_patch_world_state_serializes_collection_fields_as_json_strings() 
     _, params = session.calls[0]
     assert params["set_fields"]["faction_standings"] == "{\"manual\": 10}"
     assert params["set_fields"]["active_conditions"] == "[\"manual_test\"]"
+
+
+@pytest.mark.asyncio
+async def test_patch_character_merges_extension_fields_and_excludes_meta() -> None:
+    """Character patch should merge extension fields while excluding meta payload from set_fields."""
+
+    session = _SessionStub(records=[{"node": {"id": "c1", "nickname": "Ash", "name": "Aldric"}}])
+    schema = SchemaConfig(schema_version="1.0", core_types={}, enum_extensions=EnumExtensions())
+    service = GraphEditService(session=cast(AsyncSession, session), schema=schema)
+
+    body = CharacterPatchBody(
+        name="Aldric",
+        extension_fields={"nickname": "Ash"},
+        meta=MutationMeta(request_id="req-1", actor_id="actor-1", reason="manual_test"),
+    )
+
+    await service.patch_character(character_id="c1", body=body)
+
+    _, params = session.calls[0]
+    assert params["set_fields"]["name"] == "Aldric"
+    assert params["set_fields"]["nickname"] == "Ash"
+    assert "meta" not in params["set_fields"]
+    assert "extension_fields" not in params["set_fields"]

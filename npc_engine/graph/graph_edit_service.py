@@ -49,6 +49,35 @@ def _to_json_safe_node(node: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def _build_patch_set_fields(
+    *,
+    body: CharacterPatchBody | EventPatchBody | LocationPatchBody,
+    node_type: str,
+    schema: SchemaConfig,
+) -> dict[str, Any]:
+    """Normalize PATCH payload by removing metadata and merging validated extension fields."""
+
+    set_payload = body.model_dump(exclude_none=True)
+    extension_fields = set_payload.pop("extension_fields", None)
+    set_payload.pop("meta", None)
+    ensure_no_immutable_fields(node_type=node_type, set_fields=set_payload)
+    validate_extension_fields(schema, node_type, extension_fields)
+    return {**set_payload, **(extension_fields or {})}
+
+
+def _serialize_world_state_patch(body: WorldStatePatchBody) -> dict[str, Any]:
+    """Serialize world state patch payload using full-replace JSON semantics for collection fields."""
+
+    set_payload = body.model_dump(exclude_none=True)
+    set_payload.pop("extension_fields", None)
+    set_payload.pop("meta", None)
+    if "faction_standings" in set_payload:
+        set_payload["faction_standings"] = json.dumps(set_payload["faction_standings"], sort_keys=True)
+    if "active_conditions" in set_payload:
+        set_payload["active_conditions"] = json.dumps(set_payload["active_conditions"])
+    return set_payload
+
+
 class GraphEditService:
     """Service for v1.3 graph CRUD-style operations on core resources."""
 
@@ -74,7 +103,6 @@ class GraphEditService:
 
     async def upsert_character(self, character: CharacterNode) -> None:
         payload = character.model_dump(mode="json")
-        payload["last_graph_updated_at"] = _now_iso()
         await self._session.run(
             "MERGE (c:Character {id: $id}) "
             "SET c += $properties, c.updated_at = datetime(), c.last_graph_updated_at = datetime()",
@@ -83,12 +111,7 @@ class GraphEditService:
         )
 
     async def patch_character(self, character_id: str, body: CharacterPatchBody) -> dict:
-        set_payload = body.model_dump(exclude_none=True)
-        extension_fields = set_payload.pop("extension_fields", None)
-        set_payload.pop("meta", None)
-        ensure_no_immutable_fields(node_type="character", set_fields=set_payload)
-        validate_extension_fields(self._schema, "character", extension_fields)
-        merged = {**set_payload, **(extension_fields or {}), "last_graph_updated_at": _now_iso()}
+        merged = _build_patch_set_fields(body=body, node_type="character", schema=self._schema)
         result = await self._session.run(
             "MATCH (c:Character {id: $id}) "
             "SET c += $set_fields, c.updated_at = datetime(), c.last_graph_updated_at = datetime() "
@@ -132,12 +155,7 @@ class GraphEditService:
             raise NodeNotFoundError(node_type="character|location", node_id=f"{character_id}:{location_id}")
 
     async def patch_event(self, event_id: str, body: EventPatchBody) -> dict:
-        set_payload = body.model_dump(exclude_none=True)
-        extension_fields = set_payload.pop("extension_fields", None)
-        set_payload.pop("meta", None)
-        ensure_no_immutable_fields(node_type="event", set_fields=set_payload)
-        validate_extension_fields(self._schema, "event", extension_fields)
-        merged = {**set_payload, **(extension_fields or {}), "last_graph_updated_at": _now_iso()}
+        merged = _build_patch_set_fields(body=body, node_type="event", schema=self._schema)
         result = await self._session.run(
             "MATCH (e:Event {id: $id}) "
             "SET e += $set_fields, e.last_graph_updated_at = datetime() "
@@ -171,7 +189,6 @@ class GraphEditService:
         provenance = payload.get("provenance")
         if isinstance(provenance, dict):
             payload["provenance"] = json.dumps(provenance, sort_keys=True)
-        payload["last_graph_updated_at"] = _now_iso()
         await self._session.run(
             "MERGE (e:Event {id: $id}) "
             "SET e += $properties, e.last_graph_updated_at = datetime()",
@@ -180,12 +197,7 @@ class GraphEditService:
         )
 
     async def patch_location(self, location_id: str, body: LocationPatchBody) -> dict:
-        set_payload = body.model_dump(exclude_none=True)
-        extension_fields = set_payload.pop("extension_fields", None)
-        set_payload.pop("meta", None)
-        ensure_no_immutable_fields(node_type="location", set_fields=set_payload)
-        validate_extension_fields(self._schema, "location", extension_fields)
-        merged = {**set_payload, **(extension_fields or {}), "last_graph_updated_at": _now_iso()}
+        merged = _build_patch_set_fields(body=body, node_type="location", schema=self._schema)
         result = await self._session.run(
             "MATCH (loc:Location {id: $id}) "
             "SET loc += $set_fields, loc.last_graph_updated_at = datetime() "
@@ -216,7 +228,6 @@ class GraphEditService:
 
     async def upsert_location(self, location: LocationNode) -> None:
         payload = location.model_dump(mode="json")
-        payload["last_graph_updated_at"] = _now_iso()
         await self._session.run(
             "MERGE (loc:Location {id: $id}) "
             "SET loc += $properties, loc.last_graph_updated_at = datetime()",
@@ -225,14 +236,7 @@ class GraphEditService:
         )
 
     async def patch_world_state(self, body: WorldStatePatchBody) -> dict[str, Any]:
-        set_payload = body.model_dump(exclude_none=True)
-        set_payload.pop("extension_fields", None)
-        set_payload.pop("meta", None)
-        if "faction_standings" in set_payload:
-            set_payload["faction_standings"] = json.dumps(set_payload["faction_standings"], sort_keys=True)
-        if "active_conditions" in set_payload:
-            set_payload["active_conditions"] = json.dumps(set_payload["active_conditions"])
-        set_payload["last_graph_updated_at"] = _now_iso()
+        set_payload = _serialize_world_state_patch(body)
         result = await self._session.run(
             "MERGE (w:WorldState {id: 'world'}) "
             "SET w += $set_fields, w.last_updated_at = datetime(), w.last_graph_updated_at = datetime() "

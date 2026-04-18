@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import pytest
 
+pytest.importorskip("neo4j")
+
 from config import Settings
 from engines.economy.trading_engine import ItemTransferCommand
 from engines.economy.currency_verification_engine import CurrencyTransferCommand

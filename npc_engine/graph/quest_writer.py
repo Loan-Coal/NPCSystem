@@ -96,6 +96,49 @@ def _record_to_state_payload(record) -> dict:
     }
 
 
+def _state_write_params(*, quest_id: str, player_id: str, state_payload: dict) -> dict:
+    """Serialize quest payload into query parameters for persistence writes."""
+
+    currency_reward = state_payload.get("currency_reward")
+    return {
+        "id": f"{quest_id}:{player_id}",
+        "quest_id": state_payload["quest_id"],
+        "player_id": state_payload["player_id"],
+        "reward_source_id": state_payload["reward_source_id"],
+        "title": state_payload["title"],
+        "status": state_payload["status"],
+        "objectives_json": json.dumps(state_payload["objectives"]),
+        "objective_progress_json": json.dumps(state_payload["objective_progress"]),
+        "item_rewards_json": json.dumps(state_payload["item_rewards"]),
+        "currency_reward_json": None if currency_reward is None else json.dumps(currency_reward),
+        "rewards_applied": state_payload["rewards_applied"],
+    }
+
+
+def _deep_copy_json(value):
+    """Return a detached JSON-compatible copy for immutable return payloads."""
+
+    return json.loads(json.dumps(value))
+
+
+def _canonical_state_payload(state_payload: dict) -> dict:
+    """Build detached canonical quest payload for callers."""
+
+    currency_reward = state_payload.get("currency_reward")
+    return {
+        "quest_id": str(state_payload["quest_id"]),
+        "player_id": str(state_payload["player_id"]),
+        "reward_source_id": str(state_payload["reward_source_id"]),
+        "title": str(state_payload["title"]),
+        "status": str(state_payload["status"]),
+        "objectives": _deep_copy_json(state_payload["objectives"]),
+        "objective_progress": _deep_copy_json(state_payload["objective_progress"]),
+        "item_rewards": _deep_copy_json(state_payload["item_rewards"]),
+        "currency_reward": None if currency_reward is None else _deep_copy_json(currency_reward),
+        "rewards_applied": bool(state_payload["rewards_applied"]),
+    }
+
+
 async def get_quest_state(*, session: QuestGraphRunner, quest_id: str, player_id: str) -> dict | None:
     """Read one persisted quest state for a quest and player pair."""
 
@@ -115,23 +158,11 @@ async def create_quest_state_if_absent(
     state_payload: dict,
 ) -> dict:
     """Create quest state once, then return the current stored payload without overwriting."""
-
-    currency_reward = state_payload.get("currency_reward")
-    currency_reward_json = None if currency_reward is None else json.dumps(currency_reward)
+    write_params = _state_write_params(quest_id=quest_id, player_id=player_id, state_payload=state_payload)
 
     result = await session.run(
         CYPHER_CREATE_QUEST_STATE_IF_ABSENT,
-        id=f"{quest_id}:{player_id}",
-        quest_id=state_payload["quest_id"],
-        player_id=state_payload["player_id"],
-        reward_source_id=state_payload["reward_source_id"],
-        title=state_payload["title"],
-        status=state_payload["status"],
-        objectives_json=json.dumps(state_payload["objectives"]),
-        objective_progress_json=json.dumps(state_payload["objective_progress"]),
-        item_rewards_json=json.dumps(state_payload["item_rewards"]),
-        currency_reward_json=currency_reward_json,
-        rewards_applied=state_payload["rewards_applied"],
+        **write_params,
     )
     record = await result.single()
     assert record is not None
@@ -146,35 +177,12 @@ async def upsert_quest_state(
     state_payload: dict,
 ) -> dict:
     """Persist one quest state payload and return the same canonical payload."""
-
-    currency_reward = state_payload.get("currency_reward")
-    currency_reward_json = None if currency_reward is None else json.dumps(currency_reward)
+    write_params = _state_write_params(quest_id=quest_id, player_id=player_id, state_payload=state_payload)
 
     result = await session.run(
         CYPHER_MERGE_QUEST_STATE,
-        id=f"{quest_id}:{player_id}",
-        quest_id=state_payload["quest_id"],
-        player_id=state_payload["player_id"],
-        reward_source_id=state_payload["reward_source_id"],
-        title=state_payload["title"],
-        status=state_payload["status"],
-        objectives_json=json.dumps(state_payload["objectives"]),
-        objective_progress_json=json.dumps(state_payload["objective_progress"]),
-        item_rewards_json=json.dumps(state_payload["item_rewards"]),
-        currency_reward_json=currency_reward_json,
-        rewards_applied=state_payload["rewards_applied"],
+        **write_params,
     )
     await result.consume()
 
-    return {
-        "quest_id": state_payload["quest_id"],
-        "player_id": state_payload["player_id"],
-        "reward_source_id": state_payload["reward_source_id"],
-        "title": state_payload["title"],
-        "status": state_payload["status"],
-        "objectives": list(state_payload["objectives"]),
-        "objective_progress": dict(state_payload["objective_progress"]),
-        "item_rewards": list(state_payload["item_rewards"]),
-        "currency_reward": currency_reward,
-        "rewards_applied": bool(state_payload["rewards_applied"]),
-    }
+    return _canonical_state_payload(state_payload)
