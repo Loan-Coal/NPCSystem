@@ -6,7 +6,7 @@ Does NOT: choose event templates.
 Dependencies injected: AsyncSession.
 """
 
-from neo4j import AsyncSession, AsyncTransaction
+from neo4j import AsyncTransaction
 
 
 CYPHER_SEED_AWARENESS = """
@@ -21,14 +21,6 @@ SET k.knowledge_state = 'knows',
     k.distorted_summary = null,
     k.source_character_id = null
 """
-
-
-async def seed_awareness(session: AsyncSession, event_id: str, location_id: str, tick_id: int) -> None:
-    """Mark all NPCs at location as knowing the event."""
-
-    await session.run(CYPHER_SEED_AWARENESS, event_id=event_id, location_id=location_id, tick_id=tick_id)
-
-
 async def seed_awareness_tx(tx: AsyncTransaction, event_id: str, location_id: str, tick_id: int) -> None:
     """Mark all NPCs at location as knowing the event within a transaction."""
 

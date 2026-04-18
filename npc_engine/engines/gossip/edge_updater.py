@@ -6,10 +6,11 @@ Does NOT: enforce mutation bounds.
 Dependencies injected: AsyncSession.
 """
 
-import json
 from datetime import datetime, timezone
 
 from neo4j import AsyncSession
+
+from common.json_utils import dump_json, parse_json_list
 
 
 CYPHER_GET_RELATION_LOG = """
@@ -32,7 +33,7 @@ RETURN 1 AS updated
 
 
 def _append_log(raw_log: str, tick_id: int, cause: str, trust_delta: int) -> str:
-    payload = json.loads(raw_log)
+    payload = parse_json_list(raw_log)
     payload.append(
         {
             "tick_id": tick_id,
@@ -41,7 +42,7 @@ def _append_log(raw_log: str, tick_id: int, cause: str, trust_delta: int) -> str
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     )
-    return json.dumps(payload[-20:])
+    return dump_json(payload[-20:])
 
 
 async def log_gossip(session: AsyncSession, src_id: str, dst_id: str, tick_id: int, trust_delta: int = 1) -> None:

@@ -6,12 +6,9 @@ Does NOT: manage user sessions or token issuance.
 Dependencies injected: Settings.
 """
 
-from collections.abc import Callable
 import secrets
 
-from fastapi import Header, HTTPException, status
-
-from config import Settings, get_settings
+from config import Settings
 from auth.permissions import SCOPE_GRAPH_ADMIN, SCOPE_GRAPH_WRITE
 from utils.errors import AuthError
 
@@ -50,19 +47,3 @@ def resolve_scope_from_authorization(authorization: str, settings: Settings) -> 
         return SCOPE_GRAPH_ADMIN
 
     raise AuthError(reason="invalid_secret")
-
-
-def verify_api_key(
-    authorization: str = Header(..., alias="Authorization"),
-    settings_factory: Callable[[], Settings] = get_settings,
-) -> None:
-    """Validate the shared secret Bearer token and raise 401 on failure."""
-
-    settings = settings_factory()
-    try:
-        resolve_scope_from_authorization(authorization=authorization, settings=settings)
-    except AuthError as error:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized",
-        ) from error

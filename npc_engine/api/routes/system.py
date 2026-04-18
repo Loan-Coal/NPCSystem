@@ -9,6 +9,7 @@ Dependencies injected: None.
 from fastapi import APIRouter, Depends
 
 from api.dependencies import get_game_schema
+from api.route_helpers import ok_response
 from schema.schema_models import SchemaConfig
 
 
@@ -19,18 +20,18 @@ router = APIRouter()
 async def health() -> dict[str, str | int]:
     """Return liveness and basic service status."""
 
-    return {"status": "ok", "tick": 0, "neo4j": "degraded"}
+    return ok_response({"status": "ok", "tick": 0, "neo4j": "degraded"})
 
 
 @router.get("/v1/protected")
 async def protected_probe() -> dict[str, str]:
     """Simple protected route for auth smoke testing."""
 
-    return {"status": "authorized"}
+    return ok_response({"status": "authorized"})
 
 
 @router.get("/v1/schema")
 async def schema_snapshot(schema: SchemaConfig = Depends(get_game_schema)) -> dict:
     """Expose loaded game schema for authenticated clients."""
 
-    return schema.model_dump(mode="json")
+    return ok_response(schema.model_dump(mode="json"))

@@ -53,6 +53,46 @@ class QuestLifecycleEngine:
             for item_id, quantity in sorted(quantity_by_item_id.items())
         ]
 
+    @staticmethod
+    def _ensure_transaction_session(session: AsyncSession) -> None:
+        if not hasattr(session, "begin_transaction"):
+            raise QuestTransitionError(
+                code="QUEST_EVENT_SESSION_INVALID",
+                detail="Quest lifecycle event emission requires a transaction-capable session",
+            )
+
+    @staticmethod
+    def _build_lifecycle_event(
+        *,
+        quest_id: str,
+        player_id: str,
+        event_type: str,
+        summary: str,
+        meta: QuestTransitionMeta,
+    ) -> EventNode:
+        now = datetime.now(timezone.utc)
+        return EventNode(
+            id=f"{quest_id}:{player_id}:{event_type}:{meta.request_id}",
+            summary=summary,
+            severity=20,
+            location_id="quest",
+            occurred_at=now,
+            tick_id=int(now.timestamp()),
+            participants=[player_id],
+            event_type=event_type,
+            is_public=True,
+            producer="quest_lifecycle_engine",
+            origin_engine="quest",
+            schema_version="v1.4",
+            provenance={
+                "request_id": meta.request_id,
+                "idempotency_key": meta.idempotency_key,
+                "idempotency_request_hash": meta.idempotency_request_hash,
+                "actor_id": meta.actor_id,
+                "reason": meta.reason,
+            },
+        )
+
     async def offer_quest(
         self,
         *,
@@ -87,11 +127,7 @@ class QuestLifecycleEngine:
             currency_reward=currency_reward,
             rewards_applied=False,
         )
-        if not hasattr(session, "begin_transaction"):
-            raise QuestTransitionError(
-                code="QUEST_EVENT_SESSION_INVALID",
-                detail="Quest lifecycle event emission requires a transaction-capable session",
-            )
+        self._ensure_transaction_session(session=session)
 
         tx = await session.begin_transaction()
         async with tx:
@@ -114,27 +150,12 @@ class QuestLifecycleEngine:
                     detail=f"Quest cannot be re-offered from status={offered_state.status}",
                 )
 
-            now = datetime.now(timezone.utc)
-            event = EventNode(
-                id=f"{quest_id}:{player_id}:quest_offered:{meta.request_id}",
-                summary=f"Quest offered: {offered_state.title}",
-                severity=20,
-                location_id="quest",
-                occurred_at=now,
-                tick_id=int(now.timestamp()),
-                participants=[player_id],
+            event = self._build_lifecycle_event(
+                quest_id=quest_id,
+                player_id=player_id,
                 event_type="quest_offered",
-                is_public=True,
-                producer="quest_lifecycle_engine",
-                origin_engine="quest",
-                schema_version="v1.4",
-                provenance={
-                    "request_id": meta.request_id,
-                    "idempotency_key": meta.idempotency_key,
-                    "idempotency_request_hash": meta.idempotency_request_hash,
-                    "actor_id": meta.actor_id,
-                    "reason": meta.reason,
-                },
+                summary=f"Quest offered: {offered_state.title}",
+                meta=meta,
             )
             await upsert_quest_lifecycle_event(tx=tx, event=event)
             await tx.commit()
@@ -356,33 +377,13 @@ class QuestLifecycleEngine:
         summary: str,
         meta: QuestTransitionMeta,
     ) -> None:
-        if not hasattr(session, "begin_transaction"):
-            raise QuestTransitionError(
-                code="QUEST_EVENT_SESSION_INVALID",
-                detail="Quest lifecycle event emission requires a transaction-capable session",
-            )
-
-        now = datetime.now(timezone.utc)
-        event = EventNode(
-            id=f"{quest_id}:{player_id}:{event_type}:{meta.request_id}",
-            summary=summary,
-            severity=20,
-            location_id="quest",
-            occurred_at=now,
-            tick_id=int(now.timestamp()),
-            participants=[player_id],
+        self._ensure_transaction_session(session=session)
+        event = self._build_lifecycle_event(
+            quest_id=quest_id,
+            player_id=player_id,
             event_type=event_type,
-            is_public=True,
-            producer="quest_lifecycle_engine",
-            origin_engine="quest",
-            schema_version="v1.4",
-            provenance={
-                "request_id": meta.request_id,
-                "idempotency_key": meta.idempotency_key,
-                "idempotency_request_hash": meta.idempotency_request_hash,
-                "actor_id": meta.actor_id,
-                "reason": meta.reason,
-            },
+            summary=summary,
+            meta=meta,
         )
 
         tx = await session.begin_transaction()
@@ -401,33 +402,13 @@ class QuestLifecycleEngine:
         summary: str,
         meta: QuestTransitionMeta,
     ) -> dict:
-        if not hasattr(session, "begin_transaction"):
-            raise QuestTransitionError(
-                code="QUEST_EVENT_SESSION_INVALID",
-                detail="Quest lifecycle event emission requires a transaction-capable session",
-            )
-
-        now = datetime.now(timezone.utc)
-        event = EventNode(
-            id=f"{quest_id}:{player_id}:{event_type}:{meta.request_id}",
-            summary=summary,
-            severity=20,
-            location_id="quest",
-            occurred_at=now,
-            tick_id=int(now.timestamp()),
-            participants=[player_id],
+        self._ensure_transaction_session(session=session)
+        event = self._build_lifecycle_event(
+            quest_id=quest_id,
+            player_id=player_id,
             event_type=event_type,
-            is_public=True,
-            producer="quest_lifecycle_engine",
-            origin_engine="quest",
-            schema_version="v1.4",
-            provenance={
-                "request_id": meta.request_id,
-                "idempotency_key": meta.idempotency_key,
-                "idempotency_request_hash": meta.idempotency_request_hash,
-                "actor_id": meta.actor_id,
-                "reason": meta.reason,
-            },
+            summary=summary,
+            meta=meta,
         )
 
         tx = await session.begin_transaction()

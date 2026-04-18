@@ -6,7 +6,6 @@ Does NOT: run periodic scheduler loops.
 Dependencies injected: Settings, EmbeddingIndex.
 """
 
-import json
 from datetime import datetime, timezone
 import random
 from uuid import uuid4
@@ -15,6 +14,7 @@ import logging
 
 from neo4j import AsyncSession
 
+from common.json_utils import dump_json, parse_json_list, parse_json_object
 from config import Settings
 from engines.embedding_invalidation import invalidate_embedding_safely
 from engines.events.awareness_seeder import seed_awareness_tx
@@ -97,8 +97,8 @@ class EventHandler:
                         world_state = WorldState(
                             id=payload.get("id", "world"),
                             epoch=payload.get("epoch", "age_of_peace"),
-                            faction_standings=json.loads(payload.get("faction_standings", "{}")),
-                            active_conditions=json.loads(payload.get("active_conditions", "[]")),
+                            faction_standings=parse_json_object(payload.get("faction_standings", {})),
+                            active_conditions=parse_json_list(payload.get("active_conditions", [])),
                             weather=payload.get("weather", "clear"),
                         )
                     updated_world = world_state
@@ -110,8 +110,8 @@ class EventHandler:
                         CYPHER_MERGE_WORLD_STATE,
                         id=updated_world.id,
                         epoch=updated_world.epoch,
-                        faction_standings=json.dumps(updated_world.faction_standings),
-                        active_conditions=json.dumps(updated_world.active_conditions),
+                        faction_standings=dump_json(updated_world.faction_standings),
+                        active_conditions=dump_json(updated_world.active_conditions),
                         weather=updated_world.weather,
                     )
                 await tx.commit()

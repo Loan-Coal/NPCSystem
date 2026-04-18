@@ -9,7 +9,7 @@ Dependencies injected: GraphEditService.
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.dependencies import get_graph_edit_service
-from api.route_helpers import graph_error_to_http, ok_response
+from api.route_helpers import graph_error_to_http, ok_response, require_node
 from api.schemas import (
     CharacterMoveBody,
     CharacterPatchBody,
@@ -31,9 +31,7 @@ router = APIRouter(prefix="/graph")
 
 @router.get("/characters/{character_id}")
 async def get_character(character_id: str, service: GraphEditService = Depends(get_graph_edit_service)) -> dict:
-    node = await service.get_character(character_id=character_id)
-    if node is None:
-        raise HTTPException(status_code=404, detail="Character not found")
+    node = require_node(await service.get_character(character_id=character_id), node_type="Character")
     return ok_response(node)
 
 
@@ -92,9 +90,7 @@ async def move_character(
 
 @router.get("/events/{event_id}")
 async def get_event(event_id: str, service: GraphEditService = Depends(get_graph_edit_service)) -> dict:
-    node = await service.get_event(event_id=event_id)
-    if node is None:
-        raise HTTPException(status_code=404, detail="Event not found")
+    node = require_node(await service.get_event(event_id=event_id), node_type="Event")
     return ok_response(node)
 
 
@@ -127,9 +123,7 @@ async def patch_event(event_id: str, body: EventPatchBody, service: GraphEditSer
 
 @router.get("/locations/{location_id}")
 async def get_location(location_id: str, service: GraphEditService = Depends(get_graph_edit_service)) -> dict:
-    node = await service.get_location(location_id=location_id)
-    if node is None:
-        raise HTTPException(status_code=404, detail="Location not found")
+    node = require_node(await service.get_location(location_id=location_id), node_type="Location")
     return ok_response(node)
 
 

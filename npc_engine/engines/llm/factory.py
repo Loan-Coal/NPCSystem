@@ -16,7 +16,7 @@ from engines.llm.ollama_adapter import OllamaAdapter
 from engines.llm.protocols import LLMClientProtocol
 
 
-def _create_mock(settings: Settings) -> LLMClientProtocol:
+def _create_mock(_: Settings) -> LLMClientProtocol:
     return MockLLMAdapter()
 
 

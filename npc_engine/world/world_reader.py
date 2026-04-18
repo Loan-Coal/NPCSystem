@@ -6,11 +6,12 @@ Does NOT: update world state values.
 Dependencies injected: AsyncSession.
 """
 
-import json
 from datetime import datetime
+from typing import cast
 
 from neo4j import AsyncSession
 
+from common.json_utils import parse_json_list, parse_json_object
 from world.world_state import WorldState
 
 
@@ -32,37 +33,6 @@ def _coerce_datetime(value: object) -> object:
             return native
     return value
 
-
-def _coerce_json_mapping(value: object) -> dict[str, int]:
-    """Normalize stored mapping payloads to dict form."""
-
-    if isinstance(value, dict):
-        return value
-    if isinstance(value, str):
-        try:
-            parsed = json.loads(value)
-        except ValueError:
-            return {}
-        if isinstance(parsed, dict):
-            return parsed
-    return {}
-
-
-def _coerce_json_list(value: object) -> list[str]:
-    """Normalize stored list payloads to list form."""
-
-    if isinstance(value, list):
-        return value
-    if isinstance(value, str):
-        try:
-            parsed = json.loads(value)
-        except ValueError:
-            return []
-        if isinstance(parsed, list):
-            return parsed
-    return []
-
-
 async def get_world_state(session: AsyncSession, world_id: str = "world") -> WorldState:
     """Return world state or default model when node does not exist."""
 
@@ -71,8 +41,8 @@ async def get_world_state(session: AsyncSession, world_id: str = "world") -> Wor
     if record is None:
         return WorldState()
     payload = dict(record["world"])
-    payload["faction_standings"] = _coerce_json_mapping(payload.get("faction_standings", {}))
-    payload["active_conditions"] = _coerce_json_list(payload.get("active_conditions", []))
+    payload["faction_standings"] = cast(dict[str, int], parse_json_object(payload.get("faction_standings", {})))
+    payload["active_conditions"] = cast(list[str], parse_json_list(payload.get("active_conditions", [])))
     for field_name in ("last_updated_at", "last_graph_updated_at"):
         if field_name in payload:
             payload[field_name] = _coerce_datetime(payload[field_name])

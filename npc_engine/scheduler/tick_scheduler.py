@@ -8,6 +8,7 @@ Dependencies injected: GameClock, GossipHandler, EventHandler.
 
 from neo4j import AsyncSession
 import asyncio
+from collections.abc import Awaitable, Callable
 
 from scheduler.game_clock import GameClock
 from scheduler.tick_lease import TickLeaseRepository, TickLeaseRepositoryProtocol
@@ -84,6 +85,39 @@ class TickScheduler:
             tick_id=tick_id,
         )
 
+    async def _run_distributed_engine_tick(
+        self,
+        *,
+        session: AsyncSession,
+        engine: str,
+        tick_id: int,
+        runner: Callable[[], Awaitable[dict]],
+    ) -> tuple[bool, dict | None]:
+        claimed = await self._lease_repo.try_claim(session=session, engine=engine, tick_id=tick_id)
+        if claimed:
+            try:
+                row = await self._run_with_lease_timeout(runner())
+            except Exception as exc:
+                await self._lease_repo.mark_failed(
+                    session=session,
+                    engine=engine,
+                    tick_id=tick_id,
+                    error=str(exc),
+                )
+                raise
+
+            done = await self._lease_repo.mark_done(session=session, engine=engine, tick_id=tick_id)
+            if not done and not await self._lease_repo.is_done(
+                session=session,
+                engine=engine,
+                tick_id=tick_id,
+            ):
+                raise RuntimeError(f"failed to mark completed {engine} tick {tick_id}")
+            return False, row
+
+        unresolved = not await self._lease_repo.is_done(session=session, engine=engine, tick_id=tick_id)
+        return unresolved, None
+
     async def advance(self, session: AsyncSession, tick_delta: int, time_delta_seconds: int) -> dict:
         """Advance clock and run due handlers at resulting tick."""
 
@@ -100,30 +134,15 @@ class TickScheduler:
                 unresolved = False
                 if tick_id % self._gossip_interval == 0:
                     if self._distributed_lease_enabled:
-                        claimed = await self._lease_repo.try_claim(session=session, engine="gossip", tick_id=tick_id)
-                        if claimed:
-                            try:
-                                gossip_row = await self._run_with_lease_timeout(
-                                    self._gossip_handler.run_tick(session=session, tick_id=tick_id)
-                                )
-                            except Exception as exc:
-                                await self._lease_repo.mark_failed(
-                                    session=session,
-                                    engine="gossip",
-                                    tick_id=tick_id,
-                                    error=str(exc),
-                                )
-                                raise
-                            done = await self._lease_repo.mark_done(session=session, engine="gossip", tick_id=tick_id)
-                            if not done and not await self._lease_repo.is_done(
-                                session=session,
-                                engine="gossip",
-                                tick_id=tick_id,
-                            ):
-                                raise RuntimeError(f"failed to mark completed gossip tick {tick_id}")
+                        gossip_unresolved, gossip_row = await self._run_distributed_engine_tick(
+                            session=session,
+                            engine="gossip",
+                            tick_id=tick_id,
+                            runner=lambda: self._gossip_handler.run_tick(session=session, tick_id=tick_id),
+                        )
+                        if gossip_row is not None:
                             response["gossip"].append(gossip_row)
-                        elif not await self._lease_repo.is_done(session=session, engine="gossip", tick_id=tick_id):
-                            unresolved = True
+                        unresolved = unresolved or gossip_unresolved
                     else:
                         gossip_done = await self._is_tick_done(session=session, key="gossip_ticks", tick_id=tick_id)
                         if not gossip_done:
@@ -132,30 +151,15 @@ class TickScheduler:
                             response["gossip"].append(gossip_row)
                 if tick_id % self._event_interval == 0:
                     if self._distributed_lease_enabled:
-                        claimed = await self._lease_repo.try_claim(session=session, engine="event", tick_id=tick_id)
-                        if claimed:
-                            try:
-                                event_row = await self._run_with_lease_timeout(
-                                    self._event_handler.run_tick(session=session, tick_id=tick_id)
-                                )
-                            except Exception as exc:
-                                await self._lease_repo.mark_failed(
-                                    session=session,
-                                    engine="event",
-                                    tick_id=tick_id,
-                                    error=str(exc),
-                                )
-                                raise
-                            done = await self._lease_repo.mark_done(session=session, engine="event", tick_id=tick_id)
-                            if not done and not await self._lease_repo.is_done(
-                                session=session,
-                                engine="event",
-                                tick_id=tick_id,
-                            ):
-                                raise RuntimeError(f"failed to mark completed event tick {tick_id}")
+                        event_unresolved, event_row = await self._run_distributed_engine_tick(
+                            session=session,
+                            engine="event",
+                            tick_id=tick_id,
+                            runner=lambda: self._event_handler.run_tick(session=session, tick_id=tick_id),
+                        )
+                        if event_row is not None:
                             response["event"].append(event_row)
-                        elif not await self._lease_repo.is_done(session=session, engine="event", tick_id=tick_id):
-                            unresolved = True
+                        unresolved = unresolved or event_unresolved
                     else:
                         event_done = await self._is_tick_done(session=session, key="event_ticks", tick_id=tick_id)
                         if not event_done:

@@ -17,6 +17,18 @@ LABEL_MAX_LENGTH = 64
 UNKNOWN_LABEL = "unknown"
 NON_V1_ROUTE_LABEL = "non_v1"
 HEALTH_ROUTE_LABEL = "health"
+ROUTE_PREFIX_LABELS: tuple[tuple[str, str], ...] = (
+    ("graph/admin", "graph_admin"),
+    ("graph", "graph"),
+    ("ws/dialogue", "ws_dialogue"),
+    ("dialogue", "dialogue"),
+    ("action", "action"),
+    ("quest", "quest"),
+    ("batch", "batch"),
+    ("clock", "clock"),
+    ("schema", "schema"),
+    ("npc", "npc_state"),
+)
 
 
 def _sanitize_label_value(value: str) -> str:
@@ -48,26 +60,11 @@ def route_label_from_path(path: str, api_v1_prefix: str) -> str:
     suffix = path[len(api_v1_prefix) :].lstrip("/")
     if suffix == "":
         return "v1_root"
-    if suffix.startswith("graph/admin"):
-        return "graph_admin"
-    if suffix.startswith("graph"):
-        return "graph"
-    if suffix.startswith("ws/dialogue"):
-        return "ws_dialogue"
-    if suffix.startswith("dialogue"):
-        return "dialogue"
-    if suffix.startswith("action"):
-        return "action"
-    if suffix.startswith("quest"):
-        return "quest"
-    if suffix.startswith("batch"):
-        return "batch"
-    if suffix.startswith("clock"):
-        return "clock"
-    if suffix.startswith("schema"):
-        return "schema"
-    if suffix.startswith("npc"):
-        return "npc_state"
+
+    for prefix, label in ROUTE_PREFIX_LABELS:
+        if suffix.startswith(prefix):
+            return label
+
     return _sanitize_label_value(suffix.split("/")[0])
 
 

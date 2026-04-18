@@ -237,3 +237,63 @@ pytest -q tests/integration -k "migration"
 ## v1.3 Archive
 - M6, M7, M8, M9 were completed on 2026-04-15 to 2026-04-16.
 - Details are preserved in git history prior to this tracker migration.
+
+## Codebase Trimming Initiative (Module-by-Module)
+Status: IN_PROGRESS
+Started: 2026-04-18
+Completed:
+Checkpoint: TRIM_MODULAR_P0
+
+Guardrails (User Confirmed):
+- Public compatibility freeze: none.
+- Uncertain deletions: ask case-by-case before removal.
+- Shared helper location: `common/` package.
+- Tradeoff policy: readability wins when size impact is small.
+- Logging policy: ask per module before removing redundant logs.
+- Validation cadence: targeted tests per module, one full-suite pass at the end.
+- Ambiguity policy: stop and ask immediately.
+
+Module Progress Table:
+
+| Priority | Module | Status | Scan Done | Dedupe Done | Dead Code Removed | Module Tests | Ambiguities | Notes |
+|---|---|---|---|---|---|---|---|---|
+| 1 | utils | DONE | Yes | Yes | No (deferred by decision) | Passed | GraphUnavailableError kept by user decision | Centralized dataclass error string formatting and simplified route-prefix label mapping in metrics. |
+| 2 | world | DONE | Yes | Yes | No | Passed | None | Added shared `common/json_utils.py` and removed duplicated JSON coercion logic in world reader/writer. |
+| 3 | cache | DONE | Yes | No changes needed | No changes needed | Not Run | None | Module already minimal; no safe dedupe/dead-code trims found. |
+| 4 | mutation | DONE | Yes | Yes | No | Passed | None | Reused shared structured error base for bounds exception and removed duplicate __str__ logic. |
+| 5 | schema | DONE | Yes | Yes | No | Passed | None | Extracted shared YAML loader and semantic-field resolver helpers; reduced duplicate loader/resolver logic. |
+| 6 | auth | DONE | Yes | Yes | Yes | Passed | None | Removed unused `validate_bearer_token`/`verify_api_key` (user-approved) and consolidated repeated validation-failure observability logic in middleware. |
+| 7 | engines.contracts | DONE | Yes | Yes | No | Passed | None | Contract loader now reuses shared YAML mapping helper and removes duplicated parse/root-check code. |
+| 8 | engines.llm | DONE | Yes | Yes | Yes (unused arg cleanup) | Passed | None | Replaced duplicated Llama adapter implementation with thin subclass over Mistral adapter; cleaned unused factory arg. |
+| 9 | engines.emotion | DONE | Yes | No changes needed | No changes needed | Not Run | None | Module already concise; no safe dedupe/dead-code trims identified. |
+| 10 | engines.economy | DONE | Yes | No changes needed | No changes needed | Not Run | None | Validation logic is compact and explicit; no safe dedupe/dead-code trims identified. |
+| 11 | engines.quest | DONE | Yes | Yes | No | Passed | None | Extracted shared quest lifecycle helpers for transaction-session checks and event construction. |
+| 12 | engines.events | DONE | Yes | Yes | Yes | Passed | None | Reused shared JSON helpers in event world-state updates and removed unused `seed_awareness` function (user-approved). |
+| 13 | engines.gossip | DONE | Yes | Yes | Yes | Passed | None | Reused shared JSON helpers in edge log updates and removed unused `_apply_template` parameter. |
+| 14 | scheduler | DONE | Yes | Yes | No | Passed | None | Extracted shared distributed-lease engine tick runner to remove duplicated gossip/event lease flow. |
+| 15 | retrieval | DONE | Yes | Yes | No | Passed | None | Added shared retrieval context utils (token estimate, identity parse, deterministic JSON serialize) and removed duplicated logic across builder/budget/subgraph/serializer. |
+| 16 | graph | DONE | Yes | Yes | Yes (unused helper removed) | Passed | Preserved defensive JSON safety by user decision | Added shared provenance-field serializer and shared idempotent replay helper; removed unused graph_edit_service helper. |
+| 17 | engines.dialogue | DONE | Yes | Yes | No | Passed | Kept handler fallback by user decision | Reused shared token estimator in llm_client and preserved handler-level validation fallback contract. |
+| 18 | api | DONE | Yes | Yes | No | Passed | Kept action ignored semantics by user decision | Standardized quest errors to HTTPException with typed envelope detail, wrapped batch/clock/system success payloads in canonical envelope, and deduped graph route not-found checks with shared helper. |
+| 19 | config+main composition | TODO | No | No | No | Not Run | None | |
+| 20 | scripts | TODO | No | No | No | Not Run | None | |
+
+Recommendation Backlog (Ask Before Applying):
+
+| Rec ID | Recommendation | Expected Size Impact | Risk | User Decision | Status |
+|---|---|---|---|---|---|
+| R-01 | Introduce shared JSON-safe serialization/parsing helpers under `common/` | Medium | Low | Accepted | Applied in utils/world |
+| R-02 | Consolidate repeated API error/response wrapping helpers | Medium | Medium | Accepted | Applied in api routes/helpers |
+| R-03 | Consolidate repeated graph query fragments/constants | Medium | Medium | Pending | Proposed |
+| R-04 | Consolidate request/session/time helper logic where duplicated | Low-Medium | Low | Pending | Proposed |
+
+Final Verification (Run Once After All Modules):
+
+| Check | Status | Notes |
+|---|---|---|
+| Global lint | Pending | |
+| Global type check | Pending | |
+| Full test suite | Pending | |
+| Coverage check | Pending | |
+| Runtime smoke checks | Pending | |
+| One-time full code review | Pending | |

@@ -10,6 +10,7 @@ import json
 from typing import Any
 
 from retrieval.context_merger import MergedContext
+from retrieval.context_utils import serialize_json
 
 
 def _safe_parse(text: str) -> Any:
@@ -76,4 +77,4 @@ def serialize_context(context: MergedContext) -> str:
         "nearby_npcs": nearby_payload if isinstance(nearby_payload, list) else [],
         "recent_session_turns": session_payload if isinstance(session_payload, list) else [],
     }
-    return json.dumps(skeleton, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+    return serialize_json(skeleton, compact=True)

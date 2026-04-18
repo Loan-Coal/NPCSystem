@@ -155,6 +155,31 @@ def _record_request_observability(
     )
 
 
+def _finalize_validation_failure_response(
+    *,
+    request: Request,
+    request_id: str,
+    route_label: str,
+    started_at: float,
+    response: Response,
+    reason: str,
+) -> Response:
+    """Attach validation-failure metrics and observability for one response."""
+
+    increment_metric(
+        metric=VALIDATION_FAILURES_METRIC,
+        labels={"route": route_label, "reason": reason, "status": str(response.status_code)},
+    )
+    _record_request_observability(
+        request=request,
+        request_id=request_id,
+        route_label=route_label,
+        status_code=response.status_code,
+        started_at=started_at,
+    )
+    return response
+
+
 class ApiKeyMiddleware(BaseHTTPMiddleware):
     """Enforce Bearer auth for all routes except health."""
 
@@ -209,33 +234,25 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
             )
             if required_scope and not has_scope(granted_scope=granted_scope, required_scope=required_scope):
                 response = JSONResponse(status_code=HTTP_STATUS_FORBIDDEN, content={"detail": "Forbidden"})
-                increment_metric(
-                    metric=VALIDATION_FAILURES_METRIC,
-                    labels={"route": route_label, "reason": "forbidden", "status": str(HTTP_STATUS_FORBIDDEN)},
-                )
-                _record_request_observability(
+                return _finalize_validation_failure_response(
                     request=request,
                     request_id=request_id,
                     route_label=route_label,
-                    status_code=response.status_code,
                     started_at=started_at,
+                    response=response,
+                    reason="forbidden",
                 )
-                return response
             request.state.api_scope = granted_scope
         except AuthError:
             response = JSONResponse(status_code=HTTP_STATUS_UNAUTHORIZED, content={"detail": "Unauthorized"})
-            increment_metric(
-                metric=VALIDATION_FAILURES_METRIC,
-                labels={"route": route_label, "reason": "unauthorized", "status": str(HTTP_STATUS_UNAUTHORIZED)},
-            )
-            _record_request_observability(
+            return _finalize_validation_failure_response(
                 request=request,
                 request_id=request_id,
                 route_label=route_label,
-                status_code=response.status_code,
                 started_at=started_at,
+                response=response,
+                reason="unauthorized",
             )
-            return response
 
         idempotency_key = ""
         preflight_result: IdempotencyPreflightResult | None = None
@@ -250,18 +267,14 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                     message=f"{self._settings.IDEMPOTENCY_HEADER_NAME} header is required.",
                     status_code=HTTP_STATUS_BAD_REQUEST,
                 )
-                increment_metric(
-                    metric=VALIDATION_FAILURES_METRIC,
-                    labels={"route": route_label, "reason": IDEMPOTENCY_REQUIRED_CODE.lower(), "status": str(response.status_code)},
-                )
-                _record_request_observability(
+                return _finalize_validation_failure_response(
                     request=request,
                     request_id=request_id,
                     route_label=route_label,
-                    status_code=response.status_code,
                     started_at=started_at,
+                    response=response,
+                    reason=IDEMPOTENCY_REQUIRED_CODE.lower(),
                 )
-                return response
             except IdempotencyKeyInvalidError:
                 response = _idempotency_error_response(
                     request=request,
@@ -269,18 +282,14 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                     message=f"{self._settings.IDEMPOTENCY_HEADER_NAME} must be a valid UUIDv4.",
                     status_code=HTTP_STATUS_UNPROCESSABLE_ENTITY,
                 )
-                increment_metric(
-                    metric=VALIDATION_FAILURES_METRIC,
-                    labels={"route": route_label, "reason": IDEMPOTENCY_INVALID_CODE.lower(), "status": str(response.status_code)},
-                )
-                _record_request_observability(
+                return _finalize_validation_failure_response(
                     request=request,
                     request_id=request_id,
                     route_label=route_label,
-                    status_code=response.status_code,
                     started_at=started_at,
+                    response=response,
+                    reason=IDEMPOTENCY_INVALID_CODE.lower(),
                 )
-                return response
 
             idempotency_key = request.headers.get(self._settings.IDEMPOTENCY_HEADER_NAME, "").strip()
             request.state.idempotency_key = idempotency_key
@@ -301,14 +310,15 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                 )
                 if replay_response is not None:
                     if preflight_result.decision in {"conflict", "in_flight"}:
-                        increment_metric(
-                            metric=VALIDATION_FAILURES_METRIC,
-                            labels={
-                                "route": route_label,
-                                "reason": f"idempotency_{preflight_result.decision}",
-                                "status": str(replay_response.status_code),
-                            },
+                        return _finalize_validation_failure_response(
+                            request=request,
+                            request_id=request_id,
+                            route_label=route_label,
+                            started_at=started_at,
+                            response=replay_response,
+                            reason=f"idempotency_{preflight_result.decision}",
                         )
+
                     _record_request_observability(
                         request=request,
                         request_id=request_id,

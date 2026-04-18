@@ -9,6 +9,7 @@ Dependencies injected: AsyncSession.
 from pydantic import BaseModel, ConfigDict
 from neo4j import AsyncSession, AsyncTransaction
 
+from graph.replay_helpers import load_idempotent_replay_record
 from utils.errors import CurrencyInsufficientFundsError, CurrencyValidationError, NodeNotFoundError
 
 
@@ -207,21 +208,20 @@ async def _try_replay(
     session_scope: str,
     transfer_kind: str,
 ) -> CurrencyTransferWriteResult | None:
-    if idempotency_key == "":
-        return None
-
-    replay_result = await tx.run(
-        CYPHER_REPLAY_BY_IDEMPOTENCY,
-        source_id=source_id,
-        destination_id=destination_id,
+    replay_record = await load_idempotent_replay_record(
+        tx=tx,
+        replay_cypher=CYPHER_REPLAY_BY_IDEMPOTENCY,
+        params={
+            "source_id": source_id,
+            "destination_id": destination_id,
+            "idempotency_key": idempotency_key,
+            "session_scope": session_scope,
+            "transfer_kind": transfer_kind,
+        },
         idempotency_key=idempotency_key,
-        session_scope=session_scope,
-        transfer_kind=transfer_kind,
     )
-    replay_record = await replay_result.single()
     if replay_record is None:
         return None
-    assert replay_record is not None
 
     return CurrencyTransferWriteResult(
         request_id=str(replay_record["request_id"]),

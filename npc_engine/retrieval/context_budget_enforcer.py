@@ -10,14 +10,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
-import json
 from typing import TypeAlias
 
+from common.json_utils import parse_json_object
 from retrieval.context_merger import ContextItem, MergedContext
+from retrieval.context_utils import CHARS_PER_TOKEN_ESTIMATE, estimate_tokens, parse_node_identity
 from schema.llm_config_models import LLMConfig
 
 
-CHARS_PER_TOKEN_ESTIMATE = 4
 MIN_COMPRESSED_CHARS = 32
 COMPRESSION_SUFFIX = "...[compressed]"
 
@@ -60,7 +60,7 @@ class ContextCompressionCache:
     def compress_item(self, *, item: ContextItem, llm_config: LLMConfig, target_tokens: int) -> str:
         """Compress one context item using deterministic local logic and cache."""
 
-        node_type, node_id = _parse_node_identity(item.key)
+        node_type, node_id = parse_node_identity(item.key)
         key = build_compression_cache_key(
             node_id=node_id,
             node_type=node_type,
@@ -122,7 +122,7 @@ def enforce_context_budget(
     tier_b_items = [item for item in context.items if item.tier == "tierB"]
     tier_c_items = [item for item in context.items if item.tier == "tierC"]
 
-    tier_a_tokens = sum(_estimate_tokens(item.text) for item in tier_a_items)
+    tier_a_tokens = sum(estimate_tokens(item.text) for item in tier_a_items)
     tier_a_budget = llm_config.tier_budget_tokens.tier_a
     if tier_a_tokens > tier_a_budget:
         raise ContextBudgetError(
@@ -133,7 +133,7 @@ def enforce_context_budget(
         )
 
     session_items = [item for item in tier_a_items if item.key == "session"]
-    session_tokens = sum(_estimate_tokens(item.text) for item in session_items)
+    session_tokens = sum(estimate_tokens(item.text) for item in session_items)
     if session_tokens > llm_config.session_turns_budget_tokens:
         raise ContextBudgetError(
             tier="session_turns",
@@ -171,7 +171,7 @@ def _fit_compressible_tier(
     if len(items) == 0:
         return []
 
-    used_tokens = sum(_estimate_tokens(item.text) for item in items)
+    used_tokens = sum(estimate_tokens(item.text) for item in items)
     if used_tokens <= budget_tokens and used_tokens <= int(budget_tokens * llm_config.compression_trigger_ratio):
         return items
 
@@ -186,11 +186,11 @@ def _fit_compressible_tier(
     ]
 
     fitted = sorted(compressed_items, key=lambda item: (-item.priority, item.key))
-    total_tokens = sum(_estimate_tokens(item.text) for item in fitted)
+    total_tokens = sum(estimate_tokens(item.text) for item in fitted)
 
     while total_tokens > budget_tokens and len(fitted) > 0:
         dropped = fitted.pop()
-        total_tokens -= _estimate_tokens(dropped.text)
+        total_tokens -= estimate_tokens(dropped.text)
 
     if total_tokens > budget_tokens:
         raise ContextBudgetError(
@@ -202,11 +202,6 @@ def _fit_compressible_tier(
 
     return fitted
 
-
-def _estimate_tokens(text: str) -> int:
-    return max(1, (len(text) + CHARS_PER_TOKEN_ESTIMATE - 1) // CHARS_PER_TOKEN_ESTIMATE)
-
-
 def _compress_text(text: str, *, target_tokens: int) -> str:
     target_chars = max(MIN_COMPRESSED_CHARS, target_tokens * CHARS_PER_TOKEN_ESTIMATE)
     if len(text) <= target_chars:
@@ -216,22 +211,9 @@ def _compress_text(text: str, *, target_tokens: int) -> str:
     clipped = text[: max(1, target_chars - len(COMPRESSION_SUFFIX) - 12)]
     return f"{clipped}{COMPRESSION_SUFFIX}#{digest}"
 
-
-def _parse_node_identity(key: str) -> tuple[str, str]:
-    parts = key.split(":")
-    if len(parts) == 1:
-        return key, key
-    if len(parts) == 2:
-        return parts[0], parts[1]
-    return parts[0], ":".join(parts[1:])
-
-
 def _extract_graph_timestamp(text: str) -> str | None:
-    try:
-        payload = json.loads(text)
-    except ValueError:
-        return None
-    if not isinstance(payload, dict):
+    payload = parse_json_object(text)
+    if len(payload) == 0:
         return None
 
     for field in ("last_graph_updated_at", "updated_at", "occurred_at", "created_at"):

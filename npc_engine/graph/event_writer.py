@@ -6,10 +6,9 @@ Does NOT: orchestrate event generation logic.
 Dependencies injected: AsyncManagedTransaction.
 """
 
-import json
-
 from neo4j import AsyncTransaction
 
+from graph.json_fields import serialize_provenance_field
 from graph.node_schemas import EventNode
 from utils.errors import QuestProvenanceError
 
@@ -23,10 +22,7 @@ SET e += $properties
 async def upsert_event(tx: AsyncTransaction, event: EventNode) -> None:
     """Insert or update an event node idempotently."""
 
-    properties = event.model_dump(mode="json")
-    provenance = properties.get("provenance")
-    if isinstance(provenance, dict):
-        properties["provenance"] = json.dumps(provenance, sort_keys=True)
+    properties = serialize_provenance_field(event.model_dump(mode="json"))
 
     await tx.run(
         CYPHER_MERGE_EVENT,

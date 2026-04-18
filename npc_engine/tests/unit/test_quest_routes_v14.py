@@ -78,8 +78,8 @@ def test_quest_offer_route_dispatches_to_engine() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["status"] == "ok"
-    assert payload["quest_state"]["status"] == "offered"
+    assert payload["success"] is True
+    assert payload["data"]["quest_state"]["status"] == "offered"
 
 
 def test_quest_route_rejects_missing_idempotency_request_hash() -> None:
@@ -94,5 +94,5 @@ def test_quest_route_rejects_missing_idempotency_request_hash() -> None:
 
     assert response.status_code == 400
     payload = response.json()
-    assert payload["status"] == "ignored"
-    assert payload["error_code"] == "QUEST_PROVENANCE_REQUIRED"
+    assert payload["detail"]["success"] is False
+    assert payload["detail"]["error"] == "QUEST_PROVENANCE_REQUIRED"

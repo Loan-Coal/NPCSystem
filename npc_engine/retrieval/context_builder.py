@@ -13,6 +13,7 @@ from typing import Any
 
 from neo4j import AsyncSession
 
+from common.json_utils import parse_json_object
 from config import Settings
 from engines.dialogue.context_relevance_engine import ContextRelevanceCandidate, rank_context_candidates
 from graph.graph_reader import get_character_with_relations
@@ -25,6 +26,7 @@ from retrieval.context_budget_enforcer import (
 from retrieval.context_merger import ContextItem, merge_context
 from retrieval.context_merger import MergedContext
 from retrieval.context_serializer import serialize_context
+from retrieval.context_utils import estimate_tokens, parse_node_identity, serialize_json
 from retrieval.vector_store_protocol import VectorSearchResult
 from retrieval.subgraph_retriever import retrieve_tier_a_context
 from schema.llm_config_models import LLMConfig
@@ -73,7 +75,7 @@ async def build_serialized_context(
         ContextItem(key="world", text=world_state.model_dump_json(), tier="tier0", priority=100),
         ContextItem(
             key="emotion",
-            text=json.dumps(emotion_snapshot, ensure_ascii=True, sort_keys=True),
+            text=serialize_json(emotion_snapshot),
             tier="tier0",
             priority=95,
         ),
@@ -81,7 +83,7 @@ async def build_serialized_context(
     tier_a_raw = [
         ContextItem(
             key="session",
-            text=json.dumps(session_turns, ensure_ascii=True),
+            text=serialize_json(session_turns),
             tier="tierA",
             priority=99,
         ),
@@ -102,7 +104,7 @@ async def build_serialized_context(
     for index, row in enumerate(tier_b_results):
         item = ContextItem(
             key=f"rag:{row['id']}",
-            text=json.dumps(_to_json_safe(row["payload"]), ensure_ascii=True, sort_keys=True),
+            text=serialize_json(_to_json_safe(row["payload"])),
             tier="tierB" if index < split_index else "tierC",
             priority=max(1, 60 - index),
         )
@@ -137,7 +139,7 @@ async def build_serialized_context(
 
 
 def _estimate_tokens(text: str) -> int:
-    return max(1, (len(text) + 3) // 4)
+    return estimate_tokens(text)
 
 
 def _to_json_safe(value: Any) -> Any:
@@ -224,8 +226,8 @@ def _build_candidate(
     llm_config: LLMConfig,
     vector_scores: dict[str, float],
 ) -> ContextRelevanceCandidate:
-    node_type, node_id = _parse_identity(item.key)
-    payload = _parse_payload(item.text)
+    node_type, node_id = parse_node_identity(item.key)
+    payload = parse_json_object(item.text)
     return ContextRelevanceCandidate(
         node_type=node_type,
         node_id=node_id,
@@ -237,15 +239,6 @@ def _build_candidate(
         quest=_quest_score(item=item),
         explicit=1.0 if item.tier == "tierA" else 0.0,
     )
-
-
-def _parse_payload(text: str) -> dict[str, Any]:
-    try:
-        payload = json.loads(text)
-    except ValueError:
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
 
 def _extract_recency_score(payload: dict[str, Any]) -> float:
     for field in ("occurred_at", "updated_at", "last_graph_updated_at", "created_at"):
@@ -296,16 +289,6 @@ def _infer_proximity_hops(key: str, max_proximity_hops: int) -> int:
     if lowered.startswith("rag:"):
         return max_proximity_hops + 1
     return max_proximity_hops
-
-
-def _parse_identity(key: str) -> tuple[str, str]:
-    parts = key.split(":")
-    if len(parts) == 1:
-        return key, key
-    if len(parts) == 2:
-        return parts[0], parts[1]
-    return parts[0], ":".join(parts[1:])
-
 
 def _normalize_ratio(value: float) -> float:
     return max(0.0, min(1.0, value))

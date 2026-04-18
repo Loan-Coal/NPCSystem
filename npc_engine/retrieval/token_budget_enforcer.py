@@ -7,19 +7,14 @@ Dependencies injected: None.
 """
 
 from retrieval.context_merger import ContextItem, MergedContext
+from retrieval.context_utils import estimate_tokens
 
 
-CHARS_PER_TOKEN_ESTIMATE = 4
 TIER0_MAX_TOKENS = 380
 
 
 class TokenBudgetExceededError(Exception):
     """Raised when mandatory tier0 context alone exceeds budget."""
-
-
-
-def _estimate_tokens(text: str) -> int:
-    return max(1, (len(text) + CHARS_PER_TOKEN_ESTIMATE - 1) // CHARS_PER_TOKEN_ESTIMATE)
 
 
 
@@ -30,7 +25,7 @@ def enforce_budget(context: MergedContext, budget: int) -> MergedContext:
     tier_a_items = [item for item in context.items if item.tier == "tierA"]
     tier_b_items = [item for item in context.items if item.tier == "tierB"]
 
-    tier0_tokens = sum(_estimate_tokens(item.text) for item in tier0_items)
+    tier0_tokens = sum(estimate_tokens(item.text) for item in tier0_items)
     if tier0_tokens > TIER0_MAX_TOKENS:
         raise TokenBudgetExceededError("Tier0 context exceeds fixed max token budget")
     if tier0_tokens > budget:
@@ -41,13 +36,13 @@ def enforce_budget(context: MergedContext, budget: int) -> MergedContext:
     retained_b: list[ContextItem] = []
 
     for item in sorted(tier_a_items, key=lambda value: value.priority, reverse=True):
-        needed = _estimate_tokens(item.text)
+        needed = estimate_tokens(item.text)
         if needed <= remaining_budget:
             retained_a.append(item)
             remaining_budget -= needed
 
     for item in sorted(tier_b_items, key=lambda value: value.priority, reverse=True):
-        needed = _estimate_tokens(item.text)
+        needed = estimate_tokens(item.text)
         if needed <= remaining_budget:
             retained_b.append(item)
             remaining_budget -= needed

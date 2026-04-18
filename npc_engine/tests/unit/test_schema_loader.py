@@ -55,3 +55,18 @@ def test_load_game_schema_raises_when_missing(tmp_path: Path) -> None:
 
     with pytest.raises(SchemaMisconfiguredError):
         load_game_schema(schema_path=str(missing_path))
+
+
+def test_load_game_schema_raises_typed_error_on_read_failure(monkeypatch, tmp_path: Path) -> None:
+    """Schema loader should wrap file read failures as misconfiguration errors."""
+
+    schema_path = tmp_path / "game_schema.yaml"
+    _write_schema(path=schema_path)
+
+    def _raise_os_error(*args, **kwargs):
+        raise OSError("read failed")
+
+    monkeypatch.setattr(Path, "read_text", _raise_os_error)
+
+    with pytest.raises(SchemaMisconfiguredError):
+        load_game_schema(schema_path=str(schema_path))

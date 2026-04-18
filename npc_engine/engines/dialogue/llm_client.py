@@ -12,6 +12,7 @@ from pathlib import Path
 from api.schemas import DialogueResponse
 from pydantic import ValidationError
 from engines.llm.protocols import LLMClientProtocol
+from retrieval.context_utils import estimate_tokens
 from utils.errors import LLMRequestError, LLMTimeoutError
 from utils.metrics import increment_metric
 
@@ -38,13 +39,13 @@ class DialogueLLMClient:
         model_name = self._llm_client.model_name()
         labels = {"engine": LLM_ENGINE_LABEL, "backend": model_name, "mode": "structured"}
         increment_metric(metric=LLM_CALLS_METRIC, labels=labels)
-        increment_metric(metric=LLM_TOKENS_IN_METRIC, amount=float(_estimate_tokens(prompt)), labels=labels)
+        increment_metric(metric=LLM_TOKENS_IN_METRIC, amount=float(estimate_tokens(prompt)), labels=labels)
         try:
             response = await self._llm_client.generate_structured(prompt=prompt, schema=schema, max_tokens=MAX_TOKENS)
             normalized_response = DialogueResponse.model_validate(response).model_dump(mode="python")
             increment_metric(
                 metric=LLM_TOKENS_OUT_METRIC,
-                amount=float(_estimate_tokens(json.dumps(normalized_response, sort_keys=True, ensure_ascii=True))),
+                amount=float(estimate_tokens(json.dumps(normalized_response, sort_keys=True, ensure_ascii=True))),
                 labels=labels,
             )
             return normalized_response
@@ -79,7 +80,7 @@ class DialogueLLMClient:
         fallback = self._load_fallback_dialogue()
         increment_metric(
             metric=LLM_TOKENS_OUT_METRIC,
-            amount=float(_estimate_tokens(json.dumps(fallback, sort_keys=True, ensure_ascii=True))),
+            amount=float(estimate_tokens(json.dumps(fallback, sort_keys=True, ensure_ascii=True))),
             labels={**labels, "fallback": fallback_reason},
         )
         return fallback
@@ -90,7 +91,7 @@ class DialogueLLMClient:
         model_name = self._llm_client.model_name()
         labels = {"engine": LLM_ENGINE_LABEL, "backend": model_name, "mode": "stream"}
         increment_metric(metric=LLM_CALLS_METRIC, labels=labels)
-        increment_metric(metric=LLM_TOKENS_IN_METRIC, amount=float(_estimate_tokens(prompt)), labels=labels)
+        increment_metric(metric=LLM_TOKENS_IN_METRIC, amount=float(estimate_tokens(prompt)), labels=labels)
         try:
             chunks = [
                 chunk
@@ -102,7 +103,7 @@ class DialogueLLMClient:
             ]
             increment_metric(
                 metric=LLM_TOKENS_OUT_METRIC,
-                amount=float(_estimate_tokens("".join(chunks))),
+                amount=float(estimate_tokens("".join(chunks))),
                 labels=labels,
             )
             return chunks
@@ -111,13 +112,7 @@ class DialogueLLMClient:
             text = str(fallback["npc_response"])
             increment_metric(
                 metric=LLM_TOKENS_OUT_METRIC,
-                amount=float(_estimate_tokens(text)),
+                amount=float(estimate_tokens(text)),
                 labels={**labels, "fallback": "error"},
             )
             return [text]
-
-
-def _estimate_tokens(text: str) -> int:
-    """Approximate token count using the shared 4-char heuristic."""
-
-    return max(1, (len(text) + 3) // 4)

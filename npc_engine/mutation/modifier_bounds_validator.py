@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from graph.edge_schemas import RelationDeltaEntry
 from mutation.delta_log_manager import compute_window_sum
+from utils.errors import StructuredNPCSystemError
 
 
 MIN_RELATION_VALUE = 0
@@ -27,25 +28,13 @@ class DeltaValidationConfig:
 
 
 @dataclass(frozen=True)
-class RelationDeltaExceededError(Exception):
+class RelationDeltaExceededError(StructuredNPCSystemError):
     """Raised when requested delta exceeds configured per-turn/window bounds."""
 
     field: str
     requested_delta: int
     max_allowed: int
     context: str
-
-    def __str__(self) -> str:
-        """Return full violation context for logs and API mapping."""
-
-        return (
-            "RelationDeltaExceededError("
-            f"field={self.field}, "
-            f"requested_delta={self.requested_delta}, "
-            f"max_allowed={self.max_allowed}, "
-            f"context={self.context}"
-            ")"
-        )
 
 
 def validate_deltas(

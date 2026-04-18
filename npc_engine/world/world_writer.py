@@ -6,11 +6,12 @@ Does NOT: decide event-driven world transitions.
 Dependencies injected: AsyncSession.
 """
 
-import json
 from datetime import datetime, timezone
+from typing import cast
 
 from neo4j import AsyncSession
 
+from common.json_utils import dump_json, parse_json_list, parse_json_object
 from world.world_state import WorldState
 
 
@@ -32,8 +33,8 @@ async def upsert_world_state(session: AsyncSession, world_state: WorldState) -> 
         CYPHER_MERGE_WORLD_STATE,
         id=world_state.id,
         epoch=world_state.epoch,
-        faction_standings=json.dumps(world_state.faction_standings),
-        active_conditions=json.dumps(world_state.active_conditions),
+        faction_standings=dump_json(world_state.faction_standings),
+        active_conditions=dump_json(world_state.active_conditions),
         weather=world_state.weather,
     )
     record = await result.single()
@@ -43,8 +44,8 @@ async def upsert_world_state(session: AsyncSession, world_state: WorldState) -> 
     return WorldState(
         id=payload.get("id", world_state.id),
         epoch=payload.get("epoch", world_state.epoch),
-        faction_standings=json.loads(payload.get("faction_standings", "{}")),
-        active_conditions=json.loads(payload.get("active_conditions", "[]")),
+        faction_standings=cast(dict[str, int], parse_json_object(payload.get("faction_standings", {}))),
+        active_conditions=cast(list[str], parse_json_list(payload.get("active_conditions", []))),
         weather=payload.get("weather", world_state.weather),
         last_updated_at=datetime.now(timezone.utc),
     )

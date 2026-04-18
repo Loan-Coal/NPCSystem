@@ -7,18 +7,10 @@ Dependencies injected: SchemaConfig.
 """
 
 from schema.schema_models import SchemaConfig
+from schema.semantic_field_resolver import resolve_fields_with_semantic
 
 
 def resolve_gossip_weight_fields(schema: SchemaConfig) -> list[str]:
     """Return character extension fields tagged as gossip_weight."""
 
-    character_config = schema.core_types.get("character")
-    if character_config is None:
-        return []
-
-    fields = [
-        field_name
-        for field_name, field_config in character_config.extension_fields.items()
-        if "gossip_weight" in field_config.semantics
-    ]
-    return sorted(set(fields))
+    return resolve_fields_with_semantic(schema=schema, semantic="gossip_weight", core_type="character")

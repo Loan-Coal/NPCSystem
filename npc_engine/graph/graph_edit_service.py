@@ -7,7 +7,6 @@ Dependencies injected: AsyncSession, SchemaConfig.
 """
 
 import json
-from datetime import datetime, timezone
 from typing import Any
 
 from neo4j import AsyncSession
@@ -23,13 +22,10 @@ from api.schemas import (
     WorldStatePatchBody,
 )
 from graph.graph_edit_validator import ensure_no_immutable_fields, validate_extension_fields
+from graph.json_fields import serialize_provenance_field
 from graph.node_schemas import CharacterNode, EventNode, LocationNode
 from schema.schema_models import SchemaConfig
 from utils.errors import NodeNotFoundError
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _to_json_safe_value(value: Any) -> Any:
@@ -185,10 +181,7 @@ class GraphEditService:
         return [_to_json_safe_node(dict(record["node"])) async for record in result]
 
     async def upsert_event(self, event: EventNode) -> None:
-        payload = event.model_dump(mode="json")
-        provenance = payload.get("provenance")
-        if isinstance(provenance, dict):
-            payload["provenance"] = json.dumps(provenance, sort_keys=True)
+        payload = serialize_provenance_field(event.model_dump(mode="json"))
         await self._session.run(
             "MERGE (e:Event {id: $id}) "
             "SET e += $properties, e.last_graph_updated_at = datetime()",

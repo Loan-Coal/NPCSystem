@@ -7,10 +7,10 @@ Dependencies injected: AsyncSession.
 """
 
 from neo4j import AsyncSession
-import json
 
 from graph.graph_reader import get_character_with_relations, get_events_for_npc, get_location_context
 from retrieval.context_merger import ContextItem
+from retrieval.context_utils import serialize_json
 
 
 async def retrieve_tier_a_context(session: AsyncSession, npc_id: str, event_limit: int) -> list[ContextItem]:
@@ -27,7 +27,7 @@ async def retrieve_tier_a_context(session: AsyncSession, npc_id: str, event_limi
         items.append(
             ContextItem(
                 key=f"character:{npc_id}",
-                text=json.dumps(character_bundle["character"], ensure_ascii=True, sort_keys=True),
+                text=serialize_json(character_bundle["character"]),
                 tier="tierA",
                 priority=100,
             )
@@ -43,7 +43,7 @@ async def retrieve_tier_a_context(session: AsyncSession, npc_id: str, event_limi
         items.append(
             ContextItem(
                 key="relation:player",
-                text=json.dumps(player_relation, ensure_ascii=True, sort_keys=True),
+                text=serialize_json(player_relation),
                 tier="tierA",
                 priority=95,
             )
@@ -56,7 +56,7 @@ async def retrieve_tier_a_context(session: AsyncSession, npc_id: str, event_limi
             items.append(
                 ContextItem(
                     key=f"location:{location_id}",
-                    text=json.dumps(location_context.get("location", {}), ensure_ascii=True, sort_keys=True),
+                    text=serialize_json(location_context.get("location", {})),
                     tier="tierA",
                     priority=92,
                 )
@@ -71,7 +71,7 @@ async def retrieve_tier_a_context(session: AsyncSession, npc_id: str, event_limi
             items.append(
                 ContextItem(
                     key="nearby_npcs",
-                    text=json.dumps(nearby_npcs, ensure_ascii=True, sort_keys=True),
+                    text=serialize_json(nearby_npcs),
                     tier="tierA",
                     priority=91,
                 )
@@ -81,7 +81,7 @@ async def retrieve_tier_a_context(session: AsyncSession, npc_id: str, event_limi
         items.append(
             ContextItem(
                 key=f"event:{index}:{npc_id}",
-                text=json.dumps(event, ensure_ascii=True, sort_keys=True),
+                text=serialize_json(event),
                 tier="tierA",
                 priority=80 - index,
             )

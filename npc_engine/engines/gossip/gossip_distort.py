@@ -24,7 +24,7 @@ def _seed_value(summary: str, honesty: int, trust: int, tick_id: int) -> int:
     return int(sha256(token).hexdigest()[:8], 16)
 
 
-def _apply_template(summary: str, distortion_type: str, level: int) -> str:
+def _apply_template(summary: str, distortion_type: str) -> str:
     if distortion_type == "omission":
         words = summary.split()
         return " ".join(words[: max(1, len(words) // 2)])
@@ -61,5 +61,5 @@ def gossip_distort(
     distortion_types = ["omission", "exaggeration", "role_swap", "timeline_shift"]
     distortion_type = cast(DistortionType, distortion_types[seed % len(distortion_types)])
     level = int(min(100, max(1, int(probability * 100))))
-    distorted = _apply_template(event_summary, distortion_type=distortion_type, level=level)
+    distorted = _apply_template(event_summary, distortion_type=distortion_type)
     return GossipDistortion(summary=distorted, distortion_type=distortion_type, distortion_level=level)

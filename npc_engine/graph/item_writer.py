@@ -11,6 +11,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 from neo4j import AsyncSession
 
+from graph.replay_helpers import load_idempotent_replay_record
 from utils.errors import ItemTransferValidationError, NodeNotFoundError
 
 
@@ -114,24 +115,17 @@ async def transfer_item_atomic(
 
     tx = await session.begin_transaction()
     async with tx:
-        if idempotency_key != "":
-            replay_result = await tx.run(
-                CYPHER_REPLAY_ITEM_TRANSFER,
-                source_id=source_id,
-                destination_id=destination_id,
-                idempotency_key=idempotency_key,
-                transfer_kind=transfer_kind,
-                item_id=item_id,
-            )
-            replay_record = await replay_result.single()
-            if replay_record is not None:
-                await tx.commit()
-                return ItemTransferWriteResult(
-                    request_id=str(replay_record["request_id"]),
-                    item_id=str(replay_record["item_id"]),
-                    quantity=int(replay_record["quantity"]),
-                    replayed=True,
-                )
+        replay = await _try_replay(
+            tx=tx,
+            source_id=source_id,
+            destination_id=destination_id,
+            idempotency_key=idempotency_key,
+            transfer_kind=transfer_kind,
+            item_id=item_id,
+        )
+        if replay is not None:
+            await tx.commit()
+            return replay
 
         result = await tx.run(
             CYPHER_GRANT_SYSTEM_ITEM if source_id == "system" and transfer_kind == "quest_reward" else CYPHER_APPLY_ITEM_TRANSFER,
@@ -175,3 +169,34 @@ async def _raise_item_transfer_failure(*, tx, source_id: str, destination_id: st
 async def _character_exists(*, tx, character_id: str) -> bool:
     result = await tx.run("MATCH (c:Character {id: $character_id}) RETURN c.id AS id", character_id=character_id)
     return await result.single() is not None
+
+
+async def _try_replay(
+    *,
+    tx,
+    source_id: str,
+    destination_id: str,
+    idempotency_key: str,
+    transfer_kind: str,
+    item_id: str,
+) -> ItemTransferWriteResult | None:
+    replay_record = await load_idempotent_replay_record(
+        tx=tx,
+        replay_cypher=CYPHER_REPLAY_ITEM_TRANSFER,
+        params={
+            "source_id": source_id,
+            "destination_id": destination_id,
+            "idempotency_key": idempotency_key,
+            "transfer_kind": transfer_kind,
+            "item_id": item_id,
+        },
+        idempotency_key=idempotency_key,
+    )
+    if replay_record is None:
+        return None
+    return ItemTransferWriteResult(
+        request_id=str(replay_record["request_id"]),
+        item_id=str(replay_record["item_id"]),
+        quantity=int(replay_record["quantity"]),
+        replayed=True,
+    )

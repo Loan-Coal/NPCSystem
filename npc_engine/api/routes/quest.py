@@ -8,10 +8,11 @@ Dependencies injected: AsyncSession, QuestLifecycleEngine, Settings.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request
 from neo4j import AsyncSession
 
 from api.dependencies import get_db_session, get_quest_lifecycle_engine
+from api.route_helpers import error_response, ok_response
 from api.schemas import (
     QuestAcceptRequest,
     QuestEvaluateRequest,
@@ -32,20 +33,26 @@ IDEMPOTENCY_REQUEST_HASH_HEADER = "X-Idempotency-Request-Hash"
 router = APIRouter(prefix="/quest")
 
 
-def _quest_error_response(*, response: Response, error: QuestTransitionError) -> dict:
-    payload = {"status": "ignored", "error_code": error.code, "detail": error.detail}
-    response.status_code = 500
+def _quest_error_status(error: QuestTransitionError) -> int:
+    status_code = 500
     if error.code == "QUEST_PROVENANCE_REQUIRED":
-        response.status_code = 400
+        status_code = 400
     if error.code == "QUEST_REWARD_SOURCE_INVALID":
-        response.status_code = 400
+        status_code = 400
     if error.code == "QUEST_NOT_FOUND":
-        response.status_code = 404
+        status_code = 404
     if error.code in {"QUEST_TRANSITION_INVALID", "QUEST_OBJECTIVE_UNKNOWN"}:
-        response.status_code = 409
+        status_code = 409
     if error.code == "QUEST_EVENT_SESSION_INVALID":
-        response.status_code = 500
-    return payload
+        status_code = 500
+    return status_code
+
+
+def _quest_error_to_http(error: QuestTransitionError) -> HTTPException:
+    return HTTPException(
+        status_code=_quest_error_status(error),
+        detail=error_response(error_code=error.code, message=error.detail),
+    )
 
 
 def _build_transition_meta(*, request: Request, settings: Settings, actor_id: str, reason: str) -> QuestTransitionMeta:
@@ -82,7 +89,6 @@ def _to_objective_inputs(items: list[QuestObjectiveBody]) -> list[QuestObjective
 async def offer_quest(
     body: QuestOfferRequest,
     http_request: Request,
-    response: Response,
     session: AsyncSession = Depends(get_db_session),
     engine: QuestLifecycleEngine = Depends(get_quest_lifecycle_engine),
     settings: Settings = Depends(get_settings),
@@ -111,16 +117,15 @@ async def offer_quest(
             meta=meta,
         )
     except QuestTransitionError as error:
-        return _quest_error_response(response=response, error=error)
+        raise _quest_error_to_http(error) from error
 
-    return {"status": "ok", "quest_state": state}
+    return ok_response({"quest_state": state})
 
 
 @router.post("/accept")
 async def accept_quest(
     body: QuestAcceptRequest,
     http_request: Request,
-    response: Response,
     session: AsyncSession = Depends(get_db_session),
     engine: QuestLifecycleEngine = Depends(get_quest_lifecycle_engine),
     settings: Settings = Depends(get_settings),
@@ -141,16 +146,15 @@ async def accept_quest(
             meta=meta,
         )
     except QuestTransitionError as error:
-        return _quest_error_response(response=response, error=error)
+        raise _quest_error_to_http(error) from error
 
-    return {"status": "ok", "quest_state": state}
+    return ok_response({"quest_state": state})
 
 
 @router.post("/objective")
 async def update_objective(
     body: QuestObjectiveUpdateRequest,
     http_request: Request,
-    response: Response,
     session: AsyncSession = Depends(get_db_session),
     engine: QuestLifecycleEngine = Depends(get_quest_lifecycle_engine),
     settings: Settings = Depends(get_settings),
@@ -173,16 +177,15 @@ async def update_objective(
             meta=meta,
         )
     except QuestTransitionError as error:
-        return _quest_error_response(response=response, error=error)
+        raise _quest_error_to_http(error) from error
 
-    return {"status": "ok", "quest_state": state}
+    return ok_response({"quest_state": state})
 
 
 @router.post("/evaluate")
 async def evaluate_completion(
     body: QuestEvaluateRequest,
     http_request: Request,
-    response: Response,
     session: AsyncSession = Depends(get_db_session),
     engine: QuestLifecycleEngine = Depends(get_quest_lifecycle_engine),
     settings: Settings = Depends(get_settings),
@@ -203,16 +206,15 @@ async def evaluate_completion(
             meta=meta,
         )
     except QuestTransitionError as error:
-        return _quest_error_response(response=response, error=error)
+        raise _quest_error_to_http(error) from error
 
-    return {"status": "ok", "quest_state": state}
+    return ok_response({"quest_state": state})
 
 
 @router.post("/reward")
 async def apply_rewards(
     body: QuestRewardApplyRequest,
     http_request: Request,
-    response: Response,
     session: AsyncSession = Depends(get_db_session),
     engine: QuestLifecycleEngine = Depends(get_quest_lifecycle_engine),
     settings: Settings = Depends(get_settings),
@@ -233,6 +235,6 @@ async def apply_rewards(
             meta=meta,
         )
     except QuestTransitionError as error:
-        return _quest_error_response(response=response, error=error)
+        raise _quest_error_to_http(error) from error
 
-    return {"status": "ok", "quest_state": state}
+    return ok_response({"quest_state": state})

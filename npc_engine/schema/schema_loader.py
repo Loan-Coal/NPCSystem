@@ -7,11 +7,11 @@ Dependencies injected: None.
 """
 
 from pathlib import Path
-from typing import Any
 
 import yaml
 from pydantic import ValidationError
 
+from common.yaml_utils import load_yaml_mapping
 from schema.schema_models import SchemaConfig
 from utils.errors import SchemaMisconfiguredError, SchemaValidationError
 
@@ -30,15 +30,11 @@ def load_game_schema(schema_path: str) -> SchemaConfig:
         )
 
     try:
-        loaded: Any = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError as error:
+        loaded = load_yaml_mapping(path=path, root_error_message="schema root must be a YAML object")
+    except (OSError, UnicodeError) as error:
+        raise SchemaMisconfiguredError(schema_path=schema_path, detail=str(error)) from error
+    except (ValueError, yaml.YAMLError) as error:
         raise SchemaValidationError(schema_path=schema_path, detail=str(error)) from error
-
-    if not isinstance(loaded, dict):
-        raise SchemaValidationError(
-            schema_path=schema_path,
-            detail="schema root must be a YAML object",
-        )
 
     try:
         schema = SchemaConfig.model_validate(loaded)

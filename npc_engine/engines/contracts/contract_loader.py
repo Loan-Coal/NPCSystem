@@ -7,11 +7,11 @@ Dependencies injected: None.
 """
 
 from pathlib import Path
-from typing import Any
 
 import yaml
 from pydantic import ValidationError
 
+from common.yaml_utils import load_yaml_mapping
 from engines.contracts.contract_models import EngineContract
 from utils.errors import ContractValidationError
 
@@ -26,21 +26,11 @@ def _read_contract_document(contract_path: Path) -> dict[str, Any]:
         raise ContractValidationError(contract_path=str(contract_path), detail="contract file does not exist")
 
     try:
-        raw_content = contract_path.read_text(encoding="utf-8")
+        return load_yaml_mapping(path=contract_path, root_error_message="contract root must be a YAML object")
     except (OSError, UnicodeError) as error:
         raise ContractValidationError(contract_path=str(contract_path), detail=str(error)) from error
-
-    try:
-        loaded: Any = yaml.safe_load(raw_content)
-    except yaml.YAMLError as error:
+    except (ValueError, yaml.YAMLError) as error:
         raise ContractValidationError(contract_path=str(contract_path), detail=str(error)) from error
-
-    if not isinstance(loaded, dict):
-        raise ContractValidationError(
-            contract_path=str(contract_path),
-            detail="contract root must be a YAML object",
-        )
-    return loaded
 
 
 def load_engine_contract(contract_path: Path) -> EngineContract:

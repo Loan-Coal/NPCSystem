@@ -11,6 +11,7 @@ from neo4j import AsyncSession
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.dependencies import get_db_session, get_event_handler, get_gossip_handler
+from api.route_helpers import ok_response
 from engines.events.event_handler import EventHandler
 from engines.gossip.gossip_handler import GossipHandler
 
@@ -46,12 +47,13 @@ async def run_gossip_tick(
     """Execute one explicit gossip tick."""
 
     tick_id = request.tick_override
-    return await gossip_handler.run_tick(
+    result = await gossip_handler.run_tick(
         session=session,
         tick_id=tick_id,
         max_pairs=request.max_pairs,
         npc_ids=request.npc_ids,
     )
+    return ok_response(result)
 
 
 @router.post("/batch/event_tick")
@@ -63,4 +65,5 @@ async def run_event_tick(
     """Execute one explicit event tick."""
 
     tick_id = request.tick_override
-    return await event_handler.run_tick(session=session, tick_id=tick_id, location_ids=request.location_ids)
+    result = await event_handler.run_tick(session=session, tick_id=tick_id, location_ids=request.location_ids)
+    return ok_response(result)
