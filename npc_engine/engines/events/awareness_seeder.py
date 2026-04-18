@@ -12,6 +12,7 @@ from neo4j import AsyncSession, AsyncTransaction
 CYPHER_SEED_AWARENESS = """
 MATCH (c:Character)-[:LOCATED_AT]->(:Location {id: $location_id}), (e:Event {id: $event_id})
 WHERE c.is_player = false
+    AND c.is_active = true
 MERGE (c)-[k:KNOWS_ABOUT]->(e)
 SET k.knowledge_state = 'knows',
     k.learned_at_tick = $tick_id,

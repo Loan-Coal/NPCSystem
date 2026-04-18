@@ -11,7 +11,9 @@ from neo4j import AsyncSession
 
 CYPHER_GOSSIP_PAIRS = """
 MATCH (a:Character)-[:LOCATED_AT]->(loc:Location)<-[:LOCATED_AT]-(b:Character)
-WHERE a.id <> b.id AND a.is_player = false AND b.is_player = false
+WHERE a.id <> b.id
+    AND a.is_player = false AND b.is_player = false
+    AND a.is_active = true AND b.is_active = true
 RETURN properties(a) AS a, properties(b) AS b, properties(loc) AS loc
 """
 

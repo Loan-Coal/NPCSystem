@@ -11,13 +11,23 @@ import re
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+EXCLUDED_PATH_PARTS = {
+    "__pycache__",
+    ".venv",
+    "venv",
+    "env",
+    ".tox",
+    "site-packages",
+    "Lib",
+    "Scripts",
+}
 
 
 def _python_files() -> list[Path]:
     return [
         path
         for path in PROJECT_ROOT.rglob("*.py")
-        if "__pycache__" not in path.parts and ".venv" not in path.parts
+        if all(part not in EXCLUDED_PATH_PARTS for part in path.parts)
     ]
 
 
@@ -60,3 +70,45 @@ def test_engines_do_not_import_concrete_llm_adapters() -> None:
         )
         for banned_import in banned_imports:
             assert banned_import not in text, f"Concrete adapter import found in {path}"
+
+
+def test_gossip_pair_selector_query_requires_active_characters() -> None:
+    """Gossip pair selection query must exclude inactive characters."""
+
+    pair_selector_path = PROJECT_ROOT / "engines" / "gossip" / "pair_selector.py"
+    pair_selector_text = pair_selector_path.read_text(encoding="utf-8")
+
+    assert "a.is_active = true" in pair_selector_text
+    assert "b.is_active = true" in pair_selector_text
+
+
+def test_awareness_seeder_query_requires_active_characters() -> None:
+    """Awareness seeding query must exclude inactive characters."""
+
+    awareness_seeder_path = PROJECT_ROOT / "engines" / "events" / "awareness_seeder.py"
+    awareness_seeder_text = awareness_seeder_path.read_text(encoding="utf-8")
+
+    assert "c.is_active = true" in awareness_seeder_text
+
+
+def test_dialogue_stream_path_includes_emotion_state_in_context_builder_call() -> None:
+    """Stream dialogue path should include emotion state in context assembly."""
+
+    dialogue_handler_path = PROJECT_ROOT / "engines" / "dialogue" / "dialogue_handler.py"
+    dialogue_handler_text = dialogue_handler_path.read_text(encoding="utf-8")
+
+    assert "async def stream" in dialogue_handler_text
+    assert "emotion_state={\"current_mood\": current_emotion.label}" in dialogue_handler_text
+
+
+def test_gossip_and_event_handlers_use_shared_safe_invalidation_helper() -> None:
+    """Engine handlers should use the shared safe invalidation helper."""
+
+    gossip_handler_path = PROJECT_ROOT / "engines" / "gossip" / "gossip_handler.py"
+    event_handler_path = PROJECT_ROOT / "engines" / "events" / "event_handler.py"
+
+    gossip_text = gossip_handler_path.read_text(encoding="utf-8")
+    event_text = event_handler_path.read_text(encoding="utf-8")
+
+    assert "invalidate_embedding_safely" in gossip_text
+    assert "invalidate_embedding_safely" in event_text

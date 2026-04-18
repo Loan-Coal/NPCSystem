@@ -11,6 +11,7 @@ import asyncio
 import logging
 
 from config import Settings
+from engines.embedding_invalidation import invalidate_embedding_safely
 from engines.gossip.edge_updater import log_gossip
 from engines.gossip.gossip_distort import gossip_distort
 from engines.gossip.knowledge_propagator import propagate
@@ -55,7 +56,7 @@ class GossipHandler:
 
         async with self._lock:
             pairs = await select_pairs(session=session, max_pairs=max_pairs)
-            if npc_ids is not None and len(npc_ids) > 0:
+            if npc_ids:
                 allowed = set(npc_ids)
                 pairs = [pair for pair in pairs if pair[0]["id"] in allowed or pair[1]["id"] in allowed]
             propagated = 0
@@ -95,9 +96,11 @@ class GossipHandler:
                     tick_id=tick_id,
                     trust_delta=trust_delta,
                 )
-                try:
-                    await self._embedding_index.invalidate(item_id=receiver["id"])
-                except Exception as exc:
-                    LOGGER.warning("embedding invalidate failed for receiver=%s: %s", receiver["id"], exc)
+                await invalidate_embedding_safely(
+                    embedding_index=self._embedding_index,
+                    item_id=receiver["id"],
+                    logger=LOGGER,
+                    entity_label="receiver",
+                )
                 propagated += 1
             return {"tick_id": tick_id, "pairs": len(pairs), "propagated": propagated}

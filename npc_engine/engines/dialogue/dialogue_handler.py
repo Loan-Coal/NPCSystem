@@ -55,17 +55,11 @@ class DialogueHandler:
 
         turns = self._session_store.get_turns(player_id=request.player_id, npc_id=request.npc_id)
         current_emotion = self._emotion_updater.get_state(npc_id=request.npc_id)
-        serialized_context = await build_serialized_context(
-            session=self._session,
-            settings=self._settings,
-            llm_config=self._llm_config,
-            embedding_index=self._embedding_index,
-            npc_id=request.npc_id,
-            player_message=request.player_message,
-            session_turns=turns,
-            emotion_state={"current_mood": current_emotion.label},
+        prompt = await self._build_dialogue_prompt(
+            request=request,
+            turns=turns,
+            current_emotion=current_emotion,
         )
-        prompt = build_dialogue_prompt(request=request, serialized_context=serialized_context)
         raw_response = await self._llm.generate_response(prompt=prompt)
         try:
             parsed_response = parse_dialogue_response(payload=raw_response)
@@ -107,6 +101,17 @@ class DialogueHandler:
         """Produce token chunks for WebSocket output."""
 
         turns = self._session_store.get_turns(player_id=request.player_id, npc_id=request.npc_id)
+        current_emotion = self._emotion_updater.get_state(npc_id=request.npc_id)
+        prompt = await self._build_dialogue_prompt(
+            request=request,
+            turns=turns,
+            current_emotion=current_emotion,
+        )
+        return await self._llm.stream_text(prompt=prompt)
+
+    async def _build_dialogue_prompt(self, request: DialogueRequest, turns: list[str], current_emotion) -> str:
+        """Build serialized context and prompt consistently across REST and stream paths."""
+
         serialized_context = await build_serialized_context(
             session=self._session,
             settings=self._settings,
@@ -115,6 +120,6 @@ class DialogueHandler:
             npc_id=request.npc_id,
             player_message=request.player_message,
             session_turns=turns,
+            emotion_state={"current_mood": current_emotion.label},
         )
-        prompt = build_dialogue_prompt(request=request, serialized_context=serialized_context)
-        return await self._llm.stream_text(prompt=prompt)
+        return build_dialogue_prompt(request=request, serialized_context=serialized_context)

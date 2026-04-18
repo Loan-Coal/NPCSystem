@@ -95,3 +95,44 @@ async def test_dialogue_handler_recovers_from_validation_failure(monkeypatch) ->
     assert response.npc_response == "I need a moment to think."
     assert response.session_id == "session_1"
     assert get_counter_value(LLM_VALIDATION_FAILURES_METRIC, labels={"engine": "dialogue"}) == 1.0
+
+
+@pytest.mark.asyncio
+async def test_stream_passes_emotion_state_to_context_builder(monkeypatch) -> None:
+    """Stream flow should include emotion context when building serialized context."""
+
+    captured_kwargs: dict[str, Any] = {}
+
+    async def fake_build_serialized_context(**kwargs):
+        captured_kwargs.update(kwargs)
+        return "{}"
+
+    monkeypatch.setattr("engines.dialogue.dialogue_handler.build_serialized_context", fake_build_serialized_context)
+    monkeypatch.setattr(
+        "engines.dialogue.dialogue_handler.build_dialogue_prompt",
+        lambda request, serialized_context: "prompt",
+    )
+
+    handler = DialogueHandler(
+        session=None,
+        settings=SimpleNamespace(LLM_FALLBACK_PATH="data/fallback_responses.json"),
+        llm_client=MinimalLLMClient(),
+        llm_config=SimpleNamespace(),
+        session_store=SessionStore(ttl_seconds=300, max_turns=10),
+        emotion_updater=FakeEmotionUpdater(),
+        embedding_index=None,
+    )
+    handler._llm.stream_text = AsyncMock(return_value=["chunk"])
+
+    chunks = await handler.stream(
+        DialogueRequest(
+            player_id="player_1",
+            npc_id="npc_1",
+            player_message="hello",
+            location_id="loc_1",
+            session_id="session_1",
+        )
+    )
+
+    assert chunks == ["chunk"]
+    assert captured_kwargs["emotion_state"] == {"current_mood": "neutral"}

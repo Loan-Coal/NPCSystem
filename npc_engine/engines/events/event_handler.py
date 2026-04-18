@@ -16,6 +16,7 @@ import logging
 from neo4j import AsyncSession
 
 from config import Settings
+from engines.embedding_invalidation import invalidate_embedding_safely
 from engines.events.awareness_seeder import seed_awareness_tx
 from engines.events.event_pool import EventTemplate, load_event_pool
 from engines.events.location_scoper import resolve_locations
@@ -115,8 +116,10 @@ class EventHandler:
                     )
                 await tx.commit()
 
-            try:
-                await self._embedding_index.invalidate(item_id=location_id)
-            except Exception as exc:
-                LOGGER.warning("embedding invalidate failed for location=%s: %s", location_id, exc)
+            await invalidate_embedding_safely(
+                embedding_index=self._embedding_index,
+                item_id=location_id,
+                logger=LOGGER,
+                entity_label="location",
+            )
             return {"tick_id": tick_id, "created": 1, "event_id": event_id, "location_id": location_id}
