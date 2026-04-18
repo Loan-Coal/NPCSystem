@@ -1,6 +1,6 @@
-# NPC Engine (v1.3 rollout)
+# NPC Engine (v1.4 rollout)
 
-Current stage: M9 (Hardening, docs, CI, coverage)
+Current stage: P4 (Contracts, tests, deterministic simulation)
 
 ## Quick Start
 
@@ -33,6 +33,9 @@ make check
 make test-v13-contracts
 make test-v13-graph-admin
 make test-v13-retrieval
+make test-v14-p4
+make check-contract-sync
+make verify-v14-p4
 make verify-v13
 make seed
 ```

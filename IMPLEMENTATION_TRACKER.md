@@ -129,16 +129,16 @@ Notes:
 - Added P3 unit/integration tests and `make test-v14-p3` / `make verify-v14-p3` targets.
 
 ### P4 - Contracts, Tests, and Simulation
-Status: TODO
-Started: 
-Completed: 
+Status: DONE
+Started: 2026-04-18
+Completed: 2026-04-18
 Checkpoint: CP4_CONTRACTS_SIM
 
 Tasks:
-- [ ] Add contract tests for dialogue, quest, and currency engines.
-- [ ] Add CI guard that contract YAML changes require matching test updates.
-- [ ] Add deterministic scenario test suite for PR runs.
-- [ ] Add `scripts/simulate_world_flow.py` with stable JSON summary output.
+- [x] Add contract tests for dialogue, quest, and currency engines.
+- [x] Add CI guard that contract YAML changes require matching test updates.
+- [x] Add deterministic scenario test suite for PR runs.
+- [x] Add `scripts/simulate_world_flow.py` with stable JSON summary output.
 
 Verification:
 ```bash
@@ -146,7 +146,18 @@ cd npc_engine
 make check-contracts
 pytest -q tests/engine_contract_tests
 python -m scripts.simulate_world_flow
+pytest -q tests/unit/test_simulate_world_flow_v14.py tests/unit/test_guard_contract_test_sync_v14.py
+make check-contract-sync
+make lint
+make type
 ```
+
+Notes:
+- Added `tests/engine_contract_tests/test_dialogue_contract.py`, `test_quest_contract.py`, and `test_currency_contract.py` for engine contract conformance.
+- Added `scripts/guard_contract_test_sync.py` and `tests/unit/test_guard_contract_test_sync_v14.py` for contract-YAML/test-sync CI enforcement.
+- Added `scripts/simulate_world_flow.py` and `tests/unit/test_simulate_world_flow_v14.py` with deterministic JSON summary assertions.
+- Added `test-v14-p4`, `check-contract-sync`, and `verify-v14-p4` targets in `npc_engine/Makefile`.
+- Added `v14-p4-gates` job in `.github/workflows/ci.yml` to run contract validation, PR sync guard, and P4 tests.
 
 ### P5 - Observability and Dashboards
 Status: TODO
@@ -200,6 +211,7 @@ pytest -q tests/integration -k "migration"
 - 2026-04-17: P1 completed with deterministic relevance ranking, tier-aware budget enforcement, compression cache, and pipeline integration tests.
 - 2026-04-17: P1 hardening verified and fixed (tier drop order + compression cache source-hash guard).
 - 2026-04-17: P2 completed with currency verification engine, atomic currency writer, buy/sell coordinator routing, idempotency replay-safe transfer behavior, and `make verify-v14-p2` green.
+- 2026-04-18: P4 completed with engine contract conformance tests, deterministic world-flow simulation script, contract/test sync guard, CI wiring, and verification passes.
 
 ## v1.3 Archive
 - M6, M7, M8, M9 were completed on 2026-04-15 to 2026-04-16.
