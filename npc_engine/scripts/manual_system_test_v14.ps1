@@ -1,9 +1,11 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+# Base API endpoint and optional cleanup toggle for this manual run.
 $Base = "http://127.0.0.1:8000"
 $DoCleanup = $false
 
+# Reads a key from .env with optional default handling.
 function Get-EnvValue {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -26,6 +28,7 @@ function Get-EnvValue {
     return $value
 }
 
+# Resolves .env from either npc_engine root or repository root.
 function Get-EnvPath {
     $candidates = @(
         (Join-Path (Get-Location).Path ".env"),
@@ -37,6 +40,7 @@ function Get-EnvPath {
     throw ".env not found. Run this from npc_engine or repo root."
 }
 
+# Converts JSON with compatibility for PowerShell versions with/without -Depth.
 function ConvertFrom-JsonSafe {
     param([Parameter(Mandatory = $true)][string]$Text)
 
@@ -47,6 +51,7 @@ function ConvertFrom-JsonSafe {
     return $Text | ConvertFrom-Json
 }
 
+# Wraps Invoke-WebRequest with compatibility options and normalized arguments.
 function Invoke-WebRequestSafe {
     param(
         [Parameter(Mandatory = $true)][ValidateSet("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")][string]$Method,
@@ -73,10 +78,12 @@ function Invoke-WebRequestSafe {
     return Invoke-WebRequest @invokeArgs
 }
 
+# Standard auth header for read-only endpoints.
 function New-ReadHeaders {
     return @{ "Authorization" = "Bearer $script:ApiKey" }
 }
 
+# Standard write headers including request tracing and idempotency metadata.
 function New-WriteHeaders {
     param(
         [Parameter(Mandatory = $true)][string]$RequestId,
@@ -97,12 +104,14 @@ function New-WriteHeaders {
     }
 }
 
+# Parses common truthy string values from .env flags.
 function Parse-BoolLike {
     param([string]$Text)
     if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
     return @("1", "true", "yes", "on") -contains $Text.Trim().ToLowerInvariant()
 }
 
+# Simple assertion helper for script-level validations.
 function Assert-True {
     param(
         [Parameter(Mandatory = $true)][bool]$Condition,
@@ -112,6 +121,7 @@ function Assert-True {
     Write-Host "[ASSERT OK] $Message" -ForegroundColor Green
 }
 
+# Reads response content from error objects across PowerShell/.NET shapes.
 function Read-ErrorResponseBody {
     param([Parameter(Mandatory = $true)]$Response)
 
@@ -140,6 +150,7 @@ function Read-ErrorResponseBody {
     return ""
 }
 
+# Safely normalizes response status code extraction.
 function Resolve-StatusCode {
     param([Parameter(Mandatory = $true)]$Response)
 
@@ -155,6 +166,7 @@ function Resolve-StatusCode {
     }
 }
 
+# Unified API invoker with JSON handling, expected-status checks, and logging.
 function Invoke-NpcApi {
     param(
         [Parameter(Mandatory = $true)][ValidateSet("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")][string]$Method,
@@ -241,11 +253,13 @@ function Invoke-NpcApi {
     }
 }
 
+# Load runtime config and idempotency policy from .env.
 $EnvPath = Get-EnvPath
 $script:ApiKey = Get-EnvValue -Path $EnvPath -Key "API_KEY_SECRET"
 $script:Base = $Base
 $idempotencyEnforced = Parse-BoolLike (Get-EnvValue -Path $EnvPath -Key "IDEMPOTENCY_ENFORCE_HEADER" -Default "false")
 
+# Generate unique IDs so each run is isolated and repeatable.
 $runId = Get-Date -Format "yyyyMMddHHmmss"
 $playerId = "player_manual_$runId"
 $npcId = "npc_manual_$runId"
@@ -260,22 +274,28 @@ $sessionScope = "manual_session_$runId"
 Write-Host "Using .env: $EnvPath"
 Write-Host "IDEMPOTENCY_ENFORCE_HEADER=$idempotencyEnforced"
 
+# 1) Smoke checks: service health and protected route auth.
 Invoke-NpcApi -Method GET -Path "/health" -ExpectedStatus @(200) -Label "health"
 Invoke-NpcApi -Method GET -Path "/v1/protected" -Headers (New-ReadHeaders) -ExpectedStatus @(200) -Label "protected"
 
+# Shared provenance metadata for graph write operations.
 $meta = @{ request_id = "req-meta-$runId"; actor_id = "manual_tester"; reason = "manual_e2e" }
 
+# 2) Seed base world locations.
 Invoke-NpcApi -Method POST -Path "/v1/graph/locations" -Headers (New-WriteHeaders -RequestId "req-loc-a") -ExpectedStatus @(200) -Body @{ id = $locationA; name = "Manual Square"; region = "manual"; location_tag = "square"; descriptor = "manual location a" }
 Invoke-NpcApi -Method POST -Path "/v1/graph/locations" -Headers (New-WriteHeaders -RequestId "req-loc-b") -ExpectedStatus @(200) -Body @{ id = $locationB; name = "Manual Docks"; region = "manual"; location_tag = "docks"; descriptor = "manual location b" }
 
+# 3) Create player and NPC characters.
 Invoke-NpcApi -Method POST -Path "/v1/graph/characters" -Headers (New-WriteHeaders -RequestId "req-char-player") -ExpectedStatus @(200) -Body @{ id = $playerId; name = "Manual Player"; archetype = "adventurer"; faction = "manual"; biography = "player"; current_location_id = $locationA; is_player = $true; is_active = $true; gossipy = 40; credulity = 60; honesty = 55; current_mood = "neutral" }
 Invoke-NpcApi -Method POST -Path "/v1/graph/characters" -Headers (New-WriteHeaders -RequestId "req-char-npc") -ExpectedStatus @(200) -Body @{ id = $npcId; name = "Manual NPC"; archetype = "guard"; faction = "manual"; biography = "npc"; current_location_id = $locationA; is_player = $false; is_active = $true; gossipy = 70; credulity = 45; honesty = 65; current_mood = "neutral" }
 Invoke-NpcApi -Method POST -Path "/v1/graph/characters" -Headers (New-WriteHeaders -RequestId "req-char-vendor") -ExpectedStatus @(200) -Body @{ id = $vendorId; name = "Manual Vendor"; archetype = "merchant"; faction = "manual"; biography = "vendor"; current_location_id = $locationA; is_player = $false; is_active = $true; gossipy = 50; credulity = 50; honesty = 70; current_mood = "neutral" }
 
+# 4) Link character relationships and location edges.
 Invoke-NpcApi -Method POST -Path "/v1/graph/edges/located_at" -Headers (New-WriteHeaders -RequestId "req-loc-player") -ExpectedStatus @(200) -Body @{ character_id = $playerId; location_id = $locationA; is_permanent_resident = $false; meta = $meta }
 Invoke-NpcApi -Method POST -Path "/v1/graph/edges/located_at" -Headers (New-WriteHeaders -RequestId "req-loc-npc") -ExpectedStatus @(200) -Body @{ character_id = $npcId; location_id = $locationA; is_permanent_resident = $true; meta = $meta }
 Invoke-NpcApi -Method POST -Path "/v1/graph/edges/relates_to" -Headers (New-WriteHeaders -RequestId "req-rel") -ExpectedStatus @(200) -Body @{ src_id = $npcId; dst_id = $playerId; trust = 60; fear = 30; affection = 55; meta = $meta }
 
+# 5) Create an event and attach knowledge/participation edges.
 Invoke-NpcApi -Method POST -Path "/v1/graph/events" -Headers (New-WriteHeaders -RequestId "req-event") -ExpectedStatus @(200) -Body @{
     id = $eventId
     summary = "Manual event"
@@ -295,14 +315,18 @@ Invoke-NpcApi -Method POST -Path "/v1/graph/events" -Headers (New-WriteHeaders -
 Invoke-NpcApi -Method POST -Path "/v1/graph/edges/knows_about" -Headers (New-WriteHeaders -RequestId "req-knows") -ExpectedStatus @(200) -Body @{ character_id = $npcId; event_id = $eventId; knowledge_state = "knows"; learned_at_tick = 9001; meta = $meta }
 Invoke-NpcApi -Method POST -Path "/v1/graph/edges/participated_in" -Headers (New-WriteHeaders -RequestId "req-part") -ExpectedStatus @(200) -Body @{ character_id = $npcId; event_id = $eventId; role = "witness"; meta = $meta }
 
+# 6) Validate NPC state retrieval with related graph context.
 $state = Invoke-NpcApi -Method GET -Path "/v1/npc/$npcId/state?include_relations=true&include_events=true" -Headers (New-ReadHeaders) -ExpectedStatus @(200)
 Assert-True -Condition ($null -ne $state.Json.character) -Message "NPC state contains character"
 
+# 7) Exercise dialogue endpoint continuity via fixed session id.
 $d1 = Invoke-NpcApi -Method POST -Path "/v1/dialogue" -Headers (New-WriteHeaders -RequestId "req-dialogue-1") -ExpectedStatus @(200) -Body @{ player_id = $playerId; npc_id = $npcId; player_message = "What happened at the square?"; location_id = $locationA; session_id = $sessionId }
 Assert-True -Condition ($d1.Json.session_id -eq $sessionId) -Message "Dialogue returns same session id"
 
+# 8) Mutate world state to verify patch/write path behavior.
 Invoke-NpcApi -Method PATCH -Path "/v1/graph/world_state" -Headers (New-WriteHeaders -RequestId "req-world") -ExpectedStatus @(200) -Body @{ weather = "storm"; active_conditions = @("manual_test"); faction_standings = @{ manual = 10 }; meta = $meta }
 
+# 9) Full quest lifecycle: offer, accept, progress, evaluate, reward.
 $qOffer = Invoke-NpcApi -Method POST -Path "/v1/quest/offer" -Headers (New-WriteHeaders -RequestId "req-quest-offer") -ExpectedStatus @(200) -Body @{ quest_id = $questId; player_id = $playerId; title = "Collect Tokens"; objectives = @(@{ objective_id = "obj_tokens"; target_count = 2 }); item_rewards = @(@{ item_id = "dock_token"; quantity = 1 }); currency_reward = @{ amount = 25 } }
 Assert-True -Condition ($qOffer.Json.status -eq "ok") -Message "Quest offer accepted"
 
@@ -312,6 +336,7 @@ Invoke-NpcApi -Method POST -Path "/v1/quest/objective" -Headers (New-WriteHeader
 Invoke-NpcApi -Method POST -Path "/v1/quest/evaluate" -Headers (New-WriteHeaders -RequestId "req-quest-eval") -ExpectedStatus @(200) -Body @{ quest_id = $questId; player_id = $playerId }
 Invoke-NpcApi -Method POST -Path "/v1/quest/reward" -Headers (New-WriteHeaders -RequestId "req-quest-reward") -ExpectedStatus @(200) -Body @{ quest_id = $questId; player_id = $playerId }
 
+# 10) Verify idempotent action writes do not double-apply side effects.
 $buyIdem = [guid]::NewGuid().ToString()
 $buyBody = @{ player_id = $playerId; npc_id = $npcId; action_type = "buy_item"; intensity = 20; counterparty_id = $vendorId; currency_amount = 10; currency_reason = "manual_buy_test"; session_scope = $sessionScope }
 $buy1 = Invoke-NpcApi -Method POST -Path "/v1/action" -Headers (New-WriteHeaders -RequestId "req-buy-1" -IdempotencyKey $buyIdem -RequestHash "hash-buy-$runId") -ExpectedStatus @(200) -Body $buyBody
@@ -323,6 +348,7 @@ $questEvents = @($eventsResp.Json.data | Where-Object { $_.id -like "${questId}:
 Write-Host "Quest events found: $($questEvents.Count)"
 $questEvents | Select-Object id, event_type, summary, producer, origin_engine, schema_version | Format-Table -AutoSize
 
+# 11) Kick off reindex job and poll until terminal status.
 $reindex = Invoke-NpcApi -Method POST -Path "/v1/graph/admin/reindex" -Headers (New-WriteHeaders -RequestId "req-reindex") -ExpectedStatus @(202) -Body @{ npc_ids = @($npcId, $vendorId) }
 $jobId = $reindex.Json.data.job_id
 
@@ -338,6 +364,7 @@ if (-not [string]::IsNullOrWhiteSpace($jobId)) {
     }
 }
 
+# Optional teardown for test data created by this run.
 if ($DoCleanup) {
     Invoke-NpcApi -Method DELETE -Path "/v1/graph/edges/participated_in/$npcId/$eventId" -Headers (New-WriteHeaders -RequestId "req-del-part") -ExpectedStatus @(200)
     Invoke-NpcApi -Method DELETE -Path "/v1/graph/edges/knows_about/$npcId/$eventId" -Headers (New-WriteHeaders -RequestId "req-del-knows") -ExpectedStatus @(200)
@@ -357,5 +384,6 @@ if ($DoCleanup) {
     Invoke-NpcApi -Method DELETE -Path "/v1/graph/admin/locations/$locationB" -Headers (New-WriteHeaders -RequestId "req-del-loc-b") -ExpectedStatus @(200, 404)
 }
 
+# Final run summary for easy copy/paste into reports.
 Write-Host "Manual system test run completed."
 Write-Host "QuestId=$questId PlayerId=$playerId NpcId=$npcId VendorId=$vendorId EventId=$eventId"
