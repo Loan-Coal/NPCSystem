@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   neo4j:
     image: neo4j:5
@@ -10,6 +8,12 @@ services:
       NEO4J_AUTH: neo4j/password
     volumes:
       - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -a bolt://localhost:7687 -u neo4j -p password 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
 
   redis:
     image: redis:7-alpine
@@ -31,11 +35,14 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      GAME_SCHEMA_PATH: /app/game_schema.yaml
     depends_on:
-      - neo4j
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-    volumes:
-      - .:/app
+      neo4j:
+        condition: service_healthy
+    restart: on-failure:5
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
 
 volumes:
   neo4j_data:

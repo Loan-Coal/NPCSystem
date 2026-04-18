@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     GOSSIP_RNG_SEED: int | None = None
     EVENT_RNG_SEED: int | None = None
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
 
     @field_validator("API_KEY_SECRET")
     @classmethod
@@ -123,7 +123,12 @@ class Settings(BaseSettings):
         path = value.strip()
         if not path:
             raise ValueError("GAME_SCHEMA_PATH cannot be empty")
-        return path
+        candidate = Path(path)
+        if candidate.is_absolute():
+            return str(candidate)
+
+        project_root = Path(__file__).resolve().parent
+        return str((project_root / candidate).resolve())
 
     @field_validator("LLM_CONFIG_PATH")
     @classmethod

@@ -1,0 +1,14 @@
+{
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.mypy_cache": true,
+    "**/.ruff_cache": true,
+    "**/.tmp_exec_query": true,
+    "**/.coverage": true,
+    "**/coverage.json": true,
+    "**/verify-*.out": true,
+    "**/.venv": true,
+    "**/...venv": true
+  }
+}
