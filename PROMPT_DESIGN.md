@@ -116,7 +116,7 @@ You must respond with a single JSON object matching this EXACT schema. No other 
   },
   "mood_update": "<new mood label as string, or null if unchanged>",
   "action": {
-    "type": "<one of: speak, gesture, move, attack, give_item, none>",
+    "type": "<one of: speak, gesture, move, attack, give_item, buy_item, sell_item, none>",
     "target_id": "<target character or item id, or null>",
     "parameters": {}
   },
@@ -193,7 +193,7 @@ Respond with this JSON only:
   "intent": "<one of: deflect, comply, threaten, confide, barter, attack, flee, ignore>",
   "emotional_stance": "<one word: warm, cold, fearful, angry, curious, neutral>",
   "should_reveal_secret": <true|false>,
-  "action_hint": "<one of: speak, gesture, move, attack, give_item, none>"
+  "action_hint": "<one of: speak, gesture, move, attack, give_item, buy_item, sell_item, none>"
 }
 
 NPC context: {npc.name}, trust={player_relation.trust}, fear={player_relation.fear}, emotion={npc.emotion.label}

@@ -6,15 +6,13 @@ Does NOT: perform authentication itself.
 Dependencies injected: GraphAdminService.
 """
 
-import asyncio
-from datetime import datetime, timezone
-from uuid import uuid4
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from api.dependencies import get_embedding_index, get_graph_admin_service
+from api.dependencies import get_embedding_index, get_graph_admin_service, get_reindex_job_service
+from api.route_helpers import graph_error_to_http, ok_response
 from graph.graph_admin_service import GraphAdminService
+from graph.reindex_job_service import ReindexJobService
 from retrieval.embedding_index import EmbeddingIndex
 from utils.errors import NodeNotFoundError
 
@@ -51,32 +49,6 @@ class ReindexRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
-_REINDEX_JOBS: dict[str, dict] = {}
-
-
-async def _run_reindex_job(job_id: str, npc_ids: list[str], embedding_index: EmbeddingIndex) -> None:
-    """Execute in-memory reindex work asynchronously and update job status."""
-
-    job = _REINDEX_JOBS.get(job_id)
-    if job is None:
-        return
-
-    job["status"] = "running"
-    job["started_at"] = datetime.now(timezone.utc).isoformat()
-    try:
-        for npc_id in npc_ids:
-            await embedding_index.invalidate(item_id=npc_id)
-        job["status"] = "completed"
-        job["processed_ids"] = list(npc_ids)
-        job["failed_count"] = 0
-    except Exception as error:
-        job["status"] = "failed"
-        job["error"] = str(error)
-        job["failed_count"] = 1
-    finally:
-        job["finished_at"] = datetime.now(timezone.utc).isoformat()
-
-
 router = APIRouter(prefix="/graph/admin")
 
 
@@ -85,8 +57,8 @@ async def hard_delete_character(character_id: str, service: GraphAdminService = 
     try:
         data = await service.hard_delete_character(character_id=character_id)
     except NodeNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
-    return {"success": True, "data": data, "meta": None}
+        raise graph_error_to_http(error) from error
+    return ok_response(data)
 
 
 @router.delete("/events/{event_id}")
@@ -94,8 +66,8 @@ async def hard_delete_event(event_id: str, service: GraphAdminService = Depends(
     try:
         data = await service.hard_delete_event(event_id=event_id)
     except NodeNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
-    return {"success": True, "data": data, "meta": None}
+        raise graph_error_to_http(error) from error
+    return ok_response(data)
 
 
 @router.delete("/locations/{location_id}")
@@ -103,8 +75,8 @@ async def hard_delete_location(location_id: str, service: GraphAdminService = De
     try:
         data = await service.hard_delete_location(location_id=location_id)
     except NodeNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
-    return {"success": True, "data": data, "meta": None}
+        raise graph_error_to_http(error) from error
+    return ok_response(data)
 
 
 @router.put("/relations/absolute")
@@ -121,8 +93,8 @@ async def set_relation_absolute(
             affection=request.affection,
         )
     except NodeNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
-    return {"success": True, "data": data, "meta": None}
+        raise graph_error_to_http(error) from error
+    return ok_response(data)
 
 
 @router.post("/relations/delta")
@@ -139,44 +111,30 @@ async def apply_relation_delta(
             affection_delta=request.affection,
         )
     except NodeNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
-    return {"success": True, "data": data, "meta": {"clamped_fields": clamped_fields}}
+        raise graph_error_to_http(error) from error
+    return ok_response(data, meta={"clamped_fields": clamped_fields})
 
 
 @router.post("/reindex", status_code=202)
 async def submit_reindex(
     request: ReindexRequest,
     embedding_index: EmbeddingIndex = Depends(get_embedding_index),
+    reindex_jobs: ReindexJobService = Depends(get_reindex_job_service),
 ) -> dict:
-    job_id = str(uuid4())
-    submitted_at = datetime.now(timezone.utc).isoformat()
-    target_ids = request.npc_ids
-
-    _REINDEX_JOBS[job_id] = {
-        "job_id": job_id,
-        "status": "queued",
-        "submitted_at": submitted_at,
-        "processed_ids": [],
-        "failed_count": 0,
-    }
-    asyncio.create_task(_run_reindex_job(job_id=job_id, npc_ids=target_ids, embedding_index=embedding_index))
-    return {"success": True, "data": {"job_id": job_id}, "meta": {"status": "accepted"}}
+    job_id = reindex_jobs.submit_reindex(npc_ids=request.npc_ids, embedding_index=embedding_index)
+    return ok_response({"job_id": job_id}, meta={"status": "accepted"})
 
 
 @router.get("/reindex/{job_id}")
-async def get_reindex_job(job_id: str) -> dict:
-    job = _REINDEX_JOBS.get(job_id)
+async def get_reindex_job(job_id: str, reindex_jobs: ReindexJobService = Depends(get_reindex_job_service)) -> dict:
+    job = reindex_jobs.get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    return {"success": True, "data": job, "meta": None}
+    return ok_response(job)
 
 
 @router.get("/audit_log")
 async def audit_log(limit: int = 100) -> dict:
     """Return placeholder audit entries until persistent audit storage is implemented."""
 
-    return {
-        "success": True,
-        "data": [],
-        "meta": {"limit": limit, "note": "persistent audit log pending"},
-    }
+    return ok_response([], meta={"limit": limit, "note": "persistent audit log pending"})

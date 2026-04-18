@@ -12,6 +12,14 @@ from typing import Literal, cast
 from fastapi import APIRouter, Depends, Request
 from neo4j import AsyncSession
 
+from api.action_helpers import (
+    has_valid_currency_payload,
+    is_currency_action,
+    relation_deltas_for_action,
+    resolve_currency_reason,
+    resolve_request_id,
+    resolve_session_scope,
+)
 from api.dependencies import get_db_session
 from api.schemas import ActionReportRequest
 from config import Settings, get_settings
@@ -31,21 +39,24 @@ async def report_action(
 ) -> dict:
     """Apply a conservative relation delta for a reported gameplay action."""
 
-    if payload.action_type in {"buy_item", "sell_item"}:
+    if is_currency_action(payload.action_type):
         currency_action_type = cast(Literal["buy_item", "sell_item"], payload.action_type)
-        if payload.counterparty_id is None or payload.currency_amount is None:
+        if not has_valid_currency_payload(payload.counterparty_id, payload.currency_amount):
             return {"status": "ignored", "reason": "currency_payload_invalid"}
 
-        request_id = http_request.headers.get("X-Request-ID", "").strip()
-        if request_id == "":
-            request_id = (
-                f"action:{payload.action_type}:"
-                f"{payload.player_id}:{payload.counterparty_id}:{int(datetime.now(timezone.utc).timestamp())}"
-            )
-
-        session_scope = payload.session_scope or f"{payload.player_id}:{payload.npc_id}"
+        request_id = resolve_request_id(
+            provided_request_id=http_request.headers.get("X-Request-ID", ""),
+            action_type=payload.action_type,
+            player_id=payload.player_id,
+            counterparty_id=cast(str, payload.counterparty_id),
+        )
+        session_scope = resolve_session_scope(
+            session_scope=payload.session_scope,
+            player_id=payload.player_id,
+            npc_id=payload.npc_id,
+        )
         idempotency_key = http_request.headers.get(settings.IDEMPOTENCY_HEADER_NAME, "").strip()
-        reason = payload.currency_reason or f"action:{payload.action_type}"
+        reason = resolve_currency_reason(action_type=payload.action_type, currency_reason=payload.currency_reason)
 
         try:
             transfer_result = await apply_buy_sell_currency_transfer(
@@ -73,18 +84,7 @@ async def report_action(
 
         return {"status": "ok", "currency_transfer": transfer_result}
 
-    delta = min(15, max(-15, payload.intensity // 10))
-    deltas = {"trust": 0, "fear": 0, "affection": 0}
-    if payload.action_type == "help":
-        deltas = {"trust": delta, "fear": -delta, "affection": delta}
-    if payload.action_type == "attack":
-        deltas = {"trust": -delta, "fear": delta, "affection": -delta}
-    if payload.action_type == "give_item":
-        deltas = {"trust": delta, "fear": 0, "affection": delta}
-    if payload.action_type == "steal":
-        deltas = {"trust": -delta, "fear": delta, "affection": -delta}
-    if payload.action_type == "observe":
-        deltas = {"trust": 0, "fear": 0, "affection": 0}
+    deltas = relation_deltas_for_action(action_type=payload.action_type, intensity=payload.intensity)
     try:
         await apply_relation_delta(
             session=session,

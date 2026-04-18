@@ -6,26 +6,35 @@ Does NOT: mutate relation or emotion state directly.
 Dependencies injected: DialogueHandler.
 """
 
+from collections.abc import Iterator
+import re
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from api.dependencies import (
-    get_embedding_index,
-    get_emotion_updater,
+    build_dialogue_handler,
     get_graph_db,
     get_llm_client,
     get_llm_config,
-    get_session_store,
 )
 from api.schemas import DialogueRequest
-from engines.dialogue.dialogue_handler import DialogueHandler
+from auth.api_key import resolve_scope_from_authorization
 from config import get_settings
-from auth.api_key import validate_bearer_token
 from utils.errors import AuthError
 from utils.logging import get_logger
 
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+
+def _iter_token_chunks(text: str) -> Iterator[str]:
+    """Split text into non-empty word chunks while preserving trailing whitespace."""
+
+    for match in re.finditer(r"\S+\s*", text):
+        chunk = match.group(0)
+        if chunk != "":
+            yield chunk
 
 
 @router.websocket("/ws/dialogue")
@@ -35,7 +44,7 @@ async def dialogue_ws(websocket: WebSocket) -> None:
     settings = get_settings()
     authorization = websocket.headers.get("Authorization", "")
     try:
-        validate_bearer_token(authorization=authorization, expected_secret=settings.API_KEY_SECRET)
+        resolve_scope_from_authorization(authorization=authorization, settings=settings)
     except AuthError:
         await websocket.close(code=1008)
         return
@@ -47,18 +56,14 @@ async def dialogue_ws(websocket: WebSocket) -> None:
         async with graph_db.get_session() as session:
             payload = await websocket.receive_json()
             request = DialogueRequest.model_validate(payload)
-            handler = DialogueHandler(
+            handler = build_dialogue_handler(
                 session=session,
                 settings=settings,
                 llm_client=get_llm_client(settings=settings),
                 llm_config=get_llm_config(),
-                session_store=get_session_store(),
-                emotion_updater=get_emotion_updater(),
-                embedding_index=get_embedding_index(),
             )
             final_response = await handler.handle(request=request)
-            chunks = [token + " " for token in final_response.npc_response.split()]
-            for chunk in chunks:
+            for chunk in _iter_token_chunks(final_response.npc_response):
                 await websocket.send_json({"type": "token", "data": chunk})
             await websocket.send_json({"type": "action", "data": final_response.action.model_dump()})
             await websocket.send_json({"type": "expression", "data": final_response.facial_expression.model_dump()})

@@ -27,6 +27,7 @@ from engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
 from graph.db import GraphDB
 from graph.graph_admin_service import GraphAdminService
 from graph.graph_edit_service import GraphEditService
+from graph.reindex_job_service import ReindexJobService
 from retrieval.embedding_index import EmbeddingIndex
 from retrieval.vector_store_factory import create_vector_store
 from scheduler.game_clock import GameClock
@@ -145,6 +146,13 @@ def get_idempotency_service() -> IdempotencyService:
     )
 
 
+@lru_cache
+def get_reindex_job_service() -> ReindexJobService:
+    """Create singleton reindex job lifecycle manager."""
+
+    return ReindexJobService()
+
+
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     graph_db = get_graph_db()
     await graph_db.connect()
@@ -156,12 +164,15 @@ def get_llm_client(settings: Settings = Depends(get_settings)):
     return create_llm_client(settings=settings)
 
 
-def get_dialogue_handler(
-    session: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
-    llm_client=Depends(get_llm_client),
-    llm_config: LLMConfig = Depends(get_llm_config),
+def build_dialogue_handler(
+    *,
+    session: AsyncSession,
+    settings: Settings,
+    llm_client,
+    llm_config: LLMConfig,
 ) -> DialogueHandler:
+    """Construct DialogueHandler with shared dependency wiring."""
+
     return DialogueHandler(
         session=session,
         settings=settings,
@@ -170,6 +181,20 @@ def get_dialogue_handler(
         session_store=get_session_store(),
         emotion_updater=get_emotion_updater(),
         embedding_index=get_embedding_index(),
+    )
+
+
+def get_dialogue_handler(
+    session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+    llm_client=Depends(get_llm_client),
+    llm_config: LLMConfig = Depends(get_llm_config),
+) -> DialogueHandler:
+    return build_dialogue_handler(
+        session=session,
+        settings=settings,
+        llm_client=llm_client,
+        llm_config=llm_config,
     )
 
 

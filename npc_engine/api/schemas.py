@@ -17,7 +17,13 @@ ExpressionType = Literal["neutral", "smile", "frown", "angry", "surprised", "sad
 PlayerActionType = Literal["attack", "give_item", "steal", "help", "observe", "buy_item", "sell_item"]
 
 
-class DialogueRequest(BaseModel):
+class FrozenApiModel(BaseModel):
+    """Shared immutable base model for API request/response contracts."""
+
+    model_config = ConfigDict(frozen=True)
+
+
+class DialogueRequest(FrozenApiModel):
     """Incoming dialogue request payload."""
 
     player_id: str
@@ -26,39 +32,31 @@ class DialogueRequest(BaseModel):
     location_id: str | None = None
     session_id: str | None = None
 
-    model_config = ConfigDict(frozen=True)
 
-
-class RelationDeltas(BaseModel):
+class RelationDeltas(FrozenApiModel):
     """Per-turn relation delta outputs."""
 
     trust: int = Field(default=0, ge=-15, le=15)
     fear: int = Field(default=0, ge=-15, le=15)
     affection: int = Field(default=0, ge=-15, le=15)
 
-    model_config = ConfigDict(frozen=True)
 
-
-class ActionModel(BaseModel):
+class ActionModel(FrozenApiModel):
     """Action payload returned by dialogue engine."""
 
     type: ActionType = "speak"
     target_id: str | None = None
-    parameters: dict = Field(default_factory=dict)
-
-    model_config = ConfigDict(frozen=True)
+    parameters: dict[str, Any] = Field(default_factory=dict)
 
 
-class FacialExpressionModel(BaseModel):
+class FacialExpressionModel(FrozenApiModel):
     """Facial expression payload returned by dialogue engine."""
 
     type: ExpressionType = "neutral"
     intensity: int = Field(default=0, ge=0, le=100)
 
-    model_config = ConfigDict(frozen=True)
 
-
-class DialogueResponse(BaseModel):
+class DialogueResponse(FrozenApiModel):
     """Final dialogue response contract for REST and WebSocket completion."""
 
     npc_response: str
@@ -69,10 +67,8 @@ class DialogueResponse(BaseModel):
     session_id: str | None = None
     cached: bool = False
 
-    model_config = ConfigDict(frozen=True)
 
-
-class NPCStateResponse(BaseModel):
+class NPCStateResponse(FrozenApiModel):
     """Compact NPC state response model."""
 
     character: dict | None
@@ -80,7 +76,7 @@ class NPCStateResponse(BaseModel):
     events: list[dict]
 
 
-class EmotionResponse(BaseModel):
+class EmotionResponse(FrozenApiModel):
     """Emotion response model."""
 
     npc_id: str
@@ -90,7 +86,7 @@ class EmotionResponse(BaseModel):
     updated_at: str
 
 
-class ActionReportRequest(BaseModel):
+class ActionReportRequest(FrozenApiModel):
     """Game-reported player action against NPC."""
 
     player_id: str
@@ -102,20 +98,16 @@ class ActionReportRequest(BaseModel):
     currency_reason: str | None = None
     session_scope: str | None = None
 
-    model_config = ConfigDict(frozen=True)
 
-
-class MutationMeta(BaseModel):
+class MutationMeta(FrozenApiModel):
     """Audit metadata required for graph mutation requests."""
 
     request_id: str
     actor_id: str
     reason: str
 
-    model_config = ConfigDict(frozen=True)
 
-
-class CharacterPatchBody(BaseModel):
+class CharacterPatchBody(FrozenApiModel):
     """Typed PATCH body for Character mutations."""
 
     name: str | None = None
@@ -131,10 +123,8 @@ class CharacterPatchBody(BaseModel):
     extension_fields: dict[str, Any] | None = None
     meta: MutationMeta
 
-    model_config = ConfigDict(frozen=True)
 
-
-class EventPatchBody(BaseModel):
+class EventPatchBody(FrozenApiModel):
     """Typed PATCH body for Event mutations."""
 
     summary: str | None = None
@@ -143,10 +133,8 @@ class EventPatchBody(BaseModel):
     extension_fields: dict[str, Any] | None = None
     meta: MutationMeta
 
-    model_config = ConfigDict(frozen=True)
 
-
-class LocationPatchBody(BaseModel):
+class LocationPatchBody(FrozenApiModel):
     """Typed PATCH body for Location mutations."""
 
     name: str | None = None
@@ -156,10 +144,8 @@ class LocationPatchBody(BaseModel):
     extension_fields: dict[str, Any] | None = None
     meta: MutationMeta
 
-    model_config = ConfigDict(frozen=True)
 
-
-class WorldStatePatchBody(BaseModel):
+class WorldStatePatchBody(FrozenApiModel):
     """Typed PATCH body for WorldState with full-replace JSON semantics."""
 
     epoch: str | None = None
@@ -169,19 +155,15 @@ class WorldStatePatchBody(BaseModel):
     extension_fields: dict[str, Any] | None = None
     meta: MutationMeta
 
-    model_config = ConfigDict(frozen=True)
 
-
-class CharacterMoveBody(BaseModel):
+class CharacterMoveBody(FrozenApiModel):
     """Typed request body for atomic character move."""
 
     location_id: str
     meta: MutationMeta
 
-    model_config = ConfigDict(frozen=True)
 
-
-class RelatesToEdgeBody(BaseModel):
+class RelatesToEdgeBody(FrozenApiModel):
     """Typed request body for RELATES_TO edge upsert."""
 
     src_id: str
@@ -191,10 +173,8 @@ class RelatesToEdgeBody(BaseModel):
     affection: int = Field(default=50, ge=0, le=100)
     meta: MutationMeta
 
-    model_config = ConfigDict(frozen=True)
 
-
-class KnowsAboutEdgeBody(BaseModel):
+class KnowsAboutEdgeBody(FrozenApiModel):
     """Typed request body for KNOWS_ABOUT edge upsert."""
 
     character_id: str
@@ -207,10 +187,8 @@ class KnowsAboutEdgeBody(BaseModel):
     source_character_id: str | None = None
     meta: MutationMeta
 
-    model_config = ConfigDict(frozen=True)
 
-
-class LocatedAtEdgeBody(BaseModel):
+class LocatedAtEdgeBody(FrozenApiModel):
     """Typed request body for LOCATED_AT edge upsert."""
 
     character_id: str
@@ -218,10 +196,8 @@ class LocatedAtEdgeBody(BaseModel):
     is_permanent_resident: bool = False
     meta: MutationMeta
 
-    model_config = ConfigDict(frozen=True)
 
-
-class ParticipatedInEdgeBody(BaseModel):
+class ParticipatedInEdgeBody(FrozenApiModel):
     """Typed request body for PARTICIPATED_IN edge upsert."""
 
     character_id: str
@@ -229,36 +205,28 @@ class ParticipatedInEdgeBody(BaseModel):
     role: str
     meta: MutationMeta
 
-    model_config = ConfigDict(frozen=True)
 
-
-class QuestObjectiveBody(BaseModel):
+class QuestObjectiveBody(FrozenApiModel):
     """One quest objective definition in API payloads."""
 
     objective_id: str
     target_count: int = Field(ge=1)
 
-    model_config = ConfigDict(frozen=True)
 
-
-class QuestRewardItemBody(BaseModel):
+class QuestRewardItemBody(FrozenApiModel):
     """One item reward payload in quest API requests."""
 
     item_id: str
     quantity: int = Field(default=1, ge=1)
 
-    model_config = ConfigDict(frozen=True)
 
-
-class QuestRewardCurrencyBody(BaseModel):
+class QuestRewardCurrencyBody(FrozenApiModel):
     """Currency reward payload in quest API requests."""
 
     amount: int = Field(gt=0)
 
-    model_config = ConfigDict(frozen=True)
 
-
-class QuestOfferRequest(BaseModel):
+class QuestOfferRequest(FrozenApiModel):
     """Typed request body for quest offer lifecycle transition."""
 
     quest_id: str
@@ -268,19 +236,15 @@ class QuestOfferRequest(BaseModel):
     item_rewards: list[QuestRewardItemBody] = Field(default_factory=list)
     currency_reward: QuestRewardCurrencyBody | None = None
 
-    model_config = ConfigDict(frozen=True)
 
-
-class QuestAcceptRequest(BaseModel):
+class QuestAcceptRequest(FrozenApiModel):
     """Typed request body for quest acceptance transition."""
 
     quest_id: str
     player_id: str
 
-    model_config = ConfigDict(frozen=True)
 
-
-class QuestObjectiveUpdateRequest(BaseModel):
+class QuestObjectiveUpdateRequest(FrozenApiModel):
     """Typed request body for quest objective progress updates."""
 
     quest_id: str
@@ -288,22 +252,17 @@ class QuestObjectiveUpdateRequest(BaseModel):
     objective_id: str
     progress_delta: int = 1
 
-    model_config = ConfigDict(frozen=True)
 
-
-class QuestEvaluateRequest(BaseModel):
+class QuestEvaluateRequest(FrozenApiModel):
     """Typed request body for quest completion evaluation."""
 
     quest_id: str
     player_id: str
 
-    model_config = ConfigDict(frozen=True)
 
-
-class QuestRewardApplyRequest(BaseModel):
+class QuestRewardApplyRequest(FrozenApiModel):
     """Typed request body for quest reward application."""
 
     quest_id: str
     player_id: str
 
-    model_config = ConfigDict(frozen=True)

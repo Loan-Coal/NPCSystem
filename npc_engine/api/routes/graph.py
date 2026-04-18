@@ -9,6 +9,7 @@ Dependencies injected: GraphEditService.
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.dependencies import get_graph_edit_service
+from api.route_helpers import graph_error_to_http, ok_response
 from api.schemas import (
     CharacterMoveBody,
     CharacterPatchBody,
@@ -33,7 +34,7 @@ async def get_character(character_id: str, service: GraphEditService = Depends(g
     node = await service.get_character(character_id=character_id)
     if node is None:
         raise HTTPException(status_code=404, detail="Character not found")
-    return {"success": True, "data": node, "meta": None}
+    return ok_response(node)
 
 
 @router.get("/characters")
@@ -43,13 +44,13 @@ async def list_characters(
     service: GraphEditService = Depends(get_graph_edit_service),
 ) -> dict:
     items = await service.list_characters(limit=limit, offset=offset)
-    return {"success": True, "data": items, "meta": {"limit": limit, "offset": offset}}
+    return ok_response(items, meta={"limit": limit, "offset": offset})
 
 
 @router.post("/characters")
 async def upsert_character(character: CharacterNode, service: GraphEditService = Depends(get_graph_edit_service)) -> dict:
     await service.upsert_character(character=character)
-    return {"success": True, "data": {"id": character.id}, "meta": None}
+    return ok_response({"id": character.id})
 
 
 @router.patch("/characters/{character_id}")
@@ -61,10 +62,10 @@ async def patch_character(
     try:
         node = await service.patch_character(character_id=character_id, body=body)
     except NodeNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise graph_error_to_http(error) from error
     except (ImmutableFieldError, SchemaValidationError) as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
-    return {"success": True, "data": node, "meta": None}
+        raise graph_error_to_http(error) from error
+    return ok_response(node)
 
 
 @router.delete("/characters/{character_id}")
@@ -72,8 +73,8 @@ async def soft_delete_character(character_id: str, service: GraphEditService = D
     try:
         await service.soft_delete_character(character_id=character_id)
     except NodeNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
-    return {"success": True, "data": {"id": character_id, "deleted": True}, "meta": None}
+        raise graph_error_to_http(error) from error
+    return ok_response({"id": character_id, "deleted": True})
 
 
 @router.post("/characters/{character_id}/move")
@@ -85,8 +86,8 @@ async def move_character(
     try:
         await service.move_character(character_id=character_id, location_id=body.location_id)
     except NodeNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
-    return {"success": True, "data": {"id": character_id, "location_id": body.location_id}, "meta": None}
+        raise graph_error_to_http(error) from error
+    return ok_response({"id": character_id, "location_id": body.location_id})
 
 
 @router.get("/events/{event_id}")
@@ -94,7 +95,7 @@ async def get_event(event_id: str, service: GraphEditService = Depends(get_graph
     node = await service.get_event(event_id=event_id)
     if node is None:
         raise HTTPException(status_code=404, detail="Event not found")
-    return {"success": True, "data": node, "meta": None}
+    return ok_response(node)
 
 
 @router.get("/events")
@@ -104,13 +105,13 @@ async def list_events(
     service: GraphEditService = Depends(get_graph_edit_service),
 ) -> dict:
     items = await service.list_events(limit=limit, offset=offset)
-    return {"success": True, "data": items, "meta": {"limit": limit, "offset": offset}}
+    return ok_response(items, meta={"limit": limit, "offset": offset})
 
 
 @router.post("/events")
 async def upsert_event(event: EventNode, service: GraphEditService = Depends(get_graph_edit_service)) -> dict:
     await service.upsert_event(event=event)
-    return {"success": True, "data": {"id": event.id}, "meta": None}
+    return ok_response({"id": event.id})
 
 
 @router.patch("/events/{event_id}")
@@ -118,10 +119,10 @@ async def patch_event(event_id: str, body: EventPatchBody, service: GraphEditSer
     try:
         node = await service.patch_event(event_id=event_id, body=body)
     except NodeNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise graph_error_to_http(error) from error
     except (ImmutableFieldError, SchemaValidationError) as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
-    return {"success": True, "data": node, "meta": None}
+        raise graph_error_to_http(error) from error
+    return ok_response(node)
 
 
 @router.get("/locations/{location_id}")
@@ -129,7 +130,7 @@ async def get_location(location_id: str, service: GraphEditService = Depends(get
     node = await service.get_location(location_id=location_id)
     if node is None:
         raise HTTPException(status_code=404, detail="Location not found")
-    return {"success": True, "data": node, "meta": None}
+    return ok_response(node)
 
 
 @router.get("/locations")
@@ -139,13 +140,13 @@ async def list_locations(
     service: GraphEditService = Depends(get_graph_edit_service),
 ) -> dict:
     items = await service.list_locations(limit=limit, offset=offset)
-    return {"success": True, "data": items, "meta": {"limit": limit, "offset": offset}}
+    return ok_response(items, meta={"limit": limit, "offset": offset})
 
 
 @router.post("/locations")
 async def upsert_location(location: LocationNode, service: GraphEditService = Depends(get_graph_edit_service)) -> dict:
     await service.upsert_location(location=location)
-    return {"success": True, "data": {"id": location.id}, "meta": None}
+    return ok_response({"id": location.id})
 
 
 @router.patch("/locations/{location_id}")
@@ -157,16 +158,16 @@ async def patch_location(
     try:
         node = await service.patch_location(location_id=location_id, body=body)
     except NodeNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise graph_error_to_http(error) from error
     except (ImmutableFieldError, SchemaValidationError) as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
-    return {"success": True, "data": node, "meta": None}
+        raise graph_error_to_http(error) from error
+    return ok_response(node)
 
 
 @router.patch("/world_state")
 async def patch_world_state(body: WorldStatePatchBody, service: GraphEditService = Depends(get_graph_edit_service)) -> dict:
     node = await service.patch_world_state(body=body)
-    return {"success": True, "data": node, "meta": None}
+    return ok_response(node)
 
 
 @router.post("/edges/relates_to")
@@ -177,8 +178,8 @@ async def upsert_relates_to_edge(
     try:
         edge = await service.upsert_relates_to_edge(body=body)
     except NodeNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
-    return {"success": True, "data": edge, "meta": None}
+        raise graph_error_to_http(error) from error
+    return ok_response(edge)
 
 
 @router.post("/edges/knows_about")
@@ -189,8 +190,8 @@ async def upsert_knows_about_edge(
     try:
         edge = await service.upsert_knows_about_edge(body=body)
     except NodeNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
-    return {"success": True, "data": edge, "meta": None}
+        raise graph_error_to_http(error) from error
+    return ok_response(edge)
 
 
 @router.post("/edges/located_at")
@@ -201,8 +202,8 @@ async def upsert_located_at_edge(
     try:
         edge = await service.upsert_located_at_edge(body=body)
     except NodeNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
-    return {"success": True, "data": edge, "meta": None}
+        raise graph_error_to_http(error) from error
+    return ok_response(edge)
 
 
 @router.post("/edges/participated_in")
@@ -213,8 +214,8 @@ async def upsert_participated_in_edge(
     try:
         edge = await service.upsert_participated_in_edge(body=body)
     except NodeNotFoundError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
-    return {"success": True, "data": edge, "meta": None}
+        raise graph_error_to_http(error) from error
+    return ok_response(edge)
 
 
 @router.delete("/edges/relates_to/{src_id}/{dst_id}")
@@ -224,7 +225,7 @@ async def delete_relates_to_edge(
     service: GraphEditService = Depends(get_graph_edit_service),
 ) -> dict:
     deleted = await service.delete_relates_to_edge(src_id=src_id, dst_id=dst_id)
-    return {"success": True, "data": {"deleted": deleted}, "meta": None}
+    return ok_response({"deleted": deleted})
 
 
 @router.delete("/edges/knows_about/{character_id}/{event_id}")
@@ -234,7 +235,7 @@ async def delete_knows_about_edge(
     service: GraphEditService = Depends(get_graph_edit_service),
 ) -> dict:
     deleted = await service.delete_knows_about_edge(character_id=character_id, event_id=event_id)
-    return {"success": True, "data": {"deleted": deleted}, "meta": None}
+    return ok_response({"deleted": deleted})
 
 
 @router.delete("/edges/located_at/{character_id}/{location_id}")
@@ -244,7 +245,7 @@ async def delete_located_at_edge(
     service: GraphEditService = Depends(get_graph_edit_service),
 ) -> dict:
     deleted = await service.delete_located_at_edge(character_id=character_id, location_id=location_id)
-    return {"success": True, "data": {"deleted": deleted}, "meta": None}
+    return ok_response({"deleted": deleted})
 
 
 @router.delete("/edges/participated_in/{character_id}/{event_id}")
@@ -254,4 +255,4 @@ async def delete_participated_in_edge(
     service: GraphEditService = Depends(get_graph_edit_service),
 ) -> dict:
     deleted = await service.delete_participated_in_edge(character_id=character_id, event_id=event_id)
-    return {"success": True, "data": {"deleted": deleted}, "meta": None}
+    return ok_response({"deleted": deleted})
