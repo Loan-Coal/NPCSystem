@@ -45,6 +45,10 @@ class EventNode(BaseModel):
     participants: list[str] = Field(default_factory=list)
     event_type: str
     is_public: bool = True
+    producer: str | None = None
+    origin_engine: str | None = None
+    schema_version: str | None = None
+    provenance: dict[str, str] | None = None
     last_graph_updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     model_config = ConfigDict(frozen=True)

@@ -9,7 +9,7 @@ Dependencies injected: None.
 from api.schemas import ActionModel
 
 
-ALLOWED_ACTIONS = {"speak", "gesture", "move", "attack", "give_item", "none"}
+ALLOWED_ACTIONS = {"speak", "gesture", "move", "attack", "give_item", "buy_item", "sell_item", "none"}
 
 
 def resolve_action(action: ActionModel) -> ActionModel:

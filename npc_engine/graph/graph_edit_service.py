@@ -31,6 +31,23 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _to_json_safe_value(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _to_json_safe_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_to_json_safe_value(item) for item in value]
+    return str(value)
+
+
+def _to_json_safe_node(node: dict[str, Any]) -> dict[str, Any]:
+    normalized = _to_json_safe_value(node)
+    if isinstance(normalized, dict):
+        return normalized
+    return {}
+
+
 class GraphEditService:
     """Service for v1.3 graph CRUD-style operations on core resources."""
 
@@ -44,7 +61,7 @@ class GraphEditService:
             id=character_id,
         )
         record = await result.single()
-        return None if record is None else dict(record["node"])
+        return None if record is None else _to_json_safe_node(dict(record["node"]))
 
     async def list_characters(self, limit: int, offset: int) -> list[dict]:
         result = await self._session.run(
@@ -52,7 +69,7 @@ class GraphEditService:
             limit=limit,
             offset=offset,
         )
-        return [dict(record["node"]) async for record in result]
+        return [_to_json_safe_node(dict(record["node"])) async for record in result]
 
     async def upsert_character(self, character: CharacterNode) -> None:
         payload = character.model_dump(mode="json")
@@ -81,7 +98,7 @@ class GraphEditService:
         record = await result.single()
         if record is None:
             raise NodeNotFoundError(node_type="character", node_id=character_id)
-        return dict(record["node"])
+        return _to_json_safe_node(dict(record["node"]))
 
     async def soft_delete_character(self, character_id: str) -> None:
         result = await self._session.run(
@@ -130,7 +147,7 @@ class GraphEditService:
         record = await result.single()
         if record is None:
             raise NodeNotFoundError(node_type="event", node_id=event_id)
-        return dict(record["node"])
+        return _to_json_safe_node(dict(record["node"]))
 
     async def get_event(self, event_id: str) -> dict | None:
         result = await self._session.run(
@@ -138,7 +155,7 @@ class GraphEditService:
             id=event_id,
         )
         record = await result.single()
-        return None if record is None else dict(record["node"])
+        return None if record is None else _to_json_safe_node(dict(record["node"]))
 
     async def list_events(self, limit: int, offset: int) -> list[dict]:
         result = await self._session.run(
@@ -146,7 +163,7 @@ class GraphEditService:
             limit=limit,
             offset=offset,
         )
-        return [dict(record["node"]) async for record in result]
+        return [_to_json_safe_node(dict(record["node"])) async for record in result]
 
     async def upsert_event(self, event: EventNode) -> None:
         payload = event.model_dump(mode="json")
@@ -175,7 +192,7 @@ class GraphEditService:
         record = await result.single()
         if record is None:
             raise NodeNotFoundError(node_type="location", node_id=location_id)
-        return dict(record["node"])
+        return _to_json_safe_node(dict(record["node"]))
 
     async def get_location(self, location_id: str) -> dict | None:
         result = await self._session.run(
@@ -183,7 +200,7 @@ class GraphEditService:
             id=location_id,
         )
         record = await result.single()
-        return None if record is None else dict(record["node"])
+        return None if record is None else _to_json_safe_node(dict(record["node"]))
 
     async def list_locations(self, limit: int, offset: int) -> list[dict]:
         result = await self._session.run(
@@ -191,7 +208,7 @@ class GraphEditService:
             limit=limit,
             offset=offset,
         )
-        return [dict(record["node"]) async for record in result]
+        return [_to_json_safe_node(dict(record["node"])) async for record in result]
 
     async def upsert_location(self, location: LocationNode) -> None:
         payload = location.model_dump(mode="json")
@@ -215,7 +232,7 @@ class GraphEditService:
             set_fields=set_payload,
         )
         record = await result.single()
-        return {} if record is None else dict(record["node"])
+        return {} if record is None else _to_json_safe_node(dict(record["node"]))
 
     async def upsert_relates_to_edge(self, body: RelatesToEdgeBody) -> dict[str, Any]:
         """Create or update RELATES_TO while enforcing src/dst existence in one query."""

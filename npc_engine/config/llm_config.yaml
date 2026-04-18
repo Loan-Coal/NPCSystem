@@ -1,0 +1,16 @@
+prompt_schema_version: "v1.4"
+compression_prompt_version: "v1.4"
+tier_budget_tokens:
+  tier_a: 4000
+  tier_b: 3000
+  tier_c: 2000
+session_turns_budget_tokens: 1200
+compression_trigger_ratio: 0.85
+max_proximity_hops: 2
+relevance_weights:
+  recency: 0.25
+  severity: 0.20
+  proximity: 0.20
+  relation: 0.20
+  quest: 0.10
+  explicit: 0.05

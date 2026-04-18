@@ -74,6 +74,128 @@ The admin reindex endpoint (`POST /v1/graph/admin/reindex`) remains for manual f
 
 ---
 
+## v1.4 P0 Runtime Config Models
+
+These models are validated at startup and are not Neo4j graph entities.
+
+### LLMConfig (`schema/llm_config_models.py`)
+
+Loaded from `LLM_CONFIG_PATH` via `schema/llm_config_loader.py`.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `prompt_schema_version` | string | yes | Prompt schema contract version used by builders/parsers |
+| `compression_prompt_version` | string | yes | Compression template version |
+| `tier_budget_tokens.tier_a` | int > 0 | yes | Tier A token budget |
+| `tier_budget_tokens.tier_b` | int > 0 | yes | Tier B token budget |
+| `tier_budget_tokens.tier_c` | int > 0 | yes | Tier C token budget |
+| `session_turns_budget_tokens` | int > 0 | yes | Tier A sub-budget for session turn memory |
+| `compression_trigger_ratio` | float (0,1] | yes | Threshold for compression trigger |
+| `max_proximity_hops` | int >= 0 | yes | Graph-hop cap for proximity score contribution |
+| `relevance_weights` | object | yes | Deterministic scoring weights (must sum to 1.0) |
+
+Startup behavior: invalid or missing LLM config fails fast during application startup.
+
+### Idempotency Runtime Settings (`config.py`)
+
+| Setting | Type | Default | Description |
+|---|---|---|---|
+| `IDEMPOTENCY_ENFORCE_HEADER` | bool | `false` | Enables/disables v1.4 transport preflight checks |
+| `IDEMPOTENCY_HEADER_NAME` | string | `X-Idempotency-Key` | Header name checked by middleware |
+| `IDEMPOTENCY_PENDING_TIMEOUT_SECONDS` | int > 0 | `30` | Max age for a `pending` record before the request can proceed again |
+| `IDEMPOTENCY_RETENTION_HOURS` | int > 0 | `24` | Retention window for persisted idempotency records |
+| `IDEMPOTENCY_CLEANUP_INTERVAL_SECONDS` | int > 0 | `3600` | Cleanup cadence for deleting expired records |
+
+Runtime behavior: middleware preflight delegates to `IdempotencyService` for decisions
+(`proceed`, `replay`, `conflict`, `in_flight`) and persists terminal responses for replay.
+
+### IdempotencyRecord (`engines/idempotency/models.py`, Neo4j label `IdempotencyRecord`)
+
+| Property | Type | Required | Description |
+|---|---|---|---|
+| `idempotency_key` | string (UUIDv4) | yes | Request idempotency key from header |
+| `resource_scope` | string | yes | Method+path scope (`METHOD:/v1/...`) |
+| `request_hash` | string (sha256) | yes | Hash of method/path/query/body |
+| `status` | enum | yes | `pending`, `completed`, `failed_terminal` |
+| `response_status_code` | int | no | Cached terminal HTTP status for replay |
+| `response_body` | string | no | Cached terminal response body for replay |
+| `response_hash` | string (sha256) | no | Integrity hash of status+body |
+| `created_at` | datetime | yes | Record creation timestamp |
+| `expires_at` | datetime | yes | Expiry timestamp used by cleanup |
+| `pending_timeout_seconds` | int > 0 | yes | In-flight timeout window |
+| `updated_at` | datetime | no | Last terminal write timestamp |
+
+Constraints and indexes:
+- Unique constraint on `(idempotency_key, resource_scope)`.
+
+### Redis Runtime Settings (`config.py`)
+
+| Setting | Type | Default | Description |
+|---|---|---|---|
+| `REDIS_ENABLED` | bool | `false` | Enables optional Redis runtime connection |
+| `REDIS_URL` | string | `redis://localhost:6379/0` | Redis endpoint for non-idempotency caches |
+| `REDIS_CONNECT_TIMEOUT_SECONDS` | float > 0 | `1.0` | Connect timeout for startup ping |
+
+Runtime behavior: startup attempts Redis connect only when enabled and degrades gracefully
+when unavailable.
+
+### Engine Contract Model (`engines/contracts/contract_models.py`)
+
+Contract YAML documents under `engines/contracts/*.yaml` are validated against required fields:
+
+- `name`
+- `version`
+- `inputs`
+- `outputs`
+- `side_effects`
+- `idempotency`
+- `auth_scope`
+- `error_contract`
+- `tests`
+
+Validation command: `make check-contracts`.
+
+### P1 Context Budget Runtime Models
+
+These are runtime-only models used during prompt context assembly.
+
+#### ContextRelevanceCandidate (`engines/dialogue/context_relevance_engine.py`)
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `node_id` | string | yes | Stable node identifier for tie-break ordering |
+| `node_type` | string | yes | Stable node type for tie-break ordering |
+| `item` | `ContextItem` | yes | Context payload + tier metadata |
+| `recency` | float [0,1] | yes | Normalized recency component |
+| `severity` | float [0,1] | yes | Normalized severity component |
+| `proximity_hops` | int >= 0 | yes | Graph-hop proximity input |
+| `relation` | float [0,1] | yes | Relation relevance component |
+| `quest` | float [0,1] | yes | Quest involvement component |
+| `explicit` | float [0,1] | yes | Explicit context boost component |
+
+Scoring:
+- Score = weighted sum using `LLMConfig.relevance_weights`.
+- Deterministic tie-break: `node_type` ASC, then `node_id` ASC.
+
+#### ContextBudgetError (`retrieval/context_budget_enforcer.py`)
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `tier` | string | yes | Budget tier that failed (`tier_a`, `session_turns`, etc.) |
+| `used_tokens` | int | yes | Observed token usage |
+| `budget_tokens` | int | yes | Configured token budget for tier |
+| `detail` | string | yes | Human-readable diagnostics |
+
+#### Compression Cache Key (`retrieval/context_budget_enforcer.py`)
+
+Canonical key tuple:
+
+`(node_id, node_type, prompt_schema_version, compression_prompt_version)`
+
+This key format is used for deterministic cache lookup during Tier B/Tier C compression.
+
+---
+
 ## Node Types
 
 ### Character

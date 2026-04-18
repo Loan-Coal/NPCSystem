@@ -8,11 +8,16 @@ Dependencies injected: AsyncSession.
 
 import json
 from datetime import datetime, timezone
+from typing import Literal
 
 from neo4j import AsyncSession
 
 from config import Settings
+from engines.economy.trading_engine import build_item_transfer_command
+from engines.economy.currency_verification_engine import build_currency_transfer_command
 from graph.delta_log_writer import write_delta_log
+from graph.currency_writer import get_outbound_session_total, transfer_currency_atomic
+from graph.item_writer import transfer_item_atomic
 from graph.edge_schemas import RelationDeltaEntry
 from graph.relation_writer import get_relation_values, set_relation_values
 from mutation.delta_log_manager import append_delta
@@ -83,3 +88,115 @@ async def apply_relation_delta(
         await write_delta_log(tx=tx, src_id=src_id, dst_id=dst_id, delta_log_payload=payload)
         await tx.commit()
         return clamped
+
+
+async def apply_buy_sell_currency_transfer(
+    *,
+    session: AsyncSession,
+    settings: Settings,
+    player_id: str,
+    counterparty_id: str,
+    action_type: Literal["buy_item", "sell_item"],
+    amount: int,
+    reason: str,
+    request_id: str,
+    idempotency_key: str,
+    session_scope: str,
+) -> dict[str, int | str | bool]:
+    """Apply buy/sell currency mutation through one validated transaction path."""
+
+    source_id = player_id if action_type == "buy_item" else counterparty_id
+    destination_id = counterparty_id if action_type == "buy_item" else player_id
+    return await apply_currency_transfer(
+        session=session,
+        settings=settings,
+        source_id=source_id,
+        destination_id=destination_id,
+        amount=amount,
+        reason=reason,
+        request_id=request_id,
+        idempotency_key=idempotency_key,
+        session_scope=session_scope,
+        transfer_kind=action_type,
+    )
+
+
+async def apply_currency_transfer(
+    *,
+    session: AsyncSession,
+    settings: Settings,
+    source_id: str,
+    destination_id: str,
+    amount: int,
+    reason: str,
+    request_id: str,
+    idempotency_key: str,
+    session_scope: str,
+    transfer_kind: str,
+) -> dict[str, int | str | bool]:
+    """Apply one validated currency transfer through the shared P2 coordinator path."""
+
+    current_total = await get_outbound_session_total(
+        session=session,
+        source_id=source_id,
+        session_scope=session_scope,
+        transfer_kind=transfer_kind,
+    )
+    transfer_command = build_currency_transfer_command(
+        settings=settings,
+        source_id=source_id,
+        destination_id=destination_id,
+        amount=amount,
+        reason=reason,
+        session_scope=session_scope,
+        transfer_kind=transfer_kind,
+        current_session_total=current_total,
+    )
+    transfer_result = await transfer_currency_atomic(
+        session=session,
+        source_id=transfer_command.source_id,
+        destination_id=transfer_command.destination_id,
+        amount=transfer_command.amount,
+        reason=transfer_command.reason,
+        request_id=request_id,
+        idempotency_key=idempotency_key,
+        session_scope=transfer_command.session_scope,
+        transfer_kind=transfer_command.transfer_kind,
+    )
+    return transfer_result.model_dump(mode="python")
+
+
+async def apply_item_transfer(
+    *,
+    session: AsyncSession,
+    source_id: str,
+    destination_id: str,
+    item_id: str,
+    quantity: int,
+    reason: str,
+    request_id: str,
+    idempotency_key: str,
+    transfer_kind: str,
+) -> dict[str, str | int | bool]:
+    """Apply one validated item transfer through the shared trading coordinator path."""
+
+    transfer_command = build_item_transfer_command(
+        source_id=source_id,
+        destination_id=destination_id,
+        item_id=item_id,
+        quantity=quantity,
+        reason=reason,
+        transfer_kind=transfer_kind,
+    )
+    transfer_result = await transfer_item_atomic(
+        session=session,
+        source_id=transfer_command.source_id,
+        destination_id=transfer_command.destination_id,
+        item_id=transfer_command.item_id,
+        quantity=transfer_command.quantity,
+        reason=transfer_command.reason,
+        request_id=request_id,
+        idempotency_key=idempotency_key,
+        transfer_kind=transfer_command.transfer_kind,
+    )
+    return transfer_result.model_dump(mode="python")

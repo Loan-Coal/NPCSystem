@@ -21,6 +21,7 @@ from engines.dialogue.session_store import SessionStore
 from engines.emotion.emotion_updater import EmotionUpdater
 from engines.llm.protocols import LLMClientProtocol
 from retrieval.context_builder import build_serialized_context
+from schema.llm_config_models import LLMConfig
 
 
 class DialogueHandler:
@@ -31,12 +32,14 @@ class DialogueHandler:
         session: AsyncSession,
         settings: Settings,
         llm_client: LLMClientProtocol,
+        llm_config: LLMConfig,
         session_store: SessionStore,
         emotion_updater: EmotionUpdater,
         embedding_index,
     ):
         self._session = session
         self._settings = settings
+        self._llm_config = llm_config
         self._session_store = session_store
         self._emotion_updater = emotion_updater
         self._embedding_index = embedding_index
@@ -50,6 +53,7 @@ class DialogueHandler:
         serialized_context = await build_serialized_context(
             session=self._session,
             settings=self._settings,
+            llm_config=self._llm_config,
             embedding_index=self._embedding_index,
             npc_id=request.npc_id,
             player_message=request.player_message,
@@ -96,6 +100,7 @@ class DialogueHandler:
         serialized_context = await build_serialized_context(
             session=self._session,
             settings=self._settings,
+            llm_config=self._llm_config,
             embedding_index=self._embedding_index,
             npc_id=request.npc_id,
             player_message=request.player_message,

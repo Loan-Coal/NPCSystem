@@ -11,7 +11,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-ContextTier = Literal["tier0", "tierA", "tierB"]
+ContextTier = Literal["tier0", "tierA", "tierB", "tierC"]
 
 
 class ContextItem(BaseModel):
@@ -33,11 +33,16 @@ class MergedContext(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
-def merge_context(tier0: list[ContextItem], tier_a: list[ContextItem], tier_b: list[ContextItem]) -> MergedContext:
+def merge_context(
+    tier0: list[ContextItem],
+    tier_a: list[ContextItem],
+    tier_b: list[ContextItem],
+    tier_c: list[ContextItem] | None = None,
+) -> MergedContext:
     """Merge context tiers with de-duplication by key and deterministic ordering."""
 
     merged_by_key: dict[str, ContextItem] = {}
-    for item in [*tier0, *tier_a, *tier_b]:
+    for item in [*tier0, *tier_a, *tier_b, *(tier_c or [])]:
         existing = merged_by_key.get(item.key)
         if existing is None or item.priority > existing.priority:
             merged_by_key[item.key] = item

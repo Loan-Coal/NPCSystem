@@ -11,9 +11,11 @@ import json
 import pytest
 
 from config import Settings
-from retrieval.context_builder import build_serialized_context
-from retrieval.context_merger import ContextItem
+from retrieval.context_builder import _enforce_final_serialized_budget, _estimate_tokens, build_serialized_context
+from retrieval.context_merger import ContextItem, MergedContext
+from retrieval.context_serializer import serialize_context
 from retrieval.vector_store_protocol import VectorSearchResult
+from schema.llm_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
 from world.world_state import WorldState
 
 
@@ -25,6 +27,25 @@ class FakeEmbeddingIndex:
 
     async def search(self, query: str, top_k: int) -> list[VectorSearchResult]:
         return self._rows[:top_k]
+
+
+def _llm_config() -> LLMConfig:
+    return LLMConfig(
+        prompt_schema_version="v1.4",
+        compression_prompt_version="v1.4",
+        tier_budget_tokens=TierBudgetTokens(tier_a=4000, tier_b=3000, tier_c=2000),
+        session_turns_budget_tokens=1200,
+        compression_trigger_ratio=0.85,
+        max_proximity_hops=2,
+        relevance_weights=RelevanceWeights(
+            recency=0.25,
+            severity=0.20,
+            proximity=0.20,
+            relation=0.20,
+            quest=0.10,
+            explicit=0.05,
+        ),
+    )
 
 
 @pytest.mark.asyncio
@@ -60,6 +81,7 @@ async def test_builder_outputs_fixed_schema_with_emotion(monkeypatch) -> None:
     serialized = await build_serialized_context(
         session=None,  # type: ignore[arg-type]
         settings=settings,
+        llm_config=_llm_config(),
         embedding_index=FakeEmbeddingIndex(rows=[]),
         npc_id="npc_1",
         player_message="hello",
@@ -99,6 +121,7 @@ async def test_builder_enforces_final_serialized_budget(monkeypatch) -> None:
     serialized = await build_serialized_context(
         session=None,  # type: ignore[arg-type]
         settings=settings,
+        llm_config=_llm_config(),
         embedding_index=FakeEmbeddingIndex(rows=[{"id": "r1", "score": 1.0, "payload": {"summary": "z"}}]),
         npc_id="npc_1",
         player_message="hello",
@@ -107,3 +130,25 @@ async def test_builder_enforces_final_serialized_budget(monkeypatch) -> None:
 
     estimated_tokens = max(1, (len(serialized) + 3) // 4)
     assert estimated_tokens <= settings.PROMPT_TOKEN_BUDGET
+
+
+def test_final_serialized_budget_drops_tier_c_before_tier_b_when_over_budget() -> None:
+    merged = MergedContext(
+        items=[
+            ContextItem(key="world", text='{"epoch":"age_of_peace"}', tier="tier0", priority=100),
+            ContextItem(key="session", text='["player: hi"]', tier="tierA", priority=99),
+            ContextItem(key="rag:b", text=("B" * 200), tier="tierB", priority=30),
+            ContextItem(key="rag:c", text=("C" * 200), tier="tierC", priority=30),
+        ]
+    )
+    one_drop_context = merged.model_copy(
+        update={
+            "items": [item for item in merged.items if item.key != "rag:c"],
+        }
+    )
+    one_drop_budget = _estimate_tokens(serialize_context(context=one_drop_context))
+
+    serialized = _enforce_final_serialized_budget(context=merged, budget=one_drop_budget)
+
+    assert "BBBB" in serialized
+    assert "CCCC" not in serialized

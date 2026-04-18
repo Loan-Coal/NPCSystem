@@ -44,6 +44,7 @@
 │   ┌────────────────────────────────────────────────────────┐   │
 │   │                auth/middleware.py                       │   │
 │   │   Bearer token + scope validation (admin ⊃ write)      │   │
+│   │   + idempotency preflight on mutating /v1/* routes     │   │
 │   └────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
                         │
@@ -147,6 +148,52 @@ the highest matching scope. A single API key carries one scope value.
 
 ---
 
+## v1.4 P0 Idempotency Contract and Persistence
+
+v1.4 introduces middleware + persistence idempotency behavior in `auth/middleware.py` and
+`engines/idempotency/*` for mutating `/v1/*` requests (`POST`, `PATCH`, `PUT`, `DELETE`) when
+`IDEMPOTENCY_ENFORCE_HEADER=true`.
+
+- Header required: `X-Idempotency-Key` (configurable via `IDEMPOTENCY_HEADER_NAME`)
+- Accepted format: UUIDv4 string
+- Missing header response: HTTP 400 + `IDEMPOTENCY_KEY_REQUIRED`
+- Invalid format response: HTTP 422 + `IDEMPOTENCY_KEY_INVALID`
+- Preflight decisions: `proceed`, `replay`, `conflict`, `in_flight`
+- Persistence backend: Neo4j `IdempotencyRecord` keyed by `(idempotency_key, resource_scope)`
+- Finalization stores terminal response (`completed` or `failed_terminal`) for replay safety
+- Expired record cleanup runs in background (`IDEMPOTENCY_CLEANUP_INTERVAL_SECONDS`)
+- Scope/auth behavior is unchanged: auth still resolves before idempotency checks
+- `OPTIONS` preflight requests are always exempt
+
+---
+
+## v1.4 P1 Context Relevance and Budget Pipeline
+
+P1 introduces deterministic context ranking and tier-aware budget enforcement in the dialogue
+path via:
+
+- `engines/dialogue/context_relevance_engine.py`
+- `retrieval/context_budget_enforcer.py`
+- `retrieval/context_builder.py`
+
+Dialogue flow behavior:
+
+- Tier assembly:
+  - `tier0`: world + emotion snapshot.
+  - `tierA`: graph-authoritative context + session turns.
+  - `tierB`: vector retrieval context.
+- Deterministic relevance scoring uses weighted components from `LLMConfig.relevance_weights`.
+- Tie-break ordering is stable: score DESC, then `node_type` ASC, then `node_id` ASC.
+- Tier A and session turns are non-compressible.
+- Tier budget enforcement uses `LLMConfig.tier_budget_tokens` and `session_turns_budget_tokens`.
+- Compression cache keys are canonicalized as:
+  `(node_id, node_type, prompt_schema_version, compression_prompt_version)`.
+- Tier A overflow raises a typed context budget error before LLM invocation.
+
+This keeps prompt assembly deterministic and budget-safe while preserving high-priority context.
+
+---
+
 ## Schema Layer — Startup Sequence
 
 ```
@@ -156,6 +203,17 @@ Service start
     │       ├── parse YAML → validate against SchemaConfig (Pydantic meta-schema)
     │       ├── check required core type declarations
     │       └── FAIL FAST with specific errors if invalid
+    │
+    ├── llm_config_loader.load(LLM_CONFIG_PATH)
+    │       ├── parse YAML → validate against LLMConfig model
+    │       └── FAIL FAST with specific errors if invalid
+    │
+    ├── graph_db.connect()
+    │
+    ├── redis_runtime.connect()  # optional; non-idempotency cache runtime
+    │
+    ├── idempotency_service.ensure_constraints()
+    │       └── CREATE CONSTRAINT IF NOT EXISTS on (idempotency_key, resource_scope)
     │
     ├── model_factory.generate_models(schema)
     │       └── for each custom_node_type: create_model(...) → cached Pydantic model
@@ -172,10 +230,13 @@ Service start
     ├── Neo4j index auto-creation
     │       └── for each custom field with indexed: true → CREATE INDEX IF NOT EXISTS
     │
-    ├── embedding_reconciler.start(interval=EMBEDDING_RECONCILE_INTERVAL_SECONDS)
-    │       ├── scans Character|Event|Location where last_graph_updated_at > last_embedding_indexed_at
-    │       ├── re-embeds stale rows into vector store
-    │       └── persists node.last_embedding_indexed_at after successful upsert
+    ├── start background tasks
+    │       ├── embedding_reconciler.start(interval=EMBEDDING_RECONCILE_INTERVAL_SECONDS)
+    │       │   ├── scans Character|Event|Location where last_graph_updated_at > last_embedding_indexed_at
+    │       │   ├── re-embeds stale rows into vector store
+    │       │   └── persists node.last_embedding_indexed_at after successful upsert
+    │       └── idempotency_cleanup_scheduler.start(interval=IDEMPOTENCY_CLEANUP_INTERVAL_SECONDS)
+    │           └── deletes expired IdempotencyRecord rows
     │
     └── Register all routers in main.py with API_V1_PREFIX
 ```
@@ -451,13 +512,22 @@ wscat -c ws://localhost:8000/v1/ws/dialogue \
   -H "Authorization: Bearer your_key"
 ```
 
-### Environment Variables (v1.3 additions)
+### Environment Variables (v1.4 P0 additions)
 ```
 GAME_SCHEMA_PATH=/app/game_schema.yaml   # required; path to schema config file
+LLM_CONFIG_PATH=/app/config/llm_config.yaml
 API_V1_PREFIX=/v1                        # default; prefix for all routes
 API_KEY_GRAPH_WRITE=write_scope_key       # optional; dedicated write-scope key
 API_KEY_GRAPH_ADMIN=admin_scope_key       # optional; dedicated admin-scope key
 EMBEDDING_RECONCILE_INTERVAL_SECONDS=300
+IDEMPOTENCY_ENFORCE_HEADER=false
+IDEMPOTENCY_HEADER_NAME=X-Idempotency-Key
+IDEMPOTENCY_PENDING_TIMEOUT_SECONDS=30
+IDEMPOTENCY_RETENTION_HOURS=24
+IDEMPOTENCY_CLEANUP_INTERVAL_SECONDS=3600
+REDIS_ENABLED=false
+REDIS_URL=redis://localhost:6379/0
+REDIS_CONNECT_TIMEOUT_SECONDS=1.0
 ```
 
 ### Game Engine Integration

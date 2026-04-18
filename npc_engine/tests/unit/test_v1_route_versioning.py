@@ -49,5 +49,7 @@ def test_create_app_registers_v1_routes(monkeypatch, tmp_path: Path) -> None:
     assert "/v1/dialogue" in paths
     assert "/v1/ws/dialogue" in paths
     assert "/v1/schema" in paths
+    assert "/v1/quest/offer" in paths
+    assert "/v1/quest/reward" in paths
     assert "/v1/graph/characters" in paths
     assert "/v1/graph/admin/reindex" in paths

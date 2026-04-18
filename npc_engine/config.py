@@ -8,6 +8,7 @@ Dependencies injected: None.
 
 from functools import lru_cache
 import os
+from pathlib import Path
 import socket
 from typing import Literal
 
@@ -27,6 +28,17 @@ class Settings(BaseSettings):
     API_KEY_GRAPH_ADMIN: str | None = None
     API_V1_PREFIX: str = "/v1"
     GAME_SCHEMA_PATH: str = "game_schema.yaml"
+    LLM_CONFIG_PATH: str = "config/llm_config.yaml"
+
+    IDEMPOTENCY_ENFORCE_HEADER: bool = False
+    IDEMPOTENCY_HEADER_NAME: str = "X-Idempotency-Key"
+    IDEMPOTENCY_PENDING_TIMEOUT_SECONDS: int = 30
+    IDEMPOTENCY_RETENTION_HOURS: int = 24
+    IDEMPOTENCY_CLEANUP_INTERVAL_SECONDS: int = 3600
+
+    REDIS_ENABLED: bool = False
+    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_CONNECT_TIMEOUT_SECONDS: float = 1.0
 
     LLM_BACKEND: Literal["mistral7b", "llama8b", "ollama", "mock"] = "mock"
     LLM_TIMEOUT_SECONDS: float = 10.0
@@ -60,6 +72,8 @@ class Settings(BaseSettings):
     MAX_RELATION_DELTA_PER_TURN: int = 15
     MAX_RELATION_DELTA_PER_WINDOW: int = 40
     RELATION_WINDOW_SIZE: int = 10
+    CURRENCY_MAX_PER_TRANSACTION: int = 1000
+    CURRENCY_MAX_PER_SESSION: int = 5000
 
     CLOCK_MODE: Literal["realtime", "game_driven"] = "realtime"
 
@@ -111,6 +125,63 @@ class Settings(BaseSettings):
             raise ValueError("GAME_SCHEMA_PATH cannot be empty")
         return path
 
+    @field_validator("LLM_CONFIG_PATH")
+    @classmethod
+    def validate_llm_config_path(cls, value: str) -> str:
+        """Reject empty llm config paths so startup can fail fast."""
+
+        path = value.strip()
+        if not path:
+            raise ValueError("LLM_CONFIG_PATH cannot be empty")
+        candidate = Path(path)
+        if candidate.is_absolute():
+            return str(candidate)
+
+        project_root = Path(__file__).resolve().parent
+        return str((project_root / candidate).resolve())
+
+    @field_validator("IDEMPOTENCY_HEADER_NAME")
+    @classmethod
+    def validate_idempotency_header_name(cls, value: str) -> str:
+        """Ensure idempotency header setting is non-empty."""
+
+        header_name = value.strip()
+        if not header_name:
+            raise ValueError("IDEMPOTENCY_HEADER_NAME cannot be empty")
+        return header_name
+
+    @field_validator("REDIS_URL")
+    @classmethod
+    def validate_redis_url(cls, value: str) -> str:
+        """Ensure Redis URL is non-empty when runtime integration is enabled."""
+
+        redis_url = value.strip()
+        if not redis_url:
+            raise ValueError("REDIS_URL cannot be empty")
+        return redis_url
+
+    @field_validator("REDIS_CONNECT_TIMEOUT_SECONDS")
+    @classmethod
+    def validate_redis_connect_timeout_seconds(cls, value: float) -> float:
+        """Ensure Redis connection timeout is positive."""
+
+        if value <= 0:
+            raise ValueError("REDIS_CONNECT_TIMEOUT_SECONDS must be greater than 0")
+        return value
+
+    @field_validator(
+        "IDEMPOTENCY_PENDING_TIMEOUT_SECONDS",
+        "IDEMPOTENCY_RETENTION_HOURS",
+        "IDEMPOTENCY_CLEANUP_INTERVAL_SECONDS",
+    )
+    @classmethod
+    def validate_positive_idempotency_values(cls, value: int) -> int:
+        """Ensure idempotency timing values are positive integers."""
+
+        if value <= 0:
+            raise ValueError("idempotency timing values must be greater than 0")
+        return value
+
     @field_validator("EMBEDDING_RECONCILE_INTERVAL_SECONDS")
     @classmethod
     def validate_embedding_reconcile_interval_seconds(cls, value: int) -> int:
@@ -118,6 +189,15 @@ class Settings(BaseSettings):
 
         if value <= 0:
             raise ValueError("EMBEDDING_RECONCILE_INTERVAL_SECONDS must be greater than 0")
+        return value
+
+    @field_validator("CURRENCY_MAX_PER_TRANSACTION", "CURRENCY_MAX_PER_SESSION")
+    @classmethod
+    def validate_currency_transfer_limits(cls, value: int) -> int:
+        """Ensure configurable currency limits are positive integers."""
+
+        if value <= 0:
+            raise ValueError("currency limits must be greater than 0")
         return value
 
 

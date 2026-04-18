@@ -13,6 +13,7 @@ from api.dependencies import (
     get_emotion_updater,
     get_graph_db,
     get_llm_client,
+    get_llm_config,
     get_session_store,
 )
 from api.schemas import DialogueRequest
@@ -50,6 +51,7 @@ async def dialogue_ws(websocket: WebSocket) -> None:
                 session=session,
                 settings=settings,
                 llm_client=get_llm_client(settings=settings),
+                llm_config=get_llm_config(),
                 session_store=get_session_store(),
                 emotion_updater=get_emotion_updater(),
                 embedding_index=get_embedding_index(),

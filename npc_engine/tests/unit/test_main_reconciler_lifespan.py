@@ -53,6 +53,29 @@ class _EmbeddingIndexStub:
         return None
 
 
+class _IdempotencyServiceStub:
+    def __init__(self):
+        self.constraints_ensured = False
+
+    async def ensure_constraints(self) -> None:
+        self.constraints_ensured = True
+
+    async def cleanup_expired(self) -> int:
+        return 0
+
+
+class _RedisRuntimeStub:
+    def __init__(self):
+        self.connected = False
+        self.closed = False
+
+    async def connect(self) -> None:
+        self.connected = True
+
+    async def close(self) -> None:
+        self.closed = True
+
+
 class _ReconcilerStub:
     def __init__(self, graph_db, embedding_index, interval_seconds: int):
         self.graph_db = graph_db
@@ -69,11 +92,15 @@ class _ReconcilerStub:
 async def test_lifespan_starts_reconciler_task(monkeypatch) -> None:
     graph_db = _GraphDbStub()
     schema_loader = _SchemaLoaderStub()
+    idempotency_service = _IdempotencyServiceStub()
+    redis_runtime = _RedisRuntimeStub()
     reconciler_instance = _ReconcilerStub(graph_db=graph_db, embedding_index=_EmbeddingIndexStub(), interval_seconds=30)
 
     monkeypatch.setattr(main, "get_graph_db", lambda: graph_db)
     monkeypatch.setattr(main, "get_embedding_index", lambda: _EmbeddingIndexStub())
     monkeypatch.setattr(main, "get_game_schema", schema_loader)
+    monkeypatch.setattr(main, "get_idempotency_service", lambda: idempotency_service)
+    monkeypatch.setattr(main, "get_redis_runtime", lambda: redis_runtime)
     monkeypatch.setattr(main, "EmbeddingReconciler", lambda **_: reconciler_instance)
     monkeypatch.setattr(
         main,
@@ -89,12 +116,16 @@ async def test_lifespan_starts_reconciler_task(monkeypatch) -> None:
         assert graph_db.connected is True
         await asyncio.sleep(0)
         assert reconciler_instance.started is True
+        assert idempotency_service.constraints_ensured is True
+        assert redis_runtime.connected is True
 
 
 @pytest.mark.asyncio
 async def test_lifespan_cancels_reconciler_task_on_shutdown(monkeypatch) -> None:
     graph_db = _GraphDbStub()
     schema_loader = _SchemaLoaderStub()
+    idempotency_service = _IdempotencyServiceStub()
+    redis_runtime = _RedisRuntimeStub()
 
     task_cancelled = {"value": False}
 
@@ -116,6 +147,8 @@ async def test_lifespan_cancels_reconciler_task_on_shutdown(monkeypatch) -> None
     monkeypatch.setattr(main, "get_graph_db", lambda: graph_db)
     monkeypatch.setattr(main, "get_embedding_index", lambda: _EmbeddingIndexStub())
     monkeypatch.setattr(main, "get_game_schema", schema_loader)
+    monkeypatch.setattr(main, "get_idempotency_service", lambda: idempotency_service)
+    monkeypatch.setattr(main, "get_redis_runtime", lambda: redis_runtime)
     monkeypatch.setattr(main, "EmbeddingReconciler", lambda **_: reconciler_instance)
     monkeypatch.setattr(
         main,
@@ -132,12 +165,15 @@ async def test_lifespan_cancels_reconciler_task_on_shutdown(monkeypatch) -> None
 
     assert task_cancelled["value"] is True
     assert graph_db.closed is True
+    assert redis_runtime.closed is True
 
 
 @pytest.mark.asyncio
 async def test_lifespan_closes_graph_db_when_startup_fails_after_connect(monkeypatch) -> None:
     graph_db = _GraphDbStub()
     schema_loader = _SchemaLoaderStub()
+    idempotency_service = _IdempotencyServiceStub()
+    redis_runtime = _RedisRuntimeStub()
 
     def _raise_embedding_index_error():
         raise RuntimeError("embedding index init failed")
@@ -145,6 +181,8 @@ async def test_lifespan_closes_graph_db_when_startup_fails_after_connect(monkeyp
     monkeypatch.setattr(main, "get_graph_db", lambda: graph_db)
     monkeypatch.setattr(main, "get_game_schema", schema_loader)
     monkeypatch.setattr(main, "get_embedding_index", _raise_embedding_index_error)
+    monkeypatch.setattr(main, "get_idempotency_service", lambda: idempotency_service)
+    monkeypatch.setattr(main, "get_redis_runtime", lambda: redis_runtime)
     monkeypatch.setattr(main, "EmbeddingReconciler", _ReconcilerStub)
     monkeypatch.setattr(
         main,
@@ -162,3 +200,5 @@ async def test_lifespan_closes_graph_db_when_startup_fails_after_connect(monkeyp
 
     assert graph_db.connected is True
     assert graph_db.closed is True
+    assert redis_runtime.connected is True
+    assert redis_runtime.closed is True

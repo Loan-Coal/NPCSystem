@@ -1,25 +1,28 @@
 """
-context_builder.py - Orchestrates context merge, budget enforcement, and serialization.
+context_builder.py - Orchestrates context merge, relevance scoring, budget enforcement, and serialization.
 
 Does NOT: call LLM adapters.
 
 Dependencies injected: EmbeddingIndex.
 """
 
-from neo4j import AsyncSession
-import json
-from datetime import datetime
-from typing import Any
 from typing import Protocol
+import json
+from datetime import datetime, timezone
+from typing import Any
+
+from neo4j import AsyncSession
 
 from config import Settings
+from engines.dialogue.context_relevance_engine import ContextRelevanceCandidate, rank_context_candidates
 from graph.graph_reader import get_character_with_relations
+from retrieval.context_budget_enforcer import ContextBudgetError, ContextCompressionCache, enforce_context_budget
 from retrieval.context_merger import ContextItem, merge_context
 from retrieval.context_merger import MergedContext
 from retrieval.context_serializer import serialize_context
 from retrieval.vector_store_protocol import VectorSearchResult
 from retrieval.subgraph_retriever import retrieve_tier_a_context
-from retrieval.token_budget_enforcer import TokenBudgetExceededError, enforce_budget
+from schema.llm_config_models import LLMConfig
 from world.world_reader import get_world_state
 
 
@@ -33,11 +36,13 @@ class EmbeddingIndexProtocol(Protocol):
 async def build_serialized_context(
     session: AsyncSession,
     settings: Settings,
+    llm_config: LLMConfig,
     embedding_index: EmbeddingIndexProtocol,
     npc_id: str,
     player_message: str,
     session_turns: list[str],
     emotion_state: dict | None = None,
+    compression_cache: ContextCompressionCache | None = None,
 ) -> str:
     """Build final serialized prompt context string."""
 
@@ -60,31 +65,51 @@ async def build_serialized_context(
             tier="tier0",
             priority=95,
         ),
+    ]
+    tier_a_raw = [
         ContextItem(
             key="session",
             text=json.dumps(session_turns, ensure_ascii=True),
-            tier="tier0",
-            priority=90,
+            tier="tierA",
+            priority=99,
         ),
     ]
-    tier_a = await retrieve_tier_a_context(
-        session=session,
-        npc_id=npc_id,
-        event_limit=settings.RAG_TOP_K,
+
+    tier_a_raw.extend(
+        await retrieve_tier_a_context(
+            session=session,
+            npc_id=npc_id,
+            event_limit=settings.RAG_TOP_K,
+        )
     )
+
     tier_b_results = await embedding_index.search(query=player_message, top_k=settings.RAG_TOP_K)
-    tier_b = [
-        ContextItem(
+    tier_b_raw: list[ContextItem] = []
+    tier_c_raw: list[ContextItem] = []
+    split_index = max(1, len(tier_b_results) // 2) if len(tier_b_results) > 0 else 0
+    for index, row in enumerate(tier_b_results):
+        item = ContextItem(
             key=f"rag:{row['id']}",
             text=json.dumps(_to_json_safe(row["payload"]), ensure_ascii=True, sort_keys=True),
-            tier="tierB",
-            priority=60,
+            tier="tierB" if index < split_index else "tierC",
+            priority=max(1, 60 - index),
         )
-        for row in tier_b_results
-    ]
+        if item.tier == "tierB":
+            tier_b_raw.append(item)
+        else:
+            tier_c_raw.append(item)
 
-    merged = merge_context(tier0=tier0, tier_a=tier_a, tier_b=tier_b)
-    trimmed = enforce_budget(context=merged, budget=settings.PROMPT_TOKEN_BUDGET)
+    vector_scores = {f"rag:{row['id']}": _normalize_ratio(float(row.get("score", 0.0))) for row in tier_b_results}
+    tier_a = _rank_tier_items(items=tier_a_raw, llm_config=llm_config, vector_scores=vector_scores)
+    tier_b = _rank_tier_items(items=tier_b_raw, llm_config=llm_config, vector_scores=vector_scores)
+    tier_c = _rank_tier_items(items=tier_c_raw, llm_config=llm_config, vector_scores=vector_scores)
+
+    merged = merge_context(tier0=tier0, tier_a=tier_a, tier_b=tier_b, tier_c=tier_c)
+    trimmed = enforce_context_budget(
+        context=merged,
+        llm_config=llm_config,
+        compression_cache=compression_cache,
+    )
     return _enforce_final_serialized_budget(
         context=trimmed,
         budget=settings.PROMPT_TOKEN_BUDGET,
@@ -116,7 +141,7 @@ def _to_json_safe(value: Any) -> Any:
 
 
 def _enforce_final_serialized_budget(context: MergedContext, budget: int) -> str:
-    """Ensure final serialized prompt stays within token budget by trimming low-priority tiers."""
+    """Ensure final serialized prompt stays within token budget by trimming compressible tiers only."""
 
     current = context
     while True:
@@ -127,17 +152,133 @@ def _enforce_final_serialized_budget(context: MergedContext, budget: int) -> str
         removable_candidates = [
             item
             for item in current.items
-            if item.tier in {"tierB", "tierA"}
+            if item.tier in {"tierC", "tierB"}
         ]
         if len(removable_candidates) == 0:
-            raise TokenBudgetExceededError("Serialized context exceeds budget after mandatory tiers")
+            used_tokens = _estimate_tokens(serialized)
+            raise ContextBudgetError(
+                tier="total_prompt",
+                used_tokens=used_tokens,
+                budget_tokens=budget,
+                detail="Serialized context exceeds total prompt budget after compressible tier trimming.",
+            )
 
         to_drop = sorted(
             removable_candidates,
-            key=lambda item: (item.tier != "tierB", item.priority),
+            key=lambda item: (item.tier != "tierC", item.priority),
         )[0]
         current = current.model_copy(
             update={
                 "items": [item for item in current.items if item.key != to_drop.key],
             }
         )
+
+
+def _rank_tier_items(
+    *,
+    items: list[ContextItem],
+    llm_config: LLMConfig,
+    vector_scores: dict[str, float],
+) -> list[ContextItem]:
+    candidates = [
+        _build_candidate(item=item, llm_config=llm_config, vector_scores=vector_scores)
+        for item in items
+    ]
+    return rank_context_candidates(
+        candidates=candidates,
+        weights=llm_config.relevance_weights,
+        max_proximity_hops=llm_config.max_proximity_hops,
+    )
+
+
+def _build_candidate(
+    *,
+    item: ContextItem,
+    llm_config: LLMConfig,
+    vector_scores: dict[str, float],
+) -> ContextRelevanceCandidate:
+    node_type, node_id = _parse_identity(item.key)
+    payload = _parse_payload(item.text)
+    return ContextRelevanceCandidate(
+        node_type=node_type,
+        node_id=node_id,
+        item=item,
+        recency=_extract_recency_score(payload),
+        severity=_extract_severity_score(payload),
+        proximity_hops=_infer_proximity_hops(item.key, llm_config.max_proximity_hops),
+        relation=_extract_relation_score(item=item, vector_scores=vector_scores),
+        quest=_quest_score(item=item),
+        explicit=1.0 if item.tier == "tierA" else 0.0,
+    )
+
+
+def _parse_payload(text: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(text)
+    except ValueError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _extract_recency_score(payload: dict[str, Any]) -> float:
+    for field in ("occurred_at", "updated_at", "last_graph_updated_at", "created_at"):
+        raw_value = payload.get(field)
+        if not isinstance(raw_value, str):
+            continue
+        try:
+            parsed = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        age_hours = max(0.0, (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds() / 3600.0)
+        return _normalize_ratio(1.0 - min(age_hours / 72.0, 1.0))
+    return 0.0
+
+
+def _extract_severity_score(payload: dict[str, Any]) -> float:
+    raw_severity = payload.get("severity")
+    if isinstance(raw_severity, (int, float)):
+        return _normalize_ratio(float(raw_severity) / 100.0)
+    return 0.0
+
+
+def _extract_relation_score(*, item: ContextItem, vector_scores: dict[str, float]) -> float:
+    if item.tier == "tierB":
+        return vector_scores.get(item.key, 0.0)
+    return _normalize_ratio(item.priority / 100.0)
+
+
+def _quest_score(*, item: ContextItem) -> float:
+    lowered = item.key.lower()
+    if "quest" in lowered:
+        return 1.0
+    return 0.0
+
+
+def _infer_proximity_hops(key: str, max_proximity_hops: int) -> int:
+    lowered = key.lower()
+    if lowered.startswith("character:") or lowered.startswith("relation:"):
+        return 0
+    if lowered.startswith("location:") or lowered.startswith("nearby_npcs"):
+        return 1
+    if lowered.startswith("event:"):
+        return 1
+    if lowered.startswith("session"):
+        return 0
+    if lowered.startswith("rag:"):
+        return max_proximity_hops + 1
+    return max_proximity_hops
+
+
+def _parse_identity(key: str) -> tuple[str, str]:
+    parts = key.split(":")
+    if len(parts) == 1:
+        return key, key
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    return parts[0], ":".join(parts[1:])
+
+
+def _normalize_ratio(value: float) -> float:
+    return max(0.0, min(1.0, value))

@@ -9,7 +9,7 @@ Dependencies injected: None.
 from pathlib import Path
 from typing import Any
 
-import yaml  # type: ignore[import-untyped]
+import yaml
 from pydantic import ValidationError
 
 from schema.schema_models import SchemaConfig

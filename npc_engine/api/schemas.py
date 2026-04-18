@@ -12,9 +12,9 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
-ActionType = Literal["speak", "gesture", "move", "attack", "give_item", "none"]
+ActionType = Literal["speak", "gesture", "move", "attack", "give_item", "buy_item", "sell_item", "none"]
 ExpressionType = Literal["neutral", "smile", "frown", "angry", "surprised", "sad"]
-PlayerActionType = Literal["attack", "give_item", "steal", "help", "observe"]
+PlayerActionType = Literal["attack", "give_item", "steal", "help", "observe", "buy_item", "sell_item"]
 
 
 class DialogueRequest(BaseModel):
@@ -97,6 +97,10 @@ class ActionReportRequest(BaseModel):
     npc_id: str
     action_type: PlayerActionType
     intensity: int = Field(default=0, ge=0, le=100)
+    counterparty_id: str | None = None
+    currency_amount: int | None = Field(default=None, gt=0)
+    currency_reason: str | None = None
+    session_scope: str | None = None
 
     model_config = ConfigDict(frozen=True)
 
@@ -224,5 +228,82 @@ class ParticipatedInEdgeBody(BaseModel):
     event_id: str
     role: str
     meta: MutationMeta
+
+    model_config = ConfigDict(frozen=True)
+
+
+class QuestObjectiveBody(BaseModel):
+    """One quest objective definition in API payloads."""
+
+    objective_id: str
+    target_count: int = Field(ge=1)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class QuestRewardItemBody(BaseModel):
+    """One item reward payload in quest API requests."""
+
+    item_id: str
+    quantity: int = Field(default=1, ge=1)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class QuestRewardCurrencyBody(BaseModel):
+    """Currency reward payload in quest API requests."""
+
+    amount: int = Field(gt=0)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class QuestOfferRequest(BaseModel):
+    """Typed request body for quest offer lifecycle transition."""
+
+    quest_id: str
+    player_id: str
+    title: str
+    objectives: list[QuestObjectiveBody] = Field(min_length=1)
+    item_rewards: list[QuestRewardItemBody] = Field(default_factory=list)
+    currency_reward: QuestRewardCurrencyBody | None = None
+
+    model_config = ConfigDict(frozen=True)
+
+
+class QuestAcceptRequest(BaseModel):
+    """Typed request body for quest acceptance transition."""
+
+    quest_id: str
+    player_id: str
+
+    model_config = ConfigDict(frozen=True)
+
+
+class QuestObjectiveUpdateRequest(BaseModel):
+    """Typed request body for quest objective progress updates."""
+
+    quest_id: str
+    player_id: str
+    objective_id: str
+    progress_delta: int = 1
+
+    model_config = ConfigDict(frozen=True)
+
+
+class QuestEvaluateRequest(BaseModel):
+    """Typed request body for quest completion evaluation."""
+
+    quest_id: str
+    player_id: str
+
+    model_config = ConfigDict(frozen=True)
+
+
+class QuestRewardApplyRequest(BaseModel):
+    """Typed request body for quest reward application."""
+
+    quest_id: str
+    player_id: str
 
     model_config = ConfigDict(frozen=True)

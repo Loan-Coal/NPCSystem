@@ -12,6 +12,7 @@ from typing import AsyncGenerator
 from fastapi import Depends
 from neo4j import AsyncSession
 
+from cache.redis_runtime import RedisRuntime
 from config import Settings, get_settings
 from engines.dialogue.dialogue_handler import DialogueHandler
 from engines.dialogue.session_store import SessionStore
@@ -19,7 +20,10 @@ from engines.emotion.emotion_store import EmotionStore
 from engines.emotion.emotion_updater import EmotionUpdater
 from engines.events.event_handler import EventHandler
 from engines.gossip.gossip_handler import GossipHandler
+from engines.idempotency.neo4j_store import Neo4jIdempotencyStore
+from engines.idempotency.service import IdempotencyService
 from engines.llm.factory import create_llm_client
+from engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
 from graph.db import GraphDB
 from graph.graph_admin_service import GraphAdminService
 from graph.graph_edit_service import GraphEditService
@@ -29,6 +33,8 @@ from scheduler.game_clock import GameClock
 from scheduler.tick_scheduler import TickScheduler
 from schema.schema_loader import load_game_schema
 from schema.schema_models import SchemaConfig
+from schema.llm_config_loader import load_llm_config
+from schema.llm_config_models import LLMConfig
 
 
 @lru_cache
@@ -73,6 +79,12 @@ def get_event_handler() -> EventHandler:
 
 
 @lru_cache
+def get_quest_lifecycle_engine() -> QuestLifecycleEngine:
+    settings = get_settings()
+    return QuestLifecycleEngine(settings=settings)
+
+
+@lru_cache
 def get_game_clock() -> GameClock:
     settings = get_settings()
     return GameClock(mode=settings.CLOCK_MODE)
@@ -95,9 +107,42 @@ def get_tick_scheduler() -> TickScheduler:
 
 
 @lru_cache
+def get_redis_runtime() -> RedisRuntime:
+    """Create optional Redis runtime manager for non-idempotency caches."""
+
+    return RedisRuntime(settings=get_settings())
+
+
+@lru_cache
 def get_game_schema() -> SchemaConfig:
     settings = get_settings()
     return load_game_schema(schema_path=settings.GAME_SCHEMA_PATH)
+
+
+@lru_cache
+def get_llm_config() -> LLMConfig:
+    """Load typed llm configuration for v1.4 prompt policy settings."""
+
+    settings = get_settings()
+    return load_llm_config(config_path=settings.LLM_CONFIG_PATH)
+
+
+@lru_cache
+def get_idempotency_store() -> Neo4jIdempotencyStore:
+    """Create idempotency persistence backend."""
+
+    return Neo4jIdempotencyStore()
+
+
+@lru_cache
+def get_idempotency_service() -> IdempotencyService:
+    """Create idempotency service for middleware preflight and finalization."""
+
+    return IdempotencyService(
+        settings=get_settings(),
+        graph_db=get_graph_db(),
+        store=get_idempotency_store(),
+    )
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
@@ -115,11 +160,13 @@ def get_dialogue_handler(
     session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
     llm_client=Depends(get_llm_client),
+    llm_config: LLMConfig = Depends(get_llm_config),
 ) -> DialogueHandler:
     return DialogueHandler(
         session=session,
         settings=settings,
         llm_client=llm_client,
+        llm_config=llm_config,
         session_store=get_session_store(),
         emotion_updater=get_emotion_updater(),
         embedding_index=get_embedding_index(),
