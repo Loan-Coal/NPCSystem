@@ -9,6 +9,7 @@ Dependencies injected: AsyncSession, Settings, LLMClientProtocol, SessionStore, 
 from datetime import datetime, timezone
 
 from neo4j import AsyncSession
+from pydantic import ValidationError
 
 from api.schemas import DialogueRequest, DialogueResponse
 from config import Settings
@@ -22,6 +23,10 @@ from engines.emotion.emotion_updater import EmotionUpdater
 from engines.llm.protocols import LLMClientProtocol
 from retrieval.context_builder import build_serialized_context
 from schema.llm_config_models import LLMConfig
+from utils.metrics import increment_metric
+
+
+LLM_VALIDATION_FAILURES_METRIC = "llm_validation_failures_total"
 
 
 class DialogueHandler:
@@ -62,7 +67,11 @@ class DialogueHandler:
         )
         prompt = build_dialogue_prompt(request=request, serialized_context=serialized_context)
         raw_response = await self._llm.generate_response(prompt=prompt)
-        parsed_response = parse_dialogue_response(payload=raw_response)
+        try:
+            parsed_response = parse_dialogue_response(payload=raw_response)
+        except ValidationError:
+            increment_metric(metric=LLM_VALIDATION_FAILURES_METRIC, labels={"engine": "dialogue"})
+            raise
         resolved_action = resolve_action(action=parsed_response.action)
         final_response = parsed_response.model_copy(
             update={

@@ -1,0 +1,53 @@
+{
+  "title": "NPC Engine v1.4 - Staging Observability",
+  "description": "Dashboard definition for P5 staging profile metrics.",
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": "context-budget-errors",
+      "title": "Context Budget Errors",
+      "metric": "context_budget_errors_total",
+      "group_by": ["tier"],
+      "visualization": "timeseries"
+    },
+    {
+      "id": "llm-validation-failures",
+      "title": "LLM Validation Failures",
+      "metric": "llm_validation_failures_total",
+      "group_by": ["engine"],
+      "visualization": "timeseries"
+    },
+    {
+      "id": "llm-token-throughput",
+      "title": "LLM Token Throughput",
+      "metrics": ["llm_tokens_in_total", "llm_tokens_out_total"],
+      "group_by": ["engine", "backend", "mode"],
+      "visualization": "timeseries"
+    },
+    {
+      "id": "graph-write-latency",
+      "title": "Graph Write Latency",
+      "metric": "graph_write_latency_seconds",
+      "group_by": ["operation", "result"],
+      "visualization": "heatmap"
+    },
+    {
+      "id": "currency-transfer-health",
+      "title": "Currency Transfer Outcomes",
+      "metric": "currency_transfers_total",
+      "group_by": ["kind", "result"],
+      "visualization": "stacked_bar"
+    },
+    {
+      "id": "request-outcomes",
+      "title": "HTTP Request Outcomes",
+      "metric": "http_requests_total",
+      "group_by": ["route", "method", "result"],
+      "visualization": "stacked_area"
+    }
+  ],
+  "labels_policy": {
+    "allowed_labels": ["engine", "route", "result", "tier", "kind", "operation", "method", "backend", "mode", "status"],
+    "high_cardinality_values_in_logs_only": true
+  }
+}

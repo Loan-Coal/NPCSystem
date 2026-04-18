@@ -16,14 +16,26 @@ from neo4j import AsyncSession
 from config import Settings
 from engines.dialogue.context_relevance_engine import ContextRelevanceCandidate, rank_context_candidates
 from graph.graph_reader import get_character_with_relations
-from retrieval.context_budget_enforcer import ContextBudgetError, ContextCompressionCache, enforce_context_budget
+from retrieval.context_budget_enforcer import (
+    COMPRESSION_SUFFIX,
+    ContextBudgetError,
+    ContextCompressionCache,
+    enforce_context_budget,
+)
 from retrieval.context_merger import ContextItem, merge_context
 from retrieval.context_merger import MergedContext
 from retrieval.context_serializer import serialize_context
 from retrieval.vector_store_protocol import VectorSearchResult
 from retrieval.subgraph_retriever import retrieve_tier_a_context
 from schema.llm_config_models import LLMConfig
+from utils.metrics import increment_metric
 from world.world_reader import get_world_state
+
+
+CONTEXT_ITEMS_SELECTED_METRIC = "context_items_selected_total"
+CONTEXT_TIER_TOKENS_METRIC = "context_tier_tokens"
+CONTEXT_BUDGET_ERRORS_METRIC = "context_budget_errors_total"
+LLM_COMPRESSIONS_METRIC = "llm_compressions_total"
 
 
 class EmbeddingIndexProtocol(Protocol):
@@ -105,15 +117,23 @@ async def build_serialized_context(
     tier_c = _rank_tier_items(items=tier_c_raw, llm_config=llm_config, vector_scores=vector_scores)
 
     merged = merge_context(tier0=tier0, tier_a=tier_a, tier_b=tier_b, tier_c=tier_c)
-    trimmed = enforce_context_budget(
-        context=merged,
-        llm_config=llm_config,
-        compression_cache=compression_cache,
-    )
-    return _enforce_final_serialized_budget(
+    try:
+        trimmed = enforce_context_budget(
+            context=merged,
+            llm_config=llm_config,
+            compression_cache=compression_cache,
+        )
+    except ContextBudgetError as error:
+        increment_metric(metric=CONTEXT_BUDGET_ERRORS_METRIC, labels={"tier": error.tier})
+        raise
+
+    final_context, serialized = _enforce_final_serialized_budget_with_context(
         context=trimmed,
         budget=settings.PROMPT_TOKEN_BUDGET,
     )
+    _record_context_metrics(context=final_context)
+    _record_compression_metrics(pre_budget_context=merged, post_budget_context=final_context)
+    return serialized
 
 
 def _estimate_tokens(text: str) -> int:
@@ -143,11 +163,18 @@ def _to_json_safe(value: Any) -> Any:
 def _enforce_final_serialized_budget(context: MergedContext, budget: int) -> str:
     """Ensure final serialized prompt stays within token budget by trimming compressible tiers only."""
 
+    _, serialized = _enforce_final_serialized_budget_with_context(context=context, budget=budget)
+    return serialized
+
+
+def _enforce_final_serialized_budget_with_context(context: MergedContext, budget: int) -> tuple[MergedContext, str]:
+    """Return final merged context and serialized payload after total prompt budget trimming."""
+
     current = context
     while True:
         serialized = serialize_context(context=current)
         if _estimate_tokens(serialized) <= budget:
-            return serialized
+            return current, serialized
 
         removable_candidates = [
             item
@@ -282,3 +309,38 @@ def _parse_identity(key: str) -> tuple[str, str]:
 
 def _normalize_ratio(value: float) -> float:
     return max(0.0, min(1.0, value))
+
+
+def _record_context_metrics(context: MergedContext) -> None:
+    """Emit item-count and token-count metrics for each context tier."""
+
+    for tier in ("tier0", "tierA", "tierB", "tierC"):
+        tier_items = [item for item in context.items if item.tier == tier]
+        tier_count = len(tier_items)
+        tier_tokens = sum(_estimate_tokens(item.text) for item in tier_items)
+        if tier_count > 0:
+            increment_metric(
+                metric=CONTEXT_ITEMS_SELECTED_METRIC,
+                amount=float(tier_count),
+                labels={"tier": tier.lower()},
+            )
+        increment_metric(
+            metric=CONTEXT_TIER_TOKENS_METRIC,
+            amount=float(tier_tokens),
+            labels={"tier": tier.lower()},
+        )
+
+
+def _record_compression_metrics(pre_budget_context: MergedContext, post_budget_context: MergedContext) -> None:
+    """Emit compression count metric when budget enforcement compresses any items."""
+
+    pre_budget_map = {item.key: item.text for item in pre_budget_context.items}
+    compressed_count = sum(
+        1
+        for item in post_budget_context.items
+        if item.key in pre_budget_map
+        and item.text != pre_budget_map[item.key]
+        and COMPRESSION_SUFFIX in item.text
+    )
+    if compressed_count > 0:
+        increment_metric(metric=LLM_COMPRESSIONS_METRIC, amount=float(compressed_count), labels={"engine": "dialogue"})

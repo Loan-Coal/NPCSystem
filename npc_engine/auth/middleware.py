@@ -7,6 +7,8 @@ Dependencies injected: Settings.
 """
 
 from uuid import UUID
+from time import perf_counter
+import time
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -18,6 +20,8 @@ from config import Settings
 from engines.idempotency.models import IdempotencyPreflightResult
 from engines.idempotency.service import IdempotencyServiceProtocol
 from utils.errors import AuthError, IdempotencyKeyInvalidError, IdempotencyKeyRequiredError
+from utils.logging import get_logger
+from utils.metrics import increment_metric, observe_metric, result_label_from_status, route_label_from_path
 
 
 HEALTH_PATH = "/health"
@@ -37,6 +41,14 @@ IDEMPOTENCY_CONFLICT_CODE = "IDEMPOTENCY_KEY_CONFLICT"
 IDEMPOTENCY_IN_FLIGHT_CODE = "IDEMPOTENCY_IN_FLIGHT"
 
 MUTATING_METHODS = frozenset({"POST", "PATCH", "PUT", "DELETE"})
+
+VALIDATION_FAILURES_METRIC = "validation_failures_total"
+HTTP_REQUESTS_METRIC = "http_requests_total"
+HTTP_REQUEST_LATENCY_METRIC = "http_request_latency_seconds"
+REQUEST_COMPLETED_EVENT = "request_completed"
+REQUEST_ID_FALLBACK_PREFIX = "req"
+
+LOGGER = get_logger(__name__)
 
 
 def _required_scope_for_path(path: str, api_v1_prefix: str) -> str | None:
@@ -102,6 +114,47 @@ def _idempotency_error_response(request: Request, error_code: str, message: str,
     return JSONResponse(status_code=status_code, content=payload)
 
 
+def _resolve_request_id(request: Request) -> str:
+    """Resolve request correlation id from header or deterministic fallback."""
+
+    header_value = request.headers.get(REQUEST_ID_HEADER, "").strip()
+    if header_value != "":
+        return header_value
+    return f"{REQUEST_ID_FALLBACK_PREFIX}:{request.method.lower()}:{time.time_ns()}"
+
+
+def _record_request_observability(
+    *,
+    request: Request,
+    request_id: str,
+    route_label: str,
+    status_code: int,
+    started_at: float,
+) -> None:
+    """Emit bounded-cardinality request logs and metrics."""
+
+    result = result_label_from_status(status_code=status_code)
+    duration_seconds = perf_counter() - started_at
+    labels = {
+        "route": route_label,
+        "method": request.method.lower(),
+        "result": result,
+    }
+    increment_metric(metric=HTTP_REQUESTS_METRIC, labels=labels)
+    observe_metric(metric=HTTP_REQUEST_LATENCY_METRIC, value=duration_seconds, labels=labels)
+    LOGGER.info(
+        REQUEST_COMPLETED_EVENT,
+        extra={
+            "request_id": request_id,
+            "route": route_label,
+            "method": request.method,
+            "status_code": status_code,
+            "result": result,
+            "duration_ms": int(duration_seconds * 1000),
+        },
+    )
+
+
 class ApiKeyMiddleware(BaseHTTPMiddleware):
     """Enforce Bearer auth for all routes except health."""
 
@@ -118,8 +171,31 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         """Validate auth header before forwarding request."""
 
+        request_id = _resolve_request_id(request=request)
+        request.state.request_id = request_id
+        route_label = route_label_from_path(path=request.url.path, api_v1_prefix=self._settings.API_V1_PREFIX)
+        started_at = perf_counter()
+
         if request.url.path == HEALTH_PATH:
-            return await call_next(request)
+            try:
+                response = await call_next(request)
+            except Exception:
+                _record_request_observability(
+                    request=request,
+                    request_id=request_id,
+                    route_label=route_label,
+                    status_code=500,
+                    started_at=started_at,
+                )
+                raise
+            _record_request_observability(
+                request=request,
+                request_id=request_id,
+                route_label=route_label,
+                status_code=response.status_code,
+                started_at=started_at,
+            )
+            return response
 
         authorization = request.headers.get("Authorization", "")
         try:
@@ -132,10 +208,34 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                 api_v1_prefix=self._settings.API_V1_PREFIX,
             )
             if required_scope and not has_scope(granted_scope=granted_scope, required_scope=required_scope):
-                return JSONResponse(status_code=HTTP_STATUS_FORBIDDEN, content={"detail": "Forbidden"})
+                response = JSONResponse(status_code=HTTP_STATUS_FORBIDDEN, content={"detail": "Forbidden"})
+                increment_metric(
+                    metric=VALIDATION_FAILURES_METRIC,
+                    labels={"route": route_label, "reason": "forbidden", "status": str(HTTP_STATUS_FORBIDDEN)},
+                )
+                _record_request_observability(
+                    request=request,
+                    request_id=request_id,
+                    route_label=route_label,
+                    status_code=response.status_code,
+                    started_at=started_at,
+                )
+                return response
             request.state.api_scope = granted_scope
         except AuthError:
-            return JSONResponse(status_code=HTTP_STATUS_UNAUTHORIZED, content={"detail": "Unauthorized"})
+            response = JSONResponse(status_code=HTTP_STATUS_UNAUTHORIZED, content={"detail": "Unauthorized"})
+            increment_metric(
+                metric=VALIDATION_FAILURES_METRIC,
+                labels={"route": route_label, "reason": "unauthorized", "status": str(HTTP_STATUS_UNAUTHORIZED)},
+            )
+            _record_request_observability(
+                request=request,
+                request_id=request_id,
+                route_label=route_label,
+                status_code=response.status_code,
+                started_at=started_at,
+            )
+            return response
 
         idempotency_key = ""
         preflight_result: IdempotencyPreflightResult | None = None
@@ -144,19 +244,43 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
             try:
                 _validate_idempotency_key(request=request, settings=self._settings)
             except IdempotencyKeyRequiredError:
-                return _idempotency_error_response(
+                response = _idempotency_error_response(
                     request=request,
                     error_code=IDEMPOTENCY_REQUIRED_CODE,
                     message=f"{self._settings.IDEMPOTENCY_HEADER_NAME} header is required.",
                     status_code=HTTP_STATUS_BAD_REQUEST,
                 )
+                increment_metric(
+                    metric=VALIDATION_FAILURES_METRIC,
+                    labels={"route": route_label, "reason": IDEMPOTENCY_REQUIRED_CODE.lower(), "status": str(response.status_code)},
+                )
+                _record_request_observability(
+                    request=request,
+                    request_id=request_id,
+                    route_label=route_label,
+                    status_code=response.status_code,
+                    started_at=started_at,
+                )
+                return response
             except IdempotencyKeyInvalidError:
-                return _idempotency_error_response(
+                response = _idempotency_error_response(
                     request=request,
                     error_code=IDEMPOTENCY_INVALID_CODE,
                     message=f"{self._settings.IDEMPOTENCY_HEADER_NAME} must be a valid UUIDv4.",
                     status_code=HTTP_STATUS_UNPROCESSABLE_ENTITY,
                 )
+                increment_metric(
+                    metric=VALIDATION_FAILURES_METRIC,
+                    labels={"route": route_label, "reason": IDEMPOTENCY_INVALID_CODE.lower(), "status": str(response.status_code)},
+                )
+                _record_request_observability(
+                    request=request,
+                    request_id=request_id,
+                    route_label=route_label,
+                    status_code=response.status_code,
+                    started_at=started_at,
+                )
+                return response
 
             idempotency_key = request.headers.get(self._settings.IDEMPOTENCY_HEADER_NAME, "").strip()
             request.state.idempotency_key = idempotency_key
@@ -176,27 +300,74 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                     preflight_result=preflight_result,
                 )
                 if replay_response is not None:
+                    if preflight_result.decision in {"conflict", "in_flight"}:
+                        increment_metric(
+                            metric=VALIDATION_FAILURES_METRIC,
+                            labels={
+                                "route": route_label,
+                                "reason": f"idempotency_{preflight_result.decision}",
+                                "status": str(replay_response.status_code),
+                            },
+                        )
+                    _record_request_observability(
+                        request=request,
+                        request_id=request_id,
+                        route_label=route_label,
+                        status_code=replay_response.status_code,
+                        started_at=started_at,
+                    )
                     return replay_response
 
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
 
-        if preflight_result is None or preflight_result.decision != "proceed":
-            return response
+            if preflight_result is None or preflight_result.decision != "proceed":
+                _record_request_observability(
+                    request=request,
+                    request_id=request_id,
+                    route_label=route_label,
+                    status_code=response.status_code,
+                    started_at=started_at,
+                )
+                return response
 
-        if self._idempotency_service is None:
-            return response
+            if self._idempotency_service is None:
+                _record_request_observability(
+                    request=request,
+                    request_id=request_id,
+                    route_label=route_label,
+                    status_code=response.status_code,
+                    started_at=started_at,
+                )
+                return response
 
-        response_body, replayable_response = await _materialize_response(response=response)
-        await self._idempotency_service.finalize(
-            idempotency_key=idempotency_key,
-            method=request.method,
-            path=request.url.path,
-            request_hash=preflight_result.request_hash,
-            status_code=replayable_response.status_code,
-            response_body=response_body,
-        )
+            response_body, replayable_response = await _materialize_response(response=response)
+            await self._idempotency_service.finalize(
+                idempotency_key=idempotency_key,
+                method=request.method,
+                path=request.url.path,
+                request_hash=preflight_result.request_hash,
+                status_code=replayable_response.status_code,
+                response_body=response_body,
+            )
 
-        return replayable_response
+            _record_request_observability(
+                request=request,
+                request_id=request_id,
+                route_label=route_label,
+                status_code=replayable_response.status_code,
+                started_at=started_at,
+            )
+            return replayable_response
+        except Exception:
+            _record_request_observability(
+                request=request,
+                request_id=request_id,
+                route_label=route_label,
+                status_code=500,
+                started_at=started_at,
+            )
+            raise
 
 
 def _build_idempotency_decision_response(

@@ -59,6 +59,9 @@ test-v14-p4:
 	$(PYTHON) -m pytest -q tests/engine_contract_tests tests/unit/test_simulate_world_flow_v14.py tests/unit/test_guard_contract_test_sync_v14.py
 	$(PYTHON) -m scripts.simulate_world_flow
 
+test-v14-p5:
+	$(PYTHON) -m pytest -q tests/unit -k "metrics or observability"
+
 lint:
 	$(PYTHON) -m ruff check .
 
@@ -78,6 +81,8 @@ verify-v14-p2: lint type test-v14-p1 test-v14-p2
 verify-v14-p3: lint type test-v14-p1 test-v14-p2 test-v14-p3
 
 verify-v14-p4: lint type check-contracts check-contract-sync test-v14-p4
+
+verify-v14-p5: lint type test-v14-p5
 
 seed:
 	python -m data.seed

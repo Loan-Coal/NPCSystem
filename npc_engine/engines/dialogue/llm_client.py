@@ -12,6 +12,15 @@ from pathlib import Path
 from api.schemas import DialogueResponse
 from engines.llm.protocols import LLMClientProtocol
 from utils.errors import LLMRequestError, LLMTimeoutError
+from utils.metrics import increment_metric
+
+
+LLM_CALLS_METRIC = "llm_calls_total"
+LLM_TOKENS_IN_METRIC = "llm_tokens_in_total"
+LLM_TOKENS_OUT_METRIC = "llm_tokens_out_total"
+LLM_ENGINE_LABEL = "dialogue"
+MAX_TOKENS = 512
+DEFAULT_TEMPERATURE = 0.7
 
 
 class DialogueLLMClient:
@@ -25,10 +34,26 @@ class DialogueLLMClient:
         """Request structured dialogue response with fallback on timeout."""
 
         schema = DialogueResponse.model_json_schema()
+        model_name = self._llm_client.model_name()
+        labels = {"engine": LLM_ENGINE_LABEL, "backend": model_name, "mode": "structured"}
+        increment_metric(metric=LLM_CALLS_METRIC, labels=labels)
+        increment_metric(metric=LLM_TOKENS_IN_METRIC, amount=float(_estimate_tokens(prompt)), labels=labels)
         try:
-            return await self._llm_client.generate_structured(prompt=prompt, schema=schema, max_tokens=512)
+            response = await self._llm_client.generate_structured(prompt=prompt, schema=schema, max_tokens=MAX_TOKENS)
+            increment_metric(
+                metric=LLM_TOKENS_OUT_METRIC,
+                amount=float(_estimate_tokens(json.dumps(response, sort_keys=True, ensure_ascii=True))),
+                labels=labels,
+            )
+            return response
         except LLMTimeoutError:
-            return self._load_fallback_dialogue()
+            fallback = self._load_fallback_dialogue()
+            increment_metric(
+                metric=LLM_TOKENS_OUT_METRIC,
+                amount=float(_estimate_tokens(json.dumps(fallback, sort_keys=True, ensure_ascii=True))),
+                labels={**labels, "fallback": "timeout"},
+            )
+            return fallback
 
     def _load_fallback_dialogue(self) -> dict:
         """Load default fallback dialogue response."""
@@ -46,8 +71,37 @@ class DialogueLLMClient:
     async def stream_text(self, prompt: str) -> list[str]:
         """Stream raw token chunks from LLM backend."""
 
+        model_name = self._llm_client.model_name()
+        labels = {"engine": LLM_ENGINE_LABEL, "backend": model_name, "mode": "stream"}
+        increment_metric(metric=LLM_CALLS_METRIC, labels=labels)
+        increment_metric(metric=LLM_TOKENS_IN_METRIC, amount=float(_estimate_tokens(prompt)), labels=labels)
         try:
-            return [chunk async for chunk in self._llm_client.stream(prompt=prompt, max_tokens=512, temperature=0.7)]
+            chunks = [
+                chunk
+                async for chunk in self._llm_client.stream(
+                    prompt=prompt,
+                    max_tokens=MAX_TOKENS,
+                    temperature=DEFAULT_TEMPERATURE,
+                )
+            ]
+            increment_metric(
+                metric=LLM_TOKENS_OUT_METRIC,
+                amount=float(_estimate_tokens("".join(chunks))),
+                labels=labels,
+            )
+            return chunks
         except (LLMTimeoutError, LLMRequestError):
             fallback = self._load_fallback_dialogue()
-            return [str(fallback["npc_response"])]
+            text = str(fallback["npc_response"])
+            increment_metric(
+                metric=LLM_TOKENS_OUT_METRIC,
+                amount=float(_estimate_tokens(text)),
+                labels={**labels, "fallback": "error"},
+            )
+            return [text]
+
+
+def _estimate_tokens(text: str) -> int:
+    """Approximate token count using the shared 4-char heuristic."""
+
+    return max(1, (len(text) + 3) // 4)

@@ -1,6 +1,6 @@
 # NPC Engine (v1.4 rollout)
 
-Current stage: P4 (Contracts, tests, deterministic simulation)
+Current stage: P5 (Observability and dashboards)
 
 ## Quick Start
 
@@ -34,11 +34,19 @@ make test-v13-contracts
 make test-v13-graph-admin
 make test-v13-retrieval
 make test-v14-p4
+make test-v14-p5
 make check-contract-sync
 make verify-v14-p4
+make verify-v14-p5
 make verify-v13
 make seed
 ```
+
+## Observability Artifacts
+
+- Staging dashboard definition: observability/staging_dashboard.json
+- Staging alert rules: observability/staging_alert_rules.yaml
+- Notes and label policy: observability/README.md
 
 ## v1.3 API and Runtime Notes
 

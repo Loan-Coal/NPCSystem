@@ -160,23 +160,43 @@ Notes:
 - Added `v14-p4-gates` job in `.github/workflows/ci.yml` to run contract validation, PR sync guard, and P4 tests.
 
 ### P5 - Observability and Dashboards
-Status: TODO
-Started: 
-Completed: 
+Status: DONE
+Started: 2026-04-18
+Completed: 2026-04-18
 Checkpoint: CP5_OBSERVABILITY
 
 Tasks:
-- [ ] Add v1.4 metrics for context, LLM, graph writes, currency, and validation failures.
-- [ ] Add structured logs with request correlation and bounded-cardinality labels.
-- [ ] Add alert rules and dashboard definitions for staging profile.
+- [x] Add v1.4 metrics for context, LLM, graph writes, currency, and validation failures.
+- [x] Add structured logs with request correlation and bounded-cardinality labels.
+- [x] Add alert rules and dashboard definitions for staging profile.
 
 Verification:
 ```bash
 cd npc_engine
+make test-v14-p5
 make lint
 make type
-pytest -q tests/unit -k "metrics or observability"
+make verify-v14-p5
 ```
+
+Notes:
+- Added in-memory observability registry and bounded label helpers in `npc_engine/utils/metrics.py`.
+- Extended JSON structured logging in `npc_engine/utils/logging.py` to include request correlation and extra fields.
+- Instrumented `auth/middleware.py` for request-level observability metrics/logs and validation-failure counters.
+- Instrumented `retrieval/context_builder.py` for context tier selection tokens, budget errors, and compression metrics.
+- Instrumented `engines/dialogue/llm_client.py` and `engines/dialogue/dialogue_handler.py` for LLM calls/tokens and validation failure metrics.
+- Instrumented `graph/graph_writer.py` for graph write throughput/latency and currency transfer outcome metrics.
+- Added P5 observability tests:
+	- `tests/unit/test_metrics_observability_v14.py`
+	- `tests/unit/test_auth_observability_middleware_v14.py`
+	- `tests/unit/test_context_metrics_observability_v14.py`
+	- `tests/unit/test_llm_metrics_observability_v14.py`
+	- `tests/unit/test_graph_writer_metrics_observability_v14.py`
+- Added staging observability artifacts in `npc_engine/observability/`:
+	- `staging_dashboard.json`
+	- `staging_alert_rules.yaml`
+	- `README.md`
+- Added `test-v14-p5` and `verify-v14-p5` targets in `npc_engine/Makefile` and `v14-p5-gates` job in `.github/workflows/ci.yml`.
 
 ### P6 - Migration and Cutover Validation
 Status: TODO
@@ -212,6 +232,7 @@ pytest -q tests/integration -k "migration"
 - 2026-04-17: P1 hardening verified and fixed (tier drop order + compression cache source-hash guard).
 - 2026-04-17: P2 completed with currency verification engine, atomic currency writer, buy/sell coordinator routing, idempotency replay-safe transfer behavior, and `make verify-v14-p2` green.
 - 2026-04-18: P4 completed with engine contract conformance tests, deterministic world-flow simulation script, contract/test sync guard, CI wiring, and verification passes.
+- 2026-04-18: P5 completed with bounded observability metrics, structured request correlation logs, staging dashboard+alert definitions, and `make verify-v14-p5` green.
 
 ## v1.3 Archive
 - M6, M7, M8, M9 were completed on 2026-04-15 to 2026-04-16.

@@ -1,0 +1,40 @@
+version: 1
+profile: staging
+labels:
+  team: npc-engine
+  service: npc_engine
+rules:
+  - name: context_budget_errors_spike
+    severity: warning
+    metric: context_budget_errors_total
+    window: 5m
+    condition: sum_over_window > 10
+    description: Context budget enforcement errors exceeded threshold.
+
+  - name: llm_validation_failures_spike
+    severity: warning
+    metric: llm_validation_failures_total
+    window: 10m
+    condition: sum_over_window > 5
+    description: LLM output validation failures exceeded threshold.
+
+  - name: graph_write_latency_degraded
+    severity: warning
+    metric: graph_write_latency_seconds
+    window: 10m
+    condition: p95 > 0.75
+    description: Graph write p95 latency above staging threshold.
+
+  - name: currency_transfer_failure_ratio_high
+    severity: critical
+    metric: currency_transfers_total
+    window: 10m
+    condition: failure_ratio > 0.05
+    description: Currency transfer failure ratio above 5%.
+
+  - name: server_error_rate_high
+    severity: critical
+    metric: http_requests_total
+    window: 5m
+    condition: server_error_ratio > 0.02
+    description: HTTP 5xx result ratio above 2%.
