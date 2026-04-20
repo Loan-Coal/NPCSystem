@@ -10,7 +10,7 @@ from typing import Any, TypeVar
 
 from fastapi import HTTPException
 
-from utils.errors import ImmutableFieldError, NodeNotFoundError, SchemaValidationError
+from utils.errors import ImmutableFieldError, NodeNotFoundError, RegistryPayloadValidationError, SchemaValidationError
 
 
 T = TypeVar("T")
@@ -48,6 +48,6 @@ def graph_error_to_http(error: Exception) -> HTTPException:
 
     if isinstance(error, NodeNotFoundError):
         return HTTPException(status_code=404, detail=str(error))
-    if isinstance(error, (ImmutableFieldError, SchemaValidationError)):
+    if isinstance(error, (ImmutableFieldError, SchemaValidationError, RegistryPayloadValidationError)):
         return HTTPException(status_code=422, detail=str(error))
     return HTTPException(status_code=500, detail="Internal server error")

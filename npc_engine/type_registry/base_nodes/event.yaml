@@ -1,0 +1,11 @@
+node_type: event
+fields:
+  id: { type: str, required: true }
+  summary: { type: str, required: true }
+  severity: { type: int, required: true, range: [0, 100] }
+  location_id: { type: str, required: true }
+  occurred_at: { type: str, required: true }
+  tick_id: { type: int, required: true }
+  participants: { type: list, items_type: str, required: false }
+  event_type: { type: str, required: true }
+  is_public: { type: bool, required: true }

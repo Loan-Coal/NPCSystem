@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     API_KEY_GRAPH_ADMIN: str | None = None
     API_V1_PREFIX: str = "/v1"
     GAME_SCHEMA_PATH: str = "game_schema.yaml"
+    TYPE_REGISTRY_EXTENSION_SOURCES: str = ""
     LLM_CONFIG_PATH: str = "config/llm_config.yaml"
 
     IDEMPOTENCY_ENFORCE_HEADER: bool = False
@@ -129,6 +130,14 @@ class Settings(BaseSettings):
 
         project_root = Path(__file__).resolve().parent
         return str((project_root / candidate).resolve())
+
+    @field_validator("TYPE_REGISTRY_EXTENSION_SOURCES")
+    @classmethod
+    def normalize_type_registry_extension_sources(cls, value: str) -> str:
+        """Normalize comma-delimited extension sources for deterministic parsing."""
+
+        source_items = [item.strip() for item in value.split(",") if item.strip()]
+        return ",".join(source_items)
 
     @field_validator("LLM_CONFIG_PATH")
     @classmethod

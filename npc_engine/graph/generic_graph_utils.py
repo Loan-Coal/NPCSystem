@@ -1,0 +1,75 @@
+"""
+generic_graph_utils.py - Shared helpers for generic graph service encoding and Cypher safety.
+
+Does NOT: execute graph queries.
+
+Dependencies injected: None.
+"""
+
+import json
+from typing import Any, Mapping
+
+from type_registry.contracts import RuntimeFieldDefinition
+from utils.errors import RegistryPayloadValidationError
+
+
+BASE_NODE_LABELS = {
+    "character": "Character",
+    "event": "Event",
+    "location": "Location",
+    "world_state": "WorldState",
+}
+
+
+def required_node_id(payload: dict[str, Any]) -> str:
+    """Return non-empty node id from payload or raise typed validation error."""
+
+    node_id = payload.get("id")
+    if isinstance(node_id, str) and node_id.strip():
+        return node_id
+    raise RegistryPayloadValidationError(code="NODE_ID_REQUIRED", detail="node payload requires non-empty id")
+
+
+def encode_properties(data: Mapping[str, Any], fields: Mapping[str, RuntimeFieldDefinition]) -> dict[str, Any]:
+    """Encode runtime values for database persistence using field contracts."""
+
+    encoded: dict[str, Any] = {}
+    for key, value in data.items():
+        definition = fields.get(key)
+        if definition is None:
+            continue
+        if definition.field_type == "dict" and value is not None:
+            encoded[key] = json.dumps(value, sort_keys=True)
+            continue
+        encoded[key] = value
+    return encoded
+
+
+def decode_properties(data: Mapping[str, Any], fields: Mapping[str, RuntimeFieldDefinition]) -> dict[str, Any]:
+    """Decode stored values into API-friendly representations using field contracts."""
+
+    decoded = dict(data)
+    for key, definition in fields.items():
+        if definition.field_type != "dict":
+            continue
+        raw_value = decoded.get(key)
+        if not isinstance(raw_value, str):
+            continue
+        try:
+            decoded[key] = json.loads(raw_value)
+        except json.JSONDecodeError:
+            continue
+    return decoded
+
+
+def resolve_node_label(node_type: str) -> str:
+    """Resolve graph label for base and custom node types."""
+
+    node_key = node_type.strip().lower()
+    return BASE_NODE_LABELS.get(node_key, node_type)
+
+
+def cypher_identifier(name: str) -> str:
+    """Safely backtick-quote dynamic Cypher identifier names."""
+
+    return f"`{name.replace('`', '``')}`"

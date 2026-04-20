@@ -278,25 +278,22 @@ Write-Host "IDEMPOTENCY_ENFORCE_HEADER=$idempotencyEnforced"
 Invoke-NpcApi -Method GET -Path "/health" -ExpectedStatus @(200) -Label "health"
 Invoke-NpcApi -Method GET -Path "/v1/protected" -Headers (New-ReadHeaders) -ExpectedStatus @(200) -Label "protected"
 
-# Shared provenance metadata for graph write operations.
-$meta = @{ request_id = "req-meta-$runId"; actor_id = "manual_tester"; reason = "manual_e2e" }
-
 # 2) Seed base world locations.
-Invoke-NpcApi -Method POST -Path "/v1/graph/locations" -Headers (New-WriteHeaders -RequestId "req-loc-a") -ExpectedStatus @(200) -Body @{ id = $locationA; name = "Manual Square"; region = "manual"; location_tag = "square"; descriptor = "manual location a" }
-Invoke-NpcApi -Method POST -Path "/v1/graph/locations" -Headers (New-WriteHeaders -RequestId "req-loc-b") -ExpectedStatus @(200) -Body @{ id = $locationB; name = "Manual Docks"; region = "manual"; location_tag = "docks"; descriptor = "manual location b" }
+Invoke-NpcApi -Method POST -Path "/v1/graph/nodes/location" -Headers (New-WriteHeaders -RequestId "req-loc-a") -ExpectedStatus @(200) -Body @{ properties = @{ id = $locationA; name = "Manual Square"; region = "manual"; location_tag = "square"; descriptor = "manual location a" } }
+Invoke-NpcApi -Method POST -Path "/v1/graph/nodes/location" -Headers (New-WriteHeaders -RequestId "req-loc-b") -ExpectedStatus @(200) -Body @{ properties = @{ id = $locationB; name = "Manual Docks"; region = "manual"; location_tag = "docks"; descriptor = "manual location b" } }
 
 # 3) Create player and NPC characters.
-Invoke-NpcApi -Method POST -Path "/v1/graph/characters" -Headers (New-WriteHeaders -RequestId "req-char-player") -ExpectedStatus @(200) -Body @{ id = $playerId; name = "Manual Player"; archetype = "adventurer"; faction = "manual"; biography = "player"; current_location_id = $locationA; is_player = $true; is_active = $true; gossipy = 40; credulity = 60; honesty = 55; current_mood = "neutral" }
-Invoke-NpcApi -Method POST -Path "/v1/graph/characters" -Headers (New-WriteHeaders -RequestId "req-char-npc") -ExpectedStatus @(200) -Body @{ id = $npcId; name = "Manual NPC"; archetype = "guard"; faction = "manual"; biography = "npc"; current_location_id = $locationA; is_player = $false; is_active = $true; gossipy = 70; credulity = 45; honesty = 65; current_mood = "neutral" }
-Invoke-NpcApi -Method POST -Path "/v1/graph/characters" -Headers (New-WriteHeaders -RequestId "req-char-vendor") -ExpectedStatus @(200) -Body @{ id = $vendorId; name = "Manual Vendor"; archetype = "merchant"; faction = "manual"; biography = "vendor"; current_location_id = $locationA; is_player = $false; is_active = $true; gossipy = 50; credulity = 50; honesty = 70; current_mood = "neutral" }
+Invoke-NpcApi -Method POST -Path "/v1/graph/nodes/character" -Headers (New-WriteHeaders -RequestId "req-char-player") -ExpectedStatus @(200) -Body @{ properties = @{ id = $playerId; name = "Manual Player"; archetype = "adventurer"; faction = "manual"; biography = "player"; current_location_id = $locationA; is_player = $true; is_active = $true; gossipy = 40; credulity = 60; honesty = 55; current_mood = "neutral" } }
+Invoke-NpcApi -Method POST -Path "/v1/graph/nodes/character" -Headers (New-WriteHeaders -RequestId "req-char-npc") -ExpectedStatus @(200) -Body @{ properties = @{ id = $npcId; name = "Manual NPC"; archetype = "guard"; faction = "manual"; biography = "npc"; current_location_id = $locationA; is_player = $false; is_active = $true; gossipy = 70; credulity = 45; honesty = 65; current_mood = "neutral" } }
+Invoke-NpcApi -Method POST -Path "/v1/graph/nodes/character" -Headers (New-WriteHeaders -RequestId "req-char-vendor") -ExpectedStatus @(200) -Body @{ properties = @{ id = $vendorId; name = "Manual Vendor"; archetype = "merchant"; faction = "manual"; biography = "vendor"; current_location_id = $locationA; is_player = $false; is_active = $true; gossipy = 50; credulity = 50; honesty = 70; current_mood = "neutral" } }
 
 # 4) Link character relationships and location edges.
-Invoke-NpcApi -Method POST -Path "/v1/graph/edges/located_at" -Headers (New-WriteHeaders -RequestId "req-loc-player") -ExpectedStatus @(200) -Body @{ character_id = $playerId; location_id = $locationA; is_permanent_resident = $false; meta = $meta }
-Invoke-NpcApi -Method POST -Path "/v1/graph/edges/located_at" -Headers (New-WriteHeaders -RequestId "req-loc-npc") -ExpectedStatus @(200) -Body @{ character_id = $npcId; location_id = $locationA; is_permanent_resident = $true; meta = $meta }
-Invoke-NpcApi -Method POST -Path "/v1/graph/edges/relates_to" -Headers (New-WriteHeaders -RequestId "req-rel") -ExpectedStatus @(200) -Body @{ src_id = $npcId; dst_id = $playerId; trust = 60; fear = 30; affection = 55; meta = $meta }
+Invoke-NpcApi -Method POST -Path "/v1/graph/edges/LOCATED_AT" -Headers (New-WriteHeaders -RequestId "req-loc-player") -ExpectedStatus @(200) -Body @{ src_id = $playerId; dst_id = $locationA; properties = @{ is_permanent_resident = $false } }
+Invoke-NpcApi -Method POST -Path "/v1/graph/edges/LOCATED_AT" -Headers (New-WriteHeaders -RequestId "req-loc-npc") -ExpectedStatus @(200) -Body @{ src_id = $npcId; dst_id = $locationA; properties = @{ is_permanent_resident = $true } }
+Invoke-NpcApi -Method POST -Path "/v1/graph/edges/RELATES_TO" -Headers (New-WriteHeaders -RequestId "req-rel") -ExpectedStatus @(200) -Body @{ src_id = $npcId; dst_id = $playerId; properties = @{ trust = 60; fear = 30; affection = 55 } }
 
 # 5) Create an event and attach knowledge/participation edges.
-Invoke-NpcApi -Method POST -Path "/v1/graph/events" -Headers (New-WriteHeaders -RequestId "req-event") -ExpectedStatus @(200) -Body @{
+Invoke-NpcApi -Method POST -Path "/v1/graph/nodes/event" -Headers (New-WriteHeaders -RequestId "req-event") -ExpectedStatus @(200) -Body @{ properties = @{
     id = $eventId
     summary = "Manual event"
     severity = 50
@@ -306,14 +303,10 @@ Invoke-NpcApi -Method POST -Path "/v1/graph/events" -Headers (New-WriteHeaders -
     participants = @($npcId)
     event_type = "crime"
     is_public = $true
-    producer = "manual_test"
-    origin_engine = "manual"
-    schema_version = "v1.4"
-    provenance = @{ request_id = "req-event"; actor_id = "manual_tester"; reason = "manual"; idempotency_key = "manual-$runId"; idempotency_request_hash = "hash-manual-$runId" }
-}
+} }
 
-Invoke-NpcApi -Method POST -Path "/v1/graph/edges/knows_about" -Headers (New-WriteHeaders -RequestId "req-knows") -ExpectedStatus @(200) -Body @{ character_id = $npcId; event_id = $eventId; knowledge_state = "knows"; learned_at_tick = 9001; meta = $meta }
-Invoke-NpcApi -Method POST -Path "/v1/graph/edges/participated_in" -Headers (New-WriteHeaders -RequestId "req-part") -ExpectedStatus @(200) -Body @{ character_id = $npcId; event_id = $eventId; role = "witness"; meta = $meta }
+Invoke-NpcApi -Method POST -Path "/v1/graph/edges/KNOWS_ABOUT" -Headers (New-WriteHeaders -RequestId "req-knows") -ExpectedStatus @(200) -Body @{ src_id = $npcId; dst_id = $eventId; properties = @{ knowledge_state = "knows"; learned_at_tick = 9001 } }
+Invoke-NpcApi -Method POST -Path "/v1/graph/edges/PARTICIPATED_IN" -Headers (New-WriteHeaders -RequestId "req-part") -ExpectedStatus @(200) -Body @{ src_id = $npcId; dst_id = $eventId; properties = @{ role = "witness" } }
 
 # 6) Validate NPC state retrieval with related graph context.
 $state = Invoke-NpcApi -Method GET -Path "/v1/npc/$npcId/state?include_relations=true&include_events=true" -Headers (New-ReadHeaders) -ExpectedStatus @(200)
@@ -324,7 +317,7 @@ $d1 = Invoke-NpcApi -Method POST -Path "/v1/dialogue" -Headers (New-WriteHeaders
 Assert-True -Condition ($d1.Json.session_id -eq $sessionId) -Message "Dialogue returns same session id"
 
 # 8) Mutate world state to verify patch/write path behavior.
-Invoke-NpcApi -Method PATCH -Path "/v1/graph/world_state" -Headers (New-WriteHeaders -RequestId "req-world") -ExpectedStatus @(200) -Body @{ weather = "storm"; active_conditions = @("manual_test"); faction_standings = @{ manual = 10 }; meta = $meta }
+Invoke-NpcApi -Method PATCH -Path "/v1/graph/nodes/world_state/world" -Headers (New-WriteHeaders -RequestId "req-world") -ExpectedStatus @(200) -Body @{ properties = @{ weather = "storm"; active_conditions = @("manual_test"); faction_standings = @{ manual = 10 } } }
 
 # 9) Full quest lifecycle: offer, accept, progress, evaluate, reward.
 $qOffer = Invoke-NpcApi -Method POST -Path "/v1/quest/offer" -Headers (New-WriteHeaders -RequestId "req-quest-offer") -ExpectedStatus @(200) -Body @{ quest_id = $questId; player_id = $playerId; title = "Collect Tokens"; objectives = @(@{ objective_id = "obj_tokens"; target_count = 2 }); item_rewards = @(@{ item_id = "dock_token"; quantity = 1 }); currency_reward = @{ amount = 25 } }
@@ -343,7 +336,7 @@ $buy1 = Invoke-NpcApi -Method POST -Path "/v1/action" -Headers (New-WriteHeaders
 $buy2 = Invoke-NpcApi -Method POST -Path "/v1/action" -Headers (New-WriteHeaders -RequestId "req-buy-2" -IdempotencyKey $buyIdem -RequestHash "hash-buy-$runId") -ExpectedStatus @(200) -Body $buyBody
 Assert-True -Condition ($buy1.Json.currency_transfer.source_balance -eq $buy2.Json.currency_transfer.source_balance) -Message "Repeated idempotency key does not double debit"
 
-$eventsResp = Invoke-NpcApi -Method GET -Path "/v1/graph/events?limit=500&offset=0" -Headers (New-ReadHeaders) -ExpectedStatus @(200)
+$eventsResp = Invoke-NpcApi -Method GET -Path "/v1/graph/nodes/event?limit=500&offset=0" -Headers (New-ReadHeaders) -ExpectedStatus @(200)
 $questEvents = @($eventsResp.Json.data | Where-Object { $_.id -like "${questId}:*" })
 Write-Host "Quest events found: $($questEvents.Count)"
 $questEvents | Select-Object id, event_type, summary, producer, origin_engine, schema_version | Format-Table -AutoSize
@@ -366,11 +359,11 @@ if (-not [string]::IsNullOrWhiteSpace($jobId)) {
 
 # Optional teardown for test data created by this run.
 if ($DoCleanup) {
-    Invoke-NpcApi -Method DELETE -Path "/v1/graph/edges/participated_in/$npcId/$eventId" -Headers (New-WriteHeaders -RequestId "req-del-part") -ExpectedStatus @(200)
-    Invoke-NpcApi -Method DELETE -Path "/v1/graph/edges/knows_about/$npcId/$eventId" -Headers (New-WriteHeaders -RequestId "req-del-knows") -ExpectedStatus @(200)
-    Invoke-NpcApi -Method DELETE -Path "/v1/graph/edges/relates_to/$npcId/$playerId" -Headers (New-WriteHeaders -RequestId "req-del-rel") -ExpectedStatus @(200)
+    Invoke-NpcApi -Method DELETE -Path "/v1/graph/edges/PARTICIPATED_IN/$npcId/$eventId" -Headers (New-WriteHeaders -RequestId "req-del-part") -ExpectedStatus @(200)
+    Invoke-NpcApi -Method DELETE -Path "/v1/graph/edges/KNOWS_ABOUT/$npcId/$eventId" -Headers (New-WriteHeaders -RequestId "req-del-knows") -ExpectedStatus @(200)
+    Invoke-NpcApi -Method DELETE -Path "/v1/graph/edges/RELATES_TO/$npcId/$playerId" -Headers (New-WriteHeaders -RequestId "req-del-rel") -ExpectedStatus @(200)
 
-    $eventsAll = Invoke-NpcApi -Method GET -Path "/v1/graph/events?limit=1000&offset=0" -Headers (New-ReadHeaders) -ExpectedStatus @(200)
+    $eventsAll = Invoke-NpcApi -Method GET -Path "/v1/graph/nodes/event?limit=1000&offset=0" -Headers (New-ReadHeaders) -ExpectedStatus @(200)
     $questEventsToDelete = @($eventsAll.Json.data | Where-Object { $_.id -like "${questId}:*" })
     foreach ($qe in $questEventsToDelete) {
         Invoke-NpcApi -Method DELETE -Path "/v1/graph/admin/events/$($qe.id)" -Headers (New-WriteHeaders -RequestId "req-del-$([guid]::NewGuid().ToString())") -ExpectedStatus @(200)

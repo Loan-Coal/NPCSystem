@@ -109,6 +109,56 @@ Startup behavior: invalid or missing LLM config fails fast during application st
 Runtime behavior: middleware preflight delegates to `IdempotencyService` for decisions
 (`proceed`, `replay`, `conflict`, `in_flight`) and persists terminal responses for replay.
 
+### Type Registry Runtime Settings (`config.py`)
+
+| Setting | Type | Default | Description |
+|---|---|---|---|
+| `TYPE_REGISTRY_EXTENSION_SOURCES` | string | `""` | Comma-delimited list of extension YAML file paths or glob patterns |
+
+Runtime behavior:
+- Package-internal base contracts are always loaded from `type_registry/base_nodes/*.yaml` and `type_registry/base_edges/*.yaml`.
+- Base contracts support primitive fields and typed collection shapes: `list` + `items_type`, `dict` + `values_type`.
+- Empty value means "base schema only" registry build.
+- Non-empty value is resolved at startup, each source is loaded and validated fail-fast.
+- Invalid source path/glob or invalid YAML shape aborts startup.
+
+### TypeRegistry (`type_registry/contracts.py`)
+
+Process-level immutable runtime snapshot built once at startup.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `schema_version` | string | yes | Base schema version for the loaded registry snapshot |
+| `base_node_types` | mapping | yes | Package-internal base node type definitions (required/null/type/range contract) |
+| `base_edge_types` | mapping | yes | Package-internal base edge definitions including `src_type`/`dst_type` topology |
+| `core_types` | mapping | yes | Core object types to immutable field-definition maps |
+| `custom_node_types` | mapping | yes | Custom node type names to immutable field-definition maps |
+| `custom_edge_types` | mapping | yes | Custom edge type names to immutable edge definitions (`src_type`, `dst_type`, fields) |
+| `enum_extensions` | mapping | yes | Immutable enum extension values used by runtime validators |
+
+Merge/validation rules enforced during startup build:
+- Additive-only merges.
+- Duplicate field-name collisions fail hard.
+- Constraint mutation after first declaration fails hard.
+- Singleton is immutable for the lifetime of the process.
+
+R2 validation semantics (`type_registry/validation.py`):
+- Edge endpoint compatibility is enforced from registry definitions (`src_type`, `dst_type`).
+- Create/update reject missing required fields.
+- Explicit null is forbidden for base fields and allowed for extension fields.
+- Extension and base fields enforce primitive type/range constraints, and base collection shape constraints for typed lists/dicts.
+- PATCH omits keep existing values; payload values are merged over existing state.
+
+R3 limits and warnings:
+- Each field definition now carries `max_bytes` (default `512`) and payload validation enforces UTF-8 encoded byte limits per field.
+- Registry merge enforces extension field count cap (`16`) per object type.
+- Missing extension values are emitted as structured warnings in API response metadata (`meta.warnings`), with corresponding structured logs and `graph_warnings_total` metric increments by `warning_code`.
+
+R3 limits and warnings:
+- Each field definition now carries `max_bytes` (default `512`) and payload validation enforces UTF-8 encoded byte limits per field.
+- Registry merge enforces extension field count cap (`16`) per object type.
+- Missing extension values are emitted as structured warnings in API response metadata (`meta.warnings`), with corresponding structured logs and `graph_warnings_total` metric increments by `warning_code`.
+
 ### IdempotencyRecord (`engines/idempotency/models.py`, Neo4j label `IdempotencyRecord`)
 
 | Property | Type | Required | Description |
@@ -308,43 +358,70 @@ To change one faction's standing, send the full dict with all factions included.
 
 ---
 
-## Patch Body Models
+## Generic Graph Mutation Bodies
 
-Each resource type has a dedicated, fully typed patch request model. All fields are Optional.
-Immutable fields are absent from the model — they cannot be submitted at all.
-Extension fields from `game_schema.yaml` are accepted via a separate `extension_fields` dict
-sub-object, validated at runtime against the loaded schema.
+Graph write endpoints now use generic registry-driven payload wrappers:
 
 ```python
-class CharacterPatchBody(BaseModel):
-    name: str | None = None
-    archetype: str | None = None
-    faction: str | None = None
-    biography: str | None = None
-    current_location_id: str | None = None
-    gossipy: int | None = Field(None, ge=0, le=100)
-    credulity: int | None = Field(None, ge=0, le=100)
-    honesty: int | None = Field(None, ge=0, le=100)
-    current_mood: str | None = None
-    is_active: bool | None = None
-    extension_fields: dict[str, Any] | None = None  # validated against GameSchema at runtime
-    meta: MutationMeta
+class NodeWriteBody(BaseModel):
+  properties: dict[str, Any] = Field(default_factory=dict)
 
-class EventPatchBody(BaseModel):
-    summary: str | None = None
-    severity: int | None = Field(None, ge=0, le=100)
-    is_public: bool | None = None
-    extension_fields: dict[str, Any] | None = None
-    meta: MutationMeta
-
-class LocationPatchBody(BaseModel):
-    name: str | None = None
-    region: str | None = None
-    descriptor: str | None = None
-    location_tag: str | None = None
-    extension_fields: dict[str, Any] | None = None
-    meta: MutationMeta
+class EdgeWriteBody(BaseModel):
+  src_id: str
+  dst_id: str
+  properties: dict[str, Any] = Field(default_factory=dict)
 ```
+
+Validation behavior:
+- `properties` keys must exist in base or extension contracts for the target type.
+- Required field checks, type/range checks, topology checks, and PATCH merge semantics are enforced by `type_registry.validation`.
+- Unknown fields are rejected.
+
+### Generic Graph Pagination Contract (`api/pagination.py`)
+
+List routes use one isolated offset strategy resolver to keep pagination policy swappable.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `strategy` | string | `offset` | Current pagination strategy identifier |
+| `limit` | int | `50` | Page size (clamped to max `200`) |
+| `offset` | int | `0` | Zero-based offset |
+| `sort` | string | `id:asc` | Stable default ordering |
+
+Returned in list route response metadata:
+- `GET /v1/graph/nodes/{node_type}`
+- `GET /v1/graph/edges/{edge_type}`
+
+### Registry Introspection Endpoint
+
+`GET /v1/schema/registry` returns serialized runtime registry snapshot:
+- `schema_version`
+- `node_types[]` with per-field entries `{ field_name, field_type, field_origin, required, max_bytes }`
+- `edge_types[]` with topology (`src_type`, `dst_type`) plus field entries
+- `enum_extensions`
+
+### Generic Graph Pagination Contract (`api/pagination.py`)
+
+List routes use one isolated offset strategy resolver to keep pagination policy swappable.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `strategy` | string | `offset` | Current pagination strategy identifier |
+| `limit` | int | `50` | Page size (clamped to max `200`) |
+| `offset` | int | `0` | Zero-based offset |
+| `sort` | string | `id:asc` | Stable default ordering |
+
+Returned in list route response metadata:
+- `GET /v1/graph/nodes/{node_type}`
+- `GET /v1/graph/edges/{edge_type}`
+
+### Registry Introspection Endpoint
+
+`GET /v1/schema/registry` returns serialized runtime registry snapshot:
+- `schema_version`
+- `node_types[]` with per-field entries `{ field_name, field_type, field_origin, required, max_bytes }`
+- `edge_types[]` with topology (`src_type`, `dst_type`) plus field entries
+- `enum_extensions`
 
 ---
 
@@ -414,9 +491,9 @@ Records current location of a character.
 | `arrived_at` | datetime | yes | — | When the character arrived |
 | `is_permanent_resident` | bool | yes | false | NPCs with a "home" location |
 
-**Movement pattern:** Use `POST /v1/graph/characters/{id}/move` for atomic location changes.
-This endpoint deletes the old LOCATED_AT edge, creates a new one, and updates
-`character.current_location_id` in a single transaction. Do not use separate API calls.
+**Movement pattern:** There is no dedicated move route after generic cutover.
+Clients should update location semantics through generic node/edge endpoints with
+application-level coordination when atomic multi-write behavior is required.
 
 ---
 

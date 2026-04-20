@@ -8,6 +8,9 @@ Dependencies injected: monkeypatch and tmp_path fixtures.
 
 from pathlib import Path
 
+import pytest
+pytest.importorskip("neo4j")
+
 from fastapi.routing import APIRoute, APIWebSocketRoute
 
 from main import create_app
@@ -24,8 +27,8 @@ enum_extensions: {}
     )
 
 
-def test_graph_edge_routes_are_registered(monkeypatch, tmp_path: Path) -> None:
-    """Graph edge create/delete routes should be registered under /v1."""
+def test_graph_generic_routes_are_registered(monkeypatch, tmp_path: Path) -> None:
+    """Generic graph node/edge routes should be registered under /v1."""
 
     schema_path = tmp_path / "game_schema.yaml"
     _write_schema(path=schema_path)
@@ -45,12 +48,7 @@ def test_graph_edge_routes_are_registered(monkeypatch, tmp_path: Path) -> None:
         if isinstance(route, (APIRoute, APIWebSocketRoute))
     }
 
-    assert "/v1/graph/edges/relates_to" in paths
-    assert "/v1/graph/edges/knows_about" in paths
-    assert "/v1/graph/edges/located_at" in paths
-    assert "/v1/graph/edges/participated_in" in paths
-    assert "/v1/graph/edges/relates_to/{src_id}/{dst_id}" in paths
-    assert "/v1/graph/edges/knows_about/{character_id}/{event_id}" in paths
-    assert "/v1/graph/edges/located_at/{character_id}/{location_id}" in paths
-    assert "/v1/graph/edges/participated_in/{character_id}/{event_id}" in paths
-    assert "/v1/graph/characters/{character_id}/move" in paths
+    assert "/v1/graph/nodes/{node_type}" in paths
+    assert "/v1/graph/nodes/{node_type}/{node_id}" in paths
+    assert "/v1/graph/edges/{edge_type}" in paths
+    assert "/v1/graph/edges/{edge_type}/{src_id}/{dst_id}" in paths

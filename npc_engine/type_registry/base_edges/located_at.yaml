@@ -1,0 +1,5 @@
+edge_type: LOCATED_AT
+src_type: character
+dst_type: location
+fields:
+  is_permanent_resident: { type: bool, required: false }

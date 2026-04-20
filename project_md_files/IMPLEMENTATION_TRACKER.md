@@ -297,3 +297,237 @@ Final Verification (Run Once After All Modules):
 | Coverage check | Pending | |
 | Runtime smoke checks | Pending | |
 | One-time full code review | Pending | |
+
+## Graph Type Registry Refactor (Generic Graph API)
+Status: IN_PROGRESS
+Started: 2026-04-19
+Completed:
+Checkpoint: REGISTRY_R0
+
+Goal:
+- Replace typed graph CRUD surface with a schema-registry-driven generic node/edge API.
+- Keep non-removable base attributes for base node/edge types.
+- Allow additive extensions only (add fields, add node types, add edge types).
+
+Confirmed Constraints (User):
+- Runtime safety > developer ergonomics > speed of adding content.
+- No backward compatibility requirement; legacy routes can be removed.
+- Extension fields are metadata-only for now (no engine behavior coupling yet).
+- No schema migration tooling required.
+- Extension fields should be queryable by default; NOT indexable by default.
+- Edge definitions are the single source of truth for topology (src_type/dst_type). Node-side edge allow-lists are not used.
+- Extension identifiers (node types, edge types, field names) are developer-defined and unrestricted by pattern; collisions are rejected.
+
+Package Naming: `type_registry` (decided).
+
+### R0 - Contract and Registry Format Decisions
+Status: TODO
+Started:
+Completed:
+Checkpoint: REGISTRY_R0
+
+Tasks:
+- [x] Finalize package/folder naming → `type_registry`.
+- [x] Freeze external extension file format → YAML only.
+- [x] Decide deploy-time-only vs hot reload → deploy-time-only.
+- [x] Decide per-field byte cap value → 512 bytes per attribute, enforced independently per field.
+- [x] Decide config location for byte caps → per-type definition file.
+- [x] Define warning contract schema for API metadata + logs (stable warning_code/message/type + optional context fields).
+- [x] Decide LIST endpoint pagination baseline → offset-first with default `limit=50`.
+- [x] Decide pagination architecture → isolated pagination module, easily swappable strategy, no strategy-specific branching outside pagination module.
+- [x] Decide LIST pagination remaining knobs → max page size `200`, default sort `id ASC`.
+
+Verification:
+```bash
+cd npc_engine
+pytest -q tests/unit -k "schema or registry"
+```
+
+### R1 - Registry Foundation
+Status: DONE
+Started: 2026-04-19
+Completed: 2026-04-19
+Checkpoint: REGISTRY_R1
+
+Tasks:
+- [x] Add registry package skeleton (base contracts, extension loader, merge rules).
+- [x] Enforce additive-only merges and non-removable base attributes.
+- [x] Enforce constraints frozen once declared (no post-declaration constraint mutation).
+- [x] Build one immutable registry singleton at startup.
+- [x] Fail-fast startup when extension files are invalid or contain duplicate field names.
+
+Increment Notes (2026-04-19):
+- Added `npc_engine/type_registry/` package with contracts, extension loader, merge rules, and build facade.
+- Added config-driven extension source setting: `TYPE_REGISTRY_EXTENSION_SOURCES`.
+- Startup now builds and caches one immutable registry singleton in app lifespan before runtime service startup.
+- Added unit coverage for additive merge behavior, duplicate-name collision, constraint mutation, invalid extension file shape, and singleton immutability.
+
+Verification:
+```bash
+cd npc_engine
+pytest -q tests/unit/test_type_registry_foundation.py tests/unit/test_main_reconciler_lifespan.py tests/unit/test_schema_loader.py tests/unit/test_graph_v13_routes.py tests/unit/test_v1_route_versioning.py
+# Result: 13 passed
+```
+
+### R2 - Topology and Validation Engine
+Status: DONE
+Started: 2026-04-19
+Completed: 2026-04-19
+Checkpoint: REGISTRY_R2
+
+Tasks:
+- [x] Enforce edge endpoint compatibility (`src_type`, `dst_type`) via registry — edge definitions are the sole topology authority.
+- [x] Add generic payload validator for create/update operations.
+- [x] Enforce base required attributes as hard requirements (null forbidden for base fields).
+- [x] Enforce extension field type/range/shape validation.
+- [x] Implement PATCH semantics: omitted fields = keep existing; explicit null forbidden for base fields, allowed for extension fields.
+
+Increment Notes (2026-04-19):
+- Added package-internal base contract folders: `type_registry/base_nodes/*.yaml` and `type_registry/base_edges/*.yaml` (one file per base type).
+- Added startup loader for package-internal base contracts and merged these into immutable `TypeRegistry` runtime state.
+- Added generic validation module for topology and payload checks: endpoint compatibility, unknown fields, required/base-null rules, type/range checks, and PATCH merge semantics.
+- Kept external extension source format comma-delimited (`TYPE_REGISTRY_EXTENSION_SOURCES`) as requested.
+
+Verification:
+```bash
+cd npc_engine
+pytest -q tests/unit/test_type_registry_validator.py tests/unit/test_type_registry_foundation.py tests/unit/test_main_reconciler_lifespan.py tests/unit/test_schema_loader.py tests/unit/test_graph_v13_routes.py tests/unit/test_v1_route_versioning.py
+# Result: 19 passed
+```
+
+### R3 - Warnings and Limits
+Status: DONE
+Started: 2026-04-19
+Completed: 2026-04-19
+Checkpoint: REGISTRY_R3
+
+Tasks:
+- [x] Emit warnings for missing extension values in API response metadata.
+- [x] Emit corresponding structured warning logs with request correlation (reuse existing P5 observability infrastructure).
+- [x] Add warning metrics by warning code (reuse existing in-memory metrics registry from P5).
+- [x] Enforce 512-byte per-field UTF-8 byte cap and produce typed limit warnings/errors.
+- [x] Enforce 16 extension fields max per object type and produce typed limit errors.
+
+Increment Notes (2026-04-19):
+- Added graph warning pipeline helpers to attach warnings into API response metadata and emit structured warning logs/metrics (`graph_warnings_total`) with request correlation ids.
+- Added per-field `max_bytes` contracts (default `512`) in schema/base/runtime field models and enforced byte budgets in runtime payload validation.
+- Added startup-time extension field count enforcement (`max 16`) in registry merge rules for core/custom object types.
+
+Verification:
+```bash
+cd npc_engine
+pytest -q tests/unit/test_type_registry_limits.py tests/unit/test_graph_warning_pipeline.py
+# Result: 2 passed, 1 skipped
+```
+
+### R4 - Generic Graph Endpoints
+Status: DONE
+Started: 2026-04-19
+Completed: 2026-04-19
+Checkpoint: REGISTRY_R4
+
+Tasks:
+- [x] Add generic node endpoints (`POST/GET/PATCH/LIST /v1/graph/nodes/{node_type}`).
+- [x] Add generic edge endpoints (`POST/GET/DELETE/LIST /v1/graph/edges/{edge_type}`).
+- [x] Implement LIST pagination per R0 pagination policy decision.
+- [x] Implement pagination via a self-contained pagination module so future cursor migration does not require endpoint/service rewrites.
+- [x] Add schema introspection endpoint for clients (`/v1/schema/registry`).
+- [x] Enforce Cypher safety via value parameterization + registry allow-list validation for dynamic labels/edge-types/property names (security acceptance criterion — must pass before R4 closes).
+- [x] Remove legacy typed graph CRUD routes after parity verification.
+
+Increment Notes (2026-04-19):
+- Replaced typed graph routes with one generic route surface in `api/routes/graph.py`.
+- Added `GenericGraphService` and `generic_graph_utils` for registry-driven node/edge CRUD and safe dynamic Cypher identifiers.
+- Added isolated pagination strategy module (`api/pagination.py`) and wired generic list endpoints through it.
+- Added registry introspection serializer and endpoint (`GET /v1/schema/registry`).
+- Removed legacy typed service path (`graph/graph_edit_service.py`) and obsolete typed graph request models from `api/schemas.py`.
+- Updated dependency wiring to use `get_generic_graph_service` only.
+- Updated route/version/auth/metrics tests for generic route contracts and replaced typed service tests with `test_generic_graph_service.py`.
+
+Verification:
+```bash
+cd npc_engine
+pytest -q tests/unit/test_pagination_strategy.py tests/unit/test_registry_serializer.py tests/unit/test_graph_v13_routes.py tests/unit/test_v1_route_versioning.py tests/unit/test_type_registry_validator.py tests/unit/test_generic_graph_service.py tests/unit/test_system_registry_route.py
+# Result: 14 passed, 5 skipped
+```
+
+### R5 - Indexing and Queryability
+Status: TODO
+Started:
+Completed:
+Checkpoint: REGISTRY_R5
+
+Tasks:
+- [ ] Build index/constraint plan from registry definitions (base fields only; extension fields not indexed).
+- [ ] Apply startup index plan and report applied/skipped indexes.
+- [ ] Verify extension fields are queryable but NOT indexed by default.
+
+Verification:
+```bash
+cd npc_engine
+pytest -q tests/integration -k "index or query"
+```
+
+### R6 - Hardening and Cutover
+Status: TODO
+Started:
+Completed:
+Checkpoint: REGISTRY_R6
+
+Tasks:
+- [ ] Remove obsolete route/service/validator paths superseded by registry.
+- [ ] Run full verification loop (lint, type, unit, integration).
+- [ ] Update architecture docs and developer extension authoring guide (highlight: constraints are frozen once declared; no migration tooling; edge definitions are topology authority).
+
+Verification:
+```bash
+cd npc_engine
+make lint
+make type
+pytest -q
+```
+
+Open Decisions (Needs User Confirmation):
+- [x] Generic endpoints only vs hybrid surface (chosen: generic-only).
+- [x] Deploy-time-only schema loading vs hot reload (chosen: deploy-time-only).
+- [x] Default indexing strategy for extension fields (chosen: not indexable by default).
+- [x] Limit semantics for text budgets (chosen: UTF-8 bytes, 512 bytes per field, enforced independently).
+- [x] Topology authority (chosen: edge definition wins; node-side allow-lists removed).
+- [x] PATCH omission semantics (chosen: omitted fields keep existing value; explicit null forbidden for base fields).
+- [x] Constraint mutability (chosen: frozen once declared).
+- [x] LIST pagination remaining knobs (chosen: max page size `200`, default sort `id ASC`).
+
+Decision Log (2026-04-18):
+- [x] Unknown fields policy: fail hard when field is neither base nor declared extension.
+- [x] Extension merge policy: additive-only (no removal of base attributes/types, no constraint updates after declaration).
+- [x] Delivery channels for extension warnings: API metadata + structured logs.
+- [x] Schema loading policy: deploy-time-only (no hot reload in initial design).
+- [x] Registry package name: `type_registry`.
+- [x] Topology validation policy: edge endpoint type validation only (`src_type`/`dst_type` on edge definitions). Node-side edge allow-lists are not used — edge definitions are the sole topology authority.
+- [x] Extension file format: YAML only.
+- [x] Create behavior for missing extension fields: do not autofill; warn and persist null for extension fields only.
+- [x] Unknown field strictness across environments: always hard-fail.
+- [x] Extension constraint scope (initial): primitive types + range only.
+- [x] Constraint mutability: constraints are frozen once declared; no post-declaration updates allowed.
+- [x] Queryability policy: extension fields should be queryable.
+- [x] Extension indexing policy (default): extension fields should NOT be indexable by default.
+- [x] Missing extension values on create: persist null and emit warnings.
+- [x] Schema introspection scope: keep initial output simple; do not expose full internal policy metadata yet.
+- [x] Query guardrails policy (initial): do not add query guardrails yet.
+- [x] Write-time payload limits: enforce 512 bytes per-field UTF-8 byte cap, applied independently per attribute, for both base and extension fields.
+- [x] Config location policy: per-type max byte caps live in the same type definition file.
+- [x] Schema introspection minimum fields: field_name, field_type, field_origin (base|extension).
+- [x] Query endpoint scope (initial): storage and return only; no extension-filter query operators yet.
+- [x] Extension count policy: enforce one global hard max of 16 extension fields per object type.
+- [x] Missing value persistence policy: null allowed for extension fields only; null forbidden for base fields.
+- [x] Expensive extension query behavior: return warning and continue.
+- [x] Warning payload contract: stable `warning_code` + `message` + `type`, with optional context fields (for example `duration_ms`, `scanned_record_count`, `node_type`, `edge_type`, `field_name`).
+- [x] Field naming policy: developer-defined identifier names allowed; uniqueness enforced via collision checks.
+- [x] Duplicate field-name collision policy: fail hard when extension field name collides with existing base/extension name.
+- [x] Missing extension values on PATCH: explicit null allowed for extension fields only; explicit null forbidden for base fields.
+- [x] PATCH omission semantics: omitted fields keep their existing value (standard PATCH semantics); explicit null on a base field is a validation error.
+- [x] Expensive query warning trigger: query duration > 100 ms. Include scanned_record_count in warning payload when available.
+- [x] Cypher security policy: parameterize all values; dynamic labels/edge-types/property names may be any developer-defined names declared in registry, with collision checks and safe query construction. Verified as R4 acceptance criterion before milestone closes.
+- [x] Base contract source policy: package-internal immutable contract files under `type_registry/base_nodes/` and `type_registry/base_edges/`, one YAML file per base type.
+- [x] External extension source format policy: keep `TYPE_REGISTRY_EXTENSION_SOURCES` comma-delimited.
+- [x] Base contract shape policy: allow typed non-primitive list/dict field shapes in package-internal base contract files.

@@ -77,6 +77,22 @@ class SchemaValidationError(StructuredNPCSystemError):
 
 
 @dataclass(frozen=True)
+class RegistryValidationError(StructuredNPCSystemError):
+    """Raised when registry extension files fail validation or merge checks."""
+
+    source: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class RegistryPayloadValidationError(StructuredNPCSystemError):
+    """Raised when registry topology or payload validation fails at runtime."""
+
+    code: str
+    detail: str
+
+
+@dataclass(frozen=True)
 class NodeNotFoundError(StructuredNPCSystemError):
     """Raised when a graph node is not found for a requested operation."""
 

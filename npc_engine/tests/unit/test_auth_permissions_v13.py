@@ -6,6 +6,9 @@ Does NOT: exercise full HTTP middleware pipeline.
 Dependencies injected: None.
 """
 
+import pytest
+pytest.importorskip("neo4j")
+
 from auth.middleware import _required_scope_for_path
 from auth.permissions import SCOPE_GRAPH_ADMIN, SCOPE_GRAPH_WRITE, has_scope
 
@@ -28,7 +31,7 @@ def test_required_scope_path_resolution() -> None:
 
     prefix = "/v1"
 
-    assert _required_scope_for_path(path="/v1/graph/characters", api_v1_prefix=prefix) == SCOPE_GRAPH_WRITE
+    assert _required_scope_for_path(path="/v1/graph/nodes/character", api_v1_prefix=prefix) == SCOPE_GRAPH_WRITE
     assert _required_scope_for_path(path="/v1/graph/admin/reindex", api_v1_prefix=prefix) == SCOPE_GRAPH_ADMIN
     assert _required_scope_for_path(path="/v1/schema", api_v1_prefix=prefix) is None
     assert _required_scope_for_path(path="/v1/dialogue", api_v1_prefix=prefix) is None

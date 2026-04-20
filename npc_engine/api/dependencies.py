@@ -7,6 +7,7 @@ Dependencies injected: Settings.
 """
 
 from functools import lru_cache
+from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import Depends
@@ -25,8 +26,8 @@ from engines.idempotency.service import IdempotencyService
 from engines.llm.factory import create_llm_client
 from engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
 from graph.db import GraphDB
+from graph.generic_graph_service import GenericGraphService
 from graph.graph_admin_service import GraphAdminService
-from graph.graph_edit_service import GraphEditService
 from graph.reindex_job_service import ReindexJobService
 from retrieval.embedding_index import EmbeddingIndex
 from retrieval.vector_store_factory import create_vector_store
@@ -36,6 +37,11 @@ from schema.schema_loader import load_game_schema
 from schema.schema_models import SchemaConfig
 from schema.llm_config_loader import load_llm_config
 from schema.llm_config_models import LLMConfig
+from type_registry.registry import build_type_registry
+from type_registry.contracts import TypeRegistry
+
+
+REGISTRY_SOURCES_SEPARATOR = ","
 
 
 @lru_cache
@@ -121,6 +127,17 @@ def get_game_schema() -> SchemaConfig:
 
 
 @lru_cache
+def get_type_registry() -> TypeRegistry:
+    """Build immutable type registry singleton from base schema and extension sources."""
+
+    settings = get_settings()
+    return build_type_registry(
+        base_schema=get_game_schema(),
+        extension_sources=_resolve_registry_extension_sources(settings=settings),
+    )
+
+
+@lru_cache
 def get_llm_config() -> LLMConfig:
     """Load typed llm configuration for v1.4 prompt policy settings."""
 
@@ -133,6 +150,27 @@ def get_idempotency_store() -> Neo4jIdempotencyStore:
     """Create idempotency persistence backend."""
 
     return Neo4jIdempotencyStore()
+
+
+def _resolve_registry_extension_sources(*, settings: Settings) -> tuple[str, ...]:
+    """Resolve comma-delimited registry extension source values relative to project root."""
+
+    configured_sources = settings.TYPE_REGISTRY_EXTENSION_SOURCES
+    if not configured_sources:
+        return tuple()
+
+    project_root = Path(__file__).resolve().parent.parent
+    resolved_sources: list[str] = []
+    for source in configured_sources.split(REGISTRY_SOURCES_SEPARATOR):
+        source_value = source.strip()
+        if not source_value:
+            continue
+        source_path = Path(source_value)
+        if source_path.is_absolute():
+            resolved_sources.append(str(source_path))
+            continue
+        resolved_sources.append(str((project_root / source_path).resolve(strict=False)))
+    return tuple(resolved_sources)
 
 
 @lru_cache
@@ -198,13 +236,13 @@ def get_dialogue_handler(
     )
 
 
-def get_graph_edit_service(
+def get_generic_graph_service(
     session: AsyncSession = Depends(get_db_session),
-    schema: SchemaConfig = Depends(get_game_schema),
-) -> GraphEditService:
-    """Build graph edit service bound to current request session and schema."""
+    registry: TypeRegistry = Depends(get_type_registry),
+) -> GenericGraphService:
+    """Build generic graph service bound to current request session and registry."""
 
-    return GraphEditService(session=session, schema=schema)
+    return GenericGraphService(session=session, registry=registry)
 
 
 def get_graph_admin_service(session: AsyncSession = Depends(get_db_session)) -> GraphAdminService:

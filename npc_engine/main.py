@@ -29,6 +29,7 @@ from api.dependencies import (
     get_idempotency_service,
     get_llm_config,
     get_redis_runtime,
+    get_type_registry,
 )
 from config import get_settings
 from engines.idempotency.cleanup_scheduler import IdempotencyCleanupScheduler
@@ -48,6 +49,8 @@ async def lifespan(_app: FastAPI):
     try:
         get_game_schema.cache_clear()
         get_game_schema()
+        get_type_registry.cache_clear()
+        get_type_registry()
         get_llm_config.cache_clear()
         get_llm_config()
         await graph_db.connect()

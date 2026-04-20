@@ -87,12 +87,12 @@
 │  │ vector_store   │   │ graph_reader                        │  │
 │  │ context_merger │   │ node_schemas / edge_schemas         │  │
 │  │ token_budget_  │   │                                     │  │
-│  │  enforcer      │   │ graph_edit_service                  │  │
+│  │  enforcer      │   │ generic_graph_service               │  │
 │  │ context_       │   │ graph_admin_service                 │  │
-│  │  serializer    │   │  └── delegates writes to            │  │
-│  │ context_builder│   │      graph_edit_service             │  │
-│  └────────────────┘   │ graph_edit_validator                │  │
-│                        │ graph_edit_protocols                │  │
+│  │  serializer    │   │  └── delegates admin writes to      │  │
+│  │ context_builder│   │      graph_writer / writers         │  │
+│  └────────────────┘   │ generic_graph_utils                 │  │
+│                        │ type_registry (contracts/validator) │  │
 │  ┌────────────────┐   │ cascade_delete_service              │  │
 │  │    world/      │   │ soft_delete_service                 │  │
 │  │ world_reader   │   │ relation_mutation_service           │  │
@@ -128,6 +128,30 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Type Registry Layer (R2-R4)
+
+R2 introduces an immutable process-level registry package under `npc_engine/type_registry/`:
+
+- `contracts.py` — extension/base document contracts and immutable runtime registry models.
+- `base_nodes/*.yaml` — package-internal base node contracts (one file per base node type).
+- `base_edges/*.yaml` — package-internal base edge contracts (one file per base edge type).
+- Base contracts support primitive fields plus typed collection fields (`list` with `items_type`, `dict` with `values_type`).
+- `base_contract_loader.py` — loader for package-internal base contracts.
+- `extension_loader.py` — YAML source/path resolution and fail-fast document validation.
+- `merge_rules.py` — additive-only merge semantics and duplicate/constraint-mutation rejection.
+- `registry.py` — facade that builds one immutable registry snapshot from base schema + extension sources.
+- `validation.py` — generic topology and payload validator for create/update/patch flows.
+- `serializer.py` — stable client-facing serializer used by schema introspection endpoint.
+- R3 limits: per-field UTF-8 byte caps (`max_bytes`, default `512`) and extension field count cap (`16` per object type).
+- R3 warnings: missing extension values are emitted in API response metadata, structured logs, and `graph_warnings_total` metrics.
+- R4 pagination isolation: `api/pagination.py` owns list pagination strategy defaults/bounds so future cursor migration does not leak into route/service logic.
+
+Composition root wiring:
+
+- `api/dependencies.py:get_type_registry()` builds one cached singleton.
+- `main.py` lifespan now clears/loads the registry before connecting runtime services.
+- `api/routes/system.py:/v1/schema/registry` exposes the serialized runtime registry snapshot.
+
 ---
 
 ## Auth Scope Model
@@ -140,7 +164,7 @@ graph_admin ⊃ graph_write
 
 | Scope | Routes accessible |
 |---|---|
-| `graph_write` | All `/v1/graph/*` routes (create, patch, soft-delete, move, read) |
+| `graph_write` | All `/v1/graph/*` public routes (generic node/edge read-write + schema read) |
 | `graph_admin` | Everything in `graph_write` + all `/v1/graph/admin/*` routes (hard delete, absolute relation, unbounded delta, reindex, audit log) |
 
 Implementation: `auth/permissions.py` declares the scope hierarchy. `auth/middleware.py` checks
@@ -203,6 +227,14 @@ Service start
     │       ├── parse YAML → validate against SchemaConfig (Pydantic meta-schema)
     │       ├── check required core type declarations
     │       └── FAIL FAST with specific errors if invalid
+    │
+    ├── type_registry.build(base_schema, TYPE_REGISTRY_EXTENSION_SOURCES)
+    │       ├── load package-internal base contracts (`base_nodes/*.yaml`, `base_edges/*.yaml`)
+    │       ├── resolve configured extension file/glob sources
+    │       ├── parse + validate extension YAML documents
+    │       ├── enforce additive-only merges
+    │       ├── reject duplicate field collisions and constraint mutations
+    │       └── expose immutable singleton registry for runtime consumers
     │
     ├── llm_config_loader.load(LLM_CONFIG_PATH)
     │       ├── parse YAML → validate against LLMConfig model
@@ -335,29 +367,22 @@ Game Client          API Route       DialogueHandler      Neo4j       LLM
 
 ---
 
-## Graph Edit Pipeline — Sequence Diagram
+## Graph Write Pipeline — Sequence Diagram
 
 ```
-Game Client          API Route        GraphEditService     Neo4j     EmbeddingIndex
+Game Client          API Route      GenericGraphService      Neo4j
     │                    │                  │               │              │
     │── POST /v1/graph/──►│                 │               │              │
-    │   characters        │                 │               │              │
+  │   nodes/character   │                 │               │              │
     │                    │── verify auth    │               │              │
     │                    │   (graph_write)  │               │              │
     │                    │── validate body  │               │              │
-    │                    │   (typed model + │               │              │
-    │                    │    ext_fields)   │               │              │
-    │                    │── graph_edit_    │               │              │
-    │                    │   validator ────►│               │              │
-    │                    │                  │── MATCH loc   │              │
-    │                    │                  │   MERGE char ─►              │
+  │                    │   (generic body) │               │              │
+  │                    │                  │── registry validate          │
+  │                    │                  │── MERGE node ─►              │
     │                    │                  │◄── result ─────              │
-    │                    │                  │   (NodeNotFoundError         │
-    │                    │                  │    if loc missing)           │
-    │                    │                  │── SET last_graph_updated_at  │
     │                    │                  │── commit tx ──►              │
-    │                    │                  │               │── invalidate ►│
-    │◄── 201 Created ──────────────────────                 │              │
+  │◄── 200 OK ───────────────────────────                 │              │
 ```
 
 ---
@@ -365,15 +390,8 @@ Game Client          API Route        GraphEditService     Neo4j     EmbeddingIn
 ## Soft-Delete Flow
 
 ```
-DELETE /v1/graph/characters/{id}  (graph_write scope)
-    │
-    ├── soft_delete_service.deactivate(character_id)
-    │       ├── MATCH (c:Character {id: $id}) SET c.is_active = false
-    │       ├── SET c.last_graph_updated_at = datetime()
-    │       └── commit (all edges preserved)
-    │
-    └── embedding_index.invalidate(character_id)
-        (reconciler will skip this char in future; gossip/dialogue already filter it)
+Public character soft-delete route was removed in generic graph cutover.
+Character deletion is currently admin-only.
 
 
 DELETE /v1/graph/admin/characters/{id}  (graph_admin scope, mode=hard)

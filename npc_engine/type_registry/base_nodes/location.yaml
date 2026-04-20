@@ -1,0 +1,7 @@
+node_type: location
+fields:
+  id: { type: str, required: true }
+  name: { type: str, required: true }
+  region: { type: str, required: false }
+  location_tag: { type: str, required: true }
+  descriptor: { type: str, required: true }

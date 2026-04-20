@@ -1,252 +1,186 @@
 """
-graph.py - v1 graph_write routes for core graph resources.
+graph.py - Registry-driven generic graph_write routes.
 
 Does NOT: execute raw Cypher in route handlers.
 
-Dependencies injected: GraphEditService.
+Dependencies injected: GenericGraphService.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Any
 
-from api.dependencies import get_graph_edit_service
+from fastapi import APIRouter, Depends, Query, Request
+from pydantic import BaseModel, ConfigDict, Field
+
+from api.dependencies import get_generic_graph_service
+from api.graph_warning_helpers import attach_warnings_meta, emit_graph_warnings
+from api.pagination import resolve_offset_pagination
 from api.route_helpers import graph_error_to_http, ok_response, require_node
-from api.schemas import (
-    CharacterMoveBody,
-    CharacterPatchBody,
-    EventPatchBody,
-    KnowsAboutEdgeBody,
-    LocatedAtEdgeBody,
-    LocationPatchBody,
-    ParticipatedInEdgeBody,
-    RelatesToEdgeBody,
-    WorldStatePatchBody,
-)
-from graph.graph_edit_service import GraphEditService
-from graph.node_schemas import CharacterNode, EventNode, LocationNode
-from utils.errors import ImmutableFieldError, NodeNotFoundError, SchemaValidationError
+from graph.generic_graph_service import GenericGraphService
+from utils.errors import NodeNotFoundError, RegistryPayloadValidationError
+
+
+class NodeWriteBody(BaseModel):
+    """Generic node payload wrapper for POST/PATCH operations."""
+
+    properties: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class EdgeWriteBody(BaseModel):
+    """Generic edge payload wrapper for POST operations."""
+
+    src_id: str
+    dst_id: str
+    properties: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(frozen=True)
 
 
 router = APIRouter(prefix="/graph")
 
 
-@router.get("/characters/{character_id}")
-async def get_character(character_id: str, service: GraphEditService = Depends(get_graph_edit_service)) -> dict:
-    node = require_node(await service.get_character(character_id=character_id), node_type="Character")
-    return ok_response(node)
-
-
-@router.get("/characters")
-async def list_characters(
-    limit: int = Query(default=50, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
-    service: GraphEditService = Depends(get_graph_edit_service),
+@router.get("/nodes/{node_type}/{node_id}")
+async def get_node(
+    node_type: str,
+    node_id: str,
+    request: Request,
+    service: GenericGraphService = Depends(get_generic_graph_service),
 ) -> dict:
-    items = await service.list_characters(limit=limit, offset=offset)
-    return ok_response(items, meta={"limit": limit, "offset": offset})
+    node = require_node(await service.get_node(node_type=node_type, node_id=node_id), node_type=node_type)
+    warnings = service.missing_extension_warnings(node_type=node_type, node_payload=node)
+    request_id = getattr(request.state, "request_id", "")
+    emit_graph_warnings(warnings=warnings, request_id=request_id)
+    return ok_response(node, meta=attach_warnings_meta(base_meta=None, warnings=warnings))
 
 
-@router.post("/characters")
-async def upsert_character(character: CharacterNode, service: GraphEditService = Depends(get_graph_edit_service)) -> dict:
-    await service.upsert_character(character=character)
-    return ok_response({"id": character.id})
-
-
-@router.patch("/characters/{character_id}")
-async def patch_character(
-    character_id: str,
-    body: CharacterPatchBody,
-    service: GraphEditService = Depends(get_graph_edit_service),
+@router.get("/nodes/{node_type}")
+async def list_nodes(
+    node_type: str,
+    request: Request,
+    limit: int | None = Query(default=None, ge=1),
+    offset: int | None = Query(default=None, ge=0),
+    service: GenericGraphService = Depends(get_generic_graph_service),
 ) -> dict:
-    try:
-        node = await service.patch_character(character_id=character_id, body=body)
-    except NodeNotFoundError as error:
-        raise graph_error_to_http(error) from error
-    except (ImmutableFieldError, SchemaValidationError) as error:
-        raise graph_error_to_http(error) from error
-    return ok_response(node)
+    page = resolve_offset_pagination(limit=limit, offset=offset)
+    items = await service.list_nodes(node_type=node_type, limit=page.limit, offset=page.offset)
+    warnings: list[dict[str, Any]] = []
+    for item in items:
+        warnings.extend(service.missing_extension_warnings(node_type=node_type, node_payload=item))
+    request_id = getattr(request.state, "request_id", "")
+    emit_graph_warnings(warnings=warnings, request_id=request_id)
+    return ok_response(
+        items,
+        meta=attach_warnings_meta(
+            base_meta={
+                "limit": page.limit,
+                "offset": page.offset,
+                "sort": page.sort,
+                "strategy": page.strategy,
+            },
+            warnings=warnings,
+        ),
+    )
 
 
-@router.delete("/characters/{character_id}")
-async def soft_delete_character(character_id: str, service: GraphEditService = Depends(get_graph_edit_service)) -> dict:
-    try:
-        await service.soft_delete_character(character_id=character_id)
-    except NodeNotFoundError as error:
-        raise graph_error_to_http(error) from error
-    return ok_response({"id": character_id, "deleted": True})
-
-
-@router.post("/characters/{character_id}/move")
-async def move_character(
-    character_id: str,
-    body: CharacterMoveBody,
-    service: GraphEditService = Depends(get_graph_edit_service),
+@router.post("/nodes/{node_type}")
+async def upsert_node(
+    node_type: str,
+    body: NodeWriteBody,
+    request: Request,
+    service: GenericGraphService = Depends(get_generic_graph_service),
 ) -> dict:
     try:
-        await service.move_character(character_id=character_id, location_id=body.location_id)
-    except NodeNotFoundError as error:
+        node = await service.upsert_node(node_type=node_type, payload=body.properties)
+    except RegistryPayloadValidationError as error:
         raise graph_error_to_http(error) from error
-    return ok_response({"id": character_id, "location_id": body.location_id})
+    warnings = service.missing_extension_warnings(node_type=node_type, node_payload=node)
+    request_id = getattr(request.state, "request_id", "")
+    emit_graph_warnings(warnings=warnings, request_id=request_id)
+    return ok_response(node, meta=attach_warnings_meta(base_meta=None, warnings=warnings))
 
 
-@router.get("/events/{event_id}")
-async def get_event(event_id: str, service: GraphEditService = Depends(get_graph_edit_service)) -> dict:
-    node = require_node(await service.get_event(event_id=event_id), node_type="Event")
-    return ok_response(node)
-
-
-@router.get("/events")
-async def list_events(
-    limit: int = Query(default=50, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
-    service: GraphEditService = Depends(get_graph_edit_service),
-) -> dict:
-    items = await service.list_events(limit=limit, offset=offset)
-    return ok_response(items, meta={"limit": limit, "offset": offset})
-
-
-@router.post("/events")
-async def upsert_event(event: EventNode, service: GraphEditService = Depends(get_graph_edit_service)) -> dict:
-    await service.upsert_event(event=event)
-    return ok_response({"id": event.id})
-
-
-@router.patch("/events/{event_id}")
-async def patch_event(event_id: str, body: EventPatchBody, service: GraphEditService = Depends(get_graph_edit_service)) -> dict:
-    try:
-        node = await service.patch_event(event_id=event_id, body=body)
-    except NodeNotFoundError as error:
-        raise graph_error_to_http(error) from error
-    except (ImmutableFieldError, SchemaValidationError) as error:
-        raise graph_error_to_http(error) from error
-    return ok_response(node)
-
-
-@router.get("/locations/{location_id}")
-async def get_location(location_id: str, service: GraphEditService = Depends(get_graph_edit_service)) -> dict:
-    node = require_node(await service.get_location(location_id=location_id), node_type="Location")
-    return ok_response(node)
-
-
-@router.get("/locations")
-async def list_locations(
-    limit: int = Query(default=50, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
-    service: GraphEditService = Depends(get_graph_edit_service),
-) -> dict:
-    items = await service.list_locations(limit=limit, offset=offset)
-    return ok_response(items, meta={"limit": limit, "offset": offset})
-
-
-@router.post("/locations")
-async def upsert_location(location: LocationNode, service: GraphEditService = Depends(get_graph_edit_service)) -> dict:
-    await service.upsert_location(location=location)
-    return ok_response({"id": location.id})
-
-
-@router.patch("/locations/{location_id}")
-async def patch_location(
-    location_id: str,
-    body: LocationPatchBody,
-    service: GraphEditService = Depends(get_graph_edit_service),
+@router.patch("/nodes/{node_type}/{node_id}")
+async def patch_node(
+    node_type: str,
+    node_id: str,
+    body: NodeWriteBody,
+    request: Request,
+    service: GenericGraphService = Depends(get_generic_graph_service),
 ) -> dict:
     try:
-        node = await service.patch_location(location_id=location_id, body=body)
-    except NodeNotFoundError as error:
+        node = await service.patch_node(node_type=node_type, node_id=node_id, payload=body.properties)
+    except (NodeNotFoundError, RegistryPayloadValidationError) as error:
         raise graph_error_to_http(error) from error
-    except (ImmutableFieldError, SchemaValidationError) as error:
-        raise graph_error_to_http(error) from error
-    return ok_response(node)
+    warnings = service.missing_extension_warnings(node_type=node_type, node_payload=node)
+    request_id = getattr(request.state, "request_id", "")
+    emit_graph_warnings(warnings=warnings, request_id=request_id)
+    return ok_response(node, meta=attach_warnings_meta(base_meta=None, warnings=warnings))
 
 
-@router.patch("/world_state")
-async def patch_world_state(body: WorldStatePatchBody, service: GraphEditService = Depends(get_graph_edit_service)) -> dict:
-    node = await service.patch_world_state(body=body)
-    return ok_response(node)
-
-
-@router.post("/edges/relates_to")
-async def upsert_relates_to_edge(
-    body: RelatesToEdgeBody,
-    service: GraphEditService = Depends(get_graph_edit_service),
-) -> dict:
-    try:
-        edge = await service.upsert_relates_to_edge(body=body)
-    except NodeNotFoundError as error:
-        raise graph_error_to_http(error) from error
-    return ok_response(edge)
-
-
-@router.post("/edges/knows_about")
-async def upsert_knows_about_edge(
-    body: KnowsAboutEdgeBody,
-    service: GraphEditService = Depends(get_graph_edit_service),
-) -> dict:
-    try:
-        edge = await service.upsert_knows_about_edge(body=body)
-    except NodeNotFoundError as error:
-        raise graph_error_to_http(error) from error
-    return ok_response(edge)
-
-
-@router.post("/edges/located_at")
-async def upsert_located_at_edge(
-    body: LocatedAtEdgeBody,
-    service: GraphEditService = Depends(get_graph_edit_service),
-) -> dict:
-    try:
-        edge = await service.upsert_located_at_edge(body=body)
-    except NodeNotFoundError as error:
-        raise graph_error_to_http(error) from error
-    return ok_response(edge)
-
-
-@router.post("/edges/participated_in")
-async def upsert_participated_in_edge(
-    body: ParticipatedInEdgeBody,
-    service: GraphEditService = Depends(get_graph_edit_service),
-) -> dict:
-    try:
-        edge = await service.upsert_participated_in_edge(body=body)
-    except NodeNotFoundError as error:
-        raise graph_error_to_http(error) from error
-    return ok_response(edge)
-
-
-@router.delete("/edges/relates_to/{src_id}/{dst_id}")
-async def delete_relates_to_edge(
+@router.get("/edges/{edge_type}/{src_id}/{dst_id}")
+async def get_edge(
+    edge_type: str,
     src_id: str,
     dst_id: str,
-    service: GraphEditService = Depends(get_graph_edit_service),
+    service: GenericGraphService = Depends(get_generic_graph_service),
 ) -> dict:
-    deleted = await service.delete_relates_to_edge(src_id=src_id, dst_id=dst_id)
-    return ok_response({"deleted": deleted})
+    edge = require_node(await service.get_edge(edge_type=edge_type, src_id=src_id, dst_id=dst_id), node_type=edge_type)
+    return ok_response(edge)
 
 
-@router.delete("/edges/knows_about/{character_id}/{event_id}")
-async def delete_knows_about_edge(
-    character_id: str,
-    event_id: str,
-    service: GraphEditService = Depends(get_graph_edit_service),
+@router.get("/edges/{edge_type}")
+async def list_edges(
+    edge_type: str,
+    limit: int | None = Query(default=None, ge=1),
+    offset: int | None = Query(default=None, ge=0),
+    src_id: str | None = Query(default=None),
+    dst_id: str | None = Query(default=None),
+    service: GenericGraphService = Depends(get_generic_graph_service),
 ) -> dict:
-    deleted = await service.delete_knows_about_edge(character_id=character_id, event_id=event_id)
-    return ok_response({"deleted": deleted})
+    page = resolve_offset_pagination(limit=limit, offset=offset)
+    edges = await service.list_edges(
+        edge_type=edge_type,
+        limit=page.limit,
+        offset=page.offset,
+        src_id=src_id,
+        dst_id=dst_id,
+    )
+    return ok_response(
+        edges,
+        meta={
+            "limit": page.limit,
+            "offset": page.offset,
+            "sort": page.sort,
+            "strategy": page.strategy,
+        },
+    )
 
 
-@router.delete("/edges/located_at/{character_id}/{location_id}")
-async def delete_located_at_edge(
-    character_id: str,
-    location_id: str,
-    service: GraphEditService = Depends(get_graph_edit_service),
+@router.post("/edges/{edge_type}")
+async def upsert_edge(
+    edge_type: str,
+    body: EdgeWriteBody,
+    service: GenericGraphService = Depends(get_generic_graph_service),
 ) -> dict:
-    deleted = await service.delete_located_at_edge(character_id=character_id, location_id=location_id)
-    return ok_response({"deleted": deleted})
+    try:
+        edge = await service.upsert_edge(
+            edge_type=edge_type,
+            src_id=body.src_id,
+            dst_id=body.dst_id,
+            payload=body.properties,
+        )
+    except (NodeNotFoundError, RegistryPayloadValidationError) as error:
+        raise graph_error_to_http(error) from error
+    return ok_response(edge)
 
 
-@router.delete("/edges/participated_in/{character_id}/{event_id}")
-async def delete_participated_in_edge(
-    character_id: str,
-    event_id: str,
-    service: GraphEditService = Depends(get_graph_edit_service),
+@router.delete("/edges/{edge_type}/{src_id}/{dst_id}")
+async def delete_edge(
+    edge_type: str,
+    src_id: str,
+    dst_id: str,
+    service: GenericGraphService = Depends(get_generic_graph_service),
 ) -> dict:
-    deleted = await service.delete_participated_in_edge(character_id=character_id, event_id=event_id)
+    deleted = await service.delete_edge(edge_type=edge_type, src_id=src_id, dst_id=dst_id)
     return ok_response({"deleted": deleted})

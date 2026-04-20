@@ -1,0 +1,14 @@
+node_type: character
+fields:
+  id: { type: str, required: true }
+  name: { type: str, required: true }
+  archetype: { type: str, required: true }
+  faction: { type: str, required: false }
+  biography: { type: str, required: true }
+  current_location_id: { type: str, required: true }
+  is_player: { type: bool, required: true }
+  is_active: { type: bool, required: true }
+  gossipy: { type: int, required: true, range: [0, 100] }
+  credulity: { type: int, required: true, range: [0, 100] }
+  honesty: { type: int, required: true, range: [0, 100] }
+  current_mood: { type: str, required: false }

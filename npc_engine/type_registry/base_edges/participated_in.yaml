@@ -1,0 +1,5 @@
+edge_type: PARTICIPATED_IN
+src_type: character
+dst_type: event
+fields:
+  role: { type: str, required: true }

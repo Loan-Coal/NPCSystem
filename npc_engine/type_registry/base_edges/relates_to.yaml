@@ -1,0 +1,7 @@
+edge_type: RELATES_TO
+src_type: character
+dst_type: character
+fields:
+  trust: { type: int, required: true, range: [0, 100] }
+  fear: { type: int, required: true, range: [0, 100] }
+  affection: { type: int, required: true, range: [0, 100] }

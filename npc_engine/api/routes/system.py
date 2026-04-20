@@ -8,9 +8,11 @@ Dependencies injected: None.
 
 from fastapi import APIRouter, Depends
 
-from api.dependencies import get_game_schema
+from api.dependencies import get_game_schema, get_type_registry
 from api.route_helpers import ok_response
 from schema.schema_models import SchemaConfig
+from type_registry.contracts import TypeRegistry
+from type_registry.serializer import serialize_registry_snapshot
 
 
 router = APIRouter()
@@ -35,3 +37,10 @@ async def schema_snapshot(schema: SchemaConfig = Depends(get_game_schema)) -> di
     """Expose loaded game schema for authenticated clients."""
 
     return ok_response(schema.model_dump(mode="json"))
+
+
+@router.get("/v1/schema/registry")
+async def registry_schema_snapshot(registry: TypeRegistry = Depends(get_type_registry)) -> dict:
+    """Expose type-registry snapshot for authenticated clients."""
+
+    return ok_response(serialize_registry_snapshot(registry=registry))

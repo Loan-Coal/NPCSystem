@@ -48,6 +48,19 @@ class _SchemaLoaderStub:
         return {"schema_version": "1.0"}
 
 
+class _RegistryLoaderStub:
+    def __init__(self):
+        self.cache_cleared = False
+        self.called = False
+
+    def cache_clear(self) -> None:
+        self.cache_cleared = True
+
+    def __call__(self):
+        self.called = True
+        return {"schema_version": "1.0", "core_types": {}}
+
+
 class _EmbeddingIndexStub:
     async def upsert(self, item_id: str, text: str, payload: dict) -> None:
         return None
@@ -92,6 +105,7 @@ class _ReconcilerStub:
 async def test_lifespan_starts_reconciler_task(monkeypatch) -> None:
     graph_db = _GraphDbStub()
     schema_loader = _SchemaLoaderStub()
+    registry_loader = _RegistryLoaderStub()
     idempotency_service = _IdempotencyServiceStub()
     redis_runtime = _RedisRuntimeStub()
     reconciler_instance = _ReconcilerStub(graph_db=graph_db, embedding_index=_EmbeddingIndexStub(), interval_seconds=30)
@@ -99,6 +113,7 @@ async def test_lifespan_starts_reconciler_task(monkeypatch) -> None:
     monkeypatch.setattr(main, "get_graph_db", lambda: graph_db)
     monkeypatch.setattr(main, "get_embedding_index", lambda: _EmbeddingIndexStub())
     monkeypatch.setattr(main, "get_game_schema", schema_loader)
+    monkeypatch.setattr(main, "get_type_registry", registry_loader)
     monkeypatch.setattr(main, "get_idempotency_service", lambda: idempotency_service)
     monkeypatch.setattr(main, "get_redis_runtime", lambda: redis_runtime)
     monkeypatch.setattr(main, "EmbeddingReconciler", lambda **_: reconciler_instance)
@@ -124,6 +139,7 @@ async def test_lifespan_starts_reconciler_task(monkeypatch) -> None:
 async def test_lifespan_cancels_reconciler_task_on_shutdown(monkeypatch) -> None:
     graph_db = _GraphDbStub()
     schema_loader = _SchemaLoaderStub()
+    registry_loader = _RegistryLoaderStub()
     idempotency_service = _IdempotencyServiceStub()
     redis_runtime = _RedisRuntimeStub()
 
@@ -147,6 +163,7 @@ async def test_lifespan_cancels_reconciler_task_on_shutdown(monkeypatch) -> None
     monkeypatch.setattr(main, "get_graph_db", lambda: graph_db)
     monkeypatch.setattr(main, "get_embedding_index", lambda: _EmbeddingIndexStub())
     monkeypatch.setattr(main, "get_game_schema", schema_loader)
+    monkeypatch.setattr(main, "get_type_registry", registry_loader)
     monkeypatch.setattr(main, "get_idempotency_service", lambda: idempotency_service)
     monkeypatch.setattr(main, "get_redis_runtime", lambda: redis_runtime)
     monkeypatch.setattr(main, "EmbeddingReconciler", lambda **_: reconciler_instance)
@@ -172,6 +189,7 @@ async def test_lifespan_cancels_reconciler_task_on_shutdown(monkeypatch) -> None
 async def test_lifespan_closes_graph_db_when_startup_fails_after_connect(monkeypatch) -> None:
     graph_db = _GraphDbStub()
     schema_loader = _SchemaLoaderStub()
+    registry_loader = _RegistryLoaderStub()
     idempotency_service = _IdempotencyServiceStub()
     redis_runtime = _RedisRuntimeStub()
 
@@ -180,6 +198,7 @@ async def test_lifespan_closes_graph_db_when_startup_fails_after_connect(monkeyp
 
     monkeypatch.setattr(main, "get_graph_db", lambda: graph_db)
     monkeypatch.setattr(main, "get_game_schema", schema_loader)
+    monkeypatch.setattr(main, "get_type_registry", registry_loader)
     monkeypatch.setattr(main, "get_embedding_index", _raise_embedding_index_error)
     monkeypatch.setattr(main, "get_idempotency_service", lambda: idempotency_service)
     monkeypatch.setattr(main, "get_redis_runtime", lambda: redis_runtime)

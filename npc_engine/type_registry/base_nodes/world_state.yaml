@@ -1,0 +1,7 @@
+node_type: world_state
+fields:
+  id: { type: str, required: true }
+  epoch: { type: str, required: true }
+  faction_standings: { type: dict, values_type: int, required: true }
+  active_conditions: { type: list, items_type: str, required: true }
+  weather: { type: str, required: true }

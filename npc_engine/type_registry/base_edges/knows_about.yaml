@@ -1,0 +1,10 @@
+edge_type: KNOWS_ABOUT
+src_type: character
+dst_type: event
+fields:
+  knowledge_state: { type: str, required: true }
+  learned_at_tick: { type: int, required: true }
+  distortion_type: { type: str, required: false }
+  distortion_level: { type: int, required: false, range: [0, 100] }
+  distorted_summary: { type: str, required: false }
+  source_character_id: { type: str, required: false }
