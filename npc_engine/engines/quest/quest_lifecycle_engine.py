@@ -22,8 +22,8 @@ from engines.quest.models import (
 )
 from graph.event_writer import upsert_quest_lifecycle_event
 from graph.graph_writer import apply_currency_transfer, apply_item_transfer
-from graph.node_schemas import EventNode
 from graph.quest_writer import create_quest_state_if_absent, get_quest_state, upsert_quest_state
+from type_registry.contracts import TypeRegistry
 from utils.errors import QuestTransitionError
 
 
@@ -36,8 +36,13 @@ STATUS_COMPLETED = "completed"
 class QuestLifecycleEngine:
     """Quest lifecycle state machine with reward routing and provenance-backed events."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, registry: TypeRegistry | None = None):
         self._settings = settings
+        if registry is None:
+            from api.dependencies import get_type_registry
+
+            registry = get_type_registry()
+        self._registry = registry
 
     @staticmethod
     def _is_trusted_reward_source(reward_source_id: str) -> bool:
@@ -61,29 +66,30 @@ class QuestLifecycleEngine:
                 detail="Quest lifecycle event emission requires a transaction-capable session",
             )
 
-    @staticmethod
     def _build_lifecycle_event(
+        self,
         *,
         quest_id: str,
         player_id: str,
         event_type: str,
         summary: str,
         meta: QuestTransitionMeta,
-    ) -> EventNode:
+    ):
         now = datetime.now(timezone.utc)
-        return EventNode(
+        event_model = self._registry.node_models["event"]
+        return event_model(
             id=f"{quest_id}:{player_id}:{event_type}:{meta.request_id}",
             summary=summary,
             severity=20,
             location_id="quest",
-            occurred_at=now,
+            occurred_at=now.isoformat(),
             tick_id=int(now.timestamp()),
-            participants=[player_id],
             event_type=event_type,
             is_public=True,
             producer="quest_lifecycle_engine",
             origin_engine="quest",
             schema_version="v1.4",
+            last_graph_updated_at=now.isoformat(),
             provenance={
                 "request_id": meta.request_id,
                 "idempotency_key": meta.idempotency_key,

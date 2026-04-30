@@ -1,0 +1,5 @@
+archetype: merchant
+responses:
+  - "Hmm, let me think on that. Come back later."
+  - "I am distracted right now. Ask me again soon."
+  - "Give me a moment to gather my thoughts."

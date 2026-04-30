@@ -1,0 +1,5 @@
+archetype: default
+responses:
+  - "I need a moment to think."
+  - "Let us continue this shortly."
+  - "I am not ready to answer that yet."

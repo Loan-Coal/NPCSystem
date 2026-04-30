@@ -43,7 +43,6 @@ enum_extensions:
                 "name": "a" * 513,
                 "archetype": "guard",
                 "biography": "bio",
-                "current_location_id": "loc-1",
                 "is_player": False,
                 "is_active": True,
                 "gossipy": 10,

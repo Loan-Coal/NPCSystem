@@ -28,14 +28,14 @@ depending on internal implementation details.
 
 | Requirement | Target |
 |---|---|
-| Dialogue response latency (first token via WebSocket) | < 500 ms |
-| Full dialogue response (REST, no streaming) | < 3 s |
-| Concurrent dialogue sessions | ≥ 50 simultaneous players |
+| Dialogue response latency (first token via WebSocket) | Best-effort; prototype targets quality over latency. Production target TBD. |
+| Full dialogue response (REST, no streaming) | Best-effort; prototype targets quality over latency. |
+| Concurrent dialogue sessions | Single-stream prototype; concurrency is a post-prototype concern. |
 | Gossip tick throughput | ≥ 200 NPC pairs / tick |
 | Knowledge graph size | ≥ 10,000 nodes (characters + events + locations) |
 | Service uptime | 99.5% during active game sessions |
 | LLM fallback on timeout | < 100 ms (serve canned response) |
-| Test coverage | ≥ 80% line coverage on all modules |
+| Test coverage | 100% pass on `make eval` (Layer 1+2) + ~70% line coverage on non-prompt code |
 
 ---
 
@@ -47,6 +47,8 @@ depending on internal implementation details.
 source of truth for the game world's facts about characters, events, and locations.
 
 **Requirements:**
+- Base node and edge contracts are owned by `type_registry/base_nodes/*.yaml` and `type_registry/base_edges/*.yaml`; `game_schema.yaml` expands those contracts and can add new node or edge types.
+- Graph services use a hybrid model: registry-backed dynamic model generation plus specialized per-type services for unique behavior.
 - Store Characters with personality traits, faction, location, biography, and relationship history.
 - Store Events with timestamp, severity, location, participants, and a summary.
 - Store Locations with descriptors and connected NPCs.

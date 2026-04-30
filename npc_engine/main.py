@@ -7,9 +7,12 @@ Dependencies injected: Settings, ApiKeyMiddleware.
 """
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
+
+_logger = logging.getLogger(__name__)
 
 from api.routes.action import router as action_router
 from api.routes.batch import router as batch_router
@@ -50,9 +53,20 @@ async def lifespan(_app: FastAPI):
         get_game_schema.cache_clear()
         get_game_schema()
         get_type_registry.cache_clear()
-        get_type_registry()
+        type_registry = get_type_registry()
+        if type_registry.custom_node_types:
+            _logger.warning(
+                "WARN: custom_node_types declared (%s) but not consumed by current engines.",
+                list(type_registry.custom_node_types.keys()),
+            )
+        if type_registry.custom_edge_types:
+            _logger.warning(
+                "WARN: custom_edge_types declared (%s) but not consumed by current engines.",
+                list(type_registry.custom_edge_types.keys()),
+            )
         get_llm_config.cache_clear()
-        get_llm_config()
+        llm_config = get_llm_config()
+        _logger.info("Active relevance weights: %s", llm_config.relevance_weights)
         await graph_db.connect()
         connected = True
         await redis_runtime.connect()

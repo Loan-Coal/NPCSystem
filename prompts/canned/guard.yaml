@@ -1,0 +1,5 @@
+archetype: guard
+responses:
+  - "Move along, citizen."
+  - "I am on duty. Keep moving."
+  - "Not now. We can talk later."

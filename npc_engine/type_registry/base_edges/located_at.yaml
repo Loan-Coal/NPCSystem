@@ -3,3 +3,4 @@ src_type: character
 dst_type: location
 fields:
   is_permanent_resident: { type: bool, required: false }
+  arrived_at: { type: str, required: true }

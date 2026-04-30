@@ -6,6 +6,10 @@ fields:
   location_id: { type: str, required: true }
   occurred_at: { type: str, required: true }
   tick_id: { type: int, required: true }
-  participants: { type: list, items_type: str, required: false }
   event_type: { type: str, required: true }
   is_public: { type: bool, required: true }
+  producer: { type: str, required: false }
+  origin_engine: { type: str, required: false }
+  schema_version: { type: str, required: false }
+  provenance: { type: dict, values_type: str, required: false }
+  last_graph_updated_at: { type: str, required: true }

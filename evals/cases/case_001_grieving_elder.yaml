@@ -1,0 +1,30 @@
+case_id: case_001_grieving_elder
+description: >
+  Elder NPC receives news of a death. Response should be empathetic
+  and thematically appropriate for grief, expressed without aggression.
+
+seed:
+  npc_id: elder_1
+  player_id: player_1
+  location_id: loc_market
+
+input:
+  player_message: "My son died in the war. I don't know what to do."
+
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords: ["sorry", "condolences", "loss", "grief", "mourn", "heart", "pain", "peace", "strength"]
+  - kind: in_set
+    field: facial_expression.type
+    values: ["sad", "neutral", "frown"]
+  - kind: in_set
+    field: action.type
+    values: ["speak", "gesture", "none"]
+  - kind: range
+    field: relation_deltas.trust
+    min: -5
+    max: 10
+  - kind: tone_judge
+    description: "Response should be empathetic and not dismissive"
+    skip_until_implemented: true

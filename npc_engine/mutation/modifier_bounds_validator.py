@@ -8,8 +8,7 @@ Dependencies injected: None.
 
 from dataclasses import dataclass
 
-from graph.edge_schemas import RelationDeltaEntry
-from mutation.delta_log_manager import compute_window_sum
+from mutation.delta_log_manager import RelationDeltaEntry, compute_window_sum
 from utils.errors import StructuredNPCSystemError
 
 

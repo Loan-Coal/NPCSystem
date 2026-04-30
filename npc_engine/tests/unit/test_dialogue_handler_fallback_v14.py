@@ -73,7 +73,12 @@ async def test_dialogue_handler_recovers_from_validation_failure(monkeypatch) ->
 
     handler = DialogueHandler(
         session=None,
-        settings=SimpleNamespace(LLM_FALLBACK_PATH="data/fallback_responses.json"),
+        settings=SimpleNamespace(
+            LLM_FALLBACK_PATH="data/fallback_responses.json",
+            CANNED_RESPONSES_DIR="prompts/canned",
+            DIALOGUE_FULL_TIMEOUT_SECONDS=30.0,
+            DIALOGUE_GRAPH_ONLY_TIMEOUT_SECONDS=15.0,
+        ),
         llm_client=MinimalLLMClient(),
         llm_config=SimpleNamespace(),
         session_store=SessionStore(ttl_seconds=300, max_turns=10),

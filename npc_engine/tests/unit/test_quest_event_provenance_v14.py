@@ -9,28 +9,34 @@ Dependencies injected: none.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
 from graph.event_writer import ensure_quest_event_provenance
-from graph.node_schemas import EventNode
+from schema.schema_loader import load_game_schema
+from type_registry.registry import build_type_registry
 from utils.errors import QuestProvenanceError
 
 
-def _base_event() -> EventNode:
-    return EventNode(
+def _type_registry():
+    schema_path = Path(__file__).resolve().parents[2] / "game_schema.yaml"
+    return build_type_registry(base_schema=load_game_schema(schema_path=str(schema_path)), extension_sources=())
+
+
+def _base_event():
+    event_model = _type_registry().node_models["event"]
+    return event_model(
         id="evt-quest-1",
         summary="Quest offered",
         severity=10,
         location_id="town-square",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(timezone.utc).isoformat(),
         tick_id=1,
-        participants=["player-1"],
         event_type="quest_offered",
         is_public=True,
+        last_graph_updated_at=datetime.now(timezone.utc).isoformat(),
     )
-
-
 def test_ensure_quest_event_provenance_rejects_missing_fields() -> None:
     event = _base_event()
 

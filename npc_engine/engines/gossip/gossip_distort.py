@@ -7,9 +7,22 @@ Dependencies injected: None.
 """
 
 from hashlib import sha256
-from typing import cast
+from typing import cast, Literal
 
-from graph.edge_schemas import DistortionType, GossipDistortion
+from pydantic import BaseModel, ConfigDict, Field
+
+
+DistortionType = Literal["omission", "exaggeration", "role_swap", "timeline_shift"]
+
+
+class GossipDistortion(BaseModel):
+    """Normalized distortion payload used by gossip engine."""
+
+    summary: str
+    distortion_type: DistortionType | None
+    distortion_level: int = Field(ge=0, le=100)
+
+    model_config = ConfigDict(frozen=True)
 
 
 def _distortion_probability(honesty: int, trust: int, severity: int, base: float) -> float:

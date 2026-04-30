@@ -21,8 +21,8 @@ from engines.events.awareness_seeder import seed_awareness_tx
 from engines.events.event_pool import EventTemplate, load_event_pool
 from engines.events.location_scoper import resolve_locations
 from graph.event_writer import upsert_event
-from graph.node_schemas import EventNode
 from retrieval.embedding_index import EmbeddingIndex
+from type_registry.contracts import TypeRegistry
 from world.world_state import WorldState
 
 
@@ -48,9 +48,14 @@ SET w.epoch = $epoch,
 class EventHandler:
     """Coordinates autonomous event creation for one tick."""
 
-    def __init__(self, settings: Settings, embedding_index: EmbeddingIndex):
+    def __init__(self, settings: Settings, embedding_index: EmbeddingIndex, registry: TypeRegistry | None = None):
         self._settings = settings
         self._embedding_index = embedding_index
+        if registry is None:
+            from api.dependencies import get_type_registry
+
+            registry = get_type_registry()
+        self._registry = registry
         self._templates = load_event_pool(settings.EVENT_POOL_PATH)
         self._rng = random.Random(settings.EVENT_RNG_SEED) if settings.EVENT_RNG_SEED is not None else None
         self._lock = asyncio.Lock()
@@ -72,16 +77,18 @@ class EventHandler:
 
             location_id = scoped_locations[0]
             event_id = str(uuid4())
-            event = EventNode(
+            event_model = self._registry.node_models["event"]
+            now = datetime.now(timezone.utc).isoformat()
+            event = event_model(
                 id=event_id,
                 summary=template.summary_template,
                 severity=template.severity,
                 location_id=location_id,
-                occurred_at=datetime.now(timezone.utc),
+                occurred_at=now,
                 tick_id=tick_id,
-                participants=[],
                 event_type=template.event_type,
                 is_public=True,
+                last_graph_updated_at=now,
             )
             tx = await session.begin_transaction()
             async with tx:

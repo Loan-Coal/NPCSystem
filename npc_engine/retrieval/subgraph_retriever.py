@@ -8,7 +8,7 @@ Dependencies injected: AsyncSession.
 
 from neo4j import AsyncSession
 
-from graph.graph_reader import get_character_with_relations, get_events_for_npc, get_location_context
+from graph.graph_reader import get_character_with_relations, get_events_for_npc, get_location_context, get_npc_location_id
 from retrieval.context_merger import ContextItem
 from retrieval.context_utils import serialize_json
 
@@ -50,7 +50,7 @@ async def retrieve_tier_a_context(session: AsyncSession, npc_id: str, event_limi
         )
 
     if isinstance(character_payload, dict):
-        location_id = character_payload.get("current_location_id")
+        location_id = await get_npc_location_id(session=session, npc_id=npc_id)
         if isinstance(location_id, str) and location_id != "":
             location_context = await get_location_context(session=session, location_id=location_id)
             items.append(

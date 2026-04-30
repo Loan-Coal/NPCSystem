@@ -127,3 +127,19 @@ async def test_reconcile_once_noops_when_no_stale_rows() -> None:
 
     assert result == {"processed": 0, "failed": 0}
     assert index.upserts == []
+
+
+def test_stale_nodes_query_excludes_inactive_characters() -> None:
+    """Reconciler query must filter inactive Characters at the DB level."""
+
+    from retrieval.embedding_reconciler import CYPHER_SELECT_STALE_NODES
+
+    character_block = CYPHER_SELECT_STALE_NODES.split("UNION")[0]
+    assert "n.is_active = true" in character_block, (
+        "Character branch of reconciler query must require is_active = true"
+    )
+
+    event_block = CYPHER_SELECT_STALE_NODES.split("UNION")[1]
+    assert "n.is_active" not in event_block, (
+        "Event branch must not filter by is_active (Events have no such field)"
+    )

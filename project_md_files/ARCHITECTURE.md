@@ -76,21 +76,21 @@
 │                         Core Layer                              │
 │                                                                 │
 │  ┌────────────────┐   ┌─────────────────────────────────────┐  │
-│  │  retrieval/    │   │             graph/                  │  │
-│  │                │   │                                     │  │
-│  │ subgraph_      │   │ graph_writer (coordinator)          │  │
-│  │  retriever     │   │  ├── character_writer               │  │
-│  │ embedding_     │   │  ├── event_writer                   │  │
-│  │  index         │   │  ├── relation_writer                │  │
-│  │ embedding_     │   │  └── delta_log_writer               │  │
-│  │  reconciler    │   │                                     │  │
+│  │ graph_writer (coordinator)          │   │                                     │  │
+│  │  ├── character/event/location       │   │                                     │  │
+│  │  ├── relation/knowledge edges       │   │                                     │  │
+│  │  └── transfer coordinators          │   │                                     │  │
+│  │                                     │   │ graph_reader                        │  │
+│  │                                     │   │ type_registry/runtime_models        │  │
+│  │                                     │   │                                     │  │
+│  │                                     │   │ generic_graph_service               │  │
 │  │ vector_store   │   │ graph_reader                        │  │
-│  │ context_merger │   │ node_schemas / edge_schemas         │  │
+│  │ context_merger │   │ type_registry/runtime_models        │  │
 │  │ token_budget_  │   │                                     │  │
 │  │  enforcer      │   │ generic_graph_service               │  │
 │  │ context_       │   │ graph_admin_service                 │  │
 │  │  serializer    │   │  └── delegates admin writes to      │  │
-│  │ context_builder│   │      graph_writer / writers         │  │
+│  │ context_builder│   │      per-type graph services        │  │
 │  └────────────────┘   │ generic_graph_utils                 │  │
 │                        │ type_registry (contracts/validator) │  │
 │  ┌────────────────┐   │ cascade_delete_service              │  │
@@ -304,6 +304,31 @@ core_types:
         description: "Whether a plague is currently spreading"
         semantics: [context_tier_0]
 
+enum_extensions:
+  event_type:         [ritual, coronation, betrayal]
+  participation_role: [spy, mediator]
+```
+
+---
+
+## Future: Custom Types
+
+`game_schema.yaml` supports declaring `custom_node_types` and `custom_edge_types` (e.g. `Faction`, `MEMBER_OF`). The schema parser loads and validates them at startup, and the generic graph API stores and returns them. However, **current engines do not consume custom types** — gossip, dialogue, event, and quest engines operate only on the five built-in node types (Character, Event, Location, WorldState) and their standard edges.
+
+This means:
+- Custom node/edge data is stored and queryable.
+- Custom nodes are **not** included in LLM context, gossip pair selection, or event awareness seeding.
+- Custom edges are **not** cascade-deleted unless declared in `cascade_on_delete`.
+
+A startup warning is emitted if custom types are declared:
+```
+WARN: custom_node_types declared (['Faction']) but not consumed by current engines.
+```
+
+Custom type consumption by engines is planned for a later milestone.
+
+Example (not currently consumed):
+```yaml
 custom_node_types:
   Faction:
     fields:
@@ -315,14 +340,10 @@ custom_edge_types:
   MEMBER_OF:
     src_type: Character
     dst_type: Faction
-    cascade_on_delete: [Character]   # edge deleted when Character is hard-deleted
+    cascade_on_delete: [Character]
     directional: true
     fields:
       rank: { type: str }
-
-enum_extensions:
-  event_type:         [ritual, coronation, betrayal]
-  participation_role: [spy, mediator]
 ```
 
 ---
@@ -490,14 +511,14 @@ gossip_handler.run_tick(tick_id)
 4. **No code changes**
 
 ### Adding a new relation variable (e.g. `respect`)
-1. Add field to `RelationEdge` in `graph/edge_schemas.py`
+1. Add field to `RelationEdge` via registry contract YAML and runtime model generation in `type_registry/runtime_models.py`
 2. Add to `DialogueResponseSchema.relation_deltas`
 3. Add to `modifier_bounds_validator.py` bounds check
 4. Add to `relation_writer.py` Cypher SET clause
 5. **No engine orchestrator changes**
 
 ### Adding a new distortion type
-1. Add new `Literal` value to `GossipDistortion.distortion_type` in edge_schemas
+1. Update gossip distortion type definition in `engines/gossip/gossip_distort.py`
 2. Add template branch in `gossip_distort.py`
 3. **No other file changes**
 
@@ -571,6 +592,7 @@ REDIS_CONNECT_TIMEOUT_SECONDS=1.0
 |---|---|---|
 | Graph database | Neo4j | Native graph traversal for relationship queries; Cypher is expressive for NPC knowledge |
 | LLM interface | Protocol + factory | Swap Mistral for Llama (or cloud models) without touching engine code |
+| Local LLM backend | Mixtral 8x7B (quantized, llama.cpp/Ollama) | Solo deployment, privacy/offline goals; prompt iteration prioritized over latency at this stage |
 | Retrieval strategy | Hybrid (graph Tier A + RAG Tier B) | Facts from graph are authoritative; RAG provides semantic similarity for open-ended context |
 | Gossip distortion | Deterministic pure function | Reproducible debugging; no LLM cost for NPC-to-NPC communication |
 | Emotion persistence | In-memory store + graph snapshot | Fast reads during dialogue; survives restarts via Neo4j flush |
@@ -584,3 +606,38 @@ REDIS_CONNECT_TIMEOUT_SECONDS=1.0
 | Scope inheritance | `graph_admin ⊃ graph_write` | Single privileged key for developers; no dual-key management |
 | Edge DELETE | Path parameters per edge type | RESTful; proxy-safe; no request body on DELETE |
 | PATCH body typing | Typed models + `extension_fields` dict | Core fields statically typed; custom fields dynamically validated against schema |
+| Location source of truth | `LOCATED_AT` edge only | Removed `Character.current_location_id` scalar — edge is authoritative, scalar was redundant |
+| Event participants source of truth | `PARTICIPATED_IN` edge only | Removed `Event.participants` list property — edge is authoritative, list property was redundant |
+
+---
+
+## Dialogue Degradation Tiers
+
+Dialogue requests degrade through tiers if upstream components are slow or unavailable.
+
+| Tier | Condition | Context | Latency target |
+|---|---|---|---|
+| `full` | Normal operation | Graph Tier A + RAG Tier B + LLM | `DIALOGUE_FULL_TIMEOUT_SECONDS` (default 30s) |
+| `graph_only` | RAG unavailable or full tier timeout | Graph Tier A + LLM (no RAG) | `DIALOGUE_GRAPH_ONLY_TIMEOUT_SECONDS` (default 15s) |
+| `canned` | Neo4j unavailable or graph_only timeout | Pre-written archetype response from `prompts/canned/<archetype>.yaml` | < 50 ms |
+
+The `degradation_level` field is returned in every `DialogueResponse`. When the canned tier fires, relation mutation and emotion updates are skipped (the graph may be unavailable).
+
+Implementation: `engines/dialogue/degradation.py` + `engines/dialogue/dialogue_handler.py`.
+
+Metric: `dialogue_degradation_level_total{level=full|graph_only|canned}`
+
+---
+
+## Prompt Management
+
+Prompt templates live in `prompts/`. Two sub-directories:
+
+| Directory | Contents |
+|---|---|
+| `prompts/canned/` | Per-archetype canned response YAML files (`default.yaml`, `guard.yaml`, etc.) Used by degradation tier 3. |
+| `prompts/<engine>/` | Versioned LLM prompt templates (not yet extracted — see `proposals/prompt_inventory.md`) |
+
+**Editing a canned response:** edit the relevant `prompts/canned/<archetype>.yaml` and restart (no code change needed).
+
+**Adding a new archetype:** create `prompts/canned/<new_archetype>.yaml` following the existing format. The degradation module will pick it up automatically; the handler passes `archetype="default"` for now (TODO: derive archetype from graph at runtime).

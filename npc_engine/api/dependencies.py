@@ -29,6 +29,7 @@ from graph.db import GraphDB
 from graph.generic_graph_service import GenericGraphService
 from graph.graph_admin_service import GraphAdminService
 from graph.reindex_job_service import ReindexJobService
+from retrieval.dialogue_context_cache import DialogueContextCache
 from retrieval.embedding_index import EmbeddingIndex
 from retrieval.vector_store_factory import create_vector_store
 from scheduler.game_clock import GameClock
@@ -82,13 +83,13 @@ def get_gossip_handler() -> GossipHandler:
 @lru_cache
 def get_event_handler() -> EventHandler:
     settings = get_settings()
-    return EventHandler(settings=settings, embedding_index=get_embedding_index())
+    return EventHandler(settings=settings, embedding_index=get_embedding_index(), registry=get_type_registry())
 
 
 @lru_cache
 def get_quest_lifecycle_engine() -> QuestLifecycleEngine:
     settings = get_settings()
-    return QuestLifecycleEngine(settings=settings)
+    return QuestLifecycleEngine(settings=settings, registry=get_type_registry())
 
 
 @lru_cache
@@ -202,6 +203,12 @@ def get_llm_client(settings: Settings = Depends(get_settings)):
     return create_llm_client(settings=settings)
 
 
+@lru_cache
+def get_context_cache() -> DialogueContextCache:
+    settings = get_settings()
+    return DialogueContextCache(ttl_seconds=settings.DIALOGUE_SESSION_TTL)
+
+
 def build_dialogue_handler(
     *,
     session: AsyncSession,
@@ -219,6 +226,7 @@ def build_dialogue_handler(
         session_store=get_session_store(),
         emotion_updater=get_emotion_updater(),
         embedding_index=get_embedding_index(),
+        context_cache=get_context_cache(),
     )
 
 

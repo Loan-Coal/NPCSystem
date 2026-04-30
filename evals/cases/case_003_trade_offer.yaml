@@ -1,0 +1,30 @@
+case_id: case_003_trade_offer
+description: >
+  Merchant NPC receives a trade offer. Response should acknowledge
+  the offer and indicate willingness to negotiate or complete the trade.
+
+seed:
+  npc_id: merchant_1
+  player_id: player_1
+  location_id: loc_market
+
+input:
+  player_message: "I'll give you ten gold coins for that sword."
+
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords: ["gold", "coin", "sword", "deal", "trade", "offer", "sell", "buy", "price", "worth"]
+  - kind: in_set
+    field: facial_expression.type
+    values: ["neutral", "smile", "surprised"]
+  - kind: in_set
+    field: action.type
+    values: ["speak", "sell_item", "buy_item", "none"]
+  - kind: range
+    field: relation_deltas.trust
+    min: -5
+    max: 15
+  - kind: tone_judge
+    description: "Response should be mercantile and interested in the transaction"
+    skip_until_implemented: true

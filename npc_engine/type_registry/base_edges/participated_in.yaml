@@ -3,3 +3,4 @@ src_type: character
 dst_type: event
 fields:
   role: { type: str, required: true }
+  participated_at: { type: str, required: true }

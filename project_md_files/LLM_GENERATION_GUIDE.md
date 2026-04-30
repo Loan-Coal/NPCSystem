@@ -26,7 +26,7 @@ Do not skip ahead — later files import from earlier files.
 
 ```
 M0: config.py → utils/errors.py → utils/logging.py → auth/ → main.py skeleton
-M1: graph/db.py → graph/node_schemas.py → graph/edge_schemas.py
+M1: graph/db.py → type_registry/runtime_models.py → graph/event_writer.py
     → graph/graph_reader.py
     → graph/delta_log_writer.py → graph/character_writer.py
     → graph/event_writer.py → graph/relation_writer.py → graph/graph_writer.py
@@ -230,7 +230,7 @@ Does NOT: access the database, use randomness from external state.
 Dependencies injected: None (pure function).
 """
 import hashlib
-from npc_engine.graph.edge_schemas import GossipDistortion, DistortionType
+from npc_engine.engines.gossip.gossip_distort import GossipDistortion, DistortionType
 
 DISTORTION_PROBABILITY_SCALE = 100
 

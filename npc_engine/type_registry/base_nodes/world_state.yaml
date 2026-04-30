@@ -5,3 +5,5 @@ fields:
   faction_standings: { type: dict, values_type: int, required: true }
   active_conditions: { type: list, items_type: str, required: true }
   weather: { type: str, required: true }
+  last_updated_at: { type: str, required: true }
+  last_graph_updated_at: { type: str, required: true }

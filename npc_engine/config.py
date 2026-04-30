@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     LLM_TIMEOUT_SECONDS: float = 10.0
     LLM_CACHE_ENABLED: bool = False
     LLM_FALLBACK_PATH: str = "data/fallback_responses.json"
+    DIALOGUE_FULL_TIMEOUT_SECONDS: float = 30.0
+    DIALOGUE_GRAPH_ONLY_TIMEOUT_SECONDS: float = 15.0
+    CANNED_RESPONSES_DIR: str = "prompts/canned"
     MISTRAL_API_URL: str | None = None
     LLAMA_API_URL: str | None = None
     OLLAMA_API_URL: str = "http://localhost:11434"

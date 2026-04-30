@@ -39,6 +39,12 @@ WHERE c.is_active = true
 RETURN properties(loc) AS location, collect(properties(c)) AS present_npcs
 """
 
+CYPHER_GET_NPC_LOCATION_ID = """
+MATCH (c:Character {id: $npc_id})-[:LOCATED_AT]->(loc:Location)
+WHERE c.is_active = true
+RETURN loc.id AS location_id
+"""
+
 CYPHER_GET_NPC_PLAYER_EDGE = """
 MATCH (npc:Character {id: $npc_id})-[r:RELATES_TO]->(p:Character {id: $player_id})
 WHERE npc.is_active = true
@@ -87,6 +93,16 @@ async def get_location_context(session: AsyncSession, location_id: str) -> dict:
         "location": _to_native(record["location"]),
         "present_npcs": _to_native(record["present_npcs"]),
     }
+
+
+async def get_npc_location_id(session: AsyncSession, npc_id: str) -> str | None:
+    """Fetch the current location id for an NPC via LOCATED_AT edge."""
+
+    result = await session.run(CYPHER_GET_NPC_LOCATION_ID, npc_id=npc_id)
+    record = await result.single()
+    if record is None:
+        return None
+    return cast(str, record["location_id"])
 
 
 async def get_npc_player_edge(session: AsyncSession, npc_id: str, player_id: str) -> dict | None:

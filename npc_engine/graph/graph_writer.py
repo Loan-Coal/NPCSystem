@@ -19,9 +19,8 @@ from engines.economy.currency_verification_engine import build_currency_transfer
 from graph.delta_log_writer import write_delta_log
 from graph.currency_writer import get_outbound_session_total, transfer_currency_atomic
 from graph.item_writer import transfer_item_atomic
-from graph.edge_schemas import RelationDeltaEntry
 from graph.relation_writer import get_relation_values, set_relation_values
-from mutation.delta_log_manager import append_delta
+from mutation.delta_log_manager import RelationDeltaEntry, append_delta
 from mutation.modifier_bounds_validator import (
     DeltaValidationConfig,
     clamp_relation_values,

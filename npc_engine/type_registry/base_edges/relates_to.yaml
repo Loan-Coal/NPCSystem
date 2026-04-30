@@ -5,3 +5,6 @@ fields:
   trust: { type: int, required: true, range: [0, 100] }
   fear: { type: int, required: true, range: [0, 100] }
   affection: { type: int, required: true, range: [0, 100] }
+  interaction_count: { type: int, required: true }
+  last_updated_at: { type: str, required: true }
+  relevance_score: { type: float, required: true }

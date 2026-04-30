@@ -66,6 +66,7 @@ class DialogueResponse(FrozenApiModel):
     facial_expression: FacialExpressionModel = Field(default_factory=FacialExpressionModel)
     session_id: str | None = None
     cached: bool = False
+    degradation_level: str = "full"
 
 
 class NPCStateResponse(FrozenApiModel):

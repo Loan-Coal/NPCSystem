@@ -124,7 +124,7 @@ Notes:
 - Added `api/routes/quest.py` + quest request models and registered `/v1/quest/*` routes in app wiring.
 - Added `engines/economy/trading_engine.py` and `graph/item_writer.py` so item rewards route through a dedicated trading path.
 - Extended `graph/graph_writer.py` with `apply_currency_transfer(...)` and `apply_item_transfer(...)` coordinator entrypoints; buy/sell now delegates through generic currency coordinator.
-- Extended `graph/event_writer.py` + `graph/node_schemas.py` to enforce quest event provenance payload fields.
+- Extended `graph/event_writer.py` + registry-generated event models to enforce quest event provenance payload fields.
 - Added `graph/quest_writer.py` for persisted quest state records.
 - Added P3 unit/integration tests and `make test-v14-p3` / `make verify-v14-p3` targets.
 

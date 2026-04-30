@@ -5,3 +5,4 @@ fields:
   region: { type: str, required: false }
   location_tag: { type: str, required: true }
   descriptor: { type: str, required: true }
+  last_graph_updated_at: { type: str, required: true }

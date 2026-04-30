@@ -8,7 +8,7 @@ Dependencies injected: AsyncSession.
 
 from neo4j import AsyncSession
 
-from graph.edge_schemas import GossipDistortion
+from engines.gossip.gossip_distort import GossipDistortion
 
 
 CYPHER_PROPAGATE_KNOWLEDGE = """

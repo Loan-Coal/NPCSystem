@@ -57,8 +57,15 @@ class _RegistryLoaderStub:
         self.cache_cleared = True
 
     def __call__(self):
+        from types import SimpleNamespace
+
         self.called = True
-        return {"schema_version": "1.0", "core_types": {}}
+        return SimpleNamespace(
+            schema_version="1.0",
+            core_types={},
+            custom_node_types={},
+            custom_edge_types={},
+        )
 
 
 class _EmbeddingIndexStub:

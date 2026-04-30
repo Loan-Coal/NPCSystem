@@ -67,3 +67,5 @@ class TypeRegistry:
     custom_node_types: Mapping[str, Mapping[str, RuntimeFieldDefinition]] = field(default_factory=dict)
     custom_edge_types: Mapping[str, RuntimeEdgeTypeDefinition] = field(default_factory=dict)
     enum_extensions: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    node_models: Mapping[str, type[BaseModel]] = field(default_factory=dict)
+    edge_models: Mapping[str, type[BaseModel]] = field(default_factory=dict)

@@ -8,7 +8,18 @@ Dependencies injected: None.
 
 from datetime import datetime, timezone
 
-from graph.edge_schemas import RelationDeltaEntry
+from pydantic import BaseModel, ConfigDict
+
+
+class RelationDeltaEntry(BaseModel):
+    """Single relation delta log entry."""
+
+    tick_id: int
+    cause_id: str
+    deltas: dict[str, int]
+    timestamp: str
+
+    model_config = ConfigDict(frozen=True)
 
 
 def append_delta(
@@ -24,7 +35,7 @@ def append_delta(
         tick_id=tick_id,
         cause_id=cause_id,
         deltas=dict(deltas),
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(timezone.utc).isoformat(),
     )
     combined_log = [*delta_log, new_entry]
     return combined_log[-max_entries:]

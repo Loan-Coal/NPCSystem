@@ -1,8 +1,9 @@
 # Data Models — NPC Engine Neo4j Knowledge Graph
 
 This document is the authoritative reference for all nodes, edges, constraints,
-and indexes in the Neo4j knowledge graph. Use this when implementing `graph/node_schemas.py`,
-`graph/edge_schemas.py`, `data/seed.py`, and all Cypher queries.
+and indexes in the Neo4j knowledge graph. Use this when implementing
+`type_registry/base_nodes/*.yaml`, `type_registry/base_edges/*.yaml`,
+`type_registry/runtime_models.py`, `data/seed.py`, and all Cypher queries.
 
 ---
 
@@ -13,9 +14,9 @@ The engine supports a **hybrid schema model**: core node and edge types are fixe
 extensions are declared in `game_schema.yaml` and loaded at startup.
 
 ### Core vs Extension fields
-- **Core fields**: defined in `graph/node_schemas.py`. Always present. Validated statically by Pydantic.
-- **Extension fields**: declared in `game_schema.yaml` under `core_types.{type}.extension_fields`.
-  Validated at runtime by `schema/enum_validator.py` and `graph/graph_edit_validator.py`.
+- **Core fields**: defined in `type_registry/base_nodes/*.yaml` and `type_registry/base_edges/*.yaml`. Always present.
+- **Extension fields**: `game_schema.yaml` expands base node and edge models and can add new node and edge types.
+  Game-specific additions are validated through the type registry merge path and `graph/graph_edit_validator.py`.
   Stored in Neo4j alongside core fields.
 
 ### Custom node and edge types
@@ -259,7 +260,6 @@ Represents an NPC or the player character.
 | `archetype` | string | yes | — | e.g. "merchant", "guard", "elder", "assassin" |
 | `faction` | string | no | null | Faction affiliation |
 | `biography` | string | yes | — | Short character lore (used in prompts) |
-| `current_location_id` | string | yes | — | FK to Location.id |
 | `is_player` | bool | yes | false | True for the player character node |
 | `is_active` | bool | yes | true | False = soft-deleted; excluded from all runtime engine queries |
 | `created_at` | datetime | yes | now() | |
@@ -274,12 +274,13 @@ Represents an NPC or the player character.
 
 **Immutable fields** (cannot be patched after creation): `id`, `is_player`, `created_at`.
 
-**Pydantic model:** `CharacterNode` in `graph/node_schemas.py`
+**Runtime model:** `CharacterNode` generated from `type_registry/runtime_models.py`
+
+**Location** is tracked exclusively via the `LOCATED_AT` edge. There is no scalar `current_location_id` property on Character — the edge is the source of truth.
 
 **Indexes:**
 - Unique constraint on `id`
 - Index on `faction`
-- Index on `current_location_id`
 - Index on `is_active` (used in every engine query filter)
 
 ---
@@ -296,14 +297,15 @@ Represents something that happened in the world.
 | `location_id` | string | yes | — | Where the event occurred |
 | `occurred_at` | datetime | yes | — | Game time of occurrence |
 | `tick_id` | int | yes | — | Gossip/event tick when created |
-| `participants` | list[string] | yes | [] | Character IDs involved |
 | `event_type` | string | yes | — | Base values: `"crime"`, `"battle"`, `"trade"`, `"discovery"`. Extensible via `game_schema.yaml`. |
 | `is_public` | bool | yes | true | False = secret; affects awareness seeding |
 | `last_graph_updated_at` | datetime | yes | now() | Updated on every write |
 
-**Immutable fields**: `id`, `location_id`, `occurred_at`, `tick_id`, `event_type`, `participants`.
+**Participants** are tracked exclusively via `PARTICIPATED_IN` edges. There is no `participants` list property on Event — the edges are the source of truth.
 
-**Pydantic model:** `EventNode` in `graph/node_schemas.py`
+**Immutable fields**: `id`, `location_id`, `occurred_at`, `tick_id`, `event_type`.
+
+**Runtime model:** `EventNode` generated from `type_registry/runtime_models.py`
 
 **Indexes:**
 - Unique constraint on `id`
@@ -328,7 +330,7 @@ Represents a place in the game world.
 
 **Immutable fields**: `id`.
 
-**Pydantic model:** `LocationNode` in `graph/node_schemas.py`
+**Runtime model:** `LocationNode` generated from `type_registry/runtime_models.py`
 
 **Indexes:**
 - Unique constraint on `id`
@@ -464,6 +466,8 @@ in the log entry, and the response includes `meta.clamped_fields: list[str]`.
 
 **Seeding rule:** Initialize `relevance_score = 1.0` if same faction, `0.5` if same location, `0.0` otherwise.
 
+**`delta_log` cap and eviction policy:** Currently unbounded beyond the sliding window used by the bounds validator. Three design options (FIFO cap, DeltaEvent node, hybrid) are documented in `proposals/delta_log_options.md` — final design TBD pending selection.
+
 ---
 
 ### KNOWS_ABOUT (Character → Event)
@@ -483,8 +487,7 @@ Records that a character has knowledge (factual or rumor) about an event.
 
 ### LOCATED_AT (Character → Location)
 
-Records current location of a character.
-(Also redundantly stored on Character.current_location_id for fast lookup.)
+Records current location of a character. This edge is the **sole source of truth** for location — there is no scalar `current_location_id` property on Character nodes.
 
 | Property | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -575,10 +578,23 @@ RETURN a, b, loc
 
 ### Embedding reconciliation scan
 ```cypher
-MATCH (n)
-WHERE n.last_graph_updated_at > $last_reconcile_at
-RETURN n.id, labels(n)[0] AS node_type
+MATCH (n:Character)
+WHERE n.is_active = true AND n.id IS NOT NULL AND n.last_graph_updated_at IS NOT NULL
+  AND (n.last_embedding_indexed_at IS NULL OR n.last_graph_updated_at > n.last_embedding_indexed_at)
+RETURN n.id AS id, 'Character' AS kind
+UNION ALL
+MATCH (n:Event)
+WHERE n.id IS NOT NULL AND n.last_graph_updated_at IS NOT NULL
+  AND (n.last_embedding_indexed_at IS NULL OR n.last_graph_updated_at > n.last_embedding_indexed_at)
+RETURN n.id AS id, 'Event' AS kind
+UNION ALL
+MATCH (n:Location)
+WHERE n.id IS NOT NULL AND n.last_graph_updated_at IS NOT NULL
+  AND (n.last_embedding_indexed_at IS NULL OR n.last_graph_updated_at > n.last_embedding_indexed_at)
+RETURN n.id AS id, 'Location' AS kind
 ```
+
+Note: inactive Characters (`is_active = false`) are excluded from embedding reconciliation.
 
 ### Apply relation delta (parameterized)
 ```cypher

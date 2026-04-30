@@ -5,9 +5,11 @@ fields:
   archetype: { type: str, required: true }
   faction: { type: str, required: false }
   biography: { type: str, required: true }
-  current_location_id: { type: str, required: true }
   is_player: { type: bool, required: true }
   is_active: { type: bool, required: true }
+  created_at: { type: str, required: true }
+  updated_at: { type: str, required: true }
+  last_graph_updated_at: { type: str, required: true }
   gossipy: { type: int, required: true, range: [0, 100] }
   credulity: { type: int, required: true, range: [0, 100] }
   honesty: { type: int, required: true, range: [0, 100] }

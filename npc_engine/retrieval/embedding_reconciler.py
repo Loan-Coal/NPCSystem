@@ -18,30 +18,42 @@ LOGGER = logging.getLogger(__name__)
 
 
 CYPHER_SELECT_STALE_NODES = """
-MATCH (n)
-WHERE (n:Character OR n:Event OR n:Location)
+MATCH (n:Character)
+WHERE n.is_active = true
   AND n.id IS NOT NULL
-    AND properties(n)['last_graph_updated_at'] IS NOT NULL
-    AND (
-        properties(n)['last_embedding_indexed_at'] IS NULL
-        OR properties(n)['last_graph_updated_at'] > properties(n)['last_embedding_indexed_at']
-    )
-WITH n,
-     CASE
-       WHEN n:Character THEN 'Character'
-       WHEN n:Event THEN 'Event'
-       ELSE 'Location'
-     END AS kind
+  AND n.last_graph_updated_at IS NOT NULL
+  AND (
+      n.last_embedding_indexed_at IS NULL
+      OR n.last_graph_updated_at > n.last_embedding_indexed_at
+  )
 RETURN n.id AS id,
-       kind AS kind,
-       CASE
-         WHEN kind = 'Character' THEN trim(coalesce(n.name, '') + ' ' + coalesce(n.archetype, '') + ' ' + coalesce(n.biography, '') + ' ' + coalesce(n.current_mood, ''))
-         WHEN kind = 'Event' THEN trim(coalesce(n.summary, '') + ' ' + coalesce(n.event_type, '') + ' ' + coalesce(n.location_id, ''))
-         ELSE trim(coalesce(n.name, '') + ' ' + coalesce(n.descriptor, '') + ' ' + coalesce(n.region, '') + ' ' + coalesce(n.location_tag, ''))
-       END AS text,
+       'Character' AS kind,
+       trim(coalesce(n.name, '') + ' ' + coalesce(n.archetype, '') + ' ' + coalesce(n.biography, '') + ' ' + coalesce(n.current_mood, '')) AS text,
        properties(n) AS payload
-ORDER BY properties(n)['last_graph_updated_at'] ASC
-LIMIT $limit
+UNION ALL
+MATCH (n:Event)
+WHERE n.id IS NOT NULL
+  AND n.last_graph_updated_at IS NOT NULL
+  AND (
+      n.last_embedding_indexed_at IS NULL
+      OR n.last_graph_updated_at > n.last_embedding_indexed_at
+  )
+RETURN n.id AS id,
+       'Event' AS kind,
+       trim(coalesce(n.summary, '') + ' ' + coalesce(n.event_type, '') + ' ' + coalesce(n.location_id, '')) AS text,
+       properties(n) AS payload
+UNION ALL
+MATCH (n:Location)
+WHERE n.id IS NOT NULL
+  AND n.last_graph_updated_at IS NOT NULL
+  AND (
+      n.last_embedding_indexed_at IS NULL
+      OR n.last_graph_updated_at > n.last_embedding_indexed_at
+  )
+RETURN n.id AS id,
+       'Location' AS kind,
+       trim(coalesce(n.name, '') + ' ' + coalesce(n.descriptor, '') + ' ' + coalesce(n.region, '') + ' ' + coalesce(n.location_tag, '')) AS text,
+       properties(n) AS payload
 """
 
 
@@ -113,11 +125,15 @@ class EmbeddingReconciler:
                 await asyncio.sleep(self._interval_seconds)
 
     async def _reconcile_in_session(self, session: _SessionProtocol) -> dict[str, int]:
-        result = await session.run(CYPHER_SELECT_STALE_NODES, limit=self._batch_size)
+        result = await session.run(CYPHER_SELECT_STALE_NODES)
 
         processed = 0
         failed = 0
+        seen = 0
         async for record in result:
+            if seen >= self._batch_size:
+                break
+            seen += 1
             node_id = str(_record_value(record=record, key="id", default=""))
             kind = str(_record_value(record=record, key="kind", default=""))
             text = str(_record_value(record=record, key="text", default="")).strip()

@@ -27,6 +27,7 @@ from retrieval.context_merger import ContextItem, merge_context
 from retrieval.context_merger import MergedContext
 from retrieval.context_serializer import serialize_context
 from retrieval.context_utils import estimate_tokens, parse_node_identity, serialize_json
+from retrieval.dialogue_context_cache import DialogueContextCache
 from retrieval.vector_store_protocol import VectorSearchResult
 from retrieval.subgraph_retriever import retrieve_tier_a_context
 from schema.llm_config_models import LLMConfig
@@ -38,6 +39,8 @@ CONTEXT_ITEMS_SELECTED_METRIC = "context_items_selected_total"
 CONTEXT_TIER_TOKENS_METRIC = "context_tier_tokens"
 CONTEXT_BUDGET_ERRORS_METRIC = "context_budget_errors_total"
 LLM_COMPRESSIONS_METRIC = "llm_compressions_total"
+CONTEXT_CACHE_HITS_METRIC = "dialogue_context_cache_hits_total"
+CONTEXT_CACHE_MISSES_METRIC = "dialogue_context_cache_misses_total"
 
 
 class EmbeddingIndexProtocol(Protocol):
@@ -57,6 +60,9 @@ async def build_serialized_context(
     session_turns: list[str],
     emotion_state: dict | None = None,
     compression_cache: ContextCompressionCache | None = None,
+    context_cache: DialogueContextCache | None = None,
+    session_id: str | None = None,
+    skip_rag: bool = False,
 ) -> str:
     """Build final serialized prompt context string."""
 
@@ -71,6 +77,25 @@ async def build_serialized_context(
         emotion_snapshot = {
             "current_mood": str(character_payload.get("current_mood", "neutral")),
         }
+
+    if context_cache is not None and session_id is not None:
+        npc_ts = str(character_payload.get("last_graph_updated_at", "")) if isinstance(character_payload, dict) else ""
+        world_ts = world_state.last_updated_at.isoformat() if world_state.last_updated_at else ""
+        current_mood = str(emotion_snapshot.get("current_mood", "neutral"))
+        cache_key = context_cache.build_key(
+            npc_id=npc_id,
+            session_id=session_id,
+            npc_last_graph_updated_at=npc_ts,
+            world_last_updated_at=world_ts,
+            current_mood=current_mood,
+        )
+        cached = context_cache.get(cache_key)
+        if cached is not None:
+            increment_metric(metric=CONTEXT_CACHE_HITS_METRIC, labels={"npc_id": npc_id})
+            return cached
+        increment_metric(metric=CONTEXT_CACHE_MISSES_METRIC, labels={"npc_id": npc_id})
+    else:
+        cache_key = None
     tier0 = [
         ContextItem(key="world", text=world_state.model_dump_json(), tier="tier0", priority=100),
         ContextItem(
@@ -97,23 +122,24 @@ async def build_serialized_context(
         )
     )
 
-    tier_b_results = await embedding_index.search(query=player_message, top_k=settings.RAG_TOP_K)
     tier_b_raw: list[ContextItem] = []
     tier_c_raw: list[ContextItem] = []
-    split_index = max(1, len(tier_b_results) // 2) if len(tier_b_results) > 0 else 0
-    for index, row in enumerate(tier_b_results):
-        item = ContextItem(
-            key=f"rag:{row['id']}",
-            text=serialize_json(_to_json_safe(row["payload"])),
-            tier="tierB" if index < split_index else "tierC",
-            priority=max(1, 60 - index),
-        )
-        if item.tier == "tierB":
-            tier_b_raw.append(item)
-        else:
-            tier_c_raw.append(item)
-
-    vector_scores = {f"rag:{row['id']}": _normalize_ratio(float(row.get("score", 0.0))) for row in tier_b_results}
+    vector_scores: dict[str, float] = {}
+    if not skip_rag:
+        tier_b_results = await embedding_index.search(query=player_message, top_k=settings.RAG_TOP_K)
+        split_index = max(1, len(tier_b_results) // 2) if len(tier_b_results) > 0 else 0
+        for index, row in enumerate(tier_b_results):
+            item = ContextItem(
+                key=f"rag:{row['id']}",
+                text=serialize_json(_to_json_safe(row["payload"])),
+                tier="tierB" if index < split_index else "tierC",
+                priority=max(1, 60 - index),
+            )
+            if item.tier == "tierB":
+                tier_b_raw.append(item)
+            else:
+                tier_c_raw.append(item)
+        vector_scores = {f"rag:{row['id']}": _normalize_ratio(float(row.get("score", 0.0))) for row in tier_b_results}
     tier_a = _rank_tier_items(items=tier_a_raw, llm_config=llm_config, vector_scores=vector_scores)
     tier_b = _rank_tier_items(items=tier_b_raw, llm_config=llm_config, vector_scores=vector_scores)
     tier_c = _rank_tier_items(items=tier_c_raw, llm_config=llm_config, vector_scores=vector_scores)
@@ -135,6 +161,10 @@ async def build_serialized_context(
     )
     _record_context_metrics(context=final_context)
     _record_compression_metrics(pre_budget_context=merged, post_budget_context=final_context)
+
+    if context_cache is not None and cache_key is not None:
+        context_cache.set(cache_key, serialized)
+
     return serialized
 
 

@@ -112,7 +112,6 @@ def test_validate_node_payload_rejects_extension_range_violation(registry_fixtur
                 "name": "Aria",
                 "archetype": "guard",
                 "biography": "A city guard",
-                "current_location_id": "loc-1",
                 "legacy_title": "Captain",
                 "influence": 500,
             },
@@ -161,17 +160,15 @@ def test_validate_node_payload_rejects_invalid_list_item_shape(registry_fixture)
     with pytest.raises(RegistryPayloadValidationError, match="list\\[str\\]"):
         validate_node_payload(
             registry=registry_fixture,
-            node_type="event",
+            node_type="world_state",
             operation=RegistryOperation.CREATE,
             payload={
-                "id": "e1",
-                "summary": "Skirmish",
-                "severity": 30,
-                "location_id": "loc-1",
-                "occurred_at": "2026-04-19T00:00:00Z",
-                "tick_id": 1,
-                "participants": ["c1", 2],
-                "event_type": "crime",
-                "is_public": True,
+                "id": "world",
+                "epoch": "age_of_peace",
+                "faction_standings": {},
+                "active_conditions": ["rain", 42],
+                "weather": "clear",
+                "last_updated_at": "2026-04-19T00:00:00Z",
+                "last_graph_updated_at": "2026-04-19T00:00:00Z",
             },
         )

@@ -7,8 +7,7 @@ Dependencies injected: AsyncManagedTransaction.
 """
 
 from neo4j import AsyncManagedTransaction
-
-from graph.node_schemas import CharacterNode
+from pydantic import BaseModel
 
 
 CYPHER_MERGE_CHARACTER = """
@@ -18,7 +17,7 @@ SET c += $properties,
 """
 
 
-async def upsert_character(tx: AsyncManagedTransaction, character: CharacterNode) -> None:
+async def upsert_character(tx: AsyncManagedTransaction, character: BaseModel) -> None:
     """Insert or update a character node idempotently."""
 
     await tx.run(
