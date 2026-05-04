@@ -32,7 +32,7 @@ test-v13-contracts:
 	$(PYTHON) -m pytest -q tests/unit/test_schema_loader.py tests/unit/test_v1_route_versioning.py tests/unit/test_auth_permissions_v13.py
 
 test-v13-graph-admin:
-	$(PYTHON) -m pytest -q tests/unit/test_graph_v13_routes.py tests/unit/test_graph_edit_service_edges.py tests/unit/test_graph_admin_reindex_jobs.py
+	$(PYTHON) -m pytest -q tests/unit/test_graph_v13_routes.py tests/unit/test_graph_warning_pipeline.py tests/unit/test_graph_admin_reindex_jobs.py
 
 test-v13-retrieval:
 	$(PYTHON) -m pytest -q tests/unit/test_vector_store_and_index.py tests/unit/test_context_builder.py tests/unit/test_embedding_reconciler.py tests/unit/test_main_reconciler_lifespan.py

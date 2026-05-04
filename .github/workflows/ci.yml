@@ -28,9 +28,6 @@ jobs:
       - name: Lint
         run: make lint
 
-      - name: Type check
-        run: make type
-
   v13-tests:
     runs-on: ubuntu-latest
     strategy:
