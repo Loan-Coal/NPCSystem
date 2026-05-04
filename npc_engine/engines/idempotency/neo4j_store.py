@@ -11,75 +11,25 @@ from typing import Any
 from neo4j import AsyncSession
 
 from engines.idempotency.models import IdempotencyRecord
-
-
-CYPHER_ENSURE_IDEMPOTENCY_CONSTRAINT = """
-CREATE CONSTRAINT idempotency_record_key IF NOT EXISTS
-FOR (r:IdempotencyRecord)
-REQUIRE (r.idempotency_key, r.resource_scope) IS UNIQUE
-"""
-
-CYPHER_GET_RECORD = """
-MATCH (r:IdempotencyRecord {idempotency_key: $idempotency_key, resource_scope: $resource_scope})
-RETURN r
-LIMIT 1
-"""
-
-CYPHER_UPSERT_PENDING = """
-MERGE (r:IdempotencyRecord {idempotency_key: $idempotency_key, resource_scope: $resource_scope})
-SET r.request_hash = $request_hash,
-    r.status = 'pending',
-    r.response_status_code = null,
-    r.response_body = null,
-    r.response_hash = null,
-    r.created_at = datetime($created_at),
-    r.expires_at = datetime($expires_at),
-    r.pending_timeout_seconds = $pending_timeout_seconds,
-    r.updated_at = datetime($created_at)
-RETURN r
-"""
-
-CYPHER_CREATE_PENDING_IF_ABSENT = """
-MERGE (r:IdempotencyRecord {idempotency_key: $idempotency_key, resource_scope: $resource_scope})
-ON CREATE SET r.request_hash = $request_hash,
-              r.status = 'pending',
-              r.response_status_code = null,
-              r.response_body = null,
-              r.response_hash = null,
-              r.created_at = datetime($created_at),
-              r.expires_at = datetime($expires_at),
-              r.pending_timeout_seconds = $pending_timeout_seconds,
-              r.updated_at = datetime($created_at),
-              r._just_created = true
-WITH r, coalesce(r._just_created, false) AS created
-REMOVE r._just_created
-RETURN created
-"""
-
-CYPHER_MARK_COMPLETE = """
-MATCH (r:IdempotencyRecord {idempotency_key: $idempotency_key, resource_scope: $resource_scope})
-WHERE r.request_hash = $request_hash
-SET r.status = $status,
-    r.response_status_code = $status_code,
-    r.response_body = $response_body,
-    r.response_hash = $response_hash,
-    r.updated_at = datetime($updated_at)
-RETURN count(r) AS updated_count
-"""
-
-CYPHER_DELETE_EXPIRED = """
-MATCH (r:IdempotencyRecord)
-WHERE r.expires_at < datetime($now_iso)
-WITH collect(r) AS records, count(r) AS deleted_count
-FOREACH (record IN records | DETACH DELETE record)
-RETURN deleted_count
-"""
+from engines.idempotency.neo4j_queries import (
+    CYPHER_CREATE_PENDING_IF_ABSENT,
+    CYPHER_DELETE_EXPIRED,
+    CYPHER_ENSURE_IDEMPOTENCY_CONSTRAINT,
+    CYPHER_GET_RECORD,
+    CYPHER_MARK_COMPLETE,
+    CYPHER_UPSERT_PENDING,
+)
 
 
 class Neo4jIdempotencyStore:
     """Persists idempotency records inside Neo4j."""
 
     async def ensure_constraints(self, session: AsyncSession) -> None:
+        """Create the uniqueness constraint on idempotency records if absent.
+
+        Args:
+            session: Active Neo4j async session.
+        """
         await session.run(CYPHER_ENSURE_IDEMPOTENCY_CONSTRAINT)
 
     async def get_record(
@@ -89,6 +39,16 @@ class Neo4jIdempotencyStore:
         idempotency_key: str,
         resource_scope: str,
     ) -> IdempotencyRecord | None:
+        """Fetch an idempotency record by key and scope.
+
+        Args:
+            session: Active Neo4j async session.
+            idempotency_key: Client-supplied idempotency key.
+            resource_scope: Method+path scope string.
+
+        Returns:
+            Matching IdempotencyRecord, or None if absent.
+        """
         result = await session.run(
             CYPHER_GET_RECORD,
             idempotency_key=idempotency_key,
@@ -110,6 +70,23 @@ class Neo4jIdempotencyStore:
         expires_at: str,
         pending_timeout_seconds: int,
     ) -> IdempotencyRecord:
+        """Upsert a pending record, overwriting any prior state.
+
+        Args:
+            session: Active Neo4j async session.
+            idempotency_key: Client-supplied idempotency key.
+            resource_scope: Method+path scope string.
+            request_hash: SHA-256 hex digest of the request.
+            created_at: ISO-8601 creation timestamp.
+            expires_at: ISO-8601 expiry timestamp.
+            pending_timeout_seconds: Seconds before a pending record is considered stale.
+
+        Returns:
+            The upserted IdempotencyRecord.
+
+        Raises:
+            RuntimeError: If the Cypher query returns no row.
+        """
         result = await session.run(
             CYPHER_UPSERT_PENDING,
             idempotency_key=idempotency_key,
@@ -135,6 +112,20 @@ class Neo4jIdempotencyStore:
         expires_at: str,
         pending_timeout_seconds: int,
     ) -> bool:
+        """Create a pending record only if none exists for the key+scope pair.
+
+        Args:
+            session: Active Neo4j async session.
+            idempotency_key: Client-supplied idempotency key.
+            resource_scope: Method+path scope string.
+            request_hash: SHA-256 hex digest of the request.
+            created_at: ISO-8601 creation timestamp.
+            expires_at: ISO-8601 expiry timestamp.
+            pending_timeout_seconds: Seconds before a pending record is considered stale.
+
+        Returns:
+            True if a new record was created, False if one already existed.
+        """
         result = await session.run(
             CYPHER_CREATE_PENDING_IF_ABSENT,
             idempotency_key=idempotency_key,
@@ -161,6 +152,21 @@ class Neo4jIdempotencyStore:
         response_hash: str,
         updated_at: str,
     ) -> None:
+        """Mark an idempotency record as completed with a stored response.
+
+        Args:
+            session: Active Neo4j async session.
+            idempotency_key: Client-supplied idempotency key.
+            resource_scope: Method+path scope string.
+            request_hash: SHA-256 hex digest of the original request.
+            status_code: HTTP status code of the completed response.
+            response_body: Serialised response body string.
+            response_hash: SHA-256 hex digest of the response.
+            updated_at: ISO-8601 update timestamp.
+
+        Raises:
+            RuntimeError: If no matching record is found to update.
+        """
         await _mark_terminal(
             session=session,
             status="completed",
@@ -185,6 +191,21 @@ class Neo4jIdempotencyStore:
         response_hash: str,
         updated_at: str,
     ) -> None:
+        """Mark an idempotency record as permanently failed.
+
+        Args:
+            session: Active Neo4j async session.
+            idempotency_key: Client-supplied idempotency key.
+            resource_scope: Method+path scope string.
+            request_hash: SHA-256 hex digest of the original request.
+            status_code: HTTP status code of the failed response.
+            response_body: Serialised response body string.
+            response_hash: SHA-256 hex digest of the response.
+            updated_at: ISO-8601 update timestamp.
+
+        Raises:
+            RuntimeError: If no matching record is found to update.
+        """
         await _mark_terminal(
             session=session,
             status="failed_terminal",
@@ -198,6 +219,15 @@ class Neo4jIdempotencyStore:
         )
 
     async def delete_expired(self, session: AsyncSession, *, now_iso: str) -> int:
+        """Delete all records whose expires_at is before now_iso.
+
+        Args:
+            session: Active Neo4j async session.
+            now_iso: Current UTC time as ISO-8601 string used as the expiry cutoff.
+
+        Returns:
+            Number of records deleted.
+        """
         result = await session.run(CYPHER_DELETE_EXPIRED, now_iso=now_iso)
         row = await result.single()
         return int(row["deleted_count"]) if row is not None else 0

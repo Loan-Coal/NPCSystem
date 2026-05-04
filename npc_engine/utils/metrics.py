@@ -83,8 +83,9 @@ def result_label_from_status(status_code: int) -> str:
 class MetricsRegistry:
     """Thread-safe in-memory metrics registry for counters and observations."""
 
-    def __init__(self):
-        self._lock = Lock()
+    def __init__(self) -> None:
+        """Initialise empty counters and observations with a threading lock."""
+        self._lock: Lock = Lock()
         self._counters: dict[tuple[str, tuple[tuple[str, str], ...]], float] = {}
         self._observations: dict[tuple[str, tuple[tuple[str, str], ...]], dict[str, float]] = {}
 
@@ -145,6 +146,7 @@ class MetricsRegistry:
 
 
 def _serialize_key(key: tuple[str, tuple[tuple[str, str], ...]]) -> str:
+    """Render a (metric, labels) key as a human-readable string for snapshots."""
     metric, labels = key
     if len(labels) == 0:
         return metric

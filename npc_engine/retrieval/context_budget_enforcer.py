@@ -8,103 +8,23 @@ Dependencies injected: LLMConfig.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-import hashlib
-from typing import TypeAlias
-
-from common.json_utils import parse_json_object
+from retrieval.context_compression import (
+    COMPRESSION_SUFFIX,
+    ContextCompressionCache,
+    build_compression_cache_key,
+)
 from retrieval.context_merger import ContextItem, MergedContext
-from retrieval.context_utils import CHARS_PER_TOKEN_ESTIMATE, estimate_tokens, parse_node_identity
+from retrieval.context_utils import estimate_tokens
 from schema.llm_config_models import LLMConfig
+from utils.errors import ContextBudgetError
 
-
-MIN_COMPRESSED_CHARS = 32
-COMPRESSION_SUFFIX = "...[compressed]"
-
-CompressionCacheKey: TypeAlias = tuple[str, str, str, str]
-
-
-@dataclass(frozen=True)
-class ContextBudgetError(Exception):
-    """Typed budget error for tier-specific overflow diagnostics."""
-
-    tier: str
-    used_tokens: int
-    budget_tokens: int
-    detail: str
-
-    def __str__(self) -> str:
-        return (
-            "ContextBudgetError("
-            f"tier={self.tier}, used_tokens={self.used_tokens}, "
-            f"budget_tokens={self.budget_tokens}, detail={self.detail})"
-        )
-
-
-@dataclass(frozen=True)
-class CompressionCacheEntry:
-    """Cached compression output for one canonical cache key."""
-
-    graph_timestamp: str | None
-    source_hash: str
-    target_tokens: int
-    compressed_text: str
-
-
-class ContextCompressionCache:
-    """In-memory compression cache keyed by canonical node and prompt versions."""
-
-    def __init__(self):
-        self.entries: dict[CompressionCacheKey, CompressionCacheEntry] = {}
-
-    def compress_item(self, *, item: ContextItem, llm_config: LLMConfig, target_tokens: int) -> str:
-        """Compress one context item using deterministic local logic and cache."""
-
-        node_type, node_id = parse_node_identity(item.key)
-        key = build_compression_cache_key(
-            node_id=node_id,
-            node_type=node_type,
-            prompt_schema_version=llm_config.prompt_schema_version,
-            compression_prompt_version=llm_config.compression_prompt_version,
-        )
-        graph_timestamp = _extract_graph_timestamp(item.text)
-        source_hash = hashlib.sha1(item.text.encode("utf-8")).hexdigest()
-        cached = self.entries.get(key)
-        if cached is not None and cached.target_tokens == target_tokens:
-            if (
-                graph_timestamp is not None
-                and cached.graph_timestamp == graph_timestamp
-                and cached.source_hash == source_hash
-            ):
-                return cached.compressed_text
-            if graph_timestamp is None and cached.source_hash == source_hash:
-                return cached.compressed_text
-
-        compressed = _compress_text(item.text, target_tokens=target_tokens)
-        self.entries[key] = CompressionCacheEntry(
-            graph_timestamp=graph_timestamp,
-            source_hash=source_hash,
-            target_tokens=target_tokens,
-            compressed_text=compressed,
-        )
-        return compressed
-
-
-def build_compression_cache_key(
-    *,
-    node_id: str,
-    node_type: str,
-    prompt_schema_version: str,
-    compression_prompt_version: str,
-) -> CompressionCacheKey:
-    """Build cache key from canonical dimensions required by the v1.4 plan."""
-
-    return (
-        node_id,
-        node_type,
-        prompt_schema_version,
-        compression_prompt_version,
-    )
+__all__ = [
+    "ContextBudgetError",
+    "ContextCompressionCache",
+    "COMPRESSION_SUFFIX",
+    "build_compression_cache_key",
+    "enforce_context_budget",
+]
 
 
 def enforce_context_budget(
@@ -113,7 +33,23 @@ def enforce_context_budget(
     llm_config: LLMConfig,
     compression_cache: ContextCompressionCache | None = None,
 ) -> MergedContext:
-    """Apply tier-aware budget policy with compression for compressible tiers only."""
+    """Apply tier-aware budget policy with compression for compressible tiers.
+
+    Tier A is validated against a hard token budget and is not compressed.
+    Tiers B and C are compressed and/or dropped to fit their configured budgets.
+
+    Args:
+        context: Merged context to enforce budgets on.
+        llm_config: LLM configuration carrying per-tier token budgets and compression settings.
+        compression_cache: Optional pre-warmed compression cache; a new cache is created if omitted.
+
+    Returns:
+        A new MergedContext with tier B/C items compressed or dropped to satisfy budgets.
+
+    Raises:
+        ContextBudgetError: If tier A or session-turns exceed their non-compressible budgets,
+            or if a compressible tier cannot fit within budget after compression and dropping.
+    """
 
     cache = compression_cache or ContextCompressionCache()
 
@@ -201,23 +137,3 @@ def _fit_compressible_tier(
         )
 
     return fitted
-
-def _compress_text(text: str, *, target_tokens: int) -> str:
-    target_chars = max(MIN_COMPRESSED_CHARS, target_tokens * CHARS_PER_TOKEN_ESTIMATE)
-    if len(text) <= target_chars:
-        return text
-
-    digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:8]
-    clipped = text[: max(1, target_chars - len(COMPRESSION_SUFFIX) - 12)]
-    return f"{clipped}{COMPRESSION_SUFFIX}#{digest}"
-
-def _extract_graph_timestamp(text: str) -> str | None:
-    payload = parse_json_object(text)
-    if len(payload) == 0:
-        return None
-
-    for field in ("last_graph_updated_at", "updated_at", "occurred_at", "created_at"):
-        value = payload.get(field)
-        if isinstance(value, str) and value != "":
-            return value
-    return None

@@ -8,18 +8,30 @@ Dependencies injected: None.
 
 from retrieval.context_merger import ContextItem, MergedContext
 from retrieval.context_utils import estimate_tokens
+from utils.errors import TokenBudgetExceededError
 
+__all__ = ["TokenBudgetExceededError", "enforce_budget"]
 
 TIER0_MAX_TOKENS = 380
 
 
-class TokenBudgetExceededError(Exception):
-    """Raised when mandatory tier0 context alone exceeds budget."""
-
-
-
 def enforce_budget(context: MergedContext, budget: int) -> MergedContext:
-    """Trim tierB then tierA items while preserving tier0 items."""
+    """Trim tierB then tierA items to fit within the token budget while preserving tier0.
+
+    Tier0 items are never dropped. tierA and tierB items are greedily retained in
+    descending priority order until the remaining budget is exhausted.
+
+    Args:
+        context: Merged context to trim.
+        budget: Maximum total token count across all retained items.
+
+    Returns:
+        A new MergedContext containing only items that fit within the budget.
+
+    Raises:
+        TokenBudgetExceededError: If tier0 items alone exceed the budget or the
+            absolute TIER0_MAX_TOKENS cap.
+    """
 
     tier0_items = [item for item in context.items if item.tier == "tier0"]
     tier_a_items = [item for item in context.items if item.tier == "tierA"]

@@ -58,7 +58,23 @@ def gossip_distort(
     tick_id: int,
     distortion_base: float,
 ) -> GossipDistortion:
-    """Return deterministic distortion payload based on bounded probability."""
+    """Return a deterministic GossipDistortion based on bounded probability.
+
+    Probability is derived from honesty, trust, and severity parameters.
+    The tick_id and summary are hashed together to produce a stable, reproducible
+    distortion outcome for the same inputs.
+
+    Args:
+        event_summary: Source event summary text to potentially distort.
+        sharer_honesty: Sharer's honesty attribute (0–100).
+        sharer_receiver_trust: Trust level from sharer to receiver (0–100).
+        event_severity: Event severity (0–100); higher severity increases distortion chance.
+        tick_id: Current game tick; seeds deterministic randomness.
+        distortion_base: Base distortion probability added to attribute terms.
+
+    Returns:
+        GossipDistortion with the (possibly modified) summary and distortion metadata.
+    """
 
     probability = _distortion_probability(
         honesty=sharer_honesty,

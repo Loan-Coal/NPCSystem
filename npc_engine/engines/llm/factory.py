@@ -59,8 +59,18 @@ BACKEND_BUILDERS: dict[str, Callable[[Settings], LLMClientProtocol]] = {
 
 
 def create_llm_client(settings: Settings) -> LLMClientProtocol:
-    """Return backend adapter based on configuration."""
+    """Return backend adapter based on LLM_BACKEND configuration.
 
+    Args:
+        settings: Application settings providing LLM_BACKEND and adapter-specific URLs.
+
+    Returns:
+        Concrete LLMClientProtocol implementation for the configured backend.
+
+    Raises:
+        ValueError: If LLM_BACKEND is not one of the known keys in BACKEND_BUILDERS,
+            or if a required URL setting is missing for the selected backend.
+    """
     builder = BACKEND_BUILDERS.get(settings.LLM_BACKEND)
     if builder is None:
         raise ValueError(f"Unsupported LLM_BACKEND: {settings.LLM_BACKEND}")

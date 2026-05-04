@@ -22,7 +22,17 @@ BASE_NODE_LABELS = {
 
 
 def required_node_id(payload: dict[str, Any]) -> str:
-    """Return non-empty node id from payload or raise typed validation error."""
+    """Return non-empty node id from payload or raise typed validation error.
+
+    Args:
+        payload: Node property dict expected to contain an "id" key.
+
+    Returns:
+        Non-empty string node id.
+
+    Raises:
+        RegistryPayloadValidationError: If "id" is missing, not a string, or blank.
+    """
 
     node_id = payload.get("id")
     if isinstance(node_id, str) and node_id.strip():
@@ -31,7 +41,15 @@ def required_node_id(payload: dict[str, Any]) -> str:
 
 
 def encode_properties(data: Mapping[str, Any], fields: Mapping[str, RuntimeFieldDefinition]) -> dict[str, Any]:
-    """Encode runtime values for database persistence using field contracts."""
+    """Encode runtime values for database persistence using field contracts.
+
+    Args:
+        data: Raw property dict to encode.
+        fields: Field definitions from the type registry keyed by field name.
+
+    Returns:
+        New dict with dict-typed fields serialized as JSON strings; unknown fields excluded.
+    """
 
     encoded: dict[str, Any] = {}
     for key, value in data.items():
@@ -46,7 +64,15 @@ def encode_properties(data: Mapping[str, Any], fields: Mapping[str, RuntimeField
 
 
 def decode_properties(data: Mapping[str, Any], fields: Mapping[str, RuntimeFieldDefinition]) -> dict[str, Any]:
-    """Decode stored values into API-friendly representations using field contracts."""
+    """Decode stored values into API-friendly representations using field contracts.
+
+    Args:
+        data: Raw property dict as read from the graph (dict-typed fields may be JSON strings).
+        fields: Field definitions from the type registry keyed by field name.
+
+    Returns:
+        New dict with JSON-string dict fields parsed back into Python dicts.
+    """
 
     decoded = dict(data)
     for key, definition in fields.items():
@@ -63,13 +89,27 @@ def decode_properties(data: Mapping[str, Any], fields: Mapping[str, RuntimeField
 
 
 def resolve_node_label(node_type: str) -> str:
-    """Resolve graph label for base and custom node types."""
+    """Resolve graph label for base and custom node types.
+
+    Args:
+        node_type: Node type key (e.g. "character") or custom type name.
+
+    Returns:
+        Cypher node label string (e.g. "Character"); falls back to node_type if not in base map.
+    """
 
     node_key = node_type.strip().lower()
     return BASE_NODE_LABELS.get(node_key, node_type)
 
 
 def cypher_identifier(name: str) -> str:
-    """Safely backtick-quote dynamic Cypher identifier names."""
+    """Safely backtick-quote dynamic Cypher identifier names.
+
+    Args:
+        name: Raw identifier string that may contain special characters.
+
+    Returns:
+        Backtick-quoted Cypher identifier with any embedded backticks escaped.
+    """
 
     return f"`{name.replace('`', '``')}`"

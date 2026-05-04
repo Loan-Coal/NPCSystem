@@ -33,7 +33,14 @@ class RuntimeModelBundle:
 
 
 def build_runtime_models(*, registry: TypeRegistry) -> RuntimeModelBundle:
-    """Build dynamic runtime models for all base and custom node and edge types."""
+    """Build dynamic runtime models for all base and custom node and edge types.
+
+    Args:
+        registry: Fully merged immutable type registry.
+
+    Returns:
+        Bundle of dynamically created Pydantic model classes keyed by type name.
+    """
 
     node_models = _build_node_models(registry=registry)
     edge_models = _build_edge_models(registry=registry)

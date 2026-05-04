@@ -13,13 +13,29 @@ from engines.emotion.emotion_store import EmotionStore
 class EmotionUpdater:
     """Service that updates stored emotion states."""
 
-    def __init__(self, emotion_store: EmotionStore, decay_rate: int = 2):
+    def __init__(self, emotion_store: EmotionStore, decay_rate: int = 2) -> None:
+        """Initialise the updater with a backing store and decay configuration.
+
+        Args:
+            emotion_store: Store used to read and persist NPC emotion states.
+            decay_rate: Absolute units per tick that valence and arousal decay toward neutral.
+        """
         self._store = emotion_store
         self._decay_rate = decay_rate
 
     def apply_dialogue_mood(self, npc_id: str, mood_update: str | None) -> EmotionState:
-        """Apply optional mood label hint from dialogue output."""
+        """Apply an optional mood label hint from dialogue output and persist the result.
 
+        If mood_update is None, the current state is decayed toward neutral.
+        Otherwise arousal is incremented by 5 (capped at 100) and the label is replaced.
+
+        Args:
+            npc_id: Unique identifier of the NPC.
+            mood_update: New mood label string, or None to apply passive decay.
+
+        Returns:
+            The newly computed and stored EmotionState.
+        """
         previous = self._store.get(npc_id=npc_id)
         if mood_update is None:
             next_state = self._decay(previous)
@@ -33,8 +49,14 @@ class EmotionUpdater:
         return next_state
 
     def get_state(self, npc_id: str) -> EmotionState:
-        """Return current emotion state for NPC."""
+        """Return the current emotion state for an NPC.
 
+        Args:
+            npc_id: Unique identifier of the NPC.
+
+        Returns:
+            Stored EmotionState, or a neutral default if none has been set.
+        """
         return self._store.get(npc_id=npc_id)
 
     def _decay(self, state: EmotionState) -> EmotionState:

@@ -26,7 +26,19 @@ class EventTemplate(BaseModel):
 
 
 def load_event_pool(path: str) -> list[EventTemplate]:
-    """Load and validate event templates from JSON file."""
+    """Load and validate event templates from a JSON file.
+
+    Args:
+        path: Filesystem path to the event pool JSON file.
+
+    Returns:
+        List of validated EventTemplate instances.
+
+    Raises:
+        ValueError: If the JSON root is not a list.
+        FileNotFoundError: If the file does not exist at path.
+        json.JSONDecodeError: If the file content is not valid JSON.
+    """
 
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(payload, list):

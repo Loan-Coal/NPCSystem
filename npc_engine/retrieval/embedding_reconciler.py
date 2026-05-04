@@ -65,18 +65,32 @@ _MARK_INDEXED_QUERIES: dict[str, str] = {
 
 
 class _SessionProtocol(Protocol):
-    async def run(self, query: str, **params):
-        """Execute an async Cypher query."""
+    async def run(self, query: str, **params) -> Any:
+        """Execute an async Cypher query.
+
+        Args:
+            query: Cypher query string.
+            **params: Named parameters bound into the query.
+
+        Returns:
+            An async-iterable result cursor.
+        """
 
 
 class _GraphDbProtocol(Protocol):
-    def get_session(self):
-        """Return async context manager yielding sessions."""
+    def get_session(self) -> Any:
+        """Return an async context manager that yields a _SessionProtocol instance."""
 
 
 class _EmbeddingIndexProtocol(Protocol):
     async def upsert(self, item_id: str, text: str, payload: dict) -> None:
-        """Upsert one embedding row."""
+        """Upsert one embedding row.
+
+        Args:
+            item_id: Unique identifier for the item.
+            text: Raw text to embed.
+            payload: Metadata stored alongside the embedding.
+        """
 
 
 class EmbeddingReconciler:
@@ -88,7 +102,19 @@ class EmbeddingReconciler:
         embedding_index: _EmbeddingIndexProtocol,
         interval_seconds: int,
         batch_size: int = 200,
-    ):
+    ) -> None:
+        """Initialise the reconciler.
+
+        Args:
+            graph_db: Graph database handle used to query stale nodes.
+            embedding_index: Embedding index to write repaired embeddings into.
+            interval_seconds: Seconds between reconciliation cycles; must be greater than 0.
+            batch_size: Maximum nodes to process per cycle; must be greater than 0.
+
+        Raises:
+            ValueError: If interval_seconds or batch_size is not greater than 0.
+        """
+
         if interval_seconds <= 0:
             raise ValueError("interval_seconds must be greater than 0")
         if batch_size <= 0:
@@ -99,13 +125,24 @@ class EmbeddingReconciler:
         self._batch_size = batch_size
 
     async def reconcile_once(self) -> dict[str, int]:
-        """Run one reconciliation cycle and return processed/failed counters."""
+        """Run one reconciliation cycle over all stale nodes.
+
+        Returns:
+            Dict with keys ``processed`` (successful upserts) and ``failed`` (error count).
+        """
 
         async with self._graph_db.get_session() as session:
             return await self._reconcile_in_session(session=session)
 
     async def run_forever(self) -> None:
-        """Run reconciliation cycles until task cancellation."""
+        """Run reconciliation cycles in a loop until task cancellation.
+
+        Logs cycle stats when at least one node was processed or failed.
+        Swallows non-cancellation exceptions and retries after the configured interval.
+
+        Raises:
+            asyncio.CancelledError: Propagated on task cancellation.
+        """
 
         while True:
             try:

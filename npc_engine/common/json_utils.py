@@ -13,7 +13,14 @@ from typing import Any
 
 
 def parse_json_object(value: object) -> dict[str, Any]:
-    """Return a JSON object from native dict or JSON string; otherwise {}."""
+    """Return a JSON object from native dict or JSON string; otherwise {}.
+
+    Args:
+        value: object — raw value from an external source (dict, JSON string, or other).
+
+    Returns:
+        Parsed dict if value is a dict or a JSON string encoding a dict; empty dict otherwise.
+    """
 
     if isinstance(value, dict):
         return value
@@ -28,7 +35,14 @@ def parse_json_object(value: object) -> dict[str, Any]:
 
 
 def parse_json_list(value: object) -> list[Any]:
-    """Return a JSON array from native list or JSON string; otherwise []."""
+    """Return a JSON array from native list or JSON string; otherwise [].
+
+    Args:
+        value: object — raw value from an external source (list, JSON string, or other).
+
+    Returns:
+        Parsed list if value is a list or a JSON string encoding a list; empty list otherwise.
+    """
 
     if isinstance(value, list):
         return value
@@ -43,6 +57,13 @@ def parse_json_list(value: object) -> list[Any]:
 
 
 def dump_json(value: object) -> str:
-    """Serialize one value to JSON text with default encoder behavior."""
+    """Serialize one value to JSON text with default encoder behavior.
+
+    Args:
+        value: object — any JSON-serializable Python value.
+
+    Returns:
+        JSON string representation of value.
+    """
 
     return json.dumps(value)

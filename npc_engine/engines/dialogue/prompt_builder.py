@@ -6,14 +6,22 @@ Does NOT: call LLM adapters.
 Dependencies injected: None.
 """
 
-from api.schemas import DialogueRequest
+from engines.dialogue.dialogue_models import DialogueRequest
 
 
 PROMPT_VERSION = "stage_b_v1.0"
 
 
 def build_dialogue_prompt(request: DialogueRequest, serialized_context: str) -> str:
-    """Build deterministic dialogue prompt for structured output."""
+    """Build the deterministic dialogue prompt string for structured LLM output.
+
+    Args:
+        request: Dialogue request carrying player and NPC identifiers and message.
+        serialized_context: Compact JSON context string from the context builder.
+
+    Returns:
+        Newline-delimited prompt string including version, instructions, and context.
+    """
 
     return (
         f"PROMPT_VERSION={PROMPT_VERSION}\n"

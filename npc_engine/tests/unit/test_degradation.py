@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any
 
 import pytest
 import yaml
@@ -73,8 +72,6 @@ async def test_full_tier_succeeds(canned_dir: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_llm_timeout_falls_back_to_graph_only(canned_dir: Path) -> None:
-    call_count = 0
-
     async def full_timeout_factory() -> DialogueResponse:
         await asyncio.sleep(10.0)
         return _make_response()

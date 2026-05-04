@@ -16,6 +16,13 @@ _SCOPE_INHERITANCE = {
 
 
 def has_scope(granted_scope: str, required_scope: str) -> bool:
-    """Return True if granted scope satisfies required scope."""
+    """Return True if granted scope satisfies required scope.
 
+    Args:
+        granted_scope: Scope string resolved from the bearer token.
+        required_scope: Scope string required to access the target route.
+
+    Returns:
+        True when the granted scope covers the required scope via the inheritance map.
+    """
     return required_scope in _SCOPE_INHERITANCE.get(granted_scope, set())

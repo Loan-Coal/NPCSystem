@@ -63,7 +63,19 @@ async def test_upsert_edge_enforces_endpoint_match_before_merge(registry_fixture
     session = _SessionStub(records=[{"edge": {"trust": 10, "fear": 20, "affection": 30}, "src_id": "c1", "dst_id": "c2"}])
     service = GenericGraphService(session=cast(AsyncSession, session), registry=registry_fixture)
 
-    await service.upsert_edge(edge_type="RELATES_TO", src_id="c1", dst_id="c2", payload={"trust": 10, "fear": 20, "affection": 30})
+    await service.upsert_edge(
+        edge_type="RELATES_TO",
+        src_id="c1",
+        dst_id="c2",
+        payload={
+            "trust": 10,
+            "fear": 20,
+            "affection": 30,
+            "interaction_count": 0,
+            "last_updated_at": "2026-05-01T00:00:00Z",
+            "relevance_score": 0.5,
+        },
+    )
 
     query, _ = session.calls[0]
     assert "MATCH (src:`Character` {id: $src_id})" in query
@@ -95,7 +107,14 @@ async def test_upsert_edge_raises_when_nodes_missing(registry_fixture) -> None:
             edge_type="RELATES_TO",
             src_id="c1",
             dst_id="c2",
-            payload={"trust": 10, "fear": 20, "affection": 30},
+            payload={
+                "trust": 10,
+                "fear": 20,
+                "affection": 30,
+                "interaction_count": 0,
+                "last_updated_at": "2026-05-01T00:00:00Z",
+                "relevance_score": 0.5,
+            },
         )
 
 
@@ -114,6 +133,8 @@ async def test_upsert_node_serializes_dict_fields_for_storage(registry_fixture) 
             "faction_standings": {"guild": 10},
             "active_conditions": ["rain"],
             "weather": "storm",
+            "last_updated_at": "2026-05-01T00:00:00Z",
+            "last_graph_updated_at": "2026-05-01T00:00:00Z",
         },
     )
 

@@ -70,3 +70,49 @@ def test_load_game_schema_raises_typed_error_on_read_failure(monkeypatch, tmp_pa
 
     with pytest.raises(SchemaMisconfiguredError):
         load_game_schema(schema_path=str(schema_path))
+
+
+def test_load_game_schema_raises_validation_error_for_list_root(tmp_path: Path) -> None:
+    """A schema YAML whose root is a list should raise SchemaValidationError."""
+
+    from utils.errors import SchemaValidationError
+
+    schema_path = tmp_path / "bad.yaml"
+    schema_path.write_text("- item1\n- item2\n", encoding="utf-8")
+
+    with pytest.raises(SchemaValidationError):
+        load_game_schema(schema_path=str(schema_path))
+
+
+def test_load_game_schema_raises_validation_error_for_wrong_version(tmp_path: Path) -> None:
+    """A schema with an unsupported schema_version should raise SchemaValidationError."""
+
+    from utils.errors import SchemaValidationError
+
+    schema_path = tmp_path / "bad_version.yaml"
+    schema_path.write_text('schema_version: "99.0"\n', encoding="utf-8")
+
+    with pytest.raises(SchemaValidationError):
+        load_game_schema(schema_path=str(schema_path))
+
+
+def test_load_game_schema_raises_validation_error_for_invalid_field_type(tmp_path: Path) -> None:
+    """A schema with an unrecognised extension field type should raise SchemaValidationError."""
+
+    from utils.errors import SchemaValidationError
+
+    schema_path = tmp_path / "bad_field.yaml"
+    schema_path.write_text(
+        """
+schema_version: "1.0"
+core_types:
+  character:
+    extension_fields:
+      bad_field:
+        type: uuid
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SchemaValidationError):
+        load_game_schema(schema_path=str(schema_path))

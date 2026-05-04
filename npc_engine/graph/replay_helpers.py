@@ -21,7 +21,18 @@ async def load_idempotent_replay_record(
     params: Mapping[str, Any],
     idempotency_key: str,
 ) -> dict[str, Any] | None:
-    """Return replay record payload when idempotency key was already applied."""
+    """Return replay record payload when idempotency key was already applied.
+
+    Args:
+        tx: Active Neo4j async transaction used to run the replay query.
+        replay_cypher: Cypher query that looks up an existing idempotency record.
+        params: Query parameters forwarded to the replay Cypher statement.
+        idempotency_key: Client-supplied key; empty string bypasses the lookup.
+
+    Returns:
+        Dict of the matched replay record fields, or None if no prior record exists
+        or the key is empty.
+    """
 
     if idempotency_key == "":
         return None

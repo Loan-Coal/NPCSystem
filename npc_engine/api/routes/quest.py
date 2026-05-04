@@ -34,6 +34,14 @@ router = APIRouter(prefix="/quest")
 
 
 def _quest_error_status(error: QuestTransitionError) -> int:
+    """Map QuestTransitionError codes to HTTP status codes.
+
+    Args:
+        error: QuestTransitionError with a machine-readable code.
+
+    Returns:
+        HTTP status code for the error.
+    """
     status_code = 500
     if error.code == "QUEST_PROVENANCE_REQUIRED":
         status_code = 400
@@ -49,6 +57,14 @@ def _quest_error_status(error: QuestTransitionError) -> int:
 
 
 def _quest_error_to_http(error: QuestTransitionError) -> HTTPException:
+    """Convert a QuestTransitionError to a FastAPI HTTPException.
+
+    Args:
+        error: QuestTransitionError with code and detail.
+
+    Returns:
+        HTTPException with mapped status code and canonical error envelope.
+    """
     return HTTPException(
         status_code=_quest_error_status(error),
         detail=error_response(error_code=error.code, message=error.detail),
@@ -56,6 +72,20 @@ def _quest_error_to_http(error: QuestTransitionError) -> HTTPException:
 
 
 def _build_transition_meta(*, request: Request, settings: Settings, actor_id: str, reason: str) -> QuestTransitionMeta:
+    """Build provenance metadata required for quest lifecycle transitions.
+
+    Args:
+        request: Incoming FastAPI request.
+        settings: Application settings for header name resolution.
+        actor_id: Id of the player initiating the transition.
+        reason: Semantic reason label for the transition.
+
+    Returns:
+        QuestTransitionMeta with request_id, actor_id, reason, idempotency_key, and request_hash.
+
+    Raises:
+        QuestTransitionError: When any required provenance field is missing.
+    """
     request_id = request.headers.get("X-Request-ID", "").strip()
     idempotency_key = getattr(request.state, "idempotency_key", "") or request.headers.get(
         settings.IDEMPOTENCY_HEADER_NAME,
@@ -82,6 +112,14 @@ def _build_transition_meta(*, request: Request, settings: Settings, actor_id: st
 
 
 def _to_objective_inputs(items: list[QuestObjectiveBody]) -> list[QuestObjectiveInput]:
+    """Convert API objective body dtos to engine input models.
+
+    Args:
+        items: List of QuestObjectiveBody from the API request.
+
+    Returns:
+        List of QuestObjectiveInput for the quest lifecycle engine.
+    """
     return [QuestObjectiveInput(objective_id=item.objective_id, target_count=item.target_count) for item in items]
 
 

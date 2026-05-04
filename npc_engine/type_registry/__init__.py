@@ -1,4 +1,10 @@
-"""type_registry package - Immutable graph type registry contracts and loaders."""
+"""
+type_registry - Immutable graph type registry contracts, loaders, and payload validators.
+
+Does NOT: perform graph writes or execute request-time business logic.
+
+Dependencies injected: None (package init re-exports public API).
+"""
 
 from type_registry.contracts import TypeRegistry
 from type_registry.registry import build_type_registry

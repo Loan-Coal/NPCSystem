@@ -10,7 +10,7 @@ from neo4j import AsyncSession
 import asyncio
 from collections.abc import Awaitable, Callable
 
-from scheduler.game_clock import GameClock
+from scheduler.game_clock import ClockState, GameClock
 from scheduler.tick_lease import TickLeaseRepository, TickLeaseRepositoryProtocol
 
 
@@ -37,8 +37,8 @@ class TickScheduler:
     def __init__(
         self,
         clock: GameClock,
-        gossip_handler,
-        event_handler,
+        gossip_handler: object,
+        event_handler: object,
         gossip_interval: int,
         event_interval: int,
         *,
@@ -47,7 +47,26 @@ class TickScheduler:
         lease_owner_id: str = "worker",
         lease_ttl_seconds: int = 30,
         lease_repo: TickLeaseRepositoryProtocol | None = None,
-    ):
+    ) -> None:
+        """Initialise the tick scheduler.
+
+        Args:
+            clock: GameClock instance tracking tick and game-time progress.
+            gossip_handler: Engine exposing ``run_tick(session, tick_id)``; called every
+                ``gossip_interval`` ticks.
+            event_handler: Engine exposing ``run_tick(session, tick_id)``; called every
+                ``event_interval`` ticks.
+            gossip_interval: Run gossip every N ticks; clamped to a minimum of 1.
+            event_interval: Run events every N ticks; clamped to a minimum of 1.
+            distributed_lease_enabled: When True, use ``lease_repo`` for cross-worker
+                tick deduplication instead of the local SchedulerState Cypher queries.
+            scheduler_id: Unique identifier for the scheduler node in Neo4j.
+            lease_owner_id: Worker identifier passed to the lease repository.
+            lease_ttl_seconds: Lease TTL passed to the lease repository; clamped to 1.
+            lease_repo: Optional pre-built lease repository; constructed from
+                ``scheduler_id``, ``lease_owner_id``, and ``lease_ttl_seconds`` when None.
+        """
+
         self._clock = clock
         self._gossip_handler = gossip_handler
         self._event_handler = event_handler
@@ -119,7 +138,23 @@ class TickScheduler:
         return unresolved, None
 
     async def advance(self, session: AsyncSession, tick_delta: int, time_delta_seconds: int) -> dict:
-        """Advance clock and run due handlers at resulting tick."""
+        """Advance the clock and run any handlers that are due at the resulting tick.
+
+        Iterates each tick in ``[current+1, current+tick_delta]``. A tick is skipped
+        for the relevant engine if it was already handled (via local state or distributed
+        lease). When distributed leases are enabled and a tick is unresolved (claimed by
+        another worker but not yet done), iteration stops early.
+
+        Args:
+            session: Active Neo4j async session.
+            tick_delta: Number of ticks to advance; non-positive values are no-ops for
+                the clock but the method still returns the current state.
+            time_delta_seconds: In-game seconds proportionally advanced alongside ticks.
+
+        Returns:
+            Dict with ``clock`` (ClockState dump), ``gossip`` (list of gossip tick
+            results), and ``event`` (list of event tick results).
+        """
 
         async with self._lock:
             start_tick = self._clock.state.tick_id
@@ -178,15 +213,33 @@ class TickScheduler:
             return response
 
     @property
-    def state(self):
+    def state(self) -> ClockState:
+        """Return the current immutable clock state snapshot.
+
+        Returns:
+            ClockState from the underlying GameClock.
+        """
+
         return self._clock.state
 
     @property
     def next_gossip_tick(self) -> int:
+        """Return the next tick at which gossip will run.
+
+        Returns:
+            Tick ID of the next scheduled gossip execution.
+        """
+
         tick = self._clock.state.tick_id
         return tick + (self._gossip_interval - (tick % self._gossip_interval))
 
     @property
     def next_event_tick(self) -> int:
+        """Return the next tick at which event generation will run.
+
+        Returns:
+            Tick ID of the next scheduled event execution.
+        """
+
         tick = self._clock.state.tick_id
         return tick + (self._event_interval - (tick % self._event_interval))

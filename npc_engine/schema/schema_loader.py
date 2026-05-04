@@ -20,7 +20,19 @@ SCHEMA_VERSION_V1 = "1.0"
 
 
 def load_game_schema(schema_path: str) -> SchemaConfig:
-    """Load schema file and validate it against the schema meta-model."""
+    """Load schema file and validate it against the schema meta-model.
+
+    Args:
+        schema_path: str — filesystem path to the game_schema.yaml file.
+
+    Returns:
+        Validated SchemaConfig instance.
+
+    Raises:
+        SchemaMisconfiguredError: if the file does not exist or cannot be read.
+        SchemaValidationError: if the YAML root is not a mapping, the YAML is malformed,
+            the Pydantic validation fails, or the schema_version is unsupported.
+    """
 
     path = Path(schema_path)
     if not path.exists():

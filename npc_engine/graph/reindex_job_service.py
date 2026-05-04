@@ -21,7 +21,15 @@ class ReindexJobService:
         self._jobs: dict[str, dict[str, Any]] = {}
 
     def submit_reindex(self, npc_ids: list[str], embedding_index: EmbeddingIndex) -> str:
-        """Queue a reindex job and return its generated identifier."""
+        """Queue a reindex job and return its generated identifier.
+
+        Args:
+            npc_ids: List of NPC character IDs whose embeddings need invalidation.
+            embedding_index: Embedding index instance used to execute the invalidation calls.
+
+        Returns:
+            UUID string identifying the submitted job; use with ``get_job`` to track status.
+        """
 
         job_id = str(uuid4())
         self._jobs[job_id] = {
@@ -35,7 +43,14 @@ class ReindexJobService:
         return job_id
 
     def get_job(self, job_id: str) -> dict[str, Any] | None:
-        """Return a snapshot of a tracked job payload if present."""
+        """Return a snapshot of a tracked job payload if present.
+
+        Args:
+            job_id: UUID string returned by ``submit_reindex``.
+
+        Returns:
+            Shallow copy of the job dict, or None if no job with that ID is tracked.
+        """
 
         job = self._jobs.get(job_id)
         return None if job is None else dict(job)

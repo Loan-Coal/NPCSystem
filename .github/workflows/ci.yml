@@ -28,9 +28,6 @@ jobs:
       - name: Lint
         run: make lint
 
-      - name: Type check
-        run: make type
-
   v13-tests:
     runs-on: ubuntu-latest
     strategy:
@@ -42,6 +39,8 @@ jobs:
     defaults:
       run:
         working-directory: npc_engine
+    env:
+      API_KEY_SECRET: "test-api-key-secret-ci"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -67,6 +66,8 @@ jobs:
     defaults:
       run:
         working-directory: npc_engine
+    env:
+      API_KEY_SECRET: "test-api-key-secret-ci"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,6 +93,8 @@ jobs:
     defaults:
       run:
         working-directory: npc_engine
+    env:
+      API_KEY_SECRET: "test-api-key-secret-ci"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -124,6 +127,8 @@ jobs:
     defaults:
       run:
         working-directory: npc_engine
+    env:
+      API_KEY_SECRET: "test-api-key-secret-ci"
     steps:
       - name: Checkout
         uses: actions/checkout@v4

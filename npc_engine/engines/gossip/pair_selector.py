@@ -23,7 +23,19 @@ def _pair_weight(character: dict) -> int:
 
 
 async def select_pairs(session: AsyncSession, max_pairs: int) -> list[tuple[dict, dict, dict]]:
-    """Return top weighted directed pairs sorted deterministically."""
+    """Return top-weighted directed gossip pairs sorted deterministically.
+
+    Pairs are all co-located active non-player NPC combinations. Ranking uses
+    the sum of both characters' ``gossipy`` attributes as the primary key, with
+    character IDs as tiebreakers.
+
+    Args:
+        session: Active Neo4j async session.
+        max_pairs: Maximum number of pairs to return.
+
+    Returns:
+        List of (sharer, receiver, location) property dicts, limited to max_pairs.
+    """
 
     result = await session.run(CYPHER_GOSSIP_PAIRS)
     rows = [record.data() async for record in result]

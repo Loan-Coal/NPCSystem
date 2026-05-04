@@ -20,8 +20,12 @@ LOGGER = get_logger(__name__)
 
 
 def emit_graph_warnings(*, warnings: list[dict[str, Any]], request_id: str) -> None:
-    """Emit warning metrics and structured logs for graph responses."""
+    """Emit warning metrics and structured logs for graph responses.
 
+    Args:
+        warnings: List of warning dicts from GenericGraphService.missing_extension_warnings.
+        request_id: Resolved request correlation id for log correlation.
+    """
     for warning in warnings:
         warning_code = str(warning.get("warning_code", "UNKNOWN_WARNING")).lower()
         increment_metric(
@@ -43,8 +47,15 @@ def emit_graph_warnings(*, warnings: list[dict[str, Any]], request_id: str) -> N
 
 
 def attach_warnings_meta(*, base_meta: dict[str, Any] | None, warnings: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Attach warning payload to response meta while preserving existing metadata keys."""
+    """Attach warning payload to response meta while preserving existing metadata keys.
 
+    Args:
+        base_meta: Existing meta dict to extend, or None.
+        warnings: List of warning dicts to embed under the "warnings" key.
+
+    Returns:
+        Updated meta dict with warnings attached, or None when warnings is empty and base_meta is None.
+    """
     if len(warnings) == 0:
         return base_meta
     payload: dict[str, Any] = {} if base_meta is None else dict(base_meta)

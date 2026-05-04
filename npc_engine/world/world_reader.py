@@ -33,8 +33,17 @@ def _coerce_datetime(value: object) -> object:
             return native
     return value
 
+
 async def get_world_state(session: AsyncSession, world_id: str = "world") -> WorldState:
-    """Return world state or default model when node does not exist."""
+    """Return world state or default model when node does not exist.
+
+    Args:
+        session: Active Neo4j async session used to run the read query.
+        world_id: Node identifier for the singleton world state (default "world").
+
+    Returns:
+        Populated WorldState from the graph, or a default WorldState if the node is absent.
+    """
 
     result = await session.run(CYPHER_GET_WORLD_STATE, world_id=world_id)
     record = await result.single()

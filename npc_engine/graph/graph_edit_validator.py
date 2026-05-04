@@ -20,7 +20,15 @@ IMMUTABLE_FIELDS_BY_TYPE = {
 
 
 def ensure_no_immutable_fields(node_type: str, set_fields: dict[str, Any]) -> None:
-    """Reject patch operations that attempt to modify immutable fields."""
+    """Reject patch operations that attempt to modify immutable fields.
+
+    Args:
+        node_type: Registry node type key (e.g. "character").
+        set_fields: Dict of fields included in the patch request.
+
+    Raises:
+        ImmutableFieldError: If any field in set_fields is declared immutable for node_type.
+    """
 
     for field_name in set_fields:
         if field_name in IMMUTABLE_FIELDS_BY_TYPE.get(node_type, set()):
@@ -32,7 +40,16 @@ def validate_extension_fields(
     node_type: str,
     extension_fields: dict[str, Any] | None,
 ) -> None:
-    """Validate extension fields against loaded schema declarations."""
+    """Validate extension fields against loaded schema declarations.
+
+    Args:
+        schema: Loaded game schema configuration providing declared extension fields per type.
+        node_type: Registry node type key to look up declared extension fields for.
+        extension_fields: Extension field dict from the request payload; no-op if None or empty.
+
+    Raises:
+        SchemaValidationError: If any extension field name is not declared in the schema.
+    """
 
     if not extension_fields:
         return

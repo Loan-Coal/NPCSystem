@@ -35,7 +35,15 @@ def _build_field(field_config: ExtensionField) -> tuple[Any, Any]:
 
 
 def generate_runtime_models(schema: SchemaConfig) -> dict[str, type[BaseModel]]:
-    """Generate one dynamic model per core type with extension fields."""
+    """Generate one dynamic Pydantic model per core type with extension fields.
+
+    Args:
+        schema: SchemaConfig — the loaded and validated game schema.
+
+    Returns:
+        Dict mapping core type name to a dynamically generated Pydantic BaseModel subclass
+        whose fields correspond to the type's extension_fields with range constraints applied.
+    """
 
     models: dict[str, type[BaseModel]] = {}
     for type_name, type_config in schema.core_types.items():

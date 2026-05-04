@@ -15,7 +15,19 @@ import yaml
 
 
 def load_yaml_mapping(path: Path, root_error_message: str) -> dict[str, Any]:
-    """Read YAML from disk and require a mapping root object."""
+    """Read YAML from disk and require a mapping root object.
+
+    Args:
+        path: Path — filesystem path to the YAML file.
+        root_error_message: str — error text raised when the YAML root is not a mapping.
+
+    Returns:
+        Parsed dict representing the YAML mapping.
+
+    Raises:
+        ValueError: if the YAML root is not a dict (e.g., a list or scalar).
+        FileNotFoundError: propagated from Path.read_text if the file does not exist.
+    """
 
     raw_content = path.read_text(encoding="utf-8")
     loaded: Any = yaml.safe_load(raw_content)

@@ -27,7 +27,19 @@ SET r.trust = $new_trust,
 
 
 async def get_relation_values(tx: AsyncTransaction, src_id: str, dst_id: str) -> dict[str, int]:
-    """Fetch current relation values for one directed edge."""
+    """Fetch current relation values for one directed edge.
+
+    Args:
+        tx: Active Neo4j transaction used to run the read query.
+        src_id: ID of the source character node.
+        dst_id: ID of the destination character node.
+
+    Returns:
+        Dict with keys "trust", "fear", and "affection" mapped to their integer values.
+
+    Raises:
+        RelationEdgeNotFoundError: If no RELATES_TO edge exists between src and dst.
+    """
 
     result = await tx.run(CYPHER_GET_RELATION_VALUES, src_id=src_id, dst_id=dst_id)
     record = await result.single()
@@ -42,7 +54,17 @@ async def set_relation_values(
     dst_id: str,
     new_values: dict[str, int],
 ) -> None:
-    """Persist clamped relation values for one directed edge."""
+    """Persist clamped relation values for one directed edge.
+
+    Args:
+        tx: Active Neo4j transaction used to run the write query.
+        src_id: ID of the source character node.
+        dst_id: ID of the destination character node.
+        new_values: Dict with "trust", "fear", and "affection" integer values to persist.
+
+    Raises:
+        RelationEdgeNotFoundError: If no RELATES_TO edge exists between src and dst.
+    """
 
     result = await tx.run(
         CYPHER_SET_RELATION_VALUES,

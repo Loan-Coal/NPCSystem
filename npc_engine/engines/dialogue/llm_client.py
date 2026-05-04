@@ -9,7 +9,7 @@ Dependencies injected: LLMClientProtocol.
 import json
 from pathlib import Path
 
-from api.schemas import DialogueResponse
+from engines.dialogue.dialogue_models import DialogueResponse
 from pydantic import ValidationError
 from engines.llm.protocols import LLMClientProtocol
 from retrieval.context_utils import estimate_tokens
@@ -28,12 +28,28 @@ DEFAULT_TEMPERATURE = 0.7
 class DialogueLLMClient:
     """Dialogue-oriented structured LLM client wrapper."""
 
-    def __init__(self, llm_client: LLMClientProtocol, fallback_path: str):
+    def __init__(self, llm_client: LLMClientProtocol, fallback_path: str) -> None:
+        """Initialise the dialogue LLM client wrapper.
+
+        Args:
+            llm_client: Underlying LLM adapter implementing LLMClientProtocol.
+            fallback_path: Path to the JSON fallback response file.
+        """
+
         self._llm_client = llm_client
         self._fallback_path = fallback_path
 
     async def generate_response(self, prompt: str) -> dict:
-        """Request structured dialogue response with fallback on timeout."""
+        """Request a structured dialogue response, falling back on timeout or errors.
+
+        Args:
+            prompt: Full dialogue prompt string built by prompt_builder.
+
+        Returns:
+            Dict conforming to the DialogueResponse schema, validated by Pydantic.
+            Returns a deterministic fallback dict on LLMTimeoutError, LLMRequestError,
+            or ValidationError.
+        """
 
         schema = DialogueResponse.model_json_schema()
         model_name = self._llm_client.model_name()
@@ -57,7 +73,11 @@ class DialogueLLMClient:
             return self._fallback_with_metrics(labels=labels, fallback_reason="validation_error")
 
     def fallback_response_payload(self) -> dict:
-        """Return deterministic fallback payload for callers that need safe recovery."""
+        """Return a deterministic fallback payload for callers that need safe recovery.
+
+        Returns:
+            Dict loaded from the configured fallback JSON file.
+        """
 
         return self._load_fallback_dialogue()
 
@@ -86,7 +106,15 @@ class DialogueLLMClient:
         return fallback
 
     async def stream_text(self, prompt: str) -> list[str]:
-        """Stream raw token chunks from LLM backend."""
+        """Stream raw token chunks from the LLM backend.
+
+        Args:
+            prompt: Full dialogue prompt string.
+
+        Returns:
+            List of token chunk strings. Returns a single-element list containing
+            the fallback npc_response text on LLMTimeoutError or LLMRequestError.
+        """
 
         model_name = self._llm_client.model_name()
         labels = {"engine": LLM_ENGINE_LABEL, "backend": model_name, "mode": "stream"}

@@ -46,7 +46,18 @@ def _append_log(raw_log: str, tick_id: int, cause: str, trust_delta: int) -> str
 
 
 async def log_gossip(session: AsyncSession, src_id: str, dst_id: str, tick_id: int, trust_delta: int = 1) -> None:
-    """Append gossip metadata to relation edge delta log."""
+    """Append a gossip interaction entry to the RELATES_TO delta log with optimistic retry.
+
+    Uses an optimistic-concurrency pattern (compare-and-swap on delta_log) with up
+    to 3 attempts before giving up silently. Missing edges are silently skipped.
+
+    Args:
+        session: Active Neo4j async session.
+        src_id: Source character node ID (gossip sharer).
+        dst_id: Destination character node ID (gossip receiver).
+        tick_id: Current game tick for the log entry.
+        trust_delta: Trust delta to apply; positive for truthful gossip, negative for distortion.
+    """
 
     for _ in range(3):
         result = await session.run(CYPHER_GET_RELATION_LOG, src_id=src_id, dst_id=dst_id)

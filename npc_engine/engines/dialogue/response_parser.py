@@ -6,10 +6,20 @@ Does NOT: call LLM services.
 Dependencies injected: None.
 """
 
-from api.schemas import DialogueResponse
+from engines.dialogue.dialogue_models import DialogueResponse
 
 
 def parse_dialogue_response(payload: dict) -> DialogueResponse:
-    """Parse and validate raw LLM dict into typed response model."""
+    """Parse and validate a raw LLM output dict into a typed DialogueResponse.
+
+    Args:
+        payload: Raw dict from LLM structured generation or fallback.
+
+    Returns:
+        Validated and frozen DialogueResponse instance.
+
+    Raises:
+        pydantic.ValidationError: If the payload does not conform to the response schema.
+    """
 
     return DialogueResponse.model_validate(payload)

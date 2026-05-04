@@ -8,83 +8,12 @@ Dependencies injected: AsyncSession.
 
 from __future__ import annotations
 
+from neo4j import AsyncSession, AsyncTransaction
 from pydantic import BaseModel, ConfigDict, Field
-from neo4j import AsyncSession
 
+from graph.item_queries import CYPHER_APPLY_ITEM_TRANSFER, CYPHER_GRANT_SYSTEM_ITEM, CYPHER_REPLAY_ITEM_TRANSFER
 from graph.replay_helpers import load_idempotent_replay_record
 from utils.errors import ItemTransferValidationError, NodeNotFoundError
-
-
-CYPHER_REPLAY_ITEM_TRANSFER = """
-MATCH (src:Character {id: $source_id})-[t:TRANSFERRED_ITEM_TO {
-    idempotency_key: $idempotency_key,
-    transfer_kind: $transfer_kind,
-    item_id: $item_id
-}]->(dst:Character {id: $destination_id})
-RETURN t.request_id AS request_id,
-       t.item_id AS item_id,
-       toInteger(t.quantity) AS quantity
-LIMIT 1
-"""
-
-
-CYPHER_APPLY_ITEM_TRANSFER = """
-MATCH (src:Character {id: $source_id})
-MATCH (dst:Character {id: $destination_id})
-WHERE src.id <> dst.id
-MATCH (i:Item {id: $item_id})-[source_owned:OWNED_BY]->(src)
-WITH src, dst, i
-OPTIONAL MATCH (i)-[owned:OWNED_BY]->(:Character)
-DELETE owned
-CREATE (i)-[:OWNED_BY {updated_at: datetime()}]->(dst)
-CREATE (src)-[:TRANSFERRED_ITEM_TO {
-    request_id: $request_id,
-    idempotency_key: $idempotency_key,
-    transfer_kind: $transfer_kind,
-    item_id: $item_id,
-    quantity: $quantity,
-    reason: $reason,
-    transferred_at: datetime()
-}]->(dst)
-RETURN i.id AS item_id,
-       toInteger($quantity) AS quantity
-"""
-
-
-CYPHER_GRANT_SYSTEM_ITEM = """
-MERGE (src:Character {id: $source_id})
-ON CREATE SET src.name = 'System Treasury',
-              src.archetype = 'system',
-              src.faction = 'system',
-              src.biography = 'Synthetic reward source',
-              src.is_player = false,
-              src.is_active = true,
-              src.currency_balance = coalesce(src.currency_balance, 0),
-              src.created_at = datetime(),
-              src.updated_at = datetime(),
-              src.last_graph_updated_at = datetime()
-WITH src
-MATCH (dst:Character {id: $destination_id})
-MERGE (i:Item {id: $item_instance_id})
-ON CREATE SET i.created_at = datetime(),
-              i.last_graph_updated_at = datetime(),
-              i.name = $item_id
-WITH src, dst, i
-OPTIONAL MATCH (i)-[owned:OWNED_BY]->(:Character)
-DELETE owned
-CREATE (i)-[:OWNED_BY {updated_at: datetime()}]->(dst)
-CREATE (src)-[:TRANSFERRED_ITEM_TO {
-    request_id: $request_id,
-    idempotency_key: $idempotency_key,
-    transfer_kind: $transfer_kind,
-    item_id: $item_id,
-    quantity: $quantity,
-    reason: $reason,
-    transferred_at: datetime()
-}]->(dst)
-RETURN $item_id AS item_id,
-       toInteger($quantity) AS quantity
-"""
 
 
 class ItemTransferWriteResult(BaseModel):
@@ -110,8 +39,26 @@ async def transfer_item_atomic(
     idempotency_key: str,
     transfer_kind: str,
 ) -> ItemTransferWriteResult:
-    """Execute atomic item ownership transfer with idempotent replay handling."""
+    """Execute atomic item ownership transfer with idempotent replay handling.
 
+    Args:
+        session: Active Neo4j async session used to begin the transaction.
+        source_id: ID of the character giving the item; "system" triggers grant path.
+        destination_id: ID of the character receiving the item.
+        item_id: Identifier of the item being transferred.
+        quantity: Positive integer count of items (persisted on the audit edge).
+        reason: Human-readable description persisted on the audit edge.
+        request_id: Stable request identifier stored on the audit edge.
+        idempotency_key: Client-supplied key for replay detection.
+        transfer_kind: Transfer classification label persisted on the audit edge.
+
+    Returns:
+        ItemTransferWriteResult with confirmed item/quantity and replay flag.
+
+    Raises:
+        NodeNotFoundError: If source or destination character nodes are missing.
+        ItemTransferValidationError: If the item transfer fails write-guard conditions.
+    """
     tx = await session.begin_transaction()
     async with tx:
         replay = await _try_replay(
@@ -152,7 +99,7 @@ async def transfer_item_atomic(
         )
 
 
-async def _raise_item_transfer_failure(*, tx, source_id: str, destination_id: str) -> None:
+async def _raise_item_transfer_failure(*, tx: AsyncTransaction, source_id: str, destination_id: str) -> None:
     source_exists = await _character_exists(tx=tx, character_id=source_id)
     destination_exists = await _character_exists(tx=tx, character_id=destination_id)
     if not source_exists:
@@ -165,14 +112,14 @@ async def _raise_item_transfer_failure(*, tx, source_id: str, destination_id: st
     )
 
 
-async def _character_exists(*, tx, character_id: str) -> bool:
+async def _character_exists(*, tx: AsyncTransaction, character_id: str) -> bool:
     result = await tx.run("MATCH (c:Character {id: $character_id}) RETURN c.id AS id", character_id=character_id)
     return await result.single() is not None
 
 
 async def _try_replay(
     *,
-    tx,
+    tx: AsyncTransaction,
     source_id: str,
     destination_id: str,
     idempotency_key: str,

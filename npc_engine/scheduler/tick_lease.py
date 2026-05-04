@@ -88,15 +88,41 @@ class TickLeaseRepositoryProtocol(Protocol):
 class TickLeaseRepository:
     """Stores per-engine tick claims in Neo4j for cross-worker coordination."""
 
-    def __init__(self, scheduler_id: str, owner_id: str, lease_ttl_seconds: int):
+    def __init__(self, scheduler_id: str, owner_id: str, lease_ttl_seconds: int) -> None:
+        """Initialise the repository.
+
+        Args:
+            scheduler_id: Unique identifier for this scheduler instance.
+            owner_id: Worker identifier used in lease ownership claims.
+            lease_ttl_seconds: Lease duration; clamped to a minimum of 1.
+        """
+
         self._scheduler_id = scheduler_id
         self._owner_id = owner_id
         self._lease_ttl_seconds = max(1, lease_ttl_seconds)
 
     async def ensure_constraints(self, session: AsyncSession) -> None:
+        """Create the Neo4j uniqueness constraint for TickLease nodes if absent.
+
+        Args:
+            session: Active Neo4j async session.
+        """
+
         await session.run(CYPHER_ENSURE_TICK_LEASE_CONSTRAINT)
 
     async def try_claim(self, session: AsyncSession, engine: str, tick_id: int) -> bool:
+        """Attempt to claim the lease for this engine tick.
+
+        Args:
+            session: Active Neo4j async session.
+            engine: Engine identifier (e.g. ``"gossip"`` or ``"event"``).
+            tick_id: Tick to claim.
+
+        Returns:
+            True when the lease was successfully claimed; False if already owned
+            by another worker or already completed.
+        """
+
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         lease_until_ms = now_ms + self._lease_ttl_seconds * 1000
         result = await session.run(
@@ -112,6 +138,17 @@ class TickLeaseRepository:
         return bool(row["claimed"]) if row is not None else False
 
     async def mark_done(self, session: AsyncSession, engine: str, tick_id: int) -> bool:
+        """Mark the claimed lease as done.
+
+        Args:
+            session: Active Neo4j async session.
+            engine: Engine identifier.
+            tick_id: Tick to mark complete.
+
+        Returns:
+            True when the update matched an owned, claimed lease; False otherwise.
+        """
+
         result = await session.run(
             CYPHER_MARK_DONE,
             scheduler_id=self._scheduler_id,
@@ -123,6 +160,17 @@ class TickLeaseRepository:
         return bool(row["done"]) if row is not None else False
 
     async def is_done(self, session: AsyncSession, engine: str, tick_id: int) -> bool:
+        """Return True when the lease record has status ``'done'``.
+
+        Args:
+            session: Active Neo4j async session.
+            engine: Engine identifier.
+            tick_id: Tick to query.
+
+        Returns:
+            True if the lease exists and its status is ``'done'``; False otherwise.
+        """
+
         result = await session.run(
             CYPHER_IS_DONE,
             scheduler_id=self._scheduler_id,
@@ -133,6 +181,15 @@ class TickLeaseRepository:
         return bool(row["done"]) if row is not None else False
 
     async def mark_failed(self, session: AsyncSession, engine: str, tick_id: int, error: str) -> None:
+        """Record an error and expire the lease so another worker may retry.
+
+        Args:
+            session: Active Neo4j async session.
+            engine: Engine identifier.
+            tick_id: Tick that failed.
+            error: Error string stored on the lease node (truncated to 500 chars).
+        """
+
         await session.run(
             CYPHER_MARK_FAILED,
             scheduler_id=self._scheduler_id,

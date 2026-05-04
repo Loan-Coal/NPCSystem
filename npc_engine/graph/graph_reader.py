@@ -7,10 +7,9 @@ Dependencies injected: AsyncSession.
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from neo4j import AsyncSession
-from typing import cast
 
 
 CYPHER_GET_CHARACTER_WITH_RELATIONS = """
@@ -52,8 +51,17 @@ RETURN properties(r) AS relation
 """
 
 
-async def get_character_with_relations(session: AsyncSession, npc_id: str) -> dict:
-    """Fetch character node and directed outgoing relations."""
+async def get_character_with_relations(session: AsyncSession, npc_id: str) -> dict[str, Any]:
+    """Fetch character node and directed outgoing relations.
+
+    Args:
+        session: Active Neo4j async session for the read query.
+        npc_id: ID of the character node to fetch.
+
+    Returns:
+        Dict with "character" (node properties or None) and "relations" (list of
+        active outgoing RELATES_TO dicts, omitting entries with null character nodes).
+    """
 
     result = await session.run(CYPHER_GET_CHARACTER_WITH_RELATIONS, npc_id=npc_id)
     record = await result.single()
@@ -75,15 +83,33 @@ async def get_character_with_relations(session: AsyncSession, npc_id: str) -> di
     }
 
 
-async def get_events_for_npc(session: AsyncSession, npc_id: str, limit: int = 10) -> list[dict]:
-    """Fetch event knowledge entries for one NPC."""
+async def get_events_for_npc(session: AsyncSession, npc_id: str, limit: int = 10) -> list[dict[str, Any]]:
+    """Fetch event knowledge entries for one NPC.
+
+    Args:
+        session: Active Neo4j async session for the read query.
+        npc_id: ID of the character node whose event knowledge is fetched.
+        limit: Maximum number of events to return, ordered by most-recent first.
+
+    Returns:
+        List of dicts containing event properties, knowledge_state, and distorted_summary.
+    """
 
     result = await session.run(CYPHER_GET_EVENTS_FOR_NPC, npc_id=npc_id, limit=limit)
     return cast(list[dict], [_to_native(record.data()) async for record in result])
 
 
-async def get_location_context(session: AsyncSession, location_id: str) -> dict:
-    """Fetch location details and currently present characters."""
+async def get_location_context(session: AsyncSession, location_id: str) -> dict[str, Any]:
+    """Fetch location details and currently present characters.
+
+    Args:
+        session: Active Neo4j async session for the read query.
+        location_id: ID of the location node to fetch.
+
+    Returns:
+        Dict with "location" (node properties or None) and "present_npcs"
+        (list of active character property dicts at that location).
+    """
 
     result = await session.run(CYPHER_GET_LOCATION_CONTEXT, location_id=location_id)
     record = await result.single()
@@ -96,7 +122,15 @@ async def get_location_context(session: AsyncSession, location_id: str) -> dict:
 
 
 async def get_npc_location_id(session: AsyncSession, npc_id: str) -> str | None:
-    """Fetch the current location id for an NPC via LOCATED_AT edge."""
+    """Fetch the current location id for an NPC via LOCATED_AT edge.
+
+    Args:
+        session: Active Neo4j async session for the read query.
+        npc_id: ID of the active character node.
+
+    Returns:
+        Location node ID string, or None if the NPC has no LOCATED_AT edge.
+    """
 
     result = await session.run(CYPHER_GET_NPC_LOCATION_ID, npc_id=npc_id)
     record = await result.single()
@@ -105,8 +139,17 @@ async def get_npc_location_id(session: AsyncSession, npc_id: str) -> str | None:
     return cast(str, record["location_id"])
 
 
-async def get_npc_player_edge(session: AsyncSession, npc_id: str, player_id: str) -> dict | None:
-    """Fetch directed relation edge from NPC to player."""
+async def get_npc_player_edge(session: AsyncSession, npc_id: str, player_id: str) -> dict[str, Any] | None:
+    """Fetch directed relation edge from NPC to player.
+
+    Args:
+        session: Active Neo4j async session for the read query.
+        npc_id: ID of the source character node.
+        player_id: ID of the target character node.
+
+    Returns:
+        Dict of RELATES_TO edge properties, or None if no such edge exists.
+    """
 
     result = await session.run(CYPHER_GET_NPC_PLAYER_EDGE, npc_id=npc_id, player_id=player_id)
     record = await result.single()
