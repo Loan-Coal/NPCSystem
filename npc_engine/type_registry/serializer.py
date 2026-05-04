@@ -12,7 +12,14 @@ from type_registry.contracts import RuntimeEdgeTypeDefinition, RuntimeFieldDefin
 
 
 def serialize_registry_snapshot(*, registry: TypeRegistry) -> dict[str, Any]:
-    """Serialize immutable registry state into a stable client-facing snapshot."""
+    """Serialize immutable registry state into a stable client-facing snapshot.
+
+    Args:
+        registry: Fully merged immutable type registry.
+
+    Returns:
+        Dictionary with schema_version, node_types, edge_types, and enum_extensions.
+    """
 
     return {
         "schema_version": registry.schema_version,

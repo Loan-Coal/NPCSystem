@@ -15,7 +15,12 @@ from typing import Protocol
 class EmbeddingInvalidationTarget(Protocol):
     """Protocol for objects supporting asynchronous embedding invalidation."""
 
-    async def invalidate(self, item_id: str) -> None: ...
+    async def invalidate(self, item_id: str) -> None:
+        """Remove the embedding entry for the given item.
+
+        Args:
+            item_id: Unique identifier of the item whose embedding should be invalidated.
+        """
 
 
 async def invalidate_embedding_safely(
@@ -25,7 +30,14 @@ async def invalidate_embedding_safely(
     logger: logging.Logger,
     entity_label: str,
 ) -> None:
-    """Run invalidate as best effort and log warnings without raising."""
+    """Invalidate one embedding entry without raising on failure.
+
+    Args:
+        embedding_index: Index supporting the invalidate protocol.
+        item_id: Identifier of the item to invalidate.
+        logger: Logger used to emit a warning if invalidation fails.
+        entity_label: Human-readable entity type for log messages (e.g. ``"Character"``).
+    """
 
     try:
         await embedding_index.invalidate(item_id=item_id)

@@ -16,13 +16,23 @@ class EmotionStore:
         self._states: dict[str, EmotionState] = {}
 
     def get(self, npc_id: str) -> EmotionState:
-        """Return stored state or neutral default."""
+        """Return stored emotion state or a neutral default for unknown NPCs.
 
+        Args:
+            npc_id: Unique identifier of the NPC.
+
+        Returns:
+            Stored EmotionState if present, otherwise a default neutral EmotionState.
+        """
         return self._states.get(npc_id, EmotionState())
 
     def set(self, npc_id: str, state: EmotionState) -> None:
-        """Persist state for NPC id."""
+        """Replace the stored emotion state for an NPC (immutable update).
 
+        Args:
+            npc_id: Unique identifier of the NPC.
+            state: New EmotionState to store.
+        """
         self._states = {
             **self._states,
             npc_id: state,

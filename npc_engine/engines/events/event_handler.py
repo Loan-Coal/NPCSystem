@@ -48,7 +48,16 @@ SET w.epoch = $epoch,
 class EventHandler:
     """Coordinates autonomous event creation for one tick."""
 
-    def __init__(self, settings: Settings, embedding_index: EmbeddingIndex, registry: TypeRegistry | None = None):
+    def __init__(self, settings: Settings, embedding_index: EmbeddingIndex, registry: TypeRegistry | None = None) -> None:
+        """Initialise the event handler.
+
+        Args:
+            settings: Application settings (EVENT_POOL_PATH, EVENT_RNG_SEED).
+            embedding_index: Vector index invalidated after event creation.
+            registry: Type registry providing the event node model; resolved via
+                ``api.dependencies.get_type_registry()`` if not provided.
+        """
+
         self._settings = settings
         self._embedding_index = embedding_index
         if registry is None:
@@ -66,7 +75,21 @@ class EventHandler:
         return rng.choices(self._templates, weights=weights, k=1)[0]
 
     async def run_tick(self, session: AsyncSession, tick_id: int, location_ids: list[str] | None = None) -> dict:
-        """Create one weighted event and propagate awareness."""
+        """Create one weighted event, seed NPC awareness, and optionally update world state.
+
+        High-severity events (severity ≥ 80) add the event type to the world's
+        ``active_conditions`` list. Location embedding is invalidated after creation.
+
+        Args:
+            session: Active Neo4j async session.
+            tick_id: Current game tick identifier.
+            location_ids: Optional override list of location IDs; uses template-matched
+                locations when not provided.
+
+        Returns:
+            Dict with ``tick_id`` and ``created`` (0 or 1). When created=1, also includes
+            ``event_id`` and ``location_id``.
+        """
 
         async with self._lock:
             template = self._select_template(tick_id=tick_id)

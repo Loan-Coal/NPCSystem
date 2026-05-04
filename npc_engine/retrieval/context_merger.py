@@ -39,7 +39,20 @@ def merge_context(
     tier_b: list[ContextItem],
     tier_c: list[ContextItem] | None = None,
 ) -> MergedContext:
-    """Merge context tiers with de-duplication by key and deterministic ordering."""
+    """Merge context tiers with de-duplication by key and deterministic ordering.
+
+    When the same key appears in multiple tiers, the item with the higher priority
+    is retained. Items are ordered by (tier, -priority, key) for determinism.
+
+    Args:
+        tier0: Mandatory context items (world state, emotion).
+        tier_a: High-priority graph-backed items (character, relations, events).
+        tier_b: RAG-retrieved items (primary split).
+        tier_c: RAG-retrieved items (secondary split); omitted if None.
+
+    Returns:
+        A frozen MergedContext with deduplicated, sorted items.
+    """
 
     merged_by_key: dict[str, ContextItem] = {}
     for item in [*tier0, *tier_a, *tier_b, *(tier_c or [])]:

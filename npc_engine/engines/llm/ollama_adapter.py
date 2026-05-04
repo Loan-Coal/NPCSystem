@@ -18,12 +18,33 @@ from utils.errors import LLMRequestError, LLMTimeoutError
 class OllamaAdapter(LLMClientProtocol):
     """Adapter for Ollama generation endpoints."""
 
-    def __init__(self, base_url: str, model_name: str, timeout_seconds: float):
+    def __init__(self, base_url: str, model_name: str, timeout_seconds: float) -> None:
+        """Initialise the adapter with Ollama endpoint configuration.
+
+        Args:
+            base_url: Root URL of the Ollama server (trailing slash stripped).
+            model_name: Ollama model tag to use in all requests.
+            timeout_seconds: Per-request timeout in seconds.
+        """
         self._base_url = base_url.rstrip("/")
         self._model_name = model_name
         self._timeout_seconds = timeout_seconds
 
     async def generate(self, prompt: str, max_tokens: int, temperature: float) -> str:
+        """Send a plain-text generation request to the Ollama backend.
+
+        Args:
+            prompt: Formatted prompt string.
+            max_tokens: Maximum tokens to generate (mapped to num_predict).
+            temperature: Sampling temperature.
+
+        Returns:
+            Generated text from the backend "response" field.
+
+        Raises:
+            LLMTimeoutError: If the HTTP request times out.
+            LLMRequestError: If the backend returns an HTTP error, invalid JSON, or a backend error field.
+        """
         payload = {
             "model": self._model_name,
             "prompt": prompt,
@@ -57,6 +78,20 @@ class OllamaAdapter(LLMClientProtocol):
         schema: dict[str, Any],
         max_tokens: int,
     ) -> dict[str, Any]:
+        """Send a schema-constrained JSON generation request to the Ollama backend.
+
+        Args:
+            prompt: Formatted prompt string; schema is appended as a JSON block.
+            schema: JSON schema dict appended to the prompt and sent as format hint.
+            max_tokens: Maximum tokens to generate (mapped to num_predict).
+
+        Returns:
+            Parsed dict from the "response" field of the Ollama reply.
+
+        Raises:
+            LLMTimeoutError: If the HTTP request times out.
+            LLMRequestError: If the backend returns an HTTP error, backend error field, or non-dict JSON.
+        """
         payload = {
             "model": self._model_name,
             "prompt": f"{prompt}\n\nRequired JSON schema:\n{json.dumps(schema, ensure_ascii=True)}",
@@ -88,6 +123,20 @@ class OllamaAdapter(LLMClientProtocol):
         return dict(parsed)
 
     async def stream(self, prompt: str, max_tokens: int, temperature: float) -> AsyncIterator[str]:
+        """Stream tokens from the Ollama backend line by line.
+
+        Args:
+            prompt: Formatted prompt string.
+            max_tokens: Maximum tokens to generate (mapped to num_predict).
+            temperature: Sampling temperature.
+
+        Returns:
+            Async iterator yielding non-empty token strings from each streamed JSON line.
+
+        Raises:
+            LLMTimeoutError: If the stream connection times out.
+            LLMRequestError: If the backend returns an HTTP stream error or a backend error field.
+        """
         payload = {
             "model": self._model_name,
             "prompt": prompt,
@@ -122,4 +171,9 @@ class OllamaAdapter(LLMClientProtocol):
             raise LLMRequestError(model=self.model_name(), detail="stream_http_error") from error
 
     def model_name(self) -> str:
+        """Return the configured Ollama model tag.
+
+        Returns:
+            Model name string as provided at construction time.
+        """
         return self._model_name

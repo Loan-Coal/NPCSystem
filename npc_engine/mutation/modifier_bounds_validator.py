@@ -9,7 +9,7 @@ Dependencies injected: None.
 from dataclasses import dataclass
 
 from mutation.delta_log_manager import RelationDeltaEntry, compute_window_sum
-from utils.errors import StructuredNPCSystemError
+from utils.errors import RelationDeltaExceededError
 
 
 MIN_RELATION_VALUE = 0
@@ -26,22 +26,24 @@ class DeltaValidationConfig:
     relation_window_size: int
 
 
-@dataclass(frozen=True)
-class RelationDeltaExceededError(StructuredNPCSystemError):
-    """Raised when requested delta exceeds configured per-turn/window bounds."""
-
-    field: str
-    requested_delta: int
-    max_allowed: int
-    context: str
-
-
 def validate_deltas(
     proposed_deltas: dict[str, int],
     delta_log: list[RelationDeltaEntry],
     config: DeltaValidationConfig,
 ) -> dict[str, int]:
-    """Validate per-turn and window bounds and return normalized deltas."""
+    """Validate per-turn and window bounds and return normalized deltas.
+
+    Args:
+        proposed_deltas: Mapping of relation field names to proposed integer deltas.
+        delta_log: Historical delta log used to compute rolling window sums.
+        config: Constraint configuration specifying max per-turn and window limits.
+
+    Returns:
+        Dict of validated and normalized delta values for all RELATION_FIELDS.
+
+    Raises:
+        RelationDeltaExceededError: If any field exceeds the per-turn or window cap.
+    """
 
     validated: dict[str, int] = {}
     for field in RELATION_FIELDS:
@@ -66,7 +68,15 @@ def validate_deltas(
 
 
 def clamp_relation_values(current_values: dict[str, int], deltas: dict[str, int]) -> dict[str, int]:
-    """Return clamped relation values in [0, 100]."""
+    """Return clamped relation values in [0, 100].
+
+    Args:
+        current_values: Current relation field values before applying deltas.
+        deltas: Validated delta values to apply to each relation field.
+
+    Returns:
+        New dict with each relation field clamped to [MIN_RELATION_VALUE, MAX_RELATION_VALUE].
+    """
 
     clamped: dict[str, int] = {}
     for field in RELATION_FIELDS:

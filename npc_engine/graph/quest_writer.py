@@ -76,7 +76,7 @@ RETURN q.quest_id AS quest_id,
 """
 
 
-def _record_to_state_payload(record) -> dict:
+def _record_to_state_payload(record: dict) -> dict:
     currency_reward_json = record["currency_reward_json"]
     currency_reward = None
     if currency_reward_json is not None and str(currency_reward_json).strip() != "":
@@ -115,7 +115,7 @@ def _state_write_params(*, quest_id: str, player_id: str, state_payload: dict) -
     }
 
 
-def _deep_copy_json(value):
+def _deep_copy_json(value: object) -> object:
     """Return a detached JSON-compatible copy for immutable return payloads."""
 
     return json.loads(json.dumps(value))
@@ -140,7 +140,16 @@ def _canonical_state_payload(state_payload: dict) -> dict:
 
 
 async def get_quest_state(*, session: QuestGraphRunner, quest_id: str, player_id: str) -> dict | None:
-    """Read one persisted quest state for a quest and player pair."""
+    """Read one persisted quest state for a quest and player pair.
+
+    Args:
+        session: Active Neo4j session or transaction used to run the read query.
+        quest_id: Identifier of the quest definition.
+        player_id: ID of the player character whose state is requested.
+
+    Returns:
+        Dict with deserialized quest state fields, or None if no record exists.
+    """
 
     result = await session.run(CYPHER_GET_QUEST_STATE, id=f"{quest_id}:{player_id}")
     record = await result.single()
@@ -157,7 +166,17 @@ async def create_quest_state_if_absent(
     player_id: str,
     state_payload: dict,
 ) -> dict:
-    """Create quest state once, then return the current stored payload without overwriting."""
+    """Create quest state once, then return the current stored payload without overwriting.
+
+    Args:
+        session: Active Neo4j session or transaction used to run the merge query.
+        quest_id: Identifier of the quest definition.
+        player_id: ID of the player character whose state is being initialized.
+        state_payload: Initial quest state dict to persist if no record exists yet.
+
+    Returns:
+        Dict with the current stored quest state fields (may differ from state_payload if record existed).
+    """
     write_params = _state_write_params(quest_id=quest_id, player_id=player_id, state_payload=state_payload)
 
     result = await session.run(
@@ -176,7 +195,17 @@ async def upsert_quest_state(
     player_id: str,
     state_payload: dict,
 ) -> dict:
-    """Persist one quest state payload and return the same canonical payload."""
+    """Persist one quest state payload and return the same canonical payload.
+
+    Args:
+        session: Active Neo4j session or transaction used to run the merge query.
+        quest_id: Identifier of the quest definition.
+        player_id: ID of the player character whose state is being persisted.
+        state_payload: Full quest state dict to write; replaces any existing record.
+
+    Returns:
+        Detached canonical dict with the same data that was written (deep-copied for immutability).
+    """
     write_params = _state_write_params(quest_id=quest_id, player_id=player_id, state_payload=state_payload)
 
     result = await session.run(

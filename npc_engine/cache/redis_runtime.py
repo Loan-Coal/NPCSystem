@@ -20,7 +20,12 @@ LOGGER_NAME = "npc_engine.redis"
 class RedisRuntime:
     """Manages optional Redis connection lifecycle for cache features."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings) -> None:
+        """Initialize Redis runtime with application settings.
+
+        Args:
+            settings: Application settings used to configure Redis URL and timeouts.
+        """
         self._settings = settings
         self._logger = get_logger(LOGGER_NAME)
         self._client: Any = None

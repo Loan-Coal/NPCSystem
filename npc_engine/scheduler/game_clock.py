@@ -24,14 +24,30 @@ class ClockState(BaseModel):
 class GameClock:
     """Mutable clock with async lock for safe concurrent access."""
 
-    def __init__(self, mode: str):
+    def __init__(self, mode: str) -> None:
+        """Initialise the clock at tick 0.
+
+        Args:
+            mode: Clock mode string (e.g. ``"manual"`` or ``"auto"``).
+        """
+
         self._tick_id = 0
         self._game_time_seconds = 0
         self._mode = mode
         self._lock = asyncio.Lock()
 
     async def advance(self, tick_delta: int, time_delta_seconds: int) -> ClockState:
-        """Advance clock by deltas and return new state."""
+        """Advance the clock by the given deltas and return the new state.
+
+        Negative deltas are clamped to zero; the clock never moves backwards.
+
+        Args:
+            tick_delta: Number of ticks to advance.
+            time_delta_seconds: In-game seconds to advance.
+
+        Returns:
+            Immutable ClockState snapshot after the advance.
+        """
 
         async with self._lock:
             self._tick_id += max(0, tick_delta)
@@ -40,7 +56,11 @@ class GameClock:
 
     @property
     def state(self) -> ClockState:
-        """Return immutable clock snapshot."""
+        """Return an immutable snapshot of the current clock state.
+
+        Returns:
+            ClockState with the current tick_id, game_time_seconds, and mode.
+        """
 
         return ClockState(
             tick_id=self._tick_id,

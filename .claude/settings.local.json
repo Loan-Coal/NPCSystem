@@ -14,7 +14,10 @@
       "Bash(python -m pytest tests/unit/test_dialogue_handler_fallback_v14.py tests/unit/test_degradation.py -v --tb=short)",
       "Bash(python -m pytest tests/unit/ -q --tb=line)",
       "Bash(python -m pytest tests/unit/test_main_reconciler_lifespan.py -v --tb=short)",
-      "Bash(python -m pytest tests/unit/ --tb=no -q)"
+      "Bash(python -m pytest tests/unit/ --tb=no -q)",
+      "Bash(xargs wc *)",
+      "Bash(python -m pytest --tb=no -q)",
+      "Bash(python -m pytest tests/unit/utils/ -v --tb=short)"
     ]
   }
 }

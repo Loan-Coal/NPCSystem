@@ -14,7 +14,18 @@ def resolve_fields_with_semantic(
     semantic: SemanticTag,
     core_type: str | None = None,
 ) -> list[str]:
-    """Return unique sorted extension fields tagged with one semantic."""
+    """Return unique sorted extension fields tagged with one semantic.
+
+    Args:
+        schema: SchemaConfig — the loaded and validated game schema.
+        semantic: SemanticTag — the tag to filter on (e.g. "context_tier_0").
+        core_type: str | None — if given, restrict search to that core type only;
+            if None, search across all core types.
+
+    Returns:
+        Sorted list of unique field names that carry the requested semantic tag.
+        Returns [] if core_type is specified but not found in the schema.
+    """
 
     if core_type is None:
         type_configs = schema.core_types.values()

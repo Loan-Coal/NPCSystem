@@ -39,7 +39,15 @@ class RelevanceWeights(BaseModel):
 
     @model_validator(mode="after")
     def validate_weights_sum(self) -> "RelevanceWeights":
-        """Enforce that all relevance weights sum to exactly 1.0."""
+        """Enforce that all relevance weights sum to exactly 1.0.
+
+        Returns:
+            Validated RelevanceWeights instance.
+
+        Raises:
+            ValueError: if the sum of all six weights deviates from 1.0 by more than
+                WEIGHTS_SUM_TOLERANCE.
+        """
 
         weights_sum = (
             self.recency

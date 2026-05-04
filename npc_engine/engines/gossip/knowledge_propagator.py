@@ -31,7 +31,19 @@ async def propagate(
     tick_id: int,
     distortion: GossipDistortion,
 ) -> None:
-    """Propagate one event summary to receiver as rumor/knowledge edge."""
+    """Propagate one event to a receiver by merging a KNOWS_ABOUT edge.
+
+    Sets ``knowledge_state`` to ``"knows"`` when no distortion occurred, or
+    ``"rumor"`` when a distortion type is present.
+
+    Args:
+        session: Active Neo4j async session.
+        receiver_id: Character node ID receiving the knowledge.
+        source_character_id: Character node ID sharing the knowledge.
+        event_id: Event node ID being propagated.
+        tick_id: Current game tick recorded on the edge.
+        distortion: Distortion payload determining knowledge state and summary.
+    """
 
     knowledge_state = "knows" if distortion.distortion_type is None else "rumor"
     await session.run(

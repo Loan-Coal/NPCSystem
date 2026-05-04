@@ -40,7 +40,14 @@ RETURN r.trust AS trust
 class GossipHandler:
     """Coordinates gossip pair processing for one tick."""
 
-    def __init__(self, settings: Settings, embedding_index: EmbeddingIndex):
+    def __init__(self, settings: Settings, embedding_index: EmbeddingIndex) -> None:
+        """Initialise the gossip handler.
+
+        Args:
+            settings: Application settings (GOSSIP_DISTORTION_BASE).
+            embedding_index: Vector index used to invalidate receiver embeddings after gossip.
+        """
+
         self._settings = settings
         self._embedding_index = embedding_index
         self._lock = asyncio.Lock()
@@ -52,7 +59,17 @@ class GossipHandler:
         max_pairs: int = 20,
         npc_ids: list[str] | None = None,
     ) -> dict:
-        """Execute deterministic gossip propagation for selected pairs."""
+        """Execute one gossip tick: select pairs, distort, propagate, log, invalidate.
+
+        Args:
+            session: Active Neo4j async session.
+            tick_id: Current game tick identifier.
+            max_pairs: Maximum number of NPC pairs to process.
+            npc_ids: Optional allowlist; only pairs containing at least one listed ID are processed.
+
+        Returns:
+            Dict with keys ``tick_id``, ``pairs`` (pairs evaluated), and ``propagated`` (successful propagations).
+        """
 
         async with self._lock:
             pairs = await select_pairs(session=session, max_pairs=max_pairs)

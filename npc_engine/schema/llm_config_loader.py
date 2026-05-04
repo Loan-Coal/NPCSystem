@@ -17,7 +17,19 @@ from utils.errors import LLMConfigMisconfiguredError, LLMConfigValidationError
 
 
 def load_llm_config(config_path: str) -> LLMConfig:
-    """Load llm_config file and validate it against typed Pydantic models."""
+    """Load llm_config file and validate it against typed Pydantic models.
+
+    Args:
+        config_path: str — filesystem path to the llm_config YAML file.
+
+    Returns:
+        Validated LLMConfig instance.
+
+    Raises:
+        LLMConfigMisconfiguredError: if the file does not exist or cannot be read.
+        LLMConfigValidationError: if the YAML root is not a mapping, the YAML is malformed,
+            or the Pydantic validation fails.
+    """
 
     path = Path(config_path)
     if not path.exists():

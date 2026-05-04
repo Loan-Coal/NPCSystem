@@ -8,8 +8,6 @@ Dependencies injected: Settings and graph/session collaborators.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from neo4j import AsyncSession
 
 from config import Settings
@@ -19,6 +17,12 @@ from engines.quest.models import (
     QuestRewardItem,
     QuestStateRecord,
     QuestTransitionMeta,
+)
+from engines.quest.quest_engine_helpers import (
+    build_lifecycle_event,
+    ensure_transaction_session,
+    is_trusted_reward_source,
+    normalize_item_rewards,
 )
 from graph.event_writer import upsert_quest_lifecycle_event
 from graph.graph_writer import apply_currency_transfer, apply_item_transfer
@@ -36,7 +40,15 @@ STATUS_COMPLETED = "completed"
 class QuestLifecycleEngine:
     """Quest lifecycle state machine with reward routing and provenance-backed events."""
 
-    def __init__(self, settings: Settings, registry: TypeRegistry | None = None):
+    def __init__(self, settings: Settings, registry: TypeRegistry | None = None) -> None:
+        """Initialise the quest lifecycle engine.
+
+        Args:
+            settings: Application settings (used for currency transfer configuration).
+            registry: Type registry providing event node model; resolved via
+                ``api.dependencies.get_type_registry()`` when not provided.
+        """
+
         self._settings = settings
         if registry is None:
             from api.dependencies import get_type_registry
@@ -44,60 +56,70 @@ class QuestLifecycleEngine:
             registry = get_type_registry()
         self._registry = registry
 
-    @staticmethod
-    def _is_trusted_reward_source(reward_source_id: str) -> bool:
-        return reward_source_id == "system"
-
-    @staticmethod
-    def _normalize_item_rewards(item_rewards: list[QuestRewardItem]) -> list[QuestRewardItem]:
-        quantity_by_item_id: dict[str, int] = {}
-        for reward in item_rewards:
-            quantity_by_item_id[reward.item_id] = quantity_by_item_id.get(reward.item_id, 0) + reward.quantity
-        return [
-            QuestRewardItem(item_id=item_id, quantity=quantity)
-            for item_id, quantity in sorted(quantity_by_item_id.items())
-        ]
-
-    @staticmethod
-    def _ensure_transaction_session(session: AsyncSession) -> None:
-        if not hasattr(session, "begin_transaction"):
+    async def _require_state(self, *, session: AsyncSession, quest_id: str, player_id: str) -> QuestStateRecord:
+        payload = await get_quest_state(session=session, quest_id=quest_id, player_id=player_id)
+        if payload is None:
             raise QuestTransitionError(
-                code="QUEST_EVENT_SESSION_INVALID",
-                detail="Quest lifecycle event emission requires a transaction-capable session",
+                code="QUEST_NOT_FOUND",
+                detail=f"Quest state not found for quest_id={quest_id}, player_id={player_id}",
             )
+        return QuestStateRecord.model_validate(payload)
 
-    def _build_lifecycle_event(
+    async def _emit_lifecycle_event(
         self,
         *,
+        session: AsyncSession,
         quest_id: str,
         player_id: str,
         event_type: str,
         summary: str,
         meta: QuestTransitionMeta,
-    ):
-        now = datetime.now(timezone.utc)
-        event_model = self._registry.node_models["event"]
-        return event_model(
-            id=f"{quest_id}:{player_id}:{event_type}:{meta.request_id}",
-            summary=summary,
-            severity=20,
-            location_id="quest",
-            occurred_at=now.isoformat(),
-            tick_id=int(now.timestamp()),
+    ) -> None:
+        ensure_transaction_session(session=session)
+        event = build_lifecycle_event(
+            registry=self._registry,
+            quest_id=quest_id,
+            player_id=player_id,
             event_type=event_type,
-            is_public=True,
-            producer="quest_lifecycle_engine",
-            origin_engine="quest",
-            schema_version="v1.4",
-            last_graph_updated_at=now.isoformat(),
-            provenance={
-                "request_id": meta.request_id,
-                "idempotency_key": meta.idempotency_key,
-                "idempotency_request_hash": meta.idempotency_request_hash,
-                "actor_id": meta.actor_id,
-                "reason": meta.reason,
-            },
+            summary=summary,
+            meta=meta,
         )
+        tx = await session.begin_transaction()
+        async with tx:
+            await upsert_quest_lifecycle_event(tx=tx, event=event)
+            await tx.commit()
+
+    async def _persist_state_and_event(
+        self,
+        *,
+        session: AsyncSession,
+        quest_id: str,
+        player_id: str,
+        state_payload: dict,
+        event_type: str,
+        summary: str,
+        meta: QuestTransitionMeta,
+    ) -> dict:
+        ensure_transaction_session(session=session)
+        event = build_lifecycle_event(
+            registry=self._registry,
+            quest_id=quest_id,
+            player_id=player_id,
+            event_type=event_type,
+            summary=summary,
+            meta=meta,
+        )
+        tx = await session.begin_transaction()
+        async with tx:
+            stored = await upsert_quest_state(
+                session=tx,
+                quest_id=quest_id,
+                player_id=player_id,
+                state_payload=state_payload,
+            )
+            await upsert_quest_lifecycle_event(tx=tx, event=event)
+            await tx.commit()
+            return stored
 
     async def offer_quest(
         self,
@@ -112,9 +134,28 @@ class QuestLifecycleEngine:
         meta: QuestTransitionMeta,
         reward_source_id: str = "system",
     ) -> dict:
-        """Create or return offered quest state for a player."""
+        """Create or return offered quest state for a player.
 
-        if not self._is_trusted_reward_source(reward_source_id):
+        Args:
+            session: Active Neo4j async session capable of starting transactions.
+            quest_id: Quest identifier.
+            player_id: Player identifier.
+            title: Human-readable quest title.
+            objectives: List of quest objective definitions.
+            item_rewards: Item rewards to grant on completion.
+            currency_reward: Optional currency reward to grant on completion.
+            meta: Transition metadata for provenance and idempotency fields.
+            reward_source_id: Reward source identifier; must be a trusted system source.
+
+        Returns:
+            Persisted quest state payload dict with status ``"offered"``.
+
+        Raises:
+            QuestTransitionError: If reward_source_id is not trusted, or if the quest
+                already exists in a non-offered state.
+        """
+
+        if not is_trusted_reward_source(reward_source_id):
             raise QuestTransitionError(
                 code="QUEST_REWARD_SOURCE_INVALID",
                 detail="reward_source_id must be a trusted system source",
@@ -133,7 +174,7 @@ class QuestLifecycleEngine:
             currency_reward=currency_reward,
             rewards_applied=False,
         )
-        self._ensure_transaction_session(session=session)
+        ensure_transaction_session(session=session)
 
         tx = await session.begin_transaction()
         async with tx:
@@ -145,7 +186,7 @@ class QuestLifecycleEngine:
             )
 
             offered_state = QuestStateRecord.model_validate(stored)
-            if not self._is_trusted_reward_source(offered_state.reward_source_id):
+            if not is_trusted_reward_source(offered_state.reward_source_id):
                 raise QuestTransitionError(
                     code="QUEST_REWARD_SOURCE_INVALID",
                     detail="reward_source_id must be a trusted system source",
@@ -156,7 +197,8 @@ class QuestLifecycleEngine:
                     detail=f"Quest cannot be re-offered from status={offered_state.status}",
                 )
 
-            event = self._build_lifecycle_event(
+            event = build_lifecycle_event(
+                registry=self._registry,
                 quest_id=quest_id,
                 player_id=player_id,
                 event_type="quest_offered",
@@ -175,7 +217,20 @@ class QuestLifecycleEngine:
         player_id: str,
         meta: QuestTransitionMeta,
     ) -> dict:
-        """Accept a quest currently in offered state."""
+        """Accept a quest currently in offered state.
+
+        Args:
+            session: Active Neo4j async session capable of starting transactions.
+            quest_id: Quest identifier.
+            player_id: Player identifier.
+            meta: Transition metadata for provenance and idempotency fields.
+
+        Returns:
+            Persisted quest state payload dict with status ``"accepted"``.
+
+        Raises:
+            QuestTransitionError: If quest is not in offered or accepted state.
+        """
 
         state = await self._require_state(session=session, quest_id=quest_id, player_id=player_id)
         if state.status == STATUS_ACCEPTED:
@@ -195,7 +250,7 @@ class QuestLifecycleEngine:
             )
 
         next_state = state.model_copy(update={"status": STATUS_ACCEPTED})
-        stored = await self._persist_state_and_event(
+        return await self._persist_state_and_event(
             session=session,
             quest_id=quest_id,
             player_id=player_id,
@@ -204,7 +259,6 @@ class QuestLifecycleEngine:
             summary=f"Quest accepted: {state.title}",
             meta=meta,
         )
-        return stored
 
     async def update_objective(
         self,
@@ -216,7 +270,23 @@ class QuestLifecycleEngine:
         progress_delta: int,
         meta: QuestTransitionMeta,
     ) -> dict:
-        """Apply objective progress delta and transition into in_progress when applicable."""
+        """Apply objective progress delta and transition into in_progress when applicable.
+
+        Args:
+            session: Active Neo4j async session capable of starting transactions.
+            quest_id: Quest identifier.
+            player_id: Player identifier.
+            objective_id: Objective to update.
+            progress_delta: Signed integer added to current objective progress.
+            meta: Transition metadata for provenance and idempotency fields.
+
+        Returns:
+            Persisted quest state payload dict with updated objective progress.
+
+        Raises:
+            QuestTransitionError: If quest is not in accepted or in_progress state,
+                or if objective_id is not found.
+        """
 
         state = await self._require_state(session=session, quest_id=quest_id, player_id=player_id)
         if state.status not in {STATUS_ACCEPTED, STATUS_IN_PROGRESS}:
@@ -232,8 +302,7 @@ class QuestLifecycleEngine:
 
         existing_progress = state.objective_progress[objective_id]
         updated_progress = max(0, existing_progress + progress_delta)
-        next_progress = dict(state.objective_progress)
-        next_progress[objective_id] = updated_progress
+        next_progress = {**state.objective_progress, objective_id: updated_progress}
 
         next_state = state.model_copy(
             update={
@@ -241,7 +310,7 @@ class QuestLifecycleEngine:
                 "objective_progress": next_progress,
             }
         )
-        stored = await self._persist_state_and_event(
+        return await self._persist_state_and_event(
             session=session,
             quest_id=quest_id,
             player_id=player_id,
@@ -250,7 +319,6 @@ class QuestLifecycleEngine:
             summary=f"Quest objective updated: {objective_id}",
             meta=meta,
         )
-        return stored
 
     async def evaluate_completion(
         self,
@@ -260,7 +328,20 @@ class QuestLifecycleEngine:
         player_id: str,
         meta: QuestTransitionMeta,
     ) -> dict:
-        """Evaluate objective completion and set completed status when all targets are met."""
+        """Evaluate objective completion and set completed status when all targets are met.
+
+        Args:
+            session: Active Neo4j async session capable of starting transactions.
+            quest_id: Quest identifier.
+            player_id: Player identifier.
+            meta: Transition metadata for provenance and idempotency fields.
+
+        Returns:
+            Persisted quest state payload dict with status ``"completed"`` or ``"in_progress"``.
+
+        Raises:
+            QuestTransitionError: If quest is not in accepted, in_progress, or completed state.
+        """
 
         state = await self._require_state(session=session, quest_id=quest_id, player_id=player_id)
         if state.status not in {STATUS_ACCEPTED, STATUS_IN_PROGRESS, STATUS_COMPLETED}:
@@ -276,7 +357,7 @@ class QuestLifecycleEngine:
         next_status = STATUS_COMPLETED if is_completed else STATUS_IN_PROGRESS
         next_state = state.model_copy(update={"status": next_status})
 
-        stored = await self._persist_state_and_event(
+        return await self._persist_state_and_event(
             session=session,
             quest_id=quest_id,
             player_id=player_id,
@@ -287,7 +368,6 @@ class QuestLifecycleEngine:
             ),
             meta=meta,
         )
-        return stored
 
     async def apply_rewards(
         self,
@@ -297,7 +377,20 @@ class QuestLifecycleEngine:
         player_id: str,
         meta: QuestTransitionMeta,
     ) -> dict:
-        """Apply quest rewards by routing item and currency writes through graph coordinators."""
+        """Apply quest rewards by routing item and currency writes through graph coordinators.
+
+        Args:
+            session: Active Neo4j async session capable of starting transactions.
+            quest_id: Quest identifier.
+            player_id: Player identifier.
+            meta: Transition metadata for provenance and idempotency fields.
+
+        Returns:
+            Persisted quest state payload dict with ``rewards_applied=True``.
+
+        Raises:
+            QuestTransitionError: If quest is not completed, or if reward source is not trusted.
+        """
 
         state = await self._require_state(session=session, quest_id=quest_id, player_id=player_id)
         if state.status != STATUS_COMPLETED:
@@ -316,13 +409,13 @@ class QuestLifecycleEngine:
             )
             return state.model_dump(mode="python")
 
-        if not self._is_trusted_reward_source(state.reward_source_id):
+        if not is_trusted_reward_source(state.reward_source_id):
             raise QuestTransitionError(
                 code="QUEST_REWARD_SOURCE_INVALID",
                 detail="Quest reward source must be a trusted system source",
             )
 
-        normalized_item_rewards = self._normalize_item_rewards(state.item_rewards)
+        normalized_item_rewards = normalize_item_rewards(state.item_rewards)
         for item_reward in normalized_item_rewards:
             reward_item_idempotency_key = f"quest:{quest_id}:{player_id}:item:{item_reward.item_id}"
             await apply_item_transfer(
@@ -353,7 +446,7 @@ class QuestLifecycleEngine:
             )
 
         next_state = state.model_copy(update={"rewards_applied": True})
-        stored = await self._persist_state_and_event(
+        return await self._persist_state_and_event(
             session=session,
             quest_id=quest_id,
             player_id=player_id,
@@ -362,69 +455,3 @@ class QuestLifecycleEngine:
             summary=f"Quest rewards applied: {state.title}",
             meta=meta,
         )
-        return stored
-
-    async def _require_state(self, *, session: AsyncSession, quest_id: str, player_id: str) -> QuestStateRecord:
-        payload = await get_quest_state(session=session, quest_id=quest_id, player_id=player_id)
-        if payload is None:
-            raise QuestTransitionError(
-                code="QUEST_NOT_FOUND",
-                detail=f"Quest state not found for quest_id={quest_id}, player_id={player_id}",
-            )
-        return QuestStateRecord.model_validate(payload)
-
-    async def _emit_lifecycle_event(
-        self,
-        *,
-        session: AsyncSession,
-        quest_id: str,
-        player_id: str,
-        event_type: str,
-        summary: str,
-        meta: QuestTransitionMeta,
-    ) -> None:
-        self._ensure_transaction_session(session=session)
-        event = self._build_lifecycle_event(
-            quest_id=quest_id,
-            player_id=player_id,
-            event_type=event_type,
-            summary=summary,
-            meta=meta,
-        )
-
-        tx = await session.begin_transaction()
-        async with tx:
-            await upsert_quest_lifecycle_event(tx=tx, event=event)
-            await tx.commit()
-
-    async def _persist_state_and_event(
-        self,
-        *,
-        session: AsyncSession,
-        quest_id: str,
-        player_id: str,
-        state_payload: dict,
-        event_type: str,
-        summary: str,
-        meta: QuestTransitionMeta,
-    ) -> dict:
-        self._ensure_transaction_session(session=session)
-        event = self._build_lifecycle_event(
-            quest_id=quest_id,
-            player_id=player_id,
-            event_type=event_type,
-            summary=summary,
-            meta=meta,
-        )
-
-        tx = await session.begin_transaction()
-        async with tx:
-            stored = await upsert_quest_state(
-                session=tx,
-                quest_id=quest_id,
-                player_id=player_id,
-                state_payload=state_payload,
-            )
-            await upsert_quest_lifecycle_event(tx=tx, event=event)
-            await tx.commit()
-            return stored

@@ -14,7 +14,19 @@ from retrieval.context_utils import serialize_json
 
 
 async def retrieve_tier_a_context(session: AsyncSession, npc_id: str, event_limit: int) -> list[ContextItem]:
-    """Fetch graph-backed context items for an NPC."""
+    """Fetch graph-backed tier A context items for an NPC.
+
+    Retrieves character profile, player relation, location context, nearby NPCs,
+    and recent events from the graph.
+
+    Args:
+        session: Active Neo4j async session.
+        npc_id: ID of the NPC to build context for.
+        event_limit: Maximum number of recent events to include.
+
+    Returns:
+        List of ContextItem values for tier A, ordered by priority descending.
+    """
 
     character_bundle = await get_character_with_relations(session=session, npc_id=npc_id)
     events = await get_events_for_npc(session=session, npc_id=npc_id, limit=event_limit)

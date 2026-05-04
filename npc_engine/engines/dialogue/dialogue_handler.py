@@ -12,7 +12,7 @@ from pathlib import Path
 from neo4j import AsyncSession
 from pydantic import ValidationError
 
-from api.schemas import DialogueRequest, DialogueResponse
+from engines.dialogue.dialogue_models import DialogueRequest, DialogueResponse
 from config import Settings
 from engines.dialogue.action_resolver import resolve_action
 from engines.dialogue.degradation import execute_with_degradation
@@ -43,9 +43,22 @@ class DialogueHandler:
         llm_config: LLMConfig,
         session_store: SessionStore,
         emotion_updater: EmotionUpdater,
-        embedding_index,
+        embedding_index: object,
         context_cache: DialogueContextCache | None = None,
-    ):
+    ) -> None:
+        """Initialise the dialogue handler with all engine dependencies.
+
+        Args:
+            session: Active Neo4j async session.
+            settings: Application settings.
+            llm_client: LLM adapter for text generation.
+            llm_config: LLM configuration with tier budgets and relevance weights.
+            session_store: In-memory session turn store.
+            emotion_updater: Engine for reading and updating NPC emotion state.
+            embedding_index: Vector index supporting the EmbeddingIndexProtocol.
+            context_cache: Optional in-memory dialogue context cache.
+        """
+
         self._session = session
         self._settings = settings
         self._llm_config = llm_config
@@ -56,7 +69,15 @@ class DialogueHandler:
         self._llm = DialogueLLMClient(llm_client=llm_client, fallback_path=settings.LLM_FALLBACK_PATH)
 
     async def handle(self, request: DialogueRequest) -> DialogueResponse:
-        """Execute full dialogue flow with tiered degradation and return response payload."""
+        """Execute the full dialogue flow with tiered degradation and return the response.
+
+        Args:
+            request: Incoming dialogue request from the player.
+
+        Returns:
+            Final DialogueResponse with resolved action, updated session_id, and
+            degradation level indicating which tier produced the response.
+        """
 
         turns = self._session_store.get_turns(player_id=request.player_id, npc_id=request.npc_id)
         current_emotion = self._emotion_updater.get_state(npc_id=request.npc_id)
@@ -108,7 +129,15 @@ class DialogueHandler:
         return final_response
 
     async def stream(self, request: DialogueRequest) -> list[str]:
-        """Produce token chunks for WebSocket output."""
+        """Produce token chunks for WebSocket streaming output.
+
+        Args:
+            request: Incoming dialogue request from the player.
+
+        Returns:
+            List of token chunk strings from the LLM stream, or a single fallback
+            string on LLM error.
+        """
 
         turns = self._session_store.get_turns(player_id=request.player_id, npc_id=request.npc_id)
         current_emotion = self._emotion_updater.get_state(npc_id=request.npc_id)

@@ -24,7 +24,14 @@ class EnumValueSet:
 
 
 def build_enum_values(schema: SchemaConfig) -> EnumValueSet:
-    """Merge base values with schema extensions."""
+    """Merge base enum values with schema-defined extensions.
+
+    Args:
+        schema: SchemaConfig — the loaded and validated game schema.
+
+    Returns:
+        EnumValueSet with frozensets of accepted event_type and participation_role values.
+    """
 
     event_type = frozenset(BASE_EVENT_TYPES.union(schema.enum_extensions.event_type))
     participation_role = frozenset(

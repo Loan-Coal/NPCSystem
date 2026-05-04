@@ -11,96 +11,16 @@ from datetime import datetime, timezone
 
 from graph.db import GraphDB
 from config import get_settings
-
-
-CYPHER_SEED_LOCATIONS = """
-UNWIND $locations AS location
-MERGE (loc:Location {id: location.id})
-SET loc += location
-"""
-
-CYPHER_SEED_CHARACTERS = """
-UNWIND $characters AS character
-MERGE (c:Character {id: character.id})
-SET c += character
-"""
-
-CYPHER_SEED_LOCATED_AT = """
-UNWIND $pairs AS pair
-MATCH (c:Character {id: pair.character_id}), (loc:Location {id: pair.location_id})
-MERGE (c)-[r:LOCATED_AT]->(loc)
-SET r.arrived_at = datetime(), r.is_permanent_resident = pair.is_permanent_resident
-"""
-
-CYPHER_SEED_WORLD = """
-MERGE (w:WorldState {id: 'world'})
-SET w.epoch = 'age_of_peace',
-    w.faction_standings = '{}',
-    w.active_conditions = '[]',
-    w.weather = 'clear',
-    w.last_updated_at = datetime()
-"""
-
-CYPHER_SEED_RELATIONS = """
-MATCH (a:Character), (b:Character)
-WHERE a.id <> b.id
-    AND a.is_player = false
-    AND b.is_player = false
-OPTIONAL MATCH (a)-[:LOCATED_AT]->(loc_a:Location)
-OPTIONAL MATCH (b)-[:LOCATED_AT]->(loc_b:Location)
-WITH a, b,
-     (a.faction = b.faction) AS same_faction,
-     (loc_a IS NOT NULL AND loc_a = loc_b) AS same_location
-WHERE same_faction OR same_location
-MERGE (a)-[r:RELATES_TO]->(b)
-SET r.trust = 50,
-        r.fear = 50,
-        r.affection = 50,
-        r.interaction_count = coalesce(r.interaction_count, 0),
-        r.delta_log = '[]',
-        r.last_updated_at = datetime(),
-        r.relevance_score = CASE
-            WHEN same_faction THEN 1.0
-            WHEN same_location THEN 0.5
-            ELSE 0.0
-        END
-"""
-
-CYPHER_SEED_EVENTS = """
-UNWIND $events AS event
-MERGE (e:Event {id: event.id})
-SET e += event
-"""
-
-CYPHER_SEED_PARTICIPATION = """
-UNWIND $participation AS row
-MATCH (c:Character {id: row.character_id}), (e:Event {id: row.event_id})
-MERGE (c)-[p:PARTICIPATED_IN]->(e)
-SET p.role = row.role,
-        p.participated_at = datetime()
-"""
-
-CYPHER_SEED_KNOWLEDGE = """
-UNWIND $knowledge AS row
-MATCH (c:Character {id: row.character_id}), (e:Event {id: row.event_id})
-MERGE (c)-[k:KNOWS_ABOUT]->(e)
-SET k.knowledge_state = row.knowledge_state,
-        k.learned_at_tick = row.learned_at_tick,
-        k.distortion_type = row.distortion_type,
-        k.distortion_level = row.distortion_level,
-        k.distorted_summary = row.distorted_summary,
-        k.source_character_id = row.source_character_id
-"""
-
-
-def _locations() -> list[dict]:
-    return [
-        {"id": "loc_tavern", "name": "Iron Lantern", "region": "North", "location_tag": "tavern", "descriptor": "A busy tavern."},
-        {"id": "loc_market", "name": "Grand Market", "region": "Central", "location_tag": "market", "descriptor": "Crowded stalls."},
-        {"id": "loc_keep", "name": "Stone Keep", "region": "Central", "location_tag": "keep", "descriptor": "Fortified keep."},
-        {"id": "loc_docks", "name": "Salt Docks", "region": "South", "location_tag": "docks", "descriptor": "Trading harbor."},
-        {"id": "loc_temple", "name": "Sun Temple", "region": "East", "location_tag": "temple", "descriptor": "Quiet sanctuary."},
-    ]
+from data.seed_queries import (
+    CYPHER_SEED_CHARACTERS,
+    CYPHER_SEED_EVENTS,
+    CYPHER_SEED_KNOWLEDGE,
+    CYPHER_SEED_LOCATED_AT,
+    CYPHER_SEED_LOCATIONS,
+    CYPHER_SEED_PARTICIPATION,
+    CYPHER_SEED_RELATIONS,
+    CYPHER_SEED_WORLD,
+)
 
 
 CHARACTER_LOCATION_MAP: dict[str, str] = {
@@ -118,8 +38,37 @@ CHARACTER_LOCATION_MAP: dict[str, str] = {
     "npc_11": "loc_tavern",
 }
 
+EVENT_PARTICIPATION: list[dict[str, str]] = [
+    {"character_id": "npc_1", "event_id": "event_1", "role": "witness"},
+    {"character_id": "npc_7", "event_id": "event_1", "role": "witness"},
+    {"character_id": "npc_2", "event_id": "event_2", "role": "witness"},
+    {"character_id": "npc_8", "event_id": "event_2", "role": "witness"},
+    {"character_id": "npc_3", "event_id": "event_3", "role": "witness"},
+    {"character_id": "npc_9", "event_id": "event_3", "role": "witness"},
+]
+
+
+def _locations() -> list[dict]:
+    """Return static seed location definitions.
+
+    Returns:
+        List of location property dicts for MERGE into the graph.
+    """
+    return [
+        {"id": "loc_tavern", "name": "Iron Lantern", "region": "North", "location_tag": "tavern", "descriptor": "A busy tavern."},
+        {"id": "loc_market", "name": "Grand Market", "region": "Central", "location_tag": "market", "descriptor": "Crowded stalls."},
+        {"id": "loc_keep", "name": "Stone Keep", "region": "Central", "location_tag": "keep", "descriptor": "Fortified keep."},
+        {"id": "loc_docks", "name": "Salt Docks", "region": "South", "location_tag": "docks", "descriptor": "Trading harbor."},
+        {"id": "loc_temple", "name": "Sun Temple", "region": "East", "location_tag": "temple", "descriptor": "Quiet sanctuary."},
+    ]
+
 
 def _characters() -> list[dict]:
+    """Return static seed character definitions with a consistent timestamp.
+
+    Returns:
+        List of character property dicts for MERGE into the graph.
+    """
     base_time = datetime.now(timezone.utc).isoformat()
     return [
         {"id": "player_1", "name": "Player", "archetype": "adventurer", "faction": "free", "biography": "A wandering player.", "is_player": True, "created_at": base_time, "updated_at": base_time, "gossipy": 50, "credulity": 50, "honesty": 50, "current_mood": "neutral"},
@@ -137,17 +86,12 @@ def _characters() -> list[dict]:
     ]
 
 
-EVENT_PARTICIPATION: list[dict[str, str]] = [
-    {"character_id": "npc_1", "event_id": "event_1", "role": "witness"},
-    {"character_id": "npc_7", "event_id": "event_1", "role": "witness"},
-    {"character_id": "npc_2", "event_id": "event_2", "role": "witness"},
-    {"character_id": "npc_8", "event_id": "event_2", "role": "witness"},
-    {"character_id": "npc_3", "event_id": "event_3", "role": "witness"},
-    {"character_id": "npc_9", "event_id": "event_3", "role": "witness"},
-]
-
-
 def _events() -> list[dict]:
+    """Return static seed event definitions with a current timestamp.
+
+    Returns:
+        List of event property dicts for MERGE into the graph.
+    """
     now = datetime.now(timezone.utc).isoformat()
     return [
         {"id": "event_1", "summary": "A fire damaged the south warehouse.", "severity": 70, "location_id": "loc_market", "occurred_at": now, "tick_id": 1, "event_type": "crime", "is_public": True},
@@ -157,6 +101,15 @@ def _events() -> list[dict]:
 
 
 def _event_knowledge(events: list[dict], characters: list[dict]) -> list[dict]:
+    """Build KNOWS_ABOUT relationship rows for all non-player characters and events.
+
+    Args:
+        events: List of event dicts from _events().
+        characters: List of character dicts from _characters().
+
+    Returns:
+        List of knowledge rows for MERGE into KNOWS_ABOUT edges.
+    """
     rows: list[dict] = []
     non_player_ids = [item["id"] for item in characters if not item["is_player"]]
     for event in events:
@@ -177,8 +130,11 @@ def _event_knowledge(events: list[dict], characters: list[dict]) -> list[dict]:
 
 
 async def seed() -> None:
-    """Seed core world entities idempotently."""
+    """Seed core world entities idempotently.
 
+    Returns:
+        None. All writes are committed in a single transaction.
+    """
     settings = get_settings()
     graph_db = GraphDB(settings=settings)
     await graph_db.connect()

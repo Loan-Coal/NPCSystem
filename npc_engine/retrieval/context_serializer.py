@@ -39,7 +39,18 @@ def _extract_character_profile(context: MergedContext) -> Any:
 
 
 def serialize_context(context: MergedContext) -> str:
-    """Serialize context into fixed-schema JSON for prompt injection."""
+    """Serialize merged context into a fixed-schema JSON string for prompt injection.
+
+    Extracts well-known keys (world, emotion, character, location, relation:player,
+    nearby_npcs, session, events, rag) from the context items and assembles them
+    into a canonical skeleton structure.
+
+    Args:
+        context: Merged and budget-enforced context to serialize.
+
+    Returns:
+        Compact JSON string with sorted keys suitable for prompt injection.
+    """
 
     mapped = _extract_items(context=context)
     known_events = [_safe_parse(item.text) for item in context.items if item.key.startswith("event:")]

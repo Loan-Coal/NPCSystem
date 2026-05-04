@@ -12,16 +12,41 @@ from datetime import datetime, timedelta, timezone
 class SessionStore:
     """Stores recent dialogue turns per (player, npc) pair."""
 
-    def __init__(self, ttl_seconds: int, max_turns: int):
+    def __init__(self, ttl_seconds: int, max_turns: int) -> None:
+        """Initialise an empty session store.
+
+        Args:
+            ttl_seconds: Seconds before a session entry expires.
+            max_turns: Maximum number of turns to retain per session.
+        """
+
         self._ttl_seconds = ttl_seconds
         self._max_turns = max_turns
         self._sessions: dict[str, dict] = {}
 
     def key(self, player_id: str, npc_id: str) -> str:
+        """Build the session dict key from player and NPC identifiers.
+
+        Args:
+            player_id: Player identifier.
+            npc_id: NPC identifier.
+
+        Returns:
+            Composite key string ``"player_id:npc_id"``.
+        """
+
         return f"{player_id}:{npc_id}"
 
     def get_turns(self, player_id: str, npc_id: str) -> list[str]:
-        """Return non-expired turns or empty list."""
+        """Return non-expired turns for the given session, or an empty list.
+
+        Args:
+            player_id: Player identifier.
+            npc_id: NPC identifier.
+
+        Returns:
+            Copy of stored turns, or an empty list if the session is absent or expired.
+        """
 
         token = self.key(player_id=player_id, npc_id=npc_id)
         session = self._sessions.get(token)
@@ -33,7 +58,15 @@ class SessionStore:
         return list(session["turns"])
 
     def append_turns(self, player_id: str, npc_id: str, new_turns: list[str]) -> None:
-        """Append turns and refresh TTL."""
+        """Append new turns to the session and refresh its TTL.
+
+        Trims the combined turn list to max_turns (keeping the most recent entries).
+
+        Args:
+            player_id: Player identifier.
+            npc_id: NPC identifier.
+            new_turns: New turn strings to append.
+        """
 
         token = self.key(player_id=player_id, npc_id=npc_id)
         current_turns = self.get_turns(player_id=player_id, npc_id=npc_id)

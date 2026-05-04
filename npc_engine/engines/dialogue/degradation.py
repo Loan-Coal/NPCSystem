@@ -17,7 +17,7 @@ from typing import Literal
 
 import yaml
 
-from api.schemas import ActionModel, DialogueResponse, FacialExpressionModel, RelationDeltas
+from engines.dialogue.dialogue_models import ActionModel, DialogueResponse, FacialExpressionModel, RelationDeltas
 from utils.metrics import increment_metric
 
 
@@ -61,7 +61,23 @@ async def execute_with_degradation(
     full_timeout: float,
     graph_only_timeout: float,
 ) -> tuple[DialogueResponse, DegradationLevel]:
-    """Try full → graph_only → canned in order, returning first success."""
+    """Execute dialogue with tiered degradation: full → graph_only → canned.
+
+    Each tier is attempted in order; the first success is returned. Failures
+    are logged as warnings and the next tier is tried immediately.
+
+    Args:
+        full_factory: Async factory for the full LLM + RAG tier.
+        graph_only_factory: Async factory for the graph-only (no RAG) tier.
+        archetype: NPC archetype string used to select canned response file.
+        canned_dir: Directory containing per-archetype canned response YAML files.
+        full_timeout: Timeout in seconds for the full tier.
+        graph_only_timeout: Timeout in seconds for the graph-only tier.
+
+    Returns:
+        Tuple of (DialogueResponse, DegradationLevel) where DegradationLevel
+        indicates which tier produced the response.
+    """
 
     try:
         result = await asyncio.wait_for(full_factory(), timeout=full_timeout)

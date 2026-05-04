@@ -20,7 +20,12 @@ SET e += $properties
 
 
 async def upsert_event(tx: AsyncTransaction, event: BaseModel) -> None:
-    """Insert or update an event node idempotently."""
+    """Insert or update an event node idempotently.
+
+    Args:
+        tx: Active Neo4j transaction used to run the merge query.
+        event: Pydantic model with an ``id`` field and serializable event properties.
+    """
 
     properties = serialize_provenance_field(event.model_dump(mode="json"))
 
@@ -32,7 +37,14 @@ async def upsert_event(tx: AsyncTransaction, event: BaseModel) -> None:
 
 
 def ensure_quest_event_provenance(*, event: BaseModel) -> None:
-    """Ensure quest lifecycle events include required provenance metadata."""
+    """Ensure quest lifecycle events include required provenance metadata.
+
+    Args:
+        event: Pydantic model representing the quest lifecycle event to validate.
+
+    Raises:
+        QuestProvenanceError: If any required top-level or provenance fields are absent or blank.
+    """
 
     required_top_level = {
         "producer": event.producer,
@@ -64,7 +76,15 @@ def ensure_quest_event_provenance(*, event: BaseModel) -> None:
 
 
 async def upsert_quest_lifecycle_event(*, tx: AsyncTransaction, event: BaseModel) -> None:
-    """Persist one quest lifecycle event after provenance validation."""
+    """Persist one quest lifecycle event after provenance validation.
+
+    Args:
+        tx: Active Neo4j transaction used to run the merge query.
+        event: Pydantic model representing the quest lifecycle event to persist.
+
+    Raises:
+        QuestProvenanceError: If required provenance metadata is absent or blank.
+    """
 
     ensure_quest_event_provenance(event=event)
     await upsert_event(tx=tx, event=event)

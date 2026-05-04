@@ -27,7 +27,16 @@ RETURN properties(w) AS world
 
 
 async def upsert_world_state(session: AsyncSession, world_state: WorldState) -> WorldState:
-    """Insert or update singleton world state atomically."""
+    """Insert or update singleton world state atomically.
+
+    Args:
+        session: Active Neo4j async session used to run the MERGE query.
+        world_state: Validated WorldState model whose fields are persisted.
+
+    Returns:
+        WorldState reflecting the values confirmed by the graph after the write,
+        or the input world_state unchanged if the query returns no record.
+    """
 
     result = await session.run(
         CYPHER_MERGE_WORLD_STATE,

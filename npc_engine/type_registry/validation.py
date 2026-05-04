@@ -1,16 +1,16 @@
 """
 validation.py - Generic registry validation for node/edge payloads and topology.
 
-Does NOT: execute graph writes.
+Does NOT: execute graph writes or perform field-level type coercion.
 
 Dependencies injected: TypeRegistry.
 """
 
 from enum import Enum
-import json
 from typing import Any, Mapping
 
 from type_registry.contracts import RuntimeEdgeTypeDefinition, RuntimeFieldDefinition, TypeRegistry
+from type_registry.field_validators import validate_field_byte_limit, validate_field_range, validate_field_type
 from utils.errors import RegistryPayloadValidationError
 
 
@@ -23,8 +23,17 @@ class RegistryOperation(str, Enum):
 
 
 def validate_edge_endpoint_types(*, registry: TypeRegistry, edge_type: str, src_type: str, dst_type: str) -> None:
-    """Validate edge endpoint node types against registry topology declarations."""
+    """Validate edge endpoint node types against registry topology declarations.
 
+    Args:
+        registry: Immutable type registry holding edge topology contracts.
+        edge_type: Edge type name to look up (case-insensitive).
+        src_type: Actual source node type to validate.
+        dst_type: Actual destination node type to validate.
+
+    Raises:
+        RegistryPayloadValidationError: If the edge type is unknown or endpoints do not match.
+    """
     edge_definition = _resolve_edge_definition(registry=registry, edge_type=edge_type)
     expected_src = edge_definition.src_type.strip().lower()
     expected_dst = edge_definition.dst_type.strip().lower()
@@ -49,8 +58,22 @@ def validate_node_payload(
     payload: Mapping[str, Any],
     existing_payload: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Validate generic node payload against base and extension field contracts."""
+    """Validate generic node payload against base and extension field contracts.
 
+    Args:
+        registry: Immutable type registry holding node field contracts.
+        node_type: Node type name to look up.
+        operation: CREATE, UPDATE, or PATCH — controls required-field enforcement.
+        payload: Incoming field values to validate.
+        existing_payload: Current node state for PATCH merges (ignored otherwise).
+
+    Returns:
+        Validated payload dict; for PATCH, merged with existing_payload.
+
+    Raises:
+        RegistryPayloadValidationError: If the node type is unknown, fields are invalid,
+            required fields are missing, or type/range/byte constraints are violated.
+    """
     node_key = node_type.strip().lower()
     base_fields = registry.base_node_types.get(node_key)
     custom_fields = registry.custom_node_types.get(node_type)
@@ -83,8 +106,22 @@ def validate_edge_payload(
     payload: Mapping[str, Any],
     existing_payload: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Validate generic edge payload against edge field contracts."""
+    """Validate generic edge payload against edge field contracts.
 
+    Args:
+        registry: Immutable type registry holding edge field contracts.
+        edge_type: Edge type name to look up (case-insensitive for base edges).
+        operation: CREATE, UPDATE, or PATCH — controls required-field enforcement.
+        payload: Incoming field values to validate.
+        existing_payload: Current edge state for PATCH merges (ignored otherwise).
+
+    Returns:
+        Validated payload dict; for PATCH, merged with existing_payload.
+
+    Raises:
+        RegistryPayloadValidationError: If the edge type is unknown, fields are invalid,
+            required fields are missing, or type/range/byte constraints are violated.
+    """
     edge_definition = _resolve_edge_definition(registry=registry, edge_type=edge_type)
     field_definitions = dict(edge_definition.fields)
     _validate_unknown_fields(payload=payload, allowed_fields=field_definitions, object_type=edge_type)
@@ -143,9 +180,9 @@ def _validate_values(
                 )
             continue
 
-        _validate_field_type(field_name=field_name, value=value, definition=definition)
-        _validate_field_range(field_name=field_name, value=value, definition=definition)
-        _validate_field_byte_limit(field_name=field_name, value=value, definition=definition)
+        validate_field_type(field_name=field_name, value=value, definition=definition)
+        validate_field_range(field_name=field_name, value=value, definition=definition)
+        validate_field_byte_limit(field_name=field_name, value=value, definition=definition)
 
 
 def _validate_required_fields(
@@ -171,124 +208,3 @@ def _validate_required_fields(
         code="REQUIRED_FIELD_MISSING",
         detail=f"required fields missing for {object_type}: {joined}",
     )
-
-
-def _validate_field_type(*, field_name: str, value: Any, definition: RuntimeFieldDefinition) -> None:
-    if definition.field_type == "list":
-        _validate_list_shape(field_name=field_name, value=value, definition=definition)
-        return
-
-    if definition.field_type == "dict":
-        _validate_dict_shape(field_name=field_name, value=value, definition=definition)
-        return
-
-    validators = {
-        "str": lambda item: isinstance(item, str),
-        "int": lambda item: isinstance(item, int) and not isinstance(item, bool),
-        "float": lambda item: isinstance(item, (int, float)) and not isinstance(item, bool),
-        "bool": lambda item: isinstance(item, bool),
-    }
-    validator = validators[definition.field_type]
-    if validator(value):
-        return
-
-    raise RegistryPayloadValidationError(
-        code="FIELD_TYPE_INVALID",
-        detail=f"field type invalid for {field_name}: expected {definition.field_type}",
-    )
-
-
-def _validate_list_shape(*, field_name: str, value: Any, definition: RuntimeFieldDefinition) -> None:
-    if not isinstance(value, list):
-        raise RegistryPayloadValidationError(
-            code="FIELD_TYPE_INVALID",
-            detail=f"field type invalid for {field_name}: expected list",
-        )
-
-    if definition.list_item_type is None:
-        return
-
-    for item in value:
-        if _is_expected_primitive(value=item, expected_type=definition.list_item_type):
-            continue
-        raise RegistryPayloadValidationError(
-            code="FIELD_TYPE_INVALID",
-            detail=f"field type invalid for {field_name}: expected list[{definition.list_item_type}]",
-        )
-
-
-def _validate_dict_shape(*, field_name: str, value: Any, definition: RuntimeFieldDefinition) -> None:
-    if not isinstance(value, dict):
-        raise RegistryPayloadValidationError(
-            code="FIELD_TYPE_INVALID",
-            detail=f"field type invalid for {field_name}: expected dict",
-        )
-
-    if any(not isinstance(key, str) for key in value):
-        raise RegistryPayloadValidationError(
-            code="FIELD_TYPE_INVALID",
-            detail=f"field type invalid for {field_name}: expected dict[str, ...]",
-        )
-
-    if definition.dict_value_type is None:
-        return
-
-    for item in value.values():
-        if _is_expected_primitive(value=item, expected_type=definition.dict_value_type):
-            continue
-        raise RegistryPayloadValidationError(
-            code="FIELD_TYPE_INVALID",
-            detail=(
-                f"field type invalid for {field_name}: "
-                f"expected dict[str, {definition.dict_value_type}]"
-            ),
-        )
-
-
-def _is_expected_primitive(*, value: Any, expected_type: str) -> bool:
-    validators = {
-        "str": lambda item: isinstance(item, str),
-        "int": lambda item: isinstance(item, int) and not isinstance(item, bool),
-        "float": lambda item: isinstance(item, (int, float)) and not isinstance(item, bool),
-        "bool": lambda item: isinstance(item, bool),
-    }
-    return validators[expected_type](value)
-
-
-def _validate_field_range(*, field_name: str, value: Any, definition: RuntimeFieldDefinition) -> None:
-    if definition.range_limits is None:
-        return
-
-    lower, upper = definition.range_limits
-    numeric_value = float(value)
-    if lower <= numeric_value <= upper:
-        return
-
-    raise RegistryPayloadValidationError(
-        code="FIELD_RANGE_INVALID",
-        detail=f"field range invalid for {field_name}: expected {lower}..{upper}",
-    )
-
-
-def _validate_field_byte_limit(*, field_name: str, value: Any, definition: RuntimeFieldDefinition) -> None:
-    """Validate UTF-8 byte-size budget for one field value."""
-
-    encoded_size = _utf8_encoded_size(value=value)
-    if encoded_size <= definition.max_bytes:
-        return
-    raise RegistryPayloadValidationError(
-        code="FIELD_BYTE_LIMIT_EXCEEDED",
-        detail=(
-            f"field byte limit exceeded for {field_name}: "
-            f"{encoded_size} bytes (max {definition.max_bytes})"
-        ),
-    )
-
-
-def _utf8_encoded_size(*, value: Any) -> int:
-    if isinstance(value, str):
-        return len(value.encode("utf-8"))
-    if isinstance(value, (int, float, bool)):
-        return len(str(value).encode("utf-8"))
-    serialized = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
-    return len(serialized.encode("utf-8"))

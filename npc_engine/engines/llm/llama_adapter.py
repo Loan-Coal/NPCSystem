@@ -13,4 +13,9 @@ class LlamaAdapter(MistralAdapter):
     """Adapter for Llama completion endpoints using shared HTTP implementation."""
 
     def model_name(self) -> str:
+        """Return the Llama model identifier.
+
+        Returns:
+            Always "llama8b".
+        """
         return "llama8b"

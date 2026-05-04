@@ -24,7 +24,14 @@ async def write_delta_log(
     dst_id: str,
     delta_log_payload: list[dict],
 ) -> None:
-    """Persist serialized delta log on relation edge."""
+    """Persist serialized delta log on relation edge.
+
+    Args:
+        tx: Active Neo4j transaction used to run the write query.
+        src_id: ID of the source character node.
+        dst_id: ID of the destination character node.
+        delta_log_payload: List of delta entry dicts to serialize and store on the edge.
+    """
 
     serialized_delta_log = json.dumps(delta_log_payload)
     await tx.run(

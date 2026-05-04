@@ -23,8 +23,15 @@ class EmotionState(BaseModel):
 
 
 def derive_label(valence: int, arousal: int) -> str:
-    """Derive coarse mood label from valence/arousal coordinates."""
+    """Derive coarse mood label from valence/arousal coordinates.
 
+    Args:
+        valence: Pleasure–displeasure axis, clamped to [-100, 100].
+        arousal: Activation level, clamped to [0, 100].
+
+    Returns:
+        One of "agitated", "elated", "melancholic", "warm", or "neutral".
+    """
     if arousal >= 70 and valence < -20:
         return "agitated"
     if arousal >= 70 and valence >= 20:

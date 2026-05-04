@@ -18,7 +18,12 @@ SET c += $properties,
 
 
 async def upsert_character(tx: AsyncManagedTransaction, character: BaseModel) -> None:
-    """Insert or update a character node idempotently."""
+    """Insert or update a character node idempotently.
+
+    Args:
+        tx: Active Neo4j managed transaction used to run the merge query.
+        character: Pydantic model with an ``id`` field and serializable character properties.
+    """
 
     await tx.run(
         CYPHER_MERGE_CHARACTER,

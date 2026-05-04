@@ -6,90 +6,21 @@ Does NOT: enforce business policy bounds.
 Dependencies injected: AsyncSession.
 """
 
-from pydantic import BaseModel, ConfigDict
 from neo4j import AsyncSession, AsyncTransaction
+from pydantic import BaseModel, ConfigDict
 
+from graph.currency_queries import (
+    CYPHER_APPLY_SYSTEM_REWARD_TRANSFER,
+    CYPHER_APPLY_TRANSFER,
+    CYPHER_GET_CHARACTER_BALANCE,
+    CYPHER_GET_OUTBOUND_SESSION_TOTAL,
+    CYPHER_REPLAY_BY_IDEMPOTENCY,
+)
 from graph.replay_helpers import load_idempotent_replay_record
 from utils.errors import CurrencyInsufficientFundsError, CurrencyValidationError, NodeNotFoundError
 
 
 CURRENCY_ERR_TRANSFER_FAILED = "CURRENCY_TRANSFER_FAILED"
-
-CYPHER_GET_OUTBOUND_SESSION_TOTAL = """
-MATCH (:Character {id: $source_id})-[t:TRANSFERRED_TO {session_scope: $session_scope, transfer_kind: $transfer_kind}]->(:Character)
-RETURN coalesce(sum(toInteger(t.amount)), 0) AS total
-"""
-
-CYPHER_GET_CHARACTER_BALANCE = """
-MATCH (c:Character {id: $character_id})
-RETURN coalesce(c.currency_balance, 0) AS balance
-"""
-
-CYPHER_REPLAY_BY_IDEMPOTENCY = """
-MATCH (src:Character {id: $source_id})-[t:TRANSFERRED_TO {
-    idempotency_key: $idempotency_key,
-    session_scope: $session_scope,
-    transfer_kind: $transfer_kind
-}]->(dst:Character {id: $destination_id})
-RETURN t.request_id AS request_id,
-       toInteger(t.amount) AS amount,
-       coalesce(src.currency_balance, 0) AS source_balance,
-       coalesce(dst.currency_balance, 0) AS destination_balance
-LIMIT 1
-"""
-
-CYPHER_APPLY_TRANSFER = """
-MATCH (src:Character {id: $source_id})
-MATCH (dst:Character {id: $destination_id})
-WHERE src.id <> dst.id
-  AND coalesce(src.currency_balance, 0) >= $amount
-SET src.currency_balance = coalesce(src.currency_balance, 0) - $amount,
-    dst.currency_balance = coalesce(dst.currency_balance, 0) + $amount,
-    src.last_graph_updated_at = datetime(),
-    dst.last_graph_updated_at = datetime()
-CREATE (src)-[:TRANSFERRED_TO {
-    request_id: $request_id,
-    idempotency_key: $idempotency_key,
-    session_scope: $session_scope,
-    transfer_kind: $transfer_kind,
-    amount: $amount,
-    reason: $reason,
-    transferred_at: datetime()
-}]->(dst)
-RETURN coalesce(src.currency_balance, 0) AS source_balance,
-       coalesce(dst.currency_balance, 0) AS destination_balance
-"""
-
-
-CYPHER_APPLY_SYSTEM_REWARD_TRANSFER = """
-MERGE (src:Character {id: $source_id})
-ON CREATE SET src.name = 'System Treasury',
-              src.archetype = 'system',
-              src.faction = 'system',
-              src.biography = 'Synthetic reward source',
-              src.is_player = false,
-              src.is_active = true,
-              src.currency_balance = coalesce(src.currency_balance, 0),
-              src.created_at = datetime(),
-              src.updated_at = datetime(),
-              src.last_graph_updated_at = datetime()
-WITH src
-MATCH (dst:Character {id: $destination_id})
-SET dst.currency_balance = coalesce(dst.currency_balance, 0) + $amount,
-    src.last_graph_updated_at = datetime(),
-    dst.last_graph_updated_at = datetime()
-CREATE (src)-[:TRANSFERRED_TO {
-    request_id: $request_id,
-    idempotency_key: $idempotency_key,
-    session_scope: $session_scope,
-    transfer_kind: $transfer_kind,
-    amount: $amount,
-    reason: $reason,
-    transferred_at: datetime()
-}]->(dst)
-RETURN coalesce(src.currency_balance, 0) AS source_balance,
-       coalesce(dst.currency_balance, 0) AS destination_balance
-"""
 
 
 class CurrencyTransferWriteResult(BaseModel):
@@ -111,8 +42,17 @@ async def get_outbound_session_total(
     session_scope: str,
     transfer_kind: str,
 ) -> int:
-    """Return outbound transfer total for source within one gameplay session scope."""
+    """Return outbound transfer total for source within one gameplay session scope.
 
+    Args:
+        session: Active Neo4j async session for the read query.
+        source_id: ID of the character whose outbound total is aggregated.
+        session_scope: Opaque session identifier scoping the transfer window.
+        transfer_kind: Transfer classification label to filter by.
+
+    Returns:
+        Integer sum of amounts already transferred this session, or 0 if none.
+    """
     result = await session.run(
         CYPHER_GET_OUTBOUND_SESSION_TOTAL,
         source_id=source_id,
@@ -126,8 +66,15 @@ async def get_outbound_session_total(
 
 
 async def get_character_balance(session: AsyncSession, *, character_id: str) -> int | None:
-    """Return one character's current currency balance or None if node is missing."""
+    """Return one character's current currency balance or None if node is missing.
 
+    Args:
+        session: Active Neo4j async session for the read query.
+        character_id: ID of the character node to query.
+
+    Returns:
+        Integer currency balance, or None if the character node does not exist.
+    """
     result = await session.run(CYPHER_GET_CHARACTER_BALANCE, character_id=character_id)
     record = await result.single()
     if record is None:
@@ -147,8 +94,27 @@ async def transfer_currency_atomic(
     session_scope: str,
     transfer_kind: str,
 ) -> CurrencyTransferWriteResult:
-    """Execute atomic debit/credit and audit edge write in one transaction."""
+    """Execute atomic debit/credit and audit edge write in one transaction.
 
+    Args:
+        session: Active Neo4j async session used to begin the transaction.
+        source_id: ID of the debited character; "system" triggers reward path.
+        destination_id: ID of the credited character.
+        amount: Positive integer amount to transfer.
+        reason: Human-readable description persisted on the audit edge.
+        request_id: Stable request identifier stored on the audit edge.
+        idempotency_key: Client-supplied key for replay detection.
+        session_scope: Opaque session identifier for outbound limit tracking.
+        transfer_kind: Transfer classification label persisted on the audit edge.
+
+    Returns:
+        CurrencyTransferWriteResult with confirmed balances and replay flag.
+
+    Raises:
+        NodeNotFoundError: If source or destination character nodes are missing.
+        CurrencyInsufficientFundsError: If source balance cannot cover the amount.
+        CurrencyValidationError: If the transfer fails for other write-guard reasons.
+    """
     tx = await session.begin_transaction()
     async with tx:
         replay = await _try_replay(

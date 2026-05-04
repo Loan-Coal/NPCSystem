@@ -15,6 +15,22 @@ from typing import Literal
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from config_validators import (
+    check_api_key_secret,
+    check_api_v1_prefix,
+    check_currency_transfer_limit,
+    check_embedding_reconcile_interval,
+    check_game_schema_path,
+    check_idempotency_header_name,
+    check_llm_config_path,
+    check_positive_idempotency_value,
+    check_redis_connect_timeout,
+    check_redis_url,
+    normalize_extension_sources,
+)
+
+_PROJECT_ROOT = Path(__file__).resolve().parent
+
 
 class Settings(BaseSettings):
     """Typed environment configuration for the NPC Engine."""
@@ -99,92 +115,50 @@ class Settings(BaseSettings):
     @field_validator("API_KEY_SECRET")
     @classmethod
     def validate_api_key_secret(cls, value: str) -> str:
-        """Reject weak or placeholder API secrets."""
-
-        stripped_value = value.strip()
-        blocked_values = {"change-me", "replace_with_strong_secret", ""}
-        if len(stripped_value) < 16 or stripped_value in blocked_values:
-            raise ValueError("API_KEY_SECRET must be a non-placeholder secret with length >= 16")
-        return stripped_value
+        """Delegate to check_api_key_secret."""
+        return check_api_key_secret(value)
 
     @field_validator("API_V1_PREFIX")
     @classmethod
     def validate_api_v1_prefix(cls, value: str) -> str:
-        """Ensure API prefix is a stable absolute path segment."""
-
-        prefix = value.strip()
-        if not prefix.startswith("/"):
-            raise ValueError("API_V1_PREFIX must start with '/'")
-        if prefix == "/":
-            raise ValueError("API_V1_PREFIX cannot be '/'")
-        return prefix.rstrip("/")
+        """Delegate to check_api_v1_prefix."""
+        return check_api_v1_prefix(value)
 
     @field_validator("GAME_SCHEMA_PATH")
     @classmethod
     def validate_game_schema_path(cls, value: str) -> str:
-        """Reject empty schema paths so startup can fail fast with clear errors."""
-
-        path = value.strip()
-        if not path:
-            raise ValueError("GAME_SCHEMA_PATH cannot be empty")
-        candidate = Path(path)
-        if candidate.is_absolute():
-            return str(candidate)
-
-        project_root = Path(__file__).resolve().parent
-        return str((project_root / candidate).resolve())
+        """Delegate to check_game_schema_path."""
+        return check_game_schema_path(value, _PROJECT_ROOT)
 
     @field_validator("TYPE_REGISTRY_EXTENSION_SOURCES")
     @classmethod
     def normalize_type_registry_extension_sources(cls, value: str) -> str:
-        """Normalize comma-delimited extension sources for deterministic parsing."""
-
-        source_items = [item.strip() for item in value.split(",") if item.strip()]
-        return ",".join(source_items)
+        """Delegate to normalize_extension_sources."""
+        return normalize_extension_sources(value)
 
     @field_validator("LLM_CONFIG_PATH")
     @classmethod
     def validate_llm_config_path(cls, value: str) -> str:
-        """Reject empty llm config paths so startup can fail fast."""
-
-        path = value.strip()
-        if not path:
-            raise ValueError("LLM_CONFIG_PATH cannot be empty")
-        candidate = Path(path)
-        if candidate.is_absolute():
-            return str(candidate)
-
-        project_root = Path(__file__).resolve().parent
-        return str((project_root / candidate).resolve())
+        """Delegate to check_llm_config_path."""
+        return check_llm_config_path(value, _PROJECT_ROOT)
 
     @field_validator("IDEMPOTENCY_HEADER_NAME")
     @classmethod
     def validate_idempotency_header_name(cls, value: str) -> str:
-        """Ensure idempotency header setting is non-empty."""
-
-        header_name = value.strip()
-        if not header_name:
-            raise ValueError("IDEMPOTENCY_HEADER_NAME cannot be empty")
-        return header_name
+        """Delegate to check_idempotency_header_name."""
+        return check_idempotency_header_name(value)
 
     @field_validator("REDIS_URL")
     @classmethod
     def validate_redis_url(cls, value: str) -> str:
-        """Ensure Redis URL is non-empty when runtime integration is enabled."""
-
-        redis_url = value.strip()
-        if not redis_url:
-            raise ValueError("REDIS_URL cannot be empty")
-        return redis_url
+        """Delegate to check_redis_url."""
+        return check_redis_url(value)
 
     @field_validator("REDIS_CONNECT_TIMEOUT_SECONDS")
     @classmethod
     def validate_redis_connect_timeout_seconds(cls, value: float) -> float:
-        """Ensure Redis connection timeout is positive."""
-
-        if value <= 0:
-            raise ValueError("REDIS_CONNECT_TIMEOUT_SECONDS must be greater than 0")
-        return value
+        """Delegate to check_redis_connect_timeout."""
+        return check_redis_connect_timeout(value)
 
     @field_validator(
         "IDEMPOTENCY_PENDING_TIMEOUT_SECONDS",
@@ -193,33 +167,27 @@ class Settings(BaseSettings):
     )
     @classmethod
     def validate_positive_idempotency_values(cls, value: int) -> int:
-        """Ensure idempotency timing values are positive integers."""
-
-        if value <= 0:
-            raise ValueError("idempotency timing values must be greater than 0")
-        return value
+        """Delegate to check_positive_idempotency_value."""
+        return check_positive_idempotency_value(value)
 
     @field_validator("EMBEDDING_RECONCILE_INTERVAL_SECONDS")
     @classmethod
     def validate_embedding_reconcile_interval_seconds(cls, value: int) -> int:
-        """Ensure reconciler interval is a positive number of seconds."""
-
-        if value <= 0:
-            raise ValueError("EMBEDDING_RECONCILE_INTERVAL_SECONDS must be greater than 0")
-        return value
+        """Delegate to check_embedding_reconcile_interval."""
+        return check_embedding_reconcile_interval(value)
 
     @field_validator("CURRENCY_MAX_PER_TRANSACTION", "CURRENCY_MAX_PER_SESSION")
     @classmethod
     def validate_currency_transfer_limits(cls, value: int) -> int:
-        """Ensure configurable currency limits are positive integers."""
-
-        if value <= 0:
-            raise ValueError("currency limits must be greater than 0")
-        return value
+        """Delegate to check_currency_transfer_limit."""
+        return check_currency_transfer_limit(value)
 
 
 @lru_cache
 def get_settings() -> Settings:
-    """Create settings from environment and .env file."""
+    """Create and cache the Settings instance from environment and .env file.
 
+    Returns:
+        Singleton Settings instance populated from environment variables.
+    """
     return Settings()  # type: ignore[call-arg]
