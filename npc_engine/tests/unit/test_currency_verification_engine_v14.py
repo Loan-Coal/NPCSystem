@@ -9,7 +9,7 @@ Dependencies injected: Settings only.
 import pytest
 
 from config import Settings
-from engines.economy.currency_verification_engine import (
+from graph.transfer_validators import (
     CURRENCY_ERR_AMOUNT_INVALID,
     CURRENCY_ERR_PER_SESSION_LIMIT,
     CURRENCY_ERR_PER_TRANSACTION_LIMIT,

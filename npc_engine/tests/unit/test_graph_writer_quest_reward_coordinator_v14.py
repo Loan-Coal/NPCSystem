@@ -13,8 +13,7 @@ import pytest
 pytest.importorskip("neo4j")
 
 from config import Settings
-from engines.economy.trading_engine import ItemTransferCommand
-from engines.economy.currency_verification_engine import CurrencyTransferCommand
+from graph.transfer_validators import CurrencyTransferCommand, ItemTransferCommand
 from graph.currency_writer import CurrencyTransferWriteResult
 from graph.item_writer import ItemTransferWriteResult
 from graph.graph_writer import apply_currency_transfer, apply_item_transfer
