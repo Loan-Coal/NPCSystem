@@ -1,7 +1,7 @@
 """
-data package - holds seed for graph initialization
+data package - holds seed data for graph initialization.
 
-DOES NOT: mutate game graph state.
+Does NOT: mutate game graph state; does not query or write to any database.
 
 Dependencies injected: Settings, Graph.
 """
