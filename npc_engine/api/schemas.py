@@ -8,7 +8,7 @@ Dependencies injected: None.
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from engines.dialogue.dialogue_models import (
     ActionModel,

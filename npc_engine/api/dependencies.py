@@ -14,21 +14,17 @@ from neo4j import AsyncSession
 from api.dependency_singletons import (
     get_context_cache,
     get_embedding_index,
-    get_emotion_store,
+    get_emotion_store,  # noqa: F401  re-exported for api.routes.npc_state
     get_emotion_updater,
-    get_event_handler,
-    get_game_clock,
-    get_game_schema,
-    get_gossip_handler,
+    get_event_handler,  # noqa: F401  re-exported for api.routes.batch
+    get_game_schema,  # noqa: F401  re-exported for api.routes.system
+    get_gossip_handler,  # noqa: F401  re-exported for api.routes.batch
     get_graph_db,
-    get_idempotency_service,
-    get_idempotency_store,
     get_llm_config,
-    get_quest_lifecycle_engine,
-    get_redis_runtime,
-    get_reindex_job_service,
+    get_quest_lifecycle_engine,  # noqa: F401  re-exported for api.routes.quest
+    get_reindex_job_service,  # noqa: F401  re-exported for api.routes.graph_admin
     get_session_store,
-    get_tick_scheduler,
+    get_tick_scheduler,  # noqa: F401  re-exported for api.routes.clock
     get_type_registry,
 )
 from config import Settings, get_settings

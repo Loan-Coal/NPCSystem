@@ -41,7 +41,6 @@ from utils.errors import (
     RelationEdgeNotFoundError,
     SchemaMisconfiguredError,
     SchemaValidationError,
-    StructuredNPCSystemError,
 )
 
 

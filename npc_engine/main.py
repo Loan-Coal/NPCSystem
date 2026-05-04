@@ -12,8 +12,6 @@ from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 
-_logger = logging.getLogger(__name__)
-
 from api.routes.action import router as action_router
 from api.routes.batch import router as batch_router
 from api.routes.clock import router as clock_router
@@ -25,7 +23,7 @@ from api.routes.npc_state import router as npc_state_router
 from api.routes.quest import router as quest_router
 from api.routes.system import router as system_router
 from auth.middleware import ApiKeyMiddleware
-from api.dependencies import (
+from api.dependency_singletons import (
     get_embedding_index,
     get_game_schema,
     get_graph_db,
@@ -39,6 +37,8 @@ from engines.idempotency.cleanup_scheduler import IdempotencyCleanupScheduler
 from retrieval.embedding_reconciler import EmbeddingReconciler
 from scheduler.tick_lease import TickLeaseRepository
 from utils.logging import configure_logging
+
+_logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager

@@ -17,8 +17,6 @@ Dependencies injected: None.
 import json
 import logging
 
-import pytest
-
 from utils.logging import JsonFormatter, configure_logging, get_logger, LOGGER_NAME
 
 

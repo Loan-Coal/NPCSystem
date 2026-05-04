@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from common.json_utils import parse_json_object
-from retrieval.context_merger import ContextItem, MergedContext
+from retrieval.context_merger import ContextItem
 from retrieval.context_relevance_engine import ContextRelevanceCandidate, rank_context_candidates
 from retrieval.context_utils import parse_node_identity
 from schema.llm_config_models import LLMConfig

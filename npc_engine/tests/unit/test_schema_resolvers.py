@@ -9,7 +9,7 @@ Dependencies injected: None.
 import pytest
 
 from schema.context_field_resolver import resolve_context_fields
-from schema.enum_validator import EnumValueSet, build_enum_values
+from schema.enum_validator import build_enum_values
 from schema.gossip_weight_resolver import resolve_gossip_weight_fields
 from schema.model_factory import generate_runtime_models
 from schema.schema_models import (
