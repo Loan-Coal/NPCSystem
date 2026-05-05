@@ -1,10 +1,14 @@
 """
-main.py - FastAPI app entry point and route registration.
-
-Does NOT: implement engine business logic.
-
-Dependencies injected: Settings, ApiKeyMiddleware.
+Module: main
+Layer: api
+Purpose: FastAPI application entry point — lifespan management and route registration.
+Does NOT: implement business logic, call LLMs, or write to the graph directly.
+Dependencies injected: all api routes, auth.middleware, api.rate_limit, config, engines,
+                       retrieval, scheduler, utils
+Used by: uvicorn at process start.
 """
+
+from __future__ import annotations
 
 import asyncio
 import logging
@@ -12,6 +16,7 @@ from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 
+from npc_engine.api.rate_limit import RateLimitMiddleware
 from npc_engine.api.routes.action import router as action_router
 from npc_engine.api.routes.batch import router as batch_router
 from npc_engine.api.routes.clock import router as clock_router
@@ -21,6 +26,7 @@ from npc_engine.api.routes.graph import router as graph_router
 from npc_engine.api.routes.graph_admin import router as graph_admin_router
 from npc_engine.api.routes.npc_state import router as npc_state_router
 from npc_engine.api.routes.quest import router as quest_router
+from npc_engine.api.routes.system import admin_router as system_admin_router
 from npc_engine.api.routes.system import router as system_router
 from npc_engine.auth.middleware import ApiKeyMiddleware
 from npc_engine.api.dependency_singletons import (
@@ -110,18 +116,33 @@ async def lifespan(_app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    """Create and configure the FastAPI application."""
+    """Create and configure the FastAPI application.
 
+    Returns:
+        Configured FastAPI app with middleware and all routers registered.
+    """
     settings = get_settings()
     configure_logging(level=settings.LOG_LEVEL)
 
     app = FastAPI(title="NPC Engine", version="0.1.0", lifespan=lifespan)
+
+    # Middleware is applied in reverse registration order (last added = outermost).
+    # RateLimitMiddleware is added first so it runs AFTER auth (inner layer).
+    # ApiKeyMiddleware is added second so it runs FIRST (outer layer), rejecting
+    # unauthenticated requests before they consume a rate-limit token.
+    app.add_middleware(RateLimitMiddleware, settings=settings)
     app.add_middleware(
         ApiKeyMiddleware,
         settings=settings,
         idempotency_service=get_idempotency_service(),
     )
+
+    admin_prefix = f"{settings.API_V1_PREFIX}/admin"
+
+    # Public system routes (no auth)
     app.include_router(system_router)
+
+    # Game-engine public surface under /v1/
     app.include_router(dialogue_router, prefix=settings.API_V1_PREFIX)
     if settings.DIALOGUE_STREAM_ENABLED:
         app.include_router(dialogue_ws_router, prefix=settings.API_V1_PREFIX)
@@ -129,9 +150,12 @@ def create_app() -> FastAPI:
     app.include_router(action_router, prefix=settings.API_V1_PREFIX)
     app.include_router(quest_router, prefix=settings.API_V1_PREFIX)
     app.include_router(clock_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(batch_router, prefix=settings.API_V1_PREFIX)
     app.include_router(graph_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(graph_admin_router, prefix=settings.API_V1_PREFIX)
+
+    # Admin / designer-tooling surface under /v1/admin/
+    app.include_router(system_admin_router, prefix=admin_prefix)
+    app.include_router(batch_router, prefix=admin_prefix)
+    app.include_router(graph_admin_router, prefix=admin_prefix)
 
     return app
 

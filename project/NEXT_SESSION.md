@@ -1,35 +1,45 @@
 # Next Session Instructions
 
-## Phase 0.2 Complete
+## Phase 0.3 Complete
 
-Repository reorganization is done. All working markdown is in `project/`, reference docs in `docs/`, tests in `tests/` at repo root, e2e scenarios in `e2e/scenarios/`.
+Route audience split and hardening done. Routes are now:
+- `/v1/` — game-engine public surface (dialogue, NPC, quest, clock, action, graph CRUD)
+- `/v1/admin/` — designer/tooling (batch ticks, graph admin, schema introspection)
+
+`pytest tests/unit/` must be green before starting Phase 0.4.
 
 ## Current state
 
-- `pytest tests/unit/ -q` from repo root: **291 passed, 0 failed**
-- Root `Makefile` is canonical — all make targets work from repo root
-- CI updated to match new layout
+Run from repo root:
+```bash
+pytest tests/ -q
+```
 
-## Phase 0.3 — src/ Layout Move (next)
+Expected: all pass (294+ tests). If anything fails in the new tests, check:
+- `test_rate_limit_middleware.py` — uses `Settings(RATE_LIMIT_ENABLED=..., ...)` constructor; verify the field name matches config.py
+- `test_v1_route_versioning.py` — calls `create_app()` with monkeypatched env; verify `get_settings.cache_clear()` is called before each test
 
-**Goal:** Move source from `npc_engine/` to `src/npc_engine/` using a proper `pyproject.toml`.
+## Phase 0.4 — Per-engine LLM config (next)
 
-**Steps:**
-1. Write `pyproject.toml` (setuptools or hatchling) with `[tool.setuptools.packages.find] where = ["src"]` and all deps ported from `npc_engine/requirements.txt`.
-2. Move all Python source from `npc_engine/` into `src/npc_engine/` (~150 files).
-3. Update `pytest.ini` to `pythonpath = ["src"]` and `testpaths = ["tests"]`.
-4. Update all ~800 bare imports to `npc_engine.xxx`.
-5. Update `Makefile` and CI: `pip install -e .` instead of `pip install -r npc_engine/requirements.txt`.
-6. Update `uvicorn main:app` → `uvicorn npc_engine.main:app`.
-7. Update `python -m scripts.xxx` → `python -m npc_engine.scripts.xxx`, `python -m data.seed` → `python -m npc_engine.data.seed`.
-8. Move `.env` and `.env.example` to repo root; update any path references in `config.py`.
-9. Run `pytest tests/unit/` — must be green.
+**Goal:** Each engine has its own `llm_config.yaml`. Different parameters, different
+fallback policies per engine. Startup fails if a registered engine lacks a config.
 
-**Key files to update:** Every `*.py` file in `src/npc_engine/` (all imports), `pytest.ini`, `Makefile`, `.github/workflows/ci.yml`.
+**Key file:** `project/ROADMAP.md` Feature 0.4 section — read it first.
 
-**Stop and ask if:** The import rename surfaces unexpected circular imports or circular re-export patterns.
+**Steps per ROADMAP:**
+1. Create `engines/<engine>/llm_config.yaml` for every engine that calls an LLM.
+2. Write `src/npc_engine/engines/llm_config_loader.py` with `get_config(engine_name)`.
+3. Each engine's LLM call site reads from its own config.
+4. Schema validation: startup fails if a registered engine lacks a config file.
+5. Unit tests: schema validation, missing file, invalid values.
+6. Integration test: engines read distinct configs.
+7. Update `docs/ARCHITECTURE.md` with per-engine config pattern.
 
-## Known deferred items
+**Stop and ask if:** Any engine currently reads from a global config in a way that
+would require changing its public interface.
 
-- No open ISSUES.md entries.
-- `npc_engine/requirements.txt` is still the dep file; will be superseded by `pyproject.toml` in Phase 0.3.
+## Known open items
+
+- `project/proposals/route_audience_improvements.md` — 6 improvement proposals from
+  Phase 0.3 implementation. Review before Phase 0.4.
+- `ISSUES.md` — check for any entries before starting.

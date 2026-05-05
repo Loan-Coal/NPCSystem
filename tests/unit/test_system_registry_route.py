@@ -1,5 +1,5 @@
 """
-test_system_registry_route.py - Unit tests for /v1/schema/registry endpoint behavior.
+test_system_registry_route.py - Unit tests for /v1/admin/schema/registry endpoint behavior.
 
 Does NOT: start full application lifespan.
 
@@ -13,7 +13,7 @@ import pytest
 pytest.importorskip("neo4j")
 
 from npc_engine.api.dependencies import get_type_registry
-from npc_engine.api.routes.system import router as system_router
+from npc_engine.api.routes.system import admin_router
 from npc_engine.type_registry.contracts import TypeRegistry
 
 
@@ -25,11 +25,11 @@ def test_schema_registry_endpoint_returns_registry_snapshot() -> None:
     """Registry endpoint should return serialized registry snapshot envelope."""
 
     app = FastAPI()
-    app.include_router(system_router)
+    app.include_router(admin_router, prefix="/v1/admin")
     app.dependency_overrides[get_type_registry] = _registry_stub
 
     client = TestClient(app)
-    response = client.get("/v1/schema/registry")
+    response = client.get("/v1/admin/schema/registry")
 
     payload = response.json()
 

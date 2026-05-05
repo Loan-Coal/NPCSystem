@@ -58,14 +58,11 @@ def _required_scope_for_path(path: str, api_v1_prefix: str) -> str | None:
     Returns:
         Scope string required to access the path, or None when no scope check applies.
     """
-    graph_admin_prefix = f"{api_v1_prefix}/graph/admin"
+    admin_prefix = f"{api_v1_prefix}/admin"
     graph_write_prefix = f"{api_v1_prefix}/graph"
-    schema_path = f"{api_v1_prefix}/schema"
 
-    if path.startswith(graph_admin_prefix):
+    if path.startswith(admin_prefix):
         return SCOPE_GRAPH_ADMIN
-    if path == schema_path:
-        return None
     if path.startswith(graph_write_prefix):
         return SCOPE_GRAPH_WRITE
     return None

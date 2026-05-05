@@ -11,40 +11,42 @@
                         │  HTTP / WebSocket
                         ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    FastAPI Application  (/v1/*)                  │
+│                    FastAPI Application                           │
 │                                                                 │
+│   Middleware stack (outer → inner)                              │
+│   1. ApiKeyMiddleware  — bearer auth + idempotency preflight    │
+│   2. RateLimitMiddleware — token bucket per API key (50 rps)    │
+│                                                                 │
+│  ── Game-engine public surface (/v1/) ────────────────────────  │
 │  ┌──────────┐  ┌────────────┐  ┌──────────┐  ┌────────────┐   │
-│  │  /health │  │ /dialogue  │  │  /clock  │  │   /batch   │   │
-│  │          │  │ /ws/dialog │  │  /action │  │ /npc/{id}  │   │
-│  └──────────┘  └─────┬──────┘  └────┬─────┘  └──────┬─────┘   │
+│  │  /health │  │ /dialogue  │  │  /clock  │  │  /quest/*  │   │
+│  │ (no auth)│  │ /ws/dialog │  │  /action │  │ /npc/{id}  │   │
+│  └──────────┘  └────────────┘  └──────────┘  └────────────┘   │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │  /v1/graph/*  (graph_write scope)                        │  │
-│  │  POST|PATCH /characters  POST|PATCH /events              │  │
-│  │  POST|PATCH /locations   PATCH /world_state              │  │
-│  │  POST /edges/*           DELETE /edges/type/{s}/{d}      │  │
-│  │  DELETE /characters/{id} (soft-delete)                   │  │
-│  │  POST /characters/{id}/move   GET /schema                │  │
-│  │  GET /characters  GET /events  GET /locations            │  │
+│  │  GET|POST|PATCH /nodes/{type}  GET|POST|DELETE /edges/*  │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                 │
+│  ── Admin/tooling surface (/v1/admin/) ───────────────────────  │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  /v1/graph/admin/*  (graph_admin scope ⊃ graph_write)    │  │
-│  │  DELETE /characters/{id}  DELETE /events/{id}            │  │
-│  │  DELETE /locations/{id}   PUT /relations/absolute        │  │
-│  │  POST /relations/delta    POST /reindex                  │  │
-│  │  GET /reindex/{job_id}    GET /audit_log                 │  │
+│  │  /v1/admin/graph/*  (graph_admin scope ⊃ graph_write)    │  │
+│  │  DELETE /characters  DELETE /events  DELETE /locations   │  │
+│  │  PUT /relations/absolute  POST /relations/delta          │  │
+│  │  POST /reindex  GET /reindex/{job_id}  GET /audit_log    │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  /v1/admin/batch/*  (graph_admin scope)                  │  │
+│  │  POST /gossip_tick   POST /event_tick                    │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  /v1/admin/schema*  /v1/admin/protected  (graph_admin)   │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                 │
 │   ┌────────────────────────────────────────────────────────┐   │
 │   │              api/dependencies.py                       │   │
 │   │   (Composition root: wires DB, LLM, embeddings,       │   │
 │   │    auth, loaded GameSchema)                            │   │
-│   └────────────────────────────────────────────────────────┘   │
-│   ┌────────────────────────────────────────────────────────┐   │
-│   │                auth/middleware.py                       │   │
-│   │   Bearer token + scope validation (admin ⊃ write)      │   │
-│   │   + idempotency preflight on mutating /v1/* routes     │   │
 │   └────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
                         │
@@ -154,6 +156,20 @@ Composition root wiring:
 
 ---
 
+## Route Audience Split
+
+Routes are divided into two audiences:
+
+| Prefix | Audience | Auth |
+|--------|----------|------|
+| `/v1/` (non-graph) | Game engine (Unity, Unreal, …) | Bearer token |
+| `/v1/graph/*` | Game engine — graph read/write | Bearer + `graph_write` scope |
+| `/v1/admin/*` | Designer tooling, ops | Bearer + `graph_admin` scope |
+| `/health` | Any (liveness probe) | None |
+
+In production, restrict access to `/v1/admin/*` at the reverse-proxy or
+Docker network layer. See [docker-compose.yml](../docker-compose.yml) comments.
+
 ## Auth Scope Model
 
 Two scopes exist. `graph_admin` is a strict superset of `graph_write`.
@@ -164,11 +180,19 @@ graph_admin ⊃ graph_write
 
 | Scope | Routes accessible |
 |---|---|
-| `graph_write` | All `/v1/graph/*` public routes (generic node/edge read-write + schema read) |
-| `graph_admin` | Everything in `graph_write` + all `/v1/graph/admin/*` routes (hard delete, absolute relation, unbounded delta, reindex, audit log) |
+| `graph_write` | `/v1/graph/*` — generic node/edge CRUD (game-engine graph writes) |
+| `graph_admin` | Everything in `graph_write` + all `/v1/admin/*` routes (hard delete, batch ticks, schema introspection, absolute relation, unbounded delta, reindex, audit log) |
 
-Implementation: `auth/permissions.py` declares the scope hierarchy. `auth/middleware.py` checks
-the highest matching scope. A single API key carries one scope value.
+Implementation: `auth/permissions.py` declares the scope hierarchy. `auth/middleware.py`
+checks the highest matching scope. A single API key carries one scope value.
+
+## Rate Limiting
+
+`api/rate_limit.py` (`RateLimitMiddleware`) implements a per-API-key in-memory token
+bucket. It runs inside the auth layer (inner middleware) so unauthenticated requests are
+rejected before consuming rate-limit state. The `/health` path is always exempt.
+Parameters: `RATE_LIMIT_REQUESTS_PER_SECOND` (default 50), `RATE_LIMIT_BURST_SIZE`
+(default 100). Disable with `RATE_LIMIT_ENABLED=false`.
 
 ---
 
@@ -571,8 +595,9 @@ REDIS_CONNECT_TIMEOUT_SECONDS=1.0
 
 ### Game Engine Integration
 - **Unity:** Use `UnityWebRequest` for REST, `NativeWebSocket` or `websocket-sharp` for WS.
-  All routes now under `/v1/` prefix. Parse JSON responses with `JsonUtility` or `Newtonsoft.Json`.
-  Call `GET /v1/schema` on SDK initialization to discover available node types and fields.
+  All game-engine routes are under `/v1/`. Parse JSON responses with `JsonUtility` or `Newtonsoft.Json`.
+  Call `GET /v1/admin/schema` on designer-tool initialization to discover available node types and fields
+  (requires `graph_admin` scope).
 - **Unreal:** Use `FHttpModule` for REST, `IWebSocket` (built-in) for streaming.
   Deserialize with `FJsonObjectConverter`.
 

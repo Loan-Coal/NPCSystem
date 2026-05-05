@@ -49,7 +49,7 @@ class ReindexRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
-router = APIRouter(prefix="/graph/admin")
+router = APIRouter(prefix="/graph")
 
 
 @router.delete("/characters/{character_id}")

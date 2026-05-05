@@ -58,6 +58,49 @@ Rules:
 
 ---
 
+## Decision: No Separate Gateway Service (Feature 0.3 scope reduction)
+**Date:** 2026-05-05
+**Service / area:** Phase 0.3 — Gateway
+**Context:** ROADMAP Feature 0.3 specified building a `gateway/` package in front of
+internal services. During route inventory, we found that `main.py` already mounts all
+routes in a single FastAPI app with global `ApiKeyMiddleware` — i.e., the app already
+is what a gateway would be. Adding a wrapping FastAPI app would mean two apps, two
+middleware stacks, and in-process HTTP forwarding via mount, all for one process.
+**Options considered:**
+  1. Build `src/npc_engine/gateway/` as a second FastAPI app that re-mounts the
+     existing routers. Cons: pure duplication; two apps for one process; no isolation
+     benefit; double middleware overhead.
+  2. Harden `main.py` as the canonical public entry point — route audience split,
+     rate limiting, request logging — without a separate gateway package.
+**Choice:** Option 2.
+**Reasoning:** A separate gateway is justified when there are multiple processes or
+services to unify behind one interface. We have one process. Adding architectural
+ceremony to satisfy a pattern that doesn't fit the actual topology is overengineering.
+**Consequences:** Cross-cutting concerns (auth, rate limiting) live as middleware on
+the existing app. If the project later splits into multiple services, revisit then.
+
+---
+
+## Decision: Route Audience Split (/v1/ vs /v1/admin/)
+**Date:** 2026-05-05
+**Service / area:** Phase 0.3 — Gateway
+**Context:** All routes previously lived under a single `/v1/` prefix. Game-engine
+clients and designer tooling used the same surface with different auth scopes.
+**Options considered:**
+  1. Keep everything under `/v1/` and rely on scope-based access control alone.
+  2. Split into `/v1/` (game engine) and `/v1/admin/` (designer tooling) so the
+     audience split is visible in the URL structure and enforceable at the
+     reverse-proxy/network layer.
+**Choice:** Option 2.
+**Reasoning:** The URL split makes it possible to restrict admin routes in a Docker
+network or nginx config without having to enumerate individual paths. It also makes
+the intended consumer of each route immediately visible in the URL.
+**Consequences:** Any existing client targeting `/v1/batch/*`, `/v1/graph/admin/*`,
+or `/v1/schema` must update to the new `/v1/admin/*` paths. These are all
+designer/tooling clients, not game-engine clients.
+
+---
+
 ## Decision: Defer `src/` Layout Move; Use pyproject.toml When It Happens
 **Date:** 2026-05-05
 **Service / area:** Phase 0.2 repo reorganization

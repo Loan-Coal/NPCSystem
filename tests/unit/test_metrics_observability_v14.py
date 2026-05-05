@@ -40,7 +40,10 @@ def test_route_label_mapping_is_bounded_for_known_routes() -> None:
 
     assert route_label_from_path("/v1/dialogue", "/v1") == "dialogue"
     assert route_label_from_path("/v1/graph/nodes/character/abc", "/v1") == "graph"
-    assert route_label_from_path("/v1/graph/admin/reindex", "/v1") == "graph_admin"
+    assert route_label_from_path("/v1/admin/graph/reindex", "/v1") == "admin_graph"
+    assert route_label_from_path("/v1/admin/batch/gossip_tick", "/v1") == "admin_batch"
+    assert route_label_from_path("/v1/admin/schema", "/v1") == "admin_schema"
+    assert route_label_from_path("/v1/admin/protected", "/v1") == "admin"
     assert route_label_from_path("/v99/dialogue", "/v1") == "non_v1"
 
 

@@ -14,13 +14,16 @@ endif
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval scenarios seed
+        eval scenarios seed smoke
 
 install:
 	pip install -e .[dev]
 
 run:
 	uvicorn npc_engine.main:app --reload
+
+smoke:
+	$(PYTHON) e2e/scripts/gateway_smoke.py --base-url $(BASE_URL) --api-key $(API_KEY)
 
 test:
 	$(PYTHON) -m pytest tests/ -q

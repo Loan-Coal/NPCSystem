@@ -18,15 +18,18 @@ UNKNOWN_LABEL = "unknown"
 NON_V1_ROUTE_LABEL = "non_v1"
 HEALTH_ROUTE_LABEL = "health"
 ROUTE_PREFIX_LABELS: tuple[tuple[str, str], ...] = (
-    ("graph/admin", "graph_admin"),
+    # admin surface — must be checked before bare "graph" to avoid mis-labelling
+    ("admin/graph", "admin_graph"),
+    ("admin/batch", "admin_batch"),
+    ("admin/schema", "admin_schema"),
+    ("admin", "admin"),
+    # game-engine public surface
     ("graph", "graph"),
     ("ws/dialogue", "ws_dialogue"),
     ("dialogue", "dialogue"),
     ("action", "action"),
     ("quest", "quest"),
-    ("batch", "batch"),
     ("clock", "clock"),
-    ("schema", "schema"),
     ("npc", "npc_state"),
 )
 

@@ -105,6 +105,10 @@ class Settings(BaseSettings):
     TICK_LEASE_OWNER_ID: str = Field(default_factory=lambda: f"{socket.gethostname()}-{os.getpid()}")
     TICK_LEASE_TTL_SECONDS: int = 30
 
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_REQUESTS_PER_SECOND: float = Field(default=50.0, gt=0)
+    RATE_LIMIT_BURST_SIZE: int = Field(default=100, gt=0)
+
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     LOG_LLM_PROMPTS: bool = False
     ENV: Literal["dev", "staging", "prod"] = "dev"

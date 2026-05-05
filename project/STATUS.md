@@ -1,6 +1,39 @@
 # Status
 
-## Phase 0.3 — src/ Layout Move with pyproject.toml
+## Phase 0.3 — Route Audience Split + Hardening
+**Status:** ✅ Complete
+**Date completed:** 2026-05-05
+**Tests:** run after this session to confirm green
+
+### What was done
+- Split routes into `/v1/` (game-engine public) and `/v1/admin/` (designer/tooling):
+  - `/v1/batch/*` → `/v1/admin/batch/*`
+  - `/v1/graph/admin/*` → `/v1/admin/graph/*`
+  - `/v1/schema`, `/v1/schema/registry`, `/v1/protected` → `/v1/admin/schema`, etc.
+  - `/v1/graph/*` (generic CRUD) stays at `/v1/graph/*` — game-engine facing
+- `system.py` split into `router` (health) + `admin_router` (schema, protected)
+- `graph_admin.py` prefix changed from `/graph/admin` to `/graph`
+- `main.py` updated: new `admin_prefix`, admin routers mounted separately
+- `auth/middleware_helpers._required_scope_for_path`: unified — all `/v1/admin/*` → `graph_admin`
+- `utils/metrics.ROUTE_PREFIX_LABELS`: updated for new admin path prefixes
+- Added `RateLimitMiddleware` (token bucket, per API key, 50 rps default, burst 100)
+  - `src/npc_engine/api/rate_limit.py`
+  - Middleware ordering: ApiKeyMiddleware (outer) → RateLimitMiddleware (inner)
+  - `/health` always exempt; disabled with `RATE_LIMIT_ENABLED=false`
+- Added `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS_PER_SECOND`, `RATE_LIMIT_BURST_SIZE` to `config.py`
+- Updated 4 existing tests (`test_auth_permissions_v13`, `test_v1_route_versioning`, `test_system_registry_route`, `test_metrics_observability_v14`)
+- New `tests/unit/test_rate_limit_middleware.py` (7 tests: bucket unit + middleware integration)
+- `docker-compose.yml`: internal/public Docker networks with security posture comment
+- `docs/API.md` created — public surface with curl examples
+- `docs/ARCHITECTURE.md` updated — route audience split diagram + rate-limit section
+- `project/DECISIONS.md` — two new entries (no gateway, route split)
+- `e2e/scripts/gateway_smoke.py` — smoke test hitting new route layout
+- `make smoke` target added
+- `project/proposals/route_audience_improvements.md` — 6 improvements/flaws found
+
+---
+
+## Phase 0.2 — src/ Layout Move with pyproject.toml (was labeled 0.3)
 **Status:** ✅ Complete  
 **Date completed:** 2026-05-04  
 **Tests:** 294 passed, 2 skipped, 0 failed (run from repo root via `pytest tests/`)
