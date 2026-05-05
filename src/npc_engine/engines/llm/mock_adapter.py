@@ -1,0 +1,86 @@
+"""
+mock_adapter.py - Deterministic in-memory LLM adapter for tests and local runs.
+
+Does NOT: perform external API calls.
+
+Dependencies injected: Optional canned response payload.
+"""
+
+from typing import Any, AsyncIterator
+
+from npc_engine.engines.llm.protocols import LLMClientProtocol
+
+
+DEFAULT_RESPONSE: dict[str, Any] = {
+    "npc_response": "I hear you.",
+    "relation_deltas": {"trust": 0, "fear": 0, "affection": 0},
+    "mood_update": None,
+    "action": {"type": "speak", "target_id": None, "parameters": {}},
+    "facial_expression": {"type": "neutral", "intensity": 20},
+}
+
+
+class MockLLMAdapter(LLMClientProtocol):
+    """Deterministic adapter that always returns configured payload."""
+
+    def __init__(self, response: dict[str, Any] | None = None) -> None:
+        """Initialise adapter with an optional canned response payload.
+
+        Args:
+            response: Dict to return from all generation calls. Defaults to DEFAULT_RESPONSE.
+        """
+        self._response = dict(response) if response is not None else dict(DEFAULT_RESPONSE)
+
+    async def generate(self, prompt: str, max_tokens: int, temperature: float) -> str:
+        """Return the npc_response string from the configured payload.
+
+        Args:
+            prompt: Ignored in mock mode.
+            max_tokens: Ignored in mock mode.
+            temperature: Ignored in mock mode.
+
+        Returns:
+            str representation of _response["npc_response"], or "" if absent.
+        """
+        return str(self._response.get("npc_response", ""))
+
+    async def generate_structured(
+        self,
+        prompt: str,
+        schema: dict[str, Any],
+        max_tokens: int,
+    ) -> dict[str, Any]:
+        """Return a shallow copy of the configured payload dict.
+
+        Args:
+            prompt: Ignored in mock mode.
+            schema: Ignored in mock mode.
+            max_tokens: Ignored in mock mode.
+
+        Returns:
+            Shallow copy of the internal response dict.
+        """
+        return dict(self._response)
+
+    async def stream(self, prompt: str, max_tokens: int, temperature: float) -> AsyncIterator[str]:
+        """Yield whitespace-delimited tokens from the configured npc_response.
+
+        Args:
+            prompt: Ignored in mock mode.
+            max_tokens: Ignored in mock mode.
+            temperature: Ignored in mock mode.
+
+        Returns:
+            Async iterator yielding each word from the npc_response with a trailing space.
+        """
+        text = str(self._response.get("npc_response", ""))
+        for token in text.split():
+            yield token + " "
+
+    def model_name(self) -> str:
+        """Return the mock model identifier.
+
+        Returns:
+            Always "mock".
+        """
+        return "mock"

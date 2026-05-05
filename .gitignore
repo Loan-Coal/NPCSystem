@@ -1,10 +1,36 @@
-transcripts/
-evals/reports/
+# Python
 __pycache__/
 *.pyc
-.env
-.venv/
+*.pyo
+*.pyd
+.Python
 *.egg-info/
-dist/
-build/
+.venv/
+venv/
+
+# Type checkers and linters
+.mypy_cache/
+.ruff_cache/
 .pytest_cache/
+
+# Coverage
+.coverage
+htmlcov/
+
+# E2E and eval outputs
+e2e/transcripts/
+evals/reports/
+transcripts/
+
+# Docker
+*.env
+!.env.example
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
