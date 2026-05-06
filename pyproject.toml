@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "npc-engine"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi==0.116.1",
+    "uvicorn[standard]==0.35.0",
+    "pydantic==2.12.1",
+    "pydantic-settings==2.11.0",
+    "PyYAML==6.0.2",
+    "types-PyYAML",
+    "neo4j==5.28.2",
+    "redis==5.2.1",
+    "httpx==0.28.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.4.2",
+    "pytest-asyncio==1.2.0",
+    "pytest-cov==6.3.0",
+    "ruff==0.13.0",
+    "mypy==1.18.2",
+]
+
+[project.scripts]
+npc-engine = "npc_engine.main:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"npc_engine" = [
+    "*.yaml",
+    "*.json",
+    "config/*.yaml",
+    "data/*.json",
+    "engines/contracts/*.yaml",
+    "observability/*.yaml",
+    "observability/*.json",
+    "type_registry/base_edges/*.yaml",
+    "type_registry/base_nodes/*.yaml",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = ["asyncio: mark test as async"]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.mypy]
+mypy_path = "src"
+strict = false
+ignore_missing_imports = true

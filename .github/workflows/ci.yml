@@ -8,9 +8,6 @@ on:
 jobs:
   static-analysis:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: npc_engine
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -e .[dev]
 
       - name: Lint
         run: make lint
@@ -36,9 +33,6 @@ jobs:
           - test-v13-contracts
           - test-v13-graph-admin
           - test-v13-retrieval
-    defaults:
-      run:
-        working-directory: npc_engine
     env:
       API_KEY_SECRET: "test-api-key-secret-ci"
     steps:
@@ -53,7 +47,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -e .[dev]
 
       - name: Run matrix target
         run: make ${{ matrix.target }}
@@ -63,9 +57,6 @@ jobs:
     needs:
       - static-analysis
       - v13-tests
-    defaults:
-      run:
-        working-directory: npc_engine
     env:
       API_KEY_SECRET: "test-api-key-secret-ci"
     steps:
@@ -80,7 +71,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -e .[dev]
 
       - name: Test with v1.3 coverage gate
         run: make test-cov-v13
@@ -90,9 +81,6 @@ jobs:
 
   v14-p4-gates:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: npc_engine
     env:
       API_KEY_SECRET: "test-api-key-secret-ci"
     steps:
@@ -109,7 +97,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -e .[dev]
 
       - name: Validate contracts
         run: make check-contracts
@@ -117,16 +105,13 @@ jobs:
       - name: Guard contract YAML/test sync
         if: github.event_name == 'pull_request'
         run: |
-          python -m scripts.guard_contract_test_sync --base-ref origin/${{ github.base_ref }}
+          python -m npc_engine.scripts.guard_contract_test_sync --base-ref origin/${{ github.base_ref }}
 
       - name: Run v1.4 P4 test slice
         run: make test-v14-p4
 
   v14-p5-gates:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: npc_engine
     env:
       API_KEY_SECRET: "test-api-key-secret-ci"
     steps:
@@ -141,7 +126,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -e .[dev]
 
       - name: Run v1.4 P5 observability tests
         run: make test-v14-p5

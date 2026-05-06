@@ -1,0 +1,86 @@
+# docker-compose.yml
+#
+# Network topology
+# ─────────────────
+# Two Docker networks:
+#   internal  — Neo4j, Redis, and the app container. Not reachable from the host
+#               by default.
+#   public    — the app container only. Port 8000 is mapped here.
+#
+# Route security posture
+# ──────────────────────
+# The app exposes both game-engine (/v1/) and admin (/v1/admin/) routes on
+# port 8000. In production, add a reverse proxy (nginx, Caddy, Traefik) in
+# front of the app that:
+#   - Forwards /v1/  requests to the app  (external traffic allowed)
+#   - Blocks /v1/admin/ requests          (internal-network only)
+#
+# Example nginx snippet:
+#   location /v1/admin/ { deny all; }
+#   location /v1/       { proxy_pass http://app:8000; }
+#   location /health    { proxy_pass http://app:8000; }
+#
+# For local development the admin routes are accessible directly on port 8000.
+
+services:
+  neo4j:
+    image: neo4j:5
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/password
+    volumes:
+      - neo4j_data:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -a bolt://localhost:7687 -u neo4j -p password 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    profiles:
+      - cache
+    ports:
+      - "6379:6379"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      GAME_SCHEMA_PATH: /app/game_schema.yaml
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    restart: on-failure:5
+    command: uvicorn npc_engine.main:app --host 0.0.0.0 --port 8000
+    networks:
+      - internal
+      - public
+
+networks:
+  internal:
+    driver: bridge
+    internal: true   # no outbound internet from internal containers
+  public:
+    driver: bridge
+
+volumes:
+  neo4j_data:
