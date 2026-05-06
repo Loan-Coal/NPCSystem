@@ -57,12 +57,18 @@ def gossip_distort(
     event_severity: int,
     tick_id: int,
     distortion_base: float,
+    faction_standing: int | None = None,
+    hostile_distortion_factor: float = 1.0,
 ) -> GossipDistortion:
     """Return a deterministic GossipDistortion based on bounded probability.
 
     Probability is derived from honesty, trust, and severity parameters.
     The tick_id and summary are hashed together to produce a stable, reproducible
     distortion outcome for the same inputs.
+
+    When faction_standing is <= -50, the computed probability is multiplied by
+    hostile_distortion_factor before the gate check, increasing distortion likelihood
+    between hostile-faction pairs.
 
     Args:
         event_summary: Source event summary text to potentially distort.
@@ -71,6 +77,10 @@ def gossip_distort(
         event_severity: Event severity (0–100); higher severity increases distortion chance.
         tick_id: Current game tick; seeds deterministic randomness.
         distortion_base: Base distortion probability added to attribute terms.
+        faction_standing: Best STANDS_WITH value between sharer and receiver factions,
+            or None if no standing edges exist. Standing <= -50 triggers hostile amplification.
+        hostile_distortion_factor: Multiplier applied to probability when faction_standing
+            indicates hostility. Values above 1.0 increase distortion likelihood.
 
     Returns:
         GossipDistortion with the (possibly modified) summary and distortion metadata.
@@ -82,6 +92,8 @@ def gossip_distort(
         severity=event_severity,
         base=distortion_base,
     )
+    if faction_standing is not None and faction_standing <= -50:
+        probability = min(1.0, probability * hostile_distortion_factor)
     seed = _seed_value(event_summary, sharer_honesty, sharer_receiver_trust, tick_id)
     gate = (seed % 1000) / 1000.0
     if gate > probability:

@@ -13,7 +13,36 @@ Rules:
 
 ## Open
 
-(no open issues)
+## ISSUE-004: edge_updater.py — no-any-return from dump_json
+**Found:** 2026-05-06, during Phase 1.2 (faction-aware gossip)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/engines/gossip/edge_updater.py:45`
+**Description:** `dump_json()` returns `Any`, so `return dump_json(...)` on a function
+declared `-> str` triggers `mypy [no-any-return]`. Pre-existing before Phase 1.
+**Why deferred:** Not introduced by Phase 1 changes; low risk.
+**To fix:** Add `cast(str, dump_json(...))` on the return line, or annotate `dump_json` as `-> str`.
+
+## ISSUE-005: adjust_reputation_for_event not wired to event engine
+**Found:** 2026-05-06, during Phase 1.3 planning
+**Severity:** P3 (nice-to-fix)
+**Where:** Future `src/npc_engine/graph/reputation_writer.py` (Phase 1.3)
+**Description:** `adjust_reputation_for_event` will be implemented in 1.3 but the
+event engine wiring that calls it (e.g., killing a faction member → -20 reputation)
+is out of scope for Phase 1. The function will exist but never be triggered automatically.
+**Why deferred:** Requires engine changes belonging to a later phase.
+**To fix:** Wire in a future event-processing phase that calls `adjust_reputation_for_event`
+based on event type + target faction membership.
+
+## ISSUE-006: character.faction string field not migrated to MEMBER_OF edges
+**Found:** 2026-05-06, during Phase 1.1 (faction nodes)
+**Severity:** P3 (nice-to-fix)
+**Where:** Existing Character nodes with a `faction` string property
+**Description:** The migration script only adds the Faction node uniqueness constraint.
+Pre-existing `character.faction` string fields are not converted to MEMBER_OF edges,
+since that mapping is game-data-specific.
+**Why deferred:** Needs operator-supplied mapping of faction name strings to Faction node IDs.
+**To fix:** Provide a game-specific migration that reads character.faction, resolves it to
+a Faction node ID, and creates the MEMBER_OF edge.
 
 ---
 

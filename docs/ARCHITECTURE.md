@@ -522,23 +522,32 @@ tick_scheduler
     ▼
 gossip_handler.run_tick(tick_id)
     │
-    ├── pair_selector.select_pairs(tick_id)
-    │       └── Neo4j: query active NPCs (is_active=true) at shared locations
-    │           → weight by gossip_weight_resolver fields (default: gossipy)
-    │           → RNG-sample N pairs (seeded by tick_id)
+    ├── pair_selector.select_pairs(session, max_pairs, weight_config)
+    │       └── Neo4j: query active NPCs at shared locations
+    │           OPTIONAL MATCH faction memberships (MEMBER_OF) for each NPC
+    │           OPTIONAL MATCH STANDS_WITH edges between their factions
+    │           → base weight = sum of gossipy attributes
+    │           → faction_weight = compute_faction_weight(
+    │                 sharer_factions, receiver_factions, best_standing,
+    │                 same_faction_boost=2.0, allied_boost=1.5, hostile_penalty=0.1
+    │             )
+    │           → sort key: (base * faction_weight, a.id, b.id)
+    │           → return top-N (sharer, receiver, loc, faction_ctx) tuples
     │
-    ├── For each pair (A, B):
-    │       ├── gossip_handler.select_event_to_share(sharer=A)
-    │       │       └── Neo4j: get A's known events sorted by recency
-    │       │           → weight by gossipy + recency
+    ├── For each pair (A, B, loc, faction_ctx):
+    │       ├── gossip_handler: fetch A's most recent known event
+    │       │
+    │       ├── gossip_handler: fetch A→B trust from RELATES_TO edge
     │       │
     │       ├── gossip_distort(
-    │       │       event_summary, sharer_honesty, trust, severity, tick_id, base
+    │       │       event_summary, sharer_honesty, trust, severity, tick_id, base,
+    │       │       faction_standing=faction_ctx["best_standing"],
+    │       │       hostile_distortion_factor=weight_config.hostile_distortion_factor
     │       │   ) → GossipDistortion (pure function, no I/O)
+    │       │   Note: if faction_standing <= -50, probability × hostile_distortion_factor
     │       │
     │       ├── knowledge_propagator.propagate(B, event, distortion)
-    │       │       └── (only if B.is_active = true)
-    │       │           Neo4j: MERGE KNOWS_ABOUT edge on B→Event
+    │       │       └── Neo4j: MERGE KNOWS_ABOUT edge on B→Event
     │       │
     │       ├── edge_updater.log_gossip(A, B, tick_id)
     │       │       └── Neo4j: update A→B RELATES_TO delta_log
@@ -547,6 +556,21 @@ gossip_handler.run_tick(tick_id)
     │
     └── logger.info("gossip_tick_complete", pairs=N, distortions=K, tick=tick_id)
 ```
+
+### Faction Weight Config
+
+Weight multipliers live in `engines/gossip/config.yaml` (packaged with the engine) and
+are loaded once at startup into a `GossipWeightConfig` frozen dataclass injected into
+`GossipHandler`. Operators can override values by editing the YAML without touching
+environment variables.
+
+| Scenario | Multiplier | Default |
+|----------|-----------|---------|
+| Sharer and receiver share a faction | `same_faction_boost` | 2.0 |
+| Best standing between their factions ≥ 50 | `allied_boost` | 1.5 |
+| Best standing between their factions ≤ −50 | `hostile_penalty` | 0.1 |
+| No faction overlap or neutral standing | (none) | 1.0 |
+| Hostile pair distortion amplification | `hostile_distortion_factor` | 1.5 |
 
 ---
 

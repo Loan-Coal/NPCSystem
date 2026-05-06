@@ -3,7 +3,7 @@ gossip_handler.py - Orchestrates one gossip tick over selected NPC pairs.
 
 Does NOT: run global scheduling loops.
 
-Dependencies injected: AsyncSession, Settings, EmbeddingIndex.
+Dependencies injected: AsyncSession, Settings, GossipWeightConfig, EmbeddingIndex.
 """
 
 from neo4j import AsyncSession
@@ -13,6 +13,7 @@ import logging
 from npc_engine.config import Settings
 from npc_engine.engines.embedding_invalidation import invalidate_embedding_safely
 from npc_engine.engines.gossip.edge_updater import log_gossip
+from npc_engine.engines.gossip.gossip_config import GossipWeightConfig
 from npc_engine.engines.gossip.gossip_distort import gossip_distort
 from npc_engine.engines.gossip.knowledge_propagator import propagate
 from npc_engine.engines.gossip.pair_selector import select_pairs
@@ -40,16 +41,23 @@ RETURN r.trust AS trust
 class GossipHandler:
     """Coordinates gossip pair processing for one tick."""
 
-    def __init__(self, settings: Settings, embedding_index: EmbeddingIndex) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        embedding_index: EmbeddingIndex,
+        weight_config: GossipWeightConfig,
+    ) -> None:
         """Initialise the gossip handler.
 
         Args:
             settings: Application settings (GOSSIP_DISTORTION_BASE).
             embedding_index: Vector index used to invalidate receiver embeddings after gossip.
+            weight_config: Faction weight multipliers for pair selection and distortion.
         """
 
         self._settings = settings
         self._embedding_index = embedding_index
+        self._weight_config = weight_config
         self._lock = asyncio.Lock()
 
     async def run_tick(
@@ -72,12 +80,16 @@ class GossipHandler:
         """
 
         async with self._lock:
-            pairs = await select_pairs(session=session, max_pairs=max_pairs)
+            pairs = await select_pairs(
+                session=session,
+                max_pairs=max_pairs,
+                weight_config=self._weight_config,
+            )
             if npc_ids:
                 allowed = set(npc_ids)
                 pairs = [pair for pair in pairs if pair[0]["id"] in allowed or pair[1]["id"] in allowed]
             propagated = 0
-            for sharer, receiver, _loc in pairs:
+            for sharer, receiver, _loc, faction_ctx in pairs:
                 event_result = await session.run(CYPHER_SELECT_EVENT, sharer_id=sharer["id"])
                 event_record = await event_result.single()
                 if event_record is None:
@@ -89,6 +101,7 @@ class GossipHandler:
                 )
                 trust_record = await trust_result.single()
                 trust = int(trust_record["trust"]) if trust_record is not None else 50
+                best_standing: int | None = faction_ctx.get("best_standing")
                 distortion = gossip_distort(
                     event_summary=str(event_record["summary"]),
                     sharer_honesty=int(sharer.get("honesty", 50)),
@@ -96,6 +109,8 @@ class GossipHandler:
                     event_severity=int(event_record["severity"]),
                     tick_id=tick_id,
                     distortion_base=self._settings.GOSSIP_DISTORTION_BASE,
+                    faction_standing=best_standing,
+                    hostile_distortion_factor=self._weight_config.hostile_distortion_factor,
                 )
                 await propagate(
                     session=session,

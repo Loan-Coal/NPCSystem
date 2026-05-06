@@ -1,0 +1,35 @@
+case_id: faction_gossip_distortion_001
+description: >
+  An NPC from a hostile faction shares gossip about a war event with an NPC from
+  an enemy faction. The distorted version should reflect the hostile relationship —
+  elevated distortion level and a distortion type consistent with enemy framing
+  (exaggeration or role_swap preferred over neutral omission).
+
+seed:
+  sharer_id: npc_hostile_sharer
+  receiver_id: npc_hostile_receiver
+  faction_standing: -100
+  event_summary: "The northern army captured the bridge at dawn."
+  event_severity: 70
+  sharer_honesty: 50
+  trust: 30
+  tick_id: 42
+  distortion_base: 0.3
+  hostile_distortion_factor: 1.5
+
+expected:
+  - kind: range
+    field: distortion_level
+    min: 20
+    max: 100
+  - kind: in_set
+    field: distortion_type
+    values: ["exaggeration", "role_swap", "omission", "timeline_shift"]
+  - kind: schema
+    description: "Response must be a GossipDistortion with summary, distortion_type, distortion_level"
+
+notes: >
+  The hostile_distortion_factor (1.5) amplifies the computed probability before the gate
+  check. At distortion_base=0.3, honesty=50, trust=30, severity=70, the raw probability
+  is ~0.5; after factor it becomes min(1.0, 0.75), so distortion is virtually guaranteed.
+  This case verifies the hostile path produces a non-null distortion_type.

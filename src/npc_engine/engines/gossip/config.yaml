@@ -1,0 +1,16 @@
+# Faction weight multipliers for gossip pair selection and distortion.
+# Adjust these values to tune how strongly faction relationships influence gossip.
+
+# Multiplier applied when sharer and receiver share at least one faction.
+same_faction_boost: 2.0
+
+# Multiplier applied when the best faction standing between sharer and receiver is >= 50.
+allied_boost: 1.5
+
+# Multiplier applied when the best faction standing between sharer and receiver is <= -50.
+# Values below 1.0 reduce gossip likelihood between hostile pairs.
+hostile_penalty: 0.1
+
+# Factor by which the distortion probability is multiplied when the sharer and receiver
+# belong to hostile factions (standing <= -50). Values above 1.0 increase distortion.
+hostile_distortion_factor: 1.5
