@@ -1,0 +1,7 @@
+edge_type: MEMBER_OF
+src_type: character
+dst_type: faction
+fields:
+  role: { type: str, required: true }
+  status: { type: str, required: true }
+  joined_at: { type: str, required: true }

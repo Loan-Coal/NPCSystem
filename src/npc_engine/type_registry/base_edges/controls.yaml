@@ -1,0 +1,4 @@
+edge_type: CONTROLS
+src_type: faction
+dst_type: location
+fields: {}
