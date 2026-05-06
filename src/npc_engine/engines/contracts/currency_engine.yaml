@@ -1,5 +1,6 @@
 name: currency_engine
 version: v1.4.0
+uses_llm: false
 inputs:
   - transfer_request
 outputs:

@@ -175,6 +175,24 @@ class ContractValidationError(StructuredNPCSystemError):
 
 
 @dataclass(frozen=True)
+class EngineModelConfigMisconfiguredError(StructuredNPCSystemError):
+    """Raised when a per-engine llm_config file is missing or unreadable."""
+
+    engine: str
+    config_path: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class EngineModelConfigValidationError(StructuredNPCSystemError):
+    """Raised when a per-engine llm_config file fails schema validation."""
+
+    engine: str
+    config_path: str
+    detail: str
+
+
+@dataclass(frozen=True)
 class CurrencyValidationError(StructuredNPCSystemError):
     """Raised when requested currency mutation violates configured bounds."""
 

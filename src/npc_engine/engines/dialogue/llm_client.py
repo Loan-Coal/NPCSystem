@@ -21,23 +21,37 @@ LLM_CALLS_METRIC = "llm_calls_total"
 LLM_TOKENS_IN_METRIC = "llm_tokens_in_total"
 LLM_TOKENS_OUT_METRIC = "llm_tokens_out_total"
 LLM_ENGINE_LABEL = "dialogue"
-MAX_TOKENS = 512
-DEFAULT_TEMPERATURE = 0.7
 
 
 class DialogueLLMClient:
     """Dialogue-oriented structured LLM client wrapper."""
 
-    def __init__(self, llm_client: LLMClientProtocol, fallback_path: str) -> None:
+    def __init__(
+        self,
+        llm_client: LLMClientProtocol,
+        fallback_path: str,
+        max_tokens: int,
+        temperature: float,
+        top_p: float,
+        stop_sequences: list[str],
+    ) -> None:
         """Initialise the dialogue LLM client wrapper.
 
         Args:
             llm_client: Underlying LLM adapter implementing LLMClientProtocol.
             fallback_path: Path to the JSON fallback response file.
+            max_tokens: Maximum tokens to request from the LLM per call.
+            temperature: Sampling temperature forwarded to streaming calls.
+            top_p: Nucleus sampling probability mass forwarded to all generation calls.
+            stop_sequences: Token sequences that halt generation, forwarded to all calls.
         """
 
         self._llm_client = llm_client
         self._fallback_path = fallback_path
+        self._max_tokens = max_tokens
+        self._temperature = temperature
+        self._top_p = top_p
+        self._stop_sequences = stop_sequences
 
     async def generate_response(self, prompt: str) -> dict:
         """Request a structured dialogue response, falling back on timeout or errors.
@@ -57,7 +71,13 @@ class DialogueLLMClient:
         increment_metric(metric=LLM_CALLS_METRIC, labels=labels)
         increment_metric(metric=LLM_TOKENS_IN_METRIC, amount=float(estimate_tokens(prompt)), labels=labels)
         try:
-            response = await self._llm_client.generate_structured(prompt=prompt, schema=schema, max_tokens=MAX_TOKENS)
+            response = await self._llm_client.generate_structured(
+                prompt=prompt,
+                schema=schema,
+                max_tokens=self._max_tokens,
+                top_p=self._top_p,
+                stop_sequences=self._stop_sequences,
+            )
             normalized_response = DialogueResponse.model_validate(response).model_dump(mode="python")
             increment_metric(
                 metric=LLM_TOKENS_OUT_METRIC,
@@ -125,8 +145,10 @@ class DialogueLLMClient:
                 chunk
                 async for chunk in self._llm_client.stream(
                     prompt=prompt,
-                    max_tokens=MAX_TOKENS,
-                    temperature=DEFAULT_TEMPERATURE,
+                    max_tokens=self._max_tokens,
+                    temperature=self._temperature,
+                    top_p=self._top_p,
+                    stop_sequences=self._stop_sequences,
                 )
             ]
             increment_metric(

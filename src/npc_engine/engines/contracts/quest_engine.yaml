@@ -1,5 +1,6 @@
 name: quest_engine
 version: v1.4.0
+uses_llm: false
 inputs:
   - quest_transition
 outputs:

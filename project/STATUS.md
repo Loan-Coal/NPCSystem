@@ -1,5 +1,41 @@
 # Status
 
+## Phase 0.5 — Stability cleanup (ISSUES 001–003)
+**Status:** ✅ Complete
+**Date completed:** 2026-05-06
+**Tests:** run after session to confirm green
+
+### What was done
+- **ISSUE-001**: Added `top_p: float | None = None` and `stop_sequences: list[str] | None = None` to `LLMClientProtocol.generate`, `generate_structured`, and `stream`. All three adapters (Ollama, Mistral, Mock) accept and forward both params. `DialogueLLMClient` stores and forwards them; `DialogueHandler` passes them from `engine_model_config.llm`. New adapter payload-forwarding tests added.
+- **ISSUE-002**: Renamed `engines/economy/` → `engines/currency/` to match `_engine_dir_from_contract_name("currency_engine")` convention. Directory was a namespace stub only; no import changes needed.
+- **ISSUE-003**: Removed `create_llm_client()`, `BACKEND_BUILDERS`, and all `_create_*` helpers from `factory.py` (zero callers confirmed). Removed `LLM_BACKEND` and `OLLAMA_MODEL` from `config.py`. Rewrote `test_llm_factory.py` to cover `create_llm_client_for_engine` with per-engine config fixtures.
+
+---
+
+## Phase 0.4 — Per-engine LLM Config
+**Status:** ✅ Complete
+**Date completed:** 2026-05-05
+**Tests:** 325 passed, 2 skipped, 0 failed
+
+### What was done
+- Added `uses_llm: bool` field to `EngineContract`; set `true` in `dialogue_engine.yaml`, `false` in `quest_engine.yaml` and `currency_engine.yaml`
+- New `src/npc_engine/engines/llm_config_models.py`: `EngineModelParams`, `EnginePromptRef`, `EngineFallbackPolicy`, `EngineTimeoutsMs`, `EngineModelConfig` — all Pydantic v2, `frozen=True, extra="forbid", strict=True`
+- New `src/npc_engine/engines/llm_config_loader.py`: `get_config(engine_name)` loads and validates per-engine YAML; `validate_all_engine_llm_configs(contracts)` called at startup to fail fast on missing/invalid configs
+- New `src/npc_engine/engines/dialogue/llm_config.yaml`: mock backend defaults, per-engine timeouts, fallback tiers
+- `engines/llm/factory.py`: added `create_llm_client_for_engine(engine_config, settings)` — for Ollama, uses `engine_config.llm.model` rather than `settings.OLLAMA_MODEL`
+- `engines/dialogue/llm_client.py`: removed `MAX_TOKENS`/`DEFAULT_TEMPERATURE` module constants; `DialogueLLMClient.__init__` now requires `max_tokens` and `temperature` parameters
+- `engines/dialogue/dialogue_handler.py`: added `engine_model_config: EngineModelConfig` to `__init__`; timeouts now sourced exclusively from per-engine config
+- `config.py`: removed `DIALOGUE_FULL_TIMEOUT_SECONDS` and `DIALOGUE_GRAPH_ONLY_TIMEOUT_SECONDS`
+- `api/dependency_singletons.py`: added `get_dialogue_engine_model_config()` singleton
+- `api/dependencies.py` + `api/routes/dialogue_ws.py`: wired `engine_model_config` through dependency chain
+- `main.py` lifespan: loads contracts → `validate_all_engine_llm_configs` → pre-warms dialogue config singleton
+- New `tests/unit/test_engine_llm_config_loader.py`: 13 tests (happy path, all backends, missing file, missing field, unknown field, invalid backend, strict mode, I/O error, validate_all pass/fail/skip, uses_llm contract field)
+- New `tests/integration/test_engine_llm_config_integration.py`: 3 tests (real config loads, independent max_tokens, independent timeouts)
+- Updated `tests/unit/test_dialogue_handler_fallback_v14.py`, `test_llm_metrics_observability_v14.py`, `test_engine_contract_schema_checker_v14.py`
+- Logged 3 deferred issues in `ISSUES.md` (001–003)
+
+---
+
 ## Phase 0.3 — Route Audience Split + Hardening
 **Status:** ✅ Complete
 **Date completed:** 2026-05-05
@@ -157,9 +193,8 @@ Each service bullet lists its direct project-module dependencies.
 - **engines.llm.ollama_adapter** → engines.llm.protocols
 - **engines.llm.factory** → config, engines.llm.{protocols, mock_adapter, mistral_adapter, llama_adapter, ollama_adapter}
 
-### Economy Engines (Layer: engines)
-- **engines.economy.currency_verification_engine** → config, utils.errors
-- **engines.economy.trading_engine** → config, utils.errors
+### Currency Engines (Layer: engines)
+- **engines.currency** — namespace stub only; implementations are in graph/transfer_validators.py
 
 ### Emotion Engine (Layer: engines)
 - **engines.emotion.emotion_state** — no project deps

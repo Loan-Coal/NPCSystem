@@ -30,13 +30,22 @@ class OllamaAdapter(LLMClientProtocol):
         self._model_name = model_name
         self._timeout_seconds = timeout_seconds
 
-    async def generate(self, prompt: str, max_tokens: int, temperature: float) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        max_tokens: int,
+        temperature: float,
+        top_p: float | None = None,
+        stop_sequences: list[str] | None = None,
+    ) -> str:
         """Send a plain-text generation request to the Ollama backend.
 
         Args:
             prompt: Formatted prompt string.
             max_tokens: Maximum tokens to generate (mapped to num_predict).
             temperature: Sampling temperature.
+            top_p: Nucleus sampling probability mass. None means backend default.
+            stop_sequences: Token sequences that halt generation (mapped to stop). None means backend default.
 
         Returns:
             Generated text from the backend "response" field.
@@ -45,14 +54,16 @@ class OllamaAdapter(LLMClientProtocol):
             LLMTimeoutError: If the HTTP request times out.
             LLMRequestError: If the backend returns an HTTP error, invalid JSON, or a backend error field.
         """
+        options: dict = {"num_predict": max_tokens, "temperature": temperature}
+        if top_p is not None:
+            options["top_p"] = top_p
+        if stop_sequences is not None:
+            options["stop"] = stop_sequences
         payload = {
             "model": self._model_name,
             "prompt": prompt,
             "stream": False,
-            "options": {
-                "num_predict": max_tokens,
-                "temperature": temperature,
-            },
+            "options": options,
         }
         try:
             async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
@@ -77,6 +88,8 @@ class OllamaAdapter(LLMClientProtocol):
         prompt: str,
         schema: dict[str, Any],
         max_tokens: int,
+        top_p: float | None = None,
+        stop_sequences: list[str] | None = None,
     ) -> dict[str, Any]:
         """Send a schema-constrained JSON generation request to the Ollama backend.
 
@@ -84,6 +97,8 @@ class OllamaAdapter(LLMClientProtocol):
             prompt: Formatted prompt string; schema is appended as a JSON block.
             schema: JSON schema dict appended to the prompt and sent as format hint.
             max_tokens: Maximum tokens to generate (mapped to num_predict).
+            top_p: Nucleus sampling probability mass. None means backend default.
+            stop_sequences: Token sequences that halt generation (mapped to stop). None means backend default.
 
         Returns:
             Parsed dict from the "response" field of the Ollama reply.
@@ -92,14 +107,17 @@ class OllamaAdapter(LLMClientProtocol):
             LLMTimeoutError: If the HTTP request times out.
             LLMRequestError: If the backend returns an HTTP error, backend error field, or non-dict JSON.
         """
+        options: dict = {"num_predict": max_tokens}
+        if top_p is not None:
+            options["top_p"] = top_p
+        if stop_sequences is not None:
+            options["stop"] = stop_sequences
         payload = {
             "model": self._model_name,
             "prompt": f"{prompt}\n\nRequired JSON schema:\n{json.dumps(schema, ensure_ascii=True)}",
             "stream": False,
             "format": "json",
-            "options": {
-                "num_predict": max_tokens,
-            },
+            "options": options,
         }
         try:
             async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
@@ -122,13 +140,22 @@ class OllamaAdapter(LLMClientProtocol):
             raise LLMRequestError(model=self.model_name(), detail="invalid_json_shape")
         return dict(parsed)
 
-    async def stream(self, prompt: str, max_tokens: int, temperature: float) -> AsyncIterator[str]:
+    async def stream(
+        self,
+        prompt: str,
+        max_tokens: int,
+        temperature: float,
+        top_p: float | None = None,
+        stop_sequences: list[str] | None = None,
+    ) -> AsyncIterator[str]:
         """Stream tokens from the Ollama backend line by line.
 
         Args:
             prompt: Formatted prompt string.
             max_tokens: Maximum tokens to generate (mapped to num_predict).
             temperature: Sampling temperature.
+            top_p: Nucleus sampling probability mass. None means backend default.
+            stop_sequences: Token sequences that halt generation (mapped to stop). None means backend default.
 
         Returns:
             Async iterator yielding non-empty token strings from each streamed JSON line.
@@ -137,14 +164,16 @@ class OllamaAdapter(LLMClientProtocol):
             LLMTimeoutError: If the stream connection times out.
             LLMRequestError: If the backend returns an HTTP stream error or a backend error field.
         """
+        options: dict = {"num_predict": max_tokens, "temperature": temperature}
+        if top_p is not None:
+            options["top_p"] = top_p
+        if stop_sequences is not None:
+            options["stop"] = stop_sequences
         payload = {
             "model": self._model_name,
             "prompt": prompt,
             "stream": True,
-            "options": {
-                "num_predict": max_tokens,
-                "temperature": temperature,
-            },
+            "options": options,
         }
         try:
             async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:

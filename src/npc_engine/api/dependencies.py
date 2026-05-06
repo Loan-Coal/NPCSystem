@@ -13,6 +13,7 @@ from neo4j import AsyncSession
 
 from npc_engine.api.dependency_singletons import (
     get_context_cache,
+    get_dialogue_engine_model_config,
     get_embedding_index,
     get_emotion_store,  # noqa: F401  re-exported for api.routes.npc_state
     get_emotion_updater,
@@ -29,7 +30,8 @@ from npc_engine.api.dependency_singletons import (
 )
 from npc_engine.config import Settings, get_settings
 from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
-from npc_engine.engines.llm.factory import create_llm_client
+from npc_engine.engines.llm.factory import create_llm_client_for_engine
+from npc_engine.engines.llm_config_models import EngineModelConfig
 from npc_engine.graph.generic_graph_service import GenericGraphService
 from npc_engine.graph.graph_admin_service import GraphAdminService
 from npc_engine.schema.llm_config_models import LLMConfig
@@ -48,16 +50,20 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-def get_llm_client(settings: Settings = Depends(get_settings)):
-    """Create an LLM client bound to current request settings.
+def get_llm_client(
+    settings: Settings = Depends(get_settings),
+    engine_model_config: EngineModelConfig = Depends(get_dialogue_engine_model_config),
+):
+    """Create an LLM client from the dialogue engine's per-engine config.
 
     Args:
-        settings: Application settings resolved via dependency injection.
+        settings: Application settings providing backend URLs and timeout.
+        engine_model_config: Dialogue engine LLM config declaring backend and model.
 
     Returns:
-        LLM client instance for the current request.
+        LLM client instance for the dialogue engine.
     """
-    return create_llm_client(settings=settings)
+    return create_llm_client_for_engine(engine_config=engine_model_config, settings=settings)
 
 
 def build_dialogue_handler(
@@ -66,6 +72,7 @@ def build_dialogue_handler(
     settings: Settings,
     llm_client,
     llm_config: LLMConfig,
+    engine_model_config: EngineModelConfig,
 ) -> DialogueHandler:
     """Construct DialogueHandler with shared dependency wiring.
 
@@ -73,7 +80,8 @@ def build_dialogue_handler(
         session: Active Neo4j session for graph access.
         settings: Application settings.
         llm_client: Instantiated LLM client.
-        llm_config: Typed LLM configuration.
+        llm_config: Context pipeline config (tier budgets and relevance weights).
+        engine_model_config: Per-engine config (model params, timeouts, fallback policy).
 
     Returns:
         Fully wired DialogueHandler instance.
@@ -83,6 +91,7 @@ def build_dialogue_handler(
         settings=settings,
         llm_client=llm_client,
         llm_config=llm_config,
+        engine_model_config=engine_model_config,
         session_store=get_session_store(),
         emotion_updater=get_emotion_updater(),
         embedding_index=get_embedding_index(),
@@ -95,6 +104,7 @@ def get_dialogue_handler(
     settings: Settings = Depends(get_settings),
     llm_client=Depends(get_llm_client),
     llm_config: LLMConfig = Depends(get_llm_config),
+    engine_model_config: EngineModelConfig = Depends(get_dialogue_engine_model_config),
 ) -> DialogueHandler:
     """Build a per-request DialogueHandler via FastAPI dependency injection.
 
@@ -102,7 +112,8 @@ def get_dialogue_handler(
         session: Scoped Neo4j session.
         settings: Application settings.
         llm_client: LLM client resolved per request.
-        llm_config: Typed LLM configuration.
+        llm_config: Context pipeline config.
+        engine_model_config: Dialogue engine per-engine LLM config.
 
     Returns:
         Fully wired DialogueHandler.
@@ -112,6 +123,7 @@ def get_dialogue_handler(
         settings=settings,
         llm_client=llm_client,
         llm_config=llm_config,
+        engine_model_config=engine_model_config,
     )
 
 

@@ -3,7 +3,8 @@ dialogue_handler.py - Orchestrates context, prompting, parsing, mutation, and em
 
 Does NOT: implement HTTP transport concerns.
 
-Dependencies injected: AsyncSession, Settings, LLMClientProtocol, SessionStore, EmotionUpdater.
+Dependencies injected: AsyncSession, Settings, LLMClientProtocol, EngineModelConfig,
+                       SessionStore, EmotionUpdater.
 """
 
 from datetime import datetime, timezone
@@ -23,6 +24,7 @@ from npc_engine.engines.dialogue.response_parser import parse_dialogue_response
 from npc_engine.engines.dialogue.session_store import SessionStore
 from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
 from npc_engine.engines.llm.protocols import LLMClientProtocol
+from npc_engine.engines.llm_config_models import EngineModelConfig
 from npc_engine.retrieval.context_builder import build_serialized_context
 from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache
 from npc_engine.schema.llm_config_models import LLMConfig
@@ -41,6 +43,7 @@ class DialogueHandler:
         settings: Settings,
         llm_client: LLMClientProtocol,
         llm_config: LLMConfig,
+        engine_model_config: EngineModelConfig,
         session_store: SessionStore,
         emotion_updater: EmotionUpdater,
         embedding_index: object,
@@ -52,7 +55,8 @@ class DialogueHandler:
             session: Active Neo4j async session.
             settings: Application settings.
             llm_client: LLM adapter for text generation.
-            llm_config: LLM configuration with tier budgets and relevance weights.
+            llm_config: Context pipeline config (tier budgets and relevance weights).
+            engine_model_config: Per-engine LLM config (model params, timeouts, fallback).
             session_store: In-memory session turn store.
             emotion_updater: Engine for reading and updating NPC emotion state.
             embedding_index: Vector index supporting the EmbeddingIndexProtocol.
@@ -62,11 +66,19 @@ class DialogueHandler:
         self._session = session
         self._settings = settings
         self._llm_config = llm_config
+        self._engine_model_config = engine_model_config
         self._session_store = session_store
         self._emotion_updater = emotion_updater
         self._embedding_index = embedding_index
         self._context_cache = context_cache
-        self._llm = DialogueLLMClient(llm_client=llm_client, fallback_path=settings.LLM_FALLBACK_PATH)
+        self._llm = DialogueLLMClient(
+            llm_client=llm_client,
+            fallback_path=settings.LLM_FALLBACK_PATH,
+            max_tokens=engine_model_config.llm.max_tokens,
+            temperature=engine_model_config.llm.temperature,
+            top_p=engine_model_config.llm.top_p,
+            stop_sequences=list(engine_model_config.llm.stop_sequences),
+        )
 
     async def handle(self, request: DialogueRequest) -> DialogueResponse:
         """Execute the full dialogue flow with tiered degradation and return the response.
@@ -91,8 +103,8 @@ class DialogueHandler:
             ),
             archetype="default",
             canned_dir=Path(self._settings.CANNED_RESPONSES_DIR),
-            full_timeout=self._settings.DIALOGUE_FULL_TIMEOUT_SECONDS,
-            graph_only_timeout=self._settings.DIALOGUE_GRAPH_ONLY_TIMEOUT_SECONDS,
+            full_timeout=self._engine_model_config.timeouts_ms.full / 1000.0,
+            graph_only_timeout=self._engine_model_config.timeouts_ms.graph_only / 1000.0,
         )
 
         resolved_action = resolve_action(action=parsed_response.action)

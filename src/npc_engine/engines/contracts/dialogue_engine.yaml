@@ -1,5 +1,6 @@
 name: dialogue_engine
 version: v1.4.0
+uses_llm: true
 inputs:
   - player_input
 outputs:

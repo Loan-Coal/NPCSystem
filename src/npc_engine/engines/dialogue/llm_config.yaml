@@ -1,0 +1,22 @@
+engine: dialogue
+llm:
+  backend: mock
+  model: mock
+  temperature: 0.8
+  max_tokens: 512
+  top_p: 0.95
+  stop_sequences: []
+prompt:
+  name: dialogue_main
+  version: 1
+output_schema_ref: dialogue_response_v1
+fallback:
+  policy: graceful_degradation
+  tiers:
+    - full
+    - graph_only
+    - canned
+timeouts_ms:
+  full: 30000
+  graph_only: 10000
+  canned: 100

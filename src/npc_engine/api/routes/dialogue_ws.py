@@ -17,6 +17,7 @@ from npc_engine.api.dependencies import (
     get_llm_client,
     get_llm_config,
 )
+from npc_engine.api.dependency_singletons import get_dialogue_engine_model_config
 from npc_engine.api.schemas import DialogueRequest
 from npc_engine.auth.api_key import resolve_scope_from_authorization
 from npc_engine.config import get_settings
@@ -56,11 +57,16 @@ async def dialogue_ws(websocket: WebSocket) -> None:
         async with graph_db.get_session() as session:
             payload = await websocket.receive_json()
             request = DialogueRequest.model_validate(payload)
+            engine_model_config = get_dialogue_engine_model_config()
             handler = build_dialogue_handler(
                 session=session,
                 settings=settings,
-                llm_client=get_llm_client(settings=settings),
+                llm_client=get_llm_client(
+                    settings=settings,
+                    engine_model_config=engine_model_config,
+                ),
                 llm_config=get_llm_config(),
+                engine_model_config=engine_model_config,
             )
             final_response = await handler.handle(request=request)
             for chunk in _iter_token_chunks(final_response.npc_response):

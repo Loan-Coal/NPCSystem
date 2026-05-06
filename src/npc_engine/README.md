@@ -14,7 +14,7 @@ make install
 make run
 ```
 
-If you use Ollama backend (`LLM_BACKEND=ollama`), ensure Ollama is running and the selected model is pulled first:
+If you use the Ollama backend, ensure Ollama is running and the selected model is pulled first:
 
 ```bash
 ollama pull mixtral:8x7b
@@ -73,17 +73,14 @@ Implementation progress is tracked in ../IMPLEMENTATION_TRACKER.md.
 
 ## Ollama Models
 
-Ollama is supported as an LLM backend. The backend stays the same while models are switched by environment variables.
+Ollama is supported as an LLM backend. The model is declared per-engine in each engine's
+`llm_config.yaml` (`llm.model` field). The connection URL is set globally:
 
 Environment settings:
-- `LLM_BACKEND=ollama`
 - `OLLAMA_API_URL=http://localhost:11434`
-- `OLLAMA_MODEL=mixtral:8x7b`
 
-Examples:
-- Use Mixtral locally: `OLLAMA_MODEL=mixtral:8x7b`
-- Switch to Mistral: `OLLAMA_MODEL=mistral:7b`
-- Switch to Llama: `OLLAMA_MODEL=llama3:8b`
+Per-engine model selection: set `llm.backend: ollama` and `llm.model: <tag>` in
+`src/npc_engine/engines/<engine>/llm_config.yaml`.
 
 ## Distributed Tick Lease
 

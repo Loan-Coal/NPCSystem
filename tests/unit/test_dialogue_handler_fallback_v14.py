@@ -22,19 +22,44 @@ pytest.importorskip("neo4j")
 from npc_engine.api.schemas import DialogueRequest
 from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler, LLM_VALIDATION_FAILURES_METRIC
 from npc_engine.engines.dialogue.session_store import SessionStore
+from npc_engine.engines.llm_config_models import (
+    EngineModelConfig,
+    EngineFallbackPolicy,
+    EngineModelParams,
+    EnginePromptRef,
+    EngineTimeoutsMs,
+)
 from npc_engine.utils.metrics import get_counter_value, reset_metrics_registry
+
+
+def _make_engine_model_config() -> EngineModelConfig:
+    return EngineModelConfig(
+        engine="dialogue",
+        llm=EngineModelParams(
+            backend="mock",
+            model="mock",
+            temperature=0.7,
+            max_tokens=512,
+            top_p=0.95,
+            stop_sequences=[],
+        ),
+        prompt=EnginePromptRef(name="dialogue_main", version=1),
+        output_schema_ref="dialogue_response_v1",
+        fallback=EngineFallbackPolicy(policy="graceful_degradation", tiers=["full", "graph_only", "canned"]),
+        timeouts_ms=EngineTimeoutsMs(full=30000, graph_only=10000, canned=100),
+    )
 
 
 class MinimalLLMClient:
     """Minimal fake client for DialogueHandler construction in tests."""
 
-    async def generate(self, prompt: str, max_tokens: int, temperature: float) -> str:
+    async def generate(self, prompt: str, max_tokens: int, temperature: float, top_p=None, stop_sequences=None) -> str:
         return "ok"
 
-    async def generate_structured(self, prompt: str, schema: dict[str, Any], max_tokens: int) -> dict[str, Any]:
+    async def generate_structured(self, prompt: str, schema: dict[str, Any], max_tokens: int, top_p=None, stop_sequences=None) -> dict[str, Any]:
         return {"bad": "payload"}
 
-    async def stream(self, prompt: str, max_tokens: int, temperature: float) -> AsyncIterator[str]:
+    async def stream(self, prompt: str, max_tokens: int, temperature: float, top_p=None, stop_sequences=None) -> AsyncIterator[str]:
         if False:
             yield ""
 
@@ -81,11 +106,10 @@ async def test_dialogue_handler_recovers_from_validation_failure(monkeypatch) ->
         settings=SimpleNamespace(
             LLM_FALLBACK_PATH=_FALLBACK_PATH,
             CANNED_RESPONSES_DIR=_CANNED_DIR,
-            DIALOGUE_FULL_TIMEOUT_SECONDS=30.0,
-            DIALOGUE_GRAPH_ONLY_TIMEOUT_SECONDS=15.0,
         ),
         llm_client=MinimalLLMClient(),
         llm_config=SimpleNamespace(),
+        engine_model_config=_make_engine_model_config(),
         session_store=SessionStore(ttl_seconds=300, max_turns=10),
         emotion_updater=FakeEmotionUpdater(),
         embedding_index=None,
@@ -128,6 +152,7 @@ async def test_stream_passes_emotion_state_to_context_builder(monkeypatch) -> No
         settings=SimpleNamespace(LLM_FALLBACK_PATH=_FALLBACK_PATH),
         llm_client=MinimalLLMClient(),
         llm_config=SimpleNamespace(),
+        engine_model_config=_make_engine_model_config(),
         session_store=SessionStore(ttl_seconds=300, max_turns=10),
         emotion_updater=FakeEmotionUpdater(),
         embedding_index=None,

@@ -27,13 +27,22 @@ class MistralAdapter(LLMClientProtocol):
         self._base_url = base_url
         self._timeout_seconds = timeout_seconds
 
-    async def generate(self, prompt: str, max_tokens: int, temperature: float) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        max_tokens: int,
+        temperature: float,
+        top_p: float | None = None,
+        stop_sequences: list[str] | None = None,
+    ) -> str:
         """Send a plain-text generation request to the Mistral backend.
 
         Args:
             prompt: Formatted prompt string.
             max_tokens: Maximum tokens the backend should generate.
             temperature: Sampling temperature.
+            top_p: Nucleus sampling probability mass. None means backend default.
+            stop_sequences: Token sequences that halt generation. None means backend default.
 
         Returns:
             Generated text from the backend "text" field.
@@ -42,11 +51,11 @@ class MistralAdapter(LLMClientProtocol):
             LLMTimeoutError: If the HTTP request times out.
             LLMRequestError: If the backend returns an HTTP error or invalid JSON.
         """
-        payload = {
-            "prompt": prompt,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        }
+        payload: dict = {"prompt": prompt, "max_tokens": max_tokens, "temperature": temperature}
+        if top_p is not None:
+            payload["top_p"] = top_p
+        if stop_sequences is not None:
+            payload["stop_sequences"] = stop_sequences
         try:
             async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
                 response = await client.post(f"{self._base_url}/generate", json=payload)
@@ -66,6 +75,8 @@ class MistralAdapter(LLMClientProtocol):
         prompt: str,
         schema: dict[str, Any],
         max_tokens: int,
+        top_p: float | None = None,
+        stop_sequences: list[str] | None = None,
     ) -> dict[str, Any]:
         """Send a schema-constrained JSON generation request to the Mistral backend.
 
@@ -73,6 +84,8 @@ class MistralAdapter(LLMClientProtocol):
             prompt: Formatted prompt string.
             schema: JSON schema dict constraining the output.
             max_tokens: Maximum tokens the backend should generate.
+            top_p: Nucleus sampling probability mass. None means backend default.
+            stop_sequences: Token sequences that halt generation. None means backend default.
 
         Returns:
             Parsed dict from the backend response.
@@ -81,11 +94,11 @@ class MistralAdapter(LLMClientProtocol):
             LLMTimeoutError: If the HTTP request times out.
             LLMRequestError: If the backend returns an HTTP error, invalid JSON, or a non-dict body.
         """
-        payload = {
-            "prompt": prompt,
-            "schema": schema,
-            "max_tokens": max_tokens,
-        }
+        payload: dict = {"prompt": prompt, "schema": schema, "max_tokens": max_tokens}
+        if top_p is not None:
+            payload["top_p"] = top_p
+        if stop_sequences is not None:
+            payload["stop_sequences"] = stop_sequences
         try:
             async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
                 response = await client.post(f"{self._base_url}/generate_structured", json=payload)
@@ -102,13 +115,22 @@ class MistralAdapter(LLMClientProtocol):
             raise LLMRequestError(model=self.model_name(), detail="invalid_json_shape")
         return dict(data)
 
-    async def stream(self, prompt: str, max_tokens: int, temperature: float) -> AsyncIterator[str]:
+    async def stream(
+        self,
+        prompt: str,
+        max_tokens: int,
+        temperature: float,
+        top_p: float | None = None,
+        stop_sequences: list[str] | None = None,
+    ) -> AsyncIterator[str]:
         """Stream tokens from the Mistral backend as they are generated.
 
         Args:
             prompt: Formatted prompt string.
             max_tokens: Maximum tokens the backend should generate.
             temperature: Sampling temperature.
+            top_p: Nucleus sampling probability mass. None means backend default.
+            stop_sequences: Token sequences that halt generation. None means backend default.
 
         Returns:
             Async iterator yielding raw text chunks from the backend stream.
@@ -117,11 +139,11 @@ class MistralAdapter(LLMClientProtocol):
             LLMTimeoutError: If the stream connection times out.
             LLMRequestError: If the backend returns an HTTP stream error.
         """
-        payload = {
-            "prompt": prompt,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        }
+        payload: dict = {"prompt": prompt, "max_tokens": max_tokens, "temperature": temperature}
+        if top_p is not None:
+            payload["top_p"] = top_p
+        if stop_sequences is not None:
+            payload["stop_sequences"] = stop_sequences
         try:
             async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
                 async with client.stream("POST", f"{self._base_url}/stream", json=payload) as response:

@@ -58,17 +58,13 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     REDIS_CONNECT_TIMEOUT_SECONDS: float = 1.0
 
-    LLM_BACKEND: Literal["mistral7b", "llama8b", "ollama", "mock"] = "mock"
     LLM_TIMEOUT_SECONDS: float = 10.0
     LLM_CACHE_ENABLED: bool = False
     LLM_FALLBACK_PATH: str = "data/fallback_responses.json"
-    DIALOGUE_FULL_TIMEOUT_SECONDS: float = 30.0
-    DIALOGUE_GRAPH_ONLY_TIMEOUT_SECONDS: float = 15.0
     CANNED_RESPONSES_DIR: str = "prompts/canned"
     MISTRAL_API_URL: str | None = None
     LLAMA_API_URL: str | None = None
     OLLAMA_API_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "mixtral:8x7b"
 
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
     VECTOR_STORE_BACKEND: Literal["memory", "qdrant"] = "memory"

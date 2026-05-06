@@ -31,13 +31,22 @@ class MockLLMAdapter(LLMClientProtocol):
         """
         self._response = dict(response) if response is not None else dict(DEFAULT_RESPONSE)
 
-    async def generate(self, prompt: str, max_tokens: int, temperature: float) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        max_tokens: int,
+        temperature: float,
+        top_p: float | None = None,
+        stop_sequences: list[str] | None = None,
+    ) -> str:
         """Return the npc_response string from the configured payload.
 
         Args:
             prompt: Ignored in mock mode.
             max_tokens: Ignored in mock mode.
             temperature: Ignored in mock mode.
+            top_p: Ignored in mock mode.
+            stop_sequences: Ignored in mock mode.
 
         Returns:
             str representation of _response["npc_response"], or "" if absent.
@@ -49,6 +58,8 @@ class MockLLMAdapter(LLMClientProtocol):
         prompt: str,
         schema: dict[str, Any],
         max_tokens: int,
+        top_p: float | None = None,
+        stop_sequences: list[str] | None = None,
     ) -> dict[str, Any]:
         """Return a shallow copy of the configured payload dict.
 
@@ -56,19 +67,30 @@ class MockLLMAdapter(LLMClientProtocol):
             prompt: Ignored in mock mode.
             schema: Ignored in mock mode.
             max_tokens: Ignored in mock mode.
+            top_p: Ignored in mock mode.
+            stop_sequences: Ignored in mock mode.
 
         Returns:
             Shallow copy of the internal response dict.
         """
         return dict(self._response)
 
-    async def stream(self, prompt: str, max_tokens: int, temperature: float) -> AsyncIterator[str]:
+    async def stream(
+        self,
+        prompt: str,
+        max_tokens: int,
+        temperature: float,
+        top_p: float | None = None,
+        stop_sequences: list[str] | None = None,
+    ) -> AsyncIterator[str]:
         """Yield whitespace-delimited tokens from the configured npc_response.
 
         Args:
             prompt: Ignored in mock mode.
             max_tokens: Ignored in mock mode.
             temperature: Ignored in mock mode.
+            top_p: Ignored in mock mode.
+            stop_sequences: Ignored in mock mode.
 
         Returns:
             Async iterator yielding each word from the npc_response with a trailing space.

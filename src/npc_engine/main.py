@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager, suppress
+from pathlib import Path
 
 from fastapi import FastAPI
 
@@ -30,6 +31,7 @@ from npc_engine.api.routes.system import admin_router as system_admin_router
 from npc_engine.api.routes.system import router as system_router
 from npc_engine.auth.middleware import ApiKeyMiddleware
 from npc_engine.api.dependency_singletons import (
+    get_dialogue_engine_model_config,
     get_embedding_index,
     get_game_schema,
     get_graph_db,
@@ -39,6 +41,8 @@ from npc_engine.api.dependency_singletons import (
     get_type_registry,
 )
 from npc_engine.config import get_settings
+from npc_engine.engines.contracts.contract_loader import load_engine_contracts
+from npc_engine.engines.llm_config_loader import validate_all_engine_llm_configs
 from npc_engine.engines.idempotency.cleanup_scheduler import IdempotencyCleanupScheduler
 from npc_engine.retrieval.embedding_reconciler import EmbeddingReconciler
 from npc_engine.scheduler.tick_lease import TickLeaseRepository
@@ -73,6 +77,16 @@ async def lifespan(_app: FastAPI):
         get_llm_config.cache_clear()
         llm_config = get_llm_config()
         _logger.info("Active relevance weights: %s", llm_config.relevance_weights)
+        _contracts_dir = Path(__file__).resolve().parent / "engines" / "contracts"
+        contracts = load_engine_contracts(contracts_dir=_contracts_dir)
+        validate_all_engine_llm_configs(contracts=contracts)
+        get_dialogue_engine_model_config.cache_clear()
+        dialogue_engine_config = get_dialogue_engine_model_config()
+        _logger.info(
+            "Dialogue engine config: backend=%s model=%s",
+            dialogue_engine_config.llm.backend,
+            dialogue_engine_config.llm.model,
+        )
         await graph_db.connect()
         connected = True
         await redis_runtime.connect()

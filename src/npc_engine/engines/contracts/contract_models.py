@@ -30,5 +30,6 @@ class EngineContract(BaseModel):
     auth_scope: str = Field(min_length=1)
     error_contract: list[str] = Field(min_length=1)
     tests: list[str] = Field(min_length=1)
+    uses_llm: bool = False
 
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)

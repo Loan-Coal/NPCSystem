@@ -196,6 +196,42 @@ Parameters: `RATE_LIMIT_REQUESTS_PER_SECOND` (default 50), `RATE_LIMIT_BURST_SIZ
 
 ---
 
+## Per-engine LLM Config Pattern (Phase 0.4)
+
+Each engine that calls an LLM owns a `llm_config.yaml` co-located with its source:
+
+```
+src/npc_engine/engines/dialogue/llm_config.yaml
+src/npc_engine/engines/<future-engine>/llm_config.yaml
+```
+
+The config is typed by `engines/llm_config_models.py` (`EngineModelConfig`) and loaded
+via `engines/llm_config_loader.py` (`get_config(engine_name)`). Key fields:
+
+- `llm.backend` — adapter type (`mock | ollama | mistral7b | llama8b`)
+- `llm.model` — model identifier forwarded to the adapter (e.g. `llama3.2` for Ollama)
+- `llm.temperature`, `llm.max_tokens` — per-engine generation parameters
+- `timeouts_ms.full`, `timeouts_ms.graph_only`, `timeouts_ms.canned` — degradation tier timeouts
+- `fallback.policy` + `fallback.tiers` — ordered fallback tier sequence
+
+**Registration:** Engine contracts (`engines/contracts/<name>.yaml`) declare
+`uses_llm: true`. At startup, `validate_all_engine_llm_configs(contracts)` iterates
+all `uses_llm: true` contracts and calls `get_config` for each, failing fast if any
+config is missing or invalid.
+
+**Dependency injection:** `api/dependency_singletons.py` provides
+`get_dialogue_engine_model_config()` as an `lru_cache` singleton.
+`api/dependencies.py` passes it to `create_llm_client_for_engine` (factory) and
+into `DialogueHandler.__init__` as `engine_model_config`. The handler stores
+timeouts and delegates `max_tokens`/`temperature` to `DialogueLLMClient`.
+
+**Separation of concerns:** `schema/llm_config_models.py` (`LLMConfig`) is the
+context-pipeline config (tier budgets, relevance weights) — distinct from
+`engines/llm_config_models.py` (`EngineModelConfig`) which is model-parameter config.
+They share the colloquial name "LLM config" but have no runtime relationship.
+
+---
+
 ## v1.4 P0 Idempotency Contract and Persistence
 
 v1.4 introduces middleware + persistence idempotency behavior in `auth/middleware.py` and

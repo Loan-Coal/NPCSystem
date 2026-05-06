@@ -19,6 +19,7 @@ def _write_valid_contract(path: Path) -> None:
         """
 name: dialogue_engine
 version: v1.4.0
+uses_llm: true
 inputs:
   - player_input
 outputs:
@@ -87,6 +88,37 @@ def test_load_engine_contracts_raises_when_directory_contains_no_contracts(tmp_p
 
     with pytest.raises(ContractValidationError):
         load_engine_contracts(contracts_dir=tmp_path)
+
+
+def test_validate_engine_contract_yaml_accepts_uses_llm_false(tmp_path: Path) -> None:
+    """Loader should accept contracts with uses_llm: false."""
+
+    contract_path = tmp_path / "quest_engine.yaml"
+    contract_path.write_text(
+        """
+name: quest_engine
+version: v1.4.0
+uses_llm: false
+inputs:
+  - quest_transition
+outputs:
+  - quest_state
+side_effects:
+  - quest_event
+idempotency:
+  key_required: true
+  replay_behavior: return_previous
+auth_scope: graph_write
+error_contract:
+  - IDEMPOTENCY_KEY_REQUIRED
+tests:
+  - test_quest_contract
+""".strip(),
+        encoding="utf-8",
+    )
+
+    contract = load_engine_contract(contract_path=contract_path)
+    assert contract.uses_llm is False
 
 
 def test_validate_engine_contract_yaml_rejects_string_bool_under_strict_mode(tmp_path: Path) -> None:
