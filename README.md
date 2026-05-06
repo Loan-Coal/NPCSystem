@@ -71,4 +71,4 @@ make eval
 | [tests/scenarios/](tests/scenarios/) | E2E story scenarios with transcript output |
 | [proposals/](proposals/) | Design proposals (delta_log, prompt inventory) |
 | [docs/RELEVANCE_WEIGHTS.md](docs/RELEVANCE_WEIGHTS.md) | Relevance weight formula and examples |
-| [project_md_files/ARCHITECTURE.md](project_md_files/ARCHITECTURE.md) | Full architecture doc |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Full architecture doc |

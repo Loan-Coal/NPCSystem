@@ -1,5 +1,29 @@
 # Status
 
+## Project Health
+
+| | |
+|---|---|
+| **Current phase** | Phase 1 — Faction nodes (not started) |
+| **Foundation** | ✅ Phase 0 complete — 27 services refactored, all layer violations resolved |
+| **Open issues** | 0 — see [ISSUES.md](ISSUES.md) |
+| **Tests** | ~325 passing (run `make test` to confirm) |
+| **Next action** | Read [NEXT_SESSION.md](NEXT_SESSION.md) then start Feature 1.1 |
+
+### CI / Coverage Badges
+
+> Badges are not yet active. To enable them:
+> 1. Confirm `.github/workflows/ci.yml` runs on push (it exists — verify the trigger).
+> 2. Register the repo with [Codecov](https://codecov.io) and add `CODECOV_TOKEN` as a repository secret.
+> 3. Replace the placeholder lines below with the real badge URLs from Codecov and GitHub Actions.
+
+```
+[![CI](https://github.com/YOUR_ORG/npc-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_ORG/npc-engine/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/YOUR_ORG/npc-engine/branch/main/graph/badge.svg)](https://codecov.io/gh/YOUR_ORG/npc-engine)
+```
+
+---
+
 ## Phase 0.5 — Stability cleanup (ISSUES 001–003)
 **Status:** ✅ Complete
 **Date completed:** 2026-05-06
