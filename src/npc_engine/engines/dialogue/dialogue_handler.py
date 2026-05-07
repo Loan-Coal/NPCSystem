@@ -206,5 +206,6 @@ class DialogueHandler:
             context_cache=self._context_cache,
             session_id=session_id,
             skip_rag=skip_rag,
+            player_id=request.player_id,
         )
         return build_dialogue_prompt(request=request, serialized_context=serialized_context)

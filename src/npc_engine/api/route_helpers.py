@@ -16,6 +16,7 @@ from npc_engine.utils.errors import (
     ImmutableFieldError,
     NodeNotFoundError,
     RegistryPayloadValidationError,
+    ReputationNotFoundError,
     SchemaValidationError,
 )
 
@@ -89,6 +90,8 @@ def graph_error_to_http(error: Exception) -> HTTPException:
     if isinstance(error, FactionNotFoundError):
         return HTTPException(status_code=404, detail=str(error))
     if isinstance(error, FactionMembershipError):
+        return HTTPException(status_code=404, detail=str(error))
+    if isinstance(error, ReputationNotFoundError):
         return HTTPException(status_code=404, detail=str(error))
     if isinstance(error, (ImmutableFieldError, SchemaValidationError, RegistryPayloadValidationError)):
         return HTTPException(status_code=422, detail=str(error))

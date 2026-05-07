@@ -78,6 +78,8 @@ class Settings(BaseSettings):
     DIALOGUE_SESSION_TTL: int = 300
     DIALOGUE_STREAM_ENABLED: bool = True
 
+    REPUTATION_CONTEXT_THRESHOLD: int = 20
+
     GOSSIP_DISTORTION_BASE: float = 0.3
     GOSSIP_DISTORTION_MAX: float = 0.9
     GOSSIP_PERSONALITY_FIELDS_ENABLED: bool = True

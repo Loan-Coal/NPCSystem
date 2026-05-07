@@ -15,6 +15,7 @@ from neo4j import AsyncSession
 
 from npc_engine.config import Settings
 from npc_engine.graph.graph_reader import get_character_with_relations
+from npc_engine.graph.reputation_queries import get_reputation_context_for_npc
 from npc_engine.retrieval.context_budget_enforcer import ContextCompressionCache, enforce_context_budget
 from npc_engine.retrieval.context_merger import ContextItem, MergedContext, merge_context
 from npc_engine.retrieval.context_metrics import (
@@ -64,6 +65,7 @@ async def build_serialized_context(
     context_cache: DialogueContextCache | None = None,
     session_id: str | None = None,
     skip_rag: bool = False,
+    player_id: str | None = None,
 ) -> str:
     """Build the final serialized prompt context string for one dialogue turn.
 
@@ -84,6 +86,8 @@ async def build_serialized_context(
         context_cache: Optional in-memory dialogue context cache.
         session_id: Session identifier used as part of the context cache key.
         skip_rag: When True, skips vector store retrieval entirely.
+        player_id: When provided, player reputation toward the NPC's factions is
+            included in Tier A context if |standing| >= REPUTATION_CONTEXT_THRESHOLD.
 
     Returns:
         Compact JSON string ready for prompt injection.
@@ -133,6 +137,26 @@ async def build_serialized_context(
     tier_a_raw.extend(
         await retrieve_tier_a_context(session=session, npc_id=npc_id, event_limit=settings.RAG_TOP_K)
     )
+    if player_id is not None:
+        reputation_items = await get_reputation_context_for_npc(
+            session,
+            npc_id=npc_id,
+            player_id=player_id,
+            threshold=settings.REPUTATION_CONTEXT_THRESHOLD,
+        )
+        if reputation_items:
+            reputation_lines = [
+                f"Player reputation with {item['faction_name']}: {item['standing']} ({item['label']})"
+                for item in reputation_items
+            ]
+            tier_a_raw.append(
+                ContextItem(
+                    key="reputation",
+                    text=serialize_json(reputation_lines),
+                    tier="tierA",
+                    priority=85,
+                )
+            )
 
     tier_b_raw: list[ContextItem] = []
     tier_c_raw: list[ContextItem] = []

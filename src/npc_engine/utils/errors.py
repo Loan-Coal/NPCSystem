@@ -258,6 +258,14 @@ class FactionMembershipError(StructuredNPCSystemError):
     detail: str
 
 
+@dataclass(frozen=True)
+class ReputationNotFoundError(StructuredNPCSystemError):
+    """Raised when a HAS_REPUTATION_WITH edge is not found for a requested operation."""
+
+    character_id: str
+    faction_id: str
+
+
 class TokenBudgetExceededError(Exception):
     """Raised when mandatory tier0 context alone exceeds the token budget."""
 

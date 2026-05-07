@@ -33,6 +33,7 @@ from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm_config_models import EngineModelConfig
 from npc_engine.graph.faction_service import FactionService
+from npc_engine.graph.reputation_service import ReputationService
 from npc_engine.graph.generic_graph_service import GenericGraphService
 from npc_engine.graph.graph_admin_service import GraphAdminService
 from npc_engine.schema.llm_config_models import LLMConfig
@@ -154,6 +155,18 @@ def get_faction_service(session: AsyncSession = Depends(get_db_session)) -> Fact
         FactionService for the current request.
     """
     return FactionService(session=session)
+
+
+def get_reputation_service(session: AsyncSession = Depends(get_db_session)) -> ReputationService:
+    """Build reputation service bound to current request session.
+
+    Args:
+        session: Scoped Neo4j session.
+
+    Returns:
+        ReputationService for the current request.
+    """
+    return ReputationService(session=session)
 
 
 def get_graph_admin_service(session: AsyncSession = Depends(get_db_session)) -> GraphAdminService:
