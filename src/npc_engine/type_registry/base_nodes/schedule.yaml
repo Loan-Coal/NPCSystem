@@ -1,0 +1,8 @@
+node_type: schedule
+fields:
+  id: { type: str, required: true }
+  name: { type: str, required: true }
+  description: { type: str, required: false }
+  entries: { type: str, required: true }
+  created_at: { type: str, required: true }
+  last_graph_updated_at: { type: str, required: true }

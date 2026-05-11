@@ -25,6 +25,7 @@ from npc_engine.engines.dialogue.session_store import SessionStore
 from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.engines.llm_config_models import EngineModelConfig
+from npc_engine.engines.routine.routine_queries import set_routine_override
 from npc_engine.retrieval.context_builder import build_serialized_context
 from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache
 from npc_engine.schema.llm_config_models import LLMConfig
@@ -119,8 +120,8 @@ class DialogueHandler:
             }
         )
 
+        tick_id = int(datetime.now(timezone.utc).timestamp())
         if level != "canned":
-            tick_id = int(datetime.now(timezone.utc).timestamp())
             await apply_dialogue_relation_deltas(
                 session=self._session,
                 settings=self._settings,
@@ -131,7 +132,16 @@ class DialogueHandler:
                 tick_id=tick_id,
             )
 
-        self._emotion_updater.apply_dialogue_mood(npc_id=request.npc_id, mood_update=final_response.mood_update)
+        new_emotion = self._emotion_updater.apply_dialogue_mood(
+            npc_id=request.npc_id, mood_update=final_response.mood_update
+        )
+        if new_emotion.valence < -60:
+            await set_routine_override(
+                session=self._session,
+                character_id=request.npc_id,
+                location_id="home",
+                expires_at_tick=tick_id + 5,
+            )
         self._session_store.append_turns(
             player_id=request.player_id,
             npc_id=request.npc_id,

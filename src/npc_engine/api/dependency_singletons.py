@@ -20,6 +20,7 @@ from npc_engine.engines.gossip.gossip_handler import GossipHandler
 from npc_engine.engines.idempotency.neo4j_store import Neo4jIdempotencyStore
 from npc_engine.engines.idempotency.service import IdempotencyService
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
+from npc_engine.engines.routine.routine_engine import RoutineEngine
 from npc_engine.graph.db import GraphDB
 from npc_engine.graph.reindex_job_service import ReindexJobService
 from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache
@@ -143,17 +144,28 @@ def get_game_clock() -> GameClock:
 
 
 @lru_cache
-def get_tick_scheduler() -> TickScheduler:
-    """Create singleton tick scheduler with shared gossip and event handlers.
+def get_routine_engine() -> RoutineEngine:
+    """Create singleton routine engine for tick-driven NPC location updates.
 
     Returns:
-        TickScheduler wired to shared clock, gossip, and event singletons.
+        RoutineEngine instance used by the tick scheduler.
+    """
+    return RoutineEngine()
+
+
+@lru_cache
+def get_tick_scheduler() -> TickScheduler:
+    """Create singleton tick scheduler with shared gossip, event, and routine handlers.
+
+    Returns:
+        TickScheduler wired to shared clock, gossip, event, and routine singletons.
     """
     settings = get_settings()
     return TickScheduler(
         clock=get_game_clock(),
         gossip_handler=get_gossip_handler(),
         event_handler=get_event_handler(),
+        routine_engine=get_routine_engine(),
         gossip_interval=settings.GOSSIP_TICK_INTERVAL,
         event_interval=settings.EVENT_TICK_INTERVAL,
         distributed_lease_enabled=settings.DISTRIBUTED_TICK_LEASE_ENABLED,

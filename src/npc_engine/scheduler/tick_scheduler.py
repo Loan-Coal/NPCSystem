@@ -1,9 +1,9 @@
 """
 tick_scheduler.py - Coordinates game clock and tick execution for engines.
 
-Does NOT: define gossip/event engine internals.
+Does NOT: define gossip/event/routine engine internals.
 
-Dependencies injected: GameClock, GossipHandler, EventHandler.
+Dependencies injected: GameClock, GossipHandler, EventHandler, RoutineEngine.
 """
 
 from neo4j import AsyncSession
@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable
 
 from npc_engine.scheduler.game_clock import ClockState, GameClock
 from npc_engine.scheduler.tick_lease import TickLeaseRepository, TickLeaseRepositoryProtocol
+from npc_engine.world.world_reader import get_world_state
 
 
 CYPHER_TICK_DONE = """
@@ -32,7 +33,7 @@ END
 
 
 class TickScheduler:
-    """Orchestrates conditional gossip and event ticks."""
+    """Orchestrates conditional gossip, event, and routine ticks."""
 
     def __init__(
         self,
@@ -42,6 +43,7 @@ class TickScheduler:
         gossip_interval: int,
         event_interval: int,
         *,
+        routine_engine: object = None,
         distributed_lease_enabled: bool = False,
         scheduler_id: str = "main",
         lease_owner_id: str = "worker",
@@ -58,6 +60,8 @@ class TickScheduler:
                 ``event_interval`` ticks.
             gossip_interval: Run gossip every N ticks; clamped to a minimum of 1.
             event_interval: Run events every N ticks; clamped to a minimum of 1.
+            routine_engine: Optional engine exposing ``run_tick(session, time_of_day, tick_id)``
+                called every tick to move characters per their schedules.
             distributed_lease_enabled: When True, use ``lease_repo`` for cross-worker
                 tick deduplication instead of the local SchedulerState Cypher queries.
             scheduler_id: Unique identifier for the scheduler node in Neo4j.
@@ -70,6 +74,7 @@ class TickScheduler:
         self._clock = clock
         self._gossip_handler = gossip_handler
         self._event_handler = event_handler
+        self._routine_engine = routine_engine
         self._gossip_interval = max(1, gossip_interval)
         self._event_interval = max(1, event_interval)
         self._lock = asyncio.Lock()
@@ -164,7 +169,9 @@ class TickScheduler:
                 "clock": self._clock.state.model_dump(),
                 "gossip": [],
                 "event": [],
+                "routine": [],
             }
+            world_state = await get_world_state(session=session)
             for tick_id in range(start_tick + 1, end_tick + 1):
                 unresolved = False
                 if tick_id % self._gossip_interval == 0:
@@ -201,6 +208,14 @@ class TickScheduler:
                             event_row = await self._event_handler.run_tick(session=session, tick_id=tick_id)
                             await self._mark_tick_done(session=session, key="event_ticks", tick_id=tick_id)
                             response["event"].append(event_row)
+                if self._routine_engine is not None:
+                    routine_row = await self._routine_engine.run_tick(
+                        session=session,
+                        time_of_day=world_state.time_of_day,
+                        tick_id=tick_id,
+                    )
+                    response["routine"].append(routine_row)
+
                 if unresolved:
                     break
                 advanced_ticks += 1

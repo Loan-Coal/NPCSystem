@@ -49,6 +49,7 @@ def test_war_breaks_out(http_client: httpx.Client) -> None:
                 "faction_standings": {},
                 "active_conditions": ["northern_war"],
                 "weather": "overcast",
+                "time_of_day": "morning",
                 "last_updated_at": now,
                 "last_graph_updated_at": now,
             },

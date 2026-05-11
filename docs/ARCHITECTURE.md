@@ -557,6 +557,44 @@ gossip_handler.run_tick(tick_id)
     └── logger.info("gossip_tick_complete", pairs=N, distortions=K, tick=tick_id)
 ```
 
+## Routine Engine — Tick Data Flow
+
+The routine engine runs on every tick, immediately after the gossip and event engines. It moves
+active characters to their scheduled locations and resolves any active `routine_override`.
+
+```
+tick_scheduler.advance(tick_delta)
+    │
+    ├── get_world_state(session) → WorldState (reads time_of_day once before tick loop)
+    │
+    └── For each tick_id in [start+1, end]:
+            │
+            ▼
+        routine_engine.run_tick(session, time_of_day, tick_id)
+            │
+            ├── get_scheduled_characters(session)
+            │       └── Neo4j: MATCH (c:Character)-[:FOLLOWS_SCHEDULE]->(s:Schedule)
+            │               WHERE c.is_active = true
+            │               RETURN c.id, s.entries, c.routine_override,
+            │                      current LOCATED_AT target
+            │
+            └── For each character row:
+                    ├── If routine_override non-null:
+                    │       ├── tick_id < expires_at_tick → use override location_id
+                    │       └── tick_id ≥ expires_at_tick → clear override, fall through
+                    │
+                    ├── Parse entries JSON, find entry matching time_of_day
+                    │       └── None found → skip character (skipped++)
+                    │
+                    └── If target ≠ current_location_id:
+                            ├── update_character_location(session, character_id, location_id)
+                            │       └── Neo4j: DELETE old LOCATED_AT, CREATE new one (atomic)
+                            └── moved++
+```
+
+Gossip pair selection (`pair_selector.py`) queries `LOCATED_AT` edges, so updated locations
+are reflected in gossip pairs on the same tick without any additional wiring.
+
 ### Faction Weight Config
 
 Weight multipliers live in `engines/gossip/config.yaml` (packaged with the engine) and

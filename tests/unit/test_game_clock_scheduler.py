@@ -50,6 +50,9 @@ class FakeSession:
         self._state: dict[str, set[int]] = {"gossip_ticks": set(), "event_ticks": set()}
 
     async def run(self, query: str, **kwargs):
+        # WorldState read — return None so get_world_state returns default WorldState
+        if "WorldState" in query:
+            return _FakeResult(None)
         key = kwargs["key"]
         tick_id = int(kwargs["tick_id"])
         if "RETURN $tick_id IN completed AS done" in query:

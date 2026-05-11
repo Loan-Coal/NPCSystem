@@ -74,7 +74,7 @@ class FakeEmotionUpdater:
         return SimpleNamespace(label="neutral")
 
     def apply_dialogue_mood(self, npc_id: str, mood_update: str | None):
-        return SimpleNamespace(label=mood_update or "neutral")
+        return SimpleNamespace(label=mood_update or "neutral", valence=0)
 
 
 def setup_function() -> None:

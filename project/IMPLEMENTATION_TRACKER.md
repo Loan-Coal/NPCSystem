@@ -16,6 +16,76 @@ This file tracks iterative implementation for PROJECT_PLAN_v1.4.xml and supports
 
 ## Stages
 
+### Phase 2 — Routine Engine
+Status: IN_PROGRESS
+Started: 2026-05-11
+Completed:
+
+#### Feature 2.1 — Schedule nodes and edges
+Status: DONE
+Started: 2026-05-11
+Completed: 2026-05-11
+Commit: routine schedule (6623c3b)
+Tasks:
+- [x] `type_registry/base_nodes/schedule.yaml`
+- [x] `type_registry/base_edges/follows_schedule.yaml`
+- [x] `WorldState.time_of_day` field added to `world/world_state.py`
+- [x] `Character.routine_override` JSON field added to Character schema
+- [x] `graph/schedule_service.py` (≤300 lines)
+- [x] `graph/schedule_queries.py` (Cypher strings)
+- [x] `tests/unit/test_schedule_service.py`
+- [ ] `tests/integration/test_schedule_service.py` — deferred (requires test Neo4j)
+- [x] `api/routes/schedules.py` wired into main.py
+- [x] `e2e/scenarios/scenario_daily_life.py` (query-only stage)
+- [x] `docs/DATA_MODELS.md` updated
+
+#### Feature 2.2 — Routine engine
+Status: DONE
+Started: 2026-05-11
+Completed: 2026-05-11
+Tasks:
+- [x] `engines/routine/__init__.py`
+- [x] `engines/routine/routine_engine.py` (≤300 lines)
+- [x] `engines/routine/routine_queries.py`
+- [x] `scheduler/tick_scheduler.py` updated to call `RoutineEngine.run_tick`
+- [x] `api/dependency_singletons.py` updated with `get_routine_engine`
+- [x] `tests/unit/test_routine_engine.py` (8 tests)
+- [ ] `tests/integration/test_routine_engine.py` — deferred (requires test Neo4j)
+- [x] `e2e/scenarios/scenario_daily_life.py` extended (tick advance + location assert)
+- [ ] Integration test: gossip pairs reflect schedule-driven LOCATED_AT — deferred
+
+Verification:
+```bash
+pytest tests/unit/test_routine_engine.py -v
+pytest tests/integration/test_routine_engine.py -v
+python e2e/scenarios/scenario_daily_life.py
+pytest tests/ -q && make lint && make type
+```
+
+#### Feature 2.3 — Routine disruption
+Status: DONE
+Started: 2026-05-11
+Completed: 2026-05-11
+Commit: feat: routine disruption rules (Phase 2.3)
+Tasks:
+- [x] `engines/events/disruption_rules.yaml`
+- [x] `engines/events/disruption_loader.py`
+- [x] `engines/routine/routine_queries.py` — `set_routine_override` added
+- [x] Disruption trigger wired into `engines/events/event_handler.py`
+- [x] Emotion valence < -60 → stay-home override wired in `engines/dialogue/dialogue_handler.py`
+- [x] Override expiry handled atomically in routine engine (pre-existing, Phase 2.2)
+- [x] `tests/unit/test_routine_disruption.py` (11 tests)
+- [x] E2E disruption scenario added to `scenario_daily_life.py`
+
+Verification:
+```bash
+pytest tests/unit/test_routine_disruption.py -v
+python e2e/scenarios/scenario_daily_life.py
+pytest tests/ -q && make lint && make type
+```
+
+---
+
 ### P0 - Config and Contract Foundations
 Status: DONE
 Started: 2026-04-16
