@@ -52,6 +52,16 @@ def api_put(client: httpx.Client, path: str, payload: dict) -> dict:
     return {"url": str(resp.url), "status": resp.status_code, "body": body}
 
 
+def api_patch(client: httpx.Client, path: str, payload: dict) -> dict:
+    """PATCH helper with graceful non-JSON fallback."""
+    resp = client.patch(path, json=payload)
+    try:
+        body = resp.json()
+    except Exception:
+        body = {"raw": resp.text}
+    return {"url": str(resp.url), "status": resp.status_code, "body": body}
+
+
 API_KEY_ENV = "NPC_API_KEY"
 DEFAULT_BASE_URL = "http://localhost:8000"
 TRANSCRIPTS_DIR = Path(__file__).resolve().parents[2] / "transcripts"

@@ -348,3 +348,178 @@ async def test_malformed_entries_json_skips_character():
 
     mock_update.assert_not_awaited()
     assert result["skipped"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Tests: override at exact expiry tick is treated as expired
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_override_at_exact_expiry_tick_clears_and_uses_schedule():
+    """tick_id == expires_at_tick means the override has expired (condition is strictly <)."""
+    engine = _make_engine()
+    session = _make_session()
+
+    entries = [{"time_of_day": "morning", "location_id": "loc_market"}]
+    override = {"location_id": "loc_home", "expires_at_tick": 10}
+    rows = [_char_record("char_a", entries, current_loc="loc_home", routine_override=override)]
+
+    with (
+        patch(
+            "npc_engine.engines.routine.routine_engine.get_scheduled_characters",
+            new_callable=AsyncMock,
+            return_value=rows,
+        ),
+        patch(
+            "npc_engine.engines.routine.routine_engine.update_character_location",
+            new_callable=AsyncMock,
+        ) as mock_update,
+        patch(
+            "npc_engine.engines.routine.routine_engine.clear_routine_override",
+            new_callable=AsyncMock,
+        ) as mock_clear,
+    ):
+        result = await engine.run_tick(session=session, time_of_day="morning", tick_id=10)
+
+    mock_clear.assert_awaited_once_with(session=session, character_id="char_a")
+    mock_update.assert_awaited_once_with(
+        session=session, character_id="char_a", location_id="loc_market"
+    )
+    assert result["moved"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Tests: override JSON malformed — falls back to schedule entry
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_override_malformed_json_falls_back_to_schedule():
+    engine = _make_engine()
+    session = _make_session()
+
+    entries = [{"time_of_day": "morning", "location_id": "loc_market"}]
+    # Produce a record with invalid (non-JSON) override string directly
+    rows = [{
+        "character_id": "char_a",
+        "entries_json": json.dumps(entries),
+        "current_location_id": "loc_barracks",
+        "routine_override": "not-valid-json",
+    }]
+
+    with (
+        patch(
+            "npc_engine.engines.routine.routine_engine.get_scheduled_characters",
+            new_callable=AsyncMock,
+            return_value=rows,
+        ),
+        patch(
+            "npc_engine.engines.routine.routine_engine.update_character_location",
+            new_callable=AsyncMock,
+        ) as mock_update,
+        patch(
+            "npc_engine.engines.routine.routine_engine.clear_routine_override",
+            new_callable=AsyncMock,
+        ) as mock_clear,
+    ):
+        result = await engine.run_tick(session=session, time_of_day="morning", tick_id=5)
+
+    mock_clear.assert_not_awaited()
+    mock_update.assert_awaited_once_with(
+        session=session, character_id="char_a", location_id="loc_market"
+    )
+    assert result["moved"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Tests: character already at override location — no move
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_character_already_at_override_location_no_move():
+    engine = _make_engine()
+    session = _make_session()
+
+    entries = [{"time_of_day": "morning", "location_id": "loc_market"}]
+    override = {"location_id": "loc_home", "expires_at_tick": 20}
+    rows = [_char_record("char_a", entries, current_loc="loc_home", routine_override=override)]
+
+    with (
+        patch(
+            "npc_engine.engines.routine.routine_engine.get_scheduled_characters",
+            new_callable=AsyncMock,
+            return_value=rows,
+        ),
+        patch(
+            "npc_engine.engines.routine.routine_engine.update_character_location",
+            new_callable=AsyncMock,
+        ) as mock_update,
+    ):
+        result = await engine.run_tick(session=session, time_of_day="morning", tick_id=5)
+
+    mock_update.assert_not_awaited()
+    assert result["moved"] == 0
+    assert result["skipped"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Tests: character with null entries_json — skipped (no schedule)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_character_with_null_entries_json_skips():
+    engine = _make_engine()
+    session = _make_session()
+
+    rows = [{
+        "character_id": "char_y",
+        "entries_json": None,
+        "current_location_id": "loc_a",
+        "routine_override": None,
+    }]
+
+    with (
+        patch(
+            "npc_engine.engines.routine.routine_engine.get_scheduled_characters",
+            new_callable=AsyncMock,
+            return_value=rows,
+        ),
+        patch(
+            "npc_engine.engines.routine.routine_engine.update_character_location",
+            new_callable=AsyncMock,
+        ) as mock_update,
+    ):
+        result = await engine.run_tick(session=session, time_of_day="morning", tick_id=1)
+
+    mock_update.assert_not_awaited()
+    assert result["skipped"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Tests: _entry_location static method — direct coverage
+# ---------------------------------------------------------------------------
+
+
+def test_entry_location_returns_none_for_none_json():
+    assert RoutineEngine._entry_location(None, "morning") is None
+
+
+def test_entry_location_returns_none_when_slot_not_in_entries():
+    entries = json.dumps([{"time_of_day": "evening", "location_id": "loc_tavern"}])
+    assert RoutineEngine._entry_location(entries, "morning") is None
+
+
+def test_entry_location_returns_location_for_matching_slot():
+    entries = json.dumps([
+        {"time_of_day": "morning", "location_id": "loc_barracks"},
+        {"time_of_day": "evening", "location_id": "loc_tavern"},
+    ])
+    assert RoutineEngine._entry_location(entries, "morning") == "loc_barracks"
+    assert RoutineEngine._entry_location(entries, "evening") == "loc_tavern"
+
+
+def test_entry_location_returns_none_for_malformed_json():
+    assert RoutineEngine._entry_location("not-json", "morning") is None

@@ -1,13 +1,17 @@
 """
 Module: routine_queries
 Layer: engines/routine
-Purpose: Cypher queries for the routine engine — character schedule reads and LOCATED_AT writes.
+Purpose: Cypher queries for the routine engine — character schedule reads, LOCATED_AT writes,
+         and routine_override writes.
 Does NOT: execute logic or open transactions.
 Dependencies injected: AsyncSession.
-Used by: npc_engine.engines.routine.routine_engine
+Used by: npc_engine.engines.routine.routine_engine, npc_engine.engines.events.event_handler,
+         npc_engine.engines.dialogue.dialogue_handler
 """
 
 from __future__ import annotations
+
+import json
 
 from neo4j import AsyncSession
 
@@ -41,6 +45,11 @@ CREATE (c)-[:LOCATED_AT]->(loc)
 CYPHER_CLEAR_ROUTINE_OVERRIDE = """
 MATCH (c:Character {id: $character_id})
 SET c.routine_override = null
+"""
+
+CYPHER_SET_ROUTINE_OVERRIDE = """
+MATCH (c:Character {id: $character_id})
+SET c.routine_override = $override_json
 """
 
 
@@ -97,3 +106,21 @@ async def clear_routine_override(session: AsyncSession, character_id: str) -> No
         character_id: ID of the character whose override should be cleared.
     """
     await session.run(CYPHER_CLEAR_ROUTINE_OVERRIDE, character_id=character_id)
+
+
+async def set_routine_override(
+    session: AsyncSession,
+    character_id: str,
+    location_id: str,
+    expires_at_tick: int,
+) -> None:
+    """Write a routine_override JSON blob onto the given character.
+
+    Args:
+        session: Active Neo4j async session.
+        character_id: ID of the character to override.
+        location_id: Destination location the character should stay at.
+        expires_at_tick: Tick number at which the override should be cleared.
+    """
+    override_json = json.dumps({"location_id": location_id, "expires_at_tick": expires_at_tick})
+    await session.run(CYPHER_SET_ROUTINE_OVERRIDE, character_id=character_id, override_json=override_json)

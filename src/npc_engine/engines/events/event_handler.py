@@ -11,6 +11,7 @@ import random
 from uuid import uuid4
 import asyncio
 import logging
+from pathlib import Path
 
 from neo4j import AsyncSession
 
@@ -18,8 +19,10 @@ from npc_engine.common.json_utils import dump_json, parse_json_list, parse_json_
 from npc_engine.config import Settings
 from npc_engine.engines.embedding_invalidation import invalidate_embedding_safely
 from npc_engine.engines.events.awareness_seeder import seed_awareness_tx
+from npc_engine.engines.events.disruption_loader import DisruptionRule, load_disruption_rules
 from npc_engine.engines.events.event_pool import EventTemplate, load_event_pool
 from npc_engine.engines.events.location_scoper import resolve_locations
+from npc_engine.engines.routine.routine_queries import set_routine_override
 from npc_engine.graph.event_writer import upsert_event
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
 from npc_engine.type_registry.contracts import TypeRegistry
@@ -28,6 +31,10 @@ from npc_engine.world.world_state import WorldState
 
 LOGGER = logging.getLogger(__name__)
 
+CYPHER_CHARACTERS_AT_LOCATION = """
+MATCH (c:Character {is_active: true})-[:LOCATED_AT]->(loc:Location {id: $location_id})
+RETURN c.id AS character_id
+"""
 
 CYPHER_GET_WORLD_STATE = """
 MATCH (w:WorldState {id: $world_id})
@@ -48,7 +55,13 @@ SET w.epoch = $epoch,
 class EventHandler:
     """Coordinates autonomous event creation for one tick."""
 
-    def __init__(self, settings: Settings, embedding_index: EmbeddingIndex, registry: TypeRegistry | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        embedding_index: EmbeddingIndex,
+        registry: TypeRegistry | None = None,
+        disruption_rules_path: str | None = None,
+    ) -> None:
         """Initialise the event handler.
 
         Args:
@@ -56,6 +69,8 @@ class EventHandler:
             embedding_index: Vector index invalidated after event creation.
             registry: Type registry providing the event node model; resolved via
                 ``api.dependencies.get_type_registry()`` if not provided.
+            disruption_rules_path: Optional path to disruption_rules.yaml.  Defaults to the
+                file co-located with the event pool when None.
         """
 
         self._settings = settings
@@ -68,6 +83,34 @@ class EventHandler:
         self._templates = load_event_pool(settings.EVENT_POOL_PATH)
         self._rng = random.Random(settings.EVENT_RNG_SEED) if settings.EVENT_RNG_SEED is not None else None
         self._lock = asyncio.Lock()
+        rules_path = (
+            Path(disruption_rules_path)
+            if disruption_rules_path is not None
+            else Path(settings.EVENT_POOL_PATH).parent / "disruption_rules.yaml"
+        )
+        self._disruption_rules: list[DisruptionRule] = load_disruption_rules(rules_path)
+
+    @staticmethod
+    def _apply_disruption_rules(
+        rules: list[DisruptionRule],
+        event_type: str,
+        severity: int,
+    ) -> list[DisruptionRule]:
+        """Return the subset of rules that match the given event type or severity.
+
+        Args:
+            rules: Full list of loaded DisruptionRule objects.
+            event_type: Type string of the created event.
+            severity: Numeric severity of the created event.
+
+        Returns:
+            List of matching rules (may be empty).
+        """
+        return [
+            rule for rule in rules
+            if (event_type in rule.trigger_event_types)
+            or (rule.trigger_severity_min is not None and severity >= rule.trigger_severity_min)
+        ]
 
     def _select_template(self, tick_id: int) -> EventTemplate:
         rng = self._rng or random.Random(tick_id)
@@ -117,6 +160,22 @@ class EventHandler:
             async with tx:
                 await upsert_event(tx=tx, event=event)
                 await seed_awareness_tx(tx=tx, event_id=event_id, location_id=location_id, tick_id=tick_id)
+                matched_rules = self._apply_disruption_rules(
+                    self._disruption_rules, template.event_type, template.severity
+                )
+                if matched_rules:
+                    chars_result = await tx.run(
+                        CYPHER_CHARACTERS_AT_LOCATION, location_id=location_id
+                    )
+                    char_ids = [record["character_id"] async for record in chars_result]
+                    for rule in matched_rules:
+                        for char_id in char_ids:
+                            await set_routine_override(
+                                session=tx,
+                                character_id=char_id,
+                                location_id=rule.override_location,
+                                expires_at_tick=tick_id + rule.duration_ticks,
+                            )
                 if template.severity >= 80:
                     world_result = await tx.run(CYPHER_GET_WORLD_STATE, world_id="world")
                     world_record = await world_result.single()

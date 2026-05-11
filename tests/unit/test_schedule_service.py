@@ -196,3 +196,110 @@ async def test_get_characters_at_location_returns_empty():
     ):
         result = await service.get_characters_at_location("loc_empty", "night")
     assert result == []
+
+
+# ---------------------------------------------------------------------------
+# unassign_schedule
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_unassign_schedule_calls_writer():
+    service, _ = _make_service()
+    with patch("npc_engine.graph.schedule_service.unassign_schedule", new_callable=AsyncMock) as mock_unassign:
+        await service.unassign_schedule(character_id="char_1")
+    mock_unassign.assert_awaited_once()
+    _, kwargs = mock_unassign.call_args
+    assert kwargs["character_id"] == "char_1"
+
+
+# ---------------------------------------------------------------------------
+# get_character_schedule
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_character_schedule_returns_schedule_when_assigned():
+    service, _ = _make_service()
+    fake = {"id": "sched_1", "name": "Day Patrol", "entries": "[]"}
+    with patch(
+        "npc_engine.graph.schedule_service.get_character_schedule",
+        new_callable=AsyncMock,
+        return_value=fake,
+    ):
+        result = await service.get_character_schedule("char_1")
+    assert result is not None
+    assert result["id"] == "sched_1"
+
+
+@pytest.mark.asyncio
+async def test_get_character_schedule_returns_none_when_unassigned():
+    service, _ = _make_service()
+    with patch(
+        "npc_engine.graph.schedule_service.get_character_schedule",
+        new_callable=AsyncMock,
+        return_value=None,
+    ):
+        result = await service.get_character_schedule("char_no_schedule")
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# create_schedule — additional coverage
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_schedule_with_full_five_slot_schedule():
+    """All five valid time_of_day values accepted in a single schedule."""
+    service, _ = _make_service()
+    entries = [
+        {"time_of_day": "morning",   "location_id": "loc_1", "activity": "patrol"},
+        {"time_of_day": "midday",    "location_id": "loc_2", "activity": "lunch"},
+        {"time_of_day": "afternoon", "location_id": "loc_2", "activity": "patrol"},
+        {"time_of_day": "evening",   "location_id": "loc_3", "activity": "dinner"},
+        {"time_of_day": "night",     "location_id": "loc_1", "activity": "sleep"},
+    ]
+    with patch("npc_engine.graph.schedule_service.upsert_schedule", new_callable=AsyncMock):
+        result = await service.create_schedule(
+            schedule_id="sched_full",
+            name="Full Day",
+            description="All five slots",
+            entries=entries,
+        )
+    parsed = json.loads(result["entries"])
+    assert len(parsed) == 5
+    assert {e["time_of_day"] for e in parsed} == {"morning", "midday", "afternoon", "evening", "night"}
+
+
+@pytest.mark.asyncio
+async def test_create_schedule_allows_entries_without_activity():
+    """Entries without an 'activity' key are valid (activity is optional)."""
+    service, _ = _make_service()
+    entries = [{"time_of_day": "morning", "location_id": "loc_1"}]
+    with patch("npc_engine.graph.schedule_service.upsert_schedule", new_callable=AsyncMock):
+        result = await service.create_schedule(
+            schedule_id="sched_no_activity",
+            name="Minimal",
+            description=None,
+            entries=entries,
+        )
+    parsed = json.loads(result["entries"])
+    assert parsed[0].get("activity") is None
+
+
+@pytest.mark.asyncio
+async def test_create_schedule_rejects_second_invalid_entry():
+    """Validation fails even if the first entry is valid and only the second is invalid."""
+    service, _ = _make_service()
+    entries = [
+        {"time_of_day": "morning", "location_id": "loc_1"},
+        {"time_of_day": "dusk",    "location_id": "loc_2"},  # invalid
+    ]
+    with pytest.raises(ValueError, match="Invalid time_of_day"):
+        await service.create_schedule(
+            schedule_id="sched_mixed",
+            name="Mixed",
+            description=None,
+            entries=entries,
+        )

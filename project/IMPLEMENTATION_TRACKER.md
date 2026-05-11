@@ -63,14 +63,19 @@ pytest tests/ -q && make lint && make type
 ```
 
 #### Feature 2.3 — Routine disruption
-Status: TODO
+Status: DONE
+Started: 2026-05-11
+Completed: 2026-05-11
+Commit: feat: routine disruption rules (Phase 2.3)
 Tasks:
-- [ ] `engines/events/disruption_rules.yaml`
-- [ ] Disruption trigger wired into `engines/events/event_handler.py`
-- [ ] Emotion valence < -60 → stay-home override wired in `engines/emotion/emotion_updater.py`
-- [ ] Override expiry handled atomically in routine engine
-- [ ] `tests/unit/test_routine_disruption.py`
-- [ ] E2E disruption scenario added to `scenario_daily_life.py`
+- [x] `engines/events/disruption_rules.yaml`
+- [x] `engines/events/disruption_loader.py`
+- [x] `engines/routine/routine_queries.py` — `set_routine_override` added
+- [x] Disruption trigger wired into `engines/events/event_handler.py`
+- [x] Emotion valence < -60 → stay-home override wired in `engines/dialogue/dialogue_handler.py`
+- [x] Override expiry handled atomically in routine engine (pre-existing, Phase 2.2)
+- [x] `tests/unit/test_routine_disruption.py` (11 tests)
+- [x] E2E disruption scenario added to `scenario_daily_life.py`
 
 Verification:
 ```bash

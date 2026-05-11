@@ -1,0 +1,7 @@
+rules:
+  - trigger_event_types: [death, betrayal]
+    override_location: home
+    duration_ticks: 10
+  - trigger_severity_min: 70
+    override_location: home
+    duration_ticks: 5
