@@ -49,6 +49,7 @@ def test_serializer_outputs_fixed_skeleton_keys() -> None:
     expected_keys = {
         "world",
         "npc",
+        "player_reputation",
         "player_relation",
         "npc_known_events",
         "nearby_npcs",

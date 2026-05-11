@@ -60,7 +60,11 @@ def _get(url: str, headers: dict[str, str] | None = None) -> tuple[int, Any]:
     req = urllib.request.Request(url, headers=headers or {})
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            return resp.status, json.loads(resp.read())
+            body = resp.read()
+            try:
+                return resp.status, json.loads(body)
+            except Exception:
+                return resp.status, {}
     except urllib.error.HTTPError as exc:
         return exc.code, {}
 

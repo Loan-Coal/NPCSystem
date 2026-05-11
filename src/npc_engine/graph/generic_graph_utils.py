@@ -72,10 +72,11 @@ def decode_properties(data: Mapping[str, Any], fields: Mapping[str, RuntimeField
         fields: Field definitions from the type registry keyed by field name.
 
     Returns:
-        New dict with JSON-string dict fields parsed back into Python dicts.
+        New dict with all Neo4j driver types converted to plain Python values and
+        JSON-string dict fields parsed back into Python dicts.
     """
 
-    decoded = dict(data)
+    decoded = {k: to_native(v) for k, v in data.items()}
     for key, definition in fields.items():
         if definition.field_type != "dict":
             continue

@@ -15,6 +15,7 @@ from starlette.responses import JSONResponse, Response
 
 from npc_engine.auth.api_key import resolve_scope_from_authorization
 from npc_engine.auth.middleware_helpers import (
+    DOCS_PATHS,
     HEALTH_PATH,
     HTTP_STATUS_BAD_REQUEST,
     HTTP_STATUS_FORBIDDEN,
@@ -75,7 +76,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         route_label = route_label_from_path(path=request.url.path, api_v1_prefix=self._settings.API_V1_PREFIX)
         started_at = perf_counter()
 
-        if request.url.path == HEALTH_PATH:
+        if request.url.path == HEALTH_PATH or request.url.path in DOCS_PATHS:
             try:
                 response = await call_next(request)
             except Exception:

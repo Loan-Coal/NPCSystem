@@ -18,7 +18,7 @@ from npc_engine.config import Settings
 from npc_engine.engines.dialogue.action_resolver import resolve_action
 from npc_engine.engines.dialogue.degradation import execute_with_degradation
 from npc_engine.engines.dialogue.llm_client import DialogueLLMClient
-from npc_engine.engines.dialogue.prompt_builder import build_dialogue_prompt
+from npc_engine.engines.dialogue.prompt_builder import build_dialogue_prompt, build_system_prompt
 from npc_engine.engines.dialogue.relation_mutator import apply_dialogue_relation_deltas
 from npc_engine.engines.dialogue.response_parser import parse_dialogue_response
 from npc_engine.engines.dialogue.session_store import SessionStore
@@ -78,7 +78,9 @@ class DialogueHandler:
             temperature=engine_model_config.llm.temperature,
             top_p=engine_model_config.llm.top_p,
             stop_sequences=list(engine_model_config.llm.stop_sequences),
+            log_prompts=settings.LOG_LLM_PROMPTS,
         )
+        self._system_prompt = build_system_prompt()
 
     async def handle(self, request: DialogueRequest) -> DialogueResponse:
         """Execute the full dialogue flow with tiered degradation and return the response.
@@ -158,7 +160,7 @@ class DialogueHandler:
             turns=turns,
             current_emotion=current_emotion,
         )
-        return await self._llm.stream_text(prompt=prompt)
+        return await self._llm.stream_text(prompt=prompt, system=self._system_prompt)
 
     async def _run_llm_pipeline(
         self,
@@ -176,7 +178,7 @@ class DialogueHandler:
             current_emotion=current_emotion,
             skip_rag=skip_rag,
         )
-        raw_response = await self._llm.generate_response(prompt=prompt)
+        raw_response = await self._llm.generate_response(prompt=prompt, system=self._system_prompt)
         try:
             return parse_dialogue_response(payload=raw_response)
         except ValidationError:

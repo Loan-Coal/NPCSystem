@@ -21,10 +21,10 @@ from npc_engine.utils.metrics import get_counter_value, reset_metrics_registry
 class FakeLLMClient:
     """Deterministic fake LLM client for metric tests."""
 
-    async def generate(self, prompt: str, max_tokens: int, temperature: float, top_p=None, stop_sequences=None) -> str:
+    async def generate(self, prompt: str, max_tokens: int, temperature: float, top_p=None, stop_sequences=None, system=None) -> str:
         return "ok"
 
-    async def generate_structured(self, prompt: str, schema: dict[str, Any], max_tokens: int, top_p=None, stop_sequences=None) -> dict[str, Any]:
+    async def generate_structured(self, prompt: str, schema: dict[str, Any], max_tokens: int, top_p=None, stop_sequences=None, system=None) -> dict[str, Any]:
         return {
             "npc_response": "I hear you.",
             "relation_deltas": {"trust": 0, "fear": 0, "affection": 0},
@@ -33,7 +33,7 @@ class FakeLLMClient:
             "facial_expression": {"type": "neutral", "intensity": 20},
         }
 
-    async def stream(self, prompt: str, max_tokens: int, temperature: float, top_p=None, stop_sequences=None) -> AsyncIterator[str]:
+    async def stream(self, prompt: str, max_tokens: int, temperature: float, top_p=None, stop_sequences=None, system=None) -> AsyncIterator[str]:
         yield "hello "
         yield "world"
 
@@ -44,14 +44,14 @@ class FakeLLMClient:
 class RequestErrorLLMClient(FakeLLMClient):
     """Fake LLM client that simulates structured request failures."""
 
-    async def generate_structured(self, prompt: str, schema: dict[str, Any], max_tokens: int, top_p=None, stop_sequences=None) -> dict[str, Any]:
+    async def generate_structured(self, prompt: str, schema: dict[str, Any], max_tokens: int, top_p=None, stop_sequences=None, system=None) -> dict[str, Any]:
         raise LLMRequestError(model="mock", detail="backend_unavailable")
 
 
 class InvalidStructuredLLMClient(FakeLLMClient):
     """Fake LLM client that returns invalid structured payload shape."""
 
-    async def generate_structured(self, prompt: str, schema: dict[str, Any], max_tokens: int, top_p=None, stop_sequences=None) -> dict[str, Any]:
+    async def generate_structured(self, prompt: str, schema: dict[str, Any], max_tokens: int, top_p=None, stop_sequences=None, system=None) -> dict[str, Any]:
         return {
             "npc_response": "still speaking",
             "relation_deltas": {"trust": 0, "fear": 0, "affection": 0},

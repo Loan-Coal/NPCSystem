@@ -7,6 +7,7 @@ Dependencies injected: LLMClientProtocol.
 """
 
 import json
+import logging
 from pathlib import Path
 
 from npc_engine.engines.dialogue.dialogue_models import DialogueResponse
@@ -22,6 +23,8 @@ LLM_TOKENS_IN_METRIC = "llm_tokens_in_total"
 LLM_TOKENS_OUT_METRIC = "llm_tokens_out_total"
 LLM_ENGINE_LABEL = "dialogue"
 
+logger = logging.getLogger(__name__)
+
 
 class DialogueLLMClient:
     """Dialogue-oriented structured LLM client wrapper."""
@@ -34,6 +37,7 @@ class DialogueLLMClient:
         temperature: float,
         top_p: float,
         stop_sequences: list[str],
+        log_prompts: bool = False,
     ) -> None:
         """Initialise the dialogue LLM client wrapper.
 
@@ -44,6 +48,7 @@ class DialogueLLMClient:
             temperature: Sampling temperature forwarded to streaming calls.
             top_p: Nucleus sampling probability mass forwarded to all generation calls.
             stop_sequences: Token sequences that halt generation, forwarded to all calls.
+            log_prompts: When True, log the full prompt and system prompt at DEBUG level.
         """
 
         self._llm_client = llm_client
@@ -52,12 +57,14 @@ class DialogueLLMClient:
         self._temperature = temperature
         self._top_p = top_p
         self._stop_sequences = stop_sequences
+        self._log_prompts = log_prompts
 
-    async def generate_response(self, prompt: str) -> dict:
+    async def generate_response(self, prompt: str, system: str | None = None) -> dict:
         """Request a structured dialogue response, falling back on timeout or errors.
 
         Args:
             prompt: Full dialogue prompt string built by prompt_builder.
+            system: Optional system prompt passed to the LLM backend's system channel.
 
         Returns:
             Dict conforming to the DialogueResponse schema, validated by Pydantic.
@@ -70,6 +77,10 @@ class DialogueLLMClient:
         labels = {"engine": LLM_ENGINE_LABEL, "backend": model_name, "mode": "structured"}
         increment_metric(metric=LLM_CALLS_METRIC, labels=labels)
         increment_metric(metric=LLM_TOKENS_IN_METRIC, amount=float(estimate_tokens(prompt)), labels=labels)
+
+        if self._log_prompts:
+            logger.debug("llm_prompt", extra={"system": system, "prompt": prompt})
+
         try:
             response = await self._llm_client.generate_structured(
                 prompt=prompt,
@@ -77,6 +88,7 @@ class DialogueLLMClient:
                 max_tokens=self._max_tokens,
                 top_p=self._top_p,
                 stop_sequences=self._stop_sequences,
+                system=system,
             )
             normalized_response = DialogueResponse.model_validate(response).model_dump(mode="python")
             increment_metric(
@@ -84,6 +96,10 @@ class DialogueLLMClient:
                 amount=float(estimate_tokens(json.dumps(normalized_response, sort_keys=True, ensure_ascii=True))),
                 labels=labels,
             )
+
+            if self._log_prompts:
+                logger.debug("llm_response", extra={"response": normalized_response})
+
             return normalized_response
         except LLMTimeoutError:
             return self._fallback_with_metrics(labels=labels, fallback_reason="timeout")
@@ -125,11 +141,12 @@ class DialogueLLMClient:
         )
         return fallback
 
-    async def stream_text(self, prompt: str) -> list[str]:
+    async def stream_text(self, prompt: str, system: str | None = None) -> list[str]:
         """Stream raw token chunks from the LLM backend.
 
         Args:
             prompt: Full dialogue prompt string.
+            system: Optional system prompt passed to the LLM backend's system channel.
 
         Returns:
             List of token chunk strings. Returns a single-element list containing
@@ -140,6 +157,10 @@ class DialogueLLMClient:
         labels = {"engine": LLM_ENGINE_LABEL, "backend": model_name, "mode": "stream"}
         increment_metric(metric=LLM_CALLS_METRIC, labels=labels)
         increment_metric(metric=LLM_TOKENS_IN_METRIC, amount=float(estimate_tokens(prompt)), labels=labels)
+
+        if self._log_prompts:
+            logger.debug("llm_prompt_stream", extra={"system": system, "prompt": prompt})
+
         try:
             chunks = [
                 chunk
@@ -149,6 +170,7 @@ class DialogueLLMClient:
                     temperature=self._temperature,
                     top_p=self._top_p,
                     stop_sequences=self._stop_sequences,
+                    system=system,
                 )
             ]
             increment_metric(

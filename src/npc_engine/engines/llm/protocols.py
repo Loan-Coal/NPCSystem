@@ -20,6 +20,7 @@ class LLMClientProtocol(Protocol):
         temperature: float,
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
+        system: str | None = None,
     ) -> str:
         """Generate plain text output.
 
@@ -29,6 +30,7 @@ class LLMClientProtocol(Protocol):
             temperature: Sampling temperature (0.0 = deterministic).
             top_p: Nucleus sampling probability mass. None means backend default.
             stop_sequences: Token sequences that halt generation. None means backend default.
+            system: Optional system prompt injected via the backend's system channel.
 
         Returns:
             Generated text string from the backend.
@@ -45,6 +47,7 @@ class LLMClientProtocol(Protocol):
         max_tokens: int,
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
+        system: str | None = None,
     ) -> dict[str, Any]:
         """Generate schema-constrained JSON output.
 
@@ -54,6 +57,7 @@ class LLMClientProtocol(Protocol):
             max_tokens: Maximum number of tokens to generate.
             top_p: Nucleus sampling probability mass. None means backend default.
             stop_sequences: Token sequences that halt generation. None means backend default.
+            system: Optional system prompt injected via the backend's system channel.
 
         Returns:
             Parsed dict conforming to the provided schema.
@@ -70,6 +74,7 @@ class LLMClientProtocol(Protocol):
         temperature: float,
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
+        system: str | None = None,
     ) -> AsyncIterator[str]:
         """Yield streamed tokens for low-latency UX.
 
@@ -79,6 +84,7 @@ class LLMClientProtocol(Protocol):
             temperature: Sampling temperature (0.0 = deterministic).
             top_p: Nucleus sampling probability mass. None means backend default.
             stop_sequences: Token sequences that halt generation. None means backend default.
+            system: Optional system prompt injected via the backend's system channel.
 
         Returns:
             Async iterator yielding token strings as they arrive.

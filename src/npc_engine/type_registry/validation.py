@@ -124,8 +124,9 @@ def validate_edge_payload(
     """
     edge_definition = _resolve_edge_definition(registry=registry, edge_type=edge_type)
     field_definitions = dict(edge_definition.fields)
+    required_fields = {k: v for k, v in field_definitions.items() if v.required}
     _validate_unknown_fields(payload=payload, allowed_fields=field_definitions, object_type=edge_type)
-    _validate_values(payload=payload, field_definitions=field_definitions, base_fields=field_definitions)
+    _validate_values(payload=payload, field_definitions=field_definitions, base_fields=required_fields)
     _validate_required_fields(operation=operation, payload=payload, field_definitions=field_definitions, object_type=edge_type)
 
     if operation is RegistryOperation.PATCH:

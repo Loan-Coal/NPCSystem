@@ -22,6 +22,7 @@ from npc_engine.utils.metrics import increment_metric, observe_metric, result_la
 
 
 HEALTH_PATH = "/health"
+DOCS_PATHS = frozenset({"/docs", "/redoc", "/openapi.json"})
 OPTIONS_METHOD = "OPTIONS"
 REQUEST_ID_HEADER = "X-Request-ID"
 UUID_VERSION_V4 = 4

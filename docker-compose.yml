@@ -65,7 +65,6 @@ services:
       - .env
     environment:
       NEO4J_URI: bolt://neo4j:7687
-      GAME_SCHEMA_PATH: /app/game_schema.yaml
     depends_on:
       neo4j:
         condition: service_healthy

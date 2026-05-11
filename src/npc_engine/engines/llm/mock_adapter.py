@@ -38,6 +38,7 @@ class MockLLMAdapter(LLMClientProtocol):
         temperature: float,
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
+        system: str | None = None,
     ) -> str:
         """Return the npc_response string from the configured payload.
 
@@ -47,6 +48,7 @@ class MockLLMAdapter(LLMClientProtocol):
             temperature: Ignored in mock mode.
             top_p: Ignored in mock mode.
             stop_sequences: Ignored in mock mode.
+            system: Ignored in mock mode.
 
         Returns:
             str representation of _response["npc_response"], or "" if absent.
@@ -60,6 +62,7 @@ class MockLLMAdapter(LLMClientProtocol):
         max_tokens: int,
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
+        system: str | None = None,
     ) -> dict[str, Any]:
         """Return a shallow copy of the configured payload dict.
 
@@ -69,6 +72,7 @@ class MockLLMAdapter(LLMClientProtocol):
             max_tokens: Ignored in mock mode.
             top_p: Ignored in mock mode.
             stop_sequences: Ignored in mock mode.
+            system: Ignored in mock mode.
 
         Returns:
             Shallow copy of the internal response dict.
@@ -82,6 +86,7 @@ class MockLLMAdapter(LLMClientProtocol):
         temperature: float,
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
+        system: str | None = None,
     ) -> AsyncIterator[str]:
         """Yield whitespace-delimited tokens from the configured npc_response.
 
@@ -91,6 +96,7 @@ class MockLLMAdapter(LLMClientProtocol):
             temperature: Ignored in mock mode.
             top_p: Ignored in mock mode.
             stop_sequences: Ignored in mock mode.
+            system: Ignored in mock mode.
 
         Returns:
             Async iterator yielding each word from the npc_response with a trailing space.

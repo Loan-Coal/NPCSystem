@@ -102,7 +102,7 @@ class _FakeEmotionUpdater:
 def _build_handler(adapter: _CapturingLLMClient, config: EngineModelConfig) -> DialogueHandler:
     return DialogueHandler(
         session=None,
-        settings=SimpleNamespace(LLM_FALLBACK_PATH=_FALLBACK_PATH, CANNED_RESPONSES_DIR=_CANNED_DIR),
+        settings=SimpleNamespace(LLM_FALLBACK_PATH=_FALLBACK_PATH, CANNED_RESPONSES_DIR=_CANNED_DIR, LOG_LLM_PROMPTS=False),
         llm_client=adapter,
         llm_config=SimpleNamespace(),
         engine_model_config=config,

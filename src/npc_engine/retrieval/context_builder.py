@@ -117,6 +117,7 @@ async def build_serialized_context(
         cache_key = context_cache.build_key(
             npc_id=npc_id,
             session_id=session_id,
+            player_id=player_id or "",
             npc_last_graph_updated_at=npc_ts,
             world_last_updated_at=world_ts,
             current_mood=current_mood,

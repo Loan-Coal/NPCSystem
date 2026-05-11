@@ -14,13 +14,13 @@ endif
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval scenarios seed smoke
+        eval scenarios seed-api smoke
 
 install:
 	pip install -e .[dev]
 
 run:
-	uvicorn npc_engine.main:app --reload
+	uvicorn npc_engine.main:app --reload --reload-include="*.yaml" --reload-include="*.json"
 
 smoke:
 	$(PYTHON) e2e/scripts/gateway_smoke.py --base-url $(BASE_URL) --api-key $(API_KEY)
@@ -102,7 +102,9 @@ eval:
 		--reports evals/reports
 
 scenarios:
-	$(PYTHON) -m pytest e2e/scenarios/ -v --scenarios-only -p no:cacheprovider
+	$(PYTHON) -m pytest e2e/scenarios/ -v -s --scenarios-only -p no:cacheprovider
 
-seed:
-	$(PYTHON) -m npc_engine.data.seed
+# seed-api: seed world data via the external HTTP API (works from outside Docker)
+seed-api:
+	$(PYTHON) src/npc_engine/data/api_seeder.py \
+		--base-url $(BASE_URL) --api-key $(API_KEY)

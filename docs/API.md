@@ -343,3 +343,91 @@ Common codes:
 | `IDEMPOTENCY_KEY_INVALID` | 422 | Idempotency key is not a valid UUIDv4 |
 | `IDEMPOTENCY_KEY_CONFLICT` | 409 | Key reused with different request payload |
 | `IDEMPOTENCY_IN_FLIGHT` | 409 | Identical request is still processing |
+
+---
+
+## External Seeding & E2E
+
+All tooling runs **outside** Docker against the exposed API on port `8000`.
+Ensure the stack is up (`docker compose up`) before running any of the commands below.
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `NPC_BASE_URL` | `http://localhost:8000` | API base URL for tooling and scenarios |
+| `NPC_API_KEY` | `local_dev_secret_change_this_2026` | Bearer token (must match `API_KEY_SECRET` in `.env`) |
+
+### Seed world data
+
+Seeds locations, characters, location edges, relation edges, events, participation,
+and knowledge edges via the HTTP API. Idempotent — safe to run repeatedly.
+
+```bash
+# Using make (reads BASE_URL and API_KEY from Makefile defaults / .env)
+make seed-api
+
+# Direct invocation
+python src/npc_engine/data/api_seeder.py \
+  --base-url http://localhost:8000 \
+  --api-key local_dev_secret_change_this_2026
+```
+
+Entities created: 5 locations, 12 characters, 12 LOCATED\_AT edges,
+18 RELATES\_TO edges, 3 events, 6 PARTICIPATED\_IN edges, 33 KNOWS\_ABOUT edges.
+
+> **Note:** WorldState node is not seeded here — it is created lazily by the
+> game engine on first clock advance.
+
+### Smoke test
+
+Verifies the public API surface is reachable and auth is working.
+
+```bash
+make smoke
+
+# Or directly:
+python e2e/scripts/gateway_smoke.py \
+  --base-url http://localhost:8000 \
+  --api-key local_dev_secret_change_this_2026
+```
+
+### Faction E2E script
+
+Creates two factions, sets bidirectional standings, and queries them back.
+
+```bash
+python e2e/scripts/faction_setup.py \
+  --base-url http://localhost:8000 \
+  --api-key local_dev_secret_change_this_2026
+```
+
+### Scenario tests
+
+Scenario tests use `NPC_BASE_URL` and `NPC_API_KEY` env vars; the defaults
+match the dev stack. Run after `make seed-api`.
+
+```bash
+# All scenarios (no LLM assertions — manual transcript inspection)
+make scenarios
+
+# Single scenario
+NPC_API_KEY=local_dev_secret_change_this_2026 \
+  python -m pytest e2e/scenarios/scenario_reputation_drift.py -v --scenarios-only
+```
+
+Transcripts are written to `transcripts/` (gitignored).
+
+### Migration script
+
+The Faction schema migration connects to Neo4j directly via Bolt. The script
+defaults to `bolt://localhost:7687` which maps to the exposed Docker port.
+
+```bash
+NEO4J_PASSWORD=password python scripts/migrations/add_faction_support.py
+```
+
+> **Warning:** Do **not** `source` or `export` the project `.env` into your
+> shell before running this script. `.env` sets `NEO4J_URI=bolt://neo4j:7687`
+> (Docker container hostname), which is unreachable from the host. The script's
+> own default (`localhost:7687`) is correct for outside-Docker use.
