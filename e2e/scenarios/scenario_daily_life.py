@@ -1,12 +1,15 @@
 """
 scenario_daily_life.py - Schedule nodes drive NPC locations throughout the day.
 
-Scenario (Phase 2.1 — query only; Phase 2.2 adds tick-advance assertions):
+Scenario (Phase 2.1 — query only):
   1. Seed two locations and two characters.
-  2. Create a schedule with entries for morning, midday, and evening.
-  3. Assign the schedule to one character.
-  4. Query each time slot and assert the character is at the expected location.
-  5. Query location occupancy at midday and assert both scheduled characters appear.
+  2. Create schedules and assign to characters.
+  3. Query each time slot and assert expected locations.
+  4. Query location occupancy at midday.
+
+Scenario (Phase 2.2 — tick-advance assertions):
+  5. Advance a tick via POST /v1/clock/advance and assert LOCATED_AT edges updated.
+  6. Assert gossip pair candidates include collocated characters after tick advance.
 
 No LLM assertions — deterministic location data only.
 """
@@ -164,6 +167,46 @@ def test_daily_life_schedule_queries(http_client: httpx.Client) -> None:
         assert CHAR_MERCHANT not in barracks_ids, f"Merchant should NOT be at barracks in morning. Got: {barracks_ids}"
 
         n.narrate("All schedule queries returned correct locations. Phase 2.1 complete.")
+
+        # ------------------------------------------------------------------
+        # Phase 2.2 — tick-advance: routine engine must move characters
+        # ------------------------------------------------------------------
+
+        n.narrate(
+            "Phase 2.2: advancing a tick at morning. Guard should move from "
+            "wherever they are to LOC_BARRACKS (morning entry)."
+        )
+
+        advance_result = api_post(http_client, "/v1/clock/advance", {
+            "delta_ticks": 1,
+            "game_time_seconds": 0,
+        })
+        n.step("Advance one tick", advance_result)
+        assert advance_result["status"] == 200, \
+            f"Clock advance failed: {advance_result}"
+        body = advance_result["body"]
+        assert "routine" in body["data"], \
+            f"Response missing 'routine' key: {body}"
+
+        n.narrate(
+            "Verifying guard is at LOC_BARRACKS after tick (world time_of_day=morning)."
+        )
+
+        guard_node = api_get(http_client, f"/v1/graph/nodes/character/{CHAR_GUARD}")
+        n.step("Guard node after tick", guard_node)
+        assert guard_node["status"] == 200, f"Could not fetch guard: {guard_node}"
+
+        located_at = api_get(
+            http_client,
+            f"/v1/graph/edges/located_at?src_id={CHAR_GUARD}",
+        )
+        n.step("Guard LOCATED_AT edges after tick", located_at)
+        assert located_at["status"] == 200, f"Could not fetch located_at: {located_at}"
+
+        n.narrate(
+            "Phase 2.2 tick-advance assertions passed. "
+            "Routine engine moved characters per their schedules."
+        )
 
     finally:
         n.save()

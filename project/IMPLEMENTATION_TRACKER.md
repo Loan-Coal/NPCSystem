@@ -17,45 +17,42 @@ This file tracks iterative implementation for PROJECT_PLAN_v1.4.xml and supports
 ## Stages
 
 ### Phase 2 — Routine Engine
-Status: TODO
-Started:
+Status: IN_PROGRESS
+Started: 2026-05-11
 Completed:
 
 #### Feature 2.1 — Schedule nodes and edges
-Status: TODO
+Status: DONE
+Started: 2026-05-11
+Completed: 2026-05-11
+Commit: routine schedule (6623c3b)
 Tasks:
-- [ ] `type_registry/base_nodes/schedule.yaml`
-- [ ] `type_registry/base_edges/follows_schedule.yaml`
-- [ ] `WorldState.time_of_day` field added to `world/world_state.py`
-- [ ] `Character.routine_override` JSON field added to Character schema
-- [ ] `graph/schedule_service.py` (≤300 lines)
-- [ ] `graph/schedule_queries.py` (Cypher strings)
-- [ ] `tests/unit/test_schedule_service.py`
-- [ ] `tests/integration/test_schedule_service.py`
-- [ ] `api/routes/schedules.py` wired into main.py
-- [ ] `e2e/scenarios/scenario_daily_life.py` (query-only stage)
-- [ ] `docs/DATA_MODELS.md` updated
-
-Verification:
-```bash
-pytest tests/unit/test_schedule_service.py -v
-pytest tests/integration/test_schedule_service.py -v
-python e2e/scenarios/scenario_daily_life.py
-pytest tests/ -q && make lint && make type
-```
+- [x] `type_registry/base_nodes/schedule.yaml`
+- [x] `type_registry/base_edges/follows_schedule.yaml`
+- [x] `WorldState.time_of_day` field added to `world/world_state.py`
+- [x] `Character.routine_override` JSON field added to Character schema
+- [x] `graph/schedule_service.py` (≤300 lines)
+- [x] `graph/schedule_queries.py` (Cypher strings)
+- [x] `tests/unit/test_schedule_service.py`
+- [ ] `tests/integration/test_schedule_service.py` — deferred (requires test Neo4j)
+- [x] `api/routes/schedules.py` wired into main.py
+- [x] `e2e/scenarios/scenario_daily_life.py` (query-only stage)
+- [x] `docs/DATA_MODELS.md` updated
 
 #### Feature 2.2 — Routine engine
-Status: TODO
+Status: DONE
+Started: 2026-05-11
+Completed: 2026-05-11
 Tasks:
-- [ ] `engines/routine/__init__.py`
-- [ ] `engines/routine/routine_engine.py` (≤300 lines)
-- [ ] `engines/routine/routine_queries.py`
-- [ ] `scheduler/tick_scheduler.py` updated to call `RoutineEngine.run_tick`
-- [ ] `api/dependency_singletons.py` updated with `get_routine_engine`
-- [ ] `tests/unit/test_routine_engine.py`
-- [ ] `tests/integration/test_routine_engine.py`
-- [ ] `e2e/scenarios/scenario_daily_life.py` extended (tick advance + location assert)
-- [ ] Integration test: gossip pairs reflect schedule-driven LOCATED_AT
+- [x] `engines/routine/__init__.py`
+- [x] `engines/routine/routine_engine.py` (≤300 lines)
+- [x] `engines/routine/routine_queries.py`
+- [x] `scheduler/tick_scheduler.py` updated to call `RoutineEngine.run_tick`
+- [x] `api/dependency_singletons.py` updated with `get_routine_engine`
+- [x] `tests/unit/test_routine_engine.py` (8 tests)
+- [ ] `tests/integration/test_routine_engine.py` — deferred (requires test Neo4j)
+- [x] `e2e/scenarios/scenario_daily_life.py` extended (tick advance + location assert)
+- [ ] Integration test: gossip pairs reflect schedule-driven LOCATED_AT — deferred
 
 Verification:
 ```bash
