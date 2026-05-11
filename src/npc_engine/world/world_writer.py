@@ -21,6 +21,10 @@ SET w.epoch = $epoch,
     w.faction_standings = $faction_standings,
     w.active_conditions = $active_conditions,
     w.weather = $weather,
+    w.time_of_day = $time_of_day,
+    w.year = $year,
+    w.season = $season,
+    w.day = $day,
     w.last_updated_at = datetime()
 RETURN properties(w) AS world
 """
@@ -45,6 +49,10 @@ async def upsert_world_state(session: AsyncSession, world_state: WorldState) -> 
         faction_standings=dump_json(world_state.faction_standings),
         active_conditions=dump_json(world_state.active_conditions),
         weather=world_state.weather,
+        time_of_day=world_state.time_of_day,
+        year=world_state.year,
+        season=world_state.season,
+        day=world_state.day,
     )
     record = await result.single()
     if record is None:
@@ -56,5 +64,9 @@ async def upsert_world_state(session: AsyncSession, world_state: WorldState) -> 
         faction_standings=cast(dict[str, int], parse_json_object(payload.get("faction_standings", {}))),
         active_conditions=cast(list[str], parse_json_list(payload.get("active_conditions", []))),
         weather=payload.get("weather", world_state.weather),
+        time_of_day=payload.get("time_of_day", world_state.time_of_day),
+        year=int(payload.get("year", world_state.year)),
+        season=payload.get("season", world_state.season),
+        day=int(payload.get("day", world_state.day)),
         last_updated_at=datetime.now(timezone.utc),
     )

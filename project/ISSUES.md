@@ -57,9 +57,29 @@ since that mapping is game-data-specific.
 **To fix:** Provide a game-specific migration that reads character.faction, resolves it to
 a Faction node ID, and creates the MEMBER_OF edge.
 
+## ISSUE-013: `how_long_ago` has no defined bucket for 7–27 day distances
+**Found:** 2026-05-11, during Phase 3.1 (time_utils.py)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/world/time_utils.py` — `how_long_ago`
+**Description:** The ROADMAP spec defines buckets for 0, 1, 2–6, 28, and >28 days but omits
+7–27. Current implementation extends "a few days ago" to cover 2–27. See DECISIONS.md entry.
+**Why deferred:** Spec ambiguity; not blocking any feature.
+**To fix:** Agree on wording (e.g., "a week or two ago") and add a 7–27 bucket in time_utils.
+
 ---
 
 ## Closed
+
+## [FIXED] ISSUE-012: `time_of_day`, `year`, `season`, `day` not persisted before Phase 3.1
+**Found:** 2026-05-11, during Phase 3.1 (world_writer.py audit)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/world/world_writer.py`, `src/npc_engine/engines/events/event_handler.py`
+**Description:** Both `CYPHER_MERGE_WORLD_STATE` constants omitted `time_of_day` from their SET
+clauses; the new `year`, `season`, `day` fields were also absent. Time fields were never written
+to the graph, so they reset to defaults on each server restart.
+**Why deferred:** Pre-existing; discovered during 3.1 schema update.
+**To fix:** Add all four time fields to both SET clauses and their `session.run()` call sites.
+**Fixed:** 2026-05-11, Phase 3.1 — world_writer.py and event_handler.py updated.
 
 ## [FIXED] ISSUE-010: `seed.py` seeds via direct Neo4j, not the external API
 **Found:** 2026-05-11, during API-based seeding task

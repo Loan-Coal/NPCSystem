@@ -48,6 +48,10 @@ SET w.epoch = $epoch,
     w.faction_standings = $faction_standings,
     w.active_conditions = $active_conditions,
     w.weather = $weather,
+    w.time_of_day = $time_of_day,
+    w.year = $year,
+    w.season = $season,
+    w.day = $day,
     w.last_updated_at = datetime()
 """
 
@@ -202,6 +206,10 @@ class EventHandler:
                         faction_standings=dump_json(updated_world.faction_standings),
                         active_conditions=dump_json(updated_world.active_conditions),
                         weather=updated_world.weather,
+                        time_of_day=updated_world.time_of_day,
+                        year=updated_world.year,
+                        season=updated_world.season,
+                        day=updated_world.day,
                     )
                 await tx.commit()
 

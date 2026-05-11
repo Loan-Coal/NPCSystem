@@ -16,10 +16,41 @@ This file tracks iterative implementation for PROJECT_PLAN_v1.4.xml and supports
 
 ## Stages
 
-### Phase 2 — Routine Engine
+### Phase 3 — World Depth
 Status: IN_PROGRESS
 Started: 2026-05-11
 Completed:
+
+#### Feature 3.1 — Time as a first-class concept
+Status: DONE
+Started: 2026-05-11
+Completed: 2026-05-11
+Commit: feat: structured game time (Phase 3.1)
+Tasks:
+- [x] `world/world_state.py` — add `year`, `season`, `day` fields
+- [x] `world/world_writer.py` — persist all time fields in CYPHER + upsert
+- [x] `engines/events/event_handler.py` — sync CYPHER copy
+- [x] `world/time_utils.py` — `TimePoint`, `how_long_ago` (new, ≤80 lines)
+- [x] `world/world_time_service.py` — `advance_time` (new, ≤120 lines)
+- [x] `api/routes/clock.py` — extend with `advance_time_field`
+- [x] `tests/unit/test_world_time_service.py` — 15 cases (all green)
+- [x] `e2e/scenarios/scenario_time_passage.py`
+- [x] `project/DECISIONS.md` — how_long_ago gap entry
+- [x] `project/ISSUES.md` — ISSUE-012 (fixed), ISSUE-013 (open)
+
+Verification:
+```bash
+pytest tests/unit/test_world_time_service.py -v
+pytest tests/ -q
+python e2e/scenarios/scenario_time_passage.py
+```
+
+---
+
+### Phase 2 — Routine Engine
+Status: DONE
+Started: 2026-05-11
+Completed: 2026-05-11
 
 #### Feature 2.1 — Schedule nodes and edges
 Status: DONE

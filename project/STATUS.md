@@ -4,12 +4,13 @@
 
 | | |
 |---|---|
-| **Current phase** | Phase 2 — Routine engine |
-| **Phase 2** | 🔄 In progress — 2.1 schedule nodes ✅; 2.2 routine engine ✅; 2.3 disruption next |
+| **Current phase** | Phase 3 — World Depth |
+| **Phase 3** | 🔄 In progress — 3.1 structured game time IN_PROGRESS |
+| **Phase 2** | ✅ Complete — 2.1 schedule nodes, 2.2 routine engine, 2.3 disruption rules |
 | **Phase 1** | ✅ Complete — Faction nodes (1.1), Faction-aware gossip (1.2), Faction reputation (1.3) |
 | **Foundation** | ✅ Phase 0 complete — 27 services refactored, all layer violations resolved |
-| **Open issues** | 4 — see [ISSUES.md](ISSUES.md) (all P3, none block Phase 2) |
-| **Next action** | Read [NEXT_SESSION.md](NEXT_SESSION.md) then start Feature 2.3 |
+| **Open issues** | 4 — see [ISSUES.md](ISSUES.md) (all P3, none block Phase 3) |
+| **Next action** | Feature 3.1 in progress — structured game time |
 
 ### CI / Coverage Badges
 
@@ -25,9 +26,19 @@
 
 ---
 
-## Phase 2 — Routine Engine
+## Phase 3 — World Depth
 **Status:** 🔄 In progress
 **Started:** 2026-05-11
+
+### What is in progress
+- **3.1**: Structured game time — `year`, `season`, `day` on WorldState; `time_utils.py`; `world_time_service.py`; clock advance endpoint extension.
+
+---
+
+## Phase 2 — Routine Engine
+**Status:** ✅ Complete
+**Started:** 2026-05-11
+**Completed:** 2026-05-11
 
 ### What was done
 - **2.1**: Schedule node + FOLLOWS_SCHEDULE edge; `graph/schedule_service.py`; admin API routes under `/v1/admin/schedules/`; `e2e/scenarios/scenario_daily_life.py` (query-only); `docs/DATA_MODELS.md` updated; `WorldState.time_of_day` + `Character.routine_override` schema fields added. Commit: routine schedule (6623c3b)

@@ -20,6 +20,9 @@ class WorldState(BaseModel):
     active_conditions: list[str] = Field(default_factory=list)
     weather: str = "clear"
     time_of_day: str = "morning"
+    year: int = 1
+    season: str = "spring"
+    day: int = 1
     last_updated_at: datetime = Field(default_factory=datetime.utcnow)
     last_graph_updated_at: datetime = Field(default_factory=datetime.utcnow)
 
