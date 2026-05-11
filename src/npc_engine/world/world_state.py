@@ -19,6 +19,7 @@ class WorldState(BaseModel):
     faction_standings: dict[str, int] = Field(default_factory=dict)
     active_conditions: list[str] = Field(default_factory=list)
     weather: str = "clear"
+    time_of_day: str = "morning"
     last_updated_at: datetime = Field(default_factory=datetime.utcnow)
     last_graph_updated_at: datetime = Field(default_factory=datetime.utcnow)
 

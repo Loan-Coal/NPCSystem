@@ -696,3 +696,71 @@ most one faction at a time (not enforced by the graph; enforced by game logic).
 
 Admin API: `POST /v1/admin/factions/{faction_id}/controls/{location_id}` to set,
 `DELETE /v1/admin/factions/{faction_id}/controls/{location_id}` to remove.
+
+---
+
+## Phase 2 — Schedule and Routine Schema
+
+Added in Phase 2.1–2.3.
+
+### Schedule Node (`type_registry/base_nodes/schedule.yaml`)
+
+Neo4j label: `Schedule`
+
+| Property | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes | Unique identifier |
+| `name` | string | yes | Display name |
+| `description` | string | no | Freeform description |
+| `entries` | JSON string | yes | List of `{"time_of_day": "...", "location_id": "...", "activity": "..."}` objects |
+| `created_at` | string (ISO-8601) | yes | Creation timestamp |
+| `last_graph_updated_at` | string (ISO-8601) | yes | Last write timestamp; used by embedding reconciler |
+
+Valid `time_of_day` values in entries: `morning`, `midday`, `afternoon`, `evening`, `night`.
+
+A schedule need not define an entry for every time slot. Missing slots leave the character's
+location unchanged for that time period.
+
+Admin API: `POST /v1/admin/schedules/` to create.
+
+---
+
+### FOLLOWS_SCHEDULE Edge (`type_registry/base_edges/follows_schedule.yaml`)
+
+`(:Character)-[:FOLLOWS_SCHEDULE]->(:Schedule)`
+
+No edge properties. A character follows at most one schedule. Assigning a new schedule
+removes the existing `FOLLOWS_SCHEDULE` edge before creating the new one (enforced by
+`graph/schedule_service.py`).
+
+Admin API: `POST /v1/admin/schedules/{schedule_id}/assign/{character_id}` to assign.
+
+---
+
+### WorldState — `time_of_day` field (added Phase 2.1)
+
+| Property | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `time_of_day` | string | yes | `"morning"` | Current game time of day. Enum: `morning`, `midday`, `afternoon`, `evening`, `night` |
+
+The routine engine reads this field each tick to determine which schedule entry to apply.
+Advancing the clock (`POST /v1/clock/advance`) is responsible for updating `time_of_day`
+in WorldState.
+
+---
+
+### Character — `routine_override` field (added Phase 2.2)
+
+| Property | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `routine_override` | JSON string or null | no | `null` | Temporary location override. Schema: `{"location_id": "...", "expires_at_tick": 42}` |
+
+When non-null, the routine engine uses the override `location_id` instead of the scheduled
+one. The engine clears the override atomically in the same transaction as the location update
+once `current_tick_id >= expires_at_tick`.
+
+Override sources:
+- **Event disruption** (Phase 2.3): rule-based, triggered by events matching
+  `engines/events/disruption_rules.yaml`.
+- **Emotion threshold** (Phase 2.3): `valence < -60` triggers a stay-home override
+  for `duration_ticks = 5`, applied in `engines/emotion/emotion_updater.py`.

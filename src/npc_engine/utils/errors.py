@@ -266,6 +266,22 @@ class ReputationNotFoundError(StructuredNPCSystemError):
     faction_id: str
 
 
+@dataclass(frozen=True)
+class ScheduleNotFoundError(StructuredNPCSystemError):
+    """Raised when a Schedule node is not found for a requested operation."""
+
+    schedule_id: str
+
+
+@dataclass(frozen=True)
+class ScheduleAssignmentError(StructuredNPCSystemError):
+    """Raised when a schedule assignment cannot be completed."""
+
+    character_id: str
+    schedule_id: str
+    detail: str
+
+
 class TokenBudgetExceededError(Exception):
     """Raised when mandatory tier0 context alone exceeds the token budget."""
 

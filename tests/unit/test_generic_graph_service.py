@@ -133,6 +133,7 @@ async def test_upsert_node_serializes_dict_fields_for_storage(registry_fixture) 
             "faction_standings": {"guild": 10},
             "active_conditions": ["rain"],
             "weather": "storm",
+            "time_of_day": "morning",
             "last_updated_at": "2026-05-01T00:00:00Z",
             "last_graph_updated_at": "2026-05-01T00:00:00Z",
         },

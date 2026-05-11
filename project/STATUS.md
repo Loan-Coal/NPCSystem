@@ -4,11 +4,11 @@
 
 | | |
 |---|---|
-| **Current phase** | Phase 1 — Faction nodes (not started) |
+| **Current phase** | Phase 2 — Routine engine |
+| **Phase 1** | ✅ Complete — Faction nodes (1.1), Faction-aware gossip (1.2), Faction reputation (1.3) |
 | **Foundation** | ✅ Phase 0 complete — 27 services refactored, all layer violations resolved |
-| **Open issues** | 0 — see [ISSUES.md](ISSUES.md) |
-| **Tests** | ~325 passing (run `make test` to confirm) |
-| **Next action** | Read [NEXT_SESSION.md](NEXT_SESSION.md) then start Feature 1.1 |
+| **Open issues** | 4 — see [ISSUES.md](ISSUES.md) (all P3, none block Phase 2) |
+| **Next action** | Read [NEXT_SESSION.md](NEXT_SESSION.md) then start Feature 2.1 |
 
 ### CI / Coverage Badges
 
@@ -21,6 +21,22 @@
 [![CI](https://github.com/YOUR_ORG/npc-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_ORG/npc-engine/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/YOUR_ORG/npc-engine/branch/main/graph/badge.svg)](https://codecov.io/gh/YOUR_ORG/npc-engine)
 ```
+
+---
+
+## Phase 1 — Faction vertical slice
+**Status:** ✅ Complete
+**Date completed:** 2026-05-11
+**Commits:** faction node and membership / faction aware gossip / faction reputation
+
+### What was done
+- **1.1**: Faction node + MEMBER_OF, STANDS_WITH, CONTROLS edges; `graph/faction_service.py`; admin API routes under `/v1/admin/factions/`; `e2e/scripts/faction_setup.py`; `docs/DATA_MODELS.md` updated
+- **1.2**: Faction-aware gossip pair selection + distortion weights; `engines/gossip/gossip_config.py`; property tests; `e2e/scenarios/scenario_factional_rumor.py`
+- **1.3**: `HAS_REPUTATION_WITH` edge; reputation service; context Tier A integration; `e2e/scenarios/scenario_reputation_drift.py`
+
+### Open deferred items
+- ISSUE-005: `adjust_reputation_for_event` not wired into event engine (P3, not a Phase 2 blocker)
+- ISSUE-006: pre-existing `Character.faction` string field not migrated to `MEMBER_OF` edge (P3)
 
 ---
 

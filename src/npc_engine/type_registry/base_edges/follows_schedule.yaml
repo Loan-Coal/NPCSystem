@@ -1,0 +1,4 @@
+edge_type: FOLLOWS_SCHEDULE
+src_type: character
+dst_type: schedule
+fields: {}
