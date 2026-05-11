@@ -1,7 +1,7 @@
 """
-data package - holds seed data for graph initialization.
+data package - World seeding tooling. api_seeder seeds via the external HTTP API.
 
-Does NOT: mutate game graph state; does not query or write to any database.
+Does NOT: mutate game graph state directly; seeds exclusively through the HTTP API.
 
-Dependencies injected: Settings, Graph.
+Dependencies injected: None.
 """

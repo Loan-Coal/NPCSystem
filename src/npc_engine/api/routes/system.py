@@ -23,13 +23,13 @@ admin_router = APIRouter()
 
 
 @router.get("/health")
-async def health() -> dict[str, str | int]:
+async def health() -> dict:
     """Return liveness and basic service status."""
     return ok_response({"status": "ok", "tick": 0, "neo4j": "degraded"})
 
 
 @admin_router.get("/protected")
-async def protected_probe() -> dict[str, str]:
+async def protected_probe() -> dict:
     """Simple protected route for auth smoke testing."""
     return ok_response({"status": "authorized"})
 

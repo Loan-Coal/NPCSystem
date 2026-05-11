@@ -15,6 +15,7 @@ from npc_engine.engines.dialogue.session_store import SessionStore
 from npc_engine.engines.emotion.emotion_store import EmotionStore
 from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
 from npc_engine.engines.events.event_handler import EventHandler
+from npc_engine.engines.gossip.gossip_config import load_gossip_config
 from npc_engine.engines.gossip.gossip_handler import GossipHandler
 from npc_engine.engines.idempotency.neo4j_store import Neo4jIdempotencyStore
 from npc_engine.engines.idempotency.service import IdempotencyService
@@ -101,7 +102,11 @@ def get_gossip_handler() -> GossipHandler:
         GossipHandler wired to the singleton EmbeddingIndex.
     """
     settings = get_settings()
-    return GossipHandler(settings=settings, embedding_index=get_embedding_index())
+    return GossipHandler(
+        settings=settings,
+        embedding_index=get_embedding_index(),
+        weight_config=load_gossip_config(),
+    )
 
 
 @lru_cache

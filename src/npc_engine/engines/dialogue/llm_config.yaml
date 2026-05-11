@@ -1,7 +1,7 @@
 engine: dialogue
 llm:
-  backend: mock
-  model: mock
+  backend: ollama
+  model: mixtral:8x7b
   temperature: 0.8
   max_tokens: 512
   top_p: 0.95
@@ -17,6 +17,6 @@ fallback:
     - graph_only
     - canned
 timeouts_ms:
-  full: 30000
-  graph_only: 10000
+  full: 60000
+  graph_only: 15000
   canned: 100

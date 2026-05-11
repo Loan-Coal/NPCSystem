@@ -37,6 +37,7 @@ class OllamaAdapter(LLMClientProtocol):
         temperature: float,
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
+        system: str | None = None,
     ) -> str:
         """Send a plain-text generation request to the Ollama backend.
 
@@ -59,12 +60,14 @@ class OllamaAdapter(LLMClientProtocol):
             options["top_p"] = top_p
         if stop_sequences is not None:
             options["stop"] = stop_sequences
-        payload = {
+        payload: dict = {
             "model": self._model_name,
             "prompt": prompt,
             "stream": False,
             "options": options,
         }
+        if system is not None:
+            payload["system"] = system
         try:
             async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
                 response = await client.post(f"{self._base_url}/api/generate", json=payload)
@@ -90,6 +93,7 @@ class OllamaAdapter(LLMClientProtocol):
         max_tokens: int,
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
+        system: str | None = None,
     ) -> dict[str, Any]:
         """Send a schema-constrained JSON generation request to the Ollama backend.
 
@@ -112,13 +116,15 @@ class OllamaAdapter(LLMClientProtocol):
             options["top_p"] = top_p
         if stop_sequences is not None:
             options["stop"] = stop_sequences
-        payload = {
+        payload: dict = {
             "model": self._model_name,
             "prompt": f"{prompt}\n\nRequired JSON schema:\n{json.dumps(schema, ensure_ascii=True)}",
             "stream": False,
             "format": "json",
             "options": options,
         }
+        if system is not None:
+            payload["system"] = system
         try:
             async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
                 response = await client.post(f"{self._base_url}/api/generate", json=payload)
@@ -147,6 +153,7 @@ class OllamaAdapter(LLMClientProtocol):
         temperature: float,
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
+        system: str | None = None,
     ) -> AsyncIterator[str]:
         """Stream tokens from the Ollama backend line by line.
 
@@ -169,12 +176,14 @@ class OllamaAdapter(LLMClientProtocol):
             options["top_p"] = top_p
         if stop_sequences is not None:
             options["stop"] = stop_sequences
-        payload = {
+        payload: dict = {
             "model": self._model_name,
             "prompt": prompt,
             "stream": True,
             "options": options,
         }
+        if system is not None:
+            payload["system"] = system
         try:
             async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
                 async with client.stream("POST", f"{self._base_url}/api/generate", json=payload) as response:

@@ -628,3 +628,71 @@ SET r.trust = $new_trust,
 
 All seed functions must be idempotent: running seed.py twice must not create duplicates.
 Use `MERGE` instead of `CREATE` in all seed Cypher.
+
+---
+
+## Phase 1 — Faction Graph Schema
+
+Added in Phase 1.1. Factions are first-class graph entities that characters belong to,
+that hold territory, and that maintain bidirectional standings toward each other.
+
+### Faction Node (`type_registry/base_nodes/faction.yaml`)
+
+Neo4j label: `Faction`
+
+| Property | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes | Unique faction identifier |
+| `name` | string | yes | Display name |
+| `description` | string | no | Freeform description (≤500 chars, indexable for embeddings) |
+| `archetype` | string | yes | One of: `religious`, `political`, `mercantile`, `military`, `criminal`, `social`, `other` |
+| `is_active` | bool | yes | Soft-delete flag; inactive factions are excluded from context queries |
+| `created_at` | string (ISO-8601) | yes | Node creation timestamp |
+| `last_graph_updated_at` | string (ISO-8601) | yes | Last write timestamp, used for embedding reconciliation |
+
+Uniqueness constraint: `Faction.id` (applied by `scripts/migrations/add_faction_support.py`).
+
+Admin API: `POST /v1/admin/factions/` to create, `GET /v1/admin/factions/` to list,
+`GET /v1/admin/factions/{faction_id}` to fetch by ID.
+
+### MEMBER_OF Edge (`type_registry/base_edges/member_of.yaml`)
+
+`(:Character)-[:MEMBER_OF {role, status, joined_at}]->(:Faction)`
+
+| Property | Type | Required | Description |
+|---|---|---|---|
+| `role` | string | yes | One of: `leader`, `officer`, `member`, `recruit` |
+| `status` | string | yes | One of: `active`, `exiled`, `deceased` |
+| `joined_at` | string (ISO-8601) | yes | Timestamp when the edge was first created |
+
+`joined_at` is set on creation and never updated. Re-calling the upsert only modifies
+`role` and `status`.
+
+Admin API: `POST /v1/admin/factions/{faction_id}/members` to add,
+`DELETE /v1/admin/factions/{faction_id}/members/{character_id}` to remove,
+`GET /v1/admin/factions/{faction_id}/members` to list.
+
+### STANDS_WITH Edge (`type_registry/base_edges/stands_with.yaml`)
+
+`(:Faction)-[:STANDS_WITH {standing, last_changed_at}]->(:Faction)`
+
+| Property | Type | Required | Description |
+|---|---|---|---|
+| `standing` | int [-100, 100] | yes | -100 = at war, 0 = neutral, 100 = allied |
+| `last_changed_at` | string (ISO-8601) | yes | Timestamp of last standing update |
+
+**Bidirectional storage:** standings are stored as two independent directed edges.
+A's standing toward B may differ from B's standing toward A (asymmetric diplomacy).
+
+Admin API: `PUT /v1/admin/factions/{faction_id}/standings/{target_id}` to set (one direction),
+`GET /v1/admin/factions/{faction_id}/standings` to list all outgoing standings.
+
+### CONTROLS Edge (`type_registry/base_edges/controls.yaml`)
+
+`(:Faction)-[:CONTROLS]->(:Location)`
+
+No edge properties. Indicates territorial control. One location may be controlled by at
+most one faction at a time (not enforced by the graph; enforced by game logic).
+
+Admin API: `POST /v1/admin/factions/{faction_id}/controls/{location_id}` to set,
+`DELETE /v1/admin/factions/{faction_id}/controls/{location_id}` to remove.

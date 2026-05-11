@@ -53,13 +53,13 @@ def _make_engine_model_config() -> EngineModelConfig:
 class MinimalLLMClient:
     """Minimal fake client for DialogueHandler construction in tests."""
 
-    async def generate(self, prompt: str, max_tokens: int, temperature: float, top_p=None, stop_sequences=None) -> str:
+    async def generate(self, prompt: str, max_tokens: int, temperature: float, top_p=None, stop_sequences=None, system=None) -> str:
         return "ok"
 
-    async def generate_structured(self, prompt: str, schema: dict[str, Any], max_tokens: int, top_p=None, stop_sequences=None) -> dict[str, Any]:
+    async def generate_structured(self, prompt: str, schema: dict[str, Any], max_tokens: int, top_p=None, stop_sequences=None, system=None) -> dict[str, Any]:
         return {"bad": "payload"}
 
-    async def stream(self, prompt: str, max_tokens: int, temperature: float, top_p=None, stop_sequences=None) -> AsyncIterator[str]:
+    async def stream(self, prompt: str, max_tokens: int, temperature: float, top_p=None, stop_sequences=None, system=None) -> AsyncIterator[str]:
         if False:
             yield ""
 
@@ -106,6 +106,7 @@ async def test_dialogue_handler_recovers_from_validation_failure(monkeypatch) ->
         settings=SimpleNamespace(
             LLM_FALLBACK_PATH=_FALLBACK_PATH,
             CANNED_RESPONSES_DIR=_CANNED_DIR,
+            LOG_LLM_PROMPTS=False,
         ),
         llm_client=MinimalLLMClient(),
         llm_config=SimpleNamespace(),
@@ -149,7 +150,7 @@ async def test_stream_passes_emotion_state_to_context_builder(monkeypatch) -> No
 
     handler = DialogueHandler(
         session=None,
-        settings=SimpleNamespace(LLM_FALLBACK_PATH=_FALLBACK_PATH),
+        settings=SimpleNamespace(LLM_FALLBACK_PATH=_FALLBACK_PATH, LOG_LLM_PROMPTS=False),
         llm_client=MinimalLLMClient(),
         llm_config=SimpleNamespace(),
         engine_model_config=_make_engine_model_config(),

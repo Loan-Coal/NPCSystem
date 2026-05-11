@@ -1,0 +1,6 @@
+edge_type: HAS_REPUTATION_WITH
+src_type: character
+dst_type: faction
+fields:
+  standing: { type: int, required: true, range: [-100, 100] }
+  last_changed_at: { type: str, required: true }

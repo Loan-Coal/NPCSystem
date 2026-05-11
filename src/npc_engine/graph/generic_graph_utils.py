@@ -7,6 +7,7 @@ Dependencies injected: None.
 """
 
 import json
+from datetime import datetime
 from typing import Any, Mapping
 
 from npc_engine.type_registry.contracts import RuntimeFieldDefinition
@@ -71,10 +72,11 @@ def decode_properties(data: Mapping[str, Any], fields: Mapping[str, RuntimeField
         fields: Field definitions from the type registry keyed by field name.
 
     Returns:
-        New dict with JSON-string dict fields parsed back into Python dicts.
+        New dict with all Neo4j driver types converted to plain Python values and
+        JSON-string dict fields parsed back into Python dicts.
     """
 
-    decoded = dict(data)
+    decoded = {k: to_native(v) for k, v in data.items()}
     for key, definition in fields.items():
         if definition.field_type != "dict":
             continue
@@ -100,6 +102,34 @@ def resolve_node_label(node_type: str) -> str:
 
     node_key = node_type.strip().lower()
     return BASE_NODE_LABELS.get(node_key, node_type)
+
+
+def to_native(value: Any) -> Any:
+    """Recursively convert Neo4j driver values to plain Python containers and scalars.
+
+    Handles Neo4j DateTime objects (converted to ISO-8601 strings), dicts, lists,
+    and any driver type that exposes a ``to_native()`` method.
+
+    Args:
+        value: A value returned by the Neo4j driver (may be a primitive, dict, list,
+               datetime, or driver-specific type).
+
+    Returns:
+        Plain Python equivalent suitable for JSON serialisation.
+    """
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(k): to_native(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [to_native(item) for item in value]
+    _convert = getattr(value, "to_native", None)
+    if callable(_convert):
+        try:
+            return to_native(_convert())
+        except Exception:  # noqa: BLE001
+            return value
+    return value
 
 
 def cypher_identifier(name: str) -> str:

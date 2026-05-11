@@ -9,11 +9,11 @@ Dependencies injected: None.
 import time
 
 
-_CacheKey = tuple[str, str, str, str, str]
+_CacheKey = tuple[str, str, str, str, str, str]
 
 
 class DialogueContextCache:
-    """In-memory cache keyed by (npc_id, session_id, npc_last_graph_updated_at, world_last_updated_at, current_mood).
+    """In-memory cache keyed by (npc_id, session_id, player_id, npc_last_graph_updated_at, world_last_updated_at, current_mood).
 
     TTL equals DIALOGUE_SESSION_TTL. Interface is Redis-ready: replace _store with
     a Redis client and this class becomes the adapter.
@@ -39,24 +39,26 @@ class DialogueContextCache:
         *,
         npc_id: str,
         session_id: str,
+        player_id: str,
         npc_last_graph_updated_at: str,
         world_last_updated_at: str,
         current_mood: str,
     ) -> _CacheKey:
-        """Build a cache key from the five cache-busting dimensions.
+        """Build a cache key from the six cache-busting dimensions.
 
         Args:
             npc_id: NPC identifier.
             session_id: Dialogue session identifier.
+            player_id: Player identifier (different players may have different reputation).
             npc_last_graph_updated_at: ISO timestamp of the NPC's last graph update.
             world_last_updated_at: ISO timestamp of the world state's last update.
             current_mood: Current NPC mood string.
 
         Returns:
-            A 5-tuple used as the cache dict key.
+            A 6-tuple used as the cache dict key.
         """
 
-        return (npc_id, session_id, npc_last_graph_updated_at, world_last_updated_at, current_mood)
+        return (npc_id, session_id, player_id, npc_last_graph_updated_at, world_last_updated_at, current_mood)
 
     def get(self, key: _CacheKey) -> str | None:
         """Retrieve a cached value, evicting it if its TTL has expired.

@@ -242,6 +242,30 @@ class RelationDeltaExceededError(StructuredNPCSystemError):
     context: str
 
 
+@dataclass(frozen=True)
+class FactionNotFoundError(StructuredNPCSystemError):
+    """Raised when a Faction node is not found for a requested operation."""
+
+    faction_id: str
+
+
+@dataclass(frozen=True)
+class FactionMembershipError(StructuredNPCSystemError):
+    """Raised when a membership operation cannot be completed (e.g. member not found)."""
+
+    character_id: str
+    faction_id: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class ReputationNotFoundError(StructuredNPCSystemError):
+    """Raised when a HAS_REPUTATION_WITH edge is not found for a requested operation."""
+
+    character_id: str
+    faction_id: str
+
+
 class TokenBudgetExceededError(Exception):
     """Raised when mandatory tier0 context alone exceeds the token budget."""
 

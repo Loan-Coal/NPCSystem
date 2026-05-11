@@ -17,6 +17,7 @@ from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache
 def _make_key(
     npc_id: str = "npc_1",
     session_id: str = "sess_1",
+    player_id: str = "player_1",
     npc_ts: str = "2026-04-30T10:00:00+00:00",
     world_ts: str = "2026-04-30T09:00:00+00:00",
     mood: str = "neutral",
@@ -25,6 +26,7 @@ def _make_key(
     return cache.build_key(
         npc_id=npc_id,
         session_id=session_id,
+        player_id=player_id,
         npc_last_graph_updated_at=npc_ts,
         world_last_updated_at=world_ts,
         current_mood=mood,
