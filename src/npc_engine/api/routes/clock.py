@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from npc_engine.api.dependencies import get_db_session, get_tick_scheduler
 from npc_engine.api.route_helpers import error_response, ok_response
 from npc_engine.config import Settings, get_settings
+from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.scheduler.tick_scheduler import TickScheduler
 from npc_engine.world.world_reader import get_world_state
 from npc_engine.world.world_time_service import _VALID_FIELDS, advance_time
@@ -86,6 +87,8 @@ async def advance_clock(
         current_world = await get_world_state(session)
         advanced = advance_time(request.advance_time_field, current_world)
         updated_world = await upsert_world_state(session, advanced)
+        if request.advance_time_field == "day":
+            await MemoryEngine().decay_vividness(session)
 
     payload: dict[str, Any] = cast(dict[str, Any], result)
     if updated_world is not None:

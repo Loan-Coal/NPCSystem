@@ -1,0 +1,8 @@
+node_type: memory
+fields:
+  id: { type: str, required: true }
+  content: { type: str, required: true }
+  vividness: { type: int, required: true, range: [0, 100] }
+  emotional_charge: { type: int, required: true, range: [-100, 100] }
+  created_at_game_time: { type: str, required: true }
+  last_recalled_at: { type: str, required: false }

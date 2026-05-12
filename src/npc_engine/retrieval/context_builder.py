@@ -15,6 +15,7 @@ from neo4j import AsyncSession
 
 from npc_engine.config import Settings
 from npc_engine.graph.graph_reader import get_character_with_relations
+from npc_engine.graph.memory_queries import get_memories_for_character
 from npc_engine.graph.reputation_queries import get_reputation_context_for_npc
 from npc_engine.retrieval.context_budget_enforcer import ContextCompressionCache, enforce_context_budget
 from npc_engine.retrieval.context_merger import ContextItem, MergedContext, merge_context
@@ -158,6 +159,17 @@ async def build_serialized_context(
                     priority=85,
                 )
             )
+
+    memories = await get_memories_for_character(session, character_id=npc_id, k=3)
+    if memories:
+        tier_a_raw.append(
+            ContextItem(
+                key="memories",
+                text=serialize_json(memories),
+                tier="tierA",
+                priority=90,
+            )
+        )
 
     tier_b_raw: list[ContextItem] = []
     tier_c_raw: list[ContextItem] = []

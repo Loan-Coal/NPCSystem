@@ -25,11 +25,14 @@ from npc_engine.engines.dialogue.session_store import SessionStore
 from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.engines.llm_config_models import EngineModelConfig
+from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.engines.routine.routine_queries import set_routine_override
 from npc_engine.retrieval.context_builder import build_serialized_context
 from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache
 from npc_engine.schema.llm_config_models import LLMConfig
 from npc_engine.utils.metrics import increment_metric
+from npc_engine.world.time_utils import TimePoint
+from npc_engine.world.world_reader import get_world_state
 
 
 LLM_VALIDATION_FAILURES_METRIC = "llm_validation_failures_total"
@@ -72,6 +75,7 @@ class DialogueHandler:
         self._emotion_updater = emotion_updater
         self._embedding_index = embedding_index
         self._context_cache = context_cache
+        self._memory_engine = MemoryEngine()
         self._llm = DialogueLLMClient(
             llm_client=llm_client,
             fallback_path=settings.LLM_FALLBACK_PATH,
@@ -135,6 +139,21 @@ class DialogueHandler:
         new_emotion = self._emotion_updater.apply_dialogue_mood(
             npc_id=request.npc_id, mood_update=final_response.mood_update
         )
+        if getattr(new_emotion, "arousal", 0) > 70:
+            world_state = await get_world_state(session=self._session)
+            game_time = TimePoint(
+                year=world_state.year,
+                season=world_state.season,
+                day=world_state.day,
+                time_of_day=world_state.time_of_day,
+            )
+            await self._memory_engine.create_from_arousal(
+                self._session,
+                character_id=request.npc_id,
+                arousal=new_emotion.arousal,
+                content=f"{request.player_message} — {final_response.npc_response}",
+                game_time=game_time,
+            )
         if new_emotion.valence < -60:
             await set_routine_override(
                 session=self._session,

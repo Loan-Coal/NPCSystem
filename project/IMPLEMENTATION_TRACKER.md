@@ -26,6 +26,23 @@ Status: DONE
 Started: 2026-05-11
 Completed: 2026-05-11
 Commit: feat: structured game time (Phase 3.1)
+
+#### Feature 3.2 — Memories vs Knowledge
+Status: DONE
+Started: 2026-05-11
+Completed: 2026-05-12
+Commit: feat: memory nodes and formation (Phase 3.2)
+Tasks:
+- [x] `type_registry/base_nodes/memory.yaml` — Memory node schema
+- [x] `type_registry/base_edges/remembers.yaml` — REMEMBERS edge schema
+- [x] `type_registry/base_edges/about.yaml` — ABOUT edge schema
+- [x] `graph/memory_queries.py` — Cypher strings + read accessor
+- [x] `graph/memory_service.py` — create/get/decay (≤200 lines)
+- [x] `engines/memory/__init__.py` + `engines/memory/memory_engine.py` (≤150 lines)
+- [x] `engines/dialogue/dialogue_handler.py` — high-arousal hook
+- [x] `retrieval/context_builder.py` — Tier A memories hook
+- [x] `tests/unit/test_memory_service.py` — 7 unit tests
+- [x] `e2e/scenarios/scenario_memory_formation.py`
 Tasks:
 - [x] `world/world_state.py` — add `year`, `season`, `day` fields
 - [x] `world/world_writer.py` — persist all time fields in CYPHER + upsert
