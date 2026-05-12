@@ -3,7 +3,8 @@ tick_scheduler.py - Coordinates game clock and tick execution for engines.
 
 Does NOT: define gossip/event/routine engine internals.
 
-Dependencies injected: GameClock, GossipHandler, EventHandler, RoutineEngine.
+Dependencies injected: GameClock, GossipHandler, EventHandler, RoutineEngine,
+                       MemoryConsolidationEngine (optional).
 """
 
 from neo4j import AsyncSession
@@ -12,6 +13,7 @@ from collections.abc import Awaitable, Callable
 
 from npc_engine.scheduler.game_clock import ClockState, GameClock
 from npc_engine.scheduler.tick_lease import TickLeaseRepository, TickLeaseRepositoryProtocol
+from npc_engine.world.time_utils import TimePoint
 from npc_engine.world.world_reader import get_world_state
 
 
@@ -44,6 +46,8 @@ class TickScheduler:
         event_interval: int,
         *,
         routine_engine: object = None,
+        memory_consolidation_engine: object = None,
+        consolidation_advance_interval: int = 1,
         distributed_lease_enabled: bool = False,
         scheduler_id: str = "main",
         lease_owner_id: str = "worker",
@@ -62,6 +66,9 @@ class TickScheduler:
             event_interval: Run events every N ticks; clamped to a minimum of 1.
             routine_engine: Optional engine exposing ``run_tick(session, time_of_day, tick_id)``
                 called every tick to move characters per their schedules.
+            memory_consolidation_engine: Optional engine exposing ``run_tick(session, game_time)``
+                called once per advance on the configured cadence.
+            consolidation_advance_interval: Run consolidation every N advances; clamped to 1.
             distributed_lease_enabled: When True, use ``lease_repo`` for cross-worker
                 tick deduplication instead of the local SchedulerState Cypher queries.
             scheduler_id: Unique identifier for the scheduler node in Neo4j.
@@ -75,6 +82,9 @@ class TickScheduler:
         self._gossip_handler = gossip_handler
         self._event_handler = event_handler
         self._routine_engine = routine_engine
+        self._memory_consolidation_engine = memory_consolidation_engine
+        self._consolidation_advance_interval = max(1, consolidation_advance_interval)
+        self._advance_count = 0
         self._gossip_interval = max(1, gossip_interval)
         self._event_interval = max(1, event_interval)
         self._lock = asyncio.Lock()
@@ -170,6 +180,7 @@ class TickScheduler:
                 "gossip": [],
                 "event": [],
                 "routine": [],
+                "consolidation": [],
             }
             world_state = await get_world_state(session=session)
             for tick_id in range(start_tick + 1, end_tick + 1):
@@ -225,6 +236,23 @@ class TickScheduler:
                 advanced_seconds = int((time_delta_seconds * advanced_ticks) / tick_delta)
             state = await self._clock.advance(tick_delta=advanced_ticks, time_delta_seconds=advanced_seconds)
             response["clock"] = state.model_dump()
+
+            self._advance_count += 1
+            if (
+                self._memory_consolidation_engine is not None
+                and self._advance_count % self._consolidation_advance_interval == 0
+            ):
+                game_time = TimePoint(
+                    year=world_state.year,
+                    season=world_state.season,
+                    day=world_state.day,
+                    time_of_day=world_state.time_of_day,
+                )
+                consolidation_row = await self._memory_consolidation_engine.run_tick(
+                    session, game_time=game_time
+                )
+                response["consolidation"] = consolidation_row.get("consolidated", [])
+
             return response
 
     @property

@@ -1,6 +1,6 @@
 # Next Session Instructions
 
-## Phase 3 — World Depth. Feature 3.3 next.
+## Phase 3 — World Depth. Feature 3.5 next.
 
 Run tests before touching any code:
 
@@ -12,87 +12,113 @@ pytest tests/ -q
 
 ## Step 0 — Update stale docs first (before any code)
 
-1. `project/IMPLEMENTATION_TRACKER.md` — mark Feature 3.2 as DONE (committed), add Feature 3.3 as IN_PROGRESS with today's date.
-2. `project/STATUS.md` — update Phase 3 row to reflect 3.1 ✅, 3.2 ✅, 3.3 IN_PROGRESS.
+1. `project/IMPLEMENTATION_TRACKER.md` — mark Feature 3.4 as DONE (committed), add Feature 3.5 as IN_PROGRESS with today's date.
+2. `project/STATUS.md` — update Phase 3 row to reflect 3.1–3.4 ✅, 3.5 IN_PROGRESS.
 
 ---
 
-## Feature 3.3 — Memory Consolidation Engine
+## Feature 3.5 — Goals on characters
 
-Read `project/ROADMAP.md` lines 456–480 first (the authoritative spec).
+Read `project/ROADMAP.md` lines 508–535 first (the authoritative spec).
 
 Only start after `pytest tests/ -q` is green.
 
-**Context:** NPCs accumulate session turn history in `SessionStore`. Feature 3.3 introduces a
-scheduled consolidation step: for each NPC with recent dialogue turns, an LLM call summarizes the
-last N turns into a `Memory` node (using Feature 3.2's `create_memory`). Original turns can be
-optionally cleared after consolidation.
+**Context:** NPCs without goals are purely reactive. Explicit goals give dialogue
+natural hooks, make gossip stickier when goal-relevant, and provide quest
+generation anchors. Goals are static descriptors in 3.5 — a goal pursuit engine
+is deferred to a later feature.
 
 ### Architecture decisions (read before coding)
 
-- Engine lives in `engines/memory_consolidation/memory_consolidation_engine.py`.
-- Prompt template lives in `prompts/memory_consolidation/consolidation_v1.yaml`.
-- `engines/memory_consolidation/memory_consolidation_engine.py` takes a `SessionStore`,
-  an `LLMClientProtocol`, and a `MemoryEngine` (injected).
-- It calls the LLM with the last-N turns to get a one-paragraph summary, then calls
-  `memory_engine.create_from_arousal` — but since consolidation is rule-driven, pass
-  `arousal=80` directly to `create_memory` (skip arousal gating, call graph layer directly).
-- Wire it into `scheduler/tick_scheduler.py` similarly to `RoutineEngine` — optional
-  injected engine, called once per advance on a configurable cadence.
-- Configurable `CONSOLIDATION_TURN_THRESHOLD` in `config.py`: minimum turns before consolidating.
-  Default: 10 turns.
-- After consolidation, optionally clear the turns from SessionStore (configurable via
-  `CONSOLIDATION_CLEAR_TURNS: bool`, default False for safety).
+- **Node**: `Goal` with fields `id`, `description` (freeform), `urgency` (0–100),
+  `status` (enum: `active`, `achieved`, `abandoned`), `created_at_game_time` (JSON),
+  `target_id` (optional str, references another node).
+- **Edge**: `(:Character)-[:PURSUES]->(:Goal)`.
+- Schema YAML files:
+  - `type_registry/base_nodes/goal.yaml`
+  - `type_registry/base_edges/pursues.yaml`
+- `graph/goal_queries.py` — Cypher strings for create, get, update status.
+- `graph/goal_service.py` (≤150 lines) — `create_goal`, `get_goals_for_character`,
+  `update_goal_status`.
+- `retrieval/context_builder.py` — include active goals in Tier A (priority 87,
+  just below beliefs at 88). Fetch top-k active goals only (status="active").
+- Admin route `api/routes/goals.py` — `POST /v1/admin/goals/{character_id}`,
+  `GET /v1/admin/goals/{character_id}`, `PATCH /v1/admin/goals/{goal_id}/status`.
+  Wire into `main.py` at admin_prefix following the beliefs route pattern.
+- **Gossip relevance**: add goal-alignment factor to gossip pair selection
+  in `engines/gossip/pair_selector.py`. When an NPC has an active goal whose
+  `target_id` matches a node known to the other NPC, increment their pair score.
+  Keep this as a small additive bonus (not a multiplier) so it doesn't dominate.
 
 ### Steps
 
-1. **Prompt template** `prompts/memory_consolidation/consolidation_v1.yaml`:
-   - System role: NPC memory archivist.
-   - User message: list of turns formatted as dialogue.
-   - Expected output: single paragraph plain-text summary (not JSON — the engine stores it as content).
+1. **Schema YAMLs**:
+   - `type_registry/base_nodes/goal.yaml` — `id`, `description`, `urgency` (int,
+     0–100), `status` (str), `created_at_game_time` (str), `target_id` (str,
+     required: false).
+   - `type_registry/base_edges/pursues.yaml` — `src_type: character`,
+     `dst_type: goal`, no extra fields.
 
-2. **`engines/memory_consolidation/__init__.py`** and **`memory_consolidation_engine.py`** (≤150 lines):
-   - `MemoryConsolidationEngine` with `consolidate(session, npc_id, game_time) -> str | None`.
-   - Fetches turns from `SessionStore`; if count < threshold, returns None.
-   - Calls LLM with the consolidation prompt.
-   - Calls `graph.memory_service.create_memory` directly (vividness=75, emotional_charge=0).
-   - Returns the new memory_id.
+2. **`graph/goal_queries.py`** — Cypher strings + `get_goals_for_character`
+   read accessor. Order by urgency DESC, filter by status when provided.
 
-3. **`config.py`** — add `CONSOLIDATION_TURN_THRESHOLD: int = 10` and `CONSOLIDATION_CLEAR_TURNS: bool = False`.
+3. **`graph/goal_service.py`** (≤150 lines):
+   - `create_goal(session, *, character_id, description, urgency, game_time, target_id=None) -> str`
+   - `get_goals_for_character(session, *, character_id, k, status_filter="active") -> list[dict]`
+   - `update_goal_status(session, *, goal_id, new_status) -> None`
 
-4. **`scheduler/tick_scheduler.py`** — add optional `memory_consolidation_engine` parameter (like routine_engine), call on every N advances.
+4. **`retrieval/context_builder.py`** — after beliefs, fetch active goals for
+   the NPC (k=3) and include as Tier A at priority 87. Keep existing memories
+   and beliefs unchanged.
 
-5. **Unit tests** `tests/unit/test_memory_consolidation_engine.py`:
-   - Happy path: enough turns → LLM called → memory created.
-   - Skip path: fewer turns than threshold → returns None, no LLM call.
-   - LLM failure: validate graceful skip (no crash).
+5. **`api/routes/goals.py`** — three endpoints: create, list, patch status.
+   Wire into `main.py` following the beliefs route pattern.
 
-6. **E2E scenario** `e2e/scenarios/scenario_memory_consolidation.py`:
-   - Seed character with 15 mock session turns.
-   - Call consolidate.
-   - Assert a Memory node now exists for the character.
+6. **`engines/gossip/pair_selector.py`** — add goal-alignment bonus: for each
+   candidate pair, if either NPC has an active goal whose `target_id` is a node
+   the other NPC knows, add +10 to their pair affinity score. This requires
+   fetching active goals per NPC during pair selection — use a new helper
+   `get_goals_for_character` from `graph/goal_service.py`. Keep the change
+   minimal: one extra query per pair candidate is acceptable; bail early if no
+   active goals.
 
-### Definition of done (3.3)
-- Prompt YAML exists in `prompts/memory_consolidation/`.
-- `engines/memory_consolidation/` passes all unit tests.
-- Config fields added and defaulted.
-- Scheduler wired (optional injection, no forced calls in existing tests).
+7. **Unit tests** `tests/unit/test_goal_service.py`:
+   - Happy path: create goal → returns UUID.
+   - Get active goals: returns list sorted by urgency descending.
+   - Get goals with status filter: filters correctly.
+   - Update status: modifies status on existing node.
+   - No-goals case: returns empty list.
+
+8. **E2E scenario** `e2e/scenarios/scenario_goals.py`:
+   - Seed character.
+   - Create two goals (one active, one achieved).
+   - Fetch active goals, assert one returned.
+   - Update status of active goal to achieved.
+   - Fetch again, assert empty.
+   - Cleanup.
+
+### Definition of done (3.5)
+- Schema YAMLs exist in `type_registry/base_nodes/` and `type_registry/base_edges/`.
+- `graph/goal_service.py` passes all unit tests.
+- `retrieval/context_builder.py` includes active goals in Tier A.
+- Admin routes exist and are wired.
+- Gossip pair selector includes goal-alignment bonus.
 - E2E scenario passes.
 - Pre-merge checklist from `CLAUDE.md` satisfied.
-- Commit: `feat: memory consolidation engine (Phase 3.3)`
+- Commit: `feat: goal nodes (Phase 3.5)`
 
 ---
 
-## After 3.3 is committed — update this file for Feature 3.4
+## After 3.5 is committed — update this file for Feature 3.6
 
-When Feature 3.3 is committed and `pytest tests/ -q` is green, rewrite this file to target
-Feature 3.4 — Beliefs (separate from knowledge).
+When Feature 3.5 is committed and `pytest tests/ -q` is green, rewrite this
+file to target Feature 3.6 — Items and ownership.
 
-Read `project/ROADMAP.md` lines 481+ before writing 3.4 instructions.
+Read `project/ROADMAP.md` lines 536+ before writing 3.6 instructions.
 
 ---
 
-## Open issues to be aware of (do NOT fix during Phase 3.3 unless explicitly blocking)
+## Open issues to be aware of (do NOT fix during Phase 3.5 unless explicitly blocking)
 
 - **ISSUE-013**: `how_long_ago` has no defined bucket for 7–27 days (P3)
 - **ISSUE-005**: `adjust_reputation_for_event` not wired into event engine (P3)
@@ -100,5 +126,5 @@ Read `project/ROADMAP.md` lines 481+ before writing 3.4 instructions.
 - **ISSUE-004**: `edge_updater.py` no-any-return mypy warning (P3)
 - **ISSUE-011**: `.env` uses Docker DNS (`bolt://neo4j:7687`) — fails outside Docker (P3)
 
-If any of these blocks Phase 3.3, log a new ISSUES.md entry describing the blocking scenario
-and get approval before fixing.
+If any of these blocks Phase 3.5, log a new ISSUES.md entry describing the
+blocking scenario and get approval before fixing.

@@ -62,10 +62,14 @@ async def test_context_builder_emits_tier_item_and_token_metrics(monkeypatch) ->
     async def fake_memories(session, *, character_id, k):
         return []
 
+    async def fake_beliefs(session, *, character_id, k):
+        return []
+
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_world_state", fake_world_reader)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_character_with_relations", fake_character_reader)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.retrieve_tier_a_context", fake_tier_a_reader)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_memories_for_character", fake_memories)
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_beliefs_for_character", fake_beliefs)
 
     settings = Settings(API_KEY_SECRET="npc_dev_secret_2026_alpha")
 

@@ -24,6 +24,7 @@ from npc_engine.api.routes.clock import router as clock_router
 from npc_engine.api.routes.dialogue import router as dialogue_router
 from npc_engine.api.routes.dialogue_ws import router as dialogue_ws_router
 from npc_engine.api.routes.graph import router as graph_router
+from npc_engine.api.routes.beliefs import router as beliefs_router
 from npc_engine.api.routes.factions import router as factions_router
 from npc_engine.api.routes.schedules import router as schedules_router
 from npc_engine.api.routes.reputation import admin_router as reputation_admin_router
@@ -175,6 +176,7 @@ def create_app() -> FastAPI:
     app.include_router(system_admin_router, prefix=admin_prefix)
     app.include_router(batch_router, prefix=admin_prefix)
     app.include_router(graph_admin_router, prefix=admin_prefix)
+    app.include_router(beliefs_router, prefix=admin_prefix)
     app.include_router(factions_router, prefix=admin_prefix)
     app.include_router(schedules_router, prefix=admin_prefix)
     app.include_router(reputation_admin_router, prefix=admin_prefix)

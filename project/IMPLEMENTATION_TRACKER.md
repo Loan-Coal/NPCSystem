@@ -27,6 +27,34 @@ Started: 2026-05-11
 Completed: 2026-05-11
 Commit: feat: structured game time (Phase 3.1)
 
+#### Feature 3.4 — Beliefs (separate from knowledge)
+Status: DONE
+Started: 2026-05-12
+Completed: 2026-05-12
+Commit: feat: belief nodes (Phase 3.4)
+Tasks:
+- [x] `type_registry/base_nodes/belief.yaml` — Belief node schema
+- [x] `type_registry/base_edges/believes.yaml` — BELIEVES edge schema
+- [x] `graph/belief_queries.py` — Cypher strings + read accessor
+- [x] `graph/belief_service.py` — create/get/update_confidence (≤150 lines)
+- [x] `retrieval/context_builder.py` — Tier A beliefs hook
+- [x] `api/routes/beliefs.py` — admin route for seeding beliefs
+- [x] `tests/unit/test_belief_service.py` — 5 unit tests, all green
+- [x] `e2e/scenarios/scenario_beliefs.py`
+
+#### Feature 3.3 — Memory Consolidation Engine
+Status: DONE
+Started: 2026-05-12
+Completed: 2026-05-12
+Commit: feat: memory consolidation engine (Phase 3.3)
+Tasks:
+- [x] `prompts/memory_consolidation/consolidation_v1.yaml` — LLM summarisation prompt
+- [x] `engines/memory_consolidation/__init__.py` + `memory_consolidation_engine.py`
+- [x] `config.py` — `CONSOLIDATION_TURN_THRESHOLD`, `CONSOLIDATION_CLEAR_TURNS`
+- [x] `scheduler/tick_scheduler.py` — optional `memory_consolidation_engine` injection
+- [x] `tests/unit/test_memory_consolidation_engine.py` — 5 unit tests, all green
+- [x] `e2e/scenarios/scenario_memory_consolidation.py`
+
 #### Feature 3.2 — Memories vs Knowledge
 Status: DONE
 Started: 2026-05-11
