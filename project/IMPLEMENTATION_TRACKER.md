@@ -27,6 +27,23 @@ Started: 2026-05-11
 Completed: 2026-05-11
 Commit: feat: structured game time (Phase 3.1)
 
+#### Feature 3.7 — Secrets
+Status: DONE
+Started: 2026-05-12
+Completed: 2026-05-12
+Commit: feat: secret nodes (Phase 3.7)
+Tasks:
+- [x] `type_registry/base_nodes/secret.yaml` — Secret node schema
+- [x] `type_registry/base_edges/knows_secret.yaml` — KNOWS_SECRET edge schema
+- [x] `graph/secret_queries.py` — Cypher strings + read accessors
+- [x] `graph/secret_service.py` — create/get (≤150 lines)
+- [x] `retrieval/context_builder.py` — Tier A secrets at priority 84
+- [x] `api/routes/secrets.py` — admin routes for create/list
+- [x] `engines/gossip/knowledge_propagator.py` — propagate_secret helper
+- [x] `engines/gossip/gossip_handler.py` — wire secret propagation into tick
+- [x] `tests/unit/test_secret_service.py` — 6 unit tests, all green
+- [x] `e2e/scenarios/scenario_secrets.py`
+
 #### Feature 3.6 — Items and ownership
 Status: DONE
 Started: 2026-05-12

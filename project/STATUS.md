@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Current phase** | Phase 3 — World Depth |
-| **Phase 3** | 🔄 In progress — 3.1 ✅, 3.2 ✅, 3.3 ✅, 3.4 ✅, 3.5 ✅, 3.6 ✅ |
+| **Phase 3** | 🔄 In progress — 3.1 ✅, 3.2 ✅, 3.3 ✅, 3.4 ✅, 3.5 ✅, 3.6 ✅, 3.7 ✅ |
 | **Phase 2** | ✅ Complete — 2.1 schedule nodes, 2.2 routine engine, 2.3 disruption rules |
 | **Phase 1** | ✅ Complete — Faction nodes (1.1), Faction-aware gossip (1.2), Faction reputation (1.3) |
 | **Foundation** | ✅ Phase 0 complete — 27 services refactored, all layer violations resolved |
@@ -31,6 +31,7 @@
 **Started:** 2026-05-11
 
 ### What was done
+- **3.7**: Secret nodes — `Secret` node + YAML; `KNOWS_SECRET` edge YAML; `graph/secret_service.py`; `graph/secret_queries.py`; Tier A context hook at priority 84; `POST/GET /v1/admin/secrets/{character_id}` routes; `propagate_secret` in gossip propagator (0.2 base prob, 50% distortion); 6 unit tests green. Commit: feat: secret nodes (Phase 3.7).
 - **3.6**: Item nodes and ownership — `Item` node + YAML; `OWNS` edge YAML; `graph/item_service.py`; `graph/item_queries.py`; Tier A context hook at priority 86; `POST/GET/PATCH /v1/admin/items/{...}` routes; `give_item` ownership check in action resolver; 10 unit tests green. Commit: feat: item nodes (Phase 3.6).
 - **3.5**: Goal nodes — `Goal` node + YAML; `PURSUES` edge YAML; `graph/goal_service.py`; `graph/goal_queries.py`; Tier A context hook at priority 87; `POST/GET/PATCH /v1/admin/goals/{...}` routes; gossip goal-alignment bonus (+10 when goal target_id matches known node); 6 unit tests green. Commit: feat: goal nodes (Phase 3.5).
 - **3.4**: Belief nodes — `Belief` node + YAML; `BELIEVES` edge YAML; `graph/belief_service.py`; `graph/belief_queries.py`; Tier A context hook; `POST /v1/admin/beliefs/{character_id}` route; 5 unit tests green. Commit: feat: belief nodes (Phase 3.4).

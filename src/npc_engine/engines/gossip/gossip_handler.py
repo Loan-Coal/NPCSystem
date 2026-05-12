@@ -9,13 +9,19 @@ Dependencies injected: AsyncSession, Settings, GossipWeightConfig, EmbeddingInde
 from neo4j import AsyncSession
 import asyncio
 import logging
+import random
 
 from npc_engine.config import Settings
 from npc_engine.engines.embedding_invalidation import invalidate_embedding_safely
 from npc_engine.engines.gossip.edge_updater import log_gossip
 from npc_engine.engines.gossip.gossip_config import GossipWeightConfig
 from npc_engine.engines.gossip.gossip_distort import gossip_distort
-from npc_engine.engines.gossip.knowledge_propagator import propagate
+from npc_engine.engines.gossip.knowledge_propagator import (
+    propagate,
+    propagate_secret,
+    SECRET_BASE_PROBABILITY,
+    SECRET_DISTORTION_CHANCE,
+)
 from npc_engine.engines.gossip.pair_selector import select_pairs
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
 
@@ -35,6 +41,13 @@ LIMIT 1
 CYPHER_RELATION_TRUST = """
 MATCH (a:Character {id: $sharer_id})-[r:RELATES_TO]->(b:Character {id: $receiver_id})
 RETURN r.trust AS trust
+"""
+
+CYPHER_SELECT_SECRET = """
+MATCH (a:Character {id: $sharer_id})-[:KNOWS_SECRET]->(s:Secret)
+RETURN s.id AS secret_id, s.severity AS severity
+ORDER BY s.severity DESC
+LIMIT 1
 """
 
 
@@ -135,4 +148,22 @@ class GossipHandler:
                     entity_label="receiver",
                 )
                 propagated += 1
+
+                # Secret propagation: lower base probability, higher distortion.
+                if random.random() < SECRET_BASE_PROBABILITY:
+                    secret_result = await session.run(
+                        CYPHER_SELECT_SECRET, sharer_id=sharer["id"]
+                    )
+                    secret_record = await secret_result.single()
+                    if secret_record is not None:
+                        distorted = random.random() < SECRET_DISTORTION_CHANCE
+                        await propagate_secret(
+                            session=session,
+                            receiver_id=receiver["id"],
+                            secret_id=str(secret_record["secret_id"]),
+                            source_character_id=sharer["id"],
+                            tick_id=tick_id,
+                            distorted=distorted,
+                        )
+
             return {"tick_id": tick_id, "pairs": len(pairs), "propagated": propagated}
