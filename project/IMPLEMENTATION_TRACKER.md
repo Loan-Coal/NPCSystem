@@ -27,6 +27,22 @@ Started: 2026-05-11
 Completed: 2026-05-11
 Commit: feat: structured game time (Phase 3.1)
 
+#### Feature 3.6 — Items and ownership
+Status: DONE
+Started: 2026-05-12
+Completed: 2026-05-12
+Commit: feat: item nodes (Phase 3.6)
+Tasks:
+- [x] `type_registry/base_nodes/item.yaml` — Item node schema
+- [x] `type_registry/base_edges/owns.yaml` — OWNS edge schema
+- [x] `graph/item_queries.py` — Cypher strings + read accessors
+- [x] `graph/item_service.py` — create/get/transfer (≤150 lines)
+- [x] `retrieval/context_builder.py` — Tier A owned items at priority 86
+- [x] `api/routes/items.py` — admin routes for create/list/patch owner
+- [x] `engines/dialogue/action_resolver.py` — ownership check for give_item
+- [x] `tests/unit/test_item_service.py` — 10 unit tests, all green
+- [x] `e2e/scenarios/scenario_items.py`
+
 #### Feature 3.5 — Goals on characters
 Status: DONE
 Started: 2026-05-12
