@@ -106,8 +106,6 @@ async def decay_all_vividness(
     Returns:
         Number of Memory nodes whose vividness was reduced.
     """
-    tx = await session.begin_transaction()
-    async with tx:
-        result = await tx.run(CYPHER_DECAY_VIVIDNESS, decay=decay_per_day)
-        record = await result.single()
+    result = await session.run(CYPHER_DECAY_VIVIDNESS, decay=decay_per_day)
+    record = await result.single()
     return int(record["affected"]) if record else 0

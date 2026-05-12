@@ -71,12 +71,7 @@ def test_time_passage(http_client: httpx.Client) -> None:
     for _ in range(advances_needed):
         ws = _advance(http_client, "day")
 
-    # Now force the wrap: advance day from 28 → season increments, day resets to 1.
-    # If current_day == 28 we go directly to the wrap advance.
-    if current_day < 28:
-        ws = _advance(http_client, "day")  # this is the advance to day 28
-
-    # One more advance triggers the wrap.
+    # One more advance triggers the wrap (day 28 → day 1, season increments).
     n.narrate("Advancing day past 28 — expecting season increment and day reset to 1.")
     ws = _advance(http_client, "day")
     n.step("season incremented", {"day": ws["day"], "season": ws["season"]})

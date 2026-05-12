@@ -26,25 +26,19 @@ ON CREATE SET
     l.lease_until_ms = $lease_until_ms,
     l.status = 'claimed',
     l.updated_at = datetime()
-WITH l
-CALL {
-    WITH l
-    WHERE l.status = 'done'
-    RETURN false AS claimed
-    UNION
-    WITH l
-    WHERE l.status <> 'done' AND (l.owner = $owner_id OR coalesce(l.lease_until_ms, 0) <= $now_ms)
+WITH l,
+     CASE
+       WHEN l.status = 'done' THEN false
+       WHEN l.owner = $owner_id OR coalesce(l.lease_until_ms, 0) <= $now_ms THEN true
+       ELSE false
+     END AS should_claim
+FOREACH (x IN CASE WHEN should_claim THEN [1] ELSE [] END |
     SET l.owner = $owner_id,
         l.lease_until_ms = $lease_until_ms,
         l.status = 'claimed',
         l.updated_at = datetime()
-    RETURN true AS claimed
-    UNION
-    WITH l
-    WHERE l.status <> 'done' AND NOT (l.owner = $owner_id OR coalesce(l.lease_until_ms, 0) <= $now_ms)
-    RETURN false AS claimed
-}
-RETURN claimed
+)
+RETURN should_claim AS claimed
 """
 
 

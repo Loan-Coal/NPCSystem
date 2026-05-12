@@ -193,6 +193,10 @@ class EventHandler:
                             faction_standings=parse_json_object(payload.get("faction_standings", {})),
                             active_conditions=parse_json_list(payload.get("active_conditions", [])),
                             weather=payload.get("weather", "clear"),
+                            time_of_day=payload.get("time_of_day", "morning"),
+                            year=int(payload.get("year", 1)),
+                            season=payload.get("season", "spring"),
+                            day=int(payload.get("day", 1)),
                         )
                     updated_world = world_state
                     if template.event_type not in world_state.active_conditions:

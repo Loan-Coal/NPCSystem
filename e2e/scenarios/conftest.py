@@ -222,7 +222,7 @@ def http_client(base_url: str, api_key: str) -> httpx.Client:
     with httpx.Client(
         base_url=base_url,
         headers={"Authorization": f"Bearer {api_key}"},
-        timeout=60.0,
+        timeout=90.0,
     ) as client:
         yield client
 

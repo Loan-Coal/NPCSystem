@@ -76,24 +76,29 @@ async def advance_clock(
             ),
         )
 
-    result = await scheduler.advance(
-        session=session,
-        tick_delta=request.delta_ticks,
-        time_delta_seconds=request.game_time_seconds,
-    )
+    try:
+        result = await scheduler.advance(
+            session=session,
+            tick_delta=request.delta_ticks,
+            time_delta_seconds=request.game_time_seconds,
+        )
 
-    updated_world = None
-    if request.advance_time_field is not None:
-        current_world = await get_world_state(session)
-        advanced = advance_time(request.advance_time_field, current_world)
-        updated_world = await upsert_world_state(session, advanced)
-        if request.advance_time_field == "day":
-            await MemoryEngine().decay_vividness(session)
+        updated_world = None
+        if request.advance_time_field is not None:
+            current_world = await get_world_state(session)
+            advanced = advance_time(request.advance_time_field, current_world)
+            updated_world = await upsert_world_state(session, advanced)
+            if request.advance_time_field == "day":
+                await MemoryEngine().decay_vividness(session)
 
-    payload: dict[str, Any] = cast(dict[str, Any], result)
-    if updated_world is not None:
-        payload = {**payload, "world_state": updated_world.model_dump()}
-    return ok_response(payload)
+        payload: dict[str, Any] = cast(dict[str, Any], result)
+        if updated_world is not None:
+            payload = {**payload, "world_state": updated_world.model_dump()}
+        return ok_response(payload)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 @router.get("/clock/state")
