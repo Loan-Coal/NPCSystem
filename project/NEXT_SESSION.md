@@ -1,6 +1,6 @@
 # Next Session Instructions
 
-## Phase 3 — World Depth. Feature 3.5 next.
+## Phase 3 — World Depth. Feature 3.6 next.
 
 Run tests before touching any code:
 
@@ -12,113 +12,111 @@ pytest tests/ -q
 
 ## Step 0 — Update stale docs first (before any code)
 
-1. `project/IMPLEMENTATION_TRACKER.md` — mark Feature 3.4 as DONE (committed), add Feature 3.5 as IN_PROGRESS with today's date.
-2. `project/STATUS.md` — update Phase 3 row to reflect 3.1–3.4 ✅, 3.5 IN_PROGRESS.
+1. `project/IMPLEMENTATION_TRACKER.md` — mark Feature 3.5 as DONE (committed), add Feature 3.6 as IN_PROGRESS with today's date.
+2. `project/STATUS.md` — update Phase 3 row to reflect 3.1–3.5 ✅, 3.6 IN_PROGRESS.
 
 ---
 
-## Feature 3.5 — Goals on characters
+## Feature 3.6 — Items and ownership
 
-Read `project/ROADMAP.md` lines 508–535 first (the authoritative spec).
+Read `project/ROADMAP.md` lines 536–560 first (the authoritative spec).
 
 Only start after `pytest tests/ -q` is green.
 
-**Context:** NPCs without goals are purely reactive. Explicit goals give dialogue
-natural hooks, make gossip stickier when goal-relevant, and provide quest
-generation anchors. Goals are static descriptors in 3.5 — a goal pursuit engine
-is deferred to a later feature.
+**Context:** Action validation for giving items requires knowing what an NPC
+actually owns. This feature adds `Item` nodes and `OWNS` edges so the dialogue
+engine's action resolver can check ownership before allowing a `give_item` action.
 
 ### Architecture decisions (read before coding)
 
-- **Node**: `Goal` with fields `id`, `description` (freeform), `urgency` (0–100),
-  `status` (enum: `active`, `achieved`, `abandoned`), `created_at_game_time` (JSON),
-  `target_id` (optional str, references another node).
-- **Edge**: `(:Character)-[:PURSUES]->(:Goal)`.
+- **Node**: `Item` with fields `id`, `name`, `description`, `value` (int),
+  `rarity` (str), `type` (str), `is_unique` (bool stored as str "true"/"false"),
+  `properties` (str, JSON for flexible attributes).
+- **Edge**: `(:Character)-[:OWNS {acquired_at}]->(:Item)`.
+  The `acquired_at` field is a game-time JSON string.
 - Schema YAML files:
-  - `type_registry/base_nodes/goal.yaml`
-  - `type_registry/base_edges/pursues.yaml`
-- `graph/goal_queries.py` — Cypher strings for create, get, update status.
-- `graph/goal_service.py` (≤150 lines) — `create_goal`, `get_goals_for_character`,
-  `update_goal_status`.
-- `retrieval/context_builder.py` — include active goals in Tier A (priority 87,
-  just below beliefs at 88). Fetch top-k active goals only (status="active").
-- Admin route `api/routes/goals.py` — `POST /v1/admin/goals/{character_id}`,
-  `GET /v1/admin/goals/{character_id}`, `PATCH /v1/admin/goals/{goal_id}/status`.
-  Wire into `main.py` at admin_prefix following the beliefs route pattern.
-- **Gossip relevance**: add goal-alignment factor to gossip pair selection
-  in `engines/gossip/pair_selector.py`. When an NPC has an active goal whose
-  `target_id` matches a node known to the other NPC, increment their pair score.
-  Keep this as a small additive bonus (not a multiplier) so it doesn't dominate.
+  - `type_registry/base_nodes/item.yaml`
+  - `type_registry/base_edges/owns.yaml`
+- `graph/item_queries.py` — Cypher strings for create, get by id, get by owner.
+- `graph/item_service.py` (≤150 lines) — `create_item`, `get_items_for_character`,
+  `get_item_by_id`, `transfer_ownership`.
+- `retrieval/context_builder.py` — include owned items in Tier A (priority 86,
+  just below goals at 87). Fetch all items owned by the NPC (no status filter).
+- Admin route `api/routes/items.py` — `POST /v1/admin/items/{character_id}`,
+  `GET /v1/admin/items/{character_id}`, `PATCH /v1/admin/items/{item_id}/owner`.
+  Wire into `main.py` at admin_prefix following the goals route pattern.
+- **Action resolver**: in `engines/dialogue/action_resolver.py`, extend the
+  `give_item` action handling to check that the sharer (NPC) owns the item
+  before allowing it. If not owned, resolve the action as `ignored` with a
+  reason. Keep the change minimal — one ownership check function.
 
 ### Steps
 
 1. **Schema YAMLs**:
-   - `type_registry/base_nodes/goal.yaml` — `id`, `description`, `urgency` (int,
-     0–100), `status` (str), `created_at_game_time` (str), `target_id` (str,
-     required: false).
-   - `type_registry/base_edges/pursues.yaml` — `src_type: character`,
-     `dst_type: goal`, no extra fields.
+   - `type_registry/base_nodes/item.yaml` — `id`, `name`, `description`,
+     `value` (int), `rarity` (str), `type` (str), `is_unique` (str),
+     `properties` (str, JSON).
+   - `type_registry/base_edges/owns.yaml` — `src_type: character`,
+     `dst_type: item`, `acquired_at` (str, required: false).
 
-2. **`graph/goal_queries.py`** — Cypher strings + `get_goals_for_character`
-   read accessor. Order by urgency DESC, filter by status when provided.
+2. **`graph/item_queries.py`** — Cypher strings + `get_items_for_character`
+   and `get_item_by_id` read accessors.
 
-3. **`graph/goal_service.py`** (≤150 lines):
-   - `create_goal(session, *, character_id, description, urgency, game_time, target_id=None) -> str`
-   - `get_goals_for_character(session, *, character_id, k, status_filter="active") -> list[dict]`
-   - `update_goal_status(session, *, goal_id, new_status) -> None`
+3. **`graph/item_service.py`** (≤150 lines):
+   - `create_item(session, *, character_id, name, description, value, rarity, type_, is_unique, game_time, properties=None) -> str`
+   - `get_items_for_character(session, *, character_id) -> list[dict]`
+   - `get_item_by_id(session, *, item_id) -> dict | None`
+   - `transfer_ownership(session, *, item_id, from_character_id, to_character_id, game_time) -> None`
 
-4. **`retrieval/context_builder.py`** — after beliefs, fetch active goals for
-   the NPC (k=3) and include as Tier A at priority 87. Keep existing memories
-   and beliefs unchanged.
+4. **`retrieval/context_builder.py`** — after goals, fetch owned items for
+   the NPC and include as Tier A at priority 86.
 
-5. **`api/routes/goals.py`** — three endpoints: create, list, patch status.
-   Wire into `main.py` following the beliefs route pattern.
+5. **`api/routes/items.py`** — three endpoints: create, list, patch owner.
+   Wire into `main.py` following the goals route pattern.
 
-6. **`engines/gossip/pair_selector.py`** — add goal-alignment bonus: for each
-   candidate pair, if either NPC has an active goal whose `target_id` is a node
-   the other NPC knows, add +10 to their pair affinity score. This requires
-   fetching active goals per NPC during pair selection — use a new helper
-   `get_goals_for_character` from `graph/goal_service.py`. Keep the change
-   minimal: one extra query per pair candidate is acceptable; bail early if no
-   active goals.
+6. **`engines/dialogue/action_resolver.py`** — add ownership check for
+   `give_item` actions. When the action type is `give_item`, query `get_items_for_character`
+   for the NPC and verify the named item is in the list. If not, return
+   `ActionType.ignored` (or equivalent no-op). Keep as a small additive check.
 
-7. **Unit tests** `tests/unit/test_goal_service.py`:
-   - Happy path: create goal → returns UUID.
-   - Get active goals: returns list sorted by urgency descending.
-   - Get goals with status filter: filters correctly.
-   - Update status: modifies status on existing node.
-   - No-goals case: returns empty list.
+7. **Unit tests** `tests/unit/test_item_service.py`:
+   - Happy path: create item → returns UUID.
+   - Get items: returns list for character.
+   - Get item by id: returns item dict or None.
+   - Transfer ownership: detaches old OWNS edge, creates new one.
+   - No-items case: returns empty list.
 
-8. **E2E scenario** `e2e/scenarios/scenario_goals.py`:
-   - Seed character.
-   - Create two goals (one active, one achieved).
-   - Fetch active goals, assert one returned.
-   - Update status of active goal to achieved.
-   - Fetch again, assert empty.
+8. **E2E scenario** `e2e/scenarios/scenario_items.py`:
+   - Seed two characters.
+   - Create an item owned by character 1.
+   - Fetch items for character 1, assert one returned.
+   - Transfer ownership to character 2.
+   - Fetch items for character 1, assert empty.
+   - Fetch items for character 2, assert one returned.
    - Cleanup.
 
-### Definition of done (3.5)
+### Definition of done (3.6)
 - Schema YAMLs exist in `type_registry/base_nodes/` and `type_registry/base_edges/`.
-- `graph/goal_service.py` passes all unit tests.
-- `retrieval/context_builder.py` includes active goals in Tier A.
+- `graph/item_service.py` passes all unit tests.
+- `retrieval/context_builder.py` includes owned items in Tier A.
 - Admin routes exist and are wired.
-- Gossip pair selector includes goal-alignment bonus.
+- Action resolver checks ownership for `give_item`.
 - E2E scenario passes.
 - Pre-merge checklist from `CLAUDE.md` satisfied.
-- Commit: `feat: goal nodes (Phase 3.5)`
+- Commit: `feat: item nodes (Phase 3.6)`
 
 ---
 
-## After 3.5 is committed — update this file for Feature 3.6
+## After 3.6 is committed — update this file for Feature 3.7
 
-When Feature 3.5 is committed and `pytest tests/ -q` is green, rewrite this
-file to target Feature 3.6 — Items and ownership.
+When Feature 3.6 is committed and `pytest tests/ -q` is green, rewrite this
+file to target Feature 3.7 — Secrets.
 
-Read `project/ROADMAP.md` lines 536+ before writing 3.6 instructions.
+Read `project/ROADMAP.md` lines 563+ before writing 3.7 instructions.
 
 ---
 
-## Open issues to be aware of (do NOT fix during Phase 3.5 unless explicitly blocking)
+## Open issues to be aware of (do NOT fix during Phase 3.6 unless explicitly blocking)
 
 - **ISSUE-013**: `how_long_ago` has no defined bucket for 7–27 days (P3)
 - **ISSUE-005**: `adjust_reputation_for_event` not wired into event engine (P3)
@@ -126,5 +124,5 @@ Read `project/ROADMAP.md` lines 536+ before writing 3.6 instructions.
 - **ISSUE-004**: `edge_updater.py` no-any-return mypy warning (P3)
 - **ISSUE-011**: `.env` uses Docker DNS (`bolt://neo4j:7687`) — fails outside Docker (P3)
 
-If any of these blocks Phase 3.5, log a new ISSUES.md entry describing the
+If any of these blocks Phase 3.6, log a new ISSUES.md entry describing the
 blocking scenario and get approval before fixing.

@@ -27,6 +27,22 @@ Started: 2026-05-11
 Completed: 2026-05-11
 Commit: feat: structured game time (Phase 3.1)
 
+#### Feature 3.5 — Goals on characters
+Status: DONE
+Started: 2026-05-12
+Completed: 2026-05-12
+Commit: feat: goal nodes (Phase 3.5)
+Tasks:
+- [x] `type_registry/base_nodes/goal.yaml` — Goal node schema
+- [x] `type_registry/base_edges/pursues.yaml` — PURSUES edge schema
+- [x] `graph/goal_queries.py` — Cypher strings + read accessor
+- [x] `graph/goal_service.py` — create/get/update_status (≤150 lines)
+- [x] `retrieval/context_builder.py` — Tier A goals hook at priority 87
+- [x] `api/routes/goals.py` — admin routes for seeding/listing/patching goals
+- [x] `engines/gossip/pair_selector.py` — goal-alignment bonus
+- [x] `tests/unit/test_goal_service.py` — 6 unit tests, all green
+- [x] `e2e/scenarios/scenario_goals.py`
+
 #### Feature 3.4 — Beliefs (separate from knowledge)
 Status: DONE
 Started: 2026-05-12
