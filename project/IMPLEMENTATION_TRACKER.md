@@ -27,6 +27,20 @@ Started: 2026-05-11
 Completed: 2026-05-11
 Commit: feat: structured game time (Phase 3.1)
 
+#### Feature 3.8 — Promises and debts
+Status: DONE
+Started: 2026-05-12
+Completed: 2026-05-12
+Commit: feat: debt edges (Phase 3.8)
+Tasks:
+- [x] `type_registry/base_edges/owes.yaml` — OWES edge schema
+- [x] `graph/owes_queries.py` — Cypher strings + read accessor
+- [x] `graph/owes_service.py` — create/get/update_status (≤150 lines)
+- [x] `retrieval/context_builder.py` — Tier A obligations at priority 83
+- [x] `api/routes/debts.py` — admin routes for create/list/patch status
+- [x] `tests/unit/test_owes_service.py` — 8 unit tests, all green
+- [x] `e2e/scenarios/scenario_debts.py`
+
 #### Feature 3.7 — Secrets
 Status: DONE
 Started: 2026-05-12

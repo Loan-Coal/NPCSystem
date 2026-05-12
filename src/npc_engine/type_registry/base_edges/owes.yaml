@@ -1,0 +1,8 @@
+edge_type: OWES
+src_type: character
+dst_type: character
+fields:
+  kind: { type: str, required: true }
+  magnitude: { type: str, required: true }
+  due_by: { type: str, required: false }
+  status: { type: str, required: true }
