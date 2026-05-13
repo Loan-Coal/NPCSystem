@@ -1,6 +1,6 @@
 # Next Session Instructions
 
-## Phase 4 — Authoring engines. Feature 4.1 next.
+## Phase 4 — Authoring engines. Feature 4.3 next.
 
 Run tests before touching any code:
 
@@ -8,181 +8,126 @@ Run tests before touching any code:
 pytest tests/ -q
 ```
 
-## Phase 3 e2e HTTP migration (completed 2026-05-13)
+## Phase 4.1–4.2 completion status (committed 2026-05-13)
 
-All 13 e2e scenario files now call only the HTTP API — no direct neo4j connections remain.
-New admin routes added: `memories` router (CRUD + from-arousal + decay + consolidate),
-DELETE endpoints on beliefs/goals/secrets/items, `k` param on secrets GET.
-Verify: `grep -r "AsyncGraphDatabase" e2e/` → zero results.
-
-## Phase 3 test foundation status (completed before this session)
-
-All blocks are done — 667 unit tests green, 20 E2E scenario tests collected:
-- Block 1: `api_seeder.py` enriched with beliefs, goals, items, secrets, debts, memories
-- Block 2: Edge case unit tests added to all 6 Phase 3 test files
-- Block 3: 6 edge case E2E scenario files (`scenario_*_edge.py`)
-- Block 4: `e2e/scenarios/scenario_demo.py` — full Phase 3 story arc
-- Block 5: `e2e/scenarios/scenario_llm_judge.py` + `e2e/helpers/llm_judge.py`
-- Block 6: Makefile targets `scenario-edge`, `scenario-demo`, `eval-llm`; markers `demo`, `llm_eval` registered
-
----
+- 4.1: Faction politics engine — deterministic rules + decay, wired into TickScheduler.
+- 4.2: Quest generation engine — slot-filling + LLM flavor text + graph validation.
+- 681 unit tests green.
 
 ---
 
 ## Step 0 — Update stale docs first (before any code)
 
-1. `project/IMPLEMENTATION_TRACKER.md` — mark Feature 3.8 as DONE (committed),
-   add Phase 4 section with Feature 4.1 as IN_PROGRESS with today's date.
-2. `project/STATUS.md` — update Phase 3 row to reflect 3.1–3.8 ✅ (complete),
-   add Phase 4 row showing 4.1 IN_PROGRESS.
+1. `project/IMPLEMENTATION_TRACKER.md` — mark Feature 4.3 as IN_PROGRESS with today's date.
+2. `project/STATUS.md` — update Phase 4 row: 4.1 ✅, 4.2 ✅, 4.3 IN_PROGRESS.
 
 ---
 
-## Feature 4.1 — Faction politics engine (deterministic)
+## Feature 4.3 — Story pacing engine
 
-Read `project/ROADMAP.md` lines 613–635 first (the authoritative spec).
+Read `project/ROADMAP.md` lines 675–699 first (the authoritative spec).
 
-Only start after `pytest tests/ -q` is green.
+**Context:** The pacing engine is a meta-engine that gates other engines. It runs on each tick
+advance, reads active quests and recent player activity, then writes `max_event_severity` and
+`quest_generation_rate` multipliers to `WorldState`. Other engines read these before sampling.
+No LLM. No new graph nodes or edges (WorldState fields are added).
 
-**Context:** Faction standings drift over time based on events. This is a
-deterministic rule-based engine — no LLM. On each tick it reads recent events,
-matches them against rules in a YAML file, adjusts `STANDS_WITH.standing` edges,
-and applies a slow drift-to-neutral decay. The `STANDS_WITH` edge already exists
-in `type_registry/base_edges/stands_with.yaml` with fields `standing` (int,
-[-100,100]) and `last_changed_at` (str). The factions graph layer already has
-`graph/faction_service.py`, `graph/faction_queries.py`, and `graph/faction_writer.py`
-with `set_standing` available.
+### WorldState changes
 
-### Architecture decisions (read before coding)
+Add two new fields to `WorldState` in `world/world_state.py` **and** in the WorldState type
+registry contract (if a YAML exists for it — check `type_registry/base_nodes/world_state.yaml`):
 
-- **New package**: `engines/faction_politics/` with:
-  - `__init__.py` — package docstring only.
-  - `rules.yaml` — rule definitions (see format below).
-  - `rules_loader.py` — loads and validates `rules.yaml` at startup.
-  - `faction_politics_engine.py` (≤200 lines) — `FactionPoliticsEngine.run_tick(session)`.
-- **No new graph nodes or edges.** Reads events from the graph, writes to
-  `STANDS_WITH.standing` via `graph/faction_writer.set_standing`.
-- **Tick wiring**: Inject `FactionPoliticsEngine` into `scheduler/tick_scheduler.py`
-  as an optional field (same pattern as `MemoryConsolidationEngine` or
-  `RoutineEngine`). Wire it into `api/dependency_singletons.py` with a
-  `get_faction_politics_engine` singleton.
-- **No new API routes.** Standings are already readable via the existing factions
-  admin routes (`GET /v1/admin/factions/{faction_id}/standings`).
-
-### Rule YAML format (`engines/faction_politics/rules.yaml`)
-
-```yaml
-decay:
-  rate_per_tick: 1          # move standing 1 point toward 0 each tick
-  min_magnitude: 2          # skip decay if |standing| < min_magnitude
-
-rules:
-  - id: betrayal_standing_penalty
-    event_type: betrayal
-    standing_delta: -10
-    description: "A betrayal event between faction members reduces inter-faction standing."
-
-  - id: alliance_act_bonus
-    event_type: alliance_act
-    standing_delta: 5
-    description: "An alliance act between members of allied factions increases standing."
+```python
+max_event_severity: int = 100    # events above this severity are suppressed; default = unconstrained
+quest_generation_rate: float = 1.0  # multiplier on new quest generation; default = 1.0
 ```
 
-Fields per rule: `id` (str, unique), `event_type` (str), `standing_delta` (int),
-`description` (str, optional).
+These fields must have defaults so existing WorldState nodes in Neo4j (which lack these fields)
+continue to load without error.
+
+### Architecture
+
+New package `engines/story_pacing/`:
+- `__init__.py` — package docstring only.
+- `pacing_rules.yaml`:
+  ```yaml
+  high_severity_quest_threshold: 70    # quests with severity >= this suppress events
+  suppression_event_severity_cap: 30   # max_event_severity when high-severity quest is active
+  suppression_quest_rate: 0.5          # quest_generation_rate when high-severity quest active
+  cooldown_ticks: 10                   # ticks since last major event before pacing relaxes
+  major_event_severity_floor: 60       # events above this count as "major"
+  ```
+- `pacing_rules_loader.py` — `PacingRules` frozen dataclass; `load_pacing_rules(path) -> PacingRules`.
+- `pacing_queries.py` — Cypher constants:
+  - `CYPHER_GET_ACTIVE_HIGH_SEVERITY_QUESTS` — find Quest nodes with status != 'completed' and severity >= N.
+  - `CYPHER_GET_RECENT_MAJOR_EVENTS` — find Event nodes in last M ticks with severity >= floor.
+- `story_pacing_engine.py` (≤200 lines) — `StoryPacingEngine(rules: PacingRules)`:
+  - `run_tick(session, tick_id) -> dict`:
+    a. Query active high-severity quests.
+    b. Query recent major events (by tick_id or time).
+    c. Compute new `max_event_severity` and `quest_generation_rate` based on rules.
+    d. Write updated values to WorldState via `world_writer.upsert_world_state`.
+    e. Return `{"max_event_severity": N, "quest_generation_rate": F, "suppressed": bool}`.
+
+**Respecting pacing in other engines:**
+- `engines/events/event_handler.py` — before sampling an event from the pool, read
+  `world_state.max_event_severity`; skip events whose severity exceeds the cap.
+- `engines/quest_generation/quest_generation_engine.py` — multiply new-quest probability
+  by `world_state.quest_generation_rate` (only relevant if generation is rate-controlled).
+
+Wiring:
+- `api/dependency_singletons.py` — add `get_story_pacing_engine()` with `@lru_cache`.
+- `scheduler/tick_scheduler.py` — add optional `story_pacing_engine: object = None`; call
+  `await self._story_pacing_engine.run_tick(session=session, tick_id=tick_id)` before
+  gossip/event sampling in each tick so pacing state is fresh when samplers run.
+- `main.py` — inject `get_story_pacing_engine()` into the scheduler singleton.
 
 ### Steps
 
-1. **`engines/faction_politics/rules.yaml`** — seed with at least two rules:
-   `betrayal` → -10, `alliance_act` → +5. Include the `decay` block.
-
-2. **`engines/faction_politics/rules_loader.py`**:
-   - `FactionPoliticsRule` — frozen dataclass: `id`, `event_type`,
-     `standing_delta`.
-   - `DecayConfig` — frozen dataclass: `rate_per_tick`, `min_magnitude`.
-   - `FactionPoliticsRules` — frozen dataclass: `decay`, `rules` (list).
-   - `load_rules(path) -> FactionPoliticsRules` — loads YAML, validates unique
-     `id`s, fails fast on schema violations.
-
-3. **`engines/faction_politics/faction_politics_engine.py`** (≤200 lines):
-   - `FactionPoliticsEngine(rules: FactionPoliticsRules)`.
-   - `run_tick(session) -> None`:
-     a. Query recent events (last N, configurable; default 20) that have a
-        `src_character_id` field. For each event, look up the factions of the
-        source character via the graph.
-     b. For each matching rule (`event.event_type == rule.event_type`), find
-        faction pairs (A, B) where A is the faction of the event source and B is
-        any faction standing partner. Clamp delta application to [-100, 100].
-        Call `set_standing(session, faction_a_id, faction_b_id, new_standing)`.
-     c. After rule processing, apply decay: for every `STANDS_WITH` edge where
-        `|standing| >= decay.min_magnitude`, move standing by `rate_per_tick`
-        toward 0. Call `set_standing` for any edge that changes.
-   - `CYPHER_GET_RECENT_EVENTS` and `CYPHER_GET_ALL_STANDINGS` — Cypher string
-     constants in this file (or a companion `faction_politics_queries.py` if
-     the engine file grows past 200 lines).
-
-4. **`engines/faction_politics/__init__.py`** — package docstring only.
-
-5. **Wiring**:
-   - `api/dependency_singletons.py` — add `get_faction_politics_engine()` using
-     `@lru_cache` (same pattern as other engine singletons).
-   - `scheduler/tick_scheduler.py` — accept optional
-     `faction_politics_engine: FactionPoliticsEngine | None = None`; call
-     `await faction_politics_engine.run_tick(session)` in the advance loop if
-     not None (same optional pattern as memory consolidation engine).
-   - `main.py` — inject `get_faction_politics_engine()` into the scheduler
-     singleton at startup (same pattern as other optional engines).
-
-6. **Unit tests** `tests/unit/test_faction_politics_engine.py`:
-   - `test_rules_loader_loads_yaml` — loads the real `rules.yaml`, assert 2+
-     rules loaded and decay block present.
-   - `test_run_tick_applies_matching_rule` — mock graph calls; event of type
-     `betrayal` → standing decreases by 10.
-   - `test_run_tick_no_matching_rule_no_change` — event type with no matching
-     rule → no standing update.
-   - `test_run_tick_clamps_to_bounds` — delta that would exceed ±100 is clamped.
-   - `test_run_tick_applies_decay` — standing of magnitude >= min_magnitude drifts
-     toward 0 each tick.
-   - `test_run_tick_skips_decay_below_min_magnitude` — small standing is not decayed.
-
-7. **E2E scenario** `e2e/scenarios/scenario_faction_politics.py`:
-   - Seed two factions and one character belonging to faction A.
-   - Inject a `betrayal` event linked to that character.
-   - Run one engine tick.
-   - Assert that the A→B standing decreased by 10.
+1. Add `max_event_severity` and `quest_generation_rate` fields to `WorldState` (with defaults).
+   If `type_registry/base_nodes/world_state.yaml` exists, add the fields there too.
+2. Implement `engines/story_pacing/` package.
+3. Wire event_handler to check `world_state.max_event_severity` before sampling.
+4. Wire quest_generation_engine to check `world_state.quest_generation_rate`.
+5. Add `get_story_pacing_engine()` singleton and wire into `TickScheduler`.
+6. Unit tests `tests/unit/test_story_pacing_engine.py`:
+   - `test_pacing_rules_loader_loads_yaml` — loads real rules.yaml, asserts fields present.
+   - `test_run_tick_suppresses_when_high_severity_quest_active` — mock: high-severity quest
+     active → max_event_severity drops to suppression cap.
+   - `test_run_tick_normal_when_no_high_severity_quest` — no such quest → max_event_severity = 100.
+   - `test_run_tick_relaxes_after_cooldown` — no major events in cooldown window → rate normal.
+   - `test_event_handler_skips_suppressed_severity` — event above max_event_severity not fired.
+7. E2E scenario `e2e/scenarios/scenario_story_pacing.py`:
+   - Seed a high-severity quest (severity=80, status=in_progress).
+   - Run one tick advance.
+   - Read WorldState; assert max_event_severity <= 30 (suppression cap).
    - Cleanup.
 
-### Definition of done (4.1)
-- `engines/faction_politics/rules.yaml` exists with ≥2 rules and decay config.
-- `rules_loader.py` parses and validates the YAML at startup.
-- `FactionPoliticsEngine.run_tick` applies rules and decay using the graph layer.
-- Engine is wired into `TickScheduler` as optional injection.
-- All 6 unit tests green.
+### Definition of done (4.3)
+- WorldState extended with pacing fields (backward-compatible defaults).
+- `engines/story_pacing/` package: rules loader, Cypher constants, engine.
+- EventHandler respects `max_event_severity`.
+- QuestGenerationEngine respects `quest_generation_rate`.
+- Engine wired into TickScheduler.
+- 5 unit tests green.
 - E2E scenario passes.
-- No new graph nodes or edges introduced.
 - Pre-merge checklist from `CLAUDE.md` satisfied.
-- Commit: `feat: faction politics engine (Phase 4.1)`
+- Commit: `feat: story pacing engine (Phase 4.3)`
 
 ---
 
-## After 4.1 is committed — update this file for Feature 4.2
+## After 4.3 is committed — update this file for Feature 4.4
 
-When Feature 4.1 is committed and `pytest tests/ -q` is green, rewrite this
-file to target Feature 4.2 — Quest templates and slot-filling generation.
-
-Read `project/ROADMAP.md` lines 636–671 before writing 4.2 instructions.
+Read `project/ROADMAP.md` lines 701–719 and the Phase 4 plan file at
+`~/.claude/plans/goal-implement-phase-4-dapper-kettle.md` (Iteration 4 section).
+Replace this file with the Iteration 4 NEXT_SESSION.md content from that plan.
 
 ---
 
-## Open issues to be aware of (do NOT fix during Phase 4.1 unless explicitly blocking)
+## Open issues to be aware of (do NOT fix unless blocking)
 
-- **ISSUE-013**: `how_long_ago` has no defined bucket for 7–27 days (P3)
-- **ISSUE-005**: `adjust_reputation_for_event` not wired into event engine (P3)
-- **ISSUE-006**: pre-existing `Character.faction` string field not migrated (P3)
-- **ISSUE-004**: `edge_updater.py` no-any-return mypy warning (P3)
-- **ISSUE-011**: `.env` uses Docker DNS (`bolt://neo4j:7687`) — fails outside Docker (P3)
-- **FIXED**: `test_memory_service.py::test_decay_all_vividness_*` — fixed in
-  the Phase 3 test foundation session (wrong mock type corrected, 667 tests green).
-
-If any of these blocks Phase 4.1, log a new ISSUES.md entry describing the
-blocking scenario and get approval before fixing.
+- ISSUE-013: `how_long_ago` bucket gap 7–27 days (P3)
+- ISSUE-005: `adjust_reputation_for_event` not wired (P3)
+- ISSUE-006: `Character.faction` string field not migrated (P3)
+- ISSUE-004: `edge_updater.py` mypy warning (P3)
+- ISSUE-011: `.env` uses Docker DNS (P3)
