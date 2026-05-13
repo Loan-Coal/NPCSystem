@@ -114,3 +114,20 @@ async def update_goal_status(
             goal_id=goal_id,
             status=new_status,
         )
+
+
+async def delete_goal(
+    session: AsyncSession,
+    *,
+    goal_id: str,
+) -> None:
+    """Hard-delete a single Goal node and its relationships.
+
+    Args:
+        session: Active Neo4j async session.
+        goal_id: ID of the Goal node to delete.
+    """
+    await session.run(
+        "MATCH (g:Goal {id: $id}) DETACH DELETE g",
+        id=goal_id,
+    )

@@ -105,3 +105,20 @@ async def update_confidence(
             belief_id=belief_id,
             confidence=new_confidence,
         )
+
+
+async def delete_belief(
+    session: AsyncSession,
+    *,
+    belief_id: str,
+) -> None:
+    """Hard-delete a single Belief node and its relationships.
+
+    Args:
+        session: Active Neo4j async session.
+        belief_id: ID of the Belief node to delete.
+    """
+    await session.run(
+        "MATCH (b:Belief {id: $id}) DETACH DELETE b",
+        id=belief_id,
+    )

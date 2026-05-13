@@ -82,3 +82,20 @@ async def get_secrets_for_character_svc(
         List of secret property dicts ordered by severity descending.
     """
     return await get_secrets_for_character(session, character_id=character_id, k=k)
+
+
+async def delete_secret(
+    session: AsyncSession,
+    *,
+    secret_id: str,
+) -> None:
+    """Hard-delete a single Secret node and its relationships.
+
+    Args:
+        session: Active Neo4j async session.
+        secret_id: ID of the Secret node to delete.
+    """
+    await session.run(
+        "MATCH (s:Secret {id: $id}) DETACH DELETE s",
+        id=secret_id,
+    )

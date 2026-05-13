@@ -18,6 +18,7 @@ from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.route_helpers import ok_response
 from npc_engine.graph.item_service import (
     create_item,
+    delete_item,
     get_items_for_character_svc,
     transfer_ownership,
 )
@@ -148,4 +149,21 @@ async def patch_item_owner(
         to_character_id=body.to_character_id,
         game_time=game_time,
     )
+    return ok_response({"item_id": item_id})
+
+
+@router.delete("/{item_id}")
+async def remove_item(
+    item_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Hard-delete a single Item node.
+
+    Args:
+        item_id: ID of the Item node to delete.
+
+    Returns:
+        Envelope confirming deletion.
+    """
+    await delete_item(session, item_id=item_id)
     return ok_response({"item_id": item_id})

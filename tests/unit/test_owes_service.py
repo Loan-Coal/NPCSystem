@@ -225,3 +225,111 @@ async def test_update_debt_status_invalid_status_raises():
             creditor_id="char_b",
             status="cancelled",
         )
+
+
+# ---------------------------------------------------------------------------
+# create_debt — all four valid kind values accepted without error
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["money", "item", "service"])
+async def test_create_debt_remaining_valid_kinds(kind: str):
+    """money, item, service (in addition to favor) must all be accepted."""
+    session = _make_session()
+
+    from npc_engine.graph.owes_service import create_debt
+
+    await create_debt(
+        session,
+        debtor_id="char_a",
+        creditor_id="char_b",
+        kind=kind,
+        magnitude="some amount",
+    )
+
+    session.begin_transaction.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# update_debt_status — all valid statuses accepted
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_update_debt_status_to_defaulted():
+    """'defaulted' is a valid third status value — no error should be raised."""
+    session = _make_session()
+    tx = session.begin_transaction.return_value
+
+    from npc_engine.graph.owes_service import update_debt_status
+
+    await update_debt_status(
+        session,
+        debtor_id="char_a",
+        creditor_id="char_b",
+        status="defaulted",
+    )
+
+    call_kwargs = tx.run.call_args.kwargs
+    assert call_kwargs["status"] == "defaulted"
+
+
+@pytest.mark.asyncio
+async def test_update_debt_status_to_pending():
+    """Re-setting to 'pending' is a valid operation (no error)."""
+    session = _make_session()
+
+    from npc_engine.graph.owes_service import update_debt_status
+
+    await update_debt_status(
+        session,
+        debtor_id="char_a",
+        creditor_id="char_b",
+        status="pending",
+    )
+
+    session.begin_transaction.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# get_debts_for_character — creditor rows have role='creditor'
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_debts_creditor_rows_have_role_creditor():
+    """When a character is creditor, returned rows must have role='creditor'."""
+    fake_creditor_rows = [
+        {
+            "other_id": "char_debtor",
+            "role": "creditor",
+            "kind": "money",
+            "magnitude": "50",
+            "due_by": "day_5",
+            "status": "pending",
+        }
+    ]
+    call_count = 0
+
+    async def _mock_run(query: str, **kwargs):
+        nonlocal call_count
+        # First call: debtor query (no rows). Second call: creditor query (one row).
+        rows = [] if call_count == 0 else fake_creditor_rows
+        call_count += 1
+
+        async def _records():
+            for r in rows:
+                yield r
+
+        return _records()
+
+    session = MagicMock()
+    session.run = _mock_run
+
+    from npc_engine.graph.owes_queries import get_debts_for_character
+
+    results = await get_debts_for_character(session, character_id="char_creditor")
+    assert len(results) == 1
+    assert results[0]["role"] == "creditor"
+    assert results[0]["other_id"] == "char_debtor"

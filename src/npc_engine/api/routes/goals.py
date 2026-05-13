@@ -18,6 +18,7 @@ from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.route_helpers import ok_response
 from npc_engine.graph.goal_service import (
     create_goal,
+    delete_goal,
     get_goals_for_character_svc,
     update_goal_status,
 )
@@ -128,4 +129,21 @@ async def patch_goal_status(
         Envelope with updated goal_id.
     """
     await update_goal_status(session, goal_id=goal_id, new_status=body.status)
+    return ok_response({"goal_id": goal_id})
+
+
+@router.delete("/{goal_id}")
+async def remove_goal(
+    goal_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Hard-delete a single Goal node.
+
+    Args:
+        goal_id: ID of the Goal node to delete.
+
+    Returns:
+        Envelope confirming deletion.
+    """
+    await delete_goal(session, goal_id=goal_id)
     return ok_response({"goal_id": goal_id})

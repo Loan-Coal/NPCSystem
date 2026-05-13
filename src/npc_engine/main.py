@@ -27,6 +27,7 @@ from npc_engine.api.routes.graph import router as graph_router
 from npc_engine.api.routes.beliefs import router as beliefs_router
 from npc_engine.api.routes.goals import router as goals_router
 from npc_engine.api.routes.items import router as items_router
+from npc_engine.api.routes.memories import router as memories_router
 from npc_engine.api.routes.secrets import router as secrets_router
 from npc_engine.api.routes.debts import router as debts_router
 from npc_engine.api.routes.factions import router as factions_router
@@ -183,6 +184,7 @@ def create_app() -> FastAPI:
     app.include_router(beliefs_router, prefix=admin_prefix)
     app.include_router(goals_router, prefix=admin_prefix)
     app.include_router(items_router, prefix=admin_prefix)
+    app.include_router(memories_router, prefix=admin_prefix)
     app.include_router(secrets_router, prefix=admin_prefix)
     app.include_router(debts_router, prefix=admin_prefix)
     app.include_router(factions_router, prefix=admin_prefix)

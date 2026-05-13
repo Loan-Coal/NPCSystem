@@ -49,8 +49,12 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-markers = ["asyncio: mark test as async"]
-pythonpath = ["src", "e2e/scenarios"]
+markers = [
+    "asyncio: mark test as async",
+    "demo: full Phase 3 story arc demo scenario",
+    "llm_eval: opt-in LLM-as-judge evaluation tests (require running LLM stack)",
+]
+pythonpath = ["src", "e2e/scenarios", "e2e"]
 testpaths = ["tests", "e2e/scenarios"]
 python_files = ["test_*.py", "*_test.py", "scenario_*.py"]
 

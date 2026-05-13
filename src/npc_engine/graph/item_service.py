@@ -118,6 +118,16 @@ async def get_item_by_id_svc(
     return await get_item_by_id(session, item_id=item_id)
 
 
+async def delete_item(session: AsyncSession, *, item_id: str) -> None:
+    """Hard-delete a single Item node and all its relationships.
+
+    Args:
+        session: Active Neo4j async session.
+        item_id: ID of the Item node to delete.
+    """
+    await session.run("MATCH (i:Item {id: $id}) DETACH DELETE i", id=item_id)
+
+
 async def transfer_ownership(
     session: AsyncSession,
     *,

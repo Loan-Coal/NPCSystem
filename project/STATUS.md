@@ -4,8 +4,9 @@
 
 | | |
 |---|---|
-| **Current phase** | Phase 3 — World Depth |
-| **Phase 3** | 🔄 In progress — 3.1 ✅, 3.2 ✅, 3.3 ✅, 3.4 ✅, 3.5 ✅, 3.6 ✅, 3.7 ✅, 3.8 ✅ |
+| **Current phase** | Phase 4 — Authoring engines |
+| **Phase 4** | 🔄 In progress — 4.1 next (Faction politics engine) |
+| **Phase 3** | ✅ Complete — 3.1–3.8 done + full test foundation (667 unit tests, 20 E2E scenarios) |
 | **Phase 2** | ✅ Complete — 2.1 schedule nodes, 2.2 routine engine, 2.3 disruption rules |
 | **Phase 1** | ✅ Complete — Faction nodes (1.1), Faction-aware gossip (1.2), Faction reputation (1.3) |
 | **Foundation** | ✅ Phase 0 complete — 27 services refactored, all layer violations resolved |
@@ -27,8 +28,22 @@
 ---
 
 ## Phase 3 — World Depth
-**Status:** 🔄 In progress
+**Status:** ✅ Complete
 **Started:** 2026-05-11
+**Completed:** 2026-05-13
+
+### E2E scenario HTTP migration (2026-05-13)
+All 13 e2e scenario files were migrated from direct Neo4j Bolt connections to the HTTP API.
+New endpoints added to support full scenario coverage:
+- `POST/GET/DELETE /v1/admin/memories/{...}` — full memory CRUD
+- `POST /v1/admin/memories/from-arousal/{character_id}` — arousal-threshold memory creation
+- `POST /v1/admin/memories/decay` — vividness decay trigger
+- `POST /v1/admin/memories/consolidate/{npc_id}` — LLM consolidation trigger
+- `DELETE /v1/admin/beliefs/{belief_id}` — belief cleanup
+- `DELETE /v1/admin/goals/{goal_id}` — goal cleanup
+- `DELETE /v1/admin/secrets/{secret_id}` — secret cleanup
+- `DELETE /v1/admin/items/{item_id}` — item cleanup
+No scenario now connects directly to Neo4j or any internal service.
 
 ### What was done
 - **3.8**: Debt edges — `OWES` edge YAML; `graph/owes_service.py`; `graph/owes_queries.py`; Tier A obligations at priority 83 (pending debts as debtor or creditor, ordered by due_by); `POST/GET/PATCH /v1/admin/debts/{...}` routes; 8 unit tests green. Commit: feat: debt edges (Phase 3.8).

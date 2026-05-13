@@ -6,7 +6,7 @@ Does NOT: connect to Neo4j. All graph calls are mocked.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -198,3 +198,128 @@ async def test_update_goal_status_calls_cypher():
     call_kwargs = tx.run.call_args.kwargs
     assert call_kwargs["goal_id"] == "goal-uuid-001"
     assert call_kwargs["status"] == "achieved"
+
+
+# ---------------------------------------------------------------------------
+# create_goal — urgency boundary values; status always defaults to active
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_goal_urgency_zero():
+    """urgency=0 (lower bound) is passed through unchanged."""
+    session = _make_session()
+    tx = session.begin_transaction.return_value
+
+    from npc_engine.graph.goal_service import create_goal
+
+    await create_goal(
+        session,
+        character_id="char_1",
+        description="Low priority.",
+        urgency=0,
+        game_time=_make_game_time(),
+    )
+
+    call_kwargs = tx.run.call_args.kwargs
+    assert call_kwargs["urgency"] == 0
+
+
+@pytest.mark.asyncio
+async def test_create_goal_urgency_hundred():
+    """urgency=100 (upper bound) is passed through unchanged."""
+    session = _make_session()
+    tx = session.begin_transaction.return_value
+
+    from npc_engine.graph.goal_service import create_goal
+
+    await create_goal(
+        session,
+        character_id="char_1",
+        description="Critical mission.",
+        urgency=100,
+        game_time=_make_game_time(),
+    )
+
+    call_kwargs = tx.run.call_args.kwargs
+    assert call_kwargs["urgency"] == 100
+
+
+@pytest.mark.asyncio
+async def test_create_goal_status_always_defaults_to_active():
+    """create_goal always sets status='active' regardless of inputs."""
+    session = _make_session()
+    tx = session.begin_transaction.return_value
+
+    from npc_engine.graph.goal_service import create_goal
+
+    await create_goal(
+        session,
+        character_id="char_1",
+        description="Some goal.",
+        urgency=50,
+        game_time=_make_game_time(),
+    )
+
+    call_kwargs = tx.run.call_args.kwargs
+    assert call_kwargs["status"] == "active"
+
+
+# ---------------------------------------------------------------------------
+# update_goal_status — abandoned is a valid status
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_update_goal_status_to_abandoned():
+    """'abandoned' is a valid status value — no error should be raised."""
+    session = _make_session()
+    tx = session.begin_transaction.return_value
+
+    from npc_engine.graph.goal_service import update_goal_status
+
+    await update_goal_status(session, goal_id="goal-uuid-002", new_status="abandoned")
+
+    call_kwargs = tx.run.call_args.kwargs
+    assert call_kwargs["status"] == "abandoned"
+
+
+# ---------------------------------------------------------------------------
+# get_goals_for_character_svc — empty status_filter returns all
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_goals_svc_empty_status_filter_passes_through():
+    """status_filter='' (empty string) is forwarded to the query to return all statuses."""
+    with patch(
+        "npc_engine.graph.goal_service.get_goals_for_character",
+        new_callable=AsyncMock,
+        return_value=[],
+    ) as mock_get:
+        from npc_engine.graph.goal_service import get_goals_for_character_svc
+
+        await get_goals_for_character_svc(
+            MagicMock(), character_id="char_1", k=5, status_filter=""
+        )
+
+    mock_get.assert_awaited_once_with(ANY, character_id="char_1", k=5, status_filter="")
+
+
+@pytest.mark.asyncio
+async def test_get_goals_svc_k_exceeds_total_returns_all():
+    """k=1000 with only 2 goals returns 2, not an error."""
+    fake_goals = [
+        {"id": "g1", "description": "Goal A", "urgency": 80, "status": "active"},
+        {"id": "g2", "description": "Goal B", "urgency": 30, "status": "achieved"},
+    ]
+    with patch(
+        "npc_engine.graph.goal_service.get_goals_for_character",
+        new_callable=AsyncMock,
+        return_value=fake_goals,
+    ):
+        from npc_engine.graph.goal_service import get_goals_for_character_svc
+
+        result = await get_goals_for_character_svc(MagicMock(), character_id="char_1", k=1000)
+
+    assert len(result) == 2

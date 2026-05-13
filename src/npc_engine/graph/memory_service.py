@@ -109,3 +109,20 @@ async def decay_all_vividness(
     result = await session.run(CYPHER_DECAY_VIVIDNESS, decay=decay_per_day)
     record = await result.single()
     return int(record["affected"]) if record else 0
+
+
+async def delete_memory(
+    session: AsyncSession,
+    *,
+    memory_id: str,
+) -> None:
+    """Hard-delete a single Memory node and its relationships.
+
+    Args:
+        session: Active Neo4j async session.
+        memory_id: ID of the Memory node to delete.
+    """
+    await session.run(
+        "MATCH (m:Memory {id: $id}) DETACH DELETE m",
+        id=memory_id,
+    )

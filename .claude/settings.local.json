@@ -17,7 +17,19 @@
       "Bash(python -m pytest tests/unit/ --tb=no -q)",
       "Bash(xargs wc *)",
       "Bash(python -m pytest --tb=no -q)",
-      "Bash(python -m pytest tests/unit/utils/ -v --tb=short)"
+      "Bash(python -m pytest tests/unit/utils/ -v --tb=short)",
+      "Bash(findstr -i \"remem\\\\|about\\\\|believes\\\\|pursues\\\\|owns\\\\|knows_s\\\\|owes\")",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('src/npc_engine/data/api_seeder.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(findstr -A 5 \"scenarios\")",
+      "Bash(python -m pytest e2e/scenarios/ --collect-only -q)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/ -q --tb=short)",
+      "Bash(.venv/Scripts/python.exe -m pytest e2e/scenarios/ --collect-only -q)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/ -q --tb=no)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\\\\src\\\\npc_engine\\\\graph\" -Filter \"*.py\")",
+      "Bash(Select-Object -ExpandProperty Name)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\" -Recurse -Directory)",
+      "Bash(Select-Object -First 20)"
     ]
   }
 }

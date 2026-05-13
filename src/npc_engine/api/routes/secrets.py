@@ -18,6 +18,7 @@ from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.route_helpers import ok_response
 from npc_engine.graph.secret_service import (
     create_secret,
+    delete_secret,
     get_secrets_for_character_svc,
 )
 from npc_engine.world.time_utils import TimePoint
@@ -81,15 +82,34 @@ async def create_secret_for_character(
 @router.get("/{character_id}")
 async def list_secrets_for_character(
     character_id: str,
+    k: int = 3,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
     """List secrets known by a character, ordered by severity descending.
 
     Args:
         character_id: ID of the character.
+        k: Maximum number of secrets to return (default 3).
 
     Returns:
         Envelope with list of secret dicts.
     """
-    secrets = await get_secrets_for_character_svc(session, character_id=character_id)
+    secrets = await get_secrets_for_character_svc(session, character_id=character_id, k=k)
     return ok_response({"secrets": secrets})
+
+
+@router.delete("/{secret_id}")
+async def remove_secret(
+    secret_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Hard-delete a single Secret node.
+
+    Args:
+        secret_id: ID of the Secret node to delete.
+
+    Returns:
+        Envelope confirming deletion.
+    """
+    await delete_secret(session, secret_id=secret_id)
+    return ok_response({"secret_id": secret_id})

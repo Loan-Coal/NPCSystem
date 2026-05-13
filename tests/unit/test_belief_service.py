@@ -6,7 +6,7 @@ Does NOT: connect to Neo4j. All graph calls are mocked.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -145,3 +145,102 @@ async def test_update_confidence_calls_cypher():
     call_kwargs = tx.run.call_args.kwargs
     assert call_kwargs["belief_id"] == "belief-uuid-001"
     assert call_kwargs["confidence"] == 55
+
+
+# ---------------------------------------------------------------------------
+# create_belief — boundary confidence values
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_belief_confidence_zero():
+    """confidence=0 is at the lower bound and must be passed through unchanged."""
+    session = _make_session()
+    tx = session.begin_transaction.return_value
+
+    from npc_engine.graph.belief_service import create_belief
+
+    await create_belief(
+        session,
+        character_id="char_1",
+        content="Absolute uncertainty.",
+        confidence=0,
+        game_time=_make_game_time(),
+    )
+
+    call_kwargs = tx.run.call_args.kwargs
+    assert call_kwargs["confidence"] == 0
+
+
+@pytest.mark.asyncio
+async def test_create_belief_confidence_hundred():
+    """confidence=100 is at the upper bound and must be passed through unchanged."""
+    session = _make_session()
+    tx = session.begin_transaction.return_value
+
+    from npc_engine.graph.belief_service import create_belief
+
+    await create_belief(
+        session,
+        character_id="char_1",
+        content="Absolute certainty.",
+        confidence=100,
+        game_time=_make_game_time(),
+    )
+
+    call_kwargs = tx.run.call_args.kwargs
+    assert call_kwargs["confidence"] == 100
+
+
+# ---------------------------------------------------------------------------
+# get_beliefs_for_character_svc — k boundary values
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_beliefs_svc_passes_k_zero():
+    """k=0 is forwarded to the query (LIMIT 0 returns empty list)."""
+    with patch(
+        "npc_engine.graph.belief_service.get_beliefs_for_character",
+        new_callable=AsyncMock,
+        return_value=[],
+    ) as mock_get:
+        from npc_engine.graph.belief_service import get_beliefs_for_character_svc
+
+        result = await get_beliefs_for_character_svc(MagicMock(), character_id="char_1", k=0)
+
+    mock_get.assert_awaited_once_with(ANY, character_id="char_1", k=0)
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_beliefs_svc_k_larger_than_total_returns_all():
+    """k=1000 with only 2 beliefs returns the 2 available, not an error."""
+    fake_records = [
+        {"id": "b1", "content": "A", "confidence": 80},
+        {"id": "b2", "content": "B", "confidence": 40},
+    ]
+    with patch(
+        "npc_engine.graph.belief_service.get_beliefs_for_character",
+        new_callable=AsyncMock,
+        return_value=fake_records,
+    ):
+        from npc_engine.graph.belief_service import get_beliefs_for_character_svc
+
+        result = await get_beliefs_for_character_svc(MagicMock(), character_id="char_1", k=1000)
+
+    assert len(result) == 2
+
+
+@pytest.mark.asyncio
+async def test_get_beliefs_svc_returns_empty_for_character_with_no_beliefs():
+    with patch(
+        "npc_engine.graph.belief_service.get_beliefs_for_character",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
+        from npc_engine.graph.belief_service import get_beliefs_for_character_svc
+
+        result = await get_beliefs_for_character_svc(MagicMock(), character_id="no_beliefs_char", k=5)
+
+    assert result == []

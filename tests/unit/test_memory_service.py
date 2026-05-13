@@ -9,7 +9,7 @@ Dependencies injected: None.
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -127,17 +127,25 @@ async def test_get_memories_returns_list_from_query():
 
 # ---------------------------------------------------------------------------
 # decay_all_vividness — clamps to 0
+# decay_all_vividness calls session.run() directly (not begin_transaction).
 # ---------------------------------------------------------------------------
+
+
+def _make_decay_session(affected: int | None) -> MagicMock:
+    """Return a session mock wired for decay_all_vividness (uses session.run directly)."""
+    session = MagicMock()
+    record = MagicMock() if affected is not None else None
+    if record is not None:
+        record.__getitem__ = MagicMock(side_effect=lambda k: affected if k == "affected" else None)
+    mock_result = AsyncMock()
+    mock_result.single = AsyncMock(return_value=record)
+    session.run = AsyncMock(return_value=mock_result)
+    return session
 
 
 @pytest.mark.asyncio
 async def test_decay_all_vividness_returns_affected_count():
-    session = _make_session()
-    record = MagicMock()
-    record.__getitem__ = MagicMock(side_effect=lambda k: 3 if k == "affected" else None)
-    session.begin_transaction.return_value.__aenter__.return_value.run.return_value.single = AsyncMock(
-        return_value=record
-    )
+    session = _make_decay_session(affected=3)
 
     from npc_engine.graph.memory_service import decay_all_vividness
 
@@ -147,10 +155,7 @@ async def test_decay_all_vividness_returns_affected_count():
 
 @pytest.mark.asyncio
 async def test_decay_all_vividness_returns_zero_when_no_memories():
-    session = _make_session()
-    session.begin_transaction.return_value.__aenter__.return_value.run.return_value.single = AsyncMock(
-        return_value=None
-    )
+    session = _make_decay_session(affected=None)
 
     from npc_engine.graph.memory_service import decay_all_vividness
 
@@ -212,6 +217,113 @@ async def test_memory_engine_skips_when_arousal_at_or_below_70():
     assert result_at is None
     assert result_below is None
     mock_create.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# MemoryEngine.create_from_arousal — exact threshold boundary (arousal=71 vs 70)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_memory_engine_creates_memory_at_arousal_71():
+    """arousal=71 is strictly above the threshold (>70) and must create a memory."""
+    engine = MemoryEngine()
+    session = _make_session()
+
+    with patch(
+        "npc_engine.engines.memory.memory_engine.create_memory",
+        new_callable=AsyncMock,
+        return_value="threshold-mem-id",
+    ) as mock_create:
+        result = await engine.create_from_arousal(
+            session,
+            character_id="char_threshold",
+            arousal=71,
+            content="Threshold moment.",
+            game_time=_make_game_time(),
+        )
+
+    assert result == "threshold-mem-id"
+    mock_create.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_memory_engine_does_not_create_at_arousal_70():
+    """arousal=70 is at the threshold (not strictly above) — must NOT create a memory."""
+    engine = MemoryEngine()
+    session = _make_session()
+
+    with patch(
+        "npc_engine.engines.memory.memory_engine.create_memory",
+        new_callable=AsyncMock,
+    ) as mock_create:
+        result = await engine.create_from_arousal(
+            session,
+            character_id="char_threshold",
+            arousal=70,
+            content="Just below threshold.",
+            game_time=_make_game_time(),
+        )
+
+    assert result is None
+    mock_create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_memory_engine_emotional_charge_formula_at_threshold():
+    """At arousal=71, emotional_charge should be min(100, 71-50) = 21."""
+    engine = MemoryEngine()
+    session = _make_session()
+    captured: list[dict] = []
+
+    async def _capture(sess, *, character_id, content, vividness, emotional_charge, game_time):
+        captured.append({"emotional_charge": emotional_charge})
+        return "ec-check-id"
+
+    with patch("npc_engine.engines.memory.memory_engine.create_memory", side_effect=_capture):
+        await engine.create_from_arousal(
+            session,
+            character_id="char_1",
+            arousal=71,
+            content="Minimal arousal.",
+            game_time=_make_game_time(),
+        )
+
+    assert captured[0]["emotional_charge"] == 21
+
+
+# ---------------------------------------------------------------------------
+# get_memories_for_character_svc — empty result
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_memories_svc_returns_empty_list_when_none():
+    with patch(
+        "npc_engine.graph.memory_service.get_memories_for_character",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
+        from npc_engine.graph.memory_service import get_memories_for_character_svc
+
+        rows = await get_memories_for_character_svc(MagicMock(), character_id="no_char", k=5)
+
+    assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_get_memories_svc_passes_k_to_query():
+    """k is forwarded to the underlying query function."""
+    with patch(
+        "npc_engine.graph.memory_service.get_memories_for_character",
+        new_callable=AsyncMock,
+        return_value=[],
+    ) as mock_get:
+        from npc_engine.graph.memory_service import get_memories_for_character_svc
+
+        await get_memories_for_character_svc(MagicMock(), character_id="char_1", k=0)
+
+    mock_get.assert_awaited_once_with(ANY, character_id="char_1", k=0)
 
 
 @pytest.mark.asyncio

@@ -81,6 +81,55 @@ _EVENT_PARTICIPATION: list[dict[str, str]] = [
 
 _NPC_IDS: list[str] = [f"npc_{i}" for i in range(1, 12)]
 
+# ---------------------------------------------------------------------------
+# Phase 3 seed data (deterministic IDs for idempotency)
+# ---------------------------------------------------------------------------
+
+_GAME_TIME_JSON = '{"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}'
+
+# (id, character_id, content, confidence)
+_PHASE3_BELIEFS: list[tuple[str, str, str, int]] = [
+    ("seed_belief_npc1_001", "npc_1", "The guild will betray the city if it profits them.", 80),
+    ("seed_belief_npc1_002", "npc_1", "Temple priests preach peace but hoard wealth.", 55),
+    ("seed_belief_npc2_001", "npc_2", "The guards are all in the guild's pocket.", 90),
+    ("seed_belief_npc2_002", "npc_2", "A stranger in town means trouble.", 40),
+    ("seed_belief_npc3_001", "npc_3", "The docks have always been dangerous at night.", 70),
+    ("seed_belief_npc4_001", "npc_4", "A deal made over ale is more binding than paper.", 65),
+]
+
+# (id, character_id, description, urgency)
+_PHASE3_GOALS: list[tuple[str, str, str, int]] = [
+    ("seed_goal_npc1_001", "npc_1", "Expose the guild's corruption to the city council.", 75),
+    ("seed_goal_npc2_001", "npc_2", "Gather enough coin to leave this town.", 60),
+    ("seed_goal_npc3_001", "npc_3", "Find out what happened to the missing shipment.", 85),
+    ("seed_goal_npc4_001", "npc_4", "Win the respect of the guild officers.", 40),
+]
+
+# (id, owner_id, name, description, value, rarity, item_type, is_unique)
+_PHASE3_ITEMS: list[tuple[str, str, str, str, int, str, str, str]] = [
+    ("seed_item_001", "npc_1", "Guild Ledger", "Detailed record of guild transactions.", 500, "rare", "document", "true"),
+    ("seed_item_002", "npc_3", "Smuggler's Compass", "Points toward nearby contraband.", 150, "uncommon", "tool", "false"),
+    ("seed_item_003", "npc_4", "Silver Dagger", "A foreman's sidearm.", 80, "common", "weapon", "false"),
+]
+
+# (id, character_id, content, severity)
+_PHASE3_SECRETS: list[tuple[str, str, str, int]] = [
+    ("seed_secret_npc1_001", "npc_1", "The guild master paid off the city treasurer last winter.", 80),
+    ("seed_secret_npc2_001", "npc_2", "There is a secret tunnel from the tavern to the docks.", 60),
+]
+
+# (id, character_id, content, vividness, emotional_charge)
+_PHASE3_MEMORIES: list[tuple[str, str, str, int, int]] = [
+    ("seed_mem_npc1_001", "npc_1", "The night the guild burned the merchant's warehouse. I watched from across the street.", 85, 70),
+    ("seed_mem_npc2_001", "npc_2", "The day I arrived in this town with nothing but a satchel and a lie.", 90, -60),
+]
+
+# (debtor_id, creditor_id, kind, magnitude, due_by, status)
+_PHASE3_DEBTS: list[tuple[str, str, str, str, str, str]] = [
+    ("npc_1", "npc_2", "favor", "Promised to speak on Sera's behalf to the guild.", "Year 1 Spring Day 10", "pending"),
+    ("npc_3", "npc_4", "money", "50 gold for dock fees paid in advance.", "Year 1 Spring Day 15", "pending"),
+]
+
 
 def _characters(now: str) -> list[dict]:
     """Return character property dicts with a consistent timestamp."""
@@ -246,6 +295,93 @@ def seed(base_url: str, api_key: str) -> int:
             }
             status = _post_edge(base_url, api_key, "KNOWS_ABOUT", npc_id, evt["id"], props)
             c.record(f"KNOWS_ABOUT:{npc_id}->{evt['id']}", status)
+    c.abort_if_failed()
+
+    print("Seeding Phase 3 — Beliefs ...")
+    for belief_id, char_id, content, confidence in _PHASE3_BELIEFS:
+        props = {
+            "id": belief_id,
+            "content": content,
+            "confidence": confidence,
+            "created_at_game_time": _GAME_TIME_JSON,
+        }
+        c.record(f"Belief:{belief_id}", _post_node(base_url, api_key, "Belief", props))
+        c.record(f"BELIEVES:{char_id}->{belief_id}", _post_edge(base_url, api_key, "BELIEVES", char_id, belief_id))
+    c.abort_if_failed()
+
+    print("Seeding Phase 3 — Goals ...")
+    for goal_id, char_id, description, urgency in _PHASE3_GOALS:
+        props = {
+            "id": goal_id,
+            "description": description,
+            "urgency": urgency,
+            "status": "active",
+            "created_at_game_time": _GAME_TIME_JSON,
+        }
+        c.record(f"Goal:{goal_id}", _post_node(base_url, api_key, "Goal", props))
+        c.record(f"PURSUES:{char_id}->{goal_id}", _post_edge(base_url, api_key, "PURSUES", char_id, goal_id))
+    c.abort_if_failed()
+
+    print("Seeding Phase 3 — Items ...")
+    for item_id, owner_id, name, description, value, rarity, item_type, is_unique in _PHASE3_ITEMS:
+        props = {
+            "id": item_id,
+            "name": name,
+            "description": description,
+            "value": value,
+            "rarity": rarity,
+            "type": item_type,
+            "is_unique": is_unique,
+        }
+        c.record(f"Item:{item_id}", _post_node(base_url, api_key, "Item", props))
+        c.record(
+            f"OWNS:{owner_id}->{item_id}",
+            _post_edge(base_url, api_key, "OWNS", owner_id, item_id, {"acquired_at": _GAME_TIME_JSON}),
+        )
+    c.abort_if_failed()
+
+    print("Seeding Phase 3 — Secrets ...")
+    for secret_id, char_id, content, severity in _PHASE3_SECRETS:
+        props = {
+            "id": secret_id,
+            "content": content,
+            "severity": severity,
+            "created_at": _GAME_TIME_JSON,
+        }
+        c.record(f"Secret:{secret_id}", _post_node(base_url, api_key, "Secret", props))
+        c.record(
+            f"KNOWS_SECRET:{char_id}->{secret_id}",
+            _post_edge(base_url, api_key, "KNOWS_SECRET", char_id, secret_id, {"knowledge_state": "knows"}),
+        )
+    c.abort_if_failed()
+
+    print("Seeding Phase 3 — Memories ...")
+    for mem_id, char_id, content, vividness, emotional_charge in _PHASE3_MEMORIES:
+        props = {
+            "id": mem_id,
+            "content": content,
+            "vividness": vividness,
+            "emotional_charge": emotional_charge,
+            "created_at_game_time": _GAME_TIME_JSON,
+            "last_recalled_at": _GAME_TIME_JSON,
+        }
+        c.record(f"Memory:{mem_id}", _post_node(base_url, api_key, "Memory", props))
+        c.record(
+            f"REMEMBERS:{char_id}->{mem_id}",
+            _post_edge(base_url, api_key, "REMEMBERS", char_id, mem_id, {"since_game_time": _GAME_TIME_JSON}),
+        )
+    c.abort_if_failed()
+
+    print("Seeding Phase 3 — Debts ...")
+    for debtor_id, creditor_id, kind, magnitude, due_by, status in _PHASE3_DEBTS:
+        edge_props = {
+            "kind": kind,
+            "magnitude": magnitude,
+            "due_by": due_by,
+            "status": status,
+        }
+        label = f"OWES:{debtor_id}->{creditor_id}:{kind}"
+        c.record(label, _post_edge(base_url, api_key, "OWES", debtor_id, creditor_id, edge_props))
     c.abort_if_failed()
 
     return c.summary()

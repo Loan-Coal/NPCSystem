@@ -17,9 +17,49 @@ This file tracks iterative implementation for PROJECT_PLAN_v1.4.xml and supports
 ## Stages
 
 ### Phase 3 — World Depth
-Status: IN_PROGRESS
+Status: DONE
 Started: 2026-05-11
-Completed:
+Completed: 2026-05-13
+
+#### Phase 3 E2E HTTP Migration
+Status: DONE
+Started: 2026-05-13
+Completed: 2026-05-13
+Tasks:
+- [x] `src/npc_engine/api/routes/memories.py` — new admin routes: POST/{char}, POST/from-arousal/{char}, GET/{char}, POST/decay, DELETE/{mem}, POST/consolidate/{npc}
+- [x] `src/npc_engine/graph/memory_service.py` — added `delete_memory`
+- [x] `src/npc_engine/graph/item_service.py` — added `delete_item`
+- [x] `src/npc_engine/api/routes/beliefs.py` — added `DELETE /{belief_id}`
+- [x] `src/npc_engine/api/routes/goals.py` — added `DELETE /{goal_id}`
+- [x] `src/npc_engine/api/routes/secrets.py` — added `DELETE /{secret_id}`, `k` query param on GET
+- [x] `src/npc_engine/api/routes/items.py` — added `DELETE /{item_id}`
+- [x] `src/npc_engine/main.py` — registered memories_router under admin prefix
+- [x] All 13 e2e scenario files migrated to HTTP API (no neo4j/bolt connections remain)
+
+#### Phase 3 Test Foundation
+Status: DONE
+Started: 2026-05-13
+Completed: 2026-05-13
+Tasks:
+- [x] `src/npc_engine/data/api_seeder.py` — enriched with beliefs, goals, items, secrets, debts, memories
+- [x] `tests/unit/test_belief_service.py` — edge case tests (confidence 0/100, k-limits)
+- [x] `tests/unit/test_goal_service.py` — edge case tests (urgency 0/100, status transitions, k-limits)
+- [x] `tests/unit/test_item_service.py` — edge case tests (value=0, is_unique=False, transfer, empty)
+- [x] `tests/unit/test_secret_service.py` — edge case tests (severity 0/100, k-limits)
+- [x] `tests/unit/test_owes_service.py` — edge case tests (all kinds, defaulted, creditor role)
+- [x] `tests/unit/test_memory_service.py` — fixed broken decay tests; arousal threshold tests; k-limits
+- [x] `e2e/scenarios/scenario_beliefs_edge.py` — confidence bounds, k-limits, no-beliefs char
+- [x] `e2e/scenarios/scenario_goals_edge.py` — urgency bounds, all statuses, status_filter
+- [x] `e2e/scenarios/scenario_items_edge.py` — value=0, is_unique=False, transfer
+- [x] `e2e/scenarios/scenario_secrets_edge.py` — severity bounds, k-limits, sorted desc
+- [x] `e2e/scenarios/scenario_debts_edge.py` — all 4 kinds, bidirectional, defaulted/fulfilled
+- [x] `e2e/scenarios/scenario_memory_edge.py` — arousal threshold, vividness clamping, k-limits
+- [x] `e2e/scenarios/scenario_demo.py` — full Phase 3 story arc (all 6 features)
+- [x] `e2e/helpers/llm_judge.py` — YES/NO judge helper
+- [x] `e2e/scenarios/scenario_llm_judge.py` — 3 llm_eval tests (consolidation coherence, hostile tone, goal-hinting)
+- [x] `Makefile` — scenario-edge, scenario-demo, eval-llm targets
+- [x] `pyproject.toml` — demo and llm_eval markers registered
+667 unit tests green, 20 E2E scenario tests collected.
 
 #### Feature 3.1 — Time as a first-class concept
 Status: DONE

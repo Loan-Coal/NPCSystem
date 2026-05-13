@@ -243,3 +243,93 @@ def test_non_give_item_actions_pass_through_unchanged():
     action = ActionModel(type="speak", target_id=None, parameters={"text": "Hello"})
     result = check_give_item_ownership(action, [])
     assert result.type == "speak"
+
+
+# ---------------------------------------------------------------------------
+# create_item — boundary value and type edge cases
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_item_value_zero():
+    """value=0 is accepted without error."""
+    session = _make_session()
+    tx = session.begin_transaction.return_value
+
+    from npc_engine.graph.item_service import create_item
+
+    await create_item(
+        session,
+        character_id="char_1",
+        name="Worthless Trinket",
+        description="Nobody wants this.",
+        value=0,
+        rarity="common",
+        type_="misc",
+        is_unique=False,
+        game_time=_make_game_time(),
+    )
+
+    call_kwargs = tx.run.call_args.kwargs
+    assert call_kwargs["value"] == 0
+
+
+@pytest.mark.asyncio
+async def test_create_item_not_unique_serializes_false_string():
+    """is_unique=False must be serialized as the string 'false' for the Cypher query."""
+    session = _make_session()
+    tx = session.begin_transaction.return_value
+
+    from npc_engine.graph.item_service import create_item
+
+    await create_item(
+        session,
+        character_id="char_1",
+        name="Common Blade",
+        description="Mass produced.",
+        value=10,
+        rarity="common",
+        type_="weapon",
+        is_unique=False,
+        game_time=_make_game_time(),
+    )
+
+    call_kwargs = tx.run.call_args.kwargs
+    assert call_kwargs["is_unique"] == "false"
+
+
+# ---------------------------------------------------------------------------
+# get_items_for_character_svc — delegates to query layer
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_items_svc_delegates_to_query_layer():
+    session = MagicMock()
+    fake_items = [{"id": "i1", "name": "Sword", "value": 50}]
+
+    with patch(
+        "npc_engine.graph.item_service.get_items_for_character",
+        new_callable=AsyncMock,
+        return_value=fake_items,
+    ) as mock_get:
+        from npc_engine.graph.item_service import get_items_for_character_svc
+
+        result = await get_items_for_character_svc(session, character_id="char_1")
+
+    mock_get.assert_awaited_once_with(session, character_id="char_1")
+    assert len(result) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_items_svc_returns_empty_for_character_with_no_items():
+    with patch(
+        "npc_engine.graph.item_service.get_items_for_character",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
+        from npc_engine.graph.item_service import get_items_for_character_svc
+
+        result = await get_items_for_character_svc(MagicMock(), character_id="no_items_char")
+
+    assert result == []

@@ -6,7 +6,7 @@ Does NOT: connect to Neo4j. All graph calls are mocked.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -177,3 +177,88 @@ async def test_get_secrets_svc_delegates_to_query_layer():
 
     mock_get.assert_awaited_once_with(session, character_id="char_1", k=2)
     assert len(results) == 1
+
+
+# ---------------------------------------------------------------------------
+# create_secret — boundary severity values
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_secret_severity_zero():
+    """severity=0 (lower bound) is passed through unchanged."""
+    session = _make_session()
+    tx = session.begin_transaction.return_value
+
+    from npc_engine.graph.secret_service import create_secret
+
+    await create_secret(
+        session,
+        character_id="char_1",
+        content="Minor embarrassment.",
+        severity=0,
+        game_time=_make_game_time(),
+    )
+
+    call_kwargs = tx.run.call_args.kwargs
+    assert call_kwargs["severity"] == 0
+
+
+@pytest.mark.asyncio
+async def test_create_secret_severity_hundred():
+    """severity=100 (upper bound) is passed through unchanged."""
+    session = _make_session()
+    tx = session.begin_transaction.return_value
+
+    from npc_engine.graph.secret_service import create_secret
+
+    await create_secret(
+        session,
+        character_id="char_1",
+        content="World-ending revelation.",
+        severity=100,
+        game_time=_make_game_time(),
+    )
+
+    call_kwargs = tx.run.call_args.kwargs
+    assert call_kwargs["severity"] == 100
+
+
+# ---------------------------------------------------------------------------
+# get_secrets_for_character_svc — k boundary values
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_secrets_svc_k_zero_passes_through():
+    """k=0 is forwarded to the query without error."""
+    with patch(
+        "npc_engine.graph.secret_service.get_secrets_for_character",
+        new_callable=AsyncMock,
+        return_value=[],
+    ) as mock_get:
+        from npc_engine.graph.secret_service import get_secrets_for_character_svc
+
+        result = await get_secrets_for_character_svc(MagicMock(), character_id="char_1", k=0)
+
+    mock_get.assert_awaited_once_with(ANY, character_id="char_1", k=0)
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_secrets_svc_k_larger_than_total_returns_all():
+    """k=1000 with only 2 secrets returns 2, not an error."""
+    fake_secrets = [
+        {"id": "s1", "content": "A", "severity": 90},
+        {"id": "s2", "content": "B", "severity": 40},
+    ]
+    with patch(
+        "npc_engine.graph.secret_service.get_secrets_for_character",
+        new_callable=AsyncMock,
+        return_value=fake_secrets,
+    ):
+        from npc_engine.graph.secret_service import get_secrets_for_character_svc
+
+        result = await get_secrets_for_character_svc(MagicMock(), character_id="char_1", k=1000)
+
+    assert len(result) == 2

@@ -18,6 +18,7 @@ from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.route_helpers import ok_response
 from npc_engine.graph.belief_service import (
     create_belief,
+    delete_belief,
     get_beliefs_for_character_svc,
     update_confidence,
 )
@@ -122,4 +123,21 @@ async def patch_confidence(
         Envelope with updated belief_id.
     """
     await update_confidence(session, belief_id=belief_id, new_confidence=body.confidence)
+    return ok_response({"belief_id": belief_id})
+
+
+@router.delete("/{belief_id}")
+async def remove_belief(
+    belief_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Hard-delete a single Belief node.
+
+    Args:
+        belief_id: ID of the Belief node to delete.
+
+    Returns:
+        Envelope confirming deletion.
+    """
+    await delete_belief(session, belief_id=belief_id)
     return ok_response({"belief_id": belief_id})
