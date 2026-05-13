@@ -1,0 +1,8 @@
+node_type: goal
+fields:
+  id: { type: str, required: true }
+  description: { type: str, required: true }
+  urgency: { type: int, required: true, range: [0, 100] }
+  status: { type: str, required: true }
+  created_at_game_time: { type: str, required: true }
+  target_id: { type: str, required: false }

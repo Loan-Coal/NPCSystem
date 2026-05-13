@@ -48,6 +48,10 @@ SET w.epoch = $epoch,
     w.faction_standings = $faction_standings,
     w.active_conditions = $active_conditions,
     w.weather = $weather,
+    w.time_of_day = $time_of_day,
+    w.year = $year,
+    w.season = $season,
+    w.day = $day,
     w.last_updated_at = datetime()
 """
 
@@ -189,6 +193,10 @@ class EventHandler:
                             faction_standings=parse_json_object(payload.get("faction_standings", {})),
                             active_conditions=parse_json_list(payload.get("active_conditions", [])),
                             weather=payload.get("weather", "clear"),
+                            time_of_day=payload.get("time_of_day", "morning"),
+                            year=int(payload.get("year", 1)),
+                            season=payload.get("season", "spring"),
+                            day=int(payload.get("day", 1)),
                         )
                     updated_world = world_state
                     if template.event_type not in world_state.active_conditions:
@@ -202,6 +210,10 @@ class EventHandler:
                         faction_standings=dump_json(updated_world.faction_standings),
                         active_conditions=dump_json(updated_world.active_conditions),
                         weather=updated_world.weather,
+                        time_of_day=updated_world.time_of_day,
+                        year=updated_world.year,
+                        season=updated_world.season,
+                        day=updated_world.day,
                     )
                 await tx.commit()
 

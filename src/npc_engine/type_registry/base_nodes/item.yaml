@@ -1,0 +1,10 @@
+node_type: item
+fields:
+  id: { type: str, required: true }
+  name: { type: str, required: true }
+  description: { type: str, required: true }
+  value: { type: int, required: true }
+  rarity: { type: str, required: true }
+  type: { type: str, required: true }
+  is_unique: { type: str, required: true }
+  properties: { type: str, required: false }

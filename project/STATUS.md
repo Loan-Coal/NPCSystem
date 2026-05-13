@@ -4,12 +4,14 @@
 
 | | |
 |---|---|
-| **Current phase** | Phase 2 — Routine engine |
-| **Phase 2** | 🔄 In progress — 2.1 schedule nodes ✅; 2.2 routine engine ✅; 2.3 disruption next |
+| **Current phase** | Phase 4 — Authoring engines |
+| **Phase 4** | 🔄 In progress — 4.1 next (Faction politics engine) |
+| **Phase 3** | ✅ Complete — 3.1–3.8 done + full test foundation (667 unit tests, 20 E2E scenarios) |
+| **Phase 2** | ✅ Complete — 2.1 schedule nodes, 2.2 routine engine, 2.3 disruption rules |
 | **Phase 1** | ✅ Complete — Faction nodes (1.1), Faction-aware gossip (1.2), Faction reputation (1.3) |
 | **Foundation** | ✅ Phase 0 complete — 27 services refactored, all layer violations resolved |
-| **Open issues** | 4 — see [ISSUES.md](ISSUES.md) (all P3, none block Phase 2) |
-| **Next action** | Read [NEXT_SESSION.md](NEXT_SESSION.md) then start Feature 2.3 |
+| **Open issues** | 4 — see [ISSUES.md](ISSUES.md) (all P3, none block Phase 3) |
+| **Next action** | Feature 4.1 — Faction politics engine (deterministic) |
 
 ### CI / Coverage Badges
 
@@ -25,9 +27,40 @@
 
 ---
 
-## Phase 2 — Routine Engine
-**Status:** 🔄 In progress
+## Phase 3 — World Depth
+**Status:** ✅ Complete
 **Started:** 2026-05-11
+**Completed:** 2026-05-13
+
+### E2E scenario HTTP migration (2026-05-13)
+All 13 e2e scenario files were migrated from direct Neo4j Bolt connections to the HTTP API.
+New endpoints added to support full scenario coverage:
+- `POST/GET/DELETE /v1/admin/memories/{...}` — full memory CRUD
+- `POST /v1/admin/memories/from-arousal/{character_id}` — arousal-threshold memory creation
+- `POST /v1/admin/memories/decay` — vividness decay trigger
+- `POST /v1/admin/memories/consolidate/{npc_id}` — LLM consolidation trigger
+- `DELETE /v1/admin/beliefs/{belief_id}` — belief cleanup
+- `DELETE /v1/admin/goals/{goal_id}` — goal cleanup
+- `DELETE /v1/admin/secrets/{secret_id}` — secret cleanup
+- `DELETE /v1/admin/items/{item_id}` — item cleanup
+No scenario now connects directly to Neo4j or any internal service.
+
+### What was done
+- **3.8**: Debt edges — `OWES` edge YAML; `graph/owes_service.py`; `graph/owes_queries.py`; Tier A obligations at priority 83 (pending debts as debtor or creditor, ordered by due_by); `POST/GET/PATCH /v1/admin/debts/{...}` routes; 8 unit tests green. Commit: feat: debt edges (Phase 3.8).
+- **3.7**: Secret nodes — `Secret` node + YAML; `KNOWS_SECRET` edge YAML; `graph/secret_service.py`; `graph/secret_queries.py`; Tier A context hook at priority 84; `POST/GET /v1/admin/secrets/{character_id}` routes; `propagate_secret` in gossip propagator (0.2 base prob, 50% distortion); 6 unit tests green. Commit: feat: secret nodes (Phase 3.7).
+- **3.6**: Item nodes and ownership — `Item` node + YAML; `OWNS` edge YAML; `graph/item_service.py`; `graph/item_queries.py`; Tier A context hook at priority 86; `POST/GET/PATCH /v1/admin/items/{...}` routes; `give_item` ownership check in action resolver; 10 unit tests green. Commit: feat: item nodes (Phase 3.6).
+- **3.5**: Goal nodes — `Goal` node + YAML; `PURSUES` edge YAML; `graph/goal_service.py`; `graph/goal_queries.py`; Tier A context hook at priority 87; `POST/GET/PATCH /v1/admin/goals/{...}` routes; gossip goal-alignment bonus (+10 when goal target_id matches known node); 6 unit tests green. Commit: feat: goal nodes (Phase 3.5).
+- **3.4**: Belief nodes — `Belief` node + YAML; `BELIEVES` edge YAML; `graph/belief_service.py`; `graph/belief_queries.py`; Tier A context hook; `POST /v1/admin/beliefs/{character_id}` route; 5 unit tests green. Commit: feat: belief nodes (Phase 3.4).
+- **3.3**: Memory consolidation engine — `engines/memory_consolidation/`; `prompts/memory_consolidation/consolidation_v1.yaml`; `CONSOLIDATION_TURN_THRESHOLD`/`CONSOLIDATION_CLEAR_TURNS` config; scheduler wired; 5 unit tests green. Commit: feat: memory consolidation engine (Phase 3.3).
+- **3.2**: Memory nodes and formation — `Memory` node + YAML; `REMEMBERS` + `ABOUT` edge YAMLs; `graph/memory_service.py`; `engines/memory/memory_engine.py`; high-arousal dialogue hook; Tier A context memories hook; vividness decay on day advance. Commit: feat: memory nodes and formation (Phase 3.2).
+- **3.1**: Structured game time — `year`, `season`, `day` on WorldState; `time_utils.py`; `world_time_service.py`; clock advance endpoint extension. Commit: feat: structured game time (Phase 3.1).
+
+---
+
+## Phase 2 — Routine Engine
+**Status:** ✅ Complete
+**Started:** 2026-05-11
+**Completed:** 2026-05-11
 
 ### What was done
 - **2.1**: Schedule node + FOLLOWS_SCHEDULE edge; `graph/schedule_service.py`; admin API routes under `/v1/admin/schedules/`; `e2e/scenarios/scenario_daily_life.py` (query-only); `docs/DATA_MODELS.md` updated; `WorldState.time_of_day` + `Character.routine_override` schema fields added. Commit: routine schedule (6623c3b)

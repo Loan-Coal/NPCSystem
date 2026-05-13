@@ -14,7 +14,7 @@ endif
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval scenarios seed-api smoke
+        eval scenarios scenario-edge scenario-demo eval-llm seed-api smoke
 
 install:
 	pip install -e .[dev]
@@ -102,7 +102,16 @@ eval:
 		--reports evals/reports
 
 scenarios:
-	$(PYTHON) -m pytest e2e/scenarios/ -v -s --scenarios-only -p no:cacheprovider
+	$(PYTHON) -m pytest e2e/scenarios/ -v -s -m "not llm_eval" --scenarios-only -p no:cacheprovider
+
+scenario-edge:
+	$(PYTHON) -m pytest e2e/scenarios/ -v -s -k "edge" --scenarios-only -p no:cacheprovider
+
+scenario-demo:
+	$(PYTHON) -m pytest e2e/scenarios/scenario_demo.py -v -s --scenarios-only -p no:cacheprovider
+
+eval-llm:
+	$(PYTHON) -m pytest e2e/scenarios/scenario_llm_judge.py -v -s -m llm_eval --scenarios-only -p no:cacheprovider
 
 # seed-api: seed world data via the external HTTP API (works from outside Docker)
 seed-api:

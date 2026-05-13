@@ -1,0 +1,5 @@
+edge_type: OWNS
+src_type: character
+dst_type: item
+fields:
+  acquired_at: { type: str, required: false }

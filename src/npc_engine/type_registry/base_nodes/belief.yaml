@@ -1,0 +1,6 @@
+node_type: belief
+fields:
+  id: { type: str, required: true }
+  content: { type: str, required: true }
+  confidence: { type: int, required: true, range: [0, 100] }
+  created_at_game_time: { type: str, required: true }

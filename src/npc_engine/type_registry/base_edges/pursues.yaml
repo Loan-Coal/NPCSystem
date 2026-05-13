@@ -1,0 +1,4 @@
+edge_type: PURSUES
+src_type: character
+dst_type: goal
+fields: {}

@@ -96,6 +96,9 @@ class Settings(BaseSettings):
 
     CLOCK_MODE: Literal["realtime", "game_driven"] = "realtime"
 
+    CONSOLIDATION_TURN_THRESHOLD: int = 10
+    CONSOLIDATION_CLEAR_TURNS: bool = False
+
     MAX_CONCURRENT_TICKS: int = 20
 
     DISTRIBUTED_TICK_LEASE_ENABLED: bool = True

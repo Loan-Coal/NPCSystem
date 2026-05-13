@@ -1,0 +1,4 @@
+edge_type: ABOUT
+src_type: memory
+dst_type: event
+fields: {}

@@ -111,3 +111,15 @@ designer/tooling clients, not game-engine clients.
   3. Defer the src/ move entirely; do all other reorg tasks first.
 **Choice:** Option 3. All other Phase 0.2 tasks proceed without touching source. When the src/ move happens, a proper `pyproject.toml` will be written (setuptools or hatchling) and all bare imports renamed to `npc_engine.xxx`.
 **Consequences:** Source still lives at `npc_engine/` root. pytest.ini at repo root adds `npc_engine/` to pythonpath so tests run from root without CWD dependency.
+
+---
+
+## Decision: `how_long_ago` 7–27 day gap treated as "a few days ago"
+**Date:** 2026-05-11
+**Service / area:** world/time_utils.py (Phase 3.1)
+**Context:** The ROADMAP spec defines named buckets for 0, 1, 2–6 days, 28 days (one season), and >28 days, but leaves 7–27 days undefined.
+**Options considered:**
+  1. Add a new bucket "a week or two ago" for 7–27 days — introduces wording not in the spec.
+  2. Extend "a few days ago" to cover 2–27 days — consistent with existing bucket, spec-compatible.
+**Choice:** Option 2. "a few days ago" covers delta_days 2–27. Logged as ISSUE-013 for future refinement.
+**Consequences:** Distances of 7–27 days return "a few days ago", which is slightly imprecise but not misleading. Can be narrowed when the spec is updated.

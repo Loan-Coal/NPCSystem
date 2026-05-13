@@ -1,10 +1,121 @@
 """
-item_queries.py - Cypher query strings for item transfer reads and writes.
-
+Module: item_queries
+Layer: graph
+Purpose: Cypher query strings for item ownership (OWNS edge) and item transfer reads/writes.
 Does NOT: execute queries or validate business rules.
-
-Dependencies injected: None.
+Dependencies: None (Cypher strings only).
+Dependencies injected: AsyncSession.
+Used by: npc_engine.graph.item_service
 """
+
+from __future__ import annotations
+
+from typing import Any, cast
+
+from neo4j import AsyncSession
+
+# ---------------------------------------------------------------------------
+# OWNS-based queries (Feature 3.6 — item nodes and ownership)
+# ---------------------------------------------------------------------------
+
+CYPHER_CREATE_ITEM_NODE = """
+MERGE (i:Item {id: $item_id})
+SET i.name = $name,
+    i.description = $description,
+    i.value = $value,
+    i.rarity = $rarity,
+    i.type = $type,
+    i.is_unique = $is_unique,
+    i.properties = $properties
+WITH i
+MATCH (c:Character {id: $character_id})
+MERGE (c)-[:OWNS {acquired_at: $acquired_at}]->(i)
+RETURN i.id AS item_id
+"""
+
+CYPHER_GET_ITEMS_FOR_CHARACTER = """
+MATCH (c:Character {id: $character_id})-[:OWNS]->(i:Item)
+RETURN i.id AS id,
+       i.name AS name,
+       i.description AS description,
+       toInteger(i.value) AS value,
+       i.rarity AS rarity,
+       i.type AS type,
+       i.is_unique AS is_unique,
+       i.properties AS properties
+"""
+
+CYPHER_GET_ITEM_BY_ID = """
+MATCH (i:Item {id: $item_id})
+RETURN i.id AS id,
+       i.name AS name,
+       i.description AS description,
+       toInteger(i.value) AS value,
+       i.rarity AS rarity,
+       i.type AS type,
+       i.is_unique AS is_unique,
+       i.properties AS properties
+"""
+
+CYPHER_DETACH_ITEM_OWNER = """
+MATCH (c:Character {id: $character_id})-[r:OWNS]->(i:Item {id: $item_id})
+DELETE r
+"""
+
+CYPHER_ATTACH_ITEM_OWNER = """
+MATCH (c:Character {id: $character_id}), (i:Item {id: $item_id})
+MERGE (c)-[:OWNS {acquired_at: $acquired_at}]->(i)
+"""
+
+
+async def get_items_for_character(
+    session: AsyncSession,
+    *,
+    character_id: str,
+) -> list[dict[str, Any]]:
+    """Fetch all items owned by a character via OWNS edges.
+
+    Args:
+        session: Active Neo4j async session.
+        character_id: ID of the character node.
+
+    Returns:
+        List of item property dicts.
+    """
+    result = await session.run(
+        CYPHER_GET_ITEMS_FOR_CHARACTER,
+        character_id=character_id,
+    )
+    return cast(
+        list[dict[str, Any]],
+        [dict(record) async for record in result],
+    )
+
+
+async def get_item_by_id(
+    session: AsyncSession,
+    *,
+    item_id: str,
+) -> dict[str, Any] | None:
+    """Fetch a single item by its ID.
+
+    Args:
+        session: Active Neo4j async session.
+        item_id: ID of the Item node.
+
+    Returns:
+        Item property dict, or None if not found.
+    """
+    result = await session.run(CYPHER_GET_ITEM_BY_ID, item_id=item_id)
+    record = await result.single()
+    if record is None:
+        return None
+    return cast(dict[str, Any], dict(record))
+
+
+# ---------------------------------------------------------------------------
+# Economy/trading queries (pre-existing — Phase P3 currency/item transfer)
+# ---------------------------------------------------------------------------
 
 CYPHER_REPLAY_ITEM_TRANSFER = """
 MATCH (src:Character {id: $source_id})-[t:TRANSFERRED_ITEM_TO {

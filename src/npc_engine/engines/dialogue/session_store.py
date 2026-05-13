@@ -57,6 +57,48 @@ class SessionStore:
             return []
         return list(session["turns"])
 
+    def get_all_turns_for_npc(self, npc_id: str) -> list[str]:
+        """Return all non-expired turns for an NPC, aggregated across all player sessions.
+
+        Args:
+            npc_id: NPC identifier to match against stored session keys.
+
+        Returns:
+            Flat list of turn strings across all active player sessions for this NPC.
+        """
+        now = datetime.now(timezone.utc)
+        turns: list[str] = []
+        for key, sess in self._sessions.items():
+            if key.split(":", 1)[1] == npc_id and sess["expires_at"] >= now:
+                turns.extend(sess["turns"])
+        return turns
+
+    def clear_all_turns_for_npc(self, npc_id: str) -> None:
+        """Remove all session entries for a given NPC across all player sessions.
+
+        Args:
+            npc_id: NPC identifier; all matching ``player_id:npc_id`` keys are removed.
+        """
+        self._sessions = {k: v for k, v in self._sessions.items() if k.split(":", 1)[1] != npc_id}
+
+    def get_active_npc_ids(self, min_turns: int) -> list[str]:
+        """Return NPC IDs whose total non-expired turns meet or exceed min_turns.
+
+        Args:
+            min_turns: Minimum combined turn count across all players for an NPC.
+
+        Returns:
+            List of NPC ID strings with enough turns for consolidation.
+        """
+        now = datetime.now(timezone.utc)
+        npc_counts: dict[str, int] = {}
+        for key, sess in self._sessions.items():
+            if sess["expires_at"] < now:
+                continue
+            nid = key.split(":", 1)[1]
+            npc_counts[nid] = npc_counts.get(nid, 0) + len(sess["turns"])
+        return [nid for nid, count in npc_counts.items() if count >= min_turns]
+
     def append_turns(self, player_id: str, npc_id: str, new_turns: list[str]) -> None:
         """Append new turns to the session and refresh its TTL.
 

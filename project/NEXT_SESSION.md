@@ -1,6 +1,6 @@
 # Next Session Instructions
 
-## Phase 3 — World Depth. Feature 3.1 next.
+## Phase 4 — Authoring engines. Feature 4.1 next.
 
 Run tests before touching any code:
 
@@ -8,116 +8,181 @@ Run tests before touching any code:
 pytest tests/ -q
 ```
 
+## Phase 3 e2e HTTP migration (completed 2026-05-13)
+
+All 13 e2e scenario files now call only the HTTP API — no direct neo4j connections remain.
+New admin routes added: `memories` router (CRUD + from-arousal + decay + consolidate),
+DELETE endpoints on beliefs/goals/secrets/items, `k` param on secrets GET.
+Verify: `grep -r "AsyncGraphDatabase" e2e/` → zero results.
+
+## Phase 3 test foundation status (completed before this session)
+
+All blocks are done — 667 unit tests green, 20 E2E scenario tests collected:
+- Block 1: `api_seeder.py` enriched with beliefs, goals, items, secrets, debts, memories
+- Block 2: Edge case unit tests added to all 6 Phase 3 test files
+- Block 3: 6 edge case E2E scenario files (`scenario_*_edge.py`)
+- Block 4: `e2e/scenarios/scenario_demo.py` — full Phase 3 story arc
+- Block 5: `e2e/scenarios/scenario_llm_judge.py` + `e2e/helpers/llm_judge.py`
+- Block 6: Makefile targets `scenario-edge`, `scenario-demo`, `eval-llm`; markers `demo`, `llm_eval` registered
+
+---
+
 ---
 
 ## Step 0 — Update stale docs first (before any code)
 
-1. `project/IMPLEMENTATION_TRACKER.md` — add Phase 3 section, mark Feature 3.1 as IN_PROGRESS, set today's date.
-2. `project/STATUS.md` — update to reflect Phase 3 has started.
+1. `project/IMPLEMENTATION_TRACKER.md` — mark Feature 3.8 as DONE (committed),
+   add Phase 4 section with Feature 4.1 as IN_PROGRESS with today's date.
+2. `project/STATUS.md` — update Phase 3 row to reflect 3.1–3.8 ✅ (complete),
+   add Phase 4 row showing 4.1 IN_PROGRESS.
 
 ---
 
-## Feature 3.1 — Time as a first-class concept
+## Feature 4.1 — Faction politics engine (deterministic)
 
-Read `project/ROADMAP.md` lines 387–414 first (the authoritative spec).
+Read `project/ROADMAP.md` lines 613–635 first (the authoritative spec).
 
 Only start after `pytest tests/ -q` is green.
 
-**Context:** `WorldState` already has `time_of_day: str`. This feature adds structured
-time fields (`year`, `season`, `day`) and a helper for human-readable time distances.
-The clock advance endpoint already exists at `POST /v1/clock/advance`; it accepts
-`delta_ticks` and `game_time_seconds`. Feature 3.1 extends it with an optional
-`advance_time_field` parameter.
+**Context:** Faction standings drift over time based on events. This is a
+deterministic rule-based engine — no LLM. On each tick it reads recent events,
+matches them against rules in a YAML file, adjusts `STANDS_WITH.standing` edges,
+and applies a slow drift-to-neutral decay. The `STANDS_WITH` edge already exists
+in `type_registry/base_edges/stands_with.yaml` with fields `standing` (int,
+[-100,100]) and `last_changed_at` (str). The factions graph layer already has
+`graph/faction_service.py`, `graph/faction_queries.py`, and `graph/faction_writer.py`
+with `set_standing` available.
 
 ### Architecture decisions (read before coding)
 
-- `WorldState` lives in `world/world_state.py`. It is a Pydantic `BaseModel` serialized
-  via `model_dump_json()`. Adding fields is sufficient for dialogue context inclusion
-  (context builder serializes the whole model at Tier 0, line 132 of `retrieval/context_builder.py`).
-  No YAML semantic annotation needed.
-- `world/time_utils.py` must be a **pure, I/O-free module** (no sessions, no imports from
-  `graph/` or `engines/`). Keep it in `world/`.
-- `world/world_time_service.py` — pure `advance_time(field, world_state) -> WorldState`.
-  Returns a new `WorldState`; never mutates. Follows the immutability rule.
-- Wrap-around rules: day 1–28, season cycles `spring → summer → autumn → winter → spring`,
-  each season change increments `day` back to 1; winter→spring increments `year`.
-- The `POST /v1/clock/advance` handler is in `api/routes/clock.py` (or similar). Extend it.
+- **New package**: `engines/faction_politics/` with:
+  - `__init__.py` — package docstring only.
+  - `rules.yaml` — rule definitions (see format below).
+  - `rules_loader.py` — loads and validates `rules.yaml` at startup.
+  - `faction_politics_engine.py` (≤200 lines) — `FactionPoliticsEngine.run_tick(session)`.
+- **No new graph nodes or edges.** Reads events from the graph, writes to
+  `STANDS_WITH.standing` via `graph/faction_writer.set_standing`.
+- **Tick wiring**: Inject `FactionPoliticsEngine` into `scheduler/tick_scheduler.py`
+  as an optional field (same pattern as `MemoryConsolidationEngine` or
+  `RoutineEngine`). Wire it into `api/dependency_singletons.py` with a
+  `get_faction_politics_engine` singleton.
+- **No new API routes.** Standings are already readable via the existing factions
+  admin routes (`GET /v1/admin/factions/{faction_id}/standings`).
+
+### Rule YAML format (`engines/faction_politics/rules.yaml`)
+
+```yaml
+decay:
+  rate_per_tick: 1          # move standing 1 point toward 0 each tick
+  min_magnitude: 2          # skip decay if |standing| < min_magnitude
+
+rules:
+  - id: betrayal_standing_penalty
+    event_type: betrayal
+    standing_delta: -10
+    description: "A betrayal event between faction members reduces inter-faction standing."
+
+  - id: alliance_act_bonus
+    event_type: alliance_act
+    standing_delta: 5
+    description: "An alliance act between members of allied factions increases standing."
+```
+
+Fields per rule: `id` (str, unique), `event_type` (str), `standing_delta` (int),
+`description` (str, optional).
 
 ### Steps
 
-1. **`WorldState` schema update** (`world/world_state.py`):
-   - Add `year: int = 1`, `season: str = "spring"`, `day: int = 1` fields.
-   - `time_of_day` is already present — leave it.
-   - Update the CYPHER_MERGE_WORLD_STATE constant in `engines/events/event_handler.py` to
-     include the new fields (and any other place that serializes WorldState to graph).
+1. **`engines/faction_politics/rules.yaml`** — seed with at least two rules:
+   `betrayal` → -10, `alliance_act` → +5. Include the `decay` block.
 
-2. **`world/time_utils.py`** (new, ≤80 lines):
-   - `TimePoint` frozen dataclass: `year: int`, `season: str`, `day: int`, `time_of_day: str`.
-   - `how_long_ago(from_: TimePoint, to: TimePoint) -> str` — returns human-friendly string:
-     - Same time_of_day and day → `"moments ago"`
-     - Same day → `"earlier today"`
-     - 1 day ago → `"yesterday"`
-     - 2–6 days → `"a few days ago"`
-     - 1 season ago → `"last season"`
-     - More than a season → `"long ago"`
+2. **`engines/faction_politics/rules_loader.py`**:
+   - `FactionPoliticsRule` — frozen dataclass: `id`, `event_type`,
+     `standing_delta`.
+   - `DecayConfig` — frozen dataclass: `rate_per_tick`, `min_magnitude`.
+   - `FactionPoliticsRules` — frozen dataclass: `decay`, `rules` (list).
+   - `load_rules(path) -> FactionPoliticsRules` — loads YAML, validates unique
+     `id`s, fails fast on schema violations.
 
-3. **`world/world_time_service.py`** (new, ≤120 lines):
-   - `SEASONS = ["spring", "summer", "autumn", "winter"]`
-   - `advance_time(field: str, world_state: WorldState) -> WorldState` — pure function.
-   - `field` is one of `"time_of_day"`, `"day"`, `"season"`, `"year"`.
-   - `time_of_day` cycles through the five existing values (`morning → midday → afternoon →
-     evening → night → morning`). When it wraps from `night → morning`, increment `day`.
-   - `day` wraps 1–28; at day 29 reset to 1 and advance `season`.
-   - `season` wraps; at `winter → spring` increment `year`.
-   - `year` never wraps (increment indefinitely).
-   - Returns a new `WorldState` via `model_copy(update={...})`.
+3. **`engines/faction_politics/faction_politics_engine.py`** (≤200 lines):
+   - `FactionPoliticsEngine(rules: FactionPoliticsRules)`.
+   - `run_tick(session) -> None`:
+     a. Query recent events (last N, configurable; default 20) that have a
+        `src_character_id` field. For each event, look up the factions of the
+        source character via the graph.
+     b. For each matching rule (`event.event_type == rule.event_type`), find
+        faction pairs (A, B) where A is the faction of the event source and B is
+        any faction standing partner. Clamp delta application to [-100, 100].
+        Call `set_standing(session, faction_a_id, faction_b_id, new_standing)`.
+     c. After rule processing, apply decay: for every `STANDS_WITH` edge where
+        `|standing| >= decay.min_magnitude`, move standing by `rate_per_tick`
+        toward 0. Call `set_standing` for any edge that changes.
+   - `CYPHER_GET_RECENT_EVENTS` and `CYPHER_GET_ALL_STANDINGS` — Cypher string
+     constants in this file (or a companion `faction_politics_queries.py` if
+     the engine file grows past 200 lines).
 
-4. **`POST /v1/clock/advance` extension**:
-   - Locate the clock advance handler (check `api/routes/` or `api/routes/clock.py`).
-   - Add optional `advance_time_field: str | None = None` to the request body.
-   - When provided, call `world_time_service.advance_time(field, current_world_state)` and
-     persist the updated world state to Neo4j using the existing MERGE pattern.
-   - When not provided, existing behavior is unchanged.
+4. **`engines/faction_politics/__init__.py`** — package docstring only.
 
-5. **Unit tests** `tests/unit/test_world_time_service.py`:
-   - `time_of_day` advances through all five slots and wraps.
-   - `night → morning` increments `day`.
-   - `day 28 → day 1` increments `season`.
-   - `winter → spring` increments `year`.
-   - `how_long_ago` returns correct bucket for each distance category.
-   - `advance_time` is pure (original WorldState unchanged).
+5. **Wiring**:
+   - `api/dependency_singletons.py` — add `get_faction_politics_engine()` using
+     `@lru_cache` (same pattern as other engine singletons).
+   - `scheduler/tick_scheduler.py` — accept optional
+     `faction_politics_engine: FactionPoliticsEngine | None = None`; call
+     `await faction_politics_engine.run_tick(session)` in the advance loop if
+     not None (same optional pattern as memory consolidation engine).
+   - `main.py` — inject `get_faction_politics_engine()` into the scheduler
+     singleton at startup (same pattern as other optional engines).
 
-6. **E2E scenario** `e2e/scenarios/scenario_time_passage.py`:
-   - Advance `time_of_day` through a full day cycle.
-   - Assert the day increments after `night`.
-   - Advance day to 28 and assert season increments.
+6. **Unit tests** `tests/unit/test_faction_politics_engine.py`:
+   - `test_rules_loader_loads_yaml` — loads the real `rules.yaml`, assert 2+
+     rules loaded and decay block present.
+   - `test_run_tick_applies_matching_rule` — mock graph calls; event of type
+     `betrayal` → standing decreases by 10.
+   - `test_run_tick_no_matching_rule_no_change` — event type with no matching
+     rule → no standing update.
+   - `test_run_tick_clamps_to_bounds` — delta that would exceed ±100 is clamped.
+   - `test_run_tick_applies_decay` — standing of magnitude >= min_magnitude drifts
+     toward 0 each tick.
+   - `test_run_tick_skips_decay_below_min_magnitude` — small standing is not decayed.
 
-### Definition of done (3.1)
-- `WorldState` has `year`, `season`, `day` fields.
-- `time_utils.py` and `world_time_service.py` pass all unit tests.
-- Clock advance endpoint accepts `advance_time_field` and persists the result.
-- `tests/unit/test_world_time_service.py` passes all cases listed above.
-- E2E scenario `scenario_time_passage.py` passes.
+7. **E2E scenario** `e2e/scenarios/scenario_faction_politics.py`:
+   - Seed two factions and one character belonging to faction A.
+   - Inject a `betrayal` event linked to that character.
+   - Run one engine tick.
+   - Assert that the A→B standing decreased by 10.
+   - Cleanup.
+
+### Definition of done (4.1)
+- `engines/faction_politics/rules.yaml` exists with ≥2 rules and decay config.
+- `rules_loader.py` parses and validates the YAML at startup.
+- `FactionPoliticsEngine.run_tick` applies rules and decay using the graph layer.
+- Engine is wired into `TickScheduler` as optional injection.
+- All 6 unit tests green.
+- E2E scenario passes.
+- No new graph nodes or edges introduced.
 - Pre-merge checklist from `CLAUDE.md` satisfied.
-- Commit: `feat: structured game time (Phase 3.1)`
+- Commit: `feat: faction politics engine (Phase 4.1)`
 
 ---
 
-## After 3.1 is committed — update this file for Feature 3.2
+## After 4.1 is committed — update this file for Feature 4.2
 
-When Feature 3.1 is committed and `pytest tests/ -q` is green, rewrite this file to target
-Feature 3.2 — Memories vs Knowledge.
+When Feature 4.1 is committed and `pytest tests/ -q` is green, rewrite this
+file to target Feature 4.2 — Quest templates and slot-filling generation.
 
-Read `project/ROADMAP.md` lines 416+ before writing 3.2 instructions.
+Read `project/ROADMAP.md` lines 636–671 before writing 4.2 instructions.
 
 ---
 
-## Open issues to be aware of (do NOT fix during Phase 3 unless explicitly blocking)
+## Open issues to be aware of (do NOT fix during Phase 4.1 unless explicitly blocking)
 
+- **ISSUE-013**: `how_long_ago` has no defined bucket for 7–27 days (P3)
 - **ISSUE-005**: `adjust_reputation_for_event` not wired into event engine (P3)
 - **ISSUE-006**: pre-existing `Character.faction` string field not migrated (P3)
 - **ISSUE-004**: `edge_updater.py` no-any-return mypy warning (P3)
 - **ISSUE-011**: `.env` uses Docker DNS (`bolt://neo4j:7687`) — fails outside Docker (P3)
+- **FIXED**: `test_memory_service.py::test_decay_all_vividness_*` — fixed in
+  the Phase 3 test foundation session (wrong mock type corrected, 667 tests green).
 
-If any of these blocks Phase 3.1, log a new ISSUES.md entry describing the blocking scenario
-and get approval before fixing.
+If any of these blocks Phase 4.1, log a new ISSUES.md entry describing the
+blocking scenario and get approval before fixing.

@@ -16,10 +16,189 @@ This file tracks iterative implementation for PROJECT_PLAN_v1.4.xml and supports
 
 ## Stages
 
-### Phase 2 — Routine Engine
-Status: IN_PROGRESS
+### Phase 3 — World Depth
+Status: DONE
 Started: 2026-05-11
-Completed:
+Completed: 2026-05-13
+
+#### Phase 3 E2E HTTP Migration
+Status: DONE
+Started: 2026-05-13
+Completed: 2026-05-13
+Tasks:
+- [x] `src/npc_engine/api/routes/memories.py` — new admin routes: POST/{char}, POST/from-arousal/{char}, GET/{char}, POST/decay, DELETE/{mem}, POST/consolidate/{npc}
+- [x] `src/npc_engine/graph/memory_service.py` — added `delete_memory`
+- [x] `src/npc_engine/graph/item_service.py` — added `delete_item`
+- [x] `src/npc_engine/api/routes/beliefs.py` — added `DELETE /{belief_id}`
+- [x] `src/npc_engine/api/routes/goals.py` — added `DELETE /{goal_id}`
+- [x] `src/npc_engine/api/routes/secrets.py` — added `DELETE /{secret_id}`, `k` query param on GET
+- [x] `src/npc_engine/api/routes/items.py` — added `DELETE /{item_id}`
+- [x] `src/npc_engine/main.py` — registered memories_router under admin prefix
+- [x] All 13 e2e scenario files migrated to HTTP API (no neo4j/bolt connections remain)
+
+#### Phase 3 Test Foundation
+Status: DONE
+Started: 2026-05-13
+Completed: 2026-05-13
+Tasks:
+- [x] `src/npc_engine/data/api_seeder.py` — enriched with beliefs, goals, items, secrets, debts, memories
+- [x] `tests/unit/test_belief_service.py` — edge case tests (confidence 0/100, k-limits)
+- [x] `tests/unit/test_goal_service.py` — edge case tests (urgency 0/100, status transitions, k-limits)
+- [x] `tests/unit/test_item_service.py` — edge case tests (value=0, is_unique=False, transfer, empty)
+- [x] `tests/unit/test_secret_service.py` — edge case tests (severity 0/100, k-limits)
+- [x] `tests/unit/test_owes_service.py` — edge case tests (all kinds, defaulted, creditor role)
+- [x] `tests/unit/test_memory_service.py` — fixed broken decay tests; arousal threshold tests; k-limits
+- [x] `e2e/scenarios/scenario_beliefs_edge.py` — confidence bounds, k-limits, no-beliefs char
+- [x] `e2e/scenarios/scenario_goals_edge.py` — urgency bounds, all statuses, status_filter
+- [x] `e2e/scenarios/scenario_items_edge.py` — value=0, is_unique=False, transfer
+- [x] `e2e/scenarios/scenario_secrets_edge.py` — severity bounds, k-limits, sorted desc
+- [x] `e2e/scenarios/scenario_debts_edge.py` — all 4 kinds, bidirectional, defaulted/fulfilled
+- [x] `e2e/scenarios/scenario_memory_edge.py` — arousal threshold, vividness clamping, k-limits
+- [x] `e2e/scenarios/scenario_demo.py` — full Phase 3 story arc (all 6 features)
+- [x] `e2e/helpers/llm_judge.py` — YES/NO judge helper
+- [x] `e2e/scenarios/scenario_llm_judge.py` — 3 llm_eval tests (consolidation coherence, hostile tone, goal-hinting)
+- [x] `Makefile` — scenario-edge, scenario-demo, eval-llm targets
+- [x] `pyproject.toml` — demo and llm_eval markers registered
+667 unit tests green, 20 E2E scenario tests collected.
+
+#### Feature 3.1 — Time as a first-class concept
+Status: DONE
+Started: 2026-05-11
+Completed: 2026-05-11
+Commit: feat: structured game time (Phase 3.1)
+
+#### Feature 3.8 — Promises and debts
+Status: DONE
+Started: 2026-05-12
+Completed: 2026-05-12
+Commit: feat: debt edges (Phase 3.8)
+Tasks:
+- [x] `type_registry/base_edges/owes.yaml` — OWES edge schema
+- [x] `graph/owes_queries.py` — Cypher strings + read accessor
+- [x] `graph/owes_service.py` — create/get/update_status (≤150 lines)
+- [x] `retrieval/context_builder.py` — Tier A obligations at priority 83
+- [x] `api/routes/debts.py` — admin routes for create/list/patch status
+- [x] `tests/unit/test_owes_service.py` — 8 unit tests, all green
+- [x] `e2e/scenarios/scenario_debts.py`
+
+#### Feature 3.7 — Secrets
+Status: DONE
+Started: 2026-05-12
+Completed: 2026-05-12
+Commit: feat: secret nodes (Phase 3.7)
+Tasks:
+- [x] `type_registry/base_nodes/secret.yaml` — Secret node schema
+- [x] `type_registry/base_edges/knows_secret.yaml` — KNOWS_SECRET edge schema
+- [x] `graph/secret_queries.py` — Cypher strings + read accessors
+- [x] `graph/secret_service.py` — create/get (≤150 lines)
+- [x] `retrieval/context_builder.py` — Tier A secrets at priority 84
+- [x] `api/routes/secrets.py` — admin routes for create/list
+- [x] `engines/gossip/knowledge_propagator.py` — propagate_secret helper
+- [x] `engines/gossip/gossip_handler.py` — wire secret propagation into tick
+- [x] `tests/unit/test_secret_service.py` — 6 unit tests, all green
+- [x] `e2e/scenarios/scenario_secrets.py`
+
+#### Feature 3.6 — Items and ownership
+Status: DONE
+Started: 2026-05-12
+Completed: 2026-05-12
+Commit: feat: item nodes (Phase 3.6)
+Tasks:
+- [x] `type_registry/base_nodes/item.yaml` — Item node schema
+- [x] `type_registry/base_edges/owns.yaml` — OWNS edge schema
+- [x] `graph/item_queries.py` — Cypher strings + read accessors
+- [x] `graph/item_service.py` — create/get/transfer (≤150 lines)
+- [x] `retrieval/context_builder.py` — Tier A owned items at priority 86
+- [x] `api/routes/items.py` — admin routes for create/list/patch owner
+- [x] `engines/dialogue/action_resolver.py` — ownership check for give_item
+- [x] `tests/unit/test_item_service.py` — 10 unit tests, all green
+- [x] `e2e/scenarios/scenario_items.py`
+
+#### Feature 3.5 — Goals on characters
+Status: DONE
+Started: 2026-05-12
+Completed: 2026-05-12
+Commit: feat: goal nodes (Phase 3.5)
+Tasks:
+- [x] `type_registry/base_nodes/goal.yaml` — Goal node schema
+- [x] `type_registry/base_edges/pursues.yaml` — PURSUES edge schema
+- [x] `graph/goal_queries.py` — Cypher strings + read accessor
+- [x] `graph/goal_service.py` — create/get/update_status (≤150 lines)
+- [x] `retrieval/context_builder.py` — Tier A goals hook at priority 87
+- [x] `api/routes/goals.py` — admin routes for seeding/listing/patching goals
+- [x] `engines/gossip/pair_selector.py` — goal-alignment bonus
+- [x] `tests/unit/test_goal_service.py` — 6 unit tests, all green
+- [x] `e2e/scenarios/scenario_goals.py`
+
+#### Feature 3.4 — Beliefs (separate from knowledge)
+Status: DONE
+Started: 2026-05-12
+Completed: 2026-05-12
+Commit: feat: belief nodes (Phase 3.4)
+Tasks:
+- [x] `type_registry/base_nodes/belief.yaml` — Belief node schema
+- [x] `type_registry/base_edges/believes.yaml` — BELIEVES edge schema
+- [x] `graph/belief_queries.py` — Cypher strings + read accessor
+- [x] `graph/belief_service.py` — create/get/update_confidence (≤150 lines)
+- [x] `retrieval/context_builder.py` — Tier A beliefs hook
+- [x] `api/routes/beliefs.py` — admin route for seeding beliefs
+- [x] `tests/unit/test_belief_service.py` — 5 unit tests, all green
+- [x] `e2e/scenarios/scenario_beliefs.py`
+
+#### Feature 3.3 — Memory Consolidation Engine
+Status: DONE
+Started: 2026-05-12
+Completed: 2026-05-12
+Commit: feat: memory consolidation engine (Phase 3.3)
+Tasks:
+- [x] `prompts/memory_consolidation/consolidation_v1.yaml` — LLM summarisation prompt
+- [x] `engines/memory_consolidation/__init__.py` + `memory_consolidation_engine.py`
+- [x] `config.py` — `CONSOLIDATION_TURN_THRESHOLD`, `CONSOLIDATION_CLEAR_TURNS`
+- [x] `scheduler/tick_scheduler.py` — optional `memory_consolidation_engine` injection
+- [x] `tests/unit/test_memory_consolidation_engine.py` — 5 unit tests, all green
+- [x] `e2e/scenarios/scenario_memory_consolidation.py`
+
+#### Feature 3.2 — Memories vs Knowledge
+Status: DONE
+Started: 2026-05-11
+Completed: 2026-05-12
+Commit: feat: memory nodes and formation (Phase 3.2)
+Tasks:
+- [x] `type_registry/base_nodes/memory.yaml` — Memory node schema
+- [x] `type_registry/base_edges/remembers.yaml` — REMEMBERS edge schema
+- [x] `type_registry/base_edges/about.yaml` — ABOUT edge schema
+- [x] `graph/memory_queries.py` — Cypher strings + read accessor
+- [x] `graph/memory_service.py` — create/get/decay (≤200 lines)
+- [x] `engines/memory/__init__.py` + `engines/memory/memory_engine.py` (≤150 lines)
+- [x] `engines/dialogue/dialogue_handler.py` — high-arousal hook
+- [x] `retrieval/context_builder.py` — Tier A memories hook
+- [x] `tests/unit/test_memory_service.py` — 7 unit tests
+- [x] `e2e/scenarios/scenario_memory_formation.py`
+Tasks:
+- [x] `world/world_state.py` — add `year`, `season`, `day` fields
+- [x] `world/world_writer.py` — persist all time fields in CYPHER + upsert
+- [x] `engines/events/event_handler.py` — sync CYPHER copy
+- [x] `world/time_utils.py` — `TimePoint`, `how_long_ago` (new, ≤80 lines)
+- [x] `world/world_time_service.py` — `advance_time` (new, ≤120 lines)
+- [x] `api/routes/clock.py` — extend with `advance_time_field`
+- [x] `tests/unit/test_world_time_service.py` — 15 cases (all green)
+- [x] `e2e/scenarios/scenario_time_passage.py`
+- [x] `project/DECISIONS.md` — how_long_ago gap entry
+- [x] `project/ISSUES.md` — ISSUE-012 (fixed), ISSUE-013 (open)
+
+Verification:
+```bash
+pytest tests/unit/test_world_time_service.py -v
+pytest tests/ -q
+python e2e/scenarios/scenario_time_passage.py
+```
+
+---
+
+### Phase 2 — Routine Engine
+Status: DONE
+Started: 2026-05-11
+Completed: 2026-05-11
 
 #### Feature 2.1 — Schedule nodes and edges
 Status: DONE
