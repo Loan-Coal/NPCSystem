@@ -19,6 +19,8 @@ from npc_engine.engines.gossip.gossip_config import load_gossip_config
 from npc_engine.engines.gossip.gossip_handler import GossipHandler
 from npc_engine.engines.idempotency.neo4j_store import Neo4jIdempotencyStore
 from npc_engine.engines.idempotency.service import IdempotencyService
+from npc_engine.engines.faction_politics.faction_politics_engine import FactionPoliticsEngine
+from npc_engine.engines.faction_politics.rules_loader import load_rules
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
 from npc_engine.engines.routine.routine_engine import RoutineEngine
 from npc_engine.graph.db import GraphDB
@@ -144,6 +146,19 @@ def get_game_clock() -> GameClock:
 
 
 @lru_cache
+def get_faction_politics_engine() -> FactionPoliticsEngine:
+    """Create singleton faction politics engine loaded from rules.yaml.
+
+    Returns:
+        FactionPoliticsEngine wired to the bundled rules.yaml.
+    """
+    from pathlib import Path
+    rules_path = Path(__file__).resolve().parent.parent / "engines" / "faction_politics" / "rules.yaml"
+    rules = load_rules(rules_path)
+    return FactionPoliticsEngine(rules=rules)
+
+
+@lru_cache
 def get_routine_engine() -> RoutineEngine:
     """Create singleton routine engine for tick-driven NPC location updates.
 
@@ -166,6 +181,7 @@ def get_tick_scheduler() -> TickScheduler:
         gossip_handler=get_gossip_handler(),
         event_handler=get_event_handler(),
         routine_engine=get_routine_engine(),
+        faction_politics_engine=get_faction_politics_engine(),
         gossip_interval=settings.GOSSIP_TICK_INTERVAL,
         event_interval=settings.EVENT_TICK_INTERVAL,
         distributed_lease_enabled=settings.DISTRIBUTED_TICK_LEASE_ENABLED,

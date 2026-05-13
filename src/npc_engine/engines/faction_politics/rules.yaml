@@ -1,0 +1,14 @@
+decay:
+  rate_per_tick: 1
+  min_magnitude: 2
+
+rules:
+  - id: betrayal_standing_penalty
+    event_type: betrayal
+    standing_delta: -10
+    description: "A betrayal event between faction members reduces inter-faction standing."
+
+  - id: alliance_act_bonus
+    event_type: alliance_act
+    standing_delta: 5
+    description: "An alliance act between members of allied factions increases standing."

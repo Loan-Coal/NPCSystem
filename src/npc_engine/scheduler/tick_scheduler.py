@@ -46,6 +46,7 @@ class TickScheduler:
         event_interval: int,
         *,
         routine_engine: object = None,
+        faction_politics_engine: object = None,
         memory_consolidation_engine: object = None,
         consolidation_advance_interval: int = 1,
         distributed_lease_enabled: bool = False,
@@ -66,6 +67,8 @@ class TickScheduler:
             event_interval: Run events every N ticks; clamped to a minimum of 1.
             routine_engine: Optional engine exposing ``run_tick(session, time_of_day, tick_id)``
                 called every tick to move characters per their schedules.
+            faction_politics_engine: Optional engine exposing ``run_tick(session)``
+                called every tick to adjust faction standings from events and apply decay.
             memory_consolidation_engine: Optional engine exposing ``run_tick(session, game_time)``
                 called once per advance on the configured cadence.
             consolidation_advance_interval: Run consolidation every N advances; clamped to 1.
@@ -82,6 +85,7 @@ class TickScheduler:
         self._gossip_handler = gossip_handler
         self._event_handler = event_handler
         self._routine_engine = routine_engine
+        self._faction_politics_engine = faction_politics_engine
         self._memory_consolidation_engine = memory_consolidation_engine
         self._consolidation_advance_interval = max(1, consolidation_advance_interval)
         self._advance_count = 0
@@ -180,6 +184,7 @@ class TickScheduler:
                 "gossip": [],
                 "event": [],
                 "routine": [],
+                "faction_politics": [],
                 "consolidation": [],
             }
             world_state = await get_world_state(session=session)
@@ -226,6 +231,10 @@ class TickScheduler:
                         tick_id=tick_id,
                     )
                     response["routine"].append(routine_row)
+
+                if self._faction_politics_engine is not None:
+                    fp_row = await self._faction_politics_engine.run_tick(session=session)
+                    response["faction_politics"].append(fp_row)
 
                 if unresolved:
                     break
