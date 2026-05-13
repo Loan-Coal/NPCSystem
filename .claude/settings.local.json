@@ -29,7 +29,30 @@
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\\\\src\\\\npc_engine\\\\graph\" -Filter \"*.py\")",
       "Bash(Select-Object -ExpandProperty Name)",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\" -Recurse -Directory)",
-      "Bash(Select-Object -First 20)"
+      "Bash(Select-Object -First 20)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(python -m pytest tests/ -q --tb=no)",
+      "Bash(python -m pytest tests/unit/test_faction_politics_engine.py -v --tb=short)",
+      "Bash(python -m pytest tests/unit/test_faction_politics_engine.py::test_rules_loader_loads_yaml -v --tb=short)",
+      "Bash(python -m pytest e2e/scenarios/scenario_factional_rumor.py --collect-only)",
+      "Bash(python -m pytest tests/ -q --tb=short)",
+      "Bash(python -m pytest tests/unit/test_architecture_conformance.py -v --tb=long)",
+      "Bash(python -m pytest tests/unit/test_architecture_conformance.py::test_all_python_files_have_module_docstring_contract -v --tb=short)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(python -m pytest tests/ -q)",
+      "Bash(cd /mnt/c/Users/lohan/Documents/hackathons/NPCSystem && python -m pytest tests/ -q 2>&1 | tail -15)",
+      "Read(//mnt/c/Users/lohan/Documents/hackathons/**)",
+      "Bash(python -m pytest tests/unit/test_main_reconciler_lifespan.py -q --tb=short)",
+      "Bash(python -m pytest tests/unit/test_main_reconciler_lifespan.py::test_lifespan_starts_reconciler_task -q --tb=long)",
+      "Bash(python -m pytest tests/ -q -k \"architecture\" --tb=short)",
+      "Bash(python -m pytest tests/unit/test_quest_generation_engine.py -q --tb=short)",
+      "Bash(python -m pytest tests/unit/test_story_pacing_engine.py -v --tb=short)",
+      "Bash(python -m pytest tests/unit/test_architecture_conformance.py -q --tb=short)",
+      "Bash(python -m pytest tests/unit/test_architecture_conformance.py tests/unit/test_context_builder.py -q --tb=no)",
+      "Read(//c/Users/lohan/.claude/plans/**)",
+      "Bash(python -m pytest tests/unit/test_economy_engine.py -v --tb=short)",
+      "Bash(python -m pytest tests/unit/test_architecture_conformance.py -v --tb=short)"
     ]
   }
 }

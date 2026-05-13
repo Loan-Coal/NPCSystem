@@ -38,6 +38,7 @@ from npc_engine.api.routes.graph_admin import router as graph_admin_router
 from npc_engine.api.routes.npc_state import router as npc_state_router
 from npc_engine.api.routes.quest import router as quest_router
 from npc_engine.api.routes.quest_generation import router as quest_generation_router
+from npc_engine.api.routes.economy import router as economy_router
 from npc_engine.api.routes.system import admin_router as system_admin_router
 from npc_engine.api.routes.system import router as system_router
 from npc_engine.auth.middleware import ApiKeyMiddleware
@@ -192,6 +193,7 @@ def create_app() -> FastAPI:
     app.include_router(schedules_router, prefix=admin_prefix)
     app.include_router(reputation_admin_router, prefix=admin_prefix)
     app.include_router(quest_generation_router, prefix=admin_prefix)
+    app.include_router(economy_router, prefix=admin_prefix)
 
     return app
 

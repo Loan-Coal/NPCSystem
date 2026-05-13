@@ -19,6 +19,9 @@ from npc_engine.engines.gossip.gossip_config import load_gossip_config
 from npc_engine.engines.gossip.gossip_handler import GossipHandler
 from npc_engine.engines.idempotency.neo4j_store import Neo4jIdempotencyStore
 from npc_engine.engines.idempotency.service import IdempotencyService
+from npc_engine.engines.economy.pricing_engine import PricingEngine
+from npc_engine.engines.economy.pricing_rules_loader import load_pricing_rules
+from npc_engine.engines.economy.trade_engine import TradeEngine
 from npc_engine.engines.faction_politics.faction_politics_engine import FactionPoliticsEngine
 from npc_engine.engines.faction_politics.rules_loader import load_rules
 from npc_engine.engines.story_pacing.story_pacing_engine import StoryPacingEngine
@@ -343,6 +346,28 @@ def get_reindex_job_service() -> ReindexJobService:
         ReindexJobService instance.
     """
     return ReindexJobService()
+
+
+@lru_cache
+def get_pricing_engine() -> PricingEngine:
+    """Create singleton pricing engine loaded from pricing_rules.yaml.
+
+    Returns:
+        PricingEngine wired to the bundled pricing_rules.yaml.
+    """
+    rules_path = Path(__file__).resolve().parent.parent / "engines" / "economy" / "pricing_rules.yaml"
+    rules = load_pricing_rules(rules_path)
+    return PricingEngine(rules=rules)
+
+
+@lru_cache
+def get_trade_engine() -> TradeEngine:
+    """Create singleton trade engine wired to the shared pricing engine.
+
+    Returns:
+        TradeEngine wired to the singleton PricingEngine.
+    """
+    return TradeEngine(pricing_engine=get_pricing_engine())
 
 
 @lru_cache

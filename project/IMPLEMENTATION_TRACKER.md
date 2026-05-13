@@ -73,7 +73,24 @@ Tasks:
 686 unit tests green.
 
 #### Feature 4.4 — Economy engine (basic)
-Status: TODO
+Status: DONE
+Started: 2026-05-13
+Completed: 2026-05-13
+Commit: feat: economy engine (Phase 4.4)
+Tasks:
+- [x] `engines/economy/pricing_rules.yaml` — base prices, location/event/faction modifiers
+- [x] `engines/economy/pricing_rules_loader.py` — PricingRules frozen dataclass + load_pricing_rules
+- [x] `engines/economy/pricing_engine.py` — PricingEngine.compute_price (pure, no I/O)
+- [x] `engines/economy/trade_models.py` — TradeResult frozen dataclass
+- [x] `engines/economy/trade_engine.py` — TradeEngine.evaluate_offer (reuses atomic writers)
+- [x] `engines/economy/__init__.py` — package re-export
+- [x] `graph/pricing_queries.py` — Cypher constants + helpers for location/event/faction lookups
+- [x] `api/dependency_singletons.py` — get_pricing_engine() and get_trade_engine() @lru_cache singletons
+- [x] `api/routes/economy.py` — GET /economy/price, POST /economy/trade
+- [x] `main.py` — economy_router registered under admin_prefix
+- [x] `tests/unit/test_economy_engine.py` — 8 unit tests green
+- [x] `e2e/scenarios/scenario_economy.py` — E2E scenario
+694 unit tests green.
 
 ---
 

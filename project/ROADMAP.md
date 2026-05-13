@@ -677,7 +677,7 @@ Quest generation engine:
 **Goal:** A meta-engine that decides when high-severity events and quests are
 allowed to fire, based on current game state.
 
-**Why:** Prevents the war-during-princess-delivery problem. World-altering
+**Why:** Prevents the event during quest breaks qust, such as war-during-princess-delivery problem. World-altering
 events should not break critical quests.
 
 **Dependencies:** 4.1 done. 4.2 done.
