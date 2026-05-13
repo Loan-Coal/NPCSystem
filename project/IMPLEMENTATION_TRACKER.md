@@ -16,6 +16,52 @@ This file tracks iterative implementation for PROJECT_PLAN_v1.4.xml and supports
 
 ## Stages
 
+### Phase 4 — Authoring Engines
+Status: IN_PROGRESS
+Started: 2026-05-13
+
+#### Feature 4.1 — Faction politics engine
+Status: DONE
+Started: 2026-05-13
+Completed: 2026-05-13
+Commit: feat: faction politics engine (Phase 4.1)
+Tasks:
+- [x] `engines/faction_politics/rules.yaml` — 2 rules (betrayal -10, alliance_act +5) + decay config
+- [x] `engines/faction_politics/rules_loader.py` — FactionPoliticsRule, DecayConfig, FactionPoliticsRules dataclasses + load_rules
+- [x] `engines/faction_politics/faction_politics_engine.py` — FactionPoliticsEngine.run_tick (event rules + decay)
+- [x] `api/dependency_singletons.py` — get_faction_politics_engine() @lru_cache singleton
+- [x] `scheduler/tick_scheduler.py` — optional faction_politics_engine injection; called every tick
+- [x] `tests/unit/test_faction_politics_engine.py` — 7 unit tests green
+- [x] `e2e/scenarios/scenario_faction_politics.py` — E2E scenario
+674 unit tests green.
+
+#### Feature 4.2 — Quest templates and slot-filling
+Status: DONE
+Started: 2026-05-13
+Completed: 2026-05-13
+Commit: feat: quest templates and slot-filling generation (Phase 4.2)
+Tasks:
+- [x] `type_registry/base_nodes/quest.yaml` and `quest_template.yaml`
+- [x] `type_registry/base_edges/has_quest.yaml`
+- [x] `graph/quest_node_queries.py` and `graph/quest_node_service.py`
+- [x] `prompts/quest_generation/slot_fill_v1.yaml` and `flavor_v1.yaml`
+- [x] `prompts/quest_generation/templates/fetch_item.yaml` and `escort_npc.yaml`
+- [x] `engines/quest_generation/` package: __init__, slot_models, slot_validator, template_loader, engine
+- [x] `engines/contracts/quest_generation_engine.yaml` and `llm_config.yaml`
+- [x] `api/dependency_singletons.py` — get_quest_generation_engine() singleton
+- [x] `api/routes/quest_generation.py` — POST /quests/generate, GET /quests/{quest_id}
+- [x] `tests/unit/test_quest_generation_engine.py` — 7 unit tests green
+- [x] `e2e/scenarios/scenario_quest_generation.py` — E2E scenario
+681 unit tests green.
+
+#### Feature 4.3 — Story pacing engine
+Status: TODO
+
+#### Feature 4.4 — Economy engine (basic)
+Status: TODO
+
+---
+
 ### Phase 3 — World Depth
 Status: DONE
 Started: 2026-05-11

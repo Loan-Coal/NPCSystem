@@ -1,0 +1,13 @@
+id: fetch_item_v1
+name: Fetch Item
+archetype: merchant
+severity: 20
+slot_definitions:
+  - name: item
+    node_type: item
+    required: true
+  - name: location
+    node_type: location
+    required: false
+description_template: "Retrieve {item} from {location}."
+reward_template: "10 gold coins"

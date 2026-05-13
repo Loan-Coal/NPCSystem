@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Current phase** | Phase 4 — Authoring engines |
-| **Phase 4** | 🔄 In progress — 4.1 next (Faction politics engine) |
+| **Phase 4** | 🔄 In progress — 4.1 ✅, 4.2 ✅, 4.3 next (Story pacing) |
 | **Phase 3** | ✅ Complete — 3.1–3.8 done + full test foundation (667 unit tests, 20 E2E scenarios) |
 | **Phase 2** | ✅ Complete — 2.1 schedule nodes, 2.2 routine engine, 2.3 disruption rules |
 | **Phase 1** | ✅ Complete — Faction nodes (1.1), Faction-aware gossip (1.2), Faction reputation (1.3) |

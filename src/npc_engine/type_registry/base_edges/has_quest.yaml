@@ -1,0 +1,4 @@
+edge_type: HAS_QUEST
+src_type: character
+dst_type: quest
+fields: {}

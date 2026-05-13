@@ -1,0 +1,8 @@
+"""
+Package: quest_generation
+Layer: engines
+Purpose: LLM-powered quest generation with slot-filling, graph validation, and retry logic.
+Does NOT: expose HTTP routes or manage quest lifecycle state transitions.
+Dependencies injected: LLMClientProtocol, SlotValidator, list[QuestTemplateRecord].
+Public surface: QuestGenerationEngine, QuestTemplateRecord, GeneratedQuest, SlotDefinition, SlotFill
+"""

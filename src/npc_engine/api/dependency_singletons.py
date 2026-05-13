@@ -22,6 +22,8 @@ from npc_engine.engines.idempotency.service import IdempotencyService
 from npc_engine.engines.faction_politics.faction_politics_engine import FactionPoliticsEngine
 from npc_engine.engines.faction_politics.rules_loader import load_rules
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
+from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
+from npc_engine.engines.quest_generation.template_loader import load_templates
 from npc_engine.engines.routine.routine_engine import RoutineEngine
 from npc_engine.graph.db import GraphDB
 from npc_engine.graph.reindex_job_service import ReindexJobService
@@ -156,6 +158,26 @@ def get_faction_politics_engine() -> FactionPoliticsEngine:
     rules_path = Path(__file__).resolve().parent.parent / "engines" / "faction_politics" / "rules.yaml"
     rules = load_rules(rules_path)
     return FactionPoliticsEngine(rules=rules)
+
+
+@lru_cache
+def get_quest_generation_engine() -> QuestGenerationEngine:
+    """Create singleton quest generation engine with LLM client and loaded templates.
+
+    Returns:
+        QuestGenerationEngine wired to the shared LLM client and bundled templates.
+    """
+    from npc_engine.engines.llm.factory import create_llm_client_for_engine
+    engine_config = get_engine_model_config_for("quest_generation")
+    llm_client = create_llm_client_for_engine(engine_config, get_settings())
+    prompts_dir = Path(__file__).resolve().parent.parent / "prompts" / "quest_generation"
+    templates_dir = prompts_dir / "templates"
+    templates = load_templates(templates_dir)
+    return QuestGenerationEngine(
+        llm_client=llm_client,
+        templates=templates,
+        prompts_dir=prompts_dir,
+    )
 
 
 @lru_cache

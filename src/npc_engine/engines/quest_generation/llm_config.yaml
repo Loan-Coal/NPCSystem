@@ -1,0 +1,21 @@
+engine: quest_generation
+llm:
+  backend: ollama
+  model: mixtral:8x7b
+  temperature: 0.7
+  max_tokens: 256
+  top_p: 0.9
+  stop_sequences: []
+prompt:
+  name: slot_fill_v1
+  version: 1
+output_schema_ref: quest_generation_response_v1
+fallback:
+  policy: graceful_degradation
+  tiers:
+    - full
+    - deterministic
+timeouts_ms:
+  full: 30000
+  graph_only: 10000
+  canned: 100
