@@ -23,6 +23,8 @@ class WorldState(BaseModel):
     year: int = 1
     season: str = "spring"
     day: int = 1
+    max_event_severity: int = 100
+    quest_generation_rate: float = 1.0
     last_updated_at: datetime = Field(default_factory=datetime.utcnow)
     last_graph_updated_at: datetime = Field(default_factory=datetime.utcnow)
 

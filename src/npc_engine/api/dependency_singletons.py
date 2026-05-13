@@ -21,6 +21,8 @@ from npc_engine.engines.idempotency.neo4j_store import Neo4jIdempotencyStore
 from npc_engine.engines.idempotency.service import IdempotencyService
 from npc_engine.engines.faction_politics.faction_politics_engine import FactionPoliticsEngine
 from npc_engine.engines.faction_politics.rules_loader import load_rules
+from npc_engine.engines.story_pacing.story_pacing_engine import StoryPacingEngine
+from npc_engine.engines.story_pacing.pacing_rules_loader import load_pacing_rules
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
 from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
 from npc_engine.engines.quest_generation.template_loader import load_templates
@@ -161,6 +163,18 @@ def get_faction_politics_engine() -> FactionPoliticsEngine:
 
 
 @lru_cache
+def get_story_pacing_engine() -> StoryPacingEngine:
+    """Create singleton story pacing engine loaded from pacing_rules.yaml.
+
+    Returns:
+        StoryPacingEngine wired to the bundled pacing_rules.yaml.
+    """
+    rules_path = Path(__file__).resolve().parent.parent / "engines" / "story_pacing" / "pacing_rules.yaml"
+    rules = load_pacing_rules(rules_path)
+    return StoryPacingEngine(rules=rules)
+
+
+@lru_cache
 def get_quest_generation_engine() -> QuestGenerationEngine:
     """Create singleton quest generation engine with LLM client and loaded templates.
 
@@ -204,6 +218,7 @@ def get_tick_scheduler() -> TickScheduler:
         event_handler=get_event_handler(),
         routine_engine=get_routine_engine(),
         faction_politics_engine=get_faction_politics_engine(),
+        story_pacing_engine=get_story_pacing_engine(),
         gossip_interval=settings.GOSSIP_TICK_INTERVAL,
         event_interval=settings.EVENT_TICK_INTERVAL,
         distributed_lease_enabled=settings.DISTRIBUTED_TICK_LEASE_ENABLED,

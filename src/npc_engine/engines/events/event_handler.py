@@ -26,6 +26,7 @@ from npc_engine.engines.routine.routine_queries import set_routine_override
 from npc_engine.graph.event_writer import upsert_event
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
 from npc_engine.type_registry.contracts import TypeRegistry
+from npc_engine.world.world_reader import get_world_state
 from npc_engine.world.world_state import WorldState
 
 
@@ -140,6 +141,15 @@ class EventHandler:
 
         async with self._lock:
             template = self._select_template(tick_id=tick_id)
+            world_state_check = await get_world_state(session=session)
+            if template.severity > world_state_check.max_event_severity:
+                LOGGER.debug(
+                    "event_handler tick %d: skipping event severity=%d (cap=%d)",
+                    tick_id,
+                    template.severity,
+                    world_state_check.max_event_severity,
+                )
+                return {"tick_id": tick_id, "created": 0}
             template_locations = await resolve_locations(session=session, location_tag=template.location_tag)
             scoped_locations = location_ids if location_ids is not None and len(location_ids) > 0 else template_locations
             if len(scoped_locations) == 0:

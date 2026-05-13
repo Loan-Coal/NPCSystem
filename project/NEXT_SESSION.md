@@ -1,6 +1,6 @@
 # Next Session Instructions
 
-## Phase 4 — Authoring engines. Feature 4.3 next.
+## Phase 4 — Authoring engines. Feature 4.4 next.
 
 Run tests before touching any code:
 
@@ -8,119 +8,135 @@ Run tests before touching any code:
 pytest tests/ -q
 ```
 
-## Phase 4.1–4.2 completion status (committed 2026-05-13)
+## Phase 4.1–4.3 completion status (committed 2026-05-13)
 
-- 4.1: Faction politics engine — deterministic rules + decay, wired into TickScheduler.
-- 4.2: Quest generation engine — slot-filling + LLM flavor text + graph validation.
-- 681 unit tests green.
+- 4.1: Faction politics engine (deterministic rules + decay).
+- 4.2: Quest generation engine (slot-filling, LLM flavor, graph validation).
+- 4.3: Story pacing engine (WorldState max_event_severity + quest_generation_rate).
+- 686 unit tests green.
 
 ---
 
 ## Step 0 — Update stale docs first (before any code)
 
-1. `project/IMPLEMENTATION_TRACKER.md` — mark Feature 4.3 as IN_PROGRESS with today's date.
-2. `project/STATUS.md` — update Phase 4 row: 4.1 ✅, 4.2 ✅, 4.3 IN_PROGRESS.
+1. `project/IMPLEMENTATION_TRACKER.md` — mark Feature 4.4 as IN_PROGRESS with today's date.
+2. `project/STATUS.md` — update Phase 4 row: 4.1–4.3 ✅, 4.4 IN_PROGRESS.
 
 ---
 
-## Feature 4.3 — Story pacing engine
+## Feature 4.4 — Economy engine (basic)
 
-Read `project/ROADMAP.md` lines 675–699 first (the authoritative spec).
+Read `project/ROADMAP.md` lines 701–719 first (the authoritative spec).
 
-**Context:** The pacing engine is a meta-engine that gates other engines. It runs on each tick
-advance, reads active quests and recent player activity, then writes `max_event_severity` and
-`quest_generation_rate` multipliers to `WorldState`. Other engines read these before sampling.
-No LLM. No new graph nodes or edges (WorldState fields are added).
-
-### WorldState changes
-
-Add two new fields to `WorldState` in `world/world_state.py` **and** in the WorldState type
-registry contract (if a YAML exists for it — check `type_registry/base_nodes/world_state.yaml`):
-
-```python
-max_event_severity: int = 100    # events above this severity are suppressed; default = unconstrained
-quest_generation_rate: float = 1.0  # multiplier on new quest generation; default = 1.0
-```
-
-These fields must have defaults so existing WorldState nodes in Neo4j (which lack these fields)
-continue to load without error.
+**Context:** Items already have `OWNS` edges (from 3.6). This feature adds pricing: a
+deterministic service that computes an item's value at a given location, applying modifiers for
+rarity, active events, and faction membership. A trade endpoint handles offer/accept logic using
+unified valuation. No LLM. No new graph nodes or edges (prices are computed, not persisted).
 
 ### Architecture
 
-New package `engines/story_pacing/`:
-- `__init__.py` — package docstring only.
-- `pacing_rules.yaml`:
+New files in `engines/economy/` (currently a stub re-export package — keep backward compat):
+- `pricing_rules.yaml`:
   ```yaml
-  high_severity_quest_threshold: 70    # quests with severity >= this suppress events
-  suppression_event_severity_cap: 30   # max_event_severity when high-severity quest is active
-  suppression_quest_rate: 0.5          # quest_generation_rate when high-severity quest active
-  cooldown_ticks: 10                   # ticks since last major event before pacing relaxes
-  major_event_severity_floor: 60       # events above this count as "major"
+  base_prices:
+    sword: 50
+    potion: 20
+    map: 10
+    default: 5
+  location_modifiers:
+    - location_type: frontier
+      item_type: weapon
+      multiplier: 1.5
+    - location_type: market
+      item_type: any
+      multiplier: 0.9
+  event_modifiers:
+    - event_type: war
+      item_type: weapon
+      multiplier: 2.0
+    - event_type: plague
+      item_type: potion
+      multiplier: 3.0
+  faction_discount: 0.1   # 10% discount for faction members
   ```
-- `pacing_rules_loader.py` — `PacingRules` frozen dataclass; `load_pacing_rules(path) -> PacingRules`.
-- `pacing_queries.py` — Cypher constants:
-  - `CYPHER_GET_ACTIVE_HIGH_SEVERITY_QUESTS` — find Quest nodes with status != 'completed' and severity >= N.
-  - `CYPHER_GET_RECENT_MAJOR_EVENTS` — find Event nodes in last M ticks with severity >= floor.
-- `story_pacing_engine.py` (≤200 lines) — `StoryPacingEngine(rules: PacingRules)`:
-  - `run_tick(session, tick_id) -> dict`:
-    a. Query active high-severity quests.
-    b. Query recent major events (by tick_id or time).
-    c. Compute new `max_event_severity` and `quest_generation_rate` based on rules.
-    d. Write updated values to WorldState via `world_writer.upsert_world_state`.
-    e. Return `{"max_event_severity": N, "quest_generation_rate": F, "suppressed": bool}`.
+- `pricing_rules_loader.py` — `PricingRules` frozen dataclass; `load_pricing_rules(path) -> PricingRules`.
+- `pricing_engine.py` — `PricingEngine(rules: PricingRules)`:
+  - `compute_price(item_type, location_type, active_event_types, is_faction_member) -> int`:
+    Pure function. Applies base price * location modifier * event modifier * (1 - faction_discount
+    if member). Returns int (floor). No I/O.
+- `trade_engine.py` — `TradeEngine(pricing_engine, graph_reader, currency_writer, item_writer)`:
+  - `evaluate_offer(session, buyer_id, seller_id, item_id, offered_price) -> TradeResult`:
+    a. Compute fair price via PricingEngine (needs location lookup via graph).
+    b. Accept if offered_price >= fair_price. Reject otherwise with fair_price hint.
+    c. On accept: call `transfer_item_atomic` + `transfer_currency_atomic` in one transaction.
+    d. Return `TradeResult(accepted, fair_price, final_price)`.
 
-**Respecting pacing in other engines:**
-- `engines/events/event_handler.py` — before sampling an event from the pool, read
-  `world_state.max_event_severity`; skip events whose severity exceeds the cap.
-- `engines/quest_generation/quest_generation_engine.py` — multiply new-quest probability
-  by `world_state.quest_generation_rate` (only relevant if generation is rate-controlled).
+New `graph/pricing_queries.py` — Cypher constants:
+- `CYPHER_GET_CHARACTER_LOCATION_TYPE` — given character_id, return location_type of current location.
+- `CYPHER_GET_ACTIVE_EVENTS_AT_LOCATION` — event types at location in last N ticks.
+- `CYPHER_CHECK_FACTION_MEMBERSHIP` — given two character_ids, check if they share a faction.
+
+New `TradeResult` frozen dataclass in `engines/economy/trade_models.py`:
+```python
+@dataclass(frozen=True)
+class TradeResult:
+    accepted: bool
+    fair_price: int
+    final_price: int | None
+    rejection_reason: str | None
+```
 
 Wiring:
-- `api/dependency_singletons.py` — add `get_story_pacing_engine()` with `@lru_cache`.
-- `scheduler/tick_scheduler.py` — add optional `story_pacing_engine: object = None`; call
-  `await self._story_pacing_engine.run_tick(session=session, tick_id=tick_id)` before
-  gossip/event sampling in each tick so pacing state is fresh when samplers run.
-- `main.py` — inject `get_story_pacing_engine()` into the scheduler singleton.
+- `api/dependency_singletons.py` — add `get_pricing_engine()` and `get_trade_engine()` with `@lru_cache`.
+- **No tick wiring.** Trade runs when API route is called.
+- New routes `api/routes/economy.py`:
+  - `GET /v1/admin/economy/price?item_type=&location_id=&character_id=` → `{"price": N}`.
+  - `POST /v1/admin/economy/trade` — body: `{buyer_id, seller_id, item_id, offered_price}` → TradeResult.
 
 ### Steps
 
-1. Add `max_event_severity` and `quest_generation_rate` fields to `WorldState` (with defaults).
-   If `type_registry/base_nodes/world_state.yaml` exists, add the fields there too.
-2. Implement `engines/story_pacing/` package.
-3. Wire event_handler to check `world_state.max_event_severity` before sampling.
-4. Wire quest_generation_engine to check `world_state.quest_generation_rate`.
-5. Add `get_story_pacing_engine()` singleton and wire into `TickScheduler`.
-6. Unit tests `tests/unit/test_story_pacing_engine.py`:
-   - `test_pacing_rules_loader_loads_yaml` — loads real rules.yaml, asserts fields present.
-   - `test_run_tick_suppresses_when_high_severity_quest_active` — mock: high-severity quest
-     active → max_event_severity drops to suppression cap.
-   - `test_run_tick_normal_when_no_high_severity_quest` — no such quest → max_event_severity = 100.
-   - `test_run_tick_relaxes_after_cooldown` — no major events in cooldown window → rate normal.
-   - `test_event_handler_skips_suppressed_severity` — event above max_event_severity not fired.
-7. E2E scenario `e2e/scenarios/scenario_story_pacing.py`:
-   - Seed a high-severity quest (severity=80, status=in_progress).
-   - Run one tick advance.
-   - Read WorldState; assert max_event_severity <= 30 (suppression cap).
+1. Add `engines/economy/pricing_rules.yaml`.
+2. Implement `engines/economy/pricing_rules_loader.py` and `engines/economy/pricing_engine.py`.
+3. Add `engines/economy/trade_models.py`.
+4. Add `graph/pricing_queries.py`.
+5. Implement `engines/economy/trade_engine.py` (reuse `currency_writer.transfer_currency_atomic`
+   and `item_writer.transfer_item_atomic` — already exist).
+6. Add `get_pricing_engine()` and `get_trade_engine()` singletons.
+7. Add `api/routes/economy.py` and wire into `main.py`.
+8. Unit tests `tests/unit/test_economy_engine.py`:
+   - `test_pricing_rules_loader_loads_yaml` — loads real rules.yaml, asserts fields.
+   - `test_compute_price_base_only` — no modifiers → base price returned.
+   - `test_compute_price_location_modifier` — frontier + weapon → 1.5x.
+   - `test_compute_price_event_modifier` — war event → 2x on weapon.
+   - `test_compute_price_faction_discount` — member gets 10% off.
+   - `test_compute_price_stacked_modifiers` — location + event stack multiplicatively.
+   - `test_trade_engine_accepts_fair_offer` — offered >= fair → accepted, transfers executed.
+   - `test_trade_engine_rejects_low_offer` — offered < fair → rejected, no transfer.
+9. E2E scenario `e2e/scenarios/scenario_economy.py`:
+   - Seed buyer (with currency), seller (with item), location.
+   - Call `GET /v1/admin/economy/price` → record fair_price.
+   - Call `POST /v1/admin/economy/trade` with offered_price = fair_price → assert accepted.
+   - Assert buyer now owns item and seller has currency.
    - Cleanup.
 
-### Definition of done (4.3)
-- WorldState extended with pacing fields (backward-compatible defaults).
-- `engines/story_pacing/` package: rules loader, Cypher constants, engine.
-- EventHandler respects `max_event_severity`.
-- QuestGenerationEngine respects `quest_generation_rate`.
-- Engine wired into TickScheduler.
-- 5 unit tests green.
+### Definition of done (4.4)
+- `pricing_rules.yaml` with base prices, location/event/faction modifiers.
+- `PricingEngine.compute_price` — pure function, no I/O.
+- `TradeEngine.evaluate_offer` — reuses existing atomic writers.
+- API routes registered and functional.
+- 8 unit tests green.
 - E2E scenario passes.
 - Pre-merge checklist from `CLAUDE.md` satisfied.
-- Commit: `feat: story pacing engine (Phase 4.3)`
+- Commit: `feat: economy engine (Phase 4.4)`
 
 ---
 
-## After 4.3 is committed — update this file for Feature 4.4
+## After 4.4 is committed — Phase 4 complete
 
-Read `project/ROADMAP.md` lines 701–719 and the Phase 4 plan file at
-`~/.claude/plans/goal-implement-phase-4-dapper-kettle.md` (Iteration 4 section).
-Replace this file with the Iteration 4 NEXT_SESSION.md content from that plan.
+1. `project/IMPLEMENTATION_TRACKER.md` — mark Feature 4.4 as DONE, Phase 4 as COMPLETE.
+2. `project/STATUS.md` — Phase 4 ✅ Complete.
+3. Replace this file with Phase 5 instructions once the Phase 5 plan is written.
+4. Read `project/ROADMAP.md` lines 723+ for Phase 5 scope.
 
 ---
 

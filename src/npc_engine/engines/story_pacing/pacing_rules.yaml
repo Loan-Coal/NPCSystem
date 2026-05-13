@@ -1,0 +1,5 @@
+high_severity_quest_threshold: 70
+suppression_event_severity_cap: 30
+suppression_quest_rate: 0.5
+cooldown_ticks: 10
+major_event_severity_floor: 60

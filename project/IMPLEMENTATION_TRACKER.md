@@ -55,7 +55,22 @@ Tasks:
 681 unit tests green.
 
 #### Feature 4.3 — Story pacing engine
-Status: TODO
+Status: DONE
+Started: 2026-05-13
+Completed: 2026-05-13
+Commit: feat: story pacing engine (Phase 4.3)
+Tasks:
+- [x] `world/world_state.py` — add `max_event_severity` (default=100) and `quest_generation_rate` (default=1.0)
+- [x] `type_registry/base_nodes/world_state.yaml` — add new optional fields
+- [x] `world/world_writer.py` — persist new fields in CYPHER + return parsing
+- [x] `engines/story_pacing/__init__.py`, `pacing_rules.yaml`, `pacing_rules_loader.py`, `pacing_queries.py`, `story_pacing_engine.py`
+- [x] `engines/events/event_handler.py` — skip events above `max_event_severity`
+- [x] `engines/quest_generation/quest_generation_engine.py` — respect `quest_generation_rate`
+- [x] `api/dependency_singletons.py` — `get_story_pacing_engine()` singleton
+- [x] `scheduler/tick_scheduler.py` — optional `story_pacing_engine` injection, called before gossip/events
+- [x] `tests/unit/test_story_pacing_engine.py` — 6 unit tests green
+- [x] `e2e/scenarios/scenario_story_pacing.py` — E2E scenario
+686 unit tests green.
 
 #### Feature 4.4 — Economy engine (basic)
 Status: TODO

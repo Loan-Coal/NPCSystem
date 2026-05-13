@@ -47,6 +47,7 @@ class TickScheduler:
         *,
         routine_engine: object = None,
         faction_politics_engine: object = None,
+        story_pacing_engine: object = None,
         memory_consolidation_engine: object = None,
         consolidation_advance_interval: int = 1,
         distributed_lease_enabled: bool = False,
@@ -69,6 +70,8 @@ class TickScheduler:
                 called every tick to move characters per their schedules.
             faction_politics_engine: Optional engine exposing ``run_tick(session)``
                 called every tick to adjust faction standings from events and apply decay.
+            story_pacing_engine: Optional engine exposing ``run_tick(session, tick_id)``
+                called before gossip/event sampling to write pacing multipliers to WorldState.
             memory_consolidation_engine: Optional engine exposing ``run_tick(session, game_time)``
                 called once per advance on the configured cadence.
             consolidation_advance_interval: Run consolidation every N advances; clamped to 1.
@@ -86,6 +89,7 @@ class TickScheduler:
         self._event_handler = event_handler
         self._routine_engine = routine_engine
         self._faction_politics_engine = faction_politics_engine
+        self._story_pacing_engine = story_pacing_engine
         self._memory_consolidation_engine = memory_consolidation_engine
         self._consolidation_advance_interval = max(1, consolidation_advance_interval)
         self._advance_count = 0
@@ -185,11 +189,19 @@ class TickScheduler:
                 "event": [],
                 "routine": [],
                 "faction_politics": [],
+                "story_pacing": [],
                 "consolidation": [],
             }
             world_state = await get_world_state(session=session)
             for tick_id in range(start_tick + 1, end_tick + 1):
                 unresolved = False
+
+                if self._story_pacing_engine is not None:
+                    pacing_row = await self._story_pacing_engine.run_tick(
+                        session=session, tick_id=tick_id
+                    )
+                    response["story_pacing"].append(pacing_row)
+
                 if tick_id % self._gossip_interval == 0:
                     if self._distributed_lease_enabled:
                         gossip_unresolved, gossip_row = await self._run_distributed_engine_tick(

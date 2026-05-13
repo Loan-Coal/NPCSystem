@@ -52,6 +52,9 @@ class _FakeResult:
     def __aiter__(self) -> _AsyncIter:
         return _AsyncIter(self._records)
 
+    async def single(self) -> dict | None:
+        return self._records[0] if self._records else None
+
 
 class _FakeSessionWithNodes:
     """Session stub that returns preconfigured node records by query content."""

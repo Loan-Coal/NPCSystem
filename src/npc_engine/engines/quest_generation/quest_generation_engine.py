@@ -23,6 +23,8 @@ from typing import Any
 
 from neo4j import AsyncSession
 
+from npc_engine.world.world_reader import get_world_state
+
 from npc_engine.common.yaml_utils import load_yaml_mapping
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.engines.quest_generation.slot_models import (
@@ -89,6 +91,12 @@ class QuestGenerationEngine:
             ValueError: If no template exists for the giver's archetype or the
                 character node is not found.
         """
+        world_state = await get_world_state(session=session)
+        if world_state.quest_generation_rate < 1.0 and random.random() > world_state.quest_generation_rate:
+            raise ValueError(
+                f"Quest generation suppressed by pacing engine "
+                f"(rate={world_state.quest_generation_rate:.2f})"
+            )
         archetype, giver_name = await self._get_character_info(session, quest_giver_id)
         template = self._select_template(archetype)
         validator = SlotValidator(session=session)
