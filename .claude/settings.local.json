@@ -71,7 +71,13 @@
       "Bash(xargs grep -l \"POST /v1/admin/quests/generate\\\\|qg_merchant_giver_001\")",
       "Bash(xargs grep -l \"test_story_pacing\")",
       "Bash(python -m pytest tests/unit/test_main_reconciler_lifespan.py -q --tb=long)",
-      "Bash(python -m pytest tests/unit/test_quest_generation_engine.py::test_generate_uses_template_defaults_on_flavor_error -q --tb=long)"
+      "Bash(python -m pytest tests/unit/test_quest_generation_engine.py::test_generate_uses_template_defaults_on_flavor_error -q --tb=long)",
+      "Bash(python -m pytest tests/unit/test_sentence_encoder.py tests/unit/test_vector_store_and_index.py -v)",
+      "Bash(python -m pytest tests/unit/test_architecture_conformance.py -v)",
+      "Bash(python -m pytest tests/unit/test_context_scoring.py -v)",
+      "Bash(python -m pytest tests/unit/test_context_budget_enforcer_v14.py -v)",
+      "Bash(python -m pytest tests/unit/test_context_builder.py -v)",
+      "Bash(python -m pytest tests/unit/test_context_builder.py tests/unit/test_context_metrics_observability_v14.py -v)"
     ],
     "additionalDirectories": [
       "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem"

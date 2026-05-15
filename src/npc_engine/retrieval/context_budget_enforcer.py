@@ -51,12 +51,23 @@ def enforce_context_budget(
             or if a compressible tier cannot fit within budget after compression and dropping.
     """
 
+    TIER0_MAX_TOKENS = 380  # matches legacy token_budget_enforcer constant
+
     cache = compression_cache or ContextCompressionCache()
 
     tier0_items = [item for item in context.items if item.tier == "tier0"]
     tier_a_items = [item for item in context.items if item.tier == "tierA"]
     tier_b_items = [item for item in context.items if item.tier == "tierB"]
     tier_c_items = [item for item in context.items if item.tier == "tierC"]
+
+    tier0_tokens = sum(estimate_tokens(item.text) for item in tier0_items)
+    if tier0_tokens > TIER0_MAX_TOKENS:
+        raise ContextBudgetError(
+            tier="tier0",
+            used_tokens=tier0_tokens,
+            budget_tokens=TIER0_MAX_TOKENS,
+            detail="Tier 0 (world + emotion) exceeds non-compressible cap.",
+        )
 
     tier_a_tokens = sum(estimate_tokens(item.text) for item in tier_a_items)
     tier_a_budget = llm_config.tier_budget_tokens.tier_a

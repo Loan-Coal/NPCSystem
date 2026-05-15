@@ -16,6 +16,23 @@ This file tracks iterative implementation for PROJECT_PLAN_v1.4.xml and supports
 
 ## Stages
 
+### Roadmap V2 Phase 3 — Retrieval Foundation
+Status: DONE
+Started: 2026-05-15
+Completed: 2026-05-15
+Tests: 720 passed, 17 skipped, 0 failed
+Items: 7/7 complete
+
+- [x] 3.1 Replace character-bucket hash with sentence-transformers (sentence_encoder.py, embedding_index.py, dependency_singletons.py, pyproject.toml) — EMBED_DIMENSION=384, lazy import, GPU/CPU auto-detect
+- [x] 3.2 Fix recency scoring — skip wall-clock for game-time nodes (_GAME_TIME_FIELDS pre-check returns 0.0)
+- [x] 3.3 Map emotional_charge/urgency/confidence into severity scoring — four-field cascade in _extract_severity_score
+- [x] 3.4 Cap Tier 0 in context_budget_enforcer — TIER0_MAX_TOKENS=380; raises ContextBudgetError(tier="tier0")
+- [x] 3.5 Increase PROMPT_TOKEN_BUDGET 800 → 2500 in config.py
+- [x] 3.6 Parallelize Tier A queries with asyncio.gather; extract helpers to context_builder_helpers.py; assemble_tier_a_context pure fn; 3-stage gather in build_serialized_context
+- [x] 3.7 Add KNOWS_ABOUT filter to vector retrieval — get_known_event_ids_for_npc in graph_reader.py; Stage 1 gather; filter_ids passed to embedding_index.search; None when empty (no restriction)
+
+---
+
 ### Roadmap V2 Phase 2 — Engine Configuration Baseline
 Status: DONE
 Started: 2026-05-15

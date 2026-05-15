@@ -19,7 +19,7 @@ from npc_engine.world.world_state import WorldState
 class FakeEmbeddingIndex:
     """Simple fake embedding index for context metric tests."""
 
-    async def search(self, query: str, top_k: int):
+    async def search(self, query: str, top_k: int, filter_ids=None):
         return [{"id": "r1", "score": 0.9, "payload": {"summary": "rumor", "severity": 75}}]
 
 
@@ -55,7 +55,22 @@ async def test_context_builder_emits_tier_item_and_token_metrics(monkeypatch) ->
     async def fake_character_reader(session, npc_id):
         return {"character": {"id": npc_id, "current_mood": "neutral"}, "relations": []}
 
-    async def fake_tier_a_reader(session, npc_id, event_limit, character_bundle=None):
+    async def fake_location_id(session, npc_id):
+        return ""
+
+    async def fake_location_context(session, location_id):
+        return {}
+
+    async def fake_events(session, npc_id, limit):
+        return []
+
+    async def fake_reputation(session, npc_id, player_id, threshold):
+        return []
+
+    async def fake_known_event_ids(session, npc_id):
+        return set()
+
+    def fake_assemble(*, npc_id, character_bundle, events, location_id, location_context):
         return [ContextItem(key=f"character:{npc_id}", text='{"id":"npc_1"}', tier="tierA", priority=80)]
 
     async def fake_memories(session, *, character_id, k):
@@ -78,7 +93,12 @@ async def test_context_builder_emits_tier_item_and_token_metrics(monkeypatch) ->
 
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_world_state", fake_world_reader)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_character_with_relations", fake_character_reader)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.retrieve_tier_a_context", fake_tier_a_reader)
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_known_event_ids_for_npc", fake_known_event_ids)
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_npc_location_id", fake_location_id)
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_location_context", fake_location_context)
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_events_for_npc", fake_events)
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_reputation_context_for_npc", fake_reputation)
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.assemble_tier_a_context", fake_assemble)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_memories_for_character", fake_memories)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_beliefs_for_character", fake_beliefs)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_goals_for_character", fake_goals)

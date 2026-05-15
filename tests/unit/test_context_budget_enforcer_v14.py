@@ -153,3 +153,40 @@ def test_compression_cache_invalidates_when_source_changes_with_same_timestamp()
     second = cache.compress_item(item=changed, llm_config=llm_config, target_tokens=8)
 
     assert first != second
+
+
+# ---------------------------------------------------------------------------
+# 3.4 — Tier 0 cap
+# ---------------------------------------------------------------------------
+
+
+def test_enforce_context_budget_raises_when_tier0_exceeds_cap() -> None:
+    """Tier 0 items that exceed 380 tokens must raise ContextBudgetError."""
+    context = MergedContext(
+        items=[
+            # 400+ characters ≈ 100+ tokens (estimate_tokens uses ~4 chars/token)
+            ContextItem(key="world", text="w" * 1600, tier="tier0", priority=100),
+            ContextItem(key="session", text="s" * 10, tier="tierA", priority=95),
+        ]
+    )
+    with pytest.raises(ContextBudgetError) as exc_info:
+        enforce_context_budget(context=context, llm_config=_llm_config())
+
+    assert exc_info.value.tier == "tier0"
+    assert exc_info.value.used_tokens > exc_info.value.budget_tokens
+
+
+def test_enforce_context_budget_passes_when_tier0_within_cap() -> None:
+    """Tier 0 items within 380 tokens must not raise."""
+    context = MergedContext(
+        items=[
+            ContextItem(key="world", text="w" * 40, tier="tier0", priority=100),
+            ContextItem(key="emotion", text="e" * 20, tier="tier0", priority=95),
+            ContextItem(key="session", text="s" * 10, tier="tierA", priority=90),
+        ]
+    )
+    # Should not raise
+    result = enforce_context_budget(context=context, llm_config=_llm_config())
+    tier0_keys = [item.key for item in result.items if item.tier == "tier0"]
+    assert "world" in tier0_keys
+    assert "emotion" in tier0_keys

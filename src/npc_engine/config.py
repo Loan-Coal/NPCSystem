@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     QDRANT_URL: str | None = None
     EMBEDDING_REFRESH_ON_WRITE: bool = True
     EMBEDDING_RECONCILE_INTERVAL_SECONDS: int = 300
-    PROMPT_TOKEN_BUDGET: int = 800
+    PROMPT_TOKEN_BUDGET: int = 2500  # was 800; Mixtral has 32K context, system prompt ≈ 256 tokens
     RAG_TOP_K: int = 5
 
     DIALOGUE_SESSION_TURNS: int = 10

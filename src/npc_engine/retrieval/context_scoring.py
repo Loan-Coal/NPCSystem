@@ -66,7 +66,15 @@ def _build_candidate(
     )
 
 
+# Fields that indicate a node uses in-game time rather than wall-clock time.
+# Nodes with these fields cannot be scored against datetime.now() — Phase 6 will
+# add proper in-game-tick scoring once the game tick is threaded through the pipeline.
+_GAME_TIME_FIELDS = frozenset({"created_at_game_time", "occurred_at_game_time"})
+
+
 def _extract_recency_score(payload: dict[str, Any]) -> float:
+    if any(payload.get(f) is not None for f in _GAME_TIME_FIELDS):
+        return 0.0  # game-time node; can't score against wall clock
     for field in ("occurred_at", "updated_at", "last_graph_updated_at", "created_at"):
         raw_value = payload.get(field)
         if not isinstance(raw_value, str):
@@ -83,9 +91,26 @@ def _extract_recency_score(payload: dict[str, Any]) -> float:
 
 
 def _extract_severity_score(payload: dict[str, Any]) -> float:
-    raw_severity = payload.get("severity")
-    if isinstance(raw_severity, (int, float)):
-        return _normalize_ratio(float(raw_severity) / 100.0)
+    # Direct severity field (Event, Secret)
+    raw = payload.get("severity")
+    if isinstance(raw, (int, float)):
+        return _normalize_ratio(float(raw) / 100.0)
+
+    # Goal urgency (0–100)
+    urgency = payload.get("urgency")
+    if isinstance(urgency, (int, float)):
+        return _normalize_ratio(float(urgency) / 100.0)
+
+    # Belief confidence (0–100)
+    confidence = payload.get("confidence")
+    if isinstance(confidence, (int, float)):
+        return _normalize_ratio(float(confidence) / 100.0)
+
+    # Memory emotional charge (-100 to 100) — use absolute value
+    charge = payload.get("emotional_charge")
+    if isinstance(charge, (int, float)):
+        return _normalize_ratio(abs(float(charge)) / 100.0)
+
     return 0.0
 
 

@@ -1,20 +1,27 @@
 """
-context_builder.py - Orchestrates context merge, relevance scoring, budget enforcement, and serialization.
-
+Module: context_builder
+Layer: retrieval
+Purpose: Orchestrates context merge, relevance scoring, budget enforcement, and serialization.
 Does NOT: call LLM adapters.
-
 Dependencies injected: EmbeddingIndex.
+Used by: engines.dialogue.dialogue_handler
 """
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, Protocol
+import asyncio
+from typing import Protocol
 
 from neo4j import AsyncSession
 
 from npc_engine.config import Settings
-from npc_engine.graph.graph_reader import get_character_with_relations
+from npc_engine.graph.graph_reader import (
+    get_character_with_relations,
+    get_events_for_npc,
+    get_known_event_ids_for_npc,
+    get_location_context,
+    get_npc_location_id,
+)
 from npc_engine.graph.belief_queries import get_beliefs_for_character
 from npc_engine.graph.goal_queries import get_goals_for_character
 from npc_engine.graph.item_queries import get_items_for_character
@@ -23,6 +30,11 @@ from npc_engine.graph.owes_queries import get_debts_for_character
 from npc_engine.graph.memory_queries import get_memories_for_character
 from npc_engine.graph.reputation_queries import get_reputation_context_for_npc
 from npc_engine.retrieval.context_budget_enforcer import ContextCompressionCache, enforce_context_budget
+from npc_engine.retrieval.context_builder_helpers import (
+    enforce_final_serialized_budget_with_context,
+    normalize_ratio,
+    to_json_safe,
+)
 from npc_engine.retrieval.context_merger import ContextItem, MergedContext, merge_context
 from npc_engine.retrieval.context_metrics import (
     CONTEXT_BUDGET_ERRORS_METRIC,
@@ -35,7 +47,7 @@ from npc_engine.retrieval.context_scoring import rank_tier_items
 from npc_engine.retrieval.context_serializer import serialize_context
 from npc_engine.retrieval.context_utils import serialize_json
 from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache
-from npc_engine.retrieval.subgraph_retriever import retrieve_tier_a_context
+from npc_engine.retrieval.subgraph_retriever import assemble_tier_a_context
 from npc_engine.retrieval.vector_store_protocol import VectorSearchResult
 from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.utils.errors import ContextBudgetError
@@ -46,12 +58,18 @@ from npc_engine.world.world_reader import get_world_state
 class EmbeddingIndexProtocol(Protocol):
     """Minimal protocol required by context builder."""
 
-    async def search(self, query: str, top_k: int) -> list[VectorSearchResult]:
+    async def search(
+        self,
+        query: str,
+        top_k: int,
+        filter_ids: set[str] | None = None,
+    ) -> list[VectorSearchResult]:
         """Return top-k semantic retrieval rows.
 
         Args:
             query: Text query to embed and search.
             top_k: Maximum number of results to return.
+            filter_ids: When provided, restrict results to items with these IDs.
 
         Returns:
             List of VectorSearchResult dicts sorted by descending score.
@@ -75,28 +93,8 @@ async def build_serialized_context(
 ) -> str:
     """Build the final serialized prompt context string for one dialogue turn.
 
-    Assembles tier0 (world, emotion), tierA (graph facts, session history),
-    tierB/C (RAG results), applies relevance scoring, budget enforcement,
-    and serializes to JSON.
-
-    Args:
-        session: Active Neo4j async session.
-        settings: Application settings (RAG_TOP_K, PROMPT_TOKEN_BUDGET).
-        llm_config: LLM configuration with tier budgets and relevance weights.
-        embedding_index: Vector index used for RAG retrieval.
-        npc_id: ID of the NPC whose context is being built.
-        player_message: Current player message used as the RAG query.
-        session_turns: Recent dialogue history as serialized strings.
-        emotion_state: Optional emotion snapshot; derived from character payload if omitted.
-        compression_cache: Optional pre-warmed compression cache.
-        context_cache: Optional in-memory dialogue context cache.
-        session_id: Session identifier used as part of the context cache key.
-        skip_rag: When True, skips vector store retrieval entirely.
-        player_id: When provided, player reputation toward the NPC's factions is
-            included in Tier A context if |standing| >= REPUTATION_CONTEXT_THRESHOLD.
-
-    Returns:
-        Compact JSON string ready for prompt injection.
+    Issues graph queries in 3 parallel asyncio.gather stages, applies relevance
+    scoring, budget enforcement, and serializes to compact JSON.
 
     Raises:
         ValueError: If RAG_TOP_K is not greater than 0.
@@ -106,8 +104,13 @@ async def build_serialized_context(
     if settings.RAG_TOP_K <= 0:
         raise ValueError("RAG_TOP_K must be greater than 0")
 
-    world_state = await get_world_state(session=session)
-    character_bundle = await get_character_with_relations(session=session, npc_id=npc_id)
+    # Stage 1: fully independent queries — character bundle, world state, known event IDs
+    character_bundle, world_state, known_event_ids = await asyncio.gather(
+        get_character_with_relations(session=session, npc_id=npc_id),
+        get_world_state(session=session),
+        get_known_event_ids_for_npc(session=session, npc_id=npc_id),
+    )
+
     character_payload = character_bundle.get("character")
     emotion_snapshot = emotion_state or {"current_mood": "neutral"}
     if emotion_state is None and isinstance(character_payload, dict):
@@ -134,113 +137,96 @@ async def build_serialized_context(
             return cached
         increment_metric(metric=CONTEXT_CACHE_MISSES_METRIC, labels={"npc_id": npc_id})
 
+    # Stage 2: location_id + optional vector search in parallel
+    #   Vector search filtered to events this NPC KNOWS_ABOUT (empty set → no filter)
+    rag_filter = known_event_ids if known_event_ids else None
+    if not skip_rag:
+        location_id, tier_b_results = await asyncio.gather(
+            get_npc_location_id(session=session, npc_id=npc_id),
+            embedding_index.search(query=player_message, top_k=settings.RAG_TOP_K, filter_ids=rag_filter),
+        )
+    else:
+        location_id = await get_npc_location_id(session=session, npc_id=npc_id)
+        tier_b_results = []
+
+    # Stage 3: all remaining graph queries in parallel
+    (
+        location_context,
+        events,
+        reputation_items,
+        memories,
+        beliefs,
+        goals,
+        owned_items,
+        secrets,
+        obligations,
+    ) = await asyncio.gather(
+        get_location_context(session=session, location_id=location_id),
+        get_events_for_npc(session=session, npc_id=npc_id, limit=settings.RAG_TOP_K),
+        get_reputation_context_for_npc(
+            session,
+            npc_id=npc_id,
+            player_id=player_id or "",
+            threshold=settings.REPUTATION_CONTEXT_THRESHOLD,
+        ),
+        get_memories_for_character(session, character_id=npc_id, k=3),
+        get_beliefs_for_character(session, character_id=npc_id, k=3),
+        get_goals_for_character(session, character_id=npc_id, k=3, status_filter="active"),
+        get_items_for_character(session, character_id=npc_id, k=10),
+        get_secrets_for_character(session, character_id=npc_id, k=3),
+        get_debts_for_character(session, character_id=npc_id, k=5),
+    )
+
+    # Assemble tiers from pre-fetched data
     tier0 = [
         ContextItem(key="world", text=world_state.model_dump_json(), tier="tier0", priority=100),
         ContextItem(key="emotion", text=serialize_json(emotion_snapshot), tier="tier0", priority=95),
     ]
+
     tier_a_raw = [
         ContextItem(key="session", text=serialize_json(session_turns), tier="tierA", priority=99),
     ]
     tier_a_raw.extend(
-        await retrieve_tier_a_context(
-            session=session,
+        assemble_tier_a_context(
             npc_id=npc_id,
-            event_limit=settings.RAG_TOP_K,
             character_bundle=character_bundle,
+            events=events,
+            location_id=location_id,
+            location_context=location_context,
         )
     )
-    if player_id is not None:
-        reputation_items = await get_reputation_context_for_npc(
-            session,
-            npc_id=npc_id,
-            player_id=player_id,
-            threshold=settings.REPUTATION_CONTEXT_THRESHOLD,
-        )
-        if reputation_items:
-            reputation_lines = [
-                f"Player reputation with {item['faction_name']}: {item['standing']} ({item['label']})"
-                for item in reputation_items
-            ]
-            tier_a_raw.append(
-                ContextItem(
-                    key="reputation",
-                    text=serialize_json(reputation_lines),
-                    tier="tierA",
-                    priority=85,
-                )
-            )
 
-    memories = await get_memories_for_character(session, character_id=npc_id, k=3)
+    if player_id is not None and reputation_items:
+        reputation_lines = [
+            f"Player reputation with {item['faction_name']}: {item['standing']} ({item['label']})"
+            for item in reputation_items
+        ]
+        tier_a_raw.append(
+            ContextItem(
+                key="reputation",
+                text=serialize_json(reputation_lines),
+                tier="tierA",
+                priority=85,
+            )
+        )
+
     if memories:
-        tier_a_raw.append(
-            ContextItem(
-                key="memories",
-                text=serialize_json(memories),
-                tier="tierA",
-                priority=90,
-            )
-        )
-
-    beliefs = await get_beliefs_for_character(session, character_id=npc_id, k=3)
+        tier_a_raw.append(ContextItem(key="memories", text=serialize_json(memories), tier="tierA", priority=90))
     if beliefs:
-        tier_a_raw.append(
-            ContextItem(
-                key="beliefs",
-                text=serialize_json(beliefs),
-                tier="tierA",
-                priority=88,
-            )
-        )
-
-    goals = await get_goals_for_character(session, character_id=npc_id, k=3, status_filter="active")
+        tier_a_raw.append(ContextItem(key="beliefs", text=serialize_json(beliefs), tier="tierA", priority=88))
     if goals:
-        tier_a_raw.append(
-            ContextItem(
-                key="goals",
-                text=serialize_json(goals),
-                tier="tierA",
-                priority=87,
-            )
-        )
-
-    owned_items = await get_items_for_character(session, character_id=npc_id, k=10)
+        tier_a_raw.append(ContextItem(key="goals", text=serialize_json(goals), tier="tierA", priority=87))
     if owned_items:
-        tier_a_raw.append(
-            ContextItem(
-                key="owned_items",
-                text=serialize_json(owned_items),
-                tier="tierA",
-                priority=86,
-            )
-        )
-
-    secrets = await get_secrets_for_character(session, character_id=npc_id, k=3)
+        tier_a_raw.append(ContextItem(key="owned_items", text=serialize_json(owned_items), tier="tierA", priority=86))
     if secrets:
-        tier_a_raw.append(
-            ContextItem(
-                key="secrets",
-                text=serialize_json(secrets),
-                tier="tierA",
-                priority=84,
-            )
-        )
-
-    obligations = await get_debts_for_character(session, character_id=npc_id, k=5)
+        tier_a_raw.append(ContextItem(key="secrets", text=serialize_json(secrets), tier="tierA", priority=84))
     if obligations:
-        tier_a_raw.append(
-            ContextItem(
-                key="obligations",
-                text=serialize_json(obligations),
-                tier="tierA",
-                priority=83,
-            )
-        )
+        tier_a_raw.append(ContextItem(key="obligations", text=serialize_json(obligations), tier="tierA", priority=83))
 
     tier_b_raw: list[ContextItem] = []
     tier_c_raw: list[ContextItem] = []
     vector_scores: dict[str, float] = {}
-    if not skip_rag:
-        tier_b_results = await embedding_index.search(query=player_message, top_k=settings.RAG_TOP_K)
+    if tier_b_results:
         split_index = max(1, len(tier_b_results) // 2) if len(tier_b_results) > 0 else 0
         for index, row in enumerate(tier_b_results):
             item = ContextItem(
@@ -254,7 +240,7 @@ async def build_serialized_context(
             else:
                 tier_c_raw.append(item)
         vector_scores = {
-            f"rag:{row['id']}": _normalize_ratio(float(row.get("score", 0.0)))
+            f"rag:{row['id']}": normalize_ratio(float(row.get("score", 0.0)))
             for row in tier_b_results
         }
 
@@ -273,7 +259,7 @@ async def build_serialized_context(
         increment_metric(metric=CONTEXT_BUDGET_ERRORS_METRIC, labels={"tier": error.tier})
         raise
 
-    final_context, serialized = _enforce_final_serialized_budget_with_context(
+    final_context, serialized = enforce_final_serialized_budget_with_context(
         context=trimmed,
         budget=settings.PROMPT_TOKEN_BUDGET,
     )
@@ -286,76 +272,23 @@ async def build_serialized_context(
     return serialized
 
 
-def _to_json_safe(value: Any) -> Any:
-    """Recursively normalize runtime values to JSON-serializable primitives."""
-
-    if isinstance(value, datetime):
-        return value.isoformat()
-    if isinstance(value, dict):
-        return {str(key): _to_json_safe(val) for key, val in value.items()}
-    if isinstance(value, list):
-        return [_to_json_safe(item) for item in value]
-
-    to_native = getattr(value, "to_native", None)
-    if callable(to_native):
-        try:
-            return _to_json_safe(to_native())
-        except Exception:
-            return str(value)
-
-    return value
+def _to_json_safe(value):
+    """Delegate to the helpers module for backward compatibility."""
+    return to_json_safe(value)
 
 
+# Backward-compatibility shims for tests that import these names directly.
 def _enforce_final_serialized_budget_with_context(context: MergedContext, budget: int) -> tuple[MergedContext, str]:
-    """Trim compressible tiers until the serialized prompt fits within the token budget.
-
-    Args:
-        context: Merged context to trim.
-        budget: Maximum token count for the serialized prompt.
-
-    Returns:
-        Tuple of (final MergedContext, serialized JSON string).
-
-    Raises:
-        ContextBudgetError: If the prompt cannot fit within budget after all compressible items are dropped.
-    """
-
-    from npc_engine.retrieval.context_utils import estimate_tokens
-
-    current = context
-    while True:
-        serialized = serialize_context(context=current)
-        if estimate_tokens(serialized) <= budget:
-            return current, serialized
-
-        removable_candidates = [item for item in current.items if item.tier in {"tierC", "tierB"}]
-        if len(removable_candidates) == 0:
-            used_tokens = estimate_tokens(serialized)
-            raise ContextBudgetError(
-                tier="total_prompt",
-                used_tokens=used_tokens,
-                budget_tokens=budget,
-                detail="Serialized context exceeds total prompt budget after compressible tier trimming.",
-            )
-
-        to_drop = sorted(
-            removable_candidates,
-            key=lambda item: (item.tier != "tierC", item.priority),
-        )[0]
-        current = current.model_copy(
-            update={
-                "items": [item for item in current.items if item.key != to_drop.key],
-            }
-        )
-
-
-def _normalize_ratio(value: float) -> float:
-    return max(0.0, min(1.0, value))
+    return enforce_final_serialized_budget_with_context(context=context, budget=budget)
 
 
 def _enforce_final_serialized_budget(context: MergedContext, budget: int) -> str:
-    _, serialized = _enforce_final_serialized_budget_with_context(context=context, budget=budget)
+    _, serialized = enforce_final_serialized_budget_with_context(context=context, budget=budget)
     return serialized
+
+
+def _normalize_ratio(value: float) -> float:
+    return normalize_ratio(value)
 
 
 def _estimate_tokens(text: str) -> int:

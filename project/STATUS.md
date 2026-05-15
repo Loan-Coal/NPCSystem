@@ -4,7 +4,8 @@
 
 | | |
 |---|---|
-| **Current phase** | Roadmap V2 — Phase 2 Engine Configuration Baseline |
+| **Current phase** | Roadmap V2 — Phase 4 (next) |
+| **Roadmap V2 Phase 3** | ✅ Complete — 7/7 items done, 720 unit tests green |
 | **Roadmap V2 Phase 2** | ✅ Complete — 12/12 items done, 697 unit tests green |
 | **Roadmap V2 Phase 1** | ✅ Complete — 14/14 items done, 695 unit tests green |
 | **Phase 5** | ✅ Complete — 5.1 ✅ (video scenario + DEMO.md) |
@@ -14,7 +15,7 @@
 | **Phase 1** | ✅ Complete — Faction nodes (1.1), Faction-aware gossip (1.2), Faction reputation (1.3) |
 | **Foundation** | ✅ Phase 0 complete — 27 services refactored, all layer violations resolved |
 | **Open issues** | 4 — see [ISSUES.md](ISSUES.md) (all P3, none block Phase 3) |
-| **Next action** | Roadmap V2 Phase 3 — see ROADMAP_V2.md |
+| **Next action** | Roadmap V2 Phase 4 — see ROADMAP_V2.md |
 
 ### CI / Coverage Badges
 

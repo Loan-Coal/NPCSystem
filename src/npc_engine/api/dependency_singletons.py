@@ -119,7 +119,7 @@ def get_embedding_index() -> EmbeddingIndex:
     """
     settings = get_settings()
     vector_store = create_vector_store(settings=settings)
-    return EmbeddingIndex(vector_store=vector_store)
+    return EmbeddingIndex(vector_store=vector_store, model_name=settings.EMBEDDING_MODEL)
 
 
 @lru_cache

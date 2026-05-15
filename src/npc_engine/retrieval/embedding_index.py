@@ -1,39 +1,39 @@
 """
-embedding_index.py - Indexes text snippets and retrieves semantically similar entries.
-
+Module: embedding_index
+Layer: retrieval
+Purpose: Indexes text snippets and retrieves semantically similar entries.
 Does NOT: persist vectors outside selected vector store backend.
-
 Dependencies injected: VectorStoreProtocol.
+Used by: retrieval.context_builder, engines.gossip.gossip_handler, engines.events.event_handler.
 """
+
+from __future__ import annotations
 
 from npc_engine.retrieval.vector_store_protocol import VectorSearchResult, VectorStoreProtocol
 
+EMBED_DIMENSION = 384  # all-MiniLM-L6-v2 output dimension
 
-EMBED_DIMENSION = 16
 
-
-def _embed_text(text: str) -> list[float]:
-    vector = [0.0] * EMBED_DIMENSION
+def _embed_text(text: str, model_name: str) -> list[float]:
     if text == "":
-        return vector
-    for index, char in enumerate(text):
-        slot = index % EMBED_DIMENSION
-        vector[slot] += float(ord(char) % 101)
-    scale = float(max(1, len(text)))
-    return [value / scale for value in vector]
+        return [0.0] * EMBED_DIMENSION
+    from npc_engine.retrieval.sentence_encoder import embed
+    return embed(text, model_name=model_name)
 
 
 class EmbeddingIndex:
     """Thin embedding layer over a vector store backend."""
 
-    def __init__(self, vector_store: VectorStoreProtocol) -> None:
+    def __init__(self, vector_store: VectorStoreProtocol, model_name: str) -> None:
         """Initialise the index backed by the given vector store.
 
         Args:
             vector_store: Backend store implementing VectorStoreProtocol.
+            model_name: HuggingFace model identifier for embedding (e.g. "all-MiniLM-L6-v2").
         """
 
         self._vector_store = vector_store
+        self._model_name = model_name
 
     async def upsert(self, item_id: str, text: str, payload: dict) -> None:
         """Embed text and upsert into the vector store.
@@ -44,15 +44,23 @@ class EmbeddingIndex:
             payload: Arbitrary metadata stored alongside the embedding.
         """
 
-        vector = _embed_text(text)
+        vector = _embed_text(text, self._model_name)
         await self._vector_store.upsert(item_id=item_id, vector=vector, payload=payload)
 
-    async def search(self, query: str, top_k: int) -> list[VectorSearchResult]:
+    async def search(
+        self,
+        query: str,
+        top_k: int,
+        filter_ids: set[str] | None = None,
+    ) -> list[VectorSearchResult]:
         """Return up to top_k results nearest to the embedded query.
 
         Args:
             query: Text to embed and use as the search query.
             top_k: Maximum number of results; must be greater than 0.
+            filter_ids: When provided, only results whose id is in this set are returned.
+                Filtering is applied after retrieval, so top_k results are fetched first
+                then filtered; the final list may be shorter than top_k.
 
         Returns:
             List of VectorSearchResult dicts sorted by descending similarity score.
@@ -63,8 +71,11 @@ class EmbeddingIndex:
 
         if top_k <= 0:
             raise ValueError("top_k must be greater than 0")
-        query_vector = _embed_text(query)
-        return await self._vector_store.search(query_vector=query_vector, top_k=top_k)
+        query_vector = _embed_text(query, self._model_name)
+        results = await self._vector_store.search(query_vector=query_vector, top_k=top_k)
+        if filter_ids is not None:
+            results = [r for r in results if r["id"] in filter_ids]
+        return results[:top_k]
 
     async def invalidate(self, item_id: str) -> None:
         """Remove one indexed entry from the vector store.

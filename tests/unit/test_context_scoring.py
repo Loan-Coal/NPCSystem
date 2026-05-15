@@ -225,3 +225,69 @@ def test_rank_tier_items_empty_list():
     with patch("npc_engine.retrieval.context_scoring.rank_context_candidates", return_value=[]):
         result = rank_tier_items(items=[], llm_config=cfg, vector_scores={})
     assert result == []
+
+
+# ---------------------------------------------------------------------------
+# 3.2 — game-time field guard in _extract_recency_score
+# ---------------------------------------------------------------------------
+
+
+def test_extract_recency_score_returns_zero_for_game_time_created_at():
+    payload = {
+        "created_at_game_time": "Year 5, Day 12",
+        "occurred_at": datetime.now(timezone.utc).isoformat(),
+    }
+    assert _extract_recency_score(payload) == 0.0
+
+
+def test_extract_recency_score_returns_zero_for_game_time_occurred_at():
+    payload = {"occurred_at_game_time": "Season 3"}
+    assert _extract_recency_score(payload) == 0.0
+
+
+def test_extract_recency_score_not_blocked_when_no_game_time_fields():
+    recent = datetime.now(timezone.utc).isoformat()
+    payload = {"occurred_at": recent}
+    assert _extract_recency_score(payload) > 0.9
+
+
+# ---------------------------------------------------------------------------
+# 3.3 — urgency / confidence / emotional_charge fallbacks in _extract_severity_score
+# ---------------------------------------------------------------------------
+
+
+def test_extract_severity_score_urgency():
+    assert _extract_severity_score({"urgency": 80}) == pytest.approx(0.8)
+
+
+def test_extract_severity_score_urgency_zero():
+    assert _extract_severity_score({"urgency": 0}) == 0.0
+
+
+def test_extract_severity_score_confidence():
+    assert _extract_severity_score({"confidence": 60}) == pytest.approx(0.6)
+
+
+def test_extract_severity_score_emotional_charge_positive():
+    assert _extract_severity_score({"emotional_charge": 70}) == pytest.approx(0.7)
+
+
+def test_extract_severity_score_emotional_charge_negative():
+    # Absolute value is used, so -70 → 0.7
+    assert _extract_severity_score({"emotional_charge": -70}) == pytest.approx(0.7)
+
+
+def test_extract_severity_score_severity_takes_precedence_over_urgency():
+    # severity field wins when present
+    payload = {"severity": 40, "urgency": 90}
+    assert _extract_severity_score(payload) == pytest.approx(0.4)
+
+
+def test_extract_severity_score_urgency_takes_precedence_over_confidence():
+    payload = {"urgency": 50, "confidence": 90}
+    assert _extract_severity_score(payload) == pytest.approx(0.5)
+
+
+def test_extract_severity_score_confidence_takes_precedence_over_emotional_charge():
+    payload = {"confidence": 30, "emotional_charge": 90}
+    assert _extract_severity_score(payload) == pytest.approx(0.3)
