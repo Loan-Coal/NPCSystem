@@ -26,6 +26,7 @@ from npc_engine.engines.routine.routine_queries import set_routine_override
 from npc_engine.graph.event_writer import upsert_event
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
 from npc_engine.type_registry.contracts import TypeRegistry
+from npc_engine.type_registry.node_validator import validate_node_write
 from npc_engine.world.world_reader import get_world_state
 from npc_engine.world.world_state import WorldState
 
@@ -157,19 +158,20 @@ class EventHandler:
 
             location_id = scoped_locations[0]
             event_id = str(uuid4())
-            event_model = self._registry.node_models["event"]
             now = datetime.now(timezone.utc).isoformat()
-            event = event_model(
-                id=event_id,
-                summary=template.summary_template,
-                severity=template.severity,
-                location_id=location_id,
-                occurred_at=now,
-                tick_id=tick_id,
-                event_type=template.event_type,
-                is_public=True,
-                last_graph_updated_at=now,
-            )
+            raw_props = {
+                "id": event_id,
+                "summary": template.summary_template,
+                "severity": template.severity,
+                "location_id": location_id,
+                "occurred_at": now,
+                "tick_id": tick_id,
+                "event_type": template.event_type,
+                "is_public": True,
+                "last_graph_updated_at": now,
+            }
+            validated_props = validate_node_write(self._registry, "event", raw_props)
+            event = self._registry.node_models["event"](**validated_props)
             tx = await session.begin_transaction()
             async with tx:
                 await upsert_event(tx=tx, event=event)

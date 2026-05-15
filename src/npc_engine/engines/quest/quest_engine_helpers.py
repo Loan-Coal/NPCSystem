@@ -14,6 +14,7 @@ from neo4j import AsyncSession
 
 from npc_engine.engines.quest.models import QuestRewardItem, QuestTransitionMeta
 from npc_engine.type_registry.contracts import TypeRegistry
+from npc_engine.type_registry.node_validator import validate_node_write
 from npc_engine.utils.errors import QuestTransitionError
 
 
@@ -90,27 +91,28 @@ def build_lifecycle_event(
     """
 
     now = datetime.now(timezone.utc)
-    event_model = registry.node_models["event"]
-    return event_model(
-        id=f"{quest_id}:{player_id}:{event_type}:{meta.request_id}",
-        summary=summary,
-        severity=20,
-        location_id="quest",
-        occurred_at=now.isoformat(),
-        tick_id=int(now.timestamp()),
-        event_type=event_type,
-        is_public=True,
-        producer="quest_lifecycle_engine",
-        origin_engine="quest",
-        schema_version="v1.4",
-        last_graph_updated_at=now.isoformat(),
-        provenance={
+    raw_props = {
+        "id": f"{quest_id}:{player_id}:{event_type}:{meta.request_id}",
+        "summary": summary,
+        "severity": 20,
+        "location_id": "quest",
+        "occurred_at": now.isoformat(),
+        "tick_id": int(now.timestamp()),
+        "event_type": event_type,
+        "is_public": True,
+        "producer": "quest_lifecycle_engine",
+        "origin_engine": "quest",
+        "schema_version": "v1.4",
+        "last_graph_updated_at": now.isoformat(),
+        "provenance": {
             "request_id": meta.request_id,
             "idempotency_key": meta.idempotency_key,
             "idempotency_request_hash": meta.idempotency_request_hash,
             "actor_id": meta.actor_id,
             "reason": meta.reason,
         },
-    )
+    }
+    validated_props = validate_node_write(registry, "event", raw_props)
+    return registry.node_models["event"](**validated_props)
 
 

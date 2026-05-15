@@ -9,7 +9,7 @@ Used by: api.dependencies.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from npc_engine.config import Settings
 from npc_engine.engines.llm.llama_adapter import LlamaAdapter
@@ -20,6 +20,14 @@ from npc_engine.engines.llm.protocols import LLMClientProtocol
 
 if TYPE_CHECKING:
     from npc_engine.engines.llm_config_models import EngineModelConfig
+
+
+_REGISTRY: dict[str, Callable[..., LLMClientProtocol]] = {}
+
+
+def register_backend(name: str, constructor: Callable[..., LLMClientProtocol]) -> None:
+    """Register a backend constructor under the given name."""
+    _REGISTRY[name] = constructor
 
 
 def create_llm_client_for_engine(
@@ -45,32 +53,47 @@ def create_llm_client_for_engine(
             a required URL setting is missing.
     """
     backend = engine_config.llm.backend
-    model = engine_config.llm.model
+    constructor = _REGISTRY.get(backend)
+    if constructor is None:
+        raise ValueError(f"Unsupported LLM backend: {backend!r}")
+    return constructor(engine_config=engine_config, settings=settings)
 
-    if backend == "mock":
-        return MockLLMAdapter()
-    if backend == "mistral7b":
-        if settings.MISTRAL_API_URL is None:
-            raise ValueError("MISTRAL_API_URL is required for mistral7b backend")
-        return MistralAdapter(
-            base_url=settings.MISTRAL_API_URL,
-            model_name=model,
-            timeout_seconds=settings.LLM_TIMEOUT_SECONDS,
-        )
-    if backend == "llama8b":
-        if settings.LLAMA_API_URL is None:
-            raise ValueError("LLAMA_API_URL is required for llama8b backend")
-        return LlamaAdapter(
-            base_url=settings.LLAMA_API_URL,
-            model_name=model,
-            timeout_seconds=settings.LLM_TIMEOUT_SECONDS,
-        )
-    if backend == "ollama":
-        if settings.OLLAMA_API_URL.strip() == "":
-            raise ValueError("OLLAMA_API_URL is required for ollama backend")
-        return OllamaAdapter(
-            base_url=settings.OLLAMA_API_URL,
-            model_name=model,
-            timeout_seconds=settings.LLM_TIMEOUT_SECONDS,
-        )
-    raise ValueError(f"Unsupported backend declared in engine config: {backend}")
+
+def _build_mock(engine_config: EngineModelConfig, settings: Settings) -> LLMClientProtocol:
+    return MockLLMAdapter()
+
+
+def _build_mistral7b(engine_config: EngineModelConfig, settings: Settings) -> LLMClientProtocol:
+    if settings.MISTRAL_API_URL is None:
+        raise ValueError("MISTRAL_API_URL is required for mistral7b backend")
+    return MistralAdapter(
+        base_url=settings.MISTRAL_API_URL,
+        model_name=engine_config.llm.model,
+        timeout_seconds=settings.LLM_TIMEOUT_SECONDS,
+    )
+
+
+def _build_llama8b(engine_config: EngineModelConfig, settings: Settings) -> LLMClientProtocol:
+    if settings.LLAMA_API_URL is None:
+        raise ValueError("LLAMA_API_URL is required for llama8b backend")
+    return LlamaAdapter(
+        base_url=settings.LLAMA_API_URL,
+        model_name=engine_config.llm.model,
+        timeout_seconds=settings.LLM_TIMEOUT_SECONDS,
+    )
+
+
+def _build_ollama(engine_config: EngineModelConfig, settings: Settings) -> LLMClientProtocol:
+    if settings.OLLAMA_API_URL.strip() == "":
+        raise ValueError("OLLAMA_API_URL is required for ollama backend")
+    return OllamaAdapter(
+        base_url=settings.OLLAMA_API_URL,
+        model_name=engine_config.llm.model,
+        timeout_seconds=settings.LLM_TIMEOUT_SECONDS,
+    )
+
+
+register_backend("mock", _build_mock)
+register_backend("mistral7b", _build_mistral7b)
+register_backend("llama8b", _build_llama8b)
+register_backend("ollama", _build_ollama)

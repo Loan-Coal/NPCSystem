@@ -36,8 +36,6 @@ _PROMPT_PATH = (
 
 _VIVIDNESS = 75
 _EMOTIONAL_CHARGE = 0
-_MAX_TOKENS = 300
-_TEMPERATURE = 0.4
 
 
 class MemoryConsolidationEngine:
@@ -54,6 +52,8 @@ class MemoryConsolidationEngine:
         llm_client: LLMClientProtocol,
         turn_threshold: int,
         clear_turns_after: bool = False,
+        max_tokens: int = 300,
+        temperature: float = 0.4,
     ) -> None:
         """Initialise the memory consolidation engine.
 
@@ -62,11 +62,15 @@ class MemoryConsolidationEngine:
             llm_client: LLM adapter for generating the summary paragraph.
             turn_threshold: Minimum turn count before consolidation triggers.
             clear_turns_after: When True, clears consolidated turns from the store.
+            max_tokens: Maximum tokens to generate in the summarisation call.
+            temperature: Sampling temperature for the summarisation call.
         """
         self._session_store = session_store
         self._llm_client = llm_client
         self._turn_threshold = turn_threshold
         self._clear_turns = clear_turns_after
+        self._max_tokens = max_tokens
+        self._temperature = temperature
         prompt_data = load_yaml_mapping(_PROMPT_PATH, "consolidation_v1.yaml must have a mapping root")
         self._system_prompt: str = prompt_data["system"]
         self._user_template: str = prompt_data["user_template"]
@@ -103,8 +107,8 @@ class MemoryConsolidationEngine:
         try:
             summary = await self._llm_client.generate(
                 prompt=user_message,
-                max_tokens=_MAX_TOKENS,
-                temperature=_TEMPERATURE,
+                max_tokens=self._max_tokens,
+                temperature=self._temperature,
                 system=self._system_prompt,
             )
         except Exception:

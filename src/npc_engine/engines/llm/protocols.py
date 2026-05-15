@@ -94,6 +94,13 @@ class LLMClientProtocol(Protocol):
             LLMRequestError: If the backend returns a stream error.
         """
 
+    async def health_check(self) -> bool:
+        """Return True if the backend is reachable and ready. Non-raising.
+
+        Returns:
+            True if the backend responded successfully, False on any error.
+        """
+
     def model_name(self) -> str:
         """Return backend model identifier.
 

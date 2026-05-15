@@ -11,6 +11,7 @@ from neo4j import AsyncSession
 import asyncio
 from collections.abc import Awaitable, Callable
 
+from npc_engine.engines.base_engine import BaseEngine
 from npc_engine.scheduler.game_clock import ClockState, GameClock
 from npc_engine.scheduler.tick_lease import TickLeaseRepository, TickLeaseRepositoryProtocol
 from npc_engine.world.time_utils import TimePoint
@@ -40,15 +41,15 @@ class TickScheduler:
     def __init__(
         self,
         clock: GameClock,
-        gossip_handler: object,
-        event_handler: object,
+        gossip_handler: BaseEngine,
+        event_handler: BaseEngine,
         gossip_interval: int,
         event_interval: int,
         *,
-        routine_engine: object = None,
-        faction_politics_engine: object = None,
-        story_pacing_engine: object = None,
-        memory_consolidation_engine: object = None,
+        routine_engine: BaseEngine | None = None,
+        faction_politics_engine: BaseEngine | None = None,
+        story_pacing_engine: BaseEngine | None = None,
+        memory_consolidation_engine: BaseEngine | None = None,
         consolidation_advance_interval: int = 1,
         distributed_lease_enabled: bool = False,
         scheduler_id: str = "main",

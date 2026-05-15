@@ -29,6 +29,23 @@ class OllamaAdapter(LLMClientProtocol):
         self._base_url = base_url.rstrip("/")
         self._model_name = model_name
         self._timeout_seconds = timeout_seconds
+        self._client = httpx.AsyncClient(timeout=timeout_seconds)
+
+    async def close(self) -> None:
+        """Release the shared HTTP client. Call at application shutdown."""
+        await self._client.aclose()
+
+    async def health_check(self) -> bool:
+        """Return True if the Ollama backend is reachable. Non-raising.
+
+        Returns:
+            True if the /api/tags endpoint responds with HTTP 200, False otherwise.
+        """
+        try:
+            response = await self._client.get(f"{self._base_url}/api/tags", timeout=5.0)
+            return response.status_code == 200
+        except Exception:
+            return False
 
     async def generate(
         self,
@@ -69,9 +86,8 @@ class OllamaAdapter(LLMClientProtocol):
         if system is not None:
             payload["system"] = system
         try:
-            async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
-                response = await client.post(f"{self._base_url}/api/generate", json=payload)
-                response.raise_for_status()
+            response = await self._client.post(f"{self._base_url}/api/generate", json=payload)
+            response.raise_for_status()
         except httpx.TimeoutException as error:
             raise LLMTimeoutError(model=self.model_name(), timeout_s=self._timeout_seconds) from error
         except httpx.HTTPStatusError as error:
@@ -128,9 +144,8 @@ class OllamaAdapter(LLMClientProtocol):
         if system is not None:
             payload["system"] = system
         try:
-            async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
-                response = await client.post(f"{self._base_url}/api/generate", json=payload)
-                response.raise_for_status()
+            response = await self._client.post(f"{self._base_url}/api/generate", json=payload)
+            response.raise_for_status()
         except httpx.TimeoutException as error:
             raise LLMTimeoutError(model=self.model_name(), timeout_s=self._timeout_seconds) from error
         except httpx.HTTPStatusError as error:
@@ -189,24 +204,23 @@ class OllamaAdapter(LLMClientProtocol):
         if system is not None:
             payload["system"] = system
         try:
-            async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
-                async with client.stream("POST", f"{self._base_url}/api/generate", json=payload) as response:
-                    response.raise_for_status()
-                    async for line in response.aiter_lines():
-                        if line.strip() == "":
-                            continue
-                        try:
-                            chunk = json.loads(line)
-                        except ValueError:
-                            continue
-                        if not isinstance(chunk, dict):
-                            continue
-                        if "error" in chunk:
-                            raise LLMRequestError(model=self.model_name(), detail=f"stream_backend_error:{chunk['error']}")
-                        token = str(chunk.get("response", ""))
-                        if token != "":
-                            yield token
-                    return
+            async with self._client.stream("POST", f"{self._base_url}/api/generate", json=payload) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if line.strip() == "":
+                        continue
+                    try:
+                        chunk = json.loads(line)
+                    except ValueError:
+                        continue
+                    if not isinstance(chunk, dict):
+                        continue
+                    if "error" in chunk:
+                        raise LLMRequestError(model=self.model_name(), detail=f"stream_backend_error:{chunk['error']}")
+                    token = str(chunk.get("response", ""))
+                    if token != "":
+                        yield token
+                return
         except httpx.TimeoutException as error:
             raise LLMTimeoutError(model=self.model_name(), timeout_s=self._timeout_seconds) from error
         except httpx.HTTPError as error:

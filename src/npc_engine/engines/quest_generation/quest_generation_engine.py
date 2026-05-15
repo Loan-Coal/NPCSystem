@@ -25,8 +25,11 @@ from neo4j import AsyncSession
 
 from npc_engine.world.world_reader import get_world_state
 
+from pydantic import ValidationError
+
 from npc_engine.common.yaml_utils import load_yaml_mapping
 from npc_engine.engines.llm.protocols import LLMClientProtocol
+from npc_engine.utils.errors import LLMRequestError, LLMTimeoutError
 from npc_engine.engines.quest_generation.slot_models import (
     GeneratedQuest,
     QuestTemplateRecord,
@@ -56,6 +59,7 @@ class QuestGenerationEngine:
         llm_client: LLMClientProtocol,
         templates: list[QuestTemplateRecord],
         prompts_dir: Path,
+        max_tokens: int = 256,
     ) -> None:
         """Initialise the quest generation engine.
 
@@ -63,9 +67,11 @@ class QuestGenerationEngine:
             llm_client: LLM adapter for slot-fill and flavor text generation.
             templates: Pre-loaded quest template records.
             prompts_dir: Path to the quest_generation prompts directory.
+            max_tokens: Maximum tokens to generate in LLM calls (sourced from llm_config.yaml).
         """
         self._llm = llm_client
         self._templates = templates
+        self._max_tokens = max_tokens
         self._slot_fill_prompt = _load_prompt(prompts_dir / "slot_fill_v1.yaml")
         self._flavor_prompt = _load_prompt(prompts_dir / "flavor_v1.yaml")
 
@@ -205,12 +211,15 @@ class QuestGenerationEngine:
             result = await self._llm.generate_structured(
                 prompt=user_prompt,
                 schema=schema,
-                max_tokens=256,
+                max_tokens=self._max_tokens,
                 system=system,
             )
             return {str(k): str(v) for k, v in result.items() if isinstance(v, str)}
-        except Exception:
-            _logger.exception("LLM slot-fill call failed")
+        except (LLMTimeoutError, LLMRequestError) as error:
+            _logger.warning("LLM error during slot fill: %s", error)
+            return {}
+        except ValidationError as error:
+            _logger.warning("Schema validation error during slot fill: %s", error)
             return {}
 
     async def _generate_flavor(
@@ -239,12 +248,15 @@ class QuestGenerationEngine:
             result = await self._llm.generate_structured(
                 prompt=user_prompt,
                 schema=schema,
-                max_tokens=256,
+                max_tokens=self._max_tokens,
                 system=system,
             )
             return str(result.get("description") or default_description)
-        except Exception:
-            _logger.warning("LLM flavor generation failed; using template default")
+        except (LLMTimeoutError, LLMRequestError) as error:
+            _logger.warning("LLM error during flavor generation: %s", error)
+            return default_description
+        except ValidationError as error:
+            _logger.warning("Schema validation error during flavor generation: %s", error)
             return default_description
 
     async def _get_candidates(

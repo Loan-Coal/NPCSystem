@@ -1,0 +1,18 @@
+name: memory_consolidation_engine
+version: v1.0.0
+uses_llm: true
+inputs:
+  - npc_id
+  - game_time
+outputs:
+  - memory_id
+side_effects:
+  - memory_node_created
+idempotency:
+  key_required: false
+  replay_behavior: generate_new
+auth_scope: graph_write
+error_contract:
+  - CONSOLIDATION_LLM_ERROR
+tests:
+  - test_memory_consolidation_engine

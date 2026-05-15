@@ -17,5 +17,4 @@ fallback:
     - deterministic
 timeouts_ms:
   full: 30000
-  graph_only: 10000
-  canned: 100
+  deterministic: 100

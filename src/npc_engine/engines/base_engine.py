@@ -6,11 +6,16 @@ Does NOT: implement domain-specific engine behavior.
 Dependencies injected: None.
 """
 
-from typing import Protocol
+from typing import Any, Protocol
 
 
 class BaseEngine(Protocol):
-    """Protocol for tick-driven engines."""
+    """Structural protocol for session-scoped tick-driven engines.
 
-    async def tick(self, tick_id: int) -> None:
-        """Execute one engine tick."""
+    All concrete engines implement ``run_tick`` with varying keyword arguments
+    (session, tick_id, game_time, time_of_day, etc.). This protocol captures the
+    common structural marker — the method name — without enforcing a specific
+    signature, since each engine's required parameters differ.
+    """
+
+    async def run_tick(self, *args: Any, **kwargs: Any) -> dict: ...

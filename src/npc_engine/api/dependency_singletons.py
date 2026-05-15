@@ -45,9 +45,27 @@ from npc_engine.schema.schema_loader import load_game_schema
 from npc_engine.schema.schema_models import SchemaConfig
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.type_registry.registry import build_type_registry
+from npc_engine.engines.llm.factory import create_llm_client_for_engine
 
 
 REGISTRY_SOURCES_SEPARATOR = ","
+
+# LLM adapters registered here are closed on application shutdown via close_registered_llm_adapters().
+_llm_adapters_to_close: list = []
+
+
+def _register_adapter(adapter: object) -> object:
+    """Register an LLM adapter for teardown and return it unchanged."""
+    _llm_adapters_to_close.append(adapter)
+    return adapter
+
+
+async def close_registered_llm_adapters() -> None:
+    """Close all registered LLM adapters; called from lifespan teardown."""
+    for adapter in _llm_adapters_to_close:
+        if hasattr(adapter, "close"):
+            await adapter.close()
+    _llm_adapters_to_close.clear()
 
 
 @lru_cache
@@ -184,9 +202,8 @@ def get_quest_generation_engine() -> QuestGenerationEngine:
     Returns:
         QuestGenerationEngine wired to the shared LLM client and bundled templates.
     """
-    from npc_engine.engines.llm.factory import create_llm_client_for_engine
     engine_config = get_engine_model_config_for("quest_generation")
-    llm_client = create_llm_client_for_engine(engine_config, get_settings())
+    llm_client = _register_adapter(create_llm_client_for_engine(engine_config, get_settings()))
     prompts_dir = Path(__file__).resolve().parent.parent / "prompts" / "quest_generation"
     templates_dir = prompts_dir / "templates"
     templates = load_templates(templates_dir)
@@ -194,6 +211,7 @@ def get_quest_generation_engine() -> QuestGenerationEngine:
         llm_client=llm_client,
         templates=templates,
         prompts_dir=prompts_dir,
+        max_tokens=engine_config.llm.max_tokens,
     )
 
 
@@ -383,23 +401,21 @@ def get_context_cache() -> DialogueContextCache:
 
 @lru_cache
 def get_memory_consolidation_engine():
-    """Create provisional singleton for the memory consolidation engine.
-
-    Uses dialogue's LLM adapter until Phase 2.1 creates engines/memory_consolidation/llm_config.yaml
-    and Phase 2.2 replaces this with a properly-configured singleton.
+    """Create singleton for the memory consolidation engine using its own LLM config.
 
     Returns:
-        MemoryConsolidationEngine configured with dialogue's LLM adapter as a provisional backend.
+        MemoryConsolidationEngine configured from engines/memory_consolidation/llm_config.yaml.
     """
     from npc_engine.engines.memory_consolidation.memory_consolidation_engine import MemoryConsolidationEngine
-    from npc_engine.engines.llm.factory import create_llm_client_for_engine
 
     settings = get_settings()
-    engine_config = get_engine_model_config_for("dialogue")
-    llm_client = create_llm_client_for_engine(engine_config, settings)
+    engine_config = get_engine_model_config_for("memory_consolidation")
+    llm_client = _register_adapter(create_llm_client_for_engine(engine_config, settings))
     return MemoryConsolidationEngine(
         session_store=get_session_store(),
         llm_client=llm_client,
         turn_threshold=5,
         clear_turns_after=False,
+        max_tokens=engine_config.llm.max_tokens,
+        temperature=engine_config.llm.temperature,
     )

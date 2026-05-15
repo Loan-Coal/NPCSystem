@@ -28,6 +28,19 @@ class MistralAdapter(LLMClientProtocol):
         self._base_url = base_url
         self._model_name = model_name
         self._timeout_seconds = timeout_seconds
+        self._client = httpx.AsyncClient(timeout=timeout_seconds)
+
+    async def close(self) -> None:
+        """Release the shared HTTP client. Call at application shutdown."""
+        await self._client.aclose()
+
+    async def health_check(self) -> bool:
+        """Return True — Mistral is an external service checked at startup. Non-raising.
+
+        Returns:
+            Always True; Mistral availability is validated via configuration.
+        """
+        return True
 
     async def generate(
         self,
@@ -62,9 +75,8 @@ class MistralAdapter(LLMClientProtocol):
         if stop_sequences is not None:
             payload["stop_sequences"] = stop_sequences
         try:
-            async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
-                response = await client.post(f"{self._base_url}/generate", json=payload)
-                response.raise_for_status()
+            response = await self._client.post(f"{self._base_url}/generate", json=payload)
+            response.raise_for_status()
         except httpx.TimeoutException as error:
             raise LLMTimeoutError(model=self.model_name(), timeout_s=self._timeout_seconds) from error
         except httpx.HTTPStatusError as error:
@@ -110,9 +122,8 @@ class MistralAdapter(LLMClientProtocol):
         if stop_sequences is not None:
             payload["stop_sequences"] = stop_sequences
         try:
-            async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
-                response = await client.post(f"{self._base_url}/generate_structured", json=payload)
-                response.raise_for_status()
+            response = await self._client.post(f"{self._base_url}/generate_structured", json=payload)
+            response.raise_for_status()
         except httpx.TimeoutException as error:
             raise LLMTimeoutError(model=self.model_name(), timeout_s=self._timeout_seconds) from error
         except httpx.HTTPStatusError as error:
@@ -160,13 +171,12 @@ class MistralAdapter(LLMClientProtocol):
         if stop_sequences is not None:
             payload["stop_sequences"] = stop_sequences
         try:
-            async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
-                async with client.stream("POST", f"{self._base_url}/stream", json=payload) as response:
-                    response.raise_for_status()
-                    async for chunk in response.aiter_text():
-                        if chunk != "":
-                            yield chunk
-                    return
+            async with self._client.stream("POST", f"{self._base_url}/stream", json=payload) as response:
+                response.raise_for_status()
+                async for chunk in response.aiter_text():
+                    if chunk != "":
+                        yield chunk
+                return
         except httpx.TimeoutException as error:
             raise LLMTimeoutError(model=self.model_name(), timeout_s=self._timeout_seconds) from error
         except httpx.HTTPError as error:

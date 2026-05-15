@@ -43,18 +43,26 @@ from npc_engine.api.routes.system import admin_router as system_admin_router
 from npc_engine.api.routes.system import router as system_router
 from npc_engine.auth.middleware import ApiKeyMiddleware
 from npc_engine.api.dependency_singletons import (
+    close_registered_llm_adapters,
     get_dialogue_engine_model_config,
     get_embedding_index,
+    get_faction_politics_engine,
     get_game_schema,
     get_graph_db,
     get_idempotency_service,
     get_llm_config,
     get_memory_consolidation_engine,
+    get_pricing_engine,
+    get_quest_generation_engine,
     get_redis_runtime,
+    get_routine_engine,
+    get_story_pacing_engine,
+    get_trade_engine,
     get_type_registry,
 )
 from npc_engine.config import get_settings
 from npc_engine.engines.contracts.contract_loader import load_engine_contracts
+from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm_config_loader import validate_all_engine_llm_configs
 from npc_engine.engines.idempotency.cleanup_scheduler import IdempotencyCleanupScheduler
 from npc_engine.retrieval.embedding_reconciler import EmbeddingReconciler
@@ -73,6 +81,12 @@ async def lifespan(_app: FastAPI):
     idempotency_cleanup_task: asyncio.Task[None] | None = None
     connected = False
     try:
+        get_faction_politics_engine.cache_clear()
+        get_story_pacing_engine.cache_clear()
+        get_pricing_engine.cache_clear()
+        get_trade_engine.cache_clear()
+        get_quest_generation_engine.cache_clear()
+        get_routine_engine.cache_clear()
         get_game_schema.cache_clear()
         get_game_schema()
         get_memory_consolidation_engine.cache_clear()
@@ -101,9 +115,17 @@ async def lifespan(_app: FastAPI):
             dialogue_engine_config.llm.backend,
             dialogue_engine_config.llm.model,
         )
+        get_faction_politics_engine()
+        get_story_pacing_engine()
+        get_quest_generation_engine()
         await graph_db.connect()
         connected = True
         await redis_runtime.connect()
+        _dialogue_probe_adapter = create_llm_client_for_engine(
+            engine_config=dialogue_engine_config, settings=settings
+        )
+        if not await _dialogue_probe_adapter.health_check():
+            _logger.warning("LLM backend health check failed — starting degraded")
         if settings.DISTRIBUTED_TICK_LEASE_ENABLED:
             async with graph_db.get_session() as session:
                 lease_repo = TickLeaseRepository(
@@ -138,6 +160,7 @@ async def lifespan(_app: FastAPI):
             reconciler_task.cancel()
             with suppress(asyncio.CancelledError):
                 await reconciler_task
+        await close_registered_llm_adapters()
         await redis_runtime.close()
         if connected:
             await graph_db.close()

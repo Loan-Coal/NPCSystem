@@ -16,6 +16,30 @@ This file tracks iterative implementation for PROJECT_PLAN_v1.4.xml and supports
 
 ## Stages
 
+### Roadmap V2 Phase 2 — Engine Configuration Baseline
+Status: DONE
+Started: 2026-05-15
+Completed: 2026-05-15
+Tests: 697 passed, 17 skipped, 0 failed
+Items: 12/12 complete
+
+- [x] 2.1 memory_consolidation llm_config.yaml + contract YAML; removed module-level constants; added max_tokens/temperature params to engine __init__
+- [x] 2.2 Fixed get_memory_consolidation_engine singleton — was using dialogue config; now uses memory_consolidation
+- [x] 2.3 Fixed EngineTimeoutsMs schema — removed strict=True; added deterministic optional field; fixed quest_generation llm_config.yaml lying fields
+- [x] 2.4 Added cache_clear for all 6 rules-based engines in lifespan; added autouse conftest.py fixture for test isolation; added fail-fast warm-up calls
+- [x] 2.5 Injected max_tokens from llm_config into QuestGenerationEngine; replaced hardcoded 256
+- [x] 2.6 Replaced bare except Exception in QuestGenerationEngine with LLMTimeoutError/LLMRequestError/ValidationError catches
+- [x] 2.7 Shared httpx.AsyncClient per adapter (OllamaAdapter, MistralAdapter) — close() method added; teardown registry in dependency_singletons.py
+- [x] 2.8 health_check() added to all adapters; /readiness endpoint in system.py; LLM probe at lifespan startup
+- [x] 2.9 node_validator.py created; validate_node_write wired into EventHandler.run_tick and build_lifecycle_event (quest_engine_helpers.py)
+- [x] 2.10 Factory plugin registry — _REGISTRY dict + register_backend() + wrapper functions; replaced if/elif chain in factory.py
+- [x] 2.11 BaseEngine protocol updated to use run_tick (was tick); TickScheduler type hints updated from object to BaseEngine
+- [x] 2.12 Circular import resolved — create_llm_client_for_engine moved to module-level import in dependency_singletons.py (no actual cycle existed)
+
+Notes: Iterative — pytest run after each group. Groups: A (schema/config), B (singleton/cache), C (quest gen), D (http/health), E (arch), F (type system)
+
+---
+
 ### Roadmap V2 Phase 1 — Critical Structural Fixes
 Status: DONE
 Started: 2026-05-14

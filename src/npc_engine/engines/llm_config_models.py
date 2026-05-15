@@ -53,10 +53,11 @@ class EngineTimeoutsMs(BaseModel):
     """Per-tier timeout budgets in milliseconds."""
 
     full: int = Field(gt=0)
-    graph_only: int = Field(gt=0)
-    canned: int = Field(gt=0)
+    graph_only: int | None = Field(default=None, gt=0)
+    canned: int | None = Field(default=None, gt=0)
+    deterministic: int | None = Field(default=None, gt=0)
 
-    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
 
 class EngineModelConfig(BaseModel):

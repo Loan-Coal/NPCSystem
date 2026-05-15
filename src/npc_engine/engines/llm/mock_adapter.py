@@ -39,6 +39,17 @@ class MockLLMAdapter(LLMClientProtocol):
             dict(structured_response) if structured_response is not None else dict(self._response)
         )
 
+    async def close(self) -> None:
+        """No-op — mock adapter has no external resources to release."""
+
+    async def health_check(self) -> bool:
+        """Return True — mock adapter is always ready. Non-raising.
+
+        Returns:
+            Always True.
+        """
+        return True
+
     async def generate(
         self,
         prompt: str,

@@ -22,6 +22,7 @@ from npc_engine.engines.quest_generation.slot_models import (
 from npc_engine.engines.quest_generation.slot_validator import SlotValidator
 from npc_engine.engines.quest_generation.template_loader import load_templates
 from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
+from npc_engine.utils.errors import LLMRequestError
 
 
 # ---------------------------------------------------------------------------
@@ -322,7 +323,7 @@ async def test_generate_uses_template_defaults_on_flavor_error() -> None:
     llm_client.generate_structured = AsyncMock(
         side_effect=[
             {"item": "item_001"},
-            Exception("LLM flavor error"),
+            LLMRequestError(model="mock", detail="LLM flavor error"),
         ]
     )
 
