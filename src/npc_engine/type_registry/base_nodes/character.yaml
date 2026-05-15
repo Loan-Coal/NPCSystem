@@ -15,3 +15,4 @@ fields:
   honesty: { type: int, required: true, range: [0, 100] }
   current_mood: { type: str, required: false }
   routine_override: { type: str, required: false }
+  currency_balance: { type: int, required: false }

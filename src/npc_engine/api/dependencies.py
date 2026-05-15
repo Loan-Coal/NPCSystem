@@ -37,7 +37,7 @@ from npc_engine.graph.reputation_service import ReputationService
 from npc_engine.graph.schedule_service import ScheduleService
 from npc_engine.graph.generic_graph_service import GenericGraphService
 from npc_engine.graph.graph_admin_service import GraphAdminService
-from npc_engine.schema.llm_config_models import LLMConfig
+from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.type_registry.contracts import TypeRegistry
 
 

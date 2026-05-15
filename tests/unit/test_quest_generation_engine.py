@@ -55,6 +55,9 @@ class _FakeResult:
     async def single(self) -> dict | None:
         return self._records[0] if self._records else None
 
+    async def consume(self) -> None:
+        pass
+
 
 class _FakeSessionWithNodes:
     """Session stub that returns preconfigured node records by query content."""

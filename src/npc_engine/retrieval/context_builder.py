@@ -37,7 +37,7 @@ from npc_engine.retrieval.context_utils import serialize_json
 from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache
 from npc_engine.retrieval.subgraph_retriever import retrieve_tier_a_context
 from npc_engine.retrieval.vector_store_protocol import VectorSearchResult
-from npc_engine.schema.llm_config_models import LLMConfig
+from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.utils.errors import ContextBudgetError
 from npc_engine.utils.metrics import increment_metric
 from npc_engine.world.world_reader import get_world_state
@@ -142,7 +142,12 @@ async def build_serialized_context(
         ContextItem(key="session", text=serialize_json(session_turns), tier="tierA", priority=99),
     ]
     tier_a_raw.extend(
-        await retrieve_tier_a_context(session=session, npc_id=npc_id, event_limit=settings.RAG_TOP_K)
+        await retrieve_tier_a_context(
+            session=session,
+            npc_id=npc_id,
+            event_limit=settings.RAG_TOP_K,
+            character_bundle=character_bundle,
+        )
     )
     if player_id is not None:
         reputation_items = await get_reputation_context_for_npc(
@@ -198,7 +203,7 @@ async def build_serialized_context(
             )
         )
 
-    owned_items = await get_items_for_character(session, character_id=npc_id)
+    owned_items = await get_items_for_character(session, character_id=npc_id, k=10)
     if owned_items:
         tier_a_raw.append(
             ContextItem(

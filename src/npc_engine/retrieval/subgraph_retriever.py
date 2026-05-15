@@ -6,14 +6,23 @@ Does NOT: query vector stores or serialize final prompt text.
 Dependencies injected: AsyncSession.
 """
 
+from __future__ import annotations
+
 from neo4j import AsyncSession
 
 from npc_engine.graph.graph_reader import get_character_with_relations, get_events_for_npc, get_location_context, get_npc_location_id
 from npc_engine.retrieval.context_merger import ContextItem
-from npc_engine.retrieval.context_utils import serialize_json
+from npc_engine.retrieval.context_utils import serialize_json, _LOW_VALUE_FIELDS
+
+_NPC_NEARBY_FIELDS = ("id", "name", "archetype", "faction")
 
 
-async def retrieve_tier_a_context(session: AsyncSession, npc_id: str, event_limit: int) -> list[ContextItem]:
+async def retrieve_tier_a_context(
+    session: AsyncSession,
+    npc_id: str,
+    event_limit: int,
+    character_bundle: dict | None = None,
+) -> list[ContextItem]:
     """Fetch graph-backed tier A context items for an NPC.
 
     Retrieves character profile, player relation, location context, nearby NPCs,
@@ -23,23 +32,27 @@ async def retrieve_tier_a_context(session: AsyncSession, npc_id: str, event_limi
         session: Active Neo4j async session.
         npc_id: ID of the NPC to build context for.
         event_limit: Maximum number of recent events to include.
+        character_bundle: Pre-fetched character bundle; avoids a second graph round-trip
+            when the caller already fetched it for cache-key computation.
 
     Returns:
         List of ContextItem values for tier A, ordered by priority descending.
     """
 
-    character_bundle = await get_character_with_relations(session=session, npc_id=npc_id)
+    bundle = character_bundle if character_bundle is not None else (
+        await get_character_with_relations(session=session, npc_id=npc_id)
+    )
     events = await get_events_for_npc(session=session, npc_id=npc_id, limit=event_limit)
 
     items: list[ContextItem] = []
-    relation_entries = character_bundle.get("relations", [])
-    character_payload = character_bundle.get("character")
+    relation_entries = bundle.get("relations", [])
+    character_payload = bundle.get("character")
 
-    if character_bundle.get("character") is not None:
+    if bundle.get("character") is not None:
         items.append(
             ContextItem(
                 key=f"character:{npc_id}",
-                text=serialize_json(character_bundle["character"]),
+                text=serialize_json(bundle["character"]),
                 tier="tierA",
                 priority=100,
             )
@@ -74,7 +87,7 @@ async def retrieve_tier_a_context(session: AsyncSession, npc_id: str, event_limi
                 )
             )
             nearby_npcs = [
-                npc
+                {k: npc[k] for k in _NPC_NEARBY_FIELDS if k in npc}
                 for npc in location_context.get("present_npcs", [])
                 if isinstance(npc, dict)
                 and npc.get("id") != npc_id
@@ -93,7 +106,7 @@ async def retrieve_tier_a_context(session: AsyncSession, npc_id: str, event_limi
         items.append(
             ContextItem(
                 key=f"event:{index}:{npc_id}",
-                text=serialize_json(event),
+                text=serialize_json(event, strip_nulls=True, strip_fields=_LOW_VALUE_FIELDS),
                 tier="tierA",
                 priority=80 - index,
             )

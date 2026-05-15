@@ -15,7 +15,7 @@ from npc_engine.retrieval.context_compression import (
 )
 from npc_engine.retrieval.context_merger import ContextItem, MergedContext
 from npc_engine.retrieval.context_utils import estimate_tokens
-from npc_engine.schema.llm_config_models import LLMConfig
+from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.utils.errors import ContextBudgetError
 
 __all__ = [

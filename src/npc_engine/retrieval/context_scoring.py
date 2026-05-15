@@ -15,7 +15,7 @@ from npc_engine.common.json_utils import parse_json_object
 from npc_engine.retrieval.context_merger import ContextItem
 from npc_engine.retrieval.context_relevance_engine import ContextRelevanceCandidate, rank_context_candidates
 from npc_engine.retrieval.context_utils import parse_node_identity
-from npc_engine.schema.llm_config_models import LLMConfig
+from npc_engine.schema.context_config_models import LLMConfig
 
 
 def rank_tier_items(
@@ -63,7 +63,6 @@ def _build_candidate(
         proximity_hops=_infer_proximity_hops(item.key, llm_config.max_proximity_hops),
         relation=_extract_relation_score(item=item, vector_scores=vector_scores),
         quest=_quest_score(item=item),
-        explicit=1.0 if item.tier == "tierA" else 0.0,
     )
 
 

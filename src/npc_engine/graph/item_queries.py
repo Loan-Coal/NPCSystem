@@ -43,6 +43,8 @@ RETURN i.id AS id,
        i.type AS type,
        i.is_unique AS is_unique,
        i.properties AS properties
+ORDER BY toInteger(i.value) DESC
+LIMIT $k
 """
 
 CYPHER_GET_ITEM_BY_ID = """
@@ -72,19 +74,22 @@ async def get_items_for_character(
     session: AsyncSession,
     *,
     character_id: str,
+    k: int = 10,
 ) -> list[dict[str, Any]]:
-    """Fetch all items owned by a character via OWNS edges.
+    """Fetch top-k items owned by a character via OWNS edges, ordered by value descending.
 
     Args:
         session: Active Neo4j async session.
         character_id: ID of the character node.
+        k: Maximum number of items to return (default 10).
 
     Returns:
-        List of item property dicts.
+        List of item property dicts ordered by value descending.
     """
     result = await session.run(
         CYPHER_GET_ITEMS_FOR_CHARACTER,
         character_id=character_id,
+        k=k,
     )
     return cast(
         list[dict[str, Any]],
@@ -133,11 +138,11 @@ CYPHER_APPLY_ITEM_TRANSFER = """
 MATCH (src:Character {id: $source_id})
 MATCH (dst:Character {id: $destination_id})
 WHERE src.id <> dst.id
-MATCH (i:Item {id: $item_id})-[source_owned:OWNED_BY]->(src)
+MATCH (src)-[source_owns:OWNS]->(i:Item {id: $item_id})
 WITH src, dst, i
-OPTIONAL MATCH (i)-[owned:OWNED_BY]->(:Character)
-DELETE owned
-CREATE (i)-[:OWNED_BY {updated_at: datetime()}]->(dst)
+OPTIONAL MATCH (:Character)-[all_owns:OWNS]->(i)
+DELETE all_owns
+CREATE (dst)-[:OWNS {acquired_at: datetime()}]->(i)
 CREATE (src)-[:TRANSFERRED_ITEM_TO {
     request_id: $request_id,
     idempotency_key: $idempotency_key,
@@ -170,9 +175,9 @@ ON CREATE SET i.created_at = datetime(),
               i.last_graph_updated_at = datetime(),
               i.name = $item_id
 WITH src, dst, i
-OPTIONAL MATCH (i)-[owned:OWNED_BY]->(:Character)
-DELETE owned
-CREATE (i)-[:OWNED_BY {updated_at: datetime()}]->(dst)
+OPTIONAL MATCH (:Character)-[all_owns:OWNS]->(i)
+DELETE all_owns
+CREATE (dst)-[:OWNS {acquired_at: datetime()}]->(i)
 CREATE (src)-[:TRANSFERRED_ITEM_TO {
     request_id: $request_id,
     idempotency_key: $idempotency_key,

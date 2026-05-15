@@ -45,6 +45,7 @@ where = ["src"]
     "observability/*.json",
     "type_registry/base_edges/*.yaml",
     "type_registry/base_nodes/*.yaml",
+    "prompts/**/*.yaml",
 ]
 
 [tool.pytest.ini_options]

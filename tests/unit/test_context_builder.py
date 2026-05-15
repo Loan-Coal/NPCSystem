@@ -15,7 +15,7 @@ from npc_engine.retrieval.context_builder import _enforce_final_serialized_budge
 from npc_engine.retrieval.context_merger import ContextItem, MergedContext
 from npc_engine.retrieval.context_serializer import serialize_context
 from npc_engine.retrieval.vector_store_protocol import VectorSearchResult
-from npc_engine.schema.llm_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
+from npc_engine.schema.context_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
 from npc_engine.world.world_state import WorldState
 
 
@@ -38,12 +38,11 @@ def _llm_config() -> LLMConfig:
         compression_trigger_ratio=0.85,
         max_proximity_hops=2,
         relevance_weights=RelevanceWeights(
-            recency=0.25,
+            recency=0.30,
             severity=0.20,
             proximity=0.20,
             relation=0.20,
             quest=0.10,
-            explicit=0.05,
         ),
     )
 
@@ -56,7 +55,7 @@ async def test_builder_outputs_fixed_schema_with_emotion(monkeypatch) -> None:
     async def fake_character_reader(session, npc_id):
         return {"character": {"id": npc_id, "current_mood": "anxious"}, "relations": []}
 
-    async def fake_tier_a(session, npc_id, event_limit):
+    async def fake_tier_a(session, npc_id, event_limit, character_bundle=None):
         return [
             ContextItem(
                 key=f"character:{npc_id}",
@@ -75,7 +74,7 @@ async def test_builder_outputs_fixed_schema_with_emotion(monkeypatch) -> None:
     async def fake_goals(session, *, character_id, k, status_filter="active"):
         return []
 
-    async def fake_items(session, *, character_id):
+    async def fake_items(session, *, character_id, k=10):
         return []
 
     async def fake_secrets(session, *, character_id, k):
@@ -124,7 +123,7 @@ async def test_builder_enforces_final_serialized_budget(monkeypatch) -> None:
     async def fake_character_reader(session, npc_id):
         return {"character": {"id": npc_id, "current_mood": "neutral"}, "relations": []}
 
-    async def fake_tier_a(session, npc_id, event_limit):
+    async def fake_tier_a(session, npc_id, event_limit, character_bundle=None):
         return [
             ContextItem(key="event:0", text='{"summary":"x"}', tier="tierA", priority=10),
             ContextItem(key="event:1", text='{"summary":"y"}', tier="tierA", priority=9),
@@ -139,7 +138,7 @@ async def test_builder_enforces_final_serialized_budget(monkeypatch) -> None:
     async def fake_goals(session, *, character_id, k, status_filter="active"):
         return []
 
-    async def fake_items(session, *, character_id):
+    async def fake_items(session, *, character_id, k=10):
         return []
 
     async def fake_secrets(session, *, character_id, k):
@@ -163,14 +162,14 @@ async def test_builder_enforces_final_serialized_budget(monkeypatch) -> None:
         NEO4J_URI="bolt://localhost:7687",
         NEO4J_USER="neo4j",
         NEO4J_PASSWORD="password",
-        PROMPT_TOKEN_BUDGET=120,
+        PROMPT_TOKEN_BUDGET=200,
     )
 
     serialized = await build_serialized_context(
         session=None,  # type: ignore[arg-type]
         settings=settings,
         llm_config=_llm_config(),
-        embedding_index=FakeEmbeddingIndex(rows=[{"id": "r1", "score": 1.0, "payload": {"summary": "z"}}]),
+        embedding_index=FakeEmbeddingIndex(rows=[{"id": "r1", "score": 1.0, "payload": {"summary": "z" * 300}}]),
         npc_id="npc_1",
         player_message="hello",
         session_turns=["player: hi"],

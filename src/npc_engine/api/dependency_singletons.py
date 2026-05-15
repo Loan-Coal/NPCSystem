@@ -40,7 +40,7 @@ from npc_engine.scheduler.tick_scheduler import TickScheduler
 from npc_engine.engines.llm_config_loader import get_config as get_engine_model_config_for
 from npc_engine.engines.llm_config_models import EngineModelConfig
 from npc_engine.schema.llm_config_loader import load_llm_config
-from npc_engine.schema.llm_config_models import LLMConfig
+from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.schema.schema_loader import load_game_schema
 from npc_engine.schema.schema_models import SchemaConfig
 from npc_engine.type_registry.contracts import TypeRegistry
@@ -379,3 +379,27 @@ def get_context_cache() -> DialogueContextCache:
     """
     settings = get_settings()
     return DialogueContextCache(ttl_seconds=settings.DIALOGUE_SESSION_TTL)
+
+
+@lru_cache
+def get_memory_consolidation_engine():
+    """Create provisional singleton for the memory consolidation engine.
+
+    Uses dialogue's LLM adapter until Phase 2.1 creates engines/memory_consolidation/llm_config.yaml
+    and Phase 2.2 replaces this with a properly-configured singleton.
+
+    Returns:
+        MemoryConsolidationEngine configured with dialogue's LLM adapter as a provisional backend.
+    """
+    from npc_engine.engines.memory_consolidation.memory_consolidation_engine import MemoryConsolidationEngine
+    from npc_engine.engines.llm.factory import create_llm_client_for_engine
+
+    settings = get_settings()
+    engine_config = get_engine_model_config_for("dialogue")
+    llm_client = create_llm_client_for_engine(engine_config, settings)
+    return MemoryConsolidationEngine(
+        session_store=get_session_store(),
+        llm_client=llm_client,
+        turn_threshold=5,
+        clear_turns_after=False,
+    )

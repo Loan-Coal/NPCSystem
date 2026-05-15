@@ -11,7 +11,7 @@ import pytest
 from npc_engine.config import Settings
 from npc_engine.retrieval.context_builder import build_serialized_context
 from npc_engine.retrieval.context_merger import ContextItem
-from npc_engine.schema.llm_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
+from npc_engine.schema.context_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
 from npc_engine.utils.metrics import get_counter_value, reset_metrics_registry
 from npc_engine.world.world_state import WorldState
 
@@ -32,12 +32,11 @@ def _llm_config() -> LLMConfig:
         compression_trigger_ratio=0.9,
         max_proximity_hops=2,
         relevance_weights=RelevanceWeights(
-            recency=0.25,
+            recency=0.30,
             severity=0.2,
             proximity=0.2,
             relation=0.2,
             quest=0.1,
-            explicit=0.05,
         ),
     )
 
@@ -56,7 +55,7 @@ async def test_context_builder_emits_tier_item_and_token_metrics(monkeypatch) ->
     async def fake_character_reader(session, npc_id):
         return {"character": {"id": npc_id, "current_mood": "neutral"}, "relations": []}
 
-    async def fake_tier_a_reader(session, npc_id, event_limit):
+    async def fake_tier_a_reader(session, npc_id, event_limit, character_bundle=None):
         return [ContextItem(key=f"character:{npc_id}", text='{"id":"npc_1"}', tier="tierA", priority=80)]
 
     async def fake_memories(session, *, character_id, k):
@@ -68,7 +67,7 @@ async def test_context_builder_emits_tier_item_and_token_metrics(monkeypatch) ->
     async def fake_goals(session, *, character_id, k, status_filter="active"):
         return []
 
-    async def fake_items(session, *, character_id):
+    async def fake_items(session, *, character_id, k=10):
         return []
 
     async def fake_secrets(session, *, character_id, k):

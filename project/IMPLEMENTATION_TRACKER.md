@@ -16,8 +16,52 @@ This file tracks iterative implementation for PROJECT_PLAN_v1.4.xml and supports
 
 ## Stages
 
-### Phase 4 — Authoring Engines
+### Roadmap V2 Phase 1 — Critical Structural Fixes
+Status: DONE
+Started: 2026-05-14
+Completed: 2026-05-14
+Tests: 695 passed, 17 skipped, 0 failed
+
+#### 14 items completed
+- [x] 1.1 Fix `model_name()` on `MistralAdapter` / `LlamaAdapter` — param injected, factory updated
+- [x] 1.2 Add `system` kwarg to `MistralAdapter` / `LlamaAdapter` — prepends to prompt
+- [x] 1.3 Fix `consolidate_memories` route — provisional `get_memory_consolidation_engine()` singleton in `dependency_singletons.py`; route injects engine not raw LLM client
+- [x] 1.4 Fix `MockLLMAdapter` — `structured_response` param added, `generate_structured` returns dedicated payload
+- [x] 1.5 Rename `schema/llm_config_models.py` → `schema/context_config_models.py` — 14 files updated; old file kept as re-export shim
+- [x] 1.6 Remove redundant schema injection in `OllamaAdapter.generate_structured` — prompt passed as-is
+- [x] 1.7 Preserve `httpx` status code in `LLMRequestError` — `HTTPStatusError` caught before `HTTPError`; `detail=f"http_error:{status_code}"`
+- [x] 1.8 Remove redundant `get_character_with_relations` call — `retrieve_tier_a_context` accepts `character_bundle` kwarg
+- [x] 1.9 Fix compression — `_field_select_compress` replaces raw byte truncation; `_ESSENTIAL_FIELDS` per node type
+- [x] 1.10 Strip null fields and low-value ID fields — `serialize_json` gains `strip_nulls` / `strip_fields` kwargs
+- [x] 1.11 Cap nearby NPC payload — `_NPC_NEARBY_FIELDS = ("id","name","archetype","faction")` in `subgraph_retriever.py`
+- [x] 1.12 Add `k=10` limit to `get_items_for_character` — Cypher gets `LIMIT $k`; sorted by value DESC
+- [x] 1.13 Remove `explicit` scoring weight — 5-field `RelevanceWeights`; `recency` raised to 0.30
+- [x] 1.14 Fix `registry.py` double `TypeRegistry` construction — `dataclasses.replace()` used instead of second constructor
+
+#### Side-fixes applied during Phase 1
+- `ContextBudgetError` `frozen=True` removed (Python 3.14 `__traceback__` assignment was failing)
+- Test suite updated: `explicit` field removed from 5 test files; `fake_tier_a` stubs accept `character_bundle`; `fake_items` stubs accept `k` param; compression tests use `biography` field (in character essential set)
+
+---
+
+### Phase 5 — Demo Polish
 Status: IN_PROGRESS
+Started: 2026-05-14
+
+#### Feature 5.1 — The 90-second video scenario
+Status: DONE
+Started: 2026-05-14
+Completed: 2026-05-14
+Tasks:
+- [x] `e2e/scenarios/scenario_demo_video.py` — self-contained demo scenario (tavern, 2 NPCs, plague rumor, gossip, dialogue)
+- [x] `docs/DEMO.md` — how to reproduce the demo
+- [x] `Makefile` — added `demo-video` target
+694 unit tests green (no new unit tests — scenario is e2e only).
+
+---
+
+### Phase 4 — Authoring Engines
+Status: DONE
 Started: 2026-05-13
 
 #### Feature 4.1 — Faction politics engine

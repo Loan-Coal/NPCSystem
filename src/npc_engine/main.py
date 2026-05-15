@@ -49,6 +49,7 @@ from npc_engine.api.dependency_singletons import (
     get_graph_db,
     get_idempotency_service,
     get_llm_config,
+    get_memory_consolidation_engine,
     get_redis_runtime,
     get_type_registry,
 )
@@ -74,6 +75,7 @@ async def lifespan(_app: FastAPI):
     try:
         get_game_schema.cache_clear()
         get_game_schema()
+        get_memory_consolidation_engine.cache_clear()
         get_type_registry.cache_clear()
         type_registry = get_type_registry()
         if type_registry.custom_node_types:

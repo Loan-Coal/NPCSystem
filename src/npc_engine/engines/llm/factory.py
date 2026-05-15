@@ -54,6 +54,7 @@ def create_llm_client_for_engine(
             raise ValueError("MISTRAL_API_URL is required for mistral7b backend")
         return MistralAdapter(
             base_url=settings.MISTRAL_API_URL,
+            model_name=model,
             timeout_seconds=settings.LLM_TIMEOUT_SECONDS,
         )
     if backend == "llama8b":
@@ -61,6 +62,7 @@ def create_llm_client_for_engine(
             raise ValueError("LLAMA_API_URL is required for llama8b backend")
         return LlamaAdapter(
             base_url=settings.LLAMA_API_URL,
+            model_name=model,
             timeout_seconds=settings.LLM_TIMEOUT_SECONDS,
         )
     if backend == "ollama":

@@ -15,7 +15,7 @@ from npc_engine.retrieval.context_budget_enforcer import (
     enforce_context_budget,
 )
 from npc_engine.retrieval.context_merger import ContextItem, MergedContext
-from npc_engine.schema.llm_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
+from npc_engine.schema.context_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
 
 
 def _llm_config() -> LLMConfig:
@@ -27,12 +27,11 @@ def _llm_config() -> LLMConfig:
         compression_trigger_ratio=0.5,
         max_proximity_hops=2,
         relevance_weights=RelevanceWeights(
-            recency=0.25,
+            recency=0.30,
             severity=0.20,
             proximity=0.20,
             relation=0.20,
             quest=0.10,
-            explicit=0.05,
         ),
     )
 
@@ -106,7 +105,7 @@ def test_compression_cache_invalidates_when_graph_timestamp_changes() -> None:
     cache = ContextCompressionCache()
     item = ContextItem(
         key="character:npc_1",
-        text='{"id":"npc_1","last_graph_updated_at":"2026-04-16T10:00:00Z","summary":"'
+        text='{"name":"Aldric","last_graph_updated_at":"2026-04-16T10:00:00Z","biography":"'
         + ("A" * 600)
         + '"}',
         tier="tierB",
@@ -116,8 +115,13 @@ def test_compression_cache_invalidates_when_graph_timestamp_changes() -> None:
 
     first = cache.compress_item(item=item, llm_config=llm_config, target_tokens=8)
     second = cache.compress_item(item=item, llm_config=llm_config, target_tokens=8)
+    # Change both timestamp and biography content so the recomputed compressed text differs
     changed_item = item.model_copy(
-        update={"text": item.text.replace("2026-04-16T10:00:00Z", "2026-04-16T11:00:00Z")}
+        update={
+            "text": item.text.replace("2026-04-16T10:00:00Z", "2026-04-16T11:00:00Z").replace(
+                "A" * 600, "B" * 600
+            )
+        }
     )
     third = cache.compress_item(item=changed_item, llm_config=llm_config, target_tokens=8)
 
@@ -130,7 +134,7 @@ def test_compression_cache_invalidates_when_source_changes_with_same_timestamp()
     llm_config = _llm_config()
     base = ContextItem(
         key="character:npc_1",
-        text='{"id":"npc_1","last_graph_updated_at":"2026-04-16T10:00:00Z","summary":"'
+        text='{"name":"Aldric","last_graph_updated_at":"2026-04-16T10:00:00Z","biography":"'
         + ("A" * 600)
         + '"}',
         tier="tierB",
@@ -138,7 +142,7 @@ def test_compression_cache_invalidates_when_source_changes_with_same_timestamp()
     )
     changed = ContextItem(
         key="character:npc_1",
-        text='{"id":"npc_1","last_graph_updated_at":"2026-04-16T10:00:00Z","summary":"'
+        text='{"name":"Aldric","last_graph_updated_at":"2026-04-16T10:00:00Z","biography":"'
         + ("B" * 600)
         + '"}',
         tier="tierB",

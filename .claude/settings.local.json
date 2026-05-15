@@ -52,7 +52,27 @@
       "Bash(python -m pytest tests/unit/test_architecture_conformance.py tests/unit/test_context_builder.py -q --tb=no)",
       "Read(//c/Users/lohan/.claude/plans/**)",
       "Bash(python -m pytest tests/unit/test_economy_engine.py -v --tb=short)",
-      "Bash(python -m pytest tests/unit/test_architecture_conformance.py -v --tb=short)"
+      "Bash(python -m pytest tests/unit/test_architecture_conformance.py -v --tb=short)",
+      "Bash(Sort-Object)",
+      "Bash(grep -E \"\\\\.\\(yaml|yml\\)$\")",
+      "Bash(dir \"C:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\\\\src\\\\npc_engine\\\\engines\")",
+      "Bash(findstr \"^d\")",
+      "Bash(Get-ChildItem -Directory \"C:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\\\\src\\\\npc_engine\\\\engines\")",
+      "Bash(grep -E \"\\\\.py$\")",
+      "Bash(python -m pytest tests/unit/test_context_builder.py tests/unit/test_context_metrics_observability_v14.py tests/unit/test_context_budget_enforcer_v14.py tests/unit/test_architecture_conformance.py -q --tb=short)",
+      "Bash(python -m pytest tests/unit/test_architecture_conformance.py tests/unit/test_context_budget_enforcer_v14.py::test_compression_cache_invalidates_when_graph_timestamp_changes tests/unit/test_context_builder.py::test_builder_enforces_final_serialized_budget -q --tb=long)",
+      "Bash(python -m pytest tests/unit/test_context_builder.py::test_builder_enforces_final_serialized_budget -q --tb=long)",
+      "Bash(find \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\" -name \"*tick*\" -o -name \"*scheduler*\" 2>nul | head -20)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\\\\src\\\\npc_engine\\\\api\\\\routes\\\\\" -Filter \"*.py\" | Select-Object Name)",
+      "Bash(xargs grep -l \"story.*pacing\\\\|POST.*pacing\")",
+      "Bash(xargs grep -l \"graph/nodes\\\\|/nodes/quest\\\\|upsert_node\")",
+      "Bash(xargs grep -l \"quest\" -i)",
+      "Bash(python -m pytest tests/unit/ -x -q)",
+      "Bash(xargs grep -l \"POST /v1/admin/quests/generate\\\\|qg_merchant_giver_001\")",
+      "Bash(xargs grep -l \"test_story_pacing\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem"
     ]
   }
 }

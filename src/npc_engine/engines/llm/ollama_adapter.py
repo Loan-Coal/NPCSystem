@@ -74,6 +74,8 @@ class OllamaAdapter(LLMClientProtocol):
                 response.raise_for_status()
         except httpx.TimeoutException as error:
             raise LLMTimeoutError(model=self.model_name(), timeout_s=self._timeout_seconds) from error
+        except httpx.HTTPStatusError as error:
+            raise LLMRequestError(model=self.model_name(), detail=f"http_error:{error.response.status_code}") from error
         except httpx.HTTPError as error:
             raise LLMRequestError(model=self.model_name(), detail="http_error") from error
         try:
@@ -98,8 +100,8 @@ class OllamaAdapter(LLMClientProtocol):
         """Send a schema-constrained JSON generation request to the Ollama backend.
 
         Args:
-            prompt: Formatted prompt string; schema is appended as a JSON block.
-            schema: JSON schema dict appended to the prompt and sent as format hint.
+            prompt: Formatted prompt string.
+            schema: JSON schema dict retained for protocol compliance; not injected into the prompt body.
             max_tokens: Maximum tokens to generate (mapped to num_predict).
             top_p: Nucleus sampling probability mass. None means backend default.
             stop_sequences: Token sequences that halt generation (mapped to stop). None means backend default.
@@ -118,7 +120,7 @@ class OllamaAdapter(LLMClientProtocol):
             options["stop"] = stop_sequences
         payload: dict = {
             "model": self._model_name,
-            "prompt": f"{prompt}\n\nRequired JSON schema:\n{json.dumps(schema, ensure_ascii=True)}",
+            "prompt": prompt,
             "stream": False,
             "format": "json",
             "options": options,
@@ -131,6 +133,8 @@ class OllamaAdapter(LLMClientProtocol):
                 response.raise_for_status()
         except httpx.TimeoutException as error:
             raise LLMTimeoutError(model=self.model_name(), timeout_s=self._timeout_seconds) from error
+        except httpx.HTTPStatusError as error:
+            raise LLMRequestError(model=self.model_name(), detail=f"http_error:{error.response.status_code}") from error
         except httpx.HTTPError as error:
             raise LLMRequestError(model=self.model_name(), detail="http_error") from error
         try:

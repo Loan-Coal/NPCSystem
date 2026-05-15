@@ -79,8 +79,8 @@ class FactionPoliticsEngine:
             Dict with keys ``rule_applications`` (int) and ``decay_applications`` (int).
         """
         async with self._lock:
-            rule_apps = await self._apply_rules(session)
-            decay_apps = await self._apply_decay(session)
+            rule_apps, modified_pairs = await self._apply_rules(session)
+            decay_apps = await self._apply_decay(session, skip=modified_pairs)
             _LOGGER.info(
                 "faction_politics tick: %d rule applications, %d decay applications",
                 rule_apps,
@@ -88,14 +88,14 @@ class FactionPoliticsEngine:
             )
             return {"rule_applications": rule_apps, "decay_applications": decay_apps}
 
-    async def _apply_rules(self, session: AsyncSession) -> int:
+    async def _apply_rules(self, session: AsyncSession) -> tuple[int, set[tuple[str, str]]]:
         """Apply event-based standing rules.
 
         Args:
             session: Active Neo4j async session.
 
         Returns:
-            Number of standing updates applied.
+            Tuple of (number of standing updates applied, set of (src_id, dst_id) pairs modified).
         """
         result = await session.run(CYPHER_GET_RECENT_EVENTS, limit=_DEFAULT_EVENT_LIMIT)
         events: list[dict[str, str]] = [
@@ -104,6 +104,7 @@ class FactionPoliticsEngine:
         ]
 
         applied = 0
+        modified_pairs: set[tuple[str, str]] = set()
         for event in events:
             delta = self._rule_index.get(event["event_type"])
             if delta is None:
@@ -125,13 +126,15 @@ class FactionPoliticsEngine:
                         async with tx:
                             await set_standing(tx, src_id=src_faction, dst_id=dst_faction, standing=new_standing)
                         applied += 1
-        return applied
+                        modified_pairs.add((src_faction, dst_faction))
+        return applied, modified_pairs
 
-    async def _apply_decay(self, session: AsyncSession) -> int:
+    async def _apply_decay(self, session: AsyncSession, *, skip: set[tuple[str, str]] | None = None) -> int:
         """Drift all faction standings toward zero by rate_per_tick.
 
         Args:
             session: Active Neo4j async session.
+            skip: Pairs modified by rules this tick; these are excluded from decay.
 
         Returns:
             Number of standings updated by decay.
@@ -139,8 +142,11 @@ class FactionPoliticsEngine:
         standings = await self._get_all_standings(session)
         rate = self._rules.decay.rate_per_tick
         min_mag = self._rules.decay.min_magnitude
+        skip_set = skip or set()
         applied = 0
         for s in standings:
+            if (s["src_id"], s["dst_id"]) in skip_set:
+                continue
             current = s["standing"]
             if abs(current) < min_mag:
                 continue

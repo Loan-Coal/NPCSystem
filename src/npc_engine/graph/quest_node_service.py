@@ -34,7 +34,7 @@ async def create_quest(
     """
     tx = await session.begin_transaction()
     async with tx:
-        await tx.run(
+        result = await tx.run(
             CYPHER_CREATE_QUEST,
             quest_id=payload["quest_id"],
             description=payload["description"],
@@ -48,6 +48,7 @@ async def create_quest(
             created_at=payload["created_at"],
             completed_at=payload.get("completed_at"),
         )
+        await result.consume()
     return payload
 
 

@@ -14,8 +14,8 @@ from neo4j import AsyncSession
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from npc_engine.api.dependencies import get_db_session, get_llm_client, get_session_store
-from npc_engine.api.dependency_singletons import get_dialogue_engine_model_config
+from npc_engine.api.dependencies import get_db_session
+from npc_engine.api.dependency_singletons import get_dialogue_engine_model_config, get_memory_consolidation_engine
 from npc_engine.api.route_helpers import ok_response
 from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.graph.memory_service import (
@@ -208,7 +208,6 @@ async def consolidate_memories(
     npc_id: str,
     body: ConsolidateRequest,
     session: AsyncSession = Depends(get_db_session),
-    llm_client=Depends(get_llm_client),
 ) -> dict:
     """Consolidate recent dialogue turns into a memory via the MemoryConsolidationEngine.
 
@@ -222,23 +221,13 @@ async def consolidate_memories(
     Returns:
         Envelope with memory_id if a memory was created, or null.
     """
-    from npc_engine.engines.memory_consolidation.memory_consolidation_engine import (
-        MemoryConsolidationEngine,
-    )
-
+    engine = get_memory_consolidation_engine()
     gt = body.game_time
     game_time = TimePoint(
         year=int(gt.get("year", 1)),
         season=str(gt.get("season", "spring")),
         day=int(gt.get("day", 1)),
         time_of_day=str(gt.get("time_of_day", "morning")),
-    )
-    session_store = get_session_store()
-    engine = MemoryConsolidationEngine(
-        session_store=session_store,
-        llm_client=llm_client,
-        turn_threshold=body.turn_threshold,
-        clear_turns_after=False,
     )
     memory_id = await engine.consolidate(
         session,

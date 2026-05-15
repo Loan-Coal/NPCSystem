@@ -286,7 +286,7 @@ class TokenBudgetExceededError(Exception):
     """Raised when mandatory tier0 context alone exceeds the token budget."""
 
 
-@dataclass(frozen=True)
+@dataclass
 class ContextBudgetError(Exception):
     """Raised for tier-specific context budget overflow during prompt assembly."""
 

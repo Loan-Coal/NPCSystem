@@ -14,17 +14,16 @@ from npc_engine.engines.dialogue.context_relevance_engine import (
     score_candidate,
 )
 from npc_engine.retrieval.context_merger import ContextItem
-from npc_engine.schema.llm_config_models import RelevanceWeights
+from npc_engine.schema.context_config_models import RelevanceWeights
 
 
 def _weights() -> RelevanceWeights:
     return RelevanceWeights(
-        recency=0.25,
+        recency=0.30,
         severity=0.20,
         proximity=0.20,
         relation=0.20,
         quest=0.10,
-        explicit=0.05,
     )
 
 
@@ -38,11 +37,10 @@ def test_score_candidate_matches_weighted_formula() -> None:
         proximity_hops=1,
         relation=0.3,
         quest=0.2,
-        explicit=1.0,
     )
 
     score = score_candidate(candidate=candidate, weights=_weights(), max_proximity_hops=2)
-    assert score == pytest.approx(0.435)
+    assert score == pytest.approx(0.41)
 
 
 def test_rank_context_candidates_uses_tie_breaker_node_type_then_id() -> None:
@@ -56,7 +54,6 @@ def test_rank_context_candidates_uses_tie_breaker_node_type_then_id() -> None:
             proximity_hops=0,
             relation=0.0,
             quest=0.0,
-            explicit=0.0,
         ),
         ContextRelevanceCandidate(
             node_id="a-1",
@@ -67,7 +64,6 @@ def test_rank_context_candidates_uses_tie_breaker_node_type_then_id() -> None:
             proximity_hops=0,
             relation=0.0,
             quest=0.0,
-            explicit=0.0,
         ),
     ]
 
@@ -85,7 +81,6 @@ def test_score_candidate_zeroes_proximity_beyond_max_hops() -> None:
         proximity_hops=9,
         relation=0.0,
         quest=0.0,
-        explicit=0.0,
     )
 
     score = score_candidate(candidate=candidate, weights=_weights(), max_proximity_hops=2)
@@ -103,7 +98,6 @@ def test_rank_context_candidates_is_deterministic_across_input_order() -> None:
             proximity_hops=1,
             relation=0.2,
             quest=0.0,
-            explicit=0.0,
         ),
         ContextRelevanceCandidate(
             node_id="a",
@@ -114,7 +108,6 @@ def test_rank_context_candidates_is_deterministic_across_input_order() -> None:
             proximity_hops=1,
             relation=0.2,
             quest=0.0,
-            explicit=0.0,
         ),
     ]
 

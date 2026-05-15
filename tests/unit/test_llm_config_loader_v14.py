@@ -27,12 +27,11 @@ session_turns_budget_tokens: 1200
 compression_trigger_ratio: 0.85
 max_proximity_hops: 2
 relevance_weights:
-  recency: 0.25
+  recency: 0.30
   severity: 0.20
   proximity: 0.20
   relation: 0.20
   quest: 0.10
-  explicit: 0.05
 """.strip(),
         encoding="utf-8",
     )
@@ -48,7 +47,7 @@ def test_load_llm_config_yaml_returns_typed_model_for_minimal_valid_config(tmp_p
 
     assert config.prompt_schema_version == "v1.4"
     assert config.tier_budget_tokens.tier_a == 4000
-    assert config.relevance_weights.explicit == 0.05
+    assert config.relevance_weights.recency == 0.30
 
 
 def test_load_llm_config_yaml_raises_validation_error_when_required_fields_missing(tmp_path: Path) -> None:
@@ -119,12 +118,11 @@ session_turns_budget_tokens: 1200
 compression_trigger_ratio: 0.85
 max_proximity_hops: 2
 relevance_weights:
-  recency: 0.25
+  recency: 0.30
   severity: 0.20
   proximity: 0.20
   relation: 0.20
   quest: 0.10
-  explicit: 0.05
 """.strip(),
         encoding="utf-8",
     )
