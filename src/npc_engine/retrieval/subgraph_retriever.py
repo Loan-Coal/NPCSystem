@@ -25,6 +25,10 @@ def assemble_tier_a_context(
     events: list[dict],
     location_id: str | None,
     location_context: dict | None,
+    group_memberships: list[dict] | None = None,
+    believed_rumors: list[dict] | None = None,
+    traits: list[dict] | None = None,
+    active_pledges: list[dict] | None = None,
 ) -> list[ContextItem]:
     """Assemble Tier A ContextItems from pre-fetched graph data. Pure — no I/O.
 
@@ -34,6 +38,10 @@ def assemble_tier_a_context(
         events: Pre-fetched recent events the NPC knows about.
         location_id: The NPC's current location ID, or None if unknown.
         location_context: Pre-fetched location dict (location + present_npcs), or None.
+        group_memberships: Optional list of group membership dicts from group_service.
+        believed_rumors: Optional list of rumor belief dicts from rumor_service.
+        traits: Optional list of trait dicts ordered by intensity; top 5 included.
+        active_pledges: Optional list of active pledge dicts from pledge_service.
 
     Returns:
         List of ContextItem values for tier A, ordered by priority descending.
@@ -91,6 +99,91 @@ def assemble_tier_a_context(
                 text=serialize_json(nearby_npcs),
                 tier="tierA",
                 priority=91,
+            )
+        )
+
+    top_traits = sorted(traits or [], key=lambda t: t.get("intensity", 0), reverse=True)[:5]
+    if top_traits:
+        items.append(
+            ContextItem(
+                key="traits",
+                text=serialize_json(
+                    [
+                        {
+                            "name": t.get("name"),
+                            "intensity": t.get("intensity"),
+                            "is_secret": t.get("is_secret"),
+                        }
+                        for t in top_traits
+                    ]
+                ),
+                tier="tierA",
+                priority=83,
+            )
+        )
+
+    if group_memberships:
+        items.append(
+            ContextItem(
+                key="group_memberships",
+                text=serialize_json(
+                    [
+                        {
+                            "type": "group",
+                            "name": m.get("name"),
+                            "kind": m.get("kind"),
+                            "cohesion": m.get("cohesion"),
+                            "role": m.get("role"),
+                        }
+                        for m in group_memberships
+                    ]
+                ),
+                tier="tierA",
+                priority=82,
+            )
+        )
+
+    top_rumors = sorted(believed_rumors or [], key=lambda r: r.get("confidence", 0), reverse=True)[:3]
+    if top_rumors:
+        items.append(
+            ContextItem(
+                key="believed_rumors",
+                text=serialize_json(
+                    [
+                        {
+                            "type": "rumor",
+                            "content": r.get("content"),
+                            "confidence": r.get("confidence"),
+                            "mutation_distance": r.get("mutation_distance"),
+                        }
+                        for r in top_rumors
+                    ]
+                ),
+                tier="tierA",
+                priority=81,
+            )
+        )
+
+    active_pledge_list = [p for p in (active_pledges or []) if p.get("is_active")]
+    if active_pledge_list:
+        items.append(
+            ContextItem(
+                key="active_pledges",
+                text=serialize_json(
+                    [
+                        {
+                            "type": "pledge",
+                            "pledgee_id": p.get("pledgee_id"),
+                            "pledgee_name": p.get("pledgee_name"),
+                            "pledge_type": p.get("pledge_type"),
+                            "severity": p.get("severity"),
+                            "expires_at_tick": p.get("expires_at_tick"),
+                        }
+                        for p in active_pledge_list
+                    ]
+                ),
+                tier="tierA",
+                priority=79,
             )
         )
 

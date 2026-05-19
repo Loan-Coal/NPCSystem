@@ -3,7 +3,7 @@ Module: faction_politics_engine
 Layer: engines
 Purpose: Deterministic engine that adjusts faction standings based on recent events and applies
          slow decay toward neutral. Runs once per tick advance.
-Does NOT: call LLMs, create new graph nodes or edges, or expose HTTP routes.
+Does NOT: call LLMs or expose HTTP routes.
 Dependencies injected: FactionPoliticsRules (via constructor), AsyncSession (per tick call).
 Used by: npc_engine.scheduler.tick_scheduler
 """
@@ -17,6 +17,7 @@ from typing import Any
 from neo4j import AsyncSession
 
 from npc_engine.engines.faction_politics.rules_loader import FactionPoliticsRules
+from npc_engine.graph.faction_history_service import record_standing_change
 from npc_engine.graph.faction_writer import set_standing
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ CYPHER_GET_RECENT_EVENTS = """
 MATCH (e:Event)
 WHERE e.src_character_id IS NOT NULL
   AND e.event_type IS NOT NULL
-RETURN e.event_type AS event_type, e.src_character_id AS src_character_id
+RETURN e.id AS event_id, e.event_type AS event_type, e.src_character_id AS src_character_id
 ORDER BY e.tick_id DESC
 LIMIT $limit
 """
@@ -69,18 +70,19 @@ class FactionPoliticsEngine:
         self._lock = asyncio.Lock()
         self._rule_index: dict[str, int] = {r.event_type: r.standing_delta for r in rules.rules}
 
-    async def run_tick(self, session: AsyncSession) -> dict[str, Any]:
+    async def run_tick(self, session: AsyncSession, tick_id: int = 0) -> dict[str, Any]:
         """Execute one faction politics tick: apply event rules then decay.
 
         Args:
             session: Active Neo4j async session.
+            tick_id: Current game tick; written onto FactionStandingEvent nodes.
 
         Returns:
             Dict with keys ``rule_applications`` (int) and ``decay_applications`` (int).
         """
         async with self._lock:
-            rule_apps, modified_pairs = await self._apply_rules(session)
-            decay_apps = await self._apply_decay(session, skip=modified_pairs)
+            rule_apps, modified_pairs = await self._apply_rules(session, tick_id=tick_id)
+            decay_apps = await self._apply_decay(session, skip=modified_pairs, tick_id=tick_id)
             _LOGGER.info(
                 "faction_politics tick: %d rule applications, %d decay applications",
                 rule_apps,
@@ -88,18 +90,25 @@ class FactionPoliticsEngine:
             )
             return {"rule_applications": rule_apps, "decay_applications": decay_apps}
 
-    async def _apply_rules(self, session: AsyncSession) -> tuple[int, set[tuple[str, str]]]:
-        """Apply event-based standing rules.
+    async def _apply_rules(
+        self, session: AsyncSession, *, tick_id: int = 0
+    ) -> tuple[int, set[tuple[str, str]]]:
+        """Apply event-based standing rules and record each change as a FactionStandingEvent.
 
         Args:
             session: Active Neo4j async session.
+            tick_id: Current game tick for FactionStandingEvent nodes.
 
         Returns:
             Tuple of (number of standing updates applied, set of (src_id, dst_id) pairs modified).
         """
         result = await session.run(CYPHER_GET_RECENT_EVENTS, limit=_DEFAULT_EVENT_LIMIT)
         events: list[dict[str, str]] = [
-            {"event_type": r["event_type"], "src_character_id": r["src_character_id"]}
+            {
+                "event_id": r["event_id"],
+                "event_type": r["event_type"],
+                "src_character_id": r["src_character_id"],
+            }
             async for r in result
         ]
 
@@ -125,16 +134,35 @@ class FactionPoliticsEngine:
                         tx = await session.begin_transaction()
                         async with tx:
                             await set_standing(tx, src_id=src_faction, dst_id=dst_faction, standing=new_standing)
+                        await record_standing_change(
+                            session,
+                            src_faction_id=src_faction,
+                            dst_faction_id=dst_faction,
+                            delta=delta,
+                            new_standing=new_standing,
+                            tick=tick_id,
+                            cause_event_id=event.get("event_id"),
+                            cause_rule_id=event["event_type"],
+                        )
                         applied += 1
                         modified_pairs.add((src_faction, dst_faction))
         return applied, modified_pairs
 
-    async def _apply_decay(self, session: AsyncSession, *, skip: set[tuple[str, str]] | None = None) -> int:
+    async def _apply_decay(
+        self,
+        session: AsyncSession,
+        *,
+        skip: set[tuple[str, str]] | None = None,
+        tick_id: int = 0,
+    ) -> int:
         """Drift all faction standings toward zero by rate_per_tick.
+
+        Records each decay as a FactionStandingEvent with cause_rule_id="decay".
 
         Args:
             session: Active Neo4j async session.
             skip: Pairs modified by rules this tick; these are excluded from decay.
+            tick_id: Current game tick for FactionStandingEvent nodes.
 
         Returns:
             Number of standings updated by decay.
@@ -154,6 +182,15 @@ class FactionPoliticsEngine:
             tx = await session.begin_transaction()
             async with tx:
                 await set_standing(tx, src_id=s["src_id"], dst_id=s["dst_id"], standing=new_standing)
+            await record_standing_change(
+                session,
+                src_faction_id=s["src_id"],
+                dst_faction_id=s["dst_id"],
+                delta=new_standing - current,
+                new_standing=new_standing,
+                tick=tick_id,
+                cause_rule_id="decay",
+            )
             applied += 1
         return applied
 

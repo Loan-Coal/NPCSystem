@@ -21,6 +21,7 @@ from npc_engine.engines.routine.routine_queries import (
     get_scheduled_characters,
     update_character_location,
 )
+from npc_engine.graph.location_history_service import record_departure
 
 
 LOGGER = logging.getLogger(__name__)
@@ -80,10 +81,21 @@ class RoutineEngine:
 
                 current = row.get("current_location_id")
                 if current != target:
+                    if current is not None:
+                        arrived_at_tick = int(row["current_arrived_at_tick"]) if row.get("current_arrived_at_tick") is not None else tick_id
+                        await record_departure(
+                            session,
+                            character_id=row["character_id"],
+                            location_id=current,
+                            arrived_at_tick=arrived_at_tick,
+                            departed_at_tick=tick_id,
+                            reason="routine",
+                        )
                     await update_character_location(
                         session=session,
                         character_id=row["character_id"],
                         location_id=target,
+                        arrived_at_tick=tick_id,
                     )
                     LOGGER.info(
                         "routine: %s moved to %s at %s",

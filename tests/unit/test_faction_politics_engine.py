@@ -157,7 +157,7 @@ async def test_run_tick_applies_matching_rule() -> None:
     engine = FactionPoliticsEngine(rules=rules)
 
     session = _FakeSession(
-        events=[{"event_type": "betrayal", "src_character_id": "char_a"}],
+        events=[{"event_id": None, "event_type": "betrayal", "src_character_id": "char_a"}],
         char_factions=["faction_a"],
         standings=[{"src_id": "faction_a", "dst_id": "faction_b", "standing": 50}],
     )
@@ -173,7 +173,7 @@ async def test_run_tick_no_matching_rule_no_change() -> None:
     engine = FactionPoliticsEngine(rules=rules)
 
     session = _FakeSession(
-        events=[{"event_type": "unknown_event_xyz", "src_character_id": "char_a"}],
+        events=[{"event_id": None, "event_type": "unknown_event_xyz", "src_character_id": "char_a"}],
         char_factions=["faction_a"],
         standings=[{"src_id": "faction_a", "dst_id": "faction_b", "standing": 50}],
     )
@@ -190,7 +190,7 @@ async def test_run_tick_clamps_to_bounds() -> None:
 
     # standing=90; +30 = 120 → clamp to 100; 100 ≠ 90 so rule applies
     session = _FakeSession(
-        events=[{"event_type": "alliance_act", "src_character_id": "char_a"}],
+        events=[{"event_id": None, "event_type": "alliance_act", "src_character_id": "char_a"}],
         char_factions=["faction_a"],
         standings=[{"src_id": "faction_a", "dst_id": "faction_b", "standing": 90}],
     )
@@ -210,7 +210,7 @@ async def test_run_tick_clamps_negative_to_minus_100() -> None:
 
     # standing=-80; -30 = -110 → clamp to -100
     session = _FakeSession(
-        events=[{"event_type": "betrayal", "src_character_id": "char_a"}],
+        events=[{"event_id": None, "event_type": "betrayal", "src_character_id": "char_a"}],
         char_factions=["faction_a"],
         standings=[{"src_id": "faction_a", "dst_id": "faction_b", "standing": -80}],
     )
@@ -219,6 +219,24 @@ async def test_run_tick_clamps_negative_to_minus_100() -> None:
     assert result["rule_applications"] >= 1
     standing_written = session.tx.standing_calls[0]["standing"]
     assert standing_written >= -100
+
+
+# First test also needs event_id — fix the original fixture:
+
+@pytest.mark.asyncio
+async def test_run_tick_applies_matching_rule_with_event_id() -> None:
+    """record_standing_change is called when a rule fires; engine returns >= 1 application."""
+    rules = _make_rules(rules=[("betrayal_penalty", "betrayal", -10)])
+    engine = FactionPoliticsEngine(rules=rules)
+
+    session = _FakeSession(
+        events=[{"event_id": "evt-abc", "event_type": "betrayal", "src_character_id": "char_a"}],
+        char_factions=["faction_a"],
+        standings=[{"src_id": "faction_a", "dst_id": "faction_b", "standing": 50}],
+    )
+
+    result = await engine.run_tick(session, tick_id=5)  # type: ignore[arg-type]
+    assert result["rule_applications"] >= 1
 
 
 @pytest.mark.asyncio

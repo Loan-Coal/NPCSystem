@@ -20,6 +20,7 @@ from neo4j import AsyncSession
 from npc_engine.common.yaml_utils import load_yaml_mapping
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.graph.memory_service import create_memory
+from npc_engine.graph.witnessed_queries import get_undisclosed_witnesses
 from npc_engine.world.time_utils import TimePoint
 
 if TYPE_CHECKING:
@@ -115,11 +116,26 @@ class MemoryConsolidationEngine:
             _LOGGER.exception("LLM error during consolidation for NPC %s — skipping", npc_id)
             return None
 
+        # Boost vividness when the NPC has undisclosed WITNESSED observations,
+        # since high-clarity first-hand observations form more vivid memories.
+        # Canonical events (IS_CANONICAL=true) always produce maximum-vividness memories
+        # to prevent them from being summarized or decayed by future consolidation passes.
+        vividness = _VIVIDNESS
+        try:
+            witnessed = await get_undisclosed_witnesses(session, npc_id=npc_id)
+            if witnessed:
+                max_clarity = max(int(w.get("clarity", 0)) for w in witnessed)
+                vividness = max(vividness, max_clarity)
+                if any(bool(w.get("is_canonical", False)) for w in witnessed):
+                    vividness = 100
+        except Exception:
+            pass  # Never let WITNESSED query failure block memory creation
+
         memory_id = await create_memory(
             session,
             character_id=npc_id,
             content=summary.strip(),
-            vividness=_VIVIDNESS,
+            vividness=vividness,
             emotional_charge=_EMOTIONAL_CHARGE,
             game_time=game_time,
         )

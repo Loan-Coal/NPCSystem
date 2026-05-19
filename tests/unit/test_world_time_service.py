@@ -139,6 +139,12 @@ def test_how_long_ago_few_days():
     assert how_long_ago(now, then) == "a few days ago"
 
 
+def test_how_long_ago_few_weeks():
+    now = _tp(year=1, season="spring", day=20, time_of_day="morning")
+    then = _tp(year=1, season="spring", day=3, time_of_day="morning")
+    assert how_long_ago(now, then) == "a few weeks ago"
+
+
 def test_how_long_ago_last_season():
     # exactly 28 days apart
     now = _tp(year=1, season="summer", day=1, time_of_day="morning")

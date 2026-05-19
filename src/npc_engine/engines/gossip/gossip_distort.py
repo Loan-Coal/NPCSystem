@@ -59,6 +59,7 @@ def gossip_distort(
     distortion_base: float,
     faction_standing: int | None = None,
     hostile_distortion_factor: float = 1.0,
+    is_canonical: bool = False,
 ) -> GossipDistortion:
     """Return a deterministic GossipDistortion based on bounded probability.
 
@@ -69,6 +70,9 @@ def gossip_distort(
     When faction_standing is <= -50, the computed probability is multiplied by
     hostile_distortion_factor before the gate check, increasing distortion likelihood
     between hostile-faction pairs.
+
+    Canonical events (is_canonical=True) are never distorted — they pass through
+    unchanged with distortion_type=None and distortion_level=0.
 
     Args:
         event_summary: Source event summary text to potentially distort.
@@ -81,10 +85,13 @@ def gossip_distort(
             or None if no standing edges exist. Standing <= -50 triggers hostile amplification.
         hostile_distortion_factor: Multiplier applied to probability when faction_standing
             indicates hostility. Values above 1.0 increase distortion likelihood.
+        is_canonical: When True, skip all distortion and return the summary unchanged.
 
     Returns:
         GossipDistortion with the (possibly modified) summary and distortion metadata.
     """
+    if is_canonical:
+        return GossipDistortion(summary=event_summary, distortion_type=None, distortion_level=0)
 
     probability = _distortion_probability(
         honesty=sharer_honesty,

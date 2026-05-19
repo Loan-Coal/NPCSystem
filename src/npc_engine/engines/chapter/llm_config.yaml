@@ -1,0 +1,18 @@
+engine: chapter
+llm:
+  backend: ollama
+  model: mistral:7b-instruct
+  temperature: 0.5
+  max_tokens: 150
+  top_p: 0.9
+  stop_sequences: []
+prompt:
+  name: chapter_label_v1
+  version: 1
+output_schema_ref: chapter_label_response_v1
+fallback:
+  policy: graceful_degradation
+  tiers:
+    - full
+timeouts_ms:
+  full: 30000

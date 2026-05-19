@@ -83,12 +83,14 @@ def _char_record(
     entries: list[dict],
     current_loc: str | None,
     routine_override: dict | None = None,
+    current_arrived_at_tick: int | None = None,
 ) -> dict:
     return {
         "character_id": char_id,
         "entries_json": json.dumps(entries),
         "current_location_id": current_loc,
         "routine_override": json.dumps(routine_override) if routine_override else None,
+        "current_arrived_at_tick": current_arrived_at_tick,
     }
 
 
@@ -119,7 +121,7 @@ async def test_character_moves_to_scheduled_location():
         result = await engine.run_tick(session=session, time_of_day="morning", tick_id=10)
 
     mock_update.assert_awaited_once_with(
-        session=session, character_id="char_a", location_id="loc_market"
+        session=session, character_id="char_a", location_id="loc_market", arrived_at_tick=10
     )
     assert result["moved"] == 1
     assert result["skipped"] == 0
@@ -219,7 +221,7 @@ async def test_override_not_expired_uses_override_location():
         result = await engine.run_tick(session=session, time_of_day="morning", tick_id=10)
 
     mock_update.assert_awaited_once_with(
-        session=session, character_id="char_a", location_id="loc_home"
+        session=session, character_id="char_a", location_id="loc_home", arrived_at_tick=10
     )
     mock_clear.assert_not_awaited()
     assert result["moved"] == 1
@@ -258,7 +260,7 @@ async def test_override_expired_clears_and_uses_schedule():
 
     mock_clear.assert_awaited_once_with(session=session, character_id="char_a")
     mock_update.assert_awaited_once_with(
-        session=session, character_id="char_a", location_id="loc_market"
+        session=session, character_id="char_a", location_id="loc_market", arrived_at_tick=10
     )
     assert result["moved"] == 1
 
@@ -317,7 +319,7 @@ async def test_multiple_characters_mixed_results():
     assert result["moved"] == 1
     assert result["skipped"] == 1
     mock_update.assert_awaited_once_with(
-        session=session, character_id="char_a", location_id="loc_market"
+        session=session, character_id="char_a", location_id="loc_market", arrived_at_tick=5
     )
 
 
@@ -384,7 +386,7 @@ async def test_override_at_exact_expiry_tick_clears_and_uses_schedule():
 
     mock_clear.assert_awaited_once_with(session=session, character_id="char_a")
     mock_update.assert_awaited_once_with(
-        session=session, character_id="char_a", location_id="loc_market"
+        session=session, character_id="char_a", location_id="loc_market", arrived_at_tick=10
     )
     assert result["moved"] == 1
 
@@ -427,7 +429,7 @@ async def test_override_malformed_json_falls_back_to_schedule():
 
     mock_clear.assert_not_awaited()
     mock_update.assert_awaited_once_with(
-        session=session, character_id="char_a", location_id="loc_market"
+        session=session, character_id="char_a", location_id="loc_market", arrived_at_tick=5
     )
     assert result["moved"] == 1
 
@@ -523,3 +525,72 @@ def test_entry_location_returns_location_for_matching_slot():
 
 def test_entry_location_returns_none_for_malformed_json():
     assert RoutineEngine._entry_location("not-json", "morning") is None
+
+
+# ---------------------------------------------------------------------------
+# Tests: ISSUE-014 — arrived_at_tick is read from LOCATED_AT edge, not tick_id
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_record_departure_uses_arrived_at_tick_from_row():
+    """arrived_at_tick on the WAS_AT edge should reflect when the character actually arrived,
+    not the current departure tick. Verifies ISSUE-014 fix."""
+    engine = _make_engine()
+    session = _make_session()
+
+    entries = [{"time_of_day": "morning", "location_id": "loc_market"}]
+    # Character arrived at tick 3, departing at tick 10.
+    rows = [_char_record("char_a", entries, current_loc="loc_barracks", current_arrived_at_tick=3)]
+
+    with (
+        patch(
+            "npc_engine.engines.routine.routine_engine.get_scheduled_characters",
+            new_callable=AsyncMock,
+            return_value=rows,
+        ),
+        patch(
+            "npc_engine.engines.routine.routine_engine.update_character_location",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "npc_engine.engines.routine.routine_engine.record_departure",
+            new_callable=AsyncMock,
+        ) as mock_departure,
+    ):
+        await engine.run_tick(session=session, time_of_day="morning", tick_id=10)
+
+    mock_departure.assert_awaited_once()
+    _, kwargs = mock_departure.call_args
+    assert kwargs["arrived_at_tick"] == 3   # from edge, not tick_id=10
+    assert kwargs["departed_at_tick"] == 10
+
+
+@pytest.mark.asyncio
+async def test_record_departure_falls_back_to_tick_id_when_no_arrived_at_tick():
+    """When LOCATED_AT has no arrived_at_tick (legacy edge), fall back to tick_id."""
+    engine = _make_engine()
+    session = _make_session()
+
+    entries = [{"time_of_day": "morning", "location_id": "loc_market"}]
+    rows = [_char_record("char_a", entries, current_loc="loc_barracks", current_arrived_at_tick=None)]
+
+    with (
+        patch(
+            "npc_engine.engines.routine.routine_engine.get_scheduled_characters",
+            new_callable=AsyncMock,
+            return_value=rows,
+        ),
+        patch(
+            "npc_engine.engines.routine.routine_engine.update_character_location",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "npc_engine.engines.routine.routine_engine.record_departure",
+            new_callable=AsyncMock,
+        ) as mock_departure,
+    ):
+        await engine.run_tick(session=session, time_of_day="morning", tick_id=10)
+
+    _, kwargs = mock_departure.call_args
+    assert kwargs["arrived_at_tick"] == 10  # fallback: same as tick_id

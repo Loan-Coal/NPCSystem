@@ -1,0 +1,9 @@
+node_type: Rumor
+fields:
+  id:                { type: str, required: true }
+  content:           { type: str, required: true }
+  origin_event_id:   { type: str }
+  created_at_tick:   { type: int, required: true }
+  mutation_distance: { type: int, required: true }
+  severity:          { type: int, required: true, range: [0, 100] }
+  is_fabricated:     { type: bool, required: true }

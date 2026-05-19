@@ -1,0 +1,7 @@
+edge_type: OPPOSES
+src_type: character
+dst_type: character
+fields:
+  reason:           { type: str, required: true }
+  established_tick: { type: int, required: true }
+  intensity:        { type: int, required: true, range: [0, 100] }

@@ -50,6 +50,12 @@ class TickScheduler:
         faction_politics_engine: BaseEngine | None = None,
         story_pacing_engine: BaseEngine | None = None,
         memory_consolidation_engine: BaseEngine | None = None,
+        clique_formation_engine: BaseEngine | None = None,
+        skill_progression_engine: BaseEngine | None = None,
+        oath_engine: BaseEngine | None = None,
+        treaty_engine: BaseEngine | None = None,
+        mood_contagion_engine: BaseEngine | None = None,
+        chapter_engine: BaseEngine | None = None,
         consolidation_advance_interval: int = 1,
         distributed_lease_enabled: bool = False,
         scheduler_id: str = "main",
@@ -75,6 +81,18 @@ class TickScheduler:
                 called before gossip/event sampling to write pacing multipliers to WorldState.
             memory_consolidation_engine: Optional engine exposing ``run_tick(session, game_time)``
                 called once per advance on the configured cadence.
+            clique_formation_engine: Optional engine exposing ``run_tick(session, tick_id)``
+                called every tick; self-skips when the configured interval is not met.
+            skill_progression_engine: Optional engine exposing ``run_tick(session, tick_id)``
+                called every tick; awards XP to characters for completed quests.
+            oath_engine: Optional engine exposing ``run_tick(session, tick_id)``
+                called every tick; expires pledges and runs stub violation checks.
+            treaty_engine: Optional engine exposing ``run_tick(session, tick_id)``
+                called every tick; expires treaties and checks mechanical conditions.
+            mood_contagion_engine: Optional engine exposing ``run_tick(session, tick_id)``
+                called every tick; blends mood states between co-located affectionate NPCs.
+            chapter_engine: Optional engine exposing ``run_tick(session, tick_id)``
+                called every tick; detects chapter transitions and labels them via LLM.
             consolidation_advance_interval: Run consolidation every N advances; clamped to 1.
             distributed_lease_enabled: When True, use ``lease_repo`` for cross-worker
                 tick deduplication instead of the local SchedulerState Cypher queries.
@@ -92,6 +110,12 @@ class TickScheduler:
         self._faction_politics_engine = faction_politics_engine
         self._story_pacing_engine = story_pacing_engine
         self._memory_consolidation_engine = memory_consolidation_engine
+        self._clique_formation_engine = clique_formation_engine
+        self._skill_progression_engine = skill_progression_engine
+        self._oath_engine = oath_engine
+        self._treaty_engine = treaty_engine
+        self._mood_contagion_engine = mood_contagion_engine
+        self._chapter_engine = chapter_engine
         self._consolidation_advance_interval = max(1, consolidation_advance_interval)
         self._advance_count = 0
         self._gossip_interval = max(1, gossip_interval)
@@ -192,6 +216,12 @@ class TickScheduler:
                 "faction_politics": [],
                 "story_pacing": [],
                 "consolidation": [],
+                "clique": [],
+                "skill_progression": [],
+                "oath": [],
+                "treaty": [],
+                "mood_contagion": [],
+                "chapter": [],
             }
             world_state = await get_world_state(session=session)
             for tick_id in range(start_tick + 1, end_tick + 1):
@@ -246,8 +276,44 @@ class TickScheduler:
                     response["routine"].append(routine_row)
 
                 if self._faction_politics_engine is not None:
-                    fp_row = await self._faction_politics_engine.run_tick(session=session)
+                    fp_row = await self._faction_politics_engine.run_tick(session=session, tick_id=tick_id)
                     response["faction_politics"].append(fp_row)
+
+                if self._clique_formation_engine is not None:
+                    clique_row = await self._clique_formation_engine.run_tick(
+                        session=session, tick_id=tick_id
+                    )
+                    response["clique"].append(clique_row)
+
+                if self._skill_progression_engine is not None:
+                    sp_row = await self._skill_progression_engine.run_tick(
+                        session=session, tick_id=tick_id
+                    )
+                    response["skill_progression"].append(sp_row)
+
+                if self._oath_engine is not None:
+                    oath_row = await self._oath_engine.run_tick(
+                        session=session, tick_id=tick_id
+                    )
+                    response["oath"].append(oath_row)
+
+                if self._treaty_engine is not None:
+                    treaty_row = await self._treaty_engine.run_tick(
+                        session=session, tick_id=tick_id
+                    )
+                    response["treaty"].append(treaty_row)
+
+                if self._mood_contagion_engine is not None:
+                    mood_row = await self._mood_contagion_engine.run_tick(
+                        session=session, tick_id=tick_id
+                    )
+                    response["mood_contagion"].append(mood_row)
+
+                if self._chapter_engine is not None:
+                    chapter_row = await self._chapter_engine.run_tick(
+                        session=session, tick_id=tick_id
+                    )
+                    response["chapter"].append(chapter_row)
 
                 if unresolved:
                     break

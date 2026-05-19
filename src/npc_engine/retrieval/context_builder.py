@@ -5,6 +5,11 @@ Purpose: Orchestrates context merge, relevance scoring, budget enforcement, and 
 Does NOT: call LLM adapters.
 Dependencies injected: EmbeddingIndex.
 Used by: engines.dialogue.dialogue_handler
+
+NOTE: This file exceeds the 300-line limit (currently ~367 lines). The single public function
+build_serialized_context is an async pipeline — every line is part of one cohesive orchestration
+flow. Splitting it would create helpers with no encapsulation value. See DECISIONS.md entry
+"context_builder.py exceeds 300-line limit (Phase 6)" for the full analysis.
 """
 
 from __future__ import annotations
@@ -27,12 +32,21 @@ from npc_engine.graph.goal_queries import get_goals_for_character
 from npc_engine.graph.item_queries import get_items_for_character
 from npc_engine.graph.secret_queries import get_secrets_for_character
 from npc_engine.graph.owes_queries import get_debts_for_character
+from npc_engine.graph.group_service import get_groups_for_character_svc
+from npc_engine.graph.rumor_service import get_rumors_for_character_svc
+from npc_engine.graph.trait_service import get_traits_svc
+from npc_engine.graph.pledge_service import get_pledges_for_character_svc
 from npc_engine.graph.memory_queries import get_memories_for_character
 from npc_engine.graph.reputation_queries import get_reputation_context_for_npc
+from npc_engine.graph.trust_queries import get_second_hop_events, get_trust_scores_for_events
+from npc_engine.graph.quest_queries import get_active_quest_for_player
 from npc_engine.retrieval.context_budget_enforcer import ContextCompressionCache, enforce_context_budget
 from npc_engine.retrieval.context_builder_helpers import (
     enforce_final_serialized_budget_with_context,
+    expand_query,
+    keyword_overlap,
     normalize_ratio,
+    rerank_by_keyword,
     to_json_safe,
 )
 from npc_engine.retrieval.context_merger import ContextItem, MergedContext, merge_context
@@ -137,13 +151,14 @@ async def build_serialized_context(
             return cached
         increment_metric(metric=CONTEXT_CACHE_MISSES_METRIC, labels={"npc_id": npc_id})
 
-    # Stage 2: location_id + optional vector search in parallel
-    #   Vector search filtered to events this NPC KNOWS_ABOUT (empty set → no filter)
+    # Stage 2: location_id + optional vector search in parallel.
+    #   Vector search uses conversation-expanded query (6.3) filtered to KNOWS_ABOUT events.
     rag_filter = known_event_ids if known_event_ids else None
+    rag_query = expand_query(player_message, session_turns)
     if not skip_rag:
         location_id, tier_b_results = await asyncio.gather(
             get_npc_location_id(session=session, npc_id=npc_id),
-            embedding_index.search(query=player_message, top_k=settings.RAG_TOP_K, filter_ids=rag_filter),
+            embedding_index.search(query=rag_query, top_k=settings.RAG_TOP_K, filter_ids=rag_filter),
         )
     else:
         location_id = await get_npc_location_id(session=session, npc_id=npc_id)
@@ -160,6 +175,10 @@ async def build_serialized_context(
         owned_items,
         secrets,
         obligations,
+        group_memberships,
+        believed_rumors,
+        traits,
+        active_pledges,
     ) = await asyncio.gather(
         get_location_context(session=session, location_id=location_id),
         get_events_for_npc(session=session, npc_id=npc_id, limit=settings.RAG_TOP_K),
@@ -170,12 +189,38 @@ async def build_serialized_context(
             threshold=settings.REPUTATION_CONTEXT_THRESHOLD,
         ),
         get_memories_for_character(session, character_id=npc_id, k=3),
-        get_beliefs_for_character(session, character_id=npc_id, k=3),
-        get_goals_for_character(session, character_id=npc_id, k=3, status_filter="active"),
+        get_beliefs_for_character(session, character_id=npc_id, k=10),
+        get_goals_for_character(session, character_id=npc_id, k=10, status_filter="active"),
         get_items_for_character(session, character_id=npc_id, k=10),
-        get_secrets_for_character(session, character_id=npc_id, k=3),
+        get_secrets_for_character(session, character_id=npc_id, k=10),
         get_debts_for_character(session, character_id=npc_id, k=5),
+        get_groups_for_character_svc(session, character_id=npc_id),
+        get_rumors_for_character_svc(session, character_id=npc_id, min_confidence=30),
+        get_traits_svc(session, npc_id),
+        get_pledges_for_character_svc(session, npc_id, active_only=True),
     )
+
+    # 6.1 Two-pass rerank: fetch top-10 by intrinsic score, keep top-3 by keyword overlap.
+    beliefs = rerank_by_keyword(beliefs, "content", player_message, top_k=3)
+    goals = rerank_by_keyword(goals, "objective", player_message, top_k=3)
+    secrets = rerank_by_keyword(secrets, "content", player_message, top_k=3)
+
+    # Stage 4: trust scores + second-hop events + player quest state (depends on Stage 3).
+    event_ids = [str(e["id"]) for e in events if e.get("id")]
+
+    async def _no_quest() -> dict | None:
+        return None
+
+    trust_scores, second_hop_events, active_quest = await asyncio.gather(
+        get_trust_scores_for_events(session, npc_id=npc_id, event_ids=event_ids),
+        get_second_hop_events(session, npc_id=npc_id),
+        get_active_quest_for_player(session, player_id=player_id) if player_id else _no_quest(),
+    )
+
+    # 6.5: Cross-encoder rerank Tier B/C vector results before building ContextItems.
+    if settings.CROSS_ENCODER_ENABLED and tier_b_results:
+        from npc_engine.retrieval.cross_encoder_reranker import rerank as cross_encode_rerank
+        tier_b_results = cross_encode_rerank(player_message, tier_b_results)
 
     # Assemble tiers from pre-fetched data
     tier0 = [
@@ -193,6 +238,10 @@ async def build_serialized_context(
             events=events,
             location_id=location_id,
             location_context=location_context,
+            group_memberships=group_memberships or [],
+            believed_rumors=believed_rumors or [],
+            traits=traits or [],
+            active_pledges=active_pledges or [],
         )
     )
 
@@ -210,6 +259,8 @@ async def build_serialized_context(
             )
         )
 
+    if active_quest:
+        tier_a_raw.append(ContextItem(key="active_quest", text=serialize_json(active_quest), tier="tierA", priority=89))
     if memories:
         tier_a_raw.append(ContextItem(key="memories", text=serialize_json(memories), tier="tierA", priority=90))
     if beliefs:
@@ -222,6 +273,16 @@ async def build_serialized_context(
         tier_a_raw.append(ContextItem(key="secrets", text=serialize_json(secrets), tier="tierA", priority=84))
     if obligations:
         tier_a_raw.append(ContextItem(key="obligations", text=serialize_json(obligations), tier="tierA", priority=83))
+    # 6.6: second-hop events from trusted friends at lower priority than direct events.
+    for idx, evt in enumerate(second_hop_events or []):
+        tier_a_raw.append(
+            ContextItem(
+                key=f"second_hop:{idx}:{npc_id}",
+                text=serialize_json(evt, strip_nulls=True),
+                tier="tierA",
+                priority=74 - idx,
+            )
+        )
 
     tier_b_raw: list[ContextItem] = []
     tier_c_raw: list[ContextItem] = []
@@ -244,7 +305,22 @@ async def build_serialized_context(
             for row in tier_b_results
         }
 
-    tier_a = rank_tier_items(items=tier_a_raw, llm_config=llm_config, vector_scores=vector_scores)
+    # Map trust_scores from event_ids back to ContextItem keys ("event:{index}:{npc_id}").
+    # Trust query returns event_id → score; ContextItem keys use positional index, not id.
+    # Build a mapping from event index to trust score via the events list order.
+    event_key_trust: dict[str, float] = {}
+    for idx, evt in enumerate(events):
+        eid = str(evt.get("id", ""))
+        if eid in trust_scores:
+            event_key_trust[f"event:{idx}:{npc_id}"] = trust_scores[eid]
+
+    tier_a = rank_tier_items(
+        items=tier_a_raw,
+        llm_config=llm_config,
+        vector_scores=vector_scores,
+        trust_scores=event_key_trust,
+        active_quest=active_quest,
+    )
     tier_b = rank_tier_items(items=tier_b_raw, llm_config=llm_config, vector_scores=vector_scores)
     tier_c = rank_tier_items(items=tier_c_raw, llm_config=llm_config, vector_scores=vector_scores)
 

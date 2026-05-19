@@ -1,0 +1,7 @@
+edge_type: CAUSED_BY
+src_type: event
+dst_type: event
+fields:
+  causation_strength: { type: int, required: true, range: [0, 100] }
+  cause_type:         { type: str, required: true }
+  tick_lag:           { type: int, required: true }

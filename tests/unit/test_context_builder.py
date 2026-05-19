@@ -92,9 +92,12 @@ def _patch_graph_calls(monkeypatch, tier_a_items=None) -> None:
     async def fake_obligations(session, *, character_id, k):
         return []
 
+    async def fake_group_memberships(session, *, character_id, include_dissolved=False):
+        return []
+
     _items = tier_a_items or []
 
-    def fake_assemble(*, npc_id, character_bundle, events, location_id, location_context):
+    def fake_assemble(*, npc_id, character_bundle, events, location_id, location_context, group_memberships=None, believed_rumors=None, traits=None, active_pledges=None):
         return _items
 
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_world_state", fake_world_reader)
@@ -111,6 +114,33 @@ def _patch_graph_calls(monkeypatch, tier_a_items=None) -> None:
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_items_for_character", fake_items)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_secrets_for_character", fake_secrets)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_debts_for_character", fake_obligations)
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_groups_for_character_svc", fake_group_memberships)
+
+    async def fake_believed_rumors(session, *, character_id, min_confidence=0):
+        return []
+
+    async def fake_traits(session, character_id):
+        return []
+
+    async def fake_pledges(session, character_id, active_only=True):
+        return []
+
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_rumors_for_character_svc", fake_believed_rumors)
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_traits_svc", fake_traits)
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_pledges_for_character_svc", fake_pledges)
+
+    async def fake_trust_scores(session, *, npc_id, event_ids):
+        return {}
+
+    async def fake_second_hop(session, *, npc_id, trust_threshold=50, limit=5):
+        return []
+
+    async def fake_active_quest(session, *, player_id):
+        return None
+
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_trust_scores_for_events", fake_trust_scores)
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_second_hop_events", fake_second_hop)
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_active_quest_for_player", fake_active_quest)
 
 
 @pytest.mark.asyncio

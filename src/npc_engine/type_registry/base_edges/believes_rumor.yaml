@@ -1,0 +1,7 @@
+edge_type: BELIEVES_RUMOR
+src_type: character
+dst_type: rumor
+fields:
+  confidence:          { type: int, required: true, range: [0, 100] }
+  believed_at_tick:    { type: int, required: true }
+  from_character_id:   { type: str }

@@ -110,6 +110,12 @@ class Settings(BaseSettings):
     RATE_LIMIT_REQUESTS_PER_SECOND: float = Field(default=50.0, gt=0)
     RATE_LIMIT_BURST_SIZE: int = Field(default=100, gt=0)
 
+    WITNESSED_MAX_PER_EVENT: int = 10
+    CLIQUE_FORMATION_TICK_INTERVAL: int = 10
+    TREATY_LLM_EVAL_ENABLED: bool = False
+    CROSS_ENCODER_ENABLED: bool = False
+    RUMOR_DISTORTION_THRESHOLD: int = 50
+
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     LOG_LLM_PROMPTS: bool = False
     ENV: Literal["dev", "staging", "prod"] = "dev"

@@ -1,0 +1,6 @@
+node_type: Skill
+fields:
+  id: { type: str, required: true }
+  name: { type: str, required: true }
+  category: { type: str, required: true }   # combat | social | craft | knowledge
+  description: { type: str, required: false }

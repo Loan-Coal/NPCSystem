@@ -1835,6 +1835,18 @@ Add these as low-priority Tier A items in `context_builder.py` (priority 70–75
 
 > Each module is independently deployable. All depend on Phase 4 cross-domain primitives.
 
+> **⚠ FLAW (2026-05-19):** Schema migrations are not planned for Phase 7. Each sub-phase adds new
+> fields to existing nodes/edges (`IS_CANONICAL` on Event §7.5, `power_score`/`treasury`/
+> `military_strength` on Faction §7.2, `RELATIONSHIP_PHASE` on RELATES_TO §7.3). Without
+> migration scripts, existing graph data silently lacks these fields and queries break.
+> **Action required:** Add a Phase 7.0 "schema migration" step before each genre module,
+> analogous to `scripts/migrations/add_faction_support.py` from Phase 1.
+
+> **⚠ NOTE (2026-05-19):** Phase 7.2 (Political Simulation) should inherit the
+> `faction_id`/`reputation_delta` pattern on `EventTemplate` for political events (AGENDA
+> votes, power shifts) rather than inventing separate reputation wiring. See ISSUE-005 fix
+> and `EventHandler.run_tick` for the established pattern.
+
 ---
 
 ### 7.1 Detective / Mystery (B.1) — L

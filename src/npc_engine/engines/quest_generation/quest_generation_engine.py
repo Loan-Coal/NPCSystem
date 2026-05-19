@@ -37,6 +37,7 @@ from npc_engine.engines.quest_generation.slot_models import (
     SlotFill,
 )
 from npc_engine.engines.quest_generation.slot_validator import SlotValidator
+from npc_engine.graph.causality_service import record_causation
 from npc_engine.graph.quest_node_service import create_quest
 
 _logger = logging.getLogger(__name__)
@@ -79,6 +80,7 @@ class QuestGenerationEngine:
         self,
         session: AsyncSession,
         quest_giver_id: str,
+        cause_event_id: str | None = None,
     ) -> GeneratedQuest:
         """Generate a quest for the given quest giver.
 
@@ -89,6 +91,8 @@ class QuestGenerationEngine:
         Args:
             session: Active Neo4j async session.
             quest_giver_id: ID of the Character node that will give the quest.
+            cause_event_id: When provided, writes a CAUSED_BY edge from the new quest
+                to this event ID (narrative causation, strength=80).
 
         Returns:
             GeneratedQuest with the new quest_id, template_id, fills, and description.
@@ -126,6 +130,16 @@ class QuestGenerationEngine:
             "completed_at": None,
         }
         await create_quest(session, payload)
+        if cause_event_id is not None:
+            await record_causation(
+                session,
+                effect_node_id=quest_id,
+                effect_node_type="quest",
+                cause_event_id=cause_event_id,
+                causation_strength=80,
+                cause_type="narrative",
+                tick_lag=0,
+            )
 
         return GeneratedQuest(
             quest_id=quest_id,

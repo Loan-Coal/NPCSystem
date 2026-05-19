@@ -1,0 +1,8 @@
+node_type: choice
+fields:
+  id: { type: str, required: true }
+  chosen_at_tick: { type: int, required: true }
+  chosen_by_character_id: { type: str, required: true }
+  selected_option: { type: str, required: true }
+  available_options: { type: str, required: false }
+  consequence_event_id: { type: str, required: false }

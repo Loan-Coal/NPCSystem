@@ -47,7 +47,8 @@ def how_long_ago(from_: TimePoint, to: TimePoint) -> str:
       - same day and same time_of_day  → "moments ago"
       - same day, different time_of_day → "earlier today"
       - 1 day                           → "yesterday"
-      - 2–27 days                       → "a few days ago"
+      - 2–6 days                        → "a few days ago"
+      - 7–27 days                       → "a few weeks ago"
       - 28 days (one full season)       → "last season"
       - more than 28 days               → "long ago"
 
@@ -65,8 +66,10 @@ def how_long_ago(from_: TimePoint, to: TimePoint) -> str:
         return "earlier today"
     if delta_days == 1:
         return "yesterday"
-    if delta_days < DAYS_PER_SEASON:
+    if delta_days < 7:
         return "a few days ago"
+    if delta_days < DAYS_PER_SEASON:
+        return "a few weeks ago"
     if delta_days == DAYS_PER_SEASON:
         return "last season"
     return "long ago"

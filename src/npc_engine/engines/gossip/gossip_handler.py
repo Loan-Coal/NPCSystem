@@ -23,6 +23,7 @@ from npc_engine.engines.gossip.knowledge_propagator import (
     SECRET_DISTORTION_CHANCE,
 )
 from npc_engine.engines.gossip.pair_selector import select_pairs
+from npc_engine.graph.rumor_service import believe_rumor, create_rumor
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
 
 
@@ -124,15 +125,37 @@ class GossipHandler:
                     distortion_base=self._settings.GOSSIP_DISTORTION_BASE,
                     faction_standing=best_standing,
                     hostile_distortion_factor=self._weight_config.hostile_distortion_factor,
+                    is_canonical=bool(event_record.get("is_canonical", False)),
                 )
+                event_id = str(event_record["event_id"])
                 await propagate(
                     session=session,
                     receiver_id=receiver["id"],
                     source_character_id=sharer["id"],
-                    event_id=str(event_record["event_id"]),
+                    event_id=event_id,
                     tick_id=tick_id,
                     distortion=distortion,
                 )
+                if distortion.distortion_level >= self._settings.RUMOR_DISTORTION_THRESHOLD:
+                    try:
+                        rumor_id = await create_rumor(
+                            session,
+                            content=distortion.summary,
+                            origin_event_id=event_id,
+                            created_at_tick=tick_id,
+                            severity=int(event_record["severity"]),
+                            is_fabricated=False,
+                        )
+                        await believe_rumor(
+                            session,
+                            character_id=receiver["id"],
+                            rumor_id=rumor_id,
+                            confidence=distortion.distortion_level,
+                            tick=tick_id,
+                            from_character_id=sharer["id"],
+                        )
+                    except Exception:
+                        LOGGER.exception("Failed to record rumor for event %s", event_id)
                 trust_delta = 1 if distortion.distortion_type is None else -1
                 await log_gossip(
                     session=session,

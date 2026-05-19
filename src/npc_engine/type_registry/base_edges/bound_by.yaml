@@ -1,0 +1,5 @@
+edge_type: BOUND_BY
+src_type: faction
+dst_type: treaty
+fields:
+  role: { type: str, required: true }

@@ -240,6 +240,12 @@ def get_tick_scheduler() -> TickScheduler:
         routine_engine=get_routine_engine(),
         faction_politics_engine=get_faction_politics_engine(),
         story_pacing_engine=get_story_pacing_engine(),
+        clique_formation_engine=get_clique_formation_engine(),
+        skill_progression_engine=get_skill_progression_engine(),
+        oath_engine=get_oath_engine(),
+        treaty_engine=get_treaty_engine(),
+        mood_contagion_engine=get_mood_contagion_engine(),
+        chapter_engine=get_chapter_engine(),
         gossip_interval=settings.GOSSIP_TICK_INTERVAL,
         event_interval=settings.EVENT_TICK_INTERVAL,
         distributed_lease_enabled=settings.DISTRIBUTED_TICK_LEASE_ENABLED,
@@ -397,6 +403,86 @@ def get_context_cache() -> DialogueContextCache:
     """
     settings = get_settings()
     return DialogueContextCache(ttl_seconds=settings.DIALOGUE_SESSION_TTL)
+
+
+@lru_cache
+def get_clique_formation_engine():
+    """Create singleton clique formation engine for auto-detecting high-affection character pairs.
+
+    Returns:
+        CliqueFormationEngine configured with CLIQUE_FORMATION_TICK_INTERVAL from settings.
+    """
+    from npc_engine.engines.clique.clique_formation_engine import CliqueFormationEngine
+
+    settings = get_settings()
+    return CliqueFormationEngine(settings=settings)
+
+
+@lru_cache
+def get_treaty_engine():
+    """Create singleton treaty engine for treaty lifecycle management.
+
+    Returns:
+        TreatyEngine instance.
+    """
+    from npc_engine.engines.treaty.treaty_engine import TreatyEngine
+
+    return TreatyEngine()
+
+
+@lru_cache
+def get_oath_engine():
+    """Create singleton oath engine for pledge lifecycle management.
+
+    Returns:
+        OathEngine instance.
+    """
+    from npc_engine.engines.oath.oath_engine import OathEngine
+
+    return OathEngine()
+
+
+@lru_cache
+def get_skill_progression_engine():
+    """Create singleton skill progression engine for XP awards on quest completion.
+
+    Returns:
+        SkillProgressionEngine instance.
+    """
+    from npc_engine.engines.skill.skill_progression_engine import SkillProgressionEngine
+
+    return SkillProgressionEngine()
+
+
+@lru_cache
+def get_chapter_engine():
+    """Create singleton chapter engine with its own LLM client.
+
+    Returns:
+        ChapterEngine configured from engines/chapter/llm_config.yaml.
+    """
+    from npc_engine.engines.chapter.chapter_engine import ChapterEngine
+
+    settings = get_settings()
+    engine_config = get_engine_model_config_for("chapter")
+    llm_client = _register_adapter(create_llm_client_for_engine(engine_config, settings))
+    return ChapterEngine(
+        llm_client=llm_client,
+        max_tokens=engine_config.llm.max_tokens,
+        temperature=engine_config.llm.temperature,
+    )
+
+
+@lru_cache
+def get_mood_contagion_engine():
+    """Create singleton mood contagion engine bound to the shared emotion store.
+
+    Returns:
+        MoodContagionEngine wired to the singleton EmotionStore.
+    """
+    from npc_engine.engines.mood.mood_contagion_engine import MoodContagionEngine
+
+    return MoodContagionEngine(emotion_store=get_emotion_store())
 
 
 @lru_cache

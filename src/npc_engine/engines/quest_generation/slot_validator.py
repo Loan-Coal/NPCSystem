@@ -1,9 +1,10 @@
 """
 Module: slot_validator
 Layer: engines
-Purpose: Validates proposed slot fills against the graph by checking node existence and type.
+Purpose: Validates proposed slot fills against the graph by checking node existence, type,
+         and character skill thresholds for slots with REQUIRES_SKILL constraints.
 Does NOT: call LLMs or write to the graph.
-Dependencies: neo4j.AsyncSession
+Dependencies: neo4j.AsyncSession, graph.skill_queries
 Dependencies injected: AsyncSession (graph reader).
 Used by: npc_engine.engines.quest_generation.quest_generation_engine
 """
@@ -15,11 +16,16 @@ from typing import TYPE_CHECKING
 from neo4j import AsyncSession
 
 from npc_engine.engines.quest_generation.slot_models import SlotDefinition, SlotFill
+from npc_engine.graph.skill_queries import check_skill_threshold
 
 if TYPE_CHECKING:
     pass
 
 _CYPHER_CHECK_NODE = "MATCH (n {id: $node_id}) RETURN labels(n) AS labels LIMIT 1"
+_CYPHER_TEMPLATE_SKILL_REQS = """
+MATCH (qt:QuestTemplate {id: $template_id})-[r:REQUIRES_SKILL]->(s:Skill)
+RETURN s.id AS skill_id, toInteger(r.min_level) AS min_level
+"""
 
 
 class SlotValidator:
@@ -70,6 +76,46 @@ class SlotValidator:
                     f"slot '{slot_def.name}' node '{node_id}' has labels {sorted(actual)}"
                     f" but expected '{expected}'"
                 )
+        return violations
+
+    async def check_skill_requirements(
+        self,
+        template_id: str,
+        character_fills: dict[str, str],
+    ) -> list[str]:
+        """Check whether characters filling slots meet the template's skill requirements.
+
+        Queries REQUIRES_SKILL edges from the QuestTemplate node. For each required skill,
+        checks all character-type fills. Returns violations for any character that does not
+        meet the minimum level.
+
+        Args:
+            template_id: ID of the QuestTemplate node in the graph.
+            character_fills: Mapping of slot_name → character_id for character slots.
+
+        Returns:
+            List of violation strings; empty means all skill requirements are satisfied.
+        """
+        result = await self._session.run(_CYPHER_TEMPLATE_SKILL_REQS, template_id=template_id)
+        requirements = [dict(r) async for r in result]
+        if not requirements:
+            return []
+        violations: list[str] = []
+        for req in requirements:
+            skill_id = req["skill_id"]
+            min_level = int(req["min_level"])
+            for slot_name, character_id in character_fills.items():
+                meets = await check_skill_threshold(
+                    self._session,
+                    character_id=character_id,
+                    skill_id=skill_id,
+                    min_level=min_level,
+                )
+                if not meets:
+                    violations.append(
+                        f"slot '{slot_name}' character '{character_id}' does not meet "
+                        f"skill_threshold_not_met: skill='{skill_id}' min_level={min_level}"
+                    )
         return violations
 
     async def _get_labels(self, node_id: str) -> list[str] | None:

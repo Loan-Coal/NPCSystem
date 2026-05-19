@@ -114,6 +114,19 @@ designer/tooling clients, not game-engine clients.
 
 ---
 
+## Decision: context_builder.py exceeds 300-line limit (Phase 6)
+**Date:** 2026-05-18
+**Service / area:** retrieval/context_builder.py (Phase 6)
+**Context:** After Phase 6 additions (two-pass reranking, query expansion, trust scoring, second-hop events, quest state, cross-encoder gating), context_builder.py is 367 lines. The CLAUDE.md hard limit is 300 lines.
+**Options considered:**
+  1. Split the tier_a assembly block into `_build_secondary_tier_a_items(...)` — saves ~30 lines in main body but adds ~20-line helper with 12 parameters. Net −10 lines; the helper has no cohesion beyond "things we append to tier_a_raw".
+  2. Extract Stage 4 gather into `_fetch_enrichment(session, npc_id, player_id, event_ids)` — saves 12 lines, adds 15-line helper. Net +3 lines; still over 300.
+  3. Accept the overrun with a justifying comment and this DECISIONS entry — no artificial splits.
+**Choice:** Option 3. `build_serialized_context` is a single async orchestration function: every line is part of one logical pipeline. Splitting it would distribute one function across two modules with no encapsulation benefit. The 67-line overrun is entirely new Phase 6 gather/wiring logic.
+**Consequences:** context_builder.py stays at ~367 lines. If the function grows further (Phase 7+), split then — a 500-line orchestration file is unacceptable; 367 is defensible.
+
+---
+
 ## Decision: `how_long_ago` 7–27 day gap treated as "a few days ago"
 **Date:** 2026-05-11
 **Service / area:** world/time_utils.py (Phase 3.1)

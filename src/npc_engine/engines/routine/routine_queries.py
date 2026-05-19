@@ -26,7 +26,8 @@ WHERE c.is_active = true
 RETURN c.id AS character_id,
        s.entries AS entries_json,
        c.routine_override AS routine_override,
-       [(c)-[:LOCATED_AT]->(loc) | loc.id][0] AS current_location_id
+       [(c)-[:LOCATED_AT]->(loc) | loc.id][0] AS current_location_id,
+       [(c)-[e:LOCATED_AT]->() | e.arrived_at_tick][0] AS current_arrived_at_tick
 """
 
 # ---------------------------------------------------------------------------
@@ -39,7 +40,7 @@ OPTIONAL MATCH (c)-[old:LOCATED_AT]->()
 DELETE old
 WITH c
 MATCH (loc:Location {id: $location_id})
-CREATE (c)-[:LOCATED_AT]->(loc)
+CREATE (c)-[:LOCATED_AT {arrived_at_tick: $arrived_at_tick}]->(loc)
 """
 
 CYPHER_CLEAR_ROUTINE_OVERRIDE = """
@@ -79,22 +80,25 @@ async def update_character_location(
     session: AsyncSession,
     character_id: str,
     location_id: str,
+    arrived_at_tick: int = 0,
 ) -> None:
     """Atomically replace the LOCATED_AT edge for a character.
 
     Deletes any existing LOCATED_AT edge and creates a new one pointing to
-    the given location. No-op if the Location node does not exist (Cypher
-    MATCH silently produces no rows).
+    the given location with the arrival tick stamped on the edge.
+    No-op if the Location node does not exist (Cypher MATCH silently produces no rows).
 
     Args:
         session: Active Neo4j async session.
         character_id: ID of the character to move.
         location_id: ID of the destination location node.
+        arrived_at_tick: Tick at which the character arrived; written onto the new edge.
     """
     await session.run(
         CYPHER_UPDATE_LOCATED_AT,
         character_id=character_id,
         location_id=location_id,
+        arrived_at_tick=arrived_at_tick,
     )
 
 

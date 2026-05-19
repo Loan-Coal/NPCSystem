@@ -23,6 +23,8 @@ def rank_tier_items(
     items: list[ContextItem],
     llm_config: LLMConfig,
     vector_scores: dict[str, float],
+    trust_scores: dict[str, float] | None = None,
+    active_quest: dict | None = None,
 ) -> list[ContextItem]:
     """Score and rank context items by relevance.
 
@@ -30,13 +32,21 @@ def rank_tier_items(
         items: Unordered context items to rank.
         llm_config: LLM configuration providing relevance weights and proximity settings.
         vector_scores: Map of item key to normalized vector similarity score.
+        trust_scores: Optional map of Tier A event item key to trust score (0–1). (6.2)
+        active_quest: Optional active quest dict for quest-relevance scoring. (6.4)
 
     Returns:
         Items reordered by descending relevance score with updated priority fields.
     """
 
     candidates = [
-        _build_candidate(item=item, llm_config=llm_config, vector_scores=vector_scores)
+        _build_candidate(
+            item=item,
+            llm_config=llm_config,
+            vector_scores=vector_scores,
+            trust_scores=trust_scores,
+            active_quest=active_quest,
+        )
         for item in items
     ]
     return rank_context_candidates(
@@ -51,6 +61,8 @@ def _build_candidate(
     item: ContextItem,
     llm_config: LLMConfig,
     vector_scores: dict[str, float],
+    trust_scores: dict[str, float] | None = None,
+    active_quest: dict | None = None,
 ) -> ContextRelevanceCandidate:
     node_type, node_id = parse_node_identity(item.key)
     payload = parse_json_object(item.text)
@@ -61,8 +73,8 @@ def _build_candidate(
         recency=_extract_recency_score(payload),
         severity=_extract_severity_score(payload),
         proximity_hops=_infer_proximity_hops(item.key, llm_config.max_proximity_hops),
-        relation=_extract_relation_score(item=item, vector_scores=vector_scores),
-        quest=_quest_score(item=item),
+        relation=_extract_relation_score(item=item, vector_scores=vector_scores, trust_scores=trust_scores),
+        quest=_quest_score(item=item, active_quest=active_quest),
     )
 
 
@@ -114,16 +126,33 @@ def _extract_severity_score(payload: dict[str, Any]) -> float:
     return 0.0
 
 
-def _extract_relation_score(*, item: ContextItem, vector_scores: dict[str, float]) -> float:
+def _extract_relation_score(
+    *,
+    item: ContextItem,
+    vector_scores: dict[str, float],
+    trust_scores: dict[str, float] | None = None,
+) -> float:
     if item.tier == "tierB":
         return vector_scores.get(item.key, 0.0)
-    return _normalize_ratio(item.priority / 100.0)
+    priority_score = _normalize_ratio(item.priority / 100.0)
+    # 6.2: blend priority with trust toward the event's actor when available.
+    if trust_scores and item.key.startswith("event:"):
+        trust = trust_scores.get(item.key)
+        if trust is not None:
+            return 0.5 * priority_score + 0.5 * trust
+    return priority_score
 
 
-def _quest_score(*, item: ContextItem) -> float:
-    lowered = item.key.lower()
-    if "quest" in lowered:
+def _quest_score(*, item: ContextItem, active_quest: dict | None = None) -> float:
+    if "quest" in item.key.lower():
         return 1.0
+    # 6.4: boost items whose payload references the active quest's target or giver.
+    if active_quest is not None:
+        ids_to_match = {active_quest.get("target_id"), active_quest.get("giver_id")} - {None}
+        if ids_to_match:
+            payload = parse_json_object(item.text)
+            if any(str(v) in ids_to_match for v in payload.values() if isinstance(v, str)):
+                return 1.0
     return 0.0
 
 

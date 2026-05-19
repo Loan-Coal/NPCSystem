@@ -1,0 +1,22 @@
+name: chapter_engine
+version: v1.0.0
+uses_llm: true
+inputs:
+  - tick_id
+  - session
+outputs:
+  - chapter_id
+  - chapter_name
+  - transition
+side_effects:
+  - chapter_node_created
+  - chapter_node_closed
+  - event_linked_to_chapter
+idempotency:
+  key_required: false
+  replay_behavior: skip_if_done
+auth_scope: graph_write
+error_contract:
+  - CHAPTER_LLM_ERROR
+tests:
+  - test_chapter_engine

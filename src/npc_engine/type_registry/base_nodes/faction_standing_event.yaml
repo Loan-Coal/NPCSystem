@@ -1,0 +1,10 @@
+node_type: FactionStandingEvent
+fields:
+  id: { type: str, required: true }
+  src_faction_id: { type: str, required: true }
+  dst_faction_id: { type: str, required: true }
+  delta: { type: int, required: true }
+  new_standing: { type: int, required: true }
+  tick_id: { type: int, required: true }
+  cause_event_id: { type: str, required: false }
+  cause_rule_id: { type: str, required: false }

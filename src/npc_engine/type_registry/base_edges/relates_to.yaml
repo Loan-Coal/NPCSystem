@@ -8,3 +8,5 @@ fields:
   interaction_count: { type: int, required: true }
   last_updated_at: { type: str, required: true }
   relevance_score: { type: float, required: true }
+  relationship_phase: { type: str, required: false }
+  phase_started_at_tick: { type: int, required: false }

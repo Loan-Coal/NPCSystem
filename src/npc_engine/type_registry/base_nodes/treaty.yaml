@@ -1,0 +1,9 @@
+node_type: Treaty
+fields:
+  id:                  { type: str,  required: true }
+  terms_narrative:     { type: str,  required: true }
+  terms_conditions:    { type: str,  required: true }
+  signed_at_tick:      { type: int,  required: true }
+  expires_at_tick:     { type: int,  required: false }
+  binding_event_id:    { type: str,  required: false }
+  status:              { type: str,  required: true }

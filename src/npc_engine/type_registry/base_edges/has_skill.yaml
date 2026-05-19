@@ -1,0 +1,7 @@
+edge_type: HAS_SKILL
+src_type: character
+dst_type: skill
+fields:
+  level: { type: int, required: true }        # 0–100
+  xp: { type: int, required: true }
+  last_used_at_tick: { type: int, required: false }
