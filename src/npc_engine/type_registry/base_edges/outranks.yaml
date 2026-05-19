@@ -1,0 +1,10 @@
+edge_type: OUTRANKS
+src_type: character
+dst_type: character
+fields:
+  context:
+    type: str
+    required: true    # e.g. "military" / "court" / "guild"
+  rank_delta:
+    type: int
+    required: true    # positive = src outranks dst by this many levels

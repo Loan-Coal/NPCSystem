@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-from conftest import Narrator, api_get, api_post, char_props
+from conftest import Narrator, api_get, api_patch, api_post, char_props
 
 SCENARIO_ID = "scenario_quest_generation"
 
@@ -34,6 +34,9 @@ def test_quest_generation(http_client: httpx.Client) -> None:
     generated_quest_id: str | None = None
 
     try:
+        # Reset pacing rate so this test is not affected by stale DB state from prior runs.
+        api_patch(http_client, f"{graph}/nodes/WorldState/world", {"properties": {"quest_generation_rate": 1.0}})
+
         n.narrate("Create a merchant character who will give a quest.")
         n.step("Create merchant character", api_post(http_client, f"{graph}/nodes/Character", {
             "properties": char_props(GIVER_ID, "Merchant Bob", is_player=False, archetype="merchant", now=now),

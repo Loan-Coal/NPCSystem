@@ -1,4 +1,10 @@
 edge_type: CONTROLS
 src_type: faction
 dst_type: location
-fields: {}
+fields:
+  control_strength:
+    type: int
+    required: false   # 0–100; how firmly the faction holds this location
+  contested_by_faction_id:
+    type: str
+    required: false   # set when another faction is challenging control

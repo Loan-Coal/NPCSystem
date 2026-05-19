@@ -1,0 +1,10 @@
+# DEC-001: LEVERAGE is a reified node (not a Character→Character edge) to support
+# GROUNDED_IN graph traversal to a Secret node (F3 fix).
+# Relationships: Character -[HAS_LEVERAGE]→ Leverage -[AGAINST]→ Character
+#                Leverage -[GROUNDED_IN]→ Secret
+node_type: Leverage
+fields:
+  id:              { type: str, required: true }
+  demand:          { type: str, required: true }
+  status:          { type: str, required: true }   # held/used/exposed
+  created_at_tick: { type: int, required: true }

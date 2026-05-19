@@ -246,6 +246,10 @@ def get_tick_scheduler() -> TickScheduler:
         treaty_engine=get_treaty_engine(),
         mood_contagion_engine=get_mood_contagion_engine(),
         chapter_engine=get_chapter_engine(),
+        succession_engine=get_succession_engine(),
+        agenda_engine=get_agenda_engine(),
+        need_decay_engine=get_need_decay_engine(),
+        military_engine=get_military_engine(),
         gossip_interval=settings.GOSSIP_TICK_INTERVAL,
         event_interval=settings.EVENT_TICK_INTERVAL,
         distributed_lease_enabled=settings.DISTRIBUTED_TICK_LEASE_ENABLED,
@@ -483,6 +487,66 @@ def get_mood_contagion_engine():
     from npc_engine.engines.mood.mood_contagion_engine import MoodContagionEngine
 
     return MoodContagionEngine(emotion_store=get_emotion_store())
+
+
+@lru_cache
+def get_succession_engine():
+    """Create singleton succession engine for political title inheritance.
+
+    Returns:
+        SuccessionEngine instance.
+    """
+    from npc_engine.engines.succession.succession_engine import SuccessionEngine
+
+    return SuccessionEngine()
+
+
+@lru_cache
+def get_agenda_engine():
+    """Create singleton agenda engine for political vote resolution.
+
+    Returns:
+        AgendaEngine instance.
+    """
+    from npc_engine.engines.agenda.agenda_engine import AgendaEngine
+
+    return AgendaEngine()
+
+
+@lru_cache
+def get_investigation_engine():
+    """Create singleton investigation engine for Detective/Mystery queries.
+
+    Returns:
+        InvestigationEngine instance (stateless, no LLM).
+    """
+    from npc_engine.engines.investigation.investigation_engine import InvestigationEngine
+
+    return InvestigationEngine()
+
+
+@lru_cache
+def get_military_engine():
+    """Create singleton military engine (stub) for Strategy/4X tick processing.
+
+    Returns:
+        MilitaryEngine instance (no-op stub — see ISSUES.md ISSUE-001).
+    """
+    from npc_engine.engines.military.military_engine import MilitaryEngine
+
+    return MilitaryEngine()
+
+
+@lru_cache
+def get_need_decay_engine():
+    """Create singleton need decay engine for per-tick social need updates.
+
+    Returns:
+        NeedDecayEngine instance.
+    """
+    from npc_engine.engines.need.need_decay_engine import NeedDecayEngine
+
+    return NeedDecayEngine()
 
 
 @lru_cache

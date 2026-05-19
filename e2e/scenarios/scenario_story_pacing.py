@@ -77,4 +77,10 @@ def test_story_pacing(http_client: httpx.Client) -> None:
             )
 
     finally:
+        # Mark quest completed so the pacing engine no longer counts it on next tick.
+        from conftest import api_patch
+        api_patch(http_client, f"{graph}/nodes/Quest/{QUEST_ID}", {"properties": {"status": "completed"}})
+        # Advance one more tick with no active high-severity quest so the pacing engine
+        # recalculates and writes quest_generation_rate=1.0 back to WorldState.
+        api_post(http_client, "/v1/clock/advance", {"delta_ticks": 1, "game_time_seconds": 0})
         n.save()

@@ -1,0 +1,9 @@
+node_type: Evidence
+fields:
+  id:                          { type: str, required: true }
+  kind:                        { type: str, required: true }   # physical/testimonial/documentary
+  description:                 { type: str, required: true }
+  discovered_at_tick:          { type: int, required: true }
+  discovered_by_character_id:  { type: str, required: true }
+  links_to_event_id:           { type: str, required: false }
+  confidence:                  { type: int, required: true }   # 0–100

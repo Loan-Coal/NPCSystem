@@ -1,0 +1,6 @@
+edge_type: SUSPECTS
+src_type: character
+dst_type: character
+fields:
+  event_id:   { type: str, required: true }
+  confidence: { type: int, required: true }   # 0–100

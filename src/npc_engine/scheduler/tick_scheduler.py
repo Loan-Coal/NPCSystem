@@ -56,6 +56,10 @@ class TickScheduler:
         treaty_engine: BaseEngine | None = None,
         mood_contagion_engine: BaseEngine | None = None,
         chapter_engine: BaseEngine | None = None,
+        succession_engine: BaseEngine | None = None,
+        agenda_engine: BaseEngine | None = None,
+        need_decay_engine: BaseEngine | None = None,
+        military_engine: BaseEngine | None = None,
         consolidation_advance_interval: int = 1,
         distributed_lease_enabled: bool = False,
         scheduler_id: str = "main",
@@ -93,6 +97,14 @@ class TickScheduler:
                 called every tick; blends mood states between co-located affectionate NPCs.
             chapter_engine: Optional engine exposing ``run_tick(session, tick_id)``
                 called every tick; detects chapter transitions and labels them via LLM.
+            succession_engine: Optional engine exposing ``run_tick(session, tick_id)``
+                called every tick; grants vacant inheritable titles to the first eligible heir.
+            agenda_engine: Optional engine exposing ``run_tick(session, tick_id)``
+                called every tick; resolves open agendas whose deadline has passed.
+            need_decay_engine: Optional engine exposing ``run_tick(session, tick_id)``
+                called every tick; decays character need levels and applies location restoration.
+            military_engine: Optional engine exposing ``run_tick(session, tick_id)``
+                called every tick; currently a no-op stub (see ISSUES.md ISSUE-001).
             consolidation_advance_interval: Run consolidation every N advances; clamped to 1.
             distributed_lease_enabled: When True, use ``lease_repo`` for cross-worker
                 tick deduplication instead of the local SchedulerState Cypher queries.
@@ -116,6 +128,10 @@ class TickScheduler:
         self._treaty_engine = treaty_engine
         self._mood_contagion_engine = mood_contagion_engine
         self._chapter_engine = chapter_engine
+        self._succession_engine = succession_engine
+        self._agenda_engine = agenda_engine
+        self._need_decay_engine = need_decay_engine
+        self._military_engine = military_engine
         self._consolidation_advance_interval = max(1, consolidation_advance_interval)
         self._advance_count = 0
         self._gossip_interval = max(1, gossip_interval)
@@ -222,6 +238,10 @@ class TickScheduler:
                 "treaty": [],
                 "mood_contagion": [],
                 "chapter": [],
+                "succession": [],
+                "agenda": [],
+                "need_decay": [],
+                "military": [],
             }
             world_state = await get_world_state(session=session)
             for tick_id in range(start_tick + 1, end_tick + 1):
@@ -314,6 +334,30 @@ class TickScheduler:
                         session=session, tick_id=tick_id
                     )
                     response["chapter"].append(chapter_row)
+
+                if self._succession_engine is not None:
+                    succession_row = await self._succession_engine.run_tick(
+                        session=session, tick_id=tick_id
+                    )
+                    response["succession"].append(succession_row)
+
+                if self._agenda_engine is not None:
+                    agenda_row = await self._agenda_engine.run_tick(
+                        session=session, tick_id=tick_id
+                    )
+                    response["agenda"].append(agenda_row)
+
+                if self._need_decay_engine is not None:
+                    need_row = await self._need_decay_engine.run_tick(
+                        session=session, tick_id=tick_id
+                    )
+                    response["need_decay"].append(need_row)
+
+                if self._military_engine is not None:
+                    military_row = await self._military_engine.run_tick(
+                        session=session, tick_id=tick_id
+                    )
+                    response["military"].append(military_row)
 
                 if unresolved:
                     break

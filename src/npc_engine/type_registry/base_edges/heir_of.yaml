@@ -1,0 +1,6 @@
+edge_type: HEIR_OF
+src_type: character
+dst_type: character
+fields:
+  priority:    { type: int, required: true }    # lower number = higher priority
+  legitimacy:  { type: int, required: true }    # 0–100

@@ -1,0 +1,8 @@
+# F2 fix: no current_holder_id field. Always query current holder via HOLDS_TITLE edge.
+node_type: Title
+fields:
+  id:            { type: str,  required: true }
+  name:          { type: str,  required: true }
+  faction_id:    { type: str,  required: true }
+  power:         { type: int,  required: true }
+  is_inheritable: { type: bool, required: true }

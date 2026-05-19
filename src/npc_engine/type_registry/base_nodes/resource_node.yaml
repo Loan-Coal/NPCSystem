@@ -1,0 +1,14 @@
+node_type: ResourceNode
+fields:
+  id:
+    type: str
+    required: true
+  kind:
+    type: str
+    required: true      # gold / iron / grain / mana
+  yield_per_tick:
+    type: int
+    required: true
+  depletion:
+    type: int
+    required: true      # 0–100; 0 = fully depleted

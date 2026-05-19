@@ -1,0 +1,4 @@
+edge_type: PRODUCES
+src_type: location
+dst_type: resource_node
+fields: {}

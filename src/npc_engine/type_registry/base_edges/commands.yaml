@@ -1,0 +1,4 @@
+edge_type: COMMANDS
+src_type: character
+dst_type: army
+fields: {}

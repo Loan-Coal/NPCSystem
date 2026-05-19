@@ -108,7 +108,17 @@
       "Bash(python -m pytest tests/unit/test_architecture_conformance.py::test_all_python_files_have_module_docstring_contract -v --tb=long)",
       "Bash(python -m pytest tests/unit/test_architecture_conformance.py::test_all_python_files_have_module_docstring_contract -q --tb=short)",
       "Bash(python -m pytest tests/unit/test_gossip_rumor_integration.py::test_gossip_creates_rumor_when_distortion_level_exceeds_threshold -v --tb=long)",
-      "Bash(python -m pytest tests/unit/ -q --tb=short -p no:randomly)"
+      "Bash(python -m pytest tests/unit/ -q --tb=short -p no:randomly)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\" -Force)",
+      "Bash(Get-ChildItem -Path . -Name)",
+      "Bash(Select-Object -First 30)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\" | Where-Object { $_.Name -match '\\\\.\\(md|txt\\)$' })",
+      "Bash(awk '{print $NF}')",
+      "Bash([ -d \"c:/Users/lohan/Documents/hackathons/NPCSystem/src/npc_engine/engines/$dir\" ])",
+      "Bash(python -m pytest tests/ e2e/ -q --tb=short)",
+      "Bash(python -m pytest tests/unit/test_architecture_conformance.py::test_all_python_files_have_module_docstring_contract tests/unit/test_gossip_rumor_integration.py::test_gossip_creates_rumor_when_distortion_level_exceeds_threshold -v --tb=long)",
+      "Bash(python -m pytest tests/unit/test_architecture_conformance.py -v --tb=no -q)",
+      "Bash(python -m pytest tests/unit/test_gossip_rumor_integration.py -v --tb=short)"
     ],
     "additionalDirectories": [
       "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem"
