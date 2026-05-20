@@ -8,7 +8,6 @@ Dependencies injected: Monkeypatched HTTP client.
 
 import pytest
 
-from npc_engine.engines.llm.mistral_adapter import MistralAdapter
 from npc_engine.engines.llm.ollama_adapter import OllamaAdapter
 from npc_engine.utils.errors import LLMRequestError
 
@@ -24,22 +23,6 @@ class _FakeResponse:
 
     def json(self):
         return self._payload
-
-
-class _FakeClient:
-    """Minimal fake async client for adapter tests."""
-
-    def __init__(self, timeout: float):
-        self._timeout = timeout
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-    async def post(self, url: str, json: dict):
-        return _FakeResponse(payload=["not", "a", "dict"])
 
 
 class _FakeOllamaClient:
@@ -157,15 +140,6 @@ class _FakeOllamaStreamingClientWithError:
 
 
 @pytest.mark.asyncio
-async def test_generate_structured_rejects_non_dict_json(monkeypatch) -> None:
-    monkeypatch.setattr("npc_engine.engines.llm.mistral_adapter.httpx.AsyncClient", _FakeClient)
-    adapter = MistralAdapter(base_url="http://fake", model_name="mistral7b", timeout_seconds=1.0)
-
-    with pytest.raises(LLMRequestError):
-        await adapter.generate_structured(prompt="p", schema={}, max_tokens=10)
-
-
-@pytest.mark.asyncio
 async def test_ollama_generate_structured_rejects_invalid_json(monkeypatch) -> None:
     monkeypatch.setattr("npc_engine.engines.llm.ollama_adapter.httpx.AsyncClient", _FakeOllamaClient)
     adapter = OllamaAdapter(base_url="http://fake", model_name="mixtral:8x7b", timeout_seconds=1.0)
@@ -218,32 +192,6 @@ async def test_ollama_stream_raises_on_backend_error_chunk(monkeypatch) -> None:
 # top_p and stop_sequences forwarding
 # ---------------------------------------------------------------------------
 
-class _CapturingClient:
-    """Records the last payload sent via post()."""
-
-    def __init__(self, timeout: float):
-        self.last_payload: dict = {}
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-    async def post(self, url: str, json: dict):
-        self.last_payload = json
-        return _FakeResponse(payload={"text": "ok"})
-
-
-_capturing_instance: _CapturingClient | None = None
-
-
-def _capturing_client_factory(timeout: float) -> _CapturingClient:
-    global _capturing_instance
-    _capturing_instance = _CapturingClient(timeout)
-    return _capturing_instance
-
-
 class _CapturingOllamaClient:
     """Records the last payload for Ollama generate tests."""
 
@@ -268,34 +216,6 @@ def _capturing_ollama_factory(timeout: float) -> _CapturingOllamaClient:
     global _capturing_ollama_instance
     _capturing_ollama_instance = _CapturingOllamaClient(timeout)
     return _capturing_ollama_instance
-
-
-@pytest.mark.asyncio
-async def test_mistral_generate_forwards_top_p_and_stop_sequences(monkeypatch) -> None:
-    from npc_engine.engines.llm.mistral_adapter import MistralAdapter
-
-    monkeypatch.setattr("npc_engine.engines.llm.mistral_adapter.httpx.AsyncClient", _capturing_client_factory)
-    adapter = MistralAdapter(base_url="http://fake", model_name="mistral7b", timeout_seconds=1.0)
-    await adapter.generate(prompt="p", max_tokens=10, temperature=0.5, top_p=0.9, stop_sequences=["END"])
-
-    assert _capturing_instance is not None
-    payload = _capturing_instance.last_payload
-    assert payload["top_p"] == 0.9
-    assert payload["stop_sequences"] == ["END"]
-
-
-@pytest.mark.asyncio
-async def test_mistral_generate_omits_top_p_when_none(monkeypatch) -> None:
-    from npc_engine.engines.llm.mistral_adapter import MistralAdapter
-
-    monkeypatch.setattr("npc_engine.engines.llm.mistral_adapter.httpx.AsyncClient", _capturing_client_factory)
-    adapter = MistralAdapter(base_url="http://fake", model_name="mistral7b", timeout_seconds=1.0)
-    await adapter.generate(prompt="p", max_tokens=10, temperature=0.5)
-
-    assert _capturing_instance is not None
-    payload = _capturing_instance.last_payload
-    assert "top_p" not in payload
-    assert "stop_sequences" not in payload
 
 
 @pytest.mark.asyncio

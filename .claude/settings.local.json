@@ -147,7 +147,15 @@
       "Bash(python -m pytest tests/unit/test_context_budget_enforcer_v14.py tests/unit/test_context_pipeline.py tests/unit/test_context_scoring.py -q)",
       "Bash(python -m pytest tests/unit/test_context_budget_enforcer_v14.py::test_fill_to_budget_tier_a_fraction_limits_tier_a_tokens tests/unit/test_context_budget_enforcer_v14.py::test_fill_to_budget_drops_lowest_priority_first tests/unit/test_context_pipeline.py::test_budget_enforcer_rounding_prevents_budget_overshoot -v)",
       "Bash(python -m pytest tests/unit/test_context_budget_enforcer_v14.py tests/unit/test_context_pipeline.py -v)",
-      "Bash(docker compose *)"
+      "Bash(docker compose *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(Remove-Item \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\\\\src\\\\npc_engine\\\\engines\\\\llm\\\\mistral_adapter.py\" -Force)",
+      "Bash(Remove-Item \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\\\\src\\\\npc_engine\\\\engines\\\\llm\\\\llama_adapter.py\" -Force)",
+      "Bash(Write-Host \"Deleted\")",
+      "Bash(python -m ruff check src/npc_engine/schema/context_config_models.py src/npc_engine/retrieval/topic_classifier.py src/npc_engine/retrieval/context_builder.py src/npc_engine/engines/dialogue/prompt_builder.py src/npc_engine/engines/llm/factory.py tests/unit/test_llm_adapters.py tests/unit/test_llm_factory.py tests/unit/test_topic_classifier.py)",
+      "Bash(python -m pytest tests/unit/test_topic_classifier.py tests/unit/test_llm_adapters.py tests/unit/test_llm_factory.py tests/unit/test_architecture_conformance.py -v --tb=short)",
+      "Bash(python -m pytest tests/ --tb=short -q)"
     ],
     "additionalDirectories": [
       "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem",

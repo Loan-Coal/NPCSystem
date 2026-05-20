@@ -6,8 +6,11 @@ Does NOT: call LLM adapters.
 Dependencies injected: None.
 """
 
+import logging
+
 from npc_engine.engines.dialogue.dialogue_models import DialogueRequest
 
+logger = logging.getLogger(__name__)
 
 PROMPT_VERSION = "stage_b_v1.0"
 
@@ -62,10 +65,12 @@ def build_dialogue_prompt(request: DialogueRequest, serialized_context: str) -> 
         Newline-delimited prompt string including version, context, and player message.
     """
 
-    return (
+    prompt = (
         f"PROMPT_VERSION={PROMPT_VERSION}\n"
         f"NPC_ID={request.npc_id}\n"
         f"PLAYER_ID={request.player_id}\n"
         f"CONTEXT={serialized_context}\n"
         f"PLAYER_MESSAGE={request.player_message}\n"
     )
+    logger.debug("dialogue_prompt_assembled", extra={"prompt_version": PROMPT_VERSION, "prompt": prompt})
+    return prompt

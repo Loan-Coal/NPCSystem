@@ -11,10 +11,17 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # Built-in weight profiles. Engines declare which profile to use via
 # relevance_weight_profile in their YAML config.
 DEFAULT_WEIGHT_PROFILES: dict[str, dict[str, float]] = {
-    "default":       {"recency": 0.30, "severity": 0.20, "proximity": 0.20, "relation": 0.20, "quest": 0.10},
-    "investigation": {"recency": 0.15, "severity": 0.30, "proximity": 0.35, "relation": 0.10, "quest": 0.10},
-    "political":     {"recency": 0.20, "severity": 0.20, "proximity": 0.15, "relation": 0.30, "quest": 0.15},
-    "social":        {"recency": 0.30, "severity": 0.15, "proximity": 0.20, "relation": 0.25, "quest": 0.10},
+    "default":              {"recency": 0.30, "severity": 0.20, "proximity": 0.20, "relation": 0.20, "quest": 0.10},
+    "investigation":        {"recency": 0.15, "severity": 0.30, "proximity": 0.35, "relation": 0.10, "quest": 0.10},
+    "political":            {"recency": 0.20, "severity": 0.20, "proximity": 0.15, "relation": 0.30, "quest": 0.15},
+    "social":               {"recency": 0.30, "severity": 0.15, "proximity": 0.20, "relation": 0.25, "quest": 0.10},
+    # RPG-tuned profiles: selected automatically by topic_classifier for dialogue,
+    # or declared explicitly in engine llm_config.yaml.
+    "rpg_dialogue_social":  {"recency": 0.25, "severity": 0.15, "proximity": 0.15, "relation": 0.35, "quest": 0.10},
+    "rpg_dialogue_quest":   {"recency": 0.20, "severity": 0.20, "proximity": 0.15, "relation": 0.15, "quest": 0.30},
+    "rpg_narrative":        {"recency": 0.30, "severity": 0.30, "proximity": 0.15, "relation": 0.15, "quest": 0.10},
+    "rpg_memory":           {"recency": 0.35, "severity": 0.30, "proximity": 0.15, "relation": 0.15, "quest": 0.05},
+    "rpg_quest_gen":        {"recency": 0.15, "severity": 0.30, "proximity": 0.20, "relation": 0.15, "quest": 0.20},
 }
 
 

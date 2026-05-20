@@ -12,8 +12,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 
 from npc_engine.config import Settings
-from npc_engine.engines.llm.llama_adapter import LlamaAdapter
-from npc_engine.engines.llm.mistral_adapter import MistralAdapter
 from npc_engine.engines.llm.mock_adapter import MockLLMAdapter
 from npc_engine.engines.llm.ollama_adapter import OllamaAdapter
 from npc_engine.engines.llm.protocols import LLMClientProtocol
@@ -63,26 +61,6 @@ def _build_mock(engine_config: EngineModelConfig, settings: Settings) -> LLMClie
     return MockLLMAdapter()
 
 
-def _build_mistral7b(engine_config: EngineModelConfig, settings: Settings) -> LLMClientProtocol:
-    if settings.MISTRAL_API_URL is None:
-        raise ValueError("MISTRAL_API_URL is required for mistral7b backend")
-    return MistralAdapter(
-        base_url=settings.MISTRAL_API_URL,
-        model_name=engine_config.llm.model,
-        timeout_seconds=settings.LLM_TIMEOUT_SECONDS,
-    )
-
-
-def _build_llama8b(engine_config: EngineModelConfig, settings: Settings) -> LLMClientProtocol:
-    if settings.LLAMA_API_URL is None:
-        raise ValueError("LLAMA_API_URL is required for llama8b backend")
-    return LlamaAdapter(
-        base_url=settings.LLAMA_API_URL,
-        model_name=engine_config.llm.model,
-        timeout_seconds=settings.LLM_TIMEOUT_SECONDS,
-    )
-
-
 def _build_ollama(engine_config: EngineModelConfig, settings: Settings) -> LLMClientProtocol:
     if settings.OLLAMA_API_URL.strip() == "":
         raise ValueError("OLLAMA_API_URL is required for ollama backend")
@@ -94,6 +72,4 @@ def _build_ollama(engine_config: EngineModelConfig, settings: Settings) -> LLMCl
 
 
 register_backend("mock", _build_mock)
-register_backend("mistral7b", _build_mistral7b)
-register_backend("llama8b", _build_llama8b)
 register_backend("ollama", _build_ollama)

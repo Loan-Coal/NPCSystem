@@ -53,16 +53,6 @@ def test_factory_returns_mock_adapter_for_mock_backend() -> None:
     assert isinstance(client, MockLLMAdapter)
 
 
-def test_factory_requires_url_for_mistral_backend() -> None:
-    settings = Settings(**{**_base_settings(), "MISTRAL_API_URL": None})
-    engine_config = _make_engine_config(backend="mistral7b")
-    try:
-        create_llm_client_for_engine(engine_config=engine_config, settings=settings)
-        assert False, "Expected ValueError for missing MISTRAL_API_URL"
-    except ValueError as error:
-        assert "MISTRAL_API_URL" in str(error)
-
-
 def test_factory_returns_ollama_adapter_for_ollama_backend() -> None:
     settings = Settings(**_base_settings())
     engine_config = _make_engine_config(backend="ollama", model="mixtral:8x7b")
@@ -90,9 +80,6 @@ def test_factory_uses_per_engine_model_name_for_ollama() -> None:
 
 def test_factory_raises_for_unknown_backend() -> None:
     settings = Settings(**_base_settings())
-    # Build a config with a valid backend then patch the field for the test
-    engine_config = _make_engine_config(backend="mock")
-    # Use model_copy to simulate an unknown backend without bypassing validation
     try:
         create_llm_client_for_engine.__wrapped__ if hasattr(create_llm_client_for_engine, "__wrapped__") else None
         # Directly test the raise path: mock the backend string on the config

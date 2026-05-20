@@ -55,6 +55,7 @@ from npc_engine.retrieval.context_metrics import (
 )
 from npc_engine.retrieval.context_scoring import rank_tier_items
 from npc_engine.retrieval.graph_rag import graph_rag_retrieve
+from npc_engine.retrieval.topic_classifier import detect_dialogue_profile
 from npc_engine.world.time_utils import TimePoint
 from npc_engine.retrieval.context_utils import serialize_json
 from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache, PartialDialogueContextCache
@@ -100,6 +101,7 @@ async def build_serialized_context(
     session_id: str | None = None,
     skip_rag: bool = False,
     player_id: str | None = None,
+    weight_profile: str | None = None,
 ) -> str:
     """Build the final serialized prompt context string for one dialogue turn.
 
@@ -361,6 +363,7 @@ async def build_serialized_context(
         if eid in trust_scores:
             event_key_trust[f"event:{idx}:{npc_id}"] = trust_scores[eid]
 
+    resolved_profile = weight_profile or detect_dialogue_profile(player_message)
     tier_a = rank_tier_items(
         items=tier_a_raw,
         llm_config=llm_config,
@@ -368,9 +371,22 @@ async def build_serialized_context(
         trust_scores=event_key_trust,
         active_quest=active_quest,
         game_time=current_game_time,
+        weight_profile=resolved_profile,
     )
-    tier_b = rank_tier_items(items=tier_b_raw, llm_config=llm_config, vector_scores=vector_scores, game_time=current_game_time)
-    tier_c = rank_tier_items(items=tier_c_raw, llm_config=llm_config, vector_scores=vector_scores, game_time=current_game_time)
+    tier_b = rank_tier_items(
+        items=tier_b_raw,
+        llm_config=llm_config,
+        vector_scores=vector_scores,
+        game_time=current_game_time,
+        weight_profile=resolved_profile,
+    )
+    tier_c = rank_tier_items(
+        items=tier_c_raw,
+        llm_config=llm_config,
+        vector_scores=vector_scores,
+        game_time=current_game_time,
+        weight_profile=resolved_profile,
+    )
 
     merged = merge_context(tier0=tier0, tier_a=tier_a, tier_b=tier_b, tier_c=tier_c)
     final_context, serialized = fill_to_budget(
