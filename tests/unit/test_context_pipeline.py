@@ -86,8 +86,9 @@ def test_budget_enforcer_rejects_tier0_overflow() -> None:
 
 
 def test_budget_enforcer_rejects_tier0_fixed_cap_overflow() -> None:
+    # "x" * 3200 ≈ 400 tiktoken tokens > TIER0_MAX_TOKENS (380)
     merged = merge_context(
-        tier0=[ContextItem(key="world", text="x" * 2000, tier="tier0", priority=100)],
+        tier0=[ContextItem(key="world", text="x" * 3200, tier="tier0", priority=100)],
         tier_a=[],
         tier_b=[],
     )
@@ -96,12 +97,14 @@ def test_budget_enforcer_rejects_tier0_fixed_cap_overflow() -> None:
 
 
 def test_budget_enforcer_trims_tier_b_first() -> None:
+    # "w"*40≈20 tokens, "a"*40≈5 tokens, "b"*40≈10 tokens (tiktoken).
+    # budget=27: tier0 uses 20, remaining=7; a1 (5) fits, b1 (10) does not.
     merged = merge_context(
         tier0=[ContextItem(key="world", text="w" * 40, tier="tier0", priority=100)],
         tier_a=[ContextItem(key="a1", text="a" * 40, tier="tierA", priority=80)],
         tier_b=[ContextItem(key="b1", text="b" * 40, tier="tierB", priority=80)],
     )
-    trimmed = enforce_budget(context=merged, budget=20)
+    trimmed = enforce_budget(context=merged, budget=27)
     retained_keys = [item.key for item in trimmed.items]
     assert "a1" in retained_keys
     assert "b1" not in retained_keys
@@ -109,7 +112,7 @@ def test_budget_enforcer_trims_tier_b_first() -> None:
 
 def test_budget_enforcer_rounding_prevents_budget_overshoot() -> None:
     merged = merge_context(
-        tier0=[ContextItem(key="world", text="w" * 4, tier="tier0", priority=100)],
+        tier0=[ContextItem(key="world", text="w" * 8, tier="tier0", priority=100)],
         tier_a=[ContextItem(key="a1", text="a" * 5, tier="tierA", priority=80)],
         tier_b=[],
     )

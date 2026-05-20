@@ -14,7 +14,6 @@ flow. Splitting it would create helpers with no encapsulation value. See DECISIO
 
 from __future__ import annotations
 
-import asyncio
 from typing import Protocol
 
 from neo4j import AsyncSession
@@ -40,9 +39,8 @@ from npc_engine.graph.memory_queries import get_memories_for_character
 from npc_engine.graph.reputation_queries import get_reputation_context_for_npc
 from npc_engine.graph.trust_queries import get_second_hop_events, get_trust_scores_for_events
 from npc_engine.graph.quest_queries import get_active_quest_for_player
-from npc_engine.retrieval.context_budget_enforcer import ContextCompressionCache, enforce_context_budget
+from npc_engine.retrieval.context_budget_enforcer import ContextCompressionCache, fill_to_budget
 from npc_engine.retrieval.context_builder_helpers import (
-    enforce_final_serialized_budget_with_context,
     expand_query,
     keyword_overlap,
     normalize_ratio,
@@ -51,20 +49,19 @@ from npc_engine.retrieval.context_builder_helpers import (
 )
 from npc_engine.retrieval.context_merger import ContextItem, MergedContext, merge_context
 from npc_engine.retrieval.context_metrics import (
-    CONTEXT_BUDGET_ERRORS_METRIC,
     CONTEXT_CACHE_HITS_METRIC,
     CONTEXT_CACHE_MISSES_METRIC,
     record_compression_metrics,
     record_context_metrics,
 )
 from npc_engine.retrieval.context_scoring import rank_tier_items
-from npc_engine.retrieval.context_serializer import serialize_context
+from npc_engine.retrieval.graph_rag import graph_rag_retrieve
+from npc_engine.world.time_utils import TimePoint
 from npc_engine.retrieval.context_utils import serialize_json
-from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache
+from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache, PartialDialogueContextCache
 from npc_engine.retrieval.subgraph_retriever import assemble_tier_a_context
 from npc_engine.retrieval.vector_store_protocol import VectorSearchResult
 from npc_engine.schema.context_config_models import LLMConfig
-from npc_engine.utils.errors import ContextBudgetError
 from npc_engine.utils.metrics import increment_metric
 from npc_engine.world.world_reader import get_world_state
 
@@ -100,14 +97,14 @@ async def build_serialized_context(
     session_turns: list[str],
     emotion_state: dict | None = None,
     compression_cache: ContextCompressionCache | None = None,
-    context_cache: DialogueContextCache | None = None,
+    context_cache: PartialDialogueContextCache | DialogueContextCache | None = None,
     session_id: str | None = None,
     skip_rag: bool = False,
     player_id: str | None = None,
 ) -> str:
     """Build the final serialized prompt context string for one dialogue turn.
 
-    Issues graph queries in 3 parallel asyncio.gather stages, applies relevance
+    Issues graph queries sequentially (single session), applies relevance
     scoring, budget enforcement, and serializes to compact JSON.
 
     Raises:
@@ -118,12 +115,10 @@ async def build_serialized_context(
     if settings.RAG_TOP_K <= 0:
         raise ValueError("RAG_TOP_K must be greater than 0")
 
-    # Stage 1: fully independent queries — character bundle, world state, known event IDs
-    character_bundle, world_state, known_event_ids = await asyncio.gather(
-        get_character_with_relations(session=session, npc_id=npc_id),
-        get_world_state(session=session),
-        get_known_event_ids_for_npc(session=session, npc_id=npc_id),
-    )
+    # Stage 1: sequential queries — Neo4j AsyncSession is not safe for concurrent use.
+    character_bundle = await get_character_with_relations(session=session, npc_id=npc_id)
+    world_state = await get_world_state(session=session)
+    known_event_ids = await get_known_event_ids_for_npc(session=session, npc_id=npc_id)
 
     character_payload = character_bundle.get("character")
     emotion_snapshot = emotion_state or {"current_mood": "neutral"}
@@ -132,73 +127,131 @@ async def build_serialized_context(
             "current_mood": str(character_payload.get("current_mood", "neutral")),
         }
 
-    cache_key = None
-    if context_cache is not None and session_id is not None:
-        npc_ts = str(character_payload.get("last_graph_updated_at", "")) if isinstance(character_payload, dict) else ""
-        world_ts = world_state.last_updated_at.isoformat() if world_state.last_updated_at else ""
-        current_mood = str(emotion_snapshot.get("current_mood", "neutral"))
-        cache_key = context_cache.build_key(
+    current_game_time = TimePoint(
+        year=world_state.year,
+        season=world_state.season,
+        day=world_state.day,
+        time_of_day=world_state.time_of_day,
+    )
+
+    # Derive cache keys (used by both legacy and partial cache paths).
+    npc_ts = str(character_payload.get("last_graph_updated_at", "")) if isinstance(character_payload, dict) else ""
+    world_ts = world_state.last_updated_at.isoformat() if world_state.last_updated_at else ""
+
+    # Legacy monolithic cache path — backward-compat for callers still passing DialogueContextCache.
+    legacy_cache: DialogueContextCache | None = context_cache if isinstance(context_cache, DialogueContextCache) else None
+    if legacy_cache is not None and session_id is not None:
+        legacy_key = legacy_cache.build_key(
             npc_id=npc_id,
             session_id=session_id,
             player_id=player_id or "",
             npc_last_graph_updated_at=npc_ts,
             world_last_updated_at=world_ts,
-            current_mood=current_mood,
+            current_mood=str(emotion_snapshot.get("current_mood", "neutral")),
         )
-        cached = context_cache.get(cache_key)
+        cached = legacy_cache.get(legacy_key)
         if cached is not None:
             increment_metric(metric=CONTEXT_CACHE_HITS_METRIC, labels={"npc_id": npc_id})
             return cached
         increment_metric(metric=CONTEXT_CACHE_MISSES_METRIC, labels={"npc_id": npc_id})
+    else:
+        legacy_key = None
 
-    # Stage 2: location_id + optional vector search in parallel.
-    #   Vector search uses conversation-expanded query (6.3) filtered to KNOWS_ABOUT events.
+    # Sub-cache path — PartialDialogueContextCache splits profile and beliefs/goals.
+    partial_cache: PartialDialogueContextCache | None = (
+        context_cache if isinstance(context_cache, PartialDialogueContextCache) else None
+    )
+    profile_key = bg_key = None
+    cached_profile_data = cached_bg_data = None
+    if partial_cache is not None:
+        profile_key = partial_cache.build_profile_key(npc_id=npc_id, npc_last_graph_updated_at=npc_ts)
+        bg_key = partial_cache.build_beliefs_goals_key(npc_id=npc_id, npc_last_graph_updated_at=npc_ts)
+        cached_profile_data = partial_cache.get_profile(profile_key)
+        cached_bg_data = partial_cache.get_beliefs_goals(bg_key)
+        if cached_profile_data is not None and cached_bg_data is not None:
+            increment_metric(metric=CONTEXT_CACHE_HITS_METRIC, labels={"npc_id": npc_id})
+        else:
+            increment_metric(metric=CONTEXT_CACHE_MISSES_METRIC, labels={"npc_id": npc_id})
+
+    # Stage 2: location_id then optional vector search — session must be used sequentially.
     rag_filter = known_event_ids if known_event_ids else None
     rag_query = expand_query(player_message, session_turns)
+    location_id = await get_npc_location_id(session=session, npc_id=npc_id)
     if not skip_rag:
-        location_id, tier_b_results = await asyncio.gather(
-            get_npc_location_id(session=session, npc_id=npc_id),
-            embedding_index.search(query=rag_query, top_k=settings.RAG_TOP_K, filter_ids=rag_filter),
-        )
+        if settings.GRAPH_RAG_ENABLED:
+            tier_b_results = await graph_rag_retrieve(
+                session=session,
+                embedding_index=embedding_index,
+                query=rag_query,
+                npc_id=npc_id,
+                known_event_ids=known_event_ids or set(),
+                top_k=settings.RAG_TOP_K,
+                game_time=current_game_time,
+            )
+        else:
+            tier_b_results = await embedding_index.search(
+                query=rag_query, top_k=settings.RAG_TOP_K, filter_ids=rag_filter
+            )
     else:
-        location_id = await get_npc_location_id(session=session, npc_id=npc_id)
         tier_b_results = []
 
-    # Stage 3: all remaining graph queries in parallel
-    (
-        location_context,
-        events,
-        reputation_items,
-        memories,
-        beliefs,
-        goals,
-        owned_items,
-        secrets,
-        obligations,
-        group_memberships,
-        believed_rumors,
-        traits,
-        active_pledges,
-    ) = await asyncio.gather(
-        get_location_context(session=session, location_id=location_id),
-        get_events_for_npc(session=session, npc_id=npc_id, limit=settings.RAG_TOP_K),
-        get_reputation_context_for_npc(
+    # Stage 3: graph queries, skipping sub-caches that are warm.
+    # All queries use the same session sequentially — concurrent use causes BufferError.
+    async def _fetch_profile() -> tuple:
+        location_context = await get_location_context(session=session, location_id=location_id)
+        events = await get_events_for_npc(session=session, npc_id=npc_id, limit=settings.RAG_TOP_K)
+        reputation_items = await get_reputation_context_for_npc(
             session,
             npc_id=npc_id,
             player_id=player_id or "",
             threshold=settings.REPUTATION_CONTEXT_THRESHOLD,
-        ),
-        get_memories_for_character(session, character_id=npc_id, k=3),
-        get_beliefs_for_character(session, character_id=npc_id, k=10),
-        get_goals_for_character(session, character_id=npc_id, k=10, status_filter="active"),
-        get_items_for_character(session, character_id=npc_id, k=10),
-        get_secrets_for_character(session, character_id=npc_id, k=10),
-        get_debts_for_character(session, character_id=npc_id, k=5),
-        get_groups_for_character_svc(session, character_id=npc_id),
-        get_rumors_for_character_svc(session, character_id=npc_id, min_confidence=30),
-        get_traits_svc(session, npc_id),
-        get_pledges_for_character_svc(session, npc_id, active_only=True),
-    )
+        )
+        memories = await get_memories_for_character(session, character_id=npc_id, k=3)
+        owned_items = await get_items_for_character(session, character_id=npc_id, k=10)
+        group_memberships = await get_groups_for_character_svc(session, character_id=npc_id)
+        believed_rumors = await get_rumors_for_character_svc(session, character_id=npc_id, min_confidence=30)
+        traits = await get_traits_svc(session, npc_id)
+        active_pledges = await get_pledges_for_character_svc(session, npc_id, active_only=True)
+        return (location_context, events, reputation_items, memories,
+                owned_items, group_memberships, believed_rumors, traits, active_pledges)
+
+    async def _fetch_beliefs_goals() -> tuple:
+        beliefs = await get_beliefs_for_character(session, character_id=npc_id, k=10)
+        goals = await get_goals_for_character(session, character_id=npc_id, k=10, status_filter="active")
+        secrets = await get_secrets_for_character(session, character_id=npc_id, k=10)
+        obligations = await get_debts_for_character(session, character_id=npc_id, k=5)
+        return beliefs, goals, secrets, obligations
+
+    profile_miss = cached_profile_data is None
+    bg_miss = cached_bg_data is None
+
+    if profile_miss and bg_miss:
+        new_profile = await _fetch_profile()
+        new_bg = await _fetch_beliefs_goals()
+    elif profile_miss:
+        new_profile = await _fetch_profile()
+        new_bg = None
+    elif bg_miss:
+        new_profile = None
+        new_bg = await _fetch_beliefs_goals()
+    else:
+        new_profile = new_bg = None
+
+    if new_profile is not None:
+        (location_context, events, reputation_items, memories,
+         owned_items, group_memberships, believed_rumors, traits, active_pledges) = new_profile
+        if partial_cache is not None and profile_key is not None:
+            partial_cache.set_profile(profile_key, new_profile)
+    else:
+        (location_context, events, reputation_items, memories,
+         owned_items, group_memberships, believed_rumors, traits, active_pledges) = cached_profile_data  # type: ignore[misc]
+
+    if new_bg is not None:
+        beliefs, goals, secrets, obligations = new_bg
+        if partial_cache is not None and bg_key is not None:
+            partial_cache.set_beliefs_goals(bg_key, new_bg)
+    else:
+        beliefs, goals, secrets, obligations = cached_bg_data  # type: ignore[misc]
 
     # 6.1 Two-pass rerank: fetch top-10 by intrinsic score, keep top-3 by keyword overlap.
     beliefs = rerank_by_keyword(beliefs, "content", player_message, top_k=3)
@@ -208,14 +261,9 @@ async def build_serialized_context(
     # Stage 4: trust scores + second-hop events + player quest state (depends on Stage 3).
     event_ids = [str(e["id"]) for e in events if e.get("id")]
 
-    async def _no_quest() -> dict | None:
-        return None
-
-    trust_scores, second_hop_events, active_quest = await asyncio.gather(
-        get_trust_scores_for_events(session, npc_id=npc_id, event_ids=event_ids),
-        get_second_hop_events(session, npc_id=npc_id),
-        get_active_quest_for_player(session, player_id=player_id) if player_id else _no_quest(),
-    )
+    trust_scores = await get_trust_scores_for_events(session, npc_id=npc_id, event_ids=event_ids)
+    second_hop_events = await get_second_hop_events(session, npc_id=npc_id)
+    active_quest = await get_active_quest_for_player(session, player_id=player_id) if player_id else None
 
     # 6.5: Cross-encoder rerank Tier B/C vector results before building ContextItems.
     if settings.CROSS_ENCODER_ENABLED and tier_b_results:
@@ -320,30 +368,23 @@ async def build_serialized_context(
         vector_scores=vector_scores,
         trust_scores=event_key_trust,
         active_quest=active_quest,
+        game_time=current_game_time,
     )
-    tier_b = rank_tier_items(items=tier_b_raw, llm_config=llm_config, vector_scores=vector_scores)
-    tier_c = rank_tier_items(items=tier_c_raw, llm_config=llm_config, vector_scores=vector_scores)
+    tier_b = rank_tier_items(items=tier_b_raw, llm_config=llm_config, vector_scores=vector_scores, game_time=current_game_time)
+    tier_c = rank_tier_items(items=tier_c_raw, llm_config=llm_config, vector_scores=vector_scores, game_time=current_game_time)
 
     merged = merge_context(tier0=tier0, tier_a=tier_a, tier_b=tier_b, tier_c=tier_c)
-    try:
-        trimmed = enforce_context_budget(
-            context=merged,
-            llm_config=llm_config,
-            compression_cache=compression_cache,
-        )
-    except ContextBudgetError as error:
-        increment_metric(metric=CONTEXT_BUDGET_ERRORS_METRIC, labels={"tier": error.tier})
-        raise
-
-    final_context, serialized = enforce_final_serialized_budget_with_context(
-        context=trimmed,
-        budget=settings.PROMPT_TOKEN_BUDGET,
+    final_context, serialized = fill_to_budget(
+        context=merged,
+        llm_config=llm_config,
+        prompt_token_budget=settings.PROMPT_TOKEN_BUDGET,
+        compression_cache=compression_cache,
     )
     record_context_metrics(context=final_context)
     record_compression_metrics(pre_budget_context=merged, post_budget_context=final_context)
 
-    if context_cache is not None and cache_key is not None:
-        context_cache.set(cache_key, serialized)
+    if legacy_cache is not None and legacy_key is not None:
+        legacy_cache.set(legacy_key, serialized)
 
     return serialized
 
@@ -355,10 +396,12 @@ def _to_json_safe(value):
 
 # Backward-compatibility shims for tests that import these names directly.
 def _enforce_final_serialized_budget_with_context(context: MergedContext, budget: int) -> tuple[MergedContext, str]:
+    from npc_engine.retrieval.context_builder_helpers import enforce_final_serialized_budget_with_context
     return enforce_final_serialized_budget_with_context(context=context, budget=budget)
 
 
 def _enforce_final_serialized_budget(context: MergedContext, budget: int) -> str:
+    from npc_engine.retrieval.context_builder_helpers import enforce_final_serialized_budget_with_context
     _, serialized = enforce_final_serialized_budget_with_context(context=context, budget=budget)
     return serialized
 

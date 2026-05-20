@@ -11,6 +11,8 @@ Used by: scheduler.tick_scheduler
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -19,6 +21,8 @@ from neo4j import AsyncSession
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
 from npc_engine.engines.llm.protocols import LLMClientProtocol
+from npc_engine.graph.belief_queries import get_beliefs_for_character
+from npc_engine.graph.memory_queries import get_memories_for_character
 from npc_engine.graph.memory_service import create_memory
 from npc_engine.graph.witnessed_queries import get_undisclosed_witnesses
 from npc_engine.world.time_utils import TimePoint
@@ -102,8 +106,21 @@ class MemoryConsolidationEngine:
         if len(turns) < self._turn_threshold:
             return None
 
+        # Fetch existing beliefs and recent memories so the LLM avoids redundancy.
+        existing_beliefs, recent_memories = await asyncio.gather(
+            get_beliefs_for_character(session, character_id=npc_id, k=5),
+            get_memories_for_character(session, character_id=npc_id, k=3),
+        )
+        beliefs_text = json.dumps([b.get("content", "") for b in (existing_beliefs or [])])
+        memories_text = json.dumps([m.get("content", "") for m in (recent_memories or [])])
+
         turns_text = "\n".join(f"- {t}" for t in turns)
-        user_message = self._user_template.format(npc_id=npc_id, turns_text=turns_text)
+        user_message = self._user_template.format(
+            npc_id=npc_id,
+            turns_text=turns_text,
+            existing_beliefs=beliefs_text,
+            recent_memories=memories_text,
+        )
 
         try:
             summary = await self._llm_client.generate(

@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     QDRANT_URL: str | None = None
     EMBEDDING_REFRESH_ON_WRITE: bool = True
     EMBEDDING_RECONCILE_INTERVAL_SECONDS: int = 300
-    PROMPT_TOKEN_BUDGET: int = 2500  # was 800; Mixtral has 32K context, system prompt ≈ 256 tokens
+    PROMPT_TOKEN_BUDGET: int = 8000  # Mixtral 32K context; tier_a budget is 4000 so total must exceed it
     RAG_TOP_K: int = 5
 
     DIALOGUE_SESSION_TURNS: int = 10
@@ -114,6 +114,7 @@ class Settings(BaseSettings):
     CLIQUE_FORMATION_TICK_INTERVAL: int = 10
     TREATY_LLM_EVAL_ENABLED: bool = False
     CROSS_ENCODER_ENABLED: bool = False
+    GRAPH_RAG_ENABLED: bool = False
     RUMOR_DISTORTION_THRESHOLD: int = 50
 
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"

@@ -118,10 +118,40 @@
       "Bash(python -m pytest tests/ e2e/ -q --tb=short)",
       "Bash(python -m pytest tests/unit/test_architecture_conformance.py::test_all_python_files_have_module_docstring_contract tests/unit/test_gossip_rumor_integration.py::test_gossip_creates_rumor_when_distortion_level_exceeds_threshold -v --tb=long)",
       "Bash(python -m pytest tests/unit/test_architecture_conformance.py -v --tb=no -q)",
-      "Bash(python -m pytest tests/unit/test_gossip_rumor_integration.py -v --tb=short)"
+      "Bash(python -m pytest tests/unit/test_gossip_rumor_integration.py -v --tb=short)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\" -Name -Include NEXT_SESSION.md, DECISIONS.md, ISSUES.md)",
+      "Bash(python -m pytest tests/ -x -q)",
+      "Bash(.venv\\\\Scripts\\\\pip install *)",
+      "Bash(python -m pip install tiktoken)",
+      "Bash(python -m pytest tests/unit/test_context_budget_enforcer_v14.py::test_enforce_context_budget_compresses_tier_b_when_trigger_exceeded -v)",
+      "Bash(python -c \"import tiktoken; enc = tiktoken.get_encoding\\('cl100k_base'\\); print\\(len\\(enc.encode\\('{\\\\\"summary\\\\\":\\\\\"big\\\\\"}' * 40\\)\\)\\)\")",
+      "Bash(python -m pytest tests/unit/test_context_budget_enforcer_v14.py -v -q)",
+      "Bash(python -m pytest tests/unit/test_context_scoring.py::test_extract_recency_score_returns_zero_for_game_time_created_at tests/unit/test_context_pipeline.py::test_budget_enforcer_trims_tier_b_first -v)",
+      "Bash(python -m pytest tests/unit/test_context_pipeline.py::test_budget_enforcer_rejects_tier0_fixed_cap_overflow tests/unit/test_context_pipeline.py::test_budget_enforcer_trims_tier_b_first -v)",
+      "Bash(python -m pytest tests/unit/test_memory_consolidation_engine.py::test_consolidate_enough_turns_creates_memory -v)",
+      "Bash(python -m pytest tests/unit/test_memory_consolidation_engine.py -v -q)",
+      "Bash(python -m pytest tests/unit/test_quest_generation_engine.py -v -q)",
+      "Bash(cd \"/c/Users/lohan/Documents/hackathons/NPCSystem\" && grep -n \"ValueError\" src/npc_engine/api/routes/quest_generation.py)",
+      "Read(//c/c/Users/lohan/Documents/hackathons/NPCSystem/src/npc_engine/api/routes/**)",
+      "Bash(cd \"/c/Users/lohan/Documents/hackathons/NPCSystem\" && grep -n \"not found in graph\\\\|ValueError\\\\|raise\" src/npc_engine/engines/quest_generation/quest_generation_engine.py | head -20)",
+      "Read(//c/c/Users/lohan/Documents/hackathons/NPCSystem/src/npc_engine/engines/quest_generation/**)",
+      "Bash(cd \"/c/Users/lohan/Documents/hackathons/NPCSystem\" && find . -type f -name \"*.py\" -path \"*/scenarios/*\" | grep -i memory)",
+      "Read(//c/c/Users/lohan/Documents/hackathons/**)",
+      "Bash(python -m pytest tests/unit/test_gossip_rumor_integration.py::test_gossip_no_rumor_when_distortion_below_threshold -v)",
+      "Bash(.venv/Scripts/python.exe -m pytest e2e/scenarios/scenario_demo_video.py -v -s -m \"not llm_eval\" --scenarios-only -p no:cacheprovider)",
+      "PowerShell(cd \"C:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\"; $env:PYTHONIOENCODING = \"utf-8\"; .venv\\\\Scripts\\\\python.exe -m pytest e2e/scenarios/scenario_war_breaks_out.py -v -s -m \"not llm_eval\" --scenarios-only -p no:cacheprovider 2>&1 | Select-Object -Last 30)",
+      "PowerShell(cd \"C:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\"; $env:PYTHONIOENCODING = \"utf-8\"; .venv\\\\Scripts\\\\python.exe -m pytest tests/unit/test_context_pipeline.py tests/unit/test_context_scoring.py tests/unit/test_context_budget_enforcer_v14.py -v --tb=short 2>&1 | Select-Object -Last 60)",
+      "PowerShell(cd \"C:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\"; $env:PYTHONIOENCODING = \"utf-8\"; .venv\\\\Scripts\\\\python.exe -m pytest tests/unit/test_context_pipeline.py tests/unit/test_context_budget_enforcer_v14.py -v --tb=short 2>&1 | Select-Object -Last 30)",
+      "Bash(python -m pytest tests/unit/test_context_budget_enforcer_v14.py tests/unit/test_context_pipeline.py -x -q)",
+      "Bash(python -m pytest tests/unit/ -q)",
+      "Bash(python -m pytest tests/unit/test_context_budget_enforcer_v14.py tests/unit/test_context_pipeline.py tests/unit/test_context_scoring.py -q)",
+      "Bash(python -m pytest tests/unit/test_context_budget_enforcer_v14.py::test_fill_to_budget_tier_a_fraction_limits_tier_a_tokens tests/unit/test_context_budget_enforcer_v14.py::test_fill_to_budget_drops_lowest_priority_first tests/unit/test_context_pipeline.py::test_budget_enforcer_rounding_prevents_budget_overshoot -v)",
+      "Bash(python -m pytest tests/unit/test_context_budget_enforcer_v14.py tests/unit/test_context_pipeline.py -v)",
+      "Bash(docker compose *)"
     ],
     "additionalDirectories": [
-      "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem"
+      "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem",
+      "c:\\Users\\lohan\\.claude\\plans"
     ]
   }
 }

@@ -20,6 +20,23 @@ import httpx
 import pytest
 
 
+# Phrases emitted by the canned/fallback paths — any dialogue response matching
+# one of these indicates the LLM was never reached.
+CANNED_PHRASES: frozenset[str] = frozenset({
+    "I need a moment to think.",
+    "Let us continue this shortly.",
+    "I am not ready to answer that yet.",
+    "Hmm, let me think on that. Come back later.",
+    "I am distracted right now. Ask me again soon.",
+    "Give me a moment to gather my thoughts.",
+    "Move along, citizen.",
+    "I am on duty. Keep moving.",
+    "Not now. We can talk later.",
+    "Patience, child. Return at dusk.",
+    "The answer is not simple. Let me think.",
+    "Come back when the bells ring.",
+})
+
 BASE_URL_ENV = "NPC_BASE_URL"
 
 def api_post(client: httpx.Client, path: str, payload: dict) -> dict:
@@ -84,6 +101,7 @@ class Narrator:
             f"_Generated {datetime.now(timezone.utc).isoformat()}_",
             "",
         ]
+        self._canned_failures: list[str] = []
         title = scenario_id.replace("_", " ").title()
         print(f"\n{'═' * _WIDTH}")
         print(f"  {title}")
@@ -109,6 +127,14 @@ class Narrator:
             )
             print(wrapped[:600])
 
+            degradation = body.get("degradation_level") if isinstance(body, dict) else None
+            is_canned = degradation == "canned" or npc_text.strip() in CANNED_PHRASES
+            if is_canned:
+                self._canned_failures.append(
+                    f"[{label}] degradation_level={degradation!r} response={npc_text!r}"
+                )
+                print(f"  ! CANNED RESPONSE DETECTED (degradation_level={degradation!r})")
+
         # For NPC emotion state
         if isinstance(body, dict) and body.get("label"):
             print(f"        mood: {body['label']}  "
@@ -117,13 +143,25 @@ class Narrator:
         self._lines += [f"## {label}", f"```json\n{json.dumps(call, indent=2)}\n```", ""]
         return call
 
+    def assert_no_canned(self) -> None:
+        """Fail the test if any dialogue step returned a canned/fallback response."""
+        if self._canned_failures:
+            failures = "\n  ".join(self._canned_failures)
+            raise AssertionError(
+                f"{len(self._canned_failures)} canned response(s) detected — LLM was not reached:\n  {failures}"
+            )
+
     def narrate(self, text: str) -> None:
         """Print a story context line between steps."""
         print(f"\n  > {text}\n")
         self._lines += [f"> _{text}_", ""]
 
-    def save(self, suffix: str = "") -> Path:
-        """Write the full JSON transcript to file and print its path."""
+    def save(self, suffix: str = "", *, assert_llm_reached: bool = True) -> Path:
+        """Write the full JSON transcript to file and print its path.
+
+        Raises AssertionError after saving if any canned responses were detected
+        and assert_llm_reached is True (the default).
+        """
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         path = TRANSCRIPTS_DIR / f"{self.scenario_id}{suffix}_{ts}.md"
         TRANSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -131,6 +169,8 @@ class Narrator:
         print(f"\n{'─' * _WIDTH}")
         print(f"  transcript → {path.name}")
         print(f"{'─' * _WIDTH}\n")
+        if assert_llm_reached:
+            self.assert_no_canned()
         return path
 
 

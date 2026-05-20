@@ -13,6 +13,7 @@ Used by: npc_engine.api.routes.quest_generation
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import random
@@ -37,7 +38,10 @@ from npc_engine.engines.quest_generation.slot_models import (
     SlotFill,
 )
 from npc_engine.engines.quest_generation.slot_validator import SlotValidator
+from npc_engine.graph.belief_queries import get_beliefs_for_character
 from npc_engine.graph.causality_service import record_causation
+from npc_engine.graph.goal_queries import get_goals_for_character
+from npc_engine.graph.mood_queries import get_character_mood
 from npc_engine.graph.quest_node_service import create_quest
 
 _logger = logging.getLogger(__name__)
@@ -108,10 +112,11 @@ class QuestGenerationEngine:
                 f"(rate={world_state.quest_generation_rate:.2f})"
             )
         archetype, giver_name = await self._get_character_info(session, quest_giver_id)
+        giver_context = await self._get_giver_context(session, quest_giver_id)
         template = self._select_template(archetype)
         validator = SlotValidator(session=session)
 
-        fills_raw, fills = await self._fill_slots(session, template, validator)
+        fills_raw, fills = await self._fill_slots(session, template, validator, giver_name=giver_name, archetype=archetype, giver_context=giver_context)
         description = await self._generate_flavor(template, fills_raw, giver_name, template.description_template)
 
         quest_id = str(uuid.uuid4())
@@ -161,6 +166,21 @@ class QuestGenerationEngine:
         row = records[0]
         return str(row.get("archetype") or "default"), str(row.get("name") or character_id)
 
+    async def _get_giver_context(
+        self,
+        session: AsyncSession,
+        character_id: str,
+    ) -> dict[str, Any]:
+        """Fetch goals, beliefs, and mood for the quest giver to enrich slot-fill context."""
+        goals = await get_goals_for_character(session, character_id=character_id, k=3, status_filter="active")
+        beliefs = await get_beliefs_for_character(session, character_id=character_id, k=3)
+        mood = await get_character_mood(session, character_id=character_id)
+        return {
+            "goals": [g.get("objective", "") for g in (goals or [])],
+            "beliefs": [b.get("content", "") for b in (beliefs or [])],
+            "mood": mood[0] if mood else "neutral",
+        }
+
     def _select_template(self, archetype: str) -> QuestTemplateRecord:
         """Select a template matching the archetype, falling back to any available."""
         matches = [t for t in self._templates if t.archetype == archetype]
@@ -174,13 +194,20 @@ class QuestGenerationEngine:
         session: AsyncSession,
         template: QuestTemplateRecord,
         validator: SlotValidator,
+        *,
+        giver_name: str = "",
+        archetype: str = "",
+        giver_context: dict[str, Any] | None = None,
     ) -> tuple[dict[str, str], tuple[SlotFill, ...]]:
         """Try LLM slot-filling up to _MAX_RETRIES times, then fall back deterministically."""
         candidates = await self._get_candidates(session, template.slot_definitions)
         violation_context = ""
 
         for attempt in range(_MAX_RETRIES):
-            fills_raw = await self._ask_llm_for_fills(template, candidates, violation_context)
+            fills_raw = await self._ask_llm_for_fills(
+                template, candidates, violation_context,
+                giver_name=giver_name, archetype=archetype, giver_context=giver_context,
+            )
             violations = await validator.validate(fills_raw, template.slot_definitions)
             if not violations:
                 fills = validator.build_fills(fills_raw, template.slot_definitions)
@@ -204,6 +231,10 @@ class QuestGenerationEngine:
         template: QuestTemplateRecord,
         candidates: dict[str, list[str]],
         violation_context: str,
+        *,
+        giver_name: str = "",
+        archetype: str = "",
+        giver_context: dict[str, Any] | None = None,
     ) -> dict[str, str]:
         """Call LLM for slot fills; return empty dict on any error."""
         slot_defs_text = json.dumps(
@@ -211,10 +242,18 @@ class QuestGenerationEngine:
              for s in template.slot_definitions]
         )
         candidates_text = json.dumps(candidates)
+        giver_ctx_text = ""
+        if giver_context:
+            giver_ctx_text = (
+                f"\nGIVER: {giver_name} (archetype: {archetype})"
+                f"\nGIVER_MOOD: {giver_context.get('mood', 'neutral')}"
+                f"\nGIVER_GOALS: {json.dumps(giver_context.get('goals', []))}"
+                f"\nGIVER_BELIEFS: {json.dumps(giver_context.get('beliefs', []))}"
+            )
         user_prompt = self._slot_fill_prompt["user_template"].format(
             template_name=template.name,
             slot_definitions=slot_defs_text,
-            candidates=candidates_text + (" " + violation_context if violation_context else ""),
+            candidates=candidates_text + (" " + violation_context if violation_context else "") + giver_ctx_text,
         )
         system = self._slot_fill_prompt.get("system", "")
         try:

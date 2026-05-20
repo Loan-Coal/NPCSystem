@@ -88,6 +88,7 @@ async def execute_with_degradation(
             "Dialogue full tier failed (%s: %s), trying graph_only",
             type(exc).__name__,
             exc,
+            exc_info=True,
         )
 
     try:
@@ -99,6 +100,7 @@ async def execute_with_degradation(
             "Dialogue graph_only tier failed (%s: %s), using canned response",
             type(exc).__name__,
             exc,
+            exc_info=True,
         )
 
     increment_metric(DEGRADATION_METRIC, labels={"level": "canned"})

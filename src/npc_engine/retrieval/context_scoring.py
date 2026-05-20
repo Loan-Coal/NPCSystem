@@ -8,6 +8,7 @@ Dependencies injected: LLMConfig.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -16,6 +17,7 @@ from npc_engine.retrieval.context_merger import ContextItem
 from npc_engine.retrieval.context_relevance_engine import ContextRelevanceCandidate, rank_context_candidates
 from npc_engine.retrieval.context_utils import parse_node_identity
 from npc_engine.schema.context_config_models import LLMConfig
+from npc_engine.world.time_utils import SEASONS, DAYS_PER_SEASON, TimePoint, total_days
 
 
 def rank_tier_items(
@@ -25,6 +27,8 @@ def rank_tier_items(
     vector_scores: dict[str, float],
     trust_scores: dict[str, float] | None = None,
     active_quest: dict | None = None,
+    game_time: TimePoint | None = None,
+    weight_profile: str | None = None,
 ) -> list[ContextItem]:
     """Score and rank context items by relevance.
 
@@ -34,11 +38,14 @@ def rank_tier_items(
         vector_scores: Map of item key to normalized vector similarity score.
         trust_scores: Optional map of Tier A event item key to trust score (0–1). (6.2)
         active_quest: Optional active quest dict for quest-relevance scoring. (6.4)
+        game_time: Current structured game time for scoring game-time nodes. (8.2)
+        weight_profile: Named weight profile override (e.g. "investigation"). (8.3)
 
     Returns:
         Items reordered by descending relevance score with updated priority fields.
     """
 
+    resolved_weights = llm_config.resolve_weights(weight_profile or llm_config.default_weight_profile)
     candidates = [
         _build_candidate(
             item=item,
@@ -46,12 +53,13 @@ def rank_tier_items(
             vector_scores=vector_scores,
             trust_scores=trust_scores,
             active_quest=active_quest,
+            game_time=game_time,
         )
         for item in items
     ]
     return rank_context_candidates(
         candidates=candidates,
-        weights=llm_config.relevance_weights,
+        weights=resolved_weights,
         max_proximity_hops=llm_config.max_proximity_hops,
     )
 
@@ -63,6 +71,7 @@ def _build_candidate(
     vector_scores: dict[str, float],
     trust_scores: dict[str, float] | None = None,
     active_quest: dict | None = None,
+    game_time: TimePoint | None = None,
 ) -> ContextRelevanceCandidate:
     node_type, node_id = parse_node_identity(item.key)
     payload = parse_json_object(item.text)
@@ -70,7 +79,7 @@ def _build_candidate(
         node_type=node_type,
         node_id=node_id,
         item=item,
-        recency=_extract_recency_score(payload),
+        recency=_extract_recency_score(payload, game_time=game_time, game_day_horizon=llm_config.recency_game_day_horizon),
         severity=_extract_severity_score(payload),
         proximity_hops=_infer_proximity_hops(item.key, llm_config.max_proximity_hops),
         relation=_extract_relation_score(item=item, vector_scores=vector_scores, trust_scores=trust_scores),
@@ -78,15 +87,29 @@ def _build_candidate(
     )
 
 
-# Fields that indicate a node uses in-game time rather than wall-clock time.
-# Nodes with these fields cannot be scored against datetime.now() — Phase 6 will
-# add proper in-game-tick scoring once the game tick is threaded through the pipeline.
-_GAME_TIME_FIELDS = frozenset({"created_at_game_time", "occurred_at_game_time"})
+def _extract_recency_score(
+    payload: dict[str, Any],
+    *,
+    game_time: TimePoint | None = None,
+    game_day_horizon: int = 365,
+) -> float:
+    # Game-time nodes (Belief, Goal, Memory): score against current structured game time.
+    raw_game_time = payload.get("created_at_game_time") or payload.get("occurred_at_game_time")
+    if raw_game_time is not None and game_time is not None:
+        try:
+            gt = json.loads(raw_game_time) if isinstance(raw_game_time, str) else raw_game_time
+            node_tp = TimePoint(
+                year=int(gt.get("year", 0)),
+                season=str(gt.get("season", "spring")),
+                day=int(gt.get("day", 1)),
+                time_of_day=str(gt.get("time_of_day", "morning")),
+            )
+            age_days = max(0, total_days(game_time) - total_days(node_tp))
+            return _normalize_ratio(1.0 - min(age_days / game_day_horizon, 1.0))
+        except (KeyError, TypeError, ValueError):
+            return 0.0
 
-
-def _extract_recency_score(payload: dict[str, Any]) -> float:
-    if any(payload.get(f) is not None for f in _GAME_TIME_FIELDS):
-        return 0.0  # game-time node; can't score against wall clock
+    # Wall-clock nodes (Event, etc.): score by ISO timestamp fields.
     for field in ("occurred_at", "updated_at", "last_graph_updated_at", "created_at"):
         raw_value = payload.get(field)
         if not isinstance(raw_value, str):

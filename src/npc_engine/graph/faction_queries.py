@@ -202,6 +202,35 @@ async def list_standings(
     ])
 
 
+CYPHER_FACTION_STANDINGS_SUMMARY = """
+MATCH (f:Faction)
+WHERE f.is_active = true
+RETURN f.name AS name, f.power_score AS power_score
+ORDER BY f.power_score DESC
+LIMIT $limit
+"""
+
+
+async def get_faction_standings_summary(
+    session: AsyncSession,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Return the top factions by power_score for chapter context.
+
+    Args:
+        session: Active Neo4j async session.
+        limit: Maximum number of factions to return.
+
+    Returns:
+        List of dicts with ``name`` and ``power_score``.
+    """
+    result = await session.run(CYPHER_FACTION_STANDINGS_SUMMARY, limit=limit)
+    return cast(list[dict[str, Any]], [
+        {"name": str(record["name"] or ""), "power_score": int(record["power_score"] or 0)}
+        async for record in result
+    ])
+
+
 async def get_controlled_locations(
     session: AsyncSession,
     faction_id: str,

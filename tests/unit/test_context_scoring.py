@@ -228,19 +228,22 @@ def test_rank_tier_items_empty_list():
 
 
 # ---------------------------------------------------------------------------
-# 3.2 — game-time field guard in _extract_recency_score
+# 3.2 — game-time recency in _extract_recency_score (8.2 fix)
 # ---------------------------------------------------------------------------
 
 
-def test_extract_recency_score_returns_zero_for_game_time_created_at():
+def test_extract_recency_score_game_time_node_no_game_time_param_falls_through_to_occurred_at():
+    # When created_at_game_time is present but game_time param not provided,
+    # fall through to occurred_at (don't block recency scoring entirely).
     payload = {
         "created_at_game_time": "Year 5, Day 12",
         "occurred_at": datetime.now(timezone.utc).isoformat(),
     }
-    assert _extract_recency_score(payload) == 0.0
+    assert _extract_recency_score(payload) > 0.9
 
 
-def test_extract_recency_score_returns_zero_for_game_time_occurred_at():
+def test_extract_recency_score_game_time_only_no_fallback_returns_zero():
+    # No game_time param and no wall-clock fields → 0.0.
     payload = {"occurred_at_game_time": "Season 3"}
     assert _extract_recency_score(payload) == 0.0
 
@@ -249,6 +252,24 @@ def test_extract_recency_score_not_blocked_when_no_game_time_fields():
     recent = datetime.now(timezone.utc).isoformat()
     payload = {"occurred_at": recent}
     assert _extract_recency_score(payload) > 0.9
+
+
+def test_extract_recency_score_game_time_with_game_time_param_recent():
+    from npc_engine.world.time_utils import TimePoint
+    game_time = TimePoint(year=5, season="summer", day=10, time_of_day="morning")
+    node_game_time_json = '{"year": 5, "season": "summer", "day": 9, "time_of_day": "morning"}'
+    payload = {"created_at_game_time": node_game_time_json}
+    score = _extract_recency_score(payload, game_time=game_time)
+    assert score > 0.99  # 1-day-old node is nearly fresh
+
+
+def test_extract_recency_score_game_time_with_game_time_param_old():
+    from npc_engine.world.time_utils import TimePoint
+    game_time = TimePoint(year=5, season="summer", day=10, time_of_day="morning")
+    node_game_time_json = '{"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}'
+    payload = {"created_at_game_time": node_game_time_json}
+    score = _extract_recency_score(payload, game_time=game_time)
+    assert score < 0.5  # very old node scores low
 
 
 # ---------------------------------------------------------------------------

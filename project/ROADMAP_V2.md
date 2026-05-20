@@ -1971,7 +1971,7 @@ Tick-level: detect chapter transitions based on completed quest cluster density 
 ## Phase 8 — Scale & Retrieval Unification
 
 > Run after Phase 6–7 graph density is high enough to make these worthwhile.
-
+/cle
 ---
 
 ### 8.1 Sub-cache decomposition of `DialogueContextCache` — L

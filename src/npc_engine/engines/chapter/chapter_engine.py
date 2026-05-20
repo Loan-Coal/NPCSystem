@@ -11,6 +11,7 @@ Used by: scheduler.tick_scheduler, api.dependency_singletons
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
@@ -20,6 +21,7 @@ from typing import TYPE_CHECKING
 from neo4j import AsyncSession
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
+from npc_engine.graph.faction_queries import get_faction_standings_summary
 from npc_engine.graph.chapter_queries import (
     count_completed_quests_since_tick,
     get_completed_quests_since_tick,
@@ -32,6 +34,7 @@ from npc_engine.graph.chapter_writer import (
     create_chapter,
     link_event_to_chapter,
 )
+from npc_engine.world.world_reader import get_world_state
 
 if TYPE_CHECKING:
     from npc_engine.engines.llm.protocols import LLMClientProtocol
@@ -210,17 +213,31 @@ class ChapterEngine:
             Dict with ``title``, ``description``, ``theme`` strings.
         """
         since_tick = max(0, current.get("started_at_tick", 0))
-        events = await get_recent_events_for_chapter(session, since_tick=since_tick)
-        quests = await get_completed_quests_since_tick(session, since_tick=since_tick)
+        (events, quests), (world_state, faction_standings) = await asyncio.gather(
+            asyncio.gather(
+                get_recent_events_for_chapter(session, since_tick=since_tick),
+                get_completed_quests_since_tick(session, since_tick=since_tick),
+            ),
+            asyncio.gather(
+                get_world_state(session),
+                get_faction_standings_summary(session, limit=5),
+            ),
+        )
 
         events_text = "\n".join(
             f"- [{e['event_type']}] {e['summary']}" for e in events
         ) or "(no events)"
         quests_text = "\n".join(f"- {q['title']}" for q in quests) or "(no quests)"
+        conditions_text = ", ".join(world_state.active_conditions) or "(none)"
+        factions_text = "\n".join(
+            f"- {f['name']} (power: {f['power_score']})" for f in faction_standings
+        ) or "(none)"
 
         user_message = self._user_template.format(
             events_text=events_text,
             quests_text=quests_text,
+            active_conditions=conditions_text,
+            dominant_factions=factions_text,
         )
 
         try:

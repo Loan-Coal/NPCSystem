@@ -68,6 +68,9 @@ class _FakeSessionWithNodes:
         self.write_calls: list[tuple] = []
 
     async def run(self, query: str, **kwargs: Any) -> _FakeResult:
+        # Mood query: return a neutral mood record (added in 8.5 context enrichment).
+        if "current_mood" in query and "mood_intensity" in query:
+            return _FakeResult([{"mood": "neutral", "intensity": 0}])
         node_id = kwargs.get("node_id") or kwargs.get("character_id") or kwargs.get("quest_id")
         if node_id in self._node_map:
             val = self._node_map[node_id]

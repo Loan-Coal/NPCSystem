@@ -21,16 +21,16 @@ _LOW_VALUE_FIELDS: frozenset[str] = frozenset({
 
 
 def estimate_tokens(text: str) -> int:
-    """Approximate token count with a fixed chars-per-token heuristic.
+    """Approximate token count using 4 characters per token heuristic.
 
     Args:
-        text: Text to estimate token count for.
+        text: Text to count tokens for.
 
     Returns:
         Estimated token count; always at least 1.
     """
 
-    return max(1, (len(text) + CHARS_PER_TOKEN_ESTIMATE - 1) // CHARS_PER_TOKEN_ESTIMATE)
+    return max(1, len(text) // CHARS_PER_TOKEN_ESTIMATE)
 
 
 def parse_node_identity(key: str) -> tuple[str, str]:

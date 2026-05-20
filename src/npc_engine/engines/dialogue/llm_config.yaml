@@ -17,6 +17,6 @@ fallback:
     - graph_only
     - canned
 timeouts_ms:
-  full: 60000
-  graph_only: 15000
+  full: 200000
+  graph_only: 200000
   canned: 100

@@ -27,7 +27,7 @@ class TimePoint:
     time_of_day: str
 
 
-def _total_days(tp: TimePoint) -> int:
+def total_days(tp: TimePoint) -> int:
     """Convert a TimePoint to a monotonically increasing day count.
 
     Args:
@@ -59,7 +59,7 @@ def how_long_ago(from_: TimePoint, to: TimePoint) -> str:
     Returns:
         Human-readable time-distance string.
     """
-    delta_days = _total_days(from_) - _total_days(to)
+    delta_days = total_days(from_) - total_days(to)
     if delta_days == 0:
         if from_.time_of_day == to.time_of_day:
             return "moments ago"

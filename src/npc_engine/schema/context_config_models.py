@@ -8,6 +8,15 @@ Dependencies injected: None.
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+# Built-in weight profiles. Engines declare which profile to use via
+# relevance_weight_profile in their YAML config.
+DEFAULT_WEIGHT_PROFILES: dict[str, dict[str, float]] = {
+    "default":       {"recency": 0.30, "severity": 0.20, "proximity": 0.20, "relation": 0.20, "quest": 0.10},
+    "investigation": {"recency": 0.15, "severity": 0.30, "proximity": 0.35, "relation": 0.10, "quest": 0.10},
+    "political":     {"recency": 0.20, "severity": 0.20, "proximity": 0.15, "relation": 0.30, "quest": 0.15},
+    "social":        {"recency": 0.30, "severity": 0.15, "proximity": 0.20, "relation": 0.25, "quest": 0.10},
+}
+
 
 MIN_RATIO = 0.0
 MAX_RATIO = 1.0
@@ -70,5 +79,42 @@ class LLMConfig(BaseModel):
     compression_trigger_ratio: float = Field(gt=MIN_RATIO, le=MAX_RATIO)
     max_proximity_hops: int = Field(ge=0)
     relevance_weights: RelevanceWeights
+    recency_game_day_horizon: int = Field(gt=0, default=365)
+    default_weight_profile: str = Field(default="default")
+    weight_profiles: dict[str, RelevanceWeights] = Field(default_factory=dict)
+    # Fraction of PROMPT_TOKEN_BUDGET allocated to each tier (soft caps).
+    # tier_c receives the remainder: 1.0 - tier_a_fraction - tier_b_fraction.
+    # Override per-engine in the engine's llm_config.yaml for tuning.
+    tier_a_fraction: float = Field(default=0.55, gt=0.0, le=1.0)
+    tier_b_fraction: float = Field(default=0.30, gt=0.0, le=1.0)
 
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+
+    @model_validator(mode="after")
+    def validate_tier_fractions(self) -> "LLMConfig":
+        """Enforce that tier_a and tier_b fractions leave room for tier_c."""
+        if self.tier_a_fraction + self.tier_b_fraction > 1.0:
+            raise ValueError(
+                f"tier_a_fraction ({self.tier_a_fraction}) + tier_b_fraction ({self.tier_b_fraction}) "
+                "must not exceed 1.0"
+            )
+        return self
+
+    def resolve_weights(self, profile: str | None = None) -> RelevanceWeights:
+        """Return the RelevanceWeights for the given profile name.
+
+        Falls back to self.relevance_weights if the profile is None, empty,
+        or not found in weight_profiles or DEFAULT_WEIGHT_PROFILES.
+
+        Args:
+            profile: Named weight profile (e.g. "investigation", "political").
+
+        Returns:
+            RelevanceWeights instance for the requested profile.
+        """
+        if profile:
+            if profile in self.weight_profiles:
+                return self.weight_profiles[profile]
+            if profile in DEFAULT_WEIGHT_PROFILES:
+                return RelevanceWeights(**DEFAULT_WEIGHT_PROFILES[profile])
+        return self.relevance_weights

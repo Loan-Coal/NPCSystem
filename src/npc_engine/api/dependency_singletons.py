@@ -32,7 +32,7 @@ from npc_engine.engines.quest_generation.template_loader import load_templates
 from npc_engine.engines.routine.routine_engine import RoutineEngine
 from npc_engine.graph.db import GraphDB
 from npc_engine.graph.reindex_job_service import ReindexJobService
-from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache
+from npc_engine.retrieval.dialogue_context_cache import PartialDialogueContextCache
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
 from npc_engine.retrieval.vector_store_factory import create_vector_store
 from npc_engine.scheduler.game_clock import GameClock
@@ -399,14 +399,14 @@ def get_trade_engine() -> TradeEngine:
 
 
 @lru_cache
-def get_context_cache() -> DialogueContextCache:
+def get_context_cache() -> PartialDialogueContextCache:
     """Create singleton dialogue context cache.
 
     Returns:
-        DialogueContextCache configured with the session TTL from application settings.
+        PartialDialogueContextCache configured with the session TTL from application settings.
     """
     settings = get_settings()
-    return DialogueContextCache(ttl_seconds=settings.DIALOGUE_SESSION_TTL)
+    return PartialDialogueContextCache(ttl_seconds=settings.DIALOGUE_SESSION_TTL)
 
 
 @lru_cache
