@@ -159,7 +159,7 @@ class _FakeOllamaStreamingClientWithError:
 @pytest.mark.asyncio
 async def test_generate_structured_rejects_non_dict_json(monkeypatch) -> None:
     monkeypatch.setattr("npc_engine.engines.llm.mistral_adapter.httpx.AsyncClient", _FakeClient)
-    adapter = MistralAdapter(base_url="http://fake", timeout_seconds=1.0)
+    adapter = MistralAdapter(base_url="http://fake", model_name="mistral7b", timeout_seconds=1.0)
 
     with pytest.raises(LLMRequestError):
         await adapter.generate_structured(prompt="p", schema={}, max_tokens=10)
@@ -275,7 +275,7 @@ async def test_mistral_generate_forwards_top_p_and_stop_sequences(monkeypatch) -
     from npc_engine.engines.llm.mistral_adapter import MistralAdapter
 
     monkeypatch.setattr("npc_engine.engines.llm.mistral_adapter.httpx.AsyncClient", _capturing_client_factory)
-    adapter = MistralAdapter(base_url="http://fake", timeout_seconds=1.0)
+    adapter = MistralAdapter(base_url="http://fake", model_name="mistral7b", timeout_seconds=1.0)
     await adapter.generate(prompt="p", max_tokens=10, temperature=0.5, top_p=0.9, stop_sequences=["END"])
 
     assert _capturing_instance is not None
@@ -289,7 +289,7 @@ async def test_mistral_generate_omits_top_p_when_none(monkeypatch) -> None:
     from npc_engine.engines.llm.mistral_adapter import MistralAdapter
 
     monkeypatch.setattr("npc_engine.engines.llm.mistral_adapter.httpx.AsyncClient", _capturing_client_factory)
-    adapter = MistralAdapter(base_url="http://fake", timeout_seconds=1.0)
+    adapter = MistralAdapter(base_url="http://fake", model_name="mistral7b", timeout_seconds=1.0)
     await adapter.generate(prompt="p", max_tokens=10, temperature=0.5)
 
     assert _capturing_instance is not None

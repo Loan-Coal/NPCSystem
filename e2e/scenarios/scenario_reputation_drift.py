@@ -8,6 +8,12 @@ Scenario:
   4. Verify final standing via GET endpoint.
 
 No LLM content assertions — data-plane correctness scenario.
+
+Note (ISSUE-005): Event-triggered reputation adjustment (adjust_reputation_for_event
+wired in EventHandler.run_tick) is validated at unit level in
+tests/unit/test_event_reputation_wiring.py. E2E coverage would require forcing a
+specific event template (non-trivial with random selection), so unit tests are
+the authoritative coverage for that path.
 """
 
 from __future__ import annotations

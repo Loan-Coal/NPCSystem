@@ -25,6 +25,8 @@ SET w.epoch = $epoch,
     w.year = $year,
     w.season = $season,
     w.day = $day,
+    w.max_event_severity = $max_event_severity,
+    w.quest_generation_rate = $quest_generation_rate,
     w.last_updated_at = datetime()
 RETURN properties(w) AS world
 """
@@ -53,6 +55,8 @@ async def upsert_world_state(session: AsyncSession, world_state: WorldState) -> 
         year=world_state.year,
         season=world_state.season,
         day=world_state.day,
+        max_event_severity=world_state.max_event_severity,
+        quest_generation_rate=world_state.quest_generation_rate,
     )
     record = await result.single()
     if record is None:
@@ -68,5 +72,7 @@ async def upsert_world_state(session: AsyncSession, world_state: WorldState) -> 
         year=int(payload.get("year", world_state.year)),
         season=payload.get("season", world_state.season),
         day=int(payload.get("day", world_state.day)),
+        max_event_severity=int(payload.get("max_event_severity", world_state.max_event_severity)),
+        quest_generation_rate=float(payload.get("quest_generation_rate", world_state.quest_generation_rate)),
         last_updated_at=datetime.now(timezone.utc),
     )

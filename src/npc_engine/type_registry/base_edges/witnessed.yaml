@@ -1,0 +1,10 @@
+edge_type: WITNESSED
+src_type: character
+dst_type: character
+fields:
+  event_id:          { type: str, required: true }
+  action_type:       { type: str, required: true }
+  witnessed_at_tick: { type: int, required: true }
+  clarity:           { type: int, required: true, range: [0, 100] }
+  interpretation:    { type: str, required: true }
+  disclosed:         { type: bool, required: true }

@@ -1,0 +1,75 @@
+"""
+Module: quest_generation
+Layer: api
+Purpose: Admin HTTP routes for generating quests and retrieving quest nodes.
+Does NOT: implement quest lifecycle state transitions or call LLMs directly.
+Dependencies: engines.quest_generation.quest_generation_engine, graph.quest_node_service,
+              api.dependencies.get_db_session, api.dependency_singletons
+Dependencies injected: AsyncSession (via FastAPI Depends), QuestGenerationEngine (via Depends).
+Used by: npc_engine.main (registered at admin_prefix)
+"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException
+from neo4j import AsyncSession
+from pydantic import BaseModel, ConfigDict, Field
+
+from npc_engine.api.dependencies import get_db_session
+from npc_engine.api.dependency_singletons import get_quest_generation_engine
+from npc_engine.api.route_helpers import ok_response
+from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
+from npc_engine.graph.quest_node_service import get_quest
+
+router = APIRouter(prefix="/quests", tags=["quest_generation"])
+
+
+class GenerateQuestRequest(BaseModel):
+    """Request body for generating a new quest."""
+
+    quest_giver_id: str = Field(..., min_length=1)
+
+    model_config = ConfigDict(frozen=True)
+
+
+@router.post("/generate")
+async def generate_quest(
+    body: GenerateQuestRequest,
+    session: AsyncSession = Depends(get_db_session),
+    engine: QuestGenerationEngine = Depends(get_quest_generation_engine),
+) -> dict:
+    """Generate a quest for a given NPC quest giver.
+
+    Args:
+        body: Request body containing the quest_giver_id.
+        session: Active Neo4j async session.
+        engine: Quest generation engine singleton.
+
+    Returns:
+        Envelope with quest_id and description.
+    """
+    try:
+        result = await engine.generate(session=session, quest_giver_id=body.quest_giver_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ok_response({"quest_id": result.quest_id, "description": result.description})
+
+
+@router.get("/{quest_id}")
+async def get_quest_by_id(
+    quest_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Retrieve a quest node by ID.
+
+    Args:
+        quest_id: ID of the Quest node to retrieve.
+        session: Active Neo4j async session.
+
+    Returns:
+        Envelope with the quest node properties.
+    """
+    quest = await get_quest(session=session, quest_id=quest_id)
+    if quest is None:
+        raise HTTPException(status_code=404, detail=f"Quest '{quest_id}' not found")
+    return ok_response({"quest": quest})

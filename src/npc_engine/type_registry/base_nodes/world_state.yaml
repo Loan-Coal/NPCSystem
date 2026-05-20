@@ -6,5 +6,7 @@ fields:
   active_conditions: { type: list, items_type: str, required: true }
   weather: { type: str, required: true }
   time_of_day: { type: str, required: true }
+  max_event_severity: { type: int, required: false }
+  quest_generation_rate: { type: float, required: false }
   last_updated_at: { type: str, required: true }
   last_graph_updated_at: { type: str, required: true }

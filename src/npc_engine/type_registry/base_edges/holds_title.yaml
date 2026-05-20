@@ -1,0 +1,5 @@
+edge_type: HOLDS_TITLE
+src_type: character
+dst_type: title
+fields:
+  since_tick: { type: int, required: true }

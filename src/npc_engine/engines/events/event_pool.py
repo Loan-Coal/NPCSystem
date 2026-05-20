@@ -21,6 +21,8 @@ class EventTemplate(BaseModel):
     location_tag: str
     summary_template: str
     event_type: str
+    faction_id: str | None = None
+    reputation_delta: int | None = None
 
     model_config = ConfigDict(frozen=True)
 

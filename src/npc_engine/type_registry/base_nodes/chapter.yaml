@@ -1,0 +1,8 @@
+node_type: chapter
+fields:
+  id: { type: str, required: true }
+  name: { type: str, required: true }
+  started_at_tick: { type: int, required: true }
+  ended_at_tick: { type: int, required: false }
+  theme: { type: str, required: false }
+  status: { type: str, required: true }

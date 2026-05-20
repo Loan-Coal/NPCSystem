@@ -1,0 +1,5 @@
+node_type: Trait
+fields:
+  id: { type: str, required: true }
+  name: { type: str, required: true }
+  description: { type: str, required: false }

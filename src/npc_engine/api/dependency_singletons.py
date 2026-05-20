@@ -19,11 +19,20 @@ from npc_engine.engines.gossip.gossip_config import load_gossip_config
 from npc_engine.engines.gossip.gossip_handler import GossipHandler
 from npc_engine.engines.idempotency.neo4j_store import Neo4jIdempotencyStore
 from npc_engine.engines.idempotency.service import IdempotencyService
+from npc_engine.engines.economy.pricing_engine import PricingEngine
+from npc_engine.engines.economy.pricing_rules_loader import load_pricing_rules
+from npc_engine.engines.economy.trade_engine import TradeEngine
+from npc_engine.engines.faction_politics.faction_politics_engine import FactionPoliticsEngine
+from npc_engine.engines.faction_politics.rules_loader import load_rules
+from npc_engine.engines.story_pacing.story_pacing_engine import StoryPacingEngine
+from npc_engine.engines.story_pacing.pacing_rules_loader import load_pacing_rules
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
+from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
+from npc_engine.engines.quest_generation.template_loader import load_templates
 from npc_engine.engines.routine.routine_engine import RoutineEngine
 from npc_engine.graph.db import GraphDB
 from npc_engine.graph.reindex_job_service import ReindexJobService
-from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache
+from npc_engine.retrieval.dialogue_context_cache import PartialDialogueContextCache
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
 from npc_engine.retrieval.vector_store_factory import create_vector_store
 from npc_engine.scheduler.game_clock import GameClock
@@ -31,14 +40,32 @@ from npc_engine.scheduler.tick_scheduler import TickScheduler
 from npc_engine.engines.llm_config_loader import get_config as get_engine_model_config_for
 from npc_engine.engines.llm_config_models import EngineModelConfig
 from npc_engine.schema.llm_config_loader import load_llm_config
-from npc_engine.schema.llm_config_models import LLMConfig
+from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.schema.schema_loader import load_game_schema
 from npc_engine.schema.schema_models import SchemaConfig
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.type_registry.registry import build_type_registry
+from npc_engine.engines.llm.factory import create_llm_client_for_engine
 
 
 REGISTRY_SOURCES_SEPARATOR = ","
+
+# LLM adapters registered here are closed on application shutdown via close_registered_llm_adapters().
+_llm_adapters_to_close: list = []
+
+
+def _register_adapter(adapter: object) -> object:
+    """Register an LLM adapter for teardown and return it unchanged."""
+    _llm_adapters_to_close.append(adapter)
+    return adapter
+
+
+async def close_registered_llm_adapters() -> None:
+    """Close all registered LLM adapters; called from lifespan teardown."""
+    for adapter in _llm_adapters_to_close:
+        if hasattr(adapter, "close"):
+            await adapter.close()
+    _llm_adapters_to_close.clear()
 
 
 @lru_cache
@@ -92,7 +119,7 @@ def get_embedding_index() -> EmbeddingIndex:
     """
     settings = get_settings()
     vector_store = create_vector_store(settings=settings)
-    return EmbeddingIndex(vector_store=vector_store)
+    return EmbeddingIndex(vector_store=vector_store, model_name=settings.EMBEDDING_MODEL)
 
 
 @lru_cache
@@ -144,6 +171,51 @@ def get_game_clock() -> GameClock:
 
 
 @lru_cache
+def get_faction_politics_engine() -> FactionPoliticsEngine:
+    """Create singleton faction politics engine loaded from rules.yaml.
+
+    Returns:
+        FactionPoliticsEngine wired to the bundled rules.yaml.
+    """
+    from pathlib import Path
+    rules_path = Path(__file__).resolve().parent.parent / "engines" / "faction_politics" / "rules.yaml"
+    rules = load_rules(rules_path)
+    return FactionPoliticsEngine(rules=rules)
+
+
+@lru_cache
+def get_story_pacing_engine() -> StoryPacingEngine:
+    """Create singleton story pacing engine loaded from pacing_rules.yaml.
+
+    Returns:
+        StoryPacingEngine wired to the bundled pacing_rules.yaml.
+    """
+    rules_path = Path(__file__).resolve().parent.parent / "engines" / "story_pacing" / "pacing_rules.yaml"
+    rules = load_pacing_rules(rules_path)
+    return StoryPacingEngine(rules=rules)
+
+
+@lru_cache
+def get_quest_generation_engine() -> QuestGenerationEngine:
+    """Create singleton quest generation engine with LLM client and loaded templates.
+
+    Returns:
+        QuestGenerationEngine wired to the shared LLM client and bundled templates.
+    """
+    engine_config = get_engine_model_config_for("quest_generation")
+    llm_client = _register_adapter(create_llm_client_for_engine(engine_config, get_settings()))
+    prompts_dir = Path(__file__).resolve().parent.parent / "prompts" / "quest_generation"
+    templates_dir = prompts_dir / "templates"
+    templates = load_templates(templates_dir)
+    return QuestGenerationEngine(
+        llm_client=llm_client,
+        templates=templates,
+        prompts_dir=prompts_dir,
+        max_tokens=engine_config.llm.max_tokens,
+    )
+
+
+@lru_cache
 def get_routine_engine() -> RoutineEngine:
     """Create singleton routine engine for tick-driven NPC location updates.
 
@@ -166,6 +238,18 @@ def get_tick_scheduler() -> TickScheduler:
         gossip_handler=get_gossip_handler(),
         event_handler=get_event_handler(),
         routine_engine=get_routine_engine(),
+        faction_politics_engine=get_faction_politics_engine(),
+        story_pacing_engine=get_story_pacing_engine(),
+        clique_formation_engine=get_clique_formation_engine(),
+        skill_progression_engine=get_skill_progression_engine(),
+        oath_engine=get_oath_engine(),
+        treaty_engine=get_treaty_engine(),
+        mood_contagion_engine=get_mood_contagion_engine(),
+        chapter_engine=get_chapter_engine(),
+        succession_engine=get_succession_engine(),
+        agenda_engine=get_agenda_engine(),
+        need_decay_engine=get_need_decay_engine(),
+        military_engine=get_military_engine(),
         gossip_interval=settings.GOSSIP_TICK_INTERVAL,
         event_interval=settings.EVENT_TICK_INTERVAL,
         distributed_lease_enabled=settings.DISTRIBUTED_TICK_LEASE_ENABLED,
@@ -293,11 +377,195 @@ def get_reindex_job_service() -> ReindexJobService:
 
 
 @lru_cache
-def get_context_cache() -> DialogueContextCache:
+def get_pricing_engine() -> PricingEngine:
+    """Create singleton pricing engine loaded from pricing_rules.yaml.
+
+    Returns:
+        PricingEngine wired to the bundled pricing_rules.yaml.
+    """
+    rules_path = Path(__file__).resolve().parent.parent / "engines" / "economy" / "pricing_rules.yaml"
+    rules = load_pricing_rules(rules_path)
+    return PricingEngine(rules=rules)
+
+
+@lru_cache
+def get_trade_engine() -> TradeEngine:
+    """Create singleton trade engine wired to the shared pricing engine.
+
+    Returns:
+        TradeEngine wired to the singleton PricingEngine.
+    """
+    return TradeEngine(pricing_engine=get_pricing_engine())
+
+
+@lru_cache
+def get_context_cache() -> PartialDialogueContextCache:
     """Create singleton dialogue context cache.
 
     Returns:
-        DialogueContextCache configured with the session TTL from application settings.
+        PartialDialogueContextCache configured with the session TTL from application settings.
     """
     settings = get_settings()
-    return DialogueContextCache(ttl_seconds=settings.DIALOGUE_SESSION_TTL)
+    return PartialDialogueContextCache(ttl_seconds=settings.DIALOGUE_SESSION_TTL)
+
+
+@lru_cache
+def get_clique_formation_engine():
+    """Create singleton clique formation engine for auto-detecting high-affection character pairs.
+
+    Returns:
+        CliqueFormationEngine configured with CLIQUE_FORMATION_TICK_INTERVAL from settings.
+    """
+    from npc_engine.engines.clique.clique_formation_engine import CliqueFormationEngine
+
+    settings = get_settings()
+    return CliqueFormationEngine(settings=settings)
+
+
+@lru_cache
+def get_treaty_engine():
+    """Create singleton treaty engine for treaty lifecycle management.
+
+    Returns:
+        TreatyEngine instance.
+    """
+    from npc_engine.engines.treaty.treaty_engine import TreatyEngine
+
+    return TreatyEngine()
+
+
+@lru_cache
+def get_oath_engine():
+    """Create singleton oath engine for pledge lifecycle management.
+
+    Returns:
+        OathEngine instance.
+    """
+    from npc_engine.engines.oath.oath_engine import OathEngine
+
+    return OathEngine()
+
+
+@lru_cache
+def get_skill_progression_engine():
+    """Create singleton skill progression engine for XP awards on quest completion.
+
+    Returns:
+        SkillProgressionEngine instance.
+    """
+    from npc_engine.engines.skill.skill_progression_engine import SkillProgressionEngine
+
+    return SkillProgressionEngine()
+
+
+@lru_cache
+def get_chapter_engine():
+    """Create singleton chapter engine with its own LLM client.
+
+    Returns:
+        ChapterEngine configured from engines/chapter/llm_config.yaml.
+    """
+    from npc_engine.engines.chapter.chapter_engine import ChapterEngine
+
+    settings = get_settings()
+    engine_config = get_engine_model_config_for("chapter")
+    llm_client = _register_adapter(create_llm_client_for_engine(engine_config, settings))
+    return ChapterEngine(
+        llm_client=llm_client,
+        max_tokens=engine_config.llm.max_tokens,
+        temperature=engine_config.llm.temperature,
+    )
+
+
+@lru_cache
+def get_mood_contagion_engine():
+    """Create singleton mood contagion engine bound to the shared emotion store.
+
+    Returns:
+        MoodContagionEngine wired to the singleton EmotionStore.
+    """
+    from npc_engine.engines.mood.mood_contagion_engine import MoodContagionEngine
+
+    return MoodContagionEngine(emotion_store=get_emotion_store())
+
+
+@lru_cache
+def get_succession_engine():
+    """Create singleton succession engine for political title inheritance.
+
+    Returns:
+        SuccessionEngine instance.
+    """
+    from npc_engine.engines.succession.succession_engine import SuccessionEngine
+
+    return SuccessionEngine()
+
+
+@lru_cache
+def get_agenda_engine():
+    """Create singleton agenda engine for political vote resolution.
+
+    Returns:
+        AgendaEngine instance.
+    """
+    from npc_engine.engines.agenda.agenda_engine import AgendaEngine
+
+    return AgendaEngine()
+
+
+@lru_cache
+def get_investigation_engine():
+    """Create singleton investigation engine for Detective/Mystery queries.
+
+    Returns:
+        InvestigationEngine instance (stateless, no LLM).
+    """
+    from npc_engine.engines.investigation.investigation_engine import InvestigationEngine
+
+    return InvestigationEngine()
+
+
+@lru_cache
+def get_military_engine():
+    """Create singleton military engine (stub) for Strategy/4X tick processing.
+
+    Returns:
+        MilitaryEngine instance (no-op stub — see ISSUES.md ISSUE-001).
+    """
+    from npc_engine.engines.military.military_engine import MilitaryEngine
+
+    return MilitaryEngine()
+
+
+@lru_cache
+def get_need_decay_engine():
+    """Create singleton need decay engine for per-tick social need updates.
+
+    Returns:
+        NeedDecayEngine instance.
+    """
+    from npc_engine.engines.need.need_decay_engine import NeedDecayEngine
+
+    return NeedDecayEngine()
+
+
+@lru_cache
+def get_memory_consolidation_engine():
+    """Create singleton for the memory consolidation engine using its own LLM config.
+
+    Returns:
+        MemoryConsolidationEngine configured from engines/memory_consolidation/llm_config.yaml.
+    """
+    from npc_engine.engines.memory_consolidation.memory_consolidation_engine import MemoryConsolidationEngine
+
+    settings = get_settings()
+    engine_config = get_engine_model_config_for("memory_consolidation")
+    llm_client = _register_adapter(create_llm_client_for_engine(engine_config, settings))
+    return MemoryConsolidationEngine(
+        session_store=get_session_store(),
+        llm_client=llm_client,
+        turn_threshold=5,
+        clear_turns_after=False,
+        max_tokens=engine_config.llm.max_tokens,
+        temperature=engine_config.llm.temperature,
+    )

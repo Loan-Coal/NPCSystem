@@ -37,21 +37,45 @@ from npc_engine.api.routes.reputation import graph_router as reputation_graph_ro
 from npc_engine.api.routes.graph_admin import router as graph_admin_router
 from npc_engine.api.routes.npc_state import router as npc_state_router
 from npc_engine.api.routes.quest import router as quest_router
+from npc_engine.api.routes.quest_generation import router as quest_generation_router
+from npc_engine.api.routes.economy import router as economy_router
+from npc_engine.api.routes.location_history import router as location_history_router
+from npc_engine.api.routes.causality import router as causality_router
+from npc_engine.api.routes.witnessed import router as witnessed_router
+from npc_engine.api.routes.groups import router as groups_router
+from npc_engine.api.routes.rumors import router as rumors_router
+from npc_engine.api.routes.skills import router as skills_router
+from npc_engine.api.routes.traits import router as traits_router
+from npc_engine.api.routes.pledges import router as pledges_router
+from npc_engine.api.routes.treaties import router as treaties_router
 from npc_engine.api.routes.system import admin_router as system_admin_router
 from npc_engine.api.routes.system import router as system_router
 from npc_engine.auth.middleware import ApiKeyMiddleware
 from npc_engine.api.dependency_singletons import (
+    close_registered_llm_adapters,
     get_dialogue_engine_model_config,
     get_embedding_index,
+    get_faction_politics_engine,
     get_game_schema,
     get_graph_db,
     get_idempotency_service,
     get_llm_config,
+    get_clique_formation_engine,
+    get_memory_consolidation_engine,
+    get_oath_engine,
+    get_treaty_engine,
+    get_pricing_engine,
+    get_skill_progression_engine,
+    get_quest_generation_engine,
     get_redis_runtime,
+    get_routine_engine,
+    get_story_pacing_engine,
+    get_trade_engine,
     get_type_registry,
 )
 from npc_engine.config import get_settings
 from npc_engine.engines.contracts.contract_loader import load_engine_contracts
+from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm_config_loader import validate_all_engine_llm_configs
 from npc_engine.engines.idempotency.cleanup_scheduler import IdempotencyCleanupScheduler
 from npc_engine.retrieval.embedding_reconciler import EmbeddingReconciler
@@ -70,8 +94,19 @@ async def lifespan(_app: FastAPI):
     idempotency_cleanup_task: asyncio.Task[None] | None = None
     connected = False
     try:
+        get_faction_politics_engine.cache_clear()
+        get_clique_formation_engine.cache_clear()
+        get_skill_progression_engine.cache_clear()
+        get_oath_engine.cache_clear()
+        get_treaty_engine.cache_clear()
+        get_story_pacing_engine.cache_clear()
+        get_pricing_engine.cache_clear()
+        get_trade_engine.cache_clear()
+        get_quest_generation_engine.cache_clear()
+        get_routine_engine.cache_clear()
         get_game_schema.cache_clear()
         get_game_schema()
+        get_memory_consolidation_engine.cache_clear()
         get_type_registry.cache_clear()
         type_registry = get_type_registry()
         if type_registry.custom_node_types:
@@ -97,9 +132,17 @@ async def lifespan(_app: FastAPI):
             dialogue_engine_config.llm.backend,
             dialogue_engine_config.llm.model,
         )
+        get_faction_politics_engine()
+        get_story_pacing_engine()
+        get_quest_generation_engine()
         await graph_db.connect()
         connected = True
         await redis_runtime.connect()
+        _dialogue_probe_adapter = create_llm_client_for_engine(
+            engine_config=dialogue_engine_config, settings=settings
+        )
+        if not await _dialogue_probe_adapter.health_check():
+            _logger.warning("LLM backend health check failed — starting degraded")
         if settings.DISTRIBUTED_TICK_LEASE_ENABLED:
             async with graph_db.get_session() as session:
                 lease_repo = TickLeaseRepository(
@@ -134,6 +177,7 @@ async def lifespan(_app: FastAPI):
             reconciler_task.cancel()
             with suppress(asyncio.CancelledError):
                 await reconciler_task
+        await close_registered_llm_adapters()
         await redis_runtime.close()
         if connected:
             await graph_db.close()
@@ -190,6 +234,17 @@ def create_app() -> FastAPI:
     app.include_router(factions_router, prefix=admin_prefix)
     app.include_router(schedules_router, prefix=admin_prefix)
     app.include_router(reputation_admin_router, prefix=admin_prefix)
+    app.include_router(quest_generation_router, prefix=admin_prefix)
+    app.include_router(economy_router, prefix=admin_prefix)
+    app.include_router(location_history_router, prefix=admin_prefix)
+    app.include_router(causality_router, prefix=admin_prefix)
+    app.include_router(witnessed_router, prefix=admin_prefix)
+    app.include_router(groups_router, prefix=admin_prefix)
+    app.include_router(rumors_router, prefix=admin_prefix)
+    app.include_router(skills_router, prefix=admin_prefix)
+    app.include_router(traits_router, prefix=admin_prefix)
+    app.include_router(pledges_router, prefix=admin_prefix)
+    app.include_router(treaties_router, prefix=admin_prefix)
 
     return app
 

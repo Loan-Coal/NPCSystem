@@ -1,0 +1,7 @@
+edge_type: OCCUPIES
+src_type: army
+dst_type: location
+fields:
+  since_tick:
+    type: int
+    required: true

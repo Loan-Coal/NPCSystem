@@ -1,0 +1,17 @@
+node_type: Need
+fields:
+  id:
+    type: str
+    required: true
+  kind:
+    type: str
+    required: true   # hunger / social / rest / recreation
+  level:
+    type: int
+    required: true   # 0–100; 0 = critical
+  decay_rate:
+    type: int
+    required: true   # points subtracted per tick
+  character_id:
+    type: str
+    required: true

@@ -1,0 +1,17 @@
+node_type: Army
+fields:
+  id:
+    type: str
+    required: true
+  faction_id:
+    type: str
+    required: true
+  strength:
+    type: int
+    required: true
+  current_location_id:
+    type: str
+    required: true
+  composition:
+    type: str
+    required: true    # JSON: {"infantry": int, "cavalry": int, "siege": int}

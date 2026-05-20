@@ -1,0 +1,5 @@
+edge_type: CONTRADICTS
+src_type: rumor
+dst_type: rumor
+fields:
+  contradiction_strength: { type: int, required: true, range: [0, 100] }

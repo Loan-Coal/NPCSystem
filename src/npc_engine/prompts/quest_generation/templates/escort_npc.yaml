@@ -1,0 +1,13 @@
+id: escort_npc_v1
+name: Escort NPC
+archetype: guard
+severity: 40
+slot_definitions:
+  - name: target
+    node_type: character
+    required: true
+  - name: destination
+    node_type: location
+    required: true
+description_template: "Escort {target} safely to {destination}."
+reward_template: "25 gold coins"

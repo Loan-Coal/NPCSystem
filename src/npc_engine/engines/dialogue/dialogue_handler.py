@@ -28,8 +28,8 @@ from npc_engine.engines.llm_config_models import EngineModelConfig
 from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.engines.routine.routine_queries import set_routine_override
 from npc_engine.retrieval.context_builder import build_serialized_context
-from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache
-from npc_engine.schema.llm_config_models import LLMConfig
+from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache, PartialDialogueContextCache
+from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.utils.metrics import increment_metric
 from npc_engine.world.time_utils import TimePoint
 from npc_engine.world.world_reader import get_world_state
@@ -51,7 +51,7 @@ class DialogueHandler:
         session_store: SessionStore,
         emotion_updater: EmotionUpdater,
         embedding_index: object,
-        context_cache: DialogueContextCache | None = None,
+        context_cache: PartialDialogueContextCache | DialogueContextCache | None = None,
     ) -> None:
         """Initialise the dialogue handler with all engine dependencies.
 

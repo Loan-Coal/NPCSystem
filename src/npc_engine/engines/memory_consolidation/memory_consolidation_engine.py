@@ -11,6 +11,8 @@ Used by: scheduler.tick_scheduler
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -19,7 +21,10 @@ from neo4j import AsyncSession
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
 from npc_engine.engines.llm.protocols import LLMClientProtocol
+from npc_engine.graph.belief_queries import get_beliefs_for_character
+from npc_engine.graph.memory_queries import get_memories_for_character
 from npc_engine.graph.memory_service import create_memory
+from npc_engine.graph.witnessed_queries import get_undisclosed_witnesses
 from npc_engine.world.time_utils import TimePoint
 
 if TYPE_CHECKING:
@@ -36,8 +41,6 @@ _PROMPT_PATH = (
 
 _VIVIDNESS = 75
 _EMOTIONAL_CHARGE = 0
-_MAX_TOKENS = 300
-_TEMPERATURE = 0.4
 
 
 class MemoryConsolidationEngine:
@@ -54,6 +57,8 @@ class MemoryConsolidationEngine:
         llm_client: LLMClientProtocol,
         turn_threshold: int,
         clear_turns_after: bool = False,
+        max_tokens: int = 300,
+        temperature: float = 0.4,
     ) -> None:
         """Initialise the memory consolidation engine.
 
@@ -62,11 +67,15 @@ class MemoryConsolidationEngine:
             llm_client: LLM adapter for generating the summary paragraph.
             turn_threshold: Minimum turn count before consolidation triggers.
             clear_turns_after: When True, clears consolidated turns from the store.
+            max_tokens: Maximum tokens to generate in the summarisation call.
+            temperature: Sampling temperature for the summarisation call.
         """
         self._session_store = session_store
         self._llm_client = llm_client
         self._turn_threshold = turn_threshold
         self._clear_turns = clear_turns_after
+        self._max_tokens = max_tokens
+        self._temperature = temperature
         prompt_data = load_yaml_mapping(_PROMPT_PATH, "consolidation_v1.yaml must have a mapping root")
         self._system_prompt: str = prompt_data["system"]
         self._user_template: str = prompt_data["user_template"]
@@ -97,25 +106,53 @@ class MemoryConsolidationEngine:
         if len(turns) < self._turn_threshold:
             return None
 
+        # Fetch existing beliefs and recent memories so the LLM avoids redundancy.
+        existing_beliefs, recent_memories = await asyncio.gather(
+            get_beliefs_for_character(session, character_id=npc_id, k=5),
+            get_memories_for_character(session, character_id=npc_id, k=3),
+        )
+        beliefs_text = json.dumps([b.get("content", "") for b in (existing_beliefs or [])])
+        memories_text = json.dumps([m.get("content", "") for m in (recent_memories or [])])
+
         turns_text = "\n".join(f"- {t}" for t in turns)
-        user_message = self._user_template.format(npc_id=npc_id, turns_text=turns_text)
+        user_message = self._user_template.format(
+            npc_id=npc_id,
+            turns_text=turns_text,
+            existing_beliefs=beliefs_text,
+            recent_memories=memories_text,
+        )
 
         try:
             summary = await self._llm_client.generate(
                 prompt=user_message,
-                max_tokens=_MAX_TOKENS,
-                temperature=_TEMPERATURE,
+                max_tokens=self._max_tokens,
+                temperature=self._temperature,
                 system=self._system_prompt,
             )
         except Exception:
             _LOGGER.exception("LLM error during consolidation for NPC %s — skipping", npc_id)
             return None
 
+        # Boost vividness when the NPC has undisclosed WITNESSED observations,
+        # since high-clarity first-hand observations form more vivid memories.
+        # Canonical events (IS_CANONICAL=true) always produce maximum-vividness memories
+        # to prevent them from being summarized or decayed by future consolidation passes.
+        vividness = _VIVIDNESS
+        try:
+            witnessed = await get_undisclosed_witnesses(session, npc_id=npc_id)
+            if witnessed:
+                max_clarity = max(int(w.get("clarity", 0)) for w in witnessed)
+                vividness = max(vividness, max_clarity)
+                if any(bool(w.get("is_canonical", False)) for w in witnessed):
+                    vividness = 100
+        except Exception:
+            pass  # Never let WITNESSED query failure block memory creation
+
         memory_id = await create_memory(
             session,
             character_id=npc_id,
             content=summary.strip(),
-            vividness=_VIVIDNESS,
+            vividness=vividness,
             emotional_charge=_EMOTIONAL_CHARGE,
             game_time=game_time,
         )

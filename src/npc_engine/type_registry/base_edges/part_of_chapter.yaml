@@ -1,0 +1,5 @@
+edge_type: PART_OF_CHAPTER
+src_type: event
+dst_type: chapter
+fields:
+  linked_at_tick: { type: int, required: false }

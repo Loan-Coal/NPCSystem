@@ -1,0 +1,7 @@
+edge_type: BELONGS_TO_GROUP
+src_type: character
+dst_type: group
+fields:
+  role:           { type: str, required: true }
+  joined_at_tick: { type: int, required: true }
+  commitment:     { type: int, required: true, range: [0, 100] }

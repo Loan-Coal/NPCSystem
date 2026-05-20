@@ -3,7 +3,7 @@ mock_adapter.py - Deterministic in-memory LLM adapter for tests and local runs.
 
 Does NOT: perform external API calls.
 
-Dependencies injected: Optional canned response payload.
+Dependencies injected: Optional canned response payload, optional structured response payload.
 """
 
 from typing import Any, AsyncIterator
@@ -23,13 +23,32 @@ DEFAULT_RESPONSE: dict[str, Any] = {
 class MockLLMAdapter(LLMClientProtocol):
     """Deterministic adapter that always returns configured payload."""
 
-    def __init__(self, response: dict[str, Any] | None = None) -> None:
-        """Initialise adapter with an optional canned response payload.
+    def __init__(
+        self,
+        response: dict[str, Any] | None = None,
+        structured_response: dict[str, Any] | None = None,
+    ) -> None:
+        """Initialise adapter with optional canned response payloads.
 
         Args:
-            response: Dict to return from all generation calls. Defaults to DEFAULT_RESPONSE.
+            response: Dict returned by generate() and stream(). Defaults to DEFAULT_RESPONSE.
+            structured_response: Dict returned by generate_structured(). Defaults to response if omitted.
         """
         self._response = dict(response) if response is not None else dict(DEFAULT_RESPONSE)
+        self._structured_response = (
+            dict(structured_response) if structured_response is not None else dict(self._response)
+        )
+
+    async def close(self) -> None:
+        """No-op — mock adapter has no external resources to release."""
+
+    async def health_check(self) -> bool:
+        """Return True — mock adapter is always ready. Non-raising.
+
+        Returns:
+            Always True.
+        """
+        return True
 
     async def generate(
         self,
@@ -64,7 +83,7 @@ class MockLLMAdapter(LLMClientProtocol):
         stop_sequences: list[str] | None = None,
         system: str | None = None,
     ) -> dict[str, Any]:
-        """Return a shallow copy of the configured payload dict.
+        """Return a shallow copy of the configured structured response dict.
 
         Args:
             prompt: Ignored in mock mode.
@@ -75,9 +94,9 @@ class MockLLMAdapter(LLMClientProtocol):
             system: Ignored in mock mode.
 
         Returns:
-            Shallow copy of the internal response dict.
+            Shallow copy of the internal structured_response dict.
         """
-        return dict(self._response)
+        return dict(self._structured_response)
 
     async def stream(
         self,

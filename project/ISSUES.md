@@ -13,7 +13,21 @@ Rules:
 
 ## Open
 
-## ISSUE-011: `.env` NEO4J_URI is container DNS — migration script breaks if `.env` is sourced
+## [FIXED] ISSUE-016: test_gossip_rumor_integration mock collision — KeyError 'secret_id'
+**Found:** 2026-05-18, during Phase 5 full-suite run
+**Severity:** P2 (annoying — 1 failing test)
+**Where:** `tests/unit/test_gossip_rumor_integration.py::test_knows_about_still_created_alongside_rumor`
+**Description:** `trust_record.__getitem__` lambda only maps `"trust"` → 5; when the gossip
+handler reuses the same mock for the secret query, `secret_record["secret_id"]` raises
+`KeyError: 'secret_id'`. The test mock setup leaks into the secret-propagation branch.
+**Why deferred:** Pre-existing before Phase 5; not introduced by this session's changes.
+**To fix:** Give the secret query its own distinct mock result with `secret_id` and `severity` keys.
+**Fixed:** 2026-05-19 — added `patch("...gossip_handler.random") as mock_random` with
+`mock_random.random.return_value = 1.0` in `test_knows_about_still_created_alongside_rumor`
+to suppress the secret-propagation branch, matching the pattern already used in
+`test_gossip_handler_calls_propagate_always`.
+
+## [FIXED] ISSUE-011: `.env` NEO4J_URI is container DNS — migration script breaks if `.env` is sourced
 **Found:** 2026-05-11, during API-based seeding task
 **Severity:** P3 (nice-to-fix)
 **Where:** `.env` line 1 (`NEO4J_URI=bolt://neo4j:7687`), `scripts/migrations/add_faction_support.py`
@@ -25,8 +39,10 @@ is invisible unless documented.
 **Why deferred:** Documentation-only fix; no code change required.
 **To fix:** Documented in `docs/API.md` under "Migration script" section. Optionally add a
 prominent comment in `.env` warning against sourcing it for outside-Docker tooling.
+**Fixed:** 2026-05-19 — added inline comment to `.env` on the `NEO4J_URI` line:
+`# Docker container hostname — do NOT source this file from the host`.
 
-## ISSUE-004: edge_updater.py — no-any-return from dump_json
+## [FIXED] ISSUE-004: edge_updater.py — no-any-return from dump_json
 **Found:** 2026-05-06, during Phase 1.2 (faction-aware gossip)
 **Severity:** P3 (nice-to-fix)
 **Where:** `src/npc_engine/engines/gossip/edge_updater.py:45`
@@ -34,8 +50,9 @@ prominent comment in `.env` warning against sourcing it for outside-Docker tooli
 declared `-> str` triggers `mypy [no-any-return]`. Pre-existing before Phase 1.
 **Why deferred:** Not introduced by Phase 1 changes; low risk.
 **To fix:** Add `cast(str, dump_json(...))` on the return line, or annotate `dump_json` as `-> str`.
+**Fixed:** 2026-05-19 — `dump_json` in `common/json_utils.py` is already annotated `-> str`; the mypy error is not reproducible. No code change required.
 
-## ISSUE-005: adjust_reputation_for_event not wired to event engine
+## [FIXED] ISSUE-005: adjust_reputation_for_event not wired to event engine
 **Found:** 2026-05-06, during Phase 1.3 planning
 **Severity:** P3 (nice-to-fix)
 **Where:** Future `src/npc_engine/graph/reputation_writer.py` (Phase 1.3)
@@ -45,8 +62,13 @@ is out of scope for Phase 1. The function will exist but never be triggered auto
 **Why deferred:** Requires engine changes belonging to a later phase.
 **To fix:** Wire in a future event-processing phase that calls `adjust_reputation_for_event`
 based on event type + target faction membership.
+**Fixed:** 2026-05-19 — added optional `faction_id`/`reputation_delta` fields to `EventTemplate`
+and `event.yaml`; wired `adjust_reputation_for_event` in `EventHandler.run_tick` for all characters
+at the event location when the template carries these fields; added 5 unit tests in
+`test_event_reputation_wiring.py`; annotated 3 event templates (`evt_05_keep_drill`,
+`evt_10_guard_desertion`, `evt_06_tax_riot`) with faction/delta values.
 
-## ISSUE-006: character.faction string field not migrated to MEMBER_OF edges
+## [FIXED] ISSUE-006: character.faction string field not migrated to MEMBER_OF edges
 **Found:** 2026-05-06, during Phase 1.1 (faction nodes)
 **Severity:** P3 (nice-to-fix)
 **Where:** Existing Character nodes with a `faction` string property
@@ -56,8 +78,41 @@ since that mapping is game-data-specific.
 **Why deferred:** Needs operator-supplied mapping of faction name strings to Faction node IDs.
 **To fix:** Provide a game-specific migration that reads character.faction, resolves it to
 a Faction node ID, and creates the MEMBER_OF edge.
+**Fixed:** 2026-05-19 — created `scripts/migrations/migrate_faction_strings.py`; finds
+unmigrated Characters, validates all referenced Faction nodes exist (fails fast if any are
+missing), creates MEMBER_OF edges; supports `--dry-run` flag.
 
-## ISSUE-013: `how_long_ago` has no defined bucket for 7–27 day distances
+## [FIXED] ISSUE-015: FactionPoliticsEngine CAUSED_BY retrofit deferred
+**Found:** 2026-05-18, during Phase 4.2 (CAUSED_BY retrofit)
+**Severity:** P2 (annoying)
+**Where:** `src/npc_engine/engines/faction_politics/faction_politics_engine.py`
+**Description:** EventHandler and QuestGenerationEngine are wired with CAUSED_BY edges.
+FactionPoliticsEngine is not — it calls `set_standing()` but the triggering event has no
+dedicated graph node to link as `effect_node_id`. A `FactionStandingEvent` node type is
+needed before this can be retrofitted cleanly.
+**Why deferred:** Requires a new node schema and migration; out of Phase 4 scope.
+**To fix:** Define `FactionStandingEvent` node type in the type registry, write it during
+`set_standing()`, then add `record_causation(session, effect_node_id=..., cause_event_id=...)`.
+**Fixed:** 2026-05-18, Phase 5.3 — `FactionStandingEvent` node and `faction_history_service`
+created; `faction_politics_engine` now calls `record_standing_change` after each `set_standing`,
+with `cause_event_id` and `cause_rule_id` written for full traceability. tick_id passed through.
+
+## [FIXED] ISSUE-014: WAS_AT `arrived_at_tick` uses current tick as approximation
+**Found:** 2026-05-18, during Phase 4.1 (WAS_AT edge)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/engines/routine/routine_engine.py` — `record_departure` call site
+**Description:** `arrived_at_tick` is set to `tick_id` (the departure tick) because LOCATED_AT
+edges do not store an arrival tick. The true arrival time is unknown at departure time.
+`tick_duration` is consequently always 0.
+**Why deferred:** Tracking arrival tick requires writing it when `update_character_location`
+runs; that is a separate schema addition.
+**To fix:** Add `arrived_at_tick: int` to the LOCATED_AT edge schema; write it in
+`update_character_location`; read it back in the routine engine before calling `record_departure`.
+**Fixed:** 2026-05-18, Phase 5 — added `arrived_at_tick` to `CYPHER_GET_SCHEDULED_CHARACTERS`
+and `CYPHER_UPDATE_LOCATED_AT`; `update_character_location` now accepts and writes the tick;
+`routine_engine` reads `current_arrived_at_tick` from the row with fallback to `tick_id`.
+
+## [FIXED] ISSUE-013: `how_long_ago` has no defined bucket for 7–27 day distances
 **Found:** 2026-05-11, during Phase 3.1 (time_utils.py)
 **Severity:** P3 (nice-to-fix)
 **Where:** `src/npc_engine/world/time_utils.py` — `how_long_ago`
@@ -65,6 +120,9 @@ a Faction node ID, and creates the MEMBER_OF edge.
 7–27. Current implementation extends "a few days ago" to cover 2–27. See DECISIONS.md entry.
 **Why deferred:** Spec ambiguity; not blocking any feature.
 **To fix:** Agree on wording (e.g., "a week or two ago") and add a 7–27 bucket in time_utils.
+**Fixed:** 2026-05-19 — split bucket: 2–6 → "a few days ago" (unchanged), 7–27 → "a few weeks ago"
+(new); updated docstring and added `test_how_long_ago_few_weeks` unit test in
+`test_world_time_service.py`.
 
 ---
 

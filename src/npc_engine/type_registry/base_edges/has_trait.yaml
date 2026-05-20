@@ -1,0 +1,6 @@
+edge_type: HAS_TRAIT
+src_type: character
+dst_type: trait
+fields:
+  intensity: { type: int, required: true }    # 0–100
+  is_secret: { type: bool, required: false }

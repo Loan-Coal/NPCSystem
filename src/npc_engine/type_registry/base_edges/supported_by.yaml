@@ -1,0 +1,5 @@
+# F1 fix: replaces Deduction.supporting_evidence_ids string-array FK with a proper graph edge.
+edge_type: SUPPORTED_BY
+src_type: deduction
+dst_type: evidence
+fields: {}

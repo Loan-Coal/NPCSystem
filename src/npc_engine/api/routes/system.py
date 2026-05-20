@@ -12,6 +12,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from npc_engine.api.dependencies import get_game_schema, get_type_registry
+from npc_engine.api.dependency_singletons import _llm_adapters_to_close
 from npc_engine.api.route_helpers import ok_response
 from npc_engine.schema.schema_models import SchemaConfig
 from npc_engine.type_registry.contracts import TypeRegistry
@@ -26,6 +27,19 @@ admin_router = APIRouter()
 async def health() -> dict:
     """Return liveness and basic service status."""
     return ok_response({"status": "ok", "tick": 0, "neo4j": "degraded"})
+
+
+@router.get("/readiness")
+async def readiness() -> dict:
+    """Return readiness including LLM backend reachability."""
+    llm_ready = True
+    for adapter in _llm_adapters_to_close:
+        if hasattr(adapter, "health_check"):
+            if not await adapter.health_check():
+                llm_ready = False
+                break
+    status = "ready" if llm_ready else "degraded"
+    return ok_response({"status": status, "llm": "ok" if llm_ready else "unreachable"})
 
 
 @admin_router.get("/protected")

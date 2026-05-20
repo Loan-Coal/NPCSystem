@@ -1,0 +1,6 @@
+edge_type: DERIVED_FROM
+src_type: rumor
+dst_type: rumor
+fields:
+  mutation_type: { type: str, required: true }
+  created_at_tick: { type: int, required: true }

@@ -1,0 +1,23 @@
+base_prices:
+  sword: 50
+  potion: 20
+  map: 10
+  default: 5
+
+location_modifiers:
+  - location_type: frontier
+    item_type: weapon
+    multiplier: 1.5
+  - location_type: market
+    item_type: any
+    multiplier: 0.9
+
+event_modifiers:
+  - event_type: war
+    item_type: weapon
+    multiplier: 2.0
+  - event_type: plague
+    item_type: potion
+    multiplier: 3.0
+
+faction_discount: 0.1

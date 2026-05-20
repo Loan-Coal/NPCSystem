@@ -1,0 +1,7 @@
+node_type: Agenda
+fields:
+  id:                      { type: str, required: true }
+  description:             { type: str, required: true }
+  proposed_by_faction_id:  { type: str, required: true }
+  status:                  { type: str, required: true }   # open/passed/failed
+  deadline_tick:           { type: int, required: false }

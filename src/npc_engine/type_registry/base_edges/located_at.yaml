@@ -3,4 +3,5 @@ src_type: character
 dst_type: location
 fields:
   is_permanent_resident: { type: bool, required: false }
-  arrived_at: { type: str, required: true }
+  arrived_at: { type: str, required: false }
+  arrived_at_tick: { type: int, required: false }

@@ -1,0 +1,7 @@
+edge_type: CONNECTS_TO
+src_type: location
+dst_type: location
+fields:
+  kind: { type: str, required: true }
+  travel_cost: { type: int, required: true }
+  is_open: { type: bool, required: false }

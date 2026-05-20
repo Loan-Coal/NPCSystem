@@ -1,0 +1,5 @@
+edge_type: UNLOCKED_BY
+src_type: quest
+dst_type: choice
+fields:
+  unlocked_at_tick: { type: int, required: false }

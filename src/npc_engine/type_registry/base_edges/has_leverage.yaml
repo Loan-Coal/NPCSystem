@@ -1,0 +1,4 @@
+edge_type: HAS_LEVERAGE
+src_type: character
+dst_type: leverage
+fields: {}

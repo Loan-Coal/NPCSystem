@@ -6,4 +6,7 @@ fields:
   archetype: { type: str, required: true }
   is_active: { type: bool, required: true }
   created_at: { type: str, required: true }
+  power_score: { type: int, required: false }
+  treasury: { type: int, required: false }
+  military_strength: { type: int, required: false }
   last_graph_updated_at: { type: str, required: true }

@@ -16,6 +16,169 @@ This file tracks iterative implementation for PROJECT_PLAN_v1.4.xml and supports
 
 ## Stages
 
+### Roadmap V2 Phase 3 — Retrieval Foundation
+Status: DONE
+Started: 2026-05-15
+Completed: 2026-05-15
+Tests: 720 passed, 17 skipped, 0 failed
+Items: 7/7 complete
+
+- [x] 3.1 Replace character-bucket hash with sentence-transformers (sentence_encoder.py, embedding_index.py, dependency_singletons.py, pyproject.toml) — EMBED_DIMENSION=384, lazy import, GPU/CPU auto-detect
+- [x] 3.2 Fix recency scoring — skip wall-clock for game-time nodes (_GAME_TIME_FIELDS pre-check returns 0.0)
+- [x] 3.3 Map emotional_charge/urgency/confidence into severity scoring — four-field cascade in _extract_severity_score
+- [x] 3.4 Cap Tier 0 in context_budget_enforcer — TIER0_MAX_TOKENS=380; raises ContextBudgetError(tier="tier0")
+- [x] 3.5 Increase PROMPT_TOKEN_BUDGET 800 → 2500 in config.py
+- [x] 3.6 Parallelize Tier A queries with asyncio.gather; extract helpers to context_builder_helpers.py; assemble_tier_a_context pure fn; 3-stage gather in build_serialized_context
+- [x] 3.7 Add KNOWS_ABOUT filter to vector retrieval — get_known_event_ids_for_npc in graph_reader.py; Stage 1 gather; filter_ids passed to embedding_index.search; None when empty (no restriction)
+
+---
+
+### Roadmap V2 Phase 2 — Engine Configuration Baseline
+Status: DONE
+Started: 2026-05-15
+Completed: 2026-05-15
+Tests: 697 passed, 17 skipped, 0 failed
+Items: 12/12 complete
+
+- [x] 2.1 memory_consolidation llm_config.yaml + contract YAML; removed module-level constants; added max_tokens/temperature params to engine __init__
+- [x] 2.2 Fixed get_memory_consolidation_engine singleton — was using dialogue config; now uses memory_consolidation
+- [x] 2.3 Fixed EngineTimeoutsMs schema — removed strict=True; added deterministic optional field; fixed quest_generation llm_config.yaml lying fields
+- [x] 2.4 Added cache_clear for all 6 rules-based engines in lifespan; added autouse conftest.py fixture for test isolation; added fail-fast warm-up calls
+- [x] 2.5 Injected max_tokens from llm_config into QuestGenerationEngine; replaced hardcoded 256
+- [x] 2.6 Replaced bare except Exception in QuestGenerationEngine with LLMTimeoutError/LLMRequestError/ValidationError catches
+- [x] 2.7 Shared httpx.AsyncClient per adapter (OllamaAdapter, MistralAdapter) — close() method added; teardown registry in dependency_singletons.py
+- [x] 2.8 health_check() added to all adapters; /readiness endpoint in system.py; LLM probe at lifespan startup
+- [x] 2.9 node_validator.py created; validate_node_write wired into EventHandler.run_tick and build_lifecycle_event (quest_engine_helpers.py)
+- [x] 2.10 Factory plugin registry — _REGISTRY dict + register_backend() + wrapper functions; replaced if/elif chain in factory.py
+- [x] 2.11 BaseEngine protocol updated to use run_tick (was tick); TickScheduler type hints updated from object to BaseEngine
+- [x] 2.12 Circular import resolved — create_llm_client_for_engine moved to module-level import in dependency_singletons.py (no actual cycle existed)
+
+Notes: Iterative — pytest run after each group. Groups: A (schema/config), B (singleton/cache), C (quest gen), D (http/health), E (arch), F (type system)
+
+---
+
+### Roadmap V2 Phase 1 — Critical Structural Fixes
+Status: DONE
+Started: 2026-05-14
+Completed: 2026-05-14
+Tests: 695 passed, 17 skipped, 0 failed
+
+#### 14 items completed
+- [x] 1.1 Fix `model_name()` on `MistralAdapter` / `LlamaAdapter` — param injected, factory updated
+- [x] 1.2 Add `system` kwarg to `MistralAdapter` / `LlamaAdapter` — prepends to prompt
+- [x] 1.3 Fix `consolidate_memories` route — provisional `get_memory_consolidation_engine()` singleton in `dependency_singletons.py`; route injects engine not raw LLM client
+- [x] 1.4 Fix `MockLLMAdapter` — `structured_response` param added, `generate_structured` returns dedicated payload
+- [x] 1.5 Rename `schema/llm_config_models.py` → `schema/context_config_models.py` — 14 files updated; old file kept as re-export shim
+- [x] 1.6 Remove redundant schema injection in `OllamaAdapter.generate_structured` — prompt passed as-is
+- [x] 1.7 Preserve `httpx` status code in `LLMRequestError` — `HTTPStatusError` caught before `HTTPError`; `detail=f"http_error:{status_code}"`
+- [x] 1.8 Remove redundant `get_character_with_relations` call — `retrieve_tier_a_context` accepts `character_bundle` kwarg
+- [x] 1.9 Fix compression — `_field_select_compress` replaces raw byte truncation; `_ESSENTIAL_FIELDS` per node type
+- [x] 1.10 Strip null fields and low-value ID fields — `serialize_json` gains `strip_nulls` / `strip_fields` kwargs
+- [x] 1.11 Cap nearby NPC payload — `_NPC_NEARBY_FIELDS = ("id","name","archetype","faction")` in `subgraph_retriever.py`
+- [x] 1.12 Add `k=10` limit to `get_items_for_character` — Cypher gets `LIMIT $k`; sorted by value DESC
+- [x] 1.13 Remove `explicit` scoring weight — 5-field `RelevanceWeights`; `recency` raised to 0.30
+- [x] 1.14 Fix `registry.py` double `TypeRegistry` construction — `dataclasses.replace()` used instead of second constructor
+
+#### Side-fixes applied during Phase 1
+- `ContextBudgetError` `frozen=True` removed (Python 3.14 `__traceback__` assignment was failing)
+- Test suite updated: `explicit` field removed from 5 test files; `fake_tier_a` stubs accept `character_bundle`; `fake_items` stubs accept `k` param; compression tests use `biography` field (in character essential set)
+
+---
+
+### Phase 5 — Demo Polish
+Status: IN_PROGRESS
+Started: 2026-05-14
+
+#### Feature 5.1 — The 90-second video scenario
+Status: DONE
+Started: 2026-05-14
+Completed: 2026-05-14
+Tasks:
+- [x] `e2e/scenarios/scenario_demo_video.py` — self-contained demo scenario (tavern, 2 NPCs, plague rumor, gossip, dialogue)
+- [x] `docs/DEMO.md` — how to reproduce the demo
+- [x] `Makefile` — added `demo-video` target
+694 unit tests green (no new unit tests — scenario is e2e only).
+
+---
+
+### Phase 4 — Authoring Engines
+Status: DONE
+Started: 2026-05-13
+
+#### Feature 4.1 — Faction politics engine
+Status: DONE
+Started: 2026-05-13
+Completed: 2026-05-13
+Commit: feat: faction politics engine (Phase 4.1)
+Tasks:
+- [x] `engines/faction_politics/rules.yaml` — 2 rules (betrayal -10, alliance_act +5) + decay config
+- [x] `engines/faction_politics/rules_loader.py` — FactionPoliticsRule, DecayConfig, FactionPoliticsRules dataclasses + load_rules
+- [x] `engines/faction_politics/faction_politics_engine.py` — FactionPoliticsEngine.run_tick (event rules + decay)
+- [x] `api/dependency_singletons.py` — get_faction_politics_engine() @lru_cache singleton
+- [x] `scheduler/tick_scheduler.py` — optional faction_politics_engine injection; called every tick
+- [x] `tests/unit/test_faction_politics_engine.py` — 7 unit tests green
+- [x] `e2e/scenarios/scenario_faction_politics.py` — E2E scenario
+674 unit tests green.
+
+#### Feature 4.2 — Quest templates and slot-filling
+Status: DONE
+Started: 2026-05-13
+Completed: 2026-05-13
+Commit: feat: quest templates and slot-filling generation (Phase 4.2)
+Tasks:
+- [x] `type_registry/base_nodes/quest.yaml` and `quest_template.yaml`
+- [x] `type_registry/base_edges/has_quest.yaml`
+- [x] `graph/quest_node_queries.py` and `graph/quest_node_service.py`
+- [x] `prompts/quest_generation/slot_fill_v1.yaml` and `flavor_v1.yaml`
+- [x] `prompts/quest_generation/templates/fetch_item.yaml` and `escort_npc.yaml`
+- [x] `engines/quest_generation/` package: __init__, slot_models, slot_validator, template_loader, engine
+- [x] `engines/contracts/quest_generation_engine.yaml` and `llm_config.yaml`
+- [x] `api/dependency_singletons.py` — get_quest_generation_engine() singleton
+- [x] `api/routes/quest_generation.py` — POST /quests/generate, GET /quests/{quest_id}
+- [x] `tests/unit/test_quest_generation_engine.py` — 7 unit tests green
+- [x] `e2e/scenarios/scenario_quest_generation.py` — E2E scenario
+681 unit tests green.
+
+#### Feature 4.3 — Story pacing engine
+Status: DONE
+Started: 2026-05-13
+Completed: 2026-05-13
+Commit: feat: story pacing engine (Phase 4.3)
+Tasks:
+- [x] `world/world_state.py` — add `max_event_severity` (default=100) and `quest_generation_rate` (default=1.0)
+- [x] `type_registry/base_nodes/world_state.yaml` — add new optional fields
+- [x] `world/world_writer.py` — persist new fields in CYPHER + return parsing
+- [x] `engines/story_pacing/__init__.py`, `pacing_rules.yaml`, `pacing_rules_loader.py`, `pacing_queries.py`, `story_pacing_engine.py`
+- [x] `engines/events/event_handler.py` — skip events above `max_event_severity`
+- [x] `engines/quest_generation/quest_generation_engine.py` — respect `quest_generation_rate`
+- [x] `api/dependency_singletons.py` — `get_story_pacing_engine()` singleton
+- [x] `scheduler/tick_scheduler.py` — optional `story_pacing_engine` injection, called before gossip/events
+- [x] `tests/unit/test_story_pacing_engine.py` — 6 unit tests green
+- [x] `e2e/scenarios/scenario_story_pacing.py` — E2E scenario
+686 unit tests green.
+
+#### Feature 4.4 — Economy engine (basic)
+Status: DONE
+Started: 2026-05-13
+Completed: 2026-05-13
+Commit: feat: economy engine (Phase 4.4)
+Tasks:
+- [x] `engines/economy/pricing_rules.yaml` — base prices, location/event/faction modifiers
+- [x] `engines/economy/pricing_rules_loader.py` — PricingRules frozen dataclass + load_pricing_rules
+- [x] `engines/economy/pricing_engine.py` — PricingEngine.compute_price (pure, no I/O)
+- [x] `engines/economy/trade_models.py` — TradeResult frozen dataclass
+- [x] `engines/economy/trade_engine.py` — TradeEngine.evaluate_offer (reuses atomic writers)
+- [x] `engines/economy/__init__.py` — package re-export
+- [x] `graph/pricing_queries.py` — Cypher constants + helpers for location/event/faction lookups
+- [x] `api/dependency_singletons.py` — get_pricing_engine() and get_trade_engine() @lru_cache singletons
+- [x] `api/routes/economy.py` — GET /economy/price, POST /economy/trade
+- [x] `main.py` — economy_router registered under admin_prefix
+- [x] `tests/unit/test_economy_engine.py` — 8 unit tests green
+- [x] `e2e/scenarios/scenario_economy.py` — E2E scenario
+694 unit tests green.
+
+---
+
 ### Phase 3 — World Depth
 Status: DONE
 Started: 2026-05-11

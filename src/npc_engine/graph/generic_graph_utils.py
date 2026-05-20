@@ -18,6 +18,7 @@ BASE_NODE_LABELS = {
     "character": "Character",
     "event": "Event",
     "location": "Location",
+    "quest": "Quest",
     "world_state": "WorldState",
 }
 
@@ -57,7 +58,9 @@ def encode_properties(data: Mapping[str, Any], fields: Mapping[str, RuntimeField
         definition = fields.get(key)
         if definition is None:
             continue
-        if definition.field_type == "dict" and value is not None:
+        if value is None:
+            continue
+        if definition.field_type == "dict":
             encoded[key] = json.dumps(value, sort_keys=True)
             continue
         encoded[key] = value

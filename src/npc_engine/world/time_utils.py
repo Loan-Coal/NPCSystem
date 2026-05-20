@@ -27,7 +27,7 @@ class TimePoint:
     time_of_day: str
 
 
-def _total_days(tp: TimePoint) -> int:
+def total_days(tp: TimePoint) -> int:
     """Convert a TimePoint to a monotonically increasing day count.
 
     Args:
@@ -47,7 +47,8 @@ def how_long_ago(from_: TimePoint, to: TimePoint) -> str:
       - same day and same time_of_day  → "moments ago"
       - same day, different time_of_day → "earlier today"
       - 1 day                           → "yesterday"
-      - 2–27 days                       → "a few days ago"
+      - 2–6 days                        → "a few days ago"
+      - 7–27 days                       → "a few weeks ago"
       - 28 days (one full season)       → "last season"
       - more than 28 days               → "long ago"
 
@@ -58,15 +59,17 @@ def how_long_ago(from_: TimePoint, to: TimePoint) -> str:
     Returns:
         Human-readable time-distance string.
     """
-    delta_days = _total_days(from_) - _total_days(to)
+    delta_days = total_days(from_) - total_days(to)
     if delta_days == 0:
         if from_.time_of_day == to.time_of_day:
             return "moments ago"
         return "earlier today"
     if delta_days == 1:
         return "yesterday"
-    if delta_days < DAYS_PER_SEASON:
+    if delta_days < 7:
         return "a few days ago"
+    if delta_days < DAYS_PER_SEASON:
+        return "a few weeks ago"
     if delta_days == DAYS_PER_SEASON:
         return "last season"
     return "long ago"

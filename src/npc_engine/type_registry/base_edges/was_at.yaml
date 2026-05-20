@@ -1,0 +1,8 @@
+edge_type: WAS_AT
+src_type: character
+dst_type: location
+fields:
+  arrived_at_tick:  { type: int, required: true }
+  departed_at_tick: { type: int, required: true }
+  reason:           { type: str, required: true }
+  tick_duration:    { type: int, required: true }

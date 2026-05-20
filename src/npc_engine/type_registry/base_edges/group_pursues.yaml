@@ -1,0 +1,5 @@
+edge_type: GROUP_PURSUES
+src_type: group
+dst_type: goal
+fields:
+  priority: { type: int, required: true, range: [0, 100] }

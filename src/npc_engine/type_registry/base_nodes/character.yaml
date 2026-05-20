@@ -14,4 +14,6 @@ fields:
   credulity: { type: int, required: true, range: [0, 100] }
   honesty: { type: int, required: true, range: [0, 100] }
   current_mood: { type: str, required: false }
+  mood_intensity: { type: float, required: false }
   routine_override: { type: str, required: false }
+  currency_balance: { type: int, required: false }

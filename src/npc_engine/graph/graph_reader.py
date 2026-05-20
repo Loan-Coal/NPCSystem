@@ -50,6 +50,12 @@ WHERE npc.is_active = true
 RETURN properties(r) AS relation
 """
 
+CYPHER_GET_KNOWN_EVENT_IDS = """
+MATCH (c:Character {id: $npc_id})-[:KNOWS_ABOUT]->(e:Event)
+WHERE c.is_active = true
+RETURN e.id AS id
+"""
+
 
 async def get_character_with_relations(session: AsyncSession, npc_id: str) -> dict[str, Any]:
     """Fetch character node and directed outgoing relations.
@@ -137,6 +143,21 @@ async def get_npc_location_id(session: AsyncSession, npc_id: str) -> str | None:
     if record is None:
         return None
     return cast(str, record["location_id"])
+
+
+async def get_known_event_ids_for_npc(session: AsyncSession, npc_id: str) -> set[str]:
+    """Return the set of Event IDs this NPC has KNOWS_ABOUT edges to.
+
+    Args:
+        session: Active Neo4j async session for the read query.
+        npc_id: ID of the character node whose known events are fetched.
+
+    Returns:
+        Set of event ID strings the NPC knows about.
+    """
+
+    result = await session.run(CYPHER_GET_KNOWN_EVENT_IDS, npc_id=npc_id)
+    return {str(record["id"]) async for record in result}
 
 
 async def get_npc_player_edge(session: AsyncSession, npc_id: str, player_id: str) -> dict[str, Any] | None:

@@ -1,0 +1,11 @@
+edge_type: PLEDGE
+src_type: character
+dst_type: character
+fields:
+  pledge_type:          { type: str, required: true }
+  sworn_at_tick:        { type: int, required: true }
+  expires_at_tick:      { type: int, required: false }
+  witness_character_id: { type: str, required: false }
+  binding_event_id:     { type: str, required: false }
+  is_active:            { type: bool, required: true }
+  severity:             { type: int, required: true }

@@ -174,7 +174,7 @@ def _validate_values(
     for field_name, value in payload.items():
         definition = field_definitions[field_name]
         if value is None:
-            if field_name in base_fields:
+            if field_name in base_fields and base_fields[field_name].required:
                 raise RegistryPayloadValidationError(
                     code="BASE_FIELD_NULL_FORBIDDEN",
                     detail=f"null is not allowed for base field: {field_name}",

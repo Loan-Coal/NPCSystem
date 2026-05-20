@@ -1,0 +1,5 @@
+edge_type: REQUIRES_SKILL
+src_type: quest_template
+dst_type: skill
+fields:
+  min_level: { type: int, required: true }

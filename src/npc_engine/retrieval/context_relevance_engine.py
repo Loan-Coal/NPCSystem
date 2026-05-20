@@ -11,7 +11,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.retrieval.context_merger import ContextItem
-from npc_engine.schema.llm_config_models import RelevanceWeights
+from npc_engine.schema.context_config_models import RelevanceWeights
 
 
 MIN_COMPONENT_SCORE = 0.0
@@ -29,7 +29,6 @@ class ContextRelevanceCandidate(BaseModel):
     proximity_hops: int = Field(ge=0)
     relation: float = Field(ge=MIN_COMPONENT_SCORE, le=MAX_COMPONENT_SCORE)
     quest: float = Field(ge=MIN_COMPONENT_SCORE, le=MAX_COMPONENT_SCORE)
-    explicit: float = Field(ge=MIN_COMPONENT_SCORE, le=MAX_COMPONENT_SCORE)
 
     model_config = ConfigDict(frozen=True)
 
@@ -61,7 +60,6 @@ def score_candidate(
         + weights.proximity * proximity_score
         + weights.relation * candidate.relation
         + weights.quest * candidate.quest
-        + weights.explicit * candidate.explicit
     )
 
 

@@ -23,9 +23,15 @@ from npc_engine.engines.events.disruption_loader import DisruptionRule, load_dis
 from npc_engine.engines.events.event_pool import EventTemplate, load_event_pool
 from npc_engine.engines.events.location_scoper import resolve_locations
 from npc_engine.engines.routine.routine_queries import set_routine_override
+from npc_engine.graph.causality_service import record_causation
 from npc_engine.graph.event_writer import upsert_event
+from npc_engine.graph.reputation_writer import adjust_reputation_for_event
+from npc_engine.utils.errors import ReputationNotFoundError
+from npc_engine.graph.witnessed_service import record_witness
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
 from npc_engine.type_registry.contracts import TypeRegistry
+from npc_engine.type_registry.node_validator import validate_node_write
+from npc_engine.world.world_reader import get_world_state
 from npc_engine.world.world_state import WorldState
 
 
@@ -121,7 +127,7 @@ class EventHandler:
         weights = [template.weight for template in self._templates]
         return rng.choices(self._templates, weights=weights, k=1)[0]
 
-    async def run_tick(self, session: AsyncSession, tick_id: int, location_ids: list[str] | None = None) -> dict:
+    async def run_tick(self, session: AsyncSession, tick_id: int, location_ids: list[str] | None = None, cause_event_id: str | None = None) -> dict:
         """Create one weighted event, seed NPC awareness, and optionally update world state.
 
         High-severity events (severity ≥ 80) add the event type to the world's
@@ -132,6 +138,8 @@ class EventHandler:
             tick_id: Current game tick identifier.
             location_ids: Optional override list of location IDs; uses template-matched
                 locations when not provided.
+            cause_event_id: When provided, writes a CAUSED_BY edge from the new event to
+                this event ID (direct causation, strength=100, tick_lag=0).
 
         Returns:
             Dict with ``tick_id`` and ``created`` (0 or 1). When created=1, also includes
@@ -140,6 +148,15 @@ class EventHandler:
 
         async with self._lock:
             template = self._select_template(tick_id=tick_id)
+            world_state_check = await get_world_state(session=session)
+            if template.severity > world_state_check.max_event_severity:
+                LOGGER.debug(
+                    "event_handler tick %d: skipping event severity=%d (cap=%d)",
+                    tick_id,
+                    template.severity,
+                    world_state_check.max_event_severity,
+                )
+                return {"tick_id": tick_id, "created": 0}
             template_locations = await resolve_locations(session=session, location_tag=template.location_tag)
             scoped_locations = location_ids if location_ids is not None and len(location_ids) > 0 else template_locations
             if len(scoped_locations) == 0:
@@ -147,23 +164,43 @@ class EventHandler:
 
             location_id = scoped_locations[0]
             event_id = str(uuid4())
-            event_model = self._registry.node_models["event"]
             now = datetime.now(timezone.utc).isoformat()
-            event = event_model(
-                id=event_id,
-                summary=template.summary_template,
-                severity=template.severity,
-                location_id=location_id,
-                occurred_at=now,
-                tick_id=tick_id,
-                event_type=template.event_type,
-                is_public=True,
-                last_graph_updated_at=now,
-            )
+            raw_props = {
+                "id": event_id,
+                "summary": template.summary_template,
+                "severity": template.severity,
+                "location_id": location_id,
+                "occurred_at": now,
+                "tick_id": tick_id,
+                "event_type": template.event_type,
+                "is_public": True,
+                "last_graph_updated_at": now,
+            }
+            validated_props = validate_node_write(self._registry, "event", raw_props)
+            event = self._registry.node_models["event"](**validated_props)
             tx = await session.begin_transaction()
             async with tx:
                 await upsert_event(tx=tx, event=event)
                 await seed_awareness_tx(tx=tx, event_id=event_id, location_id=location_id, tick_id=tick_id)
+                if template.faction_id is not None and template.reputation_delta is not None:
+                    rep_chars_result = await tx.run(
+                        CYPHER_CHARACTERS_AT_LOCATION, location_id=location_id
+                    )
+                    rep_char_ids = [record["character_id"] async for record in rep_chars_result]
+                    for char_id in rep_char_ids:
+                        try:
+                            await adjust_reputation_for_event(
+                                tx,
+                                character_id=char_id,
+                                faction_id=template.faction_id,
+                                delta=template.reputation_delta,
+                            )
+                        except ReputationNotFoundError:
+                            LOGGER.debug(
+                                "event_handler: no reputation edge for char=%s faction=%s — skipped",
+                                char_id,
+                                template.faction_id,
+                            )
                 matched_rules = self._apply_disruption_rules(
                     self._disruption_rules, template.event_type, template.severity
                 )
@@ -217,6 +254,36 @@ class EventHandler:
                     )
                 await tx.commit()
 
+            if template.severity >= 80:
+                chars_result2 = await session.run(
+                    CYPHER_CHARACTERS_AT_LOCATION, location_id=location_id
+                )
+                witness_ids = [rec["character_id"] async for rec in chars_result2]
+                actor_id = str(raw_props.get("src_character_id", "")) or None
+                if actor_id and witness_ids:
+                    max_witnesses = self._settings.WITNESSED_MAX_PER_EVENT
+                    for witness_id in witness_ids[:max_witnesses]:
+                        if witness_id != actor_id:
+                            await record_witness(
+                                session,
+                                witness_id=witness_id,
+                                subject_id=actor_id,
+                                event_id=event_id,
+                                action_type=template.event_type,
+                                tick=tick_id,
+                                clarity=70,
+                                interpretation=template.summary_template,
+                            )
+            if cause_event_id is not None:
+                await record_causation(
+                    session,
+                    effect_node_id=event_id,
+                    effect_node_type="event",
+                    cause_event_id=cause_event_id,
+                    causation_strength=100,
+                    cause_type="direct",
+                    tick_lag=0,
+                )
             await invalidate_embedding_safely(
                 embedding_index=self._embedding_index,
                 item_id=location_id,

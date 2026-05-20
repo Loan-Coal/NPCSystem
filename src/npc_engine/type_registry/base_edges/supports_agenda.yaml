@@ -1,0 +1,5 @@
+edge_type: SUPPORTS_AGENDA
+src_type: character
+dst_type: agenda
+fields:
+  weight: { type: int, required: true }   # 0–100; voting weight

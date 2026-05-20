@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from npc_engine.schema.llm_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
+from npc_engine.schema.context_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
 from npc_engine.utils.errors import LLMConfigMisconfiguredError, LLMConfigValidationError
 
 
@@ -31,13 +31,12 @@ relevance_weights:
   severity: 0.2
   proximity: 0.2
   relation: 0.2
-  quest: 0.1
-  explicit: 0.1
+  quest: 0.2
 """.strip()
 
 
 def _valid_weights() -> dict:
-    return dict(recency=0.2, severity=0.2, proximity=0.2, relation=0.2, quest=0.1, explicit=0.1)
+    return dict(recency=0.2, severity=0.2, proximity=0.2, relation=0.2, quest=0.2)
 
 
 # ── RelevanceWeights.validate_weights_sum ────────────────────────────────────

@@ -1,0 +1,10 @@
+node_type: Group
+fields:
+  id:                { type: str, required: true }
+  name:              { type: str, required: true }
+  kind:              { type: str, required: true }
+  cohesion:          { type: int, required: true, range: [0, 100] }
+  is_secret:         { type: bool, required: true }
+  formed_at_tick:    { type: int, required: true }
+  dissolved_at_tick: { type: int }
+  home_location_id:  { type: str }

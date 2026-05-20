@@ -1,0 +1,7 @@
+node_type: Deduction
+fields:
+  id:                    { type: str, required: true }
+  held_by_character_id:  { type: str, required: true }
+  claim:                 { type: str, required: true }
+  confidence:            { type: int, required: true }   # 0–100
+  status:                { type: str, required: true }   # open/confirmed/refuted

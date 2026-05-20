@@ -1,0 +1,13 @@
+node_type: quest
+fields:
+  id:                { type: str, required: true }
+  description:       { type: str, required: true }
+  quest_giver_id:    { type: str, required: true }
+  target_id:         { type: str, required: false }
+  reward_id:         { type: str, required: false }
+  success_condition: { type: str, required: true }
+  failure_condition: { type: str, required: false }
+  status:            { type: str, required: true }
+  severity:          { type: int, required: true, range: [0, 100] }
+  created_at:        { type: str, required: true }
+  completed_at:      { type: str, required: false }

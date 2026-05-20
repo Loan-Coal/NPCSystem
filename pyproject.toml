@@ -16,6 +16,8 @@ dependencies = [
     "neo4j==5.28.2",
     "redis==5.2.1",
     "httpx==0.28.1",
+    "sentence-transformers>=2.6.0",
+    "torch>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +47,7 @@ where = ["src"]
     "observability/*.json",
     "type_registry/base_edges/*.yaml",
     "type_registry/base_nodes/*.yaml",
+    "prompts/**/*.yaml",
 ]
 
 [tool.pytest.ini_options]

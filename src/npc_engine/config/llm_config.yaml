@@ -8,9 +8,8 @@ session_turns_budget_tokens: 1200
 compression_trigger_ratio: 0.85
 max_proximity_hops: 2
 relevance_weights:
-  recency: 0.25
+  recency: 0.30
   severity: 0.20
   proximity: 0.20
   relation: 0.20
   quest: 0.10
-  explicit: 0.05

@@ -1,0 +1,7 @@
+edge_type: SATISFIES_NEED
+src_type: location
+dst_type: need
+fields:
+  magnitude:
+    type: int
+    required: true   # level points restored per tick when character is at src location

@@ -1,0 +1,6 @@
+node_type: narrative_beat
+fields:
+  id: { type: str, required: true }
+  kind: { type: str, required: true }
+  intensity: { type: int, required: true }
+  chapter_id: { type: str, required: true }

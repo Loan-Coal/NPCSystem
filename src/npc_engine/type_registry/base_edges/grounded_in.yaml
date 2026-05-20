@@ -1,0 +1,5 @@
+# F3 fix: Leverage node → Secret node traversal replacing secret_id string FK.
+edge_type: GROUNDED_IN
+src_type: leverage
+dst_type: secret
+fields: {}

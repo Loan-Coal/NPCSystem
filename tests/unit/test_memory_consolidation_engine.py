@@ -13,6 +13,19 @@ import pytest
 from npc_engine.engines.dialogue.session_store import SessionStore
 from npc_engine.world.time_utils import TimePoint
 
+_MCE_MODULE = "npc_engine.engines.memory_consolidation.memory_consolidation_engine"
+
+
+@pytest.fixture(autouse=True)
+def _patch_context_graph_calls():
+    """Patch the two context-enrichment graph calls added in 8.6 to return empty lists.
+    These calls hit Neo4j and are irrelevant to the consolidation logic under test."""
+    with (
+        patch(f"{_MCE_MODULE}.get_beliefs_for_character", new_callable=AsyncMock, return_value=[]),
+        patch(f"{_MCE_MODULE}.get_memories_for_character", new_callable=AsyncMock, return_value=[]),
+    ):
+        yield
+
 
 # ---------------------------------------------------------------------------
 # Helpers

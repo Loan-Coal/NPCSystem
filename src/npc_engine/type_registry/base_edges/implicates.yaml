@@ -1,0 +1,6 @@
+edge_type: IMPLICATES
+src_type: evidence
+dst_type: character
+fields:
+  weight:        { type: int,  required: true }    # 0–100; strength of implication
+  is_misleading: { type: bool, required: true }

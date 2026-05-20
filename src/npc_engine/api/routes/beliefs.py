@@ -11,7 +11,7 @@ Used by: npc_engine.main (registered at admin_prefix)
 from __future__ import annotations
 
 from neo4j import AsyncSession
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session

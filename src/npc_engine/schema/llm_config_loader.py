@@ -12,7 +12,7 @@ import yaml
 from pydantic import ValidationError
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
-from npc_engine.schema.llm_config_models import LLMConfig
+from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.utils.errors import LLMConfigMisconfiguredError, LLMConfigValidationError
 
 
