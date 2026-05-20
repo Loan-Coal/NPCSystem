@@ -22,6 +22,30 @@ Rules:
 
 ---
 
+## Decision: Root cause of world-state non-compliance is (b) — weak prompt, not retrieval
+**Date:** 2026-05-20
+**Service / area:** `engines/dialogue`, `prompts/`
+**Context:** Phase 0 audit ran `scenario_war_breaks_out.py` twice. WorldState epoch changed
+from `age_of_peace` to `war` mid-session. LLM acknowledged the epoch in its language but
+kept the same threat assessment, ignoring the behavioral rule in the system prompt.
+**Options considered:**
+  1. (a) WorldState never reached the prompt — ruled out; `context_builder.py:276` injects it
+     as tier0 / priority=100, always present.
+  2. (b) System prompt instruction too weak for Mixtral 8x7b to act on materially — confirmed.
+  3. (c) RAG retrieval filling context with wrong events — not relevant here; world state is
+     direct-injected, not retrieved.
+  4. (d) Model capability limit — possible co-cause; cannot distinguish from (b) without P0.5
+     model swap.
+**Choice:** Treat (b) as primary cause. Phase 1 first lever: rewrite epoch instruction as an
+authoritative prohibitive constraint, not a descriptive hint. Run model swap (P0.5) at Phase 1
+exit if prompt-only fix is insufficient.
+**Consequences:**
+- Phase 1 must strengthen the epoch rule AND move `_SYSTEM_PROMPT` from inline Python string
+  to a versioned YAML file under `prompts/` (CLAUDE.md rule: no prompt strings outside prompts/).
+- If prompt fix alone doesn't move the needle, escalate to Llama 3.1 8B Instruct swap.
+
+---
+
 ## Decision: Misplaced Domain Exceptions Deferred to Owning Services
 **Date:** 2026-05-01
 **Service / area:** utils (service #1)
