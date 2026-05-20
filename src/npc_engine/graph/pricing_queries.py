@@ -9,8 +9,6 @@ Used by: npc_engine.engines.economy.trade_engine
 
 from __future__ import annotations
 
-from typing import Any
-
 from neo4j import AsyncSession
 
 from npc_engine.graph.generic_graph_utils import to_native

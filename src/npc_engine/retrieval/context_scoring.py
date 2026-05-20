@@ -17,7 +17,7 @@ from npc_engine.retrieval.context_merger import ContextItem
 from npc_engine.retrieval.context_relevance_engine import ContextRelevanceCandidate, rank_context_candidates
 from npc_engine.retrieval.context_utils import parse_node_identity
 from npc_engine.schema.context_config_models import LLMConfig
-from npc_engine.world.time_utils import SEASONS, DAYS_PER_SEASON, TimePoint, total_days
+from npc_engine.world.time_utils import TimePoint, total_days
 
 
 def rank_tier_items(

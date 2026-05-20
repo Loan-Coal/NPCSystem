@@ -13,7 +13,6 @@ Used by: npc_engine.api.routes.quest_generation
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import random
@@ -120,7 +119,6 @@ class QuestGenerationEngine:
         description = await self._generate_flavor(template, fills_raw, giver_name, template.description_template)
 
         quest_id = str(uuid.uuid4())
-        fill_target = fills_raw.get("target") or fills_raw.get("item")
         payload: dict[str, Any] = {
             "quest_id": quest_id,
             "description": description,

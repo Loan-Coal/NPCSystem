@@ -16,11 +16,8 @@ from neo4j import AsyncSession
 
 from npc_engine.config import get_settings
 from npc_engine.graph.treaty_service import (
-    break_treaty,
-    check_treaty_conditions_mechanical,
     expire_treaty,
     get_expiring_treaties_svc,
-    get_active_treaties_svc,
 )
 
 

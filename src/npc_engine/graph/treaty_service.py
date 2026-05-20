@@ -15,7 +15,7 @@ import uuid
 from typing import Any, Literal
 
 from neo4j import AsyncSession
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from npc_engine.graph.treaty_queries import (
     CYPHER_CREATE_BOUND_BY,
@@ -24,7 +24,6 @@ from npc_engine.graph.treaty_queries import (
     get_active_treaties,
     get_expiring_treaties,
     get_treaty_conditions,
-    get_treaty_parties,
 )
 
 

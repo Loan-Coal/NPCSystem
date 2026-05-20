@@ -9,7 +9,6 @@ Used by: npc_engine.graph.treaty_service
 
 from __future__ import annotations
 
-import uuid
 from typing import Any
 
 from neo4j import AsyncSession

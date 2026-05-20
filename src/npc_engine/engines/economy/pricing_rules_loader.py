@@ -10,7 +10,7 @@ Used by: npc_engine.engines.economy.pricing_engine, npc_engine.api.dependency_si
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 

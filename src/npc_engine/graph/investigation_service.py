@@ -12,7 +12,6 @@ Used by: npc_engine.engines.investigation.investigation_engine
 from __future__ import annotations
 
 import uuid
-from typing import Any
 
 from neo4j import AsyncSession
 

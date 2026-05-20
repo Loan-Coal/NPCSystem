@@ -14,7 +14,6 @@ Used by: npc_engine.engines.succession.succession_engine,
 from __future__ import annotations
 
 import uuid
-from typing import Any
 
 from neo4j import AsyncSession
 

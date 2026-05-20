@@ -42,7 +42,6 @@ from npc_engine.graph.quest_queries import get_active_quest_for_player
 from npc_engine.retrieval.context_budget_enforcer import ContextCompressionCache, fill_to_budget
 from npc_engine.retrieval.context_builder_helpers import (
     expand_query,
-    keyword_overlap,
     normalize_ratio,
     rerank_by_keyword,
     to_json_safe,

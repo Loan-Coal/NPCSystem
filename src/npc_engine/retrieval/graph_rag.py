@@ -75,7 +75,6 @@ def _recency_score(props: dict[str, Any], game_time: TimePoint | None) -> float:
         try:
             import json as _json
             gt = _json.loads(raw_game_time) if isinstance(raw_game_time, str) else raw_game_time
-            from npc_engine.world.time_utils import SEASONS, DAYS_PER_SEASON
             node_tp = TimePoint(
                 year=int(gt.get("year", 0)),
                 season=str(gt.get("season", "spring")),

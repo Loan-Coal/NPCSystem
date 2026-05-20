@@ -19,7 +19,6 @@ from npc_engine.api.route_helpers import ok_response
 from npc_engine.graph.rumor_service import (
     believe_rumor,
     create_rumor,
-    get_rumor_believers_svc,
     get_rumor_tree_svc,
     get_rumors_about_event_svc,
     get_rumors_for_character_svc,

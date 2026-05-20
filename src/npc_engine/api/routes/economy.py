@@ -24,7 +24,6 @@ from npc_engine.graph.pricing_queries import (
     get_active_event_types_at_location,
     get_character_location_id,
     get_character_location_type,
-    check_faction_membership,
 )
 
 router = APIRouter(prefix="/economy", tags=["economy"])

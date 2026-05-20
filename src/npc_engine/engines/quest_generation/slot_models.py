@@ -12,7 +12,7 @@ Used by: npc_engine.engines.quest_generation.slot_validator,
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

@@ -11,11 +11,11 @@ Used by: npc_engine.main (registered at admin_prefix)
 from __future__ import annotations
 
 from neo4j import AsyncSession
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.dependency_singletons import get_dialogue_engine_model_config, get_memory_consolidation_engine
+from npc_engine.api.dependency_singletons import get_memory_consolidation_engine
 from npc_engine.api.route_helpers import ok_response
 from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.graph.memory_service import (
