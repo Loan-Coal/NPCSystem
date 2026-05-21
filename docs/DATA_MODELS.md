@@ -222,7 +222,7 @@ These are runtime-only models used during prompt context assembly.
 | `proximity_hops` | int >= 0 | yes | Graph-hop proximity input |
 | `relation` | float [0,1] | yes | Relation relevance component |
 | `quest` | float [0,1] | yes | Quest involvement component |
-| `explicit` | float [0,1] | yes | Explicit context boost component |
+| `explicit` | float [0,1] | yes | 1.0 if node_id appears in `DialogueRequest.explicit_node_ids`; 0.0 otherwise |
 
 Scoring:
 - Score = weighted sum using `LLMConfig.relevance_weights`.

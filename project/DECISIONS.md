@@ -160,3 +160,40 @@ designer/tooling clients, not game-engine clients.
   2. Extend "a few days ago" to cover 2–27 days — consistent with existing bucket, spec-compatible.
 **Choice:** Option 2. "a few days ago" covers delta_days 2–27. Logged as ISSUE-013 for future refinement.
 **Consequences:** Distances of 7–27 days return "a few days ago", which is slightly imprecise but not misleading. Can be narrowed when the spec is updated.
+
+---
+
+## Decision: Dialogue model upgraded to qwen2.5:14b (Phase 1, P1.5)
+**Date:** 2026-05-21
+**Service / area:** `engines/dialogue/llm_config.yaml`
+**Context:** Previous model was `qwen2.5:7b` (~4.7 GB Q4). Phase 2 introduces a demo game
+skeleton that will drive more varied dialogue; a stronger base model reduces prompt-engineering
+effort. Constraint: 12 GB VRAM.
+**Options considered:**
+  1. `qwen2.5:14b` (~8.5 GB Q4_K_M) — best instruction-following in class; direct lineage upgrade.
+  2. `gemma3:12b` (~8 GB) — weaker strict-JSON adherence.
+  3. `phi4:14b` (~9.8 GB) — tight on 12 GB; less proven for roleplay.
+**Choice:** `qwen2.5:14b`. Single-line change in `llm_config.yaml`; engine is model-agnostic via Ollama backend.
+**Consequences:** War scenario must be re-verified after pull (`ollama pull qwen2.5:14b`).
+Phase 2 should note this model. Phase 3 QLoRA adapter targets this base.
+
+---
+
+## Decision: explicit_node_ids API field for per-turn context pinning (Phase 1, P1.5)
+**Date:** 2026-05-21
+**Service / area:** `engines/dialogue/dialogue_models.py`, `retrieval/context_scoring.py`
+**Context:** `RelevanceWeights` documented an `explicit` scoring component but it was
+unimplemented. The component needs a mechanism for the game engine to signal which graph
+nodes are scene-critical for the current turn without relying on vector similarity alone.
+**Options considered:**
+  1. `explicit_node_ids: tuple[str, ...]` in `DialogueRequest` — per-request, deterministic, testable.
+  2. Graph node property flag — persistent but stale-flag risk.
+  3. Keyword-match automatic — fuzzy, duplicates vector similarity.
+  4. Topic classifier extension — coarse (type-level, not node-level).
+**Choice:** Option 1. Mirrors the existing `active_quest` per-request signal pattern. Nodes whose
+`node_id` appears in the set score `explicit=1.0`; all others score `0.0`. `RelevanceWeights.explicit`
+defaults to `0.0` so existing profiles are unchanged.
+**Consequences:** Phase 2 game skeleton must populate `explicit_node_ids` in `POST /v1/dialogue`
+requests to use this feature; it is inert otherwise. Primary use: Tier A graph nodes (Events,
+Memories, Characters) whose IDs the game engine knows are scene-critical. Tier B RAG chunks are
+addressable by row ID but are better served by vector similarity.

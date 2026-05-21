@@ -12,7 +12,12 @@ This document defines both prompt templates, the context skeleton format, few-sh
 and token budget strategy. All templates are versioned. `prompt_builder.py` must inject
 the version string into every LLM call log.
 
-> **Current versions:** Stage A: `v1.0` | Stage B: `v1.0`
+> **Current versions:** Stage A: `v1.0` | Stage B: `v1.1`
+>
+> Stage B `v1.1` changes (2026-05-21): prompt moved from inline Python string to
+> `src/npc_engine/prompts/dialogue/system_v1.yaml`. Epoch rule rewritten with
+> `AUTHORITATIVE` label and `MUST NOT` prohibitions (e.g., `epoch="war"` → MUST NOT
+> describe roads or travel as safe). See `prompt_builder.py` for `PROMPT_VERSION`.
 
 ---
 

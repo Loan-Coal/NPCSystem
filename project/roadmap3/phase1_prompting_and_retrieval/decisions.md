@@ -75,3 +75,60 @@ confirmed with a spot-check: canned response scored NO, proper danger response s
 CI / shared environments must pull the judge model or set this env var.
 
 **Cross-phase?** No — stays here.
+
+## [2026-05-21] P1.3 correction — model swap did occur
+
+**Context:** The P1.3 entry above recorded "Keep Mixtral 8x7b" — this captured an
+intermediate evaluation state before the model swap was committed. The authoritative
+record is `llm_config.yaml` (`model: qwen2.5:7b`) and git commit a507530 ("swap to
+qwen2.5:7b"). The prompt fix was verified with Mixtral, then the model was swapped.
+
+**Decision:** Acknowledge the correction. The NPC dialogue engine is on `qwen2.5:7b`.
+
+**Cross-phase?** No — stays here.
+
+## [2026-05-21] P1.5 — Implement explicit field via request-level explicit_node_ids
+
+**Context:** `explicit` was documented in `RELEVANCE_WEIGHTS.md` and `DATA_MODELS.md`
+as a 6th scoring component but was absent from `RelevanceWeights`, all weight profiles,
+`context_scoring.py`, and `context_relevance_engine.py` — a complete doc-only stub.
+User confirmed: implement with a strong, testable mechanism.
+
+**Options considered:**
+- Request-level `explicit_node_ids` in `DialogueRequest` — game engine passes node IDs per turn.
+- Graph node property flag (persistent, stale-flag risk).
+- Keyword-match automatic score (fuzzy, duplicates vector similarity).
+- Topic classifier extension (coarse, type-level not node-level).
+
+**Decision:** Option A — `explicit_node_ids: tuple[str, ...]` added to `DialogueRequest`.
+Node IDs in the set score `explicit=1.0`; all others score `0.0`. Threaded through
+`build_serialized_context()` → `rank_tier_items()` → `_build_candidate()`. Mirrors
+the existing `active_quest` per-request signal pattern. `RelevanceWeights.explicit`
+defaults to `0.0` so all existing profiles remain valid without modification.
+
+**Consequences:** Game engine (Phase 2) must populate `explicit_node_ids` to use this
+feature; it is inert (no-op) otherwise. Primary use is Tier A graph nodes whose IDs
+the game engine can determine at call time. Graduate to project/DECISIONS.md at P1.7
+since Phase 2 must know about the API field.
+
+**Cross-phase?** Yes — graduate to project/DECISIONS.md at P1.7.
+
+## [2026-05-21] Model upgrade to qwen2.5:14b
+
+**Context:** Previous model was qwen2.5:7b (~4.7 GB Q4). User requested upgrade to
+best available Ollama model fitting in 12 GB VRAM for improved instruction-following
+and JSON schema adherence in dialogue generation.
+
+**Options considered:**
+- `qwen2.5:14b` (~8.5 GB Q4_K_M) — direct lineage upgrade, best instruction-following in class.
+- `gemma3:12b` (~8 GB Q4) — strong creative, weaker strict-JSON adherence.
+- `phi4:14b` (~9.8 GB Q4) — tight on 12 GB, less proven for roleplay.
+
+**Decision:** `qwen2.5:14b`. Only change: `model` field in
+`src/npc_engine/engines/dialogue/llm_config.yaml`. Engine is model-agnostic via
+the Ollama backend — no other code changes required.
+
+**Consequences:** War scenario must be re-run after pull to confirm MUST NOT epoch
+constraints still hold with the 14b model. Pull: `ollama pull qwen2.5:14b`.
+
+**Cross-phase?** Yes — graduate to project/DECISIONS.md at P1.7.

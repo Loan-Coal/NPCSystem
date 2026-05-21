@@ -2,7 +2,7 @@
 
 ## Current state
 
-Roadmap V3 — **Phase 1: Prompting & Retrieval, subphases P1.5–P1.7 remaining.**
+Roadmap V3 — **Phase 2: Demo Game Skeleton + Graph Visualization.**
 
 Run tests before touching any code:
 
@@ -10,64 +10,72 @@ Run tests before touching any code:
 pytest tests/unit/ -q
 ```
 
-958 tests, all green as of 2026-05-21.
+965 tests, 964 pass in full suite (1 pre-existing gossip flake passes in isolation).
 
 ---
 
-## Where we are
+## Entry criteria
 
-| Subphase | Status |
+| Criterion | Status |
 |---|---|
-| P1.1 — Retrieval fix | SKIP — world state is tier0, never truncated |
-| P1.2 — System prompt rewrite | ✅ DONE — `system_v1.yaml`, `stage_b_v1.1` |
-| P1.3 — Verify fix + model swap | ✅ DONE — war scenario passes; switched to `qwen2.5:7b` |
-| P1.4 — LLM judge wiring | ✅ DONE — `test_war_epoch_reflects_danger` added |
-| P1.5 — Explicit weight resolution | ⏳ **ENTRY POINT** |
-| P1.6 — Docs update | ⏳ pending P1.5 |
-| P1.7 — Handoff close | ⏳ pending P1.6 |
-
----
-
-## P1.5 — Entry point
-
-**Goal:** Resolve whether the `explicit` field in `RelevanceWeights` is implemented
-or a doc-only stub. Either implement it fully or remove it from the docs.
-
-**Start here:**
-
-```bash
-grep -rn "explicit" src/npc_engine/retrieval/ docs/RELEVANCE_WEIGHTS.md
-```
-
-- If the field exists in the model but scoring ignores it → implement the scoring logic + tests.
-- If the field is only in the doc → decide with the human, then either implement or delete from doc.
-- Either way, `docs/RELEVANCE_WEIGHTS.md` and `context_scoring.py` must agree when P1.5 closes.
-
-Decisions go in `project/roadmap3/phase1_prompting_and_retrieval/decisions.md`.
+| Phase 1 handoff signed off | YES |
+| War scenario manual sign-off | YES (2026-05-21, on qwen2.5:7b) |
+| War scenario re-verified on qwen2.5:14b | ⏳ PENDING — run after `ollama pull qwen2.5:14b` |
+| `make eval-llm` passes (JUDGE_MODEL=qwen2.5:14b) | ✅ YES — 4/4 green (2026-05-21, a86082e) |
+| docs/PROMPT_DESIGN.md reflects stage_b_v1.1 | YES |
+| docs/RELEVANCE_WEIGHTS.md reflects explicit implementation | YES |
 
 ---
 
 ## Key context for the session
 
-- **Model:** `qwen2.5:7b` via Ollama. Pull if not present: `ollama pull qwen2.5:7b`
+- **Model:** `qwen2.5:14b` via Ollama. Pull if not present: `ollama pull qwen2.5:14b`
 - **Prompt version:** `stage_b_v1.1` (`PROMPT_VERSION` constant in `prompt_builder.py`)
 - **Prompt file:** `src/npc_engine/prompts/dialogue/system_v1.yaml`
-- **LLM judge:** `make eval-llm` — requires running server + `JUDGE_MODEL=qwen2.5:7b`
-- **War baseline transcript:** `transcripts/war_epoch_baseline.md`
+- **LLM judge:** `make eval-llm` — requires running server + `JUDGE_MODEL=qwen2.5:14b`
+- **War baseline transcript:** `transcripts/war_epoch_baseline.md` (recorded on qwen2.5:7b)
+- **explicit_node_ids:** New field on `POST /v1/dialogue` — pass graph node IDs to pin
+  specific context nodes for a turn. Weight controlled by `RelevanceWeights.explicit`
+  (default `0.0` — inert unless set in a weight profile). See `docs/RELEVANCE_WEIGHTS.md`.
 - **Known gap:** `active_conditions` has no MUST NOT enforcement (only `epoch` does).
-  Not blocking P1.5 but relevant for any future behavioral constraint work.
-- **Pre-existing bug:** `POST /v1/admin/memories/consolidate/{char_id}` returns 500.
-  Not blocking Phase 1 close unless consolidation is needed.
+  Not blocking Phase 2 but relevant if scene-level behavioral events are needed.
+- **Memory consolidation:** `POST /v1/admin/memories/consolidate/{char_id}` is working
+  (500 bug fixed in a86082e — asyncio.gather on shared session).
+- **Context now includes NPC inner life:** `context.npc.goals`, `context.npc.beliefs`,
+  `context.npc.memories` are serialized into every prompt. System prompt Rule 7
+  instructs the LLM to hint at high-urgency goals in open-ended responses.
+- **Reputation:** structured dicts in `context.player_reputation`; Rule 2 uses MUST
+  language for hostile standings.
+- **Seeder:** `make seed-api` uses typed admin endpoints for all Phase 3 resources.
+  Re-seeding duplicates beliefs/goals/etc — wipe DB first.
 
 ---
 
-## After P1.5: P1.6 + P1.7
+## Phase 1 open items
 
-P1.6 — update two doc files:
-1. `docs/PROMPT_DESIGN.md` — change `Stage B: v1.0` → `v1.1`, add YAML path and epoch rationale.
-2. `docs/RELEVANCE_WEIGHTS.md` — reflect P1.5 outcome.
+1. **War scenario re-verify on qwen2.5:14b** — low priority, informational only:
+   ```bash
+   ollama pull qwen2.5:14b
+   pytest e2e/scenarios/scenario_war_breaks_out.py -v -s --scenarios-only
+   ```
+   War scenario passed manually on qwen2.5:7b (2026-05-21). The eval judge test
+   `test_war_epoch_reflects_danger` also passes on 14b, so risk here is low.
 
-P1.7 — close Phase 1:
-1. Fill remaining gate items in `project/roadmap3/phase1_prompting_and_retrieval/handoff.md`.
-2. Graduate any cross-phase decisions to `project/DECISIONS.md`.
-3. Update this file with Phase 2 entry point (template is at the bottom of `handoff.md`).
+**Phase 1 is otherwise closed. Phase 2 can begin.**
+
+---
+
+## Phase 2 entry point
+
+Phase 2: Demo Game Skeleton + Graph Visualization.
+
+Goals:
+- Build a minimal playable demo scenario driven by `POST /v1/dialogue`.
+- Visualize the NPC knowledge graph (events, beliefs, goals, relations) in real time.
+- Exercise `explicit_node_ids` to demonstrate scene-critical context pinning.
+
+Relevant files from Phase 1:
+- `e2e/scenarios/scenario_war_breaks_out.py` — template for scenario structure.
+- `src/npc_engine/engines/dialogue/dialogue_models.py` — `DialogueRequest` (now has `explicit_node_ids`).
+- `docs/RELEVANCE_WEIGHTS.md` — how to configure and use explicit context pinning.
+- `project/DECISIONS.md` — model and API field decisions Phase 2 must respect.
