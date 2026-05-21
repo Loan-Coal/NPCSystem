@@ -106,3 +106,103 @@ Side-finding: unregistered type requests return HTTP 500 (plain text) instead of
 - No stub routes needed in P2.1 — all required types already exist.
 
 **Cross-phase?** No — type name clarification only. Registry names are stable.
+
+---
+
+## [2026-05-21] client.py exceeds 300-line limit — single-class cohesion exception
+
+**Context:** P2.2 adds 10 new methods to `EngineClient` (write, typed-write, and
+convenience wrappers). The file grows from 273 to ~530 lines, exceeding the 300-line
+hard limit in `CLAUDE.md`.
+
+**Options considered:**
+- Option A: Keep all methods in `client.py` — single class, single file.
+- Option B: Split into `client.py` (reads) + `client_write.py` (writes) with inheritance.
+- Option C: Composition — `EngineClient` holds a `_WriteClient` sub-object.
+
+**Decision:** Option A. Single class in one file. Add this DECISIONS.md entry as
+required by CLAUDE.md for exceptions.
+
+**Rationale:** `EngineClient` has exactly one cohesive purpose — wrap every NPC Engine
+HTTP endpoint used by the demo game. Splitting it would force callers (seed.py, game_window.py,
+fetcher.py) to import two types for what is conceptually one thing. The CLAUDE.md exception
+clause exists precisely for this case ("if a split would be artificial").
+
+**Consequences:**
+- `demo_game/client.py` stays a single file even as it grows beyond 300 lines.
+- If it exceeds 600 lines, revisit and consider a domain-based split (graph/ vs typed/).
+
+**Cross-phase?** No — demo game only.
+
+---
+
+## [2026-05-21] put_world_state / put_npc_reputation added in P2.2 (not P2.1)
+
+**Context:** The P2.1 spec listed `put_world_state` and `put_npc_reputation` as
+`EngineClient` methods but they were not implemented. P2.2 does not strictly need them
+(seed.py uses `upsert_node` and `upsert_edge` directly), but P2.5 needs them for the
+war-trigger UI button.
+
+**Decision:** Add in P2.2 as thin wrappers over the general write methods. This closes
+the P2.1 spec gap and leaves P2.5 with a clean named API to call.
+
+**Consequences:** P2.5 can call `client.put_world_state("war", ["northern_war"])` without
+importing or knowing about the underlying graph endpoint shape.
+
+**Cross-phase?** No — the methods are convenience wrappers; the underlying endpoints are stable.
+
+---
+
+## [2026-05-21] Edge type corrections discovered during P2.2 live seed run
+
+**Context:** `subphases.md` specified NPC-NPC relations and faction-faction antagonism
+using edge types that turned out to be wrong schema (wrong node type constraints).
+Discovered via HTTP 404/422 errors during the P2.2 live seed run against the engine.
+
+**Options considered:** N/A — factual schema corrections, not design choices.
+
+**Decision:** Use the actual enforced schema. Correct seed.py and document for P2.3–P2.4.
+
+| subphases.md plan | Actual schema | Change made |
+|---|---|---|
+| `mira STANDS_WITH old_henryk` (NPC-NPC trust) | `STANDS_WITH` is Faction→Faction only | Changed to `RELATES_TO` (trust/affection/fear/relevance_score/interaction_count/last_updated_at) |
+| `lira KNOWS_ABOUT aldric` (NPC-NPC knowledge) | `KNOWS_ABOUT` is Character→Event only | Changed to `lira RELATES_TO aldric` + `captain_sorn KNOWS_ABOUT northern_war_begins` |
+| `merchants_guild OPPOSES thieves_guild` (faction antagonism) | `OPPOSES` is Character→Character only | Changed to `STANDS_WITH` with negative standing integer (e.g. -60) |
+| `RELATES_TO trust: -20` (negative trust) | `trust` field is 0–100 (no negatives) | Changed to `trust: 10, fear: 30` for lira→aldric |
+
+Additional schema facts confirmed during P2.2 (inform P2.4 fetcher.py):
+- `MEMBER_OF` requires `joined_at` (ISO timestamp) and `status` (str) fields.
+- `world_state` requires `faction_standings` (dict), `time_of_day`, `weather`,
+  `last_updated_at`, `last_graph_updated_at` in addition to `epoch`/`active_conditions`.
+- Typed admin endpoints (`/v1/admin/beliefs/{id}` etc.) do NOT create BELIEVES/PURSUES
+  graph edges — idempotency for typed nodes must use `GET /v1/admin/beliefs/{id}`.
+
+**Consequences:**
+- P2.4 fetcher.py must use `RELATES_TO` for NPC-NPC trust, `KNOWS_ABOUT` only for
+  Character→Event, `STANDS_WITH` only for Faction→Faction. Node color mapping stays the same.
+- `EngineClient.put_npc_reputation(character_id, faction_id, standing)` wraps `STANDS_WITH`
+  with int standing — correct for faction-NPC reputation, NOT for NPC-NPC trust.
+
+**Cross-phase?** No — schema is stable; corrections only affect P2.2–P2.4 code.
+
+---
+
+## [2026-05-21] seed.py exceeds 300-line limit — data-heavy single-purpose exception
+
+**Context:** `seed.py` is 589 lines. CLAUDE.md requires a DECISIONS.md entry when
+a file exceeds 300 lines and splitting would be artificial.
+
+**Options considered:**
+- Option A: Keep all content in seed.py — builders, helpers, data, seed_all.
+- Option B: Split `_seed_data.py` (inline dicts) from `seed.py` (logic).
+
+**Decision:** Option A. The inline NPC data (beliefs, goals, memories, secrets)
+is inseparable from `_seed_npc_inner_life` — separating them into a second file
+creates an import just to pass the same dicts back into the same module. The bulk
+is data, not logic. Future maintainers editing the world will want to see data and
+calls in one place.
+
+**Consequences:** seed.py stays a single file. If it exceeds 800 lines (e.g., more
+NPCs added), extract `_seed_data.py` as a pure data module at that point.
+
+**Cross-phase?** No — demo game seeder only.
