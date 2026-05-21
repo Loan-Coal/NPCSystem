@@ -29,6 +29,9 @@ class _FakeResult:
     async def single(self):
         return self.record
 
+    async def consume(self) -> None:
+        pass
+
 
 class _FakeTx:
     def __init__(self, query_handler):

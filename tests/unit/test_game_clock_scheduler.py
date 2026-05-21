@@ -44,6 +44,9 @@ class _FakeResult:
     async def single(self):
         return self._row
 
+    async def consume(self) -> None:
+        pass
+
 
 class FakeSession:
     def __init__(self):

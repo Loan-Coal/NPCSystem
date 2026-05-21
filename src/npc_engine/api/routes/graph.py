@@ -65,7 +65,10 @@ async def list_nodes(
 ) -> dict:
     """Return a paginated list of nodes for a given type with extension warnings."""
     page = resolve_offset_pagination(limit=limit, offset=offset)
-    items = await service.list_nodes(node_type=node_type, limit=page.limit, offset=page.offset)
+    try:
+        items = await service.list_nodes(node_type=node_type, limit=page.limit, offset=page.offset)
+    except RegistryPayloadValidationError as error:
+        raise graph_error_to_http(error) from error
     warnings: list[dict[str, Any]] = []
     for item in items:
         warnings.extend(service.missing_extension_warnings(node_type=node_type, node_payload=item))
@@ -145,13 +148,16 @@ async def list_edges(
 ) -> dict:
     """Return a paginated list of edges for a given type with optional src/dst filters."""
     page = resolve_offset_pagination(limit=limit, offset=offset)
-    edges = await service.list_edges(
-        edge_type=edge_type,
-        limit=page.limit,
-        offset=page.offset,
-        src_id=src_id,
-        dst_id=dst_id,
-    )
+    try:
+        edges = await service.list_edges(
+            edge_type=edge_type,
+            limit=page.limit,
+            offset=page.offset,
+            src_id=src_id,
+            dst_id=dst_id,
+        )
+    except RegistryPayloadValidationError as error:
+        raise graph_error_to_http(error) from error
     return ok_response(
         edges,
         meta={

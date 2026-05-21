@@ -13,7 +13,7 @@ Rules:
 
 ## Open
 
-## ISSUE-019: 20 pre-existing test failures — `consume()` missing on mock Neo4j result objects
+## [FIXED] ISSUE-019: 20 pre-existing test failures — `consume()` missing on mock Neo4j result objects
 **Found:** 2026-05-21, during P2.1 scaffold (confirmed pre-existing via git stash comparison)
 **Severity:** P2 (test coverage gap — affected functions work in prod but are undertested)
 **Where:** `tests/unit/test_belief_service.py`, `test_generic_graph_service.py`,
@@ -32,8 +32,13 @@ only affects the test stubs). Fixing requires updating mock objects in ~5 test f
 e.g. `async def consume(self): pass`. Files to update: `test_belief_service.py`,
 `test_generic_graph_service.py`, `test_reputation_queries.py`, `test_world_reader.py`,
 and any others in the failing set.
+**Fixed:** 2026-05-21 — added `async def consume(self) -> None: pass` to `_ResultStub`/`_FakeResult`
+classes in `test_generic_graph_service.py`, `test_reputation_queries.py`, `test_world_reader.py`,
+`test_reputation_writer.py`, `test_faction_queries.py`, `test_item_writer_v14.py`,
+`test_currency_writer_v14.py`; refactored inline async generators in `test_belief_service.py`
+into `_R` wrapper classes with `__aiter__` and `consume`.
 
-## ISSUE-017: Unregistered graph type returns HTTP 500 (plain text) instead of 404/422
+## [FIXED] ISSUE-017: Unregistered graph type returns HTTP 500 (plain text) instead of 404/422
 **Found:** 2026-05-21, during P2.0 smoke-test
 **Severity:** P2 (annoying — misleading error for API consumers)
 **Where:** `src/npc_engine/api/routes/graph.py` → `list_nodes` / `list_edges` handlers
@@ -52,8 +57,13 @@ it in the route handler before the session context manager unwinds.
 in `list_nodes` / `list_edges` route handlers before the DB session context exits,
 or make the exception class inherit from a non-frozen base. Return 422 with a JSON
 body matching the existing error envelope format.
+**Fixed:** 2026-05-21 — wrapped `service.list_nodes()` and `service.list_edges()` calls in
+`src/npc_engine/api/routes/graph.py` with `try/except RegistryPayloadValidationError` raising
+`graph_error_to_http(error)`, matching the existing pattern in POST/PATCH handlers. Added
+regression tests `test_list_nodes_unknown_type_returns_422` and
+`test_list_edges_unknown_type_returns_422` in `tests/unit/test_graph_warning_pipeline.py`.
 
-## ISSUE-018: subphases.md uses wrong graph type names (WorldEvent, TRUSTS, FEARS, HAS_BELIEF, HAS_GOAL)
+## [FIXED] ISSUE-018: subphases.md uses wrong graph type names (WorldEvent, TRUSTS, FEARS, HAS_BELIEF, HAS_GOAL)
 **Found:** 2026-05-21, during P2.0 smoke-test
 **Severity:** P2 (would cause P2.2/P2.4 code to target non-existent endpoints)
 **Where:** `project/roadmap3/phase2_demo_game/subphases.md` — P2.2 and P2.4 steps
@@ -68,6 +78,10 @@ inline references now would risk churn. P2.2 and P2.4 implementations will use
 the correct names directly.
 **To fix:** When Phase 2 is done, do a single pass over `subphases.md` to replace
 the planned names with the actual names so the document is accurate for reference.
+**Fixed:** 2026-05-21 — replaced all wrong type names in `project/roadmap3/phase2_demo_game/subphases.md`
+(11 occurrences: WorldEvent→Event, WorldState→world_state, TRUSTS→STANDS_WITH, FEARS→OPPOSES,
+HAS_BELIEF→BELIEVES, HAS_GOAL→PURSUES) and 1 occurrence in `README.md` (WorldState→world_state).
+`decisions.md` left intact — it intentionally documents the mapping for historical reference.
 
 ## [FIXED] ISSUE-016: test_gossip_rumor_integration mock collision — KeyError 'secret_id'
 **Found:** 2026-05-18, during Phase 5 full-suite run

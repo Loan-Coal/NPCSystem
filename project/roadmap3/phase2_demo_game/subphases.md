@@ -30,8 +30,8 @@ before any code is written.
    curl -H "Authorization: Bearer local_dev_secret_changeme" \
         http://localhost:8000/v1/graph/nodes/Character
    ```
-   Repeat for: `Location`, `Faction`, `WorldEvent`, `Memory`, `Belief`, `Goal`.
-   Also test edge read endpoints (`KNOWS_ABOUT`, `TRUSTS`, `FEARS`, `MEMBER_OF`).
+   Repeat for: `Location`, `Faction`, `Event`, `Memory`, `Belief`, `Goal`.
+   Also test edge read endpoints (`KNOWS_ABOUT`, `STANDS_WITH`, `OPPOSES`, `MEMBER_OF`).
    If any return 404 or are missing, file `ISSUES.md` entry and plan a stub route
    addition in P2.1 before P2.4 begins.
 
@@ -186,10 +186,10 @@ exercises all node types and engines. Idempotent on re-run.
      - `old_henryk` — neutral, market_square, archetype `elder`
    - **Per NPC:** 2 beliefs, 1–2 goals, 1 secret, 2 memories
      (exercises Memory engine and inner-life prompt Rule 7)
-   - **1 WorldEvent:** `northern_war_begins` (type=conflict, initially inactive)
-   - **WorldState:** `epoch=peace`, `active_conditions=[]`
-   - **NPC-to-NPC relations:** mira TRUSTS old_henryk; lira KNOWS_ABOUT aldric;
-     captain_sorn FEARS lira (exercises Gossip engine graph state)
+   - **1 Event:** `northern_war_begins` (type=conflict, initially inactive)
+   - **world_state:** `epoch=peace`, `active_conditions=[]`
+   - **NPC-to-NPC relations:** mira STANDS_WITH old_henryk; lira KNOWS_ABOUT aldric;
+     captain_sorn OPPOSES lira (exercises Gossip engine graph state)
 
    Sync comment at top of file:
    ```python
@@ -287,16 +287,16 @@ detection) *before* building the renderer.
    - `GraphDelta(new_nodes, new_edges, changed_edges)`
    - `fetch_snapshot(client: EngineClient) -> GraphSnapshot`:
      - Calls `client.get_graph_nodes(type)` for each: `Character`, `Location`,
-       `Faction`, `WorldEvent`, `Memory`, `Belief`, `Goal`
-     - Calls `client.get_graph_edges(type)` for each: `KNOWS_ABOUT`, `TRUSTS`,
-       `FEARS`, `MEMBER_OF`, `HAS_BELIEF`, `HAS_GOAL`
+       `Faction`, `Event`, `Memory`, `Belief`, `Goal`
+     - Calls `client.get_graph_edges(type)` for each: `KNOWS_ABOUT`, `STANDS_WITH`,
+       `OPPOSES`, `MEMBER_OF`, `BELIEVES`, `PURSUES`
    - `compute_delta(prev: GraphSnapshot | None, curr: GraphSnapshot) -> GraphDelta`
    - Background polling thread: calls `fetch_snapshot` every
      `DEMO_GRAPH_POLL_INTERVAL` seconds, stores latest snapshot + delta.
 
 3. Implement `demo_game/graph_panel/renderer.py` (using approach decided in P2.0):
    - Renders `GraphSnapshot` onto a Pygame surface
-   - Node color by type: Character=blue, Faction=red, WorldEvent=orange,
+   - Node color by type: Character=blue, Faction=red, Event=orange,
      Location=green, Memory/Belief/Goal=light grey
    - Edge thickness by weight (trust/fear value where available; else thin)
    - New edges from `GraphDelta`: highlighted yellow for 2 poll cycles then fade
@@ -340,7 +340,7 @@ flow end-to-end, and write + pass the Phase 2 LLM judge test.
 
 2. **Write `e2e/scenarios/scenario_demo_game_judge.py`** (new file):
    - Seeds the demo world via API (calls the same endpoints as `seed.py`)
-   - Triggers war: sets `WorldState epoch=war`
+   - Triggers war: sets `world_state epoch=war`
    - Advances clock once
    - Calls `POST /v1/dialogue` for `captain_sorn` asking about road safety
    - LLM judge asserts: response reflects danger/war state (reuse criteria
@@ -386,7 +386,7 @@ flow end-to-end, and write + pass the Phase 2 LLM judge test.
      3. Press `C` × 2 → "Gossip is spreading — watch the edges appear."
      4. Talk to `captain_sorn` → "He knows about the war. Watch his tone change."
      5. Talk to `old_henryk` → "He heard it through the network — two hops away."
-   - Side panel legend: Character=blue, Faction=red, WorldEvent=orange,
+   - Side panel legend: Character=blue, Faction=red, Event=orange,
      `KNOWS_ABOUT` = dashed arrow (knowledge propagation)
    - Troubleshooting: LLM timeout, graph not updating, seed duplicates
 

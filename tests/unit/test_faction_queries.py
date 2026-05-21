@@ -42,6 +42,9 @@ class _FakeResult:
     def __aiter__(self) -> Any:
         return _AsyncIter(self._records)
 
+    async def consume(self) -> None:
+        pass
+
 
 @dataclass
 class _AsyncIter:

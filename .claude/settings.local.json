@@ -155,11 +155,26 @@
       "Bash(Write-Host \"Deleted\")",
       "Bash(python -m ruff check src/npc_engine/schema/context_config_models.py src/npc_engine/retrieval/topic_classifier.py src/npc_engine/retrieval/context_builder.py src/npc_engine/engines/dialogue/prompt_builder.py src/npc_engine/engines/llm/factory.py tests/unit/test_llm_adapters.py tests/unit/test_llm_factory.py tests/unit/test_topic_classifier.py)",
       "Bash(python -m pytest tests/unit/test_topic_classifier.py tests/unit/test_llm_adapters.py tests/unit/test_llm_factory.py tests/unit/test_architecture_conformance.py -v --tb=short)",
-      "Bash(python -m pytest tests/ --tb=short -q)"
+      "Bash(python -m pytest tests/ --tb=short -q)",
+      "Bash(git stash *)",
+      "Bash(git checkout *)",
+      "Bash(rm \"/c/Users/lohan/Documents/hackathons/NPCSystem/c:UserslohanDocumentshackathonsNPCSystem.gitignore\" && echo \"Cleaned up\")",
+      "Bash(python -m pytest demo_game/tests/ -q)",
+      "Bash(python -c \"from demo_game.client import EngineClient; print\\('import OK'\\)\")",
+      "Bash(make demo-seed *)",
+      "Bash(git check-ignore *)",
+      "Bash(python -m pytest tests/unit/test_belief_service.py -v)",
+      "Bash(python -m pytest tests/unit/test_belief_service.py::test_get_beliefs_returns_list_sorted_by_confidence -v)",
+      "Bash(python -m pytest tests/ -x --tb=short -q)",
+      "Bash(python -m pytest tests/unit/test_game_clock_scheduler.py::test_scheduler_triggers_handlers_on_intervals --tb=long -q)",
+      "Bash(python -m pytest tests/unit/test_gossip_rumor_integration.py --tb=short -q)",
+      "Bash(python -m pytest tests/ --tb=no -q)",
+      "Bash(python -m pytest tests/ --tb=short -q -p no:randomly)"
     ],
     "additionalDirectories": [
       "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem",
-      "c:\\Users\\lohan\\.claude\\plans"
+      "c:\\Users\\lohan\\.claude\\plans",
+      "C:\\Users\\lohan\\Documents\\hackathons\\NPCSystem"
     ]
   }
 }
