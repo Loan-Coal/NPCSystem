@@ -13,6 +13,42 @@ Rules:
 
 ## Open
 
+## ISSUE-017: Unregistered graph type returns HTTP 500 (plain text) instead of 404/422
+**Found:** 2026-05-21, during P2.0 smoke-test
+**Severity:** P2 (annoying — misleading error for API consumers)
+**Where:** `src/npc_engine/api/routes/graph.py` → `list_nodes` / `list_edges` handlers
+**Description:** Requesting a node or edge type not registered in the type registry
+(e.g. `GET /v1/graph/nodes/WorldEvent`) returns HTTP 500 with a plain-text
+"Internal Server Error" body. The root cause is a `dataclasses.FrozenInstanceError`
+in `get_db_session`: when `RegistryPayloadValidationError` (a frozen dataclass) is
+raised inside the `async with graph_db.get_session()` block, Python 3.11's
+`contextlib.__aexit__` tries to set `exc.__traceback__`, which fails on the frozen
+dataclass and masks the original error with a second exception.
+**Why deferred:** Not blocking Phase 2 — all required types exist under their
+correct names (documented in `phase2_demo_game/decisions.md` DEC-P2-03). A proper
+fix requires either making `RegistryPayloadValidationError` non-frozen or catching
+it in the route handler before the session context manager unwinds.
+**To fix:** Catch `RegistryPayloadValidationError` (and similar registry errors)
+in `list_nodes` / `list_edges` route handlers before the DB session context exits,
+or make the exception class inherit from a non-frozen base. Return 422 with a JSON
+body matching the existing error envelope format.
+
+## ISSUE-018: subphases.md uses wrong graph type names (WorldEvent, TRUSTS, FEARS, HAS_BELIEF, HAS_GOAL)
+**Found:** 2026-05-21, during P2.0 smoke-test
+**Severity:** P2 (would cause P2.2/P2.4 code to target non-existent endpoints)
+**Where:** `project/roadmap3/phase2_demo_game/subphases.md` — P2.2 and P2.4 steps
+**Description:** The subphases plan refers to type names that are not registered in
+the type registry. Actual registered equivalents:
+`WorldEvent` → `Event`; `WorldState` (capital S) → `world_state` (lowercase);
+`TRUSTS` → `STANDS_WITH`; `FEARS` → `OPPOSES`; `HAS_BELIEF` → `BELIEVES`;
+`HAS_GOAL` → `PURSUES`.
+**Why deferred:** Correction is captured in `phase2_demo_game/decisions.md`
+DEC-P2-03. The subphases.md document is a planning artefact; correcting all
+inline references now would risk churn. P2.2 and P2.4 implementations will use
+the correct names directly.
+**To fix:** When Phase 2 is done, do a single pass over `subphases.md` to replace
+the planned names with the actual names so the document is accurate for reference.
+
 ## [FIXED] ISSUE-016: test_gossip_rumor_integration mock collision — KeyError 'secret_id'
 **Found:** 2026-05-18, during Phase 5 full-suite run
 **Severity:** P2 (annoying — 1 failing test)
