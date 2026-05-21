@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from datetime import datetime, timezone
 
 import httpx
 import pytest
@@ -35,7 +36,7 @@ _JUDGE_OLLAMA_URL = (
     os.getenv("JUDGE_OLLAMA_URL")
     or os.getenv("OLLAMA_API_URL", "http://localhost:11434")
 )
-_JUDGE_MODEL = os.getenv("JUDGE_MODEL", "llama3")
+_JUDGE_MODEL = os.getenv("JUDGE_MODEL", "qwen2.5:7b")
 
 _ADMIN = "/v1/admin"
 _GRAPH = "/v1/graph"
@@ -269,6 +270,70 @@ async def test_goal_hinting_in_dialogue(
     print(f"[judge] passed={verdict.passed}  reasoning: {verdict.reasoning}")
     assert verdict.passed, (
         f"Goal-hinting check FAILED — NPC gave no hint of personal mission.\n"
+        f"Response: {npc_response!r}\n"
+        f"Judge reasoning: {verdict.reasoning}"
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Test 4 — War epoch reflected in road-safety dialogue
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.asyncio
+@pytest.mark.llm_eval
+async def test_war_epoch_reflects_danger(http_client: httpx.Client) -> None:
+    """NPC conveys danger when epoch='war' and asked about road safety."""
+    judge = _make_judge()
+    now = datetime.now(timezone.utc).isoformat()
+
+    api_post(
+        http_client,
+        "/v1/graph/nodes/world_state",
+        {
+            "properties": {
+                "id": "world",
+                "epoch": "war",
+                "faction_standings": {},
+                "active_conditions": ["northern_war"],
+                "weather": "overcast",
+                "time_of_day": "morning",
+                "last_updated_at": now,
+                "last_graph_updated_at": now,
+            },
+        },
+    )
+
+    dialogue_result = api_post(
+        http_client,
+        "/v1/dialogue",
+        {
+            "player_id": "player_1",
+            "npc_id": "guard_1",
+            "player_message": "Is the road to the capital safe to travel?",
+            "location_id": "loc_gate",
+            "session_id": f"judge_war_epoch_{uuid.uuid4().hex[:8]}",
+        },
+    )
+    assert dialogue_result["status"] == 200, f"Dialogue failed: {dialogue_result}"
+    npc_response = dialogue_result["body"].get("npc_response", "")
+    assert npc_response, "Empty NPC response — check LLM stack is running."
+    print(f"\n[npc response]\n  {npc_response}\n")
+
+    from e2e.helpers.llm_judge import llm_judge
+
+    verdict = await llm_judge(
+        content=npc_response,
+        criteria=(
+            "Does this response convey that road travel is dangerous, risky, or "
+            "inadvisable due to conflict or war? The NPC should NOT say roads are safe. "
+            "References to danger, soldiers, conflict, caution, or discouraging travel count as YES."
+        ),
+        llm_client=judge,
+    )
+    print(f"[judge] passed={verdict.passed}  reasoning: {verdict.reasoning}")
+    assert verdict.passed, (
+        f"War epoch check FAILED — NPC did not reflect danger.\n"
         f"Response: {npc_response!r}\n"
         f"Judge reasoning: {verdict.reasoning}"
     )

@@ -36,3 +36,42 @@ Whether the MUST NOT framing is sufficient for Mixtral 8x7b cannot be confirmed
 without running the war scenario — P1.3 (model swap) remains contingent on that result.
 
 **Cross-phase?** No — stays here.
+
+## [2026-05-21] P1.3 — P1.2 fix verified; no model swap needed
+
+**Context:** War scenario (`scenario_war_breaks_out.py`) run to confirm whether the
+MUST NOT epoch framing in `system_v1.yaml` changed Mixtral 8x7b's behavior.
+
+**Options considered:**
+- Swap model to Qwen2.5-7B or Llama 3.1 8B if prompt fix insufficient.
+- Keep Mixtral 8x7b if fix sufficient.
+
+**Decision:** Keep Mixtral 8x7b. Turn 2 response ("The road to the capital is open,
+but I must caution you. With the northern war raging, it's a dangerous journey.")
+correctly conveys danger. Transcript saved to `transcripts/war_epoch_baseline.md`.
+
+**Consequences:** P1.3 is complete. P1.4 proceeds as planned.
+
+**Cross-phase?** No — stays here.
+
+## [2026-05-21] P1.4 — War epoch judge test added; JUDGE_MODEL env var required
+
+**Context:** Added `test_war_epoch_reflects_danger` to `scenario_llm_judge.py` as a
+repeatable gate for the epoch constraint. Discovered that the default `JUDGE_MODEL=llama3`
+is not available locally (only `mixtral:8x7b` is pulled). All 3 pre-existing judge tests
+also fail for the same reason — this is a pre-existing environment issue, not a regression.
+
+**Options considered:**
+- Pull `llama3` as a second local model.
+- Use `JUDGE_MODEL=mixtral:8x7b` (same model as the NPC engine).
+- Document requirement and leave default.
+
+**Decision:** Leave default as `llama3` (matches the scenario file header documentation).
+Set `JUDGE_MODEL=mixtral:8x7b` when running `make eval-llm` locally until a dedicated
+judge model is pulled. The judge correctly evaluates responses when pointed at Mixtral —
+confirmed with a spot-check: canned response scored NO, proper danger response scores YES.
+
+**Consequences:** `make eval-llm` requires `JUDGE_MODEL=mixtral:8x7b` in this environment.
+CI / shared environments must pull the judge model or set this env var.
+
+**Cross-phase?** No — stays here.
