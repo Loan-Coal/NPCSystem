@@ -13,6 +13,26 @@ Rules:
 
 ## Open
 
+## ISSUE-019: 20 pre-existing test failures — `consume()` missing on mock Neo4j result objects
+**Found:** 2026-05-21, during P2.1 scaffold (confirmed pre-existing via git stash comparison)
+**Severity:** P2 (test coverage gap — affected functions work in prod but are undertested)
+**Where:** `tests/unit/test_belief_service.py`, `test_generic_graph_service.py`,
+           `test_reputation_queries.py`, `test_world_reader.py`, and others
+**Description:** Multiple test mock stubs (e.g. `_FakeResult`, `_SessionStub`, `_FakeSession`)
+do not implement `consume()` on their result objects. The production code calls
+`await result.consume()` after reading records to properly drain the Neo4j cursor.
+The mocks were written before `consume()` calls were added, so they now raise
+`AttributeError`. These tests fail consistently in the full `pytest tests/` suite.
+`make test` count: 20 failed, 951 passed, 17 skipped (988 total). This contradicts
+the NEXT_SESSION.md claim of "964/965" which was likely written counting only passing
+test files rather than the full suite.
+**Why deferred:** Not blocking Phase 2 — production paths work correctly (consume()
+only affects the test stubs). Fixing requires updating mock objects in ~5 test files.
+**To fix:** Add a `consume()` async no-op method to each affected mock result class,
+e.g. `async def consume(self): pass`. Files to update: `test_belief_service.py`,
+`test_generic_graph_service.py`, `test_reputation_queries.py`, `test_world_reader.py`,
+and any others in the failing set.
+
 ## ISSUE-017: Unregistered graph type returns HTTP 500 (plain text) instead of 404/422
 **Found:** 2026-05-21, during P2.0 smoke-test
 **Severity:** P2 (annoying — misleading error for API consumers)

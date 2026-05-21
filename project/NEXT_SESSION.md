@@ -3,14 +3,14 @@
 ## Current state
 
 Roadmap V3 — **Phase 2: Demo Game Skeleton + Graph Visualization.**
+**P2.1 (scaffold + EngineClient) is complete.** Entry point for this session is **P2.2 (seed script)**.
 
 Run tests before touching any code:
 
 ```bash
-pytest tests/unit/ -q
+pytest demo_game/tests/ -q    # 20 pass — demo_game unit tests
+pytest tests/unit/ -q         # expect ~20 pre-existing failures (ISSUE-019), do not investigate
 ```
-
-965 tests, 964 pass in full suite (1 pre-existing gossip flake passes in isolation).
 
 ---
 
@@ -19,63 +19,80 @@ pytest tests/unit/ -q
 | Criterion | Status |
 |---|---|
 | Phase 1 handoff signed off | YES |
-| War scenario manual sign-off | YES (2026-05-21, on qwen2.5:7b) |
-| War scenario re-verified on qwen2.5:14b | ⏳ PENDING — run after `ollama pull qwen2.5:14b` |
-| `make eval-llm` passes (JUDGE_MODEL=qwen2.5:14b) | ✅ YES — 4/4 green (2026-05-21, a86082e) |
-| docs/PROMPT_DESIGN.md reflects stage_b_v1.1 | YES |
-| docs/RELEVANCE_WEIGHTS.md reflects explicit implementation | YES |
+| P2.1 scaffold + EngineClient shipped | YES (2026-05-21) |
+| demo_game/tests/ — 20 pass | YES |
+| .env.demo gitignored | YES |
+| make demo, demo-seed, test-demo targets added | YES |
+| ISSUE-019 (pre-existing consume() mock failures) logged | YES |
 
 ---
 
-## Key context for the session
+## Known test count (corrected)
 
-- **Model:** `qwen2.5:14b` via Ollama. Pull if not present: `ollama pull qwen2.5:14b`
-- **Prompt version:** `stage_b_v1.1` (`PROMPT_VERSION` constant in `prompt_builder.py`)
-- **Prompt file:** `src/npc_engine/prompts/dialogue/system_v1.yaml`
-- **LLM judge:** `make eval-llm` — requires running server + `JUDGE_MODEL=qwen2.5:14b`
-- **War baseline transcript:** `transcripts/war_epoch_baseline.md` (recorded on qwen2.5:7b)
-- **explicit_node_ids:** New field on `POST /v1/dialogue` — pass graph node IDs to pin
-  specific context nodes for a turn. Weight controlled by `RelevanceWeights.explicit`
-  (default `0.0` — inert unless set in a weight profile). See `docs/RELEVANCE_WEIGHTS.md`.
-- **Known gap:** `active_conditions` has no MUST NOT enforcement (only `epoch` does).
-  Not blocking Phase 2 but relevant if scene-level behavioral events are needed.
-- **Memory consolidation:** `POST /v1/admin/memories/consolidate/{char_id}` is working
-  (500 bug fixed in a86082e — asyncio.gather on shared session).
-- **Context now includes NPC inner life:** `context.npc.goals`, `context.npc.beliefs`,
-  `context.npc.memories` are serialized into every prompt. System prompt Rule 7
-  instructs the LLM to hint at high-urgency goals in open-ended responses.
-- **Reputation:** structured dicts in `context.player_reputation`; Rule 2 uses MUST
-  language for hostile standings.
-- **Seeder:** `make seed-api` uses typed admin endpoints for all Phase 3 resources.
-  Re-seeding duplicates beliefs/goals/etc — wipe DB first.
+`pytest tests/ -q` baseline at start of P2.2: **20 failed, 951 passed, 17 skipped (988 total)**.
+The 20 failures are all pre-existing `consume()` mock stubs — see ISSUE-019. Do not treat
+these as regressions introduced during P2.1. NEXT_SESSION.md previously said "964/965" which
+was inaccurate.
 
 ---
 
-## Phase 1 open items
+## P2.2 goal — Seed script
 
-1. **War scenario re-verify on qwen2.5:14b** — low priority, informational only:
-   ```bash
-   ollama pull qwen2.5:14b
-   pytest e2e/scenarios/scenario_war_breaks_out.py -v -s --scenarios-only
-   ```
-   War scenario passed manually on qwen2.5:7b (2026-05-21). The eval judge test
-   `test_war_epoch_reflects_danger` also passes on 14b, so risk here is low.
+Implement `demo_game/seed.py` to replace the `NotImplementedError` stub. The seeder must:
 
-**Phase 1 is otherwise closed. Phase 2 can begin.**
+1. Create the demo world via HTTP only — zero direct Neo4j/npc_engine imports.
+2. Use `EngineClient` (from `demo_game.client`) for all API calls.
+3. Be **idempotent**: POST to create; treat 409 (Conflict) as "already exists", skip cleanly.
+   Mirror the `_Counter` / `_call` pattern from `src/npc_engine/data/api_seeder.py`.
+4. Seed the exact world described in `subphases.md` P2.2 (using corrected type names from
+   `decisions.md` DEC-P2-03):
+   - 3 locations: `tavern`, `market_square`, `guard_barracks`
+   - 3 factions: `merchants_guild`, `city_guard`, `thieves_guild`
+   - 5 NPCs: `mira_innkeeper`, `aldric_merchant`, `captain_sorn`, `lira_fence`, `old_henryk`
+   - Per-NPC: beliefs, goals, secrets, memories
+   - 1 Event: `northern_war_begins` (type `Event`, not `WorldEvent`)
+   - WorldState: epoch=peace (node type `world_state`, lowercase)
+   - Relations: `mira STANDS_WITH old_henryk`, `lira KNOWS_ABOUT aldric`,
+     `captain_sorn OPPOSES lira` (corrected edge types from DEC-P2-03)
+5. Add `make demo-seed` to actually call `seed()` (currently the target just prints "not implemented").
+6. Write **TDD tests first** — `demo_game/tests/test_seed.py`. Test the data-builder functions
+   independently of HTTP; test `seed()` with a mock EngineClient.
+
+TDD discipline (CLAUDE.md): write failing tests → confirm failure reason → implement → green.
 
 ---
 
-## Phase 2 entry point
+## Key context
 
-Phase 2: Demo Game Skeleton + Graph Visualization.
+- **EngineClient**: `demo_game/client.py` — synchronous httpx client. All methods raise
+  `EngineClientError` on 4xx/5xx. DI pattern: `_http_client` kwarg for test injection.
+- **Reference seeder**: `src/npc_engine/data/api_seeder.py` — exact request shapes for nodes
+  (`POST /v1/graph/nodes/{type}` with `{"properties": {...}}`), edges
+  (`POST /v1/graph/edges/{type}` with `{"src_id": ..., "dst_id": ..., "properties": {...}}`),
+  and typed admin endpoints (`POST /v1/admin/beliefs/{char_id}`, etc.).
+- **Type name corrections** (DEC-P2-03, `decisions.md`):
+  - `WorldEvent` → `Event`
+  - `WorldState` (capital S) → `world_state` (lowercase)
+  - `TRUSTS` → `STANDS_WITH`
+  - `FEARS` → `OPPOSES`
+  - `HAS_BELIEF` → `BELIEVES` (edge type, but typed endpoint is `POST /v1/admin/beliefs/{id}`)
+  - `HAS_GOAL` → `PURSUES` (edge type, but typed endpoint is `POST /v1/admin/goals/{id}`)
+- **Faction membership**: use `POST /v1/admin/factions/{faction_id}/members` with
+  `{"character_id": ..., "role": ..., "status": "active"}` — see api_seeder.py line ~299.
+- **Beliefs/goals/secrets/memories**: use typed admin endpoints (`POST /v1/admin/beliefs/{char_id}`,
+  etc.) with `game_time` dict — NOT the generic graph node endpoint. See api_seeder.py line ~344+.
+- **Re-seed idempotency**: typed admin endpoints (beliefs, goals, etc.) auto-generate IDs so
+  re-seeding creates duplicates. Comment in seed.py must say "wipe DB before re-seeding".
+  Match this note from api_seeder.py line 12–14.
+- **Config**: `from demo_game.config import config` — has `NPC_BASE_URL`, `NPC_API_KEY`.
+- **make demo-seed**: must be updated from the stub message to actually call `seed()`.
+- **Coverage gate**: `pytest demo_game/tests/ -q --cov=demo_game --cov-report=term-missing`
+  must hit ≥78% on `demo_game/` (excluding UI rendering) by end of Phase 2.
 
-Goals:
-- Build a minimal playable demo scenario driven by `POST /v1/dialogue`.
-- Visualize the NPC knowledge graph (events, beliefs, goals, relations) in real time.
-- Exercise `explicit_node_ids` to demonstrate scene-critical context pinning.
+---
 
-Relevant files from Phase 1:
-- `e2e/scenarios/scenario_war_breaks_out.py` — template for scenario structure.
-- `src/npc_engine/engines/dialogue/dialogue_models.py` — `DialogueRequest` (now has `explicit_node_ids`).
-- `docs/RELEVANCE_WEIGHTS.md` — how to configure and use explicit context pinning.
-- `project/DECISIONS.md` — model and API field decisions Phase 2 must respect.
+## Phase 2 open items (carry forward)
+
+- ISSUE-019: 20 pre-existing `consume()` mock failures — defer to Phase 4+
+- ISSUE-018: subphases.md uses wrong type names — fix in P2.6 cleanup pass
+- ISSUE-017: Unregistered type → HTTP 500 — defer to Phase 4+

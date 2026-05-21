@@ -30,17 +30,26 @@
 
 ## What Shipped
 
-- [ ] demo_game/ package scaffold
-- [ ] seed.py — demo world created via API calls
-- [ ] Dialogue UI — player input, NPC response display
-- [ ] Graph visualization panel — live-updating, faction-colored
-- [ ] Gossip trigger flow — event seeded → graph updates visible
-- [ ] make demo target
-- [ ] docs/DEMO.md updated
+- [x] demo_game/ package scaffold — P2.1 done 2026-05-21
+      EngineClient (8 methods), DemoConfig, stubs for seed/ui/graph_panel,
+      GraphNode/GraphEdge/GraphSnapshot/GraphDelta dataclasses, 20 tests green,
+      make demo / demo-seed / test-demo targets, .env.demo gitignored
+- [ ] seed.py — demo world created via API calls  ← P2.2
+- [ ] Dialogue UI — player input, NPC response display  ← P2.3
+- [ ] Graph visualization panel — live-updating, faction-colored  ← P2.4
+- [ ] Gossip trigger flow — event seeded → graph updates visible  ← P2.5
+- [ ] LLM judge scenario — `e2e/scenarios/scenario_demo_game_judge.py` PASS  ← P2.5
+- [ ] make demo target (functional, not stub)  ← P2.3
+- [ ] docs/DEMO.md updated  ← P2.6
 
 ---
 
 ## What Was Deferred
+
+- **ISSUE-019**: 20 pre-existing test failures — `consume()` missing on mock Neo4j result
+  stubs in `tests/unit/`. Not introduced by P2.1. Logged in `ISSUES.md`. Defer to Phase 4+.
+- `make test` accurate baseline: **20 failed, 951 passed, 17 skipped (988 total)** —
+  the "964/965" figure in NEXT_SESSION.md (written post-Phase 1) was incorrect.
 
 ---
 
