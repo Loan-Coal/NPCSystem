@@ -30,7 +30,8 @@ class Neo4jIdempotencyStore:
         Args:
             session: Active Neo4j async session.
         """
-        await session.run(CYPHER_ENSURE_IDEMPOTENCY_CONSTRAINT)
+        result = await session.run(CYPHER_ENSURE_IDEMPOTENCY_CONSTRAINT)
+        await result.consume()
 
     async def get_record(
         self,
@@ -55,6 +56,7 @@ class Neo4jIdempotencyStore:
             resource_scope=resource_scope,
         )
         row = await result.single()
+        await result.consume()
         if row is None:
             return None
         return _map_record(properties=row["r"])
@@ -97,6 +99,7 @@ class Neo4jIdempotencyStore:
             pending_timeout_seconds=pending_timeout_seconds,
         )
         row = await result.single()
+        await result.consume()
         if row is None:
             raise RuntimeError("Unable to upsert idempotency record")
         return _map_record(properties=row["r"])
@@ -136,6 +139,7 @@ class Neo4jIdempotencyStore:
             pending_timeout_seconds=pending_timeout_seconds,
         )
         row = await result.single()
+        await result.consume()
         if row is None:
             return False
         return bool(row["created"])
@@ -230,6 +234,7 @@ class Neo4jIdempotencyStore:
         """
         result = await session.run(CYPHER_DELETE_EXPIRED, now_iso=now_iso)
         row = await result.single()
+        await result.consume()
         return int(row["deleted_count"]) if row is not None else 0
 
 
@@ -257,6 +262,7 @@ async def _mark_terminal(
         updated_at=updated_at,
     )
     row = await result.single()
+    await result.consume()
     updated_count = int(row["updated_count"]) if row is not None else 0
     if updated_count != 1:
         raise RuntimeError("Unable to mark idempotency record terminal state")

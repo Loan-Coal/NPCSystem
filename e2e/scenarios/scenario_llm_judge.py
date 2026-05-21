@@ -173,6 +173,25 @@ async def test_hostile_npc_tone_with_low_reputation(
     """NPC response is hostile/suspicious when player reputation is -80."""
     judge = _make_judge()
 
+    # Reset world to age_of_peace so test 4's war epoch doesn't contaminate tone.
+    now = datetime.now(timezone.utc).isoformat()
+    api_post(
+        http_client,
+        "/v1/graph/nodes/world_state",
+        {
+            "properties": {
+                "id": "world",
+                "epoch": "age_of_peace",
+                "faction_standings": {},
+                "active_conditions": [],
+                "weather": "clear",
+                "time_of_day": "morning",
+                "last_updated_at": now,
+                "last_graph_updated_at": now,
+            }
+        },
+    )
+
     # Set player_1's reputation with Aldric's faction (guild) to -80
     rep_result = api_put(
         http_client,
@@ -183,7 +202,8 @@ async def test_hostile_npc_tone_with_low_reputation(
     # uses the default (0) which may not be hostile enough. We proceed anyway.
     print(f"[reputation set] status={rep_result['status']}")
 
-    # Call dialogue: player_1 greets Aldric (npc_1)
+    # Call dialogue: player_1 greets Aldric (npc_1) with a unique session to avoid
+    # carry-over from any previous test turns on the player_1:npc_1 session.
     dialogue_result = api_post(
         http_client,
         "/v1/dialogue",
@@ -191,6 +211,7 @@ async def test_hostile_npc_tone_with_low_reputation(
             "player_id": "player_1",
             "npc_id": "npc_1",
             "player_message": "Good day to you. I'd like to talk.",
+            "session_id": f"judge_hostile_{uuid.uuid4().hex[:8]}",
         },
     )
     assert dialogue_result["status"] == 200, (
@@ -234,8 +255,27 @@ async def test_goal_hinting_in_dialogue(
     """NPC hints at personal mission without directly stating 'I have a goal'."""
     judge = _make_judge()
 
+    # Reset world to age_of_peace so test 4's war epoch doesn't dominate the response.
+    now = datetime.now(timezone.utc).isoformat()
+    api_post(
+        http_client,
+        "/v1/graph/nodes/world_state",
+        {
+            "properties": {
+                "id": "world",
+                "epoch": "age_of_peace",
+                "faction_standings": {},
+                "active_conditions": [],
+                "weather": "clear",
+                "time_of_day": "morning",
+                "last_updated_at": now,
+                "last_graph_updated_at": now,
+            }
+        },
+    )
+
     # Aldric (npc_1) has seed goal: "Expose the guild's corruption to the city council"
-    # Ask an open-ended question to encourage goal-hinting
+    # Use a unique session_id so test 2's hostile-tone turns don't contaminate this context.
     dialogue_result = api_post(
         http_client,
         "/v1/dialogue",
@@ -243,6 +283,7 @@ async def test_goal_hinting_in_dialogue(
             "player_id": "player_1",
             "npc_id": "npc_1",
             "player_message": "You seem preoccupied. What's on your mind these days?",
+            "session_id": f"judge_goal_{uuid.uuid4().hex[:8]}",
         },
     )
     assert dialogue_result["status"] == 200, (

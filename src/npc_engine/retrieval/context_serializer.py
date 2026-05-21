@@ -78,12 +78,18 @@ def serialize_context(context: MergedContext) -> str:
         }
 
     reputation_payload = _safe_parse(mapped.get("reputation", "[]"))
+    goals_payload = _safe_parse(mapped.get("goals", "[]"))
+    beliefs_payload = _safe_parse(mapped.get("beliefs", "[]"))
+    memories_payload = _safe_parse(mapped.get("memories", "[]"))
 
     skeleton = {
         "world": world_payload if isinstance(world_payload, dict) else {},
         "npc": {
             "profile": npc_profile,
             "emotion": emotion_payload if isinstance(emotion_payload, dict) else {},
+            "goals": goals_payload if isinstance(goals_payload, list) else [],
+            "beliefs": beliefs_payload if isinstance(beliefs_payload, list) else [],
+            "memories": memories_payload if isinstance(memories_payload, list) else [],
         },
         "player_reputation": reputation_payload if isinstance(reputation_payload, list) else [],
         "player_relation": relation_payload if isinstance(relation_payload, dict) else {},

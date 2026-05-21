@@ -49,6 +49,7 @@ class RelevanceWeights(BaseModel):
     proximity: float = Field(ge=MIN_RATIO, le=MAX_RATIO)
     relation: float = Field(ge=MIN_RATIO, le=MAX_RATIO)
     quest: float = Field(ge=MIN_RATIO, le=MAX_RATIO)
+    explicit: float = Field(ge=MIN_RATIO, le=MAX_RATIO, default=0.0)
 
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
@@ -70,6 +71,7 @@ class RelevanceWeights(BaseModel):
             + self.proximity
             + self.relation
             + self.quest
+            + self.explicit
         )
         if abs(weights_sum - WEIGHTS_SUM_TARGET) > WEIGHTS_SUM_TOLERANCE:
             raise ValueError("relevance_weights must sum to 1.0")

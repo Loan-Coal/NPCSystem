@@ -29,6 +29,7 @@ def rank_tier_items(
     active_quest: dict | None = None,
     game_time: TimePoint | None = None,
     weight_profile: str | None = None,
+    explicit_node_ids: frozenset[str] = frozenset(),
 ) -> list[ContextItem]:
     """Score and rank context items by relevance.
 
@@ -40,6 +41,8 @@ def rank_tier_items(
         active_quest: Optional active quest dict for quest-relevance scoring. (6.4)
         game_time: Current structured game time for scoring game-time nodes. (8.2)
         weight_profile: Named weight profile override (e.g. "investigation"). (8.3)
+        explicit_node_ids: Node IDs pinned by the game engine as relevant this turn.
+            Matching nodes score explicit=1.0; all others score 0.0.
 
     Returns:
         Items reordered by descending relevance score with updated priority fields.
@@ -54,6 +57,7 @@ def rank_tier_items(
             trust_scores=trust_scores,
             active_quest=active_quest,
             game_time=game_time,
+            explicit_node_ids=explicit_node_ids,
         )
         for item in items
     ]
@@ -72,6 +76,7 @@ def _build_candidate(
     trust_scores: dict[str, float] | None = None,
     active_quest: dict | None = None,
     game_time: TimePoint | None = None,
+    explicit_node_ids: frozenset[str] = frozenset(),
 ) -> ContextRelevanceCandidate:
     node_type, node_id = parse_node_identity(item.key)
     payload = parse_json_object(item.text)
@@ -84,6 +89,7 @@ def _build_candidate(
         proximity_hops=_infer_proximity_hops(item.key, llm_config.max_proximity_hops),
         relation=_extract_relation_score(item=item, vector_scores=vector_scores, trust_scores=trust_scores),
         quest=_quest_score(item=item, active_quest=active_quest),
+        explicit=1.0 if node_id in explicit_node_ids else 0.0,
     )
 
 

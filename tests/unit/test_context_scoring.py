@@ -13,6 +13,7 @@ import pytest
 
 from npc_engine.retrieval.context_merger import ContextItem
 from npc_engine.retrieval.context_scoring import (
+    _build_candidate,
     _extract_recency_score,
     _extract_relation_score,
     _extract_severity_score,
@@ -21,6 +22,7 @@ from npc_engine.retrieval.context_scoring import (
     _quest_score,
     rank_tier_items,
 )
+from npc_engine.schema.context_config_models import RelevanceWeights
 
 
 # ---------------------------------------------------------------------------
@@ -312,3 +314,77 @@ def test_extract_severity_score_urgency_takes_precedence_over_confidence():
 def test_extract_severity_score_confidence_takes_precedence_over_emotional_charge():
     payload = {"confidence": 30, "emotional_charge": 90}
     assert _extract_severity_score(payload) == pytest.approx(0.3)
+
+
+# ---------------------------------------------------------------------------
+# explicit scoring — _build_candidate + RelevanceWeights
+# ---------------------------------------------------------------------------
+
+
+def _make_llm_config_with_explicit(*, max_proximity_hops: int = 3) -> MagicMock:
+    cfg = _make_llm_config(max_proximity_hops=max_proximity_hops)
+    cfg.recency_game_day_horizon = 365
+    return cfg
+
+
+def test_build_candidate_explicit_pinned_scores_one():
+    # node_id extracted from key "character:npc_guard" is "npc_guard"
+    item = _make_item(key="character:npc_guard")
+    cfg = _make_llm_config_with_explicit()
+    candidate = _build_candidate(
+        item=item,
+        llm_config=cfg,
+        vector_scores={},
+        explicit_node_ids=frozenset({"npc_guard"}),
+    )
+    assert candidate.explicit == 1.0
+
+
+def test_build_candidate_explicit_unpinned_scores_zero():
+    item = _make_item(key="character:npc_guard")
+    cfg = _make_llm_config_with_explicit()
+    candidate = _build_candidate(
+        item=item,
+        llm_config=cfg,
+        vector_scores={},
+        explicit_node_ids=frozenset(),
+    )
+    assert candidate.explicit == 0.0
+
+
+def test_build_candidate_explicit_other_node_pinned_scores_zero():
+    item = _make_item(key="character:npc_merchant")
+    cfg = _make_llm_config_with_explicit()
+    candidate = _build_candidate(
+        item=item,
+        llm_config=cfg,
+        vector_scores={},
+        explicit_node_ids=frozenset({"npc_guard", "npc_blacksmith"}),
+    )
+    assert candidate.explicit == 0.0
+
+
+def test_build_candidate_explicit_default_is_zero():
+    item = _make_item(key="character:npc_guard")
+    cfg = _make_llm_config_with_explicit()
+    candidate = _build_candidate(
+        item=item,
+        llm_config=cfg,
+        vector_scores={},
+    )
+    assert candidate.explicit == 0.0
+
+
+def test_relevance_weights_explicit_defaults_to_zero_and_validates():
+    weights = RelevanceWeights(recency=0.30, severity=0.20, proximity=0.20, relation=0.20, quest=0.10)
+    assert weights.explicit == 0.0
+
+
+def test_relevance_weights_with_explicit_field_validates():
+    weights = RelevanceWeights(recency=0.20, severity=0.20, proximity=0.15, relation=0.20, quest=0.15, explicit=0.10)
+    assert weights.explicit == pytest.approx(0.10)
+
+
+def test_relevance_weights_explicit_causes_sum_to_exceed_one():
+    with pytest.raises(Exception):
+        RelevanceWeights(recency=0.30, severity=0.20, proximity=0.20, relation=0.20, quest=0.10, explicit=0.10)

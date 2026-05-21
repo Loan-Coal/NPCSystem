@@ -74,6 +74,7 @@ class GenericNodeService(_GenericGraphServiceBase):
             id=node_id,
         )
         record = await result.single()
+        await result.consume()
         if record is None:
             return None
         return decode_properties(dict(record["node"]), field_defs)
@@ -96,7 +97,10 @@ class GenericNodeService(_GenericGraphServiceBase):
             limit=limit,
             offset=offset,
         )
-        return [decode_properties(dict(record["node"]), field_defs) async for record in result]
+        try:
+            return [decode_properties(dict(record["node"]), field_defs) async for record in result]
+        finally:
+            await result.consume()
 
     async def upsert_node(self, node_type: str, payload: dict[str, Any]) -> dict[str, Any]:
         """Create or fully replace a node with the given payload.
@@ -128,6 +132,7 @@ class GenericNodeService(_GenericGraphServiceBase):
             properties=encoded,
         )
         record = await result.single()
+        await result.consume()
         return decode_properties(dict(record["node"]), field_defs) if record is not None else validated
 
     async def patch_node(self, node_type: str, node_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -166,6 +171,7 @@ class GenericNodeService(_GenericGraphServiceBase):
             properties=encoded,
         )
         record = await result.single()
+        await result.consume()
         if record is None:
             raise NodeNotFoundError(node_type=node_key, node_id=node_id)
         return decode_properties(dict(record["node"]), field_defs)

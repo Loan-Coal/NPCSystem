@@ -238,5 +238,6 @@ class DialogueHandler:
             session_id=session_id,
             skip_rag=skip_rag,
             player_id=request.player_id,
+            explicit_node_ids=frozenset(request.explicit_node_ids),
         )
         return build_dialogue_prompt(request=request, serialized_context=serialized_context)

@@ -29,6 +29,7 @@ class ContextRelevanceCandidate(BaseModel):
     proximity_hops: int = Field(ge=0)
     relation: float = Field(ge=MIN_COMPONENT_SCORE, le=MAX_COMPONENT_SCORE)
     quest: float = Field(ge=MIN_COMPONENT_SCORE, le=MAX_COMPONENT_SCORE)
+    explicit: float = Field(ge=MIN_COMPONENT_SCORE, le=MAX_COMPONENT_SCORE, default=0.0)
 
     model_config = ConfigDict(frozen=True)
 
@@ -60,6 +61,7 @@ def score_candidate(
         + weights.proximity * proximity_score
         + weights.relation * candidate.relation
         + weights.quest * candidate.quest
+        + weights.explicit * candidate.explicit
     )
 
 

@@ -93,7 +93,10 @@ async def get_witnesses_of_event(
         List of witness records for the event.
     """
     result = await session.run(CYPHER_GET_WITNESSES_OF_EVENT, event_id=event_id)
-    return cast(list[dict[str, Any]], [dict(record) async for record in result])
+    try:
+        return cast(list[dict[str, Any]], [dict(record) async for record in result])
+    finally:
+        await result.consume()
 
 
 async def get_witnessed_by(
@@ -115,7 +118,10 @@ async def get_witnessed_by(
     result = await session.run(
         CYPHER_GET_WITNESSED_BY, subject_id=subject_id, limit=limit
     )
-    return cast(list[dict[str, Any]], [dict(record) async for record in result])
+    try:
+        return cast(list[dict[str, Any]], [dict(record) async for record in result])
+    finally:
+        await result.consume()
 
 
 async def get_undisclosed_witnesses(
@@ -133,4 +139,7 @@ async def get_undisclosed_witnesses(
         List of undisclosed witness records the NPC has not yet shared.
     """
     result = await session.run(CYPHER_GET_UNDISCLOSED_WITNESSES, npc_id=npc_id)
-    return cast(list[dict[str, Any]], [dict(record) async for record in result])
+    try:
+        return cast(list[dict[str, Any]], [dict(record) async for record in result])
+    finally:
+        await result.consume()
