@@ -388,6 +388,26 @@ class EngineClient:
         self._raise_for_status(resp, f"GET /v1/admin/beliefs/{character_id}")
         return resp.json().get("data", {}).get("beliefs", [])
 
+    def get_goals(self, character_id: str) -> list[dict]:
+        """Return all active goals for a character via the typed goals endpoint.
+
+        Args:
+            character_id: Character node ID.
+
+        Returns:
+            List of goal dicts (may be empty). Each dict has id, description,
+            urgency, status, created_at_game_time, and target_id fields.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        resp = self._client.get(
+            f"/v1/admin/goals/{character_id}",
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, f"GET /v1/admin/goals/{character_id}")
+        return resp.json().get("data", {}).get("goals", [])
+
     def post_belief(
         self,
         character_id: str,
