@@ -21,6 +21,8 @@ class DemoConfig(BaseSettings):
     NPC_BASE_URL: str = "http://localhost:8000"
     NPC_API_KEY: str = "local_dev_secret_change_this_2026"
     DEMO_GRAPH_POLL_INTERVAL: int = 5
+    # Fixed player identity for POST /v1/dialogue — no real player in demo.
+    DEMO_PLAYER_ID: str = "player_demo"
     # Stall-detection timeouts: far above expected worst-case latency.
     NPC_DIALOGUE_TIMEOUT_S: float = 120.0
     NPC_GRAPH_TIMEOUT_S: float = 15.0
