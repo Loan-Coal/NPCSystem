@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Current phase** | Roadmap V2 — Phase 4 complete (Phase 5 TBD) |
+| **Current phase** | Roadmap V3 — Phase 1 complete (Phase 2 next) |
 | **Roadmap V2 Phase 4** | ✅ Complete — 5/5 items done, 771 unit tests green |
 | **Roadmap V2 Phase 3** | ✅ Complete — 7/7 items done, 720 unit tests green |
 | **Roadmap V2 Phase 2** | ✅ Complete — 12/12 items done, 697 unit tests green |

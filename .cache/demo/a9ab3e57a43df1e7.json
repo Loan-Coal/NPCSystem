@@ -1,0 +1,21 @@
+{
+  "npc_response": "Aye, there are rumors that the northern armies have moved closer to our borders. It's just a whisper in the wind for now, but it makes one keep an ear out and be ready for what might come next.",
+  "relation_deltas": {
+    "trust": 0,
+    "fear": 0,
+    "affection": 0
+  },
+  "mood_update": null,
+  "action": {
+    "type": "speak",
+    "target_id": null,
+    "parameters": {}
+  },
+  "facial_expression": {
+    "type": "neutral",
+    "intensity": 0
+  },
+  "session_id": "player:mira_innkeeper",
+  "cached": false,
+  "degradation_level": "full"
+}

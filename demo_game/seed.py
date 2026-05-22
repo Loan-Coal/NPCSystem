@@ -441,10 +441,51 @@ _NPC_NPC_EDGES: list[tuple[str, str, str, dict]] = [
         "reason": "lira runs a criminal operation in the city",
         "established_tick": 0,
     }),
-    # captain_sorn already has intel about the war threat (exercises gossip panel)
+    # captain_sorn has direct, undistorted knowledge of the war (tick 0 seed)
     ("KNOWS_ABOUT", "captain_sorn", "northern_war_begins", {
-        "knowledge_state": "rumor", "learned_at_tick": 0,
+        "knowledge_state": "knows",
+        "distortion_type": None,
+        "distortion_level": 0,
+        "distorted_summary": "The northern armies have crossed the border",
+        "learned_at_tick": 0,
+        "source_character_id": None,
     }),
+    # Pre-seeded gossip chain for demo reliability.
+    # Sorn is alone at the barracks; the live gossip engine propagates only between
+    # co-located NPCs, so the demo path is fixed here with deterministic distortions.
+    ("KNOWS_ABOUT", "mira_innkeeper", "northern_war_begins", {
+        "knowledge_state": "rumor",
+        "distortion_type": "exaggeration",
+        "distortion_level": 20,
+        "distorted_summary": (
+            "A soldier mentioned the northern armies — or the Iron Guard, he called them"
+            " — have moved on the border. Rumor only, mind you."
+        ),
+        "learned_at_tick": 1,
+        "source_character_id": "captain_sorn",
+    }),
+    ("KNOWS_ABOUT", "old_henryk", "northern_war_begins", {
+        "knowledge_state": "rumor",
+        "distortion_type": "exaggeration",
+        "distortion_level": 70,
+        "distorted_summary": (
+            "It was utterly catastrophic: the northmen have poured through the king's pass,"
+            " thousands dead, they say. I ran dispatches through that pass in the last war"
+            " — I know what it looks like when it falls."
+        ),
+        "learned_at_tick": 2,
+        "source_character_id": "mira_innkeeper",
+    }),
+]
+
+# LOCATED_AT edges: (npc_id, location_id)
+# Required for co-location-based gossip pair selection and game_window display.
+_NPC_LOCATED_AT: list[tuple[str, str]] = [
+    ("mira_innkeeper", "loc_tavern"),
+    ("lira_fence", "loc_tavern"),
+    ("aldric_merchant", "loc_market_square"),
+    ("old_henryk", "loc_market_square"),
+    ("captain_sorn", "loc_guard_barracks"),
 ]
 
 
@@ -539,7 +580,7 @@ def seed_all(client: EngineClient) -> dict:
         if n == 0:
             skipped += len(life["beliefs"]) + len(life["goals"]) + len(life["memories"]) + 1
 
-    # 7. Event
+    # 7. Events
     logger.info("[seed] Events")
     _tally(_seed_node(
         client,
@@ -553,6 +594,18 @@ def seed_all(client: EngineClient) -> dict:
             is_public=False,
         ),
     ))
+    _tally(_seed_node(
+        client,
+        "Event",
+        build_event_payload(
+            id="market_fire",
+            summary="Fire breaks out in Market Square",
+            event_type="disaster",
+            location_id="loc_market_square",
+            severity=60,
+            is_public=True,
+        ),
+    ))
 
     # 8. world_state
     logger.info("[seed] world_state")
@@ -562,6 +615,14 @@ def seed_all(client: EngineClient) -> dict:
     logger.info("[seed] NPC-NPC edges")
     for edge_type, src_id, dst_id, props in _NPC_NPC_EDGES:
         _tally(_seed_edge(client, edge_type, src_id, dst_id, props))
+
+    # 10. LOCATED_AT edges (required for gossip pair selection and game_window)
+    logger.info("[seed] LOCATED_AT edges")
+    for npc_id, loc_id in _NPC_LOCATED_AT:
+        _tally(_seed_edge(client, "LOCATED_AT", npc_id, loc_id, {
+            "is_permanent_resident": True,
+            "arrived_at": _now(),
+        }))
 
     logger.info("[seed] Done — created=%d skipped=%d", created, skipped)
     return {"created": created, "skipped": skipped}
