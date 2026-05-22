@@ -13,6 +13,21 @@ Rules:
 
 ## Open
 
+## ISSUE-021: test_gossip_propagates_after_clock_advance is trivially true
+**Found:** 2026-05-22, during P2.5 planning
+**Severity:** P3 (nice-to-fix)
+**Where:** `e2e/scenarios/scenario_demo_game_judge.py::test_gossip_propagates_after_clock_advance`
+**Description:** The `northern_war_begins` Event node is seeded by `demo_game/seed.py` and
+is always present in the graph. `GET /v1/graph/nodes/Event` will return it regardless of
+whether a clock advance triggers gossip propagation. The test functions as a basic engine
+sanity check (state intact after advance_clock) but does not prove that gossip actually ran.
+**Why deferred:** A stronger test (e.g., count KNOWS_ABOUT edges before/after advance, or
+check per-NPC belief updates) may be flaky if the gossip engine requires multiple ticks to
+propagate knowledge. The war-dialogue test (test 1) is the substantive LLM judge gate for P2.5.
+**To fix:** Replace with a two-step test: (1) GET KNOWS_ABOUT edge count before advance,
+(2) advance clock, (3) assert edge count increased. OR check that a specific non-captain_sorn
+NPC has acquired a new belief mentioning war after the advance.
+
 ## [FIXED] ISSUE-019: 20 pre-existing test failures — `consume()` missing on mock Neo4j result objects
 **Found:** 2026-05-21, during P2.1 scaffold (confirmed pre-existing via git stash comparison)
 **Severity:** P2 (test coverage gap — affected functions work in prod but are undertested)
@@ -296,6 +311,22 @@ and may affect tests that construct Settings with this field.
 removed `create_llm_client`, `BACKEND_BUILDERS`, and all private `_create_*` helpers from
 `factory.py`; removed `OLLAMA_MODEL` and `LLM_BACKEND` from `config.py`; rewrote
 `test_llm_factory.py` to target `create_llm_client_for_engine`.
+
+---
+
+## ISSUE-020: `emotion` field in DialogueTurn mapped from `mood_update`, not a first-class engine field
+**Found:** 2026-05-22, during P2.3 implementation
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/dialogue.py:parse_dialogue_response`
+**Description:** The P2.3 spec requested extracting an `emotion` field from
+`POST /v1/dialogue` responses, but `DialogueResponse` has no `emotion` field.
+`parse_dialogue_response` maps `DialogueTurn.emotion` from `mood_update: str | None`,
+with a fallback to `facial_expression["type"]`. This is semantically close but not
+identical to a dedicated emotion field.
+**Why deferred:** The engine has no plans to add a dedicated `emotion` field. The
+current mapping is good enough for demo badge display and does not affect correctness.
+**To fix:** If the engine adds a dedicated top-level `emotion` field, update
+`parse_dialogue_response` to read it directly and remove the fallback logic.
 
 ---
 

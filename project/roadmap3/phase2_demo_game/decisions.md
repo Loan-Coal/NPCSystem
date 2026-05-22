@@ -206,3 +206,128 @@ calls in one place.
 NPCs added), extract `_seed_data.py` as a pure data module at that point.
 
 **Cross-phase?** No — demo game seeder only.
+
+---
+
+## [2026-05-22] game_window.py split into game_window.py + widgets.py (P2.3)
+
+**Context:** The P2.3 spec required all of: location bar, NPC list, text input,
+scrollable response log, degradation badge, right-panel placeholder, threading,
+spinner, and location nav buttons. A single-file implementation would exceed 500
+lines — well over CLAUDE.md's 300-line limit, and the split is natural (reusable
+widget types vs. application wiring).
+
+**Options considered:**
+- Option A: Single `game_window.py` with an exception entry (artificial split avoided).
+- Option B: Split into `widgets.py` (widget classes) + `game_window.py` (wiring).
+- Option C: Further split into `layout.py` (rects/constants), `widgets.py`, `game_window.py`.
+
+**Decision:** Option B. `demo_game/ui/widgets.py` (277 lines) contains
+`InputBox`, `ScrollableLog`, `NpcListWidget`, `DegradationBadge` — four cohesive
+widget types with no inter-dependencies. `demo_game/ui/game_window.py` (273 lines)
+contains `GameWindow` (event loop, state, wiring to client + dialogue module) and
+the module-level `run()` entrypoint.
+
+**Rationale:** The split is along a real seam (reusable presentation primitives
+vs. application-specific wiring). Both files are under 300 lines. Option C was
+rejected because layout constants are small and belong next to the code that uses them.
+
+**Consequences:**
+- `demo_game/ui/widgets.py` is excluded from unit test coverage (Pygame rendering).
+- `demo_game/ui/game_window.py` is excluded from unit test coverage (same reason).
+- If either file grows beyond 300 lines in P2.4 (graph panel wiring), re-evaluate.
+
+**Cross-phase?** No — demo game UI only.
+
+---
+
+## [2026-05-22] P2.3 spec field-name corrections (dialogue response schema)
+
+**Context:** P2.3 spec text used field names that do not match the actual engine
+`DialogueResponse` schema. Discovered by reading the engine source before writing
+the TDD tests.
+
+**Options considered:** N/A — factual corrections, not design choices.
+
+**Decision:** Use actual engine field names throughout. Map to readable names in
+`DialogueTurn` dataclass.
+
+| Spec text | Actual engine field | Resolution |
+|---|---|---|
+| `npc_text` (extract) | `npc_response: str` | `parse_dialogue_response` reads `raw["npc_response"]` → `DialogueTurn.npc_text` |
+| `emotion` (extract) | No `emotion` field | Map from `mood_update: str \| None`; fall back to `facial_expression["type"]`. Logged as ISSUE-020. |
+| `FULL / GRAPH_ONLY / CANNED` (badge) | `"full" / "graph_only" / "canned"` (lowercase) | Colour map uses lowercase keys. Badge label uppercased for display only. |
+| `post_dialogue(npc_id, player_input)` | `post_dialogue(player_id, npc_id, player_message, ...)` | Added `DEMO_PLAYER_ID = "player_demo"` to `DemoConfig`. Used in all dialogue calls. |
+
+**Consequences:** `dialogue.py` and `test_dialogue_logic.py` use actual field
+names. `build_dialogue_payload` includes `player_id` and `location_id` (not in
+original spec) for richer NPC context.
+
+**Cross-phase?** No — field name corrections are stable. Engine schema is frozen.
+
+---
+
+## [2026-05-22] P2.4 — GraphPoller extracted to graph_panel/poller.py
+
+**Context:** P2.4 adds ~60 lines of polling thread logic (fetch, delta countdown, render, lock).
+Adding this to `game_window.py` would push it from 273 to ~340 lines, violating the 300-line limit.
+
+**Options considered:**
+- Option A (chosen): Extract `GraphPoller` class to `demo_game/graph_panel/poller.py`. game_window.py creates and starts it; the split follows a real seam (reusable polling logic vs. app-specific UI wiring).
+- Option B: Inline everything into game_window.py and log a DECISIONS.md exception. Rejected — the seam is real and the extraction is clean.
+
+**Decision:** Option A. `GraphPoller` in `poller.py`. game_window.py stays at 290 lines.
+
+**Consequences:** `graph_panel/__init__.py` public surface now includes `GraphPoller`. Same pattern as the game_window → widgets split in P2.3.
+
+**Cross-phase?** No.
+
+---
+
+## [2026-05-22] P2.4 — render_snapshot returns pygame.Surface, does not accept one
+
+**Context:** The P2.4 stub had signature `render_snapshot(snapshot, surface: object, delta=None) -> None`. Option A rendering (FigureCanvasAgg → buffer → pygame surface) *creates* a surface from the matplotlib canvas; it does not paint onto an existing one.
+
+**Options considered:**
+- Option A (chosen): `render_snapshot(snapshot, width, height, *, highlighted_edges) -> pygame.Surface`. Caller blits the returned surface; renderer is stateless and has no coupling to the caller's screen.
+- Option B: Pass an existing surface as a target (old stub signature). Requires the caller to pre-allocate the right size, adds coupling, doesn't match the frombuffer conversion pattern.
+
+**Decision:** Option A. Stub was wrong; corrected for implementation.
+
+**Cross-phase?** No.
+
+---
+
+## [2026-05-22] P2.5 — game_window.py exceeds 300 lines after W/C key binding
+
+**Context:** P2.5 adds W/C key handlers + status overlay to `GameWindow`. File grows
+from 290 lines to 326 lines, exceeding CLAUDE.md's 300-line hard limit.
+
+**Options considered:**
+- Option A (chosen): Keep everything in `game_window.py` with this DECISIONS.md entry.
+- Option B: Extract `_handle_key`, `_set_status`, `_draw_status_overlay`, and overlay state
+  into `demo_game/ui/key_bindings.py`. Rejected — extracting two private methods, one private
+  draw helper, and two state fields into a separate file is more artificial than the overage.
+  `GameWindow` is still one cohesive class with one responsibility.
+
+**Decision:** Option A. Same justification as P2.2 (seed.py at 589 lines), P2.3 (client.py),
+and P2.4 (GraphPoller extracted only because it was a natural full class). The 300-line spirit
+is "avoid unrelated code in one file" — not the case here. All added lines belong to GameWindow.
+
+**Consequences:** `game_window.py` stays a single file. If it exceeds 400 lines, extract all
+drawing helpers (`_draw_location_bar`, `_draw_right_panel`, `_draw_nav_bar`,
+`_draw_status_overlay`) to `demo_game/ui/drawing.py`.
+
+**Cross-phase?** No — demo game only.
+
+---
+
+## [2026-05-22] P2.4 — Belief + Goal nodes synthesized via admin endpoints
+
+**Context:** `GET /v1/graph/edges/BELIEVES` and `GET /v1/graph/edges/PURSUES` return empty (confirmed P2.2). Both `GET /v1/admin/beliefs/{char_id}` and `GET /v1/admin/goals/{char_id}` return 200 with data.
+
+**Decision:** `fetch_snapshot` calls `get_beliefs(char_id)` and `get_goals(char_id)` for each fetched Character node, synthesizing virtual `GraphNode(node_type="Belief"/"Goal")` and virtual `GraphEdge(edge_type="BELIEVES"/"PURSUES")`. `get_goals()` added to `client.py` (thin wrapper matching `get_beliefs` pattern).
+
+**Consequences:** Each poll makes 5 extra GET calls (one per NPC). On a 5-second interval this is negligible. Inner life appears in the graph as gold (Belief) and amber (Goal) satellite nodes.
+
+**Cross-phase?** Affects P2.5 demo — belief/goal changes will be visible in the live graph.
