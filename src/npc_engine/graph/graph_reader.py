@@ -71,6 +71,7 @@ async def get_character_with_relations(session: AsyncSession, npc_id: str) -> di
 
     result = await session.run(CYPHER_GET_CHARACTER_WITH_RELATIONS, npc_id=npc_id)
     record = await result.single()
+    await result.consume()
     if record is None:
         return {"character": None, "relations": []}
     normalized_relations_raw = _to_native(record["relations"])
@@ -102,7 +103,10 @@ async def get_events_for_npc(session: AsyncSession, npc_id: str, limit: int = 10
     """
 
     result = await session.run(CYPHER_GET_EVENTS_FOR_NPC, npc_id=npc_id, limit=limit)
-    return cast(list[dict], [_to_native(record.data()) async for record in result])
+    try:
+        return cast(list[dict], [_to_native(record.data()) async for record in result])
+    finally:
+        await result.consume()
 
 
 async def get_location_context(session: AsyncSession, location_id: str) -> dict[str, Any]:
@@ -119,6 +123,7 @@ async def get_location_context(session: AsyncSession, location_id: str) -> dict[
 
     result = await session.run(CYPHER_GET_LOCATION_CONTEXT, location_id=location_id)
     record = await result.single()
+    await result.consume()
     if record is None:
         return {"location": None, "present_npcs": []}
     return {
@@ -140,6 +145,7 @@ async def get_npc_location_id(session: AsyncSession, npc_id: str) -> str | None:
 
     result = await session.run(CYPHER_GET_NPC_LOCATION_ID, npc_id=npc_id)
     record = await result.single()
+    await result.consume()
     if record is None:
         return None
     return cast(str, record["location_id"])
@@ -157,7 +163,13 @@ async def get_known_event_ids_for_npc(session: AsyncSession, npc_id: str) -> set
     """
 
     result = await session.run(CYPHER_GET_KNOWN_EVENT_IDS, npc_id=npc_id)
-    return {str(record["id"]) async for record in result}
+    try:
+        ids: set[str] = set()
+        async for record in result:
+            ids.add(str(record["id"]))
+        return ids
+    finally:
+        await result.consume()
 
 
 async def get_npc_player_edge(session: AsyncSession, npc_id: str, player_id: str) -> dict[str, Any] | None:
@@ -174,6 +186,7 @@ async def get_npc_player_edge(session: AsyncSession, npc_id: str, player_id: str
 
     result = await session.run(CYPHER_GET_NPC_PLAYER_EDGE, npc_id=npc_id, player_id=player_id)
     record = await result.single()
+    await result.consume()
     if record is None:
         return None
     return cast(dict, _to_native(record["relation"]))

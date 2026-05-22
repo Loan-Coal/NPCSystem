@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from datetime import datetime, timezone
 
 import httpx
 import pytest
@@ -35,7 +36,7 @@ _JUDGE_OLLAMA_URL = (
     os.getenv("JUDGE_OLLAMA_URL")
     or os.getenv("OLLAMA_API_URL", "http://localhost:11434")
 )
-_JUDGE_MODEL = os.getenv("JUDGE_MODEL", "llama3")
+_JUDGE_MODEL = os.getenv("JUDGE_MODEL", "qwen2.5:7b")
 
 _ADMIN = "/v1/admin"
 _GRAPH = "/v1/graph"
@@ -172,6 +173,25 @@ async def test_hostile_npc_tone_with_low_reputation(
     """NPC response is hostile/suspicious when player reputation is -80."""
     judge = _make_judge()
 
+    # Reset world to age_of_peace so test 4's war epoch doesn't contaminate tone.
+    now = datetime.now(timezone.utc).isoformat()
+    api_post(
+        http_client,
+        "/v1/graph/nodes/world_state",
+        {
+            "properties": {
+                "id": "world",
+                "epoch": "age_of_peace",
+                "faction_standings": {},
+                "active_conditions": [],
+                "weather": "clear",
+                "time_of_day": "morning",
+                "last_updated_at": now,
+                "last_graph_updated_at": now,
+            }
+        },
+    )
+
     # Set player_1's reputation with Aldric's faction (guild) to -80
     rep_result = api_put(
         http_client,
@@ -182,7 +202,8 @@ async def test_hostile_npc_tone_with_low_reputation(
     # uses the default (0) which may not be hostile enough. We proceed anyway.
     print(f"[reputation set] status={rep_result['status']}")
 
-    # Call dialogue: player_1 greets Aldric (npc_1)
+    # Call dialogue: player_1 greets Aldric (npc_1) with a unique session to avoid
+    # carry-over from any previous test turns on the player_1:npc_1 session.
     dialogue_result = api_post(
         http_client,
         "/v1/dialogue",
@@ -190,6 +211,7 @@ async def test_hostile_npc_tone_with_low_reputation(
             "player_id": "player_1",
             "npc_id": "npc_1",
             "player_message": "Good day to you. I'd like to talk.",
+            "session_id": f"judge_hostile_{uuid.uuid4().hex[:8]}",
         },
     )
     assert dialogue_result["status"] == 200, (
@@ -233,8 +255,27 @@ async def test_goal_hinting_in_dialogue(
     """NPC hints at personal mission without directly stating 'I have a goal'."""
     judge = _make_judge()
 
+    # Reset world to age_of_peace so test 4's war epoch doesn't dominate the response.
+    now = datetime.now(timezone.utc).isoformat()
+    api_post(
+        http_client,
+        "/v1/graph/nodes/world_state",
+        {
+            "properties": {
+                "id": "world",
+                "epoch": "age_of_peace",
+                "faction_standings": {},
+                "active_conditions": [],
+                "weather": "clear",
+                "time_of_day": "morning",
+                "last_updated_at": now,
+                "last_graph_updated_at": now,
+            }
+        },
+    )
+
     # Aldric (npc_1) has seed goal: "Expose the guild's corruption to the city council"
-    # Ask an open-ended question to encourage goal-hinting
+    # Use a unique session_id so test 2's hostile-tone turns don't contaminate this context.
     dialogue_result = api_post(
         http_client,
         "/v1/dialogue",
@@ -242,6 +283,7 @@ async def test_goal_hinting_in_dialogue(
             "player_id": "player_1",
             "npc_id": "npc_1",
             "player_message": "You seem preoccupied. What's on your mind these days?",
+            "session_id": f"judge_goal_{uuid.uuid4().hex[:8]}",
         },
     )
     assert dialogue_result["status"] == 200, (
@@ -269,6 +311,70 @@ async def test_goal_hinting_in_dialogue(
     print(f"[judge] passed={verdict.passed}  reasoning: {verdict.reasoning}")
     assert verdict.passed, (
         f"Goal-hinting check FAILED — NPC gave no hint of personal mission.\n"
+        f"Response: {npc_response!r}\n"
+        f"Judge reasoning: {verdict.reasoning}"
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Test 4 — War epoch reflected in road-safety dialogue
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.asyncio
+@pytest.mark.llm_eval
+async def test_war_epoch_reflects_danger(http_client: httpx.Client) -> None:
+    """NPC conveys danger when epoch='war' and asked about road safety."""
+    judge = _make_judge()
+    now = datetime.now(timezone.utc).isoformat()
+
+    api_post(
+        http_client,
+        "/v1/graph/nodes/world_state",
+        {
+            "properties": {
+                "id": "world",
+                "epoch": "war",
+                "faction_standings": {},
+                "active_conditions": ["northern_war"],
+                "weather": "overcast",
+                "time_of_day": "morning",
+                "last_updated_at": now,
+                "last_graph_updated_at": now,
+            },
+        },
+    )
+
+    dialogue_result = api_post(
+        http_client,
+        "/v1/dialogue",
+        {
+            "player_id": "player_1",
+            "npc_id": "guard_1",
+            "player_message": "Is the road to the capital safe to travel?",
+            "location_id": "loc_gate",
+            "session_id": f"judge_war_epoch_{uuid.uuid4().hex[:8]}",
+        },
+    )
+    assert dialogue_result["status"] == 200, f"Dialogue failed: {dialogue_result}"
+    npc_response = dialogue_result["body"].get("npc_response", "")
+    assert npc_response, "Empty NPC response — check LLM stack is running."
+    print(f"\n[npc response]\n  {npc_response}\n")
+
+    from e2e.helpers.llm_judge import llm_judge
+
+    verdict = await llm_judge(
+        content=npc_response,
+        criteria=(
+            "Does this response convey that road travel is dangerous, risky, or "
+            "inadvisable due to conflict or war? The NPC should NOT say roads are safe. "
+            "References to danger, soldiers, conflict, caution, or discouraging travel count as YES."
+        ),
+        llm_client=judge,
+    )
+    print(f"[judge] passed={verdict.passed}  reasoning: {verdict.reasoning}")
+    assert verdict.passed, (
+        f"War epoch check FAILED — NPC did not reflect danger.\n"
         f"Response: {npc_response!r}\n"
         f"Judge reasoning: {verdict.reasoning}"
     )

@@ -22,6 +22,30 @@ Rules:
 
 ---
 
+## Decision: Root cause of world-state non-compliance is (b) — weak prompt, not retrieval
+**Date:** 2026-05-20
+**Service / area:** `engines/dialogue`, `prompts/`
+**Context:** Phase 0 audit ran `scenario_war_breaks_out.py` twice. WorldState epoch changed
+from `age_of_peace` to `war` mid-session. LLM acknowledged the epoch in its language but
+kept the same threat assessment, ignoring the behavioral rule in the system prompt.
+**Options considered:**
+  1. (a) WorldState never reached the prompt — ruled out; `context_builder.py:276` injects it
+     as tier0 / priority=100, always present.
+  2. (b) System prompt instruction too weak for Mixtral 8x7b to act on materially — confirmed.
+  3. (c) RAG retrieval filling context with wrong events — not relevant here; world state is
+     direct-injected, not retrieved.
+  4. (d) Model capability limit — possible co-cause; cannot distinguish from (b) without P0.5
+     model swap.
+**Choice:** Treat (b) as primary cause. Phase 1 first lever: rewrite epoch instruction as an
+authoritative prohibitive constraint, not a descriptive hint. Run model swap (P0.5) at Phase 1
+exit if prompt-only fix is insufficient.
+**Consequences:**
+- Phase 1 must strengthen the epoch rule AND move `_SYSTEM_PROMPT` from inline Python string
+  to a versioned YAML file under `prompts/` (CLAUDE.md rule: no prompt strings outside prompts/).
+- If prompt fix alone doesn't move the needle, escalate to Llama 3.1 8B Instruct swap.
+
+---
+
 ## Decision: Misplaced Domain Exceptions Deferred to Owning Services
 **Date:** 2026-05-01
 **Service / area:** utils (service #1)
@@ -136,3 +160,58 @@ designer/tooling clients, not game-engine clients.
   2. Extend "a few days ago" to cover 2–27 days — consistent with existing bucket, spec-compatible.
 **Choice:** Option 2. "a few days ago" covers delta_days 2–27. Logged as ISSUE-013 for future refinement.
 **Consequences:** Distances of 7–27 days return "a few days ago", which is slightly imprecise but not misleading. Can be narrowed when the spec is updated.
+
+---
+
+## Decision: Dialogue model upgraded to qwen2.5:14b (Phase 1, P1.5)
+**Date:** 2026-05-21
+**Service / area:** `engines/dialogue/llm_config.yaml`
+**Context:** Previous model was `qwen2.5:7b` (~4.7 GB Q4). Phase 2 introduces a demo game
+skeleton that will drive more varied dialogue; a stronger base model reduces prompt-engineering
+effort. Constraint: 12 GB VRAM.
+**Options considered:**
+  1. `qwen2.5:14b` (~8.5 GB Q4_K_M) — best instruction-following in class; direct lineage upgrade.
+  2. `gemma3:12b` (~8 GB) — weaker strict-JSON adherence.
+  3. `phi4:14b` (~9.8 GB) — tight on 12 GB; less proven for roleplay.
+**Choice:** `qwen2.5:14b`. Single-line change in `llm_config.yaml`; engine is model-agnostic via Ollama backend.
+**Consequences:** War scenario must be re-verified after pull (`ollama pull qwen2.5:14b`).
+Phase 2 should note this model. Phase 3 QLoRA adapter targets this base.
+
+---
+
+## Decision: explicit_node_ids API field for per-turn context pinning (Phase 1, P1.5)
+**Date:** 2026-05-21
+**Service / area:** `engines/dialogue/dialogue_models.py`, `retrieval/context_scoring.py`
+**Context:** `RelevanceWeights` documented an `explicit` scoring component but it was
+unimplemented. The component needs a mechanism for the game engine to signal which graph
+nodes are scene-critical for the current turn without relying on vector similarity alone.
+**Options considered:**
+  1. `explicit_node_ids: tuple[str, ...]` in `DialogueRequest` — per-request, deterministic, testable.
+  2. Graph node property flag — persistent but stale-flag risk.
+  3. Keyword-match automatic — fuzzy, duplicates vector similarity.
+  4. Topic classifier extension — coarse (type-level, not node-level).
+**Choice:** Option 1. Mirrors the existing `active_quest` per-request signal pattern. Nodes whose
+`node_id` appears in the set score `explicit=1.0`; all others score `0.0`. `RelevanceWeights.explicit`
+defaults to `0.0` so existing profiles are unchanged.
+**Consequences:** Phase 2 game skeleton must populate `explicit_node_ids` in `POST /v1/dialogue`
+requests to use this feature; it is inert otherwise. Primary use: Tier A graph nodes (Events,
+Memories, Characters) whose IDs the game engine knows are scene-critical. Tier B RAG chunks are
+addressable by row ID but are better served by vector similarity.
+
+---
+
+## Decision: Standalone seeder pattern — demo and test worlds seed via HTTP, not shared with api_seeder.py
+**Date:** 2026-05-22
+**Service / area:** Phase 2 — `demo_game/seed.py` vs `src/npc_engine/data/api_seeder.py`
+**Context:** Phase 2 needed a seeder for a demo world distinct from the engine baseline world.
+Two options: extend `api_seeder.py` or write a standalone seeder in `demo_game/`.
+**Options considered:**
+  1. Extend `api_seeder.py` with demo-world data — couples the engine baseline seed to a demo artefact.
+  2. Standalone `demo_game/seed.py` — separate script, HTTP-only, zero `src/npc_engine/` imports.
+**Choice:** Option 2. The demo world is a Phase 2 artefact; its seeder lives in `demo_game/`.
+`api_seeder.py` remains the engine's baseline seeder.
+**Pattern for future phases:** Any phase that needs a self-contained world (eval harness,
+QLoRA training data, integration fixture) should follow the same pattern: standalone seeder
+in its own directory, calling `http://localhost:8000` only, with an idempotent `_Counter` approach.
+**Consequences:** `make demo-seed` invokes `demo_game/seed.py` directly. `make seed-api` is
+unchanged. The two seeders share no code.

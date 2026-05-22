@@ -162,22 +162,31 @@ class EmbeddingReconciler:
                 await asyncio.sleep(self._interval_seconds)
 
     async def _reconcile_in_session(self, session: _SessionProtocol) -> dict[str, int]:
+        # Phase 1: collect stale node records, fully consuming the result before
+        # running any write queries (session allows only one active result at a time).
         result = await session.run(CYPHER_SELECT_STALE_NODES)
+        batch: list[dict] = []
+        try:
+            async for record in result:
+                if len(batch) >= self._batch_size:
+                    break
+                batch.append({
+                    "node_id": str(_record_value(record=record, key="id", default="")),
+                    "kind": str(_record_value(record=record, key="kind", default="")),
+                    "text": str(_record_value(record=record, key="text", default="")).strip(),
+                    "payload": _record_value(record=record, key="payload", default={}),
+                })
+        finally:
+            await result.consume()
 
+        # Phase 2: process collected nodes — no active read result on the session.
         processed = 0
         failed = 0
-        seen = 0
-        async for record in result:
-            if seen >= self._batch_size:
-                break
-            seen += 1
-            node_id = str(_record_value(record=record, key="id", default=""))
-            kind = str(_record_value(record=record, key="kind", default=""))
-            text = str(_record_value(record=record, key="text", default="")).strip()
-            if text == "":
-                text = node_id
-
-            payload_raw = _record_value(record=record, key="payload", default={})
+        for item in batch:
+            node_id = item["node_id"]
+            kind = item["kind"]
+            text = item["text"] or node_id
+            payload_raw = item["payload"]
             payload = payload_raw if isinstance(payload_raw, dict) else {}
             indexed_at = datetime.now(timezone.utc).isoformat()
             payload_with_meta = {
@@ -206,7 +215,8 @@ class EmbeddingReconciler:
         query = _MARK_INDEXED_QUERIES.get(kind)
         if query is None:
             return
-        await session.run(query, node_id=node_id, indexed_at=indexed_at)
+        result = await session.run(query, node_id=node_id, indexed_at=indexed_at)
+        await result.consume()
 
 
 def _record_value(record: Any, key: str, default: Any) -> Any:

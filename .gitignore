@@ -22,8 +22,9 @@ e2e/transcripts/
 evals/reports/
 transcripts/
 
-# Docker
+# Docker / env files
 *.env
+.env.*
 !.env.example
 
 # IDE

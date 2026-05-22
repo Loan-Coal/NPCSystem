@@ -70,7 +70,10 @@ async def get_beliefs_for_character(
         character_id=character_id,
         k=k,
     )
-    return cast(
-        list[dict[str, Any]],
-        [dict(record) async for record in result],
-    )
+    try:
+        return cast(
+            list[dict[str, Any]],
+            [dict(record) async for record in result],
+        )
+    finally:
+        await result.consume()

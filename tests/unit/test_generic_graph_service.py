@@ -27,6 +27,9 @@ class _ResultStub:
     async def single(self) -> dict[str, Any] | None:
         return self.record
 
+    async def consume(self) -> None:
+        pass
+
 
 class _SessionStub:
     def __init__(self, records: list[dict[str, Any] | None]):

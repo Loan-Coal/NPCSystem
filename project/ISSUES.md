@@ -13,6 +13,91 @@ Rules:
 
 ## Open
 
+## ISSUE-021: test_gossip_propagates_after_clock_advance is trivially true
+**Found:** 2026-05-22, during P2.5 planning
+**Severity:** P3 (nice-to-fix)
+**Where:** `e2e/scenarios/scenario_demo_game_judge.py::test_gossip_propagates_after_clock_advance`
+**Description:** The `northern_war_begins` Event node is seeded by `demo_game/seed.py` and
+is always present in the graph. `GET /v1/graph/nodes/Event` will return it regardless of
+whether a clock advance triggers gossip propagation. The test functions as a basic engine
+sanity check (state intact after advance_clock) but does not prove that gossip actually ran.
+**Why deferred:** A stronger test (e.g., count KNOWS_ABOUT edges before/after advance, or
+check per-NPC belief updates) may be flaky if the gossip engine requires multiple ticks to
+propagate knowledge. The war-dialogue test (test 1) is the substantive LLM judge gate for P2.5.
+**To fix:** Replace with a two-step test: (1) GET KNOWS_ABOUT edge count before advance,
+(2) advance clock, (3) assert edge count increased. OR check that a specific non-captain_sorn
+NPC has acquired a new belief mentioning war after the advance.
+
+## [FIXED] ISSUE-019: 20 pre-existing test failures — `consume()` missing on mock Neo4j result objects
+**Found:** 2026-05-21, during P2.1 scaffold (confirmed pre-existing via git stash comparison)
+**Severity:** P2 (test coverage gap — affected functions work in prod but are undertested)
+**Where:** `tests/unit/test_belief_service.py`, `test_generic_graph_service.py`,
+           `test_reputation_queries.py`, `test_world_reader.py`, and others
+**Description:** Multiple test mock stubs (e.g. `_FakeResult`, `_SessionStub`, `_FakeSession`)
+do not implement `consume()` on their result objects. The production code calls
+`await result.consume()` after reading records to properly drain the Neo4j cursor.
+The mocks were written before `consume()` calls were added, so they now raise
+`AttributeError`. These tests fail consistently in the full `pytest tests/` suite.
+`make test` count: 20 failed, 951 passed, 17 skipped (988 total). This contradicts
+the NEXT_SESSION.md claim of "964/965" which was likely written counting only passing
+test files rather than the full suite.
+**Why deferred:** Not blocking Phase 2 — production paths work correctly (consume()
+only affects the test stubs). Fixing requires updating mock objects in ~5 test files.
+**To fix:** Add a `consume()` async no-op method to each affected mock result class,
+e.g. `async def consume(self): pass`. Files to update: `test_belief_service.py`,
+`test_generic_graph_service.py`, `test_reputation_queries.py`, `test_world_reader.py`,
+and any others in the failing set.
+**Fixed:** 2026-05-21 — added `async def consume(self) -> None: pass` to `_ResultStub`/`_FakeResult`
+classes in `test_generic_graph_service.py`, `test_reputation_queries.py`, `test_world_reader.py`,
+`test_reputation_writer.py`, `test_faction_queries.py`, `test_item_writer_v14.py`,
+`test_currency_writer_v14.py`; refactored inline async generators in `test_belief_service.py`
+into `_R` wrapper classes with `__aiter__` and `consume`.
+
+## [FIXED] ISSUE-017: Unregistered graph type returns HTTP 500 (plain text) instead of 404/422
+**Found:** 2026-05-21, during P2.0 smoke-test
+**Severity:** P2 (annoying — misleading error for API consumers)
+**Where:** `src/npc_engine/api/routes/graph.py` → `list_nodes` / `list_edges` handlers
+**Description:** Requesting a node or edge type not registered in the type registry
+(e.g. `GET /v1/graph/nodes/WorldEvent`) returns HTTP 500 with a plain-text
+"Internal Server Error" body. The root cause is a `dataclasses.FrozenInstanceError`
+in `get_db_session`: when `RegistryPayloadValidationError` (a frozen dataclass) is
+raised inside the `async with graph_db.get_session()` block, Python 3.11's
+`contextlib.__aexit__` tries to set `exc.__traceback__`, which fails on the frozen
+dataclass and masks the original error with a second exception.
+**Why deferred:** Not blocking Phase 2 — all required types exist under their
+correct names (documented in `phase2_demo_game/decisions.md` DEC-P2-03). A proper
+fix requires either making `RegistryPayloadValidationError` non-frozen or catching
+it in the route handler before the session context manager unwinds.
+**To fix:** Catch `RegistryPayloadValidationError` (and similar registry errors)
+in `list_nodes` / `list_edges` route handlers before the DB session context exits,
+or make the exception class inherit from a non-frozen base. Return 422 with a JSON
+body matching the existing error envelope format.
+**Fixed:** 2026-05-21 — wrapped `service.list_nodes()` and `service.list_edges()` calls in
+`src/npc_engine/api/routes/graph.py` with `try/except RegistryPayloadValidationError` raising
+`graph_error_to_http(error)`, matching the existing pattern in POST/PATCH handlers. Added
+regression tests `test_list_nodes_unknown_type_returns_422` and
+`test_list_edges_unknown_type_returns_422` in `tests/unit/test_graph_warning_pipeline.py`.
+
+## [FIXED] ISSUE-018: subphases.md uses wrong graph type names (WorldEvent, TRUSTS, FEARS, HAS_BELIEF, HAS_GOAL)
+**Found:** 2026-05-21, during P2.0 smoke-test
+**Severity:** P2 (would cause P2.2/P2.4 code to target non-existent endpoints)
+**Where:** `project/roadmap3/phase2_demo_game/subphases.md` — P2.2 and P2.4 steps
+**Description:** The subphases plan refers to type names that are not registered in
+the type registry. Actual registered equivalents:
+`WorldEvent` → `Event`; `WorldState` (capital S) → `world_state` (lowercase);
+`TRUSTS` → `STANDS_WITH`; `FEARS` → `OPPOSES`; `HAS_BELIEF` → `BELIEVES`;
+`HAS_GOAL` → `PURSUES`.
+**Why deferred:** Correction is captured in `phase2_demo_game/decisions.md`
+DEC-P2-03. The subphases.md document is a planning artefact; correcting all
+inline references now would risk churn. P2.2 and P2.4 implementations will use
+the correct names directly.
+**To fix:** When Phase 2 is done, do a single pass over `subphases.md` to replace
+the planned names with the actual names so the document is accurate for reference.
+**Fixed:** 2026-05-21 — replaced all wrong type names in `project/roadmap3/phase2_demo_game/subphases.md`
+(11 occurrences: WorldEvent→Event, WorldState→world_state, TRUSTS→STANDS_WITH, FEARS→OPPOSES,
+HAS_BELIEF→BELIEVES, HAS_GOAL→PURSUES) and 1 occurrence in `README.md` (WorldState→world_state).
+`decisions.md` left intact — it intentionally documents the mapping for historical reference.
+
 ## [FIXED] ISSUE-016: test_gossip_rumor_integration mock collision — KeyError 'secret_id'
 **Found:** 2026-05-18, during Phase 5 full-suite run
 **Severity:** P2 (annoying — 1 failing test)
@@ -226,6 +311,22 @@ and may affect tests that construct Settings with this field.
 removed `create_llm_client`, `BACKEND_BUILDERS`, and all private `_create_*` helpers from
 `factory.py`; removed `OLLAMA_MODEL` and `LLM_BACKEND` from `config.py`; rewrote
 `test_llm_factory.py` to target `create_llm_client_for_engine`.
+
+---
+
+## ISSUE-020: `emotion` field in DialogueTurn mapped from `mood_update`, not a first-class engine field
+**Found:** 2026-05-22, during P2.3 implementation
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/dialogue.py:parse_dialogue_response`
+**Description:** The P2.3 spec requested extracting an `emotion` field from
+`POST /v1/dialogue` responses, but `DialogueResponse` has no `emotion` field.
+`parse_dialogue_response` maps `DialogueTurn.emotion` from `mood_update: str | None`,
+with a fallback to `facial_expression["type"]`. This is semantically close but not
+identical to a dedicated emotion field.
+**Why deferred:** The engine has no plans to add a dedicated `emotion` field. The
+current mapping is good enough for demo badge display and does not affect correctness.
+**To fix:** If the engine adds a dedicated top-level `emotion` field, update
+`parse_dialogue_response` to read it directly and remove the fallback logic.
 
 ---
 

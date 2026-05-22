@@ -91,11 +91,17 @@ async def test_get_beliefs_returns_list_sorted_by_confidence():
     ]
 
     async def _mock_run(*args, **kwargs):
-        async def _records():
-            for r in fake_records:
-                yield r
+        class _R:
+            def __aiter__(self):
+                async def _gen():
+                    for r in fake_records:
+                        yield r
+                return _gen()
 
-        return _records()
+            async def consume(self) -> None:
+                pass
+
+        return _R()
 
     session = MagicMock()
     session.run = _mock_run
@@ -112,11 +118,17 @@ async def test_get_beliefs_returns_list_sorted_by_confidence():
 @pytest.mark.asyncio
 async def test_get_beliefs_returns_empty_list_when_none():
     async def _mock_run(*args, **kwargs):
-        async def _records():
-            return
-            yield  # make it an async generator
+        class _R:
+            def __aiter__(self):
+                async def _gen():
+                    return
+                    yield  # make it an async generator
+                return _gen()
 
-        return _records()
+            async def consume(self) -> None:
+                pass
+
+        return _R()
 
     session = MagicMock()
     session.run = _mock_run

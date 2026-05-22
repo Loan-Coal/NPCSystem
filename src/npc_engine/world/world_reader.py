@@ -47,6 +47,7 @@ async def get_world_state(session: AsyncSession, world_id: str = "world") -> Wor
 
     result = await session.run(CYPHER_GET_WORLD_STATE, world_id=world_id)
     record = await result.single()
+    await result.consume()
     if record is None:
         return WorldState()
     payload = dict(record["world"])

@@ -30,7 +30,7 @@ process, exposing integration bugs that unit tests cannot catch.
   edges weighted by trust/fear. Updates every N seconds (configurable).
   Shows relationship delta events (new edges, trust changes) as they happen.
 - Seed script: `demo_game/seed.py` creates the demo world via API calls
-  (locations, factions, NPCs, WorldState epoch) without touching Neo4j directly.
+  (locations, factions, NPCs, world_state epoch) without touching Neo4j directly.
 - At least one scripted gossip event: trigger a war or faction conflict, watch
   it propagate across NPCs visible in the side panel.
 - Evolve `docs/DEMO.md` to reflect the new demo game setup and flow.

@@ -29,6 +29,7 @@ class DialogueRequest(FrozenDialogueModel):
     player_message: str
     location_id: str | None = None
     session_id: str | None = None
+    explicit_node_ids: tuple[str, ...] = Field(default_factory=tuple)
 
 
 class RelationDeltas(FrozenDialogueModel):

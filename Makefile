@@ -14,7 +14,8 @@ endif
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval scenarios scenario-edge scenario-demo demo-video eval-llm seed-api smoke
+        eval scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo seed-api smoke \
+        demo demo-seed test-demo
 
 install:
 	pip install -e .[dev]
@@ -116,6 +117,29 @@ demo-video:
 eval-llm:
 	$(PYTHON) -m pytest e2e/scenarios/scenario_llm_judge.py -v -s -m llm_eval --scenarios-only -p no:cacheprovider
 
+eval-llm-demo:
+	$(PYTHON) -m pytest e2e/scenarios/scenario_demo_game_judge.py -v -s -m llm_eval --scenarios-only -p no:cacheprovider
+
+# ---------------------------------------------------------------------------
+# Demo game targets (Phase 2)
+# Run from repo root so demo_game/ is on sys.path.
+# ---------------------------------------------------------------------------
+
+# demo: start engine (idempotent) then open Pygame window
+demo:
+	docker-compose up -d
+	$(PYTHON) -m demo_game
+
+# demo-seed: seed the demo world via the HTTP API (idempotent — safe to re-run)
+demo-seed:
+	$(PYTHON) -m demo_game.seed
+
+# test-demo: run demo_game unit tests in isolation (separate from make test)
+# Requires: pip install -r demo_game/requirements.txt
+test-demo:
+	$(PYTHON) -m pytest demo_game/tests/ -q
+
+# ---------------------------------------------------------------------------
 # seed-api: seed world data via the external HTTP API (works from outside Docker)
 seed-api:
 	$(PYTHON) src/npc_engine/data/api_seeder.py \

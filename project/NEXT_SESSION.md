@@ -2,145 +2,90 @@
 
 ## Current state
 
-Roadmap V2 — **Phase 7 M/S implementation in progress (or just completed).**
-Run tests before touching any code:
+Roadmap V3 — **Phase 3: QLoRA Adapter.** Phase 2 is complete and signed off 2026-05-22.
+
+Run baseline checks before touching any code:
 
 ```bash
-pytest tests/ -q
+pytest demo_game/tests/ -q    # expect 107 pass
+pytest tests/unit/ -q         # ~20 pre-existing failures (ISSUE-019 pattern) — do not investigate
+make eval-llm-demo            # expect 2/2 PASS (requires Ollama + qwen2.5:14b)
 ```
 
 ---
 
-## Phase 7 M/S — What was done this session
+## Entry criteria (all green as of 2026-05-22)
 
-| Step | Deliverable | Status |
-|------|-------------|--------|
-| 7.0 | YAML schema prep (event, faction, character, relates_to) | ✅ Done |
-| 7.0 | `scripts/migrations/add_phase7_schema.py` | ✅ Done |
-| 7.3.M | `MoodContagionEngine` + `mood_queries.py` | ✅ Done |
-| 7.3.M | `EmotionStore` Neo4j persistence (`mood_intensity` field) | ✅ Done |
-| 7.3.M | `MoodContagionEngine` wired into `TickScheduler` + singletons | ✅ Done |
-| 7.4.S | `CONNECTS_TO` edge + `location_graph_queries.py` + API routes | ✅ Done |
-| 7.5.M | `CHAPTER`, `CHOICE`, `NARRATIVE_BEAT` YAML nodes/edges | ✅ Done |
-| 7.5.M | `IS_CANONICAL` gates in `gossip_distort.py` + `memory_consolidation_engine.py` | ✅ Done |
-| 7.5.M | `chapter_writer.py` + `chapter_queries.py` | ✅ Done |
-| 7.5.M | `chapter_engine.py` with rule-based detection + LLM labeling | ✅ Done |
-| 7.5.M | `ChapterEngine` wired into `TickScheduler` + singletons | ✅ Done |
+| Criterion | Status |
+|---|---|
+| 107 demo_game tests pass (`make test-demo`) | YES |
+| `make eval-llm-demo` — 2/2 PASS (qwen2.5:14b) | YES |
+| Manual sign-off: W/C keys, status overlay, live graph | YES |
+| `docs/DEMO.md` updated for interactive demo game | YES (P2.6) |
+| Engine test suite baseline: 20 failed / 951 passed / 17 skipped | CONFIRMED |
 
 ---
 
-## Flaws identified in Phase 7 roadmap (all carry forward to L modules)
+## Key context from Phase 2 that Phase 3 needs
 
-These were found during Phase 7 planning and must be applied when implementing the L modules:
+### 1. Inner life is served via typed admin endpoints, not graph edges
 
-| # | Flaw | Affected module | Fix |
-|---|------|-----------------|-----|
-| F1 | `DEDUCTION.supporting_evidence_ids` is string-array FK | 7.1 Detective | Use `SUPPORTED_BY: DEDUCTION → EVIDENCE` edge instead |
-| F2 | `TITLE.current_holder_id` duplicates `HOLDS_TITLE` edge, will go stale | 7.2 Political | Remove field; query via edge + unique constraint |
-| F3 | `LEVERAGE.secret_id` is string FK with no graph traversal | 7.2 Political | Add `GROUNDED_IN: LEVERAGE → Secret` edge at creation |
-| F8 | `ARMY.composition` is untyped string | 7.4 full | Define as JSON with schema `{infantry, cavalry, siege}`; validate at write |
+`GET /v1/admin/beliefs/{character_id}` returns the full belief list.
+The `BELIEVES` graph edge is NOT populated by the typed endpoint.
+Always use admin endpoints (`/v1/admin/beliefs`, `/v1/admin/goals`, etc.)
+for reads and writes — NOT `GET /v1/graph/edges/BELIEVES`.
 
----
+### 2. Edge schema (do not trust subphases.md names — use these)
 
-## Phase 7 L modules — deferred, next to implement
+| What you might expect | Actual schema | Notes |
+|---|---|---|
+| NPC-NPC trust via `STANDS_WITH` | `RELATES_TO` | `STANDS_WITH` is Faction→Faction only (int standing) |
+| NPC-NPC knowledge via `KNOWS_ABOUT` | N/A | `KNOWS_ABOUT` is Character→Event only |
+| Faction antagonism via `OPPOSES` | `STANDS_WITH` negative int | `OPPOSES` is Character→Character only |
+| `RELATES_TO` trust negative value | Not possible | trust field is 0–100 |
 
-### 7.1 — Detective/Mystery
+### 3. `world_state` required fields
 
-**Migration:** `scripts/migrations/add_investigation_schema.py`
+Beyond `epoch` and `active_conditions`: `faction_standings` (dict), `time_of_day`,
+`weather`, `last_updated_at`, `last_graph_updated_at`.
 
-**YAML nodes:** `evidence.yaml`, `deduction.yaml`
+### 4. Demo world (seeded, stable)
 
-**YAML edges:** `implicates.yaml` (Evidence→Character), `suspects.yaml` (Char→Char),
-`present_at.yaml` (Evidence→Location), `supported_by.yaml` (Deduction→Evidence) ← F1 fix
+5 NPCs: `mira_innkeeper` (tavern), `aldric_merchant` (market_square),
+`captain_sorn` (guard_barracks), `lira_fence` (tavern), `old_henryk` (market_square).
+`captain_sorn` has `KNOWS_ABOUT northern_war_begins`.
+Idempotent re-seed: `make demo-seed` → `created=0 skipped=53`.
 
-**New files:**
-- `src/npc_engine/graph/investigation_service.py`
-- `src/npc_engine/engines/investigation/investigation_engine.py`
-- `tests/unit/test_investigation_engine.py`
-- `e2e/scenarios/scenario_murder_mystery.py`
+### 5. demo_game/ run model
 
-**Note:** `get_investigation_context` returns a structured inconsistency list for the dialogue engine to narrate. No direct LLM call in the investigation engine itself.
+`demo_game/` at repo root — zero imports from `src/npc_engine/`.
+Runs on host: `make demo` → `python -m demo_game`.
+Requires `pygame-ce` (not `pygame` — no Python 3.14 wheel).
+Config via `.env.demo` (gitignored). See `demo_game/requirements.txt`.
 
----
+### 6. Active dialogue model
 
-### 7.2 — Political Simulation
-
-**Apply F2 fix:** No `current_holder_id` on TITLE node. Query current holder via `HOLDS_TITLE` edge.
-**Apply F3 fix:** Add `GROUNDED_IN: LEVERAGE → Secret` edge at creation time.
-**Apply event pattern:** Political events (AGENDA votes, power shifts) must use `faction_id`/`reputation_delta` on `EventTemplate`, same pattern as existing event wiring.
-
-**Migration:** `scripts/migrations/add_political_schema.py`
-
-**YAML nodes:** `title.yaml`, `agenda.yaml`
-
-**YAML edges:** `leverage.yaml`, `holds_title.yaml`, `heir_of.yaml`,
-`supports_agenda.yaml`, `opposes_agenda.yaml`, `grounded_in.yaml`
-
-**Faction node update** (already prepped in YAML via 7.0): `power_score`, `treasury`, `military_strength`
-
-**New files:**
-- `src/npc_engine/engines/succession/succession_engine.py`
-- `src/npc_engine/engines/agenda/agenda_engine.py`
-- `src/npc_engine/graph/political_writer.py`
-- `src/npc_engine/graph/political_queries.py`
-- `tests/unit/test_succession_engine.py`
-- `tests/unit/test_agenda_engine.py`
-- `e2e/scenarios/scenario_succession_crisis.py`
+`qwen2.5:14b` — see `src/npc_engine/engines/dialogue/llm_config.yaml`.
+Phase 3 QLoRA adapter targets this base.
 
 ---
 
-### 7.3 (full) — Social Simulation
+## Open issues relevant to Phase 3
 
-**Note:** Mood contagion engine already shipped. This step adds NEED + LIFE_EVENT + OUTRANKS.
-
-**Apply F4 fix:** LIFE_EVENT is NOT a separate node type. Use `EVENT` node with `subkind` field
-(already added to `event.yaml` in 7.0). Valid `subkind` values: `birth`, `death`, `marriage`, `illness`.
-
-**`relates_to.yaml` already updated** (in 7.0): `relationship_phase`, `phase_started_at_tick` fields.
-
-**Migration:** `scripts/migrations/add_social_schema.py`
-
-**YAML nodes:** `need.yaml` (`kind`, `level: 0-100`, `decay_rate`, `character_id`)
-
-**YAML edges:** `satisfies_need.yaml` (Action/Item/Location → Need), `outranks.yaml` (Char → Char, fields: `context`, `rank_delta`)
-
-**New files:**
-- `src/npc_engine/engines/need/need_decay_engine.py`
-- `src/npc_engine/graph/need_writer.py`
-- `src/npc_engine/graph/need_queries.py`
-- `tests/unit/test_need_decay_engine.py`
-- `e2e/scenarios/scenario_social_needs.py`
+| ID | Severity | Summary |
+|---|---|---|
+| ISSUE-021 | P3 | `test_gossip_propagates_after_clock_advance` is trivially true (event node is always seeded). Strengthen with edge-count diff before/after advance. |
+| ISSUE-020 | P3 | `DialogueTurn.emotion` mapped from `mood_update`, not a first-class engine field. Relevant if Phase 3 prompt changes affect mood output format. |
 
 ---
 
-### 7.4 (full) — Strategy/4X
+## Phase 3 — QLoRA Adapter entry point
 
-**Note:** `CONNECTS_TO` edge already shipped. This step adds RESOURCE_NODE, ARMY, OCCUPIES, COMMANDS.
+Phase 3 trains a QLoRA adapter on `qwen2.5:14b` to improve NPC role-adherence and
+world-state responsiveness. Refer to the Phase 3 spec when it is written.
 
-**Apply F8 fix:** `ARMY.composition` must be stored as JSON string with validated schema
-`{"infantry": int, "cavalry": int, "siege": int}`. Validate in graph writer.
+Evidence from Phase 2:
+- `captain_sorn` reliably references war/conflict when asked directly (LLM judge gate, 2/2 PASS).
+- `old_henryk`'s gossip-hop response quality is untested — likely a training signal candidate.
 
-**`controls.yaml` update:** Add `control_strength: {type: int, required: false}` and
-`contested_by_faction_id: {type: str, required: false}`.
-
-**Migration:** `scripts/migrations/add_strategy_schema.py`
-
-**YAML nodes:** `resource_node.yaml` (kind, yield_per_tick, depletion), `army.yaml` (faction_id, strength, current_location_id, composition)
-
-**YAML edges:** `produces.yaml` (Location→ResourceNode), `commands.yaml` (Char→Army), `occupies.yaml` (Army→Location)
-
-**New files:**
-- `src/npc_engine/engines/military/military_engine.py`
-- `src/npc_engine/graph/military_writer.py`
-- `src/npc_engine/graph/military_queries.py`
-- `tests/unit/test_military_engine.py`
-- `e2e/scenarios/scenario_territorial_war.py`
-
----
-
-## Open follow-ups (not in Phase 7 roadmap)
-
-1. **Two-pass reranking for memories** — Phase 6 applies it to beliefs/goals/secrets; memories would benefit equally.
-2. **CROSS_ENCODER_ENABLED=true** — wired but defaulted off; enable in staging.
-3. **OathEngine violation logic** — `check_pledge_violations` stub still returns `[]`.
-4. **Treaty mechanical enforcement** — tribute condition checking detects due-dates but does not verify payment.
+Adapter swap when ready: single-line change in `llm_config.yaml` (engine is model-agnostic via Ollama).

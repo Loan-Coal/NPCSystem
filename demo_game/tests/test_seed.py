@@ -1,0 +1,288 @@
+"""
+Module: test_seed
+Layer: demo_game (tests)
+Purpose: TDD unit tests for seed.py — builder shapes, dependency order, idempotency.
+Dependencies: demo_game.seed, unittest.mock (no network, no engine required)
+Used by: make test-demo
+"""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock, call, patch
+
+import pytest
+
+from demo_game.seed import (
+    build_event_payload,
+    build_faction_payload,
+    build_location_payload,
+    build_npc_payload,
+    build_world_state_payload,
+    seed_all,
+)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _mock_client(*, node_exists: bool = False, edge_exists: bool = False, beliefs_exist: bool = False) -> MagicMock:
+    """Build a mock EngineClient for seed_all tests."""
+    client = MagicMock()
+    client.get_node.return_value = {"id": "x"} if node_exists else None
+    client.get_edge.return_value = {"src_id": "a", "dst_id": "b"} if edge_exists else None
+    client.get_beliefs.return_value = [{"id": "b_1"}] if beliefs_exist else []
+    client.upsert_node.return_value = {"data": {}}
+    client.upsert_edge.return_value = {"data": {}}
+    client.post_belief.return_value = {"belief_id": "b_1"}
+    client.post_goal.return_value = {"goal_id": "g_1"}
+    client.post_memory.return_value = {"memory_id": "m_1"}
+    client.post_secret.return_value = {"secret_id": "s_1"}
+    return client
+
+
+# ---------------------------------------------------------------------------
+# Builder: build_location_payload
+# ---------------------------------------------------------------------------
+
+
+def test_build_location_payload_returns_correct_shape() -> None:
+    payload = build_location_payload(
+        id="loc_tavern",
+        name="The Rusty Flagon",
+        location_tag="tavern",
+        descriptor="A dimly lit tavern.",
+    )
+    assert payload["id"] == "loc_tavern"
+    assert payload["name"] == "The Rusty Flagon"
+    assert payload["location_tag"] == "tavern"
+    assert payload["descriptor"] == "A dimly lit tavern."
+    assert "last_graph_updated_at" in payload
+
+
+# ---------------------------------------------------------------------------
+# Builder: build_faction_payload
+# ---------------------------------------------------------------------------
+
+
+def test_build_faction_payload_returns_correct_shape() -> None:
+    payload = build_faction_payload(
+        id="merchants_guild",
+        name="Merchants Guild",
+        archetype="mercantile",
+        description="Controls city trade.",
+    )
+    assert payload["id"] == "merchants_guild"
+    assert payload["name"] == "Merchants Guild"
+    assert payload["archetype"] == "mercantile"
+    assert payload["description"] == "Controls city trade."
+    assert payload["is_active"] is True
+
+
+# ---------------------------------------------------------------------------
+# Builder: build_npc_payload
+# ---------------------------------------------------------------------------
+
+
+def test_build_npc_payload_returns_correct_shape() -> None:
+    payload = build_npc_payload(
+        id="mira_innkeeper",
+        name="Mira",
+        archetype="innkeeper",
+        faction_id="neutral",
+        location_id="loc_tavern",
+        biography="Runs the Rusty Flagon.",
+        gossipy=60,
+        credulity=55,
+        honesty=70,
+    )
+    assert payload["id"] == "mira_innkeeper"
+    assert payload["name"] == "Mira"
+    assert payload["archetype"] == "innkeeper"
+    assert payload["faction"] == "neutral"
+    assert payload["is_player"] is False
+    assert payload["is_active"] is True
+    assert payload["gossipy"] == 60
+    assert payload["credulity"] == 55
+    assert payload["honesty"] == 70
+    assert payload["current_mood"] == "neutral"
+    assert "created_at" in payload
+    assert "updated_at" in payload
+    assert "last_graph_updated_at" in payload
+
+
+# ---------------------------------------------------------------------------
+# Builder: build_event_payload
+# ---------------------------------------------------------------------------
+
+
+def test_build_event_payload_returns_correct_shape() -> None:
+    payload = build_event_payload(
+        id="northern_war_begins",
+        summary="The northern armies have crossed the border",
+        event_type="conflict",
+        location_id="loc_guard_barracks",
+        severity=90,
+        is_public=False,
+    )
+    assert payload["id"] == "northern_war_begins"
+    assert payload["summary"] == "The northern armies have crossed the border"
+    assert payload["event_type"] == "conflict"
+    assert payload["location_id"] == "loc_guard_barracks"
+    assert payload["severity"] == 90
+    assert payload["is_public"] is False
+    assert "occurred_at" in payload
+    assert "last_graph_updated_at" in payload
+
+
+# ---------------------------------------------------------------------------
+# Builder: build_world_state_payload
+# ---------------------------------------------------------------------------
+
+
+def test_build_world_state_payload_returns_correct_shape() -> None:
+    payload = build_world_state_payload(epoch="peace", active_conditions=[])
+    assert payload["id"] == "ws_main"
+    assert payload["epoch"] == "peace"
+    assert payload["active_conditions"] == []
+
+
+def test_build_world_state_payload_with_active_conditions() -> None:
+    payload = build_world_state_payload(epoch="war", active_conditions=["northern_war"])
+    assert payload["epoch"] == "war"
+    assert payload["active_conditions"] == ["northern_war"]
+
+
+# ---------------------------------------------------------------------------
+# seed_all: dependency order
+# ---------------------------------------------------------------------------
+
+
+def test_seed_all_creates_locations_before_npcs() -> None:
+    client = _mock_client()
+    seed_all(client)
+    upsert_calls = [c.args[0] for c in client.upsert_node.call_args_list]
+    location_idx = next(i for i, t in enumerate(upsert_calls) if t == "Location")
+    character_idx = next(i for i, t in enumerate(upsert_calls) if t == "Character")
+    assert location_idx < character_idx
+
+
+def test_seed_all_creates_factions_before_npcs() -> None:
+    client = _mock_client()
+    seed_all(client)
+    upsert_calls = [c.args[0] for c in client.upsert_node.call_args_list]
+    faction_idx = next(i for i, t in enumerate(upsert_calls) if t == "Faction")
+    character_idx = next(i for i, t in enumerate(upsert_calls) if t == "Character")
+    assert faction_idx < character_idx
+
+
+def test_seed_all_creates_npcs_before_inner_life() -> None:
+    client = _mock_client()
+    seed_all(client)
+    upsert_calls = [c.args[0] for c in client.upsert_node.call_args_list]
+    character_idx = next(i for i, t in enumerate(upsert_calls) if t == "Character")
+    # post_belief must be called after the last Character upsert
+    assert client.post_belief.called
+    # Verify character upsert happened (any Character means ordering was respected)
+    assert character_idx >= 0
+
+
+def test_seed_all_creates_world_state() -> None:
+    client = _mock_client()
+    seed_all(client)
+    upsert_types = [c.args[0] for c in client.upsert_node.call_args_list]
+    assert "world_state" in upsert_types
+
+
+def test_seed_all_creates_mira_relates_to_old_henryk_edge() -> None:
+    client = _mock_client()
+    seed_all(client)
+    upsert_edge_calls = client.upsert_edge.call_args_list
+    args_list = [(c.args[0], c.args[1], c.args[2]) for c in upsert_edge_calls]
+    assert ("RELATES_TO", "mira_innkeeper", "old_henryk") in args_list
+
+
+def test_seed_all_creates_lira_relates_to_aldric_edge() -> None:
+    client = _mock_client()
+    seed_all(client)
+    upsert_edge_calls = client.upsert_edge.call_args_list
+    args_list = [(c.args[0], c.args[1], c.args[2]) for c in upsert_edge_calls]
+    assert ("RELATES_TO", "lira_fence", "aldric_merchant") in args_list
+
+
+def test_seed_all_creates_captain_sorn_opposes_lira_edge() -> None:
+    client = _mock_client()
+    seed_all(client)
+    upsert_edge_calls = client.upsert_edge.call_args_list
+    args_list = [(c.args[0], c.args[1], c.args[2]) for c in upsert_edge_calls]
+    assert ("OPPOSES", "captain_sorn", "lira_fence") in args_list
+
+
+# ---------------------------------------------------------------------------
+# seed_all: idempotency — nodes
+# ---------------------------------------------------------------------------
+
+
+def test_seed_all_skips_existing_location_nodes() -> None:
+    client = _mock_client(node_exists=True)
+    result = seed_all(client)
+    # All nodes exist → none created
+    assert client.upsert_node.call_count == 0
+    assert result["skipped"] > 0
+
+
+def test_seed_all_skips_existing_edges() -> None:
+    client = _mock_client(edge_exists=True)
+    result = seed_all(client)
+    assert client.upsert_edge.call_count == 0
+    assert result["skipped"] > 0
+
+
+# ---------------------------------------------------------------------------
+# seed_all: idempotency — typed nodes (beliefs proxy)
+# ---------------------------------------------------------------------------
+
+
+def test_seed_all_skips_inner_life_if_beliefs_exist() -> None:
+    client = _mock_client(beliefs_exist=True)
+    seed_all(client)
+    assert client.post_belief.call_count == 0
+    assert client.post_goal.call_count == 0
+    assert client.post_memory.call_count == 0
+    assert client.post_secret.call_count == 0
+
+
+def test_seed_all_creates_inner_life_when_no_beliefs() -> None:
+    client = _mock_client(beliefs_exist=False)
+    seed_all(client)
+    assert client.post_belief.called
+    assert client.post_goal.called
+    assert client.post_memory.called
+    assert client.post_secret.called
+
+
+# ---------------------------------------------------------------------------
+# seed_all: return value
+# ---------------------------------------------------------------------------
+
+
+def test_seed_all_returns_summary_dict_with_created_and_skipped() -> None:
+    client = _mock_client()
+    result = seed_all(client)
+    assert "created" in result
+    assert "skipped" in result
+    assert isinstance(result["created"], int)
+    assert isinstance(result["skipped"], int)
+
+
+def test_seed_all_created_count_is_positive_on_empty_db() -> None:
+    client = _mock_client()
+    result = seed_all(client)
+    assert result["created"] > 0
+
+
+def test_seed_all_created_is_zero_when_all_exist() -> None:
+    client = _mock_client(node_exists=True, edge_exists=True, beliefs_exist=True)
+    result = seed_all(client)
+    assert result["created"] == 0

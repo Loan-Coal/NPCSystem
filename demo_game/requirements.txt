@@ -1,0 +1,5 @@
+httpx>=0.28.0
+pydantic-settings>=2.0.0
+pygame-ce>=2.5.0  # pygame has no Python 3.14 wheel; pygame-ce is drop-in compatible
+networkx>=3.0
+matplotlib>=3.7

@@ -102,6 +102,7 @@ async def build_serialized_context(
     skip_rag: bool = False,
     player_id: str | None = None,
     weight_profile: str | None = None,
+    explicit_node_ids: frozenset[str] = frozenset(),
 ) -> str:
     """Build the final serialized prompt context string for one dialogue turn.
 
@@ -295,14 +296,10 @@ async def build_serialized_context(
     )
 
     if player_id is not None and reputation_items:
-        reputation_lines = [
-            f"Player reputation with {item['faction_name']}: {item['standing']} ({item['label']})"
-            for item in reputation_items
-        ]
         tier_a_raw.append(
             ContextItem(
                 key="reputation",
-                text=serialize_json(reputation_lines),
+                text=serialize_json(reputation_items),
                 tier="tierA",
                 priority=85,
             )
@@ -372,6 +369,7 @@ async def build_serialized_context(
         active_quest=active_quest,
         game_time=current_game_time,
         weight_profile=resolved_profile,
+        explicit_node_ids=explicit_node_ids,
     )
     tier_b = rank_tier_items(
         items=tier_b_raw,
@@ -379,6 +377,7 @@ async def build_serialized_context(
         vector_scores=vector_scores,
         game_time=current_game_time,
         weight_profile=resolved_profile,
+        explicit_node_ids=explicit_node_ids,
     )
     tier_c = rank_tier_items(
         items=tier_c_raw,
@@ -386,6 +385,7 @@ async def build_serialized_context(
         vector_scores=vector_scores,
         game_time=current_game_time,
         weight_profile=resolved_profile,
+        explicit_node_ids=explicit_node_ids,
     )
 
     merged = merge_context(tier0=tier0, tier_a=tier_a, tier_b=tier_b, tier_c=tier_c)

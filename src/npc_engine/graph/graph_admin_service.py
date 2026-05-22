@@ -35,6 +35,7 @@ class GraphAdminService:
             id=node_id,
         )
         record = await result.single()
+        await result.consume()
         if record is None:
             raise NodeNotFoundError(node_type=label.lower(), node_id=node_id)
         return {
@@ -116,6 +117,7 @@ class GraphAdminService:
             affection=_clamp_percent(affection),
         )
         record = await result.single()
+        await result.consume()
         if record is None:
             raise NodeNotFoundError(node_type="relation", node_id=f"{src_id}:{dst_id}")
         return {"trust": int(record["trust"]), "fear": int(record["fear"]), "affection": int(record["affection"])}
@@ -152,6 +154,7 @@ class GraphAdminService:
             dst_id=dst_id,
         )
         current = await read_result.single()
+        await read_result.consume()
         if current is None:
             raise NodeNotFoundError(node_type="relation", node_id=f"{src_id}:{dst_id}")
 
@@ -163,7 +166,7 @@ class GraphAdminService:
         clamped_fields = [name for name, value in raw.items() if value < 0 or value > 100]
         new_values = {name: _clamp_percent(value) for name, value in raw.items()}
 
-        await self._session.run(
+        write_result = await self._session.run(
             "MATCH (a:Character {id: $src_id})-[r:RELATES_TO]->(b:Character {id: $dst_id}) "
             "SET r.trust = $trust, r.fear = $fear, r.affection = $affection, r.last_updated_at = datetime()",
             src_id=src_id,
@@ -172,4 +175,5 @@ class GraphAdminService:
             fear=new_values["fear"],
             affection=new_values["affection"],
         )
+        await write_result.consume()
         return new_values, clamped_fields

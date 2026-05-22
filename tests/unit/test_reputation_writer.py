@@ -28,6 +28,9 @@ class _FakeResult:
     async def single(self) -> dict | None:
         return self._record
 
+    async def consume(self) -> None:
+        pass
+
 
 class _FakeTx:
     def __init__(self, single_record: dict | None = None) -> None:

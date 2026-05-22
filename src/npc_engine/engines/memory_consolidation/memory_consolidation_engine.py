@@ -11,7 +11,6 @@ Used by: scheduler.tick_scheduler
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from pathlib import Path
@@ -107,10 +106,9 @@ class MemoryConsolidationEngine:
             return None
 
         # Fetch existing beliefs and recent memories so the LLM avoids redundancy.
-        existing_beliefs, recent_memories = await asyncio.gather(
-            get_beliefs_for_character(session, character_id=npc_id, k=5),
-            get_memories_for_character(session, character_id=npc_id, k=3),
-        )
+        # Sequential — Neo4j sessions do not support concurrent queries on the same connection.
+        existing_beliefs = await get_beliefs_for_character(session, character_id=npc_id, k=5)
+        recent_memories = await get_memories_for_character(session, character_id=npc_id, k=3)
         beliefs_text = json.dumps([b.get("content", "") for b in (existing_beliefs or [])])
         memories_text = json.dumps([m.get("content", "") for m in (recent_memories or [])])
 

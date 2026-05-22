@@ -41,6 +41,9 @@ class _ResultStub:
 
         return _iterator()
 
+    async def consume(self) -> None:
+        pass
+
 
 class _SessionStub:
     def __init__(self, rows: list[_NodeRow]):

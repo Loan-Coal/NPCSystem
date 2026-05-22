@@ -42,6 +42,9 @@ class _FakeResult:
     def __aiter__(self):
         return _AsyncIter(self._records)
 
+    async def consume(self) -> None:
+        pass
+
 
 class _FakeSession:
     def __init__(self, records: list[dict]) -> None:

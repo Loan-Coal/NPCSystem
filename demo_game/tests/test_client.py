@@ -1,0 +1,508 @@
+"""
+Module: test_client
+Layer: demo_game (tests)
+Purpose: TDD unit tests for EngineClient — all 8 methods, happy path + error path.
+Dependencies: demo_game.client, unittest.mock (no network, no engine required)
+Used by: make test-demo
+"""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock
+
+import pytest
+
+from demo_game.client import EngineClient, EngineClientError
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _client(mock_http: MagicMock) -> EngineClient:
+    """Build an EngineClient with an injected mock HTTP client."""
+    return EngineClient("http://test", "secret", _http_client=mock_http)
+
+
+# ---------------------------------------------------------------------------
+# post_dialogue
+# ---------------------------------------------------------------------------
+
+
+def test_post_dialogue_success(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(200, {"data": {"npc_response": "Hello"}})
+    result = _client(mock_http).post_dialogue("player_1", "npc_1", "Hi")
+    assert result == {"data": {"npc_response": "Hello"}}
+    mock_http.post.assert_called_once_with(
+        "/v1/dialogue",
+        json={
+            "player_id": "player_1",
+            "npc_id": "npc_1",
+            "player_message": "Hi",
+            "location_id": None,
+            "session_id": None,
+            "explicit_node_ids": [],
+        },
+        timeout=120.0,
+    )
+
+
+def test_post_dialogue_passes_optional_fields(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(200, {"data": {}})
+    _client(mock_http).post_dialogue(
+        "p", "n", "msg",
+        location_id="loc_1",
+        session_id="sess_1",
+        explicit_node_ids=("node_a", "node_b"),
+    )
+    _, kwargs = mock_http.post.call_args
+    assert kwargs["json"]["location_id"] == "loc_1"
+    assert kwargs["json"]["session_id"] == "sess_1"
+    assert kwargs["json"]["explicit_node_ids"] == ["node_a", "node_b"]
+
+
+def test_post_dialogue_raises_on_http_error(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(500, {"error": "Internal"})
+    with pytest.raises(EngineClientError, match="HTTP 500"):
+        _client(mock_http).post_dialogue("player_1", "npc_1", "Hi")
+
+
+# ---------------------------------------------------------------------------
+# get_graph_nodes
+# ---------------------------------------------------------------------------
+
+
+def test_get_graph_nodes_success(mock_http: MagicMock, make_response) -> None:
+    nodes = [{"id": "npc_1", "properties": {}}]
+    mock_http.get.return_value = make_response(200, {"data": nodes})
+    result = _client(mock_http).get_graph_nodes("Character")
+    assert result == nodes
+    mock_http.get.assert_called_once_with(
+        "/v1/graph/nodes/Character",
+        params={"limit": 100, "offset": 0},
+        timeout=15.0,
+    )
+
+
+def test_get_graph_nodes_raises_on_http_error(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(422, {"error": "bad type"})
+    with pytest.raises(EngineClientError, match="HTTP 422"):
+        _client(mock_http).get_graph_nodes("BadType")
+
+
+# ---------------------------------------------------------------------------
+# get_graph_edges
+# ---------------------------------------------------------------------------
+
+
+def test_get_graph_edges_success(mock_http: MagicMock, make_response) -> None:
+    edges = [{"src_id": "npc_1", "dst_id": "event_1", "properties": {}}]
+    mock_http.get.return_value = make_response(200, {"data": edges})
+    result = _client(mock_http).get_graph_edges("KNOWS_ABOUT")
+    assert result == edges
+    mock_http.get.assert_called_once_with(
+        "/v1/graph/edges/KNOWS_ABOUT",
+        params={"limit": 100, "offset": 0},
+        timeout=15.0,
+    )
+
+
+def test_get_graph_edges_with_filters(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(200, {"data": []})
+    _client(mock_http).get_graph_edges("KNOWS_ABOUT", src_id="npc_1", dst_id="event_1")
+    _, kwargs = mock_http.get.call_args
+    assert kwargs["params"]["src_id"] == "npc_1"
+    assert kwargs["params"]["dst_id"] == "event_1"
+
+
+def test_get_graph_edges_raises_on_http_error(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(500, {})
+    with pytest.raises(EngineClientError, match="HTTP 500"):
+        _client(mock_http).get_graph_edges("KNOWS_ABOUT")
+
+
+# ---------------------------------------------------------------------------
+# advance_clock
+# ---------------------------------------------------------------------------
+
+
+def test_advance_clock_success(mock_http: MagicMock, make_response) -> None:
+    payload = {"data": {"current_tick": 5}}
+    mock_http.post.return_value = make_response(200, payload)
+    result = _client(mock_http).advance_clock(delta_ticks=2, game_time_seconds=60)
+    assert result == payload
+    mock_http.post.assert_called_once_with(
+        "/v1/clock/advance",
+        json={"delta_ticks": 2, "game_time_seconds": 60},
+        timeout=15.0,
+    )
+
+
+def test_advance_clock_includes_time_field_when_given(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(200, {"data": {}})
+    _client(mock_http).advance_clock(advance_time_field="day")
+    _, kwargs = mock_http.post.call_args
+    assert kwargs["json"]["advance_time_field"] == "day"
+
+
+def test_advance_clock_raises_on_http_error(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(400, {"error": "bad mode"})
+    with pytest.raises(EngineClientError, match="HTTP 400"):
+        _client(mock_http).advance_clock()
+
+
+# ---------------------------------------------------------------------------
+# get_clock_state
+# ---------------------------------------------------------------------------
+
+
+def test_get_clock_state_success(mock_http: MagicMock, make_response) -> None:
+    payload = {"data": {"current_tick": 3, "next_gossip_tick": 5}}
+    mock_http.get.return_value = make_response(200, payload)
+    result = _client(mock_http).get_clock_state()
+    assert result == payload
+    mock_http.get.assert_called_once_with("/v1/clock/state", timeout=15.0)
+
+
+def test_get_clock_state_raises_on_http_error(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(503, {})
+    with pytest.raises(EngineClientError, match="HTTP 503"):
+        _client(mock_http).get_clock_state()
+
+
+# ---------------------------------------------------------------------------
+# get_npc_state
+# ---------------------------------------------------------------------------
+
+
+def test_get_npc_state_success(mock_http: MagicMock, make_response) -> None:
+    payload = {"data": {"character": {"id": "npc_1"}, "relations": [], "events": []}}
+    mock_http.get.return_value = make_response(200, payload)
+    result = _client(mock_http).get_npc_state("npc_1")
+    assert result == payload
+    mock_http.get.assert_called_once_with("/v1/npc/npc_1/state", timeout=15.0)
+
+
+def test_get_npc_state_raises_on_http_error(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(404, {"error": "not found"})
+    with pytest.raises(EngineClientError, match="HTTP 404"):
+        _client(mock_http).get_npc_state("npc_missing")
+
+
+# ---------------------------------------------------------------------------
+# get_world_state
+# ---------------------------------------------------------------------------
+
+
+def test_get_world_state_returns_first_item(mock_http: MagicMock, make_response) -> None:
+    node = {"id": "ws_1", "properties": {"epoch": "peace"}}
+    mock_http.get.return_value = make_response(200, {"data": [node]})
+    result = _client(mock_http).get_world_state()
+    assert result == node
+    mock_http.get.assert_called_once_with(
+        "/v1/graph/nodes/world_state",
+        params={"limit": 1, "offset": 0},
+        timeout=15.0,
+    )
+
+
+def test_get_world_state_returns_none_when_empty(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(200, {"data": []})
+    assert _client(mock_http).get_world_state() is None
+
+
+def test_get_world_state_raises_on_http_error(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(500, {})
+    with pytest.raises(EngineClientError, match="HTTP 500"):
+        _client(mock_http).get_world_state()
+
+
+# ---------------------------------------------------------------------------
+# get_npc_reputation
+# ---------------------------------------------------------------------------
+
+
+def test_get_npc_reputation_success(mock_http: MagicMock, make_response) -> None:
+    standings = [{"faction_id": "guard", "standing": 50}]
+    mock_http.get.return_value = make_response(200, {"data": standings})
+    result = _client(mock_http).get_npc_reputation("npc_2")
+    assert result == standings
+    mock_http.get.assert_called_once_with(
+        "/v1/graph/characters/npc_2/reputation",
+        timeout=15.0,
+    )
+
+
+def test_get_npc_reputation_raises_on_http_error(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(404, {"error": "not found"})
+    with pytest.raises(EngineClientError, match="HTTP 404"):
+        _client(mock_http).get_npc_reputation("npc_missing")
+
+
+# ---------------------------------------------------------------------------
+# get_node
+# ---------------------------------------------------------------------------
+
+
+def test_get_node_returns_data_on_200(mock_http: MagicMock, make_response) -> None:
+    node = {"id": "loc_tavern", "name": "The Rusty Flagon"}
+    mock_http.get.return_value = make_response(200, {"data": node})
+    result = _client(mock_http).get_node("Location", "loc_tavern")
+    assert result == node
+    mock_http.get.assert_called_once_with(
+        "/v1/graph/nodes/Location/loc_tavern",
+        timeout=15.0,
+    )
+
+
+def test_get_node_returns_none_on_404(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(404, {"error": "not found"})
+    assert _client(mock_http).get_node("Location", "loc_missing") is None
+
+
+def test_get_node_raises_on_500(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(500, {})
+    with pytest.raises(EngineClientError, match="HTTP 500"):
+        _client(mock_http).get_node("Location", "loc_tavern")
+
+
+# ---------------------------------------------------------------------------
+# get_edge
+# ---------------------------------------------------------------------------
+
+
+def test_get_edge_returns_data_on_200(mock_http: MagicMock, make_response) -> None:
+    edge = {"src_id": "npc_1", "dst_id": "npc_2", "standing": 70.0}
+    mock_http.get.return_value = make_response(200, {"data": edge})
+    result = _client(mock_http).get_edge("STANDS_WITH", "npc_1", "npc_2")
+    assert result == edge
+    mock_http.get.assert_called_once_with(
+        "/v1/graph/edges/STANDS_WITH/npc_1/npc_2",
+        timeout=15.0,
+    )
+
+
+def test_get_edge_returns_none_on_404(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(404, {"error": "not found"})
+    assert _client(mock_http).get_edge("STANDS_WITH", "npc_1", "npc_2") is None
+
+
+def test_get_edge_raises_on_500(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(500, {})
+    with pytest.raises(EngineClientError, match="HTTP 500"):
+        _client(mock_http).get_edge("STANDS_WITH", "npc_1", "npc_2")
+
+
+# ---------------------------------------------------------------------------
+# upsert_node
+# ---------------------------------------------------------------------------
+
+
+def test_upsert_node_success(mock_http: MagicMock, make_response) -> None:
+    node = {"id": "loc_tavern", "name": "The Rusty Flagon"}
+    mock_http.post.return_value = make_response(200, {"data": node})
+    result = _client(mock_http).upsert_node("Location", {"id": "loc_tavern", "name": "The Rusty Flagon"})
+    assert result == {"data": node}
+    mock_http.post.assert_called_once_with(
+        "/v1/graph/nodes/Location",
+        json={"properties": {"id": "loc_tavern", "name": "The Rusty Flagon"}},
+        timeout=15.0,
+    )
+
+
+def test_upsert_node_raises_on_422(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(422, {"error": "validation"})
+    with pytest.raises(EngineClientError, match="HTTP 422"):
+        _client(mock_http).upsert_node("Location", {})
+
+
+# ---------------------------------------------------------------------------
+# upsert_edge
+# ---------------------------------------------------------------------------
+
+
+def test_upsert_edge_success(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(200, {"data": {}})
+    _client(mock_http).upsert_edge("STANDS_WITH", "npc_1", "npc_2", {"standing": 70.0})
+    mock_http.post.assert_called_once_with(
+        "/v1/graph/edges/STANDS_WITH",
+        json={"src_id": "npc_1", "dst_id": "npc_2", "properties": {"standing": 70.0}},
+        timeout=15.0,
+    )
+
+
+def test_upsert_edge_uses_empty_properties_when_none(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(200, {"data": {}})
+    _client(mock_http).upsert_edge("KNOWS_ABOUT", "npc_1", "npc_2")
+    _, kwargs = mock_http.post.call_args
+    assert kwargs["json"]["properties"] == {}
+
+
+def test_upsert_edge_raises_on_422(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(422, {"error": "validation"})
+    with pytest.raises(EngineClientError, match="HTTP 422"):
+        _client(mock_http).upsert_edge("STANDS_WITH", "a", "b")
+
+
+# ---------------------------------------------------------------------------
+# get_beliefs
+# ---------------------------------------------------------------------------
+
+
+def test_get_beliefs_returns_list(mock_http: MagicMock, make_response) -> None:
+    beliefs = [{"id": "b_1", "content": "War is coming"}]
+    mock_http.get.return_value = make_response(200, {"data": {"beliefs": beliefs}})
+    result = _client(mock_http).get_beliefs("npc_1")
+    assert result == beliefs
+    mock_http.get.assert_called_once_with("/v1/admin/beliefs/npc_1", timeout=15.0)
+
+
+def test_get_beliefs_returns_empty_list_when_none(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(200, {"data": {"beliefs": []}})
+    assert _client(mock_http).get_beliefs("npc_1") == []
+
+
+def test_get_beliefs_raises_on_500(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(500, {})
+    with pytest.raises(EngineClientError, match="HTTP 500"):
+        _client(mock_http).get_beliefs("npc_1")
+
+
+# ---------------------------------------------------------------------------
+# post_belief
+# ---------------------------------------------------------------------------
+
+_GAME_TIME = {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
+
+
+def test_post_belief_success(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(201, {"belief_id": "b_1"})
+    result = _client(mock_http).post_belief("npc_1", "War is coming", 80, _GAME_TIME)
+    assert result == {"belief_id": "b_1"}
+    mock_http.post.assert_called_once_with(
+        "/v1/admin/beliefs/npc_1",
+        json={"content": "War is coming", "confidence": 80, "game_time": _GAME_TIME},
+        timeout=15.0,
+    )
+
+
+def test_post_belief_raises_on_422(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(422, {"error": "validation"})
+    with pytest.raises(EngineClientError, match="HTTP 422"):
+        _client(mock_http).post_belief("npc_1", "", 80, _GAME_TIME)
+
+
+# ---------------------------------------------------------------------------
+# post_goal
+# ---------------------------------------------------------------------------
+
+
+def test_post_goal_success(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(201, {"goal_id": "g_1"})
+    result = _client(mock_http).post_goal("npc_1", "Catch the thief", 75, _GAME_TIME)
+    assert result == {"goal_id": "g_1"}
+    mock_http.post.assert_called_once_with(
+        "/v1/admin/goals/npc_1",
+        json={"description": "Catch the thief", "urgency": 75, "game_time": _GAME_TIME},
+        timeout=15.0,
+    )
+
+
+def test_post_goal_includes_target_id_when_given(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(201, {"goal_id": "g_2"})
+    _client(mock_http).post_goal("npc_1", "Find the ledger", 80, _GAME_TIME, target_id="npc_2")
+    _, kwargs = mock_http.post.call_args
+    assert kwargs["json"]["target_id"] == "npc_2"
+
+
+def test_post_goal_raises_on_422(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(422, {"error": "validation"})
+    with pytest.raises(EngineClientError, match="HTTP 422"):
+        _client(mock_http).post_goal("npc_1", "", 75, _GAME_TIME)
+
+
+# ---------------------------------------------------------------------------
+# post_memory
+# ---------------------------------------------------------------------------
+
+
+def test_post_memory_success(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(201, {"memory_id": "m_1"})
+    result = _client(mock_http).post_memory("npc_1", "I saw the fire", 85, 70, _GAME_TIME)
+    assert result == {"memory_id": "m_1"}
+    mock_http.post.assert_called_once_with(
+        "/v1/admin/memories/npc_1",
+        json={"content": "I saw the fire", "vividness": 85, "emotional_charge": 70, "game_time": _GAME_TIME},
+        timeout=15.0,
+    )
+
+
+def test_post_memory_raises_on_422(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(422, {"error": "validation"})
+    with pytest.raises(EngineClientError, match="HTTP 422"):
+        _client(mock_http).post_memory("npc_1", "", 85, 70, _GAME_TIME)
+
+
+# ---------------------------------------------------------------------------
+# post_secret
+# ---------------------------------------------------------------------------
+
+
+def test_post_secret_success(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(201, {"secret_id": "s_1"})
+    result = _client(mock_http).post_secret("npc_1", "Hidden tunnel under the tavern", 75, _GAME_TIME)
+    assert result == {"secret_id": "s_1"}
+    mock_http.post.assert_called_once_with(
+        "/v1/admin/secrets/npc_1",
+        json={"content": "Hidden tunnel under the tavern", "severity": 75, "game_time": _GAME_TIME},
+        timeout=15.0,
+    )
+
+
+def test_post_secret_raises_on_422(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(422, {"error": "validation"})
+    with pytest.raises(EngineClientError, match="HTTP 422"):
+        _client(mock_http).post_secret("npc_1", "", 75, _GAME_TIME)
+
+
+# ---------------------------------------------------------------------------
+# put_world_state
+# ---------------------------------------------------------------------------
+
+
+def test_put_world_state_success(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(200, {"data": {"id": "ws_main", "epoch": "war"}})
+    result = _client(mock_http).put_world_state("war", ["northern_war"])
+    assert result["data"]["epoch"] == "war"
+    _, kwargs = mock_http.post.call_args
+    assert kwargs["json"]["properties"]["id"] == "ws_main"
+    assert kwargs["json"]["properties"]["epoch"] == "war"
+    assert kwargs["json"]["properties"]["active_conditions"] == ["northern_war"]
+
+
+def test_put_world_state_raises_on_500(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(500, {})
+    with pytest.raises(EngineClientError, match="HTTP 500"):
+        _client(mock_http).put_world_state("war", [])
+
+
+# ---------------------------------------------------------------------------
+# put_npc_reputation
+# ---------------------------------------------------------------------------
+
+
+def test_put_npc_reputation_success(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(200, {"data": {}})
+    _client(mock_http).put_npc_reputation("captain_sorn", "city_guard", 80)
+    mock_http.post.assert_called_once_with(
+        "/v1/graph/edges/STANDS_WITH",
+        json={"src_id": "captain_sorn", "dst_id": "city_guard", "properties": {"standing": 80, "last_changed_at": "tick_0"}},
+        timeout=15.0,
+    )
+
+
+def test_put_npc_reputation_raises_on_500(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(500, {})
+    with pytest.raises(EngineClientError, match="HTTP 500"):
+        _client(mock_http).put_npc_reputation("captain_sorn", "city_guard", 80.0)

@@ -83,6 +83,7 @@ async def get_reputation(
         faction_id=faction_id,
     )
     record = await result.single()
+    await result.consume()
     if record is None:
         return None
     return cast(dict[str, Any], dict(record))
@@ -103,10 +104,13 @@ async def list_reputations(
         List of dicts with ``faction_id``, ``faction_name``, and ``standing``.
     """
     result = await session.run(CYPHER_LIST_REPUTATIONS, character_id=character_id)
-    return cast(
-        list[dict[str, Any]],
-        [dict(record) async for record in result],
-    )
+    try:
+        return cast(
+            list[dict[str, Any]],
+            [dict(record) async for record in result],
+        )
+    finally:
+        await result.consume()
 
 
 async def get_reputation_context_for_npc(
@@ -136,7 +140,10 @@ async def get_reputation_context_for_npc(
         player_id=player_id,
         threshold=threshold,
     )
-    rows = [dict(record) async for record in result]
+    try:
+        rows = [dict(record) async for record in result]
+    finally:
+        await result.consume()
     return cast(
         list[dict[str, Any]],
         [
