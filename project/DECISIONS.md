@@ -197,3 +197,21 @@ defaults to `0.0` so existing profiles are unchanged.
 requests to use this feature; it is inert otherwise. Primary use: Tier A graph nodes (Events,
 Memories, Characters) whose IDs the game engine knows are scene-critical. Tier B RAG chunks are
 addressable by row ID but are better served by vector similarity.
+
+---
+
+## Decision: Standalone seeder pattern — demo and test worlds seed via HTTP, not shared with api_seeder.py
+**Date:** 2026-05-22
+**Service / area:** Phase 2 — `demo_game/seed.py` vs `src/npc_engine/data/api_seeder.py`
+**Context:** Phase 2 needed a seeder for a demo world distinct from the engine baseline world.
+Two options: extend `api_seeder.py` or write a standalone seeder in `demo_game/`.
+**Options considered:**
+  1. Extend `api_seeder.py` with demo-world data — couples the engine baseline seed to a demo artefact.
+  2. Standalone `demo_game/seed.py` — separate script, HTTP-only, zero `src/npc_engine/` imports.
+**Choice:** Option 2. The demo world is a Phase 2 artefact; its seeder lives in `demo_game/`.
+`api_seeder.py` remains the engine's baseline seeder.
+**Pattern for future phases:** Any phase that needs a self-contained world (eval harness,
+QLoRA training data, integration fixture) should follow the same pattern: standalone seeder
+in its own directory, calling `http://localhost:8000` only, with an idempotent `_Counter` approach.
+**Consequences:** `make demo-seed` invokes `demo_game/seed.py` directly. `make seed-api` is
+unchanged. The two seeders share no code.

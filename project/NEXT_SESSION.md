@@ -2,97 +2,90 @@
 
 ## Current state
 
-Roadmap V3 — **Phase 2: Demo Game Skeleton + Graph Visualization.**
-**P2.1 (scaffold + EngineClient) is complete.** Entry point for this session is **P2.2 (seed script)**.
+Roadmap V3 — **Phase 3: QLoRA Adapter.** Phase 2 is complete and signed off 2026-05-22.
 
-Run tests before touching any code:
+Run baseline checks before touching any code:
 
 ```bash
-pytest demo_game/tests/ -q    # 20 pass — demo_game unit tests
-pytest tests/unit/ -q         # expect ~20 pre-existing failures (ISSUE-019), do not investigate
+pytest demo_game/tests/ -q    # expect 107 pass
+pytest tests/unit/ -q         # ~20 pre-existing failures (ISSUE-019 pattern) — do not investigate
+make eval-llm-demo            # expect 2/2 PASS (requires Ollama + qwen2.5:14b)
 ```
 
 ---
 
-## Entry criteria
+## Entry criteria (all green as of 2026-05-22)
 
 | Criterion | Status |
 |---|---|
-| Phase 1 handoff signed off | YES |
-| P2.1 scaffold + EngineClient shipped | YES (2026-05-21) |
-| demo_game/tests/ — 20 pass | YES |
-| .env.demo gitignored | YES |
-| make demo, demo-seed, test-demo targets added | YES |
-| ISSUE-019 (pre-existing consume() mock failures) logged | YES |
+| 107 demo_game tests pass (`make test-demo`) | YES |
+| `make eval-llm-demo` — 2/2 PASS (qwen2.5:14b) | YES |
+| Manual sign-off: W/C keys, status overlay, live graph | YES |
+| `docs/DEMO.md` updated for interactive demo game | YES (P2.6) |
+| Engine test suite baseline: 20 failed / 951 passed / 17 skipped | CONFIRMED |
 
 ---
 
-## Known test count (corrected)
+## Key context from Phase 2 that Phase 3 needs
 
-`pytest tests/ -q` baseline at start of P2.2: **20 failed, 951 passed, 17 skipped (988 total)**.
-The 20 failures are all pre-existing `consume()` mock stubs — see ISSUE-019. Do not treat
-these as regressions introduced during P2.1. NEXT_SESSION.md previously said "964/965" which
-was inaccurate.
+### 1. Inner life is served via typed admin endpoints, not graph edges
 
----
+`GET /v1/admin/beliefs/{character_id}` returns the full belief list.
+The `BELIEVES` graph edge is NOT populated by the typed endpoint.
+Always use admin endpoints (`/v1/admin/beliefs`, `/v1/admin/goals`, etc.)
+for reads and writes — NOT `GET /v1/graph/edges/BELIEVES`.
 
-## P2.2 goal — Seed script
+### 2. Edge schema (do not trust subphases.md names — use these)
 
-Implement `demo_game/seed.py` to replace the `NotImplementedError` stub. The seeder must:
+| What you might expect | Actual schema | Notes |
+|---|---|---|
+| NPC-NPC trust via `STANDS_WITH` | `RELATES_TO` | `STANDS_WITH` is Faction→Faction only (int standing) |
+| NPC-NPC knowledge via `KNOWS_ABOUT` | N/A | `KNOWS_ABOUT` is Character→Event only |
+| Faction antagonism via `OPPOSES` | `STANDS_WITH` negative int | `OPPOSES` is Character→Character only |
+| `RELATES_TO` trust negative value | Not possible | trust field is 0–100 |
 
-1. Create the demo world via HTTP only — zero direct Neo4j/npc_engine imports.
-2. Use `EngineClient` (from `demo_game.client`) for all API calls.
-3. Be **idempotent**: POST to create; treat 409 (Conflict) as "already exists", skip cleanly.
-   Mirror the `_Counter` / `_call` pattern from `src/npc_engine/data/api_seeder.py`.
-4. Seed the exact world described in `subphases.md` P2.2 (using corrected type names from
-   `decisions.md` DEC-P2-03):
-   - 3 locations: `tavern`, `market_square`, `guard_barracks`
-   - 3 factions: `merchants_guild`, `city_guard`, `thieves_guild`
-   - 5 NPCs: `mira_innkeeper`, `aldric_merchant`, `captain_sorn`, `lira_fence`, `old_henryk`
-   - Per-NPC: beliefs, goals, secrets, memories
-   - 1 Event: `northern_war_begins` (type `Event`, not `WorldEvent`)
-   - WorldState: epoch=peace (node type `world_state`, lowercase)
-   - Relations: `mira STANDS_WITH old_henryk`, `lira KNOWS_ABOUT aldric`,
-     `captain_sorn OPPOSES lira` (corrected edge types from DEC-P2-03)
-5. Add `make demo-seed` to actually call `seed()` (currently the target just prints "not implemented").
-6. Write **TDD tests first** — `demo_game/tests/test_seed.py`. Test the data-builder functions
-   independently of HTTP; test `seed()` with a mock EngineClient.
+### 3. `world_state` required fields
 
-TDD discipline (CLAUDE.md): write failing tests → confirm failure reason → implement → green.
+Beyond `epoch` and `active_conditions`: `faction_standings` (dict), `time_of_day`,
+`weather`, `last_updated_at`, `last_graph_updated_at`.
 
----
+### 4. Demo world (seeded, stable)
 
-## Key context
+5 NPCs: `mira_innkeeper` (tavern), `aldric_merchant` (market_square),
+`captain_sorn` (guard_barracks), `lira_fence` (tavern), `old_henryk` (market_square).
+`captain_sorn` has `KNOWS_ABOUT northern_war_begins`.
+Idempotent re-seed: `make demo-seed` → `created=0 skipped=53`.
 
-- **EngineClient**: `demo_game/client.py` — synchronous httpx client. All methods raise
-  `EngineClientError` on 4xx/5xx. DI pattern: `_http_client` kwarg for test injection.
-- **Reference seeder**: `src/npc_engine/data/api_seeder.py` — exact request shapes for nodes
-  (`POST /v1/graph/nodes/{type}` with `{"properties": {...}}`), edges
-  (`POST /v1/graph/edges/{type}` with `{"src_id": ..., "dst_id": ..., "properties": {...}}`),
-  and typed admin endpoints (`POST /v1/admin/beliefs/{char_id}`, etc.).
-- **Type name corrections** (DEC-P2-03, `decisions.md`):
-  - `WorldEvent` → `Event`
-  - `WorldState` (capital S) → `world_state` (lowercase)
-  - `TRUSTS` → `STANDS_WITH`
-  - `FEARS` → `OPPOSES`
-  - `HAS_BELIEF` → `BELIEVES` (edge type, but typed endpoint is `POST /v1/admin/beliefs/{id}`)
-  - `HAS_GOAL` → `PURSUES` (edge type, but typed endpoint is `POST /v1/admin/goals/{id}`)
-- **Faction membership**: use `POST /v1/admin/factions/{faction_id}/members` with
-  `{"character_id": ..., "role": ..., "status": "active"}` — see api_seeder.py line ~299.
-- **Beliefs/goals/secrets/memories**: use typed admin endpoints (`POST /v1/admin/beliefs/{char_id}`,
-  etc.) with `game_time` dict — NOT the generic graph node endpoint. See api_seeder.py line ~344+.
-- **Re-seed idempotency**: typed admin endpoints (beliefs, goals, etc.) auto-generate IDs so
-  re-seeding creates duplicates. Comment in seed.py must say "wipe DB before re-seeding".
-  Match this note from api_seeder.py line 12–14.
-- **Config**: `from demo_game.config import config` — has `NPC_BASE_URL`, `NPC_API_KEY`.
-- **make demo-seed**: must be updated from the stub message to actually call `seed()`.
-- **Coverage gate**: `pytest demo_game/tests/ -q --cov=demo_game --cov-report=term-missing`
-  must hit ≥78% on `demo_game/` (excluding UI rendering) by end of Phase 2.
+### 5. demo_game/ run model
+
+`demo_game/` at repo root — zero imports from `src/npc_engine/`.
+Runs on host: `make demo` → `python -m demo_game`.
+Requires `pygame-ce` (not `pygame` — no Python 3.14 wheel).
+Config via `.env.demo` (gitignored). See `demo_game/requirements.txt`.
+
+### 6. Active dialogue model
+
+`qwen2.5:14b` — see `src/npc_engine/engines/dialogue/llm_config.yaml`.
+Phase 3 QLoRA adapter targets this base.
 
 ---
 
-## Phase 2 open items (carry forward)
+## Open issues relevant to Phase 3
 
-- ISSUE-019: 20 pre-existing `consume()` mock failures — defer to Phase 4+
-- ISSUE-018: subphases.md uses wrong type names — fix in P2.6 cleanup pass
-- ISSUE-017: Unregistered type → HTTP 500 — defer to Phase 4+
+| ID | Severity | Summary |
+|---|---|---|
+| ISSUE-021 | P3 | `test_gossip_propagates_after_clock_advance` is trivially true (event node is always seeded). Strengthen with edge-count diff before/after advance. |
+| ISSUE-020 | P3 | `DialogueTurn.emotion` mapped from `mood_update`, not a first-class engine field. Relevant if Phase 3 prompt changes affect mood output format. |
+
+---
+
+## Phase 3 — QLoRA Adapter entry point
+
+Phase 3 trains a QLoRA adapter on `qwen2.5:14b` to improve NPC role-adherence and
+world-state responsiveness. Refer to the Phase 3 spec when it is written.
+
+Evidence from Phase 2:
+- `captain_sorn` reliably references war/conflict when asked directly (LLM judge gate, 2/2 PASS).
+- `old_henryk`'s gossip-hop response quality is untested — likely a training signal candidate.
+
+Adapter swap when ready: single-line change in `llm_config.yaml` (engine is model-agnostic via Ollama).
