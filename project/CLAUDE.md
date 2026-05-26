@@ -3,6 +3,68 @@
 This file is read at the start of every Claude Code session. These rules are not
 suggestions. Violating them is a bug.
 
+---
+
+## Orientation
+
+**What is this:** NPC Engine is a game backend that gives NPCs persistent memory,
+relationships, and emotional state via a Neo4j knowledge graph and LLM dialogue.
+Exposes HTTP + WebSocket API for licensing to game studios as middleware.
+
+**Current phase:** Hackathon prep — June 6, 2026. See `ROADMAP.md`.
+
+### Stack
+
+| Component | Technology |
+|-----------|-----------|
+| API server | FastAPI + Uvicorn |
+| Knowledge graph | Neo4j 5 (Docker) |
+| LLM | Ollama (`qwen2.5:14b`) or OpenAI GPT-4o |
+| Demo UI | pygame-ce (Python 3.14 — **not** `pygame`) |
+| Tests | pytest |
+
+### Key commands
+
+```bash
+docker-compose up -d          # start backend
+make demo-seed                # seed world (idempotent)
+make demo                     # interactive pygame window
+make demo-run                 # scripted demo scenario (live)
+make demo-run ARGS=--dry-run  # print scene sequence only
+make demo-run ARGS=--cached   # playback from cache (for recording)
+make test                     # engine unit tests
+make test-demo                # demo_game tests only
+make eval-llm-demo            # LLM judge evals (requires Ollama)
+```
+
+### Key file locations
+
+| Path | What it is |
+|------|-----------|
+| `demo_game/` | Pygame demo app (zero imports from `src/`) |
+| `demo_game/run.py` | Scripted scenario runner (`make demo-run`) |
+| `demo_game/client.py` | `EngineClient` — REST API wrapper |
+| `demo_game/seed.py` | World seeder (5 NPCs, 3 locations, 3 factions) |
+| `prompts/` | All LLM prompt YAML files (no prompt strings in Python) |
+| `src/npc_engine/engines/` | Domain engines (dialogue, gossip, emotion, quest) |
+| `docs/DEMO_SCRIPT.md` | Scripted 5-minute demo scenario |
+| `ROADMAP.md` | Two-week hackathon plan |
+
+### Demo world (seed data)
+
+| NPC | Location | Notable |
+|-----|----------|---------|
+| `mira_innkeeper` | `tavern` | Central gossip hub |
+| `aldric_merchant` | `market_square` | Trade gossip |
+| `captain_sorn` | `guard_barracks` | Direct `KNOWS_ABOUT northern_war_begins` |
+| `lira_fence` | `tavern` | Thieves guild |
+| `old_henryk` | `market_square` | 2-hop distorted gossip target |
+
+Gossip demo path: `captain_sorn` → `mira_innkeeper` → `old_henryk`.
+World state node ID: `ws_main`. NPC IDs are stable — do not rename them.
+
+---
+
 ## Architecture
 
 ### Layer model

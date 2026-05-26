@@ -15,7 +15,7 @@ endif
         check-contracts check-contract-sync lint type check \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo seed-api smoke \
-        demo demo-seed test-demo
+        demo demo-seed demo-run test-demo
 
 install:
 	pip install -e .[dev]
@@ -133,6 +133,11 @@ demo:
 # demo-seed: seed the demo world via the HTTP API (idempotent — safe to re-run)
 demo-seed:
 	$(PYTHON) -m demo_game.seed
+
+# demo-run: play the scripted hackathon scenario (see docs/DEMO_SCRIPT.md)
+# ARGS: --dry-run (no API calls), --cached (recording mode, error on miss)
+demo-run:
+	$(PYTHON) -m demo_game.run $(ARGS)
 
 # test-demo: run demo_game unit tests in isolation (separate from make test)
 # Requires: pip install -r demo_game/requirements.txt

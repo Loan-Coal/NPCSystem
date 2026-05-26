@@ -13,6 +13,24 @@ Rules:
 
 ## Open
 
+## ISSUE-022: LLMCache key in demo_game/run.py excludes prompt content
+**Found:** 2026-05-24, during P2 iteration
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/run.py` — `LLMCache` key computation (`sha256("{npc_id}:{player_input}")`)
+**Description:** The cache key is derived from `npc_id` and `player_input` only. Any change
+to `system_v1.yaml`, `npc_voices.yaml`, or the context serialization code does not bust the
+cache. After a prompt or code change, stale cached responses continue to be served silently
+under `make demo-run ARGS=--cached`. This also means the cache can be poisoned if `make demo-run`
+is run before Ollama is up — the engine returns canned "I need a moment to think" strings
+which get written to cache as valid LLM responses.
+**Why deferred:** Cache busting is a manual step in the S2.8 iteration loop. A
+prompt-aware key (e.g. including a hash of the rendered prompt string, or
+`PROMPT_VERSION`) would automate this but requires changing how the demo runner
+threads prompt state into the cache layer.
+**To fix:** Include `PROMPT_VERSION` from `prompt_builder.py` in the cache key:
+`sha256("{npc_id}:{player_input}:{PROMPT_VERSION}")`. This automatically invalidates
+all cached responses when the prompt version is bumped.
+
 ## ISSUE-021: test_gossip_propagates_after_clock_advance is trivially true
 **Found:** 2026-05-22, during P2.5 planning
 **Severity:** P3 (nice-to-fix)
@@ -27,6 +45,46 @@ propagate knowledge. The war-dialogue test (test 1) is the substantive LLM judge
 **To fix:** Replace with a two-step test: (1) GET KNOWS_ABOUT edge count before advance,
 (2) advance clock, (3) assert edge count increased. OR check that a specific non-captain_sorn
 NPC has acquired a new belief mentioning war after the advance.
+
+## [FIXED] ISSUE-025: system_v1.yaml Rules 2–7 had dead context key references
+**Found:** 2026-05-24, during P2.1 audit
+**Severity:** P2 (annoying — rules were silently no-ops; NPC emotion/reputation/goals ignored)
+**Where:** `src/npc_engine/prompts/dialogue/system_v1.yaml` — Rules 2, 3, 4, 5, 6, 7
+**Description:** Five rules referenced paths that do not exist in the serialized context:
+`context.player_reputation` (should be `context.reputation`),
+`context.npc.emotion.current_mood` (→ `context.emotion.current_mood`),
+`context.npc.profile` (→ `context.character`),
+`context.npc_known_events` (→ `event:N:npc_id` keyed items),
+`context.recent_session_turns` (→ `context.session`),
+`context.npc.goals` (→ `context.goals`).
+The LLM never saw these fields under the referenced paths so all six behavioral
+rules — reputation gating, emotion coloring, persona anchoring, event knowledge,
+session continuity, goal surfacing — were effectively no-ops.
+**Fixed:** 2026-05-24, P2.3 — all six references corrected in `system_v1.yaml`.
+
+## [FIXED] ISSUE-024: PROMPT_TOKEN_BUDGET hardcoded at 8000 while Ollama context was 4096
+**Found:** 2026-05-24, during P2 context debugging
+**Severity:** P2 (annoying — engine was building 8000 tokens of context that Ollama silently truncated)
+**Where:** `src/npc_engine/config.py` — `PROMPT_TOKEN_BUDGET` field; `src/npc_engine/.env.example`
+**Description:** `PROMPT_TOKEN_BUDGET` was left at 8000 (a Mixtral 32K-era value) while the
+Ollama instance was configured with a 4096 token context window. The context builder assembled
+up to 8000 tokens of NPC context that Ollama then silently truncated on input. NPCs appeared to
+have full context in logs but the LLM received a truncated version, causing inconsistent behavior.
+**Fixed:** 2026-05-24, P2 — added `OLLAMA_CONTEXT_LENGTH: int = 4096` to `config.py` as the
+single source of truth; added `_derive_prompt_token_budget` model_validator that sets
+`PROMPT_TOKEN_BUDGET = OLLAMA_CONTEXT_LENGTH - 1200` when not explicitly overridden; updated
+`.env.example` to document the derivation.
+
+## [FIXED] ISSUE-023: Event ContextItems had priority below traits/groups/rumors
+**Found:** 2026-05-24, during P2.6 iteration (Henryk giving generic response)
+**Severity:** P2 (annoying — NPC-specific knowledge events truncated for socially-rich NPCs)
+**Where:** `src/npc_engine/retrieval/subgraph_retriever.py` — `assemble_tier_a_context` event loop
+**Description:** Event ContextItems were assigned `priority=80 - index`. Traits (83),
+group memberships (82), and believed rumors (81) all ranked higher. For NPCs like
+`old_henryk` who have multiple social associations, the token budget filled before
+reaching the NPC's KNOWS_ABOUT events. The result was a completely generic response
+with no reference to the war — as if the NPC had no relevant event knowledge.
+**Fixed:** 2026-05-24, P2.6 — priority raised to `89 - index` (above all social context tiers).
 
 ## [FIXED] ISSUE-019: 20 pre-existing test failures — `consume()` missing on mock Neo4j result objects
 **Found:** 2026-05-21, during P2.1 scaffold (confirmed pre-existing via git stash comparison)

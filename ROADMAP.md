@@ -56,15 +56,22 @@ The demo is the only thing that matters. Every session this fortnight is in serv
 
 ### Steps
 
-- [ ] **S2.1** Audit `prompts/` directory: list every prompt file, identify which ones fire on the demo path, document what's present vs what's missing (voice, world-state anchoring, knowledge guards).
-- [ ] **S2.2** Add per-NPC `voice_descriptor` block to the system prompt. At minimum the three demo-path NPCs:
+- [x] **S2.1** Audit `prompts/` directory: list every prompt file, identify which ones fire on the demo path, document what's present vs what's missing (voice, world-state anchoring, knowledge guards). **Findings:** 5 dead context key refs in system_v1.yaml; no per-NPC voice; `distorted_summary` edge property was being overridden by raw event node facts in context serialization; PROMPT_TOKEN_BUDGET was hardcoded at 8000 while Ollama context was 4096.
+- [x] **S2.2** Add per-NPC `voice_descriptor` block to the system prompt. At minimum the three demo-path NPCs:
   - `mira_innkeeper` — warm, observant, hears everything from the tavern, cautious about politics
   - `captain_sorn` — clipped military diction, direct, references duty and chain of command
   - `old_henryk` — rambling, mixes rumour with memory, unreliable narrator
-- [ ] **S2.3** Add "what I don't know" guard: explicit authoritative prohibition — NPC must NOT reference any event or fact unless it appears in their injected context. Zero hallucinated knowledge on the demo path.
-- [ ] **S2.4** Strengthen world-state anchor: replace descriptive hint ("the world is at war") with authoritative conditional prohibition ("If epoch=war, you must acknowledge the conflict directly when asked about the north. Do not speak of peace."). See `DECISIONS.md` entry on this pattern.
-- [ ] **S2.5** Write/extend LLM judge evals (`e2e/scenarios/`) for the three demo-path NPCs. One test per NPC. Criteria: mira references the war obliquely and invites gossip; captain_sorn confirms the war directly; old_henryk's account is distorted (wrong faction, wrong location, or inflated casualty count).
-- [ ] **S2.6** Iterate on prompts until all 3 judge evals pass. Update the cache after each accepted prompt version.
+  **Done:** `src/npc_engine/prompts/dialogue/npc_voices.yaml` created; `prompt_builder.py` updated to load and inject `VOICE_DESCRIPTOR` line; Rule 8 added to `system_v1.yaml`; PROMPT_VERSION bumped to `stage_b_v2.0`. Added "tone only" clarification to prevent voice overriding knowledge content.
+- [x] **S2.3** Add "what I don't know" guard: explicit authoritative prohibition — NPC must NOT reference any event or fact unless it appears in their injected context. Zero hallucinated knowledge on the demo path. **Done:** Rule 5 in `system_v1.yaml` rewritten with explicit prohibition; also fixed all 5 dead context key refs (Rules 2–7 were effectively no-ops).
+- [x] **S2.4** Strengthen world-state anchor: replace descriptive hint ("the world is at war") with authoritative conditional prohibition ("If epoch=war, you must acknowledge the conflict directly when asked about the north. Do not speak of peace."). **Done:** Rule 1 `epoch=war` block extended with `ADDITIONAL CONSTRAINT` paragraph in `system_v1.yaml`.
+- [x] **S2.5** Write/extend LLM judge evals (`e2e/scenarios/`) for the three demo-path NPCs. One test per NPC. **Done:** 3 judge tests added to `e2e/scenarios/scenario_demo_game_judge.py`: `test_captain_sorn_direct_war_confirmation`, `test_mira_innkeeper_oblique_gossip`, `test_old_henryk_distorted_account`. All use `ws_main` world state node.
+- [ ] **S2.6** Iterate on prompts until all 3 judge evals pass. Update the cache after each accepted prompt version. **In progress:** 2/5 passing (existing tests). Root causes identified and second-iteration fixes applied (event priority raised 80→89; voice-overrides-content guard added). Cache bust + re-eval pending.
+
+**Additional work outside original S2.x numbering:**
+- Fixed `distorted_summary` serialization bug in `src/npc_engine/retrieval/subgraph_retriever.py`: added `_flatten_event_row()` helper that merges KNOWS_ABOUT edge properties (`knowledge_state`, `distorted_summary`) into the event dict and suppresses raw narrative fields (`summary`) when the NPC has a distorted account. Without this fix the LLM saw two conflicting accounts and defaulted to the clean factual one.
+- Raised event `ContextItem` priority from `80 - index` to `89 - index` so events rank above traits (83), group memberships (82), and believed rumors (81). Socially-rich NPCs like `old_henryk` were having their KNOWS_ABOUT events truncated by the token budget.
+- Single source of truth for context budget: added `OLLAMA_CONTEXT_LENGTH` to `config.py` with a `model_validator` that derives `PROMPT_TOKEN_BUDGET = OLLAMA_CONTEXT_LENGTH - 1200` when not explicitly overridden. Set to 4096 (pure VRAM limit on RTX 5070 Ti Laptop for qwen2.5:14b Q4_K_M). Updated `.env.example`.
+- 5 unit tests for `_flatten_event_row` added in `tests/unit/test_subgraph_retriever.py`.
 
 **Exit criteria:** `make eval-llm-demo` shows 5/5 (existing 2 + 3 new) judge tests passing with cached responses.
 
@@ -171,7 +178,7 @@ Fall back to the existing interactive demo (W/C keypresses + live graph). It dem
 | # | Date | Phase | What was done | Exit state |
 |---|------|-------|---------------|------------|
 | 1 | 2026-05-22 | P1 | DEMO_SCRIPT.md filled; seed + run.py wired; gossip chain pre-seeded; market_fire added | S1.1–S1.4 ✅; `--cached` 1.5 s |
-| 2 | | P2 | | |
+| 2 | 2026-05-24 | P2 | S2.1–S2.5 complete. Fixed `distorted_summary` serialization bug; raised event priority 80→89; fixed 5 dead context key refs; added VOICE_DESCRIPTOR; single source of truth for context budget; 3 judge evals written | S2.6 in progress — 2/5 passing; cache bust + re-eval pending |
 | 3 | | P2 | | |
 | 4 | | P2 | | |
 | 5 | | P2 | | |
