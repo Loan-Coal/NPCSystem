@@ -240,16 +240,13 @@ def _seed_edge(
     dst_id: str,
     properties: dict | None = None,
 ) -> str:
-    """Upsert an edge if it does not already exist.
+    """Upsert an edge, always writing the latest properties.
 
     Returns:
-        "created" or "skipped".
+        "created" always (upsert path — deduplication is handled by Neo4j MERGE).
     """
-    if client.get_edge(edge_type, src_id, dst_id) is not None:
-        logger.info("  skip edge %s %s→%s (exists)", edge_type, src_id, dst_id)
-        return "skipped"
     client.upsert_edge(edge_type, src_id, dst_id, properties)
-    logger.info("  created edge %s %s→%s", edge_type, src_id, dst_id)
+    logger.info("  upserted edge %s %s→%s", edge_type, src_id, dst_id)
     return "created"
 
 
@@ -446,7 +443,7 @@ _NPC_NPC_EDGES: list[tuple[str, str, str, dict]] = [
         "knowledge_state": "knows",
         "distortion_type": None,
         "distortion_level": 0,
-        "distorted_summary": "The northern armies have crossed the border",
+        "distorted_summary": "The northern armies have crossed the border. We are at war.",
         "learned_at_tick": 0,
         "source_character_id": None,
     }),
@@ -458,8 +455,8 @@ _NPC_NPC_EDGES: list[tuple[str, str, str, dict]] = [
         "distortion_type": "exaggeration",
         "distortion_level": 20,
         "distorted_summary": (
-            "A soldier mentioned the northern armies — or the Iron Guard, he called them"
-            " — have moved on the border. Rumor only, mind you."
+            "A soldier passing through told me the northern armies, the Iron Guard he called them,"
+            " have moved on the border. Whether it is true I cannot say, but he seemed shaken."
         ),
         "learned_at_tick": 1,
         "source_character_id": "captain_sorn",
@@ -469,9 +466,9 @@ _NPC_NPC_EDGES: list[tuple[str, str, str, dict]] = [
         "distortion_type": "exaggeration",
         "distortion_level": 70,
         "distorted_summary": (
-            "It was utterly catastrophic: the northmen have poured through the king's pass,"
-            " thousands dead, they say. I ran dispatches through that pass in the last war"
-            " — I know what it looks like when it falls."
+            "I ran dispatches through king's pass in the last war — I know that road."
+            " And now they say the northmen have poured through it, thousands dead."
+            " Utterly catastrophic, those northmen storming king's pass like that."
         ),
         "learned_at_tick": 2,
         "source_character_id": "mira_innkeeper",

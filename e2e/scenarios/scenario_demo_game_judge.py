@@ -196,3 +196,225 @@ async def test_gossip_propagates_after_clock_advance(
         f"Events: {content}\n"
         f"Judge reasoning: {verdict.reasoning}"
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Test 3 — captain_sorn: direct war confirmation, names Iron Legion, no hedging
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.asyncio
+@pytest.mark.llm_eval
+async def test_captain_sorn_direct_war_confirmation(
+    http_client: httpx.Client,
+) -> None:
+    """captain_sorn confirms war directly, uses Iron Legion name, no hedging."""
+    if not _ollama_reachable():
+        pytest.skip(
+            f"Ollama not running or model {_JUDGE_MODEL!r} not pulled — "
+            f"run: ollama serve && ollama pull {_JUDGE_MODEL}"
+        )
+
+    judge = _make_judge()
+    now = datetime.now(timezone.utc).isoformat()
+
+    api_post(
+        http_client,
+        "/v1/graph/nodes/world_state",
+        {
+            "properties": {
+                "id": "ws_main",
+                "epoch": "war",
+                "faction_standings": {},
+                "active_conditions": ["northern_war"],
+                "weather": "overcast",
+                "time_of_day": "morning",
+                "last_updated_at": now,
+                "last_graph_updated_at": now,
+            }
+        },
+    )
+
+    dialogue_result = api_post(
+        http_client,
+        "/v1/dialogue",
+        {
+            "player_id": "player_demo",
+            "npc_id": "captain_sorn",
+            "player_message": "What is happening in the north?",
+            "session_id": f"judge_sorn_{uuid.uuid4().hex[:8]}",
+        },
+    )
+    assert dialogue_result["status"] == 200, f"Dialogue failed: {dialogue_result}"
+    npc_response = dialogue_result["body"].get("npc_response", "")
+    assert npc_response, "Empty NPC response — check LLM stack."
+    print(f"\n[captain_sorn]\n  {npc_response}\n")
+
+    from e2e.helpers.llm_judge import llm_judge
+
+    verdict = await llm_judge(
+        content=npc_response,
+        criteria=(
+            "Does this response: (1) contain a direct factual statement that armies have "
+            "crossed the border or that armed conflict is underway — stated as established "
+            "fact, not as rumour or speculation; "
+            "AND (2) lack any expression of uncertainty, hope, or dismissal — no words like "
+            "'perhaps', 'may be', 'let's hope', 'seems like', or 'no immediate threat'? "
+            "Both conditions must be true for YES. Additional context sentences are allowed "
+            "as long as the core statement is factual and the response contains no hedging."
+        ),
+        llm_client=judge,
+    )
+    print(f"[judge] passed={verdict.passed}  reasoning: {verdict.reasoning}")
+    assert verdict.passed, (
+        f"captain_sorn voice check FAILED.\n"
+        f"Response: {npc_response!r}\n"
+        f"Judge reasoning: {verdict.reasoning}"
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Test 4 — mira_innkeeper: oblique reference, Iron Guard, heard from soldier
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.asyncio
+@pytest.mark.llm_eval
+async def test_mira_innkeeper_oblique_gossip(
+    http_client: httpx.Client,
+) -> None:
+    """mira_innkeeper references conflict obliquely, says Iron Guard, attributes to a soldier."""
+    if not _ollama_reachable():
+        pytest.skip(
+            f"Ollama not running or model {_JUDGE_MODEL!r} not pulled — "
+            f"run: ollama serve && ollama pull {_JUDGE_MODEL}"
+        )
+
+    judge = _make_judge()
+    now = datetime.now(timezone.utc).isoformat()
+
+    api_post(
+        http_client,
+        "/v1/graph/nodes/world_state",
+        {
+            "properties": {
+                "id": "ws_main",
+                "epoch": "war",
+                "faction_standings": {},
+                "active_conditions": ["northern_war"],
+                "weather": "overcast",
+                "time_of_day": "morning",
+                "last_updated_at": now,
+                "last_graph_updated_at": now,
+            }
+        },
+    )
+
+    dialogue_result = api_post(
+        http_client,
+        "/v1/dialogue",
+        {
+            "player_id": "player_demo",
+            "npc_id": "mira_innkeeper",
+            "player_message": "What have you heard about the north?",
+            "session_id": f"judge_mira_{uuid.uuid4().hex[:8]}",
+        },
+    )
+    assert dialogue_result["status"] == 200, f"Dialogue failed: {dialogue_result}"
+    npc_response = dialogue_result["body"].get("npc_response", "")
+    assert npc_response, "Empty NPC response — check LLM stack."
+    print(f"\n[mira_innkeeper]\n  {npc_response}\n")
+
+    from e2e.helpers.llm_judge import llm_judge
+
+    verdict = await llm_judge(
+        content=npc_response,
+        criteria=(
+            "Does this response: (1) reference the conflict indirectly — as rumour, "
+            "something heard, or second-hand — rather than stating outright 'war has started'; "
+            "AND (2) mention a soldier, guard, or specific person as the source; "
+            "AND (3) use a warm, conversational innkeeper tone (NOT military or official)? "
+            "All three must be true for YES."
+        ),
+        llm_client=judge,
+    )
+    print(f"[judge] passed={verdict.passed}  reasoning: {verdict.reasoning}")
+    assert verdict.passed, (
+        f"mira_innkeeper voice check FAILED.\n"
+        f"Response: {npc_response!r}\n"
+        f"Judge reasoning: {verdict.reasoning}"
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Test 5 — old_henryk: distorted account, wrong faction, wrong location, inflated casualties
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.asyncio
+@pytest.mark.llm_eval
+async def test_old_henryk_distorted_account(
+    http_client: httpx.Client,
+) -> None:
+    """old_henryk gives a distorted account — wrong faction, king's pass, 1000+ dead, confident tone."""
+    if not _ollama_reachable():
+        pytest.skip(
+            f"Ollama not running or model {_JUDGE_MODEL!r} not pulled — "
+            f"run: ollama serve && ollama pull {_JUDGE_MODEL}"
+        )
+
+    judge = _make_judge()
+    now = datetime.now(timezone.utc).isoformat()
+
+    api_post(
+        http_client,
+        "/v1/graph/nodes/world_state",
+        {
+            "properties": {
+                "id": "ws_main",
+                "epoch": "war",
+                "faction_standings": {},
+                "active_conditions": ["northern_war"],
+                "weather": "overcast",
+                "time_of_day": "morning",
+                "last_updated_at": now,
+                "last_graph_updated_at": now,
+            }
+        },
+    )
+
+    dialogue_result = api_post(
+        http_client,
+        "/v1/dialogue",
+        {
+            "player_id": "player_demo",
+            "npc_id": "old_henryk",
+            "player_message": "What do you know about the northern border?",
+            "session_id": f"judge_henryk_{uuid.uuid4().hex[:8]}",
+        },
+    )
+    assert dialogue_result["status"] == 200, f"Dialogue failed: {dialogue_result}"
+    npc_response = dialogue_result["body"].get("npc_response", "")
+    assert npc_response, "Empty NPC response — check LLM stack."
+    print(f"\n[old_henryk]\n  {npc_response}\n")
+
+    from e2e.helpers.llm_judge import llm_judge
+
+    verdict = await llm_judge(
+        content=npc_response,
+        criteria=(
+            "Does this response contain at least TWO of the following distorted details: "
+            "(a) refers to the enemy as 'northmen' or a generic northern people rather than 'Iron Legion'; "
+            "(b) mentions 'king's pass' or a named mountain pass as the location; "
+            "(c) implies a catastrophic death toll — hundreds or thousands killed; "
+            "AND the tone is rambling, confident, or mixes in personal memory? "
+            "At least two distorted details PLUS the rambling/confident tone = YES."
+        ),
+        llm_client=judge,
+    )
+    print(f"[judge] passed={verdict.passed}  reasoning: {verdict.reasoning}")
+    assert verdict.passed, (
+        f"old_henryk distortion check FAILED.\n"
+        f"Response: {npc_response!r}\n"
+        f"Judge reasoning: {verdict.reasoning}"
+    )

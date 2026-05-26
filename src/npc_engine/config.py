@@ -12,7 +12,7 @@ from pathlib import Path
 import socket
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from npc_engine.config_validators import (
@@ -65,13 +65,21 @@ class Settings(BaseSettings):
     MISTRAL_API_URL: str | None = None
     LLAMA_API_URL: str | None = None
     OLLAMA_API_URL: str = "http://localhost:11434"
+    # Must match OLLAMA_CONTEXT_LENGTH passed to `ollama serve`.
+    # On RTX 5070 Ti Laptop (9.5 GiB available): 4096 fits cleanly in VRAM.
+    # 6144 is usable with a small KV-cache spill (~330 MB to shared memory).
+    # Set OLLAMA_CONTEXT_LENGTH=<value> in .env and restart both ollama and the engine.
+    OLLAMA_CONTEXT_LENGTH: int = 4096
 
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
     VECTOR_STORE_BACKEND: Literal["memory", "qdrant"] = "memory"
     QDRANT_URL: str | None = None
     EMBEDDING_REFRESH_ON_WRITE: bool = True
     EMBEDDING_RECONCILE_INTERVAL_SECONDS: int = 300
-    PROMPT_TOKEN_BUDGET: int = 8000  # Mixtral 32K context; tier_a budget is 4000 so total must exceed it
+    # Derived from OLLAMA_CONTEXT_LENGTH. Reserve 1200 tokens for system prompt,
+    # prompt headers (NPC_ID, VOICE_DESCRIPTOR, PLAYER_MESSAGE), and model output.
+    # Override via PROMPT_TOKEN_BUDGET in .env only if you need a non-standard split.
+    PROMPT_TOKEN_BUDGET: int = 0
     RAG_TOP_K: int = 5
 
     DIALOGUE_SESSION_TURNS: int = 10
@@ -124,6 +132,17 @@ class Settings(BaseSettings):
     EVENT_RNG_SEED: int | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
+
+    @model_validator(mode="after")
+    def _derive_prompt_token_budget(self) -> "Settings":
+        """Derive PROMPT_TOKEN_BUDGET from OLLAMA_CONTEXT_LENGTH when not explicitly set.
+
+        Reserves 1200 tokens for the system prompt, prompt headers, and model output.
+        Override PROMPT_TOKEN_BUDGET in .env only for non-standard splits.
+        """
+        if self.PROMPT_TOKEN_BUDGET == 0:
+            object.__setattr__(self, "PROMPT_TOKEN_BUDGET", self.OLLAMA_CONTEXT_LENGTH - 1200)
+        return self
 
     @field_validator("API_KEY_SECRET")
     @classmethod

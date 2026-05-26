@@ -324,7 +324,7 @@ async def build_serialized_context(
         tier_a_raw.append(
             ContextItem(
                 key=f"second_hop:{idx}:{npc_id}",
-                text=serialize_json(evt, strip_nulls=True),
+                text=serialize_json(_to_json_safe(evt), strip_nulls=True),
                 tier="tierA",
                 priority=74 - idx,
             )

@@ -18,6 +18,32 @@ from npc_engine.retrieval.context_utils import serialize_json, _LOW_VALUE_FIELDS
 _NPC_NEARBY_FIELDS = ("id", "name", "archetype", "faction")
 
 
+def _flatten_event_row(event_row: dict) -> dict:
+    """Merge edge properties into event dict; isolate distorted account when present.
+
+    The graph reader returns KNOWS_ABOUT edge fields (knowledge_state, distorted_summary)
+    as siblings of the nested event dict. When distorted_summary is present the NPC has a
+    personal (possibly wrong) account — returning ONLY that field prevents knowledge_state
+    ("rumor") and other metadata from giving the LLM competing signals that cause hedging
+    or reversion to ground-truth content.
+
+    Args:
+        event_row: Raw row from get_events_for_npc with keys "event", "knowledge_state",
+            and "distorted_summary".
+
+    Returns:
+        Flat dict suitable for serialization into the LLM context.
+    """
+    distorted = event_row.get("distorted_summary")
+    if distorted:
+        return {"distorted_summary": distorted}
+    flat = dict(event_row.get("event") or {})
+    knowledge_state = event_row.get("knowledge_state")
+    if knowledge_state is not None:
+        flat["knowledge_state"] = knowledge_state
+    return flat
+
+
 def assemble_tier_a_context(
     *,
     npc_id: str,
@@ -187,13 +213,17 @@ def assemble_tier_a_context(
             )
         )
 
-    for index, event in enumerate(events):
+    for index, event_row in enumerate(events):
         items.append(
             ContextItem(
                 key=f"event:{index}:{npc_id}",
-                text=serialize_json(event, strip_nulls=True, strip_fields=_LOW_VALUE_FIELDS),
+                text=serialize_json(
+                    _flatten_event_row(event_row),
+                    strip_nulls=True,
+                    strip_fields=_LOW_VALUE_FIELDS,
+                ),
                 tier="tierA",
-                priority=80 - index,
+                priority=89 - index,
             )
         )
     return items
