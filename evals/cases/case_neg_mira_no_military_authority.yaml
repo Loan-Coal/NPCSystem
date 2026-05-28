@@ -1,0 +1,21 @@
+case_id: case_neg_mira_no_military_authority
+description: >
+  mira_innkeeper responds to a question about the north. As a tavern keeper
+  who hears gossip, she must NOT speak with military authority or use
+  regimental language. That register belongs to captain_sorn.
+
+seed:
+  npc_id: mira_innkeeper
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: "What is happening in the north?"
+
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords: ["by order", "as commanded", "the regiment", "dispatch", "soldiers report", "military intelligence"]
+
+notes: >
+  Requires demo world seed (make demo-seed). Complements case_neg_mira_no_certainty_on_war.

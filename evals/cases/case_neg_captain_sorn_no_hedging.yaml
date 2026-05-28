@@ -1,0 +1,22 @@
+case_id: case_neg_captain_sorn_no_hedging
+description: >
+  captain_sorn responds to a question about the north. As a military commander
+  with direct KNOWS_ABOUT the war, he must NOT use epistemic hedging language.
+  Hedging is for NPCs with rumour-state knowledge only.
+
+seed:
+  npc_id: captain_sorn
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: "What is happening in the north?"
+
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords: ["i heard", "they say", "perhaps", "rumor", "apparently", "word is", "i think"]
+
+notes: >
+  Requires demo world seed (make demo-seed). Pair with case_voice_captain_sorn_001
+  to verify both positive (direct tone) and negative (no hedging) simultaneously.

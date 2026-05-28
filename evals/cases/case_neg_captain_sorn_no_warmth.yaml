@@ -1,0 +1,21 @@
+case_id: case_neg_captain_sorn_no_warmth
+description: >
+  captain_sorn responds to a casual social greeting. His clipped military
+  diction means he must NOT use warm, effusive pleasantries. This verifies
+  voice descriptor enforcement on non-tactical prompts.
+
+seed:
+  npc_id: captain_sorn
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: "How are you today?"
+
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords: ["my pleasure", "wonderful", "delightful", "lovely", "so glad"]
+
+notes: >
+  Requires demo world seed (make demo-seed).
