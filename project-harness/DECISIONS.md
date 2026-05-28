@@ -8,6 +8,8 @@ Rules:
 - Monotonic DEC-NNN IDs. Never reuse.
 - Context, options considered, decision, why. No essays.
 
+**Canonical location:** This file lives at `project-harness/DECISIONS.md`. Never create or edit a root-level copy.
+
 ---
 
 ## DEC-001: LEVERAGE is a reified node, not an edge
@@ -36,10 +38,10 @@ Rules:
 
 ---
 
-## DEC-004: SATISFIES_NEED uses location src_type only (ISSUE-004)
+## DEC-004: SATISFIES_NEED uses location src_type only (ISSUE-034)
 **Date:** 2026-05-19
 **Context:** SATISFIES_NEED should accept both Item and Location as source nodes per the roadmap.
-**Decision:** Initial implementation registers `satisfies_need.yaml` with `src_type: location` only. Item→Need satisfaction is deferred to ISSUE-004.
+**Decision:** Initial implementation registers `satisfies_need.yaml` with `src_type: location` only. Item→Need satisfaction is deferred to ISSUE-034.
 **Why:** The type registry YAML format supports a single `src_type` string. Adding multi-type support requires registry changes out of scope for this phase. Location-based satisfaction covers the primary use case (a tavern satisfies the social need).
 
 ---
@@ -55,7 +57,7 @@ Rules:
 ## DEC-006: Demo gossip chain is pre-seeded, not live-propagated
 **Date:** 2026-05-22
 **Context:** Roadmap V3 Phase 1. The gossip propagation engine selects pairs by co-location (`LOCATED_AT`). Captain Sorn is alone at `loc_guard_barracks`, so the engine cannot propagate northern_war_begins to Mira (tavern) or Henryk (market_square) in the 3 ticks the demo script fires.
-**Decision:** Pre-seed distorted KNOWS_ABOUT edges for `mira_innkeeper` and `old_henryk` in `demo_game/seed.py`. The 3 ClockTick scenes in `demo_game/run.py` advance the tick counter (for visual pacing) but are not the source of the demo-path knowledge. LOCATED_AT edges are also now seeded for all 5 NPCs; live gossip will work between co-located pairs in the interactive game.
+**Decision:** Pre-seed distorted KNOWS_ABOUT edges for `mira_innkeeper` and `old_henryk` in the demo world seed. The 3 ClockTick scenes in `demo_game/run.py` advance the tick counter (for visual pacing) but are not the source of the demo-path knowledge. LOCATED_AT edges are also now seeded for all 5 NPCs; live gossip will work between co-located pairs in the interactive game.
 **Why:** Demo reliability requires the same gossip chain on every run. Pre-seeding is the explicit contingency in ROADMAP.md and avoids randomness from propagation timing or ordering. The distorted summaries are authored to demonstrate the feature clearly.
 
 ---
@@ -214,3 +216,31 @@ Rules:
 **Decision:** Option 2. The demo world is a Phase 2 artefact; its seeder lives in `demo_game/`.
 **Pattern for future phases:** Any phase that needs a self-contained world (eval harness, QLoRA training data, integration fixture) should follow the same pattern: standalone seeder in its own directory, HTTP-only, idempotent.
 **Consequence:** `make demo-seed` invokes `demo_game/seed.py` directly. `make seed-api` is unchanged. The two seeders share no code.
+**Superseded by DEC-021 (2026-05-27):** Seed files consolidated under `seeds/worlds/`. DEC-020's "own directory" rationale is preserved but the directory is now always a subdirectory of `seeds/`, not the owning app.
+
+---
+
+## DEC-021: Seed files consolidated under seeds/worlds/
+**Date:** 2026-05-27
+**Context:** `demo_game/seed.py` lived inside the demo app but its purpose is seeding world state for tests, evals, and demos. `seeds/world/` already held two other seed worlds. Having seed files in multiple top-level directories made it hard to see all available worlds at a glance.
+**Decision:** Move `demo_game/seed.py` → `seeds/worlds/seed_demo_world.py`. Rename `seeds/world/` → `seeds/worlds/`. All world seed scripts now live under `seeds/worlds/`. Naming convention: `seed_<world_name>_world.py`.
+**Why:** Single folder for all seed data means a new developer or a future session can enumerate available worlds with one `ls seeds/worlds/`. The "app owns its data" principle from DEC-020 is superseded — data that serves multiple consumers (evals, demo, e2e) should not live inside one consumer's directory.
+**Consequence:** `make demo-seed` updated to invoke `seeds/worlds/seed_demo_world.py`. `demo_game/tests/test_seed.py` import path updated. `src/npc_engine/data/api_seeder.py` is not moved — it serves the engine baseline, not a test world.
+
+---
+
+## DEC-022: WorldState node uses id="world" as the canonical identifier
+**Date:** 2026-05-27
+**Context:** The demo world seed used `_WORLD_STATE_ID = "ws_main"` but `world_reader.py` defaults to `world_id: str = "world"`. The mismatch meant epoch and active_conditions were never read during dialogue — a silent content assumption baked into the seeder that violated engine content-agnosticism.
+**Decision:** All seed scripts must create the WorldState node with `id="world"`. The reader default is the source of truth; seeders conform to it.
+**Why:** The engine must not depend on knowing a world-specific ID. Any seed using a custom ID would silently break world-state-dependent rules (Rule 1 epoch constraints, active_conditions checks) without raising an error. The reader default `"world"` is the contractual ID.
+**Consequence:** Demo world seed changed from `_WORLD_STATE_ID = "ws_main"` to `_WORLD_STATE_ID = "world"`. Any live Neo4j database seeded with `ws_main` must be re-seeded or the node manually renamed. ISSUE-041 closed.
+
+---
+
+## DEC-023: Project management files live exclusively in project-harness/
+**Date:** 2026-05-27
+**Context:** ISSUES.md, DECISIONS.md, and ROADMAP.md existed at both the project root and in `project-harness/`. The two copies diverged: root had different issue IDs for the same problems, and `project-harness/DECISIONS.md` redirected back to root. Two sources of truth means both are wrong.
+**Decision:** All three files live in `project-harness/` only. Root-level copies are deleted. CLAUDE.md enforces this with an explicit rule.
+**Why:** `project-harness/` is already loaded into every Claude Code session via the system reminder. Centralising here means every session reads the latest state without hunting for the root copy. The root is for code; session-context files belong in the harness.
+**Consequence:** Any script or doc that references root-level `DECISIONS.md` or `ISSUES.md` must be updated to point to `project-harness/`.

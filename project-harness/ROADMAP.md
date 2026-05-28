@@ -64,8 +64,8 @@ The demo is the only thing that matters. Every session this fortnight is in serv
   **Done:** `src/npc_engine/prompts/dialogue/npc_voices.yaml` created; `prompt_builder.py` updated to load and inject `VOICE_DESCRIPTOR` line; Rule 8 added to `system_v1.yaml`; PROMPT_VERSION bumped to `stage_b_v2.0`. Added "tone only" clarification to prevent voice overriding knowledge content.
 - [x] **S2.3** Add "what I don't know" guard: explicit authoritative prohibition — NPC must NOT reference any event or fact unless it appears in their injected context. Zero hallucinated knowledge on the demo path. **Done:** Rule 5 in `system_v1.yaml` rewritten with explicit prohibition; also fixed all 5 dead context key refs (Rules 2–7 were effectively no-ops).
 - [x] **S2.4** Strengthen world-state anchor: replace descriptive hint ("the world is at war") with authoritative conditional prohibition ("If epoch=war, you must acknowledge the conflict directly when asked about the north. Do not speak of peace."). **Done:** Rule 1 `epoch=war` block extended with `ADDITIONAL CONSTRAINT` paragraph in `system_v1.yaml`.
-- [x] **S2.5** Write/extend LLM judge evals (`e2e/scenarios/`) for the three demo-path NPCs. One test per NPC. **Done:** 3 judge tests added to `e2e/scenarios/scenario_demo_game_judge.py`: `test_captain_sorn_direct_war_confirmation`, `test_mira_innkeeper_oblique_gossip`, `test_old_henryk_distorted_account`. All use `ws_main` world state node.
-- [ ] **S2.6** Iterate on prompts until all 3 judge evals pass. Update the cache after each accepted prompt version. **In progress:** 2/5 passing (existing tests). Root causes identified and second-iteration fixes applied (event priority raised 80→89; voice-overrides-content guard added). Cache bust + re-eval pending.
+- [x] **S2.5** Write/extend LLM judge evals (`e2e/scenarios/`) for the three demo-path NPCs. One test per NPC. **Done:** 3 judge tests added to `e2e/scenarios/scenario_demo_game_judge.py`: `test_captain_sorn_direct_war_confirmation`, `test_mira_innkeeper_oblique_gossip`, `test_old_henryk_distorted_account`. All use `world` world state node (updated from `ws_main` in pre-Phase 3 cleanup, DEC-022).
+- [x] **S2.6** Iterate on prompts until all 5 judge evals pass. Update the cache after each accepted prompt version. **Done (2026-05-26):** 5/5 passing. Cache rebuilt — 4 dialogue beats cached, `--cached` mode runs in 0.5 s. NPC responses confirmed quality: Sorn direct/factual, Mira oblique/warm, Henryk rambling with all distorted specifics (northmen/king's pass/thousands dead).
 
 **Additional work outside original S2.x numbering:**
 - Fixed `distorted_summary` serialization bug in `src/npc_engine/retrieval/subgraph_retriever.py`: added `_flatten_event_row()` helper that merges KNOWS_ABOUT edge properties (`knowledge_state`, `distorted_summary`) into the event dict and suppresses raw narrative fields (`summary`) when the NPC has a distorted account. Without this fix the LLM saw two conflicting accounts and defaulted to the clean factual one.
@@ -77,6 +77,40 @@ The demo is the only thing that matters. Every session this fortnight is in serv
 
 ---
 
+## Phase 2.5 — Eval + Prompt Breadth
+**Days 5–7 (parallel with / between Phase 2 tail and Phase 3) · ~3–4 sessions**
+
+> The current eval suite (5 YAML cases + 5 LLM judge tests) only validates the hardcoded demo path. This phase builds the eval infrastructure and prompt improvements needed to trust the system on arbitrary conversations from graph context — not just known scenarios.
+
+**Goal:** `tone_judge` is implemented and active; negative test cases exist; `seeds/world/` has 2+ eval worlds; NPC voice is a graph property (not a YAML lookup); gossip hedging rule is in the system prompt.
+
+### Steps
+
+- [x] **S2.6** *(carry-over)* Iterate on prompts until all 5 judge evals pass. Update cache after each accepted prompt version.
+  - Exit: `make eval-llm-demo` → 5/5 green. ✅ Done (2026-05-26)
+
+- [x] **R1.1** Implement `tone_judge` matcher in `evals/matchers.py` (lines 46–49). Replace stub with real Ollama call using a small fast model. Add `judge_prompt` field to eval case YAML. See ISSUE-005.
+
+- [x] **R1.2** Add 10+ negative eval cases in `evals/cases/` covering: knowledge hallucination, reputation gates, location-scoping, gossip hedging regex. See ISSUE-007.
+
+- [x] **R1.3** Create `seeds/worlds/` with 3 eval world seed scripts:
+  - `seeds/worlds/seed_tavern_world.py` — innkeeper, wanderer, merchant; events: theft, market fire, travelling performer (not war)
+  - `seeds/worlds/seed_village_world.py` — healer, elder, farmer, guard, fence; events: crop blight, bandit raid, missing child
+  - `seeds/worlds/seed_demo_world.py` — moved from `demo_game/seed.py` (DEC-021)
+  - Each script wipes the graph and re-seeds via API. Eval cases declare `requires_world:` field.
+
+- [x] **R1.4** Move NPC voice to Character node. Add `voice_descriptor` field to `character.yaml`. Pull in `get_character_with_relations()`. Read from serialized context in `prompt_builder.py`. Remove `_get_voice()` and `npc_voices.yaml` runtime load. Update all seed scripts. See ISSUE-006.
+
+- [x] **R2.1** Add gossip hedging rule to `system_v1.yaml` (Rule 9): NPC with `knowledge_state=rumor` or `distortion_level>30` MUST use epistemic markers ("I heard...", "Word is..."). Verify with hedging regex cases from R1.2.
+
+- [x] **R2.2** Generalize world-state Rule 1 in `system_v1.yaml`: replace hardcoded `epoch=war` block with a general pattern that applies to any active condition from context. Removes demo-specificity from the system prompt.
+
+**Exit criteria:** ✅ ALL MET — `tone_judge` active; 10+ negative cases pass; `seeds/worlds/` has 3 eval worlds; `voice_descriptor` pulled from graph; gossip hedging regex test passes; world-state Rule 1 generalized.
+
+**Phase 2.5 COMPLETE** (2026-05-27)
+
+---
+
 ## Phase 3 — Scripted Demo Flow + Gossip Sidebar
 **Days 5–7 · ~5 sessions**
 
@@ -85,6 +119,17 @@ The demo is the only thing that matters. Every session this fortnight is in serv
 **Goal:** Demo is recordable in rough form. Gossip-comparison sidebar is working. Keypresses replaced by programmatic scene execution.
 
 ### Steps
+
+- [ ] **S3.0** Phase 3 prep — test consolidation + multi-demo:
+  - Fix ROADMAP.md Phase 2.5 checkboxes (R2.1, R2.2 already done)
+  - Add e2e scenario for `voice_descriptor` from graph (`scenario_voice_from_graph.py`)
+  - Add e2e scenario for generalized `active_conditions` (`scenario_active_conditions.py`)
+  - Migrate 19 YAML eval cases into pytest e2e suite (`scenario_yaml_evals.py`); keep CLI runner
+  - Add `make eval-e2e` target
+  - Add 2 new demo storylines: `demo_game/scenarios/run_village_crisis.py` + `run_tavern_intrigue.py`
+  - Add `make demo-village` and `make demo-tavern` targets
+  - Add `llm-eval-as-e2e` and `multi-demo-scenario` skills to SKILLS_QUEUE.md
+  - Rewrite NEXT_SESSION.md for S3.1 handoff
 
 - [ ] **S3.1** Flesh out `demo_game/run.py` (already scaffolded): add remaining scenes from the signed-off `docs/DEMO_SCRIPT.md`; fill in all `[FILL IN]` dialogue lines; wire the second event and Beat 4. `make demo-run --dry-run` must print the full sequence cleanly.
 - [ ] **S3.2** Replace manual W/C keypresses in the demo path: `demo_run.py` calls the engine API directly to fire events and advance the clock. The interactive keypress bindings in `demo_game/ui/game_window.py` are **preserved** — do not remove them. `demo_run.py` is a separate code path.
@@ -179,11 +224,13 @@ Fall back to the existing interactive demo (W/C keypresses + live graph). It dem
 |---|------|-------|---------------|------------|
 | 1 | 2026-05-22 | P1 | DEMO_SCRIPT.md filled; seed + run.py wired; gossip chain pre-seeded; market_fire added | S1.1–S1.4 ✅; `--cached` 1.5 s |
 | 2 | 2026-05-24 | P2 | S2.1–S2.5 complete. Fixed `distorted_summary` serialization bug; raised event priority 80→89; fixed 5 dead context key refs; added VOICE_DESCRIPTOR; single source of truth for context budget; 3 judge evals written | S2.6 in progress — 2/5 passing; cache bust + re-eval pending |
-| 3 | | P2 | | |
-| 4 | | P2 | | |
-| 5 | | P2 | | |
-| 6 | | P2/P3 | | |
-| 7 | | P3 | | |
+| 3 | 2026-05-26 | P2/P2.5 | S2.6 complete: 5/5 judge evals passing; cache rebuilt (0.5 s cached mode). Eval strategy planned: Phase 2.5 added to roadmap; ISSUE-005/006/007 logged; docs/EVAL_STRATEGY.md created; PROMPT_DESIGN.md updated with voice-in-graph + gossip hedging plan; docs/next_session.md written for R1.1. | Next: R1.1 (implement tone_judge) — see docs/next_session.md |
+| 4 | 2026-05-26 | P2.5 | R1.1 complete: `tone_judge` live, 7/7 eval green, 2 voice cases added. Fixed `make eval` (Makefile PYTHON hoisted — cmd.exe grep failure on Windows). ISSUE-005 closed. | 7/7 green; R1.2 next |
+| 5 | 2026-05-26 | P2.5 | R1.2 complete: `keyword_none` matcher added; 10 negative cases (`case_neg_*.yaml`); ISSUE-007 closed | 17/17 green |
+| 6 | 2026-05-27 | P2.5 | R1.3 complete: `seeds/worlds/` created (tavern + village, full inner life); `requires_world` enforcement added to runner; ISSUE-008/009 closed; 13 demo cases + 3 fixed cases annotated | 17/17 green; R1.4 next |
+| 7 | 2026-05-27 | P2.5 | R1.4 + R2.1 + R2.2 complete: voice_descriptor moved to graph; Rule 9 (gossip hedging) added; Rule 1 generalized; seeds consolidated under seeds/worlds/; WorldState ID="world" everywhere (DEC-021/022/023); Phase 2.5 exit criteria all met | Phase 2.5 ✅ COMPLETE |
+| 8 | 2026-05-28 | P3 | S3.0: ROADMAP fixed; e2e gaps filled (voice_from_graph + active_conditions); YAML evals migrated to pytest; village + tavern demo scenarios; 2 skills added | S3.0 ✅; S3.1 next |
+| 9 | | P3 | | |
 | 8 | | P3 | | |
 | 9 | | P3 | | |
 | 10 | | P3/P4 | | |

@@ -1,0 +1,649 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	PROJECT_PLAN_v1.4.xml
+	Review-ready implementation plan for NPC Engine v1.4.
+
+	Purpose:
+	- Upgrade v1.3 with stronger context relevance, budget/compression control,
+		currency safety, machine-readable engine contracts, and better observability.
+	- Preserve schema-first philosophy and graph as single source of truth.
+	- Keep implementation aligned with existing repository layout to reduce migration risk.
+-->
+<project name="npc_engine" language="Python" version="3.11" framework="FastAPI" release="v1.4">
+
+	<scope>
+		<target_env>
+			<item>Single-player proof of concept</item>
+			<item>100 to 1000 graph nodes</item>
+			<item>One concurrent gameplay session</item>
+			<item>Mixtral 8x7B baseline with 32k token window</item>
+		</target_env>
+		<goals>
+			<item>Improve prompt quality while controlling context growth and cost</item>
+			<item>Enforce stronger write safety and idempotency for economic actions</item>
+			<item>Formalize engine contracts and contract tests</item>
+			<item>Raise production readiness for telemetry, alerts, and diagnostics</item>
+		</goals>
+		<non_goals>
+			<item>Massively concurrent multi-tenant scaling</item>
+			<item>Replacing Neo4j with alternate graph storage in v1.4</item>
+			<item>Redesigning existing API namespace or removing /v1 compatibility</item>
+			<item>Director engine machine-readable contract — Director remains rules-based with no contract validation in v1.4; contract deferred to post-v1.4</item>
+		</non_goals>
+	</scope>
+
+	<plan_review>
+		<strengths>
+			<item>Your plan keeps graph authority explicit and avoids hidden engine state coupling.</item>
+			<item>You correctly separate context selection from context compression.</item>
+			<item>You prioritize deterministic logic (relevance/gossip/rules) for replayable debugging.</item>
+			<item>You define practical first deliverables in an order that unlocks downstream work.</item>
+		</strengths>
+
+		<findings>
+			<finding severity="high" id="F-001">
+				<issue>Proposed file layout diverges from current repository structure.</issue>
+				<reasoning>The repository uses api/routes and domain subfolders under engines; introducing parallel api/routers and engines/*.py will create duplication and coupling.</reasoning>
+				<fix>Keep existing structure; add new modules under current directories only (for example engines/dialogue, engines/economy, retrieval, graph, api/routes).</fix>
+			</finding>
+
+			<finding severity="high" id="F-002">
+				<issue>Idempotency is required but deduplication storage and TTL are unspecified.</issue>
+				<reasoning>Without explicit persistence and conflict semantics, retries can still double-apply currency or quest rewards.</reasoning>
+				<fix>Introduce IdempotencyRecord storage with Neo4j as canonical source of truth and Redis as cache-only accelerator, including key scope, payload hash, status, response hash, created_at, expires_at.</fix>
+			</finding>
+
+			<finding severity="high" id="F-003">
+				<issue>Currency atomicity boundary is underspecified for item plus currency transfers.</issue>
+				<reasoning>Trading operations can drift if item transfer and balance transfer are not in one transaction.</reasoning>
+				<fix>Route buy and sell through a single graph_writer transaction coordinator that updates ownership, balances, and audit edges atomically.</fix>
+			</finding>
+
+			<finding severity="high" id="F-004">
+				<issue>Compression cache invalidation is defined conceptually but not canonically sourced.</issue>
+				<reasoning>Missing invalidation authority leads to stale context and nondeterministic prompt content.</reasoning>
+				<fix>Make last_graph_updated_at the sole invalidation signal; derive cache key from node_id, node_type, prompt_schema_version, compression_prompt_version.</fix>
+			</finding>
+
+			<finding severity="medium" id="F-005">
+				<issue>Engine contracts are proposed but no enforcement path is defined.</issue>
+				<reasoning>YAML contracts without test verification become stale documentation.</reasoning>
+				<fix>Add contract_tests that load contracts and assert required events, side effects, idempotency behavior, and auth scope.</fix>
+			</finding>
+
+			<finding severity="medium" id="F-006">
+				<issue>Event provenance schema is good but migration strategy is missing.</issue>
+				<reasoning>Existing events from v1.3 may not carry producer/schema_version/origin_engine.</reasoning>
+				<fix>Add migration script to backfill provenance with defaults and mark inferred=true where needed.</fix>
+			</finding>
+
+			<finding severity="medium" id="F-007">
+				<issue>Metrics cardinality risk is not constrained.</issue>
+				<reasoning>Labels including npc_id/request_id can explode time-series volume.</reasoning>
+				<fix>Restrict labels to bounded dimensions (engine, route, result, tier) and log high-cardinality values only in JSON logs.</fix>
+			</finding>
+
+			<finding severity="medium" id="F-008">
+				<issue>LLM fallback behaviors are implied but not explicit per boundary.</issue>
+				<reasoning>v1 coding rules require boundary fallback contracts for LLM and graph failures.</reasoning>
+				<fix>Define fallback matrix per endpoint and engine: LLM timeout fallback response, graph unavailable 503, validation failure 422 with structured details.</fix>
+			</finding>
+
+			<finding severity="low" id="F-009">
+				<issue>Awareness cache TTL is fixed in prose.</issue>
+				<reasoning>Hardcoded values conflict with no-magic-values principles.</reasoning>
+				<fix>Move awareness TTL and cache namespace to config.py and llm_config.yaml.</fix>
+			</finding>
+
+			<finding severity="low" id="F-010">
+				<issue>Director and Economy are optional but rollout gating is not explicit.</issue>
+				<reasoning>Optional systems can leak side effects if partially enabled.</reasoning>
+				<fix>Gate with explicit feature flags and contract-level disabled behavior tests.</fix>
+			</finding>
+		</findings>
+	</plan_review>
+
+	<architecture>
+		<principles>
+			<item>Graph is authoritative for game state and relationships.</item>
+			<item>Only graph_writer (and sub-writers called by it) performs Cypher writes.</item>
+			<item>Existing direct write paths are migrated incrementally to graph_writer-coordinated flows during v1.4.</item>
+			<item>Engines consume graph data plus explicit contracts; engines never read private state from other engines.</item>
+			<item>Every mutating flow emits typed Event nodes with provenance metadata.</item>
+			<item>All external boundaries validate first and fail fast.</item>
+		</principles>
+
+		<component_model>
+			<clients>
+				<item>Unity and Unreal via REST and WebSocket under /v1/*</item>
+			</clients>
+			<api_layer>
+				<item>FastAPI routes in api/routes with composition root in api/dependencies.py</item>
+			</api_layer>
+			<engine_layer>
+				<item>Dialogue, Gossip, Event, Quest, Trading, Faction, Reputation, Awareness, Director</item>
+				<item>New: Context Relevance Engine and Currency Verification Engine</item>
+			</engine_layer>
+			<core_layer>
+				<item>Neo4j graph and graph services under graph/</item>
+				<item>Retrieval and budget/compression under retrieval/</item>
+				<item>LLM adapters behind LLMClientProtocol under engines/llm/</item>
+				<item>Schema loaders and validators under schema/</item>
+				<item>Neo4j as source of truth for durable state and idempotency records</item>
+				<item>Redis optional for non-idempotency caches such as short-lived context and awareness data</item>
+			</core_layer>
+		</component_model>
+
+		<new_modules status="planned">
+			<module path="npc_engine/engines/dialogue/context_relevance_engine.py" reason="Deterministic item ranking before budget enforcement" />
+			<module path="npc_engine/engines/economy/__init__.py" reason="Economy namespace aligned with existing domain layout" />
+			<module path="npc_engine/engines/economy/currency_verification_engine.py" reason="Safe and auditable currency mutation boundary" />
+			<module path="npc_engine/engines/economy/trading_engine.py" reason="Item and currency transfer orchestration" />
+			<module path="npc_engine/retrieval/context_budget_enforcer.py" reason="Tier budget policy and compression trigger logic" />
+			<module path="npc_engine/engines/llm/compression_prompt_loader.py" reason="Loads versioned compression templates from docs prompt source" />
+			<module path="docs/prompts.md" reason="Versioned prompt templates (including compression templates) per prompt hygiene rules" />
+			<module path="npc_engine/graph/currency_writer.py" reason="Parameterized balance and audit edge writes" />
+			<module path="npc_engine/engines/contracts/dialogue_engine.yaml" reason="Machine-readable contract" />
+			<module path="npc_engine/engines/contracts/quest_engine.yaml" reason="Machine-readable contract" />
+			<module path="npc_engine/engines/contracts/currency_engine.yaml" reason="Machine-readable contract" />
+			<module path="npc_engine/tests/engine_contract_tests/test_dialogue_contract.py" reason="Engine contract validation coverage" />
+			<module path="npc_engine/tests/engine_contract_tests/test_quest_contract.py" reason="Engine contract validation coverage" />
+			<module path="npc_engine/tests/engine_contract_tests/test_currency_contract.py" reason="Engine contract validation coverage" />
+			<module path="npc_engine/scripts/simulate_world_flow.py" reason="End-to-end simulation of graph creation and multi-turn gameplay flows" />
+			<module path="npc_engine/config/llm_config.yaml" reason="Single source of truth for token budgets, compression rules, and currency limits" />
+			<module path="npc_engine/engines/idempotency/cleanup_scheduler.py" reason="Asyncio background task that hard-deletes expired idempotency records every IDEMPOTENCY_CLEANUP_INTERVAL_SECONDS" />
+		</new_modules>
+	</architecture>
+
+	<business_logic>
+		<common_invariants>
+			<item>All new v1.4 mutating endpoints require X-Idempotency-Key header and meta {actor, reason, request_id} body object. This includes the dialogue endpoint.</item>
+			<item>Legacy v1.3 mutating endpoints moved under v1.4 rollout must fail fast when X-Idempotency-Key is missing, with clear error code and message.</item>
+			<item>Mutating flows emit Event with producer, origin_engine, schema_version, and provenance.</item>
+			<item>Soft delete default path for gameplay operations; hard delete restricted to admin scope only.</item>
+			<item>Unknown game_action values are logged as warnings and ignored for mutation, while dialogue response text is preserved.</item>
+			<item>No currency field can change except through Currency Verification Engine paths.</item>
+		</common_invariants>
+
+		<idempotency_contract>
+			<transport>
+				<item>Header-based transport in v1.4: clients must send X-Idempotency-Key for mutating endpoints.</item>
+				<item>Request body idempotency_key is not accepted to avoid dual-source ambiguity.</item>
+			</transport>
+			<key_format>
+				<item>Idempotency key format is UUIDv4 string only in v1.4.</item>
+				<item>Non-UUIDv4 keys are rejected with IDEMPOTENCY_KEY_INVALID.</item>
+			</key_format>
+			<storage>
+				<item>Neo4j is canonical source of truth for idempotency record state.</item>
+				<item>v1.4 idempotency decisions are served from Neo4j only.</item>
+			</storage>
+			<record_fields>
+				<item>idempotency_key</item>
+				<item>request_hash</item>
+				<item>status: pending | completed | failed_terminal</item>
+				<item>response_hash</item>
+				<item>resource_scope</item>
+				<item>created_at</item>
+				<item>expires_at</item>
+				<item>pending_timeout_seconds: int (default 30) — used to detect crashed in-flight requests</item>
+			</record_fields>
+			<retention_policy>
+				<item>Retention window is fixed to 24 hours in v1.4.</item>
+				<item>expires_at must equal created_at plus 24 hours.</item>
+				<item>Replay requests after expiration are treated as new requests.</item>
+				<item>Expired records are hard-deleted by a scheduled asyncio background task running every IDEMPOTENCY_CLEANUP_INTERVAL_SECONDS (default 3600); it deletes records WHERE expires_at &lt; datetime().</item>
+			</retention_policy>
+			<behavior>
+				<item>Missing idempotency key returns HTTP 400 with stable error code IDEMPOTENCY_KEY_REQUIRED.</item>
+				<item>Empty or malformed idempotency key returns HTTP 422 with stable error code IDEMPOTENCY_KEY_INVALID.</item>
+				<item>Same key plus same request_hash returns previous result (safe replay).</item>
+				<item>Same key plus different request_hash returns HTTP 409 IDEMPOTENCY_KEY_CONFLICT.</item>
+				<item>Replay of a pending record within pending_timeout_seconds returns HTTP 409 IDEMPOTENCY_IN_FLIGHT; client should retry after the timeout window.</item>
+				<item>Replay of a pending record whose created_at is older than pending_timeout_seconds is treated as a crashed request: re-execute and overwrite the record in place.</item>
+				<item>Idempotency lookup and replay decisions do not depend on Redis availability.</item>
+			</behavior>
+			<api_error_examples>
+				<example id="missing_header">
+					<condition>X-Idempotency-Key header is missing on mutating endpoint.</condition>
+					<http_status>400</http_status>
+					<error_code>IDEMPOTENCY_KEY_REQUIRED</error_code>
+					<response_shape>{"success": false, "error": "IDEMPOTENCY_KEY_REQUIRED", "message": "X-Idempotency-Key header is required.", "request_id": "..."}</response_shape>
+				</example>
+				<example id="invalid_key_format">
+					<condition>X-Idempotency-Key is present but not valid UUIDv4.</condition>
+					<http_status>422</http_status>
+					<error_code>IDEMPOTENCY_KEY_INVALID</error_code>
+					<response_shape>{"success": false, "error": "IDEMPOTENCY_KEY_INVALID", "message": "X-Idempotency-Key must be a valid UUIDv4.", "request_id": "..."}</response_shape>
+				</example>
+				<example id="hash_conflict">
+					<condition>Same idempotency key reused with different request_hash within retention window.</condition>
+					<http_status>409</http_status>
+					<error_code>IDEMPOTENCY_KEY_CONFLICT</error_code>
+					<response_shape>{"success": false, "error": "IDEMPOTENCY_KEY_CONFLICT", "message": "Idempotency key already used for a different request.", "request_id": "..."}</response_shape>
+				</example>
+				<example id="in_flight">
+					<condition>Replay of a key whose record is pending and created_at is within pending_timeout_seconds.</condition>
+					<http_status>409</http_status>
+					<error_code>IDEMPOTENCY_IN_FLIGHT</error_code>
+					<response_shape>{"success": false, "error": "IDEMPOTENCY_IN_FLIGHT", "message": "Request is still being processed. Retry after pending_timeout_seconds.", "request_id": "..."}</response_shape>
+				</example>
+			</api_error_examples>
+		</idempotency_contract>
+
+		<dialogue_engine>
+			<inputs>
+				<item>player_input</item>
+				<item>npc_id</item>
+				<item>session_id</item>
+				<item>X-Idempotency-Key (header, required — same rules as all v1.4 mutating endpoints)</item>
+			</inputs>
+			<flow>
+				<item>Validate X-Idempotency-Key header; check idempotency record; replay cached response if same key and request_hash found (no re-mutation).</item>
+				<item>Gather candidate context from graph and retrieval sources.</item>
+				<item>Run context relevance scoring and top-K selection per tier.</item>
+				<item>Run budget enforcement and conditional compression.</item>
+				<item>Build deterministic prompt and call structured LLM response path.</item>
+				<item>Validate response via Pydantic schema before any mutation.</item>
+				<item>Apply bounded relation deltas and route currency-bearing actions to currency engine.</item>
+			</flow>
+			<rules>
+				<item>Dialogue requires X-Idempotency-Key header; missing key returns 400 IDEMPOTENCY_KEY_REQUIRED.</item>
+				<item>Tier A is never compressed; if Tier A exceeds budget, raise ContextBudgetError.</item>
+				<item>Relation delta bounds enforce per-turn and sliding-window safety.</item>
+			</rules>
+		</dialogue_engine>
+
+		<context_relevance_engine>
+			<inputs>
+				<item>candidate_context_items with {id, type, recency, severity, proximity, relation_relevance, quest_involvement, explicit_flag}</item>
+			</inputs>
+			<tier_policy>
+				<item>Context tiers are fixed in v1.4: Tier 0, Tier A, Tier B, Tier C.</item>
+				<item>session_turns are a named sub-tier of Tier A with their own configurable token sub-budget (session_turns_budget_tokens in llm_config.yaml); session_turns are never compressed.</item>
+				<item>Tier model may be generalized in a later release without changing v1.4 contracts.</item>
+			</tier_policy>
+			<scoring>
+				<formula>score = w_recency*norm_recency + w_severity*norm_severity + w_proximity*norm_proximity + w_relation*norm_relation + w_quest*norm_quest + w_explicit*explicit_flag</formula>
+				<proximity_definition>Minimum graph hops between the NPC and the context item's referenced characters or locations. 0 hops = same node; scores decay linearly to 0 at max_proximity_hops (config default 2); items beyond max_proximity_hops receive proximity score of 0.</proximity_definition>
+				<tie_breaking>Equal-score items are sorted by (node_type ASC, id ASC) to guarantee deterministic prompt assembly per rule PROMPT-05.</tie_breaking>
+				<config_source>config/llm_config.yaml</config_source>
+				<deterministic>true</deterministic>
+			</scoring>
+			<outputs>
+				<item>selected_items_by_tier</item>
+				<item>relevance_report</item>
+			</outputs>
+		</context_relevance_engine>
+
+		<budget_and_compression>
+			<policy_source>config/llm_config.yaml</policy_source>
+			<prompt_template_source>docs/prompts.md</prompt_template_source>
+			<behavior>
+				<item>Tokenize each tier with backend-appropriate tokenizer.</item>
+				<item>If tier token usage exceeds compression_trigger_ratio of the tier budget, compress in order Tier B then Tier C.</item>
+				<item>Cache compressed outputs keyed by (node_id, node_type, prompt_schema_version, compression_prompt_version) only; last_graph_updated_at is stored alongside the cached value and used as the sole invalidation signal — content_hash is not part of the cache key.</item>
+				<item>Invalidate cache entry when stored last_graph_updated_at differs from current node value.</item>
+			</behavior>
+			<config_example>
+				<!-- Canonical llm_config.yaml shape for budget and relevance settings -->
+				<!-- tier_budget_tokens: {tier_a: 4000, tier_b: 3000, tier_c: 2000} -->
+				<!-- session_turns_budget_tokens: 1200  (sub-budget within tier_a) -->
+				<!-- compression_trigger_ratio: 0.85    (compress when usage exceeds 85% of tier budget) -->
+				<!-- max_proximity_hops: 2              (beyond this, proximity score = 0) -->
+				<!-- relevance_weights: {recency: 0.25, severity: 0.20, proximity: 0.20, relation: 0.20, quest: 0.10, explicit: 0.05} -->
+			</config_example>
+			<fallbacks>
+				<item>Compression failure does not bypass budget checks; raises typed error with tier diagnostics.</item>
+			</fallbacks>
+		</budget_and_compression>
+
+		<quest_engine>
+			<methods>
+				<item>offer_quest</item>
+				<item>accept_quest</item>
+				<item>update_objective</item>
+				<item>evaluate_completion</item>
+				<item>apply_rewards</item>
+			</methods>
+			<rules>
+				<item>Prerequisites validated through graph_reader before offer.</item>
+				<item>Item rewards route through trading engine; currency rewards route through currency engine.</item>
+				<item>Quest failed_reason carries a visibility flag (player | admin); default is admin to avoid leaking hidden game mechanics; game designers set visibility per failure type in the quest definition.</item>
+				<item>Emit Event for each lifecycle transition.</item>
+			</rules>
+		</quest_engine>
+
+		<trading_and_currency>
+			<trading_engine>
+				<item>list_inventory(shop_id)</item>
+				<item>buy_item(buyer_id, shop_id, item_id)</item>
+				<item>sell_item(seller_id, shop_id, item_id)</item>
+				<item>transfer_item(src_id, dst_id, item_id)</item>
+			</trading_engine>
+			<currency_engine>
+				<item>transfer_currency(src_id, dst_id, amount, reason, idempotency_key)</item>
+				<item>apply_reward(target_id, amount, source_event_id, idempotency_key)</item>
+			</currency_engine>
+			<currency_rules>
+				<item>Currency amounts are integer smallest units only; decimal currency is not allowed in v1.4.</item>
+				<item>Currency transfer and reward amount must be strictly positive integers greater than zero.</item>
+				<item>Amounts above configured upper bound fail with deterministic validation error.</item>
+				<item>Validate sufficient funds and configured per-transaction max.</item>
+				<item>Validate cumulative per-session max to prevent LLM abuse.</item>
+				<item>Insufficient-funds check and balance debit are atomic: currency_writer uses WHERE c.currency_balance &gt;= $amount inside the Neo4j ACID transaction so no separate pre-read is needed and concurrent transfers cannot both succeed against the same balance.</item>
+				<item>Persist TRANSFERRED_TO audit edge with amount, reason, request_id.</item>
+				<item>Dialogue cannot mint currency directly; only validated action path can mutate balances.</item>
+			</currency_rules>
+		</trading_and_currency>
+
+		<faction_and_reputation>
+			<faction_engine>
+				<item>Writer-oriented engine for MEMBER_OF and FACTION_RELATION updates.</item>
+				<item>Emits events for faction standing transitions.</item>
+			</faction_engine>
+			<reputation_engine>
+				<item>get_standing(subject_id, target_id) returns typed StandingSnapshot.</item>
+				<item>Cache invalidated when contributors hash changes.</item>
+			</reputation_engine>
+		</faction_and_reputation>
+
+		<awareness_and_director>
+			<awareness_engine>
+				<item>Returns active NPC presence snapshot per location.</item>
+				<item>Cache in Redis with configurable TTL and invalidation on movement.</item>
+			</awareness_engine>
+			<director_engine>
+				<item>Rules-based pacing; no LLM calls.</item>
+				<item>Runs on slow scheduler tick and emits events or quest triggers.</item>
+			</director_engine>
+		</awareness_and_director>
+	</business_logic>
+
+	<data_model_updates>
+		<event_node>
+			<field name="producer" type="str" required="true" />
+			<field name="schema_version" type="str" required="true" />
+			<field name="origin_engine" type="str" required="true" />
+			<field name="provenance" type="json" required="true" note="{created_by, created_at, request_id, inferred?}" />
+		</event_node>
+
+		<item_node>
+			<field name="created_by" type="str" required="true" />
+			<field name="created_by_engine" type="str" required="true" />
+			<field name="origin_event_id" type="str|null" required="false" />
+		</item_node>
+
+		<quest_node>
+			<field name="narrative_tags" type="list[str]" required="false" default="[]" />
+			<field name="impact_summary" type="str|null" required="false" />
+			<field name="failed_reason" type="str|null" required="false" />
+		</quest_node>
+
+		<currency_fields>
+			<field name="Character.currency_balance" type="int" required="true" default="0" />
+			<field name="Shop.currency_balance" type="int" required="true" default="0" />
+			<field name="WorldState.currency_unit" type="str" required="true" default="gold" />
+		</currency_fields>
+
+		<migration_requirements>
+			<item>Backfill missing event provenance fields for pre-v1.4 events.</item>
+			<item>Initialize currency_balance for existing characters and shops.</item>
+			<item>Preserve idempotency with migration-safe default values.</item>
+		</migration_requirements>
+	</data_model_updates>
+
+	<contracts>
+		<contract_template format="yaml">
+			<required_fields>
+				<item>name</item>
+				<item>version</item>
+				<item>inputs</item>
+				<item>outputs</item>
+				<item>side_effects</item>
+				<item>idempotency</item>
+				<item>auth_scope</item>
+				<item>error_contract</item>
+				<item>tests</item>
+			</required_fields>
+		</contract_template>
+		<versioning_policy>
+			<item>Contract version is tied to release version (for example v1.4.x) and is not dynamically computed at runtime.</item>
+		</versioning_policy>
+		<enforcement>
+			<item>CI must fail if contract YAML changed without corresponding engine_contract_tests updates.</item>
+			<item>make check-contracts CI target validates that each contract YAML under engines/contracts/ has a corresponding test module in tests/engine_contract_tests/; fails with a diff if any YAML exists without a matching test file.</item>
+			<item>Contract tests validate emitted event names and minimum payload schema.</item>
+			<item>Engine contract tests run on every PR for small deterministic scenarios.</item>
+		</enforcement>
+	</contracts>
+
+	<coding_principles_compliance>
+		<compliance_scope>
+			<item>Strictly enforced for all new files and all files modified in v1.4 phases.</item>
+			<item>Legacy files not touched in v1.4 remain tracked as technical debt and are refactored incrementally.</item>
+		</compliance_scope>
+		<rule id="ARCH-01" status="target_state">Module additions are single-purpose and follow existing package boundaries.</rule>
+		<rule id="ARCH-02" status="target_state">New LLM and vector behavior remains behind protocol and factory extension points.</rule>
+		<rule id="ARCH-03" status="target_state">Dependencies are injected via constructors and api/dependencies composition root.</rule>
+		<rule id="STRUCT-05" status="target_state">Token limits, cache TTLs, and economic bounds are config-driven (no magic constants).</rule>
+		<rule id="STRUCT-06" status="target_state">Context and mutation payloads are immutable copies, not in-place mutation.</rule>
+		<rule id="TYPE-01" status="target_state">Type hints required on all new public methods.</rule>
+		<rule id="TYPE-02" status="target_state">Cross-layer payloads use Pydantic models only.</rule>
+		<rule id="ERR-01" status="target_state">Boundary validation for API, LLM output, graph reads, and config files.</rule>
+		<rule id="DI-03" status="target_state">Writers receive transaction/session injection; they do not open sessions.</rule>
+		<rule id="PROMPT-02" status="target_state">Budget enforcement before LLM invocation is mandatory.</rule>
+		<rule id="TEST-01" status="target_state">Coverage target remains 80 percent minimum.</rule>
+		<rule id="SEC-02" status="target_state">All Cypher remains parameterized; no string interpolation for user inputs.</rule>
+	</coding_principles_compliance>
+
+	<fallback_contracts>
+		<boundary name="LLM structured generation">
+			<on_error>Return typed fallback dialogue and zero side-effect actions; log llm_validation_failures_total increment.</on_error>
+		</boundary>
+		<boundary name="LLM timeout">
+			<on_error>Serve fallback_responses content and return success response with degraded=true metadata.</on_error>
+		</boundary>
+		<boundary name="Graph unavailable">
+			<on_error>Raise GraphUnavailableError and return HTTP 503 with request_id correlation.</on_error>
+		</boundary>
+		<boundary name="Request validation failure">
+			<on_error>Return HTTP 422 with structured validation details and accepted values where applicable.</on_error>
+		</boundary>
+		<boundary name="Awareness cache (Redis) unavailable">
+			<on_error>Fall back to direct Neo4j query for awareness snapshot; log cache_miss_fallback=true and increment awareness_cache_miss_total metric; do not raise 503.</on_error>
+		</boundary>
+	</fallback_contracts>
+
+	<testing_and_verification>
+		<unit_tests>
+			<item>Context relevance scoring determinism and tie-breaking rules.</item>
+			<item>Budget enforcer tier behavior and error paths.</item>
+			<item>Currency invariants (insufficient funds, max limits, idempotency replay).</item>
+			<item>Quest lifecycle transitions and reward routing.</item>
+		</unit_tests>
+
+		<integration_tests>
+			<item>Seed scenario then offer, accept, complete quest with reward.</item>
+			<item>Trading purchase and sale in single transaction path.</item>
+			<item>Dialogue-generated actions with currency transfer validation.</item>
+			<item>Compression cache invalidation after graph updates.</item>
+		</integration_tests>
+
+		<contract_tests>
+			<item>Dialogue, Quest, and Currency contract conformance.</item>
+			<item>Event emission shape and required provenance fields.</item>
+		</contract_tests>
+
+		<property_and_chaos_tests>
+			<item>Gossip distortion determinism by seed.</item>
+			<item>Concurrent transfer retries preserve currency conservation.</item>
+			<item>Missed embedding invalidation recovers through reconciler.</item>
+		</property_and_chaos_tests>
+
+		<simulation_tests>
+			<item>Build world graph from scratch and run many dialogue variations to validate end-to-end behavior.</item>
+			<item>Track outcomes for quest progression, relation deltas, and economy invariants.</item>
+			<item>Simulation script exit criterion: script exits 0 and produces a JSON summary containing {nodes_created, dialogue_turns, quests_completed, currency_transfers, relation_deltas, errors:[]}; pass requires errors array to be empty.</item>
+		</simulation_tests>
+
+		<ci_cadence>
+			<item>Every PR: unit tests, integration smoke path, engine contract tests, and small deterministic simulation scenarios.</item>
+			<item>Nightly: extended simulation scenarios, property tests, and chaos recovery tests.</item>
+			<item>Pre-release: full verification loop including migration dry-run and rollback drill.</item>
+		</ci_cadence>
+	</testing_and_verification>
+
+	<observability>
+		<metrics>
+			<item>llm_calls_total</item>
+			<item>llm_tokens_in_total</item>
+			<item>llm_tokens_out_total</item>
+			<item>llm_compressions_total</item>
+			<item>context_items_selected_total</item>
+			<item>context_tier_tokens</item>
+			<item>context_budget_errors_total</item>
+			<item>graph_writes_total</item>
+			<item>graph_write_latency_seconds</item>
+			<item>currency_transfers_total</item>
+			<item>llm_validation_failures_total</item>
+		</metrics>
+		<logging>
+			<item>Structured JSON logs with request_id correlation.</item>
+			<item>Dialogue context logs toggleable via DIALOGUE_CONTEXT_LOG.</item>
+			<item>Production prompt redaction controlled by LOG_LLM_PROMPTS and ENV.</item>
+		</logging>
+		<alerts>
+			<item>context_budget_errors_total above threshold in rolling window.</item>
+			<item>llm_validation_failures_total above threshold in rolling window.</item>
+			<item>currency transfer anomaly spikes over baseline.</item>
+		</alerts>
+	</observability>
+
+	<security_and_ops>
+		<security>
+			<item>Scope model retained: graph_admin is strict superset of graph_write.</item>
+			<item>Rate limits for LLM calls and mutation endpoints per API key.</item>
+			<item>No secrets in source; environment-based settings validation on startup.</item>
+		</security>
+		<operations>
+			<item>Feature flags for Director, Economy, Trading, and contract-enforcement strict mode are enabled by default.</item>
+			<item>Environment defaults: dev=enabled, staging=enabled, prod=enabled with kill-switch support.</item>
+			<item>Feature flag kill-switches are environment variable overrides that take precedence over config file settings: FEATURE_ECONOMY_ENABLED, FEATURE_TRADING_ENABLED, FEATURE_DIRECTOR_ENABLED (set to false to disable at runtime without a deploy).</item>
+			<item>Disabled-mode behavior must be deterministic and covered by contract tests for each feature flag.</item>
+			<item>Admin reindex endpoint retained for manual recovery workflows.</item>
+			<item>Deployment profile keeps Neo4j community + Redis suitable for POC scale.</item>
+			<item>Redis degraded mode must be supported for non-idempotency caches only; idempotency behavior remains unchanged when Redis is unavailable.</item>
+		</operations>
+	</security_and_ops>
+
+	<implementation_roadmap resumable="true">
+		<phase id="P0" status="pending" name="Config and Contract Foundations">
+			<deliverables>
+				<item>config/llm_config.yaml and typed LLMConfig model</item>
+				<item>idempotency settings, transport contract, and policy model (including pending_timeout_seconds and IDEMPOTENCY_IN_FLIGHT behavior)</item>
+				<item>Neo4j idempotency record schema and asyncio cleanup scheduler (IDEMPOTENCY_CLEANUP_INTERVAL_SECONDS)</item>
+				<item>Redis runtime integration (compose profile, dependency, health checks) for optional non-idempotency caches</item>
+				<item>engine contract schema and initial contract files</item>
+				<item>Write-path convergence design document only; idempotency record writes are the sole new Neo4j write path introduced in P0; existing graph_writer flows remain unchanged</item>
+			</deliverables>
+			<exit_criteria>
+				<item>Config validation passes at startup.</item>
+				<item>Contracts parse and pass schema validation in CI.</item>
+				<item>Missing idempotency key fails fast with stable, documented error response.</item>
+				<item>IDEMPOTENCY_IN_FLIGHT returned correctly for pending records within pending_timeout_seconds.</item>
+				<item>Idempotency behavior passes smoke tests with Redis disabled.</item>
+			</exit_criteria>
+		</phase>
+
+		<phase id="P1" status="pending" name="Context Relevance and Budget Pipeline">
+			<deliverables>
+				<item>Context Relevance Engine with deterministic scoring</item>
+				<item>Context Budget Enforcer and compression integration</item>
+				<item>Compression cache with invalidation by graph timestamp</item>
+			</deliverables>
+			<exit_criteria>
+				<item>Dialogue uses relevance then budget flow end-to-end.</item>
+				<item>Tier A overflow raises typed ContextBudgetError.</item>
+			</exit_criteria>
+		</phase>
+
+		<phase id="P2" status="pending" name="Currency Safety and Trading Atomicity">
+			<deliverables>
+				<item>Currency Verification Engine</item>
+				<item>Atomic buy and sell transaction patterns</item>
+				<item>Currency audit edges and anomaly counters</item>
+				<item>currency_writer is the first existing engine write path migrated to graph_writer coordinator; establishes the migration pattern for P3</item>
+			</deliverables>
+			<exit_criteria>
+				<item>Replay with same idempotency_key is side-effect free.</item>
+				<item>Currency conservation verified by tests.</item>
+			</exit_criteria>
+		</phase>
+
+		<phase id="P3" status="pending" name="Quest Lifecycle Integration">
+			<deliverables>
+				<item>Quest lifecycle methods and reward routing</item>
+				<item>Event provenance enforcement for quest transitions</item>
+				<item>Quest reward writes (item transfers and currency rewards) migrated to graph_writer coordinator, completing the write-path convergence started in P2</item>
+			</deliverables>
+			<exit_criteria>
+				<item>Quest offer to completion integration scenario passes.</item>
+			</exit_criteria>
+		</phase>
+
+		<phase id="P4" status="pending" name="Contracts, Tests, and Simulation">
+			<deliverables>
+				<item>Engine contract tests for Dialogue, Quest, Currency</item>
+				<item>Simulation script for full graph and dialogue flow validation</item>
+				<item>Small deterministic scenario suite executed on every PR</item>
+			</deliverables>
+			<exit_criteria>
+				<item>Contract suite green in CI.</item>
+				<item>PR scenario suite green for every pull request.</item>
+				<item>Simulation script produces stable run summary.</item>
+			</exit_criteria>
+		</phase>
+
+		<phase id="P5" status="pending" name="Observability and Dashboards">
+			<deliverables>
+				<item>Prometheus metrics, structured logs, and alert rules</item>
+				<item>Dashboard panels for context, LLM, graph, quest, and currency health</item>
+			</deliverables>
+			<exit_criteria>
+				<item>Dashboards and alert smoke tests pass in staging profile.</item>
+			</exit_criteria>
+		</phase>
+
+		<phase id="P6" status="pending" name="Migration and Cutover Validation">
+			<deliverables>
+				<item>Migration scripts for event provenance and currency initialization</item>
+				<item>Dry-run report with before and after counts and invariant checks</item>
+				<item>Rollback script and cutover checklist</item>
+			</deliverables>
+			<exit_criteria>
+				<item>Migration dry-run passes on staging snapshot.</item>
+				<item>Rollback path validated with timed recovery drill.</item>
+			</exit_criteria>
+		</phase>
+	</implementation_roadmap>
+
+	<priority_deliverables>
+		<item order="1">LLMConfig and config loader integration</item>
+		<item order="2">Context Relevance Engine</item>
+		<item order="3">Context Budget Enforcer and compression cache</item>
+		<item order="4">Currency Verification Engine and atomic transfer writes</item>
+		<item order="5">Contract registry and contract tests</item>
+		<item order="6">Dialogue context logging and simulation scripts</item>
+		<item order="7">Quest lifecycle integration with reputation and rewards</item>
+		<item order="8">Awareness cache integration</item>
+		<item order="9">Metrics, logs, dashboards, and alerts</item>
+	</priority_deliverables>
+
+	<tradeoffs>
+		<item>Richer prompts improve roleplay quality but increase token cost; relevance-first plus selective compression keeps costs bounded.</item>
+		<item>Numeric currency fields keep schema simple; dedicated currency engine enforces economic safety and auditability.</item>
+		<item>Deterministic heuristics improve reproducibility and debug quality, while LLM remains focused on narrative generation.</item>
+	</tradeoffs>
+
+</project>

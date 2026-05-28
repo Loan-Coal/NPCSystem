@@ -1,0 +1,594 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  CODING_PRINCIPLES.xml
+  Authoritative coding rules for the NPC Engine project.
+  ALL generated code MUST comply with every rule marked enforcement="strict".
+  Rules marked enforcement="guideline" are strong preferences with documented exceptions.
+
+  HOW TO READ:
+  - <rule> blocks are the enforceable unit
+  - Each rule has a rationale and one or more examples
+  - Rules are grouped by category in priority order
+-->
+<coding_principles project="npc_engine" language="Python" version="3.11">
+
+  <!-- ══════════════════════════════════════════
+       CATEGORY 1 — ARCHITECTURE PRINCIPLES
+       Highest priority. Override all other concerns.
+       ══════════════════════════════════════════ -->
+  <category name="Architecture" priority="1">
+
+    <rule id="ARCH-01" name="Single Responsibility Principle" enforcement="strict">
+      <statement>Every module, class, and function has exactly one reason to change.</statement>
+      <rationale>
+        This codebase will be extended by multiple engines and adapters. Mixed responsibilities
+        create hidden coupling that makes extension painful and breaks the open/closed principle.
+      </rationale>
+      <constraint>Each file in this project must map to exactly ONE of: data model, reader, writer,
+        handler/orchestrator, utility, protocol/interface, adapter, or test. Never mix categories.
+      </constraint>
+      <example type="violation">
+        # WRONG: context_builder.py merges tiers, enforces token budget, AND serializes
+        def build_context(npc_id, player_msg):
+            items = merge_tiers(...)    # responsibility 1
+            items = trim_to_budget(...) # responsibility 2
+            return serialize(items)     # responsibility 3
+      </example>
+      <example type="correct">
+        # RIGHT: three files, each with one job
+        # context_merger.py → context_merger.merge(tier0, tier_a, tier_b)
+        # token_budget_enforcer.py → enforce(items, budget) → trimmed items
+        # context_serializer.py → serialize(items) → str
+        # context_builder.py → thin facade chaining the three
+      </example>
+    </rule>
+
+    <rule id="ARCH-02" name="Open/Closed Principle" enforcement="strict">
+      <statement>
+        Modules are open for extension, closed for modification.
+        New LLM backends, vector stores, distortion types, or emotion models
+        must be addable by creating a new file, never by editing existing engine files.
+      </statement>
+      <rationale>
+        Engines and the gossip distortion system are expected to grow.
+        If adding Mistral requires editing dialogue_handler.py, the design is wrong.
+      </rationale>
+      <constraint>
+        All variable behavior must be behind a Protocol or abstract base class.
+        Use factory functions to select implementations based on config.
+        The factory is the only place that changes when a new implementation is added.
+      </constraint>
+      <example type="correct">
+        # Adding a new LLM backend:
+        # 1. Create engines/llm/openai_adapter.py implementing LLMClientProtocol
+        # 2. Add "openai" case to engines/llm/factory.py
+        # 3. No other file changes required
+      </example>
+    </rule>
+
+    <rule id="ARCH-03" name="Dependency Inversion Principle" enforcement="strict">
+      <statement>
+        High-level modules depend on abstractions (Protocols), not concrete implementations.
+        Concrete dependencies are injected at the boundary (FastAPI dependency injection or constructor).
+      </statement>
+      <rationale>
+        Makes unit testing trivial: inject MockLLMClient without touching any engine code.
+        Enables runtime swapping of Neo4j session, LLM backend, or vector store.
+      </rationale>
+      <constraint>
+        No engine file may import a concrete adapter (mistral_adapter, neo4j driver, etc.) directly.
+        Engines receive their dependencies as constructor arguments typed to the Protocol.
+        FastAPI dependencies in api/dependencies.py are the composition root for the API layer.
+      </constraint>
+      <example type="violation">
+        # WRONG: engine imports concrete implementation
+        from engines.llm.mistral_adapter import MistralAdapter
+        class DialogueHandler:
+            def __init__(self):
+                self.llm = MistralAdapter()
+      </example>
+      <example type="correct">
+        # RIGHT: engine depends on protocol, concrete injected by caller
+        from engines.llm.protocols import LLMClientProtocol
+        class DialogueHandler:
+            def __init__(self, llm: LLMClientProtocol, db: AsyncSession):
+                self.llm = llm
+                self.db = db
+      </example>
+    </rule>
+
+    <rule id="ARCH-04" name="Interface Segregation Principle" enforcement="strict">
+      <statement>
+        Protocols must be small and focused. Do not add methods to a protocol that
+        not all implementors will need. Split into multiple protocols if necessary.
+      </statement>
+      <example type="correct">
+        # LLMClientProtocol has generate, generate_structured, stream, model_name.
+        # All adapters implement all four. If an adapter cannot stream, it raises
+        # NotImplementedError — but streaming is architecturally required for WebSocket.
+        # If a new adapter only generates text and has no structured output, create
+        # a separate TextLLMClientProtocol and a StructuredLLMClientProtocol.
+      </example>
+    </rule>
+
+    <rule id="ARCH-05" name="Liskov Substitution Principle" enforcement="strict">
+      <statement>
+        Any class implementing a Protocol must be substitutable for any other implementation
+        without changing program behavior. No implementation may weaken preconditions or
+        strengthen postconditions relative to the Protocol's docstring.
+      </statement>
+      <example type="violation">
+        # WRONG: MockLLMClient.generate() returns "" for empty prompt, but real adapters raise
+        # This breaks tests that test empty-prompt handling
+      </example>
+    </rule>
+
+  </category>
+
+  <!-- ══════════════════════════════════════════
+       CATEGORY 2 — CODE STRUCTURE RULES
+       ══════════════════════════════════════════ -->
+  <category name="Code Structure" priority="2">
+
+    <rule id="STRUCT-01" name="File Size Limit" enforcement="strict">
+      <statement>No source file may exceed 200 lines (excluding blank lines and comments).</statement>
+      <rationale>
+        Large files are a symptom of SRP violations. The 200-line limit forces extraction
+        before files grow unwieldy. Docstrings and comments are excluded to encourage documentation.
+      </rationale>
+      <action_if_violated>
+        Extract helpers to utils/, split readers/writers, or decompose the class.
+        Never suppress the limit with a comment.
+      </action_if_violated>
+    </rule>
+
+    <rule id="STRUCT-02" name="Function Size Limit" enforcement="strict">
+      <statement>No function or method may exceed 40 lines.</statement>
+      <rationale>
+        Functions longer than 40 lines almost always contain multiple responsibilities
+        or missing abstractions. Extract sub-functions with descriptive names.
+      </rationale>
+    </rule>
+
+    <rule id="STRUCT-03" name="Module Docstrings" enforcement="strict">
+      <statement>
+        Every .py file must begin with a module-level docstring describing:
+        1. What this module does (one sentence)
+        2. What it does NOT do (scope boundary)
+        3. Key dependencies injected
+      </statement>
+      <example type="correct">
+        """
+        relation_writer.py — Writes RELATES_TO edge mutations to Neo4j.
+
+        Does NOT open or commit transactions (graph_writer.py does that).
+        Does NOT validate delta bounds (modifier_bounds_validator.py does that).
+
+        Dependencies: neo4j.AsyncSession (injected).
+        """
+      </example>
+    </rule>
+
+    <rule id="STRUCT-04" name="No Nesting Beyond 3 Levels" enforcement="strict">
+      <statement>Control flow nesting (if/for/try) must not exceed 3 levels deep.</statement>
+      <action_if_violated>Extract inner blocks into named helper functions.</action_if_violated>
+    </rule>
+
+    <rule id="STRUCT-05" name="No Magic Numbers or Strings" enforcement="strict">
+      <statement>
+        All constants must be named (ALL_CAPS module-level variable or config.py key).
+        No raw numeric literals except 0 and 1 in logic.
+        No raw string literals for node labels, relationship types, or config keys.
+      </statement>
+      <example type="violation">
+        if trust > 50:          # WRONG
+        if trust > TRUST_NEUTRAL:  # RIGHT (define TRUST_NEUTRAL = 50)
+
+        session.run("MATCH (c:Character)")   # WRONG
+        session.run(CYPHER_MATCH_CHARACTER)  # RIGHT (define as constant)
+      </example>
+    </rule>
+
+    <rule id="STRUCT-06" name="Immutability First" enforcement="strict">
+      <statement>
+        Never mutate an existing data structure in place. Always create and return a new object.
+        Use Pydantic model_copy(update=...), dataclasses.replace(), or dict spreading.
+      </statement>
+      <rationale>
+        Mutation creates hidden side effects. The dialogue pipeline passes context through
+        many steps; in-place mutation makes debugging pipeline state nearly impossible.
+      </rationale>
+      <example type="violation">
+        context["items"].append(new_item)         # WRONG: mutates in place
+      </example>
+      <example type="correct">
+        context = context.model_copy(update={"items": [*context.items, new_item]})  # RIGHT
+      </example>
+    </rule>
+
+  </category>
+
+  <!-- ══════════════════════════════════════════
+       CATEGORY 3 — TYPE SAFETY AND MODELS
+       ══════════════════════════════════════════ -->
+  <category name="Type Safety" priority="3">
+
+    <rule id="TYPE-01" name="Type Hints Everywhere" enforcement="strict">
+      <statement>
+        Every function parameter, return value, and class field must have a type annotation.
+        No implicit Any. Use Optional[X] or X | None explicitly.
+      </statement>
+    </rule>
+
+    <rule id="TYPE-02" name="Pydantic v2 for All Data Models" enforcement="strict">
+      <statement>
+        All data exchanged between layers (API schemas, graph nodes, engine inputs/outputs,
+        config) must be Pydantic v2 BaseModel or BaseSettings.
+        No raw dicts crossing module boundaries.
+      </statement>
+      <rationale>
+        Pydantic v2 gives free validation, serialization, and schema generation.
+        Raw dicts allow silent type errors (wrong key name, wrong value type).
+      </rationale>
+      <example type="violation">
+        def build_prompt(context: dict) -> str:  # WRONG: opaque dict
+      </example>
+      <example type="correct">
+        def build_prompt(context: ContextSkeleton) -> str:  # RIGHT: typed model
+      </example>
+    </rule>
+
+    <rule id="TYPE-03" name="Enums for Fixed Value Sets" enforcement="strict">
+      <statement>
+        Use Python Enum or Literal types for any field with a fixed set of valid values.
+        Never use raw strings for action types, distortion types, knowledge states, etc.
+      </statement>
+      <example type="correct">
+        from typing import Literal
+        class Action(BaseModel):
+            type: Literal["speak","gesture","move","attack","give_item","none"]
+      </example>
+    </rule>
+
+    <rule id="TYPE-04" name="Protocols Over ABCs" enforcement="guideline">
+      <statement>
+        Prefer typing.Protocol for interface definitions over abstract base classes.
+        Protocols support structural subtyping (duck typing with type checker support),
+        which works better with dependency injection and mocking.
+      </statement>
+    </rule>
+
+  </category>
+
+  <!-- ══════════════════════════════════════════
+       CATEGORY 4 — ERROR HANDLING
+       ══════════════════════════════════════════ -->
+  <category name="Error Handling" priority="4">
+
+    <rule id="ERR-01" name="Fail Fast at System Boundaries" enforcement="strict">
+      <statement>
+        Validate all external inputs (API requests, LLM responses, Neo4j results,
+        JSON file contents) immediately upon receipt. Raise or return error before
+        passing invalid data inward.
+      </statement>
+    </rule>
+
+    <rule id="ERR-02" name="Custom Exception Hierarchy" enforcement="strict">
+      <statement>
+        All domain errors must be raised as typed custom exceptions defined in utils/errors.py.
+        Never raise generic Exception or use bare except.
+        Exception classes carry structured fields (not just a message string).
+      </statement>
+      <example type="correct">
+        raise GraphUnavailableError(uri=config.NEO4J_URI, cause=str(e))
+        raise LLMTimeoutError(model=self.llm.model_name(), timeout_s=config.LLM_TIMEOUT_SECONDS)
+        raise RelationDeltaExceededError(src=src_id, dst=dst_id, delta=delta, max_allowed=max_val)
+      </example>
+    </rule>
+
+    <rule id="ERR-03" name="Never Silently Swallow Errors" enforcement="strict">
+      <statement>
+        Every except block must either re-raise, raise a domain error, log and re-raise,
+        or return a typed error value. No bare except: pass.
+      </statement>
+    </rule>
+
+    <rule id="ERR-04" name="Resilience at Engine Boundaries" enforcement="strict">
+      <statement>
+        Each engine boundary (LLM call, Neo4j query) must have a defined fallback contract.
+        LLM timeout → serve fallback_responses.json.
+        Neo4j unavailable → raise GraphUnavailableError → API returns 503.
+        Document the fallback in the function docstring.
+      </statement>
+    </rule>
+
+    <rule id="ERR-05" name="No Error Handling for Internal Invariants" enforcement="strict">
+      <statement>
+        Do not add try/except around code that calls internal functions you control.
+        Internal invariants are enforced by type hints and Pydantic; catching them hides bugs.
+        Only validate at system boundaries (API input, LLM output, DB results, file reads).
+      </statement>
+    </rule>
+
+  </category>
+
+  <!-- ══════════════════════════════════════════
+       CATEGORY 5 — DEPENDENCY INJECTION
+       ══════════════════════════════════════════ -->
+  <category name="Dependency Injection" priority="5">
+
+    <rule id="DI-01" name="Constructor Injection Only" enforcement="strict">
+      <statement>
+        All dependencies (DB session, LLM client, embedding index, config, stores) must be
+        injected via __init__ constructor parameters.
+        No global singletons accessed from inside engine or handler classes.
+        No module-level instantiation of stateful objects.
+      </statement>
+      <exception>
+        config.py Settings instance may be a module-level singleton accessed via
+        get_config() factory function. This is acceptable because Settings is immutable
+        after startup.
+      </exception>
+    </rule>
+
+    <rule id="DI-02" name="FastAPI Dependency Functions as Composition Root" enforcement="strict">
+      <statement>
+        api/dependencies.py is the only place where concrete implementations are instantiated
+        and wired together. Route handlers receive dependencies via FastAPI Depends().
+        Route handlers must not instantiate anything directly.
+      </statement>
+    </rule>
+
+    <rule id="DI-03" name="Inject Sessions, Never Open Them" enforcement="strict">
+      <statement>
+        Graph sub-writers (character_writer, relation_writer, etc.) receive an
+        AsyncSession as a parameter. They never call driver.session() themselves.
+        graph_writer.py is the only file that opens and commits transactions.
+      </statement>
+    </rule>
+
+  </category>
+
+  <!-- ══════════════════════════════════════════
+       CATEGORY 6 — ASYNC AND CONCURRENCY
+       ══════════════════════════════════════════ -->
+  <category name="Async and Concurrency" priority="6">
+
+    <rule id="ASYNC-01" name="Async All the Way Down" enforcement="strict">
+      <statement>
+        All I/O operations (Neo4j queries, LLM HTTP calls, embedding compute) must be async.
+        Use async def and await. Never use blocking I/O in an async context.
+        Use asyncio.gather() for independent parallel operations.
+      </statement>
+    </rule>
+
+    <rule id="ASYNC-02" name="Concurrency Cap on Batch Operations" enforcement="strict">
+      <statement>
+        asyncio.gather() calls that could spawn unbounded coroutines must use
+        asyncio.Semaphore(config.MAX_CONCURRENT_TICKS) to cap concurrency.
+      </statement>
+    </rule>
+
+    <rule id="ASYNC-03" name="Thread-Safe Shared State" enforcement="strict">
+      <statement>
+        emotion_store and session_store hold in-memory state accessed concurrently.
+        All mutations must be wrapped in asyncio.Lock().
+        Document the lock in the class docstring.
+      </statement>
+    </rule>
+
+  </category>
+
+  <!-- ══════════════════════════════════════════
+       CATEGORY 7 — OBSERVABILITY
+       ══════════════════════════════════════════ -->
+  <category name="Observability" priority="7">
+
+    <rule id="OBS-01" name="Structured Logging" enforcement="strict">
+      <statement>
+        Use the structured logger from utils/logging.py. Never use print().
+        Log as key-value pairs: logger.info("event", npc_id=npc_id, tick=tick, ...).
+        Include npc_id, player_id, tick, and duration_ms in all engine log entries.
+      </statement>
+    </rule>
+
+    <rule id="OBS-02" name="LLM Prompt Redaction in Production" enforcement="strict">
+      <statement>
+        LLM prompts and responses must only be logged when config.LOG_LLM_PROMPTS is True
+        AND config.ENV == "dev". In staging and production, log only token counts and model name.
+      </statement>
+      <rationale>NPC dialogue may contain player-sensitive content; do not log in production.</rationale>
+    </rule>
+
+    <rule id="OBS-03" name="RNG Seed Logging" enforcement="strict">
+      <statement>
+        All uses of random number generation (gossip pair selection, event sampling,
+        distortion probability) must log the seed used at the start of each tick.
+        This enables full reproducibility of any tick for debugging.
+      </statement>
+    </rule>
+
+    <rule id="OBS-04" name="Timing Instrumentation" enforcement="guideline">
+      <statement>
+        Wrap all LLM calls and Neo4j queries with timing that emits duration_ms to the logger.
+        This is the primary tool for identifying latency regressions before they affect players.
+      </statement>
+    </rule>
+
+  </category>
+
+  <!-- ══════════════════════════════════════════
+       CATEGORY 8 — PROMPT AND LLM HYGIENE
+       ══════════════════════════════════════════ -->
+  <category name="Prompt Hygiene" priority="8">
+
+    <rule id="PROMPT-01" name="Prompt Templates Are Versioned" enforcement="strict">
+      <statement>
+        All prompt templates live in docs/prompts.md with a version string (e.g., v1.2).
+        The version must be included in LLM call logs.
+        Never construct prompts by ad-hoc string concatenation inside engine code.
+        prompt_builder.py is the only place that assembles prompts.
+      </statement>
+    </rule>
+
+    <rule id="PROMPT-02" name="Token Budget Enforcement" enforcement="strict">
+      <statement>
+        context_builder.py must enforce config.PROMPT_TOKEN_BUDGET before serialization.
+        If budget is exceeded after Tier 0 + Tier A alone, raise TokenBudgetExceededError.
+        Tier B (RAG) items are always optional; trim them first.
+        Never pass an oversized context to the LLM silently.
+      </statement>
+    </rule>
+
+    <rule id="PROMPT-03" name="Structured Output Always Validated" enforcement="strict">
+      <statement>
+        LLM output from generate_structured() must be validated through a Pydantic model
+        (response_parser.py) before any field is accessed.
+        Never access LLM JSON fields directly with dict["key"].
+      </statement>
+    </rule>
+
+    <rule id="PROMPT-04" name="Few-Shot Examples Required" enforcement="strict">
+      <statement>
+        Stage B (realizer) prompt must include exactly two few-shot examples demonstrating
+        the full output schema (npc_response, relation_deltas, mood_update, action, facial_expression).
+        Examples are defined in docs/prompts.md and injected by prompt_builder.py.
+      </statement>
+    </rule>
+
+    <rule id="PROMPT-05" name="Idempotent Prompt Assembly" enforcement="strict">
+      <statement>
+        Given the same inputs (context skeleton, player message, session turns),
+        prompt_builder.build_prompt() must return the exact same string every time.
+        No timestamps or UUIDs injected into prompt content.
+      </statement>
+      <rationale>Enables reliable prompt caching and reproducible debugging.</rationale>
+    </rule>
+
+  </category>
+
+  <!-- ══════════════════════════════════════════
+       CATEGORY 9 — TESTING
+       ══════════════════════════════════════════ -->
+  <category name="Testing" priority="9">
+
+    <rule id="TEST-01" name="Minimum 80% Coverage" enforcement="strict">
+      <statement>
+        All modules must maintain ≥ 80% line coverage measured by pytest-cov.
+        CI will fail below this threshold.
+      </statement>
+    </rule>
+
+    <rule id="TEST-02" name="Pure Functions Are Fully Testable Without Mocks" enforcement="strict">
+      <statement>
+        gossip_distort(), token_budget_enforcer.enforce(), modifier_bounds_validator.clamp(),
+        and context_serializer.serialize() are pure functions.
+        Their tests must not use any mocks. If a mock is needed, the function is not pure.
+      </statement>
+    </rule>
+
+    <rule id="TEST-03" name="Integration Tests Use Real Neo4j" enforcement="strict">
+      <statement>
+        Integration tests for graph_writer.py must use a real Neo4j instance
+        (testcontainers-python). No mocking the database in integration tests.
+      </statement>
+      <rationale>
+        Mock databases have historically masked schema mismatches and transaction edge cases.
+      </rationale>
+    </rule>
+
+    <rule id="TEST-04" name="Mock LLM in All Non-LLM Tests" enforcement="strict">
+      <statement>
+        Any test that is not specifically testing an LLM adapter must use mock_adapter.py.
+        No real LLM calls in unit or integration tests (cost + non-determinism).
+      </statement>
+    </rule>
+
+    <rule id="TEST-05" name="Test Error Paths Explicitly" enforcement="strict">
+      <statement>
+        Every error path (LLMTimeoutError, GraphUnavailableError, ValidationError,
+        RelationDeltaExceededError) must have at least one test that triggers it
+        and asserts the correct fallback behavior or HTTP status code.
+      </statement>
+    </rule>
+
+  </category>
+
+  <!-- ══════════════════════════════════════════
+       CATEGORY 10 — DOCUMENTATION
+       ══════════════════════════════════════════ -->
+  <category name="Documentation" priority="10">
+
+    <rule id="DOC-01" name="Every File Has a docs/files/ Entry" enforcement="strict">
+      <statement>
+        Before a file may be merged, a corresponding docs/files/&lt;filename&gt;.md must exist
+        describing: purpose, public API (classes and functions), side effects, and an example.
+      </statement>
+    </rule>
+
+    <rule id="DOC-02" name="Docstring on Every Public Function" enforcement="strict">
+      <statement>
+        Every public function and class method must have a docstring with:
+        - One-line summary
+        - Args section (name: type — description)
+        - Returns section
+        - Raises section (if any exceptions are raised)
+      </statement>
+    </rule>
+
+    <rule id="DOC-03" name="ADRs for Non-Obvious Decisions" enforcement="guideline">
+      <statement>
+        Any architectural decision with meaningful trade-offs must be documented in
+        docs/adr/NNNN-title.md (Architecture Decision Record).
+        Required for: choice of Neo4j over relational DB, WebSocket over SSE,
+        in-memory emotion store, deterministic gossip distortion algorithm.
+      </statement>
+    </rule>
+
+  </category>
+
+  <!-- ══════════════════════════════════════════
+       CATEGORY 11 — SECURITY
+       ══════════════════════════════════════════ -->
+  <category name="Security" priority="11">
+
+    <rule id="SEC-01" name="No Secrets in Source Code" enforcement="strict">
+      <statement>
+        API keys, passwords, tokens, and seeds must only exist in environment variables.
+        .env files must never be committed. .env.example with placeholder values is required.
+      </statement>
+    </rule>
+
+    <rule id="SEC-02" name="Parameterized Cypher Queries" enforcement="strict">
+      <statement>
+        All Neo4j Cypher queries must use parameterized form (e.g., {npc_id}).
+        Never format user input directly into a Cypher string.
+      </statement>
+      <example type="violation">
+        session.run(f"MATCH (c:Character {{id: '{npc_id}'}})")  # WRONG: injection risk
+      </example>
+      <example type="correct">
+        session.run("MATCH (c:Character {id: $npc_id})", npc_id=npc_id)  # RIGHT
+      </example>
+    </rule>
+
+    <rule id="SEC-03" name="Auth on All Non-Health Routes" enforcement="strict">
+      <statement>
+        Every route except GET /health must pass through auth/middleware.py.
+        The middleware verifies the Authorization: Bearer {API_KEY_SECRET} header.
+        Return HTTP 401 with no body detail on failure.
+      </statement>
+    </rule>
+
+    <rule id="SEC-04" name="Input Validation at API Boundary" enforcement="strict">
+      <statement>
+        All incoming request bodies are Pydantic models with field constraints.
+        player_message must be capped at config.MAX_PLAYER_MESSAGE_CHARS (default 1000).
+        delta_ticks in /clock/advance must be bounded [1, 1000].
+        Never pass unconstrained user input to Neo4j or LLM prompts.
+      </statement>
+    </rule>
+
+  </category>
+
+</coding_principles>
