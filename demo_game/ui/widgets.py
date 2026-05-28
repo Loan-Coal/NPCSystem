@@ -10,10 +10,6 @@ Used by: demo_game.ui.game_window
 from __future__ import annotations
 
 import pygame
-
-# ---------------------------------------------------------------------------
-# Colour palette (shared across widgets)
-# ---------------------------------------------------------------------------
 _CLR_BG = (18, 18, 24)
 _CLR_PANEL = (28, 28, 36)
 _CLR_INPUT_BG = (38, 38, 50)
@@ -25,6 +21,40 @@ _CLR_PLAYER_LABEL = (120, 160, 255)
 _CLR_NPC_LABEL = (200, 160, 80)
 _CLR_ERROR_LABEL = (220, 80, 80)
 _CLR_CURSOR = (180, 180, 220)
+
+
+# ---------------------------------------------------------------------------
+# Text utilities
+# ---------------------------------------------------------------------------
+
+
+def _wrap_text(font: pygame.font.Font, text: str, max_width: int) -> list[str]:
+    """Split text into lines that each fit within max_width pixels.
+
+    Args:
+        font: Pygame font used to measure text width.
+        text: The text to wrap.
+        max_width: Maximum line width in pixels.
+
+    Returns:
+        List of line strings. Always has at least one element.
+    """
+    words = text.split()
+    if not words:
+        return [""]
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if font.size(candidate)[0] <= max_width:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines if lines else [""]
 
 
 class InputBox:
@@ -120,7 +150,7 @@ class ScrollableLog:
         self._label_font = label_font
         self._max = max_messages
         self._messages: list[tuple[str, str, tuple[int, int, int]]] = []  # (label, body, colour)
-        self._scroll_offset = 0  # lines scrolled up from bottom (0 = bottom)
+        self._scroll_px: int = 0  # pixels scrolled up from bottom (0 = bottom)
 
     def add_message(self, label: str, body: str, *, is_player: bool = False, is_error: bool = False) -> None:
         """Append a message to the log and scroll to bottom.
@@ -140,40 +170,50 @@ class ScrollableLog:
         self._messages.append((label, body, colour))
         if len(self._messages) > self._max:
             self._messages.pop(0)
-        self._scroll_offset = 0  # snap to bottom on new message
+        self._scroll_px = 0  # snap to bottom on new message
 
     def handle_event(self, event: pygame.event.Event) -> None:
         """Handle scroll-wheel events."""
         if event.type == pygame.MOUSEWHEEL:
-            self._scroll_offset = max(0, self._scroll_offset - event.y)
+            self._scroll_px = max(0, self._scroll_px + event.y * self._font.get_linesize())
 
     def clear(self) -> None:
         """Remove all messages and reset scroll."""
         self._messages.clear()
-        self._scroll_offset = 0
+        self._scroll_px = 0
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
-        """Render the log onto ``surface`` at ``rect``."""
+        """Render the log onto ``surface`` at ``rect``, wrapping long lines."""
         pygame.draw.rect(surface, _CLR_PANEL, rect, border_radius=4)
         clip = surface.subsurface(rect)
         clip.fill(_CLR_PANEL)
 
         line_h = self._font.get_linesize()
         label_h = self._label_font.get_linesize()
-        entry_h = label_h + line_h + 6  # label + body + padding
+        max_w = rect.width - 16
 
-        total_h = len(self._messages) * entry_h
-        bottom_y = max(total_h, rect.height)
-        start_y = bottom_y - self._scroll_offset * entry_h - rect.height
+        # Pre-compute wrapped lines per message (O(n) per frame; negligible at 30 FPS)
+        entries: list[tuple[str, list[str], tuple[int, int, int]]] = [
+            (label, _wrap_text(self._font, body, max_w), colour)
+            for label, body, colour in self._messages
+        ]
 
-        for i, (label, body, colour) in enumerate(self._messages):
-            y = i * entry_h - start_y
-            if y + entry_h < 0 or y > rect.height:
-                continue
-            lbl_surf = self._label_font.render(label, True, colour)
-            clip.blit(lbl_surf, (8, y))
-            body_surf = self._font.render(body, True, _CLR_TEXT)
-            clip.blit(body_surf, (8, y + label_h))
+        total_h = sum(label_h + len(lines) * line_h + 6 for _, lines, _ in entries)
+        max_scroll = max(0, total_h - rect.height)
+        scroll_px = min(self._scroll_px, max_scroll)
+        viewport_top = max(total_h, rect.height) - scroll_px - rect.height
+
+        content_y = 0
+        for label, lines, colour in entries:
+            entry_h = label_h + len(lines) * line_h + 6
+            rel_y = content_y - viewport_top
+            if rel_y + entry_h >= 0 and rel_y < rect.height:
+                lbl_surf = self._label_font.render(label, True, colour)
+                clip.blit(lbl_surf, (8, rel_y))
+                for i, line in enumerate(lines):
+                    line_surf = self._font.render(line, True, _CLR_TEXT)
+                    clip.blit(line_surf, (8, rel_y + label_h + i * line_h))
+            content_y += entry_h
 
 
 class NpcListWidget:

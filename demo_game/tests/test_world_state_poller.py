@@ -1,0 +1,90 @@
+"""
+Module: test_world_state_poller
+Layer: demo_game (tests)
+Purpose: TDD unit tests for demo_game.world_state_poller.WorldStatePoller.
+         No pygame, no network — all engine calls are mocked.
+Dependencies: demo_game.world_state_poller, demo_game.client, unittest.mock
+Used by: make test-demo
+"""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock
+
+import pytest
+
+from demo_game.client import EngineClientError
+from demo_game.world_state_poller import WorldStatePoller
+
+
+def _make_client(world_state: dict | None = None, raises: Exception | None = None) -> MagicMock:
+    """Return a mock EngineClient whose get_world_state() returns world_state or raises."""
+    client = MagicMock()
+    if raises is not None:
+        client.get_world_state.side_effect = raises
+    else:
+        client.get_world_state.return_value = world_state
+    return client
+
+
+class TestWorldStatePollerInitialState:
+    def test_initial_state_empty(self) -> None:
+        """get_state() returns ('', []) before any poll has run."""
+        poller = WorldStatePoller(_make_client(), interval_s=999.0)
+        epoch, conditions = poller.get_state()
+        assert epoch == ""
+        assert conditions == []
+
+
+class TestWorldStatePollerPollOnce:
+    def test_poll_once_updates_epoch_and_conditions(self) -> None:
+        """After _poll_once() with a war world state, get_state() reflects the update."""
+        ws = {"epoch": "war", "active_conditions": ["northern_war_active"]}
+        poller = WorldStatePoller(_make_client(ws), interval_s=999.0)
+        poller._poll_once()
+        epoch, conditions = poller.get_state()
+        assert epoch == "war"
+        assert conditions == ["northern_war_active"]
+
+    def test_poll_once_handles_none_response(self) -> None:
+        """Client returns None (world not yet seeded) — state stays empty, no crash."""
+        poller = WorldStatePoller(_make_client(None), interval_s=999.0)
+        poller._poll_once()
+        epoch, conditions = poller.get_state()
+        assert epoch == ""
+        assert conditions == []
+
+    def test_poll_once_handles_engine_client_error(self, capsys: pytest.CaptureFixture) -> None:
+        """Client raises EngineClientError — state unchanged, error printed to stderr."""
+        poller = WorldStatePoller(
+            _make_client(raises=EngineClientError("boom")), interval_s=999.0
+        )
+        poller._poll_once()
+        captured = capsys.readouterr()
+        assert "WorldStatePoller" in captured.err
+        epoch, conditions = poller.get_state()
+        assert epoch == ""
+        assert conditions == []
+
+    def test_poll_once_handles_generic_exception(self, capsys: pytest.CaptureFixture) -> None:
+        """Any unexpected exception in _poll_once() is swallowed and printed."""
+        poller = WorldStatePoller(
+            _make_client(raises=RuntimeError("network down")), interval_s=999.0
+        )
+        poller._poll_once()
+        captured = capsys.readouterr()
+        assert "WorldStatePoller" in captured.err
+
+
+class TestWorldStatePollerImmutability:
+    def test_get_state_returns_copy_of_conditions(self) -> None:
+        """Mutating the returned conditions list does not affect internal state."""
+        ws = {"epoch": "war", "active_conditions": ["northern_war_active"]}
+        poller = WorldStatePoller(_make_client(ws), interval_s=999.0)
+        poller._poll_once()
+
+        _, conditions = poller.get_state()
+        conditions.append("injected")
+
+        _, conditions_again = poller.get_state()
+        assert conditions_again == ["northern_war_active"]
