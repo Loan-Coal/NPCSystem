@@ -62,7 +62,13 @@
       "PowerShell(Get-ChildItem \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\\\\evals\\\\reports\\\\\" -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | ForEach-Object { $_.FullName })",
       "Bash(.venv/Scripts/python.exe evals/runner.py --base-url http://localhost:8000 --api-key local_dev_secret_change_this_2026 --cases evals/cases --reports evals/reports)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\\\\project-harness\" -Force)",
-      "Bash(Select-Object Name, Mode)"
+      "Bash(Select-Object Name, Mode)",
+      "Bash(ls -la \"c:\\\\\\\\Users\\\\\\\\lohan\\\\\\\\Documents\\\\\\\\hackathons\\\\\\\\NPCSystem\\\\\\\\demo_game\")",
+      "Bash(tree \"c:\\\\\\\\Users\\\\\\\\lohan\\\\\\\\Documents\\\\\\\\hackathons\\\\\\\\NPCSystem\\\\\\\\demo_game\" -I \"__pycache__|*.pyc\")",
+      "Bash(head -40 \"c:\\\\\\\\Users\\\\\\\\lohan\\\\\\\\Documents\\\\\\\\hackathons\\\\\\\\NPCSystem\\\\\\\\demo_game\\\\\\\\run.py\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\\\\project-harness\" -File)",
+      "Bash(Select-String -Pattern \"^## DEC-0\" \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\\\\project-harness\\\\DECISIONS.md\")",
+      "Bash(Select-Object -Last 1)"
     ],
     "additionalDirectories": [
       "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem",
