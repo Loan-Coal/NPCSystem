@@ -1,0 +1,28 @@
+case_id: case_voice_captain_sorn_001
+description: >
+  captain_sorn (military commander, demo world) responds to a question about
+  the north. Voice should be direct, authoritative, and factual — no hedging,
+  no rumour framing.
+
+seed:
+  npc_id: captain_sorn
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: "What is happening in the north?"
+
+expected:
+  - kind: schema
+  - kind: tone_judge
+    description: "Voice check: captain_sorn — direct military tone"
+    judge_prompt: >
+      Does this NPC response use a direct, authoritative military tone — stating
+      facts or orders without hedging words like 'perhaps', 'I heard', or
+      'they say'? YES if the tone is confident and factual. NO if it hedges,
+      gossips, or sounds warm and conversational.
+
+notes: >
+  Requires demo world seed (make demo-seed). captain_sorn is seeded with
+  KNOWS_ABOUT northern_war_begins. Pair with case_voice_mira_innkeeper to
+  verify the two voices are distinctly different.

@@ -1,0 +1,24 @@
+case_id: case_pos_world_blight_guard
+description: >
+  vw_guard has no direct KNOWS_ABOUT edge for the crop blight, but the world
+  has active_conditions=["crop_blight"]. When asked a general "how are things"
+  question, Rule 1's generalized active_conditions constraint requires the NPC
+  to acknowledge the blight. Positive test for R2.2 generalization.
+seed:
+  npc_id: vw_guard
+  player_id: player_eval
+  location_id: vw_gate
+  requires_world: village
+input:
+  player_message: "How are the crops doing this season? Good harvest expected?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - blight
+      - crops
+      - harvest
+      - fields
+      - hard times
+      - trouble
+      - difficult

@@ -4,17 +4,16 @@ description: >
   assert authority without escalating to violence unprompted.
 
 seed:
-  npc_id: guard_1
+  npc_id: vw_guard
   player_id: player_1
-  location_id: loc_gate
+  location_id: vw_gate
+  requires_world: village
 
 input:
   player_message: "I saw someone sneaking around the barracks last night."
 
 expected:
   - kind: schema
-  - kind: keyword_any
-    keywords: ["report", "investigate", "watch", "patrol", "authority", "captain", "tell", "guard"]
   - kind: in_set
     field: facial_expression.type
     values: ["neutral", "surprised", "frown", "angry"]
@@ -27,4 +26,10 @@ expected:
     max: 10
   - kind: tone_judge
     description: "Response should be authoritative but not immediately hostile"
-    skip_until_implemented: true
+    judge_prompt: >
+      Does this guard response take the report seriously and assert authority?
+      Count as YES if the guard: asks a follow-up question to gather information,
+      acknowledges the report, states intent to investigate or act, or expresses
+      urgency about catching intruders. Count as NO only if the guard is completely
+      dismissive, laughs it off, or ignores the report entirely.
+      A response that asks for a description AND states "we need to catch them" is YES.

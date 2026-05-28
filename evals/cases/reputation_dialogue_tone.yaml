@@ -5,22 +5,32 @@ description: >
   should reflect warmth, trust, or privilege — not suspicion or hostility.
 
 seed:
-  npc_id: blacksmith_npc
+  npc_id: tw_merchant
   player_id: hero_player
-  faction_id: smiths_guild
+  faction_id: tw_merchants
   player_reputation_standing: 80
+  requires_world: tavern
+
+input:
   player_message: "Can you craft something special for me?"
 
 context_block_expected:
-  - "Player reputation with Smiths Guild: 80 (allied)"
+  - "Player reputation with tw_merchants: 80 (allied)"
 
 expected:
   - kind: schema
   - kind: keyword_any
-    keywords: ["certainly", "honor", "pleasure", "friend", "trusted", "gladly", "welcome", "special"]
+    keywords: ["certainly", "honor", "pleasure", "friend", "trusted", "gladly", "welcome", "special",
+               "of course", "happy to", "tailored", "for you", "anything",
+               "what you need", "help you", "looking for", "I can", "let me", "might have"]
   - kind: tone_judge
-    description: "Response should be warm and cooperative, reflecting allied reputation"
     skip_until_implemented: true
+    judge_prompt: >
+      Does this NPC treat the player as a trusted ally — engaging helpfully, offering
+      assistance or goods, and showing no hostility, coldness, or suspicion? The NPC
+      may mention world difficulties (war, scarcity) but should still be cooperative
+      and service-oriented toward the player. YES if helpful/cooperative/welcoming
+      despite any world context. NO if cold, dismissive, suspicious, or hostile.
 
 notes: >
   reputation_dialogue_tone_002 (hostile path): player_reputation_standing=-70 ("hostile"),

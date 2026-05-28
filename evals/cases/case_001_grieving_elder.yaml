@@ -4,9 +4,10 @@ description: >
   and thematically appropriate for grief, expressed without aggression.
 
 seed:
-  npc_id: elder_1
+  npc_id: vw_elder
   player_id: player_1
-  location_id: loc_market
+  location_id: vw_village_square
+  requires_world: village
 
 input:
   player_message: "My son died in the war. I don't know what to do."
@@ -27,4 +28,3 @@ expected:
     max: 10
   - kind: tone_judge
     description: "Response should be empathetic and not dismissive"
-    skip_until_implemented: true

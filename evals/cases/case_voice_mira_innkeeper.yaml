@@ -1,0 +1,28 @@
+case_id: case_voice_mira_innkeeper_001
+description: >
+  mira_innkeeper (demo world) responds to a question about the north. Voice
+  should be warm, conversational, and gossip-framed — rumour language, no
+  direct military authority.
+
+seed:
+  npc_id: mira_innkeeper
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: "What have you heard about the north?"
+
+expected:
+  - kind: schema
+  - kind: tone_judge
+    description: "Voice check: mira_innkeeper — warm gossip tone"
+    judge_prompt: >
+      Does this NPC response use a warm, conversational innkeeper tone with
+      gossip or rumour framing — phrases like 'I heard', 'they say', or
+      attributing news to a traveller or soldier? YES if the tone feels like
+      an innkeeper passing on gossip. NO if it sounds military, official,
+      or overly clinical.
+
+notes: >
+  Requires demo world seed (make demo-seed). Pair with case_voice_captain_sorn
+  to verify the two voices are distinctly different.

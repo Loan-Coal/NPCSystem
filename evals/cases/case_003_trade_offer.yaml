@@ -4,9 +4,10 @@ description: >
   the offer and indicate willingness to negotiate or complete the trade.
 
 seed:
-  npc_id: merchant_1
-  player_id: player_1
-  location_id: loc_market
+  npc_id: aldric_merchant
+  player_id: player_eval
+  location_id: loc_market_square
+  requires_world: demo
 
 input:
   player_message: "I'll give you ten gold coins for that sword."
@@ -26,5 +27,9 @@ expected:
     min: -5
     max: 15
   - kind: tone_judge
-    description: "Response should be mercantile and interested in the transaction"
-    skip_until_implemented: true
+    judge_prompt: >
+      Does this NPC respond to a trade offer in a mercantile way — accepting the offer,
+      negotiating on price, or redirecting the player to other available items? YES if
+      the NPC engages commercially with the offer in any of these ways. NO if the NPC
+      ignores the offer entirely, responds with hostility unrelated to trade, or leaves
+      the commercial frame altogether.
