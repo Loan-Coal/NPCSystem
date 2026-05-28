@@ -1,6 +1,3 @@
-BASE_URL ?= http://localhost:8000
-API_KEY  ?= $(shell grep -m1 API_KEY_SECRET .env 2>/dev/null | cut -d= -f2)
-
 PYTHON := python
 
 ifneq (,$(wildcard .venv/Scripts/python.exe))
@@ -9,13 +6,17 @@ else ifneq (,$(wildcard .venv/bin/python))
 PYTHON := .venv/bin/python
 endif
 
+BASE_URL ?= http://localhost:8000
+API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)', open('.env').read(), re.M); print(m.group(1).strip() if m else '')")
+
 .PHONY: install run test test-cov test-cov-v13 test-cov-full-report \
         test-v13-contracts test-v13-graph-admin test-v13-retrieval \
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo seed-api smoke \
-        demo demo-seed demo-run test-demo
+        eval eval-e2e scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo seed-api smoke \
+        demo demo-seed demo-run demo-village demo-tavern test-demo \
+        seed-tavern-world seed-village-world
 
 install:
 	pip install -e .[dev]
@@ -102,6 +103,10 @@ eval:
 		--cases evals/cases \
 		--reports evals/reports
 
+# eval-e2e: run YAML eval cases as pytest parametrized tests (requires --scenarios-only)
+eval-e2e:
+	$(PYTHON) -m pytest e2e/scenarios/scenario_yaml_evals.py -v -m eval --scenarios-only -p no:cacheprovider $(ARGS)
+
 scenarios:
 	$(PYTHON) -m pytest e2e/scenarios/ -v -s -m "not llm_eval" --scenarios-only -p no:cacheprovider
 
@@ -132,7 +137,7 @@ demo:
 
 # demo-seed: seed the demo world via the HTTP API (idempotent — safe to re-run)
 demo-seed:
-	$(PYTHON) -m demo_game.seed
+	$(PYTHON) -m seeds.worlds.seed_demo_world
 
 # demo-run: play the scripted hackathon scenario (see docs/DEMO_SCRIPT.md)
 # ARGS: --dry-run (no API calls), --cached (recording mode, error on miss)
@@ -145,6 +150,28 @@ test-demo:
 	$(PYTHON) -m pytest demo_game/tests/ -q
 
 # ---------------------------------------------------------------------------
+# seed-tavern-world / seed-village-world: seed independent eval worlds (idempotent)
+seed-tavern-world:
+	$(PYTHON) -m seeds.worlds.seed_tavern_world --base-url $(BASE_URL) --api-key $(API_KEY)
+
+seed-village-world:
+	$(PYTHON) -m seeds.worlds.seed_village_world --base-url $(BASE_URL) --api-key $(API_KEY)
+
+# ---------------------------------------------------------------------------
+# Alternate storyline demos (Phase 3, S3.0)
+# Each demo uses its own eval world seed and LLM cache directory.
+# ---------------------------------------------------------------------------
+
+# demo-village: village crisis demo (crop blight + bandit raid)
+# Requires: make seed-village-world
+demo-village:
+	$(PYTHON) -m demo_game.scenarios.run_village_crisis $(ARGS)
+
+# demo-tavern: tavern intrigue demo (theft + voice distinctiveness)
+# Requires: make seed-tavern-world
+demo-tavern:
+	$(PYTHON) -m demo_game.scenarios.run_tavern_intrigue $(ARGS)
+
 # seed-api: seed world data via the external HTTP API (works from outside Docker)
 seed-api:
 	$(PYTHON) src/npc_engine/data/api_seeder.py \

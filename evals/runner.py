@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -36,7 +37,24 @@ def _load_cases(cases_dir: Path) -> list[dict]:
 def _run_case(case: dict, client: httpx.Client, base_url: str) -> dict:
     case_id: str = case["case_id"]
     seed: dict = case.get("seed", {})
-    inp: dict = case["input"]
+    inp: dict | None = case.get("input")
+
+    if inp is None:
+        return {
+            "case_id": case_id,
+            "description": case.get("description", ""),
+            "passed": True,
+            "expectations": [
+                {
+                    "kind": "runner",
+                    "passed": True,
+                    "skipped": True,
+                    "detail": "SKIP: no 'input' field — case targets a non-dialogue endpoint, not supported by this runner",
+                }
+            ],
+            "response": None,
+            "error": None,
+        }
 
     payload = {
         "player_id": seed.get("player_id", "player_eval"),
@@ -71,6 +89,18 @@ def _run_case(case: dict, client: httpx.Client, base_url: str) -> dict:
             continue
 
         if error:
+            requires_world = seed.get("requires_world")
+            if requires_world:
+                world_cmd = (
+                    "make demo-seed"
+                    if requires_world == "demo"
+                    else f"make seed-{requires_world}-world"
+                )
+                print(
+                    f"  [WARN] Case {case_id} needs world '{requires_world}'. "
+                    f"Run: {world_cmd}",
+                    file=sys.stderr,
+                )
             exp_results.append(
                 {
                     "kind": exp.get("kind", "unknown"),
@@ -104,10 +134,63 @@ def _run_case(case: dict, client: httpx.Client, base_url: str) -> dict:
     }
 
 
+def _setup_reputation(case: dict, client: httpx.Client, base_url: str) -> None:
+    """Pre-seed player reputation with a faction before the dialogue call."""
+    from datetime import datetime, timezone
+
+    seed = case.get("seed", {})
+    player_id = seed.get("player_id", "player_eval")
+    faction_id = seed.get("faction_id")
+    standing = seed.get("player_reputation_standing")
+    if faction_id is None or standing is None:
+        return
+
+    check = client.get(f"{base_url}/v1/graph/nodes/Character/{player_id}", timeout=10.0)
+    if check.status_code == 404:
+        now = datetime.now(timezone.utc).isoformat()
+        create_resp = client.post(
+            f"{base_url}/v1/graph/nodes/Character",
+            json={"properties": {
+                "id": player_id,
+                "name": player_id,
+                "archetype": "player",
+                "biography": "The player character.",
+                "is_player": True,
+                "is_active": True,
+                "gossipy": 50,
+                "credulity": 50,
+                "honesty": 50,
+                "current_mood": "neutral",
+                "voice_descriptor": None,
+                "created_at": now,
+                "updated_at": now,
+                "last_graph_updated_at": now,
+            }},
+            timeout=10.0,
+        )
+        if create_resp.status_code >= 400:
+            print(
+                f"  [WARN] could not create player node {player_id}: {create_resp.status_code}",
+                file=sys.stderr,
+            )
+            return
+
+    resp = client.put(
+        f"{base_url}/v1/admin/characters/{player_id}/reputation/{faction_id}",
+        json={"standing": standing},
+        timeout=10.0,
+    )
+    if resp.status_code >= 400:
+        print(
+            f"  [WARN] reputation setup failed for {player_id}/{faction_id}: {resp.status_code}",
+            file=sys.stderr,
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="NPC Engine eval runner")
     parser.add_argument("--base-url", default="http://localhost:8000")
-    parser.add_argument("--api-key", default="eval-key-change-me")
+    parser.add_argument("--api-key", default=os.getenv("API_KEY_SECRET", "eval-key-change-me"))
     parser.add_argument("--cases", default="evals/cases", type=Path)
     parser.add_argument("--reports", default="evals/reports", type=Path)
     args = parser.parse_args(argv)
@@ -117,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"No eval cases found in {args.cases}", file=sys.stderr)
         return 2
 
-    headers = {"X-API-Key": args.api_key}
+    headers = {"Authorization": f"Bearer {args.api_key}"}
     results: list[dict] = []
 
     with httpx.Client(headers=headers) as client:
@@ -129,10 +212,28 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
         for case in cases:
-            print(f"  running {case['case_id']} ...", end=" ", flush=True)
+            case_id = case["case_id"]
+            _setup_reputation(case=case, client=client, base_url=args.base_url)
+
+            print(f"  running {case_id} ...")
             result = _run_case(case=case, client=client, base_url=args.base_url)
+
+            inp = case.get("input")
+            if inp:
+                print(f"    > {inp['player_message']!r}")
+            if result.get("response"):
+                npc_text = result["response"].get("npc_response", "") or ""
+                truncated = (npc_text[:120] + "...") if len(npc_text) > 120 else npc_text
+                print(f"    < {truncated!r}")
+            for exp_result in result.get("expectations", []):
+                if exp_result.get("skipped"):
+                    continue
+                mark = "PASS" if exp_result["passed"] else "FAIL"
+                detail = f": {exp_result['detail']}" if not exp_result["passed"] else ""
+                print(f"    [{mark}] {exp_result['kind']}{detail}")
+
             status = "PASS" if result["passed"] else "FAIL"
-            print(status)
+            print(f"  {status}")
             results.append(result)
 
     report_path = write_report(results=results, output_dir=args.reports)
