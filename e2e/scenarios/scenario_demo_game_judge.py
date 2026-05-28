@@ -22,8 +22,8 @@ Requirements:
 
 These tests are probabilistic. A single retry is built in.
 
-CRITICAL: The demo world's world_state node ID is "ws_main" — NOT "world".
-"world" is used by scenario_llm_judge.py (Phase 1 seed). Do not conflate the two.
+The demo world's world_state node ID is "world" (DEC-022). Previously "ws_main" — updated in
+pre-Phase 3 cleanup. scenario_llm_judge.py (Phase 1 seed) also uses "world".
 
 Demo world NPC IDs: mira_innkeeper, aldric_merchant, captain_sorn, lira_fence, old_henryk
 captain_sorn KNOWS_ABOUT northern_war_begins — best NPC for war-epoch dialogue tests.
@@ -89,13 +89,13 @@ async def test_war_epoch_captain_sorn_acknowledges_war(
     judge = _make_judge()
     now = datetime.now(timezone.utc).isoformat()
 
-    # Set demo world to war epoch — id is "ws_main" (NOT "world")
+    # Set demo world to war epoch — id is "world" (DEC-022)
     ws_result = api_post(
         http_client,
         "/v1/graph/nodes/world_state",
         {
             "properties": {
-                "id": "ws_main",
+                "id": "world",
                 "epoch": "war",
                 "faction_standings": {},
                 "active_conditions": ["northern_war"],
@@ -223,7 +223,7 @@ async def test_captain_sorn_direct_war_confirmation(
         "/v1/graph/nodes/world_state",
         {
             "properties": {
-                "id": "ws_main",
+                "id": "world",
                 "epoch": "war",
                 "faction_standings": {},
                 "active_conditions": ["northern_war"],
@@ -298,7 +298,7 @@ async def test_mira_innkeeper_oblique_gossip(
         "/v1/graph/nodes/world_state",
         {
             "properties": {
-                "id": "ws_main",
+                "id": "world",
                 "epoch": "war",
                 "faction_standings": {},
                 "active_conditions": ["northern_war"],
@@ -371,7 +371,7 @@ async def test_old_henryk_distorted_account(
         "/v1/graph/nodes/world_state",
         {
             "properties": {
-                "id": "ws_main",
+                "id": "world",
                 "epoch": "war",
                 "faction_standings": {},
                 "active_conditions": ["northern_war"],
