@@ -257,9 +257,21 @@ SCENES: list[Scene] = [
         player_input="Aldric, are you alright? Was that fire near your stall?",
     ),
     NarratorCue(
+        name="pre_lira_cue",
+        delay_before_ms=2000,
+        text="[NARRATION] Lira sees the same fire differently — same event, different emotion.",
+    ),
+    DialogueBeat(
+        name="beat_5_lira",
+        delay_before_ms=500,
+        npc_id="lira_fence",
+        label="Lira",
+        player_input="Lira, did you hear about the fire? Seems like the kind of chaos that creates opportunity.",
+    ),
+    NarratorCue(
         name="outro",
         delay_before_ms=1000,
-        text="=== Demo complete. Slides begin. ===",
+        text="=== Demo complete. 5 beats. Slides begin. ===",
     ),
 ]
 
