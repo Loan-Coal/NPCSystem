@@ -282,8 +282,76 @@ When a prompt template is changed:
 3. Log the version in every LLM call: `logger.info("llm_call", prompt_version="v1.1", ...)`.
 4. Add a migration note below describing what changed and why.
 
+---
+
+## Voice Descriptor Strategy (R1.4)
+
+**Problem:** `npc_voices.yaml` is a YAML lookup keyed by `npc_id`. New NPCs not in the file get a generic `_default` voice. The prompt_builder has NPC-specific code that runs at request time.
+
+**Solution:** `voice_descriptor` is stored as a Character node property in Neo4j and pulled through the context pipeline. The prompt becomes fully NPC-agnostic — no lookup, no hardcoded IDs.
+
+**Implementation:**
+- `character.yaml` schema: add `voice_descriptor: { type: str, required: false }`
+- `graph_reader.py`: return `voice_descriptor` from `get_character_with_relations()`
+- `context_builder.py`: include `voice_descriptor` in serialized character block
+- `prompt_builder.py`: read from `context["npc"]["voice_descriptor"]`, remove `_get_voice()`
+- All seed scripts: set `voice_descriptor` when creating Character nodes
+- `npc_voices.yaml`: deprecated, not loaded at runtime
+
+**Voice descriptor format** (1–2 sentences, model-facing):
+```
+"Warm, pragmatic innkeeper. Hears everything but speaks carefully about politics."
+"Clipped military diction. Names facts directly. References duty and chain of command."
+```
+
+---
+
+## Gossip Hedging Rule (R2.1)
+
+NPCs with `knowledge_state=rumor` or `distortion_level>30` must use epistemic markers. Without an explicit rule, the LLM presents distorted facts with the same confidence as direct knowledge.
+
+**Planned Rule 9 addition to `system_v1.yaml`:**
+```
+RULE 9 — EPISTEMIC MARKERS FOR RUMOR:
+If the KNOWS_ABOUT entry for an event has knowledge_state=rumor or distortion_level>30,
+you MUST frame that information with hedging language:
+  "I heard...", "Word is...", "They say...", "Supposedly...", "Or so the rumour goes..."
+You must NOT assert rumour content as certain fact.
+```
+
+**Eval check:** `regex` matcher `(i heard|they say|supposedly|word is|rumor has|apparently)` on any dialogue response from an NPC whose KNOWS_ABOUT has `knowledge_state=rumor`.
+
+---
+
+## World-State Rule Generalization (R2.2)
+
+Current Rule 1 hardcodes `epoch=war` behavior. The system prompt should reason about any epoch or active condition from context — not just the demo scenario.
+
+**Planned change:** Rewrite Rule 1 from:
+```
+If epoch=war: you MUST acknowledge the conflict directly...
+```
+To a general form:
+```
+RULE 1 — WORLD STATE:
+Your CONTEXT includes the current epoch and active_conditions.
+For each active condition, reason about whether it is common knowledge (known to all),
+location-specific (known to NPCs in that area), or rumor-level (your KNOWS_ABOUT must confirm it).
+Do not assert any world condition unless:
+  (a) it is common knowledge for your epoch, OR
+  (b) your KNOWS_ABOUT context explicitly includes it.
+```
+
+This removes demo-specificity and lets the system work for any future epoch/condition combination.
+
+---
+
 ### Migration Log
 
 | Version | Date | Change |
 |---|---|---|
 | v1.0 | 2024-01-01 | Initial template |
+| v1.1 | 2026-05-21 | Prompt moved to system_v1.yaml; epoch rule rewritten with AUTHORITATIVE label and MUST NOT prohibitions |
+| v2.0 | 2026-05-24 | Per-NPC voice_descriptor added (npc_voices.yaml); Rule 8 added; PROMPT_VERSION bumped to stage_b_v2.0 |
+| v2.2 | 2026-05-24 | "tone only" clarification added to Rule 8; dead context key refs fixed; PROMPT_VERSION stage_b_v2.2 |
+| v2.4 | 2026-05-27 | Rule 1 generalized: hardcoded epoch=war domain references replaced with general active_conditions constraint (R2.2) |
