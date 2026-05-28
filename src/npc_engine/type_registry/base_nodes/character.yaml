@@ -17,3 +17,4 @@ fields:
   mood_intensity: { type: float, required: false }
   routine_override: { type: str, required: false }
   currency_balance: { type: int, required: false }
+  voice_descriptor: { type: str, required: false }

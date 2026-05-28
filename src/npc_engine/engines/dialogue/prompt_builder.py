@@ -18,30 +18,29 @@ from npc_engine.engines.dialogue.dialogue_models import DialogueRequest
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "stage_b_v2.2"
+PROMPT_VERSION = "stage_b_v2.4"
 
 _PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts" / "dialogue"
 _PROMPT_PATH = _PROMPTS_DIR / "system_v1.yaml"
-_VOICES_PATH = _PROMPTS_DIR / "npc_voices.yaml"
-
-# Module-level cache so YAML is loaded once per process.
-_voices_cache: dict[str, str] | None = None
 
 
-def _get_voice(npc_id: str) -> str:
-    """Return the voice descriptor for an NPC, falling back to _default.
+def _extract_voice_descriptor(serialized_context: str) -> str:
+    """Return the voice descriptor for the NPC from the serialized context.
+
+    Reads voice_descriptor from npc.profile in the context JSON. Returns empty
+    string when absent or when the context is malformed.
 
     Args:
-        npc_id: Stable NPC identifier.
+        serialized_context: Compact JSON context string from the context builder.
 
     Returns:
-        Voice descriptor string from npc_voices.yaml.
+        Voice descriptor string, or empty string if not present.
     """
-    global _voices_cache
-    if _voices_cache is None:
-        data = load_yaml_mapping(_VOICES_PATH, "npc_voices.yaml must be a mapping")
-        _voices_cache = data.get("voices", {})
-    return _voices_cache.get(npc_id) or _voices_cache.get("_default", "")
+    try:
+        ctx = json.loads(serialized_context)
+    except (json.JSONDecodeError, ValueError):
+        return ""
+    return ctx.get("npc", {}).get("profile", {}).get("voice_descriptor") or ""
 
 
 def build_system_prompt() -> str:
@@ -89,7 +88,7 @@ def build_dialogue_prompt(request: DialogueRequest, serialized_context: str) -> 
     Returns:
         Newline-delimited prompt string including version, context, voice, and player message.
     """
-    voice = _get_voice(request.npc_id)
+    voice = _extract_voice_descriptor(serialized_context)
     accounts = _extract_personal_accounts(serialized_context)
     accounts_section = "".join(f"MY_ACCOUNT_{i}={acc}\n" for i, acc in enumerate(accounts, 1))
     prompt = (
