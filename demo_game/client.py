@@ -3,7 +3,7 @@ Module: client
 Layer: demo_game (external client — zero npc_engine imports)
 Purpose: Synchronous HTTP client wrapping the NPC Engine REST API.
 Dependencies: httpx
-Used by: demo_game.ui.game_window, demo_game.graph_panel.fetcher, seeds.worlds.seed_demo_world
+Used by: demo_game.ui.game_window, demo_game.graph_panel.fetcher, demo_game.seed
 """
 
 from __future__ import annotations

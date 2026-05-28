@@ -1,13 +1,11 @@
 """
-Module: seed_demo_world
+Module: seed
 Layer: demo_game (external client)
 Purpose: Seed the demo world via the NPC Engine HTTP API. Idempotent on re-run.
 Dependencies: demo_game.client, demo_game.config
-Used by: make demo-seed, demo_game/tests/test_seed.py, __main__
+Used by: make demo-seed, demo_game/tests/test_seed.py
 
-SYNC NOTE: Keep aligned with src/npc_engine/data/api_seeder.py.
-When either seeder adds a new node type or resource, review the other.
-See project-harness/DECISIONS.md DEC-020, DEC-021, DEC-022 for the seeder conventions.
+See project-harness/DECISIONS.md DEC-020, DEC-021, DEC-022 for seeder conventions.
 
 300-line exception: inline NPC data (beliefs/goals/memories/secrets) cannot be
 split without an artificial data-only module that exists solely to be imported
@@ -120,7 +118,7 @@ def build_npc_payload(
         gossipy: Tendency to spread information (0–100).
         credulity: Tendency to believe information (0–100).
         honesty: Tendency to tell the truth (0–100).
-        voice_descriptor: Optional LLM voice/tone guidance string for the dialogue prompt.
+        voice_descriptor: Optional LLM voice/tone guidance string.
 
     Returns:
         Dict with all required Character properties.
@@ -482,6 +480,18 @@ _NPC_NPC_EDGES: list[tuple[str, str, str, dict]] = [
         ),
         "learned_at_tick": 2,
         "source_character_id": "mira_innkeeper",
+    }),
+    # Lira hears about the market fire through the tavern (fire is public; word spreads fast).
+    ("KNOWS_ABOUT", "lira_fence", "market_fire", {
+        "knowledge_state": "rumor",
+        "distortion_type": None,
+        "distortion_level": 10,
+        "distorted_summary": (
+            "Word spread through the tavern fast — fire in the square."
+            " My kind of chaos, all those distracted guards."
+        ),
+        "learned_at_tick": 3,
+        "source_character_id": None,
     }),
 ]
 

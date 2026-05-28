@@ -137,7 +137,7 @@ demo:
 
 # demo-seed: seed the demo world via the HTTP API (idempotent — safe to re-run)
 demo-seed:
-	$(PYTHON) -m seeds.worlds.seed_demo_world
+	$(PYTHON) -m demo_game.seed
 
 # demo-run: play the scripted hackathon scenario (see docs/DEMO_SCRIPT.md)
 # ARGS: --dry-run (no API calls), --cached (recording mode, error on miss)

@@ -1,8 +1,8 @@
 """
 Module: test_seed
 Layer: demo_game (tests)
-Purpose: TDD unit tests for seed_demo_world — builder shapes, dependency order, idempotency.
-Dependencies: seeds.worlds.seed_demo_world, unittest.mock (no network, no engine required)
+Purpose: TDD unit tests for seed — builder shapes, dependency order, idempotency.
+Dependencies: demo_game.seed, unittest.mock (no network, no engine required)
 Used by: make test-demo
 """
 
@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from seeds.worlds.seed_demo_world import (
+from demo_game.seed import (
     build_event_payload,
     build_faction_payload,
     build_location_payload,
@@ -226,6 +226,14 @@ def test_seed_all_creates_lira_relates_to_aldric_edge() -> None:
     upsert_edge_calls = client.upsert_edge.call_args_list
     args_list = [(c.args[0], c.args[1], c.args[2]) for c in upsert_edge_calls]
     assert ("RELATES_TO", "lira_fence", "aldric_merchant") in args_list
+
+
+def test_seed_all_creates_lira_knows_about_market_fire_edge() -> None:
+    client = _mock_client()
+    seed_all(client)
+    upsert_edge_calls = client.upsert_edge.call_args_list
+    args_list = [(c.args[0], c.args[1], c.args[2]) for c in upsert_edge_calls]
+    assert ("KNOWS_ABOUT", "lira_fence", "market_fire") in args_list
 
 
 def test_seed_all_creates_captain_sorn_opposes_lira_edge() -> None:
