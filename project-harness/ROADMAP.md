@@ -120,7 +120,7 @@ The demo is the only thing that matters. Every session this fortnight is in serv
 
 ### Steps
 
-- [ ] **S3.0** Phase 3 prep — test consolidation + multi-demo:
+- [x] **S3.0** Phase 3 prep — test consolidation + multi-demo:
   - Fix ROADMAP.md Phase 2.5 checkboxes (R2.1, R2.2 already done)
   - Add e2e scenario for `voice_descriptor` from graph (`scenario_voice_from_graph.py`)
   - Add e2e scenario for generalized `active_conditions` (`scenario_active_conditions.py`)
@@ -131,13 +131,19 @@ The demo is the only thing that matters. Every session this fortnight is in serv
   - Add `llm-eval-as-e2e` and `multi-demo-scenario` skills to SKILLS_QUEUE.md
   - Rewrite NEXT_SESSION.md for S3.1 handoff
 
-- [ ] **S3.1** Flesh out `demo_game/run.py` (already scaffolded): add remaining scenes from the signed-off `docs/DEMO_SCRIPT.md`; fill in all `[FILL IN]` dialogue lines; wire the second event and Beat 4. `make demo-run --dry-run` must print the full sequence cleanly.
+- [x] **S3.1** Demo game flesh-out (expanded scope):
+  - Verified `run.py` already complete per DEMO_SCRIPT; added Beat 5 (Lira — same fire, opportunistic lens)
+  - Seed isolation: `seeds/worlds/seed_demo_world.py` → `demo_game/seed.py`; Makefile updated; Lira KNOWS_ABOUT market_fire edge added
+  - UI fix: `ScrollableLog` word-wrap (`_wrap_text`); pixel-based scroll; no more horizontal text clipping
+  - UI fix: per-NPC dialogue logs (`dict[npc_id, ScrollableLog]`); "Talking to [NPC]" header strip; switching NPC preserves history
+  - 16 new widget tests + 1 new seed test; 125/125 demo tests green
+  - Skills added: `per-npc-dialogue-log`, `pygame-word-wrap`; DEC-024 logged
 - [ ] **S3.2** Replace manual W/C keypresses in the demo path: `demo_run.py` calls the engine API directly to fire events and advance the clock. The interactive keypress bindings in `demo_game/ui/game_window.py` are **preserved** — do not remove them. `demo_run.py` is a separate code path.
-- [ ] **S3.3** Build gossip knowledge sidebar in `demo_game/ui/`: new `KnowledgeSidebarWidget`. Click any NPC → shows two columns side by side:
+- [x] **S3.3** Build gossip knowledge sidebar in `demo_game/ui/`: new `KnowledgeSidebarWidget`. Click any NPC → shows two columns side by side:
   - Left: **"What [NPC] knows"** — pull from `GET /v1/graph/edges/KNOWS_ABOUT` filtered to this character, plus any distorted event properties stored on the edge
   - Right: **"Ground truth"** — pull from `GET /v1/graph/nodes/{event_id}` (the actual event properties)
   - Diff rendering: matching text = white; distorted values = amber; fields the NPC is missing = grey + strikethrough
-- [ ] **S3.4** Wire sidebar toggle: `Tab` key switches between the graph panel and the gossip sidebar. Active panel shown in a header strip at the top of the right pane.
+- [x] **S3.4** Wire sidebar toggle: `Tab` key switches between the graph panel and the gossip sidebar. Active panel shown in a header strip at the top of the right pane.
 - [ ] **S3.5** Record rough take #0: run `demo_run.py` end-to-end with narration, record the screen. This is a practice run — not the final cut. Write down everything that looks wrong.
 
 **Exit criteria:** Rough recording exists. Gossip sidebar shows at least one distorted field in amber. Demo runs end-to-end without a crash.
@@ -153,6 +159,7 @@ The demo is the only thing that matters. Every session this fortnight is in serv
 
 ### Steps
 
+- [ ] **S4.0** Quest engine showcase: after Aldric's Beat 4 response, check for a generated quest node and display it in a `[QUEST AVAILABLE]` banner. Wire via `GET /v1/quests/aldric_merchant`. Deferred from S3.1 — adds clear engine-suite completeness to the demo.
 - [ ] **S4.1** Typography pass: load a TTF monospace font (Terminus or similar, include in `demo_game/assets/`). Apply to all text in the window. Base size 14px, headings 16px, status labels 12px. No more pygame default font.
 - [ ] **S4.2** Colour palette: define a `PALETTE` constant in `demo_game/constants.py`. Dark navy/teal background (`#0D1B2A`), amber primary text (`#D4A017`), white secondary (`#E8E8E8`), grey inactive (`#6B7280`), red alert (`#C0392B`), green safe (`#27AE60`). Apply to all panels.
 - [ ] **S4.3** NPC name labels: always-visible character name above each NPC entry in the left panel. Selected NPC gets an amber `▶` prefix. Current location shown in a header bar at the top of the left panel.
@@ -230,9 +237,9 @@ Fall back to the existing interactive demo (W/C keypresses + live graph). It dem
 | 6 | 2026-05-27 | P2.5 | R1.3 complete: `seeds/worlds/` created (tavern + village, full inner life); `requires_world` enforcement added to runner; ISSUE-008/009 closed; 13 demo cases + 3 fixed cases annotated | 17/17 green; R1.4 next |
 | 7 | 2026-05-27 | P2.5 | R1.4 + R2.1 + R2.2 complete: voice_descriptor moved to graph; Rule 9 (gossip hedging) added; Rule 1 generalized; seeds consolidated under seeds/worlds/; WorldState ID="world" everywhere (DEC-021/022/023); Phase 2.5 exit criteria all met | Phase 2.5 ✅ COMPLETE |
 | 8 | 2026-05-28 | P3 | S3.0: ROADMAP fixed; e2e gaps filled (voice_from_graph + active_conditions); YAML evals migrated to pytest; village + tavern demo scenarios; 2 skills added | S3.0 ✅; S3.1 next |
-| 9 | | P3 | | |
-| 8 | | P3 | | |
-| 9 | | P3 | | |
+| 9 | 2026-05-28 | P3 | S3.1: Beat 5 (Lira), seed isolation (demo_game/seed.py), UI word-wrap, per-NPC dialogue logs | S3.1 ✅; S3.2 next |
+| 10 | 2026-05-28 | P3 | S3.3: KnowledgeSidebarWidget + fetcher + background fetch wired in game_window; 14 new tests; DEC-026 + pygame-diff-rendering skill | S3.3 ✅; S3.4 next |
+| 11 | 2026-05-28 | P3 | S3.4: Tab toggle, DEC-027 (exclusive scroll routing), ISSUE-045 (line-count), pygame-tab-panel-toggle skill | S3.4 ✅; S3.5 next |
 | 10 | | P3/P4 | | |
 | 11 | | P4 | | |
 | 12 | | P4 | | |

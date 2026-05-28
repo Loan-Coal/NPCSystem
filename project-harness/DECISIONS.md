@@ -244,3 +244,43 @@ Rules:
 **Decision:** All three files live in `project-harness/` only. Root-level copies are deleted. CLAUDE.md enforces this with an explicit rule.
 **Why:** `project-harness/` is already loaded into every Claude Code session via the system reminder. Centralising here means every session reads the latest state without hunting for the root copy. The root is for code; session-context files belong in the harness.
 **Consequence:** Any script or doc that references root-level `DECISIONS.md` or `ISSUES.md` must be updated to point to `project-harness/`.
+
+## DEC-024: game_window.py exempt from 300-line hard limit
+**Date:** 2026-05-28
+**Context:** `game_window.py` is 372 lines after the S3.1 per-NPC dialogue log changes. The 300-line rule exists to prevent monolithic files.
+**Decision:** Accept the exception. Do not split `GameWindow` across files.
+**Why:** `GameWindow` owns the pygame event loop, rendering pipeline (two panels), and threading model (dialogue worker + graph poller). Every draw method references `self._screen`, `self._client`, `self._logs`, `self._badge`, and shared layout constants. Splitting across files would require either passing the screen surface and all state around as arguments, or a second class that's a thin wrapper — both are more complex than the current flat structure. The left-panel rendering is extracted into `_draw_left_panel()` to keep individual methods readable.
+**Consequence:** If game_window.py grows past ~450 lines (Phase 4 polish work), revisit splitting into `DialoguePanel` + `GraphPanel` classes with a thin `GameWindow` coordinator.
+
+---
+
+## DEC-026: Sidebar fetch wired in S3.3; rendering deferred to S3.4
+**Date:** 2026-05-28
+**Context:** S3.3 builds `KnowledgeSidebarWidget` and the `knowledge_sidebar_fetcher`. The Tab-key
+toggle that makes the sidebar visible in the right panel is S3.4.
+**Decision:** Wire the background fetch on NPC-click in `game_window.py` during S3.3. Do not add
+the draw call or Tab keypress until S3.4.
+**Why:** The fetch and the render are independent concerns. Threading must be in place before the
+Tab key can show anything meaningful. Keeping the render out of S3.3 avoids a half-visible UI that
+isn't wired to a toggle yet. S3.4 adds exactly: `_show_sidebar` flag, Tab handler, header strip, and
+`self._sidebar.draw(...)` in `_draw_right_panel`.
+**Consequence:** After S3.3, clicking an NPC triggers a silent background fetch. `self._sidebar` holds
+the data but is never drawn. This is correct exit state for S3.3.
+
+---
+
+## DEC-027: Exclusive scroll routing when sidebar panel is active
+**Date:** 2026-05-28
+**Context:** `MOUSEWHEEL` events in pygame are global — not scoped to the widget under the cursor. Both `ScrollableLog` (dialogue, left panel) and `KnowledgeSidebarWidget` (right panel) have `handle_event` scroll handlers. When Tab shows the sidebar, both could receive wheel events simultaneously.
+**Decision:** In `_handle_event`, use exclusive routing: `if self._show_sidebar: self._sidebar.handle_event(event) elif self._active_npc_id: log.handle_event(event)`. Never additive.
+**Why:** Additive routing (routing to both unconditionally) causes hidden scroll-state drift — the non-visible panel accumulates scroll offset while invisible, so switching back surprises the user. Exclusive routing eliminates that class of bug with no downside for the demo.
+**Tradeoff:** User cannot scroll the dialogue log while the sidebar is shown. Acceptable for demo use; Phase 4 `DialoguePanel` / `GraphPanel` refactor can revisit if mouse-position-aware routing is desired.
+
+---
+
+## DEC-025: Demo seed reverted to demo_game/seed.py (S3.2 — reversal of DEC-021)
+**Date:** 2026-05-28
+**Context:** DEC-021 moved the demo world seed from `demo_game/seed.py` → `seeds/worlds/seed_demo_world.py` for consolidation. S3.1 reversed this: the demo seed moved back to `demo_game/seed.py`.
+**Decision:** `demo_game/seed.py` is the authoritative demo world seed. `seeds/worlds/seed_demo_world.py` is deleted. The DEC-021 "single folder" rationale is superseded for the demo seed specifically.
+**Why:** The demo game must be self-contained and fully decoupled from the NPC engine source — as if a third-party studio built it on top of the shipped SDK. Its seed data belongs inside `demo_game/`, not alongside eval world seeds. Naming convention going forward: `seeds/worlds/seed_*.py` = eval harness worlds only; `demo_game/seed.py` = demo app seed.
+**Consequence:** `seeds/worlds/` contains only `seed_tavern_world.py` and `seed_village_world.py`. Any reference to `seeds/worlds/seed_demo_world.py` in historical docs is stale but preserved for audit trail.

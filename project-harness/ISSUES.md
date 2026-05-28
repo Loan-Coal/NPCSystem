@@ -526,6 +526,16 @@ current mapping is good enough for demo badge display and does not affect correc
 
 ---
 
+## ISSUE-045: game_window.py line count exceeds DEC-024 ~450 soft limit
+**Found:** 2026-05-28, during S3.4
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/ui/game_window.py` (~460 lines after S3.4)
+**Description:** DEC-024 set a ~450-line soft limit for `game_window.py` (exempt from the 300-line hard limit). S3.4 adds ~24 lines, bringing the total to ~460.
+**Why deferred:** Phase 4 `DialoguePanel` / `GraphPanel` refactor is the natural moment to extract rendering logic into separate panel classes. Splitting mid-session (between S3.4 and S3.5) would be artificial churn.
+**To fix:** During Phase 4, extract `_draw_left_panel` helpers and/or the graph/sidebar draw branches into dedicated panel classes (`DialoguePanel`, `GraphPanel`, `SidebarPanel`). Each class gets its own file under `demo_game/ui/`.
+
+---
+
 ## ISSUE-043: requires_world is a soft advisory warn, not a hard skip
 **Found:** 2026-05-27, during pre-Phase 3 eval coherence review
 **Severity:** P3 (nice-to-fix)

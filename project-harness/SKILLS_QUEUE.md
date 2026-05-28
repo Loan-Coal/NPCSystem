@@ -97,6 +97,84 @@ edit YAML, bump version, cache rebuild.
 | event propagation | ✅ war/market fire | ✅ bandit raid | ✅ theft |
 
 
+## per-npc-dialogue-log
+**Identified:** 2026-05-28 (S3.1)
+**Pattern:** In a pygame game on top of NPC Engine, maintain one `ScrollableLog` per NPC using a `dict[npc_id, ScrollableLog]` in the `GameWindow`. Lazy-init on first message. Switch active log on NPC select — do NOT clear other logs.
+**Key detail:** The dialogue background thread returns responses after the player may have switched NPC. Store `_pending_npc_id` (the NPC the request was sent for) separately from `_active_npc_id` (the NPC currently on screen). Route the response to `_logs[_pending_npc_id]`, not to the currently selected NPC's log.
+**Checklist:**
+1. Replace `self._log: ScrollableLog` with `self._logs: dict[str, ScrollableLog] = {}`.
+2. Add `self._pending_npc_id: str | None = None` to `__init__`.
+3. Add `_get_log(npc_id) -> ScrollableLog` helper (lazy init).
+4. In `_submit_dialogue`: set `self._pending_npc_id = npc_id` before launch.
+5. In `_poll_response_queue`: route to `self._get_log(pending_npc_id)`.
+6. In `_handle_event`: route scroll events to `self._get_log(active_npc_id).handle_event`.
+7. Add a header strip showing "Talking to [NPC name]" above the log area.
+**Reuse when:** Phase 4 UI work, any new demo scenario with per-NPC conversation tracking.
+
+
+## pygame-word-wrap
+**Identified:** 2026-05-28 (S3.1)
+**Pattern:** `pygame.font.Font.render()` renders text as a single surface with no automatic word-wrap. Use `_wrap_text(font, text, max_px)` to split text into lines before rendering.
+**Implementation:**
+```python
+def _wrap_text(font, text, max_width):
+    words = text.split()
+    if not words:
+        return [""]
+    lines, current = [], ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if font.size(candidate)[0] <= max_width:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines if lines else [""]
+```
+**ScrollableLog integration:**
+- Use pixel-based scroll: `_scroll_px: int = 0` (not line-count).
+- Mouse wheel: `_scroll_px = max(0, _scroll_px - event.y * font.get_linesize())`.
+- In `draw()`: pre-compute wrapped lines per message, compute cumulative heights, skip out-of-viewport entries.
+- `entry_h = label_h + len(lines) * line_h + 6` (variable per message).
+**Reuse when:** Any pygame widget that displays multi-sentence text (dialogue log, knowledge sidebar in S3.3, quest log in Phase 4).
+
+
+## pygame-diff-rendering
+**Identified:** 2026-05-28 (S3.3)
+**Pattern:** Two-column side-by-side diff widget in pygame for comparing "what was believed" vs "what actually happened".
+**Implementation:**
+- Equal-width columns separated by a 1px `_CLR_DIVIDER` vertical line.
+- Field-level colour coding: `_CLR_WHITE` (match/ground truth), `_CLR_AMBER` (distorted), `_CLR_DIM` (missing/absent).
+- Classification via `_classify_row(edge, event) -> "matching" | "distorted" | "missing"`:
+  - `distortion_level == 0` → `"matching"`
+  - `distortion_level > 0` and `distorted_summary is None` → `"missing"`
+  - `distortion_level > 0` and `distorted_summary is not None` → `"distorted"`
+- Pixel-based scroll: `_scroll_px: int = 0`, same pattern as `ScrollableLog`.
+- Render into a `surface.subsurface(clip_rect)` to avoid drawing outside the panel bounds.
+- Reuse `_wrap_text(font, text, max_col_w)` from `demo_game.ui.widgets` for all text in both columns.
+- Pre-compute row heights before drawing (`_build_row`) so total scroll height is known.
+**Key files:** `demo_game/ui/knowledge_sidebar.py`, `demo_game/knowledge_sidebar_fetcher.py`
+**Reuse when:** Phase 4 quest log comparison (quest expected vs. actual outcome), inventory before/after
+display, any before/after or NPC-vs-ground-truth comparison in a pygame panel.
+
+
+## pygame-tab-panel-toggle
+**Identified:** 2026-05-28 (S3.4)
+**Pattern:** Switching between two right-panel views with a single key in pygame.
+**Implementation:**
+1. Add `self._show_<panel>: bool = False` state flag in `__init__`.
+2. In `_handle_key`: `elif key == pygame.K_TAB: self._show_<panel> = not self._show_<panel>`.
+3. In `_handle_event`: exclusive scroll routing — `if self._show_<panel>: widget.handle_event(event) elif ...: other.handle_event(event)`. Never additive (see DEC-027).
+4. Add `_draw_right_panel_header(rect, label)` helper: 24px strip at `rect.topleft`, `_CLR_NPC_HEADER_BG` fill, amber label via `_CLR_NPC_HEADER_TEXT`.
+5. In `_draw_right_panel`: branch on flag, call header helper first, then pass `content_rect = Rect(rect.x, rect.y + PANEL_HEADER_H, rect.width, rect.height - PANEL_HEADER_H)` to the active widget.
+6. Blit oversized surfaces (e.g. GraphPoller sized to `_RIGHT_H`) at `(rect.x, rect.y + PANEL_HEADER_H)` — nav bar drawn after covers overflow cleanly.
+**Key files:** `demo_game/ui/game_window.py`
+**Reuse when:** Phase 4 adds a quest log panel, inventory view, or any second panel that shares the right-panel slot. Also applies to any pygame panel-swap keybinding pattern.
+
+
 ## eval-harness
 **Identified:** 2026-05-26 (R1.1)
 **Pattern:** YAML-driven eval cases + synchronous runner + matcher library + markdown reports.

@@ -44,7 +44,7 @@ make eval-llm-demo            # LLM judge evals (requires Ollama)
 | `demo_game/` | Pygame demo app (zero imports from `src/`) |
 | `demo_game/run.py` | Scripted scenario runner (`make demo-run`) |
 | `demo_game/client.py` | `EngineClient` — REST API wrapper |
-| `seeds/worlds/seed_demo_world.py` | Demo world seeder (5 NPCs, 3 locations, 3 factions) |
+| `demo_game/seed.py` | Demo world seeder (5 NPCs, 3 locations, 3 factions) |
 | `seeds/worlds/seed_village_world.py` | Village eval world (vw_ prefix) |
 | `seeds/worlds/seed_tavern_world.py` | Tavern eval world (tw_ prefix) |
 | `prompts/` | All LLM prompt YAML files (no prompt strings in Python) |
