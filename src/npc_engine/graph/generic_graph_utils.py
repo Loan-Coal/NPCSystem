@@ -17,6 +17,7 @@ from npc_engine.utils.errors import RegistryPayloadValidationError
 BASE_NODE_LABELS = {
     "character": "Character",
     "event": "Event",
+    "faction": "Faction",
     "location": "Location",
     "quest": "Quest",
     "world_state": "WorldState",

@@ -3,7 +3,7 @@ Module: client
 Layer: demo_game (external client — zero npc_engine imports)
 Purpose: Synchronous HTTP client wrapping the NPC Engine REST API.
 Dependencies: httpx
-Used by: demo_game.ui.game_window, demo_game.graph_panel.fetcher, demo_game.seed
+Used by: demo_game.ui.game_window, demo_game.graph_panel.fetcher, seeds.worlds.seed_demo_world
 """
 
 from __future__ import annotations
@@ -551,7 +551,7 @@ class EngineClient:
         """Update the world state epoch and active conditions.
 
         Thin wrapper over upsert_node("world_state") that merges on the
-        fixed id "ws_main". Used by the P2.5 war-trigger UI button.
+        canonical id "world" (DEC-022). Used by the P2.5 war-trigger UI button.
 
         Args:
             epoch: New epoch string, e.g. "peace" or "war".
@@ -567,7 +567,7 @@ class EngineClient:
         return self.upsert_node(
             "world_state",
             {
-                "id": "ws_main",
+                "id": "world",
                 "epoch": epoch,
                 "active_conditions": active_conditions,
                 "faction_standings": {},

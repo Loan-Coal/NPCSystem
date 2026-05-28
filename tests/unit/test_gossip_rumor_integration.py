@@ -118,7 +118,8 @@ async def test_gossip_creates_rumor_when_distortion_level_exceeds_threshold():
          patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock), \
          patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock), \
          patch("npc_engine.engines.gossip.gossip_handler.create_rumor", new_callable=AsyncMock, return_value="r-1") as mock_create, \
-         patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock) as mock_believe:
+         patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock) as mock_believe, \
+         patch("npc_engine.engines.gossip.gossip_handler.random.random", return_value=1.0):
 
         event_record = MagicMock()
         event_record.__getitem__ = lambda s, k: {"event_id": "e-1", "summary": "awful things", "severity": 90}[k]
@@ -171,7 +172,8 @@ async def test_gossip_no_rumor_when_distortion_below_threshold():
          patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock), \
          patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock), \
          patch("npc_engine.engines.gossip.gossip_handler.create_rumor", new_callable=AsyncMock) as mock_create, \
-         patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock) as mock_believe:
+         patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock) as mock_believe, \
+         patch("npc_engine.engines.gossip.gossip_handler.random.random", return_value=1.0):
 
         event_record = MagicMock()
         event_record.__getitem__ = lambda s, k: {"event_id": "e-1", "summary": "test", "severity": 30}[k]

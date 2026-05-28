@@ -1,17 +1,17 @@
 """
-Module: seed
+Module: seed_demo_world
 Layer: demo_game (external client)
 Purpose: Seed the demo world via the NPC Engine HTTP API. Idempotent on re-run.
-Dependencies: demo_game.client
-Used by: make demo-seed, __main__
+Dependencies: demo_game.client, demo_game.config
+Used by: make demo-seed, demo_game/tests/test_seed.py, __main__
 
 SYNC NOTE: Keep aligned with src/npc_engine/data/api_seeder.py.
 When either seeder adds a new node type or resource, review the other.
-See project/DECISIONS.md for the standalone-seeder decision.
+See project-harness/DECISIONS.md DEC-020, DEC-021, DEC-022 for the seeder conventions.
 
 300-line exception: inline NPC data (beliefs/goals/memories/secrets) cannot be
 split without an artificial data-only module that exists solely to be imported
-back here. See phase2_demo_game/decisions.md for the logged exception.
+back here.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _GAME_TIME: dict = {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
-_WORLD_STATE_ID = "ws_main"
+_WORLD_STATE_ID = "world"
 
 
 # ---------------------------------------------------------------------------
@@ -106,6 +106,7 @@ def build_npc_payload(
     gossipy: int,
     credulity: int,
     honesty: int,
+    voice_descriptor: str | None = None,
 ) -> dict:
     """Return a Character node property dict ready for upsert_node.
 
@@ -119,6 +120,7 @@ def build_npc_payload(
         gossipy: Tendency to spread information (0–100).
         credulity: Tendency to believe information (0–100).
         honesty: Tendency to tell the truth (0–100).
+        voice_descriptor: Optional LLM voice/tone guidance string for the dialogue prompt.
 
     Returns:
         Dict with all required Character properties.
@@ -136,6 +138,7 @@ def build_npc_payload(
         "credulity": credulity,
         "honesty": honesty,
         "current_mood": "neutral",
+        "voice_descriptor": voice_descriptor,
         "created_at": now,
         "updated_at": now,
         "last_graph_updated_at": now,
@@ -240,13 +243,16 @@ def _seed_edge(
     dst_id: str,
     properties: dict | None = None,
 ) -> str:
-    """Upsert an edge, always writing the latest properties.
+    """Upsert an edge if it does not already exist.
 
     Returns:
-        "created" always (upsert path — deduplication is handled by Neo4j MERGE).
+        "created" or "skipped".
     """
+    if client.get_edge(edge_type, src_id, dst_id) is not None:
+        logger.info("  skip edge %s %s→%s (exists)", edge_type, src_id, dst_id)
+        return "skipped"
     client.upsert_edge(edge_type, src_id, dst_id, properties)
-    logger.info("  upserted edge %s %s→%s", edge_type, src_id, dst_id)
+    logger.info("  created edge %s %s→%s", edge_type, src_id, dst_id)
     return "created"
 
 
@@ -322,17 +328,27 @@ _FACTION_STANDS_WITH = [
 ]
 
 _NPCS = [
-    # (id, name, archetype, faction_id, location_id, biography, gossipy, credulity, honesty)
+    # (id, name, archetype, faction_id, location_id, biography, gossipy, credulity, honesty, voice_descriptor)
     ("mira_innkeeper", "Mira", "innkeeper", "neutral", "loc_tavern",
-     "Runs the Rusty Flagon with an even hand and a sharp ear.", 60, 55, 70),
+     "Runs the Rusty Flagon with an even hand and a sharp ear.", 60, 55, 70,
+     "Warm, observant. Cautious about politics — never says more than she needs to."
+     " Frames hard news as rumour or second-hand. Invites the listener to share what they know in return."),
     ("aldric_merchant", "Aldric", "merchant", "merchants_guild", "loc_market_square",
-     "A veteran spice trader who knows every coin's worth and every man's price.", 50, 40, 65),
+     "A veteran spice trader who knows every coin's worth and every man's price.", 50, 40, 65,
+     "Measured and precise. Every statement is a negotiation — he gives only what serves him."
+     " Refers to value, leverage, and risk. Distrusts sentiment."),
     ("captain_sorn", "Captain Sorn", "guard_captain", "city_guard", "loc_guard_barracks",
-     "Commands the city watch with iron discipline and growing dread.", 25, 35, 85),
+     "Commands the city watch with iron discipline and growing dread.", 25, 35, 85,
+     "Clipped military diction. Direct. Names the enemy without emotion or hesitation."
+     " No hedging, no qualifiers. Every sentence lands like a report to a superior officer."),
     ("lira_fence", "Lira", "fence", "thieves_guild", "loc_tavern",
-     "Moves stolen goods with a smile and a story, always one step ahead.", 75, 45, 30),
+     "Moves stolen goods with a smile and a story, always one step ahead.", 75, 45, 30,
+     "Light, deflective. Turns every question into a joke or a counter-question."
+     " Never volunteers information — makes you earn it. Laughs easily; means very little of it."),
     ("old_henryk", "Old Henryk", "elder", "neutral", "loc_market_square",
-     "A retired courier who has seen three wars and remembers every one.", 80, 70, 80),
+     "A retired courier who has seen three wars and remembers every one.", 80, 70, 80,
+     "Rambling. Mixes current rumour with personal memories from decades ago."
+     " Speaks with complete confidence even about details he has wrong. Never hedges."),
 ]
 
 # NPC faction membership: (npc_id, faction_id, role)
@@ -418,16 +434,12 @@ _NPC_INNER_LIFE: dict[str, dict] = {
 }
 
 # NPC-NPC edges: (edge_type, src_id, dst_id, properties)
-# RELATES_TO: Character→Character with trust/affection/fear scores
-# KNOWS_ABOUT: Character→Event knowledge (gossip propagation target)
-# OPPOSES: Character→Character antagonism
 _NPC_NPC_EDGES: list[tuple[str, str, str, dict]] = [
     ("RELATES_TO", "mira_innkeeper", "old_henryk", {
         "trust": 70, "affection": 50, "fear": 0,
         "relevance_score": 60, "interaction_count": 10,
         "last_updated_at": "tick_0",
     }),
-    # lira has low trust / high fear of aldric (KNOWS_ABOUT is Character→Event only)
     ("RELATES_TO", "lira_fence", "aldric_merchant", {
         "trust": 10, "affection": 0, "fear": 30,
         "relevance_score": 80, "interaction_count": 3,
@@ -447,9 +459,7 @@ _NPC_NPC_EDGES: list[tuple[str, str, str, dict]] = [
         "learned_at_tick": 0,
         "source_character_id": None,
     }),
-    # Pre-seeded gossip chain for demo reliability.
-    # Sorn is alone at the barracks; the live gossip engine propagates only between
-    # co-located NPCs, so the demo path is fixed here with deterministic distortions.
+    # Pre-seeded gossip chain for demo reliability (see DEC-006).
     ("KNOWS_ABOUT", "mira_innkeeper", "northern_war_begins", {
         "knowledge_state": "rumor",
         "distortion_type": "exaggeration",
@@ -476,7 +486,6 @@ _NPC_NPC_EDGES: list[tuple[str, str, str, dict]] = [
 ]
 
 # LOCATED_AT edges: (npc_id, location_id)
-# Required for co-location-based gossip pair selection and game_window display.
 _NPC_LOCATED_AT: list[tuple[str, str]] = [
     ("mira_innkeeper", "loc_tavern"),
     ("lira_fence", "loc_tavern"),
@@ -499,15 +508,16 @@ def seed_all(client: EngineClient) -> dict:
     2. Factions
     3. Characters
     4. MEMBER_OF edges (NPC ↔ Faction)
-    5. Faction-faction OPPOSES edges
+    5. Faction-faction STANDS_WITH edges
     6. NPC inner life (beliefs, goals, memories, secrets)
     7. Events
     8. world_state
     9. NPC-NPC structural edges
+    10. LOCATED_AT edges
 
     Idempotency:
     - Explicit-ID nodes: GET before POST; skip if exists.
-    - Explicit-ID edges: GET before POST; skip if exists.
+    - Explicit-ID edges: always upsert (Neo4j MERGE).
     - Typed nodes (beliefs etc.): check BELIEVES edge count; skip NPC if any exist.
 
     Args:
@@ -538,11 +548,11 @@ def seed_all(client: EngineClient) -> dict:
 
     # 3. Characters
     logger.info("[seed] Characters")
-    for npc_id, name, archetype, faction_id, location_id, biography, gossipy, credulity, honesty in _NPCS:
+    for npc_id, name, archetype, faction_id, location_id, biography, gossipy, credulity, honesty, voice_descriptor in _NPCS:
         _tally(_seed_node(
             client,
             "Character",
-            build_npc_payload(npc_id, name, archetype, faction_id, location_id, biography, gossipy, credulity, honesty),
+            build_npc_payload(npc_id, name, archetype, faction_id, location_id, biography, gossipy, credulity, honesty, voice_descriptor),
         ))
 
     # 4. MEMBER_OF edges
@@ -604,9 +614,9 @@ def seed_all(client: EngineClient) -> dict:
         ),
     ))
 
-    # 8. world_state
+    # 8. world_state (id="world" — canonical; see DEC-022)
     logger.info("[seed] world_state")
-    _tally(_seed_node(client, "world_state", build_world_state_payload("peace", [])))
+    _tally(_seed_node(client, "world_state", build_world_state_payload("war", ["northern_war"])))
 
     # 9. NPC-NPC structural edges
     logger.info("[seed] NPC-NPC edges")

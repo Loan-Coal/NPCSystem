@@ -472,11 +472,11 @@ def test_post_secret_raises_on_422(mock_http: MagicMock, make_response) -> None:
 
 
 def test_put_world_state_success(mock_http: MagicMock, make_response) -> None:
-    mock_http.post.return_value = make_response(200, {"data": {"id": "ws_main", "epoch": "war"}})
+    mock_http.post.return_value = make_response(200, {"data": {"id": "world", "epoch": "war"}})
     result = _client(mock_http).put_world_state("war", ["northern_war"])
     assert result["data"]["epoch"] == "war"
     _, kwargs = mock_http.post.call_args
-    assert kwargs["json"]["properties"]["id"] == "ws_main"
+    assert kwargs["json"]["properties"]["id"] == "world"
     assert kwargs["json"]["properties"]["epoch"] == "war"
     assert kwargs["json"]["properties"]["active_conditions"] == ["northern_war"]
 

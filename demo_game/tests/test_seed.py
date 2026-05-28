@@ -1,8 +1,8 @@
 """
 Module: test_seed
 Layer: demo_game (tests)
-Purpose: TDD unit tests for seed.py — builder shapes, dependency order, idempotency.
-Dependencies: demo_game.seed, unittest.mock (no network, no engine required)
+Purpose: TDD unit tests for seed_demo_world — builder shapes, dependency order, idempotency.
+Dependencies: seeds.worlds.seed_demo_world, unittest.mock (no network, no engine required)
 Used by: make test-demo
 """
 
@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from demo_game.seed import (
+from seeds.worlds.seed_demo_world import (
     build_event_payload,
     build_faction_payload,
     build_location_payload,
@@ -96,6 +96,7 @@ def test_build_npc_payload_returns_correct_shape() -> None:
         gossipy=60,
         credulity=55,
         honesty=70,
+        voice_descriptor="Warm, observant.",
     )
     assert payload["id"] == "mira_innkeeper"
     assert payload["name"] == "Mira"
@@ -107,9 +108,25 @@ def test_build_npc_payload_returns_correct_shape() -> None:
     assert payload["credulity"] == 55
     assert payload["honesty"] == 70
     assert payload["current_mood"] == "neutral"
+    assert payload["voice_descriptor"] == "Warm, observant."
     assert "created_at" in payload
     assert "updated_at" in payload
     assert "last_graph_updated_at" in payload
+
+
+def test_build_npc_payload_voice_descriptor_defaults_to_none() -> None:
+    payload = build_npc_payload(
+        id="guard_01",
+        name="Guard",
+        archetype="guard",
+        faction_id="city_guard",
+        location_id="loc_barracks",
+        biography="A guard.",
+        gossipy=20,
+        credulity=40,
+        honesty=80,
+    )
+    assert payload["voice_descriptor"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +160,7 @@ def test_build_event_payload_returns_correct_shape() -> None:
 
 def test_build_world_state_payload_returns_correct_shape() -> None:
     payload = build_world_state_payload(epoch="peace", active_conditions=[])
-    assert payload["id"] == "ws_main"
+    assert payload["id"] == "world"
     assert payload["epoch"] == "peace"
     assert payload["active_conditions"] == []
 
