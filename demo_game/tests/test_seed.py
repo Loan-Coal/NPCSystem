@@ -39,6 +39,7 @@ def _mock_client(*, node_exists: bool = False, edge_exists: bool = False, belief
     client.post_goal.return_value = {"goal_id": "g_1"}
     client.post_memory.return_value = {"memory_id": "m_1"}
     client.post_secret.return_value = {"secret_id": "s_1"}
+    client.post_quest_generate.return_value = {"quest_id": "q_mock_1"}
     return client
 
 
@@ -311,3 +312,57 @@ def test_seed_all_created_is_zero_when_all_exist() -> None:
     client = _mock_client(node_exists=True, edge_exists=True, beliefs_exist=True)
     result = seed_all(client)
     assert result["created"] == 0
+
+
+# ---------------------------------------------------------------------------
+# _seed_quests
+# ---------------------------------------------------------------------------
+
+
+def test_seed_quests_calls_post_quest_generate() -> None:
+    from unittest.mock import patch as _patch
+    from demo_game.seed import _seed_quests
+
+    client = MagicMock()
+    client.post_quest_generate.return_value = {"quest_id": "q_abc123"}
+    with _patch("demo_game.seed.Path") as mock_path_cls:
+        mock_path_inst = MagicMock()
+        mock_path_cls.return_value = mock_path_inst
+        _seed_quests(client)
+
+    client.post_quest_generate.assert_called_once_with("aldric_merchant")
+
+
+def test_seed_quests_writes_quest_id_to_cache() -> None:
+    import json as _json
+    from unittest.mock import patch as _patch
+    from demo_game.seed import _seed_quests
+
+    client = MagicMock()
+    client.post_quest_generate.return_value = {"quest_id": "q_abc123"}
+    with _patch("demo_game.seed.Path") as mock_path_cls:
+        mock_path_inst = MagicMock()
+        mock_path_cls.return_value = mock_path_inst
+        _seed_quests(client)
+
+    written = mock_path_inst.write_text.call_args[0][0]
+    assert _json.loads(written) == {"quest_id": "q_abc123"}
+
+
+def test_seed_quests_non_fatal_on_client_error() -> None:
+    from unittest.mock import patch as _patch
+    from demo_game.seed import _seed_quests
+
+    client = MagicMock()
+    client.post_quest_generate.side_effect = Exception("engine unavailable")
+    # Must not raise
+    _seed_quests(client)
+
+
+def test_seed_all_calls_quest_generation() -> None:
+    client = _mock_client()
+    with patch("demo_game.seed.Path") as mock_path_cls:
+        mock_path_inst = MagicMock()
+        mock_path_cls.return_value = mock_path_inst
+        seed_all(client)
+    client.post_quest_generate.assert_called_once_with("aldric_merchant")

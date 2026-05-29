@@ -14,9 +14,11 @@ back here.
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -506,6 +508,31 @@ _NPC_LOCATED_AT: list[tuple[str, str]] = [
 
 
 # ---------------------------------------------------------------------------
+# Quest seeding (non-fatal — requires quest engine to be running)
+# ---------------------------------------------------------------------------
+
+
+def _seed_quests(client: EngineClient) -> None:
+    """Generate Aldric's quest and cache the quest_id for GameWindow startup.
+
+    Non-fatal: logs a warning and returns without raising if the quest engine
+    is unavailable or the LLM call fails.
+
+    Args:
+        client: Authenticated EngineClient.
+    """
+    try:
+        data = client.post_quest_generate("aldric_merchant")
+        quest_id = data["quest_id"]
+        cache_path = Path(".cache/demo/aldric_quest.json")
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps({"quest_id": quest_id}))
+        logger.info("[seed] Quest generated: %s", quest_id)
+    except Exception as exc:
+        logger.warning("[seed] Quest seeding skipped: %s", exc)
+
+
+# ---------------------------------------------------------------------------
 # seed_all
 # ---------------------------------------------------------------------------
 
@@ -640,6 +667,10 @@ def seed_all(client: EngineClient) -> dict:
             "is_permanent_resident": True,
             "arrived_at": _now(),
         }))
+
+    # 11. Quests (non-fatal — requires quest engine)
+    logger.info("[seed] Quests")
+    _seed_quests(client)
 
     logger.info("[seed] Done — created=%d skipped=%d", created, skipped)
     return {"created": created, "skipped": skipped}
