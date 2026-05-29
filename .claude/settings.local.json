@@ -68,7 +68,16 @@
       "Bash(head -40 \"c:\\\\\\\\Users\\\\\\\\lohan\\\\\\\\Documents\\\\\\\\hackathons\\\\\\\\NPCSystem\\\\\\\\demo_game\\\\\\\\run.py\")",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\\\\project-harness\" -File)",
       "Bash(Select-String -Pattern \"^## DEC-0\" \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\\\\project-harness\\\\DECISIONS.md\")",
-      "Bash(Select-Object -Last 1)"
+      "Bash(Select-Object -Last 1)",
+      "Bash(xargs wc -l)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\" -Recurse -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -First 20)",
+      "Bash(Format-Table FullName)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "PowerShell(Invoke-WebRequest -Uri \"https://github.com/JetBrains/JetBrainsMono/raw/master/fonts/ttf/JetBrainsMono-Regular.ttf\" -OutFile \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\\\\demo_game\\\\assets\\\\fonts\\\\JetBrainsMono-Regular.ttf\" -UseBasicParsing; Write-Output \"Downloaded: $\\(\\(Get-Item 'c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\\\\demo_game\\\\assets\\\\fonts\\\\JetBrainsMono-Regular.ttf'\\).Length\\) bytes\")",
+      "Bash(New-Item -ItemType File -Path \"c:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\\\\demo_game\\\\assets\\\\portraits\\\\.gitkeep\" -Force)",
+      "Bash(Out-Null)"
     ],
     "additionalDirectories": [
       "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem",
