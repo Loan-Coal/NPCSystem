@@ -506,3 +506,203 @@ def test_put_npc_reputation_raises_on_500(mock_http: MagicMock, make_response) -
     mock_http.post.return_value = make_response(500, {})
     with pytest.raises(EngineClientError, match="HTTP 500"):
         _client(mock_http).put_npc_reputation("captain_sorn", "city_guard", 80.0)
+
+
+# ---------------------------------------------------------------------------
+# get_npc_emotion
+# ---------------------------------------------------------------------------
+
+
+def test_get_npc_emotion_success(mock_http: MagicMock, make_response) -> None:
+    payload = {"npc_id": "mira_innkeeper", "label": "happy", "valence": 0.6, "arousal": 0.4, "updated_at": "t0"}
+    mock_http.get.return_value = make_response(200, payload)
+    result = _client(mock_http).get_npc_emotion("mira_innkeeper")
+    assert result == payload
+    mock_http.get.assert_called_once_with("/v1/npc/mira_innkeeper/emotion", timeout=15.0)
+
+
+def test_get_npc_emotion_returns_none_on_404(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(404, {"error": "not found"})
+    assert _client(mock_http).get_npc_emotion("ghost_npc") is None
+
+
+def test_get_npc_emotion_raises_on_500(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(500, {})
+    with pytest.raises(EngineClientError, match="HTTP 500"):
+        _client(mock_http).get_npc_emotion("mira_innkeeper")
+
+
+# ---------------------------------------------------------------------------
+# post_quest_generate
+# ---------------------------------------------------------------------------
+
+
+def test_post_quest_generate_returns_data(mock_http: MagicMock, make_response) -> None:
+    payload = {"quest_id": "q_001", "description": "Retrieve the northern spices."}
+    mock_http.post.return_value = make_response(200, {"data": payload})
+    result = _client(mock_http).post_quest_generate("aldric_merchant")
+    assert result == payload
+    mock_http.post.assert_called_once_with(
+        "/v1/quests/generate",
+        json={"quest_giver_id": "aldric_merchant"},
+        timeout=120.0,
+    )
+
+
+def test_post_quest_generate_raises_on_error(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(500, {"error": "LLM unavailable"})
+    with pytest.raises(EngineClientError, match="HTTP 500"):
+        _client(mock_http).post_quest_generate("aldric_merchant")
+
+
+# ---------------------------------------------------------------------------
+# get_quest
+# ---------------------------------------------------------------------------
+
+
+def test_get_quest_returns_data_on_200(mock_http: MagicMock, make_response) -> None:
+    quest = {"id": "q_001", "title": "Find the spices", "status": "available"}
+    mock_http.get.return_value = make_response(200, {"data": quest})
+    result = _client(mock_http).get_quest("q_001")
+    assert result == quest
+    mock_http.get.assert_called_once_with("/v1/quests/q_001", timeout=15.0)
+
+
+def test_get_quest_returns_none_on_404(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(404, {"error": "not found"})
+    assert _client(mock_http).get_quest("missing_quest") is None
+
+
+def test_get_quest_raises_on_500(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(500, {})
+    with pytest.raises(EngineClientError, match="HTTP 500"):
+        _client(mock_http).get_quest("q_001")
+
+
+# ---------------------------------------------------------------------------
+# get_item_price
+# ---------------------------------------------------------------------------
+
+
+def test_get_item_price_returns_price_on_200(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(200, {"data": {"price": 120}})
+    result = _client(mock_http).get_item_price("spice", "aldric_merchant")
+    assert result == 120
+    mock_http.get.assert_called_once_with(
+        "/v1/economy/price",
+        params={"item_type": "spice", "character_id": "aldric_merchant"},
+        timeout=15.0,
+    )
+
+
+def test_get_item_price_returns_none_on_404(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(404, {})
+    assert _client(mock_http).get_item_price("spice", "aldric_merchant") is None
+
+
+# ---------------------------------------------------------------------------
+# post_trade
+# ---------------------------------------------------------------------------
+
+
+def test_post_trade_returns_result_on_200(mock_http: MagicMock, make_response) -> None:
+    payload = {"data": {"accepted": False, "rejection_reason": "price too low"}}
+    mock_http.post.return_value = make_response(200, payload)
+    result = _client(mock_http).post_trade(
+        buyer_id="player",
+        seller_id="aldric_merchant",
+        item_id="northern_spice_bundle",
+        item_type="spice",
+        offered_price=80,
+        tick=0,
+    )
+    assert result == payload
+    _, kwargs = mock_http.post.call_args
+    body = kwargs["json"]
+    assert body["offered_price"] == 80
+    assert body["seller_id"] == "aldric_merchant"
+
+
+def test_post_trade_raises_on_4xx(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(422, {"detail": "invalid"})
+    with pytest.raises(EngineClientError, match="HTTP 422"):
+        _client(mock_http).post_trade(
+            buyer_id="player",
+            seller_id="aldric_merchant",
+            item_id="northern_spice_bundle",
+            item_type="spice",
+            offered_price=80,
+            tick=0,
+        )
+
+
+# ---------------------------------------------------------------------------
+# _quest_headers
+# ---------------------------------------------------------------------------
+
+
+def test_quest_headers_hash_is_deterministic() -> None:
+    """Same method + path + payload always produces the same hash."""
+    c = _client(MagicMock())
+    h1 = c._quest_headers("POST", "/v1/quests/offer", {"quest_id": "q1"})
+    h2 = c._quest_headers("POST", "/v1/quests/offer", {"quest_id": "q1"})
+    assert h1["X-Idempotency-Request-Hash"] == h2["X-Idempotency-Request-Hash"]
+
+
+def test_quest_headers_request_id_differs_per_call() -> None:
+    """X-Request-ID must be a fresh uuid4 on every call."""
+    c = _client(MagicMock())
+    h1 = c._quest_headers("POST", "/v1/quests/offer", {})
+    h2 = c._quest_headers("POST", "/v1/quests/offer", {})
+    assert h1["X-Request-ID"] != h2["X-Request-ID"]
+
+
+def test_quest_headers_contains_all_required_keys() -> None:
+    """All three X- headers must be present."""
+    c = _client(MagicMock())
+    headers = c._quest_headers("POST", "/v1/quests/accept", {"quest_id": "q1"})
+    assert "X-Request-ID" in headers
+    assert "X-Idempotency-Key" in headers
+    assert "X-Idempotency-Request-Hash" in headers
+
+
+# ---------------------------------------------------------------------------
+# post_quest_offer
+# ---------------------------------------------------------------------------
+
+
+def test_post_quest_offer_success(mock_http: MagicMock, make_response) -> None:
+    payload = {"data": {"quest_id": "q_001", "status": "offered"}}
+    mock_http.post.return_value = make_response(200, payload)
+    result = _client(mock_http).post_quest_offer("q_001", "aldric_merchant", "player")
+    assert result == payload
+    _, kwargs = mock_http.post.call_args
+    assert kwargs["json"]["quest_id"] == "q_001"
+    assert "X-Idempotency-Request-Hash" in kwargs["headers"]
+
+
+def test_post_quest_offer_raises_on_4xx(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(404, {"detail": "quest not found"})
+    with pytest.raises(EngineClientError, match="HTTP 404"):
+        _client(mock_http).post_quest_offer("missing", "aldric_merchant", "player")
+
+
+# ---------------------------------------------------------------------------
+# post_quest_accept
+# ---------------------------------------------------------------------------
+
+
+def test_post_quest_accept_success(mock_http: MagicMock, make_response) -> None:
+    payload = {"data": {"quest_id": "q_001", "status": "active"}}
+    mock_http.post.return_value = make_response(200, payload)
+    result = _client(mock_http).post_quest_accept("q_001", "player")
+    assert result == payload
+    _, kwargs = mock_http.post.call_args
+    assert kwargs["json"]["quest_id"] == "q_001"
+    assert "X-Idempotency-Request-Hash" in kwargs["headers"]
+
+
+def test_post_quest_accept_raises_on_4xx(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(409, {"detail": "already accepted"})
+    with pytest.raises(EngineClientError, match="HTTP 409"):
+        _client(mock_http).post_quest_accept("q_001", "player")
