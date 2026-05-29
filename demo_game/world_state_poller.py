@@ -41,6 +41,9 @@ class WorldStatePoller:
         self._lock = threading.Lock()
         self._epoch: str = ""
         self._conditions: list[str] = []
+        self._prev_conditions: frozenset[str] = frozenset()
+        self._baseline_polled: bool = False
+        self._new_conditions: list[str] = []
 
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -66,6 +69,20 @@ class WorldStatePoller:
         with self._lock:
             return self._epoch, list(self._conditions)
 
+    def pop_new_conditions(self) -> list[str]:
+        """Return and clear any conditions that appeared since the last call.
+
+        Thread-safe. The first poll establishes the baseline and returns nothing
+        so that pre-existing conditions don't trigger banners on startup.
+
+        Returns:
+            List of newly-added condition strings (may be empty).
+        """
+        with self._lock:
+            out = list(self._new_conditions)
+            self._new_conditions.clear()
+        return out
+
     # ------------------------------------------------------------------
     # Background thread
     # ------------------------------------------------------------------
@@ -88,8 +105,15 @@ class WorldStatePoller:
                 return
             epoch = ws.get("epoch", "")
             conditions = list(ws.get("active_conditions", []))
+            new_set = frozenset(conditions)
             with self._lock:
                 self._epoch = epoch
                 self._conditions = conditions
+                if self._baseline_polled:
+                    newly_added = new_set - self._prev_conditions
+                    for cond in sorted(newly_added):
+                        self._new_conditions.append(cond)
+                self._prev_conditions = new_set
+                self._baseline_polled = True
         except Exception as exc:
             print(f"[WorldStatePoller] error: {exc}", file=sys.stderr)

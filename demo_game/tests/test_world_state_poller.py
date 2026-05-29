@@ -88,3 +88,43 @@ class TestWorldStatePollerImmutability:
 
         _, conditions_again = poller.get_state()
         assert conditions_again == ["northern_war_active"]
+
+
+class TestWorldStatePollerNewConditions:
+    def test_pop_new_conditions_empty_before_any_poll(self) -> None:
+        """No conditions queued before any poll has run."""
+        poller = WorldStatePoller(_make_client(), interval_s=999.0)
+        assert poller.pop_new_conditions() == []
+
+    def test_pop_new_conditions_empty_after_first_poll(self) -> None:
+        """First poll establishes the baseline — nothing is returned as 'new'."""
+        ws = {"epoch": "war", "active_conditions": ["northern_war_active"]}
+        poller = WorldStatePoller(_make_client(ws), interval_s=999.0)
+        poller._poll_once()
+        assert poller.pop_new_conditions() == []
+
+    def test_pop_new_conditions_returns_diff_after_second_poll(self) -> None:
+        """A condition added between polls appears on the second poll."""
+        client = MagicMock()
+        client.get_world_state.side_effect = [
+            {"epoch": "peace", "active_conditions": []},
+            {"epoch": "war",   "active_conditions": ["northern_war_active"]},
+        ]
+        poller = WorldStatePoller(client, interval_s=999.0)
+        poller._poll_once()   # first poll — baseline
+        assert poller.pop_new_conditions() == []
+        poller._poll_once()   # second poll — war starts
+        assert poller.pop_new_conditions() == ["northern_war_active"]
+
+    def test_pop_new_conditions_clears_after_call(self) -> None:
+        """Calling pop_new_conditions() twice returns empty list on the second call."""
+        client = MagicMock()
+        client.get_world_state.side_effect = [
+            {"epoch": "peace", "active_conditions": []},
+            {"epoch": "war",   "active_conditions": ["northern_war_active"]},
+        ]
+        poller = WorldStatePoller(client, interval_s=999.0)
+        poller._poll_once()
+        poller._poll_once()
+        _ = poller.pop_new_conditions()   # first call — drains the queue
+        assert poller.pop_new_conditions() == []  # second call — empty
