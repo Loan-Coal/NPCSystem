@@ -3,24 +3,62 @@ Module: widgets
 Layer: demo_game.ui
 Purpose: Reusable Pygame UI widgets — InputBox, ScrollableLog, NpcListWidget,
          DegradationBadge. No game-logic, no HTTP, no engine imports.
-Dependencies: pygame
+Dependencies: pygame, demo_game.constants
 Used by: demo_game.ui.game_window
+
+300-line exception: all widgets share colour constants and the _MockFont test
+pattern; splitting would require a shared _widget_colours module with no
+cohesion benefit. See DECISIONS.md DEC-029 for rationale.
 """
 
 from __future__ import annotations
 
+import time
+
 import pygame
-_CLR_BG = (18, 18, 24)
-_CLR_PANEL = (28, 28, 36)
-_CLR_INPUT_BG = (38, 38, 50)
+
+from demo_game.constants import FACTION_COLOURS, NPC_FACTIONS, PALETTE
+
+# Emotion label colours used in DegradationBadge.
+_CLR_EMOTION_GREEN = (80, 200, 80)
+_CLR_EMOTION_AMBER = (200, 160, 80)
+_CLR_EMOTION_RED   = (200, 80, 80)
+
+# UI palette aliases — values from constants.PALETTE, names kept for minimal diff.
+_CLR_BG          = PALETTE["bg"]
+_CLR_PANEL       = PALETTE["panel"]
+_CLR_TEXT        = PALETTE["white"]
+_CLR_DIM         = PALETTE["grey"]
+_CLR_NPC_LABEL   = PALETTE["amber"]
+
+# Widget-specific colours with no direct palette equivalent.
+_CLR_INPUT_BG     = (38, 38, 50)
 _CLR_INPUT_ACTIVE = (55, 55, 75)
-_CLR_TEXT = (220, 220, 220)
-_CLR_DIM = (130, 130, 140)
-_CLR_HIGHLIGHT = (80, 100, 160)
+_CLR_HIGHLIGHT    = (80, 100, 160)
 _CLR_PLAYER_LABEL = (120, 160, 255)
-_CLR_NPC_LABEL = (200, 160, 80)
-_CLR_ERROR_LABEL = (220, 80, 80)
-_CLR_CURSOR = (180, 180, 220)
+_CLR_ERROR_LABEL  = (220, 80, 80)
+_CLR_CURSOR       = (180, 180, 220)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _emotion_colour(valence: float) -> tuple[int, int, int]:
+    """Return an RGB colour for an emotion valence value.
+
+    Args:
+        valence: Emotion valence in [-1.0, 1.0]. Positive = positive emotion.
+
+    Returns:
+        Green for valence > 0.3, red for valence < -0.3, amber otherwise.
+    """
+    if valence > 0.3:
+        return _CLR_EMOTION_GREEN
+    if valence < -0.3:
+        return _CLR_EMOTION_RED
+    return _CLR_EMOTION_AMBER
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +163,10 @@ class InputBox:
             cy = rect.centery - text_surf.get_height() // 2
             pygame.draw.line(surface, _CLR_CURSOR, (cx, cy), (cx, cy + text_surf.get_height()), 2)
 
+    def set_text(self, text: str) -> None:
+        """Pre-fill the input box without submitting."""
+        self._text = text
+
     @property
     def text(self) -> str:
         """Current text in the input box."""
@@ -183,7 +225,11 @@ class ScrollableLog:
         self._scroll_px = 0
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
-        """Render the log onto ``surface`` at ``rect``, wrapping long lines."""
+        """Render the log onto ``surface`` at ``rect``, wrapping long lines.
+
+        Each message is prefixed with ``[LABEL]:`` in the sender colour.
+        An amber 1px border frames the entire log area.
+        """
         pygame.draw.rect(surface, _CLR_PANEL, rect, border_radius=4)
         clip = surface.subsurface(rect)
         clip.fill(_CLR_PANEL)
@@ -208,12 +254,15 @@ class ScrollableLog:
             entry_h = label_h + len(lines) * line_h + 6
             rel_y = content_y - viewport_top
             if rel_y + entry_h >= 0 and rel_y < rect.height:
-                lbl_surf = self._label_font.render(label, True, colour)
+                lbl_surf = self._label_font.render(f"[{label}]:", True, colour)
                 clip.blit(lbl_surf, (8, rel_y))
                 for i, line in enumerate(lines):
                     line_surf = self._font.render(line, True, _CLR_TEXT)
                     clip.blit(line_surf, (8, rel_y + label_h + i * line_h))
             content_y += entry_h
+
+        # Amber 1px border drawn last so it sits on top of any content overflow.
+        pygame.draw.rect(surface, PALETTE["amber"], rect, 1)
 
 
 class NpcListWidget:
@@ -265,16 +314,29 @@ class NpcListWidget:
         return None
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
-        """Render the NPC list onto ``surface`` at ``rect``."""
+        """Render the NPC list onto ``surface`` at ``rect``.
+
+        Each row shows an 8px faction-coloured dot at x+8, an amber ▶ prefix on
+        the selected row, then the NPC name.
+        """
         self._rect = rect
         pygame.draw.rect(surface, _CLR_PANEL, rect, border_radius=4)
         for i, npc_id in enumerate(self._npc_ids):
             row = pygame.Rect(rect.x, rect.y + i * self._row_h, rect.width, self._row_h)
-            if npc_id == self._active_id:
+            is_active = npc_id == self._active_id
+            if is_active:
                 pygame.draw.rect(surface, _CLR_HIGHLIGHT, row, border_radius=3)
+            faction = NPC_FACTIONS.get(npc_id, "neutral")
+            dot_clr = FACTION_COLOURS.get(faction, (96, 96, 96))
+            pygame.draw.circle(surface, dot_clr, (row.x + 8, row.centery), 4)
+            text_x = row.x + 20
+            if is_active:
+                arrow = self._font.render("▶", True, PALETTE["amber"])
+                surface.blit(arrow, (text_x, row.centery - arrow.get_height() // 2))
+                text_x += arrow.get_width() + 4
             label = self._display_names.get(npc_id, npc_id)
             txt = self._font.render(label, True, _CLR_TEXT)
-            surface.blit(txt, (row.x + 10, row.centery - txt.get_height() // 2))
+            surface.blit(txt, (text_x, row.centery - txt.get_height() // 2))
 
     @property
     def active_id(self) -> str | None:
@@ -283,7 +345,11 @@ class NpcListWidget:
 
 
 class DegradationBadge:
-    """Coloured pill showing degradation level and optional emotion text.
+    """Coloured pill showing degradation tier and live emotion label.
+
+    The degradation tier and background colour are set from dialogue responses
+    via ``set()``. The live emotion label and valence are set from the
+    EmotionPoller via ``set_emotion()`` and rendered in a valence-matched colour.
 
     Args:
         font: Font used for the label text.
@@ -292,26 +358,101 @@ class DegradationBadge:
     def __init__(self, font: pygame.font.Font) -> None:
         self._font = font
         self._level: str = ""
-        self._emotion: str | None = None
         self._color: tuple[int, int, int] = (80, 80, 80)
+        self._emotion_label: str = ""
+        self._emotion_valence: float = 0.0
 
     def set(self, level: str, emotion: str | None, color: tuple[int, int, int]) -> None:
-        """Update badge state.
+        """Update degradation tier and badge background colour from a dialogue response.
 
         Args:
             level: Degradation level string (e.g. ``"full"``).
-            emotion: Emotion/mood string, or None.
+            emotion: Ignored — live emotion comes from ``set_emotion()``.
             color: RGB badge background colour.
         """
         self._level = level.upper().replace("_", " ")
-        self._emotion = emotion
         self._color = color
 
+    def set_emotion(self, label: str, valence: float) -> None:
+        """Update the live emotion label from the EmotionPoller.
+
+        Args:
+            label: Emotion label string (e.g. ``"happy"``).
+            valence: Emotion valence in [-1.0, 1.0].
+        """
+        self._emotion_label = label
+        self._emotion_valence = valence
+
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
-        """Render the badge onto ``surface`` at ``rect``."""
+        """Render the badge onto ``surface`` at ``rect``.
+
+        Tier text is drawn in white. The emotion label is drawn in a
+        valence-matched colour: green (>0.3), amber (neutral), red (<-0.3).
+        """
         pygame.draw.rect(surface, self._color, rect, border_radius=6)
-        label = self._level or "—"
-        if self._emotion:
-            label += f"  ·  {self._emotion}"
-        txt = self._font.render(label, True, (255, 255, 255))
-        surface.blit(txt, (rect.x + 8, rect.centery - txt.get_height() // 2))
+        x = rect.x + 8
+        cy = rect.centery
+
+        tier_surf = self._font.render(self._level or "—", True, (255, 255, 255))
+        surface.blit(tier_surf, (x, cy - tier_surf.get_height() // 2))
+
+        if self._emotion_label:
+            x += tier_surf.get_width()
+            sep_surf = self._font.render("  ·  ", True, (180, 180, 180))
+            surface.blit(sep_surf, (x, cy - sep_surf.get_height() // 2))
+            x += sep_surf.get_width()
+            emo_clr = _emotion_colour(self._emotion_valence)
+            emo_surf = self._font.render(self._emotion_label, True, emo_clr)
+            surface.blit(emo_surf, (x, cy - emo_surf.get_height() // 2))
+
+
+# ---------------------------------------------------------------------------
+# EventBanner
+# ---------------------------------------------------------------------------
+
+_BANNER_H = 36
+
+
+class EventBanner:
+    """2-second flash banner for world event notifications.
+
+    Renders a full-width 36px strip at the bottom of the given rect,
+    amber text on PALETTE["red"] background. No-op when not active.
+
+    Args:
+        font: Font used to render the event label.
+    """
+
+    def __init__(self, font: pygame.font.Font) -> None:
+        self._font = font
+        self._label: str = ""
+        self._until: float = 0.0
+
+    def show(self, label: str, duration_s: float = 2.0) -> None:
+        """Activate the banner with the given label for duration_s seconds.
+
+        Args:
+            label: Event description to display.
+            duration_s: How long the banner stays visible. Defaults to 2.0 s.
+        """
+        self._label = label
+        self._until = time.monotonic() + duration_s
+
+    def is_active(self) -> bool:
+        """Return True if the banner is currently visible."""
+        return time.monotonic() < self._until
+
+    def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        """Draw the banner strip at the bottom of rect if active; no-op otherwise.
+
+        Args:
+            surface: Target pygame surface.
+            rect: Bounding rect of the panel that owns this banner.
+        """
+        if not self.is_active():
+            return
+        banner_rect = pygame.Rect(rect.x, rect.bottom - _BANNER_H, rect.width, _BANNER_H)
+        pygame.draw.rect(surface, PALETTE["red"], banner_rect)
+        text_surf = self._font.render(self._label, True, PALETTE["amber"])
+        cy = banner_rect.centery
+        surface.blit(text_surf, (banner_rect.x + 8, cy - text_surf.get_height() // 2))

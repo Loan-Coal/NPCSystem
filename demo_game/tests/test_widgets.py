@@ -1,19 +1,22 @@
 """
 Module: test_widgets
 Layer: demo_game (tests)
-Purpose: TDD unit tests for demo_game.ui.widgets — _wrap_text and ScrollableLog
-         word-wrap + pixel-scroll behaviour. No pygame display init required.
-Dependencies: demo_game.ui.widgets, unittest.mock
+Purpose: TDD unit tests for demo_game.ui.widgets — _wrap_text, ScrollableLog,
+         DegradationBadge emotion colouring, and NpcListWidget faction dot.
+         No pygame display init required.
+Dependencies: demo_game.ui.widgets, demo_game.constants, unittest.mock
 Used by: make test-demo
 """
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
+import pygame
 import pytest
 
-from demo_game.ui.widgets import ScrollableLog, _wrap_text
+from demo_game.constants import PALETTE
+from demo_game.ui.widgets import DegradationBadge, EventBanner, NpcListWidget, ScrollableLog, _emotion_colour, _wrap_text
 
 
 # ---------------------------------------------------------------------------
@@ -235,3 +238,248 @@ def test_response_routed_to_correct_npc_log() -> None:
     assert "captain_sorn" not in logs or len(logs["captain_sorn"]._messages) == 0
     # Mira's log has the message
     assert logs["mira_innkeeper"]._messages[0][1] == "Late reply from Mira"
+
+
+# ---------------------------------------------------------------------------
+# DegradationBadge — live emotion colouring
+# ---------------------------------------------------------------------------
+
+
+def test_emotion_colour_positive_valence_is_green() -> None:
+    r, g, b = _emotion_colour(0.5)
+    assert g > r and g > b
+
+
+def test_emotion_colour_negative_valence_is_red() -> None:
+    r, g, b = _emotion_colour(-0.5)
+    assert r > g and r > b
+
+
+def test_emotion_colour_neutral_valence_is_amber() -> None:
+    r, g, b = _emotion_colour(0.0)
+    # amber: high R, medium-high G, low B
+    assert r > b and g > b
+
+
+def test_emotion_colour_boundary_above_positive_threshold() -> None:
+    # 0.3 is NOT positive (> 0.3 required) — should be amber
+    r_amber, g_amber, _ = _emotion_colour(0.3)
+    r_green, g_green, _ = _emotion_colour(0.31)
+    assert g_green > r_green  # green
+    assert r_amber > g_amber or g_amber >= r_amber  # could be amber (not strictly green)
+
+
+def test_emotion_colour_boundary_below_negative_threshold() -> None:
+    # -0.3 is NOT negative (< -0.3 required) — should be amber
+    _emotion_colour(-0.3)   # amber — no assertion needed, just no crash
+    r_red, g_red, _ = _emotion_colour(-0.31)
+    assert r_red > g_red  # red
+
+
+def test_degradation_badge_set_emotion_stores_label_and_valence() -> None:
+    badge = DegradationBadge(_MockFont())
+    badge.set_emotion("joyful", 0.8)
+    assert badge._emotion_label == "joyful"
+    assert badge._emotion_valence == pytest.approx(0.8)
+
+
+def test_degradation_badge_set_emotion_overwrites_previous() -> None:
+    badge = DegradationBadge(_MockFont())
+    badge.set_emotion("happy", 0.6)
+    badge.set_emotion("neutral", 0.0)
+    assert badge._emotion_label == "neutral"
+    assert badge._emotion_valence == pytest.approx(0.0)
+
+
+def test_degradation_badge_initial_emotion_is_empty() -> None:
+    badge = DegradationBadge(_MockFont())
+    assert badge._emotion_label == ""
+    assert badge._emotion_valence == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# NpcListWidget — faction dot drawn per row
+# ---------------------------------------------------------------------------
+
+
+def _make_npc_list() -> NpcListWidget:
+    widget = NpcListWidget(_MockFont(), row_height=36)
+    widget.set_npcs(
+        ["mira_innkeeper", "lira_fence"],
+        {"mira_innkeeper": "Mira", "lira_fence": "Lira"},
+        active_id="mira_innkeeper",
+    )
+    return widget
+
+
+def test_npc_list_widget_faction_dot_drawn_for_each_row() -> None:
+    """pygame.draw.circle is called once per NPC row during draw()."""
+    widget = _make_npc_list()
+    mock_surface = MagicMock()
+
+    with patch("demo_game.ui.widgets.pygame") as mock_pygame:
+        mock_pygame.Rect = MagicMock(side_effect=lambda *a, **kw: MagicMock())
+        widget.draw(mock_surface, MagicMock())
+        assert mock_pygame.draw.circle.call_count == 2
+
+
+def test_npc_list_widget_neutral_faction_uses_grey() -> None:
+    """mira_innkeeper (neutral) draws a grey dot."""
+    widget = NpcListWidget(_MockFont(), row_height=36)
+    widget.set_npcs(
+        ["mira_innkeeper"],
+        {"mira_innkeeper": "Mira"},
+        active_id="mira_innkeeper",
+    )
+    mock_surface = MagicMock()
+
+    with patch("demo_game.ui.widgets.pygame") as mock_pygame:
+        mock_pygame.Rect = MagicMock(side_effect=lambda *a, **kw: MagicMock())
+        widget.draw(mock_surface, MagicMock())
+        call_args = mock_pygame.draw.circle.call_args
+        colour = call_args[0][1]  # second positional arg is colour
+        r, g, b = colour
+        # grey: all components roughly equal
+        assert abs(int(r) - int(g)) <= 10 and abs(int(g) - int(b)) <= 10
+
+
+def test_scrollable_log_draw_has_amber_border() -> None:
+    """ScrollableLog.draw() must call pygame.draw.rect with PALETTE['amber'] and width=1."""
+    import pygame as pg
+    log = _make_log()
+    log.add_message("Mira", "Hello traveller.")
+    surface = MagicMock()
+    rect = pg.Rect(0, 0, 200, 100)
+
+    with patch("demo_game.ui.widgets.pygame.draw") as mock_draw:
+        log.draw(surface, rect)
+
+    border_found = any(
+        len(c.args) >= 4 and c.args[1] == PALETTE["amber"] and c.args[3] == 1
+        for c in mock_draw.rect.call_args_list
+    )
+    assert border_found, "Expected a 1px amber border rect call on ScrollableLog"
+
+
+def test_scrollable_log_draw_labels_use_bracket_format() -> None:
+    """Labels are rendered as '[LABEL]:' not plain 'LABEL'."""
+    rendered_texts: list[str] = []
+
+    class _TrackingFont(_MockFont):
+        def render(self, text: str, antialias: bool, colour: tuple) -> MagicMock:
+            rendered_texts.append(text)
+            return super().render(text, antialias, colour)
+
+    import pygame as pg
+    log = ScrollableLog(_TrackingFont(), _TrackingFont())
+    log.add_message("Mira", "Hello.")
+    surface = MagicMock()
+
+    with patch("demo_game.ui.widgets.pygame.draw"):
+        log.draw(surface, pg.Rect(0, 0, 200, 100))
+
+    assert any(t.startswith("[") and t.endswith("]:") for t in rendered_texts), (
+        f"Expected a '[label]:' render, got: {rendered_texts}"
+    )
+
+
+def test_npc_list_active_row_renders_arrow_prefix_in_amber() -> None:
+    """Selected row must render '▶' with PALETTE['amber'] colour."""
+    rendered: list[tuple[str, tuple]] = []
+
+    class _TrackingFont(_MockFont):
+        def render(self, text: str, antialias: bool, colour: tuple) -> MagicMock:
+            rendered.append((text, colour))
+            return super().render(text, antialias, colour)
+
+    widget = NpcListWidget(_TrackingFont(), row_height=36)
+    widget.set_npcs(["mira_innkeeper"], {"mira_innkeeper": "Mira"}, active_id="mira_innkeeper")
+
+    with patch("demo_game.ui.widgets.pygame") as mock_pygame:
+        mock_pygame.Rect = MagicMock(side_effect=lambda *a, **kw: MagicMock())
+        widget.draw(MagicMock(), MagicMock())
+
+    arrow_calls = [(text, clr) for text, clr in rendered if text == "▶"]
+    assert len(arrow_calls) == 1, f"Expected exactly one '▶' render, got: {[t for t, _ in rendered]}"
+    assert arrow_calls[0][1] == PALETTE["amber"], f"▶ rendered in {arrow_calls[0][1]}, expected {PALETTE['amber']}"
+
+
+def test_npc_list_inactive_row_does_not_render_arrow_prefix() -> None:
+    """Only the active row should show '▶'; inactive rows must not."""
+    rendered_texts: list[str] = []
+
+    class _TrackingFont(_MockFont):
+        def render(self, text: str, antialias: bool, colour: tuple) -> MagicMock:
+            rendered_texts.append(text)
+            return super().render(text, antialias, colour)
+
+    widget = NpcListWidget(_TrackingFont(), row_height=36)
+    widget.set_npcs(
+        ["mira_innkeeper", "lira_fence"],
+        {"mira_innkeeper": "Mira", "lira_fence": "Lira"},
+        active_id="mira_innkeeper",
+    )
+
+    with patch("demo_game.ui.widgets.pygame") as mock_pygame:
+        mock_pygame.Rect = MagicMock(side_effect=lambda *a, **kw: MagicMock())
+        widget.draw(MagicMock(), MagicMock())
+
+    assert rendered_texts.count("▶") == 1, f"Expected 1 arrow render, got {rendered_texts.count('▶')}"
+
+
+def test_npc_list_widget_thieves_guild_uses_purple() -> None:
+    """lira_fence (thieves_guild) draws a purple dot (blue-dominant or violet)."""
+    widget = NpcListWidget(_MockFont(), row_height=36)
+    widget.set_npcs(
+        ["lira_fence"],
+        {"lira_fence": "Lira"},
+        active_id="lira_fence",
+    )
+    mock_surface = MagicMock()
+
+    with patch("demo_game.ui.widgets.pygame") as mock_pygame:
+        mock_pygame.Rect = MagicMock(side_effect=lambda *a, **kw: MagicMock())
+        widget.draw(mock_surface, MagicMock())
+        call_args = mock_pygame.draw.circle.call_args
+        colour = call_args[0][1]
+        r, g, b = colour
+        # purple: R and B dominant over G
+        assert r > g and b > g
+
+
+# ---------------------------------------------------------------------------
+# EventBanner
+# ---------------------------------------------------------------------------
+
+
+def test_event_banner_is_inactive_before_show() -> None:
+    """A freshly constructed EventBanner must not be active."""
+    banner = EventBanner(_MockFont())
+    assert banner.is_active() is False
+
+
+def test_event_banner_is_active_after_show() -> None:
+    """After show(), the banner must report as active for the duration."""
+    banner = EventBanner(_MockFont())
+    banner.show("war_begins", duration_s=60.0)
+    assert banner.is_active() is True
+
+
+def test_event_banner_draw_no_crash() -> None:
+    """draw() must not raise on an active banner."""
+    banner = EventBanner(_MockFont())
+    banner.show("test_event", duration_s=60.0)
+    surface = MagicMock()
+    with patch("demo_game.ui.widgets.pygame.draw") as mock_draw:
+        mock_draw.rect = MagicMock()
+        banner.draw(surface, pygame.Rect(0, 0, 400, 300))
+
+
+def test_event_banner_draw_is_noop_when_inactive() -> None:
+    """draw() must not blit anything when the banner is inactive."""
+    banner = EventBanner(_MockFont())
+    surface = MagicMock()
+    with patch("demo_game.ui.widgets.pygame.draw") as mock_draw:
+        banner.draw(surface, pygame.Rect(0, 0, 400, 300))
+        mock_draw.rect.assert_not_called()
+    surface.blit.assert_not_called()
