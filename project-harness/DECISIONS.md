@@ -284,3 +284,90 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Decision:** `demo_game/seed.py` is the authoritative demo world seed. `seeds/worlds/seed_demo_world.py` is deleted. The DEC-021 "single folder" rationale is superseded for the demo seed specifically.
 **Why:** The demo game must be self-contained and fully decoupled from the NPC engine source — as if a third-party studio built it on top of the shipped SDK. Its seed data belongs inside `demo_game/`, not alongside eval world seeds. Naming convention going forward: `seeds/worlds/seed_*.py` = eval harness worlds only; `demo_game/seed.py` = demo app seed.
 **Consequence:** `seeds/worlds/` contains only `seed_tavern_world.py` and `seed_village_world.py`. Any reference to `seeds/worlds/seed_demo_world.py` in historical docs is stale but preserved for audit trail.
+
+---
+
+## DEC-028: NPC_FACTIONS hardcoded in constants.py rather than fetched from graph
+**Date:** 2026-05-28
+**Context:** S3.5b adds a faction-coloured dot to each NPC row in NpcListWidget. Faction data exists in the graph: each Character node has a faction field. An alternative is to call `get_npc_state(npc_id)` for each NPC at list-draw time, or once on NPC click.
+**Decision:** `NPC_FACTIONS` is a static dict in `demo_game/constants.py` mapping each NPC ID to its faction string.
+**Why:** The demo world has exactly 5 NPCs whose faction membership never changes during a session. The seed is stable for the Munich June 6 demo. Fetching from the graph would require either (a) blocking list-draw, or (b) a background fetch + per-NPC cache, for data that never changes. The cost/benefit is entirely negative. If faction becomes dynamic (e.g., NPCs can switch factions at runtime), this constant should be replaced with a graph-backed `FactionPoller`.
+**Consequence:** Adding a sixth NPC or changing faction membership requires a manual update to both `seed.py` and `NPC_FACTIONS` in `constants.py`. The invariant test `test_npc_factions_keys_match_display_names` guards against drift.
+
+---
+
+## DEC-029: widgets.py exempt from 300-line hard limit
+**Date:** 2026-05-28
+**Context:** `demo_game/ui/widgets.py` reached 317 lines before S3.5 changes and grew further during S3.5 (DegradationBadge split rendering + NpcListWidget faction dot). The 300-line limit applies to non-test code.
+**Decision:** Accept the exception. Do not split `widgets.py` across files at this time.
+**Why:** All four widget classes (`InputBox`, `ScrollableLog`, `NpcListWidget`, `DegradationBadge`) share the private colour constants (`_CLR_*`) and the `_emotion_colour` / `_wrap_text` helpers defined at module level. Splitting into multiple files would require either duplicating the colour block or extracting a `_widget_colours.py` module with no cohesion benefit. The natural split (one class per file) would also break the `_MockFont` test pattern used across all widget tests in `test_widgets.py`.
+**Consequence:** If `widgets.py` grows past ~450 lines (Phase 4 polish), revisit splitting into `input_box.py`, `scrollable_log.py`, `npc_list_widget.py`, and `degradation_badge.py` with a shared `_colours.py`.
+
+---
+
+## DEC-030: S4.6 (layout refactor) reordered to execute before S4.0–S4.5
+**Date:** 2026-05-28
+**Context:** ROADMAP Phase 4 originally placed the layout audit / `--size` CLI arg as step S4.6 (after 5 polish steps). Steps S4.0–S4.5 each add new UI elements with specific pixel positions. Doing the layout refactor last would require re-deriving all new positions twice — once for the initial implementation and once during the refactor.
+**Decision:** Execute S4.6 first in the Phase 4 sequence. All subsequent polish steps build on layout constants derived from `window_w, window_h` instance attrs.
+**Why:** Single pass on pixel math. No rework. All Phase 4 widgets are built on the flexible foundation from day one.
+**Consequence:** ROADMAP updated with plan note. Implementation starts with S4.6, then S4.0, then S4.1–S4.5 in original order.
+
+---
+
+## DEC-031: Right panel extended from 2-tab bool to 3-tab RightPanel enum
+**Date:** 2026-05-28
+**Context:** S3.4 implemented a 2-tab boolean toggle (`_show_sidebar: bool`) for GRAPH vs KNOWLEDGE. S4.0 adds a third panel (PLAYER STATUS) for quests, inventory, and future player-facing data. The boolean cannot extend gracefully to 3+ values.
+**Decision:** Replace `_show_sidebar: bool` with `_active: RightPanel` where `RightPanel(enum.Enum)` has values GRAPH, KNOWLEDGE, PLAYER_STATUS. Tab key cycles using index arithmetic. Adding a 4th tab (S4.9 CHAIN) requires only appending an enum value.
+**Why:** Enum cycle is O(n) to extend (append value + add elif branch), vs boolean which requires refactoring the entire toggle to a tri-state. Enum value strings also serve as self-documenting header labels.
+**Consequence:** `_show_sidebar` removed. All code that branched on `_show_sidebar` updated to branch on `_active`. Exclusive scroll routing (DEC-027) preserved as elif chain.
+
+---
+
+## DEC-032: game_window.py split into left_panel.py + right_panel.py + thin GameWindow
+**Date:** 2026-05-28
+**Context:** DEC-024 set a 450-line trigger for splitting `game_window.py`. It reached 472 lines after S3.5. Phase 4 adds ~250+ lines of new rendering logic (tab enum, portrait zone, preset buttons, event banner, trade overlay, quest panel integration) — projecting to ~730 lines without a split.
+**Decision:** During S4.6, split game_window.py into three files:
+- `demo_game/ui/left_panel.py` — `LeftPanelRenderer`: NPC list, dialogue log, input box, portrait zone, preset buttons, event banner, trade overlay (~200 lines)
+- `demo_game/ui/right_panel.py` — `RightPanelRenderer`: `RightPanel` enum, 3-tab state, GRAPH / KNOWLEDGE / PLAYER STATUS rendering (~180 lines)
+- `demo_game/ui/game_window.py` — thin `GameWindow`: pygame event loop, thread ownership, routes events to both renderers (~150 lines)
+**Why:** Single-responsibility. Each renderer owns its rect and its widget instances. GameWindow owns threads and the pygame main loop only. File sizes stay within 300-line limit without exceptions.
+**Consequence:** DEC-024 exception is resolved. All tests importing `GameWindow` from `game_window` remain valid; renderer classes are internal. Test suite must be green before any S4.0 work begins.
+
+---
+
+## DEC-034: client.py exempt from 300-line hard limit
+**Date:** 2026-05-29
+**Context:** `demo_game/client.py` is 680 lines after adding `post_quest_generate` and `get_quest` in S4.0.
+**Decision:** Accept the exception. Do not split client.py.
+**Why:** client.py is a single-class HTTP client wrapper. Every method maps 1:1 to one engine API endpoint — no branching logic, no domain knowledge, no state other than connection settings. Splitting it (e.g. `quest_client.py`, `graph_client.py`) would require callers to import from multiple modules for unrelated operations and would obscure the complete API surface. The 300-line rule targets mixed-concern modules; this is one class with one concern.
+**Limit:** If client.py exceeds ~900 lines, extract a `QuestClient` and `EconomyClient` mixin approach, with `EngineClient` inheriting both.
+**Consequence:** client.py will grow to ~750 lines by end of Phase 4 (trade, quest lifecycle). Acceptable under this exception.
+
+---
+
+## DEC-036: left_panel.py exempt from 300-line hard limit
+**Date:** 2026-05-29
+**Context:** `demo_game/ui/left_panel.py` reached 322 lines after S4.4 added `ActionBarWidget` integration, trade-price overlay state, and two new public methods.
+**Decision:** Accept the exception. Do not split left_panel.py.
+**Why:** `left_panel.py` is a single-class renderer for one panel. Splitting it (e.g. `left_panel_widgets.py` for drawing helpers) would scatter closely related rendering logic with no encapsulation benefit — the helpers only make sense in the context of `LeftPanelRenderer`'s state. The DEC-024 line-limit rule targets mixed-concern modules; this is one class with one concern.
+**Limit:** If `left_panel.py` grows past ~400 lines, extract widget-draw helpers into `demo_game/ui/left_panel_draw.py` as free functions receiving explicit arguments.
+**Consequence:** left_panel.py may reach ~340 lines by end of Phase 4. Acceptable under this exception.
+
+---
+
+## DEC-035: PALETTE dict in constants.py is the single source of truth for UI colours
+**Date:** 2026-05-29
+**Context:** S4.2 introduced a unified colour palette. Before this, each UI file had its own hardcoded `_CLR_*` tuples, causing colour drift across panels.
+**Decision:** All UI colours must be defined in `PALETTE` (or `LOCATION_TINTS`) in `demo_game/constants.py`. Module-level `_CLR_*` aliases in widget/renderer files are allowed as thin wrappers (`_CLR_AMBER = PALETTE["amber"]`) to minimise diffs, but must not introduce new hardcoded colour tuples. Widget-specific colours with no semantic equivalent in PALETTE (e.g. `_CLR_INPUT_BG`) may remain hardcoded in their own file until a natural refactor opportunity arises.
+**Why:** Centralised palette makes re-theming or adjusting any colour a one-line change. The alternative (each file owns its colours) caused `(212, 160, 23)` and `(200, 160, 80)` amber variants to coexist with no way to tell which was canonical.
+**Consequence:** Adding a new colour requires editing constants.py first. Reviewers should reject any PR that introduces a new hardcoded colour tuple in a UI file if a PALETTE key would serve.
+
+---
+
+## DEC-033: seed.py exempt from 300-line hard limit
+**Date:** 2026-05-28
+**Context:** `demo_game/seed.py` is 671 lines. Phase 4 adds quest generation (~25 lines) and item seeding (~20 lines), pushing it toward ~720 lines.
+**Decision:** Accept the exception. Do not split seed.py.
+**Why:** seed.py is a pure data seeder: it contains zero algorithmic logic, no classes, no branching beyond HTTP error checks. Every line is a data definition or an API call. The 300-line rule targets monolithic modules mixing concerns; seed.py has exactly one concern. Splitting it (e.g. `_seed_npcs.py`, `_seed_events.py`) would scatter the definition of a single world state across multiple files with no encapsulation benefit.
+**Limit:** If seed.py grows past ~800 lines, extract helpers into `demo_game/_seed_helpers.py` (shared payload builders) while keeping the main seeding orchestration in seed.py.
+**Consequence:** seed.py will reach ~720 lines after Phase 4. Acceptable under this exception.

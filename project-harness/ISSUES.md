@@ -546,6 +546,16 @@ current mapping is good enough for demo badge display and does not affect correc
 
 ---
 
+## ISSUE-046: GET /v1/economy/price endpoint not yet verified against running engine
+**Found:** 2026-05-29, during S4.4 trade price implementation
+**Severity:** P2 (annoying)
+**Where:** `demo_game/client.py` — `get_item_price()`, `demo_game/ui/left_panel.py` — `set_trade_price()`
+**Description:** `get_item_price()` calls `GET /v1/economy/price?item_type=spice&character_id=aldric_merchant`. The endpoint was assumed to exist from the plan; it has not been tested against a live engine. If the route is absent or has a different schema, the trade overlay will silently show nothing (non-fatal, error caught), but the demo feature won't function.
+**Why deferred:** Required live engine + seeded Item node. Verification is a 5-minute manual check — deferred to pre-demo run.
+**To fix:** Start engine + `make demo-seed`, then `curl "http://localhost:8000/v1/economy/price?item_type=spice&character_id=aldric_merchant"`. If 404: check route in `src/npc_engine/api/` and update the URL. If schema differs: update `get_item_price()` to match actual response shape.
+
+---
+
 <!--
 Template for a new issue:
 

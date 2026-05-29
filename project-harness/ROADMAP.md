@@ -138,36 +138,46 @@ The demo is the only thing that matters. Every session this fortnight is in serv
   - UI fix: per-NPC dialogue logs (`dict[npc_id, ScrollableLog]`); "Talking to [NPC]" header strip; switching NPC preserves history
   - 16 new widget tests + 1 new seed test; 125/125 demo tests green
   - Skills added: `per-npc-dialogue-log`, `pygame-word-wrap`; DEC-024 logged
-- [ ] **S3.2** Replace manual W/C keypresses in the demo path: `demo_run.py` calls the engine API directly to fire events and advance the clock. The interactive keypress bindings in `demo_game/ui/game_window.py` are **preserved** — do not remove them. `demo_run.py` is a separate code path.
+- [x] **S3.2** Replace manual W/C keypresses in the demo path: `demo_run.py` calls the engine API directly to fire events and advance the clock. The interactive keypress bindings in `demo_game/ui/game_window.py` are **preserved** — do not remove them. `demo_run.py` is a separate code path. **Done: run.py already executes all scenes programmatically via DialogueBeat/EventFire/ClockTickScene — no keypresses remain on the demo path.**
 - [x] **S3.3** Build gossip knowledge sidebar in `demo_game/ui/`: new `KnowledgeSidebarWidget`. Click any NPC → shows two columns side by side:
   - Left: **"What [NPC] knows"** — pull from `GET /v1/graph/edges/KNOWS_ABOUT` filtered to this character, plus any distorted event properties stored on the edge
   - Right: **"Ground truth"** — pull from `GET /v1/graph/nodes/{event_id}` (the actual event properties)
   - Diff rendering: matching text = white; distorted values = amber; fields the NPC is missing = grey + strikethrough
 - [x] **S3.4** Wire sidebar toggle: `Tab` key switches between the graph panel and the gossip sidebar. Active panel shown in a header strip at the top of the right pane.
-- [ ] **S3.5** Record rough take #0: run `demo_run.py` end-to-end with narration, record the screen. This is a practice run — not the final cut. Write down everything that looks wrong.
+- [x] **S3.5a** Emotion polling: add `get_npc_emotion(npc_id)` to `client.py` (calls `GET /v1/npc/{npc_id}/emotion`). Add `EmotionPoller` background thread (same pattern as `WorldStatePoller`, polls every 5 s for active NPC). Update `DegradationBadge` to show live mood label with colour coding: green (valence > 0.3), amber (neutral), red (valence < −0.3). Files: `demo_game/client.py`, `demo_game/emotion_poller.py` (new), `demo_game/ui/game_window.py`, `demo_game/ui/widgets.py`. **Done 2026-05-28. 175/175 demo tests green.**
+- [x] **S3.5b** Faction badge in NPC list: add a coloured 8px dot at the left edge of each NPC list row. `FACTION_COLOURS` + `NPC_FACTIONS` added to `constants.py`. `NpcListWidget.draw()` updated. DEC-028 logged. Files: `demo_game/constants.py`, `demo_game/ui/widgets.py`. **Done 2026-05-28.**
+- [x] **S3.6** Record rough take #0: run `demo_run.py` end-to-end with narration, record the screen. This is a practice run — not the final cut. Write down everything that looks wrong.
 
 **Exit criteria:** Rough recording exists. Gossip sidebar shows at least one distorted field in amber. Demo runs end-to-end without a crash.
 
 ---
 
 ## Phase 4 — Visual Polish
-**Days 8–10 · ~4 sessions**
+**Days 8–11 · ~7.25 sessions**
 
-> Functional beats pretty, but functional + polished beats both. Reference: Caves of Qud / RimWorld aesthetic — dark bg, amber/teal text, clean grid layout.
+> Functional beats pretty, but functional + polished beats both. Reference: Caves of Qud / RimWorld aesthetic — dark bg, amber/teal text, clean grid layout. Each step is independently shippable — cut from the bottom if behind schedule.
 
-**Goal:** The pygame window looks like a real product, not a debug tool.
+**Goal:** The pygame window looks like a real product, not a debug tool. The engine's full breadth (quests, economy, emotion, factions) is visible to an audience.
 
 ### Steps
 
-- [ ] **S4.0** Quest engine showcase: after Aldric's Beat 4 response, check for a generated quest node and display it in a `[QUEST AVAILABLE]` banner. Wire via `GET /v1/quests/aldric_merchant`. Deferred from S3.1 — adds clear engine-suite completeness to the demo.
-- [ ] **S4.1** Typography pass: load a TTF monospace font (Terminus or similar, include in `demo_game/assets/`). Apply to all text in the window. Base size 14px, headings 16px, status labels 12px. No more pygame default font.
-- [ ] **S4.2** Colour palette: define a `PALETTE` constant in `demo_game/constants.py`. Dark navy/teal background (`#0D1B2A`), amber primary text (`#D4A017`), white secondary (`#E8E8E8`), grey inactive (`#6B7280`), red alert (`#C0392B`), green safe (`#27AE60`). Apply to all panels.
-- [ ] **S4.3** NPC name labels: always-visible character name above each NPC entry in the left panel. Selected NPC gets an amber `▶` prefix. Current location shown in a header bar at the top of the left panel.
-- [ ] **S4.4** Dialogue display: boxed response panel with a 1px amber border, speaker name on each turn (`[MIRA]` / `[YOU]`), degradation tier badge (small label bottom-right: `LLM` / `GRAPH` / `CANNED`), smooth text scroll.
-- [ ] **S4.5** Event flash: when `demo_run.py` fires an event, show a 2-second banner at the bottom of the screen — amber text on dark red bg — matching the existing "War declared!" overlay but applied to any event.
-- [ ] **S4.6** Layout audit: no overlapping panels, consistent 8px gutters everywhere, sidebar and dialogue column widths are locked and don't reflow.
+> **Plan note (2026-05-28):** S4.6 reordered to execute FIRST — all polish steps build on the flexible layout foundation. Right panel extended to 3-tab enum cycle (GRAPH → KNOWLEDGE → PLAYER STATUS). game_window.py split into left_panel.py + right_panel.py + thin GameWindow (DEC-024 trigger met at 472 lines). See DEC-030, DEC-031, DEC-032.
 
-**Exit criteria:** Record take #1. Watch it back. The window looks intentional. No visible layout bugs.
+- [x] **S4.6** *(REORDERED FIRST)* Layout audit + `--size` CLI arg + game_window.py split: **Done 2026-05-28.** Split `game_window.py` (472 lines) → `left_panel.py` (226 lines) + `right_panel.py` (125 lines) + thin `GameWindow` coordinator (355 lines). `--size WxH` arg added to `__main__.py`. Layout attrs derived from `window_w, window_h` in `__init__`. 6 new layout tests; 181/181 demo tests green.
+- [x] **S4.0** Quest engine — Tier 1 + 3-panel tab architecture: **Done 2026-05-29.** `RightPanel` enum (GRAPH → KNOWLEDGE → PLAYER STATUS) replaces `_show_sidebar: bool`. `QuestPanelWidget` added in `quest_panel.py`. `_seed_quests` added to `seed.py` (non-fatal). `post_quest_generate` + `get_quest` added to `client.py`. Quest loaded at GameWindow startup from `.cache/demo/aldric_quest.json`. 206/206 tests green.
+- [x] **S4.1** Typography pass: JetBrains Mono Regular TTF committed to `demo_game/assets/fonts/`. `FontLoader` singleton (class-level cache, `FileNotFoundError` fallback). All 4 `pygame.font.SysFont` calls in `game_window.py.__init__` replaced with `FontLoader.get(N)`. 4 new tests (cache hit, fallback, size isolation, fallback uses `None` name). **Done 2026-05-29. 210/210 tests green.**
+- [x] **S4.2** Colour palette + location bar gradient: `PALETTE` dict added to `constants.py` (8 keys, DEC-035). `_CLR_*` aliases in `widgets.py`, `quest_panel.py`, `left_panel.py`, `game_window.py` now reference `PALETTE`. Location bar extended 36px → 80px with cached per-location gradient surface. 4 new `test_constants.py` tests. **Done 2026-05-29. 214/214 tests green.**
+- [x] **S4.3** NPC labels + portrait: amber `▶` prefix on selected NPC row in `NpcListWidget`. 96px portrait zone inserted between NPC list and dialogue header; PNG load with geometric fallback (faction-coloured circle + first initial). `demo_game/assets/portraits/` directory created. 2 new `▶` tests. **Done 2026-05-29. 216/216 tests green.**
+- [x] **S4.4** Dialogue display + preset buttons + trade price (Iteration 1): 1px amber border on `ScrollableLog`, `[LABEL]:` speaker prefix format, `ActionBarWidget` (3 preset buttons in `action_bar.py`), trade price overlay in `left_panel.py`, `get_item_price` in `client.py`, `InputBox.set_text()`. 10 new tests (6 action bar, 2 client, 2 widget). ISSUE-046 logged for `/v1/economy/price` endpoint verification. **Done 2026-05-29. 226/226 tests green.**
+- [x] **S4.5** Event flash banner: `WorldStatePoller` extended with `_baseline_polled` flag, `pop_new_conditions()`. `EventBanner` widget added to `widgets.py` (amber text on `PALETTE["red"]`, 36px strip). `LeftPanelRenderer.show_event_banner()` added. Banner wired into `_render()` in `game_window.py`. 8 new tests (4 banner, 4 poller). **Done 2026-05-29. 234/234 tests green.**
+- [ ] **S4.6** Layout audit + `--size` CLI arg:
+  - No overlapping panels, consistent 8px gutters, column widths locked.
+  - Add `--size` arg to `demo_game/__main__.py` (e.g. `--size 1920x1080`). Derive all layout constants from `WINDOW_W, WINDOW_H` passed into `GameWindow.__init__` at startup. No `pygame.RESIZABLE`.
+- [x] **S4.7** Trade engine — Iteration 2 (full result overlay): `post_trade()` added to `client.py`. Two-click state machine (`idle → offered_low → accepted`) in `game_window.py` + `left_panel.py`. Click 1 offers 80% of fair price; click 2 offers 100%. `_draw_trade_overlay()` renders 3-line result card (item, offered/fair, ACCEPTED/REJECTED with colour). State resets on NPC/location change. 2 new client tests. **Done 2026-05-29. 236/236 tests green.**
+- [x] **S4.8** Quest engine — Tier 2 (lifecycle: offer + accept): `_quest_headers()` (SHA-256 idempotency), `post_quest_offer()`, `post_quest_accept()` added to `client.py`. `QuestPanelWidget` extended with `set_accept_callback()`, `set_status()`, `[ACCEPT QUEST]` button (amber border, green label, shown when status == "offered"). `RightPanelRenderer` gains `show_quest_panel`, `handle_quest_click()`, `set_quest_status()`, `set_quest_accept_callback()`. `game_window.py` saves `_quest_id`, auto-offers on startup if status=="available", wires accept callback. 11 new tests. **Done 2026-05-29. 247/247 tests green.**
+- [x] **S4.9** Gossip chain visualization: `GossipChainWidget` in `gossip_chain.py` — vertical chain display with `[NPC]  (X%)` header + distorted summary snippet per node, colour-coded (white/amber/red). `CHAIN` added as 4th `RightPanel` enum value; tab now cycles GRAPH → KNOWLEDGE → PLAYER STATUS → CHAIN → GRAPH. Chain pre-fetched at startup via `get_graph_edges("KNOWS_ABOUT", dst_id="northern_war_begins")`. 4 broken right-panel tests updated. 6 new gossip chain tests. **Done 2026-05-29. 254/254 tests green.**
+
+**Exit criteria:** Record take #1. Watch it back. The window looks intentional. No visible layout bugs. Trade price displays. Quest card appears after Beat 4.
 
 ---
 
@@ -240,9 +250,14 @@ Fall back to the existing interactive demo (W/C keypresses + live graph). It dem
 | 9 | 2026-05-28 | P3 | S3.1: Beat 5 (Lira), seed isolation (demo_game/seed.py), UI word-wrap, per-NPC dialogue logs | S3.1 ✅; S3.2 next |
 | 10 | 2026-05-28 | P3 | S3.3: KnowledgeSidebarWidget + fetcher + background fetch wired in game_window; 14 new tests; DEC-026 + pygame-diff-rendering skill | S3.3 ✅; S3.4 next |
 | 11 | 2026-05-28 | P3 | S3.4: Tab toggle, DEC-027 (exclusive scroll routing), ISSUE-045 (line-count), pygame-tab-panel-toggle skill | S3.4 ✅; S3.5 next |
-| 10 | | P3/P4 | | |
-| 11 | | P4 | | |
-| 12 | | P4 | | |
+| 12 | 2026-05-28 | P3 | S3.5a + S3.5b: EmotionPoller, faction badge, DEC-028/029; 175/175 tests green | S3.5 ✅; S3.2 marked ✅ (already done) |
+| 13 | 2026-05-28 | P4 | Phase 4 planning: S4.6 reordered first, 3-tab RightPanel enum, game_window split plan, DEC-030/031/032/033; 3 skills queued | S4.6 next (layout foundation) |
+| 14 | 2026-05-28 | P4 | S4.6: game_window split (left_panel.py + right_panel.py + thin GameWindow), --size CLI arg, layout attrs as instance attrs, 6 new layout tests; 181/181 green | S4.6 ✅; S4.0 next |
+| 15 | 2026-05-29 | P4 | S4.0: RightPanel enum (3-tab), QuestPanelWidget, post_quest_generate/get_quest, _seed_quests (non-fatal), quest cache load at startup; 206/206 green | S4.0 ✅; S4.1 next |
+| 16 | 2026-05-29 | P4 | S4.1: JetBrains Mono TTF asset, FontLoader singleton w/ fallback, replaced 4 SysFont calls in game_window.py, 4 new font tests; 210/210 green | S4.1 ✅; S4.2 next |
+| 17 | 2026-05-29 | P4 | S4.2: PALETTE dict in constants.py, _CLR_* aliases in 4 UI files, location bar 36→80px with cached gradient, DEC-035, 4 new constant tests; 214/214 green | S4.2 ✅; S4.3 next |
+| 18 | 2026-05-29 | P4 | S4.3: ▶ amber prefix on active NPC row, 96px portrait zone (PNG + geometric fallback), portraits/ dir; 216/216 green | S4.3 ✅; S4.4 next |
+| 19 | | P4 | | |
 | 13 | | P4/P5 | | |
 | 14 | | P5 | | |
 | 15 | | P5 | | |

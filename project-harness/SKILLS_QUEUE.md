@@ -180,4 +180,53 @@ display, any before/after or NPC-vs-ground-truth comparison in a pygame panel.
 **Pattern:** YAML-driven eval cases + synchronous runner + matcher library + markdown reports.
 **Key files:** `evals/runner.py`, `evals/matchers.py`, `evals/cases/*.yaml`, `evals/report.py`
 **Reuse when:** Adding new matcher kinds, new case categories, wiring the harness to CI, or onboarding to the eval structure from a cold start.
+
+
+## pygame-n-panel-cycle
+**Identified:** 2026-05-28 (S4.6 / S4.0)
+**Pattern:** Extending a pygame right panel from a boolean 2-tab toggle to an N-value enum cycle. Replaces/extends `pygame-tab-panel-toggle`.
+**Implementation:**
+1. Define `class RightPanel(enum.Enum)` with one value per tab. Adding a new tab = append one enum value.
+2. Store `self._active: RightPanel = RightPanel.<default>` — replaces `_show_<panel>: bool`.
+3. Tab handler: `panels = list(RightPanel); idx = panels.index(active); active = panels[(idx + 1) % len(panels)]`.
+4. Header: `f"{self._active.value}  [TAB]"` — updates automatically for any new tab.
+5. Exclusive scroll routing (DEC-027): `if active == RightPanel.X: widget_x.handle_event(event)` elif chain. Never additive.
+6. In `_draw_right_panel()`: `if active == RightPanel.X: self._draw_x_panel(content_rect)` elif chain.
+**Reuse when:** Adding any new right-panel view (inventory, chain viz, etc.). One enum value + two elif branches = new tab.
+
+
+## pygame-ttf-font
+**Identified:** 2026-05-28 (S4.1)
+**Pattern:** Loading a bundled TTF font with graceful fallback to pygame default.
+**Implementation:**
+```python
+class FontLoader:
+    _cache: dict[int, pygame.font.Font] = {}
+    _FONT_PATH = Path(__file__).parent.parent / "assets/fonts/JetBrainsMono-Regular.ttf"
+
+    @classmethod
+    def get(cls, size: int) -> pygame.font.Font:
+        if size not in cls._cache:
+            try:
+                cls._cache[size] = pygame.font.Font(str(cls._FONT_PATH), size)
+            except FileNotFoundError:
+                cls._cache[size] = pygame.font.Font(None, size)
+        return cls._cache[size]
+```
+- Asset path relative to the loader module — works regardless of working directory.
+- Size hierarchy: headings 16px, body 14px, labels/badges 12px.
+- Replace `pygame.font.Font(None, N)` at module level with `FontLoader.get(N)` inside draw methods (module-level calls execute on import, before pygame.init()).
+**Reuse when:** Any Phase 5+ widget that needs consistent typography.
+
+
+## pygame-colour-palette
+**Identified:** 2026-05-28 (S4.2)
+**Pattern:** Centralising pygame colour constants into a single PALETTE dict in constants.py.
+**Implementation:**
+- Define `PALETTE: dict[str, tuple[int, int, int]]` in `constants.py` — not in widgets.py or game_window.py.
+- Keep private aliases in widget files for minimal diff: `_CLR_AMBER = PALETTE["amber"]`. Remove hardcoded tuples.
+- `LOCATION_TINTS: dict[str, tuple[int, int, int]]` alongside PALETTE — one place to change all location colours.
+- Location bar gradient: pre-generate `pygame.Surface` per `location_id` on first use, cache it. Do NOT regenerate on every frame.
+- Test invariants in `test_constants.py`: all palette keys present; all values are 3-tuples of ints 0–255.
+**Reuse when:** Any new widget or panel that needs colours — import PALETTE, never invent new colour constants.
 **Updated (R1.2):** `keyword_none` matcher added — mirrors `keyword_any`/`keyword_all`; checks that forbidden substrings do NOT appear in `npc_response`. Symmetric design: same field path, same case-insensitive substring logic. Use for behavioral constraint tests (voice bleed, role bleed, knowledge hallucination, self-incrimination).
