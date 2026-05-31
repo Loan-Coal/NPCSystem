@@ -617,11 +617,11 @@ class EngineClient:
             EngineClientError: On any 4xx or 5xx response.
         """
         resp = self._client.post(
-            "/v1/quests/generate",
+            "/v1/admin/quests/generate",
             json={"quest_giver_id": quest_giver_id},
             timeout=self._dialogue_timeout,
         )
-        self._raise_for_status(resp, "POST /v1/quests/generate")
+        self._raise_for_status(resp, "POST /v1/admin/quests/generate")
         return resp.json().get("data", {})
 
     def get_quest(self, quest_id: str) -> dict | None:
@@ -636,11 +636,11 @@ class EngineClient:
         Raises:
             EngineClientError: On any non-404 4xx or 5xx response.
         """
-        resp = self._client.get(f"/v1/quests/{quest_id}", timeout=self._graph_timeout)
+        resp = self._client.get(f"/v1/admin/quests/{quest_id}", timeout=self._graph_timeout)
         if resp.status_code == 404:
             return None
-        self._raise_for_status(resp, f"GET /v1/quests/{quest_id}")
-        return resp.json().get("data")
+        self._raise_for_status(resp, f"GET /v1/admin/quests/{quest_id}")
+        return (resp.json().get("data") or {}).get("quest")
 
     def _quest_headers(self, method: str, path: str, payload: dict) -> dict:
         """Generate the three idempotency headers required by quest lifecycle routes.
@@ -672,37 +672,6 @@ class EngineClient:
             "X-Idempotency-Request-Hash": hash_val,
         }
 
-    def post_quest_offer(
-        self, quest_id: str, quest_giver_id: str, player_id: str
-    ) -> dict:
-        """Offer a quest to a player.
-
-        Args:
-            quest_id: The quest node ID to offer.
-            quest_giver_id: Character ID of the NPC giving the quest.
-            player_id: Character ID of the player receiving the offer.
-
-        Returns:
-            Full API response dict (quest at ``"offered"`` status).
-
-        Raises:
-            EngineClientError: On any 4xx or 5xx response.
-        """
-        path = "/v1/quests/offer"
-        payload = {
-            "quest_id": quest_id,
-            "quest_giver_id": quest_giver_id,
-            "player_id": player_id,
-        }
-        resp = self._client.post(
-            path,
-            json=payload,
-            headers=self._quest_headers("POST", path, payload),
-            timeout=self._graph_timeout,
-        )
-        self._raise_for_status(resp, f"POST {path}")
-        return resp.json()
-
     def post_quest_accept(self, quest_id: str, player_id: str) -> dict:
         """Accept a previously-offered quest on behalf of the player.
 
@@ -716,7 +685,7 @@ class EngineClient:
         Raises:
             EngineClientError: On any 4xx or 5xx response.
         """
-        path = "/v1/quests/accept"
+        path = "/v1/quest/accept"
         payload = {"quest_id": quest_id, "player_id": player_id}
         resp = self._client.post(
             path,
@@ -726,6 +695,201 @@ class EngineClient:
         )
         self._raise_for_status(resp, f"POST {path}")
         return resp.json()
+
+    def post_quest_offer(
+        self,
+        quest_id: str,
+        player_id: str,
+        title: str,
+        objectives: list[dict],
+        item_rewards: list[dict],
+        currency_reward: dict | None,
+        reward_source_id: str = "system",
+    ) -> dict:
+        """Seed an offered quest state for a player (lifecycle /v1/quest/offer).
+
+        Used by seed.py to create deterministic demo quests without LLM generation.
+
+        Args:
+            quest_id: Stable quest node ID.
+            player_id: Accepting player character ID.
+            title: Human-readable quest title.
+            objectives: List of objective dicts (objective_id, target_count, objective_type, target_id).
+            item_rewards: List of item reward dicts (item_id, quantity).
+            currency_reward: Optional {amount: int} dict or None.
+            reward_source_id: Reward source character ID or ``"system"``.
+
+        Returns:
+            API response dict with quest state.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        path = "/v1/quest/offer"
+        payload: dict = {
+            "quest_id": quest_id,
+            "player_id": player_id,
+            "title": title,
+            "objectives": objectives,
+            "item_rewards": item_rewards,
+        }
+        if currency_reward is not None:
+            payload["currency_reward"] = currency_reward
+        if reward_source_id != "system":
+            payload["reward_source_id"] = reward_source_id
+        resp = self._client.post(
+            path,
+            json=payload,
+            headers=self._quest_headers("POST", path, payload),
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, f"POST {path}")
+        return resp.json()
+
+    def post_quest_objective(
+        self,
+        quest_id: str,
+        player_id: str,
+        objective_id: str,
+        progress_delta: int,
+    ) -> dict:
+        """Apply one objective progress delta.
+
+        Args:
+            quest_id: Quest node ID.
+            player_id: Character ID of the player.
+            objective_id: Objective to update.
+            progress_delta: Signed integer added to current progress.
+
+        Returns:
+            Updated quest state dict.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        path = "/v1/quest/objective"
+        payload = {
+            "quest_id": quest_id,
+            "player_id": player_id,
+            "objective_id": objective_id,
+            "progress_delta": progress_delta,
+        }
+        resp = self._client.post(
+            path,
+            json=payload,
+            headers=self._quest_headers("POST", path, payload),
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, f"POST {path}")
+        return resp.json()
+
+    def post_quest_evaluate(self, quest_id: str, player_id: str) -> dict:
+        """Evaluate quest completion and transition to completed if objectives met.
+
+        Args:
+            quest_id: Quest node ID.
+            player_id: Character ID of the player.
+
+        Returns:
+            Updated quest state dict (status=completed or in_progress).
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        path = "/v1/quest/evaluate"
+        payload = {"quest_id": quest_id, "player_id": player_id}
+        resp = self._client.post(
+            path,
+            json=payload,
+            headers=self._quest_headers("POST", path, payload),
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, f"POST {path}")
+        return resp.json()
+
+    def post_quest_reward(self, quest_id: str, player_id: str) -> dict:
+        """Apply rewards for a completed quest.
+
+        Args:
+            quest_id: Quest node ID.
+            player_id: Character ID of the player.
+
+        Returns:
+            Updated quest state dict with rewards_applied=True.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        path = "/v1/quest/reward"
+        payload = {"quest_id": quest_id, "player_id": player_id}
+        resp = self._client.post(
+            path,
+            json=payload,
+            headers=self._quest_headers("POST", path, payload),
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, f"POST {path}")
+        return resp.json()
+
+    # ------------------------------------------------------------------
+    # Interaction (trade / quest proposals)
+    # ------------------------------------------------------------------
+
+    def post_interaction(
+        self,
+        player_id: str,
+        npc_id: str,
+        proposal: dict,
+    ) -> dict:
+        """Dispatch an interaction proposal and return the resulting InteractionState.
+
+        Args:
+            player_id: ID of the player character.
+            npc_id: ID of the NPC being engaged.
+            proposal: Dict with keys ``kind``, ``target_id`` (nullable), and
+                ``payload`` (free-form params).
+
+        Returns:
+            Dict with ``status``, ``ui_directive``, ``narration_hint``, and
+            ``negotiation_state`` (nullable).
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        resp = self._client.post(
+            "/v1/interaction",
+            json={"player_id": player_id, "npc_id": npc_id, "proposal": proposal},
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, "POST /v1/interaction")
+        return resp.json()
+
+    def post_interaction_band(
+        self,
+        player_id: str,
+        trust: int,
+        affection: int,
+    ) -> None:
+        """Update the disposition band for the player's open negotiation session.
+
+        Non-fatal — a missing or closed session is silently ignored by the server.
+
+        Args:
+            player_id: ID of the player whose band to update.
+            trust: Trust delta from the last dialogue turn.
+            affection: Affection delta from the last dialogue turn.
+
+        Raises:
+            EngineClientError: On any non-2xx response other than 404.
+        """
+        resp = self._client.post(
+            "/v1/interaction/band",
+            json={"player_id": player_id, "trust": trust, "affection": affection},
+            timeout=self._graph_timeout,
+        )
+        if resp.status_code == 404:
+            return
+        self._raise_for_status(resp, "POST /v1/interaction/band")
 
     # ------------------------------------------------------------------
     # Economy
@@ -745,13 +909,13 @@ class EngineClient:
             EngineClientError: On any non-404 4xx or 5xx response.
         """
         resp = self._client.get(
-            "/v1/economy/price",
+            "/v1/admin/economy/price",
             params={"item_type": item_type, "character_id": character_id},
             timeout=self._graph_timeout,
         )
         if resp.status_code == 404:
             return None
-        self._raise_for_status(resp, "GET /v1/economy/price")
+        self._raise_for_status(resp, "GET /v1/admin/economy/price")
         return resp.json().get("data", {}).get("price")
 
     def post_trade(
@@ -781,19 +945,38 @@ class EngineClient:
             EngineClientError: On any 4xx or 5xx response.
         """
         resp = self._client.post(
-            "/v1/economy/trade",
+            "/v1/admin/economy/trade",
             json={
                 "buyer_id": buyer_id,
                 "seller_id": seller_id,
                 "item_id": item_id,
                 "item_type": item_type,
                 "offered_price": offered_price,
-                "tick": tick,
+                "current_tick": tick,
             },
             timeout=self._graph_timeout,
         )
-        self._raise_for_status(resp, "POST /v1/economy/trade")
+        self._raise_for_status(resp, "POST /v1/admin/economy/trade")
         return resp.json()
+
+    def get_items_for_character(self, character_id: str) -> list[dict]:
+        """Return all items owned by a character.
+
+        Args:
+            character_id: Character node ID.
+
+        Returns:
+            List of item property dicts (id, name, description, value, rarity, type).
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        resp = self._client.get(
+            f"/v1/admin/items/{character_id}",
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, f"GET /v1/admin/items/{character_id}")
+        return resp.json().get("data", {}).get("items", [])
 
     def put_npc_reputation(
         self,
@@ -828,6 +1011,11 @@ class EngineClient:
     def _raise_for_status(self, response: httpx.Response, context: str) -> None:
         """Raise EngineClientError when the response status is 4xx or 5xx."""
         if response.status_code >= 400:
-            raise EngineClientError(
-                f"{context} → HTTP {response.status_code}: {response.text[:200]}"
-            )
+            try:
+                body = response.json()
+                detail = body.get("detail") or {}
+                msg = detail.get("message") if isinstance(detail, dict) else str(detail)
+                msg = msg or response.text[:200]
+            except Exception:
+                msg = response.text[:200]
+            raise EngineClientError(f"{context} → HTTP {response.status_code}: {msg}")

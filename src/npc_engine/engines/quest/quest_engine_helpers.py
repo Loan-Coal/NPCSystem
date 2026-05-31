@@ -19,16 +19,19 @@ from npc_engine.utils.errors import QuestTransitionError
 
 
 def is_trusted_reward_source(reward_source_id: str) -> bool:
-    """Return True if the reward source ID is a trusted system source.
+    """Return True when the reward source is trusted.
+
+    Trusted sources: the literal ``"system"`` sentinel, or any non-empty
+    character ID (NPC purse). Callers that use a character ID must separately
+    verify affordability via ``get_character_balance`` before applying rewards.
 
     Args:
         reward_source_id: Source identifier to validate.
 
     Returns:
-        True when ``reward_source_id`` equals ``"system"``.
+        True when ``reward_source_id`` is ``"system"`` or a non-empty character ID.
     """
-
-    return reward_source_id == "system"
+    return bool(reward_source_id) and reward_source_id != ""
 
 
 def normalize_item_rewards(item_rewards: list[QuestRewardItem]) -> list[QuestRewardItem]:

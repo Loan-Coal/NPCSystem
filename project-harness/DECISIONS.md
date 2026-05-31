@@ -371,3 +371,48 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Why:** seed.py is a pure data seeder: it contains zero algorithmic logic, no classes, no branching beyond HTTP error checks. Every line is a data definition or an API call. The 300-line rule targets monolithic modules mixing concerns; seed.py has exactly one concern. Splitting it (e.g. `_seed_npcs.py`, `_seed_events.py`) would scatter the definition of a single world state across multiple files with no encapsulation benefit.
 **Limit:** If seed.py grows past ~800 lines, extract helpers into `demo_game/_seed_helpers.py` (shared payload builders) while keeping the main seeding orchestration in seed.py.
 **Consequence:** seed.py will reach ~720 lines after Phase 4. Acceptable under this exception.
+
+---
+
+## DEC-038: NegotiationSession is frozen; route layer owns graph side-effects
+**Date:** 2026-05-30
+**Context:** Phase 3 trade. `trade_handler.py` must update the in-memory NegotiationSession for `defer_payment` but also needs a HAS_DEBT edge written to Neo4j.
+**Decision:** `trade_handler` is pure in-memory Python. It returns `InteractionState(status="accepted")` for `defer_payment`. The route layer (`api.routes.interaction`) is responsible for calling `write_debt_edge` before returning the response. The handler sets `status=accepted` in the in-memory session regardless.
+**Why:** Keeping `trade_handler` free of graph I/O makes it synchronously testable without any Neo4j fixture. The route layer already has a DB session injected. This mirrors the pattern used by `quest_engine_helpers` — handlers are pure, routes orchestrate persistence.
+**Consequence:** If the route crashes after `trade_handler` sets `accepted` but before `write_debt_edge`, the in-memory session is accepted but no DB record exists. Acceptable for PoC single-player demo; a distributed deployment would need a compensation log.
+
+---
+
+## DEC-039: TRADE tab switch — switch_to() not cycle_tab() loop
+**Date:** 2026-05-30
+**Context:** Phase 3 demo. When `propose_trade` arrives in `_poll_response_queue`, the UI must jump directly to the TRADE tab regardless of which tab is currently active.
+**Decision:** Added `RightPanelRenderer.switch_to(tab: RightPanel)` for direct tab navigation. `game_window` calls `switch_to(RightPanel.TRADE)` rather than cycling until it lands on TRADE.
+**Why:** A cycle loop is O(n) and order-dependent. A direct switch is O(1) and order-independent. Adding tabs in the future would not break the jump logic.
+**Consequence:** `switch_to` bypasses the cycling invariant but does not violate it — it simply sets `_active` directly. `cycle_tab` remains unchanged.
+
+---
+
+## DEC-037: Two-layer InteractionProposal — demo_game local type and engine type coexist
+**Date:** 2026-05-30
+**Context:** Phase 1 interaction dispatch. `demo_game/dialogue.py` needed a local `InteractionProposal` dataclass (parse layer only, no engine import). `npc_engine.engines.interaction.models` owns the engine-layer version with `is_interaction_kind()`. `game_window.py` needs to bridge them when routing to `dispatch_interaction`.
+**Decision:** Keep both types. `demo_game.dialogue.InteractionProposal` is a frozen dataclass used purely for parse output within the demo layer — it has no engine dependency and stays serializable. `npc_engine.engines.interaction.models.InteractionProposal` is the authoritative engine type. `game_window._poll_response_queue` does the translation (3-line inline construction, no dedicated converter function).
+**Why:** Importing `npc_engine` from `demo_game/dialogue.py` would couple the parse layer to the engine package; the parse module's header rule forbids this (`demo_game` layer zero engine imports). The bridge in `game_window` is the single callsite, so a dedicated converter would be premature abstraction.
+**Consequence:** The two types must be kept structurally in sync (kind, target_id, payload). If a third field is added to either, it must be mirrored. Log any divergence as a P2 issue.
+
+---
+
+## DEC-040: is_trusted_reward_source accepts any non-empty string (NPC purse)
+**Date:** 2026-05-30
+**Context:** Phase 4 quest rewards. The plan requires quest rewards to source from the NPC's purse (not just from the system). `is_trusted_reward_source` was hardcoded to `return reward_source_id == "system"`, blocking all NPC-sourced rewards.
+**Decision:** Changed `is_trusted_reward_source` to `return bool(reward_source_id) and reward_source_id != ""`. This accepts `"system"` and any non-empty character ID. Affordability protection is enforced separately in `apply_rewards` via `get_character_balance` before currency transfer.
+**Why:** The previous guard mixed two concerns: identity validation (is this a known source?) and affordability (can the source pay?). Splitting them makes each concern independently testable and allows NPC IDs without maintaining an allowlist that would require seeder changes on every new NPC.
+**Consequence:** Callers must not assume that `is_trusted_reward_source=True` implies sufficient balance. `apply_rewards` always checks balance for non-system sources. Any caller that skips the affordability check for a non-system source is a bug.
+
+---
+
+## DEC-041: Quest.status denormalised back-write at lifecycle transitions
+**Date:** 2026-05-30
+**Context:** Phase 4 NPC context injection. `get_active_quest_for_player` and `get_offered_quests_for_npc` query `QuestState` nodes (lifecycle state) and `Quest` nodes (definition) respectively. The Quest node has its own `status` field used by `get_offered_quests_for_npc` (filters `['offered', 'accepted', 'in_progress']`), but the lifecycle engine only writes to `QuestState` nodes. Quest node `status` was never updated, so the NPC could never see a quest as accepted in its context.
+**Decision:** Added `update_quest_node_status` in `quest_writer.py` and call it from `quest_lifecycle_engine` after `accept_quest` and `evaluate_completion` transitions. This keeps the Quest node status field in sync as a denormalised read field.
+**Why:** Option A (back-write) is safe because `Quest.status` is read-only for context injection — no lifecycle decision depends on it. Option B (changing context queries to join QuestState) requires schema changes and complicates the existing context builder. Option A is the minimal-change path.
+**Consequence:** `Quest.status` may lag `QuestState.status` by one lifecycle call if the back-write fails (e.g., network issue between transactions). This is acceptable for demo context injection (stale by one turn at worst).

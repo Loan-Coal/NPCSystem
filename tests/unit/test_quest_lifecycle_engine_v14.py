@@ -121,6 +121,11 @@ async def test_offer_accept_update_evaluate_and_apply_rewards_happy_path(monkeyp
     monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.apply_item_transfer", fake_item_transfer)
     monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.apply_currency_transfer", fake_currency_transfer)
 
+    async def fake_node_status_update(*, session, quest_id: str, status: str) -> None:
+        pass
+
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.update_quest_node_status", fake_node_status_update)
+
     engine = QuestLifecycleEngine(settings=_settings())
     offered = await engine.offer_quest(
         session=_fake_session(),  # type: ignore[arg-type]
@@ -196,13 +201,15 @@ async def test_accept_requires_offered_state(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_offer_rejects_existing_offered_state_with_untrusted_reward_source(monkeypatch) -> None:
+async def test_offer_rejects_existing_offered_state_with_empty_reward_source(monkeypatch) -> None:
+    # DEC-040: any non-empty string is now trusted; only "" is rejected.
+    # Simulate a stored state whose reward_source_id was saved as "".
     async def fake_create_quest_state_if_absent(*, session, quest_id: str, player_id: str, state_payload: dict):
         return {
             "quest_id": quest_id,
             "player_id": player_id,
             "status": "offered",
-            "reward_source_id": "merchant-1",
+            "reward_source_id": "",
             "title": "Collect herbs",
             "objectives": [{"objective_id": "obj-1", "target_count": 1}],
             "objective_progress": {"obj-1": 0},

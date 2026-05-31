@@ -29,14 +29,16 @@ class QuestPanelWidget:
     """Renders a quest card for the PLAYER STATUS tab.
 
     Displays an empty-state message when quest_data is None (quest engine
-    not seeded). When data is present, renders title, word-wrapped description,
-    a status badge, and — when status is ``"offered"`` — an [ACCEPT QUEST]
-    button that fires the registered callback.
+    not seeded). When data is present, renders title, description, status badge,
+    reward amount, and action buttons:
+    - [ACCEPT QUEST] when status is ``"offered"``
+    - [COMPLETE QUEST] when status is ``"accepted"`` or ``"in_progress"``
+    - [ACCEPT REWARD] when status is ``"completed"`` and rewards not yet applied
 
     Args:
         font_body: 14px monospace font for description text.
-        font_label: 12px monospace font for the status badge and button.
-        quest_data: Quest dict from the engine, or None if no quest is seeded.
+        font_label: 12px monospace font for the status badge and buttons.
+        quest_data: Quest state dict from the engine, or None if no quest is seeded.
     """
 
     def __init__(
@@ -50,7 +52,11 @@ class QuestPanelWidget:
         self._quest_data = quest_data
         self._status_override: str | None = None
         self._on_accept: Callable[[], None] | None = None
+        self._on_complete: Callable[[], None] | None = None
+        self._on_reward: Callable[[], None] | None = None
         self._accept_rect: pygame.Rect | None = None
+        self._complete_rect: pygame.Rect | None = None
+        self._reward_rect: pygame.Rect | None = None
 
     def set_quest(self, data: dict | None) -> None:
         """Update the quest data rendered in this panel."""
@@ -58,24 +64,20 @@ class QuestPanelWidget:
         self._status_override = None
 
     def set_status(self, status: str) -> None:
-        """Override the displayed status without replacing the full quest dict.
-
-        Useful after a lifecycle call (offer/accept) to reflect the new state
-        without a round-trip to fetch the updated quest.
-
-        Args:
-            status: New status string (e.g. ``"offered"``, ``"active"``).
-        """
+        """Override the displayed status without replacing the full quest dict."""
         self._status_override = status
 
     def set_accept_callback(self, cb: Callable[[], None]) -> None:
-        """Register the callback fired when the [ACCEPT QUEST] button is clicked.
-
-        Args:
-            cb: Zero-argument callable; called on the render thread when the
-                player clicks the accept button.
-        """
+        """Register the callback fired when [ACCEPT QUEST] is clicked."""
         self._on_accept = cb
+
+    def set_complete_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when [COMPLETE QUEST] is clicked."""
+        self._on_complete = cb
+
+    def set_reward_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when [ACCEPT REWARD] is clicked."""
+        self._on_reward = cb
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         """Draw the quest card (or empty-state message) onto surface within rect."""
@@ -86,15 +88,21 @@ class QuestPanelWidget:
             self._draw_card(surface, rect)
 
     def handle_event(self, event: pygame.event.Event) -> None:
-        """Route MOUSEBUTTONDOWN events to the accept button if it is visible."""
+        """Route MOUSEBUTTONDOWN events to action buttons."""
         if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
             return
         if self._accept_rect and self._accept_rect.collidepoint(event.pos):
             if self._on_accept is not None:
                 self._on_accept()
+        elif self._complete_rect and self._complete_rect.collidepoint(event.pos):
+            if self._on_complete is not None:
+                self._on_complete()
+        elif self._reward_rect and self._reward_rect.collidepoint(event.pos):
+            if self._on_reward is not None:
+                self._on_reward()
 
     def _draw_empty(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
-        lines = ["No quests seeded.", "Run: make demo-seed"]
+        lines = ["No active quest.", "Accept a quest from an NPC."]
         line_h = self._font_body.get_linesize()
         y = rect.centery - (len(lines) * line_h) // 2
         for line in lines:
@@ -104,6 +112,9 @@ class QuestPanelWidget:
 
     def _draw_card(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         x, y = rect.x + 12, rect.y + 12
+        self._accept_rect = None
+        self._complete_rect = None
+        self._reward_rect = None
 
         title = self._quest_data.get("title", "Quest")
         title_surf = self._font_body.render(title, True, _CLR_AMBER)
@@ -121,18 +132,35 @@ class QuestPanelWidget:
         status = self._status_override or self._quest_data.get("status", "unknown")
         badge = self._font_label.render(status.upper(), True, _CLR_GREY)
         surface.blit(badge, (x, y))
-        y += badge.get_height() + 8
+        y += badge.get_height() + 6
+
+        currency = self._quest_data.get("currency_reward")
+        if currency:
+            amount = currency.get("amount", 0) if isinstance(currency, dict) else 0
+            reward_txt = self._font_label.render(f"Reward: {amount} silver", True, _CLR_GREEN)
+            surface.blit(reward_txt, (x, y))
+            y += reward_txt.get_height() + 8
+
+        rewards_applied = self._quest_data.get("rewards_applied", False)
 
         if status == "offered":
             btn_rect = pygame.Rect(x, y, rect.width - 24, _ACCEPT_BTN_H)
             pygame.draw.rect(surface, _CLR_BG, btn_rect)
             pygame.draw.rect(surface, _CLR_AMBER, btn_rect, 1)
             label = self._font_label.render("ACCEPT QUEST", True, _CLR_GREEN)
-            surface.blit(
-                label,
-                (btn_rect.centerx - label.get_width() // 2,
-                 btn_rect.centery - label.get_height() // 2),
-            )
+            surface.blit(label, (btn_rect.centerx - label.get_width() // 2, btn_rect.centery - label.get_height() // 2))
             self._accept_rect = btn_rect
-        else:
-            self._accept_rect = None
+        elif status in {"accepted", "in_progress"}:
+            btn_rect = pygame.Rect(x, y, rect.width - 24, _ACCEPT_BTN_H)
+            pygame.draw.rect(surface, _CLR_BG, btn_rect)
+            pygame.draw.rect(surface, _CLR_AMBER, btn_rect, 1)
+            label = self._font_label.render("COMPLETE QUEST", True, _CLR_GREEN)
+            surface.blit(label, (btn_rect.centerx - label.get_width() // 2, btn_rect.centery - label.get_height() // 2))
+            self._complete_rect = btn_rect
+        elif status == "completed" and not rewards_applied:
+            btn_rect = pygame.Rect(x, y, rect.width - 24, _ACCEPT_BTN_H)
+            pygame.draw.rect(surface, _CLR_BG, btn_rect)
+            pygame.draw.rect(surface, _CLR_GREEN, btn_rect, 1)
+            label = self._font_label.render("ACCEPT REWARD", True, _CLR_GREEN)
+            surface.blit(label, (btn_rect.centerx - label.get_width() // 2, btn_rect.centery - label.get_height() // 2))
+            self._reward_rect = btn_rect

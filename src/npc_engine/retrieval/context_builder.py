@@ -14,7 +14,11 @@ flow. Splitting it would create helpers with no encapsulation value. See DECISIO
 
 from __future__ import annotations
 
+import logging
+import time
 from typing import Protocol
+
+logger = logging.getLogger(__name__)
 
 from neo4j import AsyncSession
 
@@ -38,7 +42,8 @@ from npc_engine.graph.pledge_service import get_pledges_for_character_svc
 from npc_engine.graph.memory_queries import get_memories_for_character
 from npc_engine.graph.reputation_queries import get_reputation_context_for_npc
 from npc_engine.graph.trust_queries import get_second_hop_events, get_trust_scores_for_events
-from npc_engine.graph.quest_queries import get_active_quest_for_player
+from npc_engine.graph.quest_queries import get_active_quest_for_player, get_offered_quests_for_npc
+from npc_engine.graph.interaction_queries import get_sellable_items_for_npc
 from npc_engine.retrieval.context_budget_enforcer import ContextCompressionCache, fill_to_budget
 from npc_engine.retrieval.context_builder_helpers import (
     expand_query,
@@ -114,10 +119,15 @@ async def build_serialized_context(
         ContextBudgetError: If tier A or total prompt budget cannot be satisfied.
     """
 
+    _t0 = time.perf_counter()
+
     if settings.RAG_TOP_K <= 0:
         raise ValueError("RAG_TOP_K must be greater than 0")
 
     # Stage 1: sequential queries — Neo4j AsyncSession is not safe for concurrent use.
+    # TODO (Phase 5 B1): To run Stage 1-4 batches concurrently, accept an AsyncDriver
+    # parameter and open one session per batch. asyncio.gather on a single session
+    # causes BufferError in the neo4j async driver.
     character_bundle = await get_character_with_relations(session=session, npc_id=npc_id)
     world_state = await get_world_state(session=session)
     known_event_ids = await get_known_event_ids_for_npc(session=session, npc_id=npc_id)
@@ -266,6 +276,8 @@ async def build_serialized_context(
     trust_scores = await get_trust_scores_for_events(session, npc_id=npc_id, event_ids=event_ids)
     second_hop_events = await get_second_hop_events(session, npc_id=npc_id)
     active_quest = await get_active_quest_for_player(session, player_id=player_id) if player_id else None
+    npc_offered_quests = await get_offered_quests_for_npc(session, npc_id=npc_id)
+    npc_sellable_items = await get_sellable_items_for_npc(session, npc_id=npc_id)
 
     # 6.5: Cross-encoder rerank Tier B/C vector results before building ContextItems.
     if settings.CROSS_ENCODER_ENABLED and tier_b_results:
@@ -307,6 +319,32 @@ async def build_serialized_context(
 
     if active_quest:
         tier_a_raw.append(ContextItem(key="active_quest", text=serialize_json(active_quest), tier="tierA", priority=89))
+    if npc_offered_quests:
+        tier_a_raw.append(ContextItem(
+            key="npc_offered_quests",
+            text=serialize_json(npc_offered_quests),
+            tier="tierA",
+            priority=92,
+        ))
+    if npc_sellable_items or npc_offered_quests:
+        available_interactions: list[dict] = []
+        if npc_sellable_items:
+            available_interactions.append({"kind": "propose_trade", "items": [i["id"] for i in npc_sellable_items]})
+            tier_a_raw.append(ContextItem(
+                key="npc_inventory_for_sale",
+                text=serialize_json(npc_sellable_items),
+                tier="tierA",
+                priority=91,
+            ))
+        if npc_offered_quests:
+            for q in npc_offered_quests:
+                available_interactions.append({"kind": "propose_quest", "quest_id": q.get("id")})
+        tier0.append(ContextItem(
+            key="available_interactions",
+            text=serialize_json(available_interactions),
+            tier="tier0",
+            priority=96,
+        ))
     if memories:
         tier_a_raw.append(ContextItem(key="memories", text=serialize_json(memories), tier="tierA", priority=90))
     if beliefs:
@@ -400,6 +438,9 @@ async def build_serialized_context(
 
     if legacy_cache is not None and legacy_key is not None:
         legacy_cache.set(legacy_key, serialized)
+
+    elapsed_ms = (time.perf_counter() - _t0) * 1000
+    logger.info("context_build_ms npc_id=%s elapsed_ms=%.1f", npc_id, elapsed_ms)
 
     return serialized
 

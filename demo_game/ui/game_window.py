@@ -29,6 +29,7 @@ from demo_game.client import EngineClient, EngineClientError
 from demo_game.config import DemoConfig
 from demo_game.constants import LOCATION_DISPLAY_NAMES, LOCATION_NPC_MAP, LOCATIONS, PALETTE
 from demo_game.dialogue import build_dialogue_payload, degradation_color, parse_dialogue_response
+from npc_engine.engines.interaction import dispatch_interaction
 from demo_game.emotion_poller import EmotionPoller
 from demo_game.graph_panel.poller import GraphPoller
 from demo_game.knowledge_sidebar_fetcher import fetch_npc_knowledge
@@ -120,9 +121,6 @@ class GameWindow:
         self._status_text: str = ""
         self._status_until: float = 0.0
 
-        self._trade_fair_price: int | None = None
-        self._trade_state: str = "idle"  # mirrors left_panel for client-side logic
-
         pygame.init()
         self._screen = pygame.display.set_mode((window_w, window_h))
         pygame.display.set_caption("NPC Engine — Demo")
@@ -160,17 +158,14 @@ class GameWindow:
             except Exception:
                 pass
 
-        if quest_data and quest_data.get("status") == "available" and self._quest_id:
-            try:
-                result = client.post_quest_offer(
-                    self._quest_id, "aldric_merchant", "player"
-                )
-                quest_data = result.get("data", quest_data)
-            except Exception:
-                pass
-
         self._right.set_quest(quest_data)
         self._right.set_quest_accept_callback(self._on_quest_accept)
+        self._right.set_quest_complete_callback(self._on_quest_complete)
+        self._right.set_quest_reward_callback(self._on_quest_reward)
+        self._right.set_trade_offer_callback(self._on_trade_offer)
+        self._right.set_trade_confirm_callback(self._on_trade_confirm)
+        self._active_npc_id_for_trade: str | None = None
+        self._last_submitted_message: str = ""
 
         # Pre-fetch the gossip chain for the CHAIN tab — non-fatal if absent.
         try:
@@ -180,6 +175,13 @@ class GameWindow:
             self._right.set_chain_data(chain_edges)
         except Exception:
             pass
+
+        # Pre-fetch player inventory for the INVENTORY tab — non-fatal if absent.
+        try:
+            items = client.get_items_for_character(self._cfg.DEMO_PLAYER_ID)
+            self._right.set_inventory(items)
+        except EngineClientError as _inv_exc:
+            print(f"[inventory] startup fetch failed: {_inv_exc}", file=sys.stderr)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -211,8 +213,6 @@ class GameWindow:
         preset = self._left.handle_action_bar(event)
         if preset is not None:
             self._left.input.set_text(preset)
-            if preset == "I'd like to trade." and self._active_npc_id == "aldric_merchant":
-                self._handle_trade_click()
 
         submitted = self._left.input.handle_event(event)
         if submitted:
@@ -223,6 +223,8 @@ class GameWindow:
             self._right.handle_scroll(event)
         elif self._right.show_quest_panel:
             self._right.handle_quest_click(event)
+        elif self._right.show_trade_panel:
+            self._right.handle_trade_click(event)
         elif self._active_npc_id:
             self._left.handle_scroll(event)
 
@@ -232,7 +234,6 @@ class GameWindow:
             self._left.set_active_npc(clicked_npc)
             self._spawn_sidebar_fetch(clicked_npc)
             self._emotion_poller.set_active_npc(clicked_npc)
-            self._reset_trade()
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             self._handle_nav_click(event.pos)
@@ -267,56 +268,100 @@ class GameWindow:
         elif key == pygame.K_TAB:
             self._right.cycle_tab()
 
-    def _handle_trade_click(self) -> None:
-        """Drive the two-click Aldric trade flow (non-fatal — swallows all exceptions).
-
-        Click 1 (state == idle): fetch fair price, offer 80%, show result overlay.
-        Click 2 (state == offered_low): offer fair price, show result overlay.
-        Click 3+ (state == accepted): no-op.
-        """
-        if self._trade_state == "accepted":
-            return
-        try:
-            if self._trade_fair_price is None:
-                price = self._client.get_item_price("spice", "aldric_merchant")
-                if price is None:
-                    return
-                self._trade_fair_price = price
-                self._left.set_trade_price(price)
-
-            if self._trade_state == "idle":
-                offered = int(self._trade_fair_price * 0.8)
-            else:
-                offered = self._trade_fair_price
-
-            result = self._client.post_trade(
-                buyer_id="player",
-                seller_id="aldric_merchant",
-                item_id="northern_spice_bundle",
-                item_type="spice",
-                offered_price=offered,
-                tick=0,
-            )
-            self._left.apply_trade_result(result, offered, self._trade_fair_price)
-            self._trade_state = self._left.get_trade_state()
-        except Exception:
-            pass
-
-    def _reset_trade(self) -> None:
-        """Reset the trade state machine — called when the active NPC changes."""
-        self._trade_state = "idle"
-        self._trade_fair_price = None
-        self._left.reset_trade_state()
-
     def _on_quest_accept(self) -> None:
         """Callback fired by the [ACCEPT QUEST] button in the PLAYER STATUS tab."""
         if not self._quest_id:
             return
         try:
-            self._client.post_quest_accept(self._quest_id, "player")
-            self._right.set_quest_status("active")
-        except Exception:
-            pass
+            self._client.post_quest_accept(self._quest_id, self._cfg.DEMO_PLAYER_ID)
+        except EngineClientError:
+            return
+        quest_data = self._client.get_quest(self._quest_id)
+        self._right.set_quest(quest_data)
+
+    def _on_quest_complete(self) -> None:
+        """Callback fired by the [COMPLETE QUEST] button — sends claim via interaction route."""
+        if not self._quest_id:
+            return
+        npc_id = self._active_npc_id
+        try:
+            result = self._client.post_interaction(
+                player_id=self._cfg.DEMO_PLAYER_ID,
+                npc_id=npc_id,
+                proposal={"kind": "claim_completion", "target_id": self._quest_id, "payload": {}},
+            )
+        except EngineClientError as exc:
+            self._set_status(f"claim error: {exc}")
+            return
+        data = result.get("data") or {}
+        quest_state = data.get("negotiation_state")
+        if quest_state:
+            self._right.set_quest(quest_state)
+        if data.get("status") == "pending_confirm":
+            self._right.switch_to(self._right.active.__class__.PLAYER_STATUS)
+            self._set_status("Quest complete — accept reward above")
+        elif data.get("narration_hint") == "npc_refuses_objective_not_met":
+            self._set_status("Objectives not yet met")
+
+    def _on_quest_reward(self) -> None:
+        """Callback fired by the [ACCEPT REWARD] button — applies quest rewards."""
+        if not self._quest_id:
+            return
+        try:
+            result = self._client.post_quest_reward(self._quest_id, self._cfg.DEMO_PLAYER_ID)
+        except EngineClientError as exc:
+            self._set_status(f"reward error: {exc}")
+            return
+        quest_state = result.get("data", {}).get("quest_state") if isinstance(result.get("data"), dict) else None
+        if quest_state:
+            self._right.set_quest(quest_state)
+        else:
+            quest_data = self._client.get_quest(self._quest_id)
+            self._right.set_quest(quest_data)
+        self._set_status("Rewards applied!")
+
+    def _on_trade_offer(self) -> None:
+        """Send the NPC's asking price as an offer (shortcut button in trade panel)."""
+        npc_id = self._active_npc_id_for_trade or self._active_npc_id
+        try:
+            result = self._client.post_interaction(
+                player_id=self._cfg.DEMO_PLAYER_ID,
+                npc_id=npc_id,
+                proposal={"kind": "currency_offer_asking", "target_id": None, "payload": {}},
+            )
+        except EngineClientError as exc:
+            self._set_status(f"offer error: {exc}")
+            return
+        self._right.set_negotiation_state((result.get("data") or {}).get("negotiation_state"))
+
+    def _on_trade_confirm(self) -> None:
+        """Confirm a pending trade: execute item+currency transfer via the economy route."""
+        state = self._right.get_trade_state()
+        if not state or state.get("status") != "pending_confirm":
+            return
+        npc_id = self._active_npc_id_for_trade or self._active_npc_id
+        offered_price = state.get("current_offer") or state.get("threshold", 0)
+        try:
+            self._client.post_trade(
+                buyer_id=self._cfg.DEMO_PLAYER_ID,
+                seller_id=npc_id,
+                item_id=state["item_id"],
+                item_type=state.get("item_type", "spice"),
+                offered_price=int(offered_price),
+                tick=0,
+            )
+        except EngineClientError as exc:
+            self._set_status(f"trade failed: {exc}")
+            return
+        self._right.set_negotiation_state(None)
+        self._set_status("Trade complete!", duration=4.0)
+        try:
+            from demo_game.ui.right_panel import RightPanel as _RP
+            items = self._client.get_items_for_character(self._cfg.DEMO_PLAYER_ID)
+            self._right.set_inventory(items)
+            self._right.switch_to(_RP.PLAYER_INVENTORY)
+        except EngineClientError as _inv_exc:
+            print(f"[inventory] post-trade fetch failed: {_inv_exc}", file=sys.stderr)
 
     def _set_status(self, text: str, duration: float = 2.0) -> None:
         self._status_text = text
@@ -332,7 +377,6 @@ class GameWindow:
         self._active_npc_id = npcs[0]
         self._left.set_location(loc_id, npcs[0])
         self._emotion_poller.set_active_npc(npcs[0])
-        self._reset_trade()
 
     # ------------------------------------------------------------------
     # Dialogue — submit + background worker
@@ -341,6 +385,7 @@ class GameWindow:
     def _submit_dialogue(self, text: str) -> None:
         if self._is_waiting:
             return
+        self._last_submitted_message = text
         npc_id = self._left.npc_list.active_id or self._active_npc_id
         payload = build_dialogue_payload(
             npc_id,
@@ -397,6 +442,108 @@ class GameWindow:
         turn = parse_dialogue_response(item)
         color = degradation_color(turn.degradation_level)
         self._left.add_npc_response(npc_id, turn.npc_text, turn.degradation_level, turn.emotion, color)
+
+        # Band update — always applied when a negotiation session may be open.
+        deltas = turn.relation_deltas
+        if deltas.get("trust") or deltas.get("affection"):
+            try:
+                self._client.post_interaction_band(
+                    player_id=self._cfg.DEMO_PLAYER_ID,
+                    trust=deltas.get("trust", 0),
+                    affection=deltas.get("affection", 0),
+                )
+            except EngineClientError:
+                pass
+
+        if turn.interaction_proposal:
+            from npc_engine.engines.interaction.models import InteractionProposal as _EngineProposal
+            eng_proposal = _EngineProposal(
+                kind=turn.interaction_proposal.kind,
+                target_id=turn.interaction_proposal.target_id,
+                payload=turn.interaction_proposal.payload,
+            )
+            state = dispatch_interaction(eng_proposal)
+            self._set_status(f"[INTERACTION] {state.ui_directive}")
+
+            if turn.interaction_proposal.kind == "propose_trade":
+                self._active_npc_id_for_trade = npc_id
+                try:
+                    result = self._client.post_interaction(
+                        player_id=self._cfg.DEMO_PLAYER_ID,
+                        npc_id=npc_id,
+                        proposal={
+                            "kind": "propose_trade",
+                            "target_id": "northern_spice_bundle",
+                            "payload": turn.interaction_proposal.payload,
+                        },
+                    )
+                    self._right.set_negotiation_state((result.get("data") or {}).get("negotiation_state"))
+                    from demo_game.ui.right_panel import RightPanel as _RightPanel
+                    self._right.switch_to(_RightPanel.TRADE)
+                except EngineClientError as exc:
+                    self._set_status(f"trade open error: {exc}")
+
+            elif turn.interaction_proposal.kind == "propose_quest":
+                try:
+                    result = self._client.post_interaction(
+                        player_id=self._cfg.DEMO_PLAYER_ID,
+                        npc_id=npc_id,
+                        proposal={
+                            "kind": "propose_quest",
+                            "target_id": turn.interaction_proposal.target_id,
+                            "payload": turn.interaction_proposal.payload,
+                        },
+                    )
+                    quest_state = (result.get("data") or {}).get("negotiation_state")
+                    if quest_state:
+                        self._right.set_quest(quest_state)
+                        self._quest_id = quest_state.get("quest_id") or self._quest_id
+                    from demo_game.ui.right_panel import RightPanel as _RightPanel
+                    self._right.switch_to(_RightPanel.PLAYER_STATUS)
+                except EngineClientError as exc:
+                    self._set_status(f"quest open error: {exc}")
+
+            elif turn.interaction_proposal.kind in {"claim_completion", "give_item"}:
+                try:
+                    result = self._client.post_interaction(
+                        player_id=self._cfg.DEMO_PLAYER_ID,
+                        npc_id=npc_id,
+                        proposal={
+                            "kind": turn.interaction_proposal.kind,
+                            "target_id": turn.interaction_proposal.target_id or self._quest_id,
+                            "payload": turn.interaction_proposal.payload,
+                        },
+                    )
+                    data = result.get("data") or {}
+                    quest_state = data.get("negotiation_state")
+                    if quest_state:
+                        self._right.set_quest(quest_state)
+                    if data.get("status") == "pending_confirm":
+                        from demo_game.ui.right_panel import RightPanel as _RightPanel
+                        self._right.switch_to(_RightPanel.PLAYER_STATUS)
+                        self._set_status("Quest complete — accept reward above")
+                except EngineClientError as exc:
+                    self._set_status(f"claim error: {exc}")
+
+        # Deterministic fallback: if the LLM didn't emit propose_trade but the player
+        # sent the trade preset, open the trade panel directly for the spice bundle.
+        if not turn.interaction_proposal and self._last_submitted_message == "I'd like to trade.":
+            self._active_npc_id_for_trade = npc_id
+            try:
+                result = self._client.post_interaction(
+                    player_id=self._cfg.DEMO_PLAYER_ID,
+                    npc_id=npc_id,
+                    proposal={
+                        "kind": "propose_trade",
+                        "target_id": "northern_spice_bundle",
+                        "payload": {"item_type": "spice"},
+                    },
+                )
+                self._right.set_negotiation_state((result.get("data") or {}).get("negotiation_state"))
+                from demo_game.ui.right_panel import RightPanel as _RightPanel
+                self._right.switch_to(_RightPanel.TRADE)
+            except EngineClientError as exc:
+                self._set_status(f"trade fallback error: {exc}")
 
     # ------------------------------------------------------------------
     # Rendering

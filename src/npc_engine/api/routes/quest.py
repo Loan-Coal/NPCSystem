@@ -45,7 +45,7 @@ def _quest_error_status(error: QuestTransitionError) -> int:
     status_code = 500
     if error.code == "QUEST_PROVENANCE_REQUIRED":
         status_code = 400
-    if error.code == "QUEST_REWARD_SOURCE_INVALID":
+    if error.code in {"QUEST_REWARD_SOURCE_INVALID", "QUEST_REWARD_SOURCE_INSUFFICIENT"}:
         status_code = 400
     if error.code == "QUEST_NOT_FOUND":
         status_code = 404
@@ -120,7 +120,15 @@ def _to_objective_inputs(items: list[QuestObjectiveBody]) -> list[QuestObjective
     Returns:
         List of QuestObjectiveInput for the quest lifecycle engine.
     """
-    return [QuestObjectiveInput(objective_id=item.objective_id, target_count=item.target_count) for item in items]
+    return [
+        QuestObjectiveInput(
+            objective_id=item.objective_id,
+            target_count=item.target_count,
+            objective_type=item.objective_type,
+            target_id=item.target_id,
+        )
+        for item in items
+    ]
 
 
 @router.post("/offer")
@@ -153,6 +161,7 @@ async def offer_quest(
                 else None
             ),
             meta=meta,
+            reward_source_id=body.reward_source_id,
         )
     except QuestTransitionError as error:
         raise _quest_error_to_http(error) from error

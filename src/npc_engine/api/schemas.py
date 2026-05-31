@@ -82,10 +82,19 @@ class ActionReportRequest(FrozenApiModel):
 
 
 class QuestObjectiveBody(FrozenApiModel):
-    """One quest objective definition in API payloads."""
+    """One quest objective definition in API payloads.
+
+    Attributes:
+        objective_id: Stable identifier for this objective.
+        target_count: How many times the objective must be satisfied.
+        objective_type: Verification strategy — ``"deliver"`` checks HAS_ITEM.
+        target_id: Graph node ID the verifier checks against.
+    """
 
     objective_id: str
     target_count: int = Field(ge=1)
+    objective_type: Literal["deliver", "kill", "visit", "talk"] = "deliver"
+    target_id: str | None = None
 
 
 class QuestRewardItemBody(FrozenApiModel):
@@ -110,6 +119,7 @@ class QuestOfferRequest(FrozenApiModel):
     objectives: list[QuestObjectiveBody] = Field(min_length=1)
     item_rewards: list[QuestRewardItemBody] = Field(default_factory=list)
     currency_reward: QuestRewardCurrencyBody | None = None
+    reward_source_id: str = "system"
 
 
 class QuestAcceptRequest(FrozenApiModel):

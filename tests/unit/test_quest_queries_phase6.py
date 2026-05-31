@@ -23,14 +23,14 @@ def _mock_session(records: list[dict]) -> MagicMock:
 
 @pytest.mark.asyncio
 async def test_returns_quest_dict_when_active():
+    # Queries QuestState nodes with key "qs" (DEC-041: status fix)
     session = _mock_session([
-        {"q": {"id": "q1", "target_id": "merchant1", "giver_id": "innkeeper1", "status": "active"}}
+        {"qs": {"quest_id": "q1", "player_id": "player1", "status": "accepted", "title": "Test"}}
     ])
     result = await get_active_quest_for_player(session, player_id="player1")
     assert result is not None
-    assert result["id"] == "q1"
-    assert result["target_id"] == "merchant1"
-    assert result["giver_id"] == "innkeeper1"
+    assert result["quest_id"] == "q1"
+    assert result["status"] == "accepted"
 
 
 @pytest.mark.asyncio

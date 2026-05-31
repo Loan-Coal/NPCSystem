@@ -36,6 +36,7 @@ from npc_engine.api.routes.reputation import admin_router as reputation_admin_ro
 from npc_engine.api.routes.reputation import graph_router as reputation_graph_router
 from npc_engine.api.routes.graph_admin import router as graph_admin_router
 from npc_engine.api.routes.npc_state import router as npc_state_router
+from npc_engine.api.routes.interaction import router as interaction_router
 from npc_engine.api.routes.quest import router as quest_router
 from npc_engine.api.routes.quest_generation import router as quest_generation_router
 from npc_engine.api.routes.economy import router as economy_router
@@ -216,6 +217,7 @@ def create_app() -> FastAPI:
         app.include_router(dialogue_ws_router, prefix=settings.API_V1_PREFIX)
     app.include_router(npc_state_router, prefix=settings.API_V1_PREFIX)
     app.include_router(action_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(interaction_router, prefix=settings.API_V1_PREFIX)
     app.include_router(quest_router, prefix=settings.API_V1_PREFIX)
     app.include_router(clock_router, prefix=settings.API_V1_PREFIX)
     app.include_router(graph_router, prefix=settings.API_V1_PREFIX)

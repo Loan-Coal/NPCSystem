@@ -11,8 +11,10 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+import logging
+
 from neo4j import AsyncSession
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
@@ -25,8 +27,14 @@ from npc_engine.graph.pricing_queries import (
     get_character_location_id,
     get_character_location_type,
 )
+from npc_engine.utils.errors import (
+    CurrencyInsufficientFundsError,
+    ItemTransferValidationError,
+    NodeNotFoundError,
+)
 
 router = APIRouter(prefix="/economy", tags=["economy"])
+_logger = logging.getLogger(__name__)
 
 
 class TradeOfferRequest(BaseModel):
@@ -94,15 +102,35 @@ async def evaluate_trade(
     Returns:
         Envelope with TradeResult fields: accepted, fair_price, final_price, rejection_reason.
     """
-    result = await trade_engine.evaluate_offer(
-        session=session,
-        buyer_id=body.buyer_id,
-        seller_id=body.seller_id,
-        item_id=body.item_id,
-        item_type=body.item_type,
-        offered_price=body.offered_price,
-        current_tick=body.current_tick,
+    _logger.info(
+        "trade_request: buyer=%s seller=%s item=%s item_type=%s price=%d",
+        body.buyer_id, body.seller_id, body.item_id, body.item_type, body.offered_price,
     )
+    try:
+        result = await trade_engine.evaluate_offer(
+            session=session,
+            buyer_id=body.buyer_id,
+            seller_id=body.seller_id,
+            item_id=body.item_id,
+            item_type=body.item_type,
+            offered_price=body.offered_price,
+            current_tick=body.current_tick,
+        )
+    except CurrencyInsufficientFundsError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "INSUFFICIENT_FUNDS", "message": "The buyer does not have enough gold."},
+        ) from exc
+    except NodeNotFoundError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "CHARACTER_NOT_FOUND", "message": f"Character not found: {exc.node_id}"},
+        ) from exc
+    except ItemTransferValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": exc.code, "message": "The seller does not own this item."},
+        ) from exc
     return ok_response({
         "accepted": result.accepted,
         "fair_price": result.fair_price,

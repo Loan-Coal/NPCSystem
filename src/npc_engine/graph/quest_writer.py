@@ -16,6 +16,13 @@ from neo4j import AsyncSession, AsyncTransaction
 QuestGraphRunner = AsyncSession | AsyncTransaction
 
 
+CYPHER_UPDATE_QUEST_NODE_STATUS = """
+MATCH (q:Quest {id: $quest_id})
+SET q.status = $status,
+    q.updated_at = datetime()
+"""
+
+
 CYPHER_GET_QUEST_STATE = """
 MATCH (q:QuestState {id: $id})
 RETURN q.quest_id AS quest_id,
@@ -137,6 +144,26 @@ def _canonical_state_payload(state_payload: dict) -> dict:
         "currency_reward": None if currency_reward is None else _deep_copy_json(currency_reward),
         "rewards_applied": bool(state_payload["rewards_applied"]),
     }
+
+
+async def update_quest_node_status(
+    *,
+    session: QuestGraphRunner,
+    quest_id: str,
+    status: str,
+) -> None:
+    """Write a lifecycle status back to the Quest node for context-builder queries.
+
+    This keeps the Quest node's ``status`` field in sync with QuestState so that
+    graph reads used for NPC context injection reflect the current lifecycle state.
+
+    Args:
+        session: Active Neo4j session or transaction.
+        quest_id: ID of the Quest node to update.
+        status: New lifecycle status string (e.g. ``"accepted"``, ``"completed"``).
+    """
+    result = await session.run(CYPHER_UPDATE_QUEST_NODE_STATUS, quest_id=quest_id, status=status)
+    await result.consume()
 
 
 async def get_quest_state(*, session: QuestGraphRunner, quest_id: str, player_id: str) -> dict | None:

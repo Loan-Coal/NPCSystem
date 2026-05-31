@@ -183,14 +183,15 @@ async def test_apply_rewards_aggregates_duplicate_item_rewards(monkeypatch) -> N
 
 
 @pytest.mark.asyncio
-async def test_apply_rewards_revalidates_trusted_reward_source(monkeypatch) -> None:
+async def test_apply_rewards_rejects_empty_reward_source(monkeypatch) -> None:
+    # DEC-040: any non-empty string is now trusted; only "" is rejected.
     async def fake_get_quest_state(*, session, quest_id: str, player_id: str):
         return {
             "quest_id": quest_id,
             "player_id": player_id,
             "status": "completed",
             "title": "Delivery",
-            "reward_source_id": "merchant-1",
+            "reward_source_id": "",
             "objectives": [{"objective_id": "obj-1", "target_count": 1}],
             "objective_progress": {"obj-1": 1},
             "item_rewards": [],

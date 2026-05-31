@@ -18,6 +18,7 @@ BASE_NODE_LABELS = {
     "character": "Character",
     "event": "Event",
     "faction": "Faction",
+    "item": "Item",
     "location": "Location",
     "quest": "Quest",
     "world_state": "WorldState",

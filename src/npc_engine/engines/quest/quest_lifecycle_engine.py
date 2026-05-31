@@ -24,9 +24,10 @@ from npc_engine.engines.quest.quest_engine_helpers import (
     is_trusted_reward_source,
     normalize_item_rewards,
 )
+from npc_engine.graph.currency_writer import get_character_balance
 from npc_engine.graph.event_writer import upsert_quest_lifecycle_event
 from npc_engine.graph.graph_writer import apply_currency_transfer, apply_item_transfer
-from npc_engine.graph.quest_writer import create_quest_state_if_absent, get_quest_state, upsert_quest_state
+from npc_engine.graph.quest_writer import create_quest_state_if_absent, get_quest_state, update_quest_node_status, upsert_quest_state
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.utils.errors import QuestTransitionError
 
@@ -250,7 +251,7 @@ class QuestLifecycleEngine:
             )
 
         next_state = state.model_copy(update={"status": STATUS_ACCEPTED})
-        return await self._persist_state_and_event(
+        stored = await self._persist_state_and_event(
             session=session,
             quest_id=quest_id,
             player_id=player_id,
@@ -259,6 +260,8 @@ class QuestLifecycleEngine:
             summary=f"Quest accepted: {state.title}",
             meta=meta,
         )
+        await update_quest_node_status(session=session, quest_id=quest_id, status=STATUS_ACCEPTED)
+        return stored
 
     async def update_objective(
         self,
@@ -357,7 +360,7 @@ class QuestLifecycleEngine:
         next_status = STATUS_COMPLETED if is_completed else STATUS_IN_PROGRESS
         next_state = state.model_copy(update={"status": next_status})
 
-        return await self._persist_state_and_event(
+        stored = await self._persist_state_and_event(
             session=session,
             quest_id=quest_id,
             player_id=player_id,
@@ -368,6 +371,9 @@ class QuestLifecycleEngine:
             ),
             meta=meta,
         )
+        if is_completed:
+            await update_quest_node_status(session=session, quest_id=quest_id, status=STATUS_COMPLETED)
+        return stored
 
     async def apply_rewards(
         self,
@@ -414,6 +420,14 @@ class QuestLifecycleEngine:
                 code="QUEST_REWARD_SOURCE_INVALID",
                 detail="Quest reward source must be a trusted system source",
             )
+
+        if state.currency_reward is not None and state.reward_source_id != "system":
+            balance = await get_character_balance(session=session, character_id=state.reward_source_id)
+            if balance is None or balance < state.currency_reward.amount:
+                raise QuestTransitionError(
+                    code="QUEST_REWARD_SOURCE_INSUFFICIENT",
+                    detail=f"NPC {state.reward_source_id} cannot afford {state.currency_reward.amount}",
+                )
 
         normalized_item_rewards = normalize_item_rewards(state.item_rewards)
         for item_reward in normalized_item_rewards:

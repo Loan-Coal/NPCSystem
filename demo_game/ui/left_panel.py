@@ -12,8 +12,6 @@ scatter rendering logic across files with no encapsulation gain. See DEC-036.
 
 from __future__ import annotations
 
-import time
-
 import pygame
 
 from demo_game.constants import (
@@ -74,13 +72,6 @@ class LeftPanelRenderer:
         self._badge = DegradationBadge(font_label)
 
         self._action_bar = ActionBarWidget(font_label)
-        self._trade_price: int | None = None       # fair price from get_item_price
-        self._trade_price_until: float = 0.0
-        self._trade_state: str = "idle"            # "idle" | "offered_low" | "accepted"
-        self._trade_result: dict | None = None     # last post_trade response
-        self._trade_offered: int | None = None
-        self._trade_fair: int | None = None
-        self._trade_result_until: float = 0.0
         self._event_banner = EventBanner(font_label)
 
         self._active_npc_id: str = ""
@@ -153,54 +144,9 @@ class LeftPanelRenderer:
         """Route a click to the action bar. Return preset text if a button was hit."""
         return self._action_bar.handle_event(event)
 
-    def set_trade_price(self, price: int | None, duration_s: float = 4.0) -> None:
-        """Display a trade price overlay for duration_s seconds."""
-        self._trade_price = price
-        self._trade_price_until = time.monotonic() + duration_s
-
     def show_event_banner(self, label: str, duration_s: float = 2.0) -> None:
         """Flash the event banner with label for duration_s seconds."""
         self._event_banner.show(label, duration_s)
-
-    def get_trade_state(self) -> str:
-        """Return current trade state: ``'idle'``, ``'offered_low'``, or ``'accepted'``."""
-        return self._trade_state
-
-    def apply_trade_result(
-        self,
-        result: dict,
-        offered: int,
-        fair: int,
-        duration_s: float = 8.0,
-    ) -> None:
-        """Advance the trade state machine and store the result for overlay rendering.
-
-        Transitions ``idle → offered_low → accepted``. Accepted is terminal.
-
-        Args:
-            result: Full API response from ``post_trade()``.
-            offered: Price that was offered this click.
-            fair: The fair market price (from ``get_item_price``).
-            duration_s: How long the result overlay stays visible.
-        """
-        if self._trade_state == "idle":
-            self._trade_state = "offered_low"
-        elif self._trade_state == "offered_low":
-            self._trade_state = "accepted"
-        self._trade_result = result
-        self._trade_offered = offered
-        self._trade_fair = fair
-        self._trade_result_until = time.monotonic() + duration_s
-
-    def reset_trade_state(self) -> None:
-        """Reset the trade state machine — call when the active NPC changes."""
-        self._trade_state = "idle"
-        self._trade_result = None
-        self._trade_offered = None
-        self._trade_fair = None
-        self._trade_result_until = 0.0
-        self._trade_price = None
-        self._trade_price_until = 0.0
 
     # ------------------------------------------------------------------
     # Widget accessors — for GameWindow event routing
@@ -264,51 +210,11 @@ class LeftPanelRenderer:
             self.get_log(self._active_npc_id).draw(
                 screen, pygame.Rect(0, log_y, left_w, log_h)
             )
-            self._draw_trade_overlay(screen, pygame.Rect(0, log_y, left_w, log_h))
-
         self._badge.draw(screen, pygame.Rect(0, badge_y, left_w, _BADGE_H))
         action_y = badge_y + _BADGE_H + 2
         self._action_bar.draw(screen, pygame.Rect(0, action_y, left_w, _ACTION_BAR_H))
         self._input.draw(screen, pygame.Rect(0, action_y + _ACTION_BAR_H + 2, left_w, _INPUT_H))
         self._event_banner.draw(screen, pygame.Rect(0, 0, left_w, usable_h))
-
-    def _draw_trade_overlay(self, screen: pygame.Surface, log_rect: pygame.Rect) -> None:
-        now = time.monotonic()
-        if self._trade_result is not None and now < self._trade_result_until:
-            data = self._trade_result.get("data", self._trade_result)
-            accepted = bool(data.get("accepted", False))
-            reason = str(data.get("rejection_reason") or "")
-            result_line = "ACCEPTED" if accepted else f"REJECTED — {reason!r}" if reason else "REJECTED"
-            lines = [
-                "Item: northern spice bundle",
-                f"Offered: {self._trade_offered} gold  |  Fair: {self._trade_fair} gold",
-                f"Result: {result_line}",
-            ]
-            lh = self._font_label.get_linesize()
-            olh = lh * len(lines) + 10
-            olr = pygame.Rect(log_rect.x, log_rect.bottom - olh, log_rect.width, olh)
-            pygame.draw.rect(screen, PALETTE["panel"], olr)
-            pygame.draw.rect(screen, PALETTE["border"], olr, 1)
-            for i, line in enumerate(lines):
-                colour = PALETTE["green"] if (i == 2 and accepted) else (
-                    PALETTE["red"] if (i == 2 and not accepted) else PALETTE["white"]
-                )
-                screen.blit(
-                    self._font_label.render(line, True, colour),
-                    (olr.x + 6, olr.y + 5 + i * lh),
-                )
-        elif self._trade_price is not None and now < self._trade_price_until:
-            lh = self._font_label.get_linesize()
-            olh = lh + 8
-            olr = pygame.Rect(log_rect.x, log_rect.bottom - olh, log_rect.width, olh)
-            pygame.draw.rect(screen, PALETTE["bg"], olr)
-            screen.blit(
-                self._font_label.render(
-                    f"Aldric: northern spice — {self._trade_price} gold",
-                    True, PALETTE["amber"],
-                ),
-                (olr.x + 8, olr.y + 4),
-            )
 
     def _draw_location_bar(self, screen: pygame.Surface, rect: pygame.Rect) -> None:
         cache_key = f"{self._active_location_id}:{rect.width}"

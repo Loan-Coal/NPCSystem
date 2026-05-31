@@ -507,29 +507,176 @@ _NPC_LOCATED_AT: list[tuple[str, str]] = [
 ]
 
 
+_PLAYER_ID = "player_demo"
+_AMULET_ID = "ancient_amulet"
+_ALDRIC_QUEST_ID = "aldric_deliver_quest"
+_ALDRIC_REWARD_AMOUNT = 50
+_SPICE_ID = "northern_spice_bundle"
+_SPICE_VALUE = 120
+
+
 # ---------------------------------------------------------------------------
 # Quest seeding (non-fatal — requires quest engine to be running)
 # ---------------------------------------------------------------------------
 
 
-def _seed_quests(client: EngineClient) -> None:
-    """Generate Aldric's quest and cache the quest_id for GameWindow startup.
+def _seed_player_and_items(client: EngineClient) -> int:
+    """Seed the player character, ancient_amulet item, and OWNS edge.
 
-    Non-fatal: logs a warning and returns without raising if the quest engine
-    is unavailable or the LLM call fails.
+    Args:
+        client: Authenticated EngineClient.
+
+    Returns:
+        Number of nodes/edges created.
+    """
+    now = _now()
+    created = 0
+
+    player_payload = {
+        "id": _PLAYER_ID,
+        "name": "Traveler",
+        "archetype": "adventurer",
+        "faction": "neutral",
+        "biography": "A wandering adventurer seeking fortune.",
+        "is_player": True,
+        "is_active": True,
+        "gossipy": 50,
+        "credulity": 50,
+        "honesty": 60,
+        "currency_balance": 100,
+        "created_at": now,
+        "updated_at": now,
+        "last_graph_updated_at": now,
+    }
+    result = _seed_node(client, "Character", player_payload)
+    if result == "created":
+        created += 1
+
+    amulet_payload = {
+        "id": _AMULET_ID,
+        "name": "Ancient Amulet",
+        "type": "artifact",
+        "description": "A heavy bronze amulet etched with unfamiliar symbols.",
+        "value": 0,
+        "rarity": "unique",
+        "is_unique": "true",
+    }
+    result = _seed_node(client, "Item", amulet_payload)
+    if result == "created":
+        created += 1
+
+    # OWNS is the only registered character→item edge (no HAS_ITEM in registry)
+    result = _seed_edge(client, "OWNS", _PLAYER_ID, _AMULET_ID, {"acquired_at": now})
+    if result == "created":
+        created += 1
+
+    return created
+
+
+def _seed_aldric_inventory(client: EngineClient) -> int:
+    """Seed Aldric's northern_spice_bundle Item and OWNS edge so get_sellable_items_for_npc returns it.
+
+    Args:
+        client: Authenticated EngineClient.
+
+    Returns:
+        Number of nodes/edges created.
+    """
+    now = _now()
+    created = 0
+    spice_payload = {
+        "id": _SPICE_ID,
+        "name": "Northern Spice Bundle",
+        "type": "spice",
+        "value": _SPICE_VALUE,
+        "rarity": "common",
+        "is_unique": "false",
+        "description": "A tight bundle of northern spices, rare in wartime.",
+    }
+    r = _seed_node(client, "Item", spice_payload)
+    if r == "created":
+        created += 1
+    r = _seed_edge(client, "OWNS", "aldric_merchant", _SPICE_ID, {"acquired_at": now})
+    if r == "created":
+        created += 1
+    return created
+
+
+def _seed_aldric_currency(client: EngineClient) -> None:
+    """Ensure Aldric has enough currency to pay the quest reward.
+
+    Patches the Character node's currency_balance field if not already set.
 
     Args:
         client: Authenticated EngineClient.
     """
     try:
-        data = client.post_quest_generate("aldric_merchant")
-        quest_id = data["quest_id"]
-        cache_path = Path(".cache/demo/aldric_quest.json")
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        cache_path.write_text(json.dumps({"quest_id": quest_id}))
-        logger.info("[seed] Quest generated: %s", quest_id)
+        existing = client.get_node("Character", "aldric_merchant")
+        if existing and existing.get("currency_balance", 0) >= _ALDRIC_REWARD_AMOUNT:
+            logger.info("[seed] Aldric already has sufficient balance — skip")
+            return
+        client.upsert_node("Character", {
+            "id": "aldric_merchant",
+            "currency_balance": 200,
+        })
+        logger.info("[seed] Set Aldric currency_balance=200")
     except Exception as exc:
-        logger.warning("[seed] Quest seeding skipped: %s", exc)
+        logger.warning("[seed] Aldric currency patch skipped: %s", exc)
+
+
+def _seed_quests(client: EngineClient) -> None:
+    """Seed Aldric's deliver-amulet quest deterministically, then cache quest_id.
+
+    Creates a QuestState via POST /v1/quest/offer with a hardcoded deliver objective
+    so the game can use graph-based verification. Falls back to LLM generation if
+    the lifecycle route is unavailable.
+
+    Non-fatal: logs a warning and returns without raising if the quest engine
+    is unavailable.
+
+    Args:
+        client: Authenticated EngineClient.
+    """
+    cache_path = Path(".cache/demo/aldric_quest.json")
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        client.post_quest_offer(
+            quest_id=_ALDRIC_QUEST_ID,
+            player_id=_PLAYER_ID,
+            title="Return the Ancient Amulet",
+            objectives=[{
+                "objective_id": "deliver_amulet",
+                "target_count": 1,
+                "objective_type": "deliver",
+                "target_id": _AMULET_ID,
+            }],
+            item_rewards=[],
+            currency_reward={"amount": _ALDRIC_REWARD_AMOUNT},
+            reward_source_id="aldric_merchant",
+        )
+        cache_path.write_text(json.dumps({"quest_id": _ALDRIC_QUEST_ID}))
+        logger.info("[seed] Quest offered: %s", _ALDRIC_QUEST_ID)
+        # Seed Quest definition node + HAS_QUEST edge so get_offered_quests_for_npc finds it
+        _seed_node(client, "Quest", {
+            "id": _ALDRIC_QUEST_ID,
+            "description": "Aldric wants the ancient amulet returned to him.",
+            "quest_giver_id": "aldric_merchant",
+            "success_condition": "player delivers ancient_amulet to aldric_merchant",
+            "status": "offered",
+            "severity": 30,
+            "created_at": _now(),
+        })
+        _seed_edge(client, "HAS_QUEST", "aldric_merchant", _ALDRIC_QUEST_ID, {})
+    except Exception as exc:
+        logger.warning("[seed] Deterministic quest offer failed (%s) — falling back to LLM generation", exc)
+        try:
+            data = client.post_quest_generate("aldric_merchant")
+            quest_id = data["quest_id"]
+            cache_path.write_text(json.dumps({"quest_id": quest_id}))
+            logger.info("[seed] Quest generated (fallback): %s", quest_id)
+        except Exception as gen_exc:
+            logger.warning("[seed] Quest seeding skipped: %s", gen_exc)
 
 
 # ---------------------------------------------------------------------------
@@ -668,7 +815,19 @@ def seed_all(client: EngineClient) -> dict:
             "arrived_at": _now(),
         }))
 
-    # 11. Quests (non-fatal — requires quest engine)
+    # 11. Player character + items (ancient_amulet + HAS_ITEM edge)
+    logger.info("[seed] Player + items")
+    created += _seed_player_and_items(client)
+
+    # 12. Aldric inventory (northern_spice_bundle + OWNS edge)
+    logger.info("[seed] Aldric inventory")
+    created += _seed_aldric_inventory(client)
+
+    # 13. Aldric currency balance (ensure NPC purse covers quest reward)
+    logger.info("[seed] Aldric currency")
+    _seed_aldric_currency(client)
+
+    # 14. Quests (non-fatal — requires quest engine)
     logger.info("[seed] Quests")
     _seed_quests(client)
 

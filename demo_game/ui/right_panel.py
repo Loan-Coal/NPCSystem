@@ -1,11 +1,15 @@
 """
 Module: right_panel
 Layer: demo_game.ui
-Purpose: Right panel renderer — cycles GRAPH → KNOWLEDGE → PLAYER STATUS → CHAIN via Tab.
-         Owns KnowledgeSidebarWidget, QuestPanelWidget, and GossipChainWidget;
-         reads the pre-rendered graph surface from GraphPoller.
+Purpose: Right panel renderer — cycles GRAPH → KNOWLEDGE → PLAYER STATUS → CHAIN →
+         TRADE → INVENTORY via Tab. Owns KnowledgeSidebarWidget, QuestPanelWidget,
+         GossipChainWidget, TradePanelWidget, and InventoryPanelWidget; reads the
+         pre-rendered graph surface from GraphPoller.
+Does NOT: make HTTP calls or hold business logic.
+Dependencies injected: None (pure rendering + callback registration).
 Dependencies: pygame, demo_game.graph_panel.poller, demo_game.ui.knowledge_sidebar,
-              demo_game.ui.quest_panel, demo_game.ui.gossip_chain
+              demo_game.ui.quest_panel, demo_game.ui.gossip_chain, demo_game.ui.trade_panel,
+              demo_game.ui.inventory_panel
 Used by: demo_game.ui.game_window
 """
 
@@ -19,7 +23,9 @@ import pygame
 from demo_game.graph_panel.poller import GraphPoller
 from demo_game.ui.gossip_chain import GossipChainWidget
 from demo_game.ui.knowledge_sidebar import KnowledgeSidebarWidget
+from demo_game.ui.inventory_panel import InventoryPanelWidget
 from demo_game.ui.quest_panel import QuestPanelWidget
+from demo_game.ui.trade_panel import TradePanelWidget
 
 PANEL_HEADER_H = 24  # Height of the tab-name header strip at the top of the right panel.
 
@@ -37,6 +43,8 @@ class RightPanel(enum.Enum):
     KNOWLEDGE = "KNOWLEDGE"
     PLAYER_STATUS = "PLAYER STATUS"
     CHAIN = "CHAIN"
+    TRADE = "TRADE"
+    PLAYER_INVENTORY = "INVENTORY"
 
 
 class RightPanelRenderer:
@@ -65,6 +73,8 @@ class RightPanelRenderer:
         self._sidebar = KnowledgeSidebarWidget(font_body, font_label)
         self._quest_panel = QuestPanelWidget(font_body, font_label)
         self._chain = GossipChainWidget(font_body, font_label)
+        self._trade_panel = TradePanelWidget(font_body, font_label)
+        self._inventory_panel = InventoryPanelWidget(font_body, font_label)
         self._active: RightPanel = RightPanel.GRAPH
 
     # ------------------------------------------------------------------
@@ -86,10 +96,19 @@ class RightPanelRenderer:
         """True when the PLAYER STATUS tab is the active view."""
         return self._active == RightPanel.PLAYER_STATUS
 
+    @property
+    def show_trade_panel(self) -> bool:
+        """True when the TRADE tab is the active view."""
+        return self._active == RightPanel.TRADE
+
     def cycle_tab(self) -> None:
         """Advance to the next tab (Tab key handler)."""
         panels = list(RightPanel)
         self._active = panels[(panels.index(self._active) + 1) % len(panels)]
+
+    def switch_to(self, tab: RightPanel) -> None:
+        """Jump directly to the named tab."""
+        self._active = tab
 
     def set_sidebar_data(self, npc_name: str, data: list[dict]) -> None:
         """Push freshly fetched KNOWS_ABOUT pairs into the sidebar widget."""
@@ -111,9 +130,37 @@ class RightPanelRenderer:
         """Register the callback fired when the [ACCEPT QUEST] button is clicked."""
         self._quest_panel.set_accept_callback(cb)
 
+    def set_quest_complete_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when the [COMPLETE QUEST] button is clicked."""
+        self._quest_panel.set_complete_callback(cb)
+
+    def set_quest_reward_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when the [ACCEPT REWARD] button is clicked."""
+        self._quest_panel.set_reward_callback(cb)
+
     def set_chain_data(self, edges: list[dict]) -> None:
         """Update the gossip chain shown in the CHAIN tab."""
         self._chain.set_chain(edges)
+
+    def set_negotiation_state(self, state: dict | None) -> None:
+        """Push a negotiation state snapshot into the trade panel."""
+        self._trade_panel.set_negotiation_state(state)
+
+    def get_trade_state(self) -> dict | None:
+        """Return the current trade negotiation state, or None."""
+        return self._trade_panel.get_state()
+
+    def set_inventory(self, items: list[dict]) -> None:
+        """Push a fresh item list into the inventory panel."""
+        self._inventory_panel.set_items(items)
+
+    def set_trade_offer_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback for the [OFFER ASKING PRICE] trade button."""
+        self._trade_panel.set_offer_callback(cb)
+
+    def set_trade_confirm_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback for the [CONFIRM TRADE] button."""
+        self._trade_panel.set_confirm_callback(cb)
 
     def handle_scroll(self, event: pygame.event.Event) -> None:
         """Route MOUSEWHEEL events to the active scrollable widget."""
@@ -123,6 +170,10 @@ class RightPanelRenderer:
     def handle_quest_click(self, event: pygame.event.Event) -> None:
         """Forward an event to the quest panel (for accept-button detection)."""
         self._quest_panel.handle_event(event)
+
+    def handle_trade_click(self, event: pygame.event.Event) -> None:
+        """Forward an event to the trade panel (for button detection)."""
+        self._trade_panel.handle_event(event)
 
     # ------------------------------------------------------------------
     # Drawing
@@ -147,6 +198,10 @@ class RightPanelRenderer:
             self._quest_panel.draw(screen, content_rect)
         elif self._active == RightPanel.CHAIN:
             self._chain.draw(screen, content_rect)
+        elif self._active == RightPanel.TRADE:
+            self._trade_panel.draw(screen, content_rect)
+        elif self._active == RightPanel.PLAYER_INVENTORY:
+            self._inventory_panel.draw(screen, content_rect)
         else:
             self._draw_graph(screen, rect)
 

@@ -101,11 +101,14 @@ class DialogueLLMClient:
                 logger.debug("llm_response", extra={"response": normalized_response})
 
             return normalized_response
-        except LLMTimeoutError:
+        except LLMTimeoutError as exc:
+            logger.warning("llm_timeout model=%s exc=%s", self._llm_client.model_name(), exc)
             return self._fallback_with_metrics(labels=labels, fallback_reason="timeout")
-        except LLMRequestError:
+        except LLMRequestError as exc:
+            logger.warning("llm_request_error model=%s exc=%s", self._llm_client.model_name(), exc)
             return self._fallback_with_metrics(labels=labels, fallback_reason="request_error")
-        except ValidationError:
+        except ValidationError as exc:
+            logger.warning("llm_validation_error model=%s errors=%s", self._llm_client.model_name(), exc.errors())
             return self._fallback_with_metrics(labels=labels, fallback_reason="validation_error")
 
     def fallback_response_payload(self) -> dict:

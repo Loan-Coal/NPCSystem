@@ -569,3 +569,14 @@ def get_memory_consolidation_engine():
         max_tokens=engine_config.llm.max_tokens,
         temperature=engine_config.llm.temperature,
     )
+
+
+@lru_cache(maxsize=1)
+def get_negotiation_store():
+    """Create the singleton in-memory NegotiationStore for trade sessions.
+
+    Returns:
+        NegotiationStore instance shared across all interaction requests.
+    """
+    from npc_engine.engines.interaction.negotiation_store import NegotiationStore
+    return NegotiationStore()

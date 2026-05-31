@@ -8,10 +8,16 @@ Dependencies injected: None.
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-ActionType = Literal["speak", "gesture", "move", "attack", "give_item", "buy_item", "sell_item", "none"]
+ActionType = Literal[
+    "speak", "gesture", "move", "attack",
+    "give_item", "buy_item", "sell_item", "none",
+    "propose_trade", "propose_quest", "claim_completion",
+]
+
+_VALID_ACTION_TYPES: frozenset[str] = frozenset(ActionType.__args__)  # type: ignore[attr-defined]
 ExpressionType = Literal["neutral", "smile", "frown", "angry", "surprised", "sad"]
 
 
@@ -46,6 +52,13 @@ class ActionModel(FrozenDialogueModel):
     type: ActionType = "speak"
     target_id: str | None = None
     parameters: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def coerce_action_type(cls, v: object) -> object:
+        if isinstance(v, str) and v not in _VALID_ACTION_TYPES:
+            return "speak"
+        return v
 
 
 class FacialExpressionModel(FrozenDialogueModel):

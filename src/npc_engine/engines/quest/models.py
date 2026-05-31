@@ -8,14 +8,26 @@ Dependencies injected: None.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class QuestObjectiveInput(BaseModel):
-    """One quest objective definition with target completion count."""
+    """One quest objective definition with target completion count and graph verification data.
+
+    Attributes:
+        objective_id: Stable identifier for this objective.
+        target_count: How many times the objective must be satisfied.
+        objective_type: Verification strategy — ``"deliver"`` checks HAS_ITEM;
+            others are stubs reserved for future phases.
+        target_id: Graph node ID the verifier checks against (e.g. item node ID).
+    """
 
     objective_id: str
     target_count: int = Field(ge=1)
+    objective_type: Literal["deliver", "kill", "visit", "talk"] = "deliver"
+    target_id: str | None = None
 
     model_config = ConfigDict(frozen=True)
 
