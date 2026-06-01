@@ -71,6 +71,7 @@ from npc_engine.api.dependency_singletons import (
     get_redis_runtime,
     get_routine_engine,
     get_story_pacing_engine,
+    get_tick_scheduler,
     get_trade_engine,
     get_type_registry,
 )
@@ -80,6 +81,8 @@ from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm_config_loader import validate_all_engine_llm_configs
 from npc_engine.engines.idempotency.cleanup_scheduler import IdempotencyCleanupScheduler
 from npc_engine.retrieval.embedding_reconciler import EmbeddingReconciler
+from npc_engine.scheduler.tick_autopilot import TickAutopilot
+from npc_engine.scheduler.tick_budget_guard import TickBudgetGuard
 from npc_engine.scheduler.tick_lease import TickLeaseRepository
 from npc_engine.utils.logging import configure_logging
 
@@ -93,6 +96,7 @@ async def lifespan(_app: FastAPI):
     settings = get_settings()
     reconciler_task: asyncio.Task[None] | None = None
     idempotency_cleanup_task: asyncio.Task[None] | None = None
+    autopilot_task: asyncio.Task[None] | None = None
     connected = False
     try:
         get_faction_politics_engine.cache_clear()
@@ -168,8 +172,21 @@ async def lifespan(_app: FastAPI):
             cleanup_scheduler.run_forever(),
             name="idempotency-cleanup",
         )
+        if settings.TICK_AUTOPILOT_ENABLED:
+            autopilot = TickAutopilot(
+                graph_db=graph_db,
+                tick_scheduler=get_tick_scheduler(),
+                interval_seconds=settings.TICK_INTERVAL_SECONDS,
+                game_seconds_per_tick=settings.TICK_GAME_SECONDS_PER_TICK,
+                budget_guard=TickBudgetGuard(max_per_minute=settings.TICK_LLM_CALLS_PER_MINUTE_MAX),
+            )
+            autopilot_task = asyncio.create_task(autopilot.run_forever(), name="tick-autopilot")
         yield
     finally:
+        if autopilot_task is not None:
+            autopilot_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await autopilot_task
         if idempotency_cleanup_task is not None:
             idempotency_cleanup_task.cancel()
             with suppress(asyncio.CancelledError):

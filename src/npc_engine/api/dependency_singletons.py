@@ -35,6 +35,7 @@ from npc_engine.graph.reindex_job_service import ReindexJobService
 from npc_engine.retrieval.dialogue_context_cache import PartialDialogueContextCache
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
 from npc_engine.retrieval.vector_store_factory import create_vector_store
+from npc_engine.scheduler.engine_status_store import EngineStatusStore
 from npc_engine.scheduler.game_clock import GameClock
 from npc_engine.scheduler.tick_scheduler import TickScheduler
 from npc_engine.engines.llm_config_loader import get_config as get_engine_model_config_for
@@ -160,6 +161,16 @@ def get_quest_lifecycle_engine() -> QuestLifecycleEngine:
 
 
 @lru_cache
+def get_engine_status_store() -> EngineStatusStore:
+    """Create singleton engine status store for per-engine tick tracking.
+
+    Returns:
+        EngineStatusStore instance shared by TickScheduler and observability routes.
+    """
+    return EngineStatusStore()
+
+
+@lru_cache
 def get_game_clock() -> GameClock:
     """Create singleton game clock.
 
@@ -250,8 +261,10 @@ def get_tick_scheduler() -> TickScheduler:
         agenda_engine=get_agenda_engine(),
         need_decay_engine=get_need_decay_engine(),
         military_engine=get_military_engine(),
+        engine_status_store=get_engine_status_store(),
         gossip_interval=settings.GOSSIP_TICK_INTERVAL,
         event_interval=settings.EVENT_TICK_INTERVAL,
+        chapter_interval=settings.CHAPTER_TICK_INTERVAL,
         distributed_lease_enabled=settings.DISTRIBUTED_TICK_LEASE_ENABLED,
         scheduler_id=settings.TICK_SCHEDULER_ID,
         lease_owner_id=settings.TICK_LEASE_OWNER_ID,

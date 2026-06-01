@@ -4,19 +4,36 @@ tick_scheduler.py - Coordinates game clock and tick execution for engines.
 Does NOT: define gossip/event/routine engine internals.
 
 Dependencies injected: GameClock, GossipHandler, EventHandler, RoutineEngine,
-                       MemoryConsolidationEngine (optional).
+                       MemoryConsolidationEngine (optional), EngineStatusStore (optional).
+Used by: api.dependency_singletons (singleton), api.routes.clock.
+
+Line-count note: This orchestrator coordinates 16 independent tick engines.
+Splitting the advance() loop would create artificial coupling. See DEC-042.
 """
 
-from neo4j import AsyncSession
+# DEC-042 exception: this file intentionally exceeds the 300-line limit because
+# extracting per-engine blocks into a separate module would fragment a cohesive
+# sequential orchestration that has no natural seam. See DECISIONS.md.
+
+from __future__ import annotations
+
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
+
+from neo4j import AsyncSession
 
 from npc_engine.engines.base_engine import BaseEngine
+from npc_engine.scheduler.engine_status_store import EngineStatusStore
 from npc_engine.scheduler.game_clock import ClockState, GameClock
 from npc_engine.scheduler.tick_lease import TickLeaseRepository, TickLeaseRepositoryProtocol
 from npc_engine.world.time_utils import TimePoint
 from npc_engine.config import get_settings
 from npc_engine.world.world_reader import get_world_state
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 CYPHER_TICK_DONE = """
@@ -62,11 +79,13 @@ class TickScheduler:
         need_decay_engine: BaseEngine | None = None,
         military_engine: BaseEngine | None = None,
         consolidation_advance_interval: int = 1,
+        chapter_interval: int = 1,
         distributed_lease_enabled: bool = False,
         scheduler_id: str = "main",
         lease_owner_id: str = "worker",
         lease_ttl_seconds: int = 30,
         lease_repo: TickLeaseRepositoryProtocol | None = None,
+        engine_status_store: EngineStatusStore | None = None,
     ) -> None:
         """Initialise the tick scheduler.
 
@@ -107,6 +126,8 @@ class TickScheduler:
             military_engine: Optional engine exposing ``run_tick(session, tick_id)``
                 called every tick; currently a no-op stub (see ISSUES.md ISSUE-001).
             consolidation_advance_interval: Run consolidation every N advances; clamped to 1.
+            chapter_interval: Run chapter engine every N ticks; clamped to 1. Default 1 preserves
+                existing every-tick behavior; raise to reduce LLM call frequency.
             distributed_lease_enabled: When True, use ``lease_repo`` for cross-worker
                 tick deduplication instead of the local SchedulerState Cypher queries.
             scheduler_id: Unique identifier for the scheduler node in Neo4j.
@@ -114,6 +135,9 @@ class TickScheduler:
             lease_ttl_seconds: Lease TTL passed to the lease repository; clamped to 1.
             lease_repo: Optional pre-built lease repository; constructed from
                 ``scheduler_id``, ``lease_owner_id``, and ``lease_ttl_seconds`` when None.
+            engine_status_store: Optional store for per-engine last-run tick and last error.
+                When provided, all engine calls are tracked; errors are recorded without
+                killing the loop.
         """
 
         self._clock = clock
@@ -134,6 +158,7 @@ class TickScheduler:
         self._need_decay_engine = need_decay_engine
         self._military_engine = military_engine
         self._consolidation_advance_interval = max(1, consolidation_advance_interval)
+        self._chapter_interval = max(1, chapter_interval)
         self._advance_count = 0
         self._gossip_interval = max(1, gossip_interval)
         self._event_interval = max(1, event_interval)
@@ -146,6 +171,39 @@ class TickScheduler:
             owner_id=lease_owner_id,
             lease_ttl_seconds=lease_ttl_seconds,
         )
+        self._engine_status_store = engine_status_store
+
+    async def _run_engine_safe(
+        self,
+        engine_name: str,
+        tick_id: int,
+        coro: Awaitable[dict],
+    ) -> dict | None:
+        """Await a coroutine, recording success or failure in the status store.
+
+        On exception: logs ``tick_engine_error``, records the error, and returns
+        None so the caller can skip appending a result without killing the loop.
+
+        Args:
+            engine_name: Canonical engine key used for status tracking.
+            tick_id: Current tick ID, attached to log and status records.
+            coro: Awaitable produced by calling the engine's run_tick method.
+        Returns:
+            Engine result dict, or None if the engine raised an exception.
+        """
+        try:
+            result = await coro
+            if self._engine_status_store is not None:
+                self._engine_status_store.record_success(engine_name, tick_id)
+            return result
+        except Exception as exc:
+            LOGGER.error(
+                "tick_engine_error",
+                extra={"engine": engine_name, "tick_id": tick_id, "error": str(exc)},
+            )
+            if self._engine_status_store is not None:
+                self._engine_status_store.record_error(engine_name, tick_id, str(exc))
+            return None
 
     async def _run_with_lease_timeout(self, coro):
         timeout_seconds = max(1.0, float(self._lease_ttl_seconds) - 1.0)
@@ -202,7 +260,7 @@ class TickScheduler:
         unresolved = not await self._lease_repo.is_done(session=session, engine=engine, tick_id=tick_id)
         return unresolved, None
 
-    async def advance(self, session: AsyncSession, tick_delta: int, time_delta_seconds: int) -> dict:
+    async def advance(self, session: AsyncSession, tick_delta: int, time_delta_seconds: int, skip_llm_engines: bool = False) -> dict:
         """Advance the clock and run any handlers that are due at the resulting tick.
 
         Iterates each tick in ``[current+1, current+tick_delta]``. A tick is skipped
@@ -210,11 +268,18 @@ class TickScheduler:
         lease). When distributed leases are enabled and a tick is unresolved (claimed by
         another worker but not yet done), iteration stops early.
 
+        Per-engine exceptions are caught, logged as ``tick_engine_error``, and recorded
+        in the ``engine_status_store`` (when configured). The loop always continues to
+        the next engine and the next tick regardless of individual failures.
+
         Args:
             session: Active Neo4j async session.
             tick_delta: Number of ticks to advance; non-positive values are no-ops for
                 the clock but the method still returns the current state.
             time_delta_seconds: In-game seconds proportionally advanced alongside ticks.
+            skip_llm_engines: When True, skip chapter and memory_consolidation engines
+                regardless of their cadence. Used by the autopilot when the LLM budget
+                for the current window is exhausted.
 
         Returns:
             Dict with ``clock`` (ClockState dump), ``gossip`` (list of gossip tick
@@ -249,120 +314,189 @@ class TickScheduler:
                 unresolved = False
 
                 if self._story_pacing_engine is not None:
-                    pacing_row = await self._story_pacing_engine.run_tick(
-                        session=session, tick_id=tick_id
+                    row = await self._run_engine_safe(
+                        "story_pacing", tick_id,
+                        self._story_pacing_engine.run_tick(session=session, tick_id=tick_id),
                     )
-                    response["story_pacing"].append(pacing_row)
+                    if row is not None:
+                        response["story_pacing"].append(row)
 
                 if tick_id % self._gossip_interval == 0:
                     if self._distributed_lease_enabled:
-                        gossip_unresolved, gossip_row = await self._run_distributed_engine_tick(
-                            session=session,
-                            engine="gossip",
-                            tick_id=tick_id,
-                            runner=lambda: self._gossip_handler.run_tick(session=session, tick_id=tick_id),
-                        )
+                        try:
+                            gossip_unresolved, gossip_row = await self._run_distributed_engine_tick(
+                                session=session,
+                                engine="gossip",
+                                tick_id=tick_id,
+                                runner=lambda: self._gossip_handler.run_tick(session=session, tick_id=tick_id),
+                            )
+                        except Exception as exc:
+                            LOGGER.error(
+                                "tick_engine_error",
+                                extra={"engine": "gossip", "tick_id": tick_id, "error": str(exc)},
+                            )
+                            if self._engine_status_store is not None:
+                                self._engine_status_store.record_error("gossip", tick_id, str(exc))
+                            gossip_row = None
+                            gossip_unresolved = False
+                        else:
+                            if gossip_row is not None and self._engine_status_store is not None:
+                                self._engine_status_store.record_success("gossip", tick_id)
                         if gossip_row is not None:
                             response["gossip"].append(gossip_row)
                         unresolved = unresolved or gossip_unresolved
                     else:
                         gossip_done = await self._is_tick_done(session=session, key="gossip_ticks", tick_id=tick_id)
                         if not gossip_done:
-                            gossip_row = await self._gossip_handler.run_tick(session=session, tick_id=tick_id)
+                            gossip_row = await self._run_engine_safe(
+                                "gossip", tick_id,
+                                self._gossip_handler.run_tick(session=session, tick_id=tick_id),
+                            )
                             await self._mark_tick_done(session=session, key="gossip_ticks", tick_id=tick_id)
-                            response["gossip"].append(gossip_row)
+                            if gossip_row is not None:
+                                response["gossip"].append(gossip_row)
+
                 if tick_id % self._event_interval == 0:
                     if self._distributed_lease_enabled:
-                        event_unresolved, event_row = await self._run_distributed_engine_tick(
-                            session=session,
-                            engine="event",
-                            tick_id=tick_id,
-                            runner=lambda: self._event_handler.run_tick(session=session, tick_id=tick_id),
-                        )
+                        try:
+                            event_unresolved, event_row = await self._run_distributed_engine_tick(
+                                session=session,
+                                engine="event",
+                                tick_id=tick_id,
+                                runner=lambda: self._event_handler.run_tick(session=session, tick_id=tick_id),
+                            )
+                        except Exception as exc:
+                            LOGGER.error(
+                                "tick_engine_error",
+                                extra={"engine": "event", "tick_id": tick_id, "error": str(exc)},
+                            )
+                            if self._engine_status_store is not None:
+                                self._engine_status_store.record_error("event", tick_id, str(exc))
+                            event_row = None
+                            event_unresolved = False
+                        else:
+                            if event_row is not None and self._engine_status_store is not None:
+                                self._engine_status_store.record_success("event", tick_id)
                         if event_row is not None:
                             response["event"].append(event_row)
                         unresolved = unresolved or event_unresolved
                     else:
                         event_done = await self._is_tick_done(session=session, key="event_ticks", tick_id=tick_id)
                         if not event_done:
-                            event_row = await self._event_handler.run_tick(session=session, tick_id=tick_id)
+                            event_row = await self._run_engine_safe(
+                                "event", tick_id,
+                                self._event_handler.run_tick(session=session, tick_id=tick_id),
+                            )
                             await self._mark_tick_done(session=session, key="event_ticks", tick_id=tick_id)
-                            response["event"].append(event_row)
+                            if event_row is not None:
+                                response["event"].append(event_row)
+
                 if self._routine_engine is not None:
-                    routine_row = await self._routine_engine.run_tick(
-                        session=session,
-                        time_of_day=world_state.time_of_day,
-                        tick_id=tick_id,
+                    row = await self._run_engine_safe(
+                        "routine", tick_id,
+                        self._routine_engine.run_tick(
+                            session=session, time_of_day=world_state.time_of_day, tick_id=tick_id,
+                        ),
                     )
-                    response["routine"].append(routine_row)
+                    if row is not None:
+                        response["routine"].append(row)
 
                 if self._faction_politics_engine is not None:
-                    fp_row = await self._faction_politics_engine.run_tick(session=session, tick_id=tick_id)
-                    response["faction_politics"].append(fp_row)
+                    row = await self._run_engine_safe(
+                        "faction_politics", tick_id,
+                        self._faction_politics_engine.run_tick(session=session, tick_id=tick_id),
+                    )
+                    if row is not None:
+                        response["faction_politics"].append(row)
 
                 if self._clique_formation_engine is not None:
-                    clique_row = await self._clique_formation_engine.run_tick(
-                        session=session, tick_id=tick_id
+                    row = await self._run_engine_safe(
+                        "clique", tick_id,
+                        self._clique_formation_engine.run_tick(session=session, tick_id=tick_id),
                     )
-                    response["clique"].append(clique_row)
+                    if row is not None:
+                        response["clique"].append(row)
 
                 if self._skill_progression_engine is not None:
-                    sp_row = await self._skill_progression_engine.run_tick(
-                        session=session, tick_id=tick_id
+                    row = await self._run_engine_safe(
+                        "skill_progression", tick_id,
+                        self._skill_progression_engine.run_tick(session=session, tick_id=tick_id),
                     )
-                    response["skill_progression"].append(sp_row)
+                    if row is not None:
+                        response["skill_progression"].append(row)
 
                 if self._oath_engine is not None:
-                    oath_row = await self._oath_engine.run_tick(
-                        session=session, tick_id=tick_id
+                    row = await self._run_engine_safe(
+                        "oath", tick_id,
+                        self._oath_engine.run_tick(session=session, tick_id=tick_id),
                     )
-                    response["oath"].append(oath_row)
+                    if row is not None:
+                        response["oath"].append(row)
 
                 if self._treaty_engine is not None:
-                    treaty_row = await self._treaty_engine.run_tick(
-                        session=session, tick_id=tick_id
+                    row = await self._run_engine_safe(
+                        "treaty", tick_id,
+                        self._treaty_engine.run_tick(session=session, tick_id=tick_id),
                     )
-                    response["treaty"].append(treaty_row)
+                    if row is not None:
+                        response["treaty"].append(row)
 
                 if self._mood_contagion_engine is not None:
-                    mood_row = await self._mood_contagion_engine.run_tick(
-                        session=session, tick_id=tick_id
+                    row = await self._run_engine_safe(
+                        "mood_contagion", tick_id,
+                        self._mood_contagion_engine.run_tick(session=session, tick_id=tick_id),
                     )
-                    response["mood_contagion"].append(mood_row)
+                    if row is not None:
+                        response["mood_contagion"].append(row)
 
-                if self._chapter_engine is not None:
-                    chapter_row = await self._chapter_engine.run_tick(
-                        session=session, tick_id=tick_id
+                if (
+                    not skip_llm_engines
+                    and self._chapter_engine is not None
+                    and tick_id % self._chapter_interval == 0
+                ):
+                    row = await self._run_engine_safe(
+                        "chapter", tick_id,
+                        self._chapter_engine.run_tick(session=session, tick_id=tick_id),
                     )
-                    response["chapter"].append(chapter_row)
+                    if row is not None:
+                        response["chapter"].append(row)
 
                 if self._succession_engine is not None:
-                    succession_row = await self._succession_engine.run_tick(
-                        session=session, tick_id=tick_id
+                    row = await self._run_engine_safe(
+                        "succession", tick_id,
+                        self._succession_engine.run_tick(session=session, tick_id=tick_id),
                     )
-                    response["succession"].append(succession_row)
+                    if row is not None:
+                        response["succession"].append(row)
 
                 if self._agenda_engine is not None:
-                    agenda_row = await self._agenda_engine.run_tick(
-                        session=session, tick_id=tick_id
+                    row = await self._run_engine_safe(
+                        "agenda", tick_id,
+                        self._agenda_engine.run_tick(session=session, tick_id=tick_id),
                     )
-                    response["agenda"].append(agenda_row)
+                    if row is not None:
+                        response["agenda"].append(row)
 
                 if self._need_decay_engine is not None:
-                    need_row = await self._need_decay_engine.run_tick(
-                        session=session, tick_id=tick_id
+                    row = await self._run_engine_safe(
+                        "need_decay", tick_id,
+                        self._need_decay_engine.run_tick(session=session, tick_id=tick_id),
                     )
-                    response["need_decay"].append(need_row)
+                    if row is not None:
+                        response["need_decay"].append(row)
 
                 if self._military_engine is not None:
-                    military_row = await self._military_engine.run_tick(
-                        session=session, tick_id=tick_id
+                    row = await self._run_engine_safe(
+                        "military", tick_id,
+                        self._military_engine.run_tick(session=session, tick_id=tick_id),
                     )
-                    response["military"].append(military_row)
+                    if row is not None:
+                        response["military"].append(row)
 
                 if unresolved:
                     break
                 advanced_ticks += 1
+
             if tick_delta <= 0:
                 advanced_seconds = 0
             else:
@@ -372,7 +506,8 @@ class TickScheduler:
 
             self._advance_count += 1
             if (
-                self._memory_consolidation_engine is not None
+                not skip_llm_engines
+                and self._memory_consolidation_engine is not None
                 and self._advance_count % self._consolidation_advance_interval == 0
             ):
                 game_time = TimePoint(
@@ -381,10 +516,14 @@ class TickScheduler:
                     day=world_state.day,
                     time_of_day=world_state.time_of_day,
                 )
-                consolidation_row = await self._memory_consolidation_engine.run_tick(
-                    session, game_time=game_time
+                consolidation_tick = start_tick + advanced_ticks
+                consolidation_row = await self._run_engine_safe(
+                    "memory_consolidation", consolidation_tick,
+                    self._memory_consolidation_engine.run_tick(session, game_time=game_time),
                 )
-                response["consolidation"] = consolidation_row.get("consolidated", [])
+                response["consolidation"] = (
+                    consolidation_row.get("consolidated", []) if consolidation_row is not None else []
+                )
 
             return response
 
@@ -419,3 +558,18 @@ class TickScheduler:
 
         tick = self._clock.state.tick_id
         return tick + (self._event_interval - (tick % self._event_interval))
+
+    @property
+    def engine_status(self) -> dict:
+        """Return a snapshot of per-engine status records as serialisable dicts.
+
+        Returns:
+            Dict mapping engine name to its status record fields, or {} when no
+            engine_status_store was configured.
+        """
+        if self._engine_status_store is None:
+            return {}
+        return {
+            name: record.model_dump()
+            for name, record in self._engine_status_store.get_all().items()
+        }

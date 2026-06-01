@@ -119,6 +119,11 @@ class Settings(BaseSettings):
     TICK_SCHEDULER_ID: str = "main"
     TICK_LEASE_OWNER_ID: str = Field(default_factory=lambda: f"{socket.gethostname()}-{os.getpid()}")
     TICK_LEASE_TTL_SECONDS: int = 30
+    TICK_AUTOPILOT_ENABLED: bool = True
+    TICK_INTERVAL_SECONDS: int = 10
+    TICK_GAME_SECONDS_PER_TICK: int = 1
+    TICK_LLM_CALLS_PER_MINUTE_MAX: int = 6
+    CHAPTER_TICK_INTERVAL: int = 1
 
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_REQUESTS_PER_SECOND: float = Field(default=50.0, gt=0)

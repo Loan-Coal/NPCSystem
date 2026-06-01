@@ -103,9 +103,13 @@ async def advance_clock(
 
 @router.get("/clock/state")
 async def clock_state(scheduler: TickScheduler = Depends(get_tick_scheduler)) -> dict:
-    """Return current clock snapshot."""
+    """Return current clock snapshot with per-engine status.
 
+    Includes ``engine_status`` — a dict mapping engine name to its last-run
+    tick id and last error. Used by the S6.0 observability dashboard.
+    """
     payload = cast(dict[str, Any], scheduler.state.model_dump())
     payload["next_gossip_tick"] = scheduler.next_gossip_tick
     payload["next_event_tick"] = scheduler.next_event_tick
+    payload["engine_status"] = scheduler.engine_status
     return ok_response(payload)
