@@ -32,6 +32,10 @@ from npc_engine.config_validators import (
 
 _PROJECT_ROOT = Path(__file__).resolve().parent
 
+# Module-level constant so DialogueRequest can import it at field-definition time
+# without calling get_settings() (which would trigger env loading during model definition).
+MAX_PLAYER_MESSAGE_CHARS: int = 1000
+
 
 class Settings(BaseSettings):
     """Typed environment configuration for the NPC Engine."""
@@ -101,6 +105,8 @@ class Settings(BaseSettings):
     RELATION_WINDOW_SIZE: int = 10
     CURRENCY_MAX_PER_TRANSACTION: int = 1000
     CURRENCY_MAX_PER_SESSION: int = 5000
+
+    WORLD_ID: str = "world_demo"
 
     CLOCK_MODE: Literal["realtime", "game_driven"] = "realtime"
 
