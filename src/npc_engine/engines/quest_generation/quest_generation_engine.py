@@ -128,7 +128,7 @@ class QuestGenerationEngine:
             "reward_id": None,
             "success_condition": f"Complete the {template.name} quest",
             "failure_condition": None,
-            "status": "offered",
+            "status": "draft",
             "severity": template.severity,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "completed_at": None,

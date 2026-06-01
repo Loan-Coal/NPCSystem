@@ -328,3 +328,97 @@ async def test_offer_rolls_back_state_when_event_write_fails(monkeypatch) -> Non
 
     assert tx.committed is False
     assert state_store == {}
+
+
+# ---------------------------------------------------------------------------
+# Tests for offer_draft_quest()
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_offer_draft_quest_happy_path(monkeypatch) -> None:
+    """offer_draft_quest transitions a draft Quest node to offered and creates QuestState."""
+    quest_node_updates: list[str] = []
+
+    async def fake_get_quest(session: Any, quest_id: str) -> dict[str, Any]:
+        return {"status": "draft", "id": quest_id}
+
+    async def fake_update_quest_node_status(*, session: Any, quest_id: str, status: str) -> None:
+        quest_node_updates.append(status)
+
+    state_store: dict[tuple[str, str], dict[str, Any]] = {}
+
+    async def fake_create_quest_state_if_absent(*, session: Any, quest_id: str, player_id: str, state_payload: dict) -> dict:
+        key = (quest_id, player_id)
+        if key not in state_store:
+            state_store[key] = dict(state_payload)
+        return dict(state_store[key])
+
+    async def fake_event_write(*, tx: Any, event: Any) -> None:
+        return None
+
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest", fake_get_quest)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.update_quest_node_status", fake_update_quest_node_status)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.create_quest_state_if_absent", fake_create_quest_state_if_absent)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_lifecycle_event", fake_event_write)
+
+    engine = QuestLifecycleEngine(settings=_settings())
+    state = await engine.offer_draft_quest(
+        session=_fake_session(),  # type: ignore[arg-type]
+        quest_id="quest-draft-1",
+        player_id="player-1",
+        title="Deliver Herbs",
+        objectives=[QuestObjectiveInput(objective_id="obj-1", target_count=1)],
+        item_rewards=[],
+        currency_reward=None,
+        meta=_meta(),
+    )
+
+    assert state["status"] == "offered"
+    assert "offered" in quest_node_updates
+
+
+@pytest.mark.asyncio
+async def test_offer_draft_quest_non_draft_raises(monkeypatch) -> None:
+    """offer_draft_quest rejects a Quest node that is not in draft status."""
+    async def fake_get_quest(session: Any, quest_id: str) -> dict[str, Any]:
+        return {"status": "offered", "id": quest_id}
+
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest", fake_get_quest)
+
+    engine = QuestLifecycleEngine(settings=_settings())
+    with pytest.raises(QuestTransitionError) as exc:
+        await engine.offer_draft_quest(
+            session=_fake_session(),  # type: ignore[arg-type]
+            quest_id="quest-already-offered",
+            player_id="player-1",
+            title="Some Quest",
+            objectives=[QuestObjectiveInput(objective_id="obj-1", target_count=1)],
+            item_rewards=[],
+            currency_reward=None,
+            meta=_meta(),
+        )
+    assert exc.value.code == "QUEST_TRANSITION_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_offer_draft_quest_not_found_raises(monkeypatch) -> None:
+    """offer_draft_quest raises QUEST_NOT_FOUND when the Quest node does not exist."""
+    async def fake_get_quest(session: Any, quest_id: str) -> None:
+        return None
+
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest", fake_get_quest)
+
+    engine = QuestLifecycleEngine(settings=_settings())
+    with pytest.raises(QuestTransitionError) as exc:
+        await engine.offer_draft_quest(
+            session=_fake_session(),  # type: ignore[arg-type]
+            quest_id="quest-missing",
+            player_id="player-1",
+            title="Some Quest",
+            objectives=[QuestObjectiveInput(objective_id="obj-1", target_count=1)],
+            item_rewards=[],
+            currency_reward=None,
+            meta=_meta(),
+        )
+    assert exc.value.code == "QUEST_NOT_FOUND"

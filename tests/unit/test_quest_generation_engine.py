@@ -336,3 +336,40 @@ async def test_generate_uses_template_defaults_on_flavor_error() -> None:
 
     assert isinstance(result, GeneratedQuest)
     assert result.description == template.description_template
+
+
+# ---------------------------------------------------------------------------
+# Test 8: generate writes Quest node with status="draft" (not "offered")
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_generate_writes_draft_status(monkeypatch) -> None:
+    captured: dict[str, Any] = {}
+
+    async def fake_create_quest(session: Any, payload: dict[str, Any]) -> dict[str, Any]:
+        captured.update(payload)
+        return payload
+
+    monkeypatch.setattr(
+        "npc_engine.engines.quest_generation.quest_generation_engine.create_quest",
+        fake_create_quest,
+    )
+
+    session = _FakeSessionWithNodes(
+        node_map={
+            "giver_001": {"archetype": "merchant", "name": "Bob"},
+            "item_001": {"labels": ["Item"]},
+        }
+    )
+    llm_client = MagicMock()
+    llm_client.generate_structured = AsyncMock(
+        side_effect=[
+            {"item": "item_001"},
+            {"description": "Gather the herbs!", "npc_plea": "Please hurry!"},
+        ]
+    )
+    engine = _make_engine(llm_client)
+    await engine.generate(session=session, quest_giver_id="giver_001")
+
+    assert captured["status"] == "draft", f"Expected 'draft', got {captured.get('status')!r}"

@@ -131,6 +131,46 @@ def _to_objective_inputs(items: list[QuestObjectiveBody]) -> list[QuestObjective
     ]
 
 
+@router.post("/offer-draft")
+async def offer_draft_quest(
+    body: QuestOfferRequest,
+    http_request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    engine: QuestLifecycleEngine = Depends(get_quest_lifecycle_engine),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Transition a generated draft quest to offered status for a player.
+
+    The quest_id must reference a Quest node written by the generator
+    (``POST /v1/admin/quests/generate``) with ``status="draft"``.
+    """
+    try:
+        meta = _build_transition_meta(
+            request=http_request,
+            settings=settings,
+            actor_id=body.player_id,
+            reason="quest_offer_draft",
+        )
+        state = await engine.offer_draft_quest(
+            session=session,
+            quest_id=body.quest_id,
+            player_id=body.player_id,
+            title=body.title,
+            objectives=_to_objective_inputs(body.objectives),
+            item_rewards=[QuestRewardItem(item_id=item.item_id, quantity=item.quantity) for item in body.item_rewards],
+            currency_reward=(
+                QuestRewardCurrency(amount=body.currency_reward.amount)
+                if body.currency_reward is not None
+                else None
+            ),
+            meta=meta,
+            reward_source_id=body.reward_source_id,
+        )
+    except QuestTransitionError as error:
+        raise _quest_error_to_http(error) from error
+    return ok_response({"quest_state": state})
+
+
 @router.post("/offer")
 async def offer_quest(
     body: QuestOfferRequest,

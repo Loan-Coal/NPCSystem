@@ -47,8 +47,8 @@ def _run(coro: Any) -> Any:
 
 
 def _mock_session_with_item(has_item: bool) -> MagicMock:
-    """Return a mock Neo4j session whose run() result returns qty=1 or qty=0."""
-    record = {"qty": 1 if has_item else 0}
+    """Return a mock Neo4j session whose run() result returns cnt=1 or cnt=0."""
+    record = {"cnt": 1 if has_item else 0}
     result_mock = AsyncMock()
     result_mock.single = AsyncMock(return_value=record)
     session = MagicMock()

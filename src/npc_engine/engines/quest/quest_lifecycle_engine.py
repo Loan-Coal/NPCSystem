@@ -29,6 +29,7 @@ from npc_engine.engines.quest.quest_engine_helpers import (
 from npc_engine.graph.currency_writer import get_character_balance
 from npc_engine.graph.event_writer import upsert_quest_lifecycle_event
 from npc_engine.graph.graph_writer import apply_currency_transfer, apply_item_transfer
+from npc_engine.graph.quest_node_service import get_quest
 from npc_engine.graph.quest_writer import create_quest_state_if_absent, get_quest_state, update_quest_node_status, upsert_quest_state
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.utils.errors import QuestTransitionError
@@ -36,6 +37,7 @@ from npc_engine.utils.errors import QuestTransitionError
 
 _logger = logging.getLogger(__name__)
 
+STATUS_DRAFT = "draft"
 STATUS_OFFERED = "offered"
 STATUS_ACCEPTED = "accepted"
 STATUS_IN_PROGRESS = "in_progress"
@@ -125,6 +127,67 @@ class QuestLifecycleEngine:
             await upsert_quest_lifecycle_event(tx=tx, event=event)
             await tx.commit()
             return stored
+
+    async def offer_draft_quest(
+        self,
+        *,
+        session: AsyncSession,
+        quest_id: str,
+        player_id: str,
+        title: str,
+        objectives: list[QuestObjectiveInput],
+        item_rewards: list[QuestRewardItem],
+        currency_reward: QuestRewardCurrency | None,
+        meta: QuestTransitionMeta,
+        reward_source_id: str = "system",
+    ) -> dict:
+        """Transition a generated draft quest to offered status for a specific player.
+
+        Validates that the Quest node exists and is in ``draft`` status (written by
+        ``QuestGenerationEngine``), updates it to ``offered``, then creates the initial
+        per-player QuestState via ``offer_quest()``.
+
+        Args:
+            session: Active Neo4j async session capable of starting transactions.
+            quest_id: ID of a Quest node in ``draft`` status (from QuestGenerationEngine).
+            player_id: Player identifier.
+            title: Human-readable quest title.
+            objectives: List of quest objective definitions.
+            item_rewards: Item rewards to grant on completion.
+            currency_reward: Optional currency reward to grant on completion.
+            meta: Transition metadata for provenance and idempotency fields.
+            reward_source_id: Reward source identifier; must be a trusted system source.
+
+        Returns:
+            Persisted quest state payload dict with status ``"offered"``.
+
+        Raises:
+            QuestTransitionError: If Quest node not found, not in draft status,
+                or reward_source_id is not trusted.
+        """
+        quest_node = await get_quest(session=session, quest_id=quest_id)
+        if quest_node is None:
+            raise QuestTransitionError(
+                code="QUEST_NOT_FOUND",
+                detail=f"Quest node not found: quest_id={quest_id}",
+            )
+        if quest_node.get("status") != STATUS_DRAFT:
+            raise QuestTransitionError(
+                code="QUEST_TRANSITION_INVALID",
+                detail=f"Quest must be in draft status to be offered; current status={quest_node.get('status')}",
+            )
+        await update_quest_node_status(session=session, quest_id=quest_id, status=STATUS_OFFERED)
+        return await self.offer_quest(
+            session=session,
+            quest_id=quest_id,
+            player_id=player_id,
+            title=title,
+            objectives=objectives,
+            item_rewards=item_rewards,
+            currency_reward=currency_reward,
+            meta=meta,
+            reward_source_id=reward_source_id,
+        )
 
     async def offer_quest(
         self,
