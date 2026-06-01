@@ -1,22 +1,47 @@
 # Session Handoff
 
 **Branch:** `munich-demo`
-**Last completed:** S0.5 — Reputation-differentiated dialogue tone (ISSUE-035)
-**Next task:** S1.1 — Autonomous tick driver
-**Roadmap ref:** `project-harness/ROADMAP.md` → Phase 1, S1.1
-**Test baseline:** 1077 passing, 19 skipped (engine) | 254 passing (demo)
+**Last completed:** S2.3 — Oath violation detection (ISSUE-032)
+**Next task:** S2.4 — Treaty tribute + economy/price verify
+**Roadmap ref:** `project-harness/ROADMAP.md` → Phase 2, S2.4
+**Test baseline:** 1157 passing, 0 failed (unit)
 
 ---
 
-## S1.1 — What to do
+## S2.4 — What to do
 
-Add a background task to `main.py` lifespan that calls `tick_scheduler.advance()`
-every N seconds (`TICK_INTERVAL_SECONDS` default 10; `TICK_AUTOPILOT_ENABLED` default
-true in demo). Mirror the `embedding_reconciler.run_forever()` pattern. Do NOT write
-a new scheduler — reuse the existing scheduler's per-engine cadence and lease/idempotency.
+Two sub-tasks:
 
-**Exit criteria:** Server up with no client calls → `Event` nodes and `KNOWS_ABOUT`
-edges change over 60 seconds (observable via `GET /v1/graph/nodes/Event`).
+1. **Treaty tribute** (ISSUE-033): implement `check_tribute_payment()` in
+   `src/npc_engine/graph/treaty_service.py`. Query currency-transfer edges for
+   the tribute period; verify faction treasury ≥ condition.amount before flagging
+   as violation. Currently `check_treaty_conditions_mechanical` flags tribute as
+   due without checking payment.
+
+2. **Economy price verify** (ISSUE-046): start engine + `make demo-seed`, then
+   `curl "http://localhost:8000/v1/economy/price?item_type=spice&character_id=aldric_merchant"`.
+   If 404, find correct route in `src/npc_engine/api/`; if schema differs, update
+   `demo_game/client.py:get_item_price()`.
+
+**Exit criteria:** both pass integration tests against live Neo4j.
+
+---
+
+## S2.3 — What was done
+
+- Added `pledge_violation_service.py` (new graph-layer module) with:
+  - `check_pledge_violations()` replacing the stub in `pledge_service.py`
+  - `_VIOLATION_ACTIONS`/`_VIOLATION_ROLES` dicts mapping pledge type → violation signals
+  - Cypher queries `CYPHER_GET_WITNESSED_VIOLATIONS`, `CYPHER_GET_PARTICIPATED_VIOLATIONS`
+  - `_emit_violation_event()` writing high-severity Event nodes on violation
+- Added `get_active_pledges_for_pledger`, `get_witnessed_violations`,
+  `get_participated_violations`, `get_all_active_pledgers` to `pledge_queries.py`
+- Added `get_all_active_pledgers_svc` to `pledge_service.py`
+- Fixed `oath_engine.run_tick`: now queries all active pledgers and calls
+  `check_pledge_violations` for each; result dict now includes `violated_pledges` count
+- Updated stale stub test in `test_pledge_service.py`
+- 10 new unit tests in `tests/unit/test_pledge_violations.py`
+- Marked ISSUE-032 fixed in ISSUES.md
 
 ---
 
@@ -24,11 +49,11 @@ edges change over 60 seconds (observable via `GET /v1/graph/nodes/Event`).
 
 | Issue | Sev | Targeted by |
 |---|---|---|
-| ISSUE-046 | P2 | pre-recording check |
-| ISSUE-031, 032, 033 | P3 | Phase 2/6 |
+| ISSUE-046 | P2 | S2.4 |
+| ISSUE-031, 033 | P3 | Phase 2/6 |
 
 **Next ID to use: ISSUE-048.**
 
 ---
 
-*Regenerated end of S0.5 session 2026-06-02.*
+*Regenerated end of S2.3 session 2026-06-03.*

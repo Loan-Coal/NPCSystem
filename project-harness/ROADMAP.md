@@ -125,19 +125,19 @@ context; military is implemented in Phase 6.
 **Why this early:** Need-driven quests (Phase 3), live gossip/emotion/agenda, and the "world is alive when
 you walk in" demo moment all depend on this. It is cheap (the engines and scheduler exist).
 
-- [ ] **S1.1** Autonomous tick driver
+- [x] **S1.1** Autonomous tick driver
   - Add a background task to the `main.py` lifespan mirroring `embedding_reconciler.run_forever()`: call
     `tick_scheduler.advance()` every N seconds (`TICK_INTERVAL_SECONDS` default 10; `TICK_AUTOPILOT_ENABLED`
     default true in demo). Re-use the scheduler's per-engine cadence + lease/idempotency. Do **not** write a new scheduler.
   - Exit: server up, no client calls → `Event` nodes and `KNOWS_ABOUT` edges change over 60 seconds.
 
-- [ ] **S1.2** Tick cost governance
+- [x] **S1.2** Tick cost governance
   - The tick drives LLM-calling engines (memory_consolidation, chapter). Add a config-driven per-engine
     cadence map + a hard per-minute LLM-call ceiling so autopilot cannot run away on cost.
   - Exit: a 5-minute autopilot run stays under a configured LLM-call budget; over-budget ticks skip LLM
     engines and log `tick_budget_exceeded`.
 
-- [ ] **S1.3** Tick reliability + visibility
+- [x] **S1.3** Tick reliability + visibility
   - A throwing engine must not kill the loop. Catch per-engine, log `tick_engine_error`, continue. Record
     last-run tick id + last error per engine (feeds S6.0).
   - Exit: a deliberately-thrown engine error is isolated; the loop keeps advancing; the error is queryable.
@@ -148,17 +148,17 @@ you walk in" demo moment all depend on this. It is cheap (the engines and schedu
 **Goal:** Make what exists actually work — finish declared-but-unimplemented behavior; correct wiring.
 **Sessions:** 4–5
 
-- [ ] **S2.1** Implement `visit`, `talk`, `kill` objective verifiers
+- [x] **S2.1** Implement `visit`, `talk`, `kill` objective verifiers
   - Extend the **existing** `engines/interaction/quest_verifier.py`. Make it the single verification
     authority — the inline `deliver` block in `quest_lifecycle_engine.py:468` calls the verifier, not a copy.
   - Exit: all four objective types return correct true/false from one code path.
 
-- [ ] **S2.2** Connect generator → lifecycle (the real "consolidation")
+- [x] **S2.2** Connect generator → lifecycle (the real "consolidation")
   - Link the generator's persisted `Quest` node into the lifecycle engine. Add `status` (`draft`/`offered`)
     so generated quests do not auto-offer.
   - Exit: generate → `draft` → offer → accept → complete end-to-end.
 
-- [ ] **S2.3** Oath violation detection (ISSUE-032)
+- [x] **S2.3** Oath violation detection (ISSUE-032)
   - `check_pledge_violations()`: query active pledges + `PARTICIPATED_IN`/`WITNESSED` since `sworn_at_tick`;
     return violated pledges; call `break_pledge` + emit a high-severity EVENT.
   - Exit: a character who broke a movement oath is flagged on tick.

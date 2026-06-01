@@ -32,13 +32,14 @@ Rules:
 
 ---
 
-## ISSUE-032: OathEngine.check_pledge_violations returns empty list
+## [FIXED] ISSUE-032: OathEngine.check_pledge_violations returns empty list
 **Found:** 2026-05-19, during Phase 7 L implementation
 **Severity:** P3 (nice-to-fix)
 **Where:** `src/npc_engine/engines/oath/oath_engine.py`
 **Description:** Violation scan stub returns `[]` unconditionally. Pledgers whose recent actions conflict with their pledge are never flagged.
 **Why deferred:** Violation detection requires cross-referencing PARTICIPATED_IN and WITNESSED edges against pledge semantics — non-trivial scope for initial implementation.
 **To fix:** For each active pledge, query pledger's PARTICIPATED_IN and WITNESSED edges since `sworn_at_tick`; check action_type against pledge_type; call `break_pledge` on violation and generate high-severity EVENT.
+**Fixed:** 2026-06-03, S2.3 — extracted `pledge_violation_service.py` with `check_pledge_violations()`, `_VIOLATION_ACTIONS`, `_VIOLATION_ROLES`, Cypher queries `CYPHER_GET_WITNESSED_VIOLATIONS`/`CYPHER_GET_PARTICIPATED_VIOLATIONS`, and `_emit_violation_event()`. `oath_engine.run_tick` now queries all active pledgers (not just expiring ones) and calls `check_pledge_violations` for each. Returns `violated_pledges` count. 10 new unit tests.
 
 ---
 

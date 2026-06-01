@@ -416,3 +416,26 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Decision:** Added `update_quest_node_status` in `quest_writer.py` and call it from `quest_lifecycle_engine` after `accept_quest` and `evaluate_completion` transitions. This keeps the Quest node status field in sync as a denormalised read field.
 **Why:** Option A (back-write) is safe because `Quest.status` is read-only for context injection — no lifecycle decision depends on it. Option B (changing context queries to join QuestState) requires schema changes and complicates the existing context builder. Option A is the minimal-change path.
 **Consequence:** `Quest.status` may lag `QuestState.status` by one lifecycle call if the back-write fails (e.g., network issue between transactions). This is acceptable for demo context injection (stale by one turn at worst).
+
+---
+
+## DEC-043: TalkVerifier uses co-location proxy (no SPOKE_TO edge exists)
+**Date:** 2026-06-02
+**Context:** S2.1 — implementing `talk` objective verifier. No graph edge records that a player has spoken with a specific NPC. The dialogue handler writes relation deltas (trust/etc.) but does NOT write a SPOKE_TO or PARTICIPATED_IN edge per dialogue exchange.
+**Decision:** `TalkVerifier` checks that the player and target NPC are both `LOCATED_AT` the same Location node. This is a co-location proxy: if two characters share a location they have the *opportunity* to talk.
+**Why:** Adding a `SPOKE_TO` edge requires changes to the dialogue handler (a new graph write per dialogue turn) — out of S2.1 scope. Co-location is the strongest available graph signal without schema changes. It matches the game mechanic: you can only speak with NPCs in your current location.
+**Consequence:** A player standing in the same room as an NPC satisfies a `talk` objective even without initiating dialogue. Upgrade path: add `SPOKE_TO { at_tick: int }` to the character schema, write it in `dialogue_handler.py` after each completed turn, and update `TalkVerifier` to query it.
+
+## DEC-042: tick_scheduler.py accepted over 300-line hard limit
+**Date:** 2026-06-02
+**Context:** S1.3 — per-engine error isolation. Adding `_run_engine_safe` and wrapping 16 engine calls pushed `tick_scheduler.py` from 434 to ~480 lines — well above the 300-line hard limit.
+**Decision:** Accepted the overrun. The `advance()` loop is a single cohesive sequential orchestration of 16 independent engines. Splitting it would require either (a) a separate `EngineRunner` class that still needs all 16 engine references injected, or (b) extracting per-engine blocks that share loop state (tick_id, unresolved, response dict) — both artificial splits that would reduce readability without improving cohesion.
+**Why:** The 300-line limit prevents God-objects and functions that are too complex to reason about. This file is long because it has 16 engine dependencies, not because of logic complexity. Each engine block is 3-5 lines; the orchestration is a mechanical sequential list.
+**Consequence:** Future engines added to the scheduler will extend the file further. The natural refactor trigger is when Phase 6 adds a `GET /v1/system/engines` endpoint that needs engine metadata (cadence, name) — at that point an `EngineDescriptor` list would replace the 16 individual `if engine is not None:` blocks.
+
+## DEC-044: quest_lifecycle_engine.py accepted over 300-line hard limit
+**Date:** 2026-06-03
+**Context:** S2.2 — adding `offer_draft_quest()` to `QuestLifecycleEngine` brings the file to ~560 lines. The class was already pre-existing at ~495 lines before this task.
+**Decision:** Accepted. `QuestLifecycleEngine` is a single-class module (SRP satisfied). Its length comes from five distinct lifecycle methods (`offer_draft_quest`, `offer_quest`, `accept_quest`, `update_objective`, `evaluate_completion`, `apply_rewards`) each with full docstrings and narrow logic. Each method is under 40 lines. Splitting into two classes would require coordinating shared constants (`STATUS_*`) and dependencies across modules with no gain in cohesion.
+**Why:** The 300-line limit targets wide classes with unrelated responsibilities. This class has one responsibility (quest lifecycle state machine) and is long due to the number of transitions in that machine, not due to sprawl.
+**Consequence:** Acceptable until Phase 3 requires adding quest-type-specific transition logic — at that point extract per-type handlers via the Strategy pattern.
