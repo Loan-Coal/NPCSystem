@@ -45,7 +45,7 @@ class BaseEdgeTypeDocument(BaseModel):
     """One package-internal base edge contract document."""
 
     edge_type: str
-    src_type: str
+    src_type: str | list[str]
     dst_type: str
     directional: bool = True
     cascade_on_delete: list[str] = Field(default_factory=list)

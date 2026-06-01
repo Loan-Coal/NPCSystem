@@ -53,7 +53,7 @@ def _llm_config() -> LLMConfig:
 def _patch_graph_calls(monkeypatch, tier_a_items=None) -> None:
     """Patch all graph calls used by build_serialized_context."""
 
-    async def fake_world_reader(session):
+    async def fake_world_reader(session, world_id: str = "world"):
         return WorldState(epoch="age_of_peace")
 
     async def fake_character_reader(session, npc_id):

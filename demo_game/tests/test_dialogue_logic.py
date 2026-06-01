@@ -30,14 +30,21 @@ def _raw_response(
     npc_response: str = "Hello, traveller.",
     degradation_level: str = "full",
     mood_update: str | None = "calm",
+    emotion: str | None = None,
     facial_expression_type: str = "neutral",
     facial_expression_intensity: int = 0,
 ) -> dict:
-    """Build a minimal fake DialogueResponse dict for parse tests."""
+    """Build a minimal fake DialogueResponse dict for parse tests.
+
+    emotion defaults to mood_update when not explicitly set, matching the
+    engine's model_validator behaviour (DialogueResponse derives emotion
+    from mood_update at serialisation time).
+    """
     return {
         "npc_response": npc_response,
         "degradation_level": degradation_level,
         "mood_update": mood_update,
+        "emotion": emotion if emotion is not None else mood_update,
         "facial_expression": {
             "type": facial_expression_type,
             "intensity": facial_expression_intensity,
@@ -132,24 +139,25 @@ def test_parse_dialogue_response_extracts_degradation_level_canned() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_parse_dialogue_response_extracts_emotion_from_mood_update() -> None:
-    raw = _raw_response(mood_update="cautious", facial_expression_type="frown")
+def test_parse_dialogue_response_reads_emotion_field_directly() -> None:
+    # Engine serialises DialogueResponse with emotion derived from mood_update.
+    raw = _raw_response(emotion="cautious")
     turn = parse_dialogue_response(raw)
     assert turn.emotion == "cautious"
 
 
-def test_parse_dialogue_response_falls_back_to_facial_expression_when_mood_is_none() -> None:
-    raw = _raw_response(mood_update=None, facial_expression_type="concerned")
+def test_parse_dialogue_response_emotion_none_when_field_absent() -> None:
+    raw = _raw_response(mood_update=None, emotion=None)
+    raw["emotion"] = None
     turn = parse_dialogue_response(raw)
-    assert turn.emotion == "concerned"
+    assert turn.emotion is None
 
 
-def test_parse_dialogue_response_emotion_is_none_when_both_absent() -> None:
-    raw = _raw_response(mood_update=None, facial_expression_type="neutral")
-    raw["facial_expression"]["type"] = "neutral"
+def test_parse_dialogue_response_emotion_explicit_overrides_mood_update() -> None:
+    # When emotion and mood_update differ, emotion field wins.
+    raw = _raw_response(mood_update="calm", emotion="tense")
     turn = parse_dialogue_response(raw)
-    # neutral is a valid fallback — emotion is the facial_expression type
-    assert turn.emotion == "neutral"
+    assert turn.emotion == "tense"
 
 
 # ---------------------------------------------------------------------------

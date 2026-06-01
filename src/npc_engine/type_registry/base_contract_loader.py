@@ -21,6 +21,13 @@ from npc_engine.utils.errors import RegistryValidationError
 YAML_GLOB = "*.yaml"
 
 
+def _normalize_src_type(src_type: str | list[str]) -> str | tuple[str, ...]:
+    """Normalize src_type to a single string or an ordered tuple of strings."""
+    if isinstance(src_type, list):
+        return tuple(t.strip().lower() for t in src_type)
+    return src_type.strip().lower()
+
+
 def load_base_node_types() -> MappingProxyType[str, MappingProxyType[str, RuntimeFieldDefinition]]:
     """Load package-shipped base node contract files into immutable runtime definitions."""
 
@@ -46,7 +53,7 @@ def load_base_edge_types() -> MappingProxyType[str, RuntimeEdgeTypeDefinition]:
         if edge_key in loaded:
             raise RegistryValidationError(source=str(path), detail=f"duplicate base edge type: {edge_key}")
         loaded[edge_key] = RuntimeEdgeTypeDefinition(
-            src_type=document.src_type.strip().lower(),
+            src_type=_normalize_src_type(document.src_type),
             dst_type=document.dst_type.strip().lower(),
             directional=document.directional,
             cascade_on_delete=tuple(document.cascade_on_delete),

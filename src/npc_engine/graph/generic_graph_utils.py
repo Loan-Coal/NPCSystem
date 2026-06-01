@@ -109,6 +109,25 @@ def resolve_node_label(node_type: str) -> str:
     return BASE_NODE_LABELS.get(node_key, node_type)
 
 
+def resolve_src_label_expr(src_type: str | tuple[str, ...]) -> str:
+    """Resolve a Cypher label expression for one or more source node types.
+
+    For a single type returns a backtick-quoted label (e.g. ``'`Location`'``).
+    For multiple types returns a Neo4j 5 label-union expression
+    (e.g. ``'`Location`|`Item`'``).
+
+    Args:
+        src_type: Single type string or tuple of type strings from
+            RuntimeEdgeTypeDefinition.src_type.
+
+    Returns:
+        Cypher label expression string safe for embedding in a MATCH pattern.
+    """
+    if isinstance(src_type, tuple):
+        return "|".join(cypher_identifier(resolve_node_label(t)) for t in src_type)
+    return cypher_identifier(resolve_node_label(src_type))
+
+
 def to_native(value: Any) -> Any:
     """Recursively convert Neo4j driver values to plain Python containers and scalars.
 

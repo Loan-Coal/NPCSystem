@@ -28,6 +28,7 @@ from typing import Any
 
 from demo_game.client import EngineClient
 from demo_game.config import DemoConfig
+from npc_engine.engines.dialogue.prompt_builder import PROMPT_VERSION as _PROMPT_VERSION
 
 # ---------------------------------------------------------------------------
 # Cache
@@ -51,7 +52,7 @@ class LLMCache:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
     def _key(self, npc_id: str, player_input: str) -> str:
-        raw = f"{npc_id}:{player_input}"
+        raw = f"{npc_id}:{player_input}:{_PROMPT_VERSION}"
         return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
     def get(self, npc_id: str, player_input: str) -> dict[str, Any] | None:

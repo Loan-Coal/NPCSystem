@@ -6,9 +6,14 @@ Does NOT: define HTTP transport schemas or route-layer concerns.
 Dependencies injected: None.
 """
 
-from typing import Any, Literal
+from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Annotated, Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import StringConstraints
+
+from npc_engine.config import MAX_PLAYER_MESSAGE_CHARS
 
 
 ActionType = Literal[
@@ -32,7 +37,7 @@ class DialogueRequest(FrozenDialogueModel):
 
     player_id: str
     npc_id: str
-    player_message: str
+    player_message: Annotated[str, StringConstraints(max_length=MAX_PLAYER_MESSAGE_CHARS)]
     location_id: str | None = None
     session_id: str | None = None
     explicit_node_ids: tuple[str, ...] = Field(default_factory=tuple)
@@ -74,8 +79,18 @@ class DialogueResponse(FrozenDialogueModel):
     npc_response: str
     relation_deltas: RelationDeltas = Field(default_factory=RelationDeltas)
     mood_update: str | None = None
+    emotion: str | None = None
     action: ActionModel = Field(default_factory=ActionModel)
     facial_expression: FacialExpressionModel = Field(default_factory=FacialExpressionModel)
     session_id: str | None = None
     cached: bool = False
     degradation_level: str = "full"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _derive_emotion(cls, data: object) -> object:
+        """Populate emotion from mood_update when not explicitly provided."""
+        if isinstance(data, dict) and not data.get("emotion"):
+            data = dict(data)
+            data["emotion"] = data.get("mood_update")
+        return data

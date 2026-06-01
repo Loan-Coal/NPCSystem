@@ -49,7 +49,7 @@ def setup_function() -> None:
 async def test_context_builder_emits_tier_item_and_token_metrics(monkeypatch) -> None:
     """Context build should emit selected-item and token counters for tiers."""
 
-    async def fake_world_reader(session):
+    async def fake_world_reader(session, world_id: str = "world"):
         return WorldState(epoch="age_of_peace")
 
     async def fake_character_reader(session, npc_id):

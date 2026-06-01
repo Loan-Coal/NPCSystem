@@ -101,7 +101,7 @@ def parse_dialogue_response(raw: dict) -> DialogueTurn:
     Field mapping from engine response:
     - ``npc_response`` → ``DialogueTurn.npc_text``
     - ``degradation_level`` → ``DialogueTurn.degradation_level``
-    - ``mood_update`` → ``DialogueTurn.emotion`` (fallback: ``facial_expression.type``)
+    - ``emotion`` → ``DialogueTurn.emotion`` (first-class field, derived from mood_update by engine)
     - ``action`` → ``DialogueTurn.interaction_proposal`` (proposal-class actions only)
     - ``relation_deltas`` → ``DialogueTurn.relation_deltas``
 
@@ -111,10 +111,7 @@ def parse_dialogue_response(raw: dict) -> DialogueTurn:
     Returns:
         Immutable ``DialogueTurn`` with parsed fields.
     """
-    mood: str | None = raw.get("mood_update")
-    if mood is None:
-        expression = raw.get("facial_expression") or {}
-        mood = expression.get("type") or None
+    mood: str | None = raw.get("emotion")
 
     action = raw.get("action") or {}
     kind = action.get("type", "speak")

@@ -144,11 +144,10 @@ async def test_war_epoch_captain_sorn_acknowledges_war(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Test 2 — Gossip: northern_war_begins Event node present after clock advance
+# Test 2 — Gossip: KNOWS_ABOUT edge count increases after a clock advance
 #
-# NOTE: This is a basic sanity check — northern_war_begins was seeded and is
-# always present. The test confirms engine state is intact after advance_clock.
-# It does not prove gossip propagation (see ISSUE-021 in project/ISSUES.md).
+# This test proves that gossip propagation actually ran — a trivial seeded-node
+# check (ISSUE-021) was replaced with a before/after KNOWS_ABOUT count assertion.
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -157,44 +156,34 @@ async def test_war_epoch_captain_sorn_acknowledges_war(
 async def test_gossip_propagates_after_clock_advance(
     http_client: httpx.Client,
 ) -> None:
-    """northern_war_begins Event node is present after a clock advance tick."""
+    """KNOWS_ABOUT edge count increases after a clock advance, proving gossip ran."""
     if not _ollama_reachable():
         pytest.skip(
             f"Ollama not running or model {_JUDGE_MODEL!r} not pulled — "
             f"run: ollama serve && ollama pull {_JUDGE_MODEL}"
         )
 
-    judge = _make_judge()
+    before_result = api_get(http_client, "/v1/graph/edges/KNOWS_ABOUT")
+    assert before_result["status"] == 200, f"GET KNOWS_ABOUT (before) failed: {before_result}"
+    count_before = len(before_result["body"].get("data", []))
+    print(f"\n[KNOWS_ABOUT before advance]  count={count_before}")
 
     advance_result = api_post(
         http_client,
         "/v1/clock/advance",
-        {"delta_ticks": 1, "game_time_seconds": 1},
+        {"delta_ticks": 10, "game_time_seconds": 10},
     )
     assert advance_result["status"] == 200, f"Clock advance failed: {advance_result}"
 
-    events_result = api_get(http_client, "/v1/graph/nodes/Event")
-    assert events_result["status"] == 200, f"GET /v1/graph/nodes/Event failed: {events_result}"
+    after_result = api_get(http_client, "/v1/graph/edges/KNOWS_ABOUT")
+    assert after_result["status"] == 200, f"GET KNOWS_ABOUT (after) failed: {after_result}"
+    count_after = len(after_result["body"].get("data", []))
+    print(f"[KNOWS_ABOUT after advance]   count={count_after}")
 
-    events = events_result["body"].get("data", [])
-    content = str([e.get("id", "") for e in events])
-    print(f"\n[event ids]\n  {content}\n")
-
-    from e2e.helpers.llm_judge import llm_judge
-
-    verdict = await llm_judge(
-        content=content,
-        criteria=(
-            "Does this list of event IDs contain an entry that references war, conflict, or "
-            "'northern_war'? Look for a string like 'northern_war_begins'. YES if present, NO if not."
-        ),
-        llm_client=judge,
-    )
-    print(f"[judge] passed={verdict.passed}  reasoning: {verdict.reasoning}")
-    assert verdict.passed, (
-        f"Event node check FAILED — northern_war_begins not found in Event list.\n"
-        f"Events: {content}\n"
-        f"Judge reasoning: {verdict.reasoning}"
+    assert count_after > count_before, (
+        f"KNOWS_ABOUT edge count did not increase after clock advance "
+        f"(before={count_before}, after={count_after}). "
+        "Gossip propagation may not have run."
     )
 
 

@@ -64,7 +64,7 @@ def _serialize_edge(*, name: str, edge: RuntimeEdgeTypeDefinition, origin: str) 
     return {
         "name": name,
         "field_origin": origin,
-        "src_type": edge.src_type,
+        "src_type": list(edge.src_type) if isinstance(edge.src_type, tuple) else edge.src_type,
         "dst_type": edge.dst_type,
         "fields": _serialize_fields(base_fields=edge.fields, origin=origin),
     }

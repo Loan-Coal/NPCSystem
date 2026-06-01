@@ -161,7 +161,7 @@ def test_build_event_payload_returns_correct_shape() -> None:
 
 def test_build_world_state_payload_returns_correct_shape() -> None:
     payload = build_world_state_payload(epoch="peace", active_conditions=[])
-    assert payload["id"] == "world"
+    assert payload["id"] == "world_demo"
     assert payload["epoch"] == "peace"
     assert payload["active_conditions"] == []
 
@@ -319,18 +319,17 @@ def test_seed_all_created_is_zero_when_all_exist() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_seed_quests_calls_post_quest_generate() -> None:
-    from unittest.mock import patch as _patch
+def test_seed_quests_calls_post_quest_offer() -> None:
     from demo_game.seed import _seed_quests
 
-    client = MagicMock()
-    client.post_quest_generate.return_value = {"quest_id": "q_abc123"}
-    with _patch("demo_game.seed.Path") as mock_path_cls:
-        mock_path_inst = MagicMock()
-        mock_path_cls.return_value = mock_path_inst
-        _seed_quests(client)
+    client = _mock_client()
+    client.post_quest_offer.return_value = {"data": {"quest_id": "aldric_deliver_quest"}}
+    _seed_quests(client)
 
-    client.post_quest_generate.assert_called_once_with("aldric_merchant")
+    client.post_quest_offer.assert_called_once()
+    call_kwargs = client.post_quest_offer.call_args[1]
+    assert call_kwargs["quest_id"] == "aldric_deliver_quest"
+    assert call_kwargs["player_id"] == "player_demo"
 
 
 def test_seed_quests_writes_quest_id_to_cache() -> None:
@@ -338,15 +337,17 @@ def test_seed_quests_writes_quest_id_to_cache() -> None:
     from unittest.mock import patch as _patch
     from demo_game.seed import _seed_quests
 
-    client = MagicMock()
-    client.post_quest_generate.return_value = {"quest_id": "q_abc123"}
+    client = _mock_client()
+    client.post_quest_offer.return_value = {"data": {"quest_id": "aldric_deliver_quest"}}
     with _patch("demo_game.seed.Path") as mock_path_cls:
         mock_path_inst = MagicMock()
+        mock_path_inst.exists.return_value = False
+        mock_path_inst.parent = MagicMock()
         mock_path_cls.return_value = mock_path_inst
         _seed_quests(client)
 
     written = mock_path_inst.write_text.call_args[0][0]
-    assert _json.loads(written) == {"quest_id": "q_abc123"}
+    assert _json.loads(written) == {"quest_id": "aldric_deliver_quest"}
 
 
 def test_seed_quests_non_fatal_on_client_error() -> None:
@@ -359,10 +360,13 @@ def test_seed_quests_non_fatal_on_client_error() -> None:
     _seed_quests(client)
 
 
-def test_seed_all_calls_quest_generation() -> None:
+def test_seed_all_calls_quest_offer() -> None:
     client = _mock_client()
+    client.post_quest_offer.return_value = {"data": {"quest_id": "aldric_deliver_quest"}}
     with patch("demo_game.seed.Path") as mock_path_cls:
         mock_path_inst = MagicMock()
+        mock_path_inst.exists.return_value = False
+        mock_path_inst.parent = MagicMock()
         mock_path_cls.return_value = mock_path_inst
         seed_all(client)
-    client.post_quest_generate.assert_called_once_with("aldric_merchant")
+    client.post_quest_offer.assert_called_once()

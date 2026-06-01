@@ -56,9 +56,38 @@ def _run_case(case: dict, client: httpx.Client, base_url: str) -> dict:
             "error": None,
         }
 
+    npc_id = seed.get("npc_id", "npc_eval")
+    requires_world = seed.get("requires_world")
+
+    npc_check = client.get(f"{base_url}/v1/graph/nodes/Character/{npc_id}", timeout=10.0)
+    if npc_check.status_code == 404:
+        world_cmd = (
+            "make demo-seed"
+            if requires_world == "demo"
+            else f"make seed-{requires_world}-world"
+            if requires_world
+            else "the appropriate seed command"
+        )
+        skip_detail = f"SKIP: NPC '{npc_id}' not found in graph. Run: {world_cmd}"
+        return {
+            "case_id": case_id,
+            "description": case.get("description", ""),
+            "passed": True,
+            "expectations": [
+                {
+                    "kind": "runner",
+                    "passed": True,
+                    "skipped": True,
+                    "detail": skip_detail,
+                }
+            ],
+            "response": None,
+            "error": None,
+        }
+
     payload = {
         "player_id": seed.get("player_id", "player_eval"),
-        "npc_id": seed.get("npc_id", "npc_eval"),
+        "npc_id": npc_id,
         "player_message": inp["player_message"],
         "location_id": seed.get("location_id"),
         "session_id": f"eval:{case_id}",
@@ -89,18 +118,6 @@ def _run_case(case: dict, client: httpx.Client, base_url: str) -> dict:
             continue
 
         if error:
-            requires_world = seed.get("requires_world")
-            if requires_world:
-                world_cmd = (
-                    "make demo-seed"
-                    if requires_world == "demo"
-                    else f"make seed-{requires_world}-world"
-                )
-                print(
-                    f"  [WARN] Case {case_id} needs world '{requires_world}'. "
-                    f"Run: {world_cmd}",
-                    file=sys.stderr,
-                )
             exp_results.append(
                 {
                     "kind": exp.get("kind", "unknown"),

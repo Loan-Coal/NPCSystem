@@ -49,11 +49,11 @@ def _make_renderer():
 # ---------------------------------------------------------------------------
 
 
-def test_right_panel_enum_has_four_values() -> None:
+def test_right_panel_enum_has_six_values() -> None:
     from demo_game.ui.right_panel import RightPanel
 
     panels = list(RightPanel)
-    assert len(panels) == 4
+    assert len(panels) == 6
 
 
 def test_right_panel_enum_values() -> None:
@@ -124,7 +124,8 @@ def test_cycle_tab_wraps_back_to_graph() -> None:
     from demo_game.ui.right_panel import RightPanel
 
     renderer = _make_renderer()
-    for _ in range(4):
+    n_panels = len(list(RightPanel))
+    for _ in range(n_panels):
         renderer.cycle_tab()
     assert renderer.active == RightPanel.GRAPH
 

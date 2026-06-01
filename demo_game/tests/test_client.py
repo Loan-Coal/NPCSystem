@@ -543,7 +543,7 @@ def test_post_quest_generate_returns_data(mock_http: MagicMock, make_response) -
     result = _client(mock_http).post_quest_generate("aldric_merchant")
     assert result == payload
     mock_http.post.assert_called_once_with(
-        "/v1/quests/generate",
+        "/v1/admin/quests/generate",
         json={"quest_giver_id": "aldric_merchant"},
         timeout=120.0,
     )
@@ -562,10 +562,10 @@ def test_post_quest_generate_raises_on_error(mock_http: MagicMock, make_response
 
 def test_get_quest_returns_data_on_200(mock_http: MagicMock, make_response) -> None:
     quest = {"id": "q_001", "title": "Find the spices", "status": "available"}
-    mock_http.get.return_value = make_response(200, {"data": quest})
+    mock_http.get.return_value = make_response(200, {"data": {"quest": quest}})
     result = _client(mock_http).get_quest("q_001")
     assert result == quest
-    mock_http.get.assert_called_once_with("/v1/quests/q_001", timeout=15.0)
+    mock_http.get.assert_called_once_with("/v1/admin/quests/q_001", timeout=15.0)
 
 
 def test_get_quest_returns_none_on_404(mock_http: MagicMock, make_response) -> None:
@@ -589,7 +589,7 @@ def test_get_item_price_returns_price_on_200(mock_http: MagicMock, make_response
     result = _client(mock_http).get_item_price("spice", "aldric_merchant")
     assert result == 120
     mock_http.get.assert_called_once_with(
-        "/v1/economy/price",
+        "/v1/admin/economy/price",
         params={"item_type": "spice", "character_id": "aldric_merchant"},
         timeout=15.0,
     )
@@ -674,7 +674,12 @@ def test_quest_headers_contains_all_required_keys() -> None:
 def test_post_quest_offer_success(mock_http: MagicMock, make_response) -> None:
     payload = {"data": {"quest_id": "q_001", "status": "offered"}}
     mock_http.post.return_value = make_response(200, payload)
-    result = _client(mock_http).post_quest_offer("q_001", "aldric_merchant", "player")
+    result = _client(mock_http).post_quest_offer(
+        "q_001", "player", "Find the spices",
+        objectives=[{"objective_id": "obj_1", "target_count": 1, "objective_type": "deliver", "target_id": "spice"}],
+        item_rewards=[],
+        currency_reward={"amount": 50},
+    )
     assert result == payload
     _, kwargs = mock_http.post.call_args
     assert kwargs["json"]["quest_id"] == "q_001"
@@ -684,7 +689,10 @@ def test_post_quest_offer_success(mock_http: MagicMock, make_response) -> None:
 def test_post_quest_offer_raises_on_4xx(mock_http: MagicMock, make_response) -> None:
     mock_http.post.return_value = make_response(404, {"detail": "quest not found"})
     with pytest.raises(EngineClientError, match="HTTP 404"):
-        _client(mock_http).post_quest_offer("missing", "aldric_merchant", "player")
+        _client(mock_http).post_quest_offer(
+            "missing", "player", "title",
+            objectives=[], item_rewards=[], currency_reward=None,
+        )
 
 
 # ---------------------------------------------------------------------------
