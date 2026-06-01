@@ -24,7 +24,6 @@ expected:
                "of course", "happy to", "tailored", "for you", "anything",
                "what you need", "help you", "looking for", "I can", "let me", "might have"]
   - kind: tone_judge
-    skip_until_implemented: true
     judge_prompt: >
       Does this NPC treat the player as a trusted ally — engaging helpfully, offering
       assistance or goods, and showing no hostility, coldness, or suspicion? The NPC

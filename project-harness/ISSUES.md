@@ -13,13 +13,12 @@ Rules:
 
 ## Open
 
-## ISSUE-035: reputation_dialogue_tone_001 eval fails — merchant archetype doesn't express warmth toward allied player
+## [FIXED] ISSUE-035: reputation_dialogue_tone_001 eval fails — merchant archetype doesn't express warmth toward allied player
 **Found:** 2026-05-27, during eval repair sprint
 **Severity:** P2 (annoying)
 **Where:** `evals/cases/reputation_dialogue_tone.yaml`, `prompts/system_v1.yaml` (or equivalent NPC voice prompt)
-**Description:** Reputation context is correctly injected (hero_player has standing=80 "allied" with tw_merchants; threshold=20). However `tw_merchant` still responds in a purely transactional tone ("No nonsense, just business") even to an allied player. The tone_judge expects warmth/privilege but a mercantile-archetype NPC produces professional efficiency instead. Root question: should reputation context produce noticeably different language/tone for this archetype, and if so, where in the prompt chain?
-**Why deferred:** Fixing this requires either (a) softening the eval expectation to accept professional-but-cooperative as "allied" for merchant NPCs, or (b) strengthening the prompt to translate reputation label into tone cues. Both need a deliberate design decision about what "reputation-differentiated dialogue" means for transactional archetypes.
-**To fix:** Option A — update `tone_judge` prompt in the eval to accept "professional, cooperative, service-oriented" as passing for merchant NPCs. Option B — add a prompt instruction that maps `reputation.label == "allied"` to a tone modifier (e.g., "greet this player by name, skip the price caveat"). Mark `skip_until_implemented` removed once chosen and implemented.
+**Description:** Reputation context is correctly injected (hero_player has standing=80 "allied" with tw_merchants; threshold=20). However `tw_merchant` still responded in a purely transactional tone ("No nonsense, just business") even to an allied player. The tone_judge expects warmth/privilege but a mercantile-archetype NPC produced professional efficiency instead.
+**Fixed:** 2026-06-02, S0.5 — chose Option B (strengthen prompt). Rule 2 "allied" bullet in `system_v1.yaml` now mandates three explicit tone shifts even when VOICE_DESCRIPTOR is clipped/transactional: (a) warm/respectful address, (b) skip price caveats, (c) express genuine eagerness. Rule 8 updated to clarify VOICE_DESCRIPTOR governs style only, not mandatory behavioral rules. Removed `skip_until_implemented: true` from eval case. PROMPT_VERSION bumped to `stage_b_v2.6`.
 
 ---
 
@@ -53,16 +52,17 @@ Rules:
 
 ---
 
-## ISSUE-034: SATISFIES_NEED src_type is multi-type (Item or Location)
+## [FIXED] ISSUE-034: SATISFIES_NEED src_type is multi-type (Item or Location)
 **Found:** 2026-05-19, during Phase 7 L implementation
 **Severity:** P2 (annoying)
 **Where:** `src/npc_engine/type_registry/base_edges/satisfies_need.yaml`
 **Description:** SATISFIES_NEED should accept both Item and Location as source nodes, but the type registry YAML format only supports a single string for `src_type`. Current implementation uses `location` as src_type; Item→Need satisfaction is not schema-registered.
 **Why deferred:** Registry extension to support multi-type src_type requires changes to `registry.py` edge model validation — out of scope for Phase 7 L.
 **To fix:** Either (a) add an `item_satisfies_need.yaml` edge type for Item→Need, or (b) extend registry to accept `src_type: [location, item]` list syntax.
+**Fixed:** 2026-06-01, S0.3 — extended `BaseEdgeTypeDocument.src_type` to `str | list[str]`; `RuntimeEdgeTypeDefinition.src_type` to `str | tuple[str, ...]`; added `resolve_src_label_expr()` helper for Neo4j label-union Cypher; updated validation to check membership; updated `satisfies_need.yaml` to `src_type: [location, item]`.
 
 
-## ISSUE-022: LLMCache key in demo_game/run.py excludes prompt content
+## [FIXED] ISSUE-022: LLMCache key in demo_game/run.py excludes prompt content
 **Found:** 2026-05-24, during P2 iteration
 **Severity:** P3 (nice-to-fix)
 **Where:** `demo_game/run.py` — `LLMCache` key computation (`sha256("{npc_id}:{player_input}")`)
@@ -79,8 +79,9 @@ threads prompt state into the cache layer.
 **To fix:** Include `PROMPT_VERSION` from `prompt_builder.py` in the cache key:
 `sha256("{npc_id}:{player_input}:{PROMPT_VERSION}")`. This automatically invalidates
 all cached responses when the prompt version is bumped.
+**Fixed:** 2026-06-01, S0.3 — imported `PROMPT_VERSION` from `prompt_builder` in `run.py`; updated `LLMCache._key()` to include it.
 
-## ISSUE-021: test_gossip_propagates_after_clock_advance is trivially true
+## [FIXED] ISSUE-021: test_gossip_propagates_after_clock_advance is trivially true
 **Found:** 2026-05-22, during P2.5 planning
 **Severity:** P3 (nice-to-fix)
 **Where:** `e2e/scenarios/scenario_demo_game_judge.py::test_gossip_propagates_after_clock_advance`
@@ -94,6 +95,7 @@ propagate knowledge. The war-dialogue test (test 1) is the substantive LLM judge
 **To fix:** Replace with a two-step test: (1) GET KNOWS_ABOUT edge count before advance,
 (2) advance clock, (3) assert edge count increased. OR check that a specific non-captain_sorn
 NPC has acquired a new belief mentioning war after the advance.
+**Fixed:** 2026-06-01, S0.3 — replaced LLM-judge event-ID check with before/after `KNOWS_ABOUT` edge count assertion (advances 10 ticks, verifies count_after > count_before).
 
 ## [FIXED] ISSUE-025: system_v1.yaml Rules 2–7 had dead context key references
 **Found:** 2026-05-24, during P2.1 audit
@@ -421,7 +423,7 @@ removed `create_llm_client`, `BACKEND_BUILDERS`, and all private `_create_*` hel
 
 ---
 
-## ISSUE-020: `emotion` field in DialogueTurn mapped from `mood_update`, not a first-class engine field
+## [FIXED] ISSUE-020: `emotion` field in DialogueTurn mapped from `mood_update`, not a first-class engine field
 **Found:** 2026-05-22, during P2.3 implementation
 **Severity:** P3 (nice-to-fix)
 **Where:** `demo_game/dialogue.py:parse_dialogue_response`
@@ -434,6 +436,7 @@ identical to a dedicated emotion field.
 current mapping is good enough for demo badge display and does not affect correctness.
 **To fix:** If the engine adds a dedicated top-level `emotion` field, update
 `parse_dialogue_response` to read it directly and remove the fallback logic.
+**Fixed:** 2026-06-01, S0.3 — added `emotion: str | None` to `DialogueResponse` with `model_validator` deriving it from `mood_update`; updated `parse_dialogue_response` to read `raw.get("emotion")` directly.
 
 ---
 
@@ -487,13 +490,14 @@ current mapping is good enough for demo badge display and does not affect correc
 
 ---
 
-## ISSUE-040: Demo seed tests assert upsert_edge.call_count == 0 but _seed_edge always upserts
+## [FIXED] ISSUE-040: Demo seed tests assert upsert_edge.call_count == 0 but _seed_edge always upserts
 **Found:** 2026-05-27, during R1.4 test run
 **Severity:** P3 (nice-to-fix)
 **Where:** `demo_game/tests/test_seed.py:252–255` (`test_seed_all_skips_existing_edges`) and `:302–305` (`test_seed_all_created_is_zero_when_all_exist`)
 **Description:** `_seed_edge` is documented to "always write the latest properties" and always returns "created". These two tests assert that `upsert_edge` is never called and that `created == 0` when all nodes exist — incompatible with the current implementation. Pre-existing: both tests fail on the baseline commit before R1.4.
 **Why deferred:** Pre-existing; tests don't gate the eval path. No functional regression.
 **To fix:** Either (a) update the tests to assert actual edge upsert counts, or (b) add skip-if-exists logic to `_seed_edge` and keep the tests as written.
+**Fixed:** 2026-06-01, S0.3 — verified `_seed_edge` already has skip-if-exists logic; both tests were already passing. Also fixed 3 related pre-existing failures (`test_seed_quests_*`) caused by the seeder switching from LLM generation to deterministic `post_quest_offer` path.
 
 ---
 
@@ -506,43 +510,47 @@ current mapping is good enough for demo badge display and does not affect correc
 
 ---
 
-## ISSUE-042: faction_gossip_distortion eval case has no runnable endpoint
+## [FIXED] ISSUE-042: faction_gossip_distortion eval case has no runnable endpoint
 **Found:** 2026-05-27, during pre-Phase 3 eval coherence review
 **Severity:** P3 (nice-to-fix)
 **Where:** `evals/cases/faction_gossip_distortion.yaml`, `evals/runner.py`
 **Description:** `faction_gossip_distortion_001` targets a gossip distortion calculation endpoint that does not exist in the API. It has no `input` field so the eval runner auto-skips it with "SKIP: no 'input' field — case targets a non-dialogue endpoint". The case documents the expected gossip distortion logic and probabilities, but cannot be exercised by the current runner.
 **Why deferred:** The gossip engine exists but has no dedicated eval endpoint. The case is valuable documentation.
 **To fix:** Expose a `/v1/gossip/distort` endpoint (or similar) and extend the runner to POST to it when the case has a non-dialogue `endpoint` field. Alternatively, convert to a unit test against `GossipEngine.distort()`.
+**Fixed:** 2026-06-01, S0.3 — deleted `faction_gossip_distortion.yaml`; added 3 unit tests to `tests/unit/test_gossip_distort.py` covering hostile-faction distortion, level range, and canonical-event bypass.
 
 ---
 
-## ISSUE-044: Multi-world WorldState conflict — single id="world" is last-seed-wins
+## [FIXED] ISSUE-044: Multi-world WorldState conflict — single id="world" is last-seed-wins
 **Found:** 2026-05-27, during eval failure investigation
 **Severity:** P2 (annoying)
 **Where:** `seeds/worlds/seed_demo_world.py`, `seeds/worlds/seed_village_world.py`, `world_reader.py`
 **Description:** All seed worlds write their WorldState to `id="world"`. Village seed sets `epoch="age_of_peace"` + `active_conditions=["crop_blight"]`; demo seed sets `epoch="war"` + `active_conditions=["northern_war"]`. Last seed run wins. Running `make seed-village-world` after `make demo-seed` causes demo world eval cases that depend on war epoch (`case_voice_captain_sorn_001`, `case_pos_mira_gossip_hedging`) to fail silently.
 **Why deferred:** Mitigation: run `make demo-seed` last before `make eval`. Proper fix requires WorldState ID refactor.
 **To fix:** Either (a) prefix WorldState IDs per world (`id="world_demo"`, `id="world_village"`) and extend `world_reader` to accept a configurable ID via eval case `seed` block, or (b) add a per-eval-run world-state setup POST before running cases.
+**Fixed:** 2026-06-01, S0.4 — added `WORLD_ID: str = "world_demo"` to `Settings`; changed `demo_game/seed.py` `_WORLD_STATE_ID` to `"world_demo"`, `seed_village_world.py` to `"world_village"`; fixed `world_reader.py` fallback to return `WorldState(id=world_id)`; threaded `world_id` through all 8 `get_world_state` call sites (context_builder, dialogue_handler, event_handler ×2, clock route, quest_generation_engine, story_pacing_engine, tick_scheduler, chapter_engine). Configure per-world reads via `WORLD_ID` in `.env`.
 
 ---
 
-## ISSUE-045: game_window.py line count exceeds DEC-024 ~450 soft limit
+## [FIXED] ISSUE-045: game_window.py line count exceeds DEC-024 ~450 soft limit
 **Found:** 2026-05-28, during S3.4
 **Severity:** P3 (nice-to-fix)
 **Where:** `demo_game/ui/game_window.py` (~460 lines after S3.4)
 **Description:** DEC-024 set a ~450-line soft limit for `game_window.py` (exempt from the 300-line hard limit). S3.4 adds ~24 lines, bringing the total to ~460.
 **Why deferred:** Phase 4 `DialoguePanel` / `GraphPanel` refactor is the natural moment to extract rendering logic into separate panel classes. Splitting mid-session (between S3.4 and S3.5) would be artificial churn.
 **To fix:** During Phase 4, extract `_draw_left_panel` helpers and/or the graph/sidebar draw branches into dedicated panel classes (`DialoguePanel`, `GraphPanel`, `SidebarPanel`). Each class gets its own file under `demo_game/ui/`.
+**Fixed:** 2026-06-01, S0.3 — extracted thread/poller orchestration, queue dispatch, and quest/trade callbacks into new `demo_game/game_controller.py` (389 lines). `game_window.py` reduced from 624 → 260 lines.
 
 ---
 
-## ISSUE-043: requires_world is a soft advisory warn, not a hard skip
+## [FIXED] ISSUE-043: requires_world is a soft advisory warn, not a hard skip
 **Found:** 2026-05-27, during pre-Phase 3 eval coherence review
 **Severity:** P3 (nice-to-fix)
 **Where:** `evals/runner.py:91–103`
 **Description:** When a request fails and the case has `requires_world`, the runner prints a `[WARN]` hint but still marks the expectation FAIL. There is no explicit SKIP for "server is up but world not seeded" vs "server is down". A CI run with the wrong seed state produces unexplained failures rather than a clear skip with a seed-world instruction.
 **Why deferred:** Current behavior is informative enough for manual runs. CI is not yet set up with per-world seed fixtures.
 **To fix:** If the response is a 4xx with an NPC-not-found body, auto-skip all expectations and emit a clear SKIP reason rather than a FAIL. Or add a pre-flight `GET /v1/graph/nodes/Character/{npc_id}` check and skip if the NPC is absent.
+**Fixed:** 2026-06-01, S0.3 — added pre-flight `GET /v1/graph/nodes/Character/{npc_id}` check in `evals/runner.py`; returns hard SKIP (passed=True, skipped=True) with seed command hint when NPC is absent (HTTP 404).
 
 ---
 
@@ -553,6 +561,15 @@ current mapping is good enough for demo badge display and does not affect correc
 **Description:** `get_item_price()` calls `GET /v1/economy/price?item_type=spice&character_id=aldric_merchant`. The endpoint was assumed to exist from the plan; it has not been tested against a live engine. If the route is absent or has a different schema, the trade overlay will silently show nothing (non-fatal, error caught), but the demo feature won't function.
 **Why deferred:** Required live engine + seeded Item node. Verification is a 5-minute manual check — deferred to pre-demo run.
 **To fix:** Start engine + `make demo-seed`, then `curl "http://localhost:8000/v1/economy/price?item_type=spice&character_id=aldric_merchant"`. If 404: check route in `src/npc_engine/api/` and update the URL. If schema differs: update `get_item_price()` to match actual response shape.
+
+---
+
+## [FIXED] ISSUE-047: Multiple stale demo test expectations after API path + seeder changes
+**Found:** 2026-06-01, during S0.3 (discovered while running `make test-demo`)
+**Severity:** P2 (test suite not green)
+**Where:** `demo_game/tests/test_client.py`, `demo_game/tests/test_seed.py`, `demo_game/tests/test_right_panel.py`
+**Description:** Several tests expected outdated API paths and function signatures accumulated since the demo was extended. 5 client tests expected `/v1/quests/generate`, `/v1/quests/{id}`, `/v1/economy/price` but the client moved to `/v1/admin/` prefixed routes. `post_quest_offer` grew 3 new required args (objectives, item_rewards, currency_reward). 3 seed tests expected LLM-based quest generation but seeder switched to deterministic `post_quest_offer`. 2 right panel tests expected 4 enum values but `RightPanel` grew to 6.
+**Fixed:** 2026-06-01, S0.3 — updated all stale test expectations to match current implementation; `test_seed_quests_*` and `test_seed_all_calls_quest_generation` rewritten to test `post_quest_offer` deterministic path; `test_right_panel_enum_has_four_values` → `_has_six_values`; `test_cycle_tab_wraps_back_to_graph` cycle count derived from `len(list(RightPanel))`.
 
 ---
 
