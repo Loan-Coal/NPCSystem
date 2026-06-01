@@ -8,6 +8,8 @@ Dependencies injected: Settings and graph/session collaborators.
 
 from __future__ import annotations
 
+import logging
+
 from neo4j import AsyncSession
 
 from npc_engine.config import Settings
@@ -31,6 +33,8 @@ from npc_engine.graph.quest_writer import create_quest_state_if_absent, get_ques
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.utils.errors import QuestTransitionError
 
+
+_logger = logging.getLogger(__name__)
 
 STATUS_OFFERED = "offered"
 STATUS_ACCEPTED = "accepted"
@@ -458,6 +462,25 @@ class QuestLifecycleEngine:
                 session_scope=f"quest:{quest_id}:{player_id}",
                 transfer_kind="quest_reward",
             )
+
+        if state.reward_source_id != "system":
+            for obj in state.objectives:
+                if obj.objective_type == "deliver" and obj.target_id is not None:
+                    deliver_idempotency_key = f"quest:{quest_id}:{player_id}:deliver:{obj.objective_id}"
+                    try:
+                        await apply_item_transfer(
+                            session=session,
+                            source_id=player_id,
+                            destination_id=state.reward_source_id,
+                            item_id=obj.target_id,
+                            quantity=obj.target_count,
+                            reason=f"quest_deliver:{quest_id}",
+                            request_id=meta.request_id,
+                            idempotency_key=deliver_idempotency_key,
+                            transfer_kind="quest_deliver",
+                        )
+                    except Exception:
+                        _logger.warning("deliver transfer failed for item %s — item may already be gone", obj.target_id)
 
         next_state = state.model_copy(update={"rewards_applied": True})
         return await self._persist_state_and_event(

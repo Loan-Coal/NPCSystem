@@ -154,6 +154,14 @@ class RightPanelRenderer:
         """Push a fresh item list into the inventory panel."""
         self._inventory_panel.set_items(items)
 
+    def set_player_gold(self, gold: int | None) -> None:
+        """Push the player's currency balance into the inventory panel."""
+        self._inventory_panel.set_gold(gold)
+
+    def set_npc_trade_gold(self, gold: int | None) -> None:
+        """Push the NPC seller's currency balance into the trade panel."""
+        self._trade_panel.set_npc_gold(gold)
+
     def set_trade_offer_callback(self, cb: Callable[[], None]) -> None:
         """Register the callback for the [OFFER ASKING PRICE] trade button."""
         self._trade_panel.set_offer_callback(cb)

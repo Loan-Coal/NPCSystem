@@ -335,6 +335,30 @@ class EngineClient:
     # Graph writes
     # ------------------------------------------------------------------
 
+    def patch_node(self, node_type: str, node_id: str, properties: dict) -> dict | None:
+        """Partially update a node; returns the updated node dict or None on 404.
+
+        Args:
+            node_type: Registered node type, e.g. "Character".
+            node_id: Node ID to patch.
+            properties: Partial property dict; only supplied fields are updated.
+
+        Returns:
+            Node property dict reflecting the state after the patch, or None if not found.
+
+        Raises:
+            EngineClientError: On any non-404 4xx or 5xx response.
+        """
+        resp = self._client.patch(
+            f"/v1/graph/nodes/{node_type}/{node_id}",
+            json={"properties": properties},
+            timeout=self._graph_timeout,
+        )
+        if resp.status_code == 404:
+            return None
+        self._raise_for_status(resp, f"PATCH /v1/graph/nodes/{node_type}/{node_id}")
+        return resp.json().get("data")
+
     def upsert_node(self, node_type: str, properties: dict) -> dict:
         """Upsert a node via the generic graph endpoint.
 

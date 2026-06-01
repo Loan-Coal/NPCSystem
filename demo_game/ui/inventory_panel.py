@@ -37,6 +37,7 @@ class InventoryPanelWidget:
         self._font_body = font_body
         self._font_label = font_label
         self._items: list[dict] = []
+        self._gold: int | None = None
 
     # ------------------------------------------------------------------
     # Public interface
@@ -54,6 +55,10 @@ class InventoryPanelWidget:
         """Return the current item list."""
         return self._items
 
+    def set_gold(self, gold: int | None) -> None:
+        """Set the player's currency balance to display above the item list."""
+        self._gold = gold
+
     # ------------------------------------------------------------------
     # Drawing
     # ------------------------------------------------------------------
@@ -67,13 +72,22 @@ class InventoryPanelWidget:
             self._draw_list(surface, rect)
 
     def _draw_empty(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        x = rect.x + _PAD
+        y = rect.y + _PAD
+        self._draw_gold_line(surface, x, y)
         lines = ["No items in inventory."]
         lh = self._font_body.get_linesize()
-        y = rect.centery - (len(lines) * lh) // 2
+        cy = rect.centery - (len(lines) * lh) // 2
         for line in lines:
             txt = self._font_body.render(line, True, _CLR_AMBER)
-            surface.blit(txt, (rect.centerx - txt.get_width() // 2, y))
-            y += lh
+            surface.blit(txt, (rect.centerx - txt.get_width() // 2, cy))
+            cy += lh
+
+    def _draw_gold_line(self, surface: pygame.Surface, x: int, y: int) -> None:
+        if self._gold is None:
+            return
+        gold_surf = self._font_label.render(f"Gold: {self._gold}", True, _CLR_AMBER)
+        surface.blit(gold_surf, (x, y))
 
     def _draw_list(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         x = rect.x + _PAD
@@ -82,6 +96,10 @@ class InventoryPanelWidget:
         header = self._font_label.render("INVENTORY", True, _CLR_AMBER)
         surface.blit(header, (x, y))
         y += header.get_height() + 6
+
+        self._draw_gold_line(surface, x, y)
+        if self._gold is not None:
+            y += self._font_label.get_linesize() + 4
 
         for item in self._items[:8]:
             name = str(item.get("name") or item.get("id") or "Unknown")

@@ -180,6 +180,8 @@ class GameWindow:
         try:
             items = client.get_items_for_character(self._cfg.DEMO_PLAYER_ID)
             self._right.set_inventory(items)
+            char = client.get_node("Character", self._cfg.DEMO_PLAYER_ID)
+            self._right.set_player_gold((char or {}).get("currency_balance"))
         except EngineClientError as _inv_exc:
             print(f"[inventory] startup fetch failed: {_inv_exc}", file=sys.stderr)
 
@@ -319,6 +321,13 @@ class GameWindow:
             quest_data = self._client.get_quest(self._quest_id)
             self._right.set_quest(quest_data)
         self._set_status("Rewards applied!")
+        try:
+            items = self._client.get_items_for_character(self._cfg.DEMO_PLAYER_ID)
+            self._right.set_inventory(items)
+            char = self._client.get_node("Character", self._cfg.DEMO_PLAYER_ID)
+            self._right.set_player_gold((char or {}).get("currency_balance"))
+        except EngineClientError:
+            pass
 
     def _on_trade_offer(self) -> None:
         """Send the NPC's asking price as an offer (shortcut button in trade panel)."""
@@ -359,6 +368,8 @@ class GameWindow:
             from demo_game.ui.right_panel import RightPanel as _RP
             items = self._client.get_items_for_character(self._cfg.DEMO_PLAYER_ID)
             self._right.set_inventory(items)
+            char = self._client.get_node("Character", self._cfg.DEMO_PLAYER_ID)
+            self._right.set_player_gold((char or {}).get("currency_balance"))
             self._right.switch_to(_RP.PLAYER_INVENTORY)
         except EngineClientError as _inv_exc:
             print(f"[inventory] post-trade fetch failed: {_inv_exc}", file=sys.stderr)
@@ -468,6 +479,11 @@ class GameWindow:
             if turn.interaction_proposal.kind == "propose_trade":
                 self._active_npc_id_for_trade = npc_id
                 try:
+                    npc_char = self._client.get_node("Character", npc_id)
+                    self._right.set_npc_trade_gold((npc_char or {}).get("currency_balance"))
+                except EngineClientError:
+                    pass
+                try:
                     result = self._client.post_interaction(
                         player_id=self._cfg.DEMO_PLAYER_ID,
                         npc_id=npc_id,
@@ -529,6 +545,11 @@ class GameWindow:
         # sent the trade preset, open the trade panel directly for the spice bundle.
         if not turn.interaction_proposal and self._last_submitted_message == "I'd like to trade.":
             self._active_npc_id_for_trade = npc_id
+            try:
+                npc_char = self._client.get_node("Character", npc_id)
+                self._right.set_npc_trade_gold((npc_char or {}).get("currency_balance"))
+            except EngineClientError:
+                pass
             try:
                 result = self._client.post_interaction(
                     player_id=self._cfg.DEMO_PLAYER_ID,

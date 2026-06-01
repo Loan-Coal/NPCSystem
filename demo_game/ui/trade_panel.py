@@ -54,6 +54,7 @@ class TradePanelWidget:
         self._font_body = font_body
         self._font_label = font_label
         self._state: dict | None = None
+        self._npc_gold: int | None = None
         self._on_offer: Callable[[], None] | None = None
         self._on_confirm: Callable[[], None] | None = None
         self._btn_offer_rect: pygame.Rect | None = None
@@ -66,6 +67,10 @@ class TradePanelWidget:
     def set_negotiation_state(self, state: dict | None) -> None:
         """Replace the displayed negotiation state. Pass None to show empty state."""
         self._state = state
+
+    def set_npc_gold(self, gold: int | None) -> None:
+        """Set the NPC seller's currency balance to display in the trade card."""
+        self._npc_gold = gold
 
     def get_state(self) -> dict | None:
         """Return the current negotiation state dict, or None."""
@@ -127,6 +132,12 @@ class TradePanelWidget:
         title = self._font_body.render(item_name, True, _CLR_AMBER)
         surface.blit(title, (x, y))
         y += title.get_height() + 6
+
+        # NPC purse
+        if self._npc_gold is not None:
+            purse = self._font_label.render(f"Seller's purse: {self._npc_gold} gold", True, _CLR_GREY)
+            surface.blit(purse, (x, y))
+            y += purse.get_height() + 4
 
         # Price row
         center = s.get("center_price", 0)

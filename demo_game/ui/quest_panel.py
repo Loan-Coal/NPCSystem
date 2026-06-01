@@ -137,7 +137,7 @@ class QuestPanelWidget:
         currency = self._quest_data.get("currency_reward")
         if currency:
             amount = currency.get("amount", 0) if isinstance(currency, dict) else 0
-            reward_txt = self._font_label.render(f"Reward: {amount} silver", True, _CLR_GREEN)
+            reward_txt = self._font_label.render(f"Reward: {amount} gold", True, _CLR_GREEN)
             surface.blit(reward_txt, (x, y))
             y += reward_txt.get_height() + 8
 
