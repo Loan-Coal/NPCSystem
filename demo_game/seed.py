@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _GAME_TIME: dict = {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
-_WORLD_STATE_ID = "world"
+_WORLD_STATE_ID = "world_demo"
 
 
 # ---------------------------------------------------------------------------

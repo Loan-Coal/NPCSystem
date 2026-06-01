@@ -129,7 +129,7 @@ async def build_serialized_context(
     # parameter and open one session per batch. asyncio.gather on a single session
     # causes BufferError in the neo4j async driver.
     character_bundle = await get_character_with_relations(session=session, npc_id=npc_id)
-    world_state = await get_world_state(session=session)
+    world_state = await get_world_state(session=session, world_id=settings.WORLD_ID)
     known_event_ids = await get_known_event_ids_for_npc(session=session, npc_id=npc_id)
 
     character_payload = character_bundle.get("character")

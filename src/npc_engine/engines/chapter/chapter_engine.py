@@ -34,6 +34,7 @@ from npc_engine.graph.chapter_writer import (
     create_chapter,
     link_event_to_chapter,
 )
+from npc_engine.config import get_settings
 from npc_engine.world.world_reader import get_world_state
 
 if TYPE_CHECKING:
@@ -219,7 +220,7 @@ class ChapterEngine:
                 get_completed_quests_since_tick(session, since_tick=since_tick),
             ),
             asyncio.gather(
-                get_world_state(session),
+                get_world_state(session, world_id=get_settings().WORLD_ID),
                 get_faction_standings_summary(session, limit=5),
             ),
         )

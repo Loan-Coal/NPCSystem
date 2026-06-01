@@ -90,3 +90,39 @@ async def test_get_world_state_accepts_native_collections_without_json_parse() -
 
     assert world_state.faction_standings == {"manual": 10}
     assert world_state.active_conditions == ["manual_test"]
+
+
+@pytest.mark.asyncio
+async def test_get_world_state_missing_node_returns_default_with_requested_id() -> None:
+    """When the world_state node is absent, returned WorldState id must match the requested world_id."""
+
+    session = _SessionStub(record=None)
+    world_state = await get_world_state(session=cast(AsyncSession, session), world_id="world_demo")
+
+    assert world_state.id == "world_demo"
+
+
+@pytest.mark.asyncio
+async def test_get_world_state_two_worlds_are_independent() -> None:
+    """Requesting different world_ids returns data from the correct node each time."""
+
+    demo_record = {"world": {"id": "world_demo", "epoch": "war", "active_conditions": '["northern_war"]', "faction_standings": "{}"}}
+    village_record = {"world": {"id": "world_village", "epoch": "age_of_peace", "active_conditions": '["crop_blight"]', "faction_standings": "{}"}}
+
+    class _MultiWorldSession:
+        """Returns the matching record based on the world_id query parameter."""
+
+        def __init__(self) -> None:
+            self._records = {"world_demo": demo_record, "world_village": village_record}
+
+        async def run(self, query: str, world_id: str = "world", **params):
+            return _ResultStub(record=self._records.get(world_id))
+
+    session = _MultiWorldSession()
+    demo = await get_world_state(session=cast(AsyncSession, session), world_id="world_demo")
+    village = await get_world_state(session=cast(AsyncSession, session), world_id="world_village")
+
+    assert demo.epoch == "war"
+    assert "northern_war" in demo.active_conditions
+    assert village.epoch == "age_of_peace"
+    assert "crop_blight" in village.active_conditions

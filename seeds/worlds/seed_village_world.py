@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _GAME_TIME: dict = {"year": 1, "season": "autumn", "day": 3, "time_of_day": "morning"}
-_WORLD_STATE_ID = "world"
+_WORLD_STATE_ID = "world_village"
 
 
 # ---------------------------------------------------------------------------

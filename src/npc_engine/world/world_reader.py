@@ -49,7 +49,7 @@ async def get_world_state(session: AsyncSession, world_id: str = "world") -> Wor
     record = await result.single()
     await result.consume()
     if record is None:
-        return WorldState()
+        return WorldState(id=world_id)
     payload = dict(record["world"])
     payload["faction_standings"] = cast(dict[str, int], parse_json_object(payload.get("faction_standings", {})))
     payload["active_conditions"] = cast(list[str], parse_json_list(payload.get("active_conditions", [])))

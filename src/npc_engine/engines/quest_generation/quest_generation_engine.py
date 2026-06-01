@@ -23,6 +23,7 @@ from typing import Any
 
 from neo4j import AsyncSession
 
+from npc_engine.config import get_settings
 from npc_engine.world.world_reader import get_world_state
 
 from pydantic import ValidationError
@@ -104,7 +105,7 @@ class QuestGenerationEngine:
             ValueError: If no template exists for the giver's archetype or the
                 character node is not found.
         """
-        world_state = await get_world_state(session=session)
+        world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
         if world_state.quest_generation_rate < 1.0 and random.random() > world_state.quest_generation_rate:
             raise ValueError(
                 f"Quest generation suppressed by pacing engine "

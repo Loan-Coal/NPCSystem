@@ -15,6 +15,7 @@ from npc_engine.engines.base_engine import BaseEngine
 from npc_engine.scheduler.game_clock import ClockState, GameClock
 from npc_engine.scheduler.tick_lease import TickLeaseRepository, TickLeaseRepositoryProtocol
 from npc_engine.world.time_utils import TimePoint
+from npc_engine.config import get_settings
 from npc_engine.world.world_reader import get_world_state
 
 
@@ -243,7 +244,7 @@ class TickScheduler:
                 "need_decay": [],
                 "military": [],
             }
-            world_state = await get_world_state(session=session)
+            world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
             for tick_id in range(start_tick + 1, end_tick + 1):
                 unresolved = False
 

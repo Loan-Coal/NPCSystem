@@ -24,6 +24,7 @@ from npc_engine.engines.story_pacing.pacing_queries import (
     CYPHER_GET_RECENT_MAJOR_EVENTS,
 )
 from npc_engine.engines.story_pacing.pacing_rules_loader import PacingRules
+from npc_engine.config import get_settings
 from npc_engine.world.world_reader import get_world_state
 from npc_engine.world.world_writer import upsert_world_state
 
@@ -74,7 +75,7 @@ class StoryPacingEngine:
                 max_event_severity = 100
                 quest_generation_rate = 1.0
 
-            world_state = await get_world_state(session=session)
+            world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
             updated = world_state.model_copy(
                 update={
                     "max_event_severity": max_event_severity,

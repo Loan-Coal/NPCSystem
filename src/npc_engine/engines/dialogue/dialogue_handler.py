@@ -140,7 +140,7 @@ class DialogueHandler:
             npc_id=request.npc_id, mood_update=final_response.mood_update
         )
         if getattr(new_emotion, "arousal", 0) > 70:
-            world_state = await get_world_state(session=self._session)
+            world_state = await get_world_state(session=self._session, world_id=self._settings.WORLD_ID)
             game_time = TimePoint(
                 year=world_state.year,
                 season=world_state.season,

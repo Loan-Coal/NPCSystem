@@ -148,7 +148,7 @@ class EventHandler:
 
         async with self._lock:
             template = self._select_template(tick_id=tick_id)
-            world_state_check = await get_world_state(session=session)
+            world_state_check = await get_world_state(session=session, world_id=self._settings.WORLD_ID)
             if template.severity > world_state_check.max_event_severity:
                 LOGGER.debug(
                     "event_handler tick %d: skipping event severity=%d (cap=%d)",
@@ -218,7 +218,7 @@ class EventHandler:
                                 expires_at_tick=tick_id + rule.duration_ticks,
                             )
                 if template.severity >= 80:
-                    world_result = await tx.run(CYPHER_GET_WORLD_STATE, world_id="world")
+                    world_result = await tx.run(CYPHER_GET_WORLD_STATE, world_id=self._settings.WORLD_ID)
                     world_record = await world_result.single()
                     if world_record is None:
                         world_state = WorldState()

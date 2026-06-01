@@ -85,7 +85,7 @@ async def advance_clock(
 
         updated_world = None
         if request.advance_time_field is not None:
-            current_world = await get_world_state(session)
+            current_world = await get_world_state(session, world_id=settings.WORLD_ID)
             advanced = advance_time(request.advance_time_field, current_world)
             updated_world = await upsert_world_state(session, advanced)
             if request.advance_time_field == "day":
