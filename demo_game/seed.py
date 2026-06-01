@@ -603,25 +603,14 @@ def _seed_aldric_inventory(client: EngineClient) -> int:
 
 
 def _seed_aldric_currency(client: EngineClient) -> None:
-    """Ensure Aldric has enough currency to pay the quest reward.
-
-    Patches the Character node's currency_balance field if not already set.
+    """Verify Aldric's currency_balance is set (seeded via Character payload).
 
     Args:
         client: Authenticated EngineClient.
     """
-    try:
-        existing = client.get_node("Character", "aldric_merchant")
-        if existing and existing.get("currency_balance", 0) >= _ALDRIC_REWARD_AMOUNT:
-            logger.info("[seed] Aldric already has sufficient balance — skip")
-            return
-        client.upsert_node("Character", {
-            "id": "aldric_merchant",
-            "currency_balance": 200,
-        })
-        logger.info("[seed] Set Aldric currency_balance=200")
-    except Exception as exc:
-        logger.warning("[seed] Aldric currency patch skipped: %s", exc)
+    existing = client.get_node("Character", "aldric_merchant")
+    balance = (existing or {}).get("currency_balance", 0)
+    logger.info("[seed] Aldric currency_balance=%s", balance)
 
 
 def _seed_quests(client: EngineClient) -> None:
@@ -733,11 +722,10 @@ def seed_all(client: EngineClient) -> dict:
     # 3. Characters
     logger.info("[seed] Characters")
     for npc_id, name, archetype, faction_id, location_id, biography, gossipy, credulity, honesty, voice_descriptor in _NPCS:
-        _tally(_seed_node(
-            client,
-            "Character",
-            build_npc_payload(npc_id, name, archetype, faction_id, location_id, biography, gossipy, credulity, honesty, voice_descriptor),
-        ))
+        payload = build_npc_payload(npc_id, name, archetype, faction_id, location_id, biography, gossipy, credulity, honesty, voice_descriptor)
+        if npc_id == "aldric_merchant":
+            payload["currency_balance"] = 200
+        _tally(_seed_node(client, "Character", payload))
 
     # 4. MEMBER_OF edges
     logger.info("[seed] MEMBER_OF edges")
