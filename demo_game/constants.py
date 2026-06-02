@@ -41,6 +41,13 @@ NPC_DISPLAY_NAMES: dict[str, str] = {
 # Ordered list of location IDs; determines button order in the nav bar.
 LOCATIONS: list[str] = list(LOCATION_NPC_MAP.keys())
 
+# Inverse of LOCATION_NPC_MAP — maps each NPC to their home location.
+NPC_LOCATION_MAP: dict[str, str] = {
+    npc_id: loc_id
+    for loc_id, npcs in LOCATION_NPC_MAP.items()
+    for npc_id in npcs
+}
+
 # Background tint colours per location (RGB), used for the location bar.
 LOCATION_TINTS: dict[str, tuple[int, int, int]] = {
     "loc_tavern": (60, 35, 20),          # warm brown
@@ -68,6 +75,10 @@ FACTION_COLOURS: dict[str, tuple[int, int, int]] = {
     "thieves_guild":   (128, 80, 200),   # purple
     "neutral":         (96, 96, 96),     # grey
 }
+
+# Gold cost per bribe and standing gain applied to player's STANDS_WITH edge.
+BRIBE_GOLD_COST: int = 20
+BRIBE_STANDING_GAIN: int = 15
 
 # Faction membership for each demo NPC — derived from seed, stable for Munich demo.
 # See DEC-028 for why this is hardcoded rather than fetched from the graph.

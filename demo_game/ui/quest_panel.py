@@ -119,6 +119,13 @@ class QuestPanelWidget:
         title = self._quest_data.get("title", "Quest")
         title_surf = self._font_body.render(title, True, _CLR_AMBER)
         surface.blit(title_surf, (x, y))
+
+        source = self._quest_data.get("source")
+        badge_label = "[GENERATED]" if source == "generated" else "[SEEDED]"
+        badge_clr = _CLR_GREEN if source == "generated" else _CLR_GREY
+        badge_surf = self._font_label.render(badge_label, True, badge_clr)
+        surface.blit(badge_surf, (x + title_surf.get_width() + 8, y + 2))
+
         y += title_surf.get_height() + 8
 
         description = self._quest_data.get("description", "")

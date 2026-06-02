@@ -331,6 +331,29 @@ class EngineClient:
         self._raise_for_status(resp, f"GET /v1/graph/edges/{edge_type}/{src_id}/{dst_id}")
         return resp.json().get("data")
 
+    def delete_edge(self, edge_type: str, src_id: str, dst_id: str) -> bool:
+        """Delete an edge by type, source, and destination. Returns False if not found.
+
+        Args:
+            edge_type: Registered edge type, e.g. "LOCATED_AT".
+            src_id: Source node ID.
+            dst_id: Destination node ID.
+
+        Returns:
+            True if the edge was deleted, False if it did not exist (HTTP 404).
+
+        Raises:
+            EngineClientError: On any non-404 4xx or 5xx response.
+        """
+        resp = self._client.delete(
+            f"/v1/graph/edges/{edge_type}/{src_id}/{dst_id}",
+            timeout=self._graph_timeout,
+        )
+        if resp.status_code == 404:
+            return False
+        self._raise_for_status(resp, f"DELETE /v1/graph/edges/{edge_type}/{src_id}/{dst_id}")
+        return resp.json().get("data", {}).get("deleted", True)
+
     # ------------------------------------------------------------------
     # Graph writes
     # ------------------------------------------------------------------
@@ -647,6 +670,29 @@ class EngineClient:
         )
         self._raise_for_status(resp, "POST /v1/admin/quests/generate")
         return resp.json().get("data", {})
+
+    def get_quest_drafts(self, quest_giver_id: str | None = None) -> list[dict]:
+        """Return all draft quests, optionally filtered by quest giver.
+
+        Args:
+            quest_giver_id: Optional character ID to filter drafts by giver.
+
+        Returns:
+            List of quest property dicts with status='draft'.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        params: dict = {}
+        if quest_giver_id is not None:
+            params["quest_giver_id"] = quest_giver_id
+        resp = self._client.get(
+            "/v1/admin/quests/drafts",
+            params=params,
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, "GET /v1/admin/quests/drafts")
+        return resp.json().get("data", {}).get("drafts", [])
 
     def get_quest(self, quest_id: str) -> dict | None:
         """Fetch a quest by ID, or None if it does not exist.

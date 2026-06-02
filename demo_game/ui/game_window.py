@@ -23,7 +23,7 @@ import pygame
 
 from demo_game.client import EngineClient, EngineClientError
 from demo_game.config import DemoConfig
-from demo_game.constants import LOCATION_DISPLAY_NAMES, LOCATION_NPC_MAP, LOCATIONS, PALETTE
+from demo_game.constants import LOCATION_DISPLAY_NAMES, LOCATION_NPC_MAP, LOCATIONS, NPC_LOCATION_MAP, PALETTE
 from demo_game.game_controller import ControllerCallbacks, GameController
 from demo_game.emotion_poller import EmotionPoller
 from demo_game.graph_panel.poller import GraphPoller
@@ -119,6 +119,24 @@ class GameWindow:
         self._right.set_quest_accept_callback(lambda: self._ctrl.on_quest_accept(self._right))
         self._right.set_quest_complete_callback(lambda: self._ctrl.on_quest_complete(self._active_npc_id, self._right))
         self._right.set_quest_reward_callback(lambda: self._ctrl.on_quest_reward(self._right))
+
+        self._right.set_npc_selected(bool(self._active_npc_id))
+        self._right.set_generate_quest_callback(
+            lambda: self._ctrl.spawn_quest_generate(self._active_npc_id)
+        )
+        self._right.set_inspect_callback(
+            lambda: self._ctrl.spawn_inspect(self._active_npc_id)
+        )
+        self._right.set_give_item_callback(
+            lambda: self._right.start_item_pick(
+                lambda item: self._ctrl.on_give_item(self._active_npc_id, item, self._right)
+            )
+        )
+        self._right.set_travel_callback(self._on_travel_clicked)
+        self._right.set_bribe_callback(
+            lambda: self._ctrl.spawn_bribe(self._active_npc_id)
+        )
+
         self._right.set_trade_offer_callback(
             lambda: self._ctrl.on_trade_offer(self._ctrl.active_npc_id_for_trade or self._active_npc_id, self._right)
         )
@@ -149,6 +167,10 @@ class GameWindow:
                 self._handle_event(event)
             self._ctrl.poll_response_queue(self._active_npc_id, self._right)
             self._ctrl.poll_sidebar_queue()
+            self._ctrl.poll_generate_quest_queue(self._right)
+            self._ctrl.poll_inspect_queue(self._right)
+            self._ctrl.poll_travel_queue()
+            self._ctrl.poll_bribe_queue()
             self._left.set_waiting(self._ctrl.is_waiting)
             self._render()
             pygame.display.flip()
@@ -172,6 +194,12 @@ class GameWindow:
             self._right.handle_quest_click(event)
         elif self._right.show_trade_panel:
             self._right.handle_trade_click(event)
+        elif self._right.show_inventory_panel:
+            self._right.handle_inventory_event(event)
+        elif self._right.show_actions_panel:
+            self._right.handle_actions_event(event)
+        elif self._right.show_inspect_panel:
+            self._right.handle_scroll(event)
         elif self._active_npc_id:
             self._left.handle_scroll(event)
 
@@ -181,24 +209,38 @@ class GameWindow:
             self._left.set_active_npc(clicked_npc)
             self._ctrl.spawn_sidebar_fetch(clicked_npc)
             self._emotion_poller.set_active_npc(clicked_npc)
+            self._right.set_npc_selected(True)
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             self._handle_nav_click(event.pos)
         if event.type == pygame.KEYDOWN:
             self._handle_key(event.key)
 
+    def _set_active_location(self, loc_id: str) -> None:
+        """Switch active location, update left panel, and trigger travel API call."""
+        if loc_id == self._active_location_id:
+            self._ctrl.spawn_travel(loc_id)
+            return
+        self._active_location_id = loc_id
+        npcs = LOCATION_NPC_MAP[loc_id]
+        self._active_npc_id = npcs[0]
+        self._left.set_location(loc_id, npcs[0])
+        self._emotion_poller.set_active_npc(npcs[0])
+        self._right.set_npc_selected(True)
+        self._ctrl.spawn_travel(loc_id)
+
     def _handle_nav_click(self, pos: tuple[int, int]) -> None:
         if pos[1] < self._window_h - _NAV_BAR_H:
             return
         idx = pos[0] // (self._window_w // len(LOCATIONS))
         if 0 <= idx < len(LOCATIONS):
-            loc_id = LOCATIONS[idx]
-            if loc_id != self._active_location_id:
-                self._active_location_id = loc_id
-                npcs = LOCATION_NPC_MAP[loc_id]
-                self._active_npc_id = npcs[0]
-                self._left.set_location(loc_id, npcs[0])
-                self._emotion_poller.set_active_npc(npcs[0])
+            self._set_active_location(LOCATIONS[idx])
+
+    def _on_travel_clicked(self) -> None:
+        """Travel button handler: move player to the selected NPC's home location."""
+        loc_id = NPC_LOCATION_MAP.get(self._active_npc_id)
+        if loc_id:
+            self._set_active_location(loc_id)
 
     def _handle_key(self, key: int) -> None:
         if key == pygame.K_w:

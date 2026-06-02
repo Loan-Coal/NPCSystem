@@ -2,15 +2,18 @@
 Module: right_panel
 Layer: demo_game.ui
 Purpose: Right panel renderer — cycles GRAPH → KNOWLEDGE → PLAYER STATUS → CHAIN →
-         TRADE → INVENTORY via Tab. Owns KnowledgeSidebarWidget, QuestPanelWidget,
-         GossipChainWidget, TradePanelWidget, and InventoryPanelWidget; reads the
-         pre-rendered graph surface from GraphPoller.
+         TRADE → INVENTORY → ACTIONS → INSPECT via Tab. Owns all panel widgets;
+         reads the pre-rendered graph surface from GraphPoller.
 Does NOT: make HTTP calls or hold business logic.
 Dependencies injected: None (pure rendering + callback registration).
 Dependencies: pygame, demo_game.graph_panel.poller, demo_game.ui.knowledge_sidebar,
               demo_game.ui.quest_panel, demo_game.ui.gossip_chain, demo_game.ui.trade_panel,
-              demo_game.ui.inventory_panel
+              demo_game.ui.inventory_panel, demo_game.ui.inspect_panel
 Used by: demo_game.ui.game_window
+
+NOTE: ~323 lines — accepted over the 300-line limit (see DEC-047). Single cohesive
+class; the overage is one give-mode lifecycle feature. Split trigger: second overlay
+workflow of this kind.
 """
 
 from __future__ import annotations
@@ -21,7 +24,9 @@ from typing import Callable
 import pygame
 
 from demo_game.graph_panel.poller import GraphPoller
+from demo_game.ui.actions_panel import ActionsPanelWidget
 from demo_game.ui.gossip_chain import GossipChainWidget
+from demo_game.ui.inspect_panel import InspectPanelWidget
 from demo_game.ui.knowledge_sidebar import KnowledgeSidebarWidget
 from demo_game.ui.inventory_panel import InventoryPanelWidget
 from demo_game.ui.quest_panel import QuestPanelWidget
@@ -45,6 +50,8 @@ class RightPanel(enum.Enum):
     CHAIN = "CHAIN"
     TRADE = "TRADE"
     PLAYER_INVENTORY = "INVENTORY"
+    ACTIONS = "ACTIONS"
+    INSPECT = "INSPECT"
 
 
 class RightPanelRenderer:
@@ -75,6 +82,8 @@ class RightPanelRenderer:
         self._chain = GossipChainWidget(font_body, font_label)
         self._trade_panel = TradePanelWidget(font_body, font_label)
         self._inventory_panel = InventoryPanelWidget(font_body, font_label)
+        self._actions_panel = ActionsPanelWidget(font_label)
+        self._inspect_panel = InspectPanelWidget(font_body, font_label)
         self._active: RightPanel = RightPanel.GRAPH
 
     # ------------------------------------------------------------------
@@ -170,10 +179,92 @@ class RightPanelRenderer:
         """Register the callback for the [CONFIRM TRADE] button."""
         self._trade_panel.set_confirm_callback(cb)
 
+    def set_npc_selected(self, selected: bool) -> None:
+        """Propagate NPC selection state to the actions panel."""
+        self._actions_panel.set_npc_selected(selected)
+
+    def set_generate_quest_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when [Generate Quest] is clicked."""
+        self._actions_panel.set_generate_quest_callback(cb)
+
+    def set_inspect_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when [Inspect] is clicked."""
+        self._actions_panel.set_inspect_callback(cb)
+
+    def set_give_item_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when [Give item] is clicked."""
+        self._actions_panel.set_give_item_callback(cb)
+
+    def set_travel_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when [Travel] is clicked."""
+        self._actions_panel.set_travel_callback(cb)
+
+    def set_bribe_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when [Bribe] is clicked."""
+        self._actions_panel.set_bribe_callback(cb)
+
+    def start_item_pick(self, on_selected: Callable[[dict], None]) -> None:
+        """Enter give mode: switch to INVENTORY tab with clickable rows.
+
+        Wraps on_selected and a cancel handler so both stop give mode and
+        return to the ACTIONS tab automatically before firing the caller's
+        callback.
+
+        Args:
+            on_selected: Called with the chosen item dict after state is cleaned up.
+        """
+        def _wrapped_selected(item: dict) -> None:
+            self._inventory_panel.stop_give_mode()
+            self._active = RightPanel.ACTIONS
+            on_selected(item)
+
+        def _wrapped_cancel() -> None:
+            self._inventory_panel.stop_give_mode()
+            self._active = RightPanel.ACTIONS
+
+        self._inventory_panel.start_give_mode(_wrapped_selected, _wrapped_cancel)
+        self._active = RightPanel.PLAYER_INVENTORY
+
+    def handle_inventory_event(self, event: pygame.event.Event) -> None:
+        """Forward an event to the inventory panel (give-mode click detection)."""
+        self._inventory_panel.handle_event(event)
+
+    def handle_actions_event(self, event: pygame.event.Event) -> None:
+        """Forward an event to the actions panel (for button and scroll detection)."""
+        self._actions_panel.handle_event(event)
+
+    @property
+    def show_inventory_panel(self) -> bool:
+        """True when the PLAYER_INVENTORY tab is the active view."""
+        return self._active == RightPanel.PLAYER_INVENTORY
+
+    @property
+    def show_actions_panel(self) -> bool:
+        """True when the ACTIONS tab is the active view."""
+        return self._active == RightPanel.ACTIONS
+
+    @property
+    def show_inspect_panel(self) -> bool:
+        """True when the INSPECT tab is the active view."""
+        return self._active == RightPanel.INSPECT
+
+    def set_inspect_data(self, npc_id: str, data: dict) -> None:
+        """Push fetched NPC data into the inspect panel and switch to INSPECT tab."""
+        self._inspect_panel.set_data(npc_id, data)
+        self._active = RightPanel.INSPECT
+
+    def clear_inspect(self) -> None:
+        """Clear the inspect panel (called on fetch error)."""
+        self._inspect_panel.clear()
+
     def handle_scroll(self, event: pygame.event.Event) -> None:
         """Route MOUSEWHEEL events to the active scrollable widget."""
         if self._active == RightPanel.KNOWLEDGE:
             self._sidebar.handle_event(event)
+        elif self._active == RightPanel.ACTIONS:
+            self._actions_panel.handle_event(event)
+        elif self._active == RightPanel.INSPECT:
+            self._inspect_panel.handle_event(event)
 
     def handle_quest_click(self, event: pygame.event.Event) -> None:
         """Forward an event to the quest panel (for accept-button detection)."""
@@ -210,6 +301,10 @@ class RightPanelRenderer:
             self._trade_panel.draw(screen, content_rect)
         elif self._active == RightPanel.PLAYER_INVENTORY:
             self._inventory_panel.draw(screen, content_rect)
+        elif self._active == RightPanel.ACTIONS:
+            self._actions_panel.draw(screen, content_rect)
+        elif self._active == RightPanel.INSPECT:
+            self._inspect_panel.draw(screen, content_rect)
         else:
             self._draw_graph(screen, rect)
 

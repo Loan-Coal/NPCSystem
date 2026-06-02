@@ -1,13 +1,18 @@
 """
 Module: game_controller
 Layer: demo_game
-Purpose: Background-thread orchestration, response-queue dispatch, and quest/trade
-         action handlers for the demo game. Decoupled from pygame rendering so it
-         can be unit-tested without a display.
-Dependencies: demo_game.client, demo_game.config, demo_game.dialogue,
-              demo_game.knowledge_sidebar_fetcher,
+Purpose: Background-thread orchestration and queue dispatch for the demo game.
+         Quest, trade, give-item, and travel action handlers; dialogue submission.
+         Quest/trade handlers are delegated to QuestTradeController. Decoupled
+         from pygame rendering so it can be unit-tested without a display.
+Dependencies: demo_game.action_workers, demo_game.client, demo_game.dialogue,
+              demo_game.constants, demo_game.quest_trade_controller,
               npc_engine.engines.interaction
 Used by: demo_game.ui.game_window
+
+NOTE: ~318 lines — accepted over the 300-line limit (see DEC-048). GameController
+is a single cohesive class; splitting travel into a separate file would require
+yet another delegation layer that adds no clarity.
 """
 
 from __future__ import annotations
@@ -15,13 +20,26 @@ from __future__ import annotations
 import queue
 import sys
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable
 
+from demo_game.action_workers import (
+    bribe_worker,
+    dialogue_worker,
+    fetch_sidebar_worker,
+    generate_quest_worker,
+    inspect_worker,
+    travel_worker,
+)
 from demo_game.client import EngineClient, EngineClientError
-from demo_game.constants import LOCATION_DISPLAY_NAMES
-from demo_game.dialogue import build_dialogue_payload, degradation_color, parse_dialogue_response, DialogueTurn
-from demo_game.knowledge_sidebar_fetcher import fetch_npc_knowledge
+from demo_game.constants import LOCATION_DISPLAY_NAMES, NPC_FACTIONS
+from demo_game.dialogue import (
+    DialogueTurn,
+    build_dialogue_payload,
+    degradation_color,
+    parse_dialogue_response,
+)
+from demo_game.quest_trade_controller import QuestTradeController
 from npc_engine.engines.interaction import dispatch_interaction
 
 if TYPE_CHECKING:
@@ -43,27 +61,10 @@ class ControllerCallbacks:
     on_set_status: Callable | None = None        # (text, duration) -> None
 
 
-def _dialogue_worker(client: EngineClient, payload: dict, result_q: queue.Queue) -> None:
-    """Call post_dialogue in a daemon thread and push the result or exception."""
-    try:
-        result_q.put(client.post_dialogue(**payload))
-    except Exception as exc:
-        result_q.put(exc)
-
-
-def _fetch_sidebar_worker(client: EngineClient, npc_id: str, result_q: queue.Queue) -> None:
-    """Fetch KNOWS_ABOUT pairs for npc_id and push (status, npc_id, data)."""
-    try:
-        pairs = fetch_npc_knowledge(client, npc_id)
-        result_q.put(("ok", npc_id, pairs))
-    except Exception as exc:
-        result_q.put(("err", npc_id, exc))
-
-
 class GameController:
     """Manages background threads, queues, and interaction dispatch for the demo.
 
-    Also owns quest/trade callbacks so GameWindow stays under 300 lines.
+    Quest, trade, and give-item handlers are delegated to QuestTradeController.
 
     Args:
         client: Initialised EngineClient.
@@ -83,16 +84,42 @@ class GameController:
 
         self._response_q: queue.Queue = queue.Queue()
         self._sidebar_fetch_q: queue.Queue = queue.Queue()
+        self._generate_quest_q: queue.Queue = queue.Queue()
+        self._inspect_q: queue.Queue = queue.Queue()
+        self._travel_q: queue.Queue = queue.Queue()
+        self._bribe_q: queue.Queue = queue.Queue()
         self._is_waiting = False
         self._pending_npc_id: str | None = None
         self._last_submitted_message: str = ""
-        self.quest_id: str | None = None
-        self.active_npc_id_for_trade: str | None = None
+
+        self._qt = QuestTradeController(
+            client=client,
+            player_id=player_id,
+            on_set_status=callbacks.on_set_status,
+        )
 
     @property
     def is_waiting(self) -> bool:
         """True while a dialogue request is in-flight."""
         return self._is_waiting
+
+    @property
+    def quest_id(self) -> str | None:
+        """Active quest ID (delegated to QuestTradeController)."""
+        return self._qt.quest_id
+
+    @quest_id.setter
+    def quest_id(self, value: str | None) -> None:
+        self._qt.quest_id = value
+
+    @property
+    def active_npc_id_for_trade(self) -> str | None:
+        """Active NPC for trade (delegated to QuestTradeController)."""
+        return self._qt.active_npc_id_for_trade
+
+    @active_npc_id_for_trade.setter
+    def active_npc_id_for_trade(self, value: str | None) -> None:
+        self._qt.active_npc_id_for_trade = value
 
     # ------------------------------------------------------------------
     # Thread spawning
@@ -107,7 +134,7 @@ class GameController:
         self._pending_npc_id = npc_id
         self._is_waiting = True
         threading.Thread(
-            target=_dialogue_worker,
+            target=dialogue_worker,
             args=(self._client, payload, self._response_q),
             daemon=True,
         ).start()
@@ -115,8 +142,48 @@ class GameController:
     def spawn_sidebar_fetch(self, npc_id: str) -> None:
         """Launch a background thread to fetch KNOWS_ABOUT data for npc_id."""
         threading.Thread(
-            target=_fetch_sidebar_worker,
+            target=fetch_sidebar_worker,
             args=(self._client, npc_id, self._sidebar_fetch_q),
+            daemon=True,
+        ).start()
+
+    def spawn_quest_generate(self, npc_id: str) -> None:
+        """Launch a background thread for POST /v1/admin/quests/generate."""
+        threading.Thread(
+            target=generate_quest_worker,
+            args=(self._client, npc_id, self._generate_quest_q),
+            daemon=True,
+        ).start()
+
+    def spawn_inspect(self, npc_id: str) -> None:
+        """Launch a background thread to fetch full NPC graph data for the INSPECT tab."""
+        threading.Thread(
+            target=inspect_worker,
+            args=(self._client, npc_id, self._inspect_q),
+            daemon=True,
+        ).start()
+
+    def spawn_travel(self, location_id: str) -> None:
+        """Launch a background thread to move the player to location_id."""
+        threading.Thread(
+            target=travel_worker,
+            args=(self._client, self._player_id, location_id, self._travel_q),
+            daemon=True,
+        ).start()
+
+    def spawn_bribe(self, npc_id: str) -> None:
+        """Launch a background thread to bribe the selected NPC's faction.
+
+        Looks up the faction from NPC_FACTIONS. No-op if the NPC has no faction entry.
+        """
+        faction_id = NPC_FACTIONS.get(npc_id)
+        if not faction_id:
+            if self._cb.on_set_status:
+                self._cb.on_set_status(f"Cannot bribe: {npc_id} has no faction", 2.0)
+            return
+        threading.Thread(
+            target=bribe_worker,
+            args=(self._client, self._player_id, npc_id, faction_id, self._bribe_q),
             daemon=True,
         ).start()
 
@@ -138,6 +205,60 @@ class GameController:
             print(f"sidebar fetch error for {npc_id}: {data}", file=sys.stderr)
             if self._cb.on_clear_sidebar:
                 self._cb.on_clear_sidebar()
+
+    def poll_generate_quest_queue(self, right: RightPanelRenderer) -> None:
+        """Drain one generate-quest result and switch to PLAYER STATUS tab."""
+        try:
+            status, payload = self._generate_quest_q.get_nowait()
+        except queue.Empty:
+            return
+        if status == "ok":
+            right.set_quest(payload)
+            from demo_game.ui.right_panel import RightPanel as _RP
+            right.switch_to(_RP.PLAYER_STATUS)
+            if self._cb.on_set_status:
+                self._cb.on_set_status("Quest generated!", 3.0)
+        else:
+            if self._cb.on_set_status:
+                self._cb.on_set_status(f"Generate failed: {payload}", 3.0)
+
+    def poll_inspect_queue(self, right: RightPanelRenderer) -> None:
+        """Drain one inspect result and switch to INSPECT tab."""
+        try:
+            status, npc_id, payload = self._inspect_q.get_nowait()
+        except queue.Empty:
+            return
+        if status == "ok":
+            right.set_inspect_data(npc_id, payload)
+            if self._cb.on_set_status:
+                self._cb.on_set_status(f"Inspect: {npc_id}", 2.0)
+        else:
+            right.clear_inspect()
+            if self._cb.on_set_status:
+                self._cb.on_set_status(f"Inspect failed: {payload}", 2.0)
+
+    def poll_travel_queue(self) -> None:
+        """Drain one travel result and update status bar."""
+        try:
+            item = self._travel_q.get_nowait()
+        except queue.Empty:
+            return
+        if item[0] == "ok" and self._cb.on_set_status:
+            self._cb.on_set_status(f"Travelled to {item[1]}", 2.0)
+        elif item[0] == "err" and self._cb.on_set_status:
+            self._cb.on_set_status(f"Travel failed: {item[2]}", 2.0)
+
+    def poll_bribe_queue(self) -> None:
+        """Drain one bribe result and update status bar."""
+        try:
+            item = self._bribe_q.get_nowait()
+        except queue.Empty:
+            return
+        if item[0] == "ok" and self._cb.on_set_status:
+            faction_id, new_standing = item[1], item[2]
+            self._cb.on_set_status(f"Bribed {faction_id}: standing now {new_standing}", 3.0)
+        elif item[0] == "err" and self._cb.on_set_status:
+            self._cb.on_set_status(f"Bribe failed: {item[2]}", 2.0)
 
     def poll_response_queue(self, active_npc_id: str, right: RightPanelRenderer) -> None:
         """Drain one dialogue result, update UI panels, and dispatch any proposal."""
@@ -163,118 +284,39 @@ class GameController:
         if turn.interaction_proposal:
             self._dispatch_proposal(turn, npc_id, right)
         elif self._last_submitted_message == "I'd like to trade.":
-            self._open_trade_fallback(npc_id, right)
+            self._qt.open_trade_fallback(npc_id, right)
 
     # ------------------------------------------------------------------
-    # Quest / trade action handlers (owned here to keep GameWindow thin)
+    # Quest / trade / give-item — delegates to QuestTradeController
     # ------------------------------------------------------------------
 
     def on_quest_accept(self, right: RightPanelRenderer) -> None:
         """Accept the current active quest."""
-        if not self.quest_id:
-            return
-        try:
-            self._client.post_quest_accept(self.quest_id, self._player_id)
-        except EngineClientError:
-            return
-        right.set_quest(self._client.get_quest(self.quest_id))
+        self._qt.on_quest_accept(right)
 
     def on_quest_complete(self, npc_id: str, right: RightPanelRenderer) -> None:
         """Send claim_completion for the current quest."""
-        if not self.quest_id:
-            return
-        try:
-            result = self._client.post_interaction(
-                player_id=self._player_id,
-                npc_id=npc_id,
-                proposal={"kind": "claim_completion", "target_id": self.quest_id, "payload": {}},
-            )
-        except EngineClientError as exc:
-            if self._cb.on_set_status:
-                self._cb.on_set_status(f"claim error: {exc}", 2.0)
-            return
-        data = result.get("data") or {}
-        if data.get("negotiation_state"):
-            right.set_quest(data["negotiation_state"])
-        if data.get("status") == "pending_confirm":
-            from demo_game.ui.right_panel import RightPanel as _RP
-            right.switch_to(_RP.PLAYER_STATUS)
-            if self._cb.on_set_status:
-                self._cb.on_set_status("Quest complete — accept reward above", 2.0)
-        elif data.get("narration_hint") == "npc_refuses_objective_not_met":
-            if self._cb.on_set_status:
-                self._cb.on_set_status("Objectives not yet met", 2.0)
+        self._qt.on_quest_complete(npc_id, right)
 
     def on_quest_reward(self, right: RightPanelRenderer) -> None:
         """Apply quest rewards and refresh inventory."""
-        if not self.quest_id:
-            return
-        try:
-            result = self._client.post_quest_reward(self.quest_id, self._player_id)
-        except EngineClientError as exc:
-            if self._cb.on_set_status:
-                self._cb.on_set_status(f"reward error: {exc}", 2.0)
-            return
-        quest_state = result.get("data", {}).get("quest_state") if isinstance(result.get("data"), dict) else None
-        if quest_state:
-            right.set_quest(quest_state)
-        if self._cb.on_set_status:
-            self._cb.on_set_status("Rewards applied!", 2.0)
-        self._refresh_inventory(right)
+        self._qt.on_quest_reward(right)
 
     def on_trade_offer(self, npc_id: str, right: RightPanelRenderer) -> None:
         """Send the NPC's asking price as a currency offer."""
-        try:
-            result = self._client.post_interaction(
-                player_id=self._player_id,
-                npc_id=npc_id,
-                proposal={"kind": "currency_offer_asking", "target_id": None, "payload": {}},
-            )
-            right.set_negotiation_state((result.get("data") or {}).get("negotiation_state"))
-        except EngineClientError as exc:
-            if self._cb.on_set_status:
-                self._cb.on_set_status(f"offer error: {exc}", 2.0)
+        self._qt.on_trade_offer(npc_id, right)
 
     def on_trade_confirm(self, npc_id: str, right: RightPanelRenderer) -> None:
-        """Confirm a pending trade: execute item+currency transfer."""
-        state = right.get_trade_state()
-        if not state or state.get("status") != "pending_confirm":
-            return
-        offered_price = state.get("current_offer") or state.get("threshold", 0)
-        try:
-            self._client.post_trade(
-                buyer_id=self._player_id,
-                seller_id=npc_id,
-                item_id=state["item_id"],
-                item_type=state.get("item_type", "spice"),
-                offered_price=int(offered_price),
-                tick=0,
-            )
-        except EngineClientError as exc:
-            if self._cb.on_set_status:
-                self._cb.on_set_status(f"trade failed: {exc}", 2.0)
-            return
-        right.set_negotiation_state(None)
-        if self._cb.on_set_status:
-            self._cb.on_set_status("Trade complete!", 4.0)
-        try:
-            from demo_game.ui.right_panel import RightPanel as _RP
-            self._refresh_inventory(right)
-            right.switch_to(_RP.PLAYER_INVENTORY)
-        except EngineClientError:
-            pass
+        """Confirm a pending trade."""
+        self._qt.on_trade_confirm(npc_id, right)
+
+    def on_give_item(self, npc_id: str, item: dict | None, right: RightPanelRenderer) -> None:
+        """Give the specified item to the NPC via the interaction endpoint."""
+        self._qt.on_give_item(npc_id, item, right)
 
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
-
-    def _refresh_inventory(self, right: RightPanelRenderer) -> None:
-        try:
-            right.set_inventory(self._client.get_items_for_character(self._player_id))
-            char = self._client.get_node("Character", self._player_id)
-            right.set_player_gold((char or {}).get("currency_balance"))
-        except EngineClientError:
-            pass
 
     def _apply_relation_band(self, turn: DialogueTurn) -> None:
         deltas = turn.relation_deltas
@@ -302,88 +344,9 @@ class GameController:
             self._cb.on_set_status(f"[INTERACTION] {state.ui_directive}", 2.0)
 
         if proposal.kind == "propose_trade":
-            self.active_npc_id_for_trade = npc_id
-            self._open_trade(npc_id, proposal.payload, right)
+            self._qt.active_npc_id_for_trade = npc_id
+            self._qt.open_trade(npc_id, proposal.payload, right)
         elif proposal.kind == "propose_quest":
-            self._open_quest(npc_id, proposal, right)
+            self._qt.open_quest(npc_id, proposal, right)
         elif proposal.kind in {"claim_completion", "give_item"}:
-            self._claim_completion(npc_id, proposal, right)
-
-    def _open_trade(self, npc_id: str, payload: dict, right: RightPanelRenderer) -> None:
-        from demo_game.ui.right_panel import RightPanel as _RP
-
-        try:
-            npc_char = self._client.get_node("Character", npc_id)
-            right.set_npc_trade_gold((npc_char or {}).get("currency_balance"))
-        except EngineClientError:
-            pass
-        try:
-            result = self._client.post_interaction(
-                player_id=self._player_id,
-                npc_id=npc_id,
-                proposal={"kind": "propose_trade", "target_id": "northern_spice_bundle", "payload": payload},
-            )
-            right.set_negotiation_state((result.get("data") or {}).get("negotiation_state"))
-            right.switch_to(_RP.TRADE)
-        except EngineClientError as exc:
-            if self._cb.on_set_status:
-                self._cb.on_set_status(f"trade open error: {exc}", 2.0)
-
-    def _open_quest(self, npc_id: str, proposal: Any, right: RightPanelRenderer) -> None:
-        from demo_game.ui.right_panel import RightPanel as _RP
-
-        try:
-            result = self._client.post_interaction(
-                player_id=self._player_id,
-                npc_id=npc_id,
-                proposal={"kind": "propose_quest", "target_id": proposal.target_id, "payload": proposal.payload},
-            )
-            quest_state = (result.get("data") or {}).get("negotiation_state")
-            if quest_state:
-                right.set_quest(quest_state)
-                self.quest_id = quest_state.get("quest_id") or self.quest_id
-            right.switch_to(_RP.PLAYER_STATUS)
-        except EngineClientError as exc:
-            if self._cb.on_set_status:
-                self._cb.on_set_status(f"quest open error: {exc}", 2.0)
-
-    def _claim_completion(self, npc_id: str, proposal: Any, right: RightPanelRenderer) -> None:
-        from demo_game.ui.right_panel import RightPanel as _RP
-
-        try:
-            result = self._client.post_interaction(
-                player_id=self._player_id,
-                npc_id=npc_id,
-                proposal={"kind": proposal.kind, "target_id": proposal.target_id, "payload": proposal.payload},
-            )
-            data = result.get("data") or {}
-            if data.get("negotiation_state"):
-                right.set_quest(data["negotiation_state"])
-            if data.get("status") == "pending_confirm":
-                right.switch_to(_RP.PLAYER_STATUS)
-                if self._cb.on_set_status:
-                    self._cb.on_set_status("Quest complete — accept reward above", 2.0)
-        except EngineClientError as exc:
-            if self._cb.on_set_status:
-                self._cb.on_set_status(f"claim error: {exc}", 2.0)
-
-    def _open_trade_fallback(self, npc_id: str, right: RightPanelRenderer) -> None:
-        from demo_game.ui.right_panel import RightPanel as _RP
-
-        self.active_npc_id_for_trade = npc_id
-        try:
-            npc_char = self._client.get_node("Character", npc_id)
-            right.set_npc_trade_gold((npc_char or {}).get("currency_balance"))
-        except EngineClientError:
-            pass
-        try:
-            result = self._client.post_interaction(
-                player_id=self._player_id,
-                npc_id=npc_id,
-                proposal={"kind": "propose_trade", "target_id": "northern_spice_bundle", "payload": {"item_type": "spice"}},
-            )
-            right.set_negotiation_state((result.get("data") or {}).get("negotiation_state"))
-            right.switch_to(_RP.TRADE)
-        except EngineClientError as exc:
-            if self._cb.on_set_status:
-                self._cb.on_set_status(f"trade fallback error: {exc}", 2.0)
+            self._qt.claim_completion(npc_id, proposal, right)

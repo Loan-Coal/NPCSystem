@@ -49,11 +49,11 @@ def _make_renderer():
 # ---------------------------------------------------------------------------
 
 
-def test_right_panel_enum_has_six_values() -> None:
+def test_right_panel_enum_has_eight_values() -> None:
     from demo_game.ui.right_panel import RightPanel
 
     panels = list(RightPanel)
-    assert len(panels) == 6
+    assert len(panels) == 8
 
 
 def test_right_panel_enum_values() -> None:
@@ -146,3 +146,71 @@ def test_show_sidebar_true_only_on_knowledge() -> None:
     assert renderer.show_sidebar is False           # CHAIN
     renderer.cycle_tab()
     assert renderer.show_sidebar is False           # back to GRAPH
+
+
+# ---------------------------------------------------------------------------
+# start_item_pick
+# ---------------------------------------------------------------------------
+
+
+def test_start_item_pick_switches_to_inventory_tab() -> None:
+    from demo_game.ui.right_panel import RightPanel
+
+    renderer = _make_renderer()
+    renderer.start_item_pick(lambda _: None)
+    assert renderer.active == RightPanel.PLAYER_INVENTORY
+
+
+def test_start_item_pick_on_selected_calls_callback_with_item() -> None:
+    renderer = _make_renderer()
+    received = []
+    renderer.start_item_pick(lambda item: received.append(item))
+    item = {"id": "pouch_01", "name": "Coin Pouch"}
+    # simulate inventory panel firing the wrapped on_selected
+    renderer._inventory_panel._on_item_selected(item)
+    assert received == [item]
+
+
+def test_start_item_pick_on_selected_returns_to_actions_tab() -> None:
+    from demo_game.ui.right_panel import RightPanel
+
+    renderer = _make_renderer()
+    renderer.start_item_pick(lambda _: None)
+    renderer._inventory_panel._on_item_selected({"id": "x"})
+    assert renderer.active == RightPanel.ACTIONS
+
+
+def test_start_item_pick_on_cancel_returns_to_actions_tab() -> None:
+    from demo_game.ui.right_panel import RightPanel
+
+    renderer = _make_renderer()
+    renderer.start_item_pick(lambda _: None)
+    renderer._inventory_panel._on_give_cancel()
+    assert renderer.active == RightPanel.ACTIONS
+
+
+def test_start_item_pick_on_selected_stops_give_mode() -> None:
+    renderer = _make_renderer()
+    renderer.start_item_pick(lambda _: None)
+    renderer._inventory_panel._on_item_selected({"id": "x"})
+    assert renderer._inventory_panel._give_mode is False
+
+
+def test_start_item_pick_on_cancel_stops_give_mode() -> None:
+    renderer = _make_renderer()
+    renderer.start_item_pick(lambda _: None)
+    renderer._inventory_panel._on_give_cancel()
+    assert renderer._inventory_panel._give_mode is False
+
+
+# ---------------------------------------------------------------------------
+# set_travel_callback
+# ---------------------------------------------------------------------------
+
+
+def test_set_travel_callback_delegates_to_actions_panel() -> None:
+    renderer = _make_renderer()
+    called = []
+    renderer.set_travel_callback(lambda: called.append(1))
+    renderer._actions_panel._on_travel()
+    assert called == [1]
