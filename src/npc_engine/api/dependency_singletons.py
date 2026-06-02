@@ -27,6 +27,8 @@ from npc_engine.engines.faction_politics.rules_loader import load_rules
 from npc_engine.engines.story_pacing.story_pacing_engine import StoryPacingEngine
 from npc_engine.engines.story_pacing.pacing_rules_loader import load_pacing_rules
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
+from npc_engine.engines.quest_generation.event_quest_trigger import EventQuestTrigger
+from npc_engine.engines.quest_generation.need_quest_trigger import NeedQuestTrigger
 from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
 from npc_engine.engines.quest_generation.template_loader import load_templates
 from npc_engine.engines.routine.routine_engine import RoutineEngine
@@ -261,6 +263,8 @@ def get_tick_scheduler() -> TickScheduler:
         agenda_engine=get_agenda_engine(),
         need_decay_engine=get_need_decay_engine(),
         military_engine=get_military_engine(),
+        event_quest_trigger=get_event_quest_trigger(),
+        need_quest_trigger=get_need_quest_trigger(),
         engine_status_store=get_engine_status_store(),
         gossip_interval=settings.GOSSIP_TICK_INTERVAL,
         event_interval=settings.EVENT_TICK_INTERVAL,
@@ -548,6 +552,26 @@ def get_military_engine():
     from npc_engine.engines.military.military_engine import MilitaryEngine
 
     return MilitaryEngine()
+
+
+@lru_cache
+def get_event_quest_trigger() -> EventQuestTrigger:
+    """Create singleton EventQuestTrigger wired to the shared quest generation engine.
+
+    Returns:
+        EventQuestTrigger instance using default trigger event types and military archetypes.
+    """
+    return EventQuestTrigger(generation_engine=get_quest_generation_engine())
+
+
+@lru_cache
+def get_need_quest_trigger() -> NeedQuestTrigger:
+    """Create singleton NeedQuestTrigger wired to the shared quest generation engine.
+
+    Returns:
+        NeedQuestTrigger instance using the default need threshold.
+    """
+    return NeedQuestTrigger(generation_engine=get_quest_generation_engine())
 
 
 @lru_cache

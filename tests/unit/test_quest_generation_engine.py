@@ -373,3 +373,194 @@ async def test_generate_writes_draft_status(monkeypatch) -> None:
     await engine.generate(session=session, quest_giver_id="giver_001")
 
     assert captured["status"] == "draft", f"Expected 'draft', got {captured.get('status')!r}"
+
+
+# ---------------------------------------------------------------------------
+# Test 9: slot-fill prompt includes GIVER_NEEDS when NPC has needs
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_generate_includes_needs_in_slot_fill_prompt(monkeypatch) -> None:
+    async def fake_needs(session: Any, character_id: str) -> list:
+        return [{"kind": "supply", "level": 15}]
+
+    async def fake_items(session: Any, *, character_id: str, k: int = 5) -> list:
+        return []
+
+    async def fake_location_id(session: Any, npc_id: str) -> str | None:
+        return "tavern"
+
+    async def fake_groups(session: Any, *, character_id: str, include_dissolved: bool = False) -> list:
+        return []
+
+    monkeypatch.setattr(
+        "npc_engine.engines.quest_generation.quest_generation_engine.get_needs_for_character",
+        fake_needs,
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.quest_generation.quest_generation_engine.get_items_for_character",
+        fake_items,
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.quest_generation.quest_generation_engine.get_npc_location_id",
+        fake_location_id,
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.quest_generation.quest_generation_engine.get_groups_for_character_svc",
+        fake_groups,
+    )
+
+    session = _FakeSessionWithNodes(
+        node_map={
+            "giver_001": {"archetype": "merchant", "name": "Bob"},
+            "item_001": {"labels": ["Item"]},
+        }
+    )
+
+    captured_prompts: list[str] = []
+
+    async def capture_llm(prompt: str, schema: Any, max_tokens: int, system: str = "") -> dict:
+        captured_prompts.append(prompt)
+        if len(captured_prompts) == 1:
+            return {"item": "item_001"}
+        return {"description": "Find supplies!", "npc_plea": "We need supplies!"}
+
+    llm_client = MagicMock()
+    llm_client.generate_structured = capture_llm
+
+    engine = _make_engine(llm_client)
+    result = await engine.generate(session=session, quest_giver_id="giver_001")
+
+    assert isinstance(result, GeneratedQuest)
+    assert len(captured_prompts) >= 1
+    slot_fill_prompt = captured_prompts[0]
+    assert "supply" in slot_fill_prompt, "Expected need kind 'supply' in slot-fill prompt"
+    assert "GIVER_NEEDS" in slot_fill_prompt, "Expected GIVER_NEEDS label in slot-fill prompt"
+
+
+# ---------------------------------------------------------------------------
+# Test 10: slot-fill prompt includes GIVER_LOCATION when NPC has a location
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_generate_includes_location_in_slot_fill_prompt(monkeypatch) -> None:
+    async def fake_needs(session: Any, character_id: str) -> list:
+        return []
+
+    async def fake_items(session: Any, *, character_id: str, k: int = 5) -> list:
+        return []
+
+    async def fake_location_id(session: Any, npc_id: str) -> str | None:
+        return "guard_barracks"
+
+    async def fake_groups(session: Any, *, character_id: str, include_dissolved: bool = False) -> list:
+        return []
+
+    monkeypatch.setattr(
+        "npc_engine.engines.quest_generation.quest_generation_engine.get_needs_for_character",
+        fake_needs,
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.quest_generation.quest_generation_engine.get_items_for_character",
+        fake_items,
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.quest_generation.quest_generation_engine.get_npc_location_id",
+        fake_location_id,
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.quest_generation.quest_generation_engine.get_groups_for_character_svc",
+        fake_groups,
+    )
+
+    session = _FakeSessionWithNodes(
+        node_map={
+            "giver_001": {"archetype": "guard_captain", "name": "Sorn"},
+            "item_001": {"labels": ["Item"]},
+        }
+    )
+
+    captured_prompts: list[str] = []
+
+    async def capture_llm(prompt: str, schema: Any, max_tokens: int, system: str = "") -> dict:
+        captured_prompts.append(prompt)
+        if len(captured_prompts) == 1:
+            return {"item": "item_001"}
+        return {"description": "Patrol the barracks!", "npc_plea": "We need help!"}
+
+    llm_client = MagicMock()
+    llm_client.generate_structured = capture_llm
+
+    engine = _make_engine(llm_client)
+    result = await engine.generate(session=session, quest_giver_id="giver_001")
+
+    assert isinstance(result, GeneratedQuest)
+    slot_fill_prompt = captured_prompts[0]
+    assert "guard_barracks" in slot_fill_prompt, "Expected location 'guard_barracks' in slot-fill prompt"
+    assert "GIVER_LOCATION" in slot_fill_prompt, "Expected GIVER_LOCATION label in slot-fill prompt"
+
+
+# ---------------------------------------------------------------------------
+# Test 11: flavor prompt includes NPC context (needs + location)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_generate_includes_npc_context_in_flavor_prompt(monkeypatch) -> None:
+    async def fake_needs(session: Any, character_id: str) -> list:
+        return [{"kind": "safety", "level": 10}]
+
+    async def fake_items(session: Any, *, character_id: str, k: int = 5) -> list:
+        return []
+
+    async def fake_location_id(session: Any, npc_id: str) -> str | None:
+        return "market_square"
+
+    async def fake_groups(session: Any, *, character_id: str, include_dissolved: bool = False) -> list:
+        return []
+
+    monkeypatch.setattr(
+        "npc_engine.engines.quest_generation.quest_generation_engine.get_needs_for_character",
+        fake_needs,
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.quest_generation.quest_generation_engine.get_items_for_character",
+        fake_items,
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.quest_generation.quest_generation_engine.get_npc_location_id",
+        fake_location_id,
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.quest_generation.quest_generation_engine.get_groups_for_character_svc",
+        fake_groups,
+    )
+
+    session = _FakeSessionWithNodes(
+        node_map={
+            "giver_001": {"archetype": "merchant", "name": "Alice"},
+            "item_001": {"labels": ["Item"]},
+        }
+    )
+
+    captured_prompts: list[str] = []
+
+    async def capture_llm(prompt: str, schema: Any, max_tokens: int, system: str = "") -> dict:
+        captured_prompts.append(prompt)
+        if len(captured_prompts) == 1:
+            return {"item": "item_001"}
+        return {"description": "Secure the market!", "npc_plea": "We are not safe!"}
+
+    llm_client = MagicMock()
+    llm_client.generate_structured = capture_llm
+
+    engine = _make_engine(llm_client)
+    result = await engine.generate(session=session, quest_giver_id="giver_001")
+
+    assert isinstance(result, GeneratedQuest)
+    assert len(captured_prompts) >= 2
+    flavor_prompt = captured_prompts[1]
+    assert "safety" in flavor_prompt, "Expected need kind 'safety' in flavor prompt"
+    assert "market_square" in flavor_prompt, "Expected location 'market_square' in flavor prompt"

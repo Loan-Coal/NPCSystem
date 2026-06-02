@@ -78,6 +78,8 @@ class TickScheduler:
         agenda_engine: BaseEngine | None = None,
         need_decay_engine: BaseEngine | None = None,
         military_engine: BaseEngine | None = None,
+        event_quest_trigger: BaseEngine | None = None,
+        need_quest_trigger: BaseEngine | None = None,
         consolidation_advance_interval: int = 1,
         chapter_interval: int = 1,
         distributed_lease_enabled: bool = False,
@@ -125,6 +127,10 @@ class TickScheduler:
                 called every tick; decays character need levels and applies location restoration.
             military_engine: Optional engine exposing ``run_tick(session, tick_id)``
                 called every tick; currently a no-op stub (see ISSUES.md ISSUE-001).
+            event_quest_trigger: Optional engine exposing ``run_tick(session, tick_id)``
+                called every tick; generates draft quests from unprocessed trigger events.
+            need_quest_trigger: Optional engine exposing ``run_tick(session, tick_id)``
+                called every tick; generates draft quests for NPCs with critically low needs.
             consolidation_advance_interval: Run consolidation every N advances; clamped to 1.
             chapter_interval: Run chapter engine every N ticks; clamped to 1. Default 1 preserves
                 existing every-tick behavior; raise to reduce LLM call frequency.
@@ -157,6 +163,8 @@ class TickScheduler:
         self._agenda_engine = agenda_engine
         self._need_decay_engine = need_decay_engine
         self._military_engine = military_engine
+        self._event_quest_trigger = event_quest_trigger
+        self._need_quest_trigger = need_quest_trigger
         self._consolidation_advance_interval = max(1, consolidation_advance_interval)
         self._chapter_interval = max(1, chapter_interval)
         self._advance_count = 0
@@ -308,6 +316,8 @@ class TickScheduler:
                 "agenda": [],
                 "need_decay": [],
                 "military": [],
+                "event_quest": [],
+                "need_quest": [],
             }
             world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
             for tick_id in range(start_tick + 1, end_tick + 1):
@@ -492,6 +502,22 @@ class TickScheduler:
                     )
                     if row is not None:
                         response["military"].append(row)
+
+                if self._event_quest_trigger is not None:
+                    row = await self._run_engine_safe(
+                        "event_quest", tick_id,
+                        self._event_quest_trigger.run_tick(session=session, tick_id=tick_id),
+                    )
+                    if row is not None:
+                        response["event_quest"].append(row)
+
+                if self._need_quest_trigger is not None:
+                    row = await self._run_engine_safe(
+                        "need_quest", tick_id,
+                        self._need_quest_trigger.run_tick(session=session, tick_id=tick_id),
+                    )
+                    if row is not None:
+                        response["need_quest"].append(row)
 
                 if unresolved:
                     break

@@ -6,9 +6,15 @@ Purpose: Orchestrates quest generation: template selection, LLM slot-filling wit
 Does NOT: expose HTTP routes or manage quest lifecycle state transitions.
 Dependencies: engines.quest_generation.slot_models, engines.quest_generation.slot_validator,
               engines.quest_generation.template_loader, engines.llm.protocols,
-              graph.quest_node_service, common.yaml_utils
+              graph.quest_node_service, graph.need_queries, graph.item_queries,
+              graph.graph_reader, graph.group_service, common.yaml_utils
 Dependencies injected: LLMClientProtocol, SlotValidator factory, list[QuestTemplateRecord].
 Used by: npc_engine.api.routes.quest_generation
+
+NOTE: This file exceeds the 300-line hard limit (~400 lines after S3.1). The additional
+graph queries in _get_giver_context are part of one cohesive context-assembly pipeline.
+Splitting into a QuestContextAssembler would be natural in Phase 4 when more NPC context
+dimensions are added. See DECISIONS.md "quest_generation_engine.py line limit (S3.1)".
 """
 
 from __future__ import annotations
@@ -41,7 +47,11 @@ from npc_engine.engines.quest_generation.slot_validator import SlotValidator
 from npc_engine.graph.belief_queries import get_beliefs_for_character
 from npc_engine.graph.causality_service import record_causation
 from npc_engine.graph.goal_queries import get_goals_for_character
+from npc_engine.graph.graph_reader import get_npc_location_id
+from npc_engine.graph.group_service import get_groups_for_character_svc
+from npc_engine.graph.item_queries import get_items_for_character
 from npc_engine.graph.mood_queries import get_character_mood
+from npc_engine.graph.need_queries import get_needs_for_character
 from npc_engine.graph.quest_node_service import create_quest
 
 _logger = logging.getLogger(__name__)
@@ -77,8 +87,8 @@ class QuestGenerationEngine:
         self._llm = llm_client
         self._templates = templates
         self._max_tokens = max_tokens
-        self._slot_fill_prompt = _load_prompt(prompts_dir / "slot_fill_v1.yaml")
-        self._flavor_prompt = _load_prompt(prompts_dir / "flavor_v1.yaml")
+        self._slot_fill_prompt = _load_prompt(prompts_dir / "slot_fill_v2.yaml")
+        self._flavor_prompt = _load_prompt(prompts_dir / "flavor_v2.yaml")
 
     async def generate(
         self,
@@ -112,12 +122,18 @@ class QuestGenerationEngine:
                 f"(rate={world_state.quest_generation_rate:.2f})"
             )
         archetype, giver_name = await self._get_character_info(session, quest_giver_id)
-        giver_context = await self._get_giver_context(session, quest_giver_id)
+        giver_context: dict[str, Any] = {
+            **await self._get_giver_context(session, quest_giver_id),
+            "world_state": {
+                "epoch": world_state.epoch,
+                "active_conditions": world_state.active_conditions,
+            },
+        }
         template = self._select_template(archetype)
         validator = SlotValidator(session=session)
 
         fills_raw, fills = await self._fill_slots(session, template, validator, giver_name=giver_name, archetype=archetype, giver_context=giver_context)
-        description = await self._generate_flavor(template, fills_raw, giver_name, template.description_template)
+        description = await self._generate_flavor(template, fills_raw, giver_name, template.description_template, giver_context)
 
         quest_id = str(uuid.uuid4())
         payload: dict[str, Any] = {
@@ -132,6 +148,7 @@ class QuestGenerationEngine:
             "severity": template.severity,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "completed_at": None,
+            "source": "generated",
         }
         await create_quest(session, payload)
         if cause_event_id is not None:
@@ -170,15 +187,47 @@ class QuestGenerationEngine:
         session: AsyncSession,
         character_id: str,
     ) -> dict[str, Any]:
-        """Fetch goals, beliefs, and mood for the quest giver to enrich slot-fill context."""
+        """Fetch needs, goals, beliefs, mood, inventory, location, and faction for the quest giver.
+
+        All queries run sequentially on the same session (Neo4j async sessions are not safe
+        for concurrent use). Called from generate() which merges world_state on top.
+
+        Args:
+            session: Active Neo4j async session.
+            character_id: ID of the Character node.
+
+        Returns:
+            Dict with keys: goals, beliefs, mood, needs, inventory, location, faction.
+        """
         goals = await get_goals_for_character(session, character_id=character_id, k=3, status_filter="active")
         beliefs = await get_beliefs_for_character(session, character_id=character_id, k=3)
         mood = await get_character_mood(session, character_id=character_id)
+        needs = await get_needs_for_character(session, character_id=character_id)
+        inventory = await get_items_for_character(session, character_id=character_id, k=5)
+        location_id = await get_npc_location_id(session, npc_id=character_id)
+        groups = await get_groups_for_character_svc(session, character_id=character_id)
         return {
             "goals": [g.get("objective", "") for g in (goals or [])],
             "beliefs": [b.get("content", "") for b in (beliefs or [])],
             "mood": mood[0] if mood else "neutral",
+            "needs": [{"kind": n.get("kind", ""), "level": n.get("level", 0)} for n in (needs or [])],
+            "inventory": [i.get("id", "") for i in (inventory or []) if i.get("id")],
+            "location": location_id or "unknown",
+            "faction": [g.get("name", g.get("group_id", "")) for g in (groups or [])],
         }
+
+    def _format_npc_context(self, giver_context: dict[str, Any]) -> str:
+        """Serialize giver context to a structured text block for v2 prompts."""
+        return "\n".join([
+            f"GIVER_MOOD: {giver_context.get('mood', 'neutral')}",
+            f"GIVER_NEEDS: {json.dumps(giver_context.get('needs', []))}",
+            f"GIVER_GOALS: {json.dumps(giver_context.get('goals', []))}",
+            f"GIVER_BELIEFS: {json.dumps(giver_context.get('beliefs', []))}",
+            f"GIVER_INVENTORY: {json.dumps(giver_context.get('inventory', []))}",
+            f"GIVER_LOCATION: {giver_context.get('location', 'unknown')}",
+            f"GIVER_FACTION: {json.dumps(giver_context.get('faction', []))}",
+            f"WORLD_STATE: {json.dumps(giver_context.get('world_state', {}))}",
+        ])
 
     def _select_template(self, archetype: str) -> QuestTemplateRecord:
         """Select a template matching the archetype, falling back to any available."""
@@ -244,15 +293,16 @@ class QuestGenerationEngine:
         giver_ctx_text = ""
         if giver_context:
             giver_ctx_text = (
-                f"\nGIVER: {giver_name} (archetype: {archetype})"
-                f"\nGIVER_MOOD: {giver_context.get('mood', 'neutral')}"
-                f"\nGIVER_GOALS: {json.dumps(giver_context.get('goals', []))}"
-                f"\nGIVER_BELIEFS: {json.dumps(giver_context.get('beliefs', []))}"
+                f"GIVER: {giver_name} (archetype: {archetype})\n"
+                + self._format_npc_context(giver_context)
             )
+        violation_prefix = f"PREVIOUS_VIOLATIONS: {violation_context}\n" if violation_context else ""
         user_prompt = self._slot_fill_prompt["user_template"].format(
             template_name=template.name,
             slot_definitions=slot_defs_text,
-            candidates=candidates_text + (" " + violation_context if violation_context else "") + giver_ctx_text,
+            candidates=candidates_text,
+            giver_context=giver_ctx_text,
+            violation_context=violation_prefix,
         )
         system = self._slot_fill_prompt.get("system", "")
         try:
@@ -280,12 +330,15 @@ class QuestGenerationEngine:
         fills_raw: dict[str, str],
         giver_name: str,
         default_description: str,
+        giver_context: dict[str, Any] | None = None,
     ) -> str:
-        """Call LLM for flavor text; return template default on any error."""
+        """Call LLM for flavor text grounded in NPC context; return template default on any error."""
+        giver_ctx_text = self._format_npc_context(giver_context) if giver_context else ""
         user_prompt = self._flavor_prompt["user_template"].format(
             template_name=template.name,
             fills=json.dumps(fills_raw),
             giver_name=giver_name,
+            giver_context=giver_ctx_text,
         )
         system = self._flavor_prompt.get("system", "")
         try:

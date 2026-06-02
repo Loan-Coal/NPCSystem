@@ -1,11 +1,14 @@
 """
 Module: dispatch
 Layer: engines
-Purpose: Routes InteractionProposal to the correct handler. Phase 1 stub —
-         all handlers return an open/stub state; no writes are performed.
-Does NOT: execute trade or quest side effects; all handlers are stubs.
+Purpose: Routes InteractionProposal to the correct handler for local in-process
+         dispatch. Note: the API layer (api/routes/interaction.py) implements the
+         full server-side handlers (trade, quest, give_item intercept). This module
+         is used for in-process fallback and proposal-kind routing; most demo paths
+         go through the HTTP API instead.
+Does NOT: write graph state, call LLMs, or issue HTTP requests.
 Dependencies injected: None.
-Used by: demo_game.ui.game_window (via demo_game.interaction_client)
+Used by: demo_game.game_controller (via dispatch_interaction for proposal routing)
 """
 
 from __future__ import annotations
