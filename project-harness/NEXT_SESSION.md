@@ -1,47 +1,39 @@
 # Session Handoff
 
 **Branch:** `munich-demo`
-**Last completed:** S2.3 — Oath violation detection (ISSUE-032)
-**Next task:** S2.4 — Treaty tribute + economy/price verify
-**Roadmap ref:** `project-harness/ROADMAP.md` → Phase 2, S2.4
-**Test baseline:** 1157 passing, 0 failed (unit)
+**Last completed:** S4.4 — [Bribe] wired (faction standing + gold deduction via background worker)
+**Next task:** S5.1 — Idempotent seed = no-clobber (seeding must not reset player-mutated state)
+**Roadmap ref:** `project-harness/ROADMAP.md` → Phase 5, S5.1
+**Test baseline:** 1200 passing, 0 failed (full suite) | 312 passing (demo suite)
 
 ---
 
-## S2.4 — What to do
+## S5.1 — What to do
 
-Two sub-tasks:
+Make the demo seed idempotent: seeding a world that already exists must not overwrite
+player-mutated state (standing, gold, inventory, completed quests).
 
-1. **Treaty tribute** (ISSUE-033): implement `check_tribute_payment()` in
-   `src/npc_engine/graph/treaty_service.py`. Query currency-transfer edges for
-   the tribute period; verify faction treasury ≥ condition.amount before flagging
-   as violation. Currently `check_treaty_conditions_mechanical` flags tribute as
-   due without checking payment.
+Exit: bribe Lira → restart → standing still elevated.
 
-2. **Economy price verify** (ISSUE-046): start engine + `make demo-seed`, then
-   `curl "http://localhost:8000/v1/economy/price?item_type=spice&character_id=aldric_merchant"`.
-   If 404, find correct route in `src/npc_engine/api/`; if schema differs, update
-   `demo_game/client.py:get_item_price()`.
-
-**Exit criteria:** both pass integration tests against live Neo4j.
+Suggested approach:
+- Before upserting a Character node check if it already exists (`GET /v1/graph/nodes/Character/{id}`).
+- Skip (or merge-only) the standing/gold fields on Character nodes if the world already has a player node.
+- Add an integration test: seed twice, verify player-mutated gold persists.
 
 ---
 
-## S2.3 — What was done
+## S4.4 — What was done (this session)
 
-- Added `pledge_violation_service.py` (new graph-layer module) with:
-  - `check_pledge_violations()` replacing the stub in `pledge_service.py`
-  - `_VIOLATION_ACTIONS`/`_VIOLATION_ROLES` dicts mapping pledge type → violation signals
-  - Cypher queries `CYPHER_GET_WITNESSED_VIOLATIONS`, `CYPHER_GET_PARTICIPATED_VIOLATIONS`
-  - `_emit_violation_event()` writing high-severity Event nodes on violation
-- Added `get_active_pledges_for_pledger`, `get_witnessed_violations`,
-  `get_participated_violations`, `get_all_active_pledgers` to `pledge_queries.py`
-- Added `get_all_active_pledgers_svc` to `pledge_service.py`
-- Fixed `oath_engine.run_tick`: now queries all active pledgers and calls
-  `check_pledge_violations` for each; result dict now includes `violated_pledges` count
-- Updated stale stub test in `test_pledge_service.py`
-- 10 new unit tests in `tests/unit/test_pledge_violations.py`
-- Marked ISSUE-032 fixed in ISSUES.md
+- Added `BRIBE_GOLD_COST = 20` and `BRIBE_STANDING_GAIN = 15` to `constants.py`.
+- Added `bribe_worker` to `action_workers.py`: reads player gold + current standing,
+  validates sufficient funds, increments standing (capped at 100), deducts gold.
+- Enabled `[Bribe]` button in `actions_panel.py` (index 4); added `set_bribe_callback`.
+- Added `set_bribe_callback` delegate to `right_panel.py`.
+- Added `spawn_bribe` + `poll_bribe_queue` + `_bribe_q` to `game_controller.py`.
+- Wired `set_bribe_callback` + `poll_bribe_queue()` in `game_window.py`.
+- 5 new tests (`test_action_workers.py`): happy path, standing cap, insufficient gold,
+  zero starting standing, API failure.
+- Test baseline: 312 passing (demo suite), 1200 passing (full suite).
 
 ---
 
@@ -49,11 +41,10 @@ Two sub-tasks:
 
 | Issue | Sev | Targeted by |
 |---|---|---|
-| ISSUE-046 | P2 | S2.4 |
-| ISSUE-031, 033 | P3 | Phase 2/6 |
+| ISSUE-031 | P3 | Phase 6 |
 
-**Next ID to use: ISSUE-048.**
+**Next ID to use: ISSUE-050.**
 
 ---
 
-*Regenerated end of S2.3 session 2026-06-03.*
+*Regenerated end of S4.4 session 2026-06-02.*

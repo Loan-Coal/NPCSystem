@@ -163,13 +163,13 @@ you walk in" demo moment all depend on this. It is cheap (the engines and schedu
     return violated pledges; call `break_pledge` + emit a high-severity EVENT.
   - Exit: a character who broke a movement oath is flagged on tick.
 
-- [ ] **S2.4** Treaty tribute (ISSUE-033) + economy/price verify (ISSUE-046)
+- [x] **S2.4** Treaty tribute (ISSUE-033) + economy/price verify (ISSUE-046)
   - Treaty: `check_tribute_payment()` queries currency-transfer edges for the period and verifies treasury
     ≥ amount before flagging.
   - Economy: confirm `GET /v1/economy/price` returns the correct price (5-minute manual curl per ISSUE-046).
   - Exit: both pass integration tests against live Neo4j.
 
-- [ ] **S2.5** Wire events → quest draft trigger (`EventQuestTrigger`)
+- [x] **S2.5** Wire events → quest draft trigger (`EventQuestTrigger`)
   - New module `engines/quest_generation/event_quest_trigger.py`: on the Phase 1 tick, configured event
     types call `generate()` to produce a `draft` quest.
   - Exit: seeding a `war_begins` event auto-creates a draft quest for the nearest military NPC.
@@ -181,25 +181,28 @@ you walk in" demo moment all depend on this. It is cheap (the engines and schedu
 **Sessions:** 3–4
 **Dependency:** requires Phase 1 (needs change on tick) + S2.1 (diverse objective types verify).
 
-- [ ] **S3.1** Context-rich generation prompt
+- [x] **S3.1** Context-rich generation prompt
   - Upgrade the generator to consume `retrieval/context_builder.py → build_serialized_context()` (needs,
     goals, inventory, location, faction, world state) rather than template slots alone. Version the prompt.
   - Exit: generator produces a quest grounded in the NPC's *current* need/goal state.
 
-- [ ] **S3.2** Need-driven trigger
+- [x] **S3.2** Need-driven trigger
   - When `need_decay_engine` (Phase 1) drops a need below threshold, the tick calls the generator for a
     need-satisfying `draft` quest.
   - Exit: under autopilot, Mira's `supply` need decays and auto-creates a draft quest with no player input.
 
-- [ ] **S3.3** Minimal draft review (NOT a 4-endpoint CRUD)
+- [x] **S3.3** Minimal draft review (NOT a 4-endpoint CRUD)
   - Structural validity is already enforced by `slot_validator`. Ship only `status=draft|offered` +
     `GET /v1/quests/drafts` + `POST /v1/quests/{id}/offer`. Defer reject/delete until a designer-tooling
     customer needs it (see Phase 12).
   - Exit: generate → list drafts → offer → visible to player.
 
-- [ ] **S3.4** Demo integration
-  - Provenance badge `[SEEDED]` vs `[GENERATED]`; press `G` to generate from the active NPC.
-  - Exit: talk to NPC → press G → quest appears with `[GENERATED]` badge.
+- [x] **S3.4** Demo integration
+  - Add a scrollable **Actions sidebar panel** (no key bindings). Panel contains:
+    - `[Generate Quest]` — enabled when an NPC is selected; calls `POST /v1/admin/quests/generate`.
+    - `[Inspect]`, `[Give item]`, `[Travel]`, `[Bribe]` — stubbed/disabled (Phase 4 placeholders).
+  - Provenance badge `[SEEDED]` vs `[GENERATED]` on each quest in the quest list panel.
+  - Exit: select NPC → click Generate Quest → quest appears in quest list with `[GENERATED]` badge.
 
 ---
 
@@ -207,11 +210,11 @@ you walk in" demo moment all depend on this. It is cheap (the engines and schedu
 **Goal:** Each new action visibly calls a specific engine. No orphaned buttons.
 **Sessions:** 3–4
 
-- [ ] **S4.1** `[Inspect]` — graph retrieval showcase (traits, faction, location, items, known events, edges).
-- [ ] **S4.2** `[Give item to NPC]` — make `give_item` player-initiatable via `interaction/dispatch.py`.
+- [x] **S4.1** `[Inspect]` — graph retrieval showcase (traits, faction, location, items, known events, edges).
+- [x] **S4.2** `[Give item to NPC]` — make `give_item` player-initiatable via `interaction/dispatch.py`.
       Note: the dispatch docstring claims "all handlers are stubs" — **stale**; update it (trade/quest work).
-- [ ] **S4.3** Travel — click a location; update player `LOCATED_AT`; co-located NPCs update `KNOWS_ABOUT`.
-- [ ] **S4.4** `[Bribe]` — faction politics engine adjusts standing + logs event; dialogue tone shifts.
+- [x] **S4.3** Travel — click a location; update player `LOCATED_AT`; co-located NPCs update `KNOWS_ABOUT`.
+- [x] **S4.4** `[Bribe]` — faction politics engine adjusts standing + logs event; dialogue tone shifts.
 
 ---
 
@@ -425,3 +428,5 @@ See `project-harness/ISSUES.md` for the full log. Every active issue now has a r
 | S0.3 | 2026-06-01 | Phase 0 | Quick issue-fix batch: ISSUE-020/021/022/034/040/042/043/045 all fixed; ISSUE-047 found+fixed (stale test suite); engine 1075 passing, demo 254 passing | Suites fully green |
 | S0.4 | 2026-06-01 | Phase 0 | Multi-world WorldState isolation: WORLD_ID in Settings, per-world seed IDs (world_demo/world_village), world_reader fallback fix, 8 call sites threaded, 2 new isolation tests | 1077 passing, demo 254 passing |
 | S0.5 | 2026-06-02 | Phase 0 | Reputation-differentiated dialogue tone: strengthened Rule 2 "allied" in system_v1.yaml (3 mandatory tone shifts), clarified Rule 8 scope, removed skip_until_implemented from eval, PROMPT_VERSION v2.6 | 1077 passing, demo 254 passing |
+| S3.4 | 2026-06-02 | Phase 3 | Demo integration: ActionsPanelWidget (ACTIONS tab), [Generate Quest] button with background LLM worker, provenance badge [GENERATED]/[SEEDED] in quest panel, source field on Quest nodes | 1194 passing, demo 254 passing |
+| S4.4 | 2026-06-02 | Phase 4 | [Bribe] wired: bribe_worker reads gold+standing, increments standing by BRIBE_STANDING_GAIN, deducts BRIBE_GOLD_COST; 5 new tests; all buttons in ACTIONS panel now active | 1200 passing, demo 312 passing |

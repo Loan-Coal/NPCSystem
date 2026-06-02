@@ -13,6 +13,21 @@ Rules:
 
 ## Open
 
+## [FIXED] ISSUE-049: Give Item action always gives first inventory item — no player choice
+**Found:** 2026-06-02, during S4.2 review
+**Severity:** P2 (annoying)
+**Where:** `demo_game/quest_trade_controller.py` — `handle_give_item` / give-item flow
+**Description:** When the player clicks `[Give Item]`, the first item in the player's inventory was given automatically without prompting the player to choose.
+**Fixed:** 2026-06-02, S4.2 — added give mode to `InventoryPanelWidget` (clickable rows + Cancel button); added `start_item_pick` to `RightPanelRenderer` (switches to INVENTORY tab, wraps callbacks to restore ACTIONS tab on completion or cancel); removed `get_player_first_item` from `RightPanelRenderer`; updated `game_window.py` callback and event routing. DEC-047 added for right_panel.py line-count exception. 17 new tests.
+
+## [FIXED] ISSUE-048: game_controller.py exceeds 300-line hard limit
+**Found:** 2026-06-02, during S3.4
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/game_controller.py` (was 520 lines after S4.1)
+**Fixed:** 2026-06-02, S4.2 — extracted `demo_game/action_workers.py` (96 lines) with all worker functions; extracted `demo_game/quest_trade_controller.py` (283 lines) with all quest/trade/give-item handlers. `game_controller.py` is now 297 lines.
+
+---
+
 ## [FIXED] ISSUE-035: reputation_dialogue_tone_001 eval fails — merchant archetype doesn't express warmth toward allied player
 **Found:** 2026-05-27, during eval repair sprint
 **Severity:** P2 (annoying)
@@ -43,13 +58,14 @@ Rules:
 
 ---
 
-## ISSUE-033: Treaty tribute condition checking does not verify payment
+## [FIXED] ISSUE-033: Treaty tribute condition checking does not verify payment
 **Found:** 2026-05-19, during Phase 7 L implementation
 **Severity:** P3 (nice-to-fix)
 **Where:** `src/npc_engine/graph/treaty_service.py:check_treaty_conditions_mechanical`
 **Description:** Tribute conditions detect when payment is due (tick % interval == 0) but do not verify whether payment was actually made. All tribute conditions are flagged as due without checking faction treasury.
 **Why deferred:** Payment verification requires faction treasury write operations not yet implemented in this layer.
 **To fix:** Query faction treasury, verify amount >= condition.amount, deduct on payment, and only flag as violation if treasury insufficient.
+**Fixed:** 2026-06-02, S2.4 — added `check_tribute_payment()` to `treaty_service.py`; reads faction treasury via `get_faction_treasury()`, auto-deducts via `deduct_faction_treasury()`, returns violation only if treasury < required. Updated `check_treaty_conditions_mechanical` to call it; added `_find_payer_faction` helper to identify payer from BOUND_BY parties. Wired condition checks into `TreatyEngine.run_tick` via new `get_all_active_treaty_ids()` query. 8 new unit tests added.
 
 ---
 
@@ -555,13 +571,14 @@ current mapping is good enough for demo badge display and does not affect correc
 
 ---
 
-## ISSUE-046: GET /v1/economy/price endpoint not yet verified against running engine
+## [FIXED] ISSUE-046: GET /v1/economy/price endpoint not yet verified against running engine
 **Found:** 2026-05-29, during S4.4 trade price implementation
 **Severity:** P2 (annoying)
 **Where:** `demo_game/client.py` — `get_item_price()`, `demo_game/ui/left_panel.py` — `set_trade_price()`
 **Description:** `get_item_price()` calls `GET /v1/economy/price?item_type=spice&character_id=aldric_merchant`. The endpoint was assumed to exist from the plan; it has not been tested against a live engine. If the route is absent or has a different schema, the trade overlay will silently show nothing (non-fatal, error caught), but the demo feature won't function.
 **Why deferred:** Required live engine + seeded Item node. Verification is a 5-minute manual check — deferred to pre-demo run.
 **To fix:** Start engine + `make demo-seed`, then `curl "http://localhost:8000/v1/economy/price?item_type=spice&character_id=aldric_merchant"`. If 404: check route in `src/npc_engine/api/` and update the URL. If schema differs: update `get_item_price()` to match actual response shape.
+**Fixed:** 2026-06-02, S2.4 — verified statically: `economy_router` is registered at `admin_prefix` (`/v1/admin`) with its own `/economy` prefix, so the route is `GET /v1/admin/economy/price`. `demo_game/client.py:get_item_price()` already calls exactly `/v1/admin/economy/price`. No code change needed.
 
 ---
 

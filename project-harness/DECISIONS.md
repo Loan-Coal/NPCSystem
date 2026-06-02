@@ -433,6 +433,34 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Why:** The 300-line limit prevents God-objects and functions that are too complex to reason about. This file is long because it has 16 engine dependencies, not because of logic complexity. Each engine block is 3-5 lines; the orchestration is a mechanical sequential list.
 **Consequence:** Future engines added to the scheduler will extend the file further. The natural refactor trigger is when Phase 6 adds a `GET /v1/system/engines` endpoint that needs engine metadata (cadence, name) — at that point an `EngineDescriptor` list would replace the 16 individual `if engine is not None:` blocks.
 
+## DEC-045: S3.1 expands _get_giver_context() rather than calling build_serialized_context()
+**Date:** 2026-06-02
+**Context:** S3.1 spec says "consume `retrieval/context_builder.py → build_serialized_context()` (needs, goals, inventory, location, faction, world state)". Two interpretations: (a) call `build_serialized_context()` directly; (b) pull the same graph data that function pulls.
+**Decision:** Option (b) — expand `_get_giver_context()` with four new graph queries (needs, items, location, groups) and merge world_state at the call site in `generate()`. `build_serialized_context()` was NOT called directly.
+**Why:** `build_serialized_context()` is dialogue-oriented. It requires `player_message`, `session_turns`, and `EmbeddingIndexProtocol` — all concepts that have no meaning in quest generation. Calling it with dummy values would couple quest generation to dialogue infrastructure. The function also runs RAG, cross-encoder reranking, and compression — all overkill for context injection at the slot-fill stage.
+**Consequence:** If a future sprint wants to share context caching between dialogue and quest generation, `build_serialized_context()` can be refactored to accept an optional EmbeddingIndex and skip RAG when not provided. That refactor belongs to a Phase 5+ caching task.
+
+## DEC-046: quest_generation_engine.py accepted over 300-line hard limit
+**Date:** 2026-06-02
+**Context:** S3.1 adds 4 graph imports, expands `_get_giver_context()` by ~15 lines, adds `_format_npc_context()` helper (~10 lines), and updates `_generate_flavor()` signature — bringing the file to ~400 lines.
+**Decision:** Accepted. All additions are part of the NPC context assembly pipeline, a single cohesive responsibility. Extracting `_get_giver_context` + `_format_npc_context` into a `QuestContextAssembler` is the natural next step but premature with only two methods.
+**Why:** See DEC-042 rationale. The natural refactor trigger is when Phase 4+ adds another NPC context dimension (e.g. relationship graph, emotional history) — that's when `QuestContextAssembler` earns its own file.
+**Consequence:** The `_format_npc_context` helper is the seed of the future assembler. Keep it pure (no I/O, no session) so it can be moved without change.
+
+## DEC-047: right_panel.py accepted over 300-line hard limit (~323 lines)
+**Date:** 2026-06-02
+**Context:** ISSUE-049 fix adds `start_item_pick`, `handle_inventory_event`, and `show_inventory_panel` (~25 lines net after removing the 4-line `get_player_first_item`). File goes from 298 → ~323 lines.
+**Decision:** Accepted. `RightPanelRenderer` is a single-class module whose one responsibility is coordinating right-panel tab state and widget delegation. Splitting into, e.g., a separate `ItemPickCoordinator` would just move the same tab-switching logic to another file with an artificial seam.
+**Why:** The overage (~23 lines) comes from one cohesive feature (give-mode lifecycle). Every existing method in this file is a narrow delegate or property. The natural split trigger would be if a second major overlay workflow (e.g., a target-select mode for travel) needed similar state — then a generic `OverlayCoordinator` would make sense.
+**Consequence:** If another workflow of this kind is added, extract an `OverlayCoordinator` and move `start_item_pick` + future counterparts there.
+
+## DEC-048: game_controller.py accepted over 300-line hard limit (~318 lines)
+**Date:** 2026-06-02
+**Context:** S4.3 adds `spawn_travel`, `poll_travel_queue`, and `_travel_q` (~20 lines net). File goes from 298 → ~318 lines.
+**Decision:** Accepted. `GameController` is a single cohesive class whose sole responsibility is managing background threads and result queues for all demo actions. Each new action (travel, inspect, generate-quest) follows the same spawn+poll pattern and belongs here.
+**Why:** Extracting travel into a `TravelController` would add an artificial seam at the cost of a second delegation layer with two methods. The natural split trigger would be if GameController grew a second stateful concern (e.g., a streaming event log) rather than just a new action of the same shape.
+**Consequence:** When Phase 4+ adds Bribe (spawns a faction-politics call), it follows the same spawn+poll pattern and stays in this file. If a fifth or sixth action makes the class unwieldy, extract a generic `ActionQueueManager` base.
+
 ## DEC-044: quest_lifecycle_engine.py accepted over 300-line hard limit
 **Date:** 2026-06-03
 **Context:** S2.2 — adding `offer_draft_quest()` to `QuestLifecycleEngine` brings the file to ~560 lines. The class was already pre-existing at ~495 lines before this task.
