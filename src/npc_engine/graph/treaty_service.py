@@ -21,9 +21,12 @@ from npc_engine.graph.treaty_queries import (
     CYPHER_CREATE_BOUND_BY,
     CYPHER_CREATE_TREATY,
     CYPHER_SET_TREATY_STATUS,
+    deduct_faction_treasury,
     get_active_treaties,
     get_expiring_treaties,
+    get_faction_treasury,
     get_treaty_conditions,
+    get_treaty_parties,
 )
 
 
@@ -140,6 +143,51 @@ async def break_treaty(
     await session.run(CYPHER_SET_TREATY_STATUS, treaty_id=treaty_id, status="broken")
 
 
+async def check_tribute_payment(
+    session: AsyncSession,
+    *,
+    treaty_id: str,
+    payer_faction_id: str,
+    amount: int,
+) -> tuple[bool, str | None]:
+    """Check if a faction can pay tribute and auto-deduct from treasury if sufficient.
+
+    Args:
+        session: Active Neo4j async session.
+        treaty_id: ID of the Treaty node (used in violation message).
+        payer_faction_id: Faction responsible for tribute payment.
+        amount: Required tribute amount.
+
+    Returns:
+        (True, None) if treasury was sufficient and payment was deducted.
+        (False, violation_message) if treasury insufficient to pay.
+    """
+    treasury = await get_faction_treasury(session, faction_id=payer_faction_id)
+    if treasury >= amount:
+        await deduct_faction_treasury(session, faction_id=payer_faction_id, amount=amount)
+        return True, None
+    return (
+        False,
+        f"tribute unpaid for treaty '{treaty_id}': treasury {treasury} < required {amount}",
+    )
+
+
+def _find_payer_faction(parties: list[str], target_faction_id: str | None) -> str | None:
+    """Return the first signatory that is not the tribute receiver.
+
+    Args:
+        parties: All faction IDs bound by the treaty.
+        target_faction_id: Faction receiving the tribute (excluded from result).
+
+    Returns:
+        Payer faction ID, or None if none can be identified.
+    """
+    for faction_id in parties:
+        if faction_id != target_faction_id:
+            return faction_id
+    return None
+
+
 async def check_treaty_conditions_mechanical(
     session: AsyncSession,
     treaty_id: str,
@@ -147,9 +195,8 @@ async def check_treaty_conditions_mechanical(
 ) -> list[str]:
     """Check structured conditions mechanically and return violated condition descriptions.
 
-    Currently verifies presence of conditions. Specific condition types (tribute payment
-    intervals etc.) require world-state queries not yet implemented — they are noted
-    but return no violations at this layer.
+    For tribute conditions: verifies the payer faction treasury is sufficient and
+    auto-deducts on payment. Only flags a violation if the treasury cannot cover the amount.
 
     Args:
         session: Active Neo4j async session.
@@ -165,16 +212,28 @@ async def check_treaty_conditions_mechanical(
     try:
         raw = json.loads(conditions_json)
         conditions = [TreatyCondition(**c) for c in raw]
-    except (json.JSONDecodeError, Exception):
-        return [f"treaty '{treaty_id}' has malformed conditions"]
+    except (json.JSONDecodeError, ValueError, KeyError) as exc:
+        return [f"treaty '{treaty_id}' has malformed conditions: {exc}"]
 
+    parties = await get_treaty_parties(session, treaty_id=treaty_id)
     violations: list[str] = []
     for condition in conditions:
         if condition.type == "tribute" and condition.interval_ticks is not None:
             if tick % condition.interval_ticks == 0 and tick > 0:
-                violations.append(
-                    f"tribute due: {condition.amount} every {condition.interval_ticks} ticks"
+                payer_id = _find_payer_faction(parties, condition.target_faction_id)
+                if payer_id is None:
+                    violations.append(
+                        f"tribute condition malformed: no payer found in parties {parties}"
+                    )
+                    continue
+                _paid, msg = await check_tribute_payment(
+                    session,
+                    treaty_id=treaty_id,
+                    payer_faction_id=payer_id,
+                    amount=condition.amount or 0,
                 )
+                if msg is not None:
+                    violations.append(msg)
     return violations
 
 

@@ -15,7 +15,9 @@ from typing import Any
 from neo4j import AsyncSession
 
 from npc_engine.config import get_settings
+from npc_engine.graph.treaty_queries import get_all_active_treaty_ids
 from npc_engine.graph.treaty_service import (
+    check_treaty_conditions_mechanical,
     expire_treaty,
     get_expiring_treaties_svc,
 )
@@ -49,7 +51,12 @@ class TreatyEngine:
         for treaty_id in expiring_ids:
             await expire_treaty(session, treaty_id, tick_id)
 
+        active_treaty_ids = await get_all_active_treaty_ids(session)
         violations_detected = 0
+        for treaty_id in active_treaty_ids:
+            treaty_violations = await check_treaty_conditions_mechanical(session, treaty_id, tick_id)
+            violations_detected += len(treaty_violations)
+
         if settings.TREATY_LLM_EVAL_ENABLED:
             pass
 
