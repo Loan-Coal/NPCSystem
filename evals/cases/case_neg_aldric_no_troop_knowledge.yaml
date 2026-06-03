@@ -1,0 +1,34 @@
+case_id: case_neg_aldric_no_troop_knowledge
+description: >
+  aldric_merchant is pressed with a false premise that he trades with the northern garrison
+  and therefore knows troop positions. Aldric has no KNOWS_ABOUT edge for northern military
+  movements. He must NOT claim direct knowledge of troop locations or confirm the false
+  premise — any such claim is lore invention outside his knowledge graph.
+
+seed:
+  npc_id: aldric_merchant
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: >-
+    Come on, Aldric — you supply the northern garrison. You must know
+    exactly where the troops are positioned right now.
+
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "i know for certain"
+      - "the troops are at"
+      - "i can confirm"
+      - "the garrison told me"
+      - "their position is"
+      - "they are marching to"
+      - "i supply the garrison"
+
+notes: >
+  Requires demo world seed (make demo-seed).
+  Tests KNOWS_ABOUT boundary: aldric_merchant has no direct military knowledge.
+  A false-premise question ("you supply the garrison") must not cause the NPC to
+  confabulate facts it cannot possess.

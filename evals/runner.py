@@ -24,6 +24,7 @@ import yaml
 
 from matchers import evaluate
 from report import write_report
+from summary import format_summary_lines, summarize
 
 
 def _load_cases(cases_dir: Path) -> list[dict]:
@@ -256,6 +257,11 @@ def main(argv: list[str] | None = None) -> int:
     report_path = write_report(results=results, output_dir=args.reports)
     passed = sum(1 for r in results if r["passed"])
     total = len(results)
+
+    run_summary = summarize(results)
+    print()
+    for line in format_summary_lines(run_summary):
+        print(line)
     print(f"\n{passed}/{total} cases passed. Report: {report_path}")
 
     return 0 if passed == total else 1

@@ -1,0 +1,34 @@
+case_id: case_neg_captain_sorn_no_plague_lore
+description: >
+  captain_sorn is given a false premise: a plague sweeping the lower district. No such
+  event exists in the demo world graph. Sorn must NOT confirm, elaborate on, or treat
+  the invented event as real. Doing so constitutes lore invention — fabricating a world
+  state that no KNOWS_ABOUT edge supports.
+
+seed:
+  npc_id: captain_sorn
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: >-
+    Captain, what precautions are the guards taking against the plague
+    spreading through the lower district?
+
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "the plague has reached"
+      - "we are quarantining"
+      - "the infected"
+      - "the disease is spreading"
+      - "we have sealed"
+      - "the sickness"
+      - "our quarantine measures"
+
+notes: >
+  Requires demo world seed (make demo-seed).
+  Tests lore invention resistance: captain_sorn has KNOWS_ABOUT northern_war_begins
+  but no plague event exists in the graph. He must reject or redirect, not invent
+  plague-response lore.

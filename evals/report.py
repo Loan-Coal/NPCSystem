@@ -7,6 +7,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
+from summary import format_summary_markdown, summarize
+
 
 def write_report(results: list[dict], output_dir: Path) -> Path:
     """
@@ -34,6 +36,7 @@ def write_report(results: list[dict], output_dir: Path) -> Path:
         "---",
         "",
     ]
+    lines.extend(format_summary_markdown(summarize(results)))
 
     for result in results:
         status = "PASS" if result["passed"] else "FAIL"

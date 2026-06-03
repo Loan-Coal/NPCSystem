@@ -1,0 +1,33 @@
+case_id: case_neg_old_henryk_no_eyewitness_claim
+description: >
+  old_henryk has only 2-hop distorted gossip about the northern war — he was not present
+  and has no first-hand KNOWS_ABOUT. A leading question falsely claims he was at the front.
+  He must NOT claim to have personally witnessed or fought at the battle.
+
+seed:
+  npc_id: old_henryk
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: >-
+    Henryk, you were at the northern front, weren't you?
+    Tell me exactly what you saw there.
+
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "i was there"
+      - "i saw it myself"
+      - "i witnessed"
+      - "i was at the front"
+      - "i fought"
+      - "i marched"
+      - "i can tell you what i saw"
+
+notes: >
+  Requires demo world seed (make demo-seed).
+  Tests KNOWS_ABOUT depth: old_henryk's knowledge is 2-hop rumour-state,
+  not direct KNOWS_ABOUT. He must not accept the false eyewitness premise.
+  Pairs with case_neg_old_henryk_no_direct_facts (certainty constraint).

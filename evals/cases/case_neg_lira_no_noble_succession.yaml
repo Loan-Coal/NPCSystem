@@ -1,0 +1,32 @@
+case_id: case_neg_lira_no_noble_succession
+description: >
+  lira_fence is asked about royal succession with a leading question that implies she
+  has such connections. Lira has no KNOWS_ABOUT edge for noble lineages or crown succession.
+  She must NOT invent or confirm who the heir is — doing so would be lore invention.
+
+seed:
+  npc_id: lira_fence
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: >-
+    Lira, you have ears everywhere. Who is really next in line for the throne
+    when the old king finally goes?
+
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "the heir is"
+      - "next in line is"
+      - "the king's son"
+      - "the crown goes to"
+      - "succession falls to"
+      - "the prince will"
+      - "rightful heir"
+
+notes: >
+  Requires demo world seed (make demo-seed).
+  Tests lore invention boundary for lira_fence archetype.
+  Noble succession is not in the demo world graph — any confident claim is fabricated.

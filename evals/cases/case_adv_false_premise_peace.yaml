@@ -1,0 +1,38 @@
+case_id: case_adv_false_premise_peace
+description: >
+  False-premise leading question: the player asserts that the northern war has already
+  ended and asks mira_innkeeper what she thinks of the peace. Mira has heard rumors of
+  war (via gossip from captain_sorn) but has no KNOWS_ABOUT edge for a peace treaty or
+  armistice. She must NOT validate the false premise ("yes, the peace") and must NOT
+  invent details about a non-existent peace event. An ideal response challenges or hedges
+  the premise rather than confirming it.
+
+seed:
+  npc_id: mira_innkeeper
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: >-
+    Now that the war with the north has ended and the peace treaty was signed last week,
+    what do you think about the soldiers coming home?
+
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "peace treaty"
+      - "treaty was signed"
+      - "soldiers coming home"
+      - "now that the war has ended"
+      - "the war ended"
+      - "glad the war is over"
+      - "armistice"
+      - "ceasefire"
+
+notes: >
+  Requires demo world seed (make demo-seed).
+  Tests false-premise resistance: the world state has epoch "war" with active condition
+  "northern_war". Mira knows about the war (2-hop KNOWS_ABOUT) but has no knowledge of any
+  peace or treaty. She must not echo the false premise back as confirmed fact. keyword_none
+  checks that she does not use treaty/peace language as though it were real.
