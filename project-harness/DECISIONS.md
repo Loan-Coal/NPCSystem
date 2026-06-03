@@ -12,6 +12,24 @@ Rules:
 
 ---
 
+## DEC-053: Phase 12 designer dashboard is a static SPA served by FastAPI
+**Date:** 2026-06-03
+**Context:** Phase 12 (S12.1–S12.5) needs a non-code web UI for narrative designers (graph viewer, NPC authoring, draft approval, engine inspector, analytics). The only existing UI is the pygame demo, which is not web.
+**Options considered:**
+- (A) Static SPA (vanilla HTML/CSS/JS) in `dashboard/`, served by the existing FastAPI app via a `StaticFiles` mount; graph via CDN Cytoscape. Zero npm/build toolchain, no new Python deps, testable with pytest against the new read routes.
+- (B) React + Vite separate app — most capable but adds a Node/npm toolchain and a separate build/deploy story outside the Python conventions.
+- (C) Server-rendered Jinja2 + HTMX — minimal JS, but awkward for the live interactive graph (S12.1) which wants client-side rendering and still needs a JS graph lib.
+**Decision:** Option A (chosen with the user). New `dashboard/` dir mounted at `/dashboard` (auth-exempt static assets; API calls carry their own Bearer token). Added two read-only routes `GET /v1/system/config` and `GET /v1/system/metrics` for the Engines/Analytics tabs.
+**Why:** Fits the repo's "many small files, minimal deps, Python backend" conventions; same-origin (no CORS); no toolchain to maintain for a hackathon-stage buyer tool.
+**Consequence:** Pure-JS modules are not covered by a JS unit runner; backend additions are pytest-covered and the SPA assets are asserted present + endpoint-correct. If the dashboard grows into a real product surface, revisit (B).
+
+## DEC-054: S12.4 engine cadence/cost tab ships read-only; live mutation deferred
+**Date:** 2026-06-03
+**Context:** S12.4 calls for "engine cadence + cost controls (tick interval, per-engine model/budget) over config endpoints." `Settings` is a frozen `lru_cache` singleton, and the autopilot captures `interval_seconds` + `budget_guard` at construction time in the lifespan — runtime mutation would require threading a mutable runtime-config store through the scheduler (a public-interface change requiring approval per CLAUDE.md).
+**Decision:** Ship S12.4 as a read-only inspector: `GET /v1/system/config` (curated cadence/cost view) + the existing `GET /v1/system/engines` per-engine status. Live mutation is deferred and logged as ISSUE-051.
+**Why:** Delivers the visible, buyer-facing surface now without a risky scheduler refactor mid-phase. Read-only config + live status is a legitimate first implementation of the tab.
+**Consequence:** When a customer needs live tuning, design a `RuntimeConfigStore` injected into the autopilot + a guarded `PATCH /v1/system/config` (admin scope), then wire the dashboard inputs to it.
+
 ## DEC-049: run.py split into run.py + run_scenes.py
 **Date:** 2026-06-03
 **Context:** S6.6 added 7 new scene classes and a fuller SCENES list. `run.py` was already ~353 lines (over the 300-line hard limit). Adding ~180 lines would push it to ~530.

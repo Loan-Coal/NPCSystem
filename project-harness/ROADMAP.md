@@ -325,10 +325,10 @@ with an eval suite that *proves* it and a published metric.
 **Sessions:** 2–3
 **Leverages:** existing knowledge-guard rule + the negative eval cases (ISSUE-037) already test this.
 
-- [ ] **S11.1** Expand the negative-eval suite into a comprehensive knowledge-guard battery: an NPC must never
+- [x] **S11.1** Expand the negative-eval suite into a comprehensive knowledge-guard battery: an NPC must never
       reference events it lacks `KNOWS_ABOUT`, reveal undisclosed secrets, or invent lore — across archetypes.
-- [ ] **S11.2** Adversarial cases: injection prompts (ties to S0.1), leading questions, false premises.
-- [ ] **S11.3** Produce a single headline metric (e.g., "0 lore hallucinations across N adversarial turns")
+- [x] **S11.2** Adversarial cases: injection prompts (ties to S0.1), leading questions, false premises.
+- [x] **S11.3** Produce a single headline metric (e.g., "0 lore hallucinations across N adversarial turns")
       and a repeatable report. Exit: a one-command eval run yields the published guarantee number.
 
 ## Phase 12 — Designer Web Dashboard
@@ -337,13 +337,108 @@ generated quests. The buyer's daily tool.
 **Sessions:** 5–8 (largest phase; likely its own milestone)
 **Leverages:** the full REST API + the draft queue (S3.3) as the approval backend.
 
-- [ ] **S12.1** Live graph viewer (read-only) over the existing graph routes.
-- [ ] **S12.2** NPC authoring form → `POST /v1/graph/nodes/Character` (traits, voice_descriptor, faction,
+**Stack (DEC-053):** Static SPA in `dashboard/`, served by FastAPI at `/dashboard` (auth-exempt
+static assets; API calls carry their own Bearer token). Graph via CDN Cytoscape. No npm/build toolchain.
+
+- [x] **S12.1** Live graph viewer (read-only) over the existing graph routes.
+- [x] **S12.2** NPC authoring form → `POST /v1/graph/nodes/Character` (traits, voice_descriptor, faction,
       starting memories). Optional: natural-language authoring ("describe an NPC" → generated node).
-- [ ] **S12.3** Quest-draft approval queue UI over `GET /v1/quests/drafts` + offer.
-- [ ] **S12.4** Engine cadence + cost controls (tick interval, per-engine model/budget) over config endpoints.
-- [ ] **S12.5** Designer analytics over `degradation_level` + `write_metrics` (which NPCs, what players ask,
-      where dialogue fell back).
+- [x] **S12.3** Quest-draft approval queue UI over `GET /v1/quests/drafts` + offer.
+- [x] **S12.4** Engine cadence + cost controls (tick interval, per-engine model/budget) over config endpoints.
+      *Shipped read-only (config + live engine status); live mutation deferred — DEC-054, ISSUE-051.*
+- [x] **S12.5** Designer analytics over `degradation_level` + `write_metrics` (which NPCs, what players ask,
+      where dialogue fell back). *Surfaced via `GET /v1/system/metrics` snapshot + recent-events feed.*
+
+---
+
+# Next Sprint — Backlog Phased (planned 2026-06-03)
+
+> Phases 0–12 are complete. The 5 unphased "Backlog / Future" items + hygiene are
+> now phased below. **Sequence: 13 → 14 → 15 → 16.** Phase 17 (SDKs) is a separate
+> commercial milestone, deferred. Each item grounded against code on 2026-06-03.
+
+## Phase 13 — Clean-Slate Hygiene
+**Goal:** Commit finished work, clear the last open issue, kill doc-drift. Nothing new
+gets built on an uncommitted, drifting base.
+**Sessions:** 1 — **do first.**
+
+- [x] **S13.1** Commit Phases 11 & 12 (were complete but uncommitted on `munich-demo`).
+  Two conventional commits: `feat(evals): anti-hallucination battery + headline metric (Phase 11)`
+  (adds `evals/summary.py`, 5 `case_adv_*` + 7 `case_neg_*` cases, `runner.py`/`report.py` changes,
+  `test_eval_summary.py`) and `feat(dashboard): designer web SPA + system read routes (Phase 12)`
+  (adds `dashboard/`, `system.py` routes, auth-exempt mount in `main.py`/`middleware*.py`,
+  `test_dashboard_routes.py`, `Makefile` targets). Decide commit-vs-gitignore for
+  `REVIEW_FINDINGS.md` + `review-evidence/`.
+  - Exit: `git status` clean except intentional artifacts; `make test` + `make test-demo` green.
+- [ ] **S13.2** ISSUE-051 — runtime config mutation. Add a `RuntimeConfigStore` read by the
+  autopilot each loop (tick interval + LLM budget); expose `PATCH /v1/system/config`
+  (graph_admin scope, bounded values); wire the dashboard Engines-tab inputs to it.
+  - **Requires sign-off:** touches the scheduler loop + a public endpoint (CLAUDE.md "asking before doing").
+  - Exit: changing tick interval in the dashboard takes effect with no restart; ISSUE-051 → `[FIXED]`.
+- [ ] **S13.3** Doc-drift sweep. Grep for stale `Phase N stub` / "all handlers are stubs" docstrings
+  (`dispatch.py` is already corrected — find the rest).
+  - Exit: no docstring describes shipped behavior as a stub. (Item 5 of old backlog.)
+
+## Phase 14 — Proactive NPC-Initiated Dialogue
+**Goal:** NPCs open conversations on their own — the autonomous world feels agentic, not reactive.
+**Sessions:** 3–4
+**Leverages:** Phase 1 tick driver + dialogue engine + S6.4 WS streaming.
+**Note:** `agenda_engine.py` only resolves *political* agendas (vote tally → passed/failed). It does
+**not** form conversational intent — S14.1 is net-new logic, not a wiring job.
+
+- [ ] **S14.1** Intent-formation tick step — new file `engines/agenda/conversation_intent_service.py`
+  (separate file per OCP): on tick, score whether an NPC wants to open dialogue with a co-located
+  player from need thresholds / unresolved goals / recently witnessed events.
+  - Exit: a hungry/threatened NPC produces a queued intent under autopilot.
+- [ ] **S14.2** Intent queue + bounded backpressure — persist pending intents (graph or session store);
+  cap per-NPC and global rate via config.
+  - Exit: intents survive a tick and never grow unbounded.
+- [ ] **S14.3** Delivery channel — push the proactive line over the WS dialogue path
+  (or a `GET /v1/dialogue/pending` poll).
+  - Exit: the client receives an unsolicited NPC line.
+- [ ] **S14.4** Demo integration — surface an NPC hailing the player.
+  - Exit: stand still in the demo → an NPC initiates a conversation. (Item 2 of old backlog.)
+
+## Phase 15 — Retrieval-Quality Evals
+**Goal:** Prove the embedding/rerank stack retrieves the *right* memories, not just that tone is right.
+**Sessions:** 2–3
+**Leverages:** existing `embedding_index`, `cross_encoder_reranker`, `subgraph_retriever`,
+`context_relevance_engine`, `context_scoring` — large stack, but only tone is currently evaluated.
+
+- [ ] **S15.1** Retrieval-inspection surface — `GET /v1/debug/retrieval?npc_id&query` returning the
+  ranked context-item IDs (graph_admin scope).
+  - Exit: endpoint returns deterministic ranked IDs for a seeded query.
+- [ ] **S15.2** Precision matcher + cases — extend `evals/runner.py` (currently dialogue-only) to POST
+  to the retrieval endpoint; add a `retrieval_precision` matcher computing precision@k / recall against
+  a labeled relevant-set. ~6 cases over the seeded worlds.
+  - Exit: `make eval-retrieval` reports precision@k.
+- [ ] **S15.3** Headline retrieval metric — fold into `evals/summary.py` alongside the hallucination number.
+  - Exit: a one-command run prints retrieval precision. (Item 3 of old backlog.)
+
+## Phase 16 — Content Moderation / Rating Guardrails
+**Goal:** Configurable per-world content ceiling (ESRB/PEGI) — a buyer compliance checkbox.
+**Sessions:** 2–3
+**Leverages:** the S0.1 input chokepoint (`MAX_PLAYER_MESSAGE_CHARS` + injection guard).
+
+- [ ] **S16.1** Config + schema — `CONTENT_RATING` setting (`everyone|teen|mature`, `Literal`) +
+  per-world override; bounded enum.
+  - Exit: rating is resolvable per world.
+- [ ] **S16.2** Input moderation — extend the existing input guard to reject/redact over-ceiling player
+  input at the API boundary.
+  - Exit: over-ceiling input rejected with 422.
+- [ ] **S16.3** Output moderation — prompt rule (in `prompts/` per layer rules) + post-generation check
+  so NPC output respects the ceiling.
+  - Exit: mature content suppressed under `everyone`; an eval case proves it. (Item 4 of old backlog.)
+
+## Phase 17 — Engine SDKs (Unity / Unreal) — DEFERRED MILESTONE
+**Goal:** Drop-in plugins wrapping the REST/WS API — highest commercial ROI.
+**Sessions:** 8+ (its own milestone, not a sprint task). Own-game milestone (Phase 7) is complete, so
+this is now unblocked, but it is sequenced after the sprint above.
+
+- [ ] **S17.1** OpenAPI contract freeze + versioned client spec.
+- [ ] **S17.2** Unity C# package (REST + WS, auth, models).
+- [ ] **S17.3** Unreal plugin (parity).
+- [ ] **S17.4** Sample integration scene per engine + docs. (Item 1 of old backlog.)
 
 ---
 
@@ -402,17 +497,19 @@ See `project-harness/ISSUES.md` for the full log. Every active issue now has a r
 
 ---
 
-## Backlog / Future (not yet phased)
+## Backlog / Future
 
-1. **Engine SDKs (Unity/Unreal)** — *explicitly deferred (2026-06-01): build after the own-game milestone.*
-   Drop-in plugins wrapping the REST/WS API. Highest commercial ROI when the studio-facing push begins.
-2. **Proactive NPC-initiated dialogue** — `agenda` can form intentions; add a tick loop for an NPC to *open*
-   a conversation. Makes the autonomous world feel agentic.
-3. **Retrieval-quality evals** — the embedding/rerank stack underpins every dialogue, yet only tone is
-   evaluated. Add retrieval-precision cases (does the NPC retrieve the right events?).
-4. **Content moderation / rating guardrails** — configurable per-world content ceiling for ESRB/PEGI
-   compliance. Reuses the S0.1 input chokepoint.
-5. **Doc-drift sweep** — `interaction/dispatch.py` and others carry stale "Phase N stub" docstrings.
+**All 5 items below were phased on 2026-06-03 → see "Next Sprint — Backlog Phased" above.**
+Sprint sequence: **13 (hygiene) → 14 (proactive dialogue) → 15 (retrieval evals) → 16 (moderation)**;
+Phase 17 (SDKs) deferred as a separate commercial milestone.
+
+| # | Old backlog item | Now |
+|---|------------------|-----|
+| 1 | Engine SDKs (Unity/Unreal) | **Phase 17** (deferred milestone) |
+| 2 | Proactive NPC-initiated dialogue | **Phase 14** |
+| 3 | Retrieval-quality evals | **Phase 15** |
+| 4 | Content moderation / rating guardrails | **Phase 16** |
+| 5 | Doc-drift sweep | **S13.3** |
 
 ---
 
@@ -438,3 +535,7 @@ See `project-harness/ISSUES.md` for the full log. Every active issue now has a r
 | S6.4 | 2026-06-03 | Phase 6 | Streaming dialogue: dialogue_ws.py client worker; ScrollableLog.begin_streaming/append_stream_token; LeftPanelRenderer streaming methods; GameController WS submit path + poll_token_queue; server done message includes full metadata; 20 new tests | 1208 passing, demo 457 passing |
 | S6.5 | 2026-06-03 | Phase 6 | Military engine: military_battle_service.py (battle resolution), military_resource_service.py (resource yield + depletion), 4 graph writer helpers, 21 new unit tests | 1223 passing, demo 457 passing |
 | S6.6 | 2026-06-03 | Phase 6 | Final demo flow: run_scenes.py (all scene types), run.py rewritten (5-act 5-min script), seed.py army seeding (iron_legion + 2 armies), put_world_state world_demo fix, DEMO_SCRIPT.md full S6 update | Phase 6 complete |
+| S11.3 | 2026-06-03 | Phase 11 | Headline anti-hallucination metric: evals/summary.py (EvalSummary frozen dataclass, summarize + console/markdown formatters), wired into runner.py console output + report.py markdown header, make eval-report alias; 8 new unit tests | Phase 11 complete |
+| S12.1–S12.5 | 2026-06-03 | Phase 12 | Designer web dashboard (static SPA at `/dashboard`, DEC-053): graph viewer (Cytoscape over `/v1/graph/*`), NPC authoring form, quest-draft approval queue, engine cadence/cost inspector, analytics. New `GET /v1/system/config` + `/v1/system/metrics` read routes; auth-exempt static mount; `make dashboard`. 7 new unit tests; S12.4 live mutation deferred (DEC-054, ISSUE-051) | Phase 12 complete |
+| Plan | 2026-06-03 | Backlog | Phased the 5 unphased backlog items + hygiene into Phases 13–17 (grounded against code). Sprint sequence 13→14→15→16; SDKs (17) deferred. NEXT_SESSION.md regenerated to point at S13.1. No code changes | Backlog phased; next sprint defined |
+| S13.1 | 2026-06-03 | Phase 13 | Committed Phases 11 & 12 + the 2026-06-03 codebase review as 4 atomic commits (feat(evals), feat(dashboard), docs(review), docs(harness)). Honest messaging — SEV-01 caveat recorded, "0 hallucinations" NOT claimed. gitignored .cache/.claude/review-evidence. Tests green: 1326 unit + 525 demo | Working tree clean; Phase 11/12/review version-controlled |
