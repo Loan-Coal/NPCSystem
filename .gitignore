@@ -22,6 +22,14 @@ e2e/transcripts/
 evals/reports/
 transcripts/
 
+# Codebase-review raw run-logs + agent transcripts (synthesis lives in
+# REVIEW_FINDINGS.md + review-fixes/, which ARE committed)
+project-harness/review-evidence/
+
+# Local agent tooling + caches (not product code)
+.cache/
+.claude/
+
 # Docker / env files
 *.env
 .env.*
