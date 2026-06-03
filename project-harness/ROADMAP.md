@@ -267,10 +267,10 @@ reseeds on every launch — bribes, gifts, standing, completed quests are wiped.
 The engines produce a *simulation*. A *game* needs a goal, scarcity, and an arc that closes. This phase
 finally earns the idle `chapter` and `story_pacing` engines.
 
-- [ ] **S7.1** Player objective + win/lose condition (e.g., "earn the trust of two of three factions before
+- [x] **S7.1** Player objective + win/lose condition (e.g., "earn the trust of two of three factions before
       the war reaches the town"). Exit: a session can be won or lost; state is shown.
-- [ ] **S7.2** Scarcity loop — make gold scarce; bribes/trades/rewards trade off. Exit: cannot bribe every faction.
-- [ ] **S7.3** Arc that closes — wire an early player choice to a visibly different `chapter`/ending via
+- [x] **S7.2** Scarcity loop — make gold scarce; bribes/trades/rewards trade off. Exit: cannot bribe every faction.
+- [x] **S7.3** Arc that closes — wire an early player choice to a visibly different `chapter`/ending via
       `chapter_engine` + `story_pacing`. Exit: different early choices reach different endings.
 
 ---
@@ -286,11 +286,11 @@ finally earns the idle `chapter` and `story_pacing` engines.
 **Sessions:** 2–3
 **Leverages:** reputation engine + gossip propagation + locations (all exist).
 
-- [ ] **S8.1** Reputation events become gossip-propagatable: a standing change at one location seeds a
+- [x] **S8.1** Reputation events become gossip-propagatable: a standing change at one location seeds a
       `KNOWS_ABOUT` rumor that spreads to co-located NPCs and onward across locations on the tick.
-- [ ] **S8.2** NPCs in a new location greet the player according to *propagated* reputation, not just local
+- [x] **S8.2** NPCs in a new location greet the player according to *propagated* reputation, not just local
       standing. Distortion applies (a small theft becomes a big rumor two hops away).
-- [ ] **S8.3** Demo: commit a notable act in one location; travel; a stranger references it. Exit: reputation
+- [x] **S8.3** Demo: commit a notable act in one location; travel; a stranger references it. Exit: reputation
       demonstrably precedes the player.
 
 ## Phase 9 — Emotion-Driven Voice (TTS)
@@ -298,11 +298,11 @@ finally earns the idle `chapter` and `story_pacing` engines.
 **Sessions:** 2–3
 **Leverages:** emotion engine (valence + mood) + `voice_descriptor` (base voice) + streaming dialogue (S6.4).
 
-- [ ] **S9.1** TTS backend adapter behind a protocol (cloud: ElevenLabs/Azure; local: Piper/Coqui to match
+- [x] **S9.1** TTS backend adapter behind a protocol (cloud: ElevenLabs/Azure; local: Piper/Coqui to match
       the on-prem story). Prompt strings/config stay out of engine code per layer rules.
-- [ ] **S9.2** Emotion → voice-parameter modulation layer: map valence/arousal to rate, pitch, and intensity
+- [x] **S9.2** Emotion → voice-parameter modulation layer: map valence/arousal to rate, pitch, and intensity
       over each NPC's base voice. Same NPC, different delivery per emotional state.
-- [ ] **S9.3** Demo: stream emotion-modulated audio for NPC lines. Exit: an NPC audibly warms toward an allied
+- [x] **S9.3** Demo: stream emotion-modulated audio for NPC lines. Exit: an NPC audibly warms toward an allied
       player and sharpens when hostile.
 
 ## Phase 10 — Rumor / Misinformation Gameplay (the moat)
@@ -311,12 +311,12 @@ corrects them. A mechanic no pure-LLM NPC product can do — it requires your gr
 **Sessions:** 3–4
 **Leverages:** gossip distortion (the math is documented in ISSUE-042) + KNOWS_ABOUT propagation + Phase 8.
 
-- [ ] **S10.1** Player action `[Spread rumor]` — inject a belief into a target NPC; it enters the gossip
+- [x] **S10.1** Player action `[Spread rumor]` — inject a belief into a target NPC; it enters the gossip
       propagation pipeline with distortion.
-- [ ] **S10.2** Consequence wiring — propagated (mis)information changes NPC behavior/dialogue/standing, so a
+- [x] **S10.2** Consequence wiring — propagated (mis)information changes NPC behavior/dialogue/standing, so a
       planted rumor has real downstream effects (e.g., turn a faction against a rival).
-- [ ] **S10.3** Counter-play — the player can trace or correct a rumor before it fully propagates.
-- [ ] **S10.4** Demo/gameplay loop: plant a lie → watch it mutate across the gossip graph → exploit it. Exit:
+- [x] **S10.3** Counter-play — the player can trace or correct a rumor before it fully propagates.
+- [x] **S10.4** Demo/gameplay loop: plant a lie → watch it mutate across the gossip graph → exploit it. Exit:
       a single planted rumor measurably shifts the world state.
 
 ## Phase 11 — Anti-Hallucination Guarantee + Eval Suite (the moat)

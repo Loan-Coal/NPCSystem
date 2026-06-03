@@ -13,6 +13,15 @@ Rules:
 
 ## Open
 
+## [FIXED] ISSUE-050: test_put_world_state_success asserts id=="world" but client uses "world_demo"
+**Found:** 2026-06-03, during S7.2 test run
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/tests/test_client.py:479`
+**Description:** `test_put_world_state_success` asserts `kwargs["json"]["properties"]["id"] == "world"` but `put_world_state` in `client.py` hardcodes `"world_demo"` (changed by ISSUE-044 fix). The test was not updated when the ID changed.
+**Why deferred:** Test failure is pre-existing, not blocking S7.2. Single-line fix.
+**To fix:** Change the assertion in `test_put_world_state_success` to `"world_demo"`.
+**Fixed:** 2026-06-03, S7.3 — changed assertion to `"world_demo"` in `demo_game/tests/test_client.py:479`.
+
 ## [FIXED] ISSUE-049: Give Item action always gives first inventory item — no player choice
 **Found:** 2026-06-02, during S4.2 review
 **Severity:** P2 (annoying)

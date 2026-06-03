@@ -25,6 +25,25 @@ Rules:
 **Why:** The world ID is a demo-world constant, not a general configuration value. Adding an injection point would be over-engineering; the demo is always `world_demo`.
 **Future:** If multi-world support is added, `EngineClient` should accept a `world_id` parameter on all world-state mutating methods.
 
+## DEC-051: S10.3 correct rumor marks 'corrected' rather than deleting the edge
+**Date:** 2026-06-03
+**Context:** When the player corrects a planted rumor at an NPC, the KNOWS_ABOUT edge
+could either be deleted or marked with `knowledge_state='corrected'`.
+**Decision:** Set `knowledge_state='corrected'` and filter it in `CYPHER_GET_EVENTS_FOR_NPC`
+(`WHERE k.knowledge_state IS NULL OR k.knowledge_state <> 'corrected'`).
+**Why:** Retaining the edge preserves audit history (who heard the rumor, at what tick) and
+enables future "trace what was corrected and where" queries without re-propagation. Deletion
+would be irreversible and prevent later investigation. The filter is O(1) Cypher predicate.
+
+## DEC-052: game_controller.py ~535 lines — continued DEC-048 exception
+**Date:** 2026-06-03
+**Context:** S10.3 added correct-rumor queue/spawn/poll and event_id tracking (~35 lines).
+**Decision:** Accept the over-limit size rather than split. DEC-048 rationale stands —
+GameController is a single cohesive class managing all action queues. Each new demo action
+adds one queue, one spawn, one poll; these are repetitive but inseparable from the class.
+**Future:** If a 5th+ phase adds more actions, consider extracting a `RumorController` analogous
+to `QuestTradeController`.
+
 ## DEC-001: LEVERAGE is a reified node, not an edge
 **Date:** 2026-05-19
 **Context:** Phase 7.2 Political Simulation adds a leverage mechanic where one character holds leverage over another, grounded in a shared secret.
@@ -473,6 +492,24 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Decision:** Accepted. `GameController` is a single cohesive class whose sole responsibility is managing background threads and result queues for all demo actions. Each new action (travel, inspect, generate-quest) follows the same spawn+poll pattern and belongs here.
 **Why:** Extracting travel into a `TravelController` would add an artificial seam at the cost of a second delegation layer with two methods. The natural split trigger would be if GameController grew a second stateful concern (e.g., a streaming event log) rather than just a new action of the same shape.
 **Consequence:** When Phase 4+ adds Bribe (spawns a faction-politics call), it follows the same spawn+poll pattern and stays in this file. If a fifth or sixth action makes the class unwieldy, extract a generic `ActionQueueManager` base.
+
+## DEC-051: run_scenes.py accepted over 300-line hard limit (~420 lines after S8.3)
+**Date:** 2026-06-03
+**Context:** S8.3 — adding `PropagatedReputationAct` brings `run_scenes.py` to ~420 lines. The file was already ~365 lines before this task (extracted from run.py in DEC-049).
+**Decision:** Accepted. All scene classes are tightly coupled by the `DemoRunner` protocol and the `Scene` base class; splitting them across two files would require a second import barrel and create artificial separation with no cohesion benefit. Each class is a leaf dataclass with a single `execute` method. The file's length is proportional to the number of demo beats, not to any violation of SRP.
+**Why:** The 300-line limit targets wide, sprawling modules. This file contains N small dataclasses, each independently testable, all serving one purpose: typed scripted-demo actions.
+**Consequence:** If the demo grows beyond ~6 more scene types, split by act group (world_scenes.py, dialogue_scenes.py, reputation_scenes.py).
+
+## DEC-052: S9.3 TTS audio delivered as base64 in WS done JSON, not as a binary frame
+**Date:** 2026-06-03
+**Context:** S9.3 — streaming audio bytes from the server to the demo UI over the existing dialogue WebSocket.
+**Options considered:**
+- (A) Binary WebSocket frame before the `done` JSON message — no encoding overhead, but requires the client to handle mixed-type frames and maintain sequence state.
+- (B) Base64 field inside the `done` JSON message — slight size overhead (~33%), but keeps the protocol single-message-type and requires no frame-type dispatch in the client.
+- (C) Separate HTTP endpoint for audio after WS completes — cleanest separation, but adds a round-trip and couples the client to two channels.
+**Decision:** Option B. The demo produces short NPC utterances (< 5 s); WAV payload is typically < 200 KB. The 33% base64 overhead is negligible, and keeping a single JSON protocol layer simplifies the demo client and all tests significantly.
+**Why:** Option A is correct for production high-throughput streaming (e.g., word-aligned lip-sync). For the Munich demo the priority is simplicity and test coverage.
+**Consequence:** If audio clips grow beyond ~500 KB or we need word-level timing, revisit binary frames (A) with a typed frame envelope.
 
 ## DEC-044: quest_lifecycle_engine.py accepted over 300-line hard limit
 **Date:** 2026-06-03
