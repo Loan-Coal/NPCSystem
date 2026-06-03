@@ -511,8 +511,8 @@ class GameController:
                     trust=deltas.get("trust", 0),
                     affection=deltas.get("affection", 0),
                 )
-            except EngineClientError:
-                pass
+            except EngineClientError as exc:
+                print(f"[game_controller] interaction band update failed: {exc}", file=sys.stderr)
 
     def _dispatch_proposal(self, turn: DialogueTurn, npc_id: str, right: RightPanelRenderer) -> None:
         from npc_engine.engines.interaction.models import InteractionProposal as _EngineProposal

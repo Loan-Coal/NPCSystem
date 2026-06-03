@@ -334,7 +334,8 @@ Verification: pass a backtick-bearing label → escaped/rejected, no injected ma
 Effort: S.
 
 ---
-**FINDING [SEV-18]: Silent error swallowing — `except Exception: pass` / warn-and-continue leaves inconsistent state with no signal (strict rule)**
+**[FIXED] FINDING [SEV-18]: Silent error swallowing — `except Exception: pass` / warn-and-continue leaves inconsistent state with no signal (strict rule)**
+**Fixed:** 2026-06-03, SEV-18 fix commit.
 Severity: HIGH · Confidence: Confirmed
 Category: correctness / error-handling
 Absorbs: PY-06, PY-07, ENG-06, DEMO-07

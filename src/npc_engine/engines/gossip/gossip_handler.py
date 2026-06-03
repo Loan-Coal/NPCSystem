@@ -172,6 +172,7 @@ class GossipHandler:
                         )
                     except Exception:
                         LOGGER.exception("Failed to record rumor for event %s", event_id)
+                        raise
                 if (
                     self._emotion_updater is not None
                     and severity_int >= self._settings.RUMOR_EMOTION_SEVERITY_THRESHOLD

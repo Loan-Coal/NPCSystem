@@ -8,6 +8,7 @@ Used by: demo_game.ui.game_window
 
 from __future__ import annotations
 
+import sys
 import threading
 import time
 
@@ -60,6 +61,6 @@ class GoldPoller:
                 gold = int((char or {}).get("currency_balance") or 0)
                 with self._lock:
                     self._gold = gold
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[gold_poller] poll failed: {exc}", file=sys.stderr)
             time.sleep(self._interval_s)

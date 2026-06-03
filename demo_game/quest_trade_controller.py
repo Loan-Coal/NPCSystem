@@ -11,6 +11,7 @@ Used by: demo_game.game_controller
 
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING, Any, Callable
 
 from demo_game.client import EngineClient, EngineClientError
@@ -142,8 +143,8 @@ class QuestTradeController:
             from demo_game.ui.right_panel import RightPanel as _RP
             self._refresh_inventory(right)
             right.switch_to(_RP.PLAYER_INVENTORY)
-        except EngineClientError:
-            pass
+        except EngineClientError as exc:
+            print(f"[quest_trade_controller] inventory refresh failed: {exc}", file=sys.stderr)
 
     # ------------------------------------------------------------------
     # Give-item handler
@@ -198,8 +199,8 @@ class QuestTradeController:
         try:
             npc_char = self._client.get_node("Character", npc_id)
             right.set_npc_trade_gold((npc_char or {}).get("currency_balance"))
-        except EngineClientError:
-            pass
+        except EngineClientError as exc:
+            print(f"[quest_trade_controller] npc gold fetch failed: {exc}", file=sys.stderr)
         try:
             result = self._client.post_interaction(
                 player_id=self._player_id,
@@ -253,8 +254,8 @@ class QuestTradeController:
         try:
             npc_char = self._client.get_node("Character", npc_id)
             right.set_npc_trade_gold((npc_char or {}).get("currency_balance"))
-        except EngineClientError:
-            pass
+        except EngineClientError as exc:
+            print(f"[quest_trade_controller] npc gold fetch failed: {exc}", file=sys.stderr)
         try:
             result = self._client.post_interaction(
                 player_id=self._player_id,
@@ -275,8 +276,8 @@ class QuestTradeController:
             right.set_inventory(self._client.get_items_for_character(self._player_id))
             char = self._client.get_node("Character", self._player_id)
             right.set_player_gold((char or {}).get("currency_balance"))
-        except EngineClientError:
-            pass
+        except EngineClientError as exc:
+            print(f"[quest_trade_controller] inventory/gold refresh failed: {exc}", file=sys.stderr)
 
     def _status(self, text: str, duration: float = 2.0) -> None:
         if self._on_set_status is not None:

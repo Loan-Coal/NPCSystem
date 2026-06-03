@@ -143,8 +143,11 @@ class MemoryConsolidationEngine:
                 vividness = max(vividness, max_clarity)
                 if any(bool(w.get("is_canonical", False)) for w in witnessed):
                     vividness = 100
-        except Exception:
-            pass  # Never let WITNESSED query failure block memory creation
+        except Exception as exc:
+            _LOGGER.warning(
+                "witnessed_query_failed",
+                extra={"npc_id": npc_id, "error": str(exc)},
+            )
 
         memory_id = await create_memory(
             session,

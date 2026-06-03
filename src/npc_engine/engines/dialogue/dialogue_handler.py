@@ -7,6 +7,7 @@ Dependencies injected: AsyncSession, Settings, LLMClientProtocol, EngineModelCon
                        SessionStore, EmotionUpdater.
 """
 
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -39,7 +40,10 @@ from npc_engine.world.time_utils import TimePoint
 from npc_engine.world.world_reader import get_world_state
 
 
+_logger = logging.getLogger(__name__)
+
 LLM_VALIDATION_FAILURES_METRIC = "llm_validation_failures_total"
+TTS_FAILURES_METRIC = "tts_failures_total"
 
 
 class DialogueHandler:
@@ -209,7 +213,13 @@ class DialogueHandler:
                 text=response.npc_response, voice_params=voice_params
             )
             return response.model_copy(update={"audio_bytes": audio})
-        except Exception:
+        except Exception as exc:
+            _logger.warning(
+                "tts_failure",
+                extra={"npc_id": npc_id, "error": str(exc)},
+                exc_info=True,
+            )
+            increment_metric(TTS_FAILURES_METRIC)
             return response
 
     async def stream(self, request: DialogueRequest) -> list[str]:

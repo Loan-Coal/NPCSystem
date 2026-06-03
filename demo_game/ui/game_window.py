@@ -163,8 +163,8 @@ class GameWindow:
             try:
                 self._ctrl.quest_id = json.loads(_quest_cache.read_text())["quest_id"]
                 self._right.set_quest(client.get_quest(self._ctrl.quest_id))
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"[game_window] quest cache restore failed: {exc}", file=sys.stderr)
 
         self._right.set_quest_accept_callback(lambda: self._ctrl.on_quest_accept(self._right))
         self._right.set_quest_complete_callback(lambda: self._ctrl.on_quest_complete(self._active_npc_id, self._right))
@@ -205,8 +205,8 @@ class GameWindow:
 
         try:
             self._right.set_chain_data(client.get_graph_edges("KNOWS_ABOUT", dst_id="northern_war_begins"))
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[game_window] gossip chain fetch failed: {exc}", file=sys.stderr)
 
         try:
             self._right.set_inventory(client.get_items_for_character(cfg.DEMO_PLAYER_ID))

@@ -36,8 +36,11 @@ def _load_canned_text(archetype: str, canned_dir: Path) -> str:
                 responses: list[str] = data.get("responses", [])
                 if responses:
                     return random.choice(responses)
-            except Exception:
-                pass
+            except Exception as exc:
+                _logger.warning(
+                    "canned_response_load_failed",
+                    extra={"archetype": name, "path": str(candidate), "error": str(exc)},
+                )
     return "I need a moment to think."
 
 
