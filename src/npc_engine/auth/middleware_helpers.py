@@ -23,6 +23,7 @@ from npc_engine.utils.metrics import increment_metric, observe_metric, result_la
 
 HEALTH_PATH = "/health"
 DOCS_PATHS = frozenset({"/docs", "/redoc", "/openapi.json"})
+DASHBOARD_PATH_PREFIX = "/dashboard"
 OPTIONS_METHOD = "OPTIONS"
 REQUEST_ID_HEADER = "X-Request-ID"
 UUID_VERSION_V4 = 4
@@ -47,6 +48,20 @@ REQUEST_COMPLETED_EVENT = "request_completed"
 REQUEST_ID_FALLBACK_PREFIX = "req"
 
 LOGGER = get_logger(__name__)
+
+
+def is_public_path(path: str) -> bool:
+    """Return True for paths served without authentication.
+
+    Covers the health probe, the OpenAPI docs, and the static designer dashboard
+    assets (which carry no secrets; their API calls supply their own Bearer token).
+
+    Args:
+        path: Incoming request path.
+    Returns:
+        True when the path must bypass the auth check.
+    """
+    return path == HEALTH_PATH or path in DOCS_PATHS or path.startswith(DASHBOARD_PATH_PREFIX)
 
 
 def _required_scope_for_path(path: str, api_v1_prefix: str) -> str | None:

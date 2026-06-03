@@ -14,8 +14,8 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-e2e scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo seed-api smoke \
-        demo demo-seed demo-run demo-village demo-tavern test-demo \
+        eval eval-report eval-e2e scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo seed-api smoke \
+        demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world
 
@@ -104,6 +104,10 @@ eval:
 		--cases evals/cases \
 		--reports evals/reports
 
+# eval-report: alias for `eval` — runs the suite and prints the published
+# anti-hallucination guarantee ("0 lore hallucinations across N adversarial turns").
+eval-report: eval
+
 # eval-e2e: run YAML eval cases as pytest parametrized tests (requires --scenarios-only)
 eval-e2e:
 	$(PYTHON) -m pytest e2e/scenarios/scenario_yaml_evals.py -v -m eval --scenarios-only -p no:cacheprovider $(ARGS)
@@ -135,6 +139,12 @@ eval-llm-demo:
 demo:
 	docker-compose up -d
 	$(PYTHON) -m demo_game
+
+# dashboard: print the URL for the Phase 12 designer web dashboard.
+# The FastAPI app serves it as static files at /dashboard once the backend is up
+# (docker-compose up -d). Paste an API key in the top bar to connect.
+dashboard:
+	@echo "Designer dashboard: http://localhost:8000/dashboard/  (start backend first: docker-compose up -d)"
 
 # demo-seed: seed the demo world via the HTTP API (idempotent — safe to re-run)
 demo-seed:

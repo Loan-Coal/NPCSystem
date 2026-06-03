@@ -13,14 +13,17 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 from neo4j import AsyncSession
 
+from npc_engine.api.dashboard_models import DashboardConfigView
 from npc_engine.api.dependencies import get_db_session, get_game_schema, get_tick_scheduler, get_type_registry
 from npc_engine.api.dependency_singletons import _llm_adapters_to_close
 from npc_engine.api.route_helpers import ok_response
+from npc_engine.config import Settings, get_settings
 from npc_engine.graph.event_feed_queries import get_recent_event_feed
 from npc_engine.scheduler.tick_scheduler import TickScheduler
 from npc_engine.schema.schema_models import SchemaConfig
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.type_registry.serializer import serialize_registry_snapshot
+from npc_engine.utils.metrics import get_metrics_registry
 
 _DEFAULT_EVENT_LIMIT = 20
 
@@ -82,6 +85,33 @@ async def engine_status(scheduler: TickScheduler = Depends(get_tick_scheduler)) 
         for record in scheduler.engine_status.values()
     ]
     return ok_response(records)
+
+
+@v1_router.get("/config")
+async def runtime_config(settings: Settings = Depends(get_settings)) -> dict:
+    """Return a curated, read-only view of cadence and cost settings.
+
+    Powers the designer dashboard Engines tab (S12.4). Exposes only operational
+    tuning knobs — no secrets, API keys, or connection strings.
+
+    Returns:
+        Dict with ``data`` holding the DashboardConfigView fields.
+    """
+    return ok_response(DashboardConfigView.from_settings(settings).model_dump())
+
+
+@v1_router.get("/metrics")
+async def metrics_snapshot() -> dict:
+    """Return an immutable snapshot of in-process request and engine metrics.
+
+    Powers the designer dashboard Analytics tab (S12.5): request counts,
+    latencies, validation failures, and any degradation counters recorded since
+    server start.
+
+    Returns:
+        Dict with ``data`` holding ``counters`` and ``observations`` maps.
+    """
+    return ok_response(get_metrics_registry().snapshot())
 
 
 @v1_router.get("/events")

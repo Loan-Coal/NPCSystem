@@ -17,6 +17,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
+from npc_engine.api.dashboard_static import register_dashboard
 from npc_engine.api.rate_limit import RateLimitMiddleware
 from npc_engine.api.routes.action import router as action_router
 from npc_engine.api.routes.batch import router as batch_router
@@ -270,6 +271,9 @@ def create_app() -> FastAPI:
     app.include_router(traits_router, prefix=admin_prefix)
     app.include_router(pledges_router, prefix=admin_prefix)
     app.include_router(treaties_router, prefix=admin_prefix)
+
+    # Designer web dashboard (Phase 12) — auth-exempt static assets.
+    register_dashboard(app)
 
     return app
 
