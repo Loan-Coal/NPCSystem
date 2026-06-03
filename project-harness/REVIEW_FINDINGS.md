@@ -317,6 +317,7 @@ Effort: S.
 
 ---
 **FINDING [SEV-17]: Cypher injection latent — `graph_admin_service._hard_delete_node` and `quest_generation` build labels via unsanitized f-string**
+Status: FIXED 2026-06-03 — both sites wrap label in `cypher_identifier()` (quest-gen via `resolve_node_label`); test `tests/unit/test_cypher_label_injection.py`.
 Severity: HIGH · Confidence: Confirmed (pattern) / current callers use literals
 Category: security
 Absorbs: SEC-06, GRAPH-09

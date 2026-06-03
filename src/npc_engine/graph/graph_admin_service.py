@@ -8,6 +8,7 @@ Dependencies injected: AsyncSession.
 
 from neo4j import AsyncSession
 
+from npc_engine.graph.generic_graph_utils import cypher_identifier
 from npc_engine.utils.errors import NodeNotFoundError
 
 
@@ -25,7 +26,7 @@ class GraphAdminService:
         """Hard delete one node label and all connected edges atomically."""
 
         result = await self._session.run(
-            f"MATCH (n:{label} {{id: $id}}) "
+            f"MATCH (n:{cypher_identifier(label)} {{id: $id}}) "
             "OPTIONAL MATCH (n)-[out]-() "
             "OPTIONAL MATCH ()-[inc]->(n) "
             "WITH n, collect(out) + collect(inc) AS rels "

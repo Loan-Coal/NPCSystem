@@ -46,6 +46,7 @@ from npc_engine.engines.quest_generation.slot_models import (
 from npc_engine.engines.quest_generation.slot_validator import SlotValidator
 from npc_engine.graph.belief_queries import get_beliefs_for_character
 from npc_engine.graph.causality_service import record_causation
+from npc_engine.graph.generic_graph_utils import cypher_identifier, resolve_node_label
 from npc_engine.graph.goal_queries import get_goals_for_character
 from npc_engine.graph.graph_reader import get_npc_location_id
 from npc_engine.graph.group_service import get_groups_for_character_svc
@@ -377,7 +378,7 @@ class QuestGenerationEngine:
             if node_type in seen_types:
                 continue
             seen_types.add(node_type)
-            label = node_type.capitalize()
+            label = cypher_identifier(resolve_node_label(node_type))
             cypher = f"MATCH (n:{label}) RETURN n.id AS id LIMIT 20"
             result = await session.run(cypher)
             ids = [str(r["id"]) async for r in result if r.get("id") is not None]
