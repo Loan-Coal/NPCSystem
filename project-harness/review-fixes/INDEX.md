@@ -14,6 +14,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - SEV-01 DONE: eval guard contract now lives in `evals/runner.py::_guard_expectations` (min_length + fallback keyword_none + tone_judge auto-injected per `case_adv_/case_neg_`). `matchers.py` has `min_length` + empty-`npc_response`-fails schema; `summary.headline` returns "NO GUARD TURNS EVALUATED" at 0 turns and `summary.guarantee_demonstrated` gates `runner.main` exit. `test-cov` now also covers `matchers`+`summary`. SEV-27 (output reliability) is now unblocked. DEC-056 records the auto-inject choice.
 - SEV-16 DONE: leaking routes (clock/debts/groups/quest_generation) now return static `error_response(...)` envelopes + log real detail via `get_logger`. Reuse this pattern for SEV-33 (one error envelope). Test: `tests/unit/test_route_error_redaction.py` (`_LEAK_TOKENS` guard).
 - SEV-17 DONE: dynamic labels in `graph_admin_service._hard_delete_node` + `quest_generation_engine._get_candidates` now wrap label in `cypher_identifier(...)` (quest-gen also via `resolve_node_label`, replacing buggy `.capitalize()`). When SEV-04 moves these into `graph/`, keep the wrap. Test: `tests/unit/test_cypher_label_injection.py`.
+- SEV-09 DONE: `gossip_handler.CYPHER_SELECT_EVENT` now returns `coalesce(e.is_canonical,false)` , excludes `k.knowledge_state='corrected'`, and orders canonical-first. When SEV-04 moves this query to `graph/gossip_queries.py`, preserve all three clauses. Tests: `tests/unit/test_gossip_event_selection.py` (query-structure guard, runs in CI) + `tests/integration/test_gossip_event_selection_integration.py` (skips w/o Neo4j).
 - Hard ordering: **SEV-31 → SEV-04 → {SEV-08, SEV-17, SEV-30, SEV-12}**; **SEV-14 → SEV-15(type-gate)**.
 - Need my approval before starting (schema / DECISIONS): **SEV-10** (graph constraints), **SEV-12** (multi-tenant).
 - Debt tickets already logged: ISSUE-052 (mypy), ISSUE-053 (rule baseline). Next issue id: **ISSUE-054**.
@@ -28,7 +29,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 ### Block B — security & correctness quick wins (independent)
 - [x] **FIX-SEV-16** — Stop leaking exception detail in HTTP responses · HIGH · S · deps: none
 - [x] **FIX-SEV-17** — Sanitize dynamic Cypher labels (`cypher_identifier`) · HIGH · S · deps: none (folds into SEV-04)
-- [ ] **FIX-SEV-09** — Gossip: canonical never distorts; corrected rumors stop spreading · HIGH · S · deps: none
+- [x] **FIX-SEV-09** — Gossip: canonical never distorts; corrected rumors stop spreading · HIGH · S · deps: none
 - [ ] *(SEV-19 prompt-log redaction, SEV-20 auth surface, SEV-21 weak creds/DoS — MEDIUM; report §3)*
 
 ### Block C — concurrency & engine integrity

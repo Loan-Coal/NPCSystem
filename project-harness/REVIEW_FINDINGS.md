@@ -196,6 +196,7 @@ Effort: M.
 
 ---
 **FINDING [SEV-09]: Gossip correctness — canonical (true) events are always distorted, and corrected rumors keep propagating**
+Status: FIXED 2026-06-03 — `CYPHER_SELECT_EVENT` now returns `coalesce(e.is_canonical,false)`, excludes `knowledge_state='corrected'`, orders canonical-first. Tests: `tests/unit/test_gossip_event_selection.py` + `tests/integration/test_gossip_event_selection_integration.py`.
 Severity: HIGH · Confidence: Confirmed (ENG-01) / Likely (ENG-11)
 Category: correctness
 Absorbs: ENG-01, ENG-11

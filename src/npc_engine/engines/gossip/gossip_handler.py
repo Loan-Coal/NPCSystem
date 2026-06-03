@@ -40,10 +40,13 @@ LOGGER = logging.getLogger(__name__)
 
 CYPHER_SELECT_EVENT = """
 MATCH (a:Character {id: $sharer_id})-[k:KNOWS_ABOUT]->(e:Event)
+WHERE coalesce(k.knowledge_state, '') <> 'corrected'
 RETURN e.id AS event_id,
        e.summary AS summary,
-       e.severity AS severity
-ORDER BY e.occurred_at DESC
+       e.severity AS severity,
+       coalesce(e.is_canonical, false) AS is_canonical
+ORDER BY coalesce(e.is_canonical, false) DESC,
+         e.occurred_at DESC
 LIMIT 1
 """
 
