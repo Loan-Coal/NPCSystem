@@ -1,8 +1,9 @@
 """
 Package: military
 Layer: engines
-Purpose: Military engine stub for Phase 7.4 Strategy/4X — no-op tick placeholder.
-Does NOT: perform combat resolution, resource yield, or LLM calls (see ISSUES.md ISSUE-001).
+Purpose: Per-tick military simulation — battle resolution between opposing armies
+         and resource yield for controlling factions (implemented S6.5, ISSUE-031).
+Does NOT: call LLMs or perform graph writes directly (delegated to military services).
 Dependencies injected: None (engines are constructed in dependency_singletons).
 Public surface: MilitaryEngine
 """
