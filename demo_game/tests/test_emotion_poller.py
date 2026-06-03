@@ -32,11 +32,12 @@ def _make_client(
 
 class TestEmotionPollerInitialState:
     def test_initial_state_empty(self) -> None:
-        """get_emotion() returns ('', 0.0) before any poll has run."""
+        """get_emotion() returns ('', 0.0, 0.0) before any poll has run."""
         poller = EmotionPoller(_make_client(), interval_s=999.0)
-        label, valence = poller.get_emotion()
+        label, valence, arousal = poller.get_emotion()
         assert label == ""
         assert valence == 0.0
+        assert arousal == 0.0
 
 
 class TestEmotionPollerPollOnce:
@@ -46,16 +47,17 @@ class TestEmotionPollerPollOnce:
         poller = EmotionPoller(_make_client(data), interval_s=999.0)
         poller.set_active_npc("mira_innkeeper")
         poller._poll_once()
-        label, valence = poller.get_emotion()
+        label, valence, arousal = poller.get_emotion()
         assert label == "happy"
         assert valence == pytest.approx(0.6)
+        assert arousal == pytest.approx(0.4)
 
     def test_poll_once_handles_none_response(self) -> None:
         """Client returns None — state stays empty, no crash."""
         poller = EmotionPoller(_make_client(None), interval_s=999.0)
         poller.set_active_npc("mira_innkeeper")
         poller._poll_once()
-        label, valence = poller.get_emotion()
+        label, valence, arousal = poller.get_emotion()
         assert label == ""
         assert valence == 0.0
 
@@ -68,7 +70,7 @@ class TestEmotionPollerPollOnce:
         poller._poll_once()
         captured = capsys.readouterr()
         assert "EmotionPoller" in captured.err
-        label, valence = poller.get_emotion()
+        label, valence, arousal = poller.get_emotion()
         assert label == ""
         assert valence == 0.0
 
@@ -107,11 +109,11 @@ class TestEmotionPollerNpcSwitch:
         poller.set_active_npc("mira_innkeeper")
         poller._poll_once()
 
-        label, valence = poller.get_emotion()
+        label, valence, arousal = poller.get_emotion()
         assert label == "anxious"
 
         poller.set_active_npc("captain_sorn")
-        label, valence = poller.get_emotion()
+        label, valence, arousal = poller.get_emotion()
         assert label == ""
         assert valence == 0.0
 
@@ -156,7 +158,7 @@ class TestEmotionPollerNpcSwitch:
         # come from the response dict, not the npc_id key — so label is "joyful"
         # because the mock always returns the same data regardless of NPC.
         # This test confirms no crash occurs in this scenario.
-        label, _ = poller.get_emotion()
+        label, _valence, _arousal = poller.get_emotion()
         assert isinstance(label, str)
 
 

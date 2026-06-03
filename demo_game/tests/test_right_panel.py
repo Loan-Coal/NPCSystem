@@ -49,11 +49,11 @@ def _make_renderer():
 # ---------------------------------------------------------------------------
 
 
-def test_right_panel_enum_has_eight_values() -> None:
+def test_right_panel_enum_has_fourteen_values() -> None:
     from demo_game.ui.right_panel import RightPanel
 
     panels = list(RightPanel)
-    assert len(panels) == 8
+    assert len(panels) == 14
 
 
 def test_right_panel_enum_values() -> None:
@@ -64,6 +64,10 @@ def test_right_panel_enum_values() -> None:
     assert "KNOWLEDGE" in values
     assert "PLAYER STATUS" in values
     assert "CHAIN" in values
+    assert "EMOTION" in values
+    assert "NEEDS" in values
+    assert "GOALS" in values
+    assert "MEMORY" in values
 
 
 def test_right_panel_graph_is_first() -> None:

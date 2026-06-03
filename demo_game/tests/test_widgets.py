@@ -483,3 +483,92 @@ def test_event_banner_draw_is_noop_when_inactive() -> None:
         banner.draw(surface, pygame.Rect(0, 0, 400, 300))
         mock_draw.rect.assert_not_called()
     surface.blit.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# ScrollableLog — streaming (begin_streaming / append_stream_token)
+# ---------------------------------------------------------------------------
+
+
+class TestScrollableLogStreaming:
+    def test_begin_streaming_creates_empty_entry(self) -> None:
+        """begin_streaming appends a new entry with empty body."""
+        log = _make_log()
+        log.begin_streaming("Mira")
+        assert len(log._messages) == 1
+        assert log._messages[0][0] == "Mira"
+        assert log._messages[0][1] == ""
+
+    def test_append_stream_token_grows_body(self) -> None:
+        """append_stream_token appends to the last entry's body in-place."""
+        log = _make_log()
+        log.begin_streaming("Mira")
+        log.append_stream_token("Hello ")
+        log.append_stream_token("there.")
+        assert log._messages[0][1] == "Hello there."
+
+    def test_append_stream_token_noop_on_empty_log(self) -> None:
+        """append_stream_token on an empty log must not raise."""
+        log = _make_log()
+        log.append_stream_token("orphan")  # should not raise
+        assert len(log._messages) == 0
+
+    def test_begin_streaming_resets_scroll_to_bottom(self) -> None:
+        """begin_streaming must scroll the viewport to the bottom."""
+        log = _make_log()
+        log._scroll_px = 300
+        log.begin_streaming("Mira")
+        assert log._scroll_px == 0
+
+    def test_begin_streaming_uses_npc_colour_by_default(self) -> None:
+        """begin_streaming without explicit colour uses the NPC amber label colour."""
+        from demo_game.ui import widgets as w
+        log = _make_log()
+        log.begin_streaming("Mira")
+        colour = log._messages[0][2]
+        assert colour == w._CLR_NPC_LABEL
+
+    def test_begin_streaming_accepts_custom_colour(self) -> None:
+        """begin_streaming forwards an explicit colour to the entry."""
+        log = _make_log()
+        log.begin_streaming("You", colour=(120, 160, 255))
+        colour = log._messages[0][2]
+        assert colour == (120, 160, 255)
+
+    def test_streaming_entry_visible_to_draw(self) -> None:
+        """draw() must not crash when the last entry has an empty body (streaming)."""
+        log = _make_log()
+        log.begin_streaming("Mira")
+        surface = MagicMock()
+        with patch("demo_game.ui.widgets.pygame.draw"):
+            log.draw(surface, pygame.Rect(0, 0, 200, 100))
+
+    def test_subsequent_add_message_starts_new_entry(self) -> None:
+        """add_message after streaming creates a separate entry at position 1."""
+        log = _make_log()
+        log.begin_streaming("Mira")
+        log.append_stream_token("Streamed text.")
+        log.add_message("You", "Player reply", is_player=True)
+        assert len(log._messages) == 2
+        assert log._messages[0][1] == "Streamed text."
+        assert log._messages[1][1] == "Player reply"
+
+    def test_streaming_does_not_mutate_previous_entry(self) -> None:
+        """begin_streaming only appends; it never mutates an earlier entry."""
+        log = _make_log()
+        log.add_message("You", "First message", is_player=True)
+        log.begin_streaming("Mira")
+        log.append_stream_token("Second.")
+        # First entry is unchanged.
+        assert log._messages[0][1] == "First message"
+        assert log._messages[1][1] == "Second."
+
+    def test_streaming_respects_max_messages(self) -> None:
+        """begin_streaming evicts the oldest entry when max_messages is exceeded."""
+        log = ScrollableLog(_MockFont(), _MockFont(), max_messages=2)
+        log.add_message("NPC", "First")
+        log.add_message("NPC", "Second")
+        log.begin_streaming("NPC")  # should evict "First"
+        assert len(log._messages) == 2
+        assert log._messages[0][1] == "Second"
+        assert log._messages[1][1] == ""

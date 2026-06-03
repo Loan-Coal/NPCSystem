@@ -40,6 +40,13 @@ def _mock_client(*, node_exists: bool = False, edge_exists: bool = False, belief
     client.post_memory.return_value = {"memory_id": "m_1"}
     client.post_secret.return_value = {"secret_id": "s_1"}
     client.post_quest_generate.return_value = {"quest_id": "q_mock_1"}
+    _pledge_map = {
+        "lira_fence": [{"pledgee_id": "thieves_guild", "pledge_type": "fealty"}],
+        "aldric_merchant": [{"pledgee_id": "merchants_guild", "pledge_type": "fealty"}],
+    }
+    client.get_pledges_for_npc.side_effect = (
+        lambda npc_id: _pledge_map.get(npc_id, []) if edge_exists else []
+    )
     return client
 
 
@@ -315,6 +322,50 @@ def test_seed_all_created_is_zero_when_all_exist() -> None:
 
 
 # ---------------------------------------------------------------------------
+# seed_all: no-clobber player state
+# ---------------------------------------------------------------------------
+
+
+def test_seed_all_preserves_player_gold_on_reseed() -> None:
+    """Re-seeding when player_demo already exists must not call upsert_node for player."""
+    client = MagicMock()
+
+    def _get_node(node_type: str, node_id: str) -> dict | None:
+        if node_type == "Character" and node_id == "player_demo":
+            return {"id": "player_demo", "currency_balance": 80}  # mutated after bribe
+        return None
+
+    client.get_node.side_effect = _get_node
+    client.get_edge.return_value = None
+    client.get_beliefs.return_value = []
+    client.upsert_node.return_value = {"data": {}}
+    client.upsert_edge.return_value = {"data": {}}
+    client.post_belief.return_value = {}
+    client.post_goal.return_value = {}
+    client.post_memory.return_value = {}
+    client.post_secret.return_value = {}
+
+    seed_all(client)
+
+    player_upserts = [
+        c for c in client.upsert_node.call_args_list
+        if c.args[0] == "Character" and c.args[1].get("id") == "player_demo"
+    ]
+    assert player_upserts == [], "player_demo must not be upserted on re-seed (preserves gold)"
+
+
+def test_seed_all_does_not_create_player_faction_standing_edges() -> None:
+    """Seeder must never create STANDS_WITH edges from player_demo (preserves bribe results)."""
+    client = _mock_client()
+    seed_all(client)
+    player_standing = [
+        c for c in client.upsert_edge.call_args_list
+        if c.args[0] == "STANDS_WITH" and c.args[1] == "player_demo"
+    ]
+    assert player_standing == [], "no STANDS_WITH edges must be seeded for player_demo"
+
+
+# ---------------------------------------------------------------------------
 # _seed_quests
 # ---------------------------------------------------------------------------
 
@@ -350,6 +401,18 @@ def test_seed_quests_writes_quest_id_to_cache() -> None:
     assert _json.loads(written) == {"quest_id": "aldric_deliver_quest"}
 
 
+def test_seed_quests_skips_post_quest_offer_if_quest_exists() -> None:
+    """_seed_quests must not re-offer a quest that already exists (preserves completed state)."""
+    from demo_game.seed import _ALDRIC_QUEST_ID, _seed_quests
+
+    client = MagicMock()
+    client.get_node.return_value = {"id": _ALDRIC_QUEST_ID, "status": "completed"}
+
+    _seed_quests(client)
+
+    client.post_quest_offer.assert_not_called()
+
+
 def test_seed_quests_non_fatal_on_client_error() -> None:
     from unittest.mock import patch as _patch
     from demo_game.seed import _seed_quests
@@ -358,6 +421,64 @@ def test_seed_quests_non_fatal_on_client_error() -> None:
     client.post_quest_generate.side_effect = Exception("engine unavailable")
     # Must not raise
     _seed_quests(client)
+
+
+def test_seed_player_items_skips_amulet_if_already_owned() -> None:
+    """_seed_player_and_items must not re-create OWNS(player→amulet) if another character already owns the amulet.
+
+    Simulates the post-delivery state: player→amulet edge was deleted (get_edge returns None),
+    but aldric→amulet exists (get_graph_edges returns it).
+    """
+    from demo_game.seed import _AMULET_ID, _PLAYER_ID, _seed_player_and_items
+
+    client = MagicMock()
+    client.get_node.return_value = {"id": "x"}  # all nodes exist
+    client.get_edge.return_value = None  # player→amulet edge is gone (was transferred)
+    client.get_graph_edges.return_value = [{"src_id": "aldric_merchant", "dst_id": _AMULET_ID}]
+
+    _seed_player_and_items(client)
+
+    for c in client.upsert_edge.call_args_list:
+        args = c[0]
+        assert not (len(args) >= 3 and args[0] == "OWNS" and args[1] == _PLAYER_ID and args[2] == _AMULET_ID), (
+            "upsert_edge must NOT create OWNS(player→amulet) when amulet is already owned by someone else"
+        )
+
+
+def test_seed_player_items_creates_owns_edge_when_no_owner() -> None:
+    """_seed_player_and_items must create OWNS(player→amulet) when the amulet has no current owner."""
+    from demo_game.seed import _AMULET_ID, _PLAYER_ID, _seed_player_and_items
+
+    client = MagicMock()
+    client.get_node.return_value = None  # nothing exists yet
+    client.get_edge.return_value = None  # edge doesn't exist
+    client.get_graph_edges.return_value = []  # no current owners
+
+    _seed_player_and_items(client)
+
+    edge_calls = [(c[0][0], c[0][1], c[0][2]) for c in client.upsert_edge.call_args_list if len(c[0]) >= 3]
+    assert ("OWNS", _PLAYER_ID, _AMULET_ID) in edge_calls, "upsert_edge must create OWNS(player→amulet) when no owner"
+
+
+def test_seed_aldric_inventory_skips_spice_if_already_owned() -> None:
+    """_seed_aldric_inventory must not re-create OWNS(aldric→spice) if another character already owns the spice.
+
+    Simulates the post-trade state: aldric→spice edge was deleted, but player→spice exists.
+    """
+    from demo_game.seed import _SPICE_ID, _seed_aldric_inventory
+
+    client = MagicMock()
+    client.get_node.return_value = {"id": "x"}  # nodes exist
+    client.get_edge.return_value = None  # aldric→spice edge is gone (was sold)
+    client.get_graph_edges.return_value = [{"src_id": "player_demo", "dst_id": _SPICE_ID}]
+
+    _seed_aldric_inventory(client)
+
+    for c in client.upsert_edge.call_args_list:
+        args = c[0]
+        assert not (len(args) >= 3 and args[0] == "OWNS" and args[2] == _SPICE_ID), (
+            "upsert_edge must NOT create OWNS(aldric→spice) when spice is already owned by someone else"
+        )
 
 
 def test_seed_all_calls_quest_offer() -> None:
