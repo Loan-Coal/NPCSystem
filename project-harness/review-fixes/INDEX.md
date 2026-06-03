@@ -12,6 +12,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - Harness gates are live: `make check` = lint + check-rules + type-ratchet + check-harness + test-cov(80%). Baselines: `scripts/rules_baseline.txt` (57), `.mypy_baseline` (256). When a fix shrinks either, run `make check-rules-update` / `make type-ratchet-update`.
 - SEV-15 lint portion DONE (commit `afecbb6`); what remains of SEV-15 is flipping `make type` to a hard CI gate AFTER SEV-14 drives mypy to 0.
 - SEV-01 DONE: eval guard contract now lives in `evals/runner.py::_guard_expectations` (min_length + fallback keyword_none + tone_judge auto-injected per `case_adv_/case_neg_`). `matchers.py` has `min_length` + empty-`npc_response`-fails schema; `summary.headline` returns "NO GUARD TURNS EVALUATED" at 0 turns and `summary.guarantee_demonstrated` gates `runner.main` exit. `test-cov` now also covers `matchers`+`summary`. SEV-27 (output reliability) is now unblocked. DEC-056 records the auto-inject choice.
+- SEV-16 DONE: leaking routes (clock/debts/groups/quest_generation) now return static `error_response(...)` envelopes + log real detail via `get_logger`. Reuse this pattern for SEV-33 (one error envelope). Test: `tests/unit/test_route_error_redaction.py` (`_LEAK_TOKENS` guard).
 - Hard ordering: **SEV-31 → SEV-04 → {SEV-08, SEV-17, SEV-30, SEV-12}**; **SEV-14 → SEV-15(type-gate)**.
 - Need my approval before starting (schema / DECISIONS): **SEV-10** (graph constraints), **SEV-12** (multi-tenant).
 - Debt tickets already logged: ISSUE-052 (mypy), ISSUE-053 (rule baseline). Next issue id: **ISSUE-054**.
@@ -24,7 +25,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - [ ] *(SEV-25 harness honesty — MEDIUM, see report §3; pair with SEV-15)*
 
 ### Block B — security & correctness quick wins (independent)
-- [ ] **FIX-SEV-16** — Stop leaking exception detail in HTTP responses · HIGH · S · deps: none
+- [x] **FIX-SEV-16** — Stop leaking exception detail in HTTP responses · HIGH · S · deps: none
 - [ ] **FIX-SEV-17** — Sanitize dynamic Cypher labels (`cypher_identifier`) · HIGH · S · deps: none (folds into SEV-04)
 - [ ] **FIX-SEV-09** — Gossip: canonical never distorts; corrected rumors stop spreading · HIGH · S · deps: none
 - [ ] *(SEV-19 prompt-log redaction, SEV-20 auth surface, SEV-21 weak creds/DoS — MEDIUM; report §3)*

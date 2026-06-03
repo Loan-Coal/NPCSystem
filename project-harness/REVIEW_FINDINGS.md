@@ -301,6 +301,7 @@ Effort: S (lint) + L (type burn-down) · Depends on: SEV-14.
 
 ---
 **FINDING [SEV-16]: Internal exception details leak to HTTP clients (systemic `detail=str(exc)` / `f"{type(exc).__name__}: {exc}"`)**
+Status: FIXED 2026-06-03 — static `error_response(...)` envelopes + server-side `get_logger` logging in clock/debts/groups/quest_generation; regression `tests/unit/test_route_error_redaction.py`.
 Severity: HIGH · Confidence: Confirmed
 Category: security
 Absorbs: PY-08, SEC-07, SEC-08
@@ -421,7 +422,7 @@ Execute top-to-bottom; items in the same block are independent and parallelizabl
 - [ ] SEV-25 (log lint/type issues, commit/flag Phase 11, relabel ISSUE-041) — harness honesty
 
 **Block B — security & correctness quick wins (independent, mostly S):**
-- [ ] SEV-16 (error leakage) · SEV-17 (Cypher injection) · SEV-19 (prompt-log redaction) · SEV-21 (NEO4J_PASSWORD/rate-limit/idempotency) · SEV-20 (auth surface) · SEV-09 (gossip canonical/corrected) · SEV-22 (RNG) · SEV-40 (seeder secret/print) · SEV-41 (UTF-8)
+- [x] SEV-16 (error leakage) · SEV-17 (Cypher injection) · SEV-19 (prompt-log redaction) · SEV-21 (NEO4J_PASSWORD/rate-limit/idempotency) · SEV-20 (auth surface) · SEV-09 (gossip canonical/corrected) · SEV-22 (RNG) · SEV-40 (seeder secret/print) · SEV-41 (UTF-8)
 
 **Block C — concurrency & engine integrity:**
 - [ ] SEV-05 (store locks) · SEV-06 (consolidation semaphore) · SEV-07 (token-budget raise) · SEV-08 (quest economy atomicity) · SEV-18 (no swallow) · SEV-30 (event atomicity)

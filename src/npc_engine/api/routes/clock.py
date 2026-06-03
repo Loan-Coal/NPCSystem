@@ -22,6 +22,9 @@ from npc_engine.scheduler.tick_scheduler import TickScheduler
 from npc_engine.world.world_reader import get_world_state
 from npc_engine.world.world_time_service import _VALID_FIELDS, advance_time
 from npc_engine.world.world_writer import upsert_world_state
+from npc_engine.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 _VALID_TIME_FIELDS = _VALID_FIELDS
 
@@ -98,7 +101,14 @@ async def advance_clock(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+        logger.exception("clock_advance_failed", extra={"error": type(exc).__name__})
+        raise HTTPException(
+            status_code=500,
+            detail=error_response(
+                error_code="INTERNAL_ERROR",
+                message="An internal error occurred.",
+            ),
+        ) from exc
 
 
 @router.get("/clock/state")

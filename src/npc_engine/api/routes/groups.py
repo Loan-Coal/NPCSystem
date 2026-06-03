@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import error_response, ok_response
 from npc_engine.graph.group_service import (
     add_member,
     create_group,
@@ -23,6 +23,9 @@ from npc_engine.graph.group_service import (
     get_groups_for_character_svc,
     get_members_svc,
 )
+from npc_engine.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Request models
@@ -148,7 +151,13 @@ async def add_member_to_group(
             commitment=body.commitment,
         )
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        logger.warning("group_add_member_failed", extra={"error": type(exc).__name__})
+        raise HTTPException(
+            status_code=422,
+            detail=error_response(
+                error_code="INVALID_REQUEST", message="Invalid request parameter."
+            ),
+        ) from exc
     return ok_response({"group_id": group_id, "character_id": body.character_id})
 
 

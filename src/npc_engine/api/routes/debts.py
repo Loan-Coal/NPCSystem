@@ -15,11 +15,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import error_response, ok_response
 from npc_engine.graph.owes_service import (
     create_debt,
     get_debts_for_character_svc,
     update_debt_status,
+)
+from npc_engine.utils.logging import get_logger
+
+logger = get_logger(__name__)
+
+_INVALID_DEBT_REQUEST = error_response(
+    error_code="INVALID_REQUEST", message="Invalid request parameter."
 )
 
 # ---------------------------------------------------------------------------
@@ -78,7 +85,8 @@ async def create_debt_for_character(
             due_by=body.due_by,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        logger.warning("debt_create_invalid", extra={"error": str(exc)})
+        raise HTTPException(status_code=422, detail=_INVALID_DEBT_REQUEST) from exc
     return ok_response({"debtor_id": debtor_id, "creditor_id": body.creditor_id})
 
 
@@ -124,5 +132,6 @@ async def patch_debt_status(
             status=body.status,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        logger.warning("debt_status_update_invalid", extra={"error": str(exc)})
+        raise HTTPException(status_code=422, detail=_INVALID_DEBT_REQUEST) from exc
     return ok_response({"debtor_id": debtor_id, "creditor_id": creditor_id, "status": body.status})

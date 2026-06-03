@@ -17,9 +17,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.dependency_singletons import get_quest_generation_engine
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import error_response, ok_response
 from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
 from npc_engine.graph.quest_node_service import get_draft_quests, get_quest, offer_quest
+from npc_engine.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/quests", tags=["quest_generation"])
 
@@ -51,7 +54,14 @@ async def generate_quest(
     try:
         result = await engine.generate(session=session, quest_giver_id=body.quest_giver_id)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        logger.warning("quest_generation_failed", extra={"error": str(exc)})
+        raise HTTPException(
+            status_code=404,
+            detail=error_response(
+                error_code="QUEST_GENERATION_FAILED",
+                message="Quest could not be generated for the given quest giver.",
+            ),
+        ) from exc
     return ok_response({"quest_id": result.quest_id, "description": result.description})
 
 
