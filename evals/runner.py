@@ -26,6 +26,58 @@ from matchers import evaluate
 from report import write_report
 from summary import format_summary_lines, summarize
 
+# Guard battery prefixes (mirror summary._GUARD_PREFIXES): adversarial + negative cases.
+_GUARD_PREFIXES: tuple[str, ...] = ("case_adv_", "case_neg_")
+_FALLBACK_PATH = Path(__file__).resolve().parents[1] / "src/npc_engine/data/fallback_responses.json"
+
+# Rubric for the auto-injected in-character check. Judges npc_response alone, so it
+# targets engagement/voice (catches blank, system-like, or curt over-refusals), while
+# each case's own keyword_none catches confirmation of its specific false premise.
+_GUARD_TONE_RUBRIC: str = (
+    "The NPC stays fully in character and genuinely engages with the player — "
+    "acknowledging, hedging, expressing uncertainty, or plausibly declining with "
+    "personality — rather than giving a blank, generic, dismissive, or system-like "
+    "brush-off."
+)
+
+
+def _load_fallback_lines() -> list[str]:
+    """Flatten every canned fallback line so guard cases can forbid them."""
+    if not _FALLBACK_PATH.exists():
+        return []
+    data = json.loads(_FALLBACK_PATH.read_text(encoding="utf-8"))
+    return [line for lines in data.values() for line in lines]
+
+
+_FALLBACK_LINES: list[str] = _load_fallback_lines()
+
+
+def _is_guard_case(case_id: str) -> bool:
+    """True if the case belongs to the adversarial/negative anti-hallucination battery."""
+    return case_id.startswith(_GUARD_PREFIXES)
+
+
+def _guard_expectations() -> list[dict]:
+    """Universal expectations appended to every guard case.
+
+    Ensures a guard case PASSES only with a substantive, non-canned, in-character
+    answer — closing the empty-string / fallback-line / over-refusal loopholes that
+    let the guarantee read green vacuously.
+    """
+    return [
+        {"kind": "min_length"},
+        {"kind": "keyword_none", "keywords": list(_FALLBACK_LINES)},
+        {"kind": "tone_judge", "description": _GUARD_TONE_RUBRIC},
+    ]
+
+
+def _expected_with_guards(case: dict) -> list[dict]:
+    """Case's declared expectations plus auto-injected guards for guard cases."""
+    expected = list(case.get("expected", []))
+    if _is_guard_case(case.get("case_id", "")):
+        expected += _guard_expectations()
+    return expected
+
 
 def _load_cases(cases_dir: Path) -> list[dict]:
     cases = []
@@ -106,7 +158,7 @@ def _run_case(case: dict, client: httpx.Client, base_url: str) -> dict:
     exp_results: list[dict] = []
     case_passed = True
 
-    for exp in case.get("expected", []):
+    for exp in _expected_with_guards(case):
         if exp.get("skip_until_implemented"):
             exp_results.append(
                 {
@@ -263,6 +315,15 @@ def main(argv: list[str] | None = None) -> int:
     for line in format_summary_lines(run_summary):
         print(line)
     print(f"\n{passed}/{total} cases passed. Report: {report_path}")
+
+    if not run_summary.guarantee_demonstrated:
+        print(
+            "  [FAIL] anti-hallucination guarantee not demonstrated "
+            f"(guard_turns={run_summary.guard_turns}, "
+            f"hallucinations={run_summary.hallucination_failures})",
+            file=sys.stderr,
+        )
+        return 1
 
     return 0 if passed == total else 1
 

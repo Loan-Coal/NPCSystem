@@ -94,6 +94,31 @@ def test_non_guard_keyword_none_failure_not_a_hallucination() -> None:
     assert s.guard_cases == 0
 
 
+def test_zero_guard_turns_headline_is_not_vacuously_green() -> None:
+    # No guard case ran (all skipped): the headline must NOT read "0 lore hallucinations".
+    results = [
+        _case("case_adv_roleplay_swap", [_exp("runner", True, skipped=True)]),
+        _case("case_neg_lira_no_system_reveal", [_exp("runner", True, skipped=True)]),
+    ]
+    s = summary.summarize(results)
+    assert s.guard_turns == 0
+    assert s.guarantee_demonstrated is False
+    assert "0 lore hallucinations" not in s.headline
+    assert "guarantee not demonstrated" in s.headline
+
+
+def test_guarantee_demonstrated_true_when_guard_turn_clean() -> None:
+    results = [_case("case_adv_x", [_exp("keyword_none", True)])]
+    s = summary.summarize(results)
+    assert s.guarantee_demonstrated is True
+
+
+def test_guarantee_not_demonstrated_when_hallucination_present() -> None:
+    results = [_case("case_adv_x", [_exp("keyword_none", False)])]
+    s = summary.summarize(results)
+    assert s.guarantee_demonstrated is False
+
+
 def test_format_summary_lines_contains_headline() -> None:
     results = [_case("case_adv_x", [_exp("keyword_none", True)])]
     s = summary.summarize(results)

@@ -4,11 +4,23 @@ One file per CRITICAL & HIGH consolidated finding. MEDIUM/LOW findings (SEV-19�
 
 Full report: [`../REVIEW_FINDINGS.md`](../REVIEW_FINDINGS.md) · Raw logs: [`../review-evidence/`](../review-evidence/)
 
+## Carry-forward notes
+
+_State that survives between fixes so a fresh `/fix-next` session needn't rediscover it._
+_`/fix-next` maintains this: add a line when a fix affects a later one, delete consumed lines, keep it ≤10 lines._
+
+- Harness gates are live: `make check` = lint + check-rules + type-ratchet + check-harness + test-cov(80%). Baselines: `scripts/rules_baseline.txt` (57), `.mypy_baseline` (256). When a fix shrinks either, run `make check-rules-update` / `make type-ratchet-update`.
+- SEV-15 lint portion DONE (commit `afecbb6`); what remains of SEV-15 is flipping `make type` to a hard CI gate AFTER SEV-14 drives mypy to 0.
+- SEV-01 DONE: eval guard contract now lives in `evals/runner.py::_guard_expectations` (min_length + fallback keyword_none + tone_judge auto-injected per `case_adv_/case_neg_`). `matchers.py` has `min_length` + empty-`npc_response`-fails schema; `summary.headline` returns "NO GUARD TURNS EVALUATED" at 0 turns and `summary.guarantee_demonstrated` gates `runner.main` exit. `test-cov` now also covers `matchers`+`summary`. SEV-27 (output reliability) is now unblocked. DEC-056 records the auto-inject choice.
+- Hard ordering: **SEV-31 → SEV-04 → {SEV-08, SEV-17, SEV-30, SEV-12}**; **SEV-14 → SEV-15(type-gate)**.
+- Need my approval before starting (schema / DECISIONS): **SEV-10** (graph constraints), **SEV-12** (multi-tenant).
+- Debt tickets already logged: ISSUE-052 (mypy), ISSUE-053 (rule baseline). Next issue id: **ISSUE-054**.
+
 ## Ordered checklist
 
 ### Block A — guarantee + gates (do first)
 - [ ] **FIX-SEV-15** — CI green: clear lint, add type to CI, restore `make check` · HIGH · S(+L) · deps: SEV-14 for type-gating
-- [ ] **FIX-SEV-01** — Make the anti-hallucination guarantee real (the moat) · **CRITICAL** · M · deps: none
+- [x] **FIX-SEV-01** — Make the anti-hallucination guarantee real (the moat) · **CRITICAL** · M · deps: none
 - [ ] *(SEV-25 harness honesty — MEDIUM, see report §3; pair with SEV-15)*
 
 ### Block B — security & correctness quick wins (independent)

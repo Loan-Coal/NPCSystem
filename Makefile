@@ -33,7 +33,7 @@ test:
 	$(PYTHON) -m pytest tests/ -q
 
 test-cov:
-	$(PYTHON) -m pytest tests/ -q --cov=npc_engine --cov-report=term-missing --cov-fail-under=80
+	$(PYTHON) -m pytest tests/ -q --cov=npc_engine --cov=matchers --cov=summary --cov-report=term-missing --cov-fail-under=80
 
 test-cov-v13:
 	$(PYTHON) -m pytest -q tests/unit/test_schema_loader.py tests/unit/test_v1_route_versioning.py tests/unit/test_embedding_reconciler.py tests/unit/test_main_reconciler_lifespan.py tests/unit/test_schema_resolvers.py --cov=src/npc_engine/schema --cov=src/npc_engine/retrieval/embedding_reconciler --cov-report=term-missing --cov-fail-under=80

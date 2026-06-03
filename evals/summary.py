@@ -22,6 +22,9 @@ _KIND_TONE_JUDGE: str = "tone_judge"
 
 _SEPARATOR: str = "=" * 60
 
+# Emitted when no guard case actually ran: the guarantee is undemonstrated, not green.
+_NO_GUARD_TURNS_MESSAGE: str = "NO GUARD TURNS EVALUATED — guarantee not demonstrated"
+
 
 @dataclass(frozen=True)
 class EvalSummary:
@@ -52,8 +55,23 @@ class EvalSummary:
     skipped_cases: int
 
     @property
+    def guarantee_demonstrated(self) -> bool:
+        """True only when at least one guard turn ran and none hallucinated.
+
+        A run with zero evaluated guard turns proves nothing — the guarantee is
+        undemonstrated, not satisfied.
+        """
+        return self.guard_turns > 0 and self.hallucination_failures == 0
+
+    @property
     def headline(self) -> str:
-        """The published guarantee string, e.g. '0 lore hallucinations across 17 adversarial turns'."""
+        """The published guarantee string, e.g. '0 lore hallucinations across 17 adversarial turns'.
+
+        When no guard turn ran, returns an explicit not-demonstrated notice so the
+        headline can never read green vacuously.
+        """
+        if self.guard_turns == 0:
+            return _NO_GUARD_TURNS_MESSAGE
         plural = "" if self.hallucination_failures == 1 else "s"
         return (
             f"{self.hallucination_failures} lore hallucination{plural} "

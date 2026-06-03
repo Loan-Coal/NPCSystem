@@ -12,6 +12,13 @@ Rules:
 
 ---
 
+## DEC-056: anti-hallucination guards auto-injected in the eval runner, not duplicated per-case
+**Date:** 2026-06-03
+**Context:** SEV-01 — every guard case (`case_adv_*`, `case_neg_*`) must PASS only when the NPC gives a substantive, non-canned, in-character answer. The brief listed adding `min_length`, a fallback `keyword_none`, and a positive `tone_judge` to all 23 guard cases.
+**Decision:** Inject those three universal expectations centrally in `evals/runner.py` (`_guard_expectations` / `_expected_with_guards`) for any `case_adv_`/`case_neg_` case, instead of copying identical blocks into 23 YAML files. Each case keeps its own hand-tuned `keyword_none` (the case-specific false-premise tokens); the runner adds the universal guards on top.
+**Why:** One source of truth means a newly added guard case cannot silently forget the protection, and the fallback-line list stays derived from `fallback_responses.json` rather than hand-copied. Avoids 23 near-identical diffs.
+**Consequence:** The injected `tone_judge` requires the judge LLM; without Ollama every guard case fails closed (correct — the guarantee is undemonstrated, not green). If a specific guard case ever needs a bespoke positive rubric, add it in the case YAML; the universal one still applies.
+
 ## DEC-053: Phase 12 designer dashboard is a static SPA served by FastAPI
 **Date:** 2026-06-03
 **Context:** Phase 12 (S12.1–S12.5) needs a non-code web UI for narrative designers (graph viewer, NPC authoring, draft approval, engine inspector, analytics). The only existing UI is the pygame demo, which is not web.

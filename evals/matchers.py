@@ -1,7 +1,8 @@
 """
 matchers.py - Expectation evaluators for eval cases.
 
-Supported kinds: schema, keyword_any, keyword_all, keyword_none, in_set, range, substring, regex, tone_judge.
+Supported kinds: schema, min_length, keyword_any, keyword_all, keyword_none,
+in_set, range, substring, regex, tone_judge.
 """
 
 from __future__ import annotations
@@ -12,6 +13,10 @@ from typing import Any
 
 import httpx
 
+
+# Guard cases must produce a substantive answer: an empty or near-empty response
+# can never demonstrate the anti-hallucination guarantee. Override via env for tuning.
+MIN_GUARD_RESPONSE_CHARS = int(os.getenv("MIN_GUARD_RESPONSE_CHARS", "20"))
 
 _JUDGE_URL = os.getenv("JUDGE_OLLAMA_URL", "http://localhost:11434")
 _JUDGE_MODEL = os.getenv("JUDGE_MODEL", "qwen2.5:14b")
@@ -55,6 +60,8 @@ def evaluate(expectation: dict, response: dict) -> tuple[bool, str]:
 
     if kind == "schema":
         return _eval_schema(expectation, response)
+    if kind == "min_length":
+        return _eval_min_length(expectation, response)
     if kind == "keyword_any":
         return _eval_keyword_any(expectation, response)
     if kind == "keyword_all":
@@ -115,18 +122,39 @@ def _eval_tone_judge(exp: dict, resp: dict) -> tuple[bool, str]:
 
 
 def _eval_schema(exp: dict, resp: dict) -> tuple[bool, str]:
-    """Check that expected fields are present and non-empty."""
+    """Check that expected fields are present and non-empty.
+
+    A blank/whitespace-only ``npc_response`` is treated as missing: an empty
+    string must not satisfy the schema, or the anti-hallucination guarantee
+    could be met vacuously by an NPC that says nothing.
+    """
     field = exp.get("field")
     if field is None:
         required_fields = ["npc_response", "relation_deltas", "action", "facial_expression"]
         missing = [f for f in required_fields if _get_nested(resp, f) is None]
         if missing:
             return False, f"missing required fields: {missing}"
+        npc_response = _get_nested(resp, "npc_response")
+        if not isinstance(npc_response, str) or not npc_response.strip():
+            return False, "npc_response is empty or whitespace-only"
         return True, "schema OK"
     value = _get_nested(resp, field)
     if value is None:
         return False, f"field {field!r} is missing or null"
     return True, f"field {field!r} present: {value!r}"
+
+
+def _eval_min_length(exp: dict, resp: dict) -> tuple[bool, str]:
+    """npc_response (trimmed) must be at least ``min`` characters long.
+
+    Defaults to MIN_GUARD_RESPONSE_CHARS. Fails empty, whitespace-only, and
+    terse responses so a guard case cannot pass without a substantive answer.
+    """
+    minimum: int = exp.get("min", MIN_GUARD_RESPONSE_CHARS)
+    text: str = (_get_nested(resp, "npc_response") or "").strip()
+    if len(text) >= minimum:
+        return True, f"min_length OK ({len(text)} >= {minimum})"
+    return False, f"min_length: response too short ({len(text)} < {minimum}): {text[:80]!r}"
 
 
 def _eval_keyword_any(exp: dict, resp: dict) -> tuple[bool, str]:

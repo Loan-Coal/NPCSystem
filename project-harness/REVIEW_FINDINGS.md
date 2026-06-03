@@ -417,7 +417,7 @@ Execute top-to-bottom; items in the same block are independent and parallelizabl
 
 **Block A — make the guarantee real & the gates green (do first):**
 - [ ] SEV-15 (lint green + add `make type` to CI) — unblocks every other PR's signal *(S; type burn-down is L, track separately)*
-- [ ] SEV-01 (real guard assertions + matcher tests + non-vacuous headline) — the product moat
+- [x] SEV-01 (real guard assertions + matcher tests + non-vacuous headline) — the product moat *(done 2026-06-03: min_length+empty-schema matchers, runner auto-injects guards, summary fails on 0 guard turns; tests in test_eval_matchers/test_eval_runner_guards/test_eval_summary)*
 - [ ] SEV-25 (log lint/type issues, commit/flag Phase 11, relabel ISSUE-041) — harness honesty
 
 **Block B — security & correctness quick wins (independent, mostly S):**
