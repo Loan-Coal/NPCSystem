@@ -1,18 +1,24 @@
 """
 Module: world_panel
 Layer: demo_game.ui
-Purpose: WORLD right-panel tab — two sections: engine-status table (top) and
-         live event feed (bottom, scrollable). Renders data pushed from WorldPoller.
+Purpose: WORLD right-panel tab — three sections: OBJECTIVE progress (top),
+         engine-status table (middle), and live event feed (bottom, scrollable).
 Does NOT: make HTTP calls or hold mutable engine state.
-Dependencies: pygame, demo_game.constants
+Dependencies: pygame, demo_game.constants, demo_game.game_end_checker
 Used by: demo_game.ui.right_panel
 """
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pygame
 
 from demo_game.constants import PALETTE
+from demo_game.game_end_checker import DEMO_FACTIONS, WIN_STANDING_THRESHOLD
+
+if TYPE_CHECKING:
+    from demo_game.game_end_checker import ObjectiveState
 
 # Colours
 _CLR_BG = PALETTE["bg"]
@@ -25,13 +31,30 @@ _CLR_GREEN = PALETTE["green"]
 _CLR_RED = PALETTE["red"]
 
 # Section geometry
-_SECTION_HDR_H = 20     # "ENGINES" / "EVENTS" section header height
+_SECTION_HDR_H = 20     # "OBJECTIVE" / "ENGINES" / "EVENTS" section header height
+_OBJECTIVE_ROW_H = 18   # height of one faction standing row
+_FACTION_BAR_W = 80     # width of the faction standing bar
+_FACTION_BAR_H = 10     # height of the faction standing bar
 _ENGINE_ROW_H = 18      # height of one engine status row
 _ENGINE_TABLE_MAX_ROWS = 8
 _EVENT_ROW_H = 16       # height of one event row
 _PAD_X = 6
 _PAD_Y = 4
 _DIVIDER_H = 2
+
+# Faction display names for the objective bar.
+_FACTION_DISPLAY: dict[str, str] = {
+    "merchants_guild": "Merchants",
+    "city_guard":      "City Guard",
+    "thieves_guild":   "Thieves",
+}
+
+# Outcome banner colours.
+_CLR_WIN_BG = (20, 80, 30)
+_CLR_WIN_TEXT = (60, 220, 80)
+_CLR_LOSE_BG = (80, 15, 15)
+_CLR_LOSE_TEXT = (220, 60, 60)
+_CLR_THREAT = (180, 80, 40)
 
 # Status badge colours
 _STATUS_OK = _CLR_GREEN
@@ -58,9 +81,10 @@ def _engine_status_label(record: dict) -> str:
 
 
 class WorldPanelWidget:
-    """Two-section WORLD panel: engine-status table and scrollable event feed.
+    """Three-section WORLD panel: objective progress, engine-status, event feed.
 
-    Push fresh data before each draw call via ``set_engines()`` / ``set_events()``.
+    Push fresh data before each draw call via ``set_engines()`` / ``set_events()``
+    / ``set_objective()``.
 
     Args:
         font_body: Main body font for row text.
@@ -77,6 +101,7 @@ class WorldPanelWidget:
         self._engines: list[dict] = []
         self._events: list[dict] = []
         self._scroll_y: int = 0
+        self._objective: ObjectiveState | None = None
 
     # ------------------------------------------------------------------
     # Data setters
@@ -89,6 +114,10 @@ class WorldPanelWidget:
     def set_events(self, events: list[dict]) -> None:
         """Push a fresh event list into the widget (replaces previous snapshot)."""
         self._events = events
+
+    def set_objective(self, objective: ObjectiveState) -> None:
+        """Push a fresh ObjectiveState into the widget."""
+        self._objective = objective
 
     # ------------------------------------------------------------------
     # Event handling
@@ -105,7 +134,7 @@ class WorldPanelWidget:
     # ------------------------------------------------------------------
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
-        """Render engine table + event feed into rect.
+        """Render objective, engine table, and event feed into rect.
 
         Args:
             surface: Target surface.
@@ -113,11 +142,88 @@ class WorldPanelWidget:
         """
         pygame.draw.rect(surface, _CLR_BG, rect)
         y = rect.y + _PAD_Y
+        y = self._draw_objective_section(surface, rect, y)
+        y += _DIVIDER_H
+        pygame.draw.line(surface, _CLR_BORDER, (rect.x + _PAD_X, y), (rect.right - _PAD_X, y))
+        y += _DIVIDER_H + _PAD_Y
         y = self._draw_engines_section(surface, rect, y)
         y += _DIVIDER_H
         pygame.draw.line(surface, _CLR_BORDER, (rect.x + _PAD_X, y), (rect.right - _PAD_X, y))
         y += _DIVIDER_H + _PAD_Y
         self._draw_events_section(surface, rect, y)
+
+    def _draw_objective_section(
+        self, surface: pygame.Surface, rect: pygame.Rect, y: int
+    ) -> int:
+        """Draw the OBJECTIVE section; return the y position after the section."""
+        obj = self._objective
+
+        # Header with optional outcome badge.
+        if obj and obj.outcome == "win":
+            pygame.draw.rect(surface, _CLR_WIN_BG, (rect.x, y, rect.width, _SECTION_HDR_H))
+            lbl = self._font_label.render("OBJECTIVE  ★ YOU WIN ★", True, _CLR_WIN_TEXT)
+        elif obj and obj.outcome == "lose":
+            pygame.draw.rect(surface, _CLR_LOSE_BG, (rect.x, y, rect.width, _SECTION_HDR_H))
+            lbl = self._font_label.render("OBJECTIVE  ✗ DEFEAT", True, _CLR_LOSE_TEXT)
+        else:
+            lbl = self._font_label.render("OBJECTIVE", True, _CLR_AMBER)
+        surface.blit(lbl, (rect.x + _PAD_X, y))
+        y += _SECTION_HDR_H
+
+        # Win objective line.
+        goal_txt = self._font_label.render(
+            f"Trust 2/3 factions (standing ≥ {WIN_STANDING_THRESHOLD})", True, _CLR_GREY
+        )
+        surface.blit(goal_txt, (rect.x + _PAD_X, y))
+        y += _OBJECTIVE_ROW_H
+
+        standings = obj.faction_standings if obj else {}
+        for faction_id in DEMO_FACTIONS:
+            y = self._draw_faction_bar(surface, rect, y, faction_id, standings.get(faction_id, 0))
+
+        # Lose threat line.
+        if obj and obj.iron_legion_controls:
+            threat_lbl = self._font_label.render(
+                "Iron Legion controls: " + ", ".join(obj.iron_legion_controls),
+                True,
+                _CLR_THREAT,
+            )
+        else:
+            threat_lbl = self._font_label.render("Iron Legion: no territories", True, _CLR_GREY)
+        surface.blit(threat_lbl, (rect.x + _PAD_X, y))
+        y += _OBJECTIVE_ROW_H
+
+        return y
+
+    def _draw_faction_bar(
+        self,
+        surface: pygame.Surface,
+        rect: pygame.Rect,
+        y: int,
+        faction_id: str,
+        standing: int,
+    ) -> int:
+        """Draw a faction standing bar row; return y after the row."""
+        name = _FACTION_DISPLAY.get(faction_id, faction_id)
+        met = standing >= WIN_STANDING_THRESHOLD
+        name_color = _CLR_GREEN if met else _CLR_WHITE
+
+        name_surf = self._font_label.render(f"{name}:", True, name_color)
+        surface.blit(name_surf, (rect.x + _PAD_X, y + 2))
+
+        # Clamped fill bar.
+        bar_x = rect.x + _PAD_X + 70
+        bar_y = y + (_OBJECTIVE_ROW_H - _FACTION_BAR_H) // 2
+        pygame.draw.rect(surface, _CLR_BORDER, (bar_x, bar_y, _FACTION_BAR_W, _FACTION_BAR_H))
+        fill_w = int(_FACTION_BAR_W * min(standing, 100) / 100)
+        bar_color = _CLR_GREEN if met else _CLR_AMBER
+        if fill_w > 0:
+            pygame.draw.rect(surface, bar_color, (bar_x, bar_y, fill_w, _FACTION_BAR_H))
+
+        val_surf = self._font_label.render(str(standing), True, name_color)
+        surface.blit(val_surf, (bar_x + _FACTION_BAR_W + 4, y + 2))
+
+        return y + _OBJECTIVE_ROW_H
 
     def _draw_engines_section(
         self, surface: pygame.Surface, rect: pygame.Rect, y: int

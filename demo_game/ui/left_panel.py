@@ -76,6 +76,7 @@ class LeftPanelRenderer:
 
         self._active_npc_id: str = ""
         self._active_location_id: str = ""
+        self._player_gold: int | None = None
         self._gradient_cache: dict[str, pygame.Surface] = {}
         # None sentinel means "tried loading PNG, failed — use geometric fallback".
         self._portrait_cache: dict[str, pygame.Surface | None] = {}
@@ -103,6 +104,10 @@ class LeftPanelRenderer:
     def set_emotion(self, label: str, valence: float) -> None:
         """Forward emotion update from EmotionPoller to the badge."""
         self._badge.set_emotion(label, valence)
+
+    def set_player_gold(self, gold: int | None) -> None:
+        """Update the displayed player gold balance in the world-state bar."""
+        self._player_gold = gold
 
     def set_waiting(self, waiting: bool) -> None:
         """Disable the input box while a dialogue reply is in-flight."""
@@ -287,13 +292,18 @@ class LeftPanelRenderer:
         epoch: str | None,
         conditions: list[str],
     ) -> None:
-        """Draw a thin strip showing the current epoch and active conditions."""
+        """Draw a thin strip showing the current epoch, active conditions, and player gold."""
         pygame.draw.rect(screen, _CLR_NPC_HEADER_BG, rect)
         clr = _CLR_NPC_HEADER_TEXT if (epoch and epoch != "peace") else _CLR_NPC_HEADER_IDLE
         cond_str = ", ".join(conditions) if conditions else "—"
         label = f"Epoch: {epoch or '—'}  |  {cond_str}"
         txt = self._font_label.render(label, True, clr)
         screen.blit(txt, (rect.x + 10, rect.centery - txt.get_height() // 2))
+        if self._player_gold is not None:
+            gold_label = f"Gold: {self._player_gold}"
+            gold_surf = self._font_label.render(gold_label, True, PALETTE["amber"])
+            gold_x = rect.right - gold_surf.get_width() - 10
+            screen.blit(gold_surf, (gold_x, rect.centery - gold_surf.get_height() // 2))
 
     def _draw_npc_header(self, screen: pygame.Surface, rect: pygame.Rect) -> None:
         """Draw the 'Talking to [NPC name]' strip above the dialogue log."""
