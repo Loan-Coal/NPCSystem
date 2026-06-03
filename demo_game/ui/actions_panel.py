@@ -2,8 +2,8 @@
 Module: actions_panel
 Layer: demo_game.ui
 Purpose: Scrollable sidebar of contextual action buttons shown in the ACTIONS right-panel tab.
-         [Generate Quest], [Inspect], and [Give item] are enabled when an NPC is selected;
-         remaining buttons are Phase 4 stubs rendered disabled.
+         [Generate Quest], [Inspect], [Give item], [Travel], [Bribe], and [Consolidate Memory]
+         are enabled when an NPC is selected.
 Dependencies: pygame, demo_game.constants
 Used by: demo_game.ui.right_panel
 """
@@ -24,18 +24,20 @@ _BTN_MARGIN = 8
 
 # (label, interactive) — False means disabled/stub button.
 _ACTIONS: list[tuple[str, bool]] = [
-    ("Generate Quest", True),
-    ("Inspect",        True),
-    ("Give item",      True),
-    ("Travel",         True),
-    ("Bribe",          True),
+    ("Generate Quest",     True),
+    ("Inspect",            True),
+    ("Give item",          True),
+    ("Travel",             True),
+    ("Bribe",              True),
+    ("Consolidate Memory", True),
 ]
 
-_INDEX_GENERATE_QUEST = 0
-_INDEX_INSPECT = 1
-_INDEX_GIVE_ITEM = 2
-_INDEX_TRAVEL = 3
-_INDEX_BRIBE = 4
+_INDEX_GENERATE_QUEST     = 0
+_INDEX_INSPECT            = 1
+_INDEX_GIVE_ITEM          = 2
+_INDEX_TRAVEL             = 3
+_INDEX_BRIBE              = 4
+_INDEX_CONSOLIDATE_MEMORY = 5
 
 _CLR_BG      = PALETTE["bg"]
 _CLR_AMBER   = PALETTE["amber"]
@@ -50,8 +52,8 @@ _STUB_SUFFIX = " [stub]"
 class ActionsPanelWidget:
     """Scrollable list of contextual action buttons for the ACTIONS tab.
 
-    [Generate Quest], [Inspect], [Give item], [Travel], and [Bribe] fire their
-    respective callbacks when an NPC is selected.
+    [Generate Quest], [Inspect], [Give item], [Travel], [Bribe], and
+    [Consolidate Memory] fire their respective callbacks when an NPC is selected.
 
     Args:
         font: Monospace font for button label text.
@@ -65,6 +67,7 @@ class ActionsPanelWidget:
         self._on_give_item: Callable[[], None] | None = None
         self._on_travel: Callable[[], None] | None = None
         self._on_bribe: Callable[[], None] | None = None
+        self._on_consolidate_memory: Callable[[], None] | None = None
         self._scroll_y: int = 0
         self._btn_rects: list[pygame.Rect] = []
 
@@ -92,6 +95,10 @@ class ActionsPanelWidget:
         """Register the callback fired when [Bribe] is clicked."""
         self._on_bribe = cb
 
+    def set_consolidate_memory_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when [Consolidate Memory] is clicked."""
+        self._on_consolidate_memory = cb
+
     def handle_event(self, event: pygame.event.Event) -> None:
         """Route MOUSEBUTTONDOWN and MOUSEWHEEL events to action buttons.
 
@@ -99,7 +106,7 @@ class ActionsPanelWidget:
         """
         if event.type == pygame.MOUSEWHEEL:
             total_h = len(_ACTIONS) * (_BTN_H + _BTN_GAP)
-            self._scroll_y = max(0, min(self._scroll_y - event.y * 20, total_h))
+            self._scroll_y = max(0, min(self._scroll_y - event.y * 20, max(0, total_h)))
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             for i, rect in enumerate(self._btn_rects):
                 if not rect.collidepoint(event.pos):
@@ -116,6 +123,8 @@ class ActionsPanelWidget:
                     self._on_travel()
                 elif i == _INDEX_BRIBE and self._on_bribe is not None:
                     self._on_bribe()
+                elif i == _INDEX_CONSOLIDATE_MEMORY and self._on_consolidate_memory is not None:
+                    self._on_consolidate_memory()
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         """Draw all action buttons within rect, applying the current scroll offset.

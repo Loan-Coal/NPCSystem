@@ -8,6 +8,7 @@ Purpose: Main pygame game window — thin coordinator. Owns the event loop and
 Dependencies: pygame, demo_game.client, demo_game.config, demo_game.constants,
               demo_game.game_controller, demo_game.emotion_poller,
               demo_game.graph_panel.poller, demo_game.world_state_poller,
+              demo_game.npc_politics_poller,
               demo_game.ui.left_panel, demo_game.ui.right_panel
 Used by: demo_game.__main__
 """
@@ -27,6 +28,11 @@ from demo_game.constants import LOCATION_DISPLAY_NAMES, LOCATION_NPC_MAP, LOCATI
 from demo_game.game_controller import ControllerCallbacks, GameController
 from demo_game.emotion_poller import EmotionPoller
 from demo_game.graph_panel.poller import GraphPoller
+from demo_game.npc_needs_poller import NpcNeedsPoller
+from demo_game.npc_goals_poller import NpcGoalsPoller
+from demo_game.npc_memory_poller import NpcMemoryPoller
+from demo_game.npc_politics_poller import NpcPoliticsPoller
+from demo_game.world_poller import WorldPoller
 from demo_game.world_state_poller import WorldStatePoller
 from demo_game.ui.font_loader import FontLoader
 from demo_game.ui.left_panel import LeftPanelRenderer
@@ -90,9 +96,28 @@ class GameWindow:
         self._world_state_poller = WorldStatePoller(client, interval_s=2.0)
         self._world_state_poller.start()
 
+        self._world_poller = WorldPoller(client, interval_s=5.0, event_limit=20)
+        self._world_poller.start()
+
         self._emotion_poller = EmotionPoller(client, interval_s=5.0)
         self._emotion_poller.set_active_npc(self._active_npc_id)
         self._emotion_poller.start()
+
+        self._needs_poller = NpcNeedsPoller(client, interval_s=5.0)
+        self._needs_poller.set_active_npc(self._active_npc_id)
+        self._needs_poller.start()
+
+        self._goals_poller = NpcGoalsPoller(client, interval_s=5.0)
+        self._goals_poller.set_active_npc(self._active_npc_id)
+        self._goals_poller.start()
+
+        self._politics_poller = NpcPoliticsPoller(client, interval_s=5.0)
+        self._politics_poller.set_active_npc(self._active_npc_id)
+        self._politics_poller.start()
+
+        self._memory_poller = NpcMemoryPoller(client, interval_s=5.0)
+        self._memory_poller.set_active_npc(self._active_npc_id)
+        self._memory_poller.start()
 
         self._ctrl = GameController(
             client,
@@ -105,7 +130,14 @@ class GameWindow:
                 on_sidebar_data=lambda name, data: self._right.set_sidebar_data(name, data),
                 on_clear_sidebar=self._right.clear_sidebar,
                 on_set_status=self._set_status,
+                on_stream_begin=lambda npc: self._left.begin_streaming_npc_response(npc),
+                on_npc_token=lambda npc, chunk: self._left.append_npc_token(npc, chunk),
+                on_stream_done=lambda npc, turn, color: self._left.update_badge(
+                    turn.degradation_level, turn.emotion, color
+                ),
             ),
+            ws_url=client.ws_url,
+            ws_api_key=client.api_key,
         )
 
         _quest_cache = Path(".cache/demo/aldric_quest.json")
@@ -135,6 +167,9 @@ class GameWindow:
         self._right.set_travel_callback(self._on_travel_clicked)
         self._right.set_bribe_callback(
             lambda: self._ctrl.spawn_bribe(self._active_npc_id)
+        )
+        self._right.set_consolidate_memory_callback(
+            lambda: self._ctrl.spawn_consolidate_memory(self._active_npc_id)
         )
 
         self._right.set_trade_offer_callback(
@@ -166,11 +201,15 @@ class GameWindow:
                     running = False
                 self._handle_event(event)
             self._ctrl.poll_response_queue(self._active_npc_id, self._right)
+            self._ctrl.poll_token_queue(self._active_npc_id, self._right)
             self._ctrl.poll_sidebar_queue()
             self._ctrl.poll_generate_quest_queue(self._right)
             self._ctrl.poll_inspect_queue(self._right)
             self._ctrl.poll_travel_queue()
             self._ctrl.poll_bribe_queue()
+            self._ctrl.poll_consolidate_memory_queue(
+                on_created=lambda _: self._memory_poller.refresh()
+            )
             self._left.set_waiting(self._ctrl.is_waiting)
             self._render()
             pygame.display.flip()
@@ -200,6 +239,8 @@ class GameWindow:
             self._right.handle_actions_event(event)
         elif self._right.show_inspect_panel:
             self._right.handle_scroll(event)
+        elif self._right.show_world_panel:
+            self._right.handle_scroll(event)
         elif self._active_npc_id:
             self._left.handle_scroll(event)
 
@@ -209,6 +250,10 @@ class GameWindow:
             self._left.set_active_npc(clicked_npc)
             self._ctrl.spawn_sidebar_fetch(clicked_npc)
             self._emotion_poller.set_active_npc(clicked_npc)
+            self._needs_poller.set_active_npc(clicked_npc)
+            self._goals_poller.set_active_npc(clicked_npc)
+            self._politics_poller.set_active_npc(clicked_npc)
+            self._memory_poller.set_active_npc(clicked_npc)
             self._right.set_npc_selected(True)
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -226,6 +271,10 @@ class GameWindow:
         self._active_npc_id = npcs[0]
         self._left.set_location(loc_id, npcs[0])
         self._emotion_poller.set_active_npc(npcs[0])
+        self._needs_poller.set_active_npc(npcs[0])
+        self._goals_poller.set_active_npc(npcs[0])
+        self._politics_poller.set_active_npc(npcs[0])
+        self._memory_poller.set_active_npc(npcs[0])
         self._right.set_npc_selected(True)
         self._ctrl.spawn_travel(loc_id)
 
@@ -264,7 +313,18 @@ class GameWindow:
         new_conds = self._world_state_poller.pop_new_conditions()
         if new_conds:
             self._left.show_event_banner(new_conds[0])
-        self._left.set_emotion(*self._emotion_poller.get_emotion())
+        _emo_label, _emo_valence, _emo_arousal = self._emotion_poller.get_emotion()
+        self._left.set_emotion(_emo_label, _emo_valence)
+        self._right.set_emotion(_emo_label, _emo_valence, _emo_arousal)
+        self._right.set_needs(self._needs_poller.get_needs())
+        self._right.set_goals(self._goals_poller.get_goals())
+        self._right.set_politics(
+            self._politics_poller.get_pledges(),
+            self._politics_poller.get_leverage(),
+        )
+        self._right.set_memories(self._memory_poller.get_memories())
+        self._right.set_world_engines(self._world_poller.get_engines())
+        self._right.set_world_events(self._world_poller.get_events())
         self._left.draw(self._screen, self._left_w, self._usable_h, epoch, conditions)
         self._right.draw(self._screen, pygame.Rect(self._right_x, 0, self._right_w, self._usable_h))
         self._draw_status_overlay()

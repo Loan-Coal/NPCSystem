@@ -2,18 +2,22 @@
 Module: right_panel
 Layer: demo_game.ui
 Purpose: Right panel renderer — cycles GRAPH → KNOWLEDGE → PLAYER STATUS → CHAIN →
-         TRADE → INVENTORY → ACTIONS → INSPECT via Tab. Owns all panel widgets;
-         reads the pre-rendered graph surface from GraphPoller.
+         TRADE → INVENTORY → ACTIONS → INSPECT → WORLD → EMOTION → NEEDS → GOALS
+         → POLITICS → MEMORY via Tab. Owns all panel widgets; reads the pre-rendered
+         graph surface from GraphPoller.
 Does NOT: make HTTP calls or hold business logic.
 Dependencies injected: None (pure rendering + callback registration).
 Dependencies: pygame, demo_game.graph_panel.poller, demo_game.ui.knowledge_sidebar,
               demo_game.ui.quest_panel, demo_game.ui.gossip_chain, demo_game.ui.trade_panel,
-              demo_game.ui.inventory_panel, demo_game.ui.inspect_panel
+              demo_game.ui.inventory_panel, demo_game.ui.inspect_panel,
+              demo_game.ui.world_panel, demo_game.ui.emotion_panel,
+              demo_game.ui.needs_panel, demo_game.ui.goals_panel,
+              demo_game.ui.politics_panel, demo_game.ui.memory_panel
 Used by: demo_game.ui.game_window
 
-NOTE: ~323 lines — accepted over the 300-line limit (see DEC-047). Single cohesive
-class; the overage is one give-mode lifecycle feature. Split trigger: second overlay
-workflow of this kind.
+NOTE: ~440 lines — accepted over the 300-line limit (see DEC-047). Single cohesive
+class; overage grows with each new panel tab. Split trigger: second overlay
+workflow of this kind or total > 500 lines.
 """
 
 from __future__ import annotations
@@ -25,12 +29,18 @@ import pygame
 
 from demo_game.graph_panel.poller import GraphPoller
 from demo_game.ui.actions_panel import ActionsPanelWidget
+from demo_game.ui.emotion_panel import EmotionPanelWidget
+from demo_game.ui.goals_panel import GoalsPanelWidget
 from demo_game.ui.gossip_chain import GossipChainWidget
+from demo_game.ui.memory_panel import MemoryPanelWidget
+from demo_game.ui.politics_panel import PoliticsPanelWidget
 from demo_game.ui.inspect_panel import InspectPanelWidget
 from demo_game.ui.knowledge_sidebar import KnowledgeSidebarWidget
 from demo_game.ui.inventory_panel import InventoryPanelWidget
+from demo_game.ui.needs_panel import NeedsPanelWidget
 from demo_game.ui.quest_panel import QuestPanelWidget
 from demo_game.ui.trade_panel import TradePanelWidget
+from demo_game.ui.world_panel import WorldPanelWidget
 
 PANEL_HEADER_H = 24  # Height of the tab-name header strip at the top of the right panel.
 
@@ -52,6 +62,12 @@ class RightPanel(enum.Enum):
     PLAYER_INVENTORY = "INVENTORY"
     ACTIONS = "ACTIONS"
     INSPECT = "INSPECT"
+    WORLD = "WORLD"
+    EMOTION = "EMOTION"
+    NEEDS = "NEEDS"
+    GOALS = "GOALS"
+    POLITICS = "POLITICS"
+    MEMORY = "MEMORY"
 
 
 class RightPanelRenderer:
@@ -84,6 +100,12 @@ class RightPanelRenderer:
         self._inventory_panel = InventoryPanelWidget(font_body, font_label)
         self._actions_panel = ActionsPanelWidget(font_label)
         self._inspect_panel = InspectPanelWidget(font_body, font_label)
+        self._world_panel = WorldPanelWidget(font_body, font_label)
+        self._emotion_panel = EmotionPanelWidget(font_body, font_label)
+        self._needs_panel = NeedsPanelWidget(font_body, font_label)
+        self._goals_panel = GoalsPanelWidget(font_body, font_label)
+        self._politics_panel = PoliticsPanelWidget(font_body, font_label)
+        self._memory_panel = MemoryPanelWidget(font_body, font_label)
         self._active: RightPanel = RightPanel.GRAPH
 
     # ------------------------------------------------------------------
@@ -257,6 +279,68 @@ class RightPanelRenderer:
         """Clear the inspect panel (called on fetch error)."""
         self._inspect_panel.clear()
 
+    def set_world_engines(self, engines: list[dict]) -> None:
+        """Push a fresh engine-status list into the WORLD panel."""
+        self._world_panel.set_engines(engines)
+
+    def set_world_events(self, events: list[dict]) -> None:
+        """Push a fresh event list into the WORLD panel."""
+        self._world_panel.set_events(events)
+
+    @property
+    def show_world_panel(self) -> bool:
+        """True when the WORLD tab is active."""
+        return self._active == RightPanel.WORLD
+
+    def set_emotion(self, label: str, valence: float, arousal: float) -> None:
+        """Push the latest emotion snapshot into the EMOTION panel widget."""
+        self._emotion_panel.set_emotion(label, valence, arousal)
+
+    def set_needs(self, needs: list[dict]) -> None:
+        """Push a fresh needs list into the NEEDS panel widget."""
+        self._needs_panel.set_needs(needs)
+
+    def set_goals(self, goals: list[dict]) -> None:
+        """Push a fresh goals list into the GOALS panel widget."""
+        self._goals_panel.set_goals(goals)
+
+    def set_politics(self, pledges: list[dict], leverage: list[dict]) -> None:
+        """Push fresh pledges + leverage into the POLITICS panel widget."""
+        self._politics_panel.set_politics(pledges, leverage)
+
+    def set_memories(self, memories: list[dict]) -> None:
+        """Push a fresh memories list into the MEMORY panel widget."""
+        self._memory_panel.set_memories(memories)
+
+    def set_consolidate_memory_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when [Consolidate Memory] is clicked."""
+        self._actions_panel.set_consolidate_memory_callback(cb)
+
+    @property
+    def show_memory_panel(self) -> bool:
+        """True when the MEMORY tab is active."""
+        return self._active == RightPanel.MEMORY
+
+    @property
+    def show_emotion_panel(self) -> bool:
+        """True when the EMOTION tab is active."""
+        return self._active == RightPanel.EMOTION
+
+    @property
+    def show_needs_panel(self) -> bool:
+        """True when the NEEDS tab is active."""
+        return self._active == RightPanel.NEEDS
+
+    @property
+    def show_goals_panel(self) -> bool:
+        """True when the GOALS tab is active."""
+        return self._active == RightPanel.GOALS
+
+    @property
+    def show_politics_panel(self) -> bool:
+        """True when the POLITICS tab is active."""
+        return self._active == RightPanel.POLITICS
+
     def handle_scroll(self, event: pygame.event.Event) -> None:
         """Route MOUSEWHEEL events to the active scrollable widget."""
         if self._active == RightPanel.KNOWLEDGE:
@@ -265,6 +349,8 @@ class RightPanelRenderer:
             self._actions_panel.handle_event(event)
         elif self._active == RightPanel.INSPECT:
             self._inspect_panel.handle_event(event)
+        elif self._active == RightPanel.WORLD:
+            self._world_panel.handle_event(event)
 
     def handle_quest_click(self, event: pygame.event.Event) -> None:
         """Forward an event to the quest panel (for accept-button detection)."""
@@ -305,6 +391,18 @@ class RightPanelRenderer:
             self._actions_panel.draw(screen, content_rect)
         elif self._active == RightPanel.INSPECT:
             self._inspect_panel.draw(screen, content_rect)
+        elif self._active == RightPanel.WORLD:
+            self._world_panel.draw(screen, content_rect)
+        elif self._active == RightPanel.EMOTION:
+            self._emotion_panel.draw(screen, content_rect)
+        elif self._active == RightPanel.NEEDS:
+            self._needs_panel.draw(screen, content_rect)
+        elif self._active == RightPanel.GOALS:
+            self._goals_panel.draw(screen, content_rect)
+        elif self._active == RightPanel.POLITICS:
+            self._politics_panel.draw(screen, content_rect)
+        elif self._active == RightPanel.MEMORY:
+            self._memory_panel.draw(screen, content_rect)
         else:
             self._draw_graph(screen, rect)
 

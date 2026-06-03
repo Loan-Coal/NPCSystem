@@ -191,11 +191,13 @@ class ScrollableLog:
         self._font = font
         self._label_font = label_font
         self._max = max_messages
-        self._messages: list[tuple[str, str, tuple[int, int, int]]] = []  # (label, body, colour)
+        # Each entry is [label, body, colour] (mutable list so streaming can
+        # append tokens into the last entry in-place without creating a new row).
+        self._messages: list[list] = []
         self._scroll_px: int = 0  # pixels scrolled up from bottom (0 = bottom)
 
     def add_message(self, label: str, body: str, *, is_player: bool = False, is_error: bool = False) -> None:
-        """Append a message to the log and scroll to bottom.
+        """Append a complete message to the log and scroll to bottom.
 
         Args:
             label: Sender name shown above the message.
@@ -209,10 +211,37 @@ class ScrollableLog:
             colour = _CLR_PLAYER_LABEL
         else:
             colour = _CLR_NPC_LABEL
-        self._messages.append((label, body, colour))
+        self._messages.append([label, body, colour])
         if len(self._messages) > self._max:
             self._messages.pop(0)
         self._scroll_px = 0  # snap to bottom on new message
+
+    def begin_streaming(self, label: str, colour: tuple[int, int, int] | None = None) -> None:
+        """Start a new streaming message entry with an empty body.
+
+        Subsequent calls to ``append_stream_token`` grow the body in-place.
+        Call ``add_message`` or ``begin_streaming`` again to start the next entry.
+
+        Args:
+            label: Sender name shown above the message.
+            colour: Label colour; defaults to NPC amber when omitted.
+        """
+        effective_colour = colour if colour is not None else _CLR_NPC_LABEL
+        self._messages.append([label, "", effective_colour])
+        if len(self._messages) > self._max:
+            self._messages.pop(0)
+        self._scroll_px = 0
+
+    def append_stream_token(self, token: str) -> None:
+        """Append a token chunk to the last message entry (streaming in-place).
+
+        No-op when the log is empty.
+
+        Args:
+            token: Word chunk (may include trailing whitespace).
+        """
+        if self._messages:
+            self._messages[-1][1] += token
 
     def handle_event(self, event: pygame.event.Event) -> None:
         """Handle scroll-wheel events."""
@@ -240,8 +269,8 @@ class ScrollableLog:
 
         # Pre-compute wrapped lines per message (O(n) per frame; negligible at 30 FPS)
         entries: list[tuple[str, list[str], tuple[int, int, int]]] = [
-            (label, _wrap_text(self._font, body, max_w), colour)
-            for label, body, colour in self._messages
+            (msg[0], _wrap_text(self._font, msg[1] or "…", max_w), msg[2])
+            for msg in self._messages
         ]
 
         total_h = sum(label_h + len(lines) * line_h + 6 for _, lines, _ in entries)

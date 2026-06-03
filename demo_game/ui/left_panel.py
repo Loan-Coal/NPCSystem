@@ -125,6 +125,40 @@ class LeftPanelRenderer:
         self.get_log(npc_id).add_message(speaker, text)
         self._badge.set(degradation_level, emotion, color)
 
+    def begin_streaming_npc_response(self, npc_id: str) -> None:
+        """Open a new empty streaming entry in the NPC's dialogue log.
+
+        Must be called once before the first ``append_npc_token`` for a response.
+        The entry is rendered as it fills in — the log rerenders each frame.
+
+        Args:
+            npc_id: NPC whose log receives the streaming entry.
+        """
+        speaker = NPC_DISPLAY_NAMES.get(npc_id, npc_id)
+        self.get_log(npc_id).begin_streaming(speaker)
+
+    def append_npc_token(self, npc_id: str, token: str) -> None:
+        """Append one streamed token to the active NPC log entry.
+
+        Args:
+            npc_id: NPC whose log entry receives the token.
+            token: Word chunk (with optional trailing whitespace).
+        """
+        self.get_log(npc_id).append_stream_token(token)
+
+    def update_badge(self, degradation_level: str, emotion: str | None, color: tuple) -> None:
+        """Update the degradation badge after streaming completes.
+
+        Called by GameController when the WS ``done`` message arrives, after
+        all tokens have been streamed into the log.
+
+        Args:
+            degradation_level: Engine degradation tier (``"full"`` / ``"graph_only"`` / ``"canned"``).
+            emotion: Emotion label from the response, or None.
+            color: RGB badge background colour matching the degradation tier.
+        """
+        self._badge.set(degradation_level, emotion, color)
+
     def add_error(self, npc_id: str, text: str) -> None:
         """Append an error line to the given NPC's dialogue log."""
         self.get_log(npc_id).add_message("ERROR", text, is_error=True)
