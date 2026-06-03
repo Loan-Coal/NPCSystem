@@ -46,7 +46,7 @@ from demo_game.run_scenes import (
     StreamingDialogueBeat,
     WorldFeed,
 )
-from npc_engine.engines.dialogue.prompt_builder import PROMPT_VERSION as _PROMPT_VERSION
+from demo_game.constants import DEMO_CACHE_VERSION as _PROMPT_VERSION
 
 # ---------------------------------------------------------------------------
 # Cache

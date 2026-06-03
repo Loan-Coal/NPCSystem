@@ -86,6 +86,10 @@ PROPAGATED_REP_FACTION: str = "merchants_guild"
 PROPAGATED_REP_LOCATION: str = "loc_market_square"
 PROPAGATED_REP_DELTA: int = 40
 
+# Cache-key version for the demo LLM response cache.
+# Bump this constant (not npc_engine's PROMPT_VERSION) when demo behaviour changes.
+DEMO_CACHE_VERSION: str = "demo_v1"
+
 # S10.1 Spread Rumor action: default planted text and severity for the demo button.
 # The text is intentionally provocative so the gossip distortion is visible.
 SPREAD_RUMOR_TEXT: str = "A hooded stranger was seen leaving the castle gates at midnight carrying stolen gold."

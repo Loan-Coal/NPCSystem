@@ -46,7 +46,6 @@ from demo_game.dialogue import (
     parse_dialogue_response,
 )
 from demo_game.quest_trade_controller import QuestTradeController
-from npc_engine.engines.interaction import dispatch_interaction
 
 if TYPE_CHECKING:
     from demo_game.ui.right_panel import RightPanelRenderer
@@ -515,17 +514,15 @@ class GameController:
                 print(f"[game_controller] interaction band update failed: {exc}", file=sys.stderr)
 
     def _dispatch_proposal(self, turn: DialogueTurn, npc_id: str, right: RightPanelRenderer) -> None:
-        from npc_engine.engines.interaction.models import InteractionProposal as _EngineProposal
-
         proposal = turn.interaction_proposal
-        eng_proposal = _EngineProposal(
-            kind=proposal.kind,
-            target_id=proposal.target_id,
-            payload=proposal.payload,
+        resp = self._client.post_interaction(
+            player_id=self._player_id,
+            npc_id=npc_id,
+            proposal={"kind": proposal.kind, "target_id": proposal.target_id, "payload": proposal.payload},
         )
-        state = dispatch_interaction(eng_proposal)
+        ui_directive = (resp.get("data") or {}).get("ui_directive", "")
         if self._cb.on_set_status:
-            self._cb.on_set_status(f"[INTERACTION] {state.ui_directive}", 2.0)
+            self._cb.on_set_status(f"[INTERACTION] {ui_directive}", 2.0)
 
         if proposal.kind == "propose_trade":
             self._qt.active_npc_id_for_trade = npc_id

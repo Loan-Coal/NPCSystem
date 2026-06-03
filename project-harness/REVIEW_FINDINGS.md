@@ -88,7 +88,7 @@ Verification: stub an empty/fallback response → guard cases must FAIL; `make e
 Effort: M · Blocks: SEV-27 (output reliability), credibility of demo.
 
 ---
-**FINDING [SEV-02]: `demo_game` imports `npc_engine` (3 sites) — breaks the documented zero-`src`-import / standalone-client contract**
+**[FIXED 2026-06-03] FINDING [SEV-02]: `demo_game` imports `npc_engine` (3 sites) — breaks the documented zero-`src`-import / standalone-client contract**
 Severity: CRITICAL · Confidence: Confirmed
 Category: layer-violation / product
 Absorbs: DEMO-01
