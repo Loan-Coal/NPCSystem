@@ -40,7 +40,7 @@ from npc_engine.graph.rumor_service import get_rumors_for_character_svc
 from npc_engine.graph.trait_service import get_traits_svc
 from npc_engine.graph.pledge_service import get_pledges_for_character_svc
 from npc_engine.graph.memory_queries import get_memories_for_character
-from npc_engine.graph.reputation_queries import get_reputation_context_for_npc
+from npc_engine.graph.reputation_queries import get_propagated_reputation_for_npc, get_reputation_context_for_npc
 from npc_engine.graph.trust_queries import get_second_hop_events, get_trust_scores_for_events
 from npc_engine.graph.quest_queries import get_active_quest_for_player, get_offered_quests_for_npc
 from npc_engine.graph.interaction_queries import get_sellable_items_for_npc
@@ -218,13 +218,18 @@ async def build_serialized_context(
             player_id=player_id or "",
             threshold=settings.REPUTATION_CONTEXT_THRESHOLD,
         )
+        propagated_reputation_items = (
+            await get_propagated_reputation_for_npc(session, npc_id=npc_id, player_id=player_id)
+            if player_id
+            else []
+        )
         memories = await get_memories_for_character(session, character_id=npc_id, k=3)
         owned_items = await get_items_for_character(session, character_id=npc_id, k=10)
         group_memberships = await get_groups_for_character_svc(session, character_id=npc_id)
         believed_rumors = await get_rumors_for_character_svc(session, character_id=npc_id, min_confidence=30)
         traits = await get_traits_svc(session, npc_id)
         active_pledges = await get_pledges_for_character_svc(session, npc_id, active_only=True)
-        return (location_context, events, reputation_items, memories,
+        return (location_context, events, reputation_items, propagated_reputation_items, memories,
                 owned_items, group_memberships, believed_rumors, traits, active_pledges)
 
     async def _fetch_beliefs_goals() -> tuple:
@@ -250,12 +255,12 @@ async def build_serialized_context(
         new_profile = new_bg = None
 
     if new_profile is not None:
-        (location_context, events, reputation_items, memories,
+        (location_context, events, reputation_items, propagated_reputation_items, memories,
          owned_items, group_memberships, believed_rumors, traits, active_pledges) = new_profile
         if partial_cache is not None and profile_key is not None:
             partial_cache.set_profile(profile_key, new_profile)
     else:
-        (location_context, events, reputation_items, memories,
+        (location_context, events, reputation_items, propagated_reputation_items, memories,
          owned_items, group_memberships, believed_rumors, traits, active_pledges) = cached_profile_data  # type: ignore[misc]
 
     if new_bg is not None:
@@ -314,6 +319,16 @@ async def build_serialized_context(
                 text=serialize_json(reputation_items),
                 tier="tierA",
                 priority=85,
+            )
+        )
+
+    if player_id is not None and propagated_reputation_items:
+        tier_a_raw.append(
+            ContextItem(
+                key="propagated_reputation",
+                text=serialize_json(propagated_reputation_items),
+                tier="tierA",
+                priority=84,
             )
         )
 

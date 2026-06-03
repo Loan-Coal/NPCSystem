@@ -337,20 +337,29 @@ def test_fill_to_budget_tier0_overflow_raises() -> None:
 
 
 def test_fill_to_budget_drops_lowest_priority_first() -> None:
-    """When serialized size exceeds budget, tier_c is dropped before tier_b before tier_a."""
+    """When serialized size exceeds budget, tier_c is dropped before tier_b before tier_a.
+
+    Uses "rag:" prefixed keys so items appear in npc_known_events in the serialized
+    output and actually contribute to serialized size. The base skeleton with world/session
+    fits in the budget; adding compressed rag items pushes over it, so the post-hoc trim
+    drops tier_c first, then tier_b.
+    """
+    big = '{"summary":"' + "x" * 600 + '"}'  # valid JSON; after compression still ~90 chars in output
     context = MergedContext(
         items=[
-            _make_item("world", "tier0", 100, chars=40),
-            _make_item("session", "tierA", 95, chars=100),
-            _make_item("rag_b:1", "tierB", 20, chars=300),
-            _make_item("rag_c:1", "tierC", 10, chars=300),
+            ContextItem(key="world", text='{"epoch":"war"}', tier="tier0", priority=100),
+            ContextItem(key="session", text='["t1"]', tier="tierA", priority=95),
+            ContextItem(key="rag:b1", text=big, tier="tierB", priority=20),
+            ContextItem(key="rag:c1", text=big, tier="tierC", priority=10),
         ]
     )
     llm_config = _llm_config_large()
 
-    filled, _ = fill_to_budget(context=context, llm_config=llm_config, prompt_token_budget=50)
+    # Budget=80: base skeleton+world+session ≈ 58 tokens (fits); adding a compressed rag
+    # item (~90 chars in npc_known_events) pushes to ~81 tokens > 80, triggering the trim.
+    filled, _ = fill_to_budget(context=context, llm_config=llm_config, prompt_token_budget=80)
 
     tier_keys = {item.key for item in filled.items}
     assert "world" in tier_keys
     assert "session" in tier_keys
-    assert "rag_c:1" not in tier_keys or "rag_b:1" not in tier_keys
+    assert "rag:c1" not in tier_keys or "rag:b1" not in tier_keys

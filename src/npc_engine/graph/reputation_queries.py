@@ -36,6 +36,21 @@ WHERE abs(toInteger(r.standing)) >= $threshold
 RETURN f.name AS faction_name, toInteger(r.standing) AS standing
 """
 
+CYPHER_PROPAGATED_REPUTATION_FOR_NPC = """
+MATCH (npc:Character {id: $npc_id})-[k:KNOWS_ABOUT]->(e:Event)
+WHERE npc.is_active = true
+  AND e.event_type = 'reputation_change'
+  AND e.src_character_id = $player_id
+RETURN e.faction_id AS faction_id,
+       toInteger(e.reputation_delta) AS reputation_delta,
+       coalesce(k.distorted_summary, e.summary) AS account,
+       k.knowledge_state AS knowledge_state
+ORDER BY e.occurred_at DESC
+LIMIT $limit
+"""
+
+_PROPAGATED_REP_LIMIT: int = 5
+
 # ---------------------------------------------------------------------------
 # Standing label
 # ---------------------------------------------------------------------------
@@ -111,6 +126,42 @@ async def list_reputations(
         )
     finally:
         await result.consume()
+
+
+async def get_propagated_reputation_for_npc(
+    session: AsyncSession,
+    *,
+    npc_id: str,
+    player_id: str,
+    limit: int = _PROPAGATED_REP_LIMIT,
+) -> list[dict[str, Any]]:
+    """Fetch reputation-change events the NPC knows about concerning the player.
+
+    Returns events the NPC has heard about via gossip propagation where the
+    player's reputation changed. Distorted summaries (gossip) are preferred
+    over the raw summary when present, reflecting what the NPC actually heard.
+
+    Args:
+        session: Active Neo4j async session.
+        npc_id: ID of the NPC whose KNOWS_ABOUT edges are searched.
+        player_id: ID of the player character (src_character_id on the Event).
+        limit: Maximum number of events to return.
+
+    Returns:
+        List of dicts with ``faction_id``, ``reputation_delta``,
+        ``account`` (the NPC's version of events), and ``knowledge_state``.
+    """
+    result = await session.run(
+        CYPHER_PROPAGATED_REPUTATION_FOR_NPC,
+        npc_id=npc_id,
+        player_id=player_id,
+        limit=limit,
+    )
+    try:
+        rows = [dict(record) async for record in result]
+    finally:
+        await result.consume()
+    return cast(list[dict[str, Any]], rows)
 
 
 async def get_reputation_context_for_npc(

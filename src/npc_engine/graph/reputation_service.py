@@ -18,6 +18,10 @@ from npc_engine.graph.reputation_queries import (
     get_reputation_context_for_npc,
     list_reputations,
 )
+from npc_engine.graph.reputation_event_seeder import (
+    create_reputation_event,
+    seed_reputation_awareness,
+)
 from npc_engine.graph.reputation_writer import (
     adjust_reputation,
     adjust_reputation_for_event,
@@ -76,6 +80,58 @@ class ReputationService:
         tx = await self._session.begin_transaction()
         async with tx:
             return cast(int, await adjust_reputation(tx, character_id=character_id, faction_id=faction_id, delta=delta))
+
+    async def adjust_reputation_with_event(
+        self,
+        *,
+        character_id: str,
+        faction_id: str,
+        delta: int,
+        location_id: str,
+        tick_id: int,
+    ) -> int:
+        """Adjust a character's reputation and seed a gossip-propagatable Event.
+
+        Runs all three writes in a single transaction:
+        1. Adjust the HAS_REPUTATION_WITH standing.
+        2. Create a reputation_change Event node at location_id.
+        3. Seed KNOWS_ABOUT edges for active NPCs at location_id.
+
+        The gossip tick can then propagate the event to NPCs at other locations.
+
+        Args:
+            character_id: ID of the character node.
+            faction_id: ID of the faction node.
+            delta: Integer standing delta.
+            location_id: Location where the standing change occurred.
+            tick_id: Current game tick.
+
+        Returns:
+            The new clamped standing value.
+
+        Raises:
+            ReputationNotFoundError: If character or faction node is absent.
+        """
+        tx = await self._session.begin_transaction()
+        async with tx:
+            new_standing = await adjust_reputation(
+                tx, character_id=character_id, faction_id=faction_id, delta=delta
+            )
+            event_id = await create_reputation_event(
+                tx,
+                character_id=character_id,
+                faction_id=faction_id,
+                delta=delta,
+                location_id=location_id,
+                tick_id=tick_id,
+            )
+            await seed_reputation_awareness(
+                tx,
+                event_id=event_id,
+                location_id=location_id,
+                tick_id=tick_id,
+            )
+        return new_standing
 
     async def adjust_reputation_for_event(
         self, *, character_id: str, faction_id: str, delta: int

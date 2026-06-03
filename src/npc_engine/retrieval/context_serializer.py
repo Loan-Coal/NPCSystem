@@ -78,6 +78,7 @@ def serialize_context(context: MergedContext) -> str:
         }
 
     reputation_payload = _safe_parse(mapped.get("reputation", "[]"))
+    propagated_reputation_payload = _safe_parse(mapped.get("propagated_reputation", "[]"))
     goals_payload = _safe_parse(mapped.get("goals", "[]"))
     beliefs_payload = _safe_parse(mapped.get("beliefs", "[]"))
     memories_payload = _safe_parse(mapped.get("memories", "[]"))
@@ -92,6 +93,7 @@ def serialize_context(context: MergedContext) -> str:
             "memories": memories_payload if isinstance(memories_payload, list) else [],
         },
         "player_reputation": reputation_payload if isinstance(reputation_payload, list) else [],
+        "propagated_reputation": propagated_reputation_payload if isinstance(propagated_reputation_payload, list) else [],
         "player_relation": relation_payload if isinstance(relation_payload, dict) else {},
         "npc_known_events": [*known_events, *rag_events],
         "nearby_npcs": nearby_payload if isinstance(nearby_payload, list) else [],

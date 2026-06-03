@@ -50,6 +50,7 @@ def test_serializer_outputs_fixed_skeleton_keys() -> None:
         "world",
         "npc",
         "player_reputation",
+        "propagated_reputation",
         "player_relation",
         "npc_known_events",
         "nearby_npcs",

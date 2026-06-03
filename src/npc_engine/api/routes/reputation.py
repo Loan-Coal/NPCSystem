@@ -33,9 +33,16 @@ class SetReputationRequest(BaseModel):
 
 
 class AdjustReputationRequest(BaseModel):
-    """Request body for applying a relative reputation delta."""
+    """Request body for applying a relative reputation delta.
+
+    When location_id and tick_id are both provided, a reputation_change Event
+    node is created at the given location and KNOWS_ABOUT edges are seeded for
+    co-located NPCs, so the standing change enters the gossip pipeline.
+    """
 
     delta: Annotated[int, Field(ge=-200, le=200)]
+    location_id: str | None = None
+    tick_id: int | None = None
 
     model_config = ConfigDict(frozen=True)
 
@@ -101,13 +108,26 @@ async def adjust_reputation(
     request: AdjustReputationRequest,
     service: ReputationService = Depends(get_reputation_service),
 ) -> dict:
-    """Apply a delta to a character's reputation with a faction (clamped to [-100, 100])."""
+    """Apply a delta to a character's reputation with a faction (clamped to [-100, 100]).
+
+    When location_id and tick_id are provided, also creates a reputation_change
+    Event node and seeds KNOWS_ABOUT edges for co-located NPCs.
+    """
     try:
-        new_standing = await service.adjust_reputation(
-            character_id=character_id,
-            faction_id=faction_id,
-            delta=request.delta,
-        )
+        if request.location_id is not None and request.tick_id is not None:
+            new_standing = await service.adjust_reputation_with_event(
+                character_id=character_id,
+                faction_id=faction_id,
+                delta=request.delta,
+                location_id=request.location_id,
+                tick_id=request.tick_id,
+            )
+        else:
+            new_standing = await service.adjust_reputation(
+                character_id=character_id,
+                faction_id=faction_id,
+                delta=request.delta,
+            )
     except ReputationNotFoundError as error:
         raise graph_error_to_http(error) from error
     return ok_response({"character_id": character_id, "faction_id": faction_id, "standing": new_standing})  # type: ignore[no-any-return]
