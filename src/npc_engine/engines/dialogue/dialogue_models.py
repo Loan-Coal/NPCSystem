@@ -85,6 +85,7 @@ class DialogueResponse(FrozenDialogueModel):
     session_id: str | None = None
     cached: bool = False
     degradation_level: str = "full"
+    audio_bytes: bytes | None = None
 
     @model_validator(mode="before")
     @classmethod

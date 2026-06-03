@@ -27,6 +27,10 @@ from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.engines.llm_config_models import EngineModelConfig
 from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.engines.routine.routine_queries import set_routine_override
+from npc_engine.engines.tts.protocols import TTSClientProtocol
+from npc_engine.engines.tts.voice_modulator import modulate as modulate_voice
+from npc_engine.engines.tts.voice_params import VoiceParams
+from npc_engine.graph.graph_reader import get_npc_voice_descriptor
 from npc_engine.retrieval.context_builder import build_serialized_context
 from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache, PartialDialogueContextCache
 from npc_engine.schema.context_config_models import LLMConfig
@@ -52,6 +56,7 @@ class DialogueHandler:
         emotion_updater: EmotionUpdater,
         embedding_index: object,
         context_cache: PartialDialogueContextCache | DialogueContextCache | None = None,
+        tts_client: TTSClientProtocol | None = None,
     ) -> None:
         """Initialise the dialogue handler with all engine dependencies.
 
@@ -65,6 +70,7 @@ class DialogueHandler:
             emotion_updater: Engine for reading and updating NPC emotion state.
             embedding_index: Vector index supporting the EmbeddingIndexProtocol.
             context_cache: Optional in-memory dialogue context cache.
+            tts_client: Optional TTS adapter; used when settings.TTS_ENABLED is True.
         """
 
         self._session = session
@@ -75,6 +81,7 @@ class DialogueHandler:
         self._emotion_updater = emotion_updater
         self._embedding_index = embedding_index
         self._context_cache = context_cache
+        self._tts_client = tts_client
         self._memory_engine = MemoryEngine()
         self._llm = DialogueLLMClient(
             llm_client=llm_client,
@@ -169,7 +176,41 @@ class DialogueHandler:
                 f"npc: {final_response.npc_response}",
             ],
         )
+        if getattr(self._settings, "TTS_ENABLED", False) and getattr(self, "_tts_client", None) is not None:
+            final_response = await self._synthesize_audio(
+                response=final_response, npc_id=request.npc_id
+            )
         return final_response
+
+    async def _synthesize_audio(
+        self, response: DialogueResponse, npc_id: str
+    ) -> DialogueResponse:
+        """Call the TTS backend and attach audio bytes to the response.
+
+        Fetches the NPC's voice_descriptor from the graph to build VoiceParams.
+        On TTS failure the original response (without audio) is returned so the
+        dialogue turn is never blocked by a TTS outage.
+
+        Args:
+            response: The fully resolved dialogue response awaiting audio.
+            npc_id: NPC identifier used to look up voice configuration.
+
+        Returns:
+            Response with audio_bytes populated, or original on synthesis error.
+        """
+        voice_descriptor = await get_npc_voice_descriptor(
+            session=self._session, npc_id=npc_id
+        )
+        base_params = VoiceParams(voice_id=voice_descriptor or "default")
+        current_emotion = self._emotion_updater.get_state(npc_id=npc_id)
+        voice_params = modulate_voice(base_params=base_params, emotion_state=current_emotion)
+        try:
+            audio = await self._tts_client.synthesize(  # type: ignore[union-attr]
+                text=response.npc_response, voice_params=voice_params
+            )
+            return response.model_copy(update={"audio_bytes": audio})
+        except Exception:
+            return response
 
     async def stream(self, request: DialogueRequest) -> list[str]:
         """Produce token chunks for WebSocket streaming output.

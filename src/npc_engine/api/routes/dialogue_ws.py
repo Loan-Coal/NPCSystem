@@ -6,8 +6,10 @@ Does NOT: mutate relation or emotion state directly.
 Dependencies injected: DialogueHandler.
 """
 
+import base64
 from collections.abc import Iterator
 import re
+from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -21,12 +23,40 @@ from npc_engine.api.dependency_singletons import get_dialogue_engine_model_confi
 from npc_engine.api.schemas import DialogueRequest
 from npc_engine.auth.api_key import resolve_scope_from_authorization
 from npc_engine.config import get_settings
+from npc_engine.engines.dialogue.dialogue_models import DialogueResponse
 from npc_engine.utils.errors import AuthError
 from npc_engine.utils.logging import get_logger
 
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+
+def _build_done_data(response: DialogueResponse) -> dict[str, Any]:
+    """Assemble the payload for the ``done`` WebSocket message.
+
+    Includes all metadata fields plus ``audio_bytes_b64`` (base64-encoded WAV
+    bytes) when TTS produced audio, or None when TTS is disabled or failed.
+
+    Args:
+        response: Fully resolved dialogue response from the handler.
+
+    Returns:
+        Dict safe to pass to ``websocket.send_json``.
+    """
+    audio_b64: str | None = (
+        base64.b64encode(response.audio_bytes).decode()
+        if response.audio_bytes
+        else None
+    )
+    return {
+        "degradation_level": response.degradation_level,
+        "emotion": response.emotion,
+        "relation_deltas": response.relation_deltas.model_dump(),
+        "action": response.action.model_dump(),
+        "facial_expression": response.facial_expression.model_dump(),
+        "audio_bytes_b64": audio_b64,
+    }
 
 
 def _iter_token_chunks(text: str) -> Iterator[str]:
@@ -73,13 +103,7 @@ async def dialogue_ws(websocket: WebSocket) -> None:
                 await websocket.send_json({"type": "token", "data": chunk})
             await websocket.send_json({
                 "type": "done",
-                "data": {
-                    "degradation_level": final_response.degradation_level,
-                    "emotion": final_response.emotion,
-                    "relation_deltas": final_response.relation_deltas.model_dump(),
-                    "action": final_response.action.model_dump(),
-                    "facial_expression": final_response.facial_expression.model_dump(),
-                },
+                "data": _build_done_data(final_response),
             })
     except WebSocketDisconnect:
         return
