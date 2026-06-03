@@ -18,6 +18,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - SEV-07 DONE: `context_budget_enforcer.fill_to_budget` is canonical — sums tier0+tierA up front and `raise TokenBudgetExceededError` if > `prompt_token_budget`; all tier-A kept (no soft-cap drop); only tier B/C trimmed (incl. post-serialize overhead loop). Default FastAPI 500 (no body leak) is the API mapping. `token_budget_enforcer.py` left in place (ISSUE-054, delete needs approval; DEC-057). Tests: `test_context_budget_enforcer_v14.py`.
 - SEV-18 DONE: degradation/memory_consolidation log warnings; gossip rumor-record now re-raises (not atomic — defer to SEV-04); TTS logs warning + increments `tts_failures_total`. Tests: `tests/unit/test_error_swallowing_sev18.py` (patch logger directly — caplog fails due to `propagate=False`).
 - SEV-02 DONE: `game_controller._dispatch_proposal` now calls `client.post_interaction(player_id, npc_id, proposal_dict)`; `run.py` uses `DEMO_CACHE_VERSION` from `demo_game/constants.py`. Test: `tests/unit/test_sev02_no_engine_imports.py`.
+- SEV-13 DONE: `_WORLD_STATE_ID="world"` in seed.py; `put_world_state` now sends `id="world"` and drops faction_standings/time_of_day/weather clobber. SEV-11 (game losable/winnable) builds on this same world-state arc.
 - Hard ordering: **SEV-31 → SEV-04 → {SEV-08, SEV-17, SEV-30, SEV-12}**; **SEV-14 → SEV-15(type-gate)**.
 - Need my approval before starting: **SEV-05** (public-interface async change), **SEV-10** (graph constraints), **SEV-12** (multi-tenant). SEV-06 couples to SEV-05.
 - SEV-14 IN PROGRESS: FrozenApiModel (22 errors) + config.py validators (13 errors) done; mypy baseline 256→221. Next clusters: ~90 no-any-return routes (OkEnvelope[T] + response_model=), create_model (`__base__` fix), graph writers (Record typing).
@@ -52,7 +53,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 
 ### Block E — product & demo
 - [x] **FIX-SEV-02** — Remove `npc_engine` imports from `demo_game` · **CRITICAL** · M · deps: none
-- [ ] **FIX-SEV-13** — Restore canonical WorldState id `world` · HIGH · S · deps: none (coordinate with SEV-11)
+- [x] **FIX-SEV-13** — Restore canonical WorldState id `world` · HIGH · S · deps: none (coordinate with SEV-11)
 - [ ] **FIX-SEV-11** — Make game losable/winnable; fix attribution/neutral bribes · HIGH · M · deps: none
 - [ ] **FIX-SEV-12** — Multi-tenant / world isolation · HIGH · XL · **deps: DECISIONS approval + SEV-04 + SEV-10**
 - [ ] *(SEV-28 WS timeout, SEV-33 error envelope, SEV-34 README — MEDIUM; report §3)*

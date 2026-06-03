@@ -168,7 +168,7 @@ def test_build_event_payload_returns_correct_shape() -> None:
 
 def test_build_world_state_payload_returns_correct_shape() -> None:
     payload = build_world_state_payload(epoch="peace", active_conditions=[])
-    assert payload["id"] == "world_demo"
+    assert payload["id"] == "world"
     assert payload["epoch"] == "peace"
     assert payload["active_conditions"] == []
 

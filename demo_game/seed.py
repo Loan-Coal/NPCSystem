@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _GAME_TIME: dict = {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
-_WORLD_STATE_ID = "world_demo"
+_WORLD_STATE_ID = "world"
 # Scarcity constraint (S7.2): bribing all 3 factions to win threshold costs 4*20*3=240 gold.
 # Starting at 60 the player demonstrably cannot win by bribing alone; must earn via quest/trade.
 _PLAYER_STARTING_GOLD = 60

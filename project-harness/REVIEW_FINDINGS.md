@@ -257,7 +257,7 @@ Verification: two seeded worlds with overlapping IDs stay isolated across all re
 Effort: XL.
 
 ---
-**FINDING [SEV-13]: WorldState seeded as `world_demo` vs DEC-022's canonical `world` — world state is silently never read by NPCs (reintroduces closed ISSUE-041)**
+**[FIXED 2026-06-03] FINDING [SEV-13]: WorldState seeded as `world_demo` vs DEC-022's canonical `world` — world state is silently never read by NPCs (reintroduces closed ISSUE-041)**
 Severity: HIGH · Confidence: Confirmed
 Category: correctness (regression)
 Absorbs: DEMO-02, GAME-10, DEMO-09

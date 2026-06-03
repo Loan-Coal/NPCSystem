@@ -736,12 +736,9 @@ class EngineClient:
         return self.upsert_node(
             "world_state",
             {
-                "id": "world_demo",
+                "id": "world",
                 "epoch": epoch,
                 "active_conditions": active_conditions,
-                "faction_standings": {},
-                "time_of_day": "morning",
-                "weather": "clear",
                 "last_updated_at": now,
                 "last_graph_updated_at": now,
             },
