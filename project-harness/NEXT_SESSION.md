@@ -4,7 +4,7 @@
 **Last completed:** **Phase 13 — Clean-Slate Hygiene, COMPLETE.** S13.1 (committed Phases 11/12 + review),
 S13.2 dropped (DEC-055, ISSUE-051 won't-fix), S13.3 (doc-drift sweep — fixed military `__init__` stub
 docstring). Roadmap archived (Phases 0–13) and slimmed to Phase 14+.
-**Test baseline:** 1326 unit + 525 demo passing. `make lint`/`make type` are RED (SEV-15/25, remediation).
+**Test baseline:** 1326 unit + 525 demo passing. `make lint` GREEN (SEV-15 lint cleared — 38 errors fixed, uncommitted). `make type` RED — 256 errors, tracked as ISSUE-052 (SEV-14); ratchet-pinned via `.mypy_baseline`. Harness quality gates added — see `project-harness/HARNESS_GATES.md`.
 
 ---
 
@@ -27,6 +27,8 @@ If features go first: **Phase 14** (proactive NPC dialogue) → 15 → 16; Phase
 - Remediation backlog: `project-harness/REVIEW_FINDINGS.md` + `project-harness/review-fixes/` (INDEX.md = critical path).
 
 ## Open issues
-- None active. ISSUE-051 closed won't-fix (DEC-055). **Next ID to use: ISSUE-052.**
+- **ISSUE-052** (P2) — 256 mypy type errors; `make type` gate red (SEV-14, ratchet-pinned at `.mypy_baseline`).
+- **ISSUE-053** (P2) — 57 grandfathered CLAUDE.md rule violations (`make check-rules` baseline / `scripts/rules_baseline.txt`).
+- ISSUE-051 closed won't-fix (DEC-055). **Next ID to use: ISSUE-054.**
 
 *Regenerated 2026-06-03 after Phase 13 close + roadmap restructure.*

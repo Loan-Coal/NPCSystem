@@ -13,6 +13,22 @@ Rules:
 
 ## Open
 
+## ISSUE-052: 256 mypy type errors across 86 files (type gate red)
+**Found:** 2026-06-03, during the multi-agent codebase review (SEV-14/SEV-15)
+**Severity:** P2 (annoying)
+**Where:** `src/` (86 files); see `project-harness/review-evidence/04_type.log`. Root clusters: ~90 `no-any-return` from `dict[Any,Any]` route returns, 22 `FrozenApiModel`-as-base-class in `api/schemas.py`, `create_model(__config__=...)` in `type_registry/runtime_models.py`, `Record`/`BaseModel` arg/attr errors in `graph/*_writer.py`, 14 validator `no-any-return` in `config.py`.
+**Description:** `make type` (mypy) fails with 256 errors. The count is pinned by the ratchet (`.mypy_baseline = 256`, `scripts/mypy_ratchet.py`) so it can only shrink; `make type` is reported in CI but cannot be a hard gate until this reaches 0.
+**Why deferred:** Large incremental burn-down (full remediation brief in `project-harness/review-fixes/FIX-SEV-14.md`); out of scope for the harness-hardening task that surfaced it.
+**To fix:** Execute FIX-SEV-14 (generic `OkEnvelope[T]` + per-route `response_model`, drop the `FrozenApiModel` alias, fix `create_model`, type the graph writers, annotate config validators). Drive `.mypy_baseline` to 0 via `make type-ratchet-update`, then flip `make type` to gating in CI (FIX-SEV-15).
+
+## ISSUE-053: 57 grandfathered CLAUDE.md rule violations (file-size, swallows, prints, Cypher-leak, demo imports)
+**Found:** 2026-06-03, during the multi-agent codebase review
+**Severity:** P2 (annoying)
+**Where:** `scripts/rules_baseline.txt` (enumerated); spans `src/` and `demo_game/`. Maps to SEV-23 (file-size), SEV-18/PY-06 (swallows), SEV-40 (prints), SEV-04 (Cypher outside `graph/`), SEV-02/DEMO-01 (demo imports `npc_engine`).
+**Description:** The `make check-rules` gate (`scripts/check_rules.py`) records 57 existing rule violations as a baseline so only NEW ones fail CI. The baseline is the debt backlog.
+**Why deferred:** Each cluster has its own remediation brief in `project-harness/review-fixes/`; the gate prevents growth while they are worked down.
+**To fix:** Work the SEV briefs; after each, run `make check-rules-update` to shrink `scripts/rules_baseline.txt`. Done when the baseline is empty.
+
 ## [WONTFIX] ISSUE-051: Dashboard S12.4 engine cadence/cost controls are read-only (no live mutation)
 **Found:** 2026-06-03, during S12.4
 **Severity:** P3 (nice-to-fix)
@@ -537,7 +553,7 @@ current mapping is good enough for demo badge display and does not affect correc
 
 ---
 
-## ISSUE-041: Demo seed creates WorldState id="ws_main" but world_reader defaults to id="world"
+## [FIXED] ISSUE-041: Demo seed creates WorldState id="ws_main" but world_reader defaults to id="world"
 **Found:** 2026-05-27, during R2.2 eval investigation
 **Severity:** P2 (annoying)
 **Where:** `seeds/worlds/seed_demo_world.py` (`_WORLD_STATE_ID = "ws_main"`), `src/npc_engine/world/world_reader.py:37` (`world_id: str = "world"`)
