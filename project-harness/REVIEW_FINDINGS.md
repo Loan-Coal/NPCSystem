@@ -273,6 +273,7 @@ Effort: S.
 
 ---
 **FINDING [SEV-14]: Type-safety collapse at the API boundary — ~90 endpoints return bare `dict[Any,Any]`; the schema layer, dynamic-model builder, and graph writers are all mypy-broken (254 errors)**
+**STATUS: IN PROGRESS** — FrozenApiModel cluster (22 errors) + config.py validators cluster (13 errors) fixed 2026-06-03; mypy baseline 256→221. Remaining: ~90 no-any-return route cluster, create_model cluster, writer clusters.
 Severity: HIGH · Confidence: Confirmed
 Category: correctness / api-design
 Absorbs: PY-01, PY-02, PY-03, PY-05, PY-11, PY-12

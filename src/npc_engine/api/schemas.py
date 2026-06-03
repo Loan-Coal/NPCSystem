@@ -6,6 +6,8 @@ Does NOT: execute graph or LLM logic.
 Dependencies injected: None.
 """
 
+from __future__ import annotations
+
 from typing import Literal
 
 from pydantic import Field
@@ -23,7 +25,14 @@ from npc_engine.engines.dialogue.dialogue_models import (
 
 PlayerActionType = Literal["attack", "give_item", "steal", "help", "observe", "buy_item", "sell_item"]
 
-FrozenApiModel = FrozenDialogueModel
+
+class FrozenApiModel(FrozenDialogueModel):
+    """Frozen base class for all API schema models.
+
+    Inherits model_config from FrozenDialogueModel (frozen=True, extra='forbid').
+    Using a named class rather than a value alias allows mypy to treat it as a
+    valid base class and enables proper OpenAPI schema generation.
+    """
 
 __all__ = [
     "ActionModel",

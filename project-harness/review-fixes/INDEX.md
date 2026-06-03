@@ -20,7 +20,9 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - SEV-02 DONE: `game_controller._dispatch_proposal` now calls `client.post_interaction(player_id, npc_id, proposal_dict)`; `run.py` uses `DEMO_CACHE_VERSION` from `demo_game/constants.py`. Test: `tests/unit/test_sev02_no_engine_imports.py`.
 - Hard ordering: **SEV-31 → SEV-04 → {SEV-08, SEV-17, SEV-30, SEV-12}**; **SEV-14 → SEV-15(type-gate)**.
 - Need my approval before starting: **SEV-05** (public-interface async change), **SEV-10** (graph constraints), **SEV-12** (multi-tenant). SEV-06 couples to SEV-05.
+- SEV-14 IN PROGRESS: FrozenApiModel (22 errors) + config.py validators (13 errors) done; mypy baseline 256→221. Next clusters: ~90 no-any-return routes (OkEnvelope[T] + response_model=), create_model (`__base__` fix), graph writers (Record typing).
 - Debt tickets already logged: ISSUE-052 (mypy), ISSUE-053 (rule baseline), ISSUE-054 (delete redundant token_budget_enforcer). Next issue id: **ISSUE-055**.
+- config.py cast() pattern: pydantic mypy plugin breaks on Python 3.14 (ImportError); use cast() in @field_validator returns as workaround.
 
 ## Ordered checklist
 
