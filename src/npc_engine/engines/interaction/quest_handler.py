@@ -19,7 +19,6 @@ import uuid
 from neo4j import AsyncSession
 
 from npc_engine.engines.interaction.models import (
-    STATUS_DECLINED,
     STATUS_OPEN,
     STATUS_PENDING_CONFIRM,
     UI_DIRECTIVE_NONE,
@@ -143,7 +142,6 @@ async def handle_claim_completion(
 
     meta = _build_meta(player_id=player_id, quest_id=quest_id, reason="claim_completion")
     for obj in objectives:
-        target = obj.objective_progress if hasattr(obj, "objective_progress") else None
         current_progress = state_payload.get("objective_progress", {}).get(obj.objective_id, 0)
         delta = max(0, obj.target_count - current_progress)
         if delta > 0:

@@ -20,7 +20,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING
 
 from neo4j import AsyncSession
 

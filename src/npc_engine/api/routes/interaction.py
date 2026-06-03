@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from neo4j import AsyncSession
 from pydantic import BaseModel, ConfigDict, Field
 

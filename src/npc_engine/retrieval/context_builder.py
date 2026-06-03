@@ -18,8 +18,6 @@ import logging
 import time
 from typing import Protocol
 
-logger = logging.getLogger(__name__)
-
 from neo4j import AsyncSession
 
 from npc_engine.config import Settings
@@ -69,6 +67,8 @@ from npc_engine.retrieval.vector_store_protocol import VectorSearchResult
 from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.utils.metrics import increment_metric
 from npc_engine.world.world_reader import get_world_state
+
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingIndexProtocol(Protocol):
