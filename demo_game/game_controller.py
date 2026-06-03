@@ -245,12 +245,14 @@ class GameController:
     def spawn_bribe(self, npc_id: str) -> None:
         """Launch a background thread to bribe the selected NPC's faction.
 
-        Looks up the faction from NPC_FACTIONS. No-op if the NPC has no faction entry.
+        Looks up the faction from NPC_FACTIONS. No-op if the NPC has no faction
+        entry or belongs to the "neutral" faction (bribing neutral NPCs has no
+        effect on any win condition and would waste gold).
         """
         faction_id = NPC_FACTIONS.get(npc_id)
-        if not faction_id:
+        if not faction_id or faction_id == "neutral":
             if self._cb.on_set_status:
-                self._cb.on_set_status(f"Cannot bribe: {npc_id} has no faction", 2.0)
+                self._cb.on_set_status(f"{npc_id} has no faction to bribe", 2.0)
             return
         threading.Thread(
             target=bribe_worker,

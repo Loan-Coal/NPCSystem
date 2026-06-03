@@ -21,7 +21,10 @@ WIN_MIN_FACTIONS: int = 2
 DEMO_FACTIONS: tuple[str, ...] = ("merchants_guild", "city_guard", "thieves_guild")
 
 # Lose condition constants.
-LOSE_LOCATION_ID: str = "loc_market_square"
+# Iron Legion armies are seeded at loc_guard_barracks (see seed.py _ARMIES);
+# military_battle_service writes CONTROLS only at the battle location, so the
+# legion can only ever control loc_guard_barracks.
+LOSE_LOCATION_ID: str = "loc_guard_barracks"
 LOSE_FACTION_ID: str = "iron_legion"
 
 # Arc-specific win ending subtitles keyed by first-allied faction (None = generic fallback).

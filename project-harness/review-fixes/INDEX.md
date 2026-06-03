@@ -24,6 +24,8 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - SEV-14 IN PROGRESS: FrozenApiModel (22 errors) + config.py validators (13 errors) done; mypy baseline 256→221. Next clusters: ~90 no-any-return routes (OkEnvelope[T] + response_model=), create_model (`__base__` fix), graph writers (Record typing).
 - Debt tickets already logged: ISSUE-052 (mypy), ISSUE-053 (rule baseline), ISSUE-054 (delete redundant token_budget_enforcer). Next issue id: **ISSUE-055**.
 - config.py cast() pattern: pydantic mypy plugin breaks on Python 3.14 (ImportError); use cast() in @field_validator returns as workaround.
+- SEV-11 DONE: LOSE_LOCATION_ID→"loc_guard_barracks"; spawn_bribe neutral guard added; earn-hint row in world_panel; poller freeze was already correct. rules baseline ratcheted 57→53.
+- test_action_workers + test_spread_rumor_worker have 2 pre-existing failures (unrelated to SEV-11); do not confuse with regressions.
 
 ## Ordered checklist
 
@@ -54,7 +56,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 ### Block E — product & demo
 - [x] **FIX-SEV-02** — Remove `npc_engine` imports from `demo_game` · **CRITICAL** · M · deps: none
 - [x] **FIX-SEV-13** — Restore canonical WorldState id `world` · HIGH · S · deps: none (coordinate with SEV-11)
-- [ ] **FIX-SEV-11** — Make game losable/winnable; fix attribution/neutral bribes · HIGH · M · deps: none
+- [x] **FIX-SEV-11** — Make game losable/winnable; fix attribution/neutral bribes · HIGH · M · deps: none
 - [ ] **FIX-SEV-12** — Multi-tenant / world isolation · HIGH · XL · **deps: DECISIONS approval + SEV-04 + SEV-10**
 - [ ] *(SEV-28 WS timeout, SEV-33 error envelope, SEV-34 README — MEDIUM; report §3)*
 

@@ -81,20 +81,20 @@ def test_check_win_minimum_threshold_boundary():
 # ---------------------------------------------------------------------------
 
 
-def test_check_lose_market_square_controlled_returns_true():
+def test_check_lose_lose_location_controlled_returns_true():
     assert check_lose([LOSE_LOCATION_ID]) is True
 
 
 def test_check_lose_other_location_controlled_returns_false():
-    assert check_lose(["loc_guard_barracks"]) is False
+    assert check_lose(["loc_tavern"]) is False
 
 
 def test_check_lose_empty_list_returns_false():
     assert check_lose([]) is False
 
 
-def test_check_lose_multiple_locations_including_market():
-    assert check_lose(["loc_guard_barracks", LOSE_LOCATION_ID]) is True
+def test_check_lose_multiple_locations_including_lose_location():
+    assert check_lose(["loc_tavern", LOSE_LOCATION_ID]) is True
 
 
 # ---------------------------------------------------------------------------
@@ -144,8 +144,8 @@ def test_evaluate_game_end_returns_objective_state_type():
 
 
 def test_evaluate_game_end_iron_legion_controls_stored():
-    state = evaluate_game_end([], ["loc_guard_barracks"])
-    assert "loc_guard_barracks" in state.iron_legion_controls
+    state = evaluate_game_end([], [LOSE_LOCATION_ID])
+    assert LOSE_LOCATION_ID in state.iron_legion_controls
 
 
 def test_evaluate_game_end_faction_standings_defaults_to_zero():

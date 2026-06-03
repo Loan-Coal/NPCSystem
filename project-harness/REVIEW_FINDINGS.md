@@ -227,7 +227,8 @@ Verification: after fresh boot `SHOW CONSTRAINTS` lists core labels; `make seed-
 Effort: M.
 
 ---
-**FINDING [SEV-11]: The game cannot be lost and cannot realistically be won with the shipped seed/economy**
+**[FIXED] FINDING [SEV-11]: The game cannot be lost and cannot realistically be won with the shipped seed/economy**
+Fixed: 2026-06-03 — LOSE_LOCATION_ID→"loc_guard_barracks"; neutral-bribe guard; earn-hint in world_panel; poller freeze already correct.
 Severity: HIGH · Confidence: Confirmed (lose) / Likely (win)
 Category: gameplay / correctness
 Absorbs: GAME-01, GAME-02, GAME-04, GAME-05

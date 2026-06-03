@@ -177,6 +177,16 @@ class WorldPanelWidget:
         surface.blit(goal_txt, (rect.x + _PAD_X, y))
         y += _OBJECTIVE_ROW_H
 
+        # Earn-gold hint — hidden once game ends so it doesn't clutter the outcome screen.
+        if not (obj and obj.outcome):
+            hint_txt = self._font_label.render(
+                "Earn gold: Aldric quest / spice trade → Bribe faction NPCs",
+                True,
+                _CLR_GREY,
+            )
+            surface.blit(hint_txt, (rect.x + _PAD_X, y))
+        y += _OBJECTIVE_ROW_H
+
         standings = obj.faction_standings if obj else {}
         for faction_id in DEMO_FACTIONS:
             y = self._draw_faction_bar(surface, rect, y, faction_id, standings.get(faction_id, 0))
