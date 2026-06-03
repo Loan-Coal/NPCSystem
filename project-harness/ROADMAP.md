@@ -224,11 +224,11 @@ you walk in" demo moment all depend on this. It is cheap (the engines and schedu
 **Why a phase:** The product is sold on "persistent memory / the world remembers." The demo currently
 reseeds on every launch — bribes, gifts, standing, completed quests are wiped. This makes the pitch true.
 
-- [ ] **S5.1** Idempotent seed = no-clobber: seeding must not reset player-mutated state if the world exists.
+- [x] **S5.1** Idempotent seed = no-clobber: seeding must not reset player-mutated state if the world exists.
       Exit: bribe Lira → restart → standing still elevated.
-- [ ] **S5.2** Player state persistence: inventory, gold, standing, quests survive a restart (verify nothing
+- [x] **S5.2** Player state persistence: inventory, gold, standing, quests survive a restart (verify nothing
       in the demo path is in-memory-only). Exit: complete a quest → restart → quest still completed.
-- [ ] **S5.3** Named snapshot/restore of world state for demo resets between takes (graph export/import,
+- [x] **S5.3** Named snapshot/restore of world state for demo resets between takes (graph export/import,
       not a new persistence layer).
 
 ---
@@ -237,24 +237,24 @@ reseeds on every launch — bribes, gifts, standing, completed quests are wiped.
 **Goal:** Every engine legible. All features demonstrable in 5 minutes.
 **Sessions:** 5–6 (each panel is its own task — do not budget as one session)
 
-- [ ] **S6.0** Engine-status endpoint + WORLD panel
+- [x] **S6.0** Engine-status endpoint + WORLD panel
   - `GET /v1/system/engines`: per-engine last-run tick, last error, cadence (fed by S1.3) — also a
     **buyer-facing observability** surface.
   - Demo tab `WORLD`: live event feed of the last N ticks.
   - Exit: panel updates while the player does nothing — world visibly alive.
-- [ ] **S6.1** Emotion + needs + agenda panels (3 separate tasks). Emotion is already surfaced as a badge
+- [x] **S6.1** Emotion + needs + agenda panels (3 separate tasks). Emotion is already surfaced as a badge
       (`left_panel.py:103`) — promote to a prominent bar; needs + agenda are new poller+widget each.
-- [ ] **S6.2** Surface the political layer (secrets/leverage/pledges/beliefs) — at least one visible
+- [x] **S6.2** Surface the political layer (secrets/leverage/pledges/beliefs) — at least one visible
       consequence (an NPC references leverage; or a broken oath appears in the WORLD feed + shifts standing).
-- [ ] **S6.3** Memory-recall proof — witnessing NPC consolidates a notable player action into a Memory node;
+- [x] **S6.3** Memory-recall proof — witnessing NPC consolidates a notable player action into a Memory node;
       a later session references it. (Makes the headline feature visible.)
-- [ ] **S6.4** Streaming dialogue — switch the demo to `dialogue_ws.py` (WebSocket) for token streaming.
-- [ ] **S6.5** Implement the military engine (ISSUE-031) *(decision: implement)*
+- [x] **S6.4** Streaming dialogue — switch the demo to `dialogue_ws.py` (WebSocket) for token streaming.
+- [x] **S6.5** Implement the military engine (ISSUE-031) *(decision: implement)*
   - Battle resolution (opposing armies same location → strength compare → `CONTROLS`/`OCCUPIES` updates),
     resource yield (`PRODUCES` → treasury per tick), depletion tracking. Runs on the Phase 1 tick.
   - World-state changes surface in the WORLD feed (war → occupation).
   - Exit: seeding two opposing armies + 3 ticks changes world state and writes events.
-- [ ] **S6.6** Final demo flow — 5-minute script touching dialogue (streamed), gossip, generated quest,
+- [x] **S6.6** Final demo flow — 5-minute script touching dialogue (streamed), gossip, generated quest,
       bribe, autonomous tick, emotion change, a political consequence, military world-state change, WORLD feed.
       Record 3 takes; export final cut.
 
@@ -430,3 +430,11 @@ See `project-harness/ISSUES.md` for the full log. Every active issue now has a r
 | S0.5 | 2026-06-02 | Phase 0 | Reputation-differentiated dialogue tone: strengthened Rule 2 "allied" in system_v1.yaml (3 mandatory tone shifts), clarified Rule 8 scope, removed skip_until_implemented from eval, PROMPT_VERSION v2.6 | 1077 passing, demo 254 passing |
 | S3.4 | 2026-06-02 | Phase 3 | Demo integration: ActionsPanelWidget (ACTIONS tab), [Generate Quest] button with background LLM worker, provenance badge [GENERATED]/[SEEDED] in quest panel, source field on Quest nodes | 1194 passing, demo 254 passing |
 | S4.4 | 2026-06-02 | Phase 4 | [Bribe] wired: bribe_worker reads gold+standing, increments standing by BRIBE_STANDING_GAIN, deducts BRIBE_GOLD_COST; 5 new tests; all buttons in ACTIONS panel now active | 1200 passing, demo 312 passing |
+| S5.1 | 2026-06-02 | Phase 5 | Idempotent seed: added Quest exist-check to _seed_quests (preserves completed quests); 3 new tests confirming gold/standing/quest state survive reseed | 1200 passing, demo 315 passing |
+| S5.2 | 2026-06-02 | Phase 5 | Player state persistence audit + OWNS-edge re-seed bug fix (_seed_item_edge_if_unowned); 3 new tests | 1200 passing, demo 318 passing |
+| S5.3 | 2026-06-02 | Phase 5 | Named snapshot/restore: demo_game/snapshot.py (export/restore via Cypher), make demo-snapshot/demo-restore targets, 18 new unit tests | 1200 passing, demo 336 passing |
+| S6.2 | 2026-06-02 | Phase 6 | POLITICS panel (pledges + leverage): NpcPoliticsPoller, PoliticsPanelWidget, seed step 16 (2 Leverage nodes + fealty pledges), 30 new demo tests | 1200 passing, demo 411 passing |
+| S6.3 | 2026-06-03 | Phase 6 | Memory-recall proof: NpcMemoryPoller, MemoryPanelWidget (MEMORY tab), [Consolidate Memory] button in ACTIONS, get_memories()/consolidate_memory() on EngineClient, consolidate_memory_worker + spawn/poll in GameController, 3rd player-witness memory seeded for Mira | 1205 passing, demo 437 passing |
+| S6.4 | 2026-06-03 | Phase 6 | Streaming dialogue: dialogue_ws.py client worker; ScrollableLog.begin_streaming/append_stream_token; LeftPanelRenderer streaming methods; GameController WS submit path + poll_token_queue; server done message includes full metadata; 20 new tests | 1208 passing, demo 457 passing |
+| S6.5 | 2026-06-03 | Phase 6 | Military engine: military_battle_service.py (battle resolution), military_resource_service.py (resource yield + depletion), 4 graph writer helpers, 21 new unit tests | 1223 passing, demo 457 passing |
+| S6.6 | 2026-06-03 | Phase 6 | Final demo flow: run_scenes.py (all scene types), run.py rewritten (5-act 5-min script), seed.py army seeding (iron_legion + 2 armies), put_world_state world_demo fix, DEMO_SCRIPT.md full S6 update | Phase 6 complete |

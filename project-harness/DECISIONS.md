@@ -12,6 +12,19 @@ Rules:
 
 ---
 
+## DEC-049: run.py split into run.py + run_scenes.py
+**Date:** 2026-06-03
+**Context:** S6.6 added 7 new scene classes and a fuller SCENES list. `run.py` was already ~353 lines (over the 300-line hard limit). Adding ~180 lines would push it to ~530.
+**Decision:** Extracted all `Scene` subclasses (NarratorCue, SeedCheck, EventFire, ClockTick, DialogueBeat, StreamingDialogueBeat, BribeScene, ReputationDisplay, EmotionDisplay, QuestDisplay, MemoryConsolidate, WorldFeed) plus the base `Scene` dataclass into `demo_game/run_scenes.py`. `run.py` now holds LLMCache, SCENES list, DemoRunner, and main().
+**Why:** Natural seam — the scene type definitions are pure data-class behaviour with no dependency on LLMCache or DemoRunner state. Moving them removes a circularity and keeps both files under 300 lines.
+
+## DEC-050: put_world_state hardcoded "world" → "world_demo"
+**Date:** 2026-06-03
+**Context:** ISSUE-044 fix (S0.4) changed the canonical WorldState ID from "world" to "world_demo" in seed.py and Settings. However `EngineClient.put_world_state` still wrote to `id="world"`, so all EventFire scenes in the demo runner wrote to a node the engine never read.
+**Decision:** Changed the hardcoded `"world"` to `"world_demo"` in `put_world_state`. All callers (run.py, game_window.py, scenario runners) now update the correct node.
+**Why:** The world ID is a demo-world constant, not a general configuration value. Adding an injection point would be over-engineering; the demo is always `world_demo`.
+**Future:** If multi-world support is added, `EngineClient` should accept a `world_id` parameter on all world-state mutating methods.
+
 ## DEC-001: LEVERAGE is a reified node, not an edge
 **Date:** 2026-05-19
 **Context:** Phase 7.2 Political Simulation adds a leverage mechanic where one character holds leverage over another, grounded in a shared secret.
@@ -447,12 +460,12 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Why:** See DEC-042 rationale. The natural refactor trigger is when Phase 4+ adds another NPC context dimension (e.g. relationship graph, emotional history) — that's when `QuestContextAssembler` earns its own file.
 **Consequence:** The `_format_npc_context` helper is the seed of the future assembler. Keep it pure (no I/O, no session) so it can be moved without change.
 
-## DEC-047: right_panel.py accepted over 300-line hard limit (~323 lines)
-**Date:** 2026-06-02
-**Context:** ISSUE-049 fix adds `start_item_pick`, `handle_inventory_event`, and `show_inventory_panel` (~25 lines net after removing the 4-line `get_player_first_item`). File goes from 298 → ~323 lines.
-**Decision:** Accepted. `RightPanelRenderer` is a single-class module whose one responsibility is coordinating right-panel tab state and widget delegation. Splitting into, e.g., a separate `ItemPickCoordinator` would just move the same tab-switching logic to another file with an artificial seam.
-**Why:** The overage (~23 lines) comes from one cohesive feature (give-mode lifecycle). Every existing method in this file is a narrow delegate or property. The natural split trigger would be if a second major overlay workflow (e.g., a target-select mode for travel) needed similar state — then a generic `OverlayCoordinator` would make sense.
-**Consequence:** If another workflow of this kind is added, extract an `OverlayCoordinator` and move `start_item_pick` + future counterparts there.
+## DEC-047: right_panel.py accepted over 300-line hard limit (~405 lines, updated S6.1)
+**Date:** 2026-06-02 (updated 2026-06-03)
+**Context:** Originally ~323 lines after ISSUE-049 fix. S6.1 adds EMOTION, NEEDS, and GOALS tabs — 3 imports, 3 widget instantiations, 6 setters, 3 properties, 6 draw/scroll branches — ~48 additional lines, bringing total to ~405 lines.
+**Decision:** Accepted. `RightPanelRenderer` is a single-class module whose sole concern is coordinating right-panel tab state and delegating to widget instances. Every new tab adds the same narrow delegate pattern (setter, property, draw branch); there is no natural seam to split at fewer than 3 tabs.
+**Why:** Splitting EMOTION/NEEDS/GOALS into a second renderer would add an artificial seam and a routing layer. The file remains structurally uniform — no function exceeds 10 lines.
+**Split trigger:** Total > 500 lines OR a second stateful overlay workflow (like give-mode) is added.
 
 ## DEC-048: game_controller.py accepted over 300-line hard limit (~318 lines)
 **Date:** 2026-06-02

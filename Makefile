@@ -16,6 +16,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval eval-e2e scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo \
+        demo-snapshot demo-restore \
         seed-tavern-world seed-village-world
 
 install:
@@ -148,6 +149,16 @@ demo-run:
 # Requires: pip install -r demo_game/requirements.txt
 test-demo:
 	$(PYTHON) -m pytest demo_game/tests/ -q
+
+# demo-snapshot: export current Neo4j graph to .cache/demo/snapshot.json
+# Run once before the demo to capture the clean seeded state.
+demo-snapshot:
+	$(PYTHON) -m demo_game.snapshot --mode snapshot
+
+# demo-restore: wipe Neo4j graph and reimport from .cache/demo/snapshot.json
+# Use between demo takes to reset the world to the snapshot state.
+demo-restore:
+	$(PYTHON) -m demo_game.snapshot --mode restore
 
 # ---------------------------------------------------------------------------
 # seed-tavern-world / seed-village-world: seed independent eval worlds (idempotent)

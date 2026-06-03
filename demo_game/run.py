@@ -1,13 +1,13 @@
 """
 Module: run
 Layer: demo_game (external client)
-Purpose: Scripted hackathon demo runner. Plays the exact docs/DEMO_SCRIPT.md
-         scenario end-to-end via the engine HTTP API.
+Purpose: Scripted hackathon demo runner. Plays the docs/DEMO_SCRIPT.md scenario
+         end-to-end via the engine HTTP API, covering all Phase 6 engine beats.
 
 Usage:
     make demo-run              # live run (calls LLM, warms cache)
     make demo-run ARGS=--dry-run    # print scene sequence, no API calls
-    make demo-run ARGS=--cached     # read-only cache; error on miss
+    make demo-run ARGS=--cached     # read-only cache; error on miss (recording)
 
 Requires:
     - docker-compose services running (make demo-seed already done)
@@ -22,12 +22,26 @@ import hashlib
 import json
 import sys
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from demo_game.client import EngineClient
 from demo_game.config import DemoConfig
+from demo_game.run_scenes import (
+    BribeScene,
+    ClockTick,
+    DialogueBeat,
+    EmotionDisplay,
+    EventFire,
+    MemoryConsolidate,
+    NarratorCue,
+    QuestDisplay,
+    ReputationDisplay,
+    Scene,
+    SeedCheck,
+    StreamingDialogueBeat,
+    WorldFeed,
+)
 from npc_engine.engines.dialogue.prompt_builder import PROMPT_VERSION as _PROMPT_VERSION
 
 # ---------------------------------------------------------------------------
@@ -40,12 +54,12 @@ CACHE_DIR = _REPO_ROOT / ".cache" / "demo"
 class LLMCache:
     """Hash-keyed disk cache for LLM dialogue responses.
 
-    Key: sha256(npc_id + player_input).  Value: raw dialogue response dict.
+    Key: sha256(npc_id + player_input + PROMPT_VERSION). Value: raw dialogue response dict.
     Cache miss with readonly=True raises CacheMissError.
     """
 
     class CacheMissError(RuntimeError):
-        pass
+        """Raised on a cache miss when --cached is set."""
 
     def __init__(self, readonly: bool = False) -> None:
         self.readonly = readonly
@@ -56,12 +70,14 @@ class LLMCache:
         return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
     def get(self, npc_id: str, player_input: str) -> dict[str, Any] | None:
+        """Return the cached response dict or None on miss."""
         path = CACHE_DIR / f"{self._key(npc_id, player_input)}.json"
         if path.exists():
             return json.loads(path.read_text())
         return None
 
     def put(self, npc_id: str, player_input: str, response: dict[str, Any]) -> None:
+        """Write a response to cache; raises CacheMissError if readonly."""
         if self.readonly:
             truncated = repr(player_input)[:40]
             raise LLMCache.CacheMissError(
@@ -73,105 +89,7 @@ class LLMCache:
 
 
 # ---------------------------------------------------------------------------
-# Scene definitions
-# ---------------------------------------------------------------------------
-@dataclass
-class Scene:
-    """A single scripted action in the demo timeline."""
-
-    name: str
-    delay_before_ms: int = 0
-
-
-@dataclass
-class NarratorCue(Scene):
-    """Print a narration cue to stdout (never calls the engine)."""
-
-    text: str = ""
-
-    def execute(self, runner: DemoRunner) -> None:
-        runner.print_cue(self.text)
-
-
-@dataclass
-class SeedCheck(Scene):
-    """Verify that a required KNOWS_ABOUT edge exists in the graph."""
-
-    npc_id: str = "captain_sorn"
-    required_edge_target: str = "northern_war_begins"
-
-    def execute(self, runner: DemoRunner) -> None:
-        runner.print_step(f"Verifying seed: {self.npc_id} KNOWS_ABOUT {self.required_edge_target}")
-        if runner.dry_run:
-            return
-        edge = runner.client.get_edge("KNOWS_ABOUT", self.npc_id, self.required_edge_target)
-        if edge is None:
-            raise RuntimeError(
-                f"{self.npc_id} missing KNOWS_ABOUT {self.required_edge_target}. "
-                "Run: make demo-seed"
-            )
-        runner.print_ok(f"{self.npc_id} has KNOWS_ABOUT {self.required_edge_target}")
-
-
-@dataclass
-class EventFire(Scene):
-    """Update world state to fire an event (epoch change + active conditions)."""
-
-    epoch: str = "war"
-    active_conditions: list[str] = field(default_factory=lambda: ["northern_war_active"])
-
-    def execute(self, runner: DemoRunner) -> None:
-        runner.print_step(f"Firing world event: epoch={self.epoch}")
-        if runner.dry_run:
-            return
-        runner.client.put_world_state(epoch=self.epoch, active_conditions=self.active_conditions)
-        runner.print_ok("World state updated")
-
-
-@dataclass
-class ClockTick(Scene):
-    """Advance the gossip clock by N ticks."""
-
-    delta_ticks: int = 1
-
-    def execute(self, runner: DemoRunner) -> None:
-        runner.print_step(f"Advancing gossip clock +{self.delta_ticks} tick(s)")
-        if runner.dry_run:
-            return
-        runner.client.advance_clock(delta_ticks=self.delta_ticks)
-        runner.print_ok("Clock advanced")
-
-
-@dataclass
-class DialogueBeat(Scene):
-    """Send a player dialogue line and print the NPC response (cached or live)."""
-
-    npc_id: str = ""
-    player_input: str = ""
-    label: str = ""
-
-    def execute(self, runner: DemoRunner) -> None:
-        display = self.label or self.npc_id
-        runner.print_step(f"Dialogue [{display}]: {self.player_input!r:.60}")
-        if runner.dry_run:
-            return
-
-        cached = runner.cache.get(self.npc_id, self.player_input)
-        if cached:
-            runner.print_ok(f"[cached] {display}: {cached.get('npc_response', '')[:80]}")
-            return
-
-        response = runner.client.post_dialogue(
-            player_id="player",
-            npc_id=self.npc_id,
-            player_message=self.player_input,
-        )
-        runner.cache.put(self.npc_id, self.player_input, response)
-        runner.print_ok(f"[live]   {display}: {response.get('npc_response', '')[:80]}")
-
-
-# ---------------------------------------------------------------------------
-# Scene list — fill in [FILL IN] values after docs/DEMO_SCRIPT.md is signed off
+# Scene list -- full Phase 6 coverage (all S6 engine beats)
 # ---------------------------------------------------------------------------
 SCENES: list[Scene] = [
     NarratorCue(
@@ -184,10 +102,14 @@ SCENES: list[Scene] = [
         npc_id="captain_sorn",
         required_edge_target="northern_war_begins",
     ),
+
+    # -----------------------------------------------------------------------
+    # ACT 1 -- Gossip chain (S6.0 + S6.4 streaming)
+    # -----------------------------------------------------------------------
     NarratorCue(
         name="pre_event_cue",
         delay_before_ms=1000,
-        text="[NARRATION] World is at peace. Captain Sorn knows something we don't -- yet.",
+        text="[ACT 1] World at peace. Captain Sorn knows something we don't -- yet.",
     ),
     EventFire(
         name="war_event",
@@ -195,15 +117,20 @@ SCENES: list[Scene] = [
         epoch="war",
         active_conditions=["northern_war_active"],
     ),
-    ClockTick(name="tick_1", delay_before_ms=1500, delta_ticks=1),
-    ClockTick(name="tick_2", delay_before_ms=1000, delta_ticks=1),
-    ClockTick(name="tick_3", delay_before_ms=1000, delta_ticks=1),
+    NarratorCue(
+        name="pre_tick_cue",
+        delay_before_ms=500,
+        text="[NARRATION] Clock advances. Gossip propagates: Sorn -> Mira -> Henryk.",
+    ),
+    ClockTick(name="tick_1", delay_before_ms=1000, delta_ticks=1),
+    ClockTick(name="tick_2", delay_before_ms=500, delta_ticks=1),
+    ClockTick(name="tick_3", delay_before_ms=500, delta_ticks=1),
     NarratorCue(
         name="pre_sorn_cue",
         delay_before_ms=1000,
-        text="[NARRATION] Ask Captain Sorn -- he has direct knowledge.",
+        text="[NARRATION] Ask Captain Sorn -- streaming dialogue, direct knowledge.",
     ),
-    DialogueBeat(
+    StreamingDialogueBeat(
         name="beat_1_sorn",
         delay_before_ms=500,
         npc_id="captain_sorn",
@@ -213,9 +140,9 @@ SCENES: list[Scene] = [
     NarratorCue(
         name="pre_mira_cue",
         delay_before_ms=2000,
-        text="[NARRATION] Now Mira -- she heard it second-hand.",
+        text="[NARRATION] Mira -- second-hand. Watch the faction name drift.",
     ),
-    DialogueBeat(
+    StreamingDialogueBeat(
         name="beat_2_mira",
         delay_before_ms=500,
         npc_id="mira_innkeeper",
@@ -225,54 +152,129 @@ SCENES: list[Scene] = [
     NarratorCue(
         name="pre_henryk_cue",
         delay_before_ms=2000,
-        text="[NARRATION] Old Henryk -- third hand. The story has travelled far.",
+        text="[NARRATION] Old Henryk -- third hand, fully garbled. Open the KNOWLEDGE sidebar.",
     ),
-    DialogueBeat(
+    StreamingDialogueBeat(
         name="beat_3_henryk",
         delay_before_ms=500,
         npc_id="old_henryk",
         label="Old Henryk",
         player_input="Henryk, I heard there was trouble up north?",
     ),
+
+    # -----------------------------------------------------------------------
+    # ACT 2 -- Quest + market fire + emotion change (S6.1)
+    # -----------------------------------------------------------------------
     NarratorCue(
-        name="sidebar_cue",
-        delay_before_ms=1500,
-        text="[NARRATION] Open the knowledge sidebar. Left: what Henryk thinks. Right: ground truth.",
+        name="pre_quest_cue",
+        delay_before_ms=2000,
+        text="[ACT 2] Engine-generated quest: Aldric wants the ancient amulet returned.",
+    ),
+    QuestDisplay(
+        name="quest_display",
+        delay_before_ms=500,
+        quest_id="aldric_deliver_quest",
     ),
     EventFire(
         name="market_fire",
-        delay_before_ms=3000,
+        delay_before_ms=2000,
         epoch="war",
         active_conditions=["northern_war_active", "market_fire_active"],
     ),
     NarratorCue(
         name="pre_aldric_cue",
         delay_before_ms=1000,
-        text="[NARRATION] Second event -- fire in Market Square. Watch Aldric's reaction.",
+        text="[NARRATION] Second event -- fire in Market Square. Aldric's emotion shifts.",
     ),
-    DialogueBeat(
+    StreamingDialogueBeat(
         name="beat_4_aldric",
         delay_before_ms=500,
         npc_id="aldric_merchant",
         label="Aldric",
         player_input="Aldric, are you alright? Was that fire near your stall?",
     ),
-    NarratorCue(
-        name="pre_lira_cue",
-        delay_before_ms=2000,
-        text="[NARRATION] Lira sees the same fire differently — same event, different emotion.",
+    EmotionDisplay(
+        name="aldric_emotion",
+        delay_before_ms=500,
+        npc_id="aldric_merchant",
     ),
-    DialogueBeat(
+
+    # -----------------------------------------------------------------------
+    # ACT 3 -- Bribe + political consequence (S6.2)
+    # -----------------------------------------------------------------------
+    NarratorCue(
+        name="pre_bribe_cue",
+        delay_before_ms=2000,
+        text="[ACT 3] Bribe Lira -- player pays 20g, standing with Thieves' Guild improves.",
+    ),
+    BribeScene(
+        name="bribe_lira",
+        delay_before_ms=500,
+        player_id="player_demo",
+        npc_id="lira_fence",
+        faction_id="thieves_guild",
+    ),
+    ReputationDisplay(
+        name="standing_after_bribe",
+        delay_before_ms=500,
+        player_id="player_demo",
+        faction_id="thieves_guild",
+    ),
+    NarratorCue(
+        name="lira_response_cue",
+        delay_before_ms=1000,
+        text="[NARRATION] Lira's response after the bribe -- same chaos, different tone.",
+    ),
+    StreamingDialogueBeat(
         name="beat_5_lira",
         delay_before_ms=500,
         npc_id="lira_fence",
         label="Lira",
-        player_input="Lira, did you hear about the fire? Seems like the kind of chaos that creates opportunity.",
+        player_input="Lira, did you hear about the fire? Seems like your kind of chaos.",
     ),
+
+    # -----------------------------------------------------------------------
+    # ACT 4 -- Memory recall (S6.3)
+    # -----------------------------------------------------------------------
+    NarratorCue(
+        name="pre_memory_cue",
+        delay_before_ms=2000,
+        text="[ACT 4] Memory consolidation -- Mira's session turns become a permanent Memory node.",
+    ),
+    MemoryConsolidate(
+        name="mira_memory",
+        delay_before_ms=500,
+        npc_id="mira_innkeeper",
+        player_id="player_demo",
+    ),
+
+    # -----------------------------------------------------------------------
+    # ACT 5 -- Military engine + WORLD feed (S6.5 + S6.0)
+    # -----------------------------------------------------------------------
+    NarratorCue(
+        name="pre_military_cue",
+        delay_before_ms=2000,
+        text=(
+            "[ACT 5] Military engine tick -- Iron Legion (strength 100) vs City Guard (60) "
+            "at the barracks. One clock advance resolves the battle."
+        ),
+    ),
+    ClockTick(name="military_tick", delay_before_ms=1000, delta_ticks=1),
+    NarratorCue(
+        name="pre_world_feed_cue",
+        delay_before_ms=500,
+        text="[NARRATION] WORLD feed -- battle event surfaced by the military engine.",
+    ),
+    WorldFeed(
+        name="world_feed_battle",
+        delay_before_ms=500,
+        limit=8,
+    ),
+
     NarratorCue(
         name="outro",
         delay_before_ms=1000,
-        text="=== Demo complete. 5 beats. Slides begin. ===",
+        text="=== Demo complete. 5 acts. All Phase 6 beats covered. Slides begin. ===",
     ),
 ]
 
@@ -304,12 +306,15 @@ class DemoRunner:
         print(f"\n[done] {elapsed:.1f}s elapsed")
 
     def print_step(self, msg: str) -> None:
+        """Print a step line."""
         print(f"  >  {msg}")
 
     def print_ok(self, msg: str) -> None:
+        """Print a result line."""
         print(f"  ok {msg}")
 
     def print_cue(self, msg: str) -> None:
+        """Print a narration bar."""
         bar = "-" * 60
         print(f"\n{bar}\n  {msg}\n{bar}")
 

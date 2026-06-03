@@ -37,13 +37,14 @@ Rules:
 
 ---
 
-## ISSUE-031: Military engine run_tick is a stub
+## [FIXED] ISSUE-031: Military engine run_tick is a stub
 **Found:** 2026-05-19, during Phase 7 L implementation
 **Severity:** P3 (nice-to-fix)
 **Where:** `src/npc_engine/engines/military/military_engine.py`
 **Description:** `MilitaryEngine.run_tick` returns `{"skipped": True}` with no logic. Battle resolution, resource yield, and depletion tracking are not implemented.
 **Why deferred:** User confirmed military tick logic should be deferred; engine is wired for future expansion.
 **To fix:** Implement battle resolution (opposing armies at same location → strength comparison, CONTROLS/OCCUPIES edge updates), resource yield (PRODUCES → faction.treasury per tick), and depletion tracking (ResourceNode.depletion decrement).
+**Fixed:** 2026-06-03, S6.5 — added `military_battle_service.py` (battle resolution: strength compare, set_controls_location, remove_controls_location, damage, battle Event); added `military_resource_service.py` (resource yield + depletion decrement); added 4 write helpers to `military_writer.py`; replaced stub `military_engine.py` with real orchestration. 21 new tests.
 
 ---
 
