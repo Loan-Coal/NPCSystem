@@ -1,36 +1,32 @@
 # Session Handoff
 
-**Branch:** `munich-demo`
-**Last completed:** S13.1 — Phases 11 & 12 + the codebase review committed as 4 atomic commits;
-working tree clean; `.cache/`, `.claude/`, `review-evidence/` gitignored. Tests green (1326 unit + 525 demo).
-**Next task:** **S13.2** — runtime config mutation (ISSUE-051). **Needs sign-off before coding:**
-adds a `RuntimeConfigStore` read by the autopilot loop + a public `PATCH /v1/system/config`
-(graph_admin scope, bounded values) + wires the dashboard Engines-tab inputs.
-**Roadmap ref:** `project-harness/ROADMAP.md` → Phase 13 → S13.2.
+**Branch:** `munich-demo` (local only — 0 pushed; 6 commits ahead of origin)
+**Last completed:** **Phase 13 — Clean-Slate Hygiene, COMPLETE.** S13.1 (committed Phases 11/12 + review),
+S13.2 dropped (DEC-055, ISSUE-051 won't-fix), S13.3 (doc-drift sweep — fixed military `__init__` stub
+docstring). Roadmap archived (Phases 0–13) and slimmed to Phase 14+.
+**Test baseline:** 1326 unit + 525 demo passing. `make lint`/`make type` are RED (SEV-15/25, remediation).
 
 ---
 
-## ⚠️ Strategic decision pending — review backlog vs. feature phases
+## Next task — a sequencing decision, then build
 
-The 2026-06-03 audit (now committed: `REVIEW_FINDINGS.md` + `review-fixes/`) returned **BLOCK**:
-43 findings (2 CRITICAL, 16 HIGH). The clean-slate is now *version-controlled* but **not healthy**:
+Phases 14–16 are planned in `ROADMAP.md` (forward roadmap). **But** the 2026-06-03 audit returned
+**BLOCK** (2 CRITICAL + 16 HIGH). Before starting Phase 14, decide:
 
-- **SEV-01 (CRITICAL):** anti-hallucination guarantee unmeasured (matchers pass on empty/fallback/
-  synonym/refusal; live eval 27/31). The headline moat is asserted, not proven.
-- **SEV-02 (CRITICAL):** `demo_game` imports `npc_engine` internals — not a standalone client.
-- **SEV-15/SEV-25 (HIGH):** `make lint` (38 ruff) + `make type` (254 mypy) red, not in CI → `make check` cannot pass.
-- **SEV-04/03/14/12/11 (HIGH):** layer erosion (Cypher in 16+ engines), prompt-injection surface,
-  `dict[Any,Any]` API boundary, no multi-tenant isolation, game cannot be won/lost.
+> **Phase the `review-fixes/` remediation backlog vs. the feature phases.**
 
-**Open question for the user:** the `review-fixes/` remediation backlog (Blocks A–F, dependency-ordered
-critical path in `review-fixes/INDEX.md`) very likely outranks the new-feature Phases 14–16. Recommend
-inserting a **Phase 13.5 / "Remediation"** block (start: SEV-15 → SEV-01 to prove the moat; SEV-02; the
-S-sized no-dep wins SEV-09/13/16/17/07) **before** Phase 14. Confirm sequencing before building features.
+Recommended first moves if remediation goes first (critical path from `review-fixes/INDEX.md`):
+`SEV-15` (green the lint/type gate) → `SEV-01` (prove the anti-hallucination moat — the headline claim) ‖
+`SEV-02` (make `demo_game` a real standalone client). Fastest no-dep wins: SEV-09, SEV-13, SEV-16, SEV-17, SEV-07.
+
+If features go first: **Phase 14** (proactive NPC dialogue) → 15 → 16; Phase 17 (SDKs) deferred.
+
+## Where things live
+- Forward roadmap: `project-harness/ROADMAP.md` (Phase 14 →).
+- Full history (Phases 0–13): `project-harness/proposals/archive/ROADMAP_through_phase13_2026-06-03.md`.
+- Remediation backlog: `project-harness/REVIEW_FINDINGS.md` + `project-harness/review-fixes/` (INDEX.md = critical path).
 
 ## Open issues
+- None active. ISSUE-051 closed won't-fix (DEC-055). **Next ID to use: ISSUE-052.**
 
-- **ISSUE-051** (P3): dashboard engine controls read-only → S13.2 (needs sign-off).
-
-**Next ID to use: ISSUE-052.**
-
-*Regenerated 2026-06-03 after S13.1.*
+*Regenerated 2026-06-03 after Phase 13 close + roadmap restructure.*

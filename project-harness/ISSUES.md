@@ -13,13 +13,14 @@ Rules:
 
 ## Open
 
-## ISSUE-051: Dashboard S12.4 engine cadence/cost controls are read-only (no live mutation)
+## [WONTFIX] ISSUE-051: Dashboard S12.4 engine cadence/cost controls are read-only (no live mutation)
 **Found:** 2026-06-03, during S12.4
 **Severity:** P3 (nice-to-fix)
 **Where:** `dashboard/js/engines.js`, `src/npc_engine/api/routes/system.py` (`/v1/system/config`)
 **Description:** The Engines tab displays runtime cadence/cost config + per-engine status but cannot change them. `Settings` is a frozen `lru_cache` singleton and the autopilot captures `interval_seconds`/`budget_guard` at construction in the lifespan, so there is no runtime-mutation path. See DEC-054.
 **Why deferred:** Live mutation requires a `RuntimeConfigStore` injected into the autopilot + a guarded write endpoint — a public-interface/scheduler change needing approval, out of scope for the read-only first slice.
 **To fix:** Add a `RuntimeConfigStore` read by the autopilot each loop for interval + LLM budget; expose `PATCH /v1/system/config` (graph_admin scope, bounded values); wire the dashboard inputs to it.
+**Closed:** 2026-06-03, S13.2 dropped (DEC-055) — deprioritized below the CRITICAL/HIGH review-remediation backlog; dashboard controls remain read-only. Reopen if a customer needs live tuning.
 
 ## [FIXED] ISSUE-050: test_put_world_state_success asserts id=="world" but client uses "world_demo"
 **Found:** 2026-06-03, during S7.2 test run

@@ -30,6 +30,15 @@ Rules:
 **Why:** Delivers the visible, buyer-facing surface now without a risky scheduler refactor mid-phase. Read-only config + live status is a legitimate first implementation of the tab.
 **Consequence:** When a customer needs live tuning, design a `RuntimeConfigStore` injected into the autopilot + a guarded `PATCH /v1/system/config` (admin scope), then wire the dashboard inputs to it.
 
+## DEC-055: S13.2 dropped; roadmap slimmed to Phase 14+ after the 2026-06-03 review
+**Date:** 2026-06-03
+**Context:** Phase 13 hygiene committed the finished Phase 11/12 work and surfaced `REVIEW_FINDINGS.md` (multi-agent audit, **BLOCK**, 43 findings incl. 2 CRITICAL). Two decisions followed.
+**Decisions:**
+- (1) **Drop S13.2** (runtime config mutation / ISSUE-051). It is a P3 scheduler-loop + public-`PATCH` change that needs sign-off, and it ranks below the CRITICAL/HIGH review-remediation backlog. ISSUE-051 closed won't-fix; dashboard controls stay read-only.
+- (2) **Archive + slim the roadmap.** Phases 0–13 (full history, audit, session log) snapshotted to `proposals/archive/ROADMAP_through_phase13_2026-06-03.md`; live `ROADMAP.md` reduced to Phase 14 onward + a remediation-backlog pointer to `review-fixes/`.
+**Why:** Keep the live roadmap a clean forward-planning surface; avoid building features (or a risky scheduler refactor) on a BLOCK-verdict base without first deciding remediation sequencing.
+**Consequence:** The `review-fixes/` backlog (FIX-SEV-01…18) is not yet phased — the next session owes a remediation-vs-feature sequencing decision before Phase 14 work begins.
+
 ## DEC-049: run.py split into run.py + run_scenes.py
 **Date:** 2026-06-03
 **Context:** S6.6 added 7 new scene classes and a fuller SCENES list. `run.py` was already ~353 lines (over the 300-line hard limit). Adding ~180 lines would push it to ~530.
