@@ -71,9 +71,16 @@ async def dialogue_ws(websocket: WebSocket) -> None:
             final_response = await handler.handle(request=request)
             for chunk in _iter_token_chunks(final_response.npc_response):
                 await websocket.send_json({"type": "token", "data": chunk})
-            await websocket.send_json({"type": "action", "data": final_response.action.model_dump()})
-            await websocket.send_json({"type": "expression", "data": final_response.facial_expression.model_dump()})
-            await websocket.send_json({"type": "done"})
+            await websocket.send_json({
+                "type": "done",
+                "data": {
+                    "degradation_level": final_response.degradation_level,
+                    "emotion": final_response.emotion,
+                    "relation_deltas": final_response.relation_deltas.model_dump(),
+                    "action": final_response.action.model_dump(),
+                    "facial_expression": final_response.facial_expression.model_dump(),
+                },
+            })
     except WebSocketDisconnect:
         return
     except Exception as error:

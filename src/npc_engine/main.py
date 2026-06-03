@@ -51,6 +51,7 @@ from npc_engine.api.routes.pledges import router as pledges_router
 from npc_engine.api.routes.treaties import router as treaties_router
 from npc_engine.api.routes.system import admin_router as system_admin_router
 from npc_engine.api.routes.system import router as system_router
+from npc_engine.api.routes.system import v1_router as system_v1_router
 from npc_engine.auth.middleware import ApiKeyMiddleware
 from npc_engine.api.dependency_singletons import (
     close_registered_llm_adapters,
@@ -237,6 +238,7 @@ def create_app() -> FastAPI:
     app.include_router(interaction_router, prefix=settings.API_V1_PREFIX)
     app.include_router(quest_router, prefix=settings.API_V1_PREFIX)
     app.include_router(clock_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(system_v1_router, prefix=settings.API_V1_PREFIX)
     app.include_router(graph_router, prefix=settings.API_V1_PREFIX)
     app.include_router(reputation_graph_router, prefix=settings.API_V1_PREFIX)
 
