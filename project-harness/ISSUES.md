@@ -13,6 +13,14 @@ Rules:
 
 ## Open
 
+## ISSUE-054: redundant `token_budget_enforcer.py` superseded by `fill_to_budget`
+**Found:** 2026-06-03, during SEV-07
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/retrieval/token_budget_enforcer.py` + `tests/unit/test_context_pipeline.py`
+**Description:** `enforce_budget` is not wired anywhere and silently drops Tier-A, contradicting the canonical `fill_to_budget` enforcer (see DEC-057). It and its tests are dead weight.
+**Why deferred:** Deleting a non-temporary file requires human approval per CLAUDE.md; out of scope for the SEV-07 bug fix.
+**To fix:** With approval, delete `token_budget_enforcer.py` and its `test_context_pipeline.py` tests; confirm no imports remain.
+
 ## ISSUE-052: 256 mypy type errors across 86 files (type gate red)
 **Found:** 2026-06-03, during the multi-agent codebase review (SEV-14/SEV-15)
 **Severity:** P2 (annoying)

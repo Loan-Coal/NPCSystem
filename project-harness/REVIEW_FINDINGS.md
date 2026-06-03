@@ -166,6 +166,7 @@ Effort: M.
 
 ---
 **FINDING [SEV-07]: `context_builder` silently drops mandatory Tier-A context instead of raising `TokenBudgetExceededError` (strict prompt-hygiene rule)**
+Status: FIXED 2026-06-03 — `fill_to_budget` now sums tier0+tierA and raises `TokenBudgetExceededError` on overflow; tier-A non-droppable; only B/C trimmed. DEC-057; redundant enforcer → ISSUE-054.
 Severity: HIGH · Confidence: Confirmed
 Category: prompt-quality / correctness
 Absorbs: ENG-03

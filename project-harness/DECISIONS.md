@@ -12,6 +12,16 @@ Rules:
 
 ---
 
+## DEC-057: `fill_to_budget` is the canonical token-budget enforcer; Tier0+TierA are non-droppable
+**Date:** 2026-06-03
+**Context:** SEV-07 — two enforcers existed: `context_budget_enforcer.fill_to_budget` (wired into `context_builder`, but it silently dropped mandatory Tier-A items when budget was tight) and `token_budget_enforcer.enforce_budget` (not wired; also dropped Tier-A). The strict rule requires raising `TokenBudgetExceededError` when Tier0+TierA alone exceed the budget — only Tier B/C may be trimmed.
+**Options considered:**
+- (A) Fix `fill_to_budget` to raise on mandatory overflow and delete `token_budget_enforcer.py`.
+- (B) Fix `fill_to_budget` only; leave the unused `token_budget_enforcer.py` in place.
+**Decision:** Option B for now. `fill_to_budget` is the canonical enforcer: it sums Tier0+TierA up front and raises `TokenBudgetExceededError` if they exceed `prompt_token_budget`; all Tier-A is included in full (no soft-cap dropping); only Tier B/C are greedily filled/trimmed, including the post-serialization overhead trim. `token_budget_enforcer.py` is left untouched because deleting a non-temporary file requires human approval per CLAUDE.md.
+**Why:** Mandatory identity/session context must never be silently truncated — silent loss drives hallucination and is near-undiagnosable (a SEV-01 contributor).
+**Consequence:** `token_budget_enforcer.py` (and its `test_context_pipeline.py` tests) is now redundant; logged as ISSUE-054 for deletion once approved.
+
 ## DEC-056: anti-hallucination guards auto-injected in the eval runner, not duplicated per-case
 **Date:** 2026-06-03
 **Context:** SEV-01 — every guard case (`case_adv_*`, `case_neg_*`) must PASS only when the NPC gives a substantive, non-canned, in-character answer. The brief listed adding `min_length`, a fallback `keyword_none`, and a positive `tone_judge` to all 23 guard cases.

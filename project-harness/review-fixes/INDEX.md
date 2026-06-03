@@ -15,9 +15,10 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - SEV-16 DONE: leaking routes (clock/debts/groups/quest_generation) now return static `error_response(...)` envelopes + log real detail via `get_logger`. Reuse this pattern for SEV-33 (one error envelope). Test: `tests/unit/test_route_error_redaction.py` (`_LEAK_TOKENS` guard).
 - SEV-17 DONE: dynamic labels in `graph_admin_service._hard_delete_node` + `quest_generation_engine._get_candidates` now wrap label in `cypher_identifier(...)` (quest-gen also via `resolve_node_label`, replacing buggy `.capitalize()`). When SEV-04 moves these into `graph/`, keep the wrap. Test: `tests/unit/test_cypher_label_injection.py`.
 - SEV-09 DONE: `gossip_handler.CYPHER_SELECT_EVENT` now returns `coalesce(e.is_canonical,false)` , excludes `k.knowledge_state='corrected'`, and orders canonical-first. When SEV-04 moves this query to `graph/gossip_queries.py`, preserve all three clauses. Tests: `tests/unit/test_gossip_event_selection.py` (query-structure guard, runs in CI) + `tests/integration/test_gossip_event_selection_integration.py` (skips w/o Neo4j).
+- SEV-07 DONE: `context_budget_enforcer.fill_to_budget` is canonical — sums tier0+tierA up front and `raise TokenBudgetExceededError` if > `prompt_token_budget`; all tier-A kept (no soft-cap drop); only tier B/C trimmed (incl. post-serialize overhead loop). Default FastAPI 500 (no body leak) is the API mapping. `token_budget_enforcer.py` left in place (ISSUE-054, delete needs approval; DEC-057). Tests: `test_context_budget_enforcer_v14.py`.
 - Hard ordering: **SEV-31 → SEV-04 → {SEV-08, SEV-17, SEV-30, SEV-12}**; **SEV-14 → SEV-15(type-gate)**.
-- Need my approval before starting (schema / DECISIONS): **SEV-10** (graph constraints), **SEV-12** (multi-tenant).
-- Debt tickets already logged: ISSUE-052 (mypy), ISSUE-053 (rule baseline). Next issue id: **ISSUE-054**.
+- Need my approval before starting: **SEV-05** (public-interface async change), **SEV-10** (graph constraints), **SEV-12** (multi-tenant). SEV-06 couples to SEV-05.
+- Debt tickets already logged: ISSUE-052 (mypy), ISSUE-053 (rule baseline), ISSUE-054 (delete redundant token_budget_enforcer). Next issue id: **ISSUE-055**.
 
 ## Ordered checklist
 
@@ -35,7 +36,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 ### Block C — concurrency & engine integrity
 - [ ] **FIX-SEV-05** — Lock `emotion_store`/`session_store` · HIGH · M · deps: coordinate public-interface change
 - [ ] **FIX-SEV-06** — Cap consolidation fan-out with a Semaphore · HIGH · M · deps: coordinate with SEV-05 (same path)
-- [ ] **FIX-SEV-07** — Raise `TokenBudgetExceededError` (no silent Tier-A drop) · HIGH · S · deps: none
+- [x] **FIX-SEV-07** — Raise `TokenBudgetExceededError` (no silent Tier-A drop) · HIGH · S · deps: none
 - [ ] **FIX-SEV-08** — Atomic, possession-checked quest rewards · HIGH · M · deps: SEV-04 (tx ownership)
 - [ ] **FIX-SEV-18** — Log-and-(re)raise instead of swallowing · HIGH · S · deps: gossip site couples to SEV-04
 

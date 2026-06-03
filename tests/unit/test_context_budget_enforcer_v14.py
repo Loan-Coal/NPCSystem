@@ -17,6 +17,7 @@ from npc_engine.retrieval.context_budget_enforcer import (
 )
 from npc_engine.retrieval.context_merger import ContextItem, MergedContext
 from npc_engine.schema.context_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
+from npc_engine.utils.errors import TokenBudgetExceededError
 
 
 def _llm_config() -> LLMConfig:
@@ -223,8 +224,8 @@ def _make_item(key: str, tier: str, priority: int, chars: int = 40) -> ContextIt
     return ContextItem(key=key, text=key[0] * chars, tier=tier, priority=priority)
 
 
-def test_fill_to_budget_tight_budget_includes_top_priority_tier_a_only() -> None:
-    """With a tight budget (800 tokens), only highest-priority tier_a items fit; no error raised."""
+def test_fill_to_budget_keeps_all_mandatory_tier_a_when_it_fits() -> None:
+    """Mandatory tier0+tierA are never dropped when they fit; tier_a is not soft-capped away."""
     context = MergedContext(
         items=[
             _make_item("world", "tier0", 100, chars=40),
@@ -243,12 +244,13 @@ def test_fill_to_budget_tight_budget_includes_top_priority_tier_a_only() -> None
     assert "world" in tier_keys
     assert "session" in tier_keys
     assert "character:npc_high" in tier_keys
+    assert "character:npc_low" in tier_keys  # mandatory tier_a is not dropped
     assert isinstance(serialized, str)
     assert len(serialized) > 0
 
 
-def test_fill_to_budget_never_raises_for_budget_overflow() -> None:
-    """fill_to_budget must not raise ContextBudgetError even when tier_a alone exceeds total budget."""
+def test_fill_to_budget_raises_when_mandatory_tier_a_exceeds_budget() -> None:
+    """fill_to_budget raises TokenBudgetExceededError when tier0+tierA alone exceed the budget."""
     context = MergedContext(
         items=[
             _make_item("world", "tier0", 100, chars=40),
@@ -257,9 +259,27 @@ def test_fill_to_budget_never_raises_for_budget_overflow() -> None:
     )
     llm_config = _llm_config_large()
 
-    filled, serialized = fill_to_budget(context=context, llm_config=llm_config, prompt_token_budget=800)
+    with pytest.raises(TokenBudgetExceededError):
+        fill_to_budget(context=context, llm_config=llm_config, prompt_token_budget=800)
 
-    assert any(item.tier == "tier0" for item in filled.items)
+
+def test_fill_to_budget_trims_tier_b_over_budget_without_raising() -> None:
+    """When only tier_b is over budget, it is trimmed and no error is raised."""
+    context = MergedContext(
+        items=[
+            _make_item("world", "tier0", 100, chars=40),
+            _make_item("session", "tierA", 95, chars=40),
+            _make_item("rag:1", "tierB", 20, chars=3200),
+            _make_item("rag:2", "tierB", 10, chars=3200),
+        ]
+    )
+    llm_config = _llm_config_large()
+
+    filled, serialized = fill_to_budget(context=context, llm_config=llm_config, prompt_token_budget=400)
+
+    tier_keys = {item.key for item in filled.items}
+    assert "world" in tier_keys
+    assert "session" in tier_keys
     assert isinstance(serialized, str)
 
 
@@ -286,8 +306,8 @@ def test_fill_to_budget_large_budget_includes_all_tiers() -> None:
     assert "rag:2" in tier_keys
 
 
-def test_fill_to_budget_tier_a_fraction_limits_tier_a_tokens() -> None:
-    """Reducing tier_a_fraction should cause lower-priority tier_a items to be dropped."""
+def test_fill_to_budget_tier_a_fraction_does_not_drop_mandatory_tier_a() -> None:
+    """tier_a_fraction must not drop mandatory tier_a context; all tier_a is kept when it fits."""
     from npc_engine.schema.context_config_models import TierBudgetTokens
 
     config_narrow_a = LLMConfig(
@@ -318,7 +338,8 @@ def test_fill_to_budget_tier_a_fraction_limits_tier_a_tokens() -> None:
 
     narrow_a_count = sum(1 for i in filled_narrow.items if i.tier == "tierA")
     wide_a_count = sum(1 for i in filled_wide.items if i.tier == "tierA")
-    assert narrow_a_count < wide_a_count
+    # Tier A is mandatory: a narrow tier_a_fraction does not drop it.
+    assert narrow_a_count == wide_a_count == 4
 
 
 def test_fill_to_budget_tier0_overflow_raises() -> None:
