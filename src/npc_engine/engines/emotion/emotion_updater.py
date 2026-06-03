@@ -9,6 +9,11 @@ Dependencies injected: EmotionStore.
 from npc_engine.engines.emotion.emotion_state import EmotionState, derive_label
 from npc_engine.engines.emotion.emotion_store import EmotionStore
 
+_SHOCK_VALENCE_DIVISOR = 3
+_SHOCK_VALENCE_CAP = 30
+_SHOCK_AROUSAL_DIVISOR = 2
+_SHOCK_AROUSAL_CAP = 40
+
 
 class EmotionUpdater:
     """Service that updates stored emotion states."""
@@ -58,6 +63,33 @@ class EmotionUpdater:
             Stored EmotionState, or a neutral default if none has been set.
         """
         return self._store.get(npc_id=npc_id)
+
+    def apply_event_shock(self, npc_id: str, severity: int) -> EmotionState:
+        """Apply an emotional shock when an NPC receives a high-severity rumour or event.
+
+        Decreases valence and increases arousal proportionally to event severity,
+        pushing the NPC toward "agitated" or "melancholic". The effect is bounded
+        so a single event cannot force an extreme state.
+
+        Args:
+            npc_id: Unique identifier of the NPC.
+            severity: Event severity 0–100; values below 50 produce small shifts.
+
+        Returns:
+            The newly computed and stored EmotionState.
+        """
+        previous = self._store.get(npc_id=npc_id)
+        valence_delta = min(_SHOCK_VALENCE_CAP, severity // _SHOCK_VALENCE_DIVISOR)
+        arousal_delta = min(_SHOCK_AROUSAL_CAP, severity // _SHOCK_AROUSAL_DIVISOR)
+        new_valence = max(-100, previous.valence - valence_delta)
+        new_arousal = min(100, previous.arousal + arousal_delta)
+        next_state = EmotionState(
+            valence=new_valence,
+            arousal=new_arousal,
+            label=derive_label(new_valence, new_arousal),
+        )
+        self._store.set(npc_id=npc_id, state=next_state)
+        return next_state
 
     def _decay(self, state: EmotionState) -> EmotionState:
         valence = state.valence

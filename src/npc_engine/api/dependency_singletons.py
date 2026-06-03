@@ -137,6 +137,7 @@ def get_gossip_handler() -> GossipHandler:
         settings=settings,
         embedding_index=get_embedding_index(),
         weight_config=load_gossip_config(),
+        emotion_updater=get_emotion_updater(),
     )
 
 

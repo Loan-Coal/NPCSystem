@@ -108,6 +108,11 @@ class Settings(BaseSettings):
 
     WORLD_ID: str = "world_demo"
 
+    TTS_ENABLED: bool = False
+    TTS_BACKEND: Literal["piper", "mock"] = "piper"
+    PIPER_BASE_URL: str = "http://localhost:5000"
+    TTS_TIMEOUT_SECONDS: float = Field(default=10.0, gt=0)
+
     CLOCK_MODE: Literal["realtime", "game_driven"] = "realtime"
 
     CONSOLIDATION_TURN_THRESHOLD: int = 10
@@ -135,6 +140,7 @@ class Settings(BaseSettings):
     CROSS_ENCODER_ENABLED: bool = False
     GRAPH_RAG_ENABLED: bool = False
     RUMOR_DISTORTION_THRESHOLD: int = 50
+    RUMOR_EMOTION_SEVERITY_THRESHOLD: int = 50
 
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     LOG_LLM_PROMPTS: bool = False

@@ -282,6 +282,14 @@ class ScheduleAssignmentError(StructuredNPCSystemError):
     detail: str
 
 
+@dataclass(frozen=True)
+class TTSSynthesisError(StructuredNPCSystemError):
+    """Raised when a TTS backend returns an error or times out during synthesis."""
+
+    backend: str
+    detail: str
+
+
 class TokenBudgetExceededError(Exception):
     """Raised when mandatory tier0 context alone exceeds the token budget."""
 

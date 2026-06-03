@@ -45,6 +45,8 @@ from npc_engine.api.routes.causality import router as causality_router
 from npc_engine.api.routes.witnessed import router as witnessed_router
 from npc_engine.api.routes.groups import router as groups_router
 from npc_engine.api.routes.rumors import router as rumors_router
+from npc_engine.api.routes.gossip_spread import router as gossip_spread_router
+from npc_engine.api.routes.rumor_trace import router as rumor_trace_router
 from npc_engine.api.routes.skills import router as skills_router
 from npc_engine.api.routes.traits import router as traits_router
 from npc_engine.api.routes.pledges import router as pledges_router
@@ -262,6 +264,8 @@ def create_app() -> FastAPI:
     app.include_router(witnessed_router, prefix=admin_prefix)
     app.include_router(groups_router, prefix=admin_prefix)
     app.include_router(rumors_router, prefix=admin_prefix)
+    app.include_router(gossip_spread_router, prefix=admin_prefix)
+    app.include_router(rumor_trace_router, prefix=admin_prefix)
     app.include_router(skills_router, prefix=admin_prefix)
     app.include_router(traits_router, prefix=admin_prefix)
     app.include_router(pledges_router, prefix=admin_prefix)

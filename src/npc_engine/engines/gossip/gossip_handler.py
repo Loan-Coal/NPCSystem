@@ -6,10 +6,13 @@ Does NOT: run global scheduling loops.
 Dependencies injected: AsyncSession, Settings, GossipWeightConfig, EmbeddingIndex.
 """
 
-from neo4j import AsyncSession
+from __future__ import annotations
+
 import asyncio
 import logging
 import random
+
+from neo4j import AsyncSession
 
 from npc_engine.config import Settings
 from npc_engine.engines.embedding_invalidation import invalidate_embedding_safely
@@ -25,6 +28,11 @@ from npc_engine.engines.gossip.knowledge_propagator import (
 from npc_engine.engines.gossip.pair_selector import select_pairs
 from npc_engine.graph.rumor_service import believe_rumor, create_rumor
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
 
 
 LOGGER = logging.getLogger(__name__)
@@ -60,18 +68,22 @@ class GossipHandler:
         settings: Settings,
         embedding_index: EmbeddingIndex,
         weight_config: GossipWeightConfig,
+        emotion_updater: EmotionUpdater | None = None,
     ) -> None:
         """Initialise the gossip handler.
 
         Args:
-            settings: Application settings (GOSSIP_DISTORTION_BASE).
+            settings: Application settings (GOSSIP_DISTORTION_BASE, RUMOR_EMOTION_SEVERITY_THRESHOLD).
             embedding_index: Vector index used to invalidate receiver embeddings after gossip.
             weight_config: Faction weight multipliers for pair selection and distortion.
+            emotion_updater: Optional emotion updater; when supplied, receivers of high-severity
+                events have their emotion state shocked toward agitated/melancholic.
         """
 
         self._settings = settings
         self._embedding_index = embedding_index
         self._weight_config = weight_config
+        self._emotion_updater = emotion_updater
         self._lock = asyncio.Lock()
 
     async def run_tick(
@@ -116,11 +128,12 @@ class GossipHandler:
                 trust_record = await trust_result.single()
                 trust = int(trust_record["trust"]) if trust_record is not None else 50
                 best_standing: int | None = faction_ctx.get("best_standing")
+                severity_int = int(event_record["severity"])
                 distortion = gossip_distort(
                     event_summary=str(event_record["summary"]),
                     sharer_honesty=int(sharer.get("honesty", 50)),
                     sharer_receiver_trust=trust,
-                    event_severity=int(event_record["severity"]),
+                    event_severity=severity_int,
                     tick_id=tick_id,
                     distortion_base=self._settings.GOSSIP_DISTORTION_BASE,
                     faction_standing=best_standing,
@@ -143,7 +156,7 @@ class GossipHandler:
                             content=distortion.summary,
                             origin_event_id=event_id,
                             created_at_tick=tick_id,
-                            severity=int(event_record["severity"]),
+                            severity=severity_int,
                             is_fabricated=False,
                         )
                         await believe_rumor(
@@ -156,6 +169,21 @@ class GossipHandler:
                         )
                     except Exception:
                         LOGGER.exception("Failed to record rumor for event %s", event_id)
+                if (
+                    self._emotion_updater is not None
+                    and severity_int >= self._settings.RUMOR_EMOTION_SEVERITY_THRESHOLD
+                ):
+                    self._emotion_updater.apply_event_shock(
+                        npc_id=receiver["id"],
+                        severity=severity_int,
+                    )
+                    LOGGER.info(
+                        "emotion_shock npc_id=%s severity=%d tick=%d",
+                        receiver["id"],
+                        severity_int,
+                        tick_id,
+                    )
+
                 trust_delta = 1 if distortion.distortion_type is None else -1
                 await log_gossip(
                     session=session,

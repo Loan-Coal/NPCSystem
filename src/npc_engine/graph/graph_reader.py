@@ -24,6 +24,7 @@ RETURN properties(c) AS character,
 CYPHER_GET_EVENTS_FOR_NPC = """
 MATCH (c:Character {id: $npc_id})-[k:KNOWS_ABOUT]->(e:Event)
 WHERE c.is_active = true
+  AND (k.knowledge_state IS NULL OR k.knowledge_state <> 'corrected')
 RETURN properties(e) AS event,
        k.knowledge_state AS knowledge_state,
        k.distorted_summary AS distorted_summary
@@ -211,3 +212,28 @@ def _to_native(value: Any) -> Any:
             return value
 
     return value
+
+
+_CYPHER_GET_VOICE_DESCRIPTOR = """
+MATCH (c:Character {id: $npc_id})
+RETURN c.voice_descriptor AS voice_descriptor
+"""
+
+
+async def get_npc_voice_descriptor(session: AsyncSession, npc_id: str) -> str | None:
+    """Return the voice_descriptor property for an NPC, or None if unset.
+
+    Args:
+        session: Active Neo4j async session.
+        npc_id: Stable NPC identifier.
+
+    Returns:
+        voice_descriptor string from the Character node, or None if the node
+        is absent or the property is not set.
+    """
+    result = await session.run(_CYPHER_GET_VOICE_DESCRIPTOR, {"npc_id": npc_id})
+    record = await result.single()
+    await result.consume()
+    if record is None:
+        return None
+    return record["voice_descriptor"]
