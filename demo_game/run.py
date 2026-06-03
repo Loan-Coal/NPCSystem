@@ -30,15 +30,19 @@ from demo_game.config import DemoConfig
 from demo_game.run_scenes import (
     BribeScene,
     ClockTick,
+    CorrectRumorScene,
     DialogueBeat,
     EmotionDisplay,
     EventFire,
     MemoryConsolidate,
     NarratorCue,
+    PropagatedReputationAct,
     QuestDisplay,
     ReputationDisplay,
+    RumorTraceDisplay,
     Scene,
     SeedCheck,
+    SpreadRumorScene,
     StreamingDialogueBeat,
     WorldFeed,
 )
@@ -271,10 +275,142 @@ SCENES: list[Scene] = [
         limit=8,
     ),
 
+    # -----------------------------------------------------------------------
+    # ACT 6 -- Networked reputation (S8.3)
+    # -----------------------------------------------------------------------
+    NarratorCue(
+        name="pre_rep_act_cue",
+        delay_before_ms=2000,
+        text=(
+            "[ACT 6] Networked reputation. Player commits a notable act at Market Square. "
+            "Gossip carries it to the Tavern. Mira has never met you -- but she heard."
+        ),
+    ),
+    PropagatedReputationAct(
+        name="rep_act_market",
+        delay_before_ms=500,
+        player_id="player_demo",
+    ),
+    ReputationDisplay(
+        name="standing_after_rep_act",
+        delay_before_ms=500,
+        player_id="player_demo",
+        faction_id="merchants_guild",
+    ),
+    NarratorCue(
+        name="pre_rep_propagate_cue",
+        delay_before_ms=1000,
+        text="[NARRATION] Clock advances. Gossip tick propagates the reputation event to the tavern.",
+    ),
+    ClockTick(name="rep_tick_1", delay_before_ms=500, delta_ticks=1),
+    ClockTick(name="rep_tick_2", delay_before_ms=500, delta_ticks=1),
+    ClockTick(name="rep_tick_3", delay_before_ms=500, delta_ticks=1),
+    NarratorCue(
+        name="pre_mira_rep_cue",
+        delay_before_ms=1000,
+        text=(
+            "[NARRATION] Player travels to the Tavern. Mira has no direct standing edge "
+            "with this player. Watch context.propagated_reputation fire Rule 12."
+        ),
+    ),
+    StreamingDialogueBeat(
+        name="beat_6_mira_propagated",
+        delay_before_ms=500,
+        npc_id="mira_innkeeper",
+        label="Mira (propagated rep)",
+        player_input="Good evening. First time in your establishment.",
+    ),
+
+    # -----------------------------------------------------------------------
+    # ACT 7 -- Rumor warfare: plant → propagate → correct → verify (S10.4)
+    # -----------------------------------------------------------------------
+    NarratorCue(
+        name="pre_rumor_arc_cue",
+        delay_before_ms=2000,
+        text=(
+            "[ACT 7] Rumor warfare. Plant a lie with Lira. "
+            "Watch it drift to Mira. Correct it at the source. "
+            "Old Henryk still believes it."
+        ),
+    ),
+    SpreadRumorScene(
+        name="plant_rumor",
+        delay_before_ms=500,
+        target_npc_id="lira_fence",
+        rumor_text=(
+            "A hooded stranger was seen leaving the castle gates "
+            "at midnight carrying stolen gold."
+        ),
+        severity=70,
+    ),
+    NarratorCue(
+        name="pre_propagate_cue",
+        delay_before_ms=1000,
+        text="[NARRATION] Clock advances +2. Gossip engine propagates the lie to Mira.",
+    ),
+    ClockTick(name="rumor_tick_1", delay_before_ms=500, delta_ticks=1),
+    ClockTick(name="rumor_tick_2", delay_before_ms=500, delta_ticks=1),
+    RumorTraceDisplay(
+        name="trace_after_propagate",
+        delay_before_ms=500,
+    ),
+    NarratorCue(
+        name="pre_mira_rumor_cue",
+        delay_before_ms=1000,
+        text="[NARRATION] Mira references the lie. Rule 5 knowledge guard: she KNOWS_ABOUT it.",
+    ),
+    StreamingDialogueBeat(
+        name="beat_mira_believes_rumor",
+        delay_before_ms=500,
+        npc_id="mira_innkeeper",
+        label="Mira (believes rumor)",
+        player_input="Mira, I heard some strange news about the castle last night...",
+    ),
+    NarratorCue(
+        name="pre_correct_cue",
+        delay_before_ms=2000,
+        text="[NARRATION] Player corrects the lie at Mira. Her belief is now 'corrected'.",
+    ),
+    CorrectRumorScene(
+        name="correct_at_mira",
+        delay_before_ms=500,
+        npc_id="mira_innkeeper",
+    ),
+    NarratorCue(
+        name="pre_mira_corrected_cue",
+        delay_before_ms=1000,
+        text="[NARRATION] Same question — corrected edge excluded from context. Mira no longer knows.",
+    ),
+    StreamingDialogueBeat(
+        name="beat_mira_corrected",
+        delay_before_ms=500,
+        npc_id="mira_innkeeper",
+        label="Mira (corrected)",
+        player_input="Mira, what do you make of that business at the castle last night?",
+    ),
+    NarratorCue(
+        name="pre_henryk_still_believes_cue",
+        delay_before_ms=2000,
+        text=(
+            "[NARRATION] Old Henryk is DOWNSTREAM. His edge is not corrected. "
+            "He still believes it. Correction is LOCAL — the graph proves it."
+        ),
+    ),
+    StreamingDialogueBeat(
+        name="beat_henryk_downstream",
+        delay_before_ms=500,
+        npc_id="old_henryk",
+        label="Old Henryk (downstream — still believes)",
+        player_input="Henryk, did you hear anything odd about the castle guards recently?",
+    ),
+
     NarratorCue(
         name="outro",
         delay_before_ms=1000,
-        text="=== Demo complete. 5 acts. All Phase 6 beats covered. Slides begin. ===",
+        text=(
+            "=== Demo complete. 7 acts. "
+            "Phase 6 + Phase 8 networked reputation + Phase 10 rumor warfare covered. ==="
+        ),
     ),
 ]
 

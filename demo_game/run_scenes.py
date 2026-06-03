@@ -5,6 +5,8 @@ Purpose: All Scene subclass definitions for the scripted demo runner. Extracted
          from run.py to keep each file under the 300-line limit.
 Dependencies: demo_game.client, demo_game.dialogue_ws, demo_game.constants
 Used by: demo_game.run
+
+Note: file intentionally exceeds 300-line limit — see DEC-051.
 """
 
 from __future__ import annotations
@@ -14,7 +16,13 @@ import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from demo_game.constants import BRIBE_GOLD_COST, BRIBE_STANDING_GAIN
+from demo_game.constants import (
+    BRIBE_GOLD_COST,
+    BRIBE_STANDING_GAIN,
+    PROPAGATED_REP_DELTA,
+    PROPAGATED_REP_FACTION,
+    PROPAGATED_REP_LOCATION,
+)
 from demo_game.dialogue_ws import dialogue_ws_worker
 
 if TYPE_CHECKING:
@@ -362,3 +370,140 @@ class WorldFeed(Scene):
             summary = evt.get("summary", "?")[:70]
             tick = evt.get("tick_id", "?")
             runner.print_ok(f"[world tick={tick}] {etype}: {summary}")
+
+
+# ---------------------------------------------------------------------------
+# Propagated reputation (S8.3)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PropagatedReputationAct(Scene):
+    """Commit a notable act at a location, seeding a gossip-propagatable reputation event.
+
+    Calls the /adjust endpoint with location_id + tick_id so the engine creates a
+    reputation_change Event node and seeds KNOWS_ABOUT edges for co-located NPCs.
+    After a few clock ticks, distant NPCs (e.g. mira_innkeeper at loc_tavern) will
+    receive the event via gossip propagation and greet the player accordingly.
+    """
+
+    player_id: str = "player_demo"
+    faction_id: str = PROPAGATED_REP_FACTION
+    delta: int = PROPAGATED_REP_DELTA
+    location_id: str = PROPAGATED_REP_LOCATION
+
+    def execute(self, runner: DemoRunner) -> None:
+        """Adjust standing + seed reputation event; print new standing and tick_id used."""
+        runner.print_step(
+            f"[act] {self.player_id} {self.delta:+d} standing with {self.faction_id} "
+            f"at {self.location_id} (gossip event seeded)"
+        )
+        if runner.dry_run:
+            return
+
+        clock = runner.client.get_clock_state()
+        tick_id: int = clock.get("data", {}).get("current_tick", 1)
+
+        result = runner.client.adjust_npc_reputation(
+            self.player_id, self.faction_id, self.delta, self.location_id, tick_id
+        )
+        new_standing = result.get("data", {}).get("standing", "?")
+        runner.print_ok(
+            f"[reputation] {self.faction_id}: standing={new_standing} "
+            f"(reputation_change event at {self.location_id}, tick={tick_id})"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Rumor gameplay arc (S10.4)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SpreadRumorScene(Scene):
+    """Plant a fabricated rumor into target_npc_id and capture the returned event_id.
+
+    The event_id is stored on the runner as ``runner.planted_event_id`` so subsequent
+    scenes (RumorTraceDisplay, CorrectRumorScene) can reference the same event.
+    """
+
+    target_npc_id: str = "lira_fence"
+    rumor_text: str = ""
+    severity: int = 70
+
+    def execute(self, runner: DemoRunner) -> None:
+        """POST /v1/admin/gossip/spread and capture event_id on runner."""
+        runner.print_step(
+            f"[rumor] Planting lie at {self.target_npc_id!r}: {self.rumor_text!r:.60}"
+        )
+        if runner.dry_run:
+            return
+
+        clock = runner.client.get_clock_state()
+        tick_id: int = clock.get("data", {}).get("current_tick", 0)
+
+        resp = runner.client.spread_rumor(
+            target_npc_id=self.target_npc_id,
+            rumor_text=self.rumor_text,
+            severity=self.severity,
+            tick_id=tick_id,
+        )
+        event_id: str = resp.get("data", {}).get("event_id", "")
+        runner.planted_event_id = event_id  # type: ignore[attr-defined]
+        runner.print_ok(f"[rumor] Planted — event_id={event_id!r} tick={tick_id}")
+
+
+@dataclass
+class RumorTraceDisplay(Scene):
+    """Print the propagation chain for the most recently planted rumor.
+
+    Reads ``runner.planted_event_id`` set by SpreadRumorScene.
+    """
+
+    def execute(self, runner: DemoRunner) -> None:
+        """GET /v1/admin/gossip/trace/{event_id} and print the chain."""
+        runner.print_step("[rumor] Tracing propagation chain")
+        if runner.dry_run:
+            return
+
+        event_id: str = getattr(runner, "planted_event_id", "")
+        if not event_id:
+            runner.print_ok("[rumor] No planted_event_id on runner — skipping trace")
+            return
+
+        resp = runner.client.trace_rumor(event_id)
+        chain: list[dict] = resp.get("data", {}).get("chain", [])
+        if not chain:
+            runner.print_ok("[rumor] Chain empty — rumor has not propagated yet")
+            return
+        for hop in chain:
+            npc = hop.get("npc_id", "?")
+            tick = hop.get("learned_at_tick", "?")
+            state = hop.get("knowledge_state") or "believed"
+            runner.print_ok(f"  hop: {npc} (tick={tick}, state={state})")
+
+
+@dataclass
+class CorrectRumorScene(Scene):
+    """Mark one NPC's belief in the planted rumor as corrected.
+
+    Reads ``runner.planted_event_id`` set by SpreadRumorScene.
+    Corrected NPCs no longer reference the lie in dialogue; downstream NPCs are unaffected.
+    """
+
+    npc_id: str = "mira_innkeeper"
+
+    def execute(self, runner: DemoRunner) -> None:
+        """POST /v1/admin/gossip/correct for npc_id + planted event_id."""
+        runner.print_step(f"[rumor] Correcting belief at {self.npc_id!r}")
+        if runner.dry_run:
+            return
+
+        event_id: str = getattr(runner, "planted_event_id", "")
+        if not event_id:
+            runner.print_ok("[rumor] No planted_event_id on runner — skipping correction")
+            return
+
+        resp = runner.client.correct_rumor(npc_id=self.npc_id, event_id=event_id)
+        corrected: bool = resp.get("data", {}).get("corrected", False)
+        runner.print_ok(
+            f"[rumor] {self.npc_id} corrected={corrected} (event_id={event_id!r})"
+        )
