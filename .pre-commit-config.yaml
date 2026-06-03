@@ -1,0 +1,37 @@
+# Pre-commit gates for the NPC Engine.
+#   Install once:  pip install pre-commit && pre-commit install && pre-commit install --hook-type pre-push
+# Fast checks run on `git commit`; the slower mypy ratchet runs on `git push`.
+# These mirror the CI gates so failures surface locally, before CI.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.13.0
+    hooks:
+      - id: ruff            # lint (auto-fixes what it can)
+        args: [--fix]
+        files: ^src/
+      - id: ruff-format     # format
+        files: ^src/
+
+  - repo: local
+    hooks:
+      - id: check-rules
+        name: CLAUDE.md rule gate (file-size / print / swallow / cypher-leak / demo-import)
+        entry: python scripts/check_rules.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-harness
+        name: harness honesty (docs vs gates)
+        entry: python scripts/check_harness_honesty.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: mypy-ratchet
+        name: mypy error ratchet (count may not rise)
+        entry: python scripts/mypy_ratchet.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

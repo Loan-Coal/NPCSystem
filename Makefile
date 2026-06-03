@@ -13,6 +13,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         test-v13-contracts test-v13-graph-admin test-v13-retrieval \
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
+        check-rules check-rules-update type-ratchet type-ratchet-update check-harness \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval eval-report eval-e2e scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
@@ -38,7 +39,7 @@ test-cov-v13:
 	$(PYTHON) -m pytest -q tests/unit/test_schema_loader.py tests/unit/test_v1_route_versioning.py tests/unit/test_embedding_reconciler.py tests/unit/test_main_reconciler_lifespan.py tests/unit/test_schema_resolvers.py --cov=src/npc_engine/schema --cov=src/npc_engine/retrieval/embedding_reconciler --cov-report=term-missing --cov-fail-under=80
 
 test-cov-full-report:
-	$(PYTHON) -m pytest -q tests/ --cov=npc_engine --cov-report=term-missing
+	$(PYTHON) -m pytest -q tests/ --cov=npc_engine --cov=evals --cov-report=term-missing
 
 test-v13-contracts:
 	$(PYTHON) -m pytest -q tests/unit/test_schema_loader.py tests/unit/test_v1_route_versioning.py tests/unit/test_auth_permissions_v13.py
@@ -80,7 +81,30 @@ lint:
 type:
 	$(PYTHON) -m mypy src/
 
-check: lint type test
+# --- Ratcheted gates (debt may shrink, never grow) -------------------------
+# check-rules: enforce the strict CLAUDE.md rules; fails only on NEW violations
+# vs scripts/rules_baseline.txt. Run check-rules-update after fixing some to lock it in.
+check-rules:
+	$(PYTHON) scripts/check_rules.py
+
+check-rules-update:
+	$(PYTHON) scripts/check_rules.py --update-baseline
+
+# type-ratchet: fail if mypy error count rose above .mypy_baseline (currently 256).
+# Fix errors to drive it down, then run type-ratchet-update.
+type-ratchet:
+	$(PYTHON) scripts/mypy_ratchet.py
+
+type-ratchet-update:
+	$(PYTHON) scripts/mypy_ratchet.py --update
+
+# check-harness: fail when the harness docs contradict the live gates.
+check-harness:
+	$(PYTHON) scripts/check_harness_honesty.py
+
+# check: the single canonical health gate. Same command locally and in CI.
+# Uses the ratchets so it is runnable today despite existing lint/type debt.
+check: lint check-rules type-ratchet check-harness test-cov
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 
