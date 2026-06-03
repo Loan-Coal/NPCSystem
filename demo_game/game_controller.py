@@ -10,8 +10,9 @@ Dependencies: demo_game.action_workers, demo_game.dialogue_ws, demo_game.client,
               npc_engine.engines.interaction
 Used by: demo_game.ui.game_window
 
-NOTE: ~380 lines — accepted over the 300-line limit (see DEC-048). S6.4 added
-WS streaming (~40 lines). GameController is a single cohesive class; splitting
+NOTE: ~535 lines — accepted over the 300-line limit (see DEC-048, DEC-052). S6.4
+added WS streaming (~40 lines); S10.3 added correct-rumor queue/spawn/poll and
+event_id tracking (~35 lines). GameController is a single cohesive class; splitting
 individual action queues would add indirection without clarity gains.
 """
 
@@ -23,13 +24,16 @@ import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable
 
+from demo_game.audio_player import play_audio_bytes
 from demo_game.action_workers import (
     bribe_worker,
     consolidate_memory_worker,
+    correct_rumor_worker,
     dialogue_worker,
     fetch_sidebar_worker,
     generate_quest_worker,
     inspect_worker,
+    spread_rumor_worker,
     travel_worker,
 )
 from demo_game.dialogue_ws import dialogue_ws_worker
@@ -104,6 +108,9 @@ class GameController:
         self._travel_q: queue.Queue = queue.Queue()
         self._bribe_q: queue.Queue = queue.Queue()
         self._consolidate_memory_q: queue.Queue = queue.Queue()
+        self._spread_rumor_q: queue.Queue = queue.Queue()
+        self._correct_rumor_q: queue.Queue = queue.Queue()
+        self._last_planted_event_id: str = ""
         self._is_waiting = False
         self._pending_npc_id: str | None = None
         self._last_submitted_message: str = ""
@@ -213,6 +220,29 @@ class GameController:
             daemon=True,
         ).start()
 
+    def spawn_spread_rumor(self, npc_id: str) -> None:
+        """Launch a background thread to plant the default rumor at npc_id."""
+        threading.Thread(
+            target=spread_rumor_worker,
+            args=(self._client, npc_id, self._spread_rumor_q),
+            daemon=True,
+        ).start()
+
+    def spawn_correct_rumor(self, npc_id: str) -> None:
+        """Launch a background thread to correct the last planted rumor at npc_id.
+
+        No-op with a status message if no rumor has been planted this session.
+        """
+        if not self._last_planted_event_id:
+            if self._cb.on_set_status:
+                self._cb.on_set_status("No rumor planted yet — use [Spread Rumor] first", 2.0)
+            return
+        threading.Thread(
+            target=correct_rumor_worker,
+            args=(self._client, npc_id, self._last_planted_event_id, self._correct_rumor_q),
+            daemon=True,
+        ).start()
+
     def spawn_bribe(self, npc_id: str) -> None:
         """Launch a background thread to bribe the selected NPC's faction.
 
@@ -273,6 +303,9 @@ class GameController:
                 "relation_deltas": metadata.get("relation_deltas") or {},
             }
             self._stream_text = ""
+            audio_bytes = metadata.get("audio_bytes")
+            if audio_bytes:
+                play_audio_bytes(audio_bytes)
             turn: DialogueTurn = parse_dialogue_response(fake_raw)
             color = degradation_color(turn.degradation_level)
             if self._cb.on_stream_done:
@@ -372,6 +405,32 @@ class GameController:
                 on_created(memory_id)
         elif item[0] == "err" and self._cb.on_set_status:
             self._cb.on_set_status(f"Consolidate failed: {item[2]}", 2.0)
+
+    def poll_spread_rumor_queue(self) -> None:
+        """Drain one spread-rumor result, cache the event_id, and update status bar."""
+        try:
+            item = self._spread_rumor_q.get_nowait()
+        except queue.Empty:
+            return
+        if item[0] == "ok":
+            npc_id, event_id = item[1], item[2]
+            self._last_planted_event_id = event_id
+            if self._cb.on_set_status:
+                self._cb.on_set_status(f"Rumor planted at {npc_id} ({event_id})", 3.0)
+        elif item[0] == "err" and self._cb.on_set_status:
+            self._cb.on_set_status(f"Spread rumor failed: {item[2]}", 2.0)
+
+    def poll_correct_rumor_queue(self) -> None:
+        """Drain one correct-rumor result and update status bar."""
+        try:
+            item = self._correct_rumor_q.get_nowait()
+        except queue.Empty:
+            return
+        if item[0] == "ok" and self._cb.on_set_status:
+            npc_id, event_id = item[1], item[2]
+            self._cb.on_set_status(f"Corrected rumor at {npc_id} (event: {event_id})", 3.0)
+        elif item[0] == "err" and self._cb.on_set_status:
+            self._cb.on_set_status(f"Correct rumor failed: {item[2]}", 2.0)
 
     def poll_bribe_queue(self) -> None:
         """Drain one bribe result and update status bar."""

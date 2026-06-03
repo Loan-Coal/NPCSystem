@@ -10,6 +10,7 @@ Used by: demo_game.game_controller
 
 from __future__ import annotations
 
+import base64
 import json
 import queue
 
@@ -54,7 +55,10 @@ def dialogue_ws_worker(
                 if msg_type == "token":
                     result_q.put(("token", msg["data"]))
                 elif msg_type == "done":
-                    result_q.put(("done", msg.get("data") or {}))
+                    metadata = dict(msg.get("data") or {})
+                    audio_b64: str | None = metadata.pop("audio_bytes_b64", None)
+                    metadata["audio_bytes"] = base64.b64decode(audio_b64) if audio_b64 else None
+                    result_q.put(("done", metadata))
                     break
                 elif msg_type == "error":
                     result_q.put(("error", RuntimeError(str(msg.get("data", "ws_error")))))

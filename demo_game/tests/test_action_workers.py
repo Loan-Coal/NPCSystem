@@ -16,18 +16,39 @@ import pytest
 from demo_game.action_workers import bribe_worker, travel_worker
 from demo_game.constants import BRIBE_GOLD_COST, BRIBE_STANDING_GAIN
 
+_EXPECTED_STANDING = 10 + BRIBE_STANDING_GAIN
+
 
 class TestBribeWorker:
-    def _make_client(self, gold: int, current_standing: int, faction_id: str = "city_guard") -> MagicMock:
+    def _make_client(
+        self,
+        gold: int,
+        current_standing: int,
+        faction_id: str = "city_guard",
+        location_id: str | None = "market_square",
+        tick_id: int | None = 5,
+    ) -> MagicMock:
+        """Build a mock EngineClient with location + clock responses pre-wired."""
         client = MagicMock()
         client.get_node.return_value = {"currency_balance": gold}
         client.get_npc_reputation.return_value = [{"faction_id": faction_id, "standing": current_standing}]
         client.put_npc_reputation.return_value = {}
         client.patch_node.return_value = {}
+        # Location and tick for the gossip-event path.
+        if location_id is not None:
+            client.get_graph_edges.return_value = [{"dst_id": location_id}]
+        else:
+            client.get_graph_edges.return_value = []
+        if tick_id is not None:
+            client.get_clock_state.return_value = {"data": {"tick_id": tick_id}}
+        else:
+            client.get_clock_state.side_effect = Exception("clock unavailable")
+        expected = min(100, current_standing + BRIBE_STANDING_GAIN)
+        client.adjust_npc_reputation.return_value = {"data": {"standing": expected}}
         return client
 
-    def test_bribe_ok_updates_standing_and_deducts_gold(self) -> None:
-        """Happy path: standing increases by BRIBE_STANDING_GAIN, gold decreases by BRIBE_GOLD_COST."""
+    def test_bribe_ok_uses_adjust_npc_reputation_with_location(self) -> None:
+        """Happy path: adjust_npc_reputation is called with location + tick when available."""
         client = self._make_client(gold=100, current_standing=10)
         result_q: queue.Queue = queue.Queue()
         bribe_worker(client, "player_1", "captain_sorn", "city_guard", result_q)
@@ -35,9 +56,34 @@ class TestBribeWorker:
         status, faction_id, new_standing = result_q.get_nowait()
         assert status == "ok"
         assert faction_id == "city_guard"
-        assert new_standing == 10 + BRIBE_STANDING_GAIN
-        client.put_npc_reputation.assert_called_once_with("player_1", "city_guard", 10 + BRIBE_STANDING_GAIN)
+        assert new_standing == _EXPECTED_STANDING
+        client.adjust_npc_reputation.assert_called_once_with(
+            "player_1", "city_guard", BRIBE_STANDING_GAIN, "market_square", 5
+        )
+        client.put_npc_reputation.assert_not_called()
         client.patch_node.assert_called_once_with("Character", "player_1", {"currency_balance": 100 - BRIBE_GOLD_COST})
+
+    def test_bribe_ok_falls_back_to_put_when_no_location(self) -> None:
+        """When location lookup returns nothing, falls back to put_npc_reputation."""
+        client = self._make_client(gold=100, current_standing=10, location_id=None)
+        result_q: queue.Queue = queue.Queue()
+        bribe_worker(client, "player_1", "captain_sorn", "city_guard", result_q)
+
+        status, _, _ = result_q.get_nowait()
+        assert status == "ok"
+        client.adjust_npc_reputation.assert_not_called()
+        client.put_npc_reputation.assert_called_once()
+
+    def test_bribe_ok_falls_back_to_put_when_no_tick(self) -> None:
+        """When clock state is unavailable, falls back to put_npc_reputation."""
+        client = self._make_client(gold=100, current_standing=10, tick_id=None)
+        result_q: queue.Queue = queue.Queue()
+        bribe_worker(client, "player_1", "captain_sorn", "city_guard", result_q)
+
+        status, _, _ = result_q.get_nowait()
+        assert status == "ok"
+        client.adjust_npc_reputation.assert_not_called()
+        client.put_npc_reputation.assert_called_once()
 
     def test_bribe_standing_capped_at_100(self) -> None:
         """Standing is capped at 100 when current + gain would exceed it."""
@@ -59,6 +105,7 @@ class TestBribeWorker:
         assert item[0] == "err"
         assert item[1] == "captain_sorn"
         client.put_npc_reputation.assert_not_called()
+        client.adjust_npc_reputation.assert_not_called()
         client.patch_node.assert_not_called()
 
     def test_bribe_ok_zero_starting_standing(self) -> None:
@@ -66,7 +113,9 @@ class TestBribeWorker:
         client = MagicMock()
         client.get_node.return_value = {"currency_balance": 100}
         client.get_npc_reputation.return_value = []  # no existing record
-        client.put_npc_reputation.return_value = {}
+        client.get_graph_edges.return_value = [{"dst_id": "market_square"}]
+        client.get_clock_state.return_value = {"data": {"tick_id": 1}}
+        client.adjust_npc_reputation.return_value = {"data": {"standing": BRIBE_STANDING_GAIN}}
         client.patch_node.return_value = {}
 
         result_q: queue.Queue = queue.Queue()
@@ -77,9 +126,9 @@ class TestBribeWorker:
         assert new_standing == BRIBE_STANDING_GAIN
 
     def test_bribe_err_api_failure_pushes_err(self) -> None:
-        """If put_npc_reputation raises, worker pushes ("err", npc_id, exc)."""
+        """If adjust_npc_reputation raises, worker pushes ("err", npc_id, exc)."""
         client = self._make_client(gold=100, current_standing=0)
-        client.put_npc_reputation.side_effect = Exception("neo4j down")
+        client.adjust_npc_reputation.side_effect = Exception("neo4j down")
 
         result_q: queue.Queue = queue.Queue()
         bribe_worker(client, "player_1", "captain_sorn", "city_guard", result_q)

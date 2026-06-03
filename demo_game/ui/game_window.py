@@ -25,7 +25,10 @@ import pygame
 from demo_game.client import EngineClient, EngineClientError
 from demo_game.config import DemoConfig
 from demo_game.constants import LOCATION_DISPLAY_NAMES, LOCATION_NPC_MAP, LOCATIONS, NPC_LOCATION_MAP, PALETTE
+from demo_game.game_end_checker import ARC_WIN_SUBTITLES
 from demo_game.game_controller import ControllerCallbacks, GameController
+from demo_game.game_end_poller import GameEndPoller
+from demo_game.gold_poller import GoldPoller
 from demo_game.emotion_poller import EmotionPoller
 from demo_game.graph_panel.poller import GraphPoller
 from demo_game.npc_needs_poller import NpcNeedsPoller
@@ -47,6 +50,13 @@ _CLR_NAV_BG = (14, 14, 20)
 _CLR_NAV_BTN = (38, 38, 52)
 _CLR_NAV_BTN_ACTIVE = (70, 90, 155)
 _CLR_NAV_TEXT = (200, 200, 210)
+
+# Game-end overlay colours.
+_CLR_OVERLAY_WIN_BG = (10, 50, 20, 210)
+_CLR_OVERLAY_LOSE_BG = (60, 10, 10, 210)
+_CLR_OVERLAY_WIN_TEXT = (60, 230, 90)
+_CLR_OVERLAY_LOSE_TEXT = (230, 60, 60)
+_CLR_OVERLAY_SUB = (200, 200, 200)
 
 
 class GameWindow:
@@ -75,6 +85,8 @@ class GameWindow:
         self._active_npc_id: str = LOCATION_NPC_MAP[LOCATIONS[0]][0]
         self._status_text: str = ""
         self._status_until: float = 0.0
+        self._game_over: bool = False
+        self._game_over_outcome: str = ""  # "win" or "lose"
 
         pygame.init()
         self._screen = pygame.display.set_mode((window_w, window_h))
@@ -95,6 +107,12 @@ class GameWindow:
 
         self._world_state_poller = WorldStatePoller(client, interval_s=2.0)
         self._world_state_poller.start()
+
+        self._game_end_poller = GameEndPoller(client, cfg.DEMO_PLAYER_ID, interval_s=3.0)
+        self._game_end_poller.start()
+
+        self._gold_poller = GoldPoller(client, cfg.DEMO_PLAYER_ID, interval_s=3.0)
+        self._gold_poller.start()
 
         self._world_poller = WorldPoller(client, interval_s=5.0, event_limit=20)
         self._world_poller.start()
@@ -171,6 +189,12 @@ class GameWindow:
         self._right.set_consolidate_memory_callback(
             lambda: self._ctrl.spawn_consolidate_memory(self._active_npc_id)
         )
+        self._right.set_spread_rumor_callback(
+            lambda: self._ctrl.spawn_spread_rumor(self._active_npc_id)
+        )
+        self._right.set_correct_rumor_callback(
+            lambda: self._ctrl.spawn_correct_rumor(self._active_npc_id)
+        )
 
         self._right.set_trade_offer_callback(
             lambda: self._ctrl.on_trade_offer(self._ctrl.active_npc_id_for_trade or self._active_npc_id, self._right)
@@ -186,8 +210,6 @@ class GameWindow:
 
         try:
             self._right.set_inventory(client.get_items_for_character(cfg.DEMO_PLAYER_ID))
-            char = client.get_node("Character", cfg.DEMO_PLAYER_ID)
-            self._right.set_player_gold((char or {}).get("currency_balance"))
         except EngineClientError as exc:
             print(f"[inventory] startup fetch failed: {exc}", file=sys.stderr)
 
@@ -207,6 +229,8 @@ class GameWindow:
             self._ctrl.poll_inspect_queue(self._right)
             self._ctrl.poll_travel_queue()
             self._ctrl.poll_bribe_queue()
+            self._ctrl.poll_spread_rumor_queue()
+            self._ctrl.poll_correct_rumor_queue()
             self._ctrl.poll_consolidate_memory_queue(
                 on_created=lambda _: self._memory_poller.refresh()
             )
@@ -222,7 +246,7 @@ class GameWindow:
             self._left.input.set_text(preset)
 
         submitted = self._left.input.handle_event(event)
-        if submitted:
+        if submitted and not self._game_over:
             npc_id = self._left.npc_list.active_id or self._active_npc_id
             self._left.add_player_message(npc_id, submitted)
             self._ctrl.submit_dialogue(submitted, npc_id, self._active_location_id)
@@ -292,6 +316,11 @@ class GameWindow:
             self._set_active_location(loc_id)
 
     def _handle_key(self, key: int) -> None:
+        if key == pygame.K_q and self._game_over:
+            pygame.event.post(pygame.event.Event(pygame.QUIT))
+            return
+        if self._game_over:
+            return
         if key == pygame.K_w:
             try:
                 self._client.put_world_state("war", ["northern_war"])
@@ -325,9 +354,19 @@ class GameWindow:
         self._right.set_memories(self._memory_poller.get_memories())
         self._right.set_world_engines(self._world_poller.get_engines())
         self._right.set_world_events(self._world_poller.get_events())
+        gold = self._gold_poller.get_gold()
+        self._left.set_player_gold(gold)
+        self._right.set_player_gold(gold)
+        objective_state = self._game_end_poller.get_state()
+        self._right.set_objective_state(objective_state)
+        if not self._game_over and objective_state.outcome is not None:
+            self._game_over = True
+            self._game_over_outcome = objective_state.outcome
         self._left.draw(self._screen, self._left_w, self._usable_h, epoch, conditions)
         self._right.draw(self._screen, pygame.Rect(self._right_x, 0, self._right_w, self._usable_h))
         self._draw_status_overlay()
+        if self._game_over:
+            self._draw_game_over_overlay()
         self._draw_nav_bar(pygame.Rect(0, self._usable_h, self._window_w, _NAV_BAR_H))
 
     def _draw_status_overlay(self) -> None:
@@ -346,6 +385,34 @@ class GameWindow:
             label = LOCATION_DISPLAY_NAMES.get(loc_id, loc_id)
             txt = self._font_nav.render(label, True, _CLR_NAV_TEXT)
             self._screen.blit(txt, (btn_rect.centerx - txt.get_width() // 2, btn_rect.centery - txt.get_height() // 2))
+
+    def _draw_game_over_overlay(self) -> None:
+        """Draw a semi-transparent win/lose overlay over the full game area."""
+        is_win = self._game_over_outcome == "win"
+        overlay_color = _CLR_OVERLAY_WIN_BG if is_win else _CLR_OVERLAY_LOSE_BG
+        overlay = pygame.Surface((self._left_w, self._usable_h), pygame.SRCALPHA)
+        overlay.fill(overlay_color)
+        self._screen.blit(overlay, (0, 0))
+
+        font_big = FontLoader.get(36)
+        headline = "VICTORY!" if is_win else "DEFEATED"
+        text_color = _CLR_OVERLAY_WIN_TEXT if is_win else _CLR_OVERLAY_LOSE_TEXT
+        headline_surf = font_big.render(headline, True, text_color)
+        cx = self._left_w // 2
+        cy = self._usable_h // 2
+        self._screen.blit(headline_surf, (cx - headline_surf.get_width() // 2, cy - 40))
+
+        font_sub = FontLoader.get(16)
+        if is_win:
+            arc_faction = self._game_end_poller.get_state().arc_faction
+            sub = ARC_WIN_SUBTITLES.get(arc_faction, ARC_WIN_SUBTITLES[None])
+        else:
+            sub = "The Iron Legion has taken the market square. All is lost."
+        sub_surf = font_sub.render(sub, True, _CLR_OVERLAY_SUB)
+        self._screen.blit(sub_surf, (cx - sub_surf.get_width() // 2, cy + 14))
+
+        hint_surf = font_sub.render("Press Q to quit", True, _CLR_OVERLAY_SUB)
+        self._screen.blit(hint_surf, (cx - hint_surf.get_width() // 2, cy + 40))
 
     def _set_status(self, text: str, duration: float = 2.0) -> None:
         self._status_text = text

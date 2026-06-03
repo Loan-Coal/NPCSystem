@@ -13,12 +13,31 @@ from __future__ import annotations
 import queue
 
 from demo_game.client import EngineClient
-from demo_game.constants import BRIBE_GOLD_COST, BRIBE_STANDING_GAIN
+from demo_game.constants import BRIBE_GOLD_COST, BRIBE_STANDING_GAIN, SPREAD_RUMOR_TEXT, SPREAD_RUMOR_SEVERITY
 from demo_game.knowledge_sidebar_fetcher import fetch_npc_knowledge
 
 _STANDING_CAP = 100
 _STANDING_FLOOR = -100
 _CHAR_NODE_TYPE = "Character"
+
+
+def _get_player_location(client: EngineClient, player_id: str) -> str | None:
+    """Return the player's current location ID, or None on failure."""
+    try:
+        edges = client.get_graph_edges("LOCATED_AT", src_id=player_id)
+        return next((e.get("dst_id") for e in edges if e.get("dst_id")), None)
+    except Exception:
+        return None
+
+
+def _get_current_tick(client: EngineClient) -> int | None:
+    """Return the current game tick from the clock state, or None on failure."""
+    try:
+        state = client.get_clock_state()
+        tick = state.get("data", {}).get("tick_id")
+        return int(tick) if tick is not None else None
+    except Exception:
+        return None
 
 
 def dialogue_worker(client: EngineClient, payload: dict, result_q: queue.Queue) -> None:
@@ -82,8 +101,12 @@ def bribe_worker(
     Reads the player's current gold and standing, validates sufficient funds,
     then writes the new standing and deducts the cost.
 
+    When the player's current location and tick are retrievable, calls
+    adjust_npc_reputation so a gossip-propagatable reputation Event is seeded
+    for co-located NPCs. Falls back to put_npc_reputation if either lookup fails.
+
     Pushes ("ok", faction_id, new_standing) on success or ("err", npc_id, exc) on failure.
-    If the player cannot afford the bribe, pushes ("err", npc_id, InsufficientGoldError).
+    If the player cannot afford the bribe, pushes ("err", npc_id, ValueError).
     """
     try:
         char = client.get_node(_CHAR_NODE_TYPE, player_id) or {}
@@ -96,7 +119,15 @@ def bribe_worker(
         current = next((int(r.get("standing") or 0) for r in reps if r.get("faction_id") == faction_id), 0)
         new_standing = min(_STANDING_CAP, current + BRIBE_STANDING_GAIN)
 
-        client.put_npc_reputation(player_id, faction_id, new_standing)
+        location_id = _get_player_location(client, player_id)
+        tick_id = _get_current_tick(client)
+
+        if location_id is not None and tick_id is not None:
+            resp = client.adjust_npc_reputation(player_id, faction_id, BRIBE_STANDING_GAIN, location_id, tick_id)
+            new_standing = int((resp.get("data") or {}).get("standing") or new_standing)
+        else:
+            client.put_npc_reputation(player_id, faction_id, new_standing)
+
         client.patch_node(_CHAR_NODE_TYPE, player_id, {"currency_balance": gold - BRIBE_GOLD_COST})
         result_q.put(("ok", faction_id, new_standing))
     except Exception as exc:
@@ -117,6 +148,45 @@ def consolidate_memory_worker(
     try:
         memory_id = client.consolidate_memory(npc_id, player_id)
         result_q.put(("ok", npc_id, memory_id))
+    except Exception as exc:
+        result_q.put(("err", npc_id, exc))
+
+
+def spread_rumor_worker(
+    client: EngineClient,
+    npc_id: str,
+    result_q: queue.Queue,
+) -> None:
+    """Plant the default rumor at npc_id and push ("ok", npc_id, event_id) or ("err", npc_id, exc).
+
+    Fetches the current tick from the clock endpoint so the Event node is stamped
+    with the correct occurred_at value.  Falls back to tick_id=0 if the clock is
+    unreachable.
+    """
+    try:
+        tick_id = _get_current_tick(client) or 0
+        resp = client.spread_rumor(
+            target_npc_id=npc_id,
+            rumor_text=SPREAD_RUMOR_TEXT,
+            severity=SPREAD_RUMOR_SEVERITY,
+            tick_id=tick_id,
+        )
+        event_id = (resp.get("data") or {}).get("event_id", "")
+        result_q.put(("ok", npc_id, event_id))
+    except Exception as exc:
+        result_q.put(("err", npc_id, exc))
+
+
+def correct_rumor_worker(
+    client: EngineClient,
+    npc_id: str,
+    event_id: str,
+    result_q: queue.Queue,
+) -> None:
+    """Mark npc_id's belief in event_id as corrected and push ("ok", npc_id, event_id) or ("err", npc_id, exc)."""
+    try:
+        client.correct_rumor(npc_id=npc_id, event_id=event_id)
+        result_q.put(("ok", npc_id, event_id))
     except Exception as exc:
         result_q.put(("err", npc_id, exc))
 

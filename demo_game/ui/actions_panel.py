@@ -2,8 +2,8 @@
 Module: actions_panel
 Layer: demo_game.ui
 Purpose: Scrollable sidebar of contextual action buttons shown in the ACTIONS right-panel tab.
-         [Generate Quest], [Inspect], [Give item], [Travel], [Bribe], and [Consolidate Memory]
-         are enabled when an NPC is selected.
+         [Generate Quest], [Inspect], [Give item], [Travel], [Bribe], [Consolidate Memory],
+         [Spread Rumor], and [Correct Rumor] are enabled when an NPC is selected.
 Dependencies: pygame, demo_game.constants
 Used by: demo_game.ui.right_panel
 """
@@ -30,6 +30,8 @@ _ACTIONS: list[tuple[str, bool]] = [
     ("Travel",             True),
     ("Bribe",              True),
     ("Consolidate Memory", True),
+    ("Spread Rumor",       True),
+    ("Correct Rumor",      True),
 ]
 
 _INDEX_GENERATE_QUEST     = 0
@@ -38,6 +40,8 @@ _INDEX_GIVE_ITEM          = 2
 _INDEX_TRAVEL             = 3
 _INDEX_BRIBE              = 4
 _INDEX_CONSOLIDATE_MEMORY = 5
+_INDEX_SPREAD_RUMOR       = 6
+_INDEX_CORRECT_RUMOR      = 7
 
 _CLR_BG      = PALETTE["bg"]
 _CLR_AMBER   = PALETTE["amber"]
@@ -52,8 +56,9 @@ _STUB_SUFFIX = " [stub]"
 class ActionsPanelWidget:
     """Scrollable list of contextual action buttons for the ACTIONS tab.
 
-    [Generate Quest], [Inspect], [Give item], [Travel], [Bribe], and
-    [Consolidate Memory] fire their respective callbacks when an NPC is selected.
+    [Generate Quest], [Inspect], [Give item], [Travel], [Bribe],
+    [Consolidate Memory], [Spread Rumor], and [Correct Rumor] fire their
+    respective callbacks when an NPC is selected.
 
     Args:
         font: Monospace font for button label text.
@@ -68,6 +73,8 @@ class ActionsPanelWidget:
         self._on_travel: Callable[[], None] | None = None
         self._on_bribe: Callable[[], None] | None = None
         self._on_consolidate_memory: Callable[[], None] | None = None
+        self._on_spread_rumor: Callable[[], None] | None = None
+        self._on_correct_rumor: Callable[[], None] | None = None
         self._scroll_y: int = 0
         self._btn_rects: list[pygame.Rect] = []
 
@@ -99,6 +106,14 @@ class ActionsPanelWidget:
         """Register the callback fired when [Consolidate Memory] is clicked."""
         self._on_consolidate_memory = cb
 
+    def set_spread_rumor_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when [Spread Rumor] is clicked."""
+        self._on_spread_rumor = cb
+
+    def set_correct_rumor_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when [Correct Rumor] is clicked."""
+        self._on_correct_rumor = cb
+
     def handle_event(self, event: pygame.event.Event) -> None:
         """Route MOUSEBUTTONDOWN and MOUSEWHEEL events to action buttons.
 
@@ -125,6 +140,10 @@ class ActionsPanelWidget:
                     self._on_bribe()
                 elif i == _INDEX_CONSOLIDATE_MEMORY and self._on_consolidate_memory is not None:
                     self._on_consolidate_memory()
+                elif i == _INDEX_SPREAD_RUMOR and self._on_spread_rumor is not None:
+                    self._on_spread_rumor()
+                elif i == _INDEX_CORRECT_RUMOR and self._on_correct_rumor is not None:
+                    self._on_correct_rumor()
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         """Draw all action buttons within rect, applying the current scroll offset.

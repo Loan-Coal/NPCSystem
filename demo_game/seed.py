@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 
 _GAME_TIME: dict = {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
 _WORLD_STATE_ID = "world_demo"
+# Scarcity constraint (S7.2): bribing all 3 factions to win threshold costs 4*20*3=240 gold.
+# Starting at 60 the player demonstrably cannot win by bribing alone; must earn via quest/trade.
+_PLAYER_STARTING_GOLD = 60
 
 
 # ---------------------------------------------------------------------------
@@ -657,7 +660,7 @@ def _seed_player_and_items(client: EngineClient) -> int:
         "gossipy": 50,
         "credulity": 50,
         "honesty": 60,
-        "currency_balance": 100,
+        "currency_balance": _PLAYER_STARTING_GOLD,
         "created_at": now,
         "updated_at": now,
         "last_graph_updated_at": now,

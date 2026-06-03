@@ -12,7 +12,8 @@ Dependencies: pygame, demo_game.graph_panel.poller, demo_game.ui.knowledge_sideb
               demo_game.ui.inventory_panel, demo_game.ui.inspect_panel,
               demo_game.ui.world_panel, demo_game.ui.emotion_panel,
               demo_game.ui.needs_panel, demo_game.ui.goals_panel,
-              demo_game.ui.politics_panel, demo_game.ui.memory_panel
+              demo_game.ui.politics_panel, demo_game.ui.memory_panel,
+              demo_game.game_end_checker
 Used by: demo_game.ui.game_window
 
 NOTE: ~440 lines — accepted over the 300-line limit (see DEC-047). Single cohesive
@@ -23,11 +24,14 @@ workflow of this kind or total > 500 lines.
 from __future__ import annotations
 
 import enum
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import pygame
 
 from demo_game.graph_panel.poller import GraphPoller
+
+if TYPE_CHECKING:
+    from demo_game.game_end_checker import ObjectiveState
 from demo_game.ui.actions_panel import ActionsPanelWidget
 from demo_game.ui.emotion_panel import EmotionPanelWidget
 from demo_game.ui.goals_panel import GoalsPanelWidget
@@ -287,6 +291,10 @@ class RightPanelRenderer:
         """Push a fresh event list into the WORLD panel."""
         self._world_panel.set_events(events)
 
+    def set_objective_state(self, state: ObjectiveState) -> None:
+        """Push the latest ObjectiveState into the WORLD panel's OBJECTIVE section."""
+        self._world_panel.set_objective(state)
+
     @property
     def show_world_panel(self) -> bool:
         """True when the WORLD tab is active."""
@@ -315,6 +323,14 @@ class RightPanelRenderer:
     def set_consolidate_memory_callback(self, cb: Callable[[], None]) -> None:
         """Register the callback fired when [Consolidate Memory] is clicked."""
         self._actions_panel.set_consolidate_memory_callback(cb)
+
+    def set_spread_rumor_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when [Spread Rumor] is clicked."""
+        self._actions_panel.set_spread_rumor_callback(cb)
+
+    def set_correct_rumor_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when [Correct Rumor] is clicked."""
+        self._actions_panel.set_correct_rumor_callback(cb)
 
     @property
     def show_memory_panel(self) -> bool:

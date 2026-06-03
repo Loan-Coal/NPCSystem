@@ -476,7 +476,7 @@ def test_put_world_state_success(mock_http: MagicMock, make_response) -> None:
     result = _client(mock_http).put_world_state("war", ["northern_war"])
     assert result["data"]["epoch"] == "war"
     _, kwargs = mock_http.post.call_args
-    assert kwargs["json"]["properties"]["id"] == "world"
+    assert kwargs["json"]["properties"]["id"] == "world_demo"
     assert kwargs["json"]["properties"]["epoch"] == "war"
     assert kwargs["json"]["properties"]["active_conditions"] == ["northern_war"]
 

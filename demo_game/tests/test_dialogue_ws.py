@@ -104,17 +104,22 @@ class TestDialogueWsTokens:
 
         item = result_q.get_nowait()
         assert item[0] == "done"
-        assert item[1] == metadata
+        # audio_bytes is always injected (None when absent from server data)
+        assert item[1]["degradation_level"] == "graph_only"
+        assert item[1]["emotion"] == "neutral"
+        assert item[1]["relation_deltas"] == {"trust": 3, "fear": 0, "affection": 0}
+        assert item[1].get("audio_bytes") is None
 
     def test_done_with_no_data_field(self) -> None:
-        """done message without a data field yields empty metadata dict."""
+        """done message without a data field yields metadata with audio_bytes=None."""
         ws = _make_ws_mock([{"type": "done"}])
         result_q: queue.Queue = queue.Queue()
         with _patch_ws(ws):
             dialogue_ws_worker(_WS_URL, _API_KEY, _PAYLOAD, result_q)
 
         item = result_q.get_nowait()
-        assert item == ("done", {})
+        assert item[0] == "done"
+        assert item[1] == {"audio_bytes": None}
 
     def test_send_payload_serialised_as_json(self) -> None:
         """Payload dict is serialised and sent as a JSON string."""
@@ -194,3 +199,43 @@ class TestDialogueWsErrors:
         assert items[-1][0] == "error"
         # Only two items: one token and one error.
         assert len(items) == 2
+
+
+# ---------------------------------------------------------------------------
+# Audio bytes decoding
+# ---------------------------------------------------------------------------
+
+
+class TestDialogueWsAudio:
+    def test_done_with_audio_bytes_b64_decoded_to_bytes(self) -> None:
+        """audio_bytes_b64 in done data is decoded to raw bytes in metadata."""
+        import base64
+        wav_bytes = b"RIFF\x00\x00\x00\x00WAVEfmt "
+        metadata = {
+            "degradation_level": "full",
+            "emotion": None,
+            "relation_deltas": {},
+            "action": {"type": "speak"},
+            "facial_expression": {"type": "neutral"},
+            "audio_bytes_b64": base64.b64encode(wav_bytes).decode(),
+        }
+        ws = _make_ws_mock([{"type": "done", "data": metadata}])
+        result_q: queue.Queue = queue.Queue()
+        with _patch_ws(ws):
+            dialogue_ws_worker(_WS_URL, _API_KEY, _PAYLOAD, result_q)
+
+        item = result_q.get_nowait()
+        assert item[0] == "done"
+        assert item[1].get("audio_bytes") == wav_bytes
+
+    def test_done_without_audio_bytes_b64_gives_none(self) -> None:
+        """When audio_bytes_b64 is absent from done data, audio_bytes is None in metadata."""
+        metadata = {"degradation_level": "full", "emotion": None}
+        ws = _make_ws_mock([{"type": "done", "data": metadata}])
+        result_q: queue.Queue = queue.Queue()
+        with _patch_ws(ws):
+            dialogue_ws_worker(_WS_URL, _API_KEY, _PAYLOAD, result_q)
+
+        item = result_q.get_nowait()
+        assert item[0] == "done"
+        assert item[1].get("audio_bytes") is None

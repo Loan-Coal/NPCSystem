@@ -1267,6 +1267,129 @@ class EngineClient:
             "last_changed_at": "tick_0",
         })
 
+    def adjust_npc_reputation(
+        self,
+        character_id: str,
+        faction_id: str,
+        delta: int,
+        location_id: str,
+        tick_id: int,
+    ) -> dict:
+        """Apply a standing delta and seed a gossip-propagatable reputation event.
+
+        Calls POST /v1/admin/characters/{character_id}/reputation/{faction_id}/adjust
+        with location_id and tick_id so a KNOWS_ABOUT edge is seeded for NPCs
+        at location_id, making the standing change visible to the gossip engine.
+
+        Args:
+            character_id: Character node ID.
+            faction_id: Faction node ID.
+            delta: Standing delta (positive = gain).
+            location_id: Location where the standing change occurred.
+            tick_id: Current game tick.
+
+        Returns:
+            Full API response dict containing new standing.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        resp = self._client.post(
+            f"/v1/admin/characters/{character_id}/reputation/{faction_id}/adjust",
+            json={"delta": delta, "location_id": location_id, "tick_id": tick_id},
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(
+            resp,
+            f"POST /v1/admin/characters/{character_id}/reputation/{faction_id}/adjust",
+        )
+        return resp.json()
+
+    def spread_rumor(
+        self,
+        target_npc_id: str,
+        rumor_text: str,
+        severity: int,
+        tick_id: int,
+    ) -> dict:
+        """Inject a player-planted rumor into target_npc_id's KNOWS_ABOUT graph.
+
+        Calls POST /v1/admin/gossip/spread.  On the next clock advance, the gossip
+        engine propagates and distorts the rumor to co-located NPCs.
+
+        Args:
+            target_npc_id: NPC that immediately believes the planted rumor.
+            rumor_text: The fabricated belief text (up to 500 chars).
+            severity: How serious the rumor is (0–100).
+            tick_id: Current game tick.
+
+        Returns:
+            Full API response dict containing event_id and npc_id.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        resp = self._client.post(
+            "/v1/admin/gossip/spread",
+            json={
+                "target_npc_id": target_npc_id,
+                "rumor_text": rumor_text,
+                "severity": severity,
+                "tick_id": tick_id,
+            },
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, "POST /v1/admin/gossip/spread")
+        return resp.json()
+
+    def trace_rumor(self, event_id: str) -> dict:
+        """Return the ordered NPC chain that holds a KNOWS_ABOUT edge to event_id.
+
+        Calls GET /v1/admin/gossip/trace/{event_id}.  The chain is ordered by
+        learned_at_tick ascending so the propagation path is visible.
+
+        Args:
+            event_id: ID of the fabricated Event node to trace.
+
+        Returns:
+            Full API response dict containing event_id and chain list.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        resp = self._client.get(
+            f"/v1/admin/gossip/trace/{event_id}",
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, f"GET /v1/admin/gossip/trace/{event_id}")
+        return resp.json()
+
+    def correct_rumor(self, npc_id: str, event_id: str) -> dict:
+        """Mark one NPC's belief in a fabricated event as corrected.
+
+        Calls POST /v1/admin/gossip/correct.  After this call the NPC's
+        KNOWS_ABOUT edge has knowledge_state='corrected' and is excluded
+        from their dialogue context.  Downstream NPCs are unaffected.
+
+        Args:
+            npc_id: NPC whose belief should be corrected.
+            event_id: ID of the fabricated Event node.
+
+        Returns:
+            Full API response dict containing npc_id, event_id, and corrected flag.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response (including 404 if the
+                edge does not exist).
+        """
+        resp = self._client.post(
+            "/v1/admin/gossip/correct",
+            json={"npc_id": npc_id, "event_id": event_id},
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, "POST /v1/admin/gossip/correct")
+        return resp.json()
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------

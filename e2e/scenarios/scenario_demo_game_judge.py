@@ -2,6 +2,7 @@
 Module: scenario_demo_game_judge
 Layer: e2e
 Purpose: LLM-as-judge eval tests for the Phase 2 demo world (war epoch + gossip propagation).
+         Includes S10.2 test: planted rumor consequence — NPC B references planted rumor after clock advance.
 Dependencies: e2e.helpers.llm_judge, e2e.scenarios.conftest, npc_engine.engines.llm.ollama_adapter
 Used by: make eval-llm-demo
 
@@ -404,6 +405,95 @@ async def test_old_henryk_distorted_account(
     print(f"[judge] passed={verdict.passed}  reasoning: {verdict.reasoning}")
     assert verdict.passed, (
         f"old_henryk distortion check FAILED.\n"
+        f"Response: {npc_response!r}\n"
+        f"Judge reasoning: {verdict.reasoning}"
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Test S10.2 — Planted rumor consequence: NPC B references planted rumor
+#              at NPC A after a clock advance (gossip propagation).
+#
+# lira_fence and mira_innkeeper share the tavern location, so they form a
+# gossip pair in a single tick. The planted rumor at lira has tick_id=9999
+# (above all seeded events) so it is the most-recent KNOWS_ABOUT event and
+# will be selected by CYPHER_SELECT_EVENT on the next gossip tick.
+# ══════════════════════════════════════════════════════════════════════════════
+
+_PLANTED_RUMOR_MARKER = "Aldric the merchant has been secretly poisoning the well water"
+_PLANTED_RUMOR_TICK = 9999
+
+
+@pytest.mark.asyncio
+@pytest.mark.llm_eval
+async def test_planted_rumor_propagates_to_mira_dialogue(
+    http_client: httpx.Client,
+) -> None:
+    """A rumor planted at lira_fence appears in mira_innkeeper dialogue after a clock advance."""
+    if not _ollama_reachable():
+        pytest.skip(
+            f"Ollama not running or model {_JUDGE_MODEL!r} not pulled — "
+            f"run: ollama serve && ollama pull {_JUDGE_MODEL}"
+        )
+
+    judge = _make_judge()
+
+    # 1. Plant the fabricated belief at lira_fence (tavern).
+    plant_result = api_post(
+        http_client,
+        "/v1/admin/gossip/spread",
+        {
+            "target_npc_id": "lira_fence",
+            "rumor_text": _PLANTED_RUMOR_MARKER,
+            "severity": 80,
+            "tick_id": _PLANTED_RUMOR_TICK,
+        },
+    )
+    assert plant_result["status"] == 200, f"Rumor plant failed: {plant_result}"
+    print(f"\n[planted rumor] event_id={plant_result['body'].get('data', {}).get('event_id')}")
+
+    # 2. Advance clock — triggers gossip tick, lira_fence propagates to mira_innkeeper.
+    advance_result = api_post(
+        http_client,
+        "/v1/clock/advance",
+        {"delta_ticks": 5, "game_time_seconds": 5},
+    )
+    assert advance_result["status"] == 200, f"Clock advance failed: {advance_result}"
+
+    # 3. Ask mira_innkeeper about Aldric — she should now reference the planted rumor.
+    dialogue_result = api_post(
+        http_client,
+        "/v1/dialogue",
+        {
+            "player_id": "player_eval_rumor",
+            "npc_id": "mira_innkeeper",
+            "player_message": "Have you heard anything about Aldric the merchant lately?",
+            "session_id": f"judge_rumor_{uuid.uuid4().hex[:8]}",
+        },
+    )
+    assert dialogue_result["status"] == 200, f"Dialogue failed: {dialogue_result}"
+    npc_response = dialogue_result["body"].get("npc_response", "")
+    assert npc_response, "Empty NPC response — check LLM stack."
+    print(f"\n[mira_innkeeper — rumor consequence]\n  {npc_response}\n")
+
+    from e2e.helpers.llm_judge import llm_judge
+
+    verdict = await llm_judge(
+        content=npc_response,
+        criteria=(
+            "Does this NPC response reference a negative or suspicious piece of information "
+            "about a merchant, trader, or someone involved with food/water — "
+            "such as poisoning, contamination, wrongdoing, or dishonesty? "
+            "The response may be hedged ('I heard', 'rumor has it', 'they say') since gossip "
+            "is uncertain. YES if any such negative claim about a merchant appears. "
+            "NO if the response is purely positive or neutral about all merchants."
+        ),
+        llm_client=judge,
+    )
+    print(f"[judge] passed={verdict.passed}  reasoning: {verdict.reasoning}")
+    assert verdict.passed, (
+        f"S10.2 rumor consequence check FAILED — mira did not reference planted rumor.\n"
+        f"Planted: {_PLANTED_RUMOR_MARKER!r}\n"
         f"Response: {npc_response!r}\n"
         f"Judge reasoning: {verdict.reasoning}"
     )

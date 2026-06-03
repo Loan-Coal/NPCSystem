@@ -80,6 +80,17 @@ FACTION_COLOURS: dict[str, tuple[int, int, int]] = {
 BRIBE_GOLD_COST: int = 20
 BRIBE_STANDING_GAIN: int = 15
 
+# S8.3 propagated-reputation act: player commits a notable act at market_square.
+# Seeds a reputation_change Event that gossip-propagates to the tavern.
+PROPAGATED_REP_FACTION: str = "merchants_guild"
+PROPAGATED_REP_LOCATION: str = "loc_market_square"
+PROPAGATED_REP_DELTA: int = 40
+
+# S10.1 Spread Rumor action: default planted text and severity for the demo button.
+# The text is intentionally provocative so the gossip distortion is visible.
+SPREAD_RUMOR_TEXT: str = "A hooded stranger was seen leaving the castle gates at midnight carrying stolen gold."
+SPREAD_RUMOR_SEVERITY: int = 70
+
 # Faction membership for each demo NPC — derived from seed, stable for Munich demo.
 # See DEC-028 for why this is hardcoded rather than fetched from the graph.
 NPC_FACTIONS: dict[str, str] = {
