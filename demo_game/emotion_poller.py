@@ -45,6 +45,7 @@ class EmotionPoller:
         self._npc_id: str | None = None
         self._label: str = ""
         self._valence: float = 0.0
+        self._arousal: float = 0.0
 
         # Signals the polling loop to fire immediately (NPC switch or start).
         self._immediate = threading.Event()
@@ -70,19 +71,21 @@ class EmotionPoller:
             self._npc_id = npc_id
             self._label = ""
             self._valence = 0.0
+            self._arousal = 0.0
         self._immediate.set()
 
-    def get_emotion(self) -> tuple[str, float]:
-        """Return the latest (label, valence) snapshot for the active NPC.
+    def get_emotion(self) -> tuple[str, float, float]:
+        """Return the latest (label, valence, arousal) snapshot for the active NPC.
 
         Thread-safe. Returns empty defaults until the first successful poll.
 
         Returns:
-            Tuple of (label_str, valence_float). Both are empty/zero until
-            the first successful poll completes for the current NPC.
+            Tuple of (label_str, valence_float, arousal_float). All are
+            empty/zero until the first successful poll completes for the
+            current NPC.
         """
         with self._lock:
-            return self._label, self._valence
+            return self._label, self._valence, self._arousal
 
     # ------------------------------------------------------------------
     # Background thread
@@ -111,10 +114,12 @@ class EmotionPoller:
                 return
             label = str(data.get("label", ""))
             valence = float(data.get("valence", 0.0))
+            arousal = float(data.get("arousal", 0.0))
             with self._lock:
                 if self._npc_id == npc_id:  # discard if NPC switched mid-request
                     self._label = label
                     self._valence = valence
+                    self._arousal = arousal
         except Exception as exc:
             print(f"[EmotionPoller] error: {exc}", file=sys.stderr)
 

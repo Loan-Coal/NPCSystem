@@ -52,6 +52,20 @@ class EngineClient:
         )
 
     # ------------------------------------------------------------------
+    # URL helpers
+    # ------------------------------------------------------------------
+
+    @property
+    def ws_url(self) -> str:
+        """WebSocket base URL derived from base_url (http→ws, https→wss)."""
+        return self._base_url.replace("https://", "wss://").replace("http://", "ws://")
+
+    @property
+    def api_key(self) -> str:
+        """Bearer token used for authentication."""
+        return self._api_key
+
+    # ------------------------------------------------------------------
     # Dialogue
     # ------------------------------------------------------------------
 
@@ -281,6 +295,40 @@ class EngineClient:
         resp = self._client.get("/v1/clock/state", timeout=self._graph_timeout)
         self._raise_for_status(resp, "GET /v1/clock/state")
         return resp.json()
+
+    def get_engine_status(self) -> list[dict]:
+        """Return per-engine status records from the observability endpoint.
+
+        Returns:
+            List of dicts each containing engine_name, last_tick_id, last_error,
+            last_error_tick, and error_count. Empty list if no engines have run.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        resp = self._client.get("/v1/system/engines", timeout=self._graph_timeout)
+        self._raise_for_status(resp, "GET /v1/system/engines")
+        return resp.json().get("data", [])
+
+    def get_recent_events(self, limit: int = 20) -> list[dict]:
+        """Return the most recent Event nodes ordered by tick descending.
+
+        Args:
+            limit: Maximum number of events to return (1–100).
+        Returns:
+            List of event dicts with event_id, event_type, label, severity,
+            tick_id, location_id, src_character_id keys.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        resp = self._client.get(
+            "/v1/system/events",
+            params={"limit": limit},
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, "GET /v1/system/events")
+        return resp.json().get("data", [])
 
     # ------------------------------------------------------------------
     # Graph single-item reads (return None on 404)
@@ -581,6 +629,60 @@ class EngineClient:
         self._raise_for_status(resp, f"POST /v1/admin/memories/{character_id}")
         return resp.json()
 
+    def get_memories(self, character_id: str, k: int = 10) -> list[dict]:
+        """Return memories for a character ordered by vividness descending.
+
+        Args:
+            character_id: Character node ID.
+            k: Maximum number of memories to return (default 10).
+
+        Returns:
+            List of memory dicts. Each has id, content, vividness, emotional_charge,
+            and created_at_game_time fields.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        resp = self._client.get(
+            f"/v1/admin/memories/{character_id}",
+            params={"k": k},
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, f"GET /v1/admin/memories/{character_id}")
+        return resp.json().get("data", {}).get("memories", [])
+
+    def consolidate_memory(
+        self,
+        npc_id: str,
+        player_id: str,
+        game_time: dict | None = None,
+    ) -> str | None:
+        """Trigger memory consolidation for an NPC from their dialogue session turns.
+
+        Calls POST /v1/admin/memories/consolidate/{npc_id}. Returns the new
+        memory ID if consolidation occurred, or None if the turn threshold was not met.
+
+        Args:
+            npc_id: NPC whose session turns to consolidate.
+            player_id: Player session identifier.
+            game_time: Optional game-time dict; defaults to spring day 1 morning.
+
+        Returns:
+            Memory ID string if a memory was created, else None.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        if game_time is None:
+            game_time = {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
+        resp = self._client.post(
+            f"/v1/admin/memories/consolidate/{npc_id}",
+            json={"player_id": player_id, "game_time": game_time},
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, f"POST /v1/admin/memories/consolidate/{npc_id}")
+        return resp.json().get("data", {}).get("memory_id")
+
     def post_secret(
         self,
         character_id: str,
@@ -634,7 +736,7 @@ class EngineClient:
         return self.upsert_node(
             "world_state",
             {
-                "id": "world",
+                "id": "world_demo",
                 "epoch": epoch,
                 "active_conditions": active_conditions,
                 "faction_standings": {},
@@ -1028,6 +1130,97 @@ class EngineClient:
         )
         self._raise_for_status(resp, "POST /v1/admin/economy/trade")
         return resp.json()
+
+    def post_pledge(
+        self,
+        pledger_id: str,
+        pledgee_id: str,
+        pledge_type: str,
+        tick: int,
+        severity: int = 50,
+    ) -> dict:
+        """Create a pledge from pledger_id to pledgee_id.
+
+        Args:
+            pledger_id: Character making the pledge.
+            pledgee_id: Character or faction receiving the pledge.
+            pledge_type: One of protect/serve/kill/marry/mentor/fealty/vendetta.
+            tick: Current game tick.
+            severity: Pledge severity 0–100 (default 50).
+
+        Returns:
+            API response dict.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        resp = self._client.post(
+            f"/v1/pledges/characters/{pledger_id}",
+            json={"pledgee_id": pledgee_id, "pledge_type": pledge_type, "tick": tick, "severity": severity},
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, f"POST /v1/pledges/characters/{pledger_id}")
+        return resp.json()
+
+    def get_pledges_for_npc(self, npc_id: str) -> list[dict]:
+        """Return active pledges where npc_id is the pledger.
+
+        Args:
+            npc_id: Character node ID.
+
+        Returns:
+            List of pledge dicts with pledgee_id, pledge_type, tick, status fields.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        resp = self._client.get(
+            f"/v1/pledges/characters/{npc_id}",
+            params={"active_only": True},
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, f"GET /v1/pledges/characters/{npc_id}")
+        return resp.json().get("data", {}).get("pledges", [])
+
+    def get_leverage_for_npc(self, npc_id: str) -> list[dict]:
+        """Return Leverage nodes held by npc_id via HAS_LEVERAGE edges.
+
+        Fetches HAS_LEVERAGE edges where src_id=npc_id, then cross-references
+        all Leverage nodes client-side — appropriate for demo scale.
+
+        Args:
+            npc_id: Character node ID.
+
+        Returns:
+            List of Leverage node dicts with id, demand, status, created_at_tick.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        edges = self.get_graph_edges("HAS_LEVERAGE", src_id=npc_id)
+        if not edges:
+            return []
+        leverage_ids = {e.get("dst_id") for e in edges if e.get("dst_id")}
+        all_leverage = self.get_graph_nodes("Leverage", limit=200)
+        return [lv for lv in all_leverage if lv.get("id") in leverage_ids]
+
+    def get_needs_for_npc(self, npc_id: str) -> list[dict]:
+        """Return all Need nodes for the given NPC, filtered by character_id.
+
+        Fetches all Need nodes via the generic graph endpoint and filters
+        client-side — appropriate for demo scale (few NPCs, few needs each).
+
+        Args:
+            npc_id: Character node ID to filter by.
+
+        Returns:
+            List of Need node dicts with id, kind, level, decay_rate, character_id.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        all_needs = self.get_graph_nodes("Need", limit=200)
+        return [n for n in all_needs if n.get("character_id") == npc_id]
 
     def get_items_for_character(self, character_id: str) -> list[dict]:
         """Return all items owned by a character.

@@ -256,6 +256,38 @@ def _seed_edge(
     return "created"
 
 
+def _seed_item_edge_if_unowned(
+    client: EngineClient,
+    owner_id: str,
+    item_id: str,
+    properties: dict | None = None,
+) -> str:
+    """Seed OWNS(owner→item) only when no character currently owns the item.
+
+    Unlike _seed_edge, this checks all inbound OWNS edges on the item (not just the
+    specific owner→item edge). This prevents re-gifting items that were transferred
+    during gameplay — e.g. the player delivers the amulet to Aldric, then reseed
+    would otherwise recreate OWNS(player→amulet) because that specific edge no longer
+    exists, even though Aldric now owns it.
+
+    Args:
+        client: Authenticated EngineClient.
+        owner_id: Character ID who should own the item on first seed.
+        item_id: Item node ID.
+        properties: Optional edge properties (e.g. acquired_at).
+
+    Returns:
+        "created" or "skipped".
+    """
+    current_owners = client.get_graph_edges("OWNS", dst_id=item_id, limit=1)
+    if current_owners:
+        logger.info("  skip edge OWNS %s→%s (item already owned)", owner_id, item_id)
+        return "skipped"
+    client.upsert_edge("OWNS", owner_id, item_id, properties or {})
+    logger.info("  created edge OWNS %s→%s", owner_id, item_id)
+    return "created"
+
+
 def _seed_npc_inner_life(
     client: EngineClient,
     npc_id: str,
@@ -371,6 +403,7 @@ _NPC_INNER_LIFE: dict[str, dict] = {
         "memories": [
             ("The night a deserter begged at my door in the rain. I hid him in the cellar for a week.", 85, 65),
             ("The last time the city went to war — half my regulars never came back.", 90, -75),
+            ("A stranger came in asking about the northern war. Nervous eyes, too many questions. I told them what little I knew.", 80, 30),
         ],
         "secret": ("She hid a deserter from the city guard last winter.", 75),
     },
@@ -432,6 +465,87 @@ _NPC_INNER_LIFE: dict[str, dict] = {
         "secret": ("He knows the location of an old smuggler's cache beneath the north mill.", 60),
     },
 }
+
+# NPC Needs: (npc_id, kind, level 0-100 where 0=critical, decay_rate per tick)
+_NPC_NEEDS: list[tuple[str, str, int, int]] = [
+    # mira_innkeeper — busy social hub, rests poorly
+    ("mira_innkeeper", "social",     85, 2),
+    ("mira_innkeeper", "rest",       35, 4),
+    # aldric_merchant — driven, skips meals
+    ("aldric_merchant", "hunger",    28, 3),
+    ("aldric_merchant", "social",    60, 2),
+    # captain_sorn — disciplined but exhausted
+    ("captain_sorn", "rest",         20, 5),
+    ("captain_sorn", "recreation",   45, 2),
+    # lira_fence — cautious, keeps to herself
+    ("lira_fence", "social",         70, 2),
+    ("lira_fence", "rest",           55, 3),
+    # old_henryk — worn down, needs rest most
+    ("old_henryk", "rest",           15, 4),
+    ("old_henryk", "hunger",         50, 3),
+]
+
+# Leverage nodes: (id, demand, status, created_at_tick)
+_LEVERAGE_NODES: list[tuple[str, str, str, int]] = [
+    (
+        "lv_lira_over_aldric",
+        "Reveal that Aldric has been skimming guild tithes unless he lets a shipment through",
+        "held",
+        0,
+    ),
+    (
+        "lv_sorn_over_gate_sgt",
+        "Demand the gate sergeant's loyalty in exchange for silence about the bribe",
+        "held",
+        0,
+    ),
+]
+
+# HAS_LEVERAGE edges: (holder_npc_id, leverage_node_id)
+_HAS_LEVERAGE_EDGES: list[tuple[str, str]] = [
+    ("lira_fence", "lv_lira_over_aldric"),
+    ("captain_sorn", "lv_sorn_over_gate_sgt"),
+]
+
+# ---------------------------------------------------------------------------
+# Military layer — armies for S6.6 battle demo
+# ---------------------------------------------------------------------------
+
+# Extra faction for the Iron Legion (northern invaders from northern_war_begins event)
+_MILITARY_FACTIONS: list[tuple[str, str, str, str]] = [
+    ("iron_legion", "Iron Legion", "military", "The northern army that crossed the border at the start of the war."),
+]
+
+# Army nodes: (id, faction_id, strength, current_location_id, composition)
+_ARMIES: list[tuple[str, str, int, str, str]] = [
+    (
+        "army_iron_legion",
+        "iron_legion",
+        100,
+        "loc_guard_barracks",
+        '{"infantry": 80, "cavalry": 15, "siege": 5}',
+    ),
+    (
+        "army_city_guard_main",
+        "city_guard",
+        60,
+        "loc_guard_barracks",
+        '{"infantry": 55, "cavalry": 5, "siege": 0}',
+    ),
+]
+
+# OCCUPIES edges: (army_id, location_id, since_tick)
+_ARMY_OCCUPIES: list[tuple[str, str, int]] = [
+    ("army_iron_legion", "loc_guard_barracks", 0),
+    ("army_city_guard_main", "loc_guard_barracks", 0),
+]
+
+# Pledge seed data: (pledger_id, pledgee_id, pledge_type, tick)
+# Using create_pledge via the typed pledges route (POST /v1/pledges/characters/{pledger_id})
+_PLEDGE_SEED: list[tuple[str, str, str, int]] = [
+    ("lira_fence", "thieves_guild", "fealty", 0),
+    ("aldric_merchant", "merchants_guild", "fealty", 0),
+]
 
 # NPC-NPC edges: (edge_type, src_id, dst_id, properties)
 _NPC_NPC_EDGES: list[tuple[str, str, str, dict]] = [
@@ -565,8 +679,8 @@ def _seed_player_and_items(client: EngineClient) -> int:
     if result == "created":
         created += 1
 
-    # OWNS is the only registered character→item edge (no HAS_ITEM in registry)
-    result = _seed_edge(client, "OWNS", _PLAYER_ID, _AMULET_ID, {"acquired_at": now})
+    # Use _seed_item_edge_if_unowned so a post-delivery reseed doesn't reclaim the amulet
+    result = _seed_item_edge_if_unowned(client, _PLAYER_ID, _AMULET_ID, {"acquired_at": now})
     if result == "created":
         created += 1
 
@@ -596,7 +710,7 @@ def _seed_aldric_inventory(client: EngineClient) -> int:
     r = _seed_node(client, "Item", spice_payload)
     if r == "created":
         created += 1
-    r = _seed_edge(client, "OWNS", "aldric_merchant", _SPICE_ID, {"acquired_at": now})
+    r = _seed_item_edge_if_unowned(client, "aldric_merchant", _SPICE_ID, {"acquired_at": now})
     if r == "created":
         created += 1
     return created
@@ -620,6 +734,9 @@ def _seed_quests(client: EngineClient) -> None:
     so the game can use graph-based verification. Falls back to LLM generation if
     the lifecycle route is unavailable.
 
+    Idempotency: skips if the Quest node already exists so a completed or
+    in-progress quest is not reset to "offered" on re-seed.
+
     Non-fatal: logs a warning and returns without raising if the quest engine
     is unavailable.
 
@@ -628,6 +745,10 @@ def _seed_quests(client: EngineClient) -> None:
     """
     cache_path = Path(".cache/demo/aldric_quest.json")
     cache_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if client.get_node("Quest", _ALDRIC_QUEST_ID) is not None:
+        logger.info("[seed] Quest %s already exists — skipped", _ALDRIC_QUEST_ID)
+        return
 
     try:
         client.post_quest_offer(
@@ -818,6 +939,68 @@ def seed_all(client: EngineClient) -> dict:
     # 14. Quests (non-fatal — requires quest engine)
     logger.info("[seed] Quests")
     _seed_quests(client)
+
+    # 15. NPC Needs
+    logger.info("[seed] NPC Needs")
+    for npc_id, kind, level, decay_rate in _NPC_NEEDS:
+        node_id = f"{npc_id}_need_{kind}"
+        _tally(_seed_node(client, "Need", {
+            "id": node_id,
+            "kind": kind,
+            "level": level,
+            "decay_rate": decay_rate,
+            "character_id": npc_id,
+        }))
+
+    # 16. Political layer — Leverage nodes + HAS_LEVERAGE edges + Pledges
+    logger.info("[seed] Leverage nodes")
+    for lv_id, demand, status, created_at_tick in _LEVERAGE_NODES:
+        _tally(_seed_node(client, "Leverage", {
+            "id": lv_id,
+            "demand": demand,
+            "status": status,
+            "created_at_tick": created_at_tick,
+        }))
+
+    logger.info("[seed] HAS_LEVERAGE edges")
+    for holder_id, lv_id in _HAS_LEVERAGE_EDGES:
+        _tally(_seed_edge(client, "HAS_LEVERAGE", holder_id, lv_id, {}))
+
+    logger.info("[seed] Pledges")
+    for pledger_id, pledgee_id, pledge_type, tick in _PLEDGE_SEED:
+        try:
+            existing = client.get_pledges_for_npc(pledger_id)
+            already_exists = any(
+                p.get("pledgee_id") == pledgee_id and p.get("pledge_type") == pledge_type
+                for p in existing
+            )
+            if already_exists:
+                skipped += 1
+                continue
+            client.post_pledge(pledger_id, pledgee_id, pledge_type, tick)
+            created += 1
+        except Exception as exc:
+            logger.warning("[seed] Pledge %s→%s skipped: %s", pledger_id, pledgee_id, exc)
+            skipped += 1
+
+    # 17. Military layer — iron_legion faction + armies + OCCUPIES edges
+    logger.info("[seed] Military factions")
+    for faction_id, name, archetype, description in _MILITARY_FACTIONS:
+        _tally(_seed_node(client, "Faction", build_faction_payload(faction_id, name, archetype, description)))
+
+    logger.info("[seed] Armies")
+    for army_id, faction_id, strength, location_id, composition in _ARMIES:
+        _tally(_seed_node(client, "Army", {
+            "id": army_id,
+            "faction_id": faction_id,
+            "strength": strength,
+            "current_location_id": location_id,
+            "composition": composition,
+        }))
+
+    logger.info("[seed] OCCUPIES edges")
+    for army_id, location_id, since_tick in _ARMY_OCCUPIES:
+        _tally(_seed_edge(client, "OCCUPIES", army_id, location_id, {"since_tick": since_tick}))
 
     logger.info("[seed] Done — created=%d skipped=%d", created, skipped)
     return {"created": created, "skipped": skipped}

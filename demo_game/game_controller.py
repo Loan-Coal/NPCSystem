@@ -5,14 +5,14 @@ Purpose: Background-thread orchestration and queue dispatch for the demo game.
          Quest, trade, give-item, and travel action handlers; dialogue submission.
          Quest/trade handlers are delegated to QuestTradeController. Decoupled
          from pygame rendering so it can be unit-tested without a display.
-Dependencies: demo_game.action_workers, demo_game.client, demo_game.dialogue,
-              demo_game.constants, demo_game.quest_trade_controller,
+Dependencies: demo_game.action_workers, demo_game.dialogue_ws, demo_game.client,
+              demo_game.dialogue, demo_game.constants, demo_game.quest_trade_controller,
               npc_engine.engines.interaction
 Used by: demo_game.ui.game_window
 
-NOTE: ~318 lines — accepted over the 300-line limit (see DEC-048). GameController
-is a single cohesive class; splitting travel into a separate file would require
-yet another delegation layer that adds no clarity.
+NOTE: ~380 lines — accepted over the 300-line limit (see DEC-048). S6.4 added
+WS streaming (~40 lines). GameController is a single cohesive class; splitting
+individual action queues would add indirection without clarity gains.
 """
 
 from __future__ import annotations
@@ -25,12 +25,14 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from demo_game.action_workers import (
     bribe_worker,
+    consolidate_memory_worker,
     dialogue_worker,
     fetch_sidebar_worker,
     generate_quest_worker,
     inspect_worker,
     travel_worker,
 )
+from demo_game.dialogue_ws import dialogue_ws_worker
 from demo_game.client import EngineClient, EngineClientError
 from demo_game.constants import LOCATION_DISPLAY_NAMES, NPC_FACTIONS
 from demo_game.dialogue import (
@@ -59,17 +61,25 @@ class ControllerCallbacks:
     on_sidebar_data: Callable | None = None      # (display_name, data) -> None
     on_clear_sidebar: Callable | None = None     # () -> None
     on_set_status: Callable | None = None        # (text, duration) -> None
+    # WS streaming callbacks — only fired when ws_url is set on GameController.
+    on_stream_begin: Callable | None = None      # (npc_id: str) -> None
+    on_npc_token: Callable | None = None         # (npc_id: str, chunk: str) -> None
+    on_stream_done: Callable | None = None       # (npc_id: str, turn, color) -> None
 
 
 class GameController:
     """Manages background threads, queues, and interaction dispatch for the demo.
 
     Quest, trade, and give-item handlers are delegated to QuestTradeController.
+    When ws_url and ws_api_key are supplied, dialogue uses the WebSocket streaming
+    path; otherwise falls back to the REST POST path.
 
     Args:
         client: Initialised EngineClient.
         player_id: Player ID string from DemoConfig.
         callbacks: Bound UI callbacks for each result type.
+        ws_url: WebSocket base URL (``ws://…``). None disables streaming.
+        ws_api_key: Bearer token for the WS upgrade request.
     """
 
     def __init__(
@@ -77,20 +87,28 @@ class GameController:
         client: EngineClient,
         player_id: str,
         callbacks: ControllerCallbacks,
+        ws_url: str | None = None,
+        ws_api_key: str = "",
     ) -> None:
         self._client = client
         self._player_id = player_id
         self._cb = callbacks
+        self._ws_url = ws_url
+        self._ws_api_key = ws_api_key
 
         self._response_q: queue.Queue = queue.Queue()
+        self._token_q: queue.Queue = queue.Queue()
         self._sidebar_fetch_q: queue.Queue = queue.Queue()
         self._generate_quest_q: queue.Queue = queue.Queue()
         self._inspect_q: queue.Queue = queue.Queue()
         self._travel_q: queue.Queue = queue.Queue()
         self._bribe_q: queue.Queue = queue.Queue()
+        self._consolidate_memory_q: queue.Queue = queue.Queue()
         self._is_waiting = False
         self._pending_npc_id: str | None = None
         self._last_submitted_message: str = ""
+        self._stream_began: bool = False
+        self._stream_text: str = ""
 
         self._qt = QuestTradeController(
             client=client,
@@ -126,18 +144,30 @@ class GameController:
     # ------------------------------------------------------------------
 
     def submit_dialogue(self, text: str, npc_id: str, location_id: str | None) -> None:
-        """Launch a background thread for POST /v1/dialogue. No-op if already waiting."""
+        """Launch a background thread for dialogue. Uses WS streaming when configured.
+
+        No-op if a dialogue request is already in-flight.
+        """
         if self._is_waiting:
             return
         self._last_submitted_message = text
         payload = build_dialogue_payload(npc_id, text, player_id=self._player_id, location_id=location_id)
         self._pending_npc_id = npc_id
         self._is_waiting = True
-        threading.Thread(
-            target=dialogue_worker,
-            args=(self._client, payload, self._response_q),
-            daemon=True,
-        ).start()
+        self._stream_began = False
+        self._stream_text = ""
+        if self._ws_url:
+            threading.Thread(
+                target=dialogue_ws_worker,
+                args=(self._ws_url, self._ws_api_key, payload, self._token_q),
+                daemon=True,
+            ).start()
+        else:
+            threading.Thread(
+                target=dialogue_worker,
+                args=(self._client, payload, self._response_q),
+                daemon=True,
+            ).start()
 
     def spawn_sidebar_fetch(self, npc_id: str) -> None:
         """Launch a background thread to fetch KNOWS_ABOUT data for npc_id."""
@@ -171,6 +201,18 @@ class GameController:
             daemon=True,
         ).start()
 
+    def spawn_consolidate_memory(self, npc_id: str) -> None:
+        """Launch a background thread to consolidate session turns into a Memory node.
+
+        Args:
+            npc_id: NPC whose session turns to consolidate.
+        """
+        threading.Thread(
+            target=consolidate_memory_worker,
+            args=(self._client, npc_id, self._player_id, self._consolidate_memory_q),
+            daemon=True,
+        ).start()
+
     def spawn_bribe(self, npc_id: str) -> None:
         """Launch a background thread to bribe the selected NPC's faction.
 
@@ -190,6 +232,62 @@ class GameController:
     # ------------------------------------------------------------------
     # Queue polling
     # ------------------------------------------------------------------
+
+    def poll_token_queue(self, active_npc_id: str, right: RightPanelRenderer) -> None:
+        """Drain one WS streaming event and update the UI.
+
+        Called every frame when WS streaming is active. Handles three event types:
+        - ``"token"`` → fires ``on_stream_begin`` on the first token then ``on_npc_token``.
+        - ``"done"`` → clears waiting flag, fires ``on_stream_done``, dispatches proposal.
+        - ``"error"`` → clears waiting flag, fires ``on_error``.
+
+        Args:
+            active_npc_id: Fallback NPC ID when no pending NPC is set.
+            right: Right panel renderer for proposal dispatch.
+        """
+        try:
+            item = self._token_q.get_nowait()
+        except queue.Empty:
+            return
+
+        npc_id = self._pending_npc_id or active_npc_id
+
+        if item[0] == "token":
+            if not self._stream_began:
+                self._stream_began = True
+                if self._cb.on_stream_begin:
+                    self._cb.on_stream_begin(npc_id)
+            self._stream_text += item[1]
+            if self._cb.on_npc_token:
+                self._cb.on_npc_token(npc_id, item[1])
+        elif item[0] == "done":
+            self._is_waiting = False
+            self._stream_began = False
+            metadata = item[1]
+            fake_raw = {
+                "npc_response": self._stream_text,
+                "action": metadata.get("action") or {"type": "speak"},
+                "facial_expression": metadata.get("facial_expression") or {"type": "neutral"},
+                "degradation_level": metadata.get("degradation_level", "full"),
+                "emotion": metadata.get("emotion"),
+                "relation_deltas": metadata.get("relation_deltas") or {},
+            }
+            self._stream_text = ""
+            turn: DialogueTurn = parse_dialogue_response(fake_raw)
+            color = degradation_color(turn.degradation_level)
+            if self._cb.on_stream_done:
+                self._cb.on_stream_done(npc_id, turn, color)
+            self._apply_relation_band(turn)
+            if turn.interaction_proposal:
+                self._dispatch_proposal(turn, npc_id, right)
+            elif self._last_submitted_message == "I'd like to trade.":
+                self._qt.open_trade_fallback(npc_id, right)
+        elif item[0] == "error":
+            self._is_waiting = False
+            self._stream_began = False
+            self._stream_text = ""
+            if self._cb.on_error:
+                self._cb.on_error(npc_id, str(item[1]))
 
     def poll_sidebar_queue(self) -> None:
         """Drain one sidebar-fetch result and fire the appropriate callback."""
@@ -247,6 +345,33 @@ class GameController:
             self._cb.on_set_status(f"Travelled to {item[1]}", 2.0)
         elif item[0] == "err" and self._cb.on_set_status:
             self._cb.on_set_status(f"Travel failed: {item[2]}", 2.0)
+
+    def poll_consolidate_memory_queue(
+        self,
+        on_created: Callable[[str | None], None] | None = None,
+    ) -> None:
+        """Drain one consolidate-memory result, update status, and call on_created.
+
+        Args:
+            on_created: Optional callback receiving the new memory_id (or None
+                        if the turn threshold was not met). Use to trigger a
+                        poller refresh so the MEMORY panel updates.
+        """
+        try:
+            item = self._consolidate_memory_q.get_nowait()
+        except queue.Empty:
+            return
+        if item[0] == "ok":
+            memory_id = item[2]
+            if self._cb.on_set_status:
+                if memory_id:
+                    self._cb.on_set_status("Memory consolidated!", 3.0)
+                else:
+                    self._cb.on_set_status("Not enough dialogue turns for memory", 2.0)
+            if on_created is not None:
+                on_created(memory_id)
+        elif item[0] == "err" and self._cb.on_set_status:
+            self._cb.on_set_status(f"Consolidate failed: {item[2]}", 2.0)
 
     def poll_bribe_queue(self) -> None:
         """Drain one bribe result and update status bar."""

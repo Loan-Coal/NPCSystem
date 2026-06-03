@@ -103,6 +103,24 @@ def bribe_worker(
         result_q.put(("err", npc_id, exc))
 
 
+def consolidate_memory_worker(
+    client: EngineClient,
+    npc_id: str,
+    player_id: str,
+    result_q: queue.Queue,
+) -> None:
+    """Consolidate session dialogue turns for npc_id into a Memory node.
+
+    Pushes ("ok", npc_id, memory_id) if a memory was created (memory_id may be
+    None if the turn threshold was not met), or ("err", npc_id, exc) on failure.
+    """
+    try:
+        memory_id = client.consolidate_memory(npc_id, player_id)
+        result_q.put(("ok", npc_id, memory_id))
+    except Exception as exc:
+        result_q.put(("err", npc_id, exc))
+
+
 def inspect_worker(client: EngineClient, npc_id: str, result_q: queue.Queue) -> None:
     """Fetch all NPC graph data and push ("ok", npc_id, data_dict) or ("err", npc_id, exc).
 
