@@ -4,8 +4,9 @@ Layer: graph
 Purpose: Write operations for Army, ResourceNode, and OCCUPIES/COMMANDS/PRODUCES
          relationships (Phase 7.4 Strategy/4X).
 Does NOT: read graph state beyond what MERGE requires, call LLMs, or import engine code.
+         Territory/control writes are in military_control_writer.py.
 Dependencies injected: None (pure Cypher, session passed per call).
-Used by: npc_engine.engines.military.military_engine
+Used by: npc_engine.engines.military.military_engine, npc_engine.graph.military_control_writer
 """
 
 from __future__ import annotations

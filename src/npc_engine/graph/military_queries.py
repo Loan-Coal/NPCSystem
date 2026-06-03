@@ -118,6 +118,33 @@ async def get_controlled_locations(
     return [dict(r) async for r in result]
 
 
+async def get_faction_resource_nodes(
+    session: AsyncSession,
+) -> list[dict[str, Any]]:
+    """Fetch all (faction, resource_node) pairs for non-depleted resources.
+
+    Returns one row per faction+resource combination where the faction controls
+    the producing location and the resource node is not fully depleted.
+
+    Args:
+        session: Active Neo4j async session.
+
+    Returns:
+        List of dicts: faction_id, resource_node_id, yield_per_tick, depletion.
+    """
+    result = await session.run(
+        """
+        MATCH (f:Faction)-[:CONTROLS]->(loc:Location)-[:PRODUCES]->(r:ResourceNode)
+        WHERE r.depletion > 0
+        RETURN f.id AS faction_id,
+               r.id AS resource_node_id,
+               r.yield_per_tick AS yield_per_tick,
+               r.depletion AS depletion
+        """
+    )
+    return [dict(r) async for r in result]
+
+
 async def get_armies_in_conflict(
     session: AsyncSession,
 ) -> list[dict[str, Any]]:
