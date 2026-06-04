@@ -38,37 +38,18 @@ def _make_handler(emotion_updater=None, emotion_threshold: int = 50):
     )
 
 
-def _make_mock_session(severity: int):
-    """Return an AsyncMock session that yields one event record with given severity."""
-    session = AsyncMock()
+def _make_mock_session() -> AsyncMock:
+    """Return an AsyncMock session (graph functions are patched separately)."""
+    return AsyncMock()
 
-    event_record = MagicMock()
-    event_record.__getitem__ = lambda s, k: {
+
+def _event_data(severity: int) -> dict:
+    return {
         "event_id": "e-rumor",
         "summary": "The captain is a traitor",
         "severity": severity,
         "is_canonical": False,
-    }[k]
-    event_record.get = lambda k, default=None: {
-        "is_canonical": False,
-    }.get(k, default)
-
-    trust_record = MagicMock()
-    trust_record.__getitem__ = lambda s, k: {"trust": 50}[k]
-
-    call_count = [0]
-
-    async def _run_side(query, **kwargs):
-        res = AsyncMock()
-        if call_count[0] == 0:
-            res.single = AsyncMock(return_value=event_record)
-        else:
-            res.single = AsyncMock(return_value=trust_record)
-        call_count[0] += 1
-        return res
-
-    session.run = _run_side
-    return session
+    }
 
 
 @pytest.mark.asyncio
@@ -81,9 +62,11 @@ async def test_emotion_shock_called_for_high_severity():
     pairs = [
         ({"id": "sharer-1", "honesty": 50}, {"id": "receiver-1"}, "loc-1", {"best_standing": None})
     ]
-    session = _make_mock_session(severity=75)
+    session = _make_mock_session()
 
     with patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new_callable=AsyncMock, return_value=pairs), \
+         patch("npc_engine.engines.gossip.gossip_handler.select_gossip_event", new_callable=AsyncMock, return_value=_event_data(75)), \
+         patch("npc_engine.engines.gossip.gossip_handler.select_relation_trust", new_callable=AsyncMock, return_value=50), \
          patch("npc_engine.engines.gossip.gossip_handler.propagate", new_callable=AsyncMock), \
          patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock), \
          patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock), \
@@ -108,9 +91,11 @@ async def test_emotion_shock_not_called_for_low_severity():
     pairs = [
         ({"id": "sharer-1", "honesty": 50}, {"id": "receiver-1"}, "loc-1", {"best_standing": None})
     ]
-    session = _make_mock_session(severity=30)
+    session = _make_mock_session()
 
     with patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new_callable=AsyncMock, return_value=pairs), \
+         patch("npc_engine.engines.gossip.gossip_handler.select_gossip_event", new_callable=AsyncMock, return_value=_event_data(30)), \
+         patch("npc_engine.engines.gossip.gossip_handler.select_relation_trust", new_callable=AsyncMock, return_value=50), \
          patch("npc_engine.engines.gossip.gossip_handler.propagate", new_callable=AsyncMock), \
          patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock), \
          patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock), \
@@ -133,9 +118,11 @@ async def test_emotion_shock_skipped_when_no_updater():
     pairs = [
         ({"id": "sharer-1", "honesty": 50}, {"id": "receiver-1"}, "loc-1", {"best_standing": None})
     ]
-    session = _make_mock_session(severity=90)
+    session = _make_mock_session()
 
     with patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new_callable=AsyncMock, return_value=pairs), \
+         patch("npc_engine.engines.gossip.gossip_handler.select_gossip_event", new_callable=AsyncMock, return_value=_event_data(90)), \
+         patch("npc_engine.engines.gossip.gossip_handler.select_relation_trust", new_callable=AsyncMock, return_value=50), \
          patch("npc_engine.engines.gossip.gossip_handler.propagate", new_callable=AsyncMock), \
          patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock), \
          patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock), \
@@ -160,9 +147,11 @@ async def test_emotion_shock_at_exact_threshold():
     pairs = [
         ({"id": "sharer-1", "honesty": 50}, {"id": "receiver-1"}, "loc-1", {"best_standing": None})
     ]
-    session = _make_mock_session(severity=50)
+    session = _make_mock_session()
 
     with patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new_callable=AsyncMock, return_value=pairs), \
+         patch("npc_engine.engines.gossip.gossip_handler.select_gossip_event", new_callable=AsyncMock, return_value=_event_data(50)), \
+         patch("npc_engine.engines.gossip.gossip_handler.select_relation_trust", new_callable=AsyncMock, return_value=50), \
          patch("npc_engine.engines.gossip.gossip_handler.propagate", new_callable=AsyncMock), \
          patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock), \
          patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock), \

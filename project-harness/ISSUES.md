@@ -634,6 +634,14 @@ current mapping is good enough for demo badge display and does not affect correc
 
 ---
 
+## ISSUE-056: 20 pre-existing test failures in HEAD blocking `make check`
+**Found:** 2026-06-04, during SEV-04 gossip migration
+**Severity:** P2 (test suite not green; `make check` was already failing in HEAD before SEV-04)
+**Where:** tests/unit/test_quest_lifecycle_engine_v14.py (8), test_quest_reward_routing_v14.py (4), test_quest_event_provenance_v14.py (3), test_sev06_semaphore.py (2), test_structured_output_sev27.py (2), test_error_swallowing_sev18.py (1)
+**Description:** These tests were committed in prior sessions but their production code later diverged. Root causes vary: `QuestLifecycleEngine.__init__` now requires `TypeRegistry` but tests don't inject it; `SessionStore.append_turns` is now async (SEV-05) but sev06 test calls it synchronously; structured-output test mocks differ from the SEV-27 implementation; sev18 witnessed-query test patch path is wrong.
+**Why deferred:** Pre-existing in HEAD before SEV-04. Fixing 20 unrelated test failures is outside SEV-04 scope. Each requires understanding the specific module's current interface.
+**To fix:** Fix each test group separately: (1) Update `test_quest_lifecycle_engine_v14.py` to inject `TypeRegistry`; (2) Update `test_sev06_semaphore.py` to `await store.append_turns()`; (3) Reconcile `test_structured_output_sev27.py` mock with actual llm_client interface; (4) Fix patch path in `test_error_swallowing_sev18.py::test_witnessed_query_failure_logs_warning`. Consider fixing during SEV-39 (targeted tests for worst-covered risk modules).
+
 ## ISSUE-055: `api_seeder.py` uses get-then-skip; consider client-supplied stable ids long-term
 **Found:** 2026-06-04, during SEV-10 planning
 **Severity:** P3 (nice-to-fix)

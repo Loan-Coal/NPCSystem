@@ -146,7 +146,6 @@ class DialogueLLMClient:
             extra={"model": self._llm_client.model_name()},
         )
         return self._fallback_with_metrics(labels=labels, fallback_reason="validation_error")
->>>>>>> worktree-agent-a62d7ed9d57354274
 
     def fallback_response_payload(self) -> dict:
         """Return a deterministic fallback payload for callers that need safe recovery.

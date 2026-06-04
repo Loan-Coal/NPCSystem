@@ -13,7 +13,7 @@ reason before the fix and pass after, without requiring a live Neo4j.
 
 from __future__ import annotations
 
-from npc_engine.engines.gossip.gossip_handler import CYPHER_SELECT_EVENT
+from npc_engine.graph.gossip_queries import CYPHER_SELECT_EVENT
 
 
 def test_select_event_returns_is_canonical():

@@ -91,6 +91,23 @@
       "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem",
       "c:\\Users\\lohan\\.claude\\plans",
       "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem\\.cache\\demo"
+      "Bash(python -m pytest tests/unit/ -q --ignore=tests/unit/test_architecture_conformance.py)",
+      "Bash(python -m pytest tests/unit/test_generic_graph_service.py::test_upsert_node_serializes_dict_fields_for_storage -q -s)",
+      "Bash(python -m pytest tests/unit/test_quest_event_provenance_v14.py -q)",
+      "Bash(python -m pytest tests/unit/test_type_registry_validator.py::test_validate_node_payload_rejects_invalid_list_item_shape -q -s)",
+      "Bash(python -m pytest tests/unit/test_embedding_reconciler.py -q)",
+      "Bash(python -m pytest tests/unit/test_context_builder.py -q)",
+      "Bash(python -m pytest tests/unit/test_dialogue_context_cache.py -q)",
+      "Bash(python -m pytest tests/unit/test_degradation.py -v)",
+      "Bash(python -m pytest tests/unit/ -v --tb=short)",
+      "Bash(python -m pytest tests/unit/test_dialogue_handler_fallback_v14.py -v --tb=long)",
+      "Bash(python -m pytest tests/unit/test_dialogue_handler_fallback_v14.py tests/unit/test_degradation.py -v --tb=short)",
+      "Bash(python -m pytest tests/unit/ -q --tb=line)",
+      "Bash(python -m pytest tests/unit/test_main_reconciler_lifespan.py -v --tb=short)",
+      "Bash(python -m pytest tests/unit/ --tb=no -q)",
+      "Bash(xargs wc *)",
+      "Bash(python -m pytest --tb=no -q)",
+      "Bash(python -m pytest tests/unit/utils/ -v --tb=short)"
     ]
   }
 }

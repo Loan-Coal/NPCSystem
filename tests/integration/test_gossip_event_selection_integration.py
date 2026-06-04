@@ -18,7 +18,7 @@ from uuid import uuid4
 import pytest
 from neo4j import AsyncGraphDatabase
 
-from npc_engine.engines.gossip.gossip_handler import CYPHER_SELECT_EVENT
+from npc_engine.graph.gossip_queries import CYPHER_SELECT_EVENT
 from npc_engine.graph.rumor_trace_service import correct_rumor_at_npc
 
 

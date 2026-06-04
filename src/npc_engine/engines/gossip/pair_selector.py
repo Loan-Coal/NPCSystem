@@ -13,30 +13,7 @@ from neo4j import AsyncSession
 from npc_engine.engines.gossip.gossip_config import GossipWeightConfig
 from npc_engine.engines.gossip.pair_weighting import compute_faction_weight
 from npc_engine.graph.goal_queries import get_goals_for_character
-
-
-CYPHER_GOSSIP_PAIRS = """
-MATCH (a:Character)-[:LOCATED_AT]->(loc:Location)<-[:LOCATED_AT]-(b:Character)
-WHERE a.id <> b.id
-    AND a.is_player = false AND b.is_player = false
-    AND a.is_active = true AND b.is_active = true
-OPTIONAL MATCH (a)-[:MEMBER_OF]->(fa:Faction)
-WHERE fa.is_active = true
-OPTIONAL MATCH (b)-[:MEMBER_OF]->(fb:Faction)
-WHERE fb.is_active = true
-OPTIONAL MATCH (fa)-[sw:STANDS_WITH]->(fb)
-WITH a, b, loc,
-     collect(DISTINCT fa.id) AS a_faction_ids,
-     collect(DISTINCT fb.id) AS b_faction_ids,
-     max(sw.standing) AS best_standing
-RETURN properties(a) AS a, properties(b) AS b, properties(loc) AS loc,
-       a_faction_ids, b_faction_ids, best_standing
-"""
-
-CYPHER_KNOWN_NODE_IDS = """
-MATCH (c:Character {id: $character_id})-[:KNOWS_ABOUT]->(n)
-RETURN n.id AS node_id
-"""
+from npc_engine.graph.gossip_queries import fetch_gossip_pairs, fetch_known_node_ids
 
 _GOAL_ALIGNMENT_BONUS = 10
 
@@ -62,17 +39,8 @@ async def _fetch_goal_target_ids(session: AsyncSession, character_id: str) -> se
 
 
 async def _fetch_known_node_ids(session: AsyncSession, character_id: str) -> set[str]:
-    """Return the set of node IDs this character knows about via KNOWS_ABOUT edges.
-
-    Args:
-        session: Active Neo4j async session.
-        character_id: Character node ID to query knowledge for.
-
-    Returns:
-        Set of known node ID strings.
-    """
-    result = await session.run(CYPHER_KNOWN_NODE_IDS, character_id=character_id)
-    return {record["node_id"] async for record in result if record["node_id"]}
+    """Delegate to graph layer: returns node IDs known by character via KNOWS_ABOUT."""
+    return await fetch_known_node_ids(session, character_id=character_id)
 
 
 async def select_pairs(
@@ -97,8 +65,7 @@ async def select_pairs(
         List of (sharer, receiver, location, faction_ctx) tuples, limited to max_pairs.
         faction_ctx contains ``a_faction_ids``, ``b_faction_ids``, and ``best_standing``.
     """
-    result = await session.run(CYPHER_GOSSIP_PAIRS)
-    rows = [record.data() async for record in result]
+    rows = await fetch_gossip_pairs(session)
 
     # Build goal-alignment bonus map — skip entirely when no rows
     goal_alignment: dict[tuple[str, str], int] = {}

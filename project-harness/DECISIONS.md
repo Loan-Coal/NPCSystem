@@ -569,6 +569,13 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Why:** The nested mypy.ini pinned `python_version = 3.11` (stack is 3.14), silently inflating error counts. The nested docker-compose.yml used a module path that no longer exists. All copies had diverged from root versions.
 **Consequence:** None — no Makefile or CI reference pointed to these paths.
 
+## DEC-060: main.py grandfathered at 361 lines pending SEV-23 split
+**Date:** 2026-06-04
+**Context:** SEV-33 added 77 lines to `src/npc_engine/main.py` (284 → 361), pushing it over the 300-line hard limit. This was not caught in that session. SEV-23 tracks splitting all over-300 files.
+**Decision:** Waiver granted. `main.py` added to the rules baseline as a grandfathered violation. Will be resolved when SEV-23 executes.
+**Why:** Splitting `main.py` mid-session during SEV-04 would expand scope and risk regressions in unrelated code. The violation was introduced by a committed prior fix, not by the current change.
+**Consequence:** `make check-rules` passes with a baselined exception. SEV-23 must un-grandfather this when it splits the file.
+
 ## DEC-059: MemoryConsolidationEngine.run_tick opens per-task Neo4j sessions from GraphDB
 **Date:** 2026-06-04
 **Context:** SEV-06 — `run_tick` previously iterated NPCs sequentially with a single shared `AsyncSession`. Neo4j `AsyncSession` objects are not concurrency-safe.

@@ -11,18 +11,15 @@ from __future__ import annotations
 from neo4j import AsyncSession
 
 from npc_engine.engines.gossip.gossip_distort import GossipDistortion
+from npc_engine.graph.gossip_write_queries import (
+    write_knowledge_propagation,
+    write_secret_propagation,
+)
 
-
-CYPHER_PROPAGATE_KNOWLEDGE = """
-MATCH (receiver:Character {id: $receiver_id}), (event:Event {id: $event_id})
-MERGE (receiver)-[k:KNOWS_ABOUT]->(event)
-SET k.knowledge_state = $knowledge_state,
-    k.distortion_type = $distortion_type,
-    k.distortion_level = $distortion_level,
-    k.distorted_summary = $distorted_summary,
-    k.learned_at_tick = $tick_id,
-    k.source_character_id = $source_character_id
-"""
+# Secrets propagate with lower base probability and higher distortion chance
+# than standard events. These constants are used by gossip_handler.
+SECRET_BASE_PROBABILITY: float = 0.2
+SECRET_DISTORTION_CHANCE: float = 0.5
 
 
 async def propagate(
@@ -46,10 +43,9 @@ async def propagate(
         tick_id: Current game tick recorded on the edge.
         distortion: Distortion payload determining knowledge state and summary.
     """
-
     knowledge_state = "knows" if distortion.distortion_type is None else "rumor"
-    await session.run(
-        CYPHER_PROPAGATE_KNOWLEDGE,
+    await write_knowledge_propagation(
+        session=session,
         receiver_id=receiver_id,
         event_id=event_id,
         knowledge_state=knowledge_state,
@@ -59,20 +55,6 @@ async def propagate(
         tick_id=tick_id,
         source_character_id=source_character_id,
     )
-
-
-CYPHER_PROPAGATE_SECRET = """
-MATCH (receiver:Character {id: $receiver_id}), (secret:Secret {id: $secret_id})
-MERGE (receiver)-[k:KNOWS_SECRET]->(secret)
-SET k.knowledge_state = $knowledge_state,
-    k.learned_at_tick = $tick_id,
-    k.source_character_id = $source_character_id
-"""
-
-# Secrets propagate with lower base probability and higher distortion chance
-# than standard events. These constants are used by gossip_handler.
-SECRET_BASE_PROBABILITY: float = 0.2
-SECRET_DISTORTION_CHANCE: float = 0.5
 
 
 async def propagate_secret(
@@ -98,11 +80,11 @@ async def propagate_secret(
         distorted: When True the edge is marked as a rumor rather than direct knowledge.
     """
     knowledge_state = "rumor" if distorted else "knows"
-    await session.run(
-        CYPHER_PROPAGATE_SECRET,
+    await write_secret_propagation(
+        session=session,
         receiver_id=receiver_id,
         secret_id=secret_id,
-        knowledge_state=knowledge_state,
-        tick_id=tick_id,
         source_character_id=source_character_id,
+        tick_id=tick_id,
+        knowledge_state=knowledge_state,
     )

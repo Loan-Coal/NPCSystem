@@ -292,8 +292,8 @@ def create_app() -> FastAPI:
     app = FastAPI(title="NPC Engine", version="0.1.0", lifespan=lifespan)
 
     # Exception handlers — registered before middleware so they apply to all errors.
-    app.add_exception_handler(RequestValidationError, _validation_error_handler)
-    app.add_exception_handler(HTTPException, _http_error_handler)
+    app.add_exception_handler(RequestValidationError, _validation_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(HTTPException, _http_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, _internal_error_handler)
 
     # Middleware is applied in reverse registration order (last added = outermost).

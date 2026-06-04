@@ -26,6 +26,11 @@ from npc_engine.engines.gossip.knowledge_propagator import (
     SECRET_DISTORTION_CHANCE,
 )
 from npc_engine.engines.gossip.pair_selector import select_pairs
+from npc_engine.graph.gossip_queries import (
+    select_gossip_event,
+    select_gossip_secret,
+    select_relation_trust,
+)
 from npc_engine.graph.rumor_service import believe_rumor, create_rumor
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
 
@@ -36,31 +41,6 @@ if TYPE_CHECKING:
 
 
 LOGGER = logging.getLogger(__name__)
-
-
-CYPHER_SELECT_EVENT = """
-MATCH (a:Character {id: $sharer_id})-[k:KNOWS_ABOUT]->(e:Event)
-WHERE coalesce(k.knowledge_state, '') <> 'corrected'
-RETURN e.id AS event_id,
-       e.summary AS summary,
-       e.severity AS severity,
-       coalesce(e.is_canonical, false) AS is_canonical
-ORDER BY coalesce(e.is_canonical, false) DESC,
-         e.occurred_at DESC
-LIMIT 1
-"""
-
-CYPHER_RELATION_TRUST = """
-MATCH (a:Character {id: $sharer_id})-[r:RELATES_TO]->(b:Character {id: $receiver_id})
-RETURN r.trust AS trust
-"""
-
-CYPHER_SELECT_SECRET = """
-MATCH (a:Character {id: $sharer_id})-[:KNOWS_SECRET]->(s:Secret)
-RETURN s.id AS secret_id, s.severity AS severity
-ORDER BY s.severity DESC
-LIMIT 1
-"""
 
 
 class GossipHandler:
@@ -119,17 +99,14 @@ class GossipHandler:
                 pairs = [pair for pair in pairs if pair[0]["id"] in allowed or pair[1]["id"] in allowed]
             propagated = 0
             for sharer, receiver, _loc, faction_ctx in pairs:
-                event_result = await session.run(CYPHER_SELECT_EVENT, sharer_id=sharer["id"])
-                event_record = await event_result.single()
+                event_record = await select_gossip_event(session, sharer_id=sharer["id"])
                 if event_record is None:
                     continue
-                trust_result = await session.run(
-                    CYPHER_RELATION_TRUST,
+                trust = await select_relation_trust(
+                    session,
                     sharer_id=sharer["id"],
                     receiver_id=receiver["id"],
                 )
-                trust_record = await trust_result.single()
-                trust = int(trust_record["trust"]) if trust_record is not None else 50
                 best_standing: int | None = faction_ctx.get("best_standing")
                 severity_int = int(event_record["severity"])
                 distortion = gossip_distort(
@@ -206,10 +183,7 @@ class GossipHandler:
 
                 # Secret propagation: lower base probability, higher distortion.
                 if random.random() < SECRET_BASE_PROBABILITY:
-                    secret_result = await session.run(
-                        CYPHER_SELECT_SECRET, sharer_id=sharer["id"]
-                    )
-                    secret_record = await secret_result.single()
+                    secret_record = await select_gossip_secret(session, sharer_id=sharer["id"])
                     if secret_record is not None:
                         distorted = random.random() < SECRET_DISTORTION_CHANCE
                         await propagate_secret(

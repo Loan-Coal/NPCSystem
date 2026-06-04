@@ -322,7 +322,7 @@ def seed(base_url: str, api_key: str) -> int:
     print("Seeding factions ...")
     for faction in _FACTIONS:
         label = f"Faction:{faction['id']}"
-        if _faction_exists(base_url, api_key, faction["id"]):
+        if _faction_exists(base_url, api_key, str(faction["id"])):
             c.record(label, 409)
         else:
             status, _ = _call("POST", f"{base_url}/v1/admin/factions/", api_key, faction)
