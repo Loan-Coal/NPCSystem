@@ -1,10 +1,14 @@
 """
-neo4j_queries.py - Cypher query strings for idempotency record persistence.
-
+Module: idempotency_queries
+Layer: graph
+Purpose: Cypher query strings for idempotency record persistence.
 Does NOT: execute queries or hold connection state.
-
 Dependencies injected: None.
+Used by: graph.idempotency_writer
 """
+
+from __future__ import annotations
+
 
 CYPHER_ENSURE_IDEMPOTENCY_CONSTRAINT = """
 CREATE CONSTRAINT idempotency_record_key IF NOT EXISTS

@@ -10,7 +10,7 @@ from typing import Protocol
 
 from neo4j import AsyncSession
 
-from npc_engine.engines.idempotency.models import IdempotencyRecord
+from npc_engine.graph.idempotency_models import IdempotencyRecord
 
 
 class IdempotencyStoreProtocol(Protocol):

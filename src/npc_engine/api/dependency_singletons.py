@@ -18,7 +18,7 @@ from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
 from npc_engine.engines.events.event_handler import EventHandler
 from npc_engine.engines.gossip.gossip_config import load_gossip_config
 from npc_engine.engines.gossip.gossip_handler import GossipHandler
-from npc_engine.engines.idempotency.neo4j_store import Neo4jIdempotencyStore
+from npc_engine.graph.idempotency_writer import Neo4jIdempotencyStore
 from npc_engine.engines.idempotency.service import IdempotencyService
 from npc_engine.engines.economy.pricing_engine import PricingEngine
 from npc_engine.engines.economy.pricing_rules_loader import load_pricing_rules
