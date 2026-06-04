@@ -11,6 +11,8 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 import logging
 
 from neo4j import AsyncSession
@@ -56,7 +58,7 @@ async def get_item_price(
     character_id: str = Query(..., min_length=1),
     session: AsyncSession = Depends(get_db_session),
     pricing_engine: PricingEngine = Depends(get_pricing_engine),
-) -> dict:
+) -> dict[str, Any]:
     """Compute the current fair price for an item at a character's location.
 
     Args:
@@ -91,7 +93,7 @@ async def evaluate_trade(
     body: TradeOfferRequest,
     session: AsyncSession = Depends(get_db_session),
     trade_engine: TradeEngine = Depends(get_trade_engine),
-) -> dict:
+) -> dict[str, Any]:
     """Evaluate a trade offer and execute transfers if accepted.
 
     Args:

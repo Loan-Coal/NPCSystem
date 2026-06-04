@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from typing import cast
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
 from npc_engine.engines.dialogue.dialogue_models import DialogueRequest
@@ -56,7 +57,7 @@ def build_system_prompt() -> str:
     prompt_data = load_yaml_mapping(
         _PROMPT_PATH, "prompts/dialogue/system_v1.yaml must be a mapping"
     )
-    return prompt_data["system"]
+    return cast(str, prompt_data["system"])
 
 
 def _extract_personal_accounts(serialized_context: str) -> list[str]:

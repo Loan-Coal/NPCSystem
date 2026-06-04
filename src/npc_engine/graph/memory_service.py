@@ -10,7 +10,7 @@ Used by: npc_engine.engines.memory.memory_engine, npc_engine.retrieval.context_b
 from __future__ import annotations
 
 import uuid
-from typing import Any, cast
+from typing import Any
 
 from neo4j import AsyncSession
 
@@ -86,10 +86,7 @@ async def get_memories_for_character_svc(
     Returns:
         List of memory property dicts sorted by vividness descending.
     """
-    return cast(
-        list[dict[str, Any]],
-        await get_memories_for_character(session, character_id=character_id, k=k),
-    )
+    return await get_memories_for_character(session, character_id=character_id, k=k)
 
 
 async def decay_all_vividness(

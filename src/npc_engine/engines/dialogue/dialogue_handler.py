@@ -32,6 +32,7 @@ from npc_engine.engines.tts.protocols import TTSClientProtocol
 from npc_engine.engines.tts.voice_modulator import modulate as modulate_voice
 from npc_engine.engines.tts.voice_params import VoiceParams
 from npc_engine.graph.graph_reader import get_npc_voice_descriptor
+from npc_engine.retrieval.context_builder import EmbeddingIndexProtocol
 from npc_engine.retrieval.context_builder import build_serialized_context
 from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache, PartialDialogueContextCache
 from npc_engine.schema.context_config_models import LLMConfig
@@ -58,7 +59,7 @@ class DialogueHandler:
         engine_model_config: EngineModelConfig,
         session_store: SessionStore,
         emotion_updater: EmotionUpdater,
-        embedding_index: object,
+        embedding_index: EmbeddingIndexProtocol,
         context_cache: PartialDialogueContextCache | DialogueContextCache | None = None,
         tts_client: TTSClientProtocol | None = None,
     ) -> None:
@@ -122,7 +123,7 @@ class DialogueHandler:
             archetype="default",
             canned_dir=Path(self._settings.CANNED_RESPONSES_DIR),
             full_timeout=self._engine_model_config.timeouts_ms.full / 1000.0,
-            graph_only_timeout=self._engine_model_config.timeouts_ms.graph_only / 1000.0,
+            graph_only_timeout=(self._engine_model_config.timeouts_ms.graph_only or 0) / 1000.0,
         )
 
         resolved_action = resolve_action(action=parsed_response.action)

@@ -11,6 +11,8 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
@@ -42,7 +44,7 @@ class SpreadRumorRequest(BaseModel):
 async def spread_rumor_route(
     body: SpreadRumorRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Inject a player-planted lie into a target NPC's KNOWS_ABOUT graph.
 
     The NPC immediately acquires the rumor as a KNOWS_ABOUT edge with
@@ -51,7 +53,7 @@ async def spread_rumor_route(
     pipeline.
 
     Args:
-        body: target_npc_id, rumor_text, severity (0–100), and current tick_id.
+        body: target_npc_id, rumor_text, severity (0â€“100), and current tick_id.
 
     Returns:
         Envelope with event_id and npc_id.

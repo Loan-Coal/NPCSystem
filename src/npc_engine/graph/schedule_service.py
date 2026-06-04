@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from typing import Any, cast
+from typing import Any
 
 from neo4j import AsyncSession
 
@@ -137,7 +137,7 @@ class ScheduleService:
         result = await get_schedule(self._session, schedule_id)
         if result is None:
             raise ScheduleNotFoundError(schedule_id=schedule_id)
-        return cast(dict[str, Any], result)
+        return result
 
     async def get_character_schedule(self, character_id: str) -> dict[str, Any] | None:
         """Fetch the Schedule a character follows, or None if unassigned.
@@ -148,10 +148,7 @@ class ScheduleService:
         Returns:
             Dict of schedule properties, or None.
         """
-        return cast(
-            dict[str, Any] | None,
-            await get_character_schedule(self._session, character_id),
-        )
+        return await get_character_schedule(self._session, character_id)
 
     async def get_character_location_at(
         self, character_id: str, time_of_day: str

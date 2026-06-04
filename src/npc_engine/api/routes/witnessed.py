@@ -10,6 +10,8 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends, Query
 
@@ -28,7 +30,7 @@ router = APIRouter(prefix="/witnessed", tags=["witnessed"])
 async def get_event_witnesses(
     event_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Return all characters who witnessed a given event.
 
     Args:
@@ -46,7 +48,7 @@ async def get_observations_of_subject(
     subject_id: str,
     limit: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Return all WITNESSED edges pointing at a subject character.
 
     Args:
@@ -66,7 +68,7 @@ async def disclose_witness(
     subject_id: str = Query(...),
     event_id: str = Query(...),
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Mark a WITNESSED edge as disclosed (the witness has shared the information).
 
     Args:

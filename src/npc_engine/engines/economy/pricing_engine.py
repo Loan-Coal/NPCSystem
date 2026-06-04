@@ -59,9 +59,9 @@ class PricingEngine:
                 price *= mod.multiplier
 
         for event_type in active_event_types:
-            for mod in self._rules.event_modifiers:
-                if mod.event_type == event_type and mod.item_type == item_type:
-                    price *= mod.multiplier
+            for event_mod in self._rules.event_modifiers:
+                if event_mod.event_type == event_type and event_mod.item_type == item_type:
+                    price *= event_mod.multiplier
 
         if is_faction_member:
             price *= 1.0 - self._rules.faction_discount

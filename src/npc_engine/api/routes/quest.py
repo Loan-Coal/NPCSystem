@@ -8,6 +8,8 @@ Dependencies injected: AsyncSession, QuestLifecycleEngine, Settings.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from neo4j import AsyncSession
 
@@ -138,7 +140,7 @@ async def offer_draft_quest(
     session: AsyncSession = Depends(get_db_session),
     engine: QuestLifecycleEngine = Depends(get_quest_lifecycle_engine),
     settings: Settings = Depends(get_settings),
-) -> dict:
+) -> dict[str, Any]:
     """Transition a generated draft quest to offered status for a player.
 
     The quest_id must reference a Quest node written by the generator
@@ -178,7 +180,7 @@ async def offer_quest(
     session: AsyncSession = Depends(get_db_session),
     engine: QuestLifecycleEngine = Depends(get_quest_lifecycle_engine),
     settings: Settings = Depends(get_settings),
-) -> dict:
+) -> dict[str, Any]:
     """Offer a quest and create the initial offered lifecycle state."""
 
     try:
@@ -216,7 +218,7 @@ async def accept_quest(
     session: AsyncSession = Depends(get_db_session),
     engine: QuestLifecycleEngine = Depends(get_quest_lifecycle_engine),
     settings: Settings = Depends(get_settings),
-) -> dict:
+) -> dict[str, Any]:
     """Accept one offered quest for a player."""
 
     try:
@@ -245,7 +247,7 @@ async def update_objective(
     session: AsyncSession = Depends(get_db_session),
     engine: QuestLifecycleEngine = Depends(get_quest_lifecycle_engine),
     settings: Settings = Depends(get_settings),
-) -> dict:
+) -> dict[str, Any]:
     """Apply one quest objective progress update."""
 
     try:
@@ -276,7 +278,7 @@ async def evaluate_completion(
     session: AsyncSession = Depends(get_db_session),
     engine: QuestLifecycleEngine = Depends(get_quest_lifecycle_engine),
     settings: Settings = Depends(get_settings),
-) -> dict:
+) -> dict[str, Any]:
     """Evaluate quest completion based on objective progress."""
 
     try:
@@ -305,7 +307,7 @@ async def apply_rewards(
     session: AsyncSession = Depends(get_db_session),
     engine: QuestLifecycleEngine = Depends(get_quest_lifecycle_engine),
     settings: Settings = Depends(get_settings),
-) -> dict:
+) -> dict[str, Any]:
     """Apply rewards for one completed quest using converged coordinator write paths."""
 
     try:

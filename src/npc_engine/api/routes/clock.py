@@ -8,7 +8,7 @@ Dependencies injected: TickScheduler, AsyncSession.
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from neo4j import AsyncSession
@@ -48,7 +48,7 @@ async def advance_clock(
     session: AsyncSession = Depends(get_db_session),
     scheduler: TickScheduler = Depends(get_tick_scheduler),
     settings: Settings = Depends(get_settings),
-) -> dict:
+) -> dict[str, Any]:
     """Advance clock and trigger due engine ticks.
 
     When advance_time_field is provided, also advances that structured time
@@ -94,7 +94,7 @@ async def advance_clock(
             if request.advance_time_field == "day":
                 await MemoryEngine().decay_vividness(session)
 
-        payload: dict[str, Any] = cast(dict[str, Any], result)
+        payload: dict[str, Any] = result
         if updated_world is not None:
             payload = {**payload, "world_state": updated_world.model_dump()}
         return ok_response(payload)
@@ -112,13 +112,13 @@ async def advance_clock(
 
 
 @router.get("/clock/state")
-async def clock_state(scheduler: TickScheduler = Depends(get_tick_scheduler)) -> dict:
+async def clock_state(scheduler: TickScheduler = Depends(get_tick_scheduler)) -> dict[str, Any]:
     """Return current clock snapshot with per-engine status.
 
-    Includes ``engine_status`` — a dict mapping engine name to its last-run
+    Includes ``engine_status`` â€” a dict mapping engine name to its last-run
     tick id and last error. Used by the S6.0 observability dashboard.
     """
-    payload = cast(dict[str, Any], scheduler.state.model_dump())
+    payload = scheduler.state.model_dump()
     payload["next_gossip_tick"] = scheduler.next_gossip_tick
     payload["next_event_tick"] = scheduler.next_event_tick
     payload["engine_status"] = scheduler.engine_status

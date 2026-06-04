@@ -6,6 +6,8 @@ Does NOT: perform authentication itself.
 Dependencies injected: GraphAdminService.
 """
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -53,7 +55,7 @@ router = APIRouter(prefix="/graph")
 
 
 @router.delete("/characters/{character_id}")
-async def hard_delete_character(character_id: str, service: GraphAdminService = Depends(get_graph_admin_service)) -> dict:
+async def hard_delete_character(character_id: str, service: GraphAdminService = Depends(get_graph_admin_service)) -> dict[str, Any]:
     """Hard-delete a character and all associated edges from the graph."""
     try:
         data = await service.hard_delete_character(character_id=character_id)
@@ -63,7 +65,7 @@ async def hard_delete_character(character_id: str, service: GraphAdminService = 
 
 
 @router.delete("/events/{event_id}")
-async def hard_delete_event(event_id: str, service: GraphAdminService = Depends(get_graph_admin_service)) -> dict:
+async def hard_delete_event(event_id: str, service: GraphAdminService = Depends(get_graph_admin_service)) -> dict[str, Any]:
     """Hard-delete an event and all associated edges from the graph."""
     try:
         data = await service.hard_delete_event(event_id=event_id)
@@ -73,7 +75,7 @@ async def hard_delete_event(event_id: str, service: GraphAdminService = Depends(
 
 
 @router.delete("/locations/{location_id}")
-async def hard_delete_location(location_id: str, service: GraphAdminService = Depends(get_graph_admin_service)) -> dict:
+async def hard_delete_location(location_id: str, service: GraphAdminService = Depends(get_graph_admin_service)) -> dict[str, Any]:
     """Hard-delete a location and all associated edges from the graph."""
     try:
         data = await service.hard_delete_location(location_id=location_id)
@@ -86,7 +88,7 @@ async def hard_delete_location(location_id: str, service: GraphAdminService = De
 async def set_relation_absolute(
     request: AbsoluteRelationRequest,
     service: GraphAdminService = Depends(get_graph_admin_service),
-) -> dict:
+) -> dict[str, Any]:
     """Set absolute relation values between two characters, bypassing delta constraints."""
     try:
         data = await service.set_relation_absolute(
@@ -105,7 +107,7 @@ async def set_relation_absolute(
 async def apply_relation_delta(
     request: DeltaRelationRequest,
     service: GraphAdminService = Depends(get_graph_admin_service),
-) -> dict:
+) -> dict[str, Any]:
     """Apply an unbounded admin relation delta and return clamped field metadata."""
     try:
         data, clamped_fields = await service.apply_unbounded_relation_delta(
@@ -125,14 +127,14 @@ async def submit_reindex(
     request: ReindexRequest,
     embedding_index: EmbeddingIndex = Depends(get_embedding_index),
     reindex_jobs: ReindexJobService = Depends(get_reindex_job_service),
-) -> dict:
+) -> dict[str, Any]:
     """Submit an async reindex job for the given NPC ids and return a job id."""
     job_id = reindex_jobs.submit_reindex(npc_ids=request.npc_ids, embedding_index=embedding_index)
     return ok_response({"job_id": job_id}, meta={"status": "accepted"})
 
 
 @router.get("/reindex/{job_id}")
-async def get_reindex_job(job_id: str, reindex_jobs: ReindexJobService = Depends(get_reindex_job_service)) -> dict:
+async def get_reindex_job(job_id: str, reindex_jobs: ReindexJobService = Depends(get_reindex_job_service)) -> dict[str, Any]:
     """Return the status of a previously submitted reindex job."""
     job = reindex_jobs.get_job(job_id)
     if job is None:
@@ -141,7 +143,7 @@ async def get_reindex_job(job_id: str, reindex_jobs: ReindexJobService = Depends
 
 
 @router.get("/audit_log")
-async def audit_log(limit: int = 100) -> dict:
+async def audit_log(limit: int = 100) -> dict[str, Any]:
     """Return placeholder audit entries until persistent audit storage is implemented."""
 
     return ok_response([], meta={"limit": limit, "note": "persistent audit log pending"})

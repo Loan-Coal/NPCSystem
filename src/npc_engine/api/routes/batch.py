@@ -6,6 +6,8 @@ Does NOT: advance game clock automatically.
 Dependencies injected: GossipHandler, EventHandler, AsyncSession.
 """
 
+from typing import Any
+
 from fastapi import APIRouter, Depends
 from neo4j import AsyncSession
 from pydantic import BaseModel, ConfigDict, Field
@@ -43,7 +45,7 @@ async def run_gossip_tick(
     request: GossipTickRequest,
     session: AsyncSession = Depends(get_db_session),
     gossip_handler: GossipHandler = Depends(get_gossip_handler),
-) -> dict:
+) -> dict[str, Any]:
     """Execute one explicit gossip tick."""
 
     tick_id = request.tick_override
@@ -61,7 +63,7 @@ async def run_event_tick(
     request: EventTickRequest,
     session: AsyncSession = Depends(get_db_session),
     event_handler: EventHandler = Depends(get_event_handler),
-) -> dict:
+) -> dict[str, Any]:
     """Execute one explicit event tick."""
 
     tick_id = request.tick_override

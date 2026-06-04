@@ -6,8 +6,17 @@ Does NOT: manage transaction lifecycle.
 Dependencies injected: AsyncManagedTransaction.
 """
 
+from typing import Any, Protocol
+
 from neo4j import AsyncManagedTransaction
-from pydantic import BaseModel
+
+
+class _CharacterNode(Protocol):
+    """Structural protocol for any node that can be written as a Character."""
+
+    id: str
+
+    def model_dump(self, *, mode: str = "python") -> dict[str, Any]: ...
 
 
 CYPHER_MERGE_CHARACTER = """
@@ -17,7 +26,7 @@ SET c += $properties,
 """
 
 
-async def upsert_character(tx: AsyncManagedTransaction, character: BaseModel) -> None:
+async def upsert_character(tx: AsyncManagedTransaction, character: _CharacterNode) -> None:
     """Insert or update a character node idempotently.
 
     Args:

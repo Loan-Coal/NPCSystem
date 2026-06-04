@@ -10,6 +10,8 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
@@ -52,7 +54,7 @@ async def create_secret_for_character(
     character_id: str,
     body: CreateSecretRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create a secret and link it to a character.
 
     Args:
@@ -84,7 +86,7 @@ async def list_secrets_for_character(
     character_id: str,
     k: int = 3,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List secrets known by a character, ordered by severity descending.
 
     Args:
@@ -102,7 +104,7 @@ async def list_secrets_for_character(
 async def remove_secret(
     secret_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Hard-delete a single Secret node.
 
     Args:

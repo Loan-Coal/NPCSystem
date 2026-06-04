@@ -9,7 +9,7 @@ Used by: npc_engine.api.routes.reputation
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 from neo4j import AsyncSession
 
@@ -79,7 +79,7 @@ class ReputationService:
         """
         tx = await self._session.begin_transaction()
         async with tx:
-            return cast(int, await adjust_reputation(tx, character_id=character_id, faction_id=faction_id, delta=delta))
+            return await adjust_reputation(tx, character_id=character_id, faction_id=faction_id, delta=delta)
 
     async def adjust_reputation_with_event(
         self,
@@ -166,10 +166,7 @@ class ReputationService:
         Returns:
             Dict with faction_id, faction_name, and standing, or None if absent.
         """
-        return cast(
-            dict[str, Any] | None,
-            await get_reputation(self._session, character_id=character_id, faction_id=faction_id),
-        )
+        return await get_reputation(self._session, character_id=character_id, faction_id=faction_id)
 
     async def list_reputations(self, *, character_id: str) -> list[dict[str, Any]]:
         """Fetch all HAS_REPUTATION_WITH edges for a character.
@@ -180,10 +177,7 @@ class ReputationService:
         Returns:
             List of dicts with faction_id, faction_name, and standing.
         """
-        return cast(
-            list[dict[str, Any]],
-            await list_reputations(self._session, character_id=character_id),
-        )
+        return await list_reputations(self._session, character_id=character_id)
 
     async def get_reputation_context_for_npc(
         self, *, npc_id: str, player_id: str, threshold: int
@@ -198,9 +192,6 @@ class ReputationService:
         Returns:
             List of dicts with faction_name, standing, and label.
         """
-        return cast(
-            list[dict[str, Any]],
-            await get_reputation_context_for_npc(
-                self._session, npc_id=npc_id, player_id=player_id, threshold=threshold
-            ),
+        return await get_reputation_context_for_npc(
+                self._session, npc_id=npc_id, player_id=player_id, threshold=threshold,
         )

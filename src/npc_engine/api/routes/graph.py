@@ -46,7 +46,7 @@ async def get_node(
     node_id: str,
     request: Request,
     service: GenericGraphService = Depends(get_generic_graph_service),
-) -> dict:
+) -> dict[str, Any]:
     """Return one node by type and id with extension warnings."""
     node = require_node(await service.get_node(node_type=node_type, node_id=node_id), node_type=node_type)
     warnings = service.missing_extension_warnings(node_type=node_type, node_payload=node)
@@ -62,7 +62,7 @@ async def list_nodes(
     limit: int | None = Query(default=None, ge=1),
     offset: int | None = Query(default=None, ge=0),
     service: GenericGraphService = Depends(get_generic_graph_service),
-) -> dict:
+) -> dict[str, Any]:
     """Return a paginated list of nodes for a given type with extension warnings."""
     page = resolve_offset_pagination(limit=limit, offset=offset)
     try:
@@ -94,7 +94,7 @@ async def upsert_node(
     body: NodeWriteBody,
     request: Request,
     service: GenericGraphService = Depends(get_generic_graph_service),
-) -> dict:
+) -> dict[str, Any]:
     """Upsert a node by type using the registry-driven schema."""
     try:
         node = await service.upsert_node(node_type=node_type, payload=body.properties)
@@ -113,7 +113,7 @@ async def patch_node(
     body: NodeWriteBody,
     request: Request,
     service: GenericGraphService = Depends(get_generic_graph_service),
-) -> dict:
+) -> dict[str, Any]:
     """Patch specific fields on an existing node by type and id."""
     try:
         node = await service.patch_node(node_type=node_type, node_id=node_id, payload=body.properties)
@@ -131,7 +131,7 @@ async def get_edge(
     src_id: str,
     dst_id: str,
     service: GenericGraphService = Depends(get_generic_graph_service),
-) -> dict:
+) -> dict[str, Any]:
     """Return one edge by type, source, and destination ids."""
     edge = require_node(await service.get_edge(edge_type=edge_type, src_id=src_id, dst_id=dst_id), node_type=edge_type)
     return ok_response(edge)
@@ -145,7 +145,7 @@ async def list_edges(
     src_id: str | None = Query(default=None),
     dst_id: str | None = Query(default=None),
     service: GenericGraphService = Depends(get_generic_graph_service),
-) -> dict:
+) -> dict[str, Any]:
     """Return a paginated list of edges for a given type with optional src/dst filters."""
     page = resolve_offset_pagination(limit=limit, offset=offset)
     try:
@@ -174,7 +174,7 @@ async def upsert_edge(
     edge_type: str,
     body: EdgeWriteBody,
     service: GenericGraphService = Depends(get_generic_graph_service),
-) -> dict:
+) -> dict[str, Any]:
     """Upsert an edge between two existing nodes using the registry-driven schema."""
     try:
         edge = await service.upsert_edge(
@@ -194,7 +194,7 @@ async def delete_edge(
     src_id: str,
     dst_id: str,
     service: GenericGraphService = Depends(get_generic_graph_service),
-) -> dict:
+) -> dict[str, Any]:
     """Delete an edge by type, source, and destination ids."""
     deleted = await service.delete_edge(edge_type=edge_type, src_id=src_id, dst_id=dst_id)
     return ok_response({"deleted": deleted})

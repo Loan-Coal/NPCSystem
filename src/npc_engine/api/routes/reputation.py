@@ -9,7 +9,7 @@ Used by: npc_engine.main (graph_router at API_V1_PREFIX, admin_router at admin_p
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
@@ -48,7 +48,7 @@ class AdjustReputationRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Read router  (registered at API_V1_PREFIX → /v1/graph/characters/...)
+# Read router  (registered at API_V1_PREFIX â†’ /v1/graph/characters/...)
 # ---------------------------------------------------------------------------
 
 graph_router = APIRouter(prefix="/graph/characters", tags=["reputation"])
@@ -58,10 +58,10 @@ graph_router = APIRouter(prefix="/graph/characters", tags=["reputation"])
 async def list_reputations(
     character_id: str,
     service: ReputationService = Depends(get_reputation_service),
-) -> dict:
+) -> dict[str, Any]:
     """List all faction reputation edges for a character."""
     reputations = await service.list_reputations(character_id=character_id)
-    return ok_response(reputations)  # type: ignore[no-any-return]
+    return ok_response(reputations)
 
 
 @graph_router.get("/{character_id}/reputation/{faction_id}")
@@ -69,14 +69,14 @@ async def get_reputation(
     character_id: str,
     faction_id: str,
     service: ReputationService = Depends(get_reputation_service),
-) -> dict:
+) -> dict[str, Any]:
     """Fetch a character's reputation with a specific faction."""
     reputation = await service.get_reputation(character_id=character_id, faction_id=faction_id)
-    return ok_response(require_node(reputation, node_type="Reputation"))  # type: ignore[no-any-return]
+    return ok_response(require_node(reputation, node_type="Reputation"))
 
 
 # ---------------------------------------------------------------------------
-# Write router  (registered at admin_prefix → /v1/admin/characters/...)
+# Write router  (registered at admin_prefix â†’ /v1/admin/characters/...)
 # ---------------------------------------------------------------------------
 
 admin_router = APIRouter(prefix="/characters", tags=["reputation"])
@@ -88,7 +88,7 @@ async def set_reputation(
     faction_id: str,
     request: SetReputationRequest,
     service: ReputationService = Depends(get_reputation_service),
-) -> dict:
+) -> dict[str, Any]:
     """Set a character's absolute reputation standing with a faction."""
     try:
         await service.set_reputation(
@@ -98,7 +98,7 @@ async def set_reputation(
         )
     except ReputationNotFoundError as error:
         raise graph_error_to_http(error) from error
-    return ok_response({"character_id": character_id, "faction_id": faction_id, "standing": request.standing})  # type: ignore[no-any-return]
+    return ok_response({"character_id": character_id, "faction_id": faction_id, "standing": request.standing})
 
 
 @admin_router.post("/{character_id}/reputation/{faction_id}/adjust", status_code=200)
@@ -107,7 +107,7 @@ async def adjust_reputation(
     faction_id: str,
     request: AdjustReputationRequest,
     service: ReputationService = Depends(get_reputation_service),
-) -> dict:
+) -> dict[str, Any]:
     """Apply a delta to a character's reputation with a faction (clamped to [-100, 100]).
 
     When location_id and tick_id are provided, also creates a reputation_change
@@ -130,4 +130,4 @@ async def adjust_reputation(
             )
     except ReputationNotFoundError as error:
         raise graph_error_to_http(error) from error
-    return ok_response({"character_id": character_id, "faction_id": faction_id, "standing": new_standing})  # type: ignore[no-any-return]
+    return ok_response({"character_id": character_id, "faction_id": faction_id, "standing": new_standing})

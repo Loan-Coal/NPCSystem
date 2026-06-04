@@ -9,6 +9,7 @@ Dependencies injected: TypeRegistry, AsyncSession.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 from neo4j import AsyncSession
 
@@ -78,7 +79,7 @@ def build_lifecycle_event(
     event_type: str,
     summary: str,
     meta: QuestTransitionMeta,
-) -> object:
+) -> Any:
     """Construct a typed lifecycle event node using the registry event model.
 
     Args:

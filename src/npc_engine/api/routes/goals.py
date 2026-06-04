@@ -10,6 +10,8 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
@@ -62,7 +64,7 @@ async def seed_goal(
     character_id: str,
     body: CreateGoalRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Seed a new goal on a character.
 
     Args:
@@ -96,7 +98,7 @@ async def list_goals(
     k: int = 10,
     status: str = "active",
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List goals for a character ordered by urgency descending.
 
     Args:
@@ -118,7 +120,7 @@ async def patch_goal_status(
     goal_id: str,
     body: UpdateGoalStatusRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Update the status of an existing goal.
 
     Args:
@@ -136,7 +138,7 @@ async def patch_goal_status(
 async def remove_goal(
     goal_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Hard-delete a single Goal node.
 
     Args:

@@ -12,6 +12,8 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -39,10 +41,10 @@ class CorrectRumorRequest(BaseModel):
 async def trace_rumor_route(
     event_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Return the ordered NPC chain that holds a KNOWS_ABOUT edge to event_id.
 
-    The chain is ordered by learned_at_tick ascending (origin → downstream).
+    The chain is ordered by learned_at_tick ascending (origin â†’ downstream).
     Corrected holders are excluded from the result so only active believers appear.
 
     Args:
@@ -59,7 +61,7 @@ async def trace_rumor_route(
 async def correct_rumor_route(
     body: CorrectRumorRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Mark one NPC's belief in a fabricated event as corrected.
 
     After this call, the NPC's KNOWS_ABOUT edge to the event has

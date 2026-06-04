@@ -1,7 +1,7 @@
 """
 Module: interaction
 Layer: api
-Purpose: Public HTTP route for interaction proposal dispatch — opens trade sessions,
+Purpose: Public HTTP route for interaction proposal dispatch â€” opens trade sessions,
          processes move grammar, handles quest proposals and completion claims,
          and returns current interaction state.
 Does NOT: write currency transfers (those go through /admin/economy/trade),
@@ -12,6 +12,8 @@ Used by: npc_engine.main (registered at API_V1_PREFIX)
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 import logging
 
@@ -73,7 +75,7 @@ class InteractionRequest(BaseModel):
 
 
 class BandUpdateRequest(BaseModel):
-    """Request body for POST /interaction/band — update disposition band after a turn."""
+    """Request body for POST /interaction/band â€” update disposition band after a turn."""
 
     player_id: str = Field(..., min_length=1)
     trust: int = Field(default=0)
@@ -109,7 +111,7 @@ async def post_interaction(
     pricing_engine: PricingEngine = Depends(get_pricing_engine),
     negotiation_store: NegotiationStore = Depends(get_negotiation_store),
     quest_engine: QuestLifecycleEngine = Depends(get_quest_lifecycle_engine),
-) -> dict:
+) -> dict[str, Any]:
     """Dispatch an interaction proposal and return the resulting state.
 
     For ``propose_trade``: opens or resumes a NegotiationSession and
@@ -246,7 +248,7 @@ async def post_interaction(
 async def update_band(
     body: BandUpdateRequest,
     negotiation_store: NegotiationStore = Depends(get_negotiation_store),
-) -> dict:
+) -> dict[str, Any]:
     """Shift the disposition band for an open session after a dialogue turn.
 
     Called by the demo after each dialogue response that contains relation_deltas.

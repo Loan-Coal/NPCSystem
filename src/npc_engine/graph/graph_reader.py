@@ -236,4 +236,4 @@ async def get_npc_voice_descriptor(session: AsyncSession, npc_id: str) -> str | 
     await result.consume()
     if record is None:
         return None
-    return record["voice_descriptor"]
+    return cast(str, record["voice_descriptor"])

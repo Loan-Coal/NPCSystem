@@ -10,6 +10,8 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
@@ -69,7 +71,7 @@ async def create_item_for_character(
     character_id: str,
     body: CreateItemRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create an item and assign ownership to a character.
 
     Args:
@@ -105,7 +107,7 @@ async def create_item_for_character(
 async def list_items_for_character(
     character_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List all items owned by a character.
 
     Args:
@@ -124,7 +126,7 @@ async def patch_item_owner(
     body: TransferOwnerRequest,
     from_character_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Transfer ownership of an item to another character.
 
     Args:
@@ -156,7 +158,7 @@ async def patch_item_owner(
 async def remove_item(
     item_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Hard-delete a single Item node.
 
     Args:

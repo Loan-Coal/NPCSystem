@@ -10,6 +10,8 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends, Query
 
@@ -29,7 +31,7 @@ async def list_location_history(
     character_id: str,
     limit: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Return recent WAS_AT edges for a character in reverse chronological order.
 
     Args:
@@ -51,7 +53,7 @@ async def get_alibi(
     from_tick: int = Query(..., ge=0),
     to_tick: int = Query(..., ge=0),
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Return all locations a character occupied during a tick window.
 
     Args:
@@ -76,7 +78,7 @@ async def prune_history(
     character_id: str,
     older_than_ticks: int = Query(..., ge=0),
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Delete WAS_AT edges older than a tick threshold for a character.
 
     Args:

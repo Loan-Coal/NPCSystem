@@ -7,6 +7,7 @@ Dependencies injected: Settings.
 """
 
 from functools import lru_cache
+from typing import TypeVar
 from pathlib import Path
 
 from npc_engine.cache.redis_runtime import RedisRuntime
@@ -57,7 +58,10 @@ REGISTRY_SOURCES_SEPARATOR = ","
 _llm_adapters_to_close: list = []
 
 
-def _register_adapter(adapter: object) -> object:
+_T = TypeVar("_T")
+
+
+def _register_adapter(adapter: _T) -> _T:
     """Register an LLM adapter for teardown and return it unchanged."""
     _llm_adapters_to_close.append(adapter)
     return adapter

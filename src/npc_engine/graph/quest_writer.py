@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 
-from neo4j import AsyncSession, AsyncTransaction
+from neo4j import AsyncSession, AsyncTransaction, Record
 
 
 QuestGraphRunner = AsyncSession | AsyncTransaction
@@ -83,7 +83,7 @@ RETURN q.quest_id AS quest_id,
 """
 
 
-def _record_to_state_payload(record: dict) -> dict:
+def _record_to_state_payload(record: Record) -> dict:
     currency_reward_json = record["currency_reward_json"]
     currency_reward = None
     if currency_reward_json is not None and str(currency_reward_json).strip() != "":

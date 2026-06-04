@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache
+from typing import cast
 
 _logger = logging.getLogger(__name__)
 
@@ -59,4 +60,4 @@ def embed(text: str, model_name: str) -> list[float]:
 
     encoder = get_encoder(model_name)
     vector = encoder.encode(text, normalize_embeddings=True)
-    return vector.tolist()
+    return cast(list[float], vector.tolist())

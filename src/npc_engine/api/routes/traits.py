@@ -10,6 +10,8 @@ Used by: npc_engine.main
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
@@ -45,7 +47,7 @@ async def add_character_trait(
     character_id: str,
     body: AddTraitRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create or update a HAS_TRAIT edge for a character.
 
     Args:
@@ -69,7 +71,7 @@ async def add_character_trait(
 async def list_character_traits(
     character_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List all traits for a character ordered by intensity descending.
 
     Args:
@@ -87,7 +89,7 @@ async def remove_character_trait(
     character_id: str,
     trait_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Remove a HAS_TRAIT edge from a character.
 
     Args:

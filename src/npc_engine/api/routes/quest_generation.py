@@ -11,6 +11,8 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 from neo4j import AsyncSession
 from pydantic import BaseModel, ConfigDict, Field
@@ -40,7 +42,7 @@ async def generate_quest(
     body: GenerateQuestRequest,
     session: AsyncSession = Depends(get_db_session),
     engine: QuestGenerationEngine = Depends(get_quest_generation_engine),
-) -> dict:
+) -> dict[str, Any]:
     """Generate a quest for a given NPC quest giver.
 
     Args:
@@ -69,11 +71,11 @@ async def generate_quest(
 async def list_draft_quests(
     quest_giver_id: str | None = None,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List all quest nodes with status='draft'.
 
     Args:
-        quest_giver_id: Optional filter — only return drafts for this NPC.
+        quest_giver_id: Optional filter â€” only return drafts for this NPC.
         session: Active Neo4j async session.
 
     Returns:
@@ -87,10 +89,10 @@ async def list_draft_quests(
 async def offer_draft_quest_simple(
     quest_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Transition a draft quest to offered status.
 
-    No player assignment or objective setup — this is the minimal designer-review
+    No player assignment or objective setup â€” this is the minimal designer-review
     path that marks a generated draft as ready to be seen by players.
 
     Args:
@@ -116,7 +118,7 @@ async def offer_draft_quest_simple(
 async def get_quest_by_id(
     quest_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Retrieve a quest node by ID.
 
     Args:

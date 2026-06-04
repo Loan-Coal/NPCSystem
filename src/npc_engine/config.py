@@ -10,7 +10,7 @@ from functools import lru_cache
 import os
 from pathlib import Path
 import socket
-from typing import Literal, cast
+from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -165,49 +165,49 @@ class Settings(BaseSettings):
     @classmethod
     def validate_api_key_secret(cls, value: str) -> str:
         """Delegate to check_api_key_secret."""
-        return cast(str, check_api_key_secret(value))
+        return check_api_key_secret(value)
 
     @field_validator("API_V1_PREFIX")
     @classmethod
     def validate_api_v1_prefix(cls, value: str) -> str:
         """Delegate to check_api_v1_prefix."""
-        return cast(str, check_api_v1_prefix(value))
+        return check_api_v1_prefix(value)
 
     @field_validator("GAME_SCHEMA_PATH")
     @classmethod
     def validate_game_schema_path(cls, value: str) -> str:
         """Delegate to check_game_schema_path."""
-        return cast(str, check_game_schema_path(value, _PROJECT_ROOT))
+        return check_game_schema_path(value, _PROJECT_ROOT)
 
     @field_validator("TYPE_REGISTRY_EXTENSION_SOURCES")
     @classmethod
     def normalize_type_registry_extension_sources(cls, value: str) -> str:
         """Delegate to normalize_extension_sources."""
-        return cast(str, normalize_extension_sources(value))
+        return normalize_extension_sources(value)
 
     @field_validator("LLM_CONFIG_PATH")
     @classmethod
     def validate_llm_config_path(cls, value: str) -> str:
         """Delegate to check_llm_config_path."""
-        return cast(str, check_llm_config_path(value, _PROJECT_ROOT))
+        return check_llm_config_path(value, _PROJECT_ROOT)
 
     @field_validator("IDEMPOTENCY_HEADER_NAME")
     @classmethod
     def validate_idempotency_header_name(cls, value: str) -> str:
         """Delegate to check_idempotency_header_name."""
-        return cast(str, check_idempotency_header_name(value))
+        return check_idempotency_header_name(value)
 
     @field_validator("REDIS_URL")
     @classmethod
     def validate_redis_url(cls, value: str) -> str:
         """Delegate to check_redis_url."""
-        return cast(str, check_redis_url(value))
+        return check_redis_url(value)
 
     @field_validator("REDIS_CONNECT_TIMEOUT_SECONDS")
     @classmethod
     def validate_redis_connect_timeout_seconds(cls, value: float) -> float:
         """Delegate to check_redis_connect_timeout."""
-        return cast(float, check_redis_connect_timeout(value))
+        return check_redis_connect_timeout(value)
 
     @field_validator(
         "IDEMPOTENCY_PENDING_TIMEOUT_SECONDS",
@@ -217,31 +217,31 @@ class Settings(BaseSettings):
     @classmethod
     def validate_positive_idempotency_values(cls, value: int) -> int:
         """Delegate to check_positive_idempotency_value."""
-        return cast(int, check_positive_idempotency_value(value))
+        return check_positive_idempotency_value(value)
 
     @field_validator("EMBEDDING_RECONCILE_INTERVAL_SECONDS")
     @classmethod
     def validate_embedding_reconcile_interval_seconds(cls, value: int) -> int:
         """Delegate to check_embedding_reconcile_interval."""
-        return cast(int, check_embedding_reconcile_interval(value))
+        return check_embedding_reconcile_interval(value)
 
     @field_validator("CURRENCY_MAX_PER_TRANSACTION", "CURRENCY_MAX_PER_SESSION")
     @classmethod
     def validate_currency_transfer_limits(cls, value: int) -> int:
         """Delegate to check_currency_transfer_limit."""
-        return cast(int, check_currency_transfer_limit(value))
+        return check_currency_transfer_limit(value)
 
     @field_validator("LLM_FALLBACK_PATH")
     @classmethod
     def validate_llm_fallback_path(cls, value: str) -> str:
         """Delegate to check_package_data_path."""
-        return cast(str, check_package_data_path(value, _PROJECT_ROOT))
+        return check_package_data_path(value, _PROJECT_ROOT)
 
     @field_validator("EVENT_POOL_PATH")
     @classmethod
     def validate_event_pool_path(cls, value: str) -> str:
         """Delegate to check_package_data_path."""
-        return cast(str, check_package_data_path(value, _PROJECT_ROOT))
+        return check_package_data_path(value, _PROJECT_ROOT)
 
 
 @lru_cache

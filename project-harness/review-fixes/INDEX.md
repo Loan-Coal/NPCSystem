@@ -21,9 +21,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - SEV-13 DONE: `_WORLD_STATE_ID="world"` in seed.py; `put_world_state` now sends `id="world"` and drops faction_standings/time_of_day/weather clobber. SEV-11 (game losable/winnable) builds on this same world-state arc.
 - Hard ordering: **SEV-31 → SEV-04 → {SEV-08, SEV-17, SEV-30, SEV-12}**; **SEV-14 → SEV-15(type-gate)**.
 - Need my approval before starting: **SEV-05** (public-interface async change), **SEV-10** (graph constraints), **SEV-12** (multi-tenant). SEV-06 couples to SEV-05.
-- SEV-14 IN PROGRESS: FrozenApiModel (22 errors) + config.py validators (13 errors) done; mypy baseline 256→221. Next clusters: ~90 no-any-return routes (OkEnvelope[T] + response_model=), create_model (`__base__` fix), graph writers (Record typing).
 - Debt tickets already logged: ISSUE-052 (mypy), ISSUE-053 (rule baseline), ISSUE-054 (delete redundant token_budget_enforcer). Next issue id: **ISSUE-055**.
-- config.py cast() pattern: pydantic mypy plugin breaks on Python 3.14 (ImportError); use cast() in @field_validator returns as workaround.
 - SEV-11 DONE: LOSE_LOCATION_ID→"loc_guard_barracks"; spawn_bribe neutral guard added; earn-hint row in world_panel; poller freeze was already correct. rules baseline ratcheted 57→53.
 - test_action_workers + test_spread_rumor_worker have 2 pre-existing failures (unrelated to SEV-11); do not confuse with regressions.
 
@@ -50,7 +48,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 ### Block D — layer & type campaigns (large, sequence internally)
 - [ ] *(SEV-31 layer model + contract checker — MEDIUM; prerequisite, report §3)*
 - [ ] **FIX-SEV-04** — Move Cypher + transactions into `graph/` · HIGH · L · deps: SEV-31; folds in SEV-17, SEV-30
-- [ ] **FIX-SEV-14** — Pydantic exit schemas + mypy burn-down · HIGH · L · deps: none; completes SEV-15 gating
+- [x] **FIX-SEV-14** — Pydantic exit schemas + mypy burn-down · HIGH · L · deps: none; completes SEV-15 gating
 - [ ] **FIX-SEV-10** — Core-node constraints + seeder idempotency · HIGH · M · deps: human approval (schema change)
 
 ### Block E — product & demo

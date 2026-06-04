@@ -10,6 +10,8 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends, Query
 
@@ -28,7 +30,7 @@ async def get_consequence_chain(
     event_id: str,
     max_depth: int = Query(default=5, ge=1, le=20),
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Return the causal consequence chain starting from an event.
 
     Args:
@@ -49,7 +51,7 @@ async def get_direct_causes(
     node_id: str,
     node_type: str = Query(default="Event"),
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Return direct cause events for a given node.
 
     Args:

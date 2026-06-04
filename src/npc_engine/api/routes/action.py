@@ -7,7 +7,7 @@ Dependencies injected: AsyncSession, Settings.
 """
 
 from datetime import datetime, timezone
-from typing import Literal, cast
+from typing import Literal, cast, Any
 
 from fastapi import APIRouter, Depends, Request
 from neo4j import AsyncSession
@@ -36,7 +36,7 @@ async def report_action(
     http_request: Request,
     session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
-) -> dict:
+) -> dict[str, Any]:
     """Apply a conservative relation delta for a reported gameplay action."""
 
     if is_currency_action(payload.action_type):
@@ -63,9 +63,9 @@ async def report_action(
                 session=session,
                 settings=settings,
                 player_id=payload.player_id,
-                counterparty_id=payload.counterparty_id,
+                counterparty_id=cast(str, payload.counterparty_id),
                 action_type=currency_action_type,
-                amount=payload.currency_amount,
+                amount=cast(int, payload.currency_amount),
                 reason=reason,
                 request_id=request_id,
                 idempotency_key=idempotency_key,

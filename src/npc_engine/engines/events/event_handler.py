@@ -180,7 +180,7 @@ class EventHandler:
             event = self._registry.node_models["event"](**validated_props)
             tx = await session.begin_transaction()
             async with tx:
-                await upsert_event(tx=tx, event=event)
+                await upsert_event(tx=tx, event=event)  # type: ignore[arg-type]
                 await seed_awareness_tx(tx=tx, event_id=event_id, location_id=location_id, tick_id=tick_id)
                 if template.faction_id is not None and template.reputation_delta is not None:
                     rep_chars_result = await tx.run(
@@ -212,7 +212,7 @@ class EventHandler:
                     for rule in matched_rules:
                         for char_id in char_ids:
                             await set_routine_override(
-                                session=tx,
+                                session=tx,  # type: ignore[arg-type]
                                 character_id=char_id,
                                 location_id=rule.override_location,
                                 expires_at_tick=tick_id + rule.duration_ticks,

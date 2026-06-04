@@ -24,6 +24,12 @@ TYPE_MAP: dict[str, Any] = {
 }
 
 
+class _FrozenBase(BaseModel):
+    """Frozen, no-extra base used by all dynamic runtime models."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
 @dataclass(frozen=True)
 class RuntimeModelBundle:
     """Immutable bundle of dynamic node and edge model classes."""
@@ -60,7 +66,7 @@ def _build_node_models(*, registry: TypeRegistry) -> dict[str, type[BaseModel]]:
     for node_name in sorted(node_names):
         fields = _merged_node_fields(registry=registry, node_name=node_name)
         model_name = f"{_to_pascal_case(node_name)}Node"
-        model = create_model(model_name, __config__=ConfigDict(frozen=True, extra="forbid"), **_build_model_fields(fields=fields))
+        model = create_model(model_name, __base__=_FrozenBase, **_build_model_fields(fields=fields))
         models[node_name.lower()] = model
         models[node_name] = model
     return models
@@ -77,7 +83,7 @@ def _build_edge_models(*, registry: TypeRegistry) -> dict[str, type[BaseModel]]:
         if edge_definition is None:
             edge_definition = registry.custom_edge_types[edge_name]
         model_name = f"{_to_pascal_case(edge_name)}Edge"
-        model = create_model(model_name, __config__=ConfigDict(frozen=True, extra="forbid"), **_build_model_fields(fields=edge_definition.fields))
+        model = create_model(model_name, __base__=_FrozenBase, **_build_model_fields(fields=edge_definition.fields))
         models[edge_name.lower()] = model
         models[edge_name] = model
     return models
@@ -93,8 +99,8 @@ def _merged_node_fields(*, registry: TypeRegistry, node_name: str) -> Mapping[st
     return fields
 
 
-def _build_model_fields(*, fields: Mapping[str, RuntimeFieldDefinition]) -> dict[str, tuple[Any, Any]]:
-    model_fields: dict[str, tuple[Any, Any]] = {}
+def _build_model_fields(*, fields: Mapping[str, RuntimeFieldDefinition]) -> dict[str, Any]:
+    model_fields: dict[str, Any] = {}
     for field_name, definition in fields.items():
         annotation = _annotation_for(definition)
         field_info = _field_info_for(definition=definition)
@@ -105,10 +111,10 @@ def _build_model_fields(*, fields: Mapping[str, RuntimeFieldDefinition]) -> dict
 def _annotation_for(definition: RuntimeFieldDefinition) -> Any:
     if definition.field_type == "list":
         item_type = TYPE_MAP.get(definition.list_item_type or "str", Any)
-        return list[item_type]
+        return list[item_type]  # type: ignore[valid-type]
     if definition.field_type == "dict":
         value_type = TYPE_MAP.get(definition.dict_value_type or "str", Any)
-        return dict[str, value_type]
+        return dict[str, value_type]  # type: ignore[valid-type]
     return TYPE_MAP[definition.field_type]
 
 

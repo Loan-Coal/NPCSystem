@@ -1,7 +1,7 @@
 """
 Module: system
 Layer: api
-Purpose: System-level API routes — health check, engine-status observability,
+Purpose: System-level API routes â€” health check, engine-status observability,
          and admin tooling probes.
 Does NOT: mutate state or call external services directly.
 Dependencies injected: SchemaConfig, TypeRegistry, TickScheduler, AsyncSession.
@@ -9,6 +9,8 @@ Used by: main.py (router, admin_router, v1_router)
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from neo4j import AsyncSession
@@ -34,13 +36,13 @@ v1_router = APIRouter(prefix="/system")
 
 
 @router.get("/health")
-async def health() -> dict:
+async def health() -> dict[str, Any]:
     """Return liveness and basic service status."""
     return ok_response({"status": "ok", "tick": 0, "neo4j": "degraded"})
 
 
 @router.get("/readiness")
-async def readiness() -> dict:
+async def readiness() -> dict[str, Any]:
     """Return readiness including LLM backend reachability."""
     llm_ready = True
     for adapter in _llm_adapters_to_close:
@@ -53,25 +55,25 @@ async def readiness() -> dict:
 
 
 @admin_router.get("/protected")
-async def protected_probe() -> dict:
+async def protected_probe() -> dict[str, Any]:
     """Simple protected route for auth smoke testing."""
     return ok_response({"status": "authorized"})
 
 
 @admin_router.get("/schema")
-async def schema_snapshot(schema: SchemaConfig = Depends(get_game_schema)) -> dict:
+async def schema_snapshot(schema: SchemaConfig = Depends(get_game_schema)) -> dict[str, Any]:
     """Expose loaded game schema for authenticated admin clients."""
     return ok_response(schema.model_dump(mode="json"))
 
 
 @admin_router.get("/schema/registry")
-async def registry_schema_snapshot(registry: TypeRegistry = Depends(get_type_registry)) -> dict:
+async def registry_schema_snapshot(registry: TypeRegistry = Depends(get_type_registry)) -> dict[str, Any]:
     """Expose type-registry snapshot for authenticated admin clients."""
     return ok_response(serialize_registry_snapshot(registry=registry))
 
 
 @v1_router.get("/engines")
-async def engine_status(scheduler: TickScheduler = Depends(get_tick_scheduler)) -> dict:
+async def engine_status(scheduler: TickScheduler = Depends(get_tick_scheduler)) -> dict[str, Any]:
     """Return per-engine last-run tick, last error, and error count.
 
     Buyer-facing observability surface. Each entry corresponds to one registered
@@ -88,11 +90,11 @@ async def engine_status(scheduler: TickScheduler = Depends(get_tick_scheduler)) 
 
 
 @v1_router.get("/config")
-async def runtime_config(settings: Settings = Depends(get_settings)) -> dict:
+async def runtime_config(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
     """Return a curated, read-only view of cadence and cost settings.
 
     Powers the designer dashboard Engines tab (S12.4). Exposes only operational
-    tuning knobs — no secrets, API keys, or connection strings.
+    tuning knobs â€” no secrets, API keys, or connection strings.
 
     Returns:
         Dict with ``data`` holding the DashboardConfigView fields.
@@ -101,7 +103,7 @@ async def runtime_config(settings: Settings = Depends(get_settings)) -> dict:
 
 
 @v1_router.get("/metrics")
-async def metrics_snapshot() -> dict:
+async def metrics_snapshot() -> dict[str, Any]:
     """Return an immutable snapshot of in-process request and engine metrics.
 
     Powers the designer dashboard Analytics tab (S12.5): request counts,
@@ -118,13 +120,13 @@ async def metrics_snapshot() -> dict:
 async def recent_events(
     limit: int = Query(default=_DEFAULT_EVENT_LIMIT, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Return the most recent Event nodes ordered by tick descending.
 
     Used by the demo WORLD panel to display a live event feed.
 
     Args:
-        limit: Maximum number of events to return (1–100, default 20).
+        limit: Maximum number of events to return (1â€“100, default 20).
     Returns:
         Dict with ``data`` list of event dicts.
     """

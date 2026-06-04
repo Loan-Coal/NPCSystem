@@ -10,6 +10,8 @@ Used by: npc_engine.main
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -60,7 +62,7 @@ async def add_character_skill(
     character_id: str,
     body: AddSkillRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create or update a HAS_SKILL edge for a character.
 
     Args:
@@ -84,7 +86,7 @@ async def add_character_skill(
 async def list_character_skills(
     character_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List all skills for a character.
 
     Args:
@@ -102,7 +104,7 @@ async def award_xp(
     character_id: str,
     body: IncrementXpRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Award XP to a character skill and return the new level.
 
     Args:
@@ -121,7 +123,7 @@ async def award_xp_for_skill(
     skill_id: str,
     body: IncrementXpRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Award XP to a specific skill for a character.
 
     Args:
@@ -148,7 +150,7 @@ async def check_skill(
     skill_id: str,
     min_level: int = 0,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Check whether a character meets a minimum skill threshold.
 
     Args:
@@ -173,7 +175,7 @@ async def list_characters_with_skill(
     skill_id: str,
     min_level: int = 0,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List active characters that have a skill at or above a minimum level.
 
     Args:

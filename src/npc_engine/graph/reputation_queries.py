@@ -101,7 +101,7 @@ async def get_reputation(
     await result.consume()
     if record is None:
         return None
-    return cast(dict[str, Any], dict(record))
+    return dict(record)
 
 
 async def list_reputations(
@@ -161,7 +161,7 @@ async def get_propagated_reputation_for_npc(
         rows = [dict(record) async for record in result]
     finally:
         await result.consume()
-    return cast(list[dict[str, Any]], rows)
+    return rows
 
 
 async def get_reputation_context_for_npc(

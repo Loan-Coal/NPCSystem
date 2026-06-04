@@ -10,6 +10,8 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -65,7 +67,7 @@ async def create_debt_for_character(
     debtor_id: str,
     body: CreateDebtRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create an OWES obligation from debtor to creditor.
 
     Args:
@@ -94,7 +96,7 @@ async def create_debt_for_character(
 async def list_debts_for_character(
     character_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List pending obligations for a character (as debtor or creditor).
 
     Args:
@@ -113,7 +115,7 @@ async def patch_debt_status(
     creditor_id: str,
     body: UpdateDebtStatusRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Update the status of an OWES obligation.
 
     Args:

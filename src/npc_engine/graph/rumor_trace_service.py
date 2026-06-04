@@ -11,7 +11,7 @@ Used by: npc_engine.api.routes.rumor_trace
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 from neo4j import AsyncSession
 
@@ -58,7 +58,7 @@ async def trace_rumor_chain(
         rows = [dict(record) async for record in result]
     finally:
         await result.consume()
-    return cast(list[dict[str, Any]], rows)
+    return rows
 
 
 async def correct_rumor_at_npc(

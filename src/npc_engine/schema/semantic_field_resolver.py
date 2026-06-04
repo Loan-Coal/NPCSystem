@@ -28,7 +28,7 @@ def resolve_fields_with_semantic(
     """
 
     if core_type is None:
-        type_configs = schema.core_types.values()
+        type_configs = list(schema.core_types.values())
     else:
         selected_type = schema.core_types.get(core_type)
         if selected_type is None:

@@ -10,6 +10,8 @@ Used by: npc_engine.main
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
@@ -70,7 +72,7 @@ router = APIRouter(prefix="/treaties", tags=["treaties"])
 async def create_treaty_route(
     body: CreateTreatyRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create a new Treaty and BOUND_BY edges for each signatory faction.
 
     Args:
@@ -95,7 +97,7 @@ async def create_treaty_route(
 async def list_faction_treaties(
     faction_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List active treaties for a faction.
 
     Args:
@@ -113,7 +115,7 @@ async def expire_treaty_route(
     treaty_id: str,
     body: ExpireTreatyRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Manually expire a treaty.
 
     Args:
@@ -132,7 +134,7 @@ async def break_treaty_route(
     treaty_id: str,
     body: BreakTreatyRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Break a treaty.
 
     Args:

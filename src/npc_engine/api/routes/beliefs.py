@@ -10,6 +10,8 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
@@ -61,7 +63,7 @@ async def seed_belief(
     character_id: str,
     body: CreateBeliefRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Seed a new belief on a character.
 
     Args:
@@ -93,7 +95,7 @@ async def list_beliefs(
     character_id: str,
     k: int = 10,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List beliefs for a character ordered by confidence descending.
 
     Args:
@@ -112,12 +114,12 @@ async def patch_confidence(
     belief_id: str,
     body: UpdateConfidenceRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Update the confidence of an existing belief.
 
     Args:
         belief_id: ID of the Belief node.
-        body: New confidence value (0–100).
+        body: New confidence value (0â€“100).
 
     Returns:
         Envelope with updated belief_id.
@@ -130,7 +132,7 @@ async def patch_confidence(
 async def remove_belief(
     belief_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Hard-delete a single Belief node.
 
     Args:

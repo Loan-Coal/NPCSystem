@@ -10,6 +10,8 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -42,11 +44,11 @@ async def connect_locations(
     to_id: str,
     body: ConnectLocationRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create a bidirectional CONNECTS_TO edge between two locations.
 
-    Both A→B and B→A edges are created with the same cost and kind.
-    Idempotent — calling again with the same kind updates travel_cost and is_open.
+    Both Aâ†’B and Bâ†’A edges are created with the same cost and kind.
+    Idempotent â€” calling again with the same kind updates travel_cost and is_open.
 
     Args:
         from_id: ID of the source location node.
@@ -87,7 +89,7 @@ async def connect_locations(
 async def list_connections(
     location_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Return all outbound CONNECTS_TO edges from a location, ordered by travel cost.
 
     Args:
@@ -105,7 +107,7 @@ async def shortest_path(
     from_id: str,
     to_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Return the shortest path between two locations by hop count.
 
     Args:
@@ -129,7 +131,7 @@ async def remove_connection(
     from_id: str,
     to_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Remove the bidirectional CONNECTS_TO edges between two locations.
 
     Args:

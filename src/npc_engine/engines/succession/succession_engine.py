@@ -12,7 +12,7 @@ Used by: npc_engine.scheduler.tick_scheduler
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from neo4j import AsyncSession
 
@@ -103,4 +103,4 @@ class SuccessionEngine:
         heirs = await get_heirs_for_character(session, character_id=faction_id)
         if not heirs:
             return None
-        return heirs[0]["heir"].get("id")
+        return cast(str | None, heirs[0]["heir"].get("id"))

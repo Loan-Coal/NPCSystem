@@ -10,6 +10,8 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -67,7 +69,7 @@ router = APIRouter(prefix="/groups", tags=["groups"])
 async def create_group_route(
     body: CreateGroupRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create a new Group node.
 
     Args:
@@ -93,7 +95,7 @@ async def list_groups_for_character(
     character_id: str,
     include_dissolved: bool = False,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List groups a character belongs to.
 
     Args:
@@ -113,7 +115,7 @@ async def list_groups_for_character(
 async def list_group_members(
     group_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List active members of a group.
 
     Args:
@@ -131,7 +133,7 @@ async def add_member_to_group(
     group_id: str,
     body: AddMemberRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Add a character to an existing group.
 
     Args:
@@ -166,7 +168,7 @@ async def dissolve_group_route(
     group_id: str,
     tick: int,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Mark a group as dissolved at the given tick.
 
     Args:

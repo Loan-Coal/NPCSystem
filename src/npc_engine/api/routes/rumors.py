@@ -10,6 +10,8 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
@@ -63,7 +65,7 @@ router = APIRouter(prefix="/rumors", tags=["rumors"])
 async def create_rumor_route(
     body: CreateRumorRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create (or merge) a root Rumor node.
 
     Args:
@@ -88,7 +90,7 @@ async def believe_rumor_route(
     rumor_id: str,
     body: BelieveRumorRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Record a character's belief in a rumor.
 
     Args:
@@ -114,7 +116,7 @@ async def list_rumors_for_character(
     character_id: str,
     min_confidence: int = 30,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List rumors a character believes.
 
     Args:
@@ -134,7 +136,7 @@ async def list_rumors_for_character(
 async def get_rumor_tree_route(
     rumor_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Fetch the full derivation tree of a rumor.
 
     Args:
@@ -151,7 +153,7 @@ async def get_rumor_tree_route(
 async def get_rumors_about_event_route(
     event_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Fetch rumors originating from a specific event.
 
     Args:

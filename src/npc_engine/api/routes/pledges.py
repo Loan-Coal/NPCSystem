@@ -10,7 +10,7 @@ Used by: npc_engine.main
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Any
 
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends
@@ -68,7 +68,7 @@ async def create_character_pledge(
     character_id: str,
     body: CreatePledgeRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create a new PLEDGE edge from a character to another.
 
     Args:
@@ -97,7 +97,7 @@ async def list_character_pledges(
     character_id: str,
     active_only: bool = True,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List pledges where character is the pledger.
 
     Args:
@@ -116,7 +116,7 @@ async def break_character_pledge(
     character_id: str,
     body: BreakPledgeRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Break an active pledge and apply relationship consequences.
 
     Args:

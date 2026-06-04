@@ -10,6 +10,8 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
@@ -89,7 +91,7 @@ _engine = MemoryEngine()
 async def run_decay(
     body: DecayRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Reduce vividness of all Memory nodes by decay_per_day, clamped to 0.
 
     Args:
@@ -107,7 +109,7 @@ async def seed_memory_from_arousal(
     character_id: str,
     body: CreateMemoryFromArousalRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create a Memory node only if arousal exceeds the high-arousal threshold (>70).
 
     Args:
@@ -139,7 +141,7 @@ async def seed_memory(
     character_id: str,
     body: CreateMemoryRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create a Memory node and link it to a character.
 
     Args:
@@ -172,7 +174,7 @@ async def list_memories(
     character_id: str,
     k: int = 5,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List memories for a character ordered by vividness descending.
 
     Args:
@@ -190,7 +192,7 @@ async def list_memories(
 async def remove_memory(
     memory_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Hard-delete a single Memory node.
 
     Args:
@@ -208,7 +210,7 @@ async def consolidate_memories(
     npc_id: str,
     body: ConsolidateRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Consolidate recent dialogue turns into a memory via the MemoryConsolidationEngine.
 
     Reads recent turns from the shared session store for the given npc_id + player_id

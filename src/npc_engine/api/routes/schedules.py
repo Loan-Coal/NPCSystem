@@ -9,7 +9,7 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
@@ -62,7 +62,7 @@ router = APIRouter(prefix="/schedules", tags=["schedules"])
 async def create_schedule(
     request: CreateScheduleRequest,
     service: ScheduleService = Depends(get_schedule_service),
-) -> dict:
+) -> dict[str, Any]:
     """Create or update a Schedule node."""
     entries = [e.model_dump(exclude_none=True) for e in request.entries]
     schedule = await service.create_schedule(
@@ -71,20 +71,20 @@ async def create_schedule(
         description=request.description,
         entries=entries,
     )
-    return ok_response({"id": schedule["id"]})  # type: ignore[no-any-return]
+    return ok_response({"id": schedule["id"]})
 
 
 @router.get("/{schedule_id}")
 async def get_schedule(
     schedule_id: str,
     service: ScheduleService = Depends(get_schedule_service),
-) -> dict:
+) -> dict[str, Any]:
     """Fetch a single Schedule node by ID."""
     try:
         schedule = await service.get_schedule(schedule_id)
     except ScheduleNotFoundError as error:
         raise graph_error_to_http(error) from error
-    return ok_response(schedule)  # type: ignore[no-any-return]
+    return ok_response(schedule)
 
 
 @router.post("/{schedule_id}/assign/{character_id}", status_code=201)
@@ -92,33 +92,33 @@ async def assign_schedule(
     schedule_id: str,
     character_id: str,
     service: ScheduleService = Depends(get_schedule_service),
-) -> dict:
+) -> dict[str, Any]:
     """Assign a schedule to a character, replacing any existing assignment."""
     try:
         await service.assign_schedule(character_id=character_id, schedule_id=schedule_id)
     except ScheduleAssignmentError as error:
         raise graph_error_to_http(error) from error
-    return ok_response({"character_id": character_id, "schedule_id": schedule_id})  # type: ignore[no-any-return]
+    return ok_response({"character_id": character_id, "schedule_id": schedule_id})
 
 
 @router.delete("/{character_id}/unassign")
 async def unassign_schedule(
     character_id: str,
     service: ScheduleService = Depends(get_schedule_service),
-) -> dict:
+) -> dict[str, Any]:
     """Remove a character's schedule assignment."""
     await service.unassign_schedule(character_id=character_id)
-    return ok_response({"character_id": character_id})  # type: ignore[no-any-return]
+    return ok_response({"character_id": character_id})
 
 
 @router.get("/character/{character_id}")
 async def get_character_schedule(
     character_id: str,
     service: ScheduleService = Depends(get_schedule_service),
-) -> dict:
+) -> dict[str, Any]:
     """Fetch the schedule a character follows, if any."""
     schedule = await service.get_character_schedule(character_id)
-    return ok_response(require_node(schedule, node_type="Schedule"))  # type: ignore[no-any-return]
+    return ok_response(require_node(schedule, node_type="Schedule"))
 
 
 @router.get("/character/{character_id}/at")
@@ -126,10 +126,10 @@ async def get_character_location_at(
     character_id: str,
     time_of_day: TimeOfDay,
     service: ScheduleService = Depends(get_schedule_service),
-) -> dict:
+) -> dict[str, Any]:
     """Return the location a character is scheduled to be at a given time of day."""
     location_id = await service.get_character_location_at(character_id, time_of_day)
-    return ok_response({"character_id": character_id, "time_of_day": time_of_day, "location_id": location_id})  # type: ignore[no-any-return]
+    return ok_response({"character_id": character_id, "time_of_day": time_of_day, "location_id": location_id})
 
 
 @router.get("/location/{location_id}/at")
@@ -137,7 +137,7 @@ async def get_characters_at_location(
     location_id: str,
     time_of_day: TimeOfDay,
     service: ScheduleService = Depends(get_schedule_service),
-) -> dict:
+) -> dict[str, Any]:
     """Return character IDs scheduled to be at a location at a given time of day."""
     character_ids = await service.get_characters_at_location(location_id, time_of_day)
-    return ok_response({"location_id": location_id, "time_of_day": time_of_day, "character_ids": character_ids})  # type: ignore[no-any-return]
+    return ok_response({"location_id": location_id, "time_of_day": time_of_day, "character_ids": character_ids})
