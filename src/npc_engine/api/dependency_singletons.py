@@ -37,9 +37,9 @@ from npc_engine.retrieval.embedding_index import EmbeddingIndex
 from npc_engine.retrieval.vector_store_factory import create_vector_store
 from npc_engine.scheduler.game_clock import GameClock
 from npc_engine.scheduler.tick_scheduler import TickScheduler
-from npc_engine.engines.llm_config_loader import get_config as get_engine_model_config_for
+from npc_engine.engines.llm_runtime_config import get_config as get_engine_model_config_for
 from npc_engine.engines.llm_config_models import EngineModelConfig
-from npc_engine.schema.llm_config_loader import load_llm_config
+from npc_engine.schema.llm_schema_loader import load_llm_config
 from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.schema.schema_loader import load_game_schema
 from npc_engine.schema.schema_models import SchemaConfig

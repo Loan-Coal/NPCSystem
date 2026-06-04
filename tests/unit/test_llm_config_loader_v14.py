@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from npc_engine.schema.llm_config_loader import load_llm_config
+from npc_engine.schema.llm_schema_loader import load_llm_config
 from npc_engine.utils.errors import LLMConfigMisconfiguredError, LLMConfigValidationError
 
 

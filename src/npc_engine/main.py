@@ -76,7 +76,7 @@ from npc_engine.api.dependency_singletons import (
 from npc_engine.config import get_settings
 from npc_engine.engines.contracts.contract_loader import load_engine_contracts
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
-from npc_engine.engines.llm_config_loader import validate_all_engine_llm_configs
+from npc_engine.engines.llm_runtime_config import validate_all_engine_llm_configs
 from npc_engine.engines.idempotency.cleanup_scheduler import IdempotencyCleanupScheduler
 from npc_engine.retrieval.embedding_reconciler import EmbeddingReconciler
 from npc_engine.scheduler.tick_lease import TickLeaseRepository
