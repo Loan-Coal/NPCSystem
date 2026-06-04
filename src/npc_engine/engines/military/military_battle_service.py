@@ -27,7 +27,7 @@ from npc_engine.graph.military_control_writer import (
     remove_controls_location,
     set_controls_location,
 )
-from npc_engine.graph.military_writer import set_army_strength
+from npc_engine.graph.military_writer import emit_battle_event, set_army_strength
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,22 +35,6 @@ FULL_CONTROL_STRENGTH = 100
 BATTLE_EVENT_SEVERITY = 80
 BATTLE_WINNER_DAMAGE_DIVISOR = 4  # winner loses loser_strength // divisor
 BATTLE_LOSER_DAMAGE_DIVISOR = 2   # loser loses winner_strength // divisor
-
-_CYPHER_EMIT_BATTLE_EVENT = """
-MERGE (e:Event {id: $event_id})
-SET e.event_type          = 'battle',
-    e.summary             = $summary,
-    e.severity            = $severity,
-    e.location_id         = $location_id,
-    e.occurred_at         = $occurred_at,
-    e.tick_id             = $tick_id,
-    e.is_public           = true,
-    e.producer            = 'military_engine',
-    e.origin_engine       = 'military_engine',
-    e.schema_version      = '1.0',
-    e.faction_id          = $winner_faction_id,
-    e.last_graph_updated_at = $occurred_at
-"""
 
 
 class BattleResult(BaseModel):
@@ -222,6 +206,8 @@ async def _emit_battle_event(
 ) -> None:
     """Write a public battle Event node to the graph.
 
+    Delegates to graph.military_writer.emit_battle_event.
+
     Args:
         session: Active Neo4j async session.
         location_id: Location where the battle occurred.
@@ -235,8 +221,8 @@ async def _emit_battle_event(
         f"Battle at {location_id}: {winner_faction_id} defeated {loser_faction_id} "
         f"at tick {tick_id}"
     )
-    await session.run(
-        _CYPHER_EMIT_BATTLE_EVENT,
+    await emit_battle_event(
+        session,
         event_id=event_id,
         summary=summary,
         severity=BATTLE_EVENT_SEVERITY,
