@@ -3,7 +3,7 @@ Module: seed_http
 Layer: data (tooling, not application code)
 Purpose: HTTP helpers for the world seeder — issue GET/POST requests to the API,
          track success/skip/failure counts, and expose existence checks.
-Does NOT: import any npc_engine application code.
+Dependencies: npc_engine.utils.logging (structured logging only — no domain imports).
 Dependencies injected: base_url and api_key passed per call.
 Used by: data.api_seeder
 """
@@ -17,10 +17,14 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Any
 
+from npc_engine.utils.logging import get_logger
+
+_LOGGER = get_logger(__name__)
+
 
 @dataclass
 class Counter:
-    """Mutable seed-run counters with print-on-record and abort helpers."""
+    """Mutable seed-run counters with log-on-record and abort helpers."""
 
     ok: int = 0
     skipped: int = 0
@@ -28,28 +32,28 @@ class Counter:
     failures: list[str] = field(default_factory=list)
 
     def record(self, label: str, status: int) -> None:
-        """Record an API call result and print one line of output."""
+        """Record an API call result and log one line of output."""
         if 200 <= status < 300:
             self.ok += 1
-            print(f"  [OK]   {label}")
+            _LOGGER.info("seeder_record", extra={"label": label, "result": "OK", "http_status": status})
         elif status == 409:
             self.skipped += 1
-            print(f"  [SKIP] {label} (already exists)")
+            _LOGGER.info("seeder_record", extra={"label": label, "result": "SKIP", "http_status": status})
         else:
             self.failed += 1
             self.failures.append(f"{label} (HTTP {status})")
-            print(f"  [FAIL] {label} (HTTP {status})")
+            _LOGGER.error("seeder_record", extra={"label": label, "result": "FAIL", "http_status": status})
 
     def abort_if_failed(self) -> None:
-        """Raise SystemExit when any hard failure has occurred."""
+        """Call sys.exit(1) when any hard failure has occurred."""
         if self.failed:
-            print(f"\nAborting: {self.failed} failure(s): {self.failures}")
+            _LOGGER.error("seeder_abort", extra={"failure_count": self.failed, "failures": str(self.failures)})
             sys.exit(1)
 
     def summary(self) -> int:
-        """Print totals and return exit code (0 = success, 1 = any failure)."""
+        """Log totals and return exit code (0 = success, 1 = any failure)."""
         total = self.ok + self.skipped + self.failed
-        print(f"\n{self.ok} created, {self.skipped} skipped, {self.failed} failed / {total} total")
+        _LOGGER.info("seeder_summary", extra={"ok": self.ok, "skipped": self.skipped, "failed": self.failed, "total": total})
         return 1 if self.failed else 0
 
 
