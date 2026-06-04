@@ -634,7 +634,8 @@ current mapping is good enough for demo badge display and does not affect correc
 
 ---
 
-## ISSUE-056: 8 remaining pre-existing test failures in HEAD blocking `make check`
+## [FIXED] ISSUE-056: 8 remaining pre-existing test failures in HEAD blocking `make check`
+**Fixed:** 2026-06-04, final-review Batch 2 (L4-01). Root causes per L4: 3 quest_event_provenance + 2 sev27 were cascades of the deleted `game_schema.yaml` (restored, L9-01); 2 sev06 awaited the now-async `append_turns` (SEV-05); 1 sev18 added the now-required `graph_db`/`settings` ctor args (SEV-08); sev27 also switched caplog→direct logger-patch (propagate=False order-flake). `make check` green: 1590 pass, 0 fail.
 **Found:** 2026-06-04, during SEV-04 gossip migration
 **Severity:** P2 (test suite not green; `make check` failing)
 **Where:** test_quest_event_provenance_v14.py (3), test_sev06_semaphore.py (2), test_structured_output_sev27.py (2), test_error_swallowing_sev18.py (1)
@@ -658,6 +659,14 @@ current mapping is good enough for demo badge display and does not affect correc
 **Description:** SEV-10 implements idempotency via get-then-skip (mirror the village seeder). The architecturally correct solution for a multi-tenant middleware product is to let callers supply a stable `id` on creation endpoints and use `MERGE` instead of `CREATE` — this makes seeding and re-seeding fully deterministic without an extra GET round-trip, and aligns the API with idiomatic graph semantics. That change touches endpoint schemas and all callers and was deferred.
 **Why deferred:** Scope; get-then-skip is sufficient for current single-world demo use. Client-supplied ids requires coordinating endpoint schema changes with SEV-12 (multi-tenant) and SEV-33 (error envelope).
 **To fix:** Change typed admin endpoints (`/characters`, `/items`, `/beliefs`, `/goals`, `/secrets`, `/memories`, etc.) to accept an optional `id` field; use `MERGE (n {id: $id})` when provided. Apply same contract to `api_seeder.py`, `seed_village_world.py`, `demo_game/seed.py`. Document as the canonical seeding contract in `docs/API.md`.
+
+## ISSUE-057: Location hierarchy (PART_OF edges between Location nodes) not yet modeled
+**Found:** 2026-06-04, during SEV-12 architectural review
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/graph/`, `demo_game/seed.py`, `seeds/worlds/`
+**Description:** Locations are flat nodes with no parent/child relationship. The intended model is a hierarchy: market → village → duchy → kingdom → continent → world. Without `PART_OF` edges, location-aware features (region gossip spread, travel time, area-of-effect events) cannot traverse geography.
+**Why deferred:** Not needed for current demo or review hardening; design-phase only.
+**To fix:** Add a `PART_OF` directed edge type to `type_registry/`; update `graph/location_writer.py` to accept an optional `parent_id`; update `demo_game/seed.py` and eval seeders to wire the hierarchy. Add retrieval helpers for ancestor/descendant traversal.
 
 <!--
 Template for a new issue:

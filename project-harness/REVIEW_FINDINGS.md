@@ -243,19 +243,11 @@ Verification: integration test drives quest→trade→bribe×N to `outcome=="win
 Effort: M.
 
 ---
-**FINDING [SEV-12]: No multi-tenant / world isolation — two studios' worlds collide in one global graph**
+**[CLOSED N/A 2026-06-04] FINDING [SEV-12]: No multi-tenant / world isolation — two studios' worlds collide in one global graph**
+Closed: deployment model confirmed as one Docker stack + Neo4j per studio/game install. Graph-level `world_id` isolation is not needed. See DEC-068.
 Severity: HIGH · Confidence: Confirmed
 Category: product / data-integrity
 Absorbs: GAME-03
-Rule violated: middleware licensed to multiple studios must scope all data by tenant/world
-Location(s): entire `src/npc_engine/graph/` (`rg "world_id" src/npc_engine/graph` → **no files**); `api/routes/graph.py` keys nodes only on `(node_type, id)`; `auth/middleware.py` resolves only a `granted_scope`, no tenant
-Evidence: all reads/writes MERGE on `(label,id)`; `Character{id:"mira_innkeeper"}` is the same node for every tenant.
-How it manifests: Studio A's and Studio B's same-named NPCs are one node; seeds overwrite each other; gossip/reputation cross-contaminate. The "single API call to integrate" licensing pitch has no isolation backing it.
-Root cause: built single-world for the hackathon; tenancy never modeled.
-Blast radius: every node/edge/engine; the licensing value proposition.
-Recommended fix: see FIX-SEV-12 — introduce `world_id`/`tenant_id` as first-class node identity, threaded through auth scope → every MERGE/MATCH → the generic graph routes. **Schema change → requires a DECISIONS entry + human approval before implementation.**
-Verification: two seeded worlds with overlapping IDs stay isolated across all reads.
-Effort: XL.
 
 ---
 **[FIXED 2026-06-03] FINDING [SEV-13]: WorldState seeded as `world_demo` vs DEC-022's canonical `world` — world state is silently never read by NPCs (reintroduces closed ISSUE-041)**
@@ -441,7 +433,7 @@ Execute top-to-bottom; items in the same block are independent and parallelizabl
 
 **Block E — product & demo:**
 - [x] SEV-02 (demo standalone) · SEV-13 (world id) · SEV-11 (win/lose) · SEV-28 (WS timeout) · SEV-33 (error envelope) · SEV-34 (README) — DONE
-- [ ] SEV-12 (multi-tenant — XL, blocked: DECISIONS proposal + human approval required) — NOT YET DONE
+- [x] SEV-12 (multi-tenant — CLOSED N/A: one deployment per studio, isolation is infrastructure-level; see DEC-068)
 
 **Block F — hygiene & docs (low-risk, batchable):**
 - [x] SEV-23 (file size) · SEV-24 (nested infra) · SEV-25 (harness honesty) · SEV-26 (repo hygiene) · SEV-27 (structured output) · SEV-32 (docstrings) · SEV-35 · SEV-36 · SEV-37 · SEV-38 · SEV-39 · SEV-42 · SEV-43 — DONE

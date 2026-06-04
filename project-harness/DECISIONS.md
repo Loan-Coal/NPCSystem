@@ -634,6 +634,13 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Decision:** Waiver. All content is cohesive CLI seeder logic (seed data wiring, HTTP orchestration, key resolution). Splitting resolve_api_key to a new module is artificial — it directly uses the same logger and is called only once.
 **Consequence:** make check-rules-update must baseline api_seeder.py.
 
+## DEC-068: Multi-tenant isolation is deployment-level, not graph-level (SEV-12 closed)
+**Date:** 2026-06-04
+**Context:** SEV-12 flagged the absence of `world_id` on every Neo4j node as a multi-tenant data-integrity risk. The proposed fix was to add a composite key `(world_id, id)` to every node and thread `world_id` through all Cypher and auth.
+**Decision:** Do not add `world_id` to the graph schema. The intended deployment model is one NPC Engine instance (Docker stack + Neo4j) per game studio / per game installation. Isolation is infrastructure-level: each studio runs their own container stack locally as part of their game distribution. A single graph contains exactly one game world.
+**Why:** Adding `world_id` everywhere solves a problem that doesn't exist in the target deployment model and would add blast-radius changes to every query, route, and seeder for no benefit.
+**Consequence:** SEV-12 is closed as N/A. ISSUE-055 (client-supplied stable ids) dependency on SEV-12 is also resolved — the multi-tenant coupling no longer applies.
+
 ## DEC-067: dialogue_handler.py waived at 312 lines (SEV-19)
 **Date:** 2026-06-04
 **Context:** SEV-19 added resolve_log_prompts() (6-line helper) to dialogue_handler.py, pushing it from ~306 to 312 lines. All content is the single DialogueHandler orchestration class and its helpers.
