@@ -97,3 +97,38 @@ def test_ws_connection_limit_rejects_at_cap() -> None:
 def test_ws_connection_limit_rejects_over_cap() -> None:
     """check_ws_connection_limit returns False when count exceeds the cap."""
     assert check_ws_connection_limit(current_count=MAX_WS_CONNECTIONS_PER_KEY + 10) is False
+
+
+# ── WS slot enforcement (L1-01: the cap must actually be wired, not just defined) ──
+
+
+@pytest.mark.asyncio
+async def test_acquire_ws_slot_enforces_cap_and_releases() -> None:
+    """Acquiring up to the cap succeeds; the next is rejected; releasing frees a slot."""
+    from npc_engine.api.routes import dialogue_ws
+
+    key = "test-key-hash"
+    dialogue_ws._active_ws_connections.pop(key, None)
+    try:
+        for _ in range(MAX_WS_CONNECTIONS_PER_KEY):
+            assert await dialogue_ws._acquire_ws_slot(key) is True
+        # At cap: the next acquisition must be rejected.
+        assert await dialogue_ws._acquire_ws_slot(key) is False
+        # Releasing one slot lets exactly one more connection in.
+        await dialogue_ws._release_ws_slot(key)
+        assert await dialogue_ws._acquire_ws_slot(key) is True
+        assert await dialogue_ws._acquire_ws_slot(key) is False
+    finally:
+        dialogue_ws._active_ws_connections.pop(key, None)
+
+
+@pytest.mark.asyncio
+async def test_release_ws_slot_cleans_up_at_zero() -> None:
+    """Releasing the last slot removes the key entirely (no unbounded dict growth)."""
+    from npc_engine.api.routes import dialogue_ws
+
+    key = "test-key-cleanup"
+    dialogue_ws._active_ws_connections.pop(key, None)
+    assert await dialogue_ws._acquire_ws_slot(key) is True
+    await dialogue_ws._release_ws_slot(key)
+    assert key not in dialogue_ws._active_ws_connections

@@ -126,7 +126,9 @@ class MemoryConsolidationEngine:
         beliefs_text = json.dumps([b.get("content", "") for b in (existing_beliefs or [])])
         memories_text = json.dumps([m.get("content", "") for m in (recent_memories or [])])
 
-        turns_text = "\n".join(f"- {t}" for t in turns)
+        # L1-05: collapse newlines within each turn so a stored player message
+        # cannot inject a forged prompt line (e.g. a fake EXISTING_BELIEFS field).
+        turns_text = "\n".join(f"- {t.replace(chr(13), ' ').replace(chr(10), ' ')}" for t in turns)
         user_message = self._user_template.format(
             npc_id=npc_id,
             turns_text=turns_text,

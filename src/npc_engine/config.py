@@ -9,6 +9,7 @@ Dependencies injected: None.
 """
 
 from functools import lru_cache
+import logging
 import os
 from pathlib import Path
 import socket
@@ -62,9 +63,8 @@ class Settings(BaseSettings):
     API_KEY_GRAPH_WRITE: str | None = None
     API_KEY_GRAPH_ADMIN: str | None = None
     API_V1_PREFIX: str = "/v1"
-    # Build identifier surfaced on GET /health so a stale image is detectable
-    # (L9-05). Baked at image build time via the Dockerfile BUILD_SHA arg; "dev"
-    # for local/non-container runs.
+    # Build id surfaced on GET /health to detect stale images (L9-05); baked via
+    # the Dockerfile BUILD_SHA arg, "dev" for local runs.
     BUILD_SHA: str = "dev"
     GAME_SCHEMA_PATH: str = "game_schema.yaml"
     TYPE_REGISTRY_EXTENSION_SOURCES: str = ""
@@ -124,9 +124,8 @@ class Settings(BaseSettings):
     CURRENCY_MAX_PER_TRANSACTION: int = 1000
     CURRENCY_MAX_PER_SESSION: int = 5000
 
-    # Canonical world-state node id (DEC-022). Must match what the seeders write
-    # ("world"); the prior "world_demo" default silently desynced the engine from
-    # seeded state (L1-07 / SEV-13 config-layer gap).
+    # Canonical world-state node id (DEC-022); must match the seeders ("world").
+    # Prior "world_demo" default desynced the engine from seeded state (L1-07).
     WORLD_ID: str = "world"
 
     TTS_ENABLED: bool = False
@@ -189,6 +188,20 @@ class Settings(BaseSettings):
     def _validate_neo4j_password(self) -> "Settings":
         """Reject the default NEO4J_PASSWORD in staging/prod (SEV-21)."""
         check_neo4j_password(self.NEO4J_PASSWORD, env=self.ENV)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_production_safety(self) -> "Settings":
+        """Reject the shipped dev API_KEY_SECRET outside dev (L1-04); warn (not
+        error, for back-compat) when idempotency is disabled outside dev (L1-06).
+        """
+        check_api_key_secret(self.API_KEY_SECRET, env=self.ENV)
+        if not self.IDEMPOTENCY_ENFORCE_HEADER and self.ENV != "dev":
+            logging.getLogger(__name__).warning(
+                "idempotency_enforcement_disabled env=%s — mutating endpoints are "
+                "replay-able; set IDEMPOTENCY_ENFORCE_HEADER=true in staging/prod",
+                self.ENV,
+            )
         return self
 
     @field_validator("API_KEY_SECRET")

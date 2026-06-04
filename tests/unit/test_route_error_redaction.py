@@ -99,6 +99,38 @@ def test_group_exception_does_not_leak_exception_text(monkeypatch: pytest.Monkey
     _assert_no_leak(json.dumps(response.json()))
 
 
+def test_graph_error_to_http_redacts_node_identity() -> None:
+    """L1-02: NodeNotFoundError must not leak node_type/node_id/class repr to the client."""
+    from npc_engine.api.route_helpers import graph_error_to_http
+    from npc_engine.utils.errors import NodeNotFoundError
+
+    exc = graph_error_to_http(NodeNotFoundError(node_type="Character", node_id="secret_id_42"))
+    assert exc.status_code == 404
+    assert exc.detail == "Resource not found"
+    for leaked in ("secret_id_42", "Character", "NodeNotFoundError"):
+        assert leaked not in str(exc.detail), f"404 detail leaked {leaked!r}"
+
+
+def test_graph_error_to_http_redacts_schema_path_but_keeps_validation_feedback() -> None:
+    """L1-02: 422s expose caller-relevant feedback but never the internal schema path or class repr."""
+    from npc_engine.api.route_helpers import graph_error_to_http
+    from npc_engine.utils.errors import RegistryPayloadValidationError, SchemaValidationError
+
+    reg = graph_error_to_http(
+        RegistryPayloadValidationError(code="REQUIRED_FIELD_MISSING", detail="missing: epoch")
+    )
+    assert reg.status_code == 422
+    assert "REQUIRED_FIELD_MISSING" in str(reg.detail) and "missing: epoch" in str(reg.detail)
+    assert "RegistryPayloadValidationError" not in str(reg.detail)
+
+    sch = graph_error_to_http(
+        SchemaValidationError(schema_path="/srv/npc_engine/internal_schema.yaml", detail="bad enum value")
+    )
+    assert sch.status_code == 422
+    assert str(sch.detail) == "bad enum value"
+    assert "/srv/npc_engine" not in str(sch.detail)
+
+
 def test_quest_generation_value_error_does_not_leak_path(monkeypatch: pytest.MonkeyPatch) -> None:
     class _BoomEngine:
         async def generate(self, **kwargs):

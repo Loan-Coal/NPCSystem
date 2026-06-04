@@ -11,11 +11,29 @@ from __future__ import annotations
 
 import pytest
 
-from npc_engine.config_validators import check_neo4j_password
+from npc_engine.config_validators import check_api_key_secret, check_neo4j_password
 from npc_engine.api.rate_limit import MAX_RATE_LIMIT_BUCKETS, RateLimitMiddleware
 
 
 # ── check_neo4j_password ──────────────────────────────────────────────────────
+
+
+def test_check_api_key_secret_rejects_shipped_dev_secret_in_prod() -> None:
+    """L1-04: the shipped dev API secret is rejected outside dev."""
+    with pytest.raises(ValueError, match="API_KEY_SECRET"):
+        check_api_key_secret("local_dev_secret_change_this_2026", env="prod")
+    with pytest.raises(ValueError, match="API_KEY_SECRET"):
+        check_api_key_secret("local_dev_secret_change_this_2026", env="staging")
+
+
+def test_check_api_key_secret_allows_shipped_dev_secret_in_dev() -> None:
+    """L1-04: the shipped dev secret remains usable in dev (local stack + suite)."""
+    assert check_api_key_secret("local_dev_secret_change_this_2026", env="dev") == "local_dev_secret_change_this_2026"
+
+
+def test_check_api_key_secret_accepts_strong_secret_in_prod() -> None:
+    """A strong, non-shipped secret is accepted in prod."""
+    assert check_api_key_secret("a-very-strong-unique-secret-2026", env="prod") == "a-very-strong-unique-secret-2026"
 
 
 def test_check_neo4j_password_rejects_weak_in_prod() -> None:

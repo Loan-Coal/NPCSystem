@@ -19,10 +19,34 @@ from npc_engine.engines.dialogue.dialogue_models import DialogueRequest
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "stage_b_v2.7"
+PROMPT_VERSION = "stage_b_v2.8"
 
 _PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts" / "dialogue"
 _PROMPT_PATH = _PROMPTS_DIR / "system_v1.yaml"
+
+# Sentinels that fence untrusted player input (L1-05). The system prompt instructs
+# the model that anything between these markers is player speech, never an
+# instruction or a lore source. Sanitization strips forged markers and collapses
+# newlines so a player cannot inject a forged KEY=VALUE prompt line.
+_PLAYER_MESSAGE_OPEN = "<<<PLAYER_MESSAGE>>>"
+_PLAYER_MESSAGE_CLOSE = "<<<END_PLAYER_MESSAGE>>>"
+
+
+def _sanitize_player_message(message: str) -> str:
+    """Neutralize prompt-injection vectors in raw player input (L1-05).
+
+    Removes any forged sentinel markers and collapses CR/LF so a player cannot
+    break out of the fenced region to inject a new prompt field (e.g. a forged
+    ``MY_ACCOUNT_1=`` or ``CONTEXT=`` line). The model still receives the player's
+    words verbatim, just on a single fenced line.
+
+    Args:
+        message: Raw, already length-capped player message.
+    Returns:
+        Sanitized single-line message safe to embed between the sentinels.
+    """
+    cleaned = message.replace(_PLAYER_MESSAGE_OPEN, "").replace(_PLAYER_MESSAGE_CLOSE, "")
+    return cleaned.replace("\r", " ").replace("\n", " ")
 
 
 def _extract_voice_descriptor(serialized_context: str) -> str:
@@ -92,6 +116,11 @@ def build_dialogue_prompt(request: DialogueRequest, serialized_context: str) -> 
     voice = _extract_voice_descriptor(serialized_context)
     accounts = _extract_personal_accounts(serialized_context)
     accounts_section = "".join(f"MY_ACCOUNT_{i}={acc}\n" for i, acc in enumerate(accounts, 1))
+    fenced_player_message = (
+        f"{_PLAYER_MESSAGE_OPEN}\n"
+        f"{_sanitize_player_message(request.player_message)}\n"
+        f"{_PLAYER_MESSAGE_CLOSE}\n"
+    )
     prompt = (
         f"PROMPT_VERSION={PROMPT_VERSION}\n"
         f"NPC_ID={request.npc_id}\n"
@@ -99,7 +128,10 @@ def build_dialogue_prompt(request: DialogueRequest, serialized_context: str) -> 
         f"VOICE_DESCRIPTOR={voice}\n"
         + accounts_section
         + f"CONTEXT={serialized_context}\n"
-        f"PLAYER_MESSAGE={request.player_message}\n"
+        + fenced_player_message
     )
-    logger.debug("dialogue_prompt_assembled", extra={"prompt_version": PROMPT_VERSION, "prompt": prompt})
+    # L1-03: never log the assembled prompt here — it carries the raw player_message
+    # and NPC context and is NOT behind the LOG_LLM_PROMPTS env-gate. The gated,
+    # dev-only prompt log lives in llm_client. Keep only the non-sensitive event.
+    logger.debug("dialogue_prompt_assembled", extra={"prompt_version": PROMPT_VERSION})
     return prompt

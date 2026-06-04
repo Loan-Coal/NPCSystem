@@ -1,14 +1,17 @@
 """
 dialogue_ws.py - WebSocket endpoint for streamed dialogue token events.
 Layer: api
-Purpose: (auto-detected — review)
-
+Purpose: Stream dialogue token chunks over a WebSocket, capping concurrent
+         connections per API key to prevent unmetered LLM amplification.
 Does NOT: mutate relation or emotion state directly.
-
 Dependencies injected: DialogueHandler.
 """
 
+from __future__ import annotations
+
+import asyncio
 import base64
+import hashlib
 from collections.abc import Iterator
 import re
 from typing import Any
@@ -49,6 +52,38 @@ def check_ws_connection_limit(current_count: int) -> bool:
         True when current_count is below MAX_WS_CONNECTIONS_PER_KEY.
     """
     return current_count < MAX_WS_CONNECTIONS_PER_KEY
+
+
+# Active WebSocket connection counts keyed by a hash of the API key, guarded by a
+# lock so the check-and-increment is atomic (L1-01: the cap was previously defined
+# but never enforced at the endpoint).
+_active_ws_connections: dict[str, int] = {}
+_ws_connections_lock = asyncio.Lock()
+
+
+def _ws_key_id(authorization: str) -> str:
+    """Return a non-reversible per-key identity (SHA-256) for connection accounting."""
+    return hashlib.sha256(authorization.encode("utf-8")).hexdigest()
+
+
+async def _acquire_ws_slot(key_id: str) -> bool:
+    """Atomically reserve a connection slot for key_id; False when already at cap."""
+    async with _ws_connections_lock:
+        current = _active_ws_connections.get(key_id, 0)
+        if not check_ws_connection_limit(current):
+            return False
+        _active_ws_connections[key_id] = current + 1
+        return True
+
+
+async def _release_ws_slot(key_id: str) -> None:
+    """Release one previously-acquired connection slot for key_id."""
+    async with _ws_connections_lock:
+        remaining = _active_ws_connections.get(key_id, 0) - 1
+        if remaining > 0:
+            _active_ws_connections[key_id] = remaining
+        else:
+            _active_ws_connections.pop(key_id, None)
 
 
 def _build_done_data(response: DialogueResponse) -> dict[str, Any]:
@@ -99,6 +134,12 @@ async def dialogue_ws(websocket: WebSocket) -> None:
         await websocket.close(code=1008)
         return
 
+    key_id = _ws_key_id(authorization)
+    if not await _acquire_ws_slot(key_id):
+        logger.warning("ws_connection_cap_reached", extra={"max": MAX_WS_CONNECTIONS_PER_KEY})
+        await websocket.close(code=1008)
+        return
+
     await websocket.accept()
     graph_db = get_graph_db()
     await graph_db.connect()
@@ -130,3 +171,5 @@ async def dialogue_ws(websocket: WebSocket) -> None:
         logger.exception("ws_dialogue_error", extra={"detail": str(error)})
         await websocket.send_json({"type": "error", "data": "internal_error"})
         await websocket.close(code=1011)
+    finally:
+        await _release_ws_slot(key_id)

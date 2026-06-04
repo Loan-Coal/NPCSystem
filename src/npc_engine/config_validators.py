@@ -13,22 +13,35 @@ from __future__ import annotations
 from pathlib import Path
 
 
-def check_api_key_secret(value: str) -> str:
-    """Reject weak or placeholder API secrets.
+# The secret shipped in the example/dev .env. Allowed in dev so the local stack
+# and test suite work out of the box, but it is public (committed), so it must be
+# rejected outside dev (L1-04) the same way the weak Neo4j password is.
+_KNOWN_DEV_API_KEY_SECRET = "local_dev_secret_change_this_2026"
+
+
+def check_api_key_secret(value: str, env: str = "dev") -> str:
+    """Reject weak, placeholder, or shipped-dev API secrets.
 
     Args:
         value: str — raw API_KEY_SECRET value from the environment.
+        env: Current ENV value ("dev", "staging", or "prod").
 
     Returns:
         Stripped, validated secret string.
 
     Raises:
-        ValueError: if the value is shorter than 16 chars or matches a known placeholder.
+        ValueError: if the value is shorter than 16 chars, matches a known
+            placeholder, or is the shipped dev secret while env is not "dev".
     """
     stripped = value.strip()
     blocked = {"change-me", "replace_with_strong_secret", ""}
     if len(stripped) < 16 or stripped in blocked:
         raise ValueError("API_KEY_SECRET must be a non-placeholder secret with length >= 16")
+    if stripped == _KNOWN_DEV_API_KEY_SECRET and env != "dev":
+        raise ValueError(
+            "API_KEY_SECRET must not use the shipped dev secret in staging/prod. "
+            "Set a strong, unique secret via the API_KEY_SECRET environment variable."
+        )
     return stripped
 
 
