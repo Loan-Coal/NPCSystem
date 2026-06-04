@@ -17,6 +17,7 @@ See DEC-061 in project-harness/DECISIONS.md.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import random
 
@@ -53,6 +54,23 @@ if TYPE_CHECKING:
 
 
 LOGGER = logging.getLogger(__name__)
+
+_SECRET_SEED_NAMESPACE = "gossip_secret"
+
+
+def _secret_rng_seed(sharer_id: str, receiver_id: str, tick_id: int) -> int:
+    """Derive a deterministic integer seed for secret-propagation RNG.
+
+    Args:
+        sharer_id: ID of the NPC sharing the secret.
+        receiver_id: ID of the NPC receiving the secret.
+        tick_id: Current game tick.
+
+    Returns:
+        A 64-bit integer seed suitable for ``random.Random(seed)``.
+    """
+    raw = f"{_SECRET_SEED_NAMESPACE}|{sharer_id}|{receiver_id}|{tick_id}"
+    return int.from_bytes(hashlib.sha256(raw.encode()).digest()[:8], byteorder="little")
 
 
 class GossipHandler:
@@ -335,10 +353,16 @@ class GossipHandler:
             propagated += 1
 
             # Secret propagation: lower base probability, higher distortion chance.
-            if random.random() < SECRET_BASE_PROBABILITY:
+            secret_seed = _secret_rng_seed(sharer["id"], receiver["id"], tick_id)
+            LOGGER.debug(
+                "gossip_secret_rng seed=%d sharer=%s receiver=%s tick=%d",
+                secret_seed, sharer["id"], receiver["id"], tick_id,
+            )
+            rng = random.Random(secret_seed)
+            if rng.random() < SECRET_BASE_PROBABILITY:
                 secret_record = await select_gossip_secret(session, sharer_id=sharer["id"])
                 if secret_record is not None:
-                    distorted = random.random() < SECRET_DISTORTION_CHANCE
+                    distorted = rng.random() < SECRET_DISTORTION_CHANCE
                     await propagate_secret(
                         session=session,
                         receiver_id=receiver["id"],

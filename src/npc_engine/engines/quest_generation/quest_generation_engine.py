@@ -19,6 +19,7 @@ dimensions are added. See DECISIONS.md "quest_generation_engine.py line limit (S
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import random
@@ -61,7 +62,25 @@ from npc_engine.graph.quest_node_service import create_quest
 
 _logger = logging.getLogger(__name__)
 
+_QUEST_SEED_NAMESPACE = "quest_generation"
 _MAX_RETRIES = 3
+
+
+def _quest_rng_seed(quest_giver_id: str, world_day: int) -> int:
+    """Derive a deterministic integer seed for quest-generation RNG.
+
+    Reproducible for the same (giver, world_day) pair; different pairs or
+    days produce different seeds so quest content varies.
+
+    Args:
+        quest_giver_id: ID of the NPC initiating the quest.
+        world_day: Current world day (from WorldState.day).
+
+    Returns:
+        A 64-bit integer seed suitable for ``random.Random(seed)``.
+    """
+    raw = f"{_QUEST_SEED_NAMESPACE}|{quest_giver_id}|{world_day}"
+    return int.from_bytes(hashlib.sha256(raw.encode()).digest()[:8], byteorder="little")
 
 
 def _load_prompt(prompt_path: Path) -> dict[str, str]:
@@ -119,7 +138,11 @@ class QuestGenerationEngine:
                 character node is not found.
         """
         world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
-        if world_state.quest_generation_rate < 1.0 and random.random() > world_state.quest_generation_rate:
+        world_day: int = world_state.day
+        quest_seed = _quest_rng_seed(quest_giver_id, world_day)
+        rng = random.Random(quest_seed)
+        _logger.debug("quest_rng seed=%d giver=%s world_day=%d", quest_seed, quest_giver_id, world_day)
+        if world_state.quest_generation_rate < 1.0 and rng.random() > world_state.quest_generation_rate:
             raise ValueError(
                 f"Quest generation suppressed by pacing engine "
                 f"(rate={world_state.quest_generation_rate:.2f})"
@@ -132,10 +155,10 @@ class QuestGenerationEngine:
                 "active_conditions": world_state.active_conditions,
             },
         }
-        template = self._select_template(archetype)
+        template = self._select_template(archetype, rng=rng)
         validator = SlotValidator(session=session)
 
-        fills_raw, fills = await self._fill_slots(session, template, validator, giver_name=giver_name, archetype=archetype, giver_context=giver_context)
+        fills_raw, fills = await self._fill_slots(session, template, validator, giver_name=giver_name, archetype=archetype, giver_context=giver_context, rng=rng)
         description = await self._generate_flavor(template, fills_raw, giver_name, template.description_template, giver_context)
 
         quest_id = str(uuid.uuid4())
@@ -227,13 +250,14 @@ class QuestGenerationEngine:
             f"WORLD_STATE: {json.dumps(giver_context.get('world_state', {}))}",
         ])
 
-    def _select_template(self, archetype: str) -> QuestTemplateRecord:
+    def _select_template(self, archetype: str, rng: random.Random | None = None) -> QuestTemplateRecord:
         """Select a template matching the archetype, falling back to any available."""
         matches = [t for t in self._templates if t.archetype == archetype]
         pool = matches if matches else self._templates
         if not pool:
             raise ValueError("No quest templates available")
-        return random.choice(pool)
+        _rng = rng if rng is not None else random.Random()
+        return _rng.choice(pool)
 
     async def _fill_slots(
         self,
@@ -244,6 +268,7 @@ class QuestGenerationEngine:
         giver_name: str = "",
         archetype: str = "",
         giver_context: dict[str, Any] | None = None,
+        rng: random.Random | None = None,
     ) -> tuple[dict[str, str], tuple[SlotFill, ...]]:
         """Try LLM slot-filling up to _MAX_RETRIES times, then fall back deterministically."""
         candidates = await self._get_candidates(session, template.slot_definitions)
@@ -268,7 +293,7 @@ class QuestGenerationEngine:
 
         # Deterministic fallback: pick random valid nodes from graph
         _logger.warning("quest_generation falling back to deterministic slot fill")
-        fills_raw = await self._deterministic_fill(session, template.slot_definitions, candidates)
+        fills_raw = await self._deterministic_fill(session, template.slot_definitions, candidates, rng=rng)
         fills = validator.build_fills(fills_raw, template.slot_definitions)
         return fills_raw, fills
 
@@ -385,13 +410,15 @@ class QuestGenerationEngine:
         session: AsyncSession,
         slot_definitions: tuple[SlotDefinition, ...],
         candidates: dict[str, list[str]],
+        rng: random.Random | None = None,
     ) -> dict[str, str]:
         """Pick random valid nodes from candidates for each slot."""
+        _rng = rng if rng is not None else random.Random()
         fills: dict[str, str] = {}
         for slot_def in slot_definitions:
             pool = candidates.get(slot_def.node_type, [])
             if pool:
-                fills[slot_def.name] = random.choice(pool)
+                fills[slot_def.name] = _rng.choice(pool)
             elif slot_def.required:
                 _logger.warning(
                     "No candidates for required slot '%s' (type=%s); using placeholder",

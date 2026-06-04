@@ -112,10 +112,8 @@ async def test_gossip_handler_calls_propagate_always():
             "npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely",
             new_callable=AsyncMock,
         ),
-        patch("npc_engine.engines.gossip.gossip_handler.random") as mock_random,
+        patch("npc_engine.engines.gossip.gossip_handler.propagate_secret", new_callable=AsyncMock),
     ):
-        mock_random.random.return_value = 1.0  # skip secret propagation
-
         await handler.run_tick(session=session, tick_id=1)
         mock_batch_write.assert_called_once()
 
@@ -319,10 +317,8 @@ async def test_knows_about_still_created_alongside_rumor():
             return_value="r-1",
         ),
         patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.random") as mock_random,
+        patch("npc_engine.engines.gossip.gossip_handler.propagate_secret", new_callable=AsyncMock),
     ):
-        mock_random.random.return_value = 1.0  # skip secret propagation
-
         with patch("npc_engine.engines.gossip.gossip_handler.gossip_distort") as mock_distort:
             from npc_engine.engines.gossip.gossip_distort import GossipDistortion
 
