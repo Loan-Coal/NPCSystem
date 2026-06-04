@@ -13,6 +13,7 @@ from uuid import UUID
 from fastapi import Request
 from starlette.responses import JSONResponse, Response
 
+from npc_engine.api.error_envelope import ErrorBody, ErrorEnvelope
 from npc_engine.auth.permissions import SCOPE_GRAPH_ADMIN, SCOPE_GRAPH_WRITE
 from npc_engine.config import Settings
 from npc_engine.engines.idempotency.models import IdempotencyPreflightResult
@@ -135,7 +136,7 @@ def _validate_idempotency_key(request: Request, settings: Settings) -> None:
 
 
 def _idempotency_error_response(request: Request, error_code: str, message: str, status_code: int) -> JSONResponse:
-    """Build a stable idempotency error response payload.
+    """Build a stable idempotency error response using the canonical ErrorEnvelope.
 
     Args:
         request: Incoming FastAPI request.
@@ -144,16 +145,14 @@ def _idempotency_error_response(request: Request, error_code: str, message: str,
         status_code: HTTP status code for the response.
 
     Returns:
-        JSONResponse with idempotency error envelope.
+        JSONResponse with ErrorEnvelope shape.
     """
-    request_id = request.headers.get(REQUEST_ID_HEADER, "")
-    payload = {
-        "success": False,
-        "error": error_code,
-        "message": message,
-        "request_id": request_id,
-    }
-    return JSONResponse(status_code=status_code, content=payload)
+    return JSONResponse(
+        status_code=status_code,
+        content=ErrorEnvelope(
+            error=ErrorBody(code=error_code, message=message)
+        ).model_dump(),
+    )
 
 
 def _resolve_request_id(request: Request) -> str:
