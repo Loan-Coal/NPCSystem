@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session, get_tick_scheduler
 from npc_engine.api.route_helpers import error_response, ok_response
-from npc_engine.config import Settings, get_settings
+from npc_engine.config import MAX_DELTA_TICKS, Settings, get_settings
 from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.scheduler.tick_scheduler import TickScheduler
 from npc_engine.world.world_reader import get_world_state
@@ -29,7 +29,7 @@ _VALID_TIME_FIELDS = _VALID_FIELDS
 class ClockAdvanceRequest(BaseModel):
     """Request payload for game-driven clock advancement."""
 
-    delta_ticks: int = Field(default=1, ge=1, le=200)
+    delta_ticks: int = Field(default=1, ge=1, le=MAX_DELTA_TICKS)
     game_time_seconds: int = Field(default=1, ge=0)
     advance_time_field: str | None = Field(default=None)
 
@@ -59,7 +59,7 @@ async def advance_clock(
                 message="Clock can only be advanced in game_driven mode",
             ),
         )
-    if request.delta_ticks > settings.MAX_CONCURRENT_TICKS * 10:
+    if request.delta_ticks > settings.MAX_DELTA_TICKS:
         raise HTTPException(
             status_code=400,
             detail=error_response(
