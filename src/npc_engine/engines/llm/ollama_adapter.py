@@ -11,6 +11,7 @@ import json
 
 import httpx
 
+from npc_engine.config import get_settings
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.utils.errors import LLMRequestError, LLMTimeoutError
 
@@ -117,7 +118,7 @@ class OllamaAdapter(LLMClientProtocol):
 
         Args:
             prompt: Formatted prompt string.
-            schema: JSON schema dict retained for protocol compliance; not injected into the prompt body.
+            schema: JSON schema dict passed as Ollama's ``format`` field to constrain output shape.
             max_tokens: Maximum tokens to generate (mapped to num_predict).
             top_p: Nucleus sampling probability mass. None means backend default.
             stop_sequences: Token sequences that halt generation (mapped to stop). None means backend default.
@@ -129,7 +130,11 @@ class OllamaAdapter(LLMClientProtocol):
             LLMTimeoutError: If the HTTP request times out.
             LLMRequestError: If the backend returns an HTTP error, backend error field, or non-dict JSON.
         """
-        options: dict = {"num_predict": max_tokens}
+        settings = get_settings()
+        options: dict = {
+            "num_predict": max_tokens,
+            "temperature": settings.STRUCTURED_OUTPUT_TEMPERATURE,
+        }
         if top_p is not None:
             options["top_p"] = top_p
         if stop_sequences is not None:
@@ -138,7 +143,7 @@ class OllamaAdapter(LLMClientProtocol):
             "model": self._model_name,
             "prompt": prompt,
             "stream": False,
-            "format": "json",
+            "format": schema,
             "options": options,
         }
         if system is not None:

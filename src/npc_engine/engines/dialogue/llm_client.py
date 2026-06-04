@@ -62,6 +62,11 @@ class DialogueLLMClient:
     async def generate_response(self, prompt: str, system: str | None = None) -> dict:
         """Request a structured dialogue response, falling back on timeout or errors.
 
+        Attempts structured generation twice before serving the canned fallback.
+        One repair retry is made when ValidationError is raised on the first attempt.
+        Logs WARNING per failed validation attempt and ERROR when the canned fallback
+        is ultimately served.
+
         Args:
             prompt: Full dialogue prompt string built by prompt_builder.
             system: Optional system prompt passed to the LLM backend's system channel.
@@ -69,7 +74,7 @@ class DialogueLLMClient:
         Returns:
             Dict conforming to the DialogueResponse schema, validated by Pydantic.
             Returns a deterministic fallback dict on LLMTimeoutError, LLMRequestError,
-            or ValidationError.
+            or when both validation attempts fail.
         """
 
         schema = DialogueResponse.model_json_schema()
@@ -82,34 +87,66 @@ class DialogueLLMClient:
             logger.debug("llm_prompt", extra={"system": system, "prompt": prompt})
 
         try:
-            response = await self._llm_client.generate_structured(
-                prompt=prompt,
-                schema=schema,
-                max_tokens=self._max_tokens,
-                top_p=self._top_p,
-                stop_sequences=self._stop_sequences,
-                system=system,
+            return await self._generate_with_retry(
+                prompt=prompt, schema=schema, system=system, labels=labels
             )
-            normalized_response = DialogueResponse.model_validate(response).model_dump(mode="python")
-            increment_metric(
-                metric=LLM_TOKENS_OUT_METRIC,
-                amount=float(estimate_tokens(json.dumps(normalized_response, sort_keys=True, ensure_ascii=True))),
-                labels=labels,
-            )
-
-            if self._log_prompts:
-                logger.debug("llm_response", extra={"response": normalized_response})
-
-            return normalized_response
         except LLMTimeoutError as exc:
             logger.warning("llm_timeout model=%s exc=%s", self._llm_client.model_name(), exc)
             return self._fallback_with_metrics(labels=labels, fallback_reason="timeout")
         except LLMRequestError as exc:
             logger.warning("llm_request_error model=%s exc=%s", self._llm_client.model_name(), exc)
             return self._fallback_with_metrics(labels=labels, fallback_reason="request_error")
-        except ValidationError as exc:
-            logger.warning("llm_validation_error model=%s errors=%s", self._llm_client.model_name(), exc.errors())
-            return self._fallback_with_metrics(labels=labels, fallback_reason="validation_error")
+
+    async def _generate_with_retry(
+        self,
+        prompt: str,
+        schema: dict,
+        system: str | None,
+        labels: dict[str, str],
+    ) -> dict:
+        """Attempt structured generation up to two times before serving the canned fallback.
+
+        Args:
+            prompt: Full dialogue prompt string.
+            schema: JSON schema dict for the DialogueResponse model.
+            system: Optional system prompt.
+            labels: Metric labels for observability.
+
+        Returns:
+            Validated dialogue response dict.
+        """
+        for attempt in range(2):
+            try:
+                raw = await self._llm_client.generate_structured(
+                    prompt=prompt,
+                    schema=schema,
+                    max_tokens=self._max_tokens,
+                    top_p=self._top_p,
+                    stop_sequences=self._stop_sequences,
+                    system=system,
+                )
+                normalized_response = DialogueResponse.model_validate(raw).model_dump(mode="python")
+                increment_metric(
+                    metric=LLM_TOKENS_OUT_METRIC,
+                    amount=float(
+                        estimate_tokens(json.dumps(normalized_response, sort_keys=True, ensure_ascii=True))
+                    ),
+                    labels=labels,
+                )
+                if self._log_prompts:
+                    logger.debug("llm_response", extra={"response": normalized_response})
+                return normalized_response
+            except ValidationError as exc:
+                logger.warning(
+                    "structured_output_validation_failed",
+                    extra={"attempt": attempt, "model": self._llm_client.model_name(), "error": str(exc)},
+                )
+        logger.error(
+            "structured_output_fallback_served",
+            extra={"model": self._llm_client.model_name()},
+        )
+        return self._fallback_with_metrics(labels=labels, fallback_reason="validation_error")
+>>>>>>> worktree-agent-a62d7ed9d57354274
 
     def fallback_response_payload(self) -> dict:
         """Return a deterministic fallback payload for callers that need safe recovery.
