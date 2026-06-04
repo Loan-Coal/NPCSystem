@@ -1,5 +1,7 @@
 """
 graph_reader.py - Read-only Cypher accessors for NPC graph queries.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: apply mutations or open transactions.
 

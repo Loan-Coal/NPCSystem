@@ -1,5 +1,7 @@
 """
 gossip_weight_resolver.py - Resolves schema-tagged gossip weight fields.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: execute gossip selection logic.
 

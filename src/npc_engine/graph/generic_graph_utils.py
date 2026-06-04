@@ -1,5 +1,7 @@
 """
 generic_graph_utils.py - Shared helpers for generic graph service encoding and Cypher safety.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: execute graph queries.
 

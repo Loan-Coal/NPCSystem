@@ -1,5 +1,7 @@
 """
 factory.py - Creates LLM adapter instances from per-engine config.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: perform generation calls directly.
 

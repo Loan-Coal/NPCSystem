@@ -1,5 +1,7 @@
 """
 awareness_seeder.py - Seeds factual KNOWS_ABOUT edges for affected NPCs.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: choose event templates or open transactions.
 

@@ -1,5 +1,7 @@
 """
 world_reader.py - Fetches the singleton WorldState node from Neo4j.
+Layer: services
+Purpose: (auto-detected — review)
 
 Does NOT: update world state values.
 

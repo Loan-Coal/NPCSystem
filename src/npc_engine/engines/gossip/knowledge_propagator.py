@@ -1,5 +1,7 @@
 """
 knowledge_propagator.py - Writes gossip knowledge propagation edges.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: choose which pairs gossip.
 

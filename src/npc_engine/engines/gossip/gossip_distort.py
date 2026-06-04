@@ -1,5 +1,7 @@
 """
 gossip_distort.py - Pure deterministic gossip distortion function.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: access databases or external services.
 

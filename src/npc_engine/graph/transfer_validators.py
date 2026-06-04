@@ -1,5 +1,7 @@
 """
 transfer_validators.py - Validates currency and item transfer requests, returning immutable commands.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: execute graph writes or open transactions.
 

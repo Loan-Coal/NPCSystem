@@ -1,5 +1,7 @@
 """
 graph.py - Registry-driven generic graph_write routes.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: execute raw Cypher in route handlers.
 

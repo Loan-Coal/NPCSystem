@@ -31,6 +31,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - test_action_workers + test_spread_rumor_worker have 2 pre-existing failures (unrelated); do not confuse with regressions.
 - SEV-36: shock on any high-severity event (incl. positive) is INTENTIONAL — do not add valence gate. Quest terminal state deferred to DECISIONS.
 - SEV-23 DONE: dependency_singletons split → dependencies_infra/stores/engines/advanced + thin re-exporter. political_writer split into 3. api_seeder split into api_seeder/seed_data/seed_http. quest.py helpers → quest_helpers.py. chapter_labeler.py extracted. EmbeddingIndexProtocol → context_protocols.py. Waivers: chapter_engine.py ~322 lines (DEC-062), context_builder.py ~464 lines (DEC-016 updated). rules baseline ratcheted to 38.
+- SEV-32 DONE: scripts/docstring_audit.py (CI gate) + scripts/migrate_docstrings.py (one-shot migration); 154 files got Layer: added; check-docstrings added to make check. DEC-063. Placeholder Purpose:/Dependencies:/Used by: values should be filled over time.
 
 ## Ordered checklist
 
@@ -73,7 +74,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - [x] **FIX-SEV-26** — Repo hygiene: git rm cached logs; fix .gitignore · MEDIUM · S · deps: none
 - [x] **FIX-SEV-23** — Split unwaived over-300-line files · MEDIUM · L · deps: none (do SEV-42 first to avoid moving reindex_job_service twice)
 - [x] **FIX-SEV-27** — Structured-output reliability (temperature + schema + retry) · MEDIUM · M · deps: SEV-01 done
-- [ ] **FIX-SEV-32** — Bulk-migrate module docstrings to canonical format · MEDIUM · L · deps: none
+- [x] **FIX-SEV-32** — Bulk-migrate module docstrings to canonical format · MEDIUM · L · deps: none
 - [x] **FIX-SEV-35** — Unify `delta_ticks` bound to `MAX_DELTA_TICKS=1000` · LOW · S · deps: none
 - [ ] **FIX-SEV-36** — Separate gossip distortion probability from confidence · LOW · M · deps: none (shock behavior intentional — see brief)
 - [x] **FIX-SEV-37** — Demo low-severity cluster (magic strings, print, config, QUIT) · LOW · S · deps: none

@@ -1,5 +1,7 @@
 """
 currency_writer.py - Atomic currency transfer writes with audit edge persistence.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: enforce business policy bounds.
 

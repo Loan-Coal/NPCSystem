@@ -1,5 +1,7 @@
 """
 modifier_bounds_validator.py - Validates and clamps relation deltas with window caps.
+Layer: services
+Purpose: (auto-detected — review)
 
 Does NOT: write relation changes to the graph.
 

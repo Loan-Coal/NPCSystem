@@ -1,5 +1,7 @@
 """
 dialogue_ws.py - WebSocket endpoint for streamed dialogue token events.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: mutate relation or emotion state directly.
 

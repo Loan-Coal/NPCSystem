@@ -1,5 +1,7 @@
 """
 context_serializer.py - Deterministically serializes merged context items.
+Layer: retrieval
+Purpose: (auto-detected — review)
 
 Does NOT: enforce token budget or merge tiers.
 

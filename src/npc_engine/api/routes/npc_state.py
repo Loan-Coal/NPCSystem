@@ -1,5 +1,7 @@
 """
 npc_state.py - Read endpoints for NPC state and emotion snapshots.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: perform dialogue generation.
 

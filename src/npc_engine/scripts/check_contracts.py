@@ -1,5 +1,7 @@
 """
 check_contracts.py - CLI utility to validate engine contract YAML files.
+Layer: unknown
+Purpose: (auto-detected — review)
 
 Does NOT: execute any engine behavior.
 

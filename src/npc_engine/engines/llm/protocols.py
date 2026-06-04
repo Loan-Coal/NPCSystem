@@ -1,5 +1,7 @@
 """
 protocols.py - Shared protocol for LLM backend adapters.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: implement network requests.
 

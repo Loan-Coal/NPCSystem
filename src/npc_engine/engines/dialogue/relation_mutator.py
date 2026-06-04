@@ -1,5 +1,7 @@
 """
 relation_mutator.py - Applies validated relation deltas through graph writer.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: decide delta policy rules.
 

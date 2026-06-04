@@ -1,5 +1,7 @@
 """
 dialogue_models.py - Internal dialogue domain models shared across the dialogue engine.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: define HTTP transport schemas or route-layer concerns.
 

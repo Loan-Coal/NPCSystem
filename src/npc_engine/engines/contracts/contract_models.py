@@ -1,5 +1,7 @@
 """
 contract_models.py - Typed models for machine-readable engine contracts.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: load contract files from disk.
 

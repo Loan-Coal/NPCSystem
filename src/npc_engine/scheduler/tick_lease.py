@@ -1,5 +1,7 @@
 """
 tick_lease.py - Distributed lease/claim storage for scheduler ticks in Neo4j.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: run engine handlers or advance clock state.
 

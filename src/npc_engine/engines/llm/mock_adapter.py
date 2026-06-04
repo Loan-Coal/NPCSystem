@@ -1,5 +1,7 @@
 """
 mock_adapter.py - Deterministic in-memory LLM adapter for tests and local runs.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: perform external API calls.
 

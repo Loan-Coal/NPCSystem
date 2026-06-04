@@ -1,5 +1,7 @@
 """
 graph_warning_helpers.py - Shared warning metadata and observability helpers for graph routes.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: execute graph operations.
 

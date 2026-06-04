@@ -1,5 +1,7 @@
 """
 graph_rag.py - GraphRAG unified Tier B/C retrieval.
+Layer: retrieval
+Purpose: (auto-detected — review)
 
 Replaces the raw vector-score ranking for Tier B/C with a graph-aware scoring
 that combines vector similarity, trust-weighted 1-hop graph expansion, and

@@ -1,5 +1,7 @@
 """
 character_writer.py - Writes Character nodes to Neo4j.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: manage transaction lifecycle.
 

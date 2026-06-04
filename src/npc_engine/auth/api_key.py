@@ -1,5 +1,7 @@
 """
 api_key.py - Validates Authorization Bearer tokens against configured shared secret.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: manage user sessions or token issuance.
 

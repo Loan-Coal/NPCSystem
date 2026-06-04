@@ -1,5 +1,7 @@
 """
 route_helpers.py - Shared API response and exception mapping helpers.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: perform business logic or data access.
 

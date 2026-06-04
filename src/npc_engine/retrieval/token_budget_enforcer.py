@@ -1,5 +1,7 @@
 """
 token_budget_enforcer.py - Trims merged context to stay within a token budget.
+Layer: retrieval
+Purpose: (auto-detected — review)
 
 Does NOT: fetch context or serialize output.
 

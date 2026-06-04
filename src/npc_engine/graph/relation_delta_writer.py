@@ -1,5 +1,7 @@
 """
 relation_delta_writer.py - Validates and atomically applies relation deltas within one transaction.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: handle currency or item transfers.
 

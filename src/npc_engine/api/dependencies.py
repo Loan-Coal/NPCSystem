@@ -1,5 +1,7 @@
 """
 dependencies.py - FastAPI dependency composition root for session-scoped and composed services.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: define singleton application-level providers.
 

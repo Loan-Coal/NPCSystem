@@ -1,5 +1,7 @@
 """
 context_merger.py - Combines retrieval tiers into a stable, deduplicated context object.
+Layer: retrieval
+Purpose: (auto-detected — review)
 
 Does NOT: enforce token budget or serialize prompt text.
 

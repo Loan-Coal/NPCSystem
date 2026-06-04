@@ -1,5 +1,7 @@
 """
 context_utils.py - Shared retrieval helpers for token estimation and key parsing.
+Layer: retrieval
+Purpose: (auto-detected — review)
 
 Does NOT: enforce tier budgets or fetch graph/vector data.
 

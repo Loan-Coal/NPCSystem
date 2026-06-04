@@ -1,5 +1,7 @@
 """
 base_contract_loader.py - Loads package-internal base node/edge type contracts.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: load external extension contracts.
 

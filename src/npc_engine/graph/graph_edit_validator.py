@@ -1,5 +1,7 @@
 """
 graph_edit_validator.py - Validation helpers for typed graph edit payloads.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: execute graph writes.
 

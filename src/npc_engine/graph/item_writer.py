@@ -1,5 +1,7 @@
 """
 item_writer.py - Atomic item transfer writes with idempotent replay support.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: enforce business policy bounds.
 

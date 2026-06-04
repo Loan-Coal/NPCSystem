@@ -1,5 +1,7 @@
 """
 world_writer.py - Persists WorldState updates and returns stored state.
+Layer: services
+Purpose: (auto-detected — review)
 
 Does NOT: decide event-driven world transitions.
 

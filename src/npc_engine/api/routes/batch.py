@@ -1,5 +1,7 @@
 """
 batch.py - Bulk routes for explicit gossip and event tick execution.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: advance game clock automatically.
 

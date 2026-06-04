@@ -1,5 +1,7 @@
 """
 json_fields.py - Shared JSON field serialization helpers for graph write payloads.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: execute graph queries.
 

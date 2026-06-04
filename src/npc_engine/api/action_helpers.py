@@ -1,5 +1,7 @@
 """
 action_helpers.py - Pure helpers for /action route branching and payload shaping.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: execute graph writes.
 

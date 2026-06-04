@@ -1,5 +1,7 @@
 """
 middleware_helpers.py - Standalone helper functions and shared constants for ApiKeyMiddleware.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: define the middleware class itself.
 

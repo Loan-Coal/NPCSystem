@@ -1,5 +1,7 @@
 """
 event_writer.py - Writes Event nodes and participation edges to Neo4j.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: orchestrate event generation logic.
 

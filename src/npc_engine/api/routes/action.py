@@ -1,5 +1,7 @@
 """
 action.py - Endpoint to report player actions against NPCs.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: execute world tick logic.
 

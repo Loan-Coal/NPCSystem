@@ -601,6 +601,13 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Why:** execute_currency_transfer_in_tx shares _try_replay and _raise_transfer_failure private helpers with transfer_currency_atomic. Extracting it to a new module would require exposing those helpers or duplicating 40 lines of error-handling logic. The cohesion is high — all three functions implement the same atomic-write contract, differing only in who owns the transaction boundary. SEV-23 may revisit.
 **Consequence:** make check-rules-update must baseline currency_writer.py. SEV-23 may split if a natural boundary is found.
 
+## DEC-063: Canonical module docstring format — Layer/Purpose/Dependencies/Used by (SEV-32)
+**Date:** 2026-06-04
+**Context:** 154/336 src files lacked the mandatory `Layer:` field; 25 `__init__.py` lacked `Public surface:`. Old format used "Does NOT:" and "Dependencies injected:" without an explicit layer tag.
+**Decision:** All src/ files now carry the canonical format (`Module:/Package:`, `Layer:`, `Purpose:`, `Dependencies:`, `Used by:`, `Public surface:` for __init__.py). `scripts/docstring_audit.py` enforces this as a CI gate; added to `make check` after `check-layers`.
+**Why:** `Layer:` makes architectural membership explicit in every file header without parsing imports. LLM context retrieval carries layer/coupling context per chunk.
+**Consequence:** `scripts/migrate_docstrings.py` ran a one-shot migration 2026-06-04. Placeholder values `(auto-detected — review)` in `Purpose:` / `Dependencies:` / `Used by:` for migrated files should be filled in over time. `check-docstrings` now blocks any new file that omits the fields.
+
 ## DEC-062: chapter_engine.py waived at ~322 lines (SEV-23 split)
 **Date:** 2026-06-04
 **Context:** SEV-23 extracted `_rule_based_label` → `chapter_labeler.py`, reducing chapter_engine.py from 347 to 322 lines. Still 22 lines over the 300-line limit.

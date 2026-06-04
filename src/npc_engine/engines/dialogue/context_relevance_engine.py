@@ -1,5 +1,7 @@
 """
 context_relevance_engine.py - Re-export stub; implementation lives in retrieval/.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: define any logic.
 

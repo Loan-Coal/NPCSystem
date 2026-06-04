@@ -1,5 +1,7 @@
 """
 world_state.py - Pydantic model for singleton world state node.
+Layer: services
+Purpose: (auto-detected — review)
 
 Does NOT: read or write world state from Neo4j.
 

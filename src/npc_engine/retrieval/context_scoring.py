@@ -1,5 +1,7 @@
 """
 context_scoring.py - Relevance scoring helpers for context tier items.
+Layer: retrieval
+Purpose: (auto-detected — review)
 
 Does NOT: fetch graph/vector data or enforce token budgets.
 

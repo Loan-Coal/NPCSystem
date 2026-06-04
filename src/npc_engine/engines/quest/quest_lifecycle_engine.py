@@ -1,5 +1,7 @@
 """
 quest_lifecycle_engine.py - P3 quest lifecycle orchestration service.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: expose HTTP routing concerns.
 

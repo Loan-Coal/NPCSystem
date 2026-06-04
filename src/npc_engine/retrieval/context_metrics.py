@@ -1,5 +1,7 @@
 """
 context_metrics.py - Metric emission helpers for context assembly.
+Layer: retrieval
+Purpose: (auto-detected — review)
 
 Does NOT: retrieve or modify context items.
 

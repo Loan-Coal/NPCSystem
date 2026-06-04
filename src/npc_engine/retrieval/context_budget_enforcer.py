@@ -1,5 +1,7 @@
 """
 context_budget_enforcer.py - Tier-aware context budget enforcement with compression cache.
+Layer: retrieval
+Purpose: (auto-detected — review)
 
 Does NOT: call external LLM services for compression.
 

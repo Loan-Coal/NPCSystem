@@ -1,5 +1,7 @@
 """
 store_protocol.py - Storage protocol for idempotency persistence backends.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: provide concrete database implementation.
 

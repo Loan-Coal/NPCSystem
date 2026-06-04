@@ -1,5 +1,7 @@
 """
 event_handler.py - Orchestrates weighted event generation and awareness seeding.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: run periodic scheduler loops.
 

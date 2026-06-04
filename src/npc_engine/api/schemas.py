@@ -1,5 +1,7 @@
 """
 schemas.py - Shared API request and response models.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: execute graph or LLM logic.
 

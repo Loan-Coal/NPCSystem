@@ -1,5 +1,7 @@
 """
 gossip_handler.py - Orchestrates one gossip tick over selected NPC pairs.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: run global scheduling loops.
 

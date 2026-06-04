@@ -1,5 +1,7 @@
 """
 context_relevance_engine.py - Deterministic context relevance scoring and ranking.
+Layer: retrieval
+Purpose: (auto-detected — review)
 
 Does NOT: fetch graph/vector data.
 

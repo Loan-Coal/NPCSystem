@@ -1,5 +1,7 @@
 """
 service_helpers.py - Private helpers for idempotency preflight evaluation.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: manage sessions or expose public service API.
 

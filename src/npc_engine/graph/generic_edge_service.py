@@ -1,5 +1,7 @@
 """
 generic_edge_service.py - Registry-driven generic edge CRUD operations.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: enforce auth scopes or execute node mutations.
 

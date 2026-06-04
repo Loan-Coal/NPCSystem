@@ -1,5 +1,7 @@
 """
 action_resolver.py - Validates and normalizes candidate dialogue actions.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: execute gameplay side effects.
 

@@ -1,5 +1,7 @@
 """
 semantic_field_resolver.py - Shared field selection by semantic tags.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: load schema files or resolve graph data.
 

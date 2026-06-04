@@ -1,5 +1,7 @@
 """
 tick_scheduler.py - Coordinates game clock and tick execution for engines.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: define gossip/event/routine engine internals.
 

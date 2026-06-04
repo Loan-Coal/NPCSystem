@@ -1,5 +1,7 @@
 """
 models.py - Typed quest lifecycle models for engine orchestration.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: execute graph writes.
 

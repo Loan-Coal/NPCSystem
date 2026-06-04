@@ -1,5 +1,7 @@
 """
 location_scoper.py - Resolves candidate locations for event templates.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: create events or awareness edges.
 

@@ -1,5 +1,7 @@
 """
 currency_queries.py - Cypher query strings for currency transfer reads and writes.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: execute queries or validate business rules.
 

@@ -1,5 +1,7 @@
 """
 edge_updater.py - Appends gossip interaction metadata to relation delta logs.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: enforce mutation bounds.
 

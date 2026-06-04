@@ -1,5 +1,7 @@
 """
 pagination.py - Isolated pagination strategy helpers for API routes.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: query storage layers directly.
 

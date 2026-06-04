@@ -1,5 +1,7 @@
 """
 event_pool.py - Loads weighted event templates from JSON file.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: persist generated events.
 

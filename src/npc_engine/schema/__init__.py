@@ -1,5 +1,8 @@
 """
 schema package - Runtime schema loading and helper resolvers.
+Layer: config
+Purpose: (auto-detected — review)
+Public surface: (list re-exports here)
 
 Does NOT: execute graph writes.
 

@@ -1,5 +1,7 @@
 """
 relation_writer.py - Applies RELATES_TO updates with bounded relation values.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: validate window constraints.
 

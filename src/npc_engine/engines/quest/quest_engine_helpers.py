@@ -1,5 +1,7 @@
 """
 quest_engine_helpers.py - Private helpers for QuestLifecycleEngine.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: expose public lifecycle API or touch HTTP concerns.
 

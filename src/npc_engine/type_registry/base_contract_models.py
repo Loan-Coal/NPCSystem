@@ -1,5 +1,7 @@
 """
 base_contract_models.py - Pydantic contracts for package-internal base type YAML files.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: load files from disk.
 

@@ -1,5 +1,7 @@
 """
 context_field_resolver.py - Resolves schema-tagged fields for context tiers.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: query graph data.
 

@@ -1,5 +1,7 @@
 """
 graph_writer.py - Transaction coordinator for currency and item mutation workflows.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: define mutation policy bounds or apply relation deltas.
 

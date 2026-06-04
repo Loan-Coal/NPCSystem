@@ -1,5 +1,7 @@
 """
 delta_log_manager.py - Pure utilities for relation delta log append and window math.
+Layer: services
+Purpose: (auto-detected — review)
 
 Does NOT: persist logs or mutate graph edges in storage.
 

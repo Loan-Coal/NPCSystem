@@ -1,5 +1,7 @@
 """
 contract_loader.py - Loads and validates engine contract YAML files.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: enforce contracts at runtime.
 

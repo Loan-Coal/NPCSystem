@@ -1,5 +1,7 @@
 """
 service.py - Idempotency decision engine backed by persistent storage.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: parse HTTP headers directly.
 

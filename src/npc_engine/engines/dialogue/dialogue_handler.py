@@ -1,5 +1,7 @@
 """
 dialogue_handler.py - Orchestrates context, prompting, parsing, mutation, and emotion update.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: implement HTTP transport concerns.
 

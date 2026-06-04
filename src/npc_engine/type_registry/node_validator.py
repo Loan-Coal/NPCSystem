@@ -1,5 +1,7 @@
 """
 node_validator.py - Validates and normalises node property dicts against TypeRegistry models.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: write to the graph or enforce business rules.
 

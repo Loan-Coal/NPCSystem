@@ -1,5 +1,7 @@
 """
 embedding_reconciler.py - Background stale-embedding reconciliation worker.
+Layer: retrieval
+Purpose: (auto-detected — review)
 
 Does NOT: mutate core graph properties other than embedding index timestamps.
 

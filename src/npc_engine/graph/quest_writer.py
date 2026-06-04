@@ -1,5 +1,7 @@
 """
 quest_writer.py - Quest state persistence helpers for lifecycle engine.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: enforce quest transition policies.
 

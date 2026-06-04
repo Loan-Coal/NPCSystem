@@ -1,5 +1,7 @@
 """
 serializer.py - Client-safe serialization helpers for registry introspection payloads.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: load or merge registry contracts.
 

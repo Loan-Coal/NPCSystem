@@ -1,5 +1,7 @@
 """
 dialogue.py - REST endpoint for full dialogue responses.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: implement dialogue orchestration logic itself.
 
