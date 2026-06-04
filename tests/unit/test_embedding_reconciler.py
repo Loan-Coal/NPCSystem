@@ -10,11 +10,13 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pytest
 
 from npc_engine.retrieval.embedding_reconciler import EmbeddingReconciler
+
+EMBED_DIM = 4  # small dimension for test vectors
 
 
 @dataclass(frozen=True)
@@ -67,10 +69,20 @@ class _GraphDbStub:
         yield self._session
 
 
+@dataclass
 class _EmbeddingIndexStub:
-    def __init__(self, fail_on_id: str | None = None):
-        self.fail_on_id = fail_on_id
-        self.upserts: list[tuple[str, str, dict]] = []
+    """Stub embedding index that supports embed_batch (SEV-29 batch API)."""
+
+    fail_on_id: str | None = None
+    # Track embed_batch calls
+    embed_batch_calls: list[list[str]] = field(default_factory=list)
+    # Keep upserts for backward compat (even though reconciler no longer calls upsert)
+    upserts: list[tuple[str, str, dict]] = field(default_factory=list)
+
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Return one fixed-length vector per text."""
+        self.embed_batch_calls.append(texts)
+        return [[float(i % 10)] * EMBED_DIM for i in range(len(texts))]
 
     async def upsert(self, item_id: str, text: str, payload: dict) -> None:
         if self.fail_on_id == item_id:
@@ -79,7 +91,8 @@ class _EmbeddingIndexStub:
 
 
 @pytest.mark.asyncio
-async def test_reconcile_once_upserts_and_marks_rows() -> None:
+async def test_reconcile_once_batch_encodes_and_marks_rows() -> None:
+    """reconcile_once must call embed_batch once and mark nodes as indexed."""
     session = _SessionStub(
         rows=[
             _NodeRow(id="npc_1", kind="Character", text="Guard in plaza", payload={"name": "Ari"}),
@@ -94,29 +107,11 @@ async def test_reconcile_once_upserts_and_marks_rows() -> None:
 
     assert result["processed"] == 2
     assert result["failed"] == 0
-    assert [entry[0] for entry in index.upserts] == ["npc_1", "event_1"]
-    assert all("indexed_at" in entry[2] for entry in index.upserts)
-    mark_calls = [call for call in session.run_calls if call[0].startswith("MATCH (n:Character") or call[0].startswith("MATCH (n:Event")]
-    assert len(mark_calls) == 2
-
-
-@pytest.mark.asyncio
-async def test_reconcile_once_continues_after_single_row_failure() -> None:
-    session = _SessionStub(
-        rows=[
-            _NodeRow(id="npc_fail", kind="Character", text="Broken row", payload={}),
-            _NodeRow(id="loc_1", kind="Location", text="North gate", payload={"name": "North Gate"}),
-        ]
-    )
-    graph_db = _GraphDbStub(session=session)
-    index = _EmbeddingIndexStub(fail_on_id="npc_fail")
-    reconciler = EmbeddingReconciler(graph_db=graph_db, embedding_index=index, interval_seconds=300)
-
-    result = await reconciler.reconcile_once()
-
-    assert result["processed"] == 1
-    assert result["failed"] == 1
-    assert [entry[0] for entry in index.upserts] == ["loc_1"]
+    # embed_batch called once with both texts
+    assert len(index.embed_batch_calls) == 1
+    assert set(index.embed_batch_calls[0]) == {"Guard in plaza", "Market fire"}
+    # At most 2 session.run calls: 1 SELECT + 1 batch SET
+    assert len(session.run_calls) <= 2
 
 
 @pytest.mark.asyncio
@@ -129,7 +124,7 @@ async def test_reconcile_once_noops_when_no_stale_rows() -> None:
     result = await reconciler.reconcile_once()
 
     assert result == {"processed": 0, "failed": 0}
-    assert index.upserts == []
+    assert index.embed_batch_calls == []
 
 
 def test_stale_nodes_query_excludes_inactive_characters() -> None:

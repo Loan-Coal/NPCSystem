@@ -576,6 +576,13 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Why:** Splitting `main.py` mid-session during SEV-04 would expand scope and risk regressions in unrelated code. The violation was introduced by a committed prior fix, not by the current change.
 **Consequence:** `make check-rules` passes with a baselined exception. SEV-23 must un-grandfather this when it splits the file.
 
+## DEC-061: gossip_handler.py waived at ~310 lines (soft 300-line limit)
+**Date:** 2026-06-04
+**Context:** SEV-29 batch N+1 fix added `_process_pairs`, `_build_write_params`, and `_run_side_effects` helper methods to `GossipHandler`, pushing the file from ~198 to ~310 lines.
+**Decision:** Waive the 300-line limit for this file.
+**Why:** The four methods (`run_tick`, `_process_pairs`, `_build_write_params`, `_run_side_effects`) are tightly coupled phases of a single gossip-tick orchestration. Extracting them to a separate module would create an artificial split with no independent reuse value. The 10-line overage does not impair readability.
+**Consequence:** `make check-rules` must baseline gossip_handler.py if the check fires. SEV-23 may revisit.
+
 ## DEC-059: MemoryConsolidationEngine.run_tick opens per-task Neo4j sessions from GraphDB
 **Date:** 2026-06-04
 **Context:** SEV-06 — `run_tick` previously iterated NPCs sequentially with a single shared `AsyncSession`. Neo4j `AsyncSession` objects are not concurrency-safe.

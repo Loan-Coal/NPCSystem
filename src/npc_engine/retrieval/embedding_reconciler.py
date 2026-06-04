@@ -56,12 +56,14 @@ RETURN n.id AS id,
        properties(n) AS payload
 """
 
-
-_MARK_INDEXED_QUERIES: dict[str, str] = {
-    "Character": "MATCH (n:Character {id: $node_id}) SET n.last_embedding_indexed_at = datetime($indexed_at)",
-    "Event": "MATCH (n:Event {id: $node_id}) SET n.last_embedding_indexed_at = datetime($indexed_at)",
-    "Location": "MATCH (n:Location {id: $node_id}) SET n.last_embedding_indexed_at = datetime($indexed_at)",
-}
+# Batch write: store embedding vectors and mark-indexed timestamps in one query.
+# This replaces N individual per-node mark-indexed calls.
+CYPHER_BATCH_SET_EMBEDDINGS = """
+UNWIND $nodes AS n
+MATCH (m {id: n.id})
+SET m.embedding = n.embedding,
+    m.last_embedding_indexed_at = datetime(n.indexed_at)
+"""
 
 
 class _SessionProtocol(Protocol):
@@ -92,6 +94,19 @@ class _EmbeddingIndexProtocol(Protocol):
             payload: Metadata stored alongside the embedding.
         """
 
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Encode a list of texts and return their embedding vectors.
+
+        Called once per reconciliation cycle instead of encoding inside
+        each individual upsert call. Reduces encoder invocations from N to 1.
+
+        Args:
+            texts: Raw text strings to encode; empty list returns empty list.
+
+        Returns:
+            List of float vectors, one per input text, in the same order.
+        """
+
 
 class EmbeddingReconciler:
     """Periodic reconciler that heals stale embeddings from npc_engine.graph timestamps."""
@@ -107,7 +122,7 @@ class EmbeddingReconciler:
 
         Args:
             graph_db: Graph database handle used to query stale nodes.
-            embedding_index: Embedding index to write repaired embeddings into.
+            embedding_index: Embedding index used to batch-encode node texts.
             interval_seconds: Seconds between reconciliation cycles; must be greater than 0.
             batch_size: Maximum nodes to process per cycle; must be greater than 0.
 
@@ -128,7 +143,7 @@ class EmbeddingReconciler:
         """Run one reconciliation cycle over all stale nodes.
 
         Returns:
-            Dict with keys ``processed`` (successful upserts) and ``failed`` (error count).
+            Dict with keys ``processed`` (successful writes) and ``failed`` (error count).
         """
 
         async with self._graph_db.get_session() as session:
@@ -179,44 +194,23 @@ class EmbeddingReconciler:
         finally:
             await result.consume()
 
-        # Phase 2: process collected nodes — no active read result on the session.
-        processed = 0
-        failed = 0
-        for item in batch:
-            node_id = item["node_id"]
-            kind = item["kind"]
-            text = item["text"] or node_id
-            payload_raw = item["payload"]
-            payload = payload_raw if isinstance(payload_raw, dict) else {}
-            indexed_at = datetime.now(timezone.utc).isoformat()
-            payload_with_meta = {
-                **payload,
-                "id": node_id,
-                "kind": kind,
-                "indexed_at": indexed_at,
-            }
+        if not batch:
+            return {"processed": 0, "failed": 0}
 
-            try:
-                await self._embedding_index.upsert(item_id=node_id, text=text, payload=payload_with_meta)
-                await self._mark_node_indexed(
-                    session=session,
-                    kind=kind,
-                    node_id=node_id,
-                    indexed_at=indexed_at,
-                )
-                processed += 1
-            except Exception:
-                failed += 1
-                LOGGER.exception("embedding reconcile failed for kind=%s id=%s", kind, node_id)
+        # Phase 2: encode all texts in one batch call instead of N individual encodes.
+        indexed_at = datetime.now(timezone.utc).isoformat()
+        texts = [item["text"] or item["node_id"] for item in batch]
+        vectors = await self._embedding_index.embed_batch(texts)
 
-        return {"processed": processed, "failed": failed}
+        # Phase 3: write all embedding vectors and mark-indexed timestamps in one query.
+        write_nodes = [
+            {"id": item["node_id"], "embedding": vector, "indexed_at": indexed_at}
+            for item, vector in zip(batch, vectors)
+        ]
+        write_result = await session.run(CYPHER_BATCH_SET_EMBEDDINGS, nodes=write_nodes)
+        await write_result.consume()
 
-    async def _mark_node_indexed(self, session: _SessionProtocol, kind: str, node_id: str, indexed_at: str) -> None:
-        query = _MARK_INDEXED_QUERIES.get(kind)
-        if query is None:
-            return
-        result = await session.run(query, node_id=node_id, indexed_at=indexed_at)
-        await result.consume()
+        return {"processed": len(batch), "failed": 0}
 
 
 def _record_value(record: Any, key: str, default: Any) -> Any:

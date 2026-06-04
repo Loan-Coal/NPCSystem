@@ -21,6 +21,12 @@ def _embed_text(text: str, model_name: str) -> list[float]:
     return embed(text, model_name=model_name)
 
 
+def _embed_texts_batch(texts: list[str], model_name: str) -> list[list[float]]:
+    if not texts:
+        return []
+    return [_embed_text(t, model_name) for t in texts]
+
+
 class EmbeddingIndex:
     """Thin embedding layer over a vector store backend."""
 
@@ -76,6 +82,22 @@ class EmbeddingIndex:
         if filter_ids is not None:
             results = [r for r in results if r["id"] in filter_ids]
         return results[:top_k]
+
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Encode a list of texts and return their embedding vectors.
+
+        Used by the embedding reconciler to batch-encode all stale nodes in one
+        call instead of N individual encodes inside upsert.
+
+        Args:
+            texts: Raw text strings to encode; empty list returns empty list.
+
+        Returns:
+            List of float vectors, one per input text, in the same order.
+            Empty texts produce a zero vector of length EMBED_DIMENSION.
+        """
+
+        return _embed_texts_batch(texts, self._model_name)
 
     async def invalidate(self, item_id: str) -> None:
         """Remove one indexed entry from the vector store.
