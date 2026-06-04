@@ -37,8 +37,14 @@ v1_router = APIRouter(prefix="/system")
 
 @router.get("/health")
 async def health() -> dict[str, Any]:
-    """Return liveness and basic service status."""
-    return ok_response({"status": "ok", "tick": 0, "neo4j": "degraded"})
+    """Return process liveness and the running build identifier.
+
+    Liveness only — intentionally dependency-free (no DB/LLM probe) so it stays
+    fast and cannot be taken down by a backing service. Dependency readiness lives
+    on GET /readiness. `version` is the baked build SHA (L9-05): if it does not
+    match the source you expect, the container is stale (rebuild with --build).
+    """
+    return ok_response({"status": "ok", "version": get_settings().BUILD_SHA})
 
 
 @router.get("/readiness")

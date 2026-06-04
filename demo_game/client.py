@@ -718,27 +718,32 @@ class EngineClient:
     # Convenience write wrappers (P2.5 UI trigger surface)
     # ------------------------------------------------------------------
 
-    def put_world_state(self, epoch: str, active_conditions: list[str]) -> dict:
-        """Update the world state epoch and active conditions.
+    def put_world_state(self, epoch: str, active_conditions: list[str]) -> dict | None:
+        """Partially update the world state epoch and active conditions.
 
-        Thin wrapper over upsert_node("world_state") that merges on the
-        canonical id "world" (DEC-022). Used by the P2.5 war-trigger UI button.
+        PATCHes the canonical "world" node (DEC-022). A partial update is required:
+        the generic create path (upsert_node) re-validates ALL required fields
+        (faction_standings, time_of_day, weather) and 422s on an existing node,
+        and re-sending them would clobber live state (SEV-13). patch_node validates
+        only the supplied fields against the existing node. Used by the P2.5
+        war-trigger UI button. The world_state node is created by the seeder first.
 
         Args:
             epoch: New epoch string, e.g. "peace" or "war".
             active_conditions: List of active condition IDs.
 
         Returns:
-            Full API response dict.
+            Updated node property dict, or None if the "world" node does not exist
+            (i.e. the world was never seeded).
 
         Raises:
-            EngineClientError: On any 4xx or 5xx response.
+            EngineClientError: On any non-404 4xx or 5xx response.
         """
         now = datetime.now(timezone.utc).isoformat()
-        return self.upsert_node(
+        return self.patch_node(
             "world_state",
+            "world",
             {
-                "id": "world",
                 "epoch": epoch,
                 "active_conditions": active_conditions,
                 "last_updated_at": now,

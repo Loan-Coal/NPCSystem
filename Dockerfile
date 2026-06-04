@@ -20,4 +20,9 @@ COPY . .
 
 EXPOSE 8000
 
+# Build identifier surfaced on GET /health (L9-05) so a stale image is detectable.
+# Pass via: docker build --build-arg BUILD_SHA=$(git rev-parse --short HEAD)
+ARG BUILD_SHA=dev
+ENV BUILD_SHA=$BUILD_SHA
+
 CMD ["uvicorn", "npc_engine.main:app", "--host", "0.0.0.0", "--port", "8000"]

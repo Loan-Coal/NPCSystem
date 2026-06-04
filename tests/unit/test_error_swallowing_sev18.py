@@ -61,6 +61,8 @@ async def test_witnessed_query_failure_logs_warning():
     engine = MemoryConsolidationEngine(
         session_store=session_store,
         llm_client=llm_client,
+        graph_db=MagicMock(),  # SEV-08 made graph_db + settings required ctor params
+        settings=MagicMock(),
         turn_threshold=2,
         clear_turns_after=False,
     )
@@ -213,6 +215,10 @@ async def test_gossip_rumor_record_failure_reraises():
             "severity": 80,
             "is_canonical": False,
             "trust": 50,
+            # L4-04: gossip_handler reads write["distortion_level"] to decide whether
+            # to create_rumor. Omitting it made the guard never reach create_rumor, so
+            # the re-raise it claims to test was never exercised. 100 >= threshold(0).
+            "distortion_level": 100,
         }
     ]
 

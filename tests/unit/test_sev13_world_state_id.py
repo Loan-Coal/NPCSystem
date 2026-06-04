@@ -27,24 +27,36 @@ def test_build_world_state_payload_uses_canonical_id() -> None:
     )
 
 
-def test_put_world_state_request_body_id_is_world() -> None:
-    """EngineClient.put_world_state must send id='world' and NOT clobber faction_standings."""
+def test_put_world_state_patches_canonical_world_node() -> None:
+    """EngineClient.put_world_state must PATCH the canonical 'world' node and NOT clobber.
+
+    Regression for L9-02: put_world_state previously called upsert_node (CREATE
+    validation), which 422s on an existing world_state node because the generic
+    create path requires faction_standings/time_of_day/weather. A partial update
+    must go through patch_node (PATCH validation), which only validates supplied
+    fields against the existing node — preserving the SEV-13 no-clobber contract.
+    """
     from demo_game.client import EngineClient  # type: ignore[import]
 
     client = EngineClient.__new__(EngineClient)
-    captured: list[dict] = []
+    captured: list[tuple[str, str, dict]] = []
 
-    def fake_upsert(node_type: str, props: dict) -> dict:
-        captured.append(props)
+    def fake_patch(node_type: str, node_id: str, props: dict) -> dict:
+        captured.append((node_type, node_id, props))
         return {}
 
-    client.upsert_node = fake_upsert  # type: ignore[method-assign]
+    def fail_upsert(node_type: str, props: dict) -> dict:  # pragma: no cover - guard
+        raise AssertionError("put_world_state must PATCH, not upsert (L9-02)")
+
+    client.patch_node = fake_patch  # type: ignore[method-assign]
+    client.upsert_node = fail_upsert  # type: ignore[method-assign]
     client.put_world_state("war", ["northern_war_begins"])
 
-    assert captured, "upsert_node was not called"
-    body = captured[0]
-    assert body["id"] == "world", (
-        f"Request body id={body['id']!r}; must be 'world' (DEC-022)."
+    assert captured, "patch_node was not called"
+    node_type, node_id, body = captured[0]
+    assert node_type == "world_state", f"node_type={node_type!r}; must be 'world_state'."
+    assert node_id == "world", (
+        f"patch target node_id={node_id!r}; must be 'world' (DEC-022)."
     )
     assert "faction_standings" not in body, (
         "put_world_state must NOT clobber faction_standings."
@@ -55,3 +67,4 @@ def test_put_world_state_request_body_id_is_world() -> None:
     assert "weather" not in body, (
         "put_world_state must NOT clobber weather."
     )
+    assert body.get("epoch") == "war", "epoch must be included in the patch payload."

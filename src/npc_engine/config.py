@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     API_KEY_GRAPH_WRITE: str | None = None
     API_KEY_GRAPH_ADMIN: str | None = None
     API_V1_PREFIX: str = "/v1"
+    # Build identifier surfaced on GET /health so a stale image is detectable
+    # (L9-05). Baked at image build time via the Dockerfile BUILD_SHA arg; "dev"
+    # for local/non-container runs.
+    BUILD_SHA: str = "dev"
     GAME_SCHEMA_PATH: str = "game_schema.yaml"
     TYPE_REGISTRY_EXTENSION_SOURCES: str = ""
     LLM_CONFIG_PATH: str = "config/llm_config.yaml"
@@ -120,7 +124,10 @@ class Settings(BaseSettings):
     CURRENCY_MAX_PER_TRANSACTION: int = 1000
     CURRENCY_MAX_PER_SESSION: int = 5000
 
-    WORLD_ID: str = "world_demo"
+    # Canonical world-state node id (DEC-022). Must match what the seeders write
+    # ("world"); the prior "world_demo" default silently desynced the engine from
+    # seeded state (L1-07 / SEV-13 config-layer gap).
+    WORLD_ID: str = "world"
 
     TTS_ENABLED: bool = False
     TTS_BACKEND: Literal["piper", "mock"] = "piper"

@@ -472,17 +472,22 @@ def test_post_secret_raises_on_422(mock_http: MagicMock, make_response) -> None:
 
 
 def test_put_world_state_success(mock_http: MagicMock, make_response) -> None:
-    mock_http.post.return_value = make_response(200, {"data": {"id": "world", "epoch": "war"}})
+    # L9-02: put_world_state PATCHes the canonical 'world' node (partial update),
+    # it does not POST/upsert (which 422s on the existing node's required fields).
+    mock_http.patch.return_value = make_response(200, {"data": {"id": "world", "epoch": "war"}})
     result = _client(mock_http).put_world_state("war", ["northern_war"])
-    assert result["data"]["epoch"] == "war"
-    _, kwargs = mock_http.post.call_args
-    assert kwargs["json"]["properties"]["id"] == "world"
-    assert kwargs["json"]["properties"]["epoch"] == "war"
-    assert kwargs["json"]["properties"]["active_conditions"] == ["northern_war"]
+    assert result["epoch"] == "war"
+    args, kwargs = mock_http.patch.call_args
+    assert args[0] == "/v1/graph/nodes/world_state/world"
+    props = kwargs["json"]["properties"]
+    assert "id" not in props, "id is the URL path segment, not a patched property"
+    assert props["epoch"] == "war"
+    assert props["active_conditions"] == ["northern_war"]
+    assert "faction_standings" not in props and "weather" not in props
 
 
 def test_put_world_state_raises_on_500(mock_http: MagicMock, make_response) -> None:
-    mock_http.post.return_value = make_response(500, {})
+    mock_http.patch.return_value = make_response(500, {})
     with pytest.raises(EngineClientError, match="HTTP 500"):
         _client(mock_http).put_world_state("war", [])
 

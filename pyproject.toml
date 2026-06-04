@@ -57,7 +57,7 @@ markers = [
     "demo: full Phase 3 story arc demo scenario",
     "llm_eval: opt-in LLM-as-judge evaluation tests (require running LLM stack)",
 ]
-pythonpath = ["src", "e2e/scenarios", "e2e"]
+pythonpath = ["src", "e2e/scenarios", "e2e", "evals"]
 testpaths = ["tests", "e2e/scenarios"]
 python_files = ["test_*.py", "*_test.py", "scenario_*.py"]
 

@@ -43,7 +43,7 @@ def test_config_view_maps_settings_fields() -> None:
     view = DashboardConfigView.from_settings(_settings_stub())
     dumped = view.model_dump()
 
-    assert dumped["world_id"] == "world_demo"
+    assert dumped["world_id"] == "world"
     assert dumped["tick_interval_seconds"] == 10
     assert dumped["tick_llm_calls_per_minute_max"] == 6
     assert "api_key_secret" not in dumped
@@ -61,7 +61,7 @@ def test_config_route_returns_curated_envelope() -> None:
 
     assert response.status_code == 200
     assert payload["success"] is True
-    assert payload["data"]["world_id"] == "world_demo"
+    assert payload["data"]["world_id"] == "world"
     assert "tick_autopilot_enabled" in payload["data"]
     # No secret leaks through the curated projection.
     assert all("secret" not in key.lower() for key in payload["data"])

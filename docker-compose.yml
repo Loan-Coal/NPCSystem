@@ -59,6 +59,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Surfaced on GET /health (L9-05). `make smoke` passes the git short SHA.
+        BUILD_SHA: ${BUILD_SHA:-dev}
     ports:
       - "8000:8000"
     env_file:

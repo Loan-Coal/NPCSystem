@@ -29,6 +29,14 @@ run:
 smoke:
 	$(PYTHON) e2e/scripts/gateway_smoke.py --base-url $(BASE_URL) --api-key $(API_KEY)
 
+# Boot gate (L9-01 / L9-05): rebuild the app image stamped with the current git
+# SHA, start it, and fail if it never becomes healthy or if /health reports a
+# different SHA (stale image). Catches "fresh build can't boot" and "up -d served
+# an old image" regressions. Recommended for CI once CI changes are approved.
+boot-check:
+	BUILD_SHA=$$(git rev-parse --short HEAD) docker-compose up -d --build app
+	$(PYTHON) e2e/scripts/boot_check.py --base-url $(BASE_URL) --expect-sha $$(git rev-parse --short HEAD)
+
 test:
 	$(PYTHON) -m pytest tests/ -q
 

@@ -49,10 +49,11 @@ def _make_settings(max_concurrent: int = _MAX_CONCURRENT) -> MagicMock:
     return settings
 
 
-def _make_store_with_npcs(npc_ids: list[str], turns_per_npc: int = 10) -> SessionStore:
+async def _make_store_with_npcs(npc_ids: list[str], turns_per_npc: int = 10) -> SessionStore:
     store = SessionStore(ttl_seconds=300, max_turns=200)
     for npc_id in npc_ids:
-        store.append_turns("player1", npc_id, [f"Turn {i}" for i in range(turns_per_npc)])
+        # SEV-05 made SessionStore mutators async; the coroutine must be awaited.
+        await store.append_turns("player1", npc_id, [f"Turn {i}" for i in range(turns_per_npc)])
     return store
 
 
@@ -84,7 +85,7 @@ def _make_engine(store: SessionStore, graph_db: MagicMock, settings: MagicMock):
 async def test_run_tick_parallelises_up_to_max_concurrent_ticks():
     """Wall time must be << serial time, proving parallelism is capped by the semaphore."""
     npc_ids = [f"npc_{i:03d}" for i in range(_NPC_COUNT)]
-    store = _make_store_with_npcs(npc_ids)
+    store = await _make_store_with_npcs(npc_ids)
     graph_db = _make_graph_db()
     settings = _make_settings(_MAX_CONCURRENT)
     engine = _make_engine(store, graph_db, settings)
@@ -123,9 +124,9 @@ async def test_run_tick_returns_only_successful_consolidations():
     # Only first 5 get enough turns
     store = SessionStore(ttl_seconds=300, max_turns=100)
     for npc_id in all_npcs[:5]:
-        store.append_turns("player1", npc_id, [f"Turn {i}" for i in range(10)])
+        await store.append_turns("player1", npc_id, [f"Turn {i}" for i in range(10)])
     for npc_id in all_npcs[5:]:
-        store.append_turns("player1", npc_id, ["only one turn"])
+        await store.append_turns("player1", npc_id, ["only one turn"])
 
     graph_db = _make_graph_db()
     settings = _make_settings()
