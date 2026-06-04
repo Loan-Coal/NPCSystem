@@ -49,6 +49,21 @@ LLM_VALIDATION_FAILURES_METRIC = "llm_validation_failures_total"
 TTS_FAILURES_METRIC = "tts_failures_total"
 
 
+def resolve_log_prompts(settings: Settings) -> bool:
+    """Return True only when prompt logging is enabled AND environment is dev.
+
+    Per project security rules, prompt/response logging must be suppressed in
+    staging and prod even when the LOG_LLM_PROMPTS flag is set to True.
+
+    Args:
+        settings: Application settings instance.
+
+    Returns:
+        True when LOG_LLM_PROMPTS is True and ENV equals "dev"; False otherwise.
+    """
+    return settings.LOG_LLM_PROMPTS and settings.ENV == "dev"
+
+
 class DialogueHandler:
     """Dialogue engine orchestrator."""
 
@@ -97,7 +112,7 @@ class DialogueHandler:
             temperature=engine_model_config.llm.temperature,
             top_p=engine_model_config.llm.top_p,
             stop_sequences=list(engine_model_config.llm.stop_sequences),
-            log_prompts=settings.LOG_LLM_PROMPTS,
+            log_prompts=resolve_log_prompts(settings),
         )
         self._system_prompt = build_system_prompt()
 
