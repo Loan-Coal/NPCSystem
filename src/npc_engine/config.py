@@ -37,6 +37,16 @@ _PROJECT_ROOT = Path(__file__).resolve().parent
 MAX_PLAYER_MESSAGE_CHARS: int = 1000
 MAX_DELTA_TICKS: int = 1000
 
+# GraphRAG composite-score weights (must sum to 1.0).
+# Extracted from graph_rag.py to allow test-time verification and future tuning.
+RAG_RELEVANCE_WEIGHT: float = 0.5   # vector-similarity component weight
+RAG_TRUST_WEIGHT: float = 0.3       # graph edge-weight (trust/confidence) component weight
+RAG_RECENCY_WEIGHT: float = 0.2     # temporal recency component weight
+
+# Recency decay thresholds.
+RAG_RECENCY_DAYS_SOFT: float = 365.0   # game-time: full decay over this many game-days
+RAG_RECENCY_DAYS_HARD: float = 72.0    # wall-clock: full decay over this many real hours
+
 
 class Settings(BaseSettings):
     """Typed environment configuration for the NPC Engine."""

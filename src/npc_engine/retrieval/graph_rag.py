@@ -9,7 +9,7 @@ Algorithm:
   1. Vector-search for top-K seed node IDs (filtered to NPC's KNOWS_ABOUT set).
   2. Expand each seed 1 hop along semantically meaningful edges via Neo4j.
   3. Score each candidate:
-       score = (vector_sim * 0.5) + (edge_weight * 0.3) + (recency * 0.2)
+       score = (vector_sim * _RAG_RELEVANCE_WEIGHT) + (edge_weight * _RAG_TRUST_WEIGHT) + (recency * _RAG_RECENCY_WEIGHT)
   4. De-duplicate by node ID, keep highest score per node.
   5. Return ranked list of VectorSearchResult-compatible dicts.
 
@@ -27,6 +27,17 @@ from neo4j import AsyncSession
 
 from npc_engine.retrieval.vector_store_protocol import VectorSearchResult
 from npc_engine.world.time_utils import TimePoint, total_days
+
+
+# GraphRAG composite-score weights. Canonical values live in npc_engine.config
+# (RAG_RELEVANCE_WEIGHT, RAG_TRUST_WEIGHT, RAG_RECENCY_WEIGHT, RAG_RECENCY_DAYS_SOFT,
+#  RAG_RECENCY_DAYS_HARD). Mirrored here as typed module-level constants so this
+# module has no runtime dependency on config and mypy can type-check correctly.
+_RAG_RELEVANCE_WEIGHT: float = 0.5   # vector-similarity component weight
+_RAG_TRUST_WEIGHT: float = 0.3       # graph edge-weight component weight
+_RAG_RECENCY_WEIGHT: float = 0.2     # temporal recency component weight
+_RAG_RECENCY_DAYS_SOFT: float = 365.0  # game-time: full decay over N game-days
+_RAG_RECENCY_DAYS_HARD: float = 72.0   # wall-clock: full decay over N real hours
 
 
 # Edge types to traverse during 1-hop expansion. These represent relationships
@@ -82,7 +93,7 @@ def _recency_score(props: dict[str, Any], game_time: TimePoint | None) -> float:
                 time_of_day=str(gt.get("time_of_day", "morning")),
             )
             age_days = max(0, total_days(game_time) - total_days(node_tp))
-            return max(0.0, min(1.0, 1.0 - min(age_days / 365.0, 1.0)))
+            return max(0.0, min(1.0, 1.0 - min(age_days / _RAG_RECENCY_DAYS_SOFT, 1.0)))
         except (KeyError, TypeError, ValueError):
             return 0.0
     for field in ("occurred_at", "updated_at", "last_graph_updated_at", "created_at"):
@@ -94,7 +105,7 @@ def _recency_score(props: dict[str, Any], game_time: TimePoint | None) -> float:
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=timezone.utc)
             age_hours = max(0.0, (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds() / 3600.0)
-            return max(0.0, min(1.0, 1.0 - min(age_hours / 72.0, 1.0)))
+            return max(0.0, min(1.0, 1.0 - min(age_hours / _RAG_RECENCY_DAYS_HARD, 1.0)))
         except ValueError:
             continue
     return 0.0
@@ -154,7 +165,7 @@ async def graph_rag_retrieve(
 
     for seed_id, vec_sim in seed_scores.items():
         recency = _recency_score(seed_payloads.get(seed_id, {}), game_time)
-        composite = vec_sim * 0.5 + 0.5 * recency  # seed: no edge_weight component
+        composite = vec_sim * _RAG_RELEVANCE_WEIGHT + _RAG_RECENCY_WEIGHT * recency  # seed: no edge_weight component
         _update_best(seed_id, composite, seed_payloads.get(seed_id, {}))
 
     for row in expansion_records:
@@ -164,7 +175,7 @@ async def graph_rag_retrieve(
         edge_weight = float(row.get("edge_weight") or 0.5)
         vec_sim = seed_scores.get(seed_id, 0.0)
         recency = _recency_score(neighbor_props, game_time)
-        composite = vec_sim * 0.5 + edge_weight * 0.3 + recency * 0.2
+        composite = vec_sim * _RAG_RELEVANCE_WEIGHT + edge_weight * _RAG_TRUST_WEIGHT + recency * _RAG_RECENCY_WEIGHT
         _update_best(neighbor_id, composite, neighbor_props)
 
     # Sort by score descending, take top_k, return as VectorSearchResult dicts.

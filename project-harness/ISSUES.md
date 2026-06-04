@@ -642,6 +642,14 @@ current mapping is good enough for demo badge display and does not affect correc
 **Why deferred:** Pre-existing in HEAD before SEV-04. Fixing 20 unrelated test failures is outside SEV-04 scope. Each requires understanding the specific module's current interface.
 **To fix:** Fix each test group separately: (1) Update `test_quest_lifecycle_engine_v14.py` to inject `TypeRegistry`; (2) Update `test_sev06_semaphore.py` to `await store.append_turns()`; (3) Reconcile `test_structured_output_sev27.py` mock with actual llm_client interface; (4) Fix patch path in `test_error_swallowing_sev18.py::test_witnessed_query_failure_logs_warning`. Consider fixing during SEV-39 (targeted tests for worst-covered risk modules).
 
+## ISSUE-056: graph_rag.py MATCH (seed) full-scan — no label filter
+**Found:** 2026-06-04, during SEV-39 coverage fix
+**Severity:** P2 (annoying)
+**Where:** `src/npc_engine/retrieval/graph_rag.py` — `_CYPHER_EXPAND_SEEDS` query, `MATCH (seed) WHERE seed.id = seed_id`
+**Description:** The expansion Cypher does `MATCH (seed)` without a label filter, triggering a full-node scan on every GraphRAG call. In large graphs this will be slow and risk matching unintended node types.
+**Why deferred:** Fixing requires knowing the correct label(s) for seed nodes (Event, Knowledge, etc.) which may shift as SEV-04 migrates Cypher domains. Touching the query now risks coupling to SEV-04 in-flight work.
+**To fix:** After SEV-04 completes, add `(seed:Event|Knowledge)` label filter (or the appropriate type-registry label constant) to `_CYPHER_EXPAND_SEEDS`. Verify with integration tests against test DB.
+
 ## ISSUE-055: `api_seeder.py` uses get-then-skip; consider client-supplied stable ids long-term
 **Found:** 2026-06-04, during SEV-10 planning
 **Severity:** P3 (nice-to-fix)
