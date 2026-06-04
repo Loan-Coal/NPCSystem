@@ -52,15 +52,15 @@ class QuestLifecycleEngine:
 
         Args:
             settings: Application settings (used for currency transfer configuration).
-            registry: Type registry providing event node model; resolved via
-                ``api.dependencies.get_type_registry()`` when not provided.
+            registry: Type registry providing event node model; must be injected
+                by the composition root (``api/dependency_singletons.py``).
+        Raises:
+            ValueError: If registry is None (must be injected via __init__).
         """
 
         self._settings = settings
         if registry is None:
-            from npc_engine.api.dependencies import get_type_registry
-
-            registry = get_type_registry()
+            raise ValueError("QuestLifecycleEngine requires a TypeRegistry injected via __init__")
         self._registry = registry
 
     async def _require_state(self, *, session: AsyncSession, quest_id: str, player_id: str) -> QuestStateRecord:

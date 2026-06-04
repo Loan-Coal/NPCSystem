@@ -83,21 +83,31 @@ Services belong to exactly one layer. Dependencies point downward only.
 
 ```
 api/         → HTTP routes, request/response models, auth middleware
+auth/        → API-key authentication middleware  [api peer, rank 6]
+data/        → admin endpoint schemas + seeders   [api peer, rank 6]
 engines/     → domain logic, LLM orchestration, tick schedulers
+scheduler/   → tick scheduler loop               [engines peer, rank 5]
 services/    → shared domain operations (mutation bounds, context assembly)
+cache/       → in-process dialogue context cache  [services peer, rank 4]
 retrieval/   → graph reader, vector store, context builder
 graph/       → Neo4j write operations, schema enforcement
+mutation/    → relation delta validation + logging [graph peer, rank 2]
+world/       → world-state data model + time utils [graph peer, rank 2]
 config/      → settings, environment, schema loader
+common/      → zero-dep shared utilities           [config peer, rank 1]
+type_registry/ → node/edge type contract system   [config peer, rank 1]
+schema/      → game schema loader                  [config peer, rank 1]
+utils/       → error hierarchy + structured logging [config peer, rank 1]
 ```
 
-Allowed dependencies:
+Allowed dependencies (enforced by `make check-layers`):
 
-- `api`       → engines, services, retrieval, graph, config
-- `engines`   → services, retrieval, graph, config
-- `services`  → retrieval, graph, config
-- `retrieval` → graph, config
-- `graph`     → config
-- `config`    → nothing
+- `api/auth/data` → engines, scheduler, services, cache, retrieval, graph, mutation, world, config, common, type_registry, schema, utils
+- `engines/scheduler` → services, cache, retrieval, graph, mutation, world, config, common, type_registry, schema, utils
+- `services/cache` → retrieval, graph, mutation, world, config, common, type_registry, schema, utils
+- `retrieval`  → graph, mutation, world, config, common, type_registry, schema, utils
+- `graph/mutation/world` → config, common, type_registry, schema, utils
+- `config/common/type_registry/schema/utils` → nothing
 
 ### Forbidden cross-layer patterns
 

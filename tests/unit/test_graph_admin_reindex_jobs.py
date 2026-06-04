@@ -9,7 +9,7 @@ Dependencies injected: None.
 import pytest
 from typing import cast
 
-from npc_engine.graph.reindex_job_service import ReindexJobService
+from npc_engine.retrieval.reindex_job_service import ReindexJobService
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
 
 

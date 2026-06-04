@@ -1,9 +1,11 @@
 """
-reindex_job_service.py - In-memory lifecycle manager for admin reindex jobs.
-
+Module: reindex_job_service
+Layer: retrieval
+Purpose: In-memory lifecycle manager for admin reindex jobs (relocated from graph/ in SEV-31).
 Does NOT: implement graph mutation business logic.
-
 Dependencies injected: EmbeddingIndex.
+Internal dependencies: retrieval.embedding_index
+Used by: api.dependency_singletons, api.routes.graph_admin
 """
 
 import asyncio

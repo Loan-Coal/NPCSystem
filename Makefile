@@ -13,7 +13,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         test-v13-contracts test-v13-graph-admin test-v13-retrieval \
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
-        check-rules check-rules-update type-ratchet type-ratchet-update check-harness \
+        check-rules check-rules-update check-layers type-ratchet type-ratchet-update check-harness \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval eval-report eval-e2e scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
@@ -101,9 +101,13 @@ type-ratchet-update:
 check-harness:
 	$(PYTHON) scripts/check_harness_honesty.py
 
+# check-layers: enforce the NPC Engine layer model (SEV-31).
+check-layers:
+	$(PYTHON) scripts/check_layers.py
+
 # check: the single canonical health gate. Same command locally and in CI.
 # mypy is at 0 (SEV-14 done) so 'type' is now a hard gate here.
-check: lint check-rules type check-harness test-cov
+check: lint check-rules check-layers type check-harness test-cov
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 

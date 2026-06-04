@@ -34,7 +34,7 @@ from npc_engine.engines.quest_generation.quest_generation_engine import QuestGen
 from npc_engine.engines.quest_generation.template_loader import load_templates
 from npc_engine.engines.routine.routine_engine import RoutineEngine
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.reindex_job_service import ReindexJobService
+from npc_engine.retrieval.reindex_job_service import ReindexJobService
 from npc_engine.retrieval.dialogue_context_cache import PartialDialogueContextCache
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
 from npc_engine.retrieval.vector_store_factory import create_vector_store

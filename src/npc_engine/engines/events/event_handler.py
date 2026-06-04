@@ -77,18 +77,18 @@ class EventHandler:
         Args:
             settings: Application settings (EVENT_POOL_PATH, EVENT_RNG_SEED).
             embedding_index: Vector index invalidated after event creation.
-            registry: Type registry providing the event node model; resolved via
-                ``api.dependencies.get_type_registry()`` if not provided.
+            registry: Type registry providing the event node model; must be injected
+                by the composition root (``api/dependency_singletons.py``).
             disruption_rules_path: Optional path to disruption_rules.yaml.  Defaults to the
                 file co-located with the event pool when None.
+        Raises:
+            ValueError: If registry is None (must be injected via __init__).
         """
 
         self._settings = settings
         self._embedding_index = embedding_index
         if registry is None:
-            from npc_engine.api.dependencies import get_type_registry
-
-            registry = get_type_registry()
+            raise ValueError("EventHandler requires a TypeRegistry injected via __init__")
         self._registry = registry
         self._templates = load_event_pool(settings.EVENT_POOL_PATH)
         self._rng = random.Random(settings.EVENT_RNG_SEED) if settings.EVENT_RNG_SEED is not None else None

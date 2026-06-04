@@ -24,6 +24,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - **SEV-10 APPROVED**: schema change confirmed. api_seeder idempotency strategy still open — see FIX-SEV-10.md (get-then-skip vs client-supplied stable id).
 - **SEV-24 APPROVED**: delete 6 nested infra files under src/npc_engine/. **SEV-12 still needs DECISIONS + SEV-04 + SEV-10**.
 - All medium/low briefs now written (SEV-23 through SEV-43 except SEV-30). Next issue id: **ISSUE-055**.
+- SEV-31 DONE: `scripts/check_layers.py` + `make check-layers` enforce layer ranks; `world/` and `mutation/` assigned rank 2 (graph peer, per actual import edges); `reindex_job_service` moved to `retrieval/`; two engines' upward api imports removed (now raise ValueError if registry not injected). SEV-04 is now unblocked.
 - test_action_workers + test_spread_rumor_worker have 2 pre-existing failures (unrelated); do not confuse with regressions.
 - SEV-36: shock on any high-severity event (incl. positive) is INTENTIONAL — do not add valence gate. Quest terminal state deferred to DECISIONS.
 
@@ -48,7 +49,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - [x] **FIX-SEV-18** — Log-and-(re)raise instead of swallowing · HIGH · S · deps: gossip site couples to SEV-04
 
 ### Block D — layer & type campaigns (large, sequence internally)
-- [ ] **FIX-SEV-31** — Layer model + contract checker · MEDIUM · M · deps: none → **blocks SEV-04**
+- [x] **FIX-SEV-31** — Layer model + contract checker · MEDIUM · M · deps: none → **blocks SEV-04**
 - [ ] **FIX-SEV-04** — Move Cypher + transactions into `graph/` · HIGH · L · deps: SEV-31; folds in SEV-17, SEV-30
 - [x] **FIX-SEV-14** — Pydantic exit schemas + mypy burn-down · HIGH · L · deps: none; completes SEV-15 gating
 - [ ] **FIX-SEV-10** — Core-node constraints + seeder idempotency · HIGH · M · deps: approved (see FIX-SEV-10.md for open api_seeder idempotency strategy Q)

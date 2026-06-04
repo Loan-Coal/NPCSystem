@@ -28,6 +28,9 @@ jobs:
       - name: CLAUDE.md rule gate (ratcheted)
         run: make check-rules
 
+      - name: Layer model enforcement (SEV-31)
+        run: make check-layers
+
       - name: Type check (mypy at 0 — hard gate, SEV-14 complete)
         run: make type
 
