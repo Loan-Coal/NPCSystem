@@ -4,7 +4,7 @@ Layer: engines
 Purpose: Awards XP to characters who participated in recently-completed quests,
          based on skills required by the quest's template.
 Does NOT: call LLMs, define quest templates, or update non-skill graph state.
-Dependencies: graph.skill_service
+Dependencies: graph.skill_queries, graph.skill_service
 Dependencies injected: AsyncSession, xp_per_completion (constructor).
 Used by: npc_engine.scheduler.tick_scheduler
 """
@@ -16,21 +16,10 @@ from typing import Any
 
 from neo4j import AsyncSession
 
+from npc_engine.graph.skill_queries import get_completed_quests_with_skills
 from npc_engine.graph.skill_service import increment_xp
 
 _LOGGER = logging.getLogger(__name__)
-
-# Cypher: find quests completed in the current tick and their template skill requirements.
-CYPHER_COMPLETED_QUESTS_WITH_SKILLS = """
-MATCH (q:Quest {status: 'completed'})
-WHERE q.completed_at_tick = $tick_id
-MATCH (q)-[:BASED_ON]->(qt:QuestTemplate)-[r:REQUIRES_SKILL]->(s:Skill)
-MATCH (c:Character)-[:PARTICIPATED_IN]->(q)
-RETURN q.id AS quest_id,
-       c.id AS character_id,
-       s.id AS skill_id,
-       toInteger(r.min_level) AS min_level
-"""
 
 
 class SkillProgressionEngine:
@@ -60,8 +49,7 @@ class SkillProgressionEngine:
         Returns:
             Dict with key ``xp_awards`` (number of (character, skill) XP grants made).
         """
-        result = await session.run(CYPHER_COMPLETED_QUESTS_WITH_SKILLS, tick_id=tick_id)
-        rows = [dict(r) async for r in result]
+        rows = await get_completed_quests_with_skills(session, tick_id=tick_id)
         awards = 0
         for row in rows:
             try:
