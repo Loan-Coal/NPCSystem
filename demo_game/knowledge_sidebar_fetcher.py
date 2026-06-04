@@ -9,9 +9,11 @@ Used by: demo_game.ui.game_window
 
 from __future__ import annotations
 
-import sys
+import logging
 
 from demo_game.client import EngineClient
+
+_logger = logging.getLogger(__name__)
 
 
 def fetch_npc_knowledge(
@@ -45,10 +47,7 @@ def fetch_npc_knowledge(
             continue
         event = client.get_node("Event", event_id)
         if event is None:
-            print(
-                f"knowledge_sidebar_fetcher: event '{event_id}' not found, skipping",
-                file=sys.stderr,
-            )
+            _logger.warning("event '%s' not found, skipping", event_id)
             continue
         pairs.append((edge, event))
     return pairs

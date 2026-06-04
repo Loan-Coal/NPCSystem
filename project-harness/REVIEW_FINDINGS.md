@@ -442,7 +442,8 @@ Execute top-to-bottom; items in the same block are independent and parallelizabl
 - [ ] SEV-02 (demo standalone) · SEV-13 (world id) · SEV-11 (win/lose) · SEV-28 (WS timeout) · SEV-33 (error envelope) · SEV-34 (README) · SEV-12 (multi-tenant — XL, needs DECISIONS + approval)
 
 **Block F — hygiene & docs (low-risk, batchable):**
-- [ ] SEV-23 (file size) · SEV-24 (nested infra — needs delete approval) · SEV-26 (repo hygiene) · SEV-32 (docstrings) · SEV-35/36/37/38/39/42/43 · SEV-27 (structured output, after SEV-01)
+- [ ] SEV-23 (file size) · SEV-24 (nested infra — needs delete approval) · SEV-26 (repo hygiene) · SEV-32 (docstrings) · SEV-35/36/[x]SEV-37/38/39/42/43 · SEV-27 (structured output, after SEV-01)
+  - [x] SEV-37 DONE 2026-06-04: TRADE_INTENT_MESSAGE constant; print()→logger in all pollers/controllers; NPC_API_KEY sentinel removed + get_demo_config() lazy accessor; player_message capped at DEMO_MAX_MESSAGE_CHARS=1000; QUIT guard with self._running flag. Tests: test_sev37_demo_hygiene.py (24 tests).
 
 ---
 

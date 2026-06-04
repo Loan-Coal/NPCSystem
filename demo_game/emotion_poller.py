@@ -11,12 +11,14 @@ Used by: demo_game.ui.game_window
 
 from __future__ import annotations
 
-import sys
+import logging
 import threading
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from demo_game.client import EngineClient
+
+_logger = logging.getLogger(__name__)
 
 
 class EmotionPoller:
@@ -121,5 +123,5 @@ class EmotionPoller:
                     self._valence = valence
                     self._arousal = arousal
         except Exception as exc:
-            print(f"[EmotionPoller] error: {exc}", file=sys.stderr)
+            _logger.warning("poll error: %s", exc)
 

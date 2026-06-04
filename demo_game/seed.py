@@ -1020,10 +1020,10 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     from demo_game.client import EngineClient
-    from demo_game.config import config
+    from demo_game.config import get_demo_config
 
-    base_url = os.environ.get("NPC_BASE_URL", config.NPC_BASE_URL)
-    api_key = os.environ.get("NPC_API_KEY", config.NPC_API_KEY)
+    base_url = os.environ.get("NPC_BASE_URL", get_demo_config().NPC_BASE_URL)
+    api_key = os.environ.get("NPC_API_KEY", get_demo_config().NPC_API_KEY)
 
     client = EngineClient(base_url, api_key)
     try:

@@ -8,13 +8,14 @@ Used by: demo_game.ui.game_window
 
 from __future__ import annotations
 
-import sys
+import logging
 import threading
 import time
 
 from demo_game.client import EngineClient
 
 _CHAR_NODE_TYPE = "Character"
+_logger = logging.getLogger(__name__)
 
 
 class GoldPoller:
@@ -62,5 +63,5 @@ class GoldPoller:
                 with self._lock:
                     self._gold = gold
             except Exception as exc:
-                print(f"[gold_poller] poll failed: {exc}", file=sys.stderr)
+                _logger.warning("poll failed: %s", exc)
             time.sleep(self._interval_s)

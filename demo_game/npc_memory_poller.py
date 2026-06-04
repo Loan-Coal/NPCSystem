@@ -11,7 +11,7 @@ Used by: demo_game.ui.game_window
 
 from __future__ import annotations
 
-import sys
+import logging
 import threading
 from typing import TYPE_CHECKING
 
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 _DEFAULT_INTERVAL_S = 5.0
 
 
+_logger = logging.getLogger(__name__)
 class NpcMemoryPoller:
     """Background daemon that polls Memory nodes for the currently active NPC.
 
@@ -112,4 +113,4 @@ class NpcMemoryPoller:
                 if self._npc_id == npc_id:
                     self._memories = memories
         except Exception as exc:
-            print(f"[NpcMemoryPoller] error: {exc}", file=sys.stderr)
+            _logger.warning("error: %s", exc)
