@@ -5,12 +5,16 @@ Provides:
 - http_client fixture (session-scoped)
 - Narrator class: prints a human-readable story log while recording a transcript
 - char_props / loc_props helpers to satisfy required schema fields
+
+UTF-8 note: stdout/stderr are reconfigured to UTF-8 at import time so that
+scenario output does not raise UnicodeEncodeError on cp1252 Windows consoles (SEV-41).
 """
 
 from __future__ import annotations
 
 import json
 import os
+import sys
 import textwrap
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +22,24 @@ from typing import Any
 
 import httpx
 import pytest
+
+
+# ---------------------------------------------------------------------------
+# UTF-8 stdout enforcement (SEV-41) — inline copy, pure stdlib, no src/ import
+# ---------------------------------------------------------------------------
+
+def _reconfigure_if_needed(stream: object) -> None:
+    reconfigure = getattr(stream, "reconfigure", None)
+    if reconfigure is None:
+        return
+    current: str = getattr(stream, "encoding", "") or ""
+    if current.lower().replace("-", "") == "utf8":
+        return
+    reconfigure(encoding="utf-8")
+
+
+_reconfigure_if_needed(sys.stdout)
+_reconfigure_if_needed(sys.stderr)
 
 
 # Phrases emitted by the canned/fallback paths — any dialogue response matching

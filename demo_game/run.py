@@ -469,6 +469,8 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """Entry point."""
+    from demo_game.encoding_utils import ensure_utf8_stdout
+    ensure_utf8_stdout()
     args = _parse_args()
 
     if args.dry_run and args.cached:
