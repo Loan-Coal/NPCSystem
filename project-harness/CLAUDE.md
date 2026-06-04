@@ -35,6 +35,12 @@ make demo-run ARGS=--cached   # playback from cache (for recording)
 make test                     # engine unit tests
 make test-demo                # demo_game tests only
 make eval-llm-demo            # LLM judge evals (requires Ollama)
+make demo-village             # village crisis demo (seed-village-world first)
+make demo-tavern              # tavern intrigue demo (seed-tavern-world first)
+make seed-village-world       # seed village eval world only (idempotent)
+make seed-tavern-world        # seed tavern eval world only (idempotent)
+make eval-report              # generate eval summary report
+make demo-snapshot            # snapshot current demo state to cache
 ```
 
 ### Key file locations
