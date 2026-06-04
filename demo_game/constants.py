@@ -90,6 +90,11 @@ PROPAGATED_REP_DELTA: int = 40
 # Bump this constant (not npc_engine's PROMPT_VERSION) when demo behaviour changes.
 DEMO_CACHE_VERSION: str = "demo_v1"
 
+# Maximum seconds to wait for a single WebSocket frame from the dialogue endpoint.
+# If the server dies mid-stream, ws.recv() raises TimeoutError after this delay and
+# the WS worker breaks out, allowing clear_waiting() in the finally block to unlock UI.
+NPC_DIALOGUE_TIMEOUT_S: float = 30.0
+
 # S10.1 Spread Rumor action: default planted text and severity for the demo button.
 # The text is intentionally provocative so the gossip distortion is visible.
 SPREAD_RUMOR_TEXT: str = "A hooded stranger was seen leaving the castle gates at midnight carrying stolen gold."

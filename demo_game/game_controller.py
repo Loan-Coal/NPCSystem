@@ -127,6 +127,15 @@ class GameController:
         """True while a dialogue request is in-flight."""
         return self._is_waiting
 
+    def clear_waiting(self) -> None:
+        """Release the in-flight guard so new dialogue requests are accepted.
+
+        Safe to call from any thread. Idempotent — harmless if already False.
+        Called by ``dialogue_ws_worker`` in its finally block to unlock the UI
+        when the server closes the connection or a recv timeout fires (SEV-28).
+        """
+        self._is_waiting = False
+
     @property
     def quest_id(self) -> str | None:
         """Active quest ID (delegated to QuestTradeController)."""
@@ -165,7 +174,7 @@ class GameController:
         if self._ws_url:
             threading.Thread(
                 target=dialogue_ws_worker,
-                args=(self._ws_url, self._ws_api_key, payload, self._token_q),
+                args=(self._ws_url, self._ws_api_key, payload, self._token_q, self.clear_waiting),
                 daemon=True,
             ).start()
         else:
