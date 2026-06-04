@@ -27,16 +27,67 @@ class GossipDistortion(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
-def _distortion_probability(honesty: int, trust: int, severity: int, base: float) -> float:
+def compute_distortion_probability(honesty: int, trust: int, severity: int, base: float) -> float:
+    """Compute the probability that a gossip event is distorted.
+
+    This is NOT the same as BELIEVES_RUMOR.confidence. It is the RNG gate
+    value used only to decide whether distortion occurs; it is never written
+    to the graph.
+
+    Args:
+        honesty: Sharer honesty attribute (0–100); higher → lower distortion.
+        trust: Trust from sharer to receiver (0–100); higher → lower distortion.
+        severity: Event severity (0–100); higher → higher distortion.
+        base: Base distortion rate (e.g. Settings.GOSSIP_DISTORTION_BASE).
+
+    Returns:
+        Probability in [0.0, 1.0].
+    """
     honesty_term = (1.0 - (honesty / 100.0)) * 0.5
     severity_term = (severity / 100.0) * 0.3
     trust_term = (trust / 100.0) * 0.2
     return max(0.0, min(1.0, base + honesty_term + severity_term - trust_term))
 
 
-def _seed_value(summary: str, honesty: int, trust: int, tick_id: int) -> int:
+def compute_confidence(source_trust: int, event_severity: int) -> int:
+    """Compute the confidence value written to BELIEVES_RUMOR.confidence.
+
+    Confidence represents how certain the receiving NPC is in what they heard.
+    It is a function of how much the receiver trusts the source and how
+    plausible the event is (higher severity → lower plausibility → lower
+    confidence). It is entirely independent of whether distortion occurred.
+
+    Args:
+        source_trust: Trust level from sharer to receiver (0–100).
+        event_severity: Event severity (0–100); high severity reduces plausibility.
+
+    Returns:
+        Confidence in [1, 100].
+    """
+    plausibility = 1.0 - (event_severity / 100.0) * 0.3
+    raw = (source_trust / 100.0) * plausibility
+    return int(min(100, max(1, round(raw * 100))))
+
+
+def compute_seed_value(summary: str, honesty: int, trust: int, tick_id: int) -> int:
+    """Compute the deterministic RNG seed for a gossip pair + tick.
+
+    Args:
+        summary: Source event summary text.
+        honesty: Sharer honesty attribute.
+        trust: Trust level from sharer to receiver.
+        tick_id: Current game tick.
+
+    Returns:
+        Integer seed derived from SHA-256 of the combined inputs.
+    """
     token = f"{summary}|{honesty}|{trust}|{tick_id}".encode("utf-8")
     return int(sha256(token).hexdigest()[:8], 16)
+
+
+# Private aliases kept for internal use (avoid breaking call sites in this module)
+_distortion_probability = compute_distortion_probability
+_seed_value = compute_seed_value
 
 
 def _apply_template(summary: str, distortion_type: str) -> str:

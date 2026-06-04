@@ -7,11 +7,11 @@ Does NOT: run global scheduling loops.
 
 Dependencies injected: AsyncSession, Settings, GossipWeightConfig, EmbeddingIndex.
 
-NOTE: This file is ~310 lines, just over the 300-line soft limit. Splitting would
+NOTE: This file is ~351 lines, over the 300-line soft limit. Splitting would
 be artificial because run_tick + _process_pairs + _build_write_params + _run_side_effects
 are all tightly coupled phases of a single orchestration class. Splitting would
 scatter the gossip tick logic across multiple files with no independent reuse value.
-See DEC-058 in project-harness/DECISIONS.md.
+See DEC-061 in project-harness/DECISIONS.md.
 """
 
 from __future__ import annotations
@@ -26,7 +26,12 @@ from npc_engine.config import Settings
 from npc_engine.engines.embedding_invalidation import invalidate_embedding_safely
 from npc_engine.engines.gossip.edge_updater import log_gossip
 from npc_engine.engines.gossip.gossip_config import GossipWeightConfig
-from npc_engine.engines.gossip.gossip_distort import gossip_distort
+from npc_engine.engines.gossip.gossip_distort import (
+    compute_confidence,
+    compute_distortion_probability,
+    compute_seed_value,
+    gossip_distort,
+)
 from npc_engine.engines.gossip.knowledge_propagator import (
     propagate_secret,
     SECRET_BASE_PROBABILITY,
@@ -191,9 +196,33 @@ class GossipHandler:
             trust = int(row["trust"])
             best_standing: int | None = faction_ctx.get("best_standing")
             severity_int = int(row["severity"])
+            honesty_int = int(sharer.get("honesty", 50))
+
+            distortion_probability = compute_distortion_probability(
+                honesty=honesty_int,
+                trust=trust,
+                severity=severity_int,
+                base=self._settings.GOSSIP_DISTORTION_BASE,
+            )
+            seed = compute_seed_value(
+                summary=str(row["summary"]),
+                honesty=honesty_int,
+                trust=trust,
+                tick_id=tick_id,
+            )
+            LOGGER.debug(
+                "gossip_pair sharer=%s receiver=%s tick=%d "
+                "distortion_probability=%.3f seed=%d",
+                sharer["id"],
+                receiver["id"],
+                tick_id,
+                distortion_probability,
+                seed,
+            )
+
             distortion = gossip_distort(
                 event_summary=str(row["summary"]),
-                sharer_honesty=int(sharer.get("honesty", 50)),
+                sharer_honesty=honesty_int,
                 sharer_receiver_trust=trust,
                 event_severity=severity_int,
                 tick_id=tick_id,
@@ -203,6 +232,9 @@ class GossipHandler:
                 is_canonical=bool(row.get("is_canonical", False)),
             )
             knowledge_state = "knows" if distortion.distortion_type is None else "rumor"
+            belief_confidence = compute_confidence(
+                source_trust=trust, event_severity=severity_int
+            )
             write_entry: dict = {
                 "receiver_id": receiver["id"],
                 "event_id": str(row["event_id"]),
@@ -212,6 +244,7 @@ class GossipHandler:
                 "distorted_summary": distortion.summary,
                 "tick_id": tick_id,
                 "source_character_id": sharer["id"],
+                "belief_confidence": belief_confidence,
             }
             write_params.append(write_entry)
             distortion_map[key] = write_entry
@@ -262,7 +295,7 @@ class GossipHandler:
                         session,
                         character_id=receiver["id"],
                         rumor_id=rumor_id,
-                        confidence=write["distortion_level"],
+                        confidence=write["belief_confidence"],
                         tick=tick_id,
                         from_character_id=sharer["id"],
                     )

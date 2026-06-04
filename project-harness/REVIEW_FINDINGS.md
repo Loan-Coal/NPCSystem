@@ -389,7 +389,7 @@ Effort: S.
 
 **FINDING [SEV-35]: `delta_ticks` bound mismatch** — Confirmed · SEC-03, GAME-09. `clock.py:32` `le=200` vs the project rule's `[1,1000]` vs the secondary guard `MAX_CONCURRENT_TICKS*10` (magic) vs client docstring "1–200". Fix: one `MAX_DELTA_TICKS=1000` constant used in field + guard + client doc. Effort S.
 
-**FINDING [SEV-36]: Emotion/distortion semantics** — Likely/Suspected · ENG-09, ENG-10, ENG-13. Emotion shock fires on any high-severity event incl. positive/canonical ones (`gossip_handler.py:172-185`) → uniformly melancholic NPCs; `gossip_distort` conflates distortion *probability* with *level* written to `BELIEVES_RUMOR.confidence`; quest `completed` is one-way on the node but reversible per-player state. Fix: gate shock on valence; separate distortion probability from magnitude; make `completed` terminal. Effort M (needs DECISIONS on intended semantics).
+**[FIXED 2026-06-04] FINDING [SEV-36]: Emotion/distortion semantics** — distortion probability now separated from `BELIEVES_RUMOR.confidence`; `compute_confidence` (trust-based) is written to graph; distortion_probability + seed logged per pair. Shock on positive events is INTENTIONAL (DEC confirmed). Quest completed terminal state deferred to DEC-064.
 
 **FINDING [SEV-37]: Demo low-severity cluster** — Confirmed · DEMO-05, DEMO-08, DEMO-10..14. Trade-intent magic string `"I'd like to trade."` in 3 control-flow sites; `print()` vs logger in ~15 pollers; hardcoded `NPC_API_KEY` dev default + module-level `DemoConfig()`; no client-side `player_message` cap; stale test docstring ("8 methods" vs 50); QUIT event still dispatched post-`running=False`. Fix: named constants/enums, stdlib `logging`, `get_config()` accessor, client cap, doc + `continue`. Effort S.
 

@@ -29,7 +29,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - All medium/low briefs now written (SEV-23 through SEV-43 except SEV-30). Next issue id: **ISSUE-055**.
 - SEV-31 DONE: `scripts/check_layers.py` + `make check-layers` enforce layer ranks; `world/` and `mutation/` assigned rank 2 (graph peer, per actual import edges); `reindex_job_service` moved to `retrieval/`; two engines' upward api imports removed (now raise ValueError if registry not injected). SEV-04 is now unblocked.
 - test_action_workers + test_spread_rumor_worker have 2 pre-existing failures (unrelated); do not confuse with regressions.
-- SEV-36: shock on any high-severity event (incl. positive) is INTENTIONAL — do not add valence gate. Quest terminal state deferred to DECISIONS.
+- SEV-36 DONE: `compute_distortion_probability`, `compute_confidence`, `compute_seed_value` now public in `gossip_distort.py`; `_build_write_params` logs `distortion_probability` + `seed` per pair; `believe_rumor` gets `belief_confidence` from trust (not distortion_level). DEC-064 (quest completed deferred), DEC-065 (no BASE_DISTORTION_RATE alias). gossip_handler.py waiver extended to ~351 lines (DEC-061).
 - SEV-23 DONE: dependency_singletons split → dependencies_infra/stores/engines/advanced + thin re-exporter. political_writer split into 3. api_seeder split into api_seeder/seed_data/seed_http. quest.py helpers → quest_helpers.py. chapter_labeler.py extracted. EmbeddingIndexProtocol → context_protocols.py. Waivers: chapter_engine.py ~322 lines (DEC-062), context_builder.py ~464 lines (DEC-016 updated). rules baseline ratcheted to 38.
 - SEV-32 DONE: scripts/docstring_audit.py (CI gate) + scripts/migrate_docstrings.py (one-shot migration); 154 files got Layer: added; check-docstrings added to make check. DEC-063. Placeholder Purpose:/Dependencies:/Used by: values should be filled over time.
 
@@ -76,7 +76,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - [x] **FIX-SEV-27** — Structured-output reliability (temperature + schema + retry) · MEDIUM · M · deps: SEV-01 done
 - [x] **FIX-SEV-32** — Bulk-migrate module docstrings to canonical format · MEDIUM · L · deps: none
 - [x] **FIX-SEV-35** — Unify `delta_ticks` bound to `MAX_DELTA_TICKS=1000` · LOW · S · deps: none
-- [ ] **FIX-SEV-36** — Separate gossip distortion probability from confidence · LOW · M · deps: none (shock behavior intentional — see brief)
+- [x] **FIX-SEV-36** — Separate gossip distortion probability from confidence · LOW · M · deps: none (shock behavior intentional — see brief)
 - [x] **FIX-SEV-37** — Demo low-severity cluster (magic strings, print, config, QUIT) · LOW · S · deps: none
 - [x] **FIX-SEV-38** — Eval-matcher weaknesses + mock LSP · LOW · M · deps: none
 - [x] **FIX-SEV-39** — Targeted tests for worst-covered risk modules · LOW · L · deps: none
