@@ -73,7 +73,7 @@ Each consolidated finding lists the raw agent IDs it absorbs. Full per-instance 
 ### CRITICAL
 
 ---
-**FINDING [SEV-01]: The anti-hallucination "guarantee" is unproven — guard evals pass on empty/fallback/synonym/refusal responses, and the matchers are untested**
+**[FIXED 2026-06-03] FINDING [SEV-01]: The anti-hallucination "guarantee" is unproven — guard evals pass on empty/fallback/synonym/refusal responses, and the matchers are untested**
 Severity: CRITICAL · Confidence: Confirmed (corroborated by live `make eval` 27/31)
 Category: test-gap / prompt-quality
 Absorbs: PROMPT-04, PROMPT-09, TEST-01, TEST-02, TEST-04, TEST-05 (partial)
@@ -120,7 +120,7 @@ Verification: adversarial eval with embedded forged fields must not recite them.
 Effort: M · Depends on: SEV-01 (need real assertions to prove the fix).
 
 ---
-**FINDING [SEV-04]: Cypher and transaction control are pervasive outside `graph/` — 16+ engine files run raw Cypher; engines and every `graph/` sub-writer open/commit their own transactions**
+**[FIXED 2026-06-04] FINDING [SEV-04]: Cypher and transaction control are pervasive outside `graph/` — 16+ engine files run raw Cypher; engines and every `graph/` sub-writer open/commit their own transactions**
 Severity: HIGH · Confidence: Confirmed · **DONE** (all engine domains migrated: gossip, story_pacing, routine, skill, military, clique, idempotency, events, faction_politics, quest_generation; new graph/ files: event_queries, faction_politics_queries, quest_generation_queries; world_reader/world_writer accept AsyncTransaction; tx ownership in engines deferred to SEV-30)
 Category: layer-violation / data-integrity
 Absorbs: ARCH-01, ARCH-06, GRAPH-01, GRAPH-02, ARCH-09
@@ -150,7 +150,7 @@ Verification: `asyncio.gather` N concurrent shocks on one NPC → final state eq
 Effort: M (touches a public store interface — coordinate per "ask before changing a public interface").
 
 ---
-**FINDING [SEV-06]: Memory-consolidation tick iterates all active NPCs with sequential awaits and no `Semaphore(MAX_CONCURRENT_TICKS)` (strict rule)**
+**[FIXED 2026-06-03] FINDING [SEV-06]: Memory-consolidation tick iterates all active NPCs with sequential awaits and no `Semaphore(MAX_CONCURRENT_TICKS)` (strict rule)**
 Severity: HIGH · Confidence: Confirmed
 Category: concurrency / performance
 Absorbs: PY-10
@@ -181,7 +181,7 @@ Verification: unit test feeding Tier A over budget asserts the raise; re-evaluat
 Effort: S.
 
 ---
-**FINDING [SEV-08]: Quest economy exploits — deliver-objective collection is best-effort while rewards are already granted; reward flag persisted in a separate transaction**
+**[FIXED 2026-06-04] FINDING [SEV-08]: Quest economy exploits — deliver-objective collection is best-effort while rewards are already granted; reward flag persisted in a separate transaction**
 Severity: HIGH · Confidence: Confirmed (ENG-05) / Likely (ENG-04)
 Category: data-integrity / correctness
 Absorbs: ENG-04, ENG-05
@@ -212,7 +212,7 @@ Verification: seed canonical Event → run tick → assert edge `distortion_type
 Effort: S.
 
 ---
-**FINDING [SEV-10]: No uniqueness constraints on core node labels in any auto-run path; the canonical seeder is non-idempotent**
+**[FIXED 2026-06-04] FINDING [SEV-10]: No uniqueness constraints on core node labels in any auto-run path; the canonical seeder is non-idempotent**
 Severity: HIGH · Confidence: Confirmed
 Category: data-integrity
 Absorbs: GRAPH-03, GRAPH-04
@@ -289,7 +289,7 @@ Verification: `mypy src/npc_engine` error count → 0 (or a tracked burn-down); 
 Effort: L.
 
 ---
-**FINDING [SEV-15]: Quality gates are red and partly ungated — `make lint` fails (38), `make type` fails (254) and is not in CI, so `make check` cannot pass**
+**[FIXED 2026-06-03] FINDING [SEV-15]: Quality gates are red and partly ungated — `make lint` fails (38), `make type` fails (254) and is not in CI, so `make check` cannot pass**
 Severity: HIGH · Confidence: Confirmed
 Category: build-infra / harness-drift
 Absorbs: HARN-01, HARN-02, HARN-13, PY-04
@@ -363,48 +363,48 @@ Effort: S.
 
 **[FIXED 2026-06-04] FINDING [SEV-23]: 300-line hard-limit violations (11 src + ~12 demo files), several unwaived** — Confidence Confirmed · Absorbs ARCH-05, HARN-04, DEMO-03, DEMO-04. Src ≥300 (LOC): `api/dependency_singletons.py 620` (**no waiver**, double the limit, the composition root), `scheduler/tick_scheduler.py 601` (DEC-042✓), `engines/quest/quest_lifecycle_engine.py 557` (DEC-044✓), `retrieval/context_builder.py 486` (DEC-016 stale — waived "at 367", now 486), `data/api_seeder.py 449`, `engines/quest_generation/quest_generation_engine.py 406` (DEC-046✓), `engines/chapter/chapter_engine.py 347`, `graph/political_writer.py 329`, `api/routes/quest.py 327`, `utils/errors.py 312`, `auth/middleware_helpers.py 305` — last 6 unwaived. Demo: `client.py 1407` (no waiver), `seed.py 1035` (justified✓), `run_scenes.py 509`, `run.py 493`, `ui/widgets.py 487`, `ui/right_panel.py 449`, + others. Fix: split unwaived files or add justified DECISIONS entries; refresh DEC-016. Effort L.
 
-**FINDING [SEV-24]: Stale nested infra duplicates under `src/npc_engine/`** — Confidence Confirmed · Absorbs ARCH-07, ARCH-08, HARN-05, HARN-16. `src/npc_engine/{docker-compose.yml,Dockerfile,mypy.ini,requirements.txt,game_schema.yaml,README.md}` (all dated May 11) drift from authoritative root copies: nested `Dockerfile`/compose use `uvicorn main:app` (module path no longer exists) and drop the `internal`/`public` network isolation; nested `mypy.ini` pins `python_version=3.11` vs the 3.14 stack (plausibly inflating type errors); nested README references a nonexistent `make seed` + a moved tracker. Fix: delete the six nested infra files (human-approval per "ask before deleting"); DECISIONS entry naming root canonical; bump mypy to 3.14. Effort S.
+**[FIXED 2026-06-04] FINDING [SEV-24]: Stale nested infra duplicates under `src/npc_engine/`** — Confidence Confirmed · Absorbs ARCH-07, ARCH-08, HARN-05, HARN-16. `src/npc_engine/{docker-compose.yml,Dockerfile,mypy.ini,requirements.txt,game_schema.yaml,README.md}` (all dated May 11) drift from authoritative root copies: nested `Dockerfile`/compose use `uvicorn main:app` (module path no longer exists) and drop the `internal`/`public` network isolation; nested `mypy.ini` pins `python_version=3.11` vs the 3.14 stack (plausibly inflating type errors); nested README references a nonexistent `make seed` + a moved tracker. Fix: delete the six nested infra files (human-approval per "ask before deleting"); DECISIONS entry naming root canonical; bump mypy to 3.14. Effort S.
 
-**FINDING [SEV-25]: Harness misrepresents reality** — Confidence Confirmed · Absorbs HARN-03, HARN-09, HARN-08. `NEXT_SESSION.md:38` "Open issues: None" while 38 lint + 254 type errors exist and are logged nowhere; ROADMAP/NEXT_SESSION mark Phase 11 / S11.3 "complete" but all its artifacts (`evals/summary.py`, `tests/unit/test_eval_summary.py`, the 12 `case_*` yaml) are **uncommitted** (`??` in git status; HEAD is S10.4); ISSUE-041 sits under `## Open` without `[FIXED]` and cites a nonexistent `seeds/worlds/seed_demo_world.py`. Fix: open ISSUE-051 (lint) + ISSUE-052 (type); commit or mark Phase 11 uncommitted; relabel ISSUE-041. Effort S.
+**[FIXED 2026-06-03] FINDING [SEV-25]: Harness misrepresents reality** — Confidence Confirmed · Absorbs HARN-03, HARN-09, HARN-08. `NEXT_SESSION.md:38` "Open issues: None" while 38 lint + 254 type errors exist and are logged nowhere; ROADMAP/NEXT_SESSION mark Phase 11 / S11.3 "complete" but all its artifacts (`evals/summary.py`, `tests/unit/test_eval_summary.py`, the 12 `case_*` yaml) are **uncommitted** (`??` in git status; HEAD is S10.4); ISSUE-041 sits under `## Open` without `[FIXED]` and cites a nonexistent `seeds/worlds/seed_demo_world.py`. Fix: open ISSUE-051 (lint) + ISSUE-052 (type); commit or mark Phase 11 uncommitted; relabel ISSUE-041. Effort S.
 
-**FINDING [SEV-26]: Repo hygiene — committed logs + `.gitignore` gaps** — Confidence Confirmed · Absorbs HARN-06, HARN-07. `git ls-files` tracks `server.log`,`server2.log` (288 KB each) and `reports/*.md`; `.gitignore` lacks `*.log`, top-level `/reports/`, `.cache/`. Fix: `git rm --cached` the artifacts; extend `.gitignore`. Effort S.
+**[FIXED 2026-06-04] FINDING [SEV-26]: Repo hygiene — committed logs + `.gitignore` gaps** — Confidence Confirmed · Absorbs HARN-06, HARN-07. `git ls-files` tracks `server.log`,`server2.log` (288 KB each) and `reports/*.md`; `.gitignore` lacks `*.log`, top-level `/reports/`, `.cache/`. Fix: `git rm --cached` the artifacts; extend `.gitignore`. Effort S.
 
-**FINDING [SEV-27]: Structured-output reliability — `generate_structured` drops temperature and discards the JSON schema; invalid output silently falls back with no repair** — Confidence Confirmed · Absorbs PROMPT-03, PROMPT-07. `ollama_adapter.py:132-143` omits `temperature` (dialogue runs at uncontrolled ~0.8) and passes `format:"json"` (syntax only, schema discarded); `llm_client.py:93-112` catches `ValidationError` → canned fallback with no self-repair retry — combined with SEV-01 this passes `keyword_none` evals. Fix: forward a low temperature for guard-sensitive structured calls; pass the schema via Ollama `format:<schema>` or inject it; one repair retry before fallback; update `LLMClientProtocol` + mock (LSP). Effort M · Depends on SEV-01.
+**[FIXED 2026-06-04] FINDING [SEV-27]: Structured-output reliability — `generate_structured` drops temperature and discards the JSON schema; invalid output silently falls back with no repair** — Confidence Confirmed · Absorbs PROMPT-03, PROMPT-07. `ollama_adapter.py:132-143` omits `temperature` (dialogue runs at uncontrolled ~0.8) and passes `format:"json"` (syntax only, schema discarded); `llm_client.py:93-112` catches `ValidationError` → canned fallback with no self-repair retry — combined with SEV-01 this passes `keyword_none` evals. Fix: forward a low temperature for guard-sensitive structured calls; pass the schema via Ollama `format:<schema>` or inject it; one repair retry before fallback; update `LLMClientProtocol` + mock (LSP). Effort M · Depends on SEV-01.
 
-**FINDING [SEV-28]: WebSocket dialogue stream has no recv/stall timeout → permanent input lockup** — Confidence Likely · Absorbs DEMO-06. `demo_game/dialogue_ws.py:49-62` `ws.recv()` has no timeout/deadline; a server that streams then dies without `done`/`error` blocks the daemon thread, leaving `GameController._is_waiting=True` forever → input locked on stage. Fix: per-call `recv` timeout mirroring `NPC_DIALOGUE_TIMEOUT_S` + a watchdog that clears `_is_waiting`. Effort S.
+**[FIXED 2026-06-04] FINDING [SEV-28]: WebSocket dialogue stream has no recv/stall timeout → permanent input lockup** — Confidence Likely · Absorbs DEMO-06. `demo_game/dialogue_ws.py:49-62` `ws.recv()` has no timeout/deadline; a server that streams then dies without `done`/`error` blocks the daemon thread, leaving `GameController._is_waiting=True` forever → input locked on stage. Fix: per-call `recv` timeout mirroring `NPC_DIALOGUE_TIMEOUT_S` + a watchdog that clears `_is_waiting`. Effort S.
 
-**FINDING [SEV-29]: N+1 graph queries** — Confidence Confirmed · Absorbs GRAPH-05, GRAPH-06. `gossip_handler.py:118-219` issues 2-3 `session.run` per pair in a loop; `retrieval/embedding_reconciler.py:185-219` embeds + marks one node at a time (200 sequential encodes + 200 writes per cycle). Fix: batch via `UNWIND $pairs`/`UNWIND $ids`; add a batch upsert to the embedding-index protocol. Effort M.
+**[FIXED 2026-06-04] FINDING [SEV-29]: N+1 graph queries** — Confidence Confirmed · Absorbs GRAPH-05, GRAPH-06. `gossip_handler.py:118-219` issues 2-3 `session.run` per pair in a loop; `retrieval/embedding_reconciler.py:185-219` embeds + marks one node at a time (200 sequential encodes + 200 writes per cycle). Fix: batch via `UNWIND $pairs`/`UNWIND $ids`; add a batch upsert to the embedding-index protocol. Effort M.
 
 **FINDING [SEV-30]: Non-atomic event materialization** — Confidence Likely · Absorbs GRAPH-07. `engines/events/event_handler.py:181-264` commits event+awareness+reputation+world-state at `:255`, then runs WITNESSED writes **after** the transaction (`:258+`) → an event can exist with no witnesses on partial failure. Fix: move witness writes inside the same `async with tx:` or document/reconcile the eventual-consistency contract. Effort M · Depends on SEV-04.
 
-**FINDING [SEV-31]: Layer model doc omits 8 real packages; the contract checker can't catch violations** — Confidence Confirmed · Absorbs ARCH-04, ARCH-02, ARCH-03, ARCH-11. CLAUDE.md defines 6 layers but the tree has `mutation/`, `scheduler/`, `schema/`, `type_registry/`, `cache/`, `auth/`, `common/`, `data/`, `world/` unranked and **no `services/` dir**; real upward edges exist (`engines/events/event_handler.py:89` and `engines/quest/quest_lifecycle_engine.py:61` import `npc_engine.api.dependencies`; `graph/reindex_job_service.py:14` imports `retrieval.embedding_index`) but `check-contracts` PASSes because it doesn't encode the topology. The `config/` "layer" is a data dir (`llm_config.yaml`); settings live in `config.py`. Fix: assign every package a layer rank in CLAUDE.md; extend the contract checker to assert the full edge set so SEV-04's upward imports fail CI. Effort M · Blocks reliable detection of SEV-04.
+**[FIXED 2026-06-04] FINDING [SEV-31]: Layer model doc omits 8 real packages; the contract checker can't catch violations** — Confidence Confirmed · Absorbs ARCH-04, ARCH-02, ARCH-03, ARCH-11. CLAUDE.md defines 6 layers but the tree has `mutation/`, `scheduler/`, `schema/`, `type_registry/`, `cache/`, `auth/`, `common/`, `data/`, `world/` unranked and **no `services/` dir**; real upward edges exist (`engines/events/event_handler.py:89` and `engines/quest/quest_lifecycle_engine.py:61` import `npc_engine.api.dependencies`; `graph/reindex_job_service.py:14` imports `retrieval.embedding_index`) but `check-contracts` PASSes because it doesn't encode the topology. The `config/` "layer" is a data dir (`llm_config.yaml`); settings live in `config.py`. Fix: assign every package a layer rank in CLAUDE.md; extend the contract checker to assert the full edge set so SEV-04's upward imports fail CI. Effort M · Blocks reliable detection of SEV-04.
 
 **FINDING [SEV-32]: Module-docstring format drift** — **FIXED 2026-06-04.** 154 files migrated via scripts/migrate_docstrings.py; scripts/docstring_audit.py added as CI gate in make check (DEC-063).
 
-**FINDING [SEV-33]: Inconsistent error envelope for integrators** — Confidence Confirmed · Absorbs GAME-07. Success uses `{data,meta}` (`ok_response`); middleware errors return bare `{"detail":"Forbidden"}`; idempotency uses `{error_code}`; FastAPI 422 uses `{"detail":[…]}` — `client.py:1400-1407` must defensively probe shapes. Fix: one error envelope `{error:{code,message,details}}` via FastAPI exception handlers + middleware; document in `docs/API.md`. Effort M.
+**[FIXED 2026-06-04] FINDING [SEV-33]: Inconsistent error envelope for integrators** — Confidence Confirmed · Absorbs GAME-07. Success uses `{data,meta}` (`ok_response`); middleware errors return bare `{"detail":"Forbidden"}`; idempotency uses `{error_code}`; FastAPI 422 uses `{"detail":[…]}` — `client.py:1400-1407` must defensively probe shapes. Fix: one error envelope `{error:{code,message,details}}` via FastAPI exception handlers + middleware; document in `docs/API.md`. Effort M.
 
-**FINDING [SEV-34]: Onboarding docs stale/broken** — Confidence Confirmed · Absorbs GAME-08, HARN-12. Root `README.md:43-58` says `mixtral:8x7b`, `cd npc_engine`, `python data/seed.py` (paths don't exist; wrong model) and lists already-done "what's next: rate limiting"; CLAUDE.md "Key commands" omits real targets (`demo-village`,`demo-tavern`,`seed-*-world`,`eval-report`,`demo-snapshot`). Fix: rewrite Quick start to `docker-compose up -d` → `make demo-seed` → `make demo`; correct model/paths; sync the command table. Effort S.
+**[FIXED 2026-06-04] FINDING [SEV-34]: Onboarding docs stale/broken** — Confidence Confirmed · Absorbs GAME-08, HARN-12. Root `README.md:43-58` says `mixtral:8x7b`, `cd npc_engine`, `python data/seed.py` (paths don't exist; wrong model) and lists already-done "what's next: rate limiting"; CLAUDE.md "Key commands" omits real targets (`demo-village`,`demo-tavern`,`seed-*-world`,`eval-report`,`demo-snapshot`). Fix: rewrite Quick start to `docker-compose up -d` → `make demo-seed` → `make demo`; correct model/paths; sync the command table. Effort S.
 
 ### LOW
 
-**FINDING [SEV-35]: `delta_ticks` bound mismatch** — Confirmed · SEC-03, GAME-09. `clock.py:32` `le=200` vs the project rule's `[1,1000]` vs the secondary guard `MAX_CONCURRENT_TICKS*10` (magic) vs client docstring "1–200". Fix: one `MAX_DELTA_TICKS=1000` constant used in field + guard + client doc. Effort S.
+**[FIXED 2026-06-04] FINDING [SEV-35]: `delta_ticks` bound mismatch** — Confirmed · SEC-03, GAME-09. `clock.py:32` `le=200` vs the project rule's `[1,1000]` vs the secondary guard `MAX_CONCURRENT_TICKS*10` (magic) vs client docstring "1–200". Fix: one `MAX_DELTA_TICKS=1000` constant used in field + guard + client doc. Effort S.
 
 **[FIXED 2026-06-04] FINDING [SEV-36]: Emotion/distortion semantics** — distortion probability now separated from `BELIEVES_RUMOR.confidence`; `compute_confidence` (trust-based) is written to graph; distortion_probability + seed logged per pair. Shock on positive events is INTENTIONAL (DEC confirmed). Quest completed terminal state deferred to DEC-064.
 
-**FINDING [SEV-37]: Demo low-severity cluster** — Confirmed · DEMO-05, DEMO-08, DEMO-10..14. Trade-intent magic string `"I'd like to trade."` in 3 control-flow sites; `print()` vs logger in ~15 pollers; hardcoded `NPC_API_KEY` dev default + module-level `DemoConfig()`; no client-side `player_message` cap; stale test docstring ("8 methods" vs 50); QUIT event still dispatched post-`running=False`. Fix: named constants/enums, stdlib `logging`, `get_config()` accessor, client cap, doc + `continue`. Effort S.
+**[FIXED 2026-06-04] FINDING [SEV-37]: Demo low-severity cluster** — Confirmed · DEMO-05, DEMO-08, DEMO-10..14. Trade-intent magic string `"I'd like to trade."` in 3 control-flow sites; `print()` vs logger in ~15 pollers; hardcoded `NPC_API_KEY` dev default + module-level `DemoConfig()`; no client-side `player_message` cap; stale test docstring ("8 methods" vs 50); QUIT event still dispatched post-`running=False`. Fix: named constants/enums, stdlib `logging`, `get_config()` accessor, client cap, doc + `continue`. Effort S.
 
-**FINDING [SEV-38]: Eval-matcher weaknesses & mock LSP** — Confirmed/Likely · TEST-05, TEST-08, TEST-09, TEST-10, TEST-11, PROMPT-05, PROMPT-08, PROMPT-10, PROMPT-12. Blocklists trivially evadable / `keyword_any` near-tautological; `context_block_expected` silently ignored by the runner; duplicated inline judge-prompt strings outside `prompts/` (`evals/matchers.py:20-34` ≡ `e2e/helpers/llm_judge.py:32-46`); `MockLLMAdapter` never raises `LLMTimeoutError`/`LLMRequestError` or returns garbage (real `OllamaAdapter` does) → under-exercises the fallback contract; `tone_judge` fails-open to FALSE; judge shares the model family of the system-under-test; LLM-judge tests hard-assert despite "treat failures as warnings" docstring; `guard_contract_test_sync` only checks a same-named file changed, not that it exercises the contract; `check-contracts` doesn't assert listed test files exist. Fix: semantic matchers, extract judge prompt to `prompts/eval/`, add a raising/garbage mock mode + LSP contract tests, distinguish judge-infra-error from content-fail, make the sync guard parse for contract symbols. Effort M.
+**[FIXED 2026-06-04] FINDING [SEV-38]: Eval-matcher weaknesses & mock LSP** — Confirmed/Likely · TEST-05, TEST-08, TEST-09, TEST-10, TEST-11, PROMPT-05, PROMPT-08, PROMPT-10, PROMPT-12. Blocklists trivially evadable / `keyword_any` near-tautological; `context_block_expected` silently ignored by the runner; duplicated inline judge-prompt strings outside `prompts/` (`evals/matchers.py:20-34` ≡ `e2e/helpers/llm_judge.py:32-46`); `MockLLMAdapter` never raises `LLMTimeoutError`/`LLMRequestError` or returns garbage (real `OllamaAdapter` does) → under-exercises the fallback contract; `tone_judge` fails-open to FALSE; judge shares the model family of the system-under-test; LLM-judge tests hard-assert despite "treat failures as warnings" docstring; `guard_contract_test_sync` only checks a same-named file changed, not that it exercises the contract; `check-contracts` doesn't assert listed test files exist. Fix: semantic matchers, extract judge prompt to `prompts/eval/`, add a raising/garbage mock mode + LSP contract tests, distinguish judge-infra-error from content-fail, make the sync guard parse for contract symbols. Effort M.
 **STATUS [SEV-38] DONE 2026-06-04**: `EvalConfigError`+`JudgeResult` added to `evals/matchers.py`; `keyword_any` guards <2 items; `context_block_expected` raises on absent runner context; `tone_judge` infra failure → `JudgeResult(score=None, error="infra_failure")` + WARNING log; judge prompt extracted to `prompts/eval/tone_judge.yaml` (loaded by both `evals/matchers.py` and `e2e/helpers/llm_judge.py`); `MockLLMAdapter` gains `raise_on_generate` mode (instance-based). 14 regression tests in `tests/unit/test_eval_matchers_sev38.py`.
 
-**FINDING [SEV-39]: Worst-covered risk modules untested** — Confirmed · GRAPH-10, TEST-06, TEST-07. `retrieval/graph_rag.py` 17% (label-less seed `MATCH (seed)` full scan + magic weights `0.5/0.3/0.2`, `365.0/72.0` + in-function `import json`), `pair_selector.py` 22% (RNG-seeded selection — the determinism rule path), `idempotency/neo4j_store.py` 26% (replay contract), `modifier_bounds_validator.py` 40% (mutation safety), `relation_delta_writer.py` 29%; no eval/scenario exercises `delta_ticks=1/1000` or idempotency replay. Fix: targeted unit tests + per-module `--cov-fail-under` floors for risk modules. Effort L.
+**[FIXED 2026-06-04] FINDING [SEV-39]: Worst-covered risk modules untested** — Confirmed · GRAPH-10, TEST-06, TEST-07. `retrieval/graph_rag.py` 17% (label-less seed `MATCH (seed)` full scan + magic weights `0.5/0.3/0.2`, `365.0/72.0` + in-function `import json`), `pair_selector.py` 22% (RNG-seeded selection — the determinism rule path), `idempotency/neo4j_store.py` 26% (replay contract), `modifier_bounds_validator.py` 40% (mutation safety), `relation_delta_writer.py` 29%; no eval/scenario exercises `delta_ticks=1/1000` or idempotency replay. Fix: targeted unit tests + per-module `--cov-fail-under` floors for risk modules. Effort L.
 
 **FINDING [SEV-40]: `print()` + hardcoded default API key in `api_seeder.py`** — Confirmed · PY-13, GRAPH-12. 21 `print()` calls (structured-logging rule); `:440` `default=os.environ.get("NPC_API_KEY","local_dev_secret_change_this_2026")` ships a real-looking shared secret. Fix: stdlib logger; require the env var (fail fast). Effort S.
 
 **FINDING [SEV-41]: Windows/Unicode failures in live scenarios (22 failed)** — Confirmed (observed) · `make scenarios` UnicodeEncodeError on the cp1252 console (`scenario_war_breaks_out`) + mojibake in `demo-run` output. Portability/repeatability gap on the documented Windows target. Fix: force UTF-8 stdout (`PYTHONUTF8=1` / `sys.stdout.reconfigure(encoding="utf-8")`) in scenario/demo entrypoints. Effort S.
 
-**FINDING [SEV-42]: Naming/placement smells** — Confirmed · ARCH-10, ARCH-03. Two same-named `llm_config_loader.py` (schema vs engines) require import aliasing; `graph/reindex_job_service.py` is a job manager (no Neo4j writes) misplaced in `graph/` and importing `retrieval`. Fix: rename for intent; relocate the job service to `retrieval`/`scheduler`. Effort S.
+**[FIXED 2026-06-04] FINDING [SEV-42]: Naming/placement smells** — Confirmed · ARCH-10, ARCH-03. Two same-named `llm_config_loader.py` (schema vs engines) require import aliasing; `graph/reindex_job_service.py` is a job manager (no Neo4j writes) misplaced in `graph/` and importing `retrieval`. Fix: rename for intent; relocate the job service to `retrieval`/`scheduler`. Effort S.
 
-**FINDING [SEV-43]: Contract guards are near-no-ops** — Confirmed · TEST-08 (also under SEV-38). `check-contracts` validates only YAML shape; `guard_contract_test_sync` passes when a same-named file appears in the diff, never confirming the test exists or exercises the `error_contract`. Fix: assert `tests:` paths exist on disk; parse changed tests for contract symbols. Effort M.
+**[FIXED 2026-06-04] FINDING [SEV-43]: Contract guards are near-no-ops** — Confirmed · TEST-08 (also under SEV-38). `check-contracts` validates only YAML shape; `guard_contract_test_sync` passes when a same-named file appears in the diff, never confirming the test exists or exercises the `error_contract`. Fix: assert `tests:` paths exist on disk; parse changed tests for contract symbols. Effort M.
 
 ---
 
@@ -429,21 +429,22 @@ Execute top-to-bottom; items in the same block are independent and parallelizabl
 - [ ] SEV-25 (log lint/type issues, commit/flag Phase 11, relabel ISSUE-041) — harness honesty
 
 **Block B — security & correctness quick wins (independent, mostly S):**
-- [x] SEV-16 (error leakage) · SEV-17 (Cypher injection) · SEV-19 (prompt-log redaction) · SEV-21 (NEO4J_PASSWORD/rate-limit/idempotency) · SEV-20 (auth surface) · SEV-09 (gossip canonical/corrected) · SEV-22 (RNG) · SEV-40 (seeder secret/print) · SEV-41 (UTF-8)
+- [x] SEV-16 (error leakage) · SEV-17 (Cypher injection) · SEV-09 (gossip canonical/corrected) — DONE
+- [ ] SEV-19 (prompt-log redaction — LOG_LLM_PROMPTS still not ENV-gated) · SEV-20 (auth surface — /readiness still unprotected) · SEV-21 (NEO4J_PASSWORD validator, rate-limit eviction, idempotency default) · SEV-22 (RNG seeding in quest-gen + gossip secret) · SEV-40 (api_seeder print()/hardcoded key) · SEV-41 (UTF-8 stdout) — NOT YET DONE
 
 **Block C — concurrency & engine integrity:**
-- [ ] SEV-05 (store locks) · SEV-06 (consolidation semaphore) · SEV-07 (token-budget raise) · SEV-08 (quest economy atomicity) · SEV-18 (no swallow) · SEV-30 (event atomicity)
+- [x] SEV-05 (store locks) · SEV-06 (consolidation semaphore) · SEV-07 (token-budget raise) · SEV-08 (quest economy atomicity) · SEV-18 (no swallow) — DONE
+- [ ] SEV-30 (event atomicity — no brief yet, depends SEV-04) — NOT YET DONE
 
 **Block D — layer & type campaigns (L, sequence-internally):**
-- [ ] SEV-31 (layer model + contract checker) → SEV-04 (Cypher/tx into graph/) → SEV-17/30 fold in
-- [ ] SEV-14 (Pydantic boundaries) → completes SEV-15 type-gating
-- [ ] SEV-10 (constraints + seeder idempotency) · SEV-29 (N+1)
+- [x] SEV-31 (layer model + contract checker) · SEV-04 (Cypher/tx into graph/) · SEV-14 (Pydantic boundaries / mypy 0) · SEV-10 (constraints + seeder idempotency) · SEV-29 (N+1) — DONE
 
 **Block E — product & demo:**
-- [ ] SEV-02 (demo standalone) · SEV-13 (world id) · SEV-11 (win/lose) · SEV-28 (WS timeout) · SEV-33 (error envelope) · SEV-34 (README) · SEV-12 (multi-tenant — XL, needs DECISIONS + approval)
+- [x] SEV-02 (demo standalone) · SEV-13 (world id) · SEV-11 (win/lose) · SEV-28 (WS timeout) · SEV-33 (error envelope) · SEV-34 (README) — DONE
+- [ ] SEV-12 (multi-tenant — XL, blocked: DECISIONS proposal + human approval required) — NOT YET DONE
 
 **Block F — hygiene & docs (low-risk, batchable):**
-- [ ] SEV-23 (file size) · SEV-24 (nested infra — needs delete approval) · SEV-26 (repo hygiene) · SEV-32 (docstrings) · SEV-35/36/[x]SEV-37/38/39/42/43 · SEV-27 (structured output, after SEV-01)
+- [x] SEV-23 (file size) · SEV-24 (nested infra) · SEV-25 (harness honesty) · SEV-26 (repo hygiene) · SEV-27 (structured output) · SEV-32 (docstrings) · SEV-35 · SEV-36 · SEV-37 · SEV-38 · SEV-39 · SEV-42 · SEV-43 — DONE
   - [x] SEV-37 DONE 2026-06-04: TRADE_INTENT_MESSAGE constant; print()→logger in all pollers/controllers; NPC_API_KEY sentinel removed + get_demo_config() lazy accessor; player_message capped at DEMO_MAX_MESSAGE_CHARS=1000; QUIT guard with self._running flag. Tests: test_sev37_demo_hygiene.py (24 tests).
   - [x] SEV-38 DONE 2026-06-04: EvalConfigError raised for keyword_any<2 items and context_block_expected with no context; tone_judge infra failure returns JudgeResult(score=None) instead of fail-open; shared judge prompt extracted to prompts/eval/tone_judge.yaml; MockLLMAdapter gains raise_on_generate mode. Tests: test_eval_matchers_sev38.py (14 tests).
   - [x] SEV-39 DONE 2026-06-04: 5 risk modules covered — graph_rag 88% (RAG weights extracted to config.py), pair_selector determinism+observability, neo4j_store replay contract, modifier_bounds_validator boundary tests, relation_delta_writer typed-error tests. ISSUE-056 logged for label-less MATCH full-scan. Tests: 5 new test files (36 tests total).
