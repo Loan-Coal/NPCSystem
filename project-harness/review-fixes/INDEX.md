@@ -10,7 +10,7 @@ _State that survives between fixes so a fresh `/fix-next` session needn't redisc
 _`/fix-next` maintains this: add a line when a fix affects a later one, delete consumed lines, keep it ≤10 lines._
 
 - Harness gates are live: `make check` = lint + check-rules + type-ratchet + check-harness + test-cov(80%). Baselines: `scripts/rules_baseline.txt` (57), `.mypy_baseline` (256). When a fix shrinks either, run `make check-rules-update` / `make type-ratchet-update`.
-- SEV-15 lint portion DONE (commit `afecbb6`); what remains of SEV-15 is flipping `make type` to a hard CI gate AFTER SEV-14 drives mypy to 0.
+- SEV-15 DONE: `make check` now uses hard `make type` gate (mypy 0); CI `static-analysis` job runs `make type` (gating). `type-ratchet` kept but no longer in `check` path.
 - SEV-01 DONE: eval guard contract now lives in `evals/runner.py::_guard_expectations` (min_length + fallback keyword_none + tone_judge auto-injected per `case_adv_/case_neg_`). `matchers.py` has `min_length` + empty-`npc_response`-fails schema; `summary.headline` returns "NO GUARD TURNS EVALUATED" at 0 turns and `summary.guarantee_demonstrated` gates `runner.main` exit. `test-cov` now also covers `matchers`+`summary`. SEV-27 (output reliability) is now unblocked. DEC-056 records the auto-inject choice.
 - SEV-16 DONE: leaking routes (clock/debts/groups/quest_generation) now return static `error_response(...)` envelopes + log real detail via `get_logger`. Reuse this pattern for SEV-33 (one error envelope). Test: `tests/unit/test_route_error_redaction.py` (`_LEAK_TOKENS` guard).
 - SEV-17 DONE: dynamic labels in `graph_admin_service._hard_delete_node` + `quest_generation_engine._get_candidates` now wrap label in `cypher_identifier(...)` (quest-gen also via `resolve_node_label`, replacing buggy `.capitalize()`). When SEV-04 moves these into `graph/`, keep the wrap. Test: `tests/unit/test_cypher_label_injection.py`.
@@ -28,7 +28,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 ## Ordered checklist
 
 ### Block A — guarantee + gates (do first)
-- [ ] **FIX-SEV-15** — CI green: clear lint, add type to CI, restore `make check` · HIGH · S(+L) · deps: SEV-14 for type-gating
+- [x] **FIX-SEV-15** — CI green: clear lint, add type to CI, restore `make check` · HIGH · S(+L) · deps: SEV-14 for type-gating
 - [x] **FIX-SEV-01** — Make the anti-hallucination guarantee real (the moat) · **CRITICAL** · M · deps: none
 - [ ] *(SEV-25 harness honesty — MEDIUM, see report §3; pair with SEV-15)*
 

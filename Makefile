@@ -90,8 +90,7 @@ check-rules:
 check-rules-update:
 	$(PYTHON) scripts/check_rules.py --update-baseline
 
-# type-ratchet: fail if mypy error count rose above .mypy_baseline (currently 256).
-# Fix errors to drive it down, then run type-ratchet-update.
+# type-ratchet: kept for historical reference; mypy is now at 0 so 'make type' is the gate.
 type-ratchet:
 	$(PYTHON) scripts/mypy_ratchet.py
 
@@ -103,8 +102,8 @@ check-harness:
 	$(PYTHON) scripts/check_harness_honesty.py
 
 # check: the single canonical health gate. Same command locally and in CI.
-# Uses the ratchets so it is runnable today despite existing lint/type debt.
-check: lint check-rules type-ratchet check-harness test-cov
+# mypy is at 0 (SEV-14 done) so 'type' is now a hard gate here.
+check: lint check-rules type check-harness test-cov
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 

@@ -28,8 +28,8 @@ jobs:
       - name: CLAUDE.md rule gate (ratcheted)
         run: make check-rules
 
-      - name: Type-error ratchet (mypy count may not rise above baseline)
-        run: make type-ratchet
+      - name: Type check (mypy at 0 — hard gate, SEV-14 complete)
+        run: make type
 
       - name: Harness honesty (advisory)
         run: make check-harness
