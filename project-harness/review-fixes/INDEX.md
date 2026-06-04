@@ -32,7 +32,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 ### Block A — guarantee + gates (do first)
 - [x] **FIX-SEV-15** — CI green: clear lint, add type to CI, restore `make check` · HIGH · S(+L) · deps: SEV-14 for type-gating
 - [x] **FIX-SEV-01** — Make the anti-hallucination guarantee real (the moat) · **CRITICAL** · M · deps: none
-- [ ] **FIX-SEV-25** — Harness honesty: fix stale status docs · MEDIUM · S · deps: none
+- [x] **FIX-SEV-25** — Harness honesty: fix stale status docs · MEDIUM · S · deps: none
 
 ### Block B — security & correctness quick wins (independent)
 - [x] **FIX-SEV-16** — Stop leaking exception detail in HTTP responses · HIGH · S · deps: none
