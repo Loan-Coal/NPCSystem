@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 
 import httpx
 
+from demo_game.constants import DEMO_MAX_MESSAGE_CHARS
+
 
 class EngineClientError(Exception):
     """Raised on any 4xx or 5xx response from the NPC Engine."""
@@ -97,7 +99,7 @@ class EngineClient:
         body = {
             "player_id": player_id,
             "npc_id": npc_id,
-            "player_message": player_message,
+            "player_message": player_message[:DEMO_MAX_MESSAGE_CHARS],
             "location_id": location_id,
             "session_id": session_id,
             "explicit_node_ids": list(explicit_node_ids),

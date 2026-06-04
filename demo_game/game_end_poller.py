@@ -10,7 +10,7 @@ Used by: demo_game.ui.game_window
 
 from __future__ import annotations
 
-import sys
+import logging
 import threading
 from typing import TYPE_CHECKING
 
@@ -23,6 +23,8 @@ from demo_game.game_end_checker import (
 
 if TYPE_CHECKING:
     from demo_game.client import EngineClient
+
+_logger = logging.getLogger(__name__)
 
 _INITIAL_STATE = ObjectiveState(
     faction_standings={},
@@ -121,4 +123,4 @@ class GameEndPoller:
             with self._lock:
                 self._state = new_state
         except Exception as exc:
-            print(f"[GameEndPoller] error: {exc}", file=sys.stderr)
+            _logger.warning("poll error: %s", exc)

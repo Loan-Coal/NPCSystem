@@ -18,8 +18,8 @@ individual action queues would add indirection without clarity gains.
 
 from __future__ import annotations
 
+import logging
 import queue
-import sys
 import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable
@@ -38,7 +38,7 @@ from demo_game.action_workers import (
 )
 from demo_game.dialogue_ws import dialogue_ws_worker
 from demo_game.client import EngineClient, EngineClientError
-from demo_game.constants import LOCATION_DISPLAY_NAMES, NPC_FACTIONS
+from demo_game.constants import LOCATION_DISPLAY_NAMES, NPC_FACTIONS, TRADE_INTENT_MESSAGE
 from demo_game.dialogue import (
     DialogueTurn,
     build_dialogue_payload,
@@ -49,6 +49,8 @@ from demo_game.quest_trade_controller import QuestTradeController
 
 if TYPE_CHECKING:
     from demo_game.ui.right_panel import RightPanelRenderer
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -323,7 +325,7 @@ class GameController:
             self._apply_relation_band(turn)
             if turn.interaction_proposal:
                 self._dispatch_proposal(turn, npc_id, right)
-            elif self._last_submitted_message == "I'd like to trade.":
+            elif self._last_submitted_message == TRADE_INTENT_MESSAGE:
                 self._qt.open_trade_fallback(npc_id, right)
         elif item[0] == "error":
             self._is_waiting = False
@@ -343,7 +345,7 @@ class GameController:
             if self._cb.on_sidebar_data:
                 self._cb.on_sidebar_data(display_name, data)
         else:
-            print(f"sidebar fetch error for {npc_id}: {data}", file=sys.stderr)
+            _logger.warning("sidebar fetch error for %s: %s", npc_id, data)
             if self._cb.on_clear_sidebar:
                 self._cb.on_clear_sidebar()
 
@@ -477,7 +479,7 @@ class GameController:
         self._apply_relation_band(turn)
         if turn.interaction_proposal:
             self._dispatch_proposal(turn, npc_id, right)
-        elif self._last_submitted_message == "I'd like to trade.":
+        elif self._last_submitted_message == TRADE_INTENT_MESSAGE:
             self._qt.open_trade_fallback(npc_id, right)
 
     # ------------------------------------------------------------------
@@ -522,7 +524,7 @@ class GameController:
                     affection=deltas.get("affection", 0),
                 )
             except EngineClientError as exc:
-                print(f"[game_controller] interaction band update failed: {exc}", file=sys.stderr)
+                _logger.warning("interaction band update failed: %s", exc)
 
     def _dispatch_proposal(self, turn: DialogueTurn, npc_id: str, right: RightPanelRenderer) -> None:
         proposal = turn.interaction_proposal

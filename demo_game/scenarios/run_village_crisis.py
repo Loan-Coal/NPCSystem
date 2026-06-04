@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from demo_game.client import EngineClient
-from demo_game.config import DemoConfig
+from demo_game.config import get_demo_config
 
 # ---------------------------------------------------------------------------
 # Cache — keyed by npc_id + player_input, stored in .cache/village/
@@ -288,7 +288,7 @@ class VillageDemoRunner:
     def __init__(self, dry_run: bool = False, cached: bool = False) -> None:
         self.dry_run = dry_run
         self.cache = LLMCache(readonly=cached)
-        cfg = DemoConfig()
+        cfg = get_demo_config()
         self.client: EngineClient = EngineClient(
             base_url=cfg.NPC_BASE_URL,
             api_key=cfg.NPC_API_KEY,

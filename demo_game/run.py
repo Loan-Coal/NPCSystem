@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from demo_game.client import EngineClient
-from demo_game.config import DemoConfig
+from demo_game.config import get_demo_config
 from demo_game.run_scenes import (
     BribeScene,
     ClockTick,
@@ -424,7 +424,7 @@ class DemoRunner:
     def __init__(self, dry_run: bool = False, cached: bool = False) -> None:
         self.dry_run = dry_run
         self.cache = LLMCache(readonly=cached)
-        cfg = DemoConfig()
+        cfg = get_demo_config()
         self.client: EngineClient = EngineClient(
             base_url=cfg.NPC_BASE_URL,
             api_key=cfg.NPC_API_KEY,

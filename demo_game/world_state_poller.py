@@ -11,7 +11,7 @@ Used by: demo_game.ui.game_window
 
 from __future__ import annotations
 
-import sys
+import logging
 import threading
 from typing import TYPE_CHECKING
 
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from demo_game.client import EngineClient
 
 
+_logger = logging.getLogger(__name__)
 class WorldStatePoller:
     """Background daemon thread that periodically polls the engine world state.
 
@@ -116,4 +117,4 @@ class WorldStatePoller:
                 self._prev_conditions = new_set
                 self._baseline_polled = True
         except Exception as exc:
-            print(f"[WorldStatePoller] error: {exc}", file=sys.stderr)
+            _logger.warning("error: %s", exc)

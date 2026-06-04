@@ -61,28 +61,30 @@ class TestEmotionPollerPollOnce:
         assert label == ""
         assert valence == 0.0
 
-    def test_poll_once_handles_engine_client_error(self, capsys: pytest.CaptureFixture) -> None:
-        """Client raises EngineClientError — state unchanged, error printed to stderr."""
+    def test_poll_once_handles_engine_client_error(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Client raises EngineClientError — state unchanged, error logged as WARNING."""
+        import logging
         poller = EmotionPoller(
             _make_client(raises=EngineClientError("boom")), interval_s=999.0
         )
         poller.set_active_npc("mira_innkeeper")
-        poller._poll_once()
-        captured = capsys.readouterr()
-        assert "EmotionPoller" in captured.err
+        with caplog.at_level(logging.WARNING, logger="demo_game.emotion_poller"):
+            poller._poll_once()
+        assert any("poll error" in r.message for r in caplog.records)
         label, valence, arousal = poller.get_emotion()
         assert label == ""
         assert valence == 0.0
 
-    def test_poll_once_handles_generic_exception(self, capsys: pytest.CaptureFixture) -> None:
-        """Any unexpected exception in _poll_once() is swallowed and printed."""
+    def test_poll_once_handles_generic_exception(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Any unexpected exception in _poll_once() is swallowed and logged as WARNING."""
+        import logging
         poller = EmotionPoller(
             _make_client(raises=RuntimeError("network down")), interval_s=999.0
         )
         poller.set_active_npc("mira_innkeeper")
-        poller._poll_once()
-        captured = capsys.readouterr()
-        assert "EmotionPoller" in captured.err
+        with caplog.at_level(logging.WARNING, logger="demo_game.emotion_poller"):
+            poller._poll_once()
+        assert any("poll error" in r.message for r in caplog.records)
 
     def test_poll_once_skips_when_no_active_npc(self) -> None:
         """_poll_once() does nothing when no NPC is set."""

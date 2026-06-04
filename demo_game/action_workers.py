@@ -10,12 +10,14 @@ Used by: demo_game.game_controller
 
 from __future__ import annotations
 
+import logging
 import queue
-import sys
 
 from demo_game.client import EngineClient, EngineClientError
 from demo_game.constants import BRIBE_GOLD_COST, BRIBE_STANDING_GAIN, SPREAD_RUMOR_TEXT, SPREAD_RUMOR_SEVERITY
 from demo_game.knowledge_sidebar_fetcher import fetch_npc_knowledge
+
+_logger = logging.getLogger(__name__)
 
 _STANDING_CAP = 100
 _STANDING_FLOOR = -100
@@ -28,7 +30,7 @@ def _get_player_location(client: EngineClient, player_id: str) -> str | None:
         edges = client.get_graph_edges("LOCATED_AT", src_id=player_id)
         return next((e.get("dst_id") for e in edges if e.get("dst_id")), None)
     except EngineClientError as exc:
-        print(f"[action_workers] get_player_location failed: {exc}", file=sys.stderr)
+        _logger.warning("get_player_location failed: %s", exc)
         return None
 
 
@@ -39,7 +41,7 @@ def _get_current_tick(client: EngineClient) -> int | None:
         tick = state.get("data", {}).get("tick_id")
         return int(tick) if tick is not None else None
     except EngineClientError as exc:
-        print(f"[action_workers] get_current_tick failed: {exc}", file=sys.stderr)
+        _logger.warning("get_current_tick failed: %s", exc)
         return None
 
 

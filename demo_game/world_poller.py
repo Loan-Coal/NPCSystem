@@ -11,13 +11,14 @@ Used by: demo_game.ui.game_window
 
 from __future__ import annotations
 
-import sys
+import logging
 import threading
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from demo_game.client import EngineClient
 
+_logger = logging.getLogger(__name__)
 _DEFAULT_INTERVAL_S = 5.0
 _DEFAULT_EVENT_LIMIT = 20
 
@@ -104,13 +105,13 @@ class WorldPoller:
         try:
             engines = self._client.get_engine_status()
         except Exception as exc:
-            print(f"[WorldPoller] engine_status error: {exc}", file=sys.stderr)
+            _logger.warning("engine_status error: %s", exc)
             engines = None
 
         try:
             events = self._client.get_recent_events(limit=self._event_limit)
         except Exception as exc:
-            print(f"[WorldPoller] recent_events error: {exc}", file=sys.stderr)
+            _logger.warning("recent_events error: %s", exc)
             events = None
 
         with self._lock:

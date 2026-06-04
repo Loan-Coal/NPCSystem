@@ -11,7 +11,7 @@ Used by: demo_game.ui.game_window
 
 from __future__ import annotations
 
-import sys
+import logging
 import threading
 from typing import TYPE_CHECKING
 
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 _DEFAULT_INTERVAL_S = 5.0
 
 
+_logger = logging.getLogger(__name__)
 class NpcNeedsPoller:
     """Background daemon that polls Need nodes for the currently active NPC.
 
@@ -108,4 +109,4 @@ class NpcNeedsPoller:
                 if self._npc_id == npc_id:
                     self._needs = needs
         except Exception as exc:
-            print(f"[NpcNeedsPoller] error: {exc}", file=sys.stderr)
+            _logger.warning("error: %s", exc)

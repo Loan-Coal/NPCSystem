@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import pygame
 
-from demo_game.constants import PALETTE
+from demo_game.constants import PALETTE, TRADE_INTENT_MESSAGE
 
 _PRESETS: list[tuple[str, str]] = [
     ("Ask about war",  "Tell me about the war in the north."),
-    ("Trade",          "I'd like to trade."),
+    ("Trade",          TRADE_INTENT_MESSAGE),
     ("Ask for rumors", "Have you heard any rumors lately?"),
 ]
 

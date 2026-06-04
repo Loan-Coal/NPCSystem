@@ -90,6 +90,14 @@ PROPAGATED_REP_DELTA: int = 40
 # Bump this constant (not npc_engine's PROMPT_VERSION) when demo behaviour changes.
 DEMO_CACHE_VERSION: str = "demo_v1"
 
+# Preset dialogue message for the Trade action button.
+# Used in action_bar.py, game_controller.py, and quest_trade_controller.py.
+TRADE_INTENT_MESSAGE: str = "I'd like to trade."
+
+# Client-side cap on player_message length before sending to the NPC Engine.
+# Mirrors src/npc_engine/config.py MAX_PLAYER_MESSAGE_CHARS (default 1000).
+DEMO_MAX_MESSAGE_CHARS: int = 1000
+
 # Maximum seconds to wait for a single WebSocket frame from the dialogue endpoint.
 # If the server dies mid-stream, ws.recv() raises TimeoutError after this delay and
 # the WS worker breaks out, allowing clear_waiting() in the finally block to unlock UI.

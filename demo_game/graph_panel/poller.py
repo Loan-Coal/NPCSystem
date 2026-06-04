@@ -13,7 +13,7 @@ Used by: demo_game.ui.game_window
 
 from __future__ import annotations
 
-import sys
+import logging
 import threading
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from demo_game.config import DemoConfig
 
 
+_logger = logging.getLogger(__name__)
 class GraphPoller:
     """Background daemon thread that periodically fetches and renders the graph.
 
@@ -122,7 +123,7 @@ class GraphPoller:
                 self._surface = surface
                 self._last_updated = timestamp
         except Exception as exc:
-            print(f"[GraphPoller] poll error: {exc}", file=sys.stderr)
+            _logger.warning("poll error: %s", exc)
 
     def _update_highlights(self, delta: GraphDelta) -> frozenset[tuple[str, str, str]]:
         """Decrement countdown for existing highlights; add new delta edges at 2.
