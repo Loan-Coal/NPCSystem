@@ -606,6 +606,8 @@ def get_memory_consolidation_engine():
     return MemoryConsolidationEngine(
         session_store=get_session_store(),
         llm_client=llm_client,
+        graph_db=get_graph_db(),
+        settings=settings,
         turn_threshold=5,
         clear_turns_after=False,
         max_tokens=engine_config.llm.max_tokens,

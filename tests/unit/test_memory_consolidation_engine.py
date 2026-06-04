@@ -63,7 +63,29 @@ def _make_llm(summary: str = "A memorable conversation happened.") -> MagicMock:
 # ---------------------------------------------------------------------------
 
 
-def _make_engine(store: SessionStore, llm: MagicMock, threshold: int = 5, clear: bool = False):
+def _make_graph_db() -> MagicMock:
+    """Return a MagicMock GraphDB that yields a fresh mock AsyncSession per get_session() call."""
+    graph_db = MagicMock()
+    graph_db.get_session.return_value.__aenter__ = AsyncMock(return_value=_make_session())
+    graph_db.get_session.return_value.__aexit__ = AsyncMock(return_value=False)
+    return graph_db
+
+
+def _make_settings(max_concurrent: int = 5) -> MagicMock:
+    """Return a MagicMock Settings with MAX_CONCURRENT_TICKS set."""
+    settings = MagicMock()
+    settings.MAX_CONCURRENT_TICKS = max_concurrent
+    return settings
+
+
+def _make_engine(
+    store: SessionStore,
+    llm: MagicMock,
+    threshold: int = 5,
+    clear: bool = False,
+    graph_db: MagicMock | None = None,
+    settings: MagicMock | None = None,
+):
     """Return a MemoryConsolidationEngine with the prompt YAML mocked."""
     with patch(
         "npc_engine.engines.memory_consolidation.memory_consolidation_engine.load_yaml_mapping",
@@ -79,6 +101,8 @@ def _make_engine(store: SessionStore, llm: MagicMock, threshold: int = 5, clear:
         return MemoryConsolidationEngine(
             session_store=store,
             llm_client=llm,
+            graph_db=graph_db or _make_graph_db(),
+            settings=settings or _make_settings(),
             turn_threshold=threshold,
             clear_turns_after=clear,
         )
@@ -200,8 +224,11 @@ async def test_run_tick_consolidates_all_eligible_npcs():
     await store.append_turns("player1", "npc_c", ["Only one turn"])  # below threshold
 
     llm = _make_llm("Summary.")
-    engine = _make_engine(store, llm, threshold=5)
-    session = _make_session()
+    # graph_db yields a fresh session per get_session() context-manager call
+    graph_db = MagicMock()
+    graph_db.get_session.return_value.__aenter__ = AsyncMock(return_value=_make_session())
+    graph_db.get_session.return_value.__aexit__ = AsyncMock(return_value=False)
+    engine = _make_engine(store, llm, threshold=5, graph_db=graph_db)
     game_time = _make_game_time()
 
     call_count = 0
@@ -215,7 +242,7 @@ async def test_run_tick_consolidates_all_eligible_npcs():
         "npc_engine.engines.memory_consolidation.memory_consolidation_engine.create_memory",
         new=_fake_create,
     ):
-        result = await engine.run_tick(session, game_time=game_time)
+        result = await engine.run_tick(game_time=game_time)
 
     assert set(result["consolidated"]) == {"npc_a", "npc_b"}
     assert "npc_c" not in result["consolidated"]

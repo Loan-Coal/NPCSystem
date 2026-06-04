@@ -568,3 +568,14 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Decision:** Root-level copies are canonical. Nested copies under `src/npc_engine/` deleted via `git rm`.
 **Why:** The nested mypy.ini pinned `python_version = 3.11` (stack is 3.14), silently inflating error counts. The nested docker-compose.yml used a module path that no longer exists. All copies had diverged from root versions.
 **Consequence:** None — no Makefile or CI reference pointed to these paths.
+
+## DEC-059: MemoryConsolidationEngine.run_tick opens per-task Neo4j sessions from GraphDB
+**Date:** 2026-06-04
+**Context:** SEV-06 — `run_tick` previously iterated NPCs sequentially with a single shared `AsyncSession`. Neo4j `AsyncSession` objects are not concurrency-safe.
+**Options considered:**
+- (A) Parallelize LLM calls only; serialize Neo4j writes behind an `asyncio.Lock`. Complex because `consolidate()` interleaves read and write Neo4j calls.
+- (B) Inject `GraphDB` into the engine constructor; open one fresh `AsyncSession` per NPC task via `GraphDB.get_session()`. Each session is isolated and concurrency-safe.
+- (C) Keep `run_tick(session, ...)` signature and reuse the passed session under a lock — effectively keeping it serial.
+**Decision:** Option B. `GraphDB` and `Settings` are injected at construction. `run_tick` ignores the caller-supplied `_session` (kept for `BaseEngine` interface compatibility) and opens per-task sessions. `asyncio.Semaphore(settings.MAX_CONCURRENT_TICKS)` bounds concurrent open sessions.
+**Why:** Neo4j connection pools are designed for this pattern. Option A would violate SRP. Option C yields no speedup.
+**Consequence:** `dependency_singletons.get_memory_consolidation_engine` now passes `graph_db` and `settings`. Callers in `tick_scheduler` that pass a session continue to work.

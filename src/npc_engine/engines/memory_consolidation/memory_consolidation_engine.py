@@ -4,23 +4,26 @@ Layer: engines
 Purpose: Consolidates recent session turns into a Memory node via a single LLM summarisation call.
 Does NOT: query Neo4j directly — delegates to graph.memory_service.create_memory.
 Dependencies: engines.llm.protocols, engines.dialogue.session_store, graph.memory_service,
-              world.time_utils, common.yaml_utils
-Dependencies injected: SessionStore, LLMClientProtocol, AsyncSession (per call).
+              graph.db, config, world.time_utils, common.yaml_utils
+Dependencies injected: SessionStore, LLMClientProtocol, GraphDB, Settings, AsyncSession (per consolidate call).
 Used by: scheduler.tick_scheduler
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from neo4j import AsyncSession
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
+from npc_engine.config import Settings
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.graph.belief_queries import get_beliefs_for_character
+from npc_engine.graph.db import GraphDB
 from npc_engine.graph.memory_queries import get_memories_for_character
 from npc_engine.graph.memory_service import create_memory
 from npc_engine.graph.witnessed_queries import get_undisclosed_witnesses
@@ -48,12 +51,19 @@ class MemoryConsolidationEngine:
     For each NPC with enough recent dialogue turns, calls the LLM with a
     summarisation prompt and persists the result as a Memory node in Neo4j.
     LLM errors are caught and logged; the engine skips the NPC gracefully.
+
+    run_tick parallelises consolidation across NPCs using asyncio.gather bounded
+    by asyncio.Semaphore(settings.MAX_CONCURRENT_TICKS). Each parallel task opens
+    its own Neo4j session via the injected GraphDB driver, because Neo4j AsyncSession
+    objects are not concurrency-safe for concurrent queries (see DEC-058).
     """
 
     def __init__(
         self,
         session_store: SessionStore,
         llm_client: LLMClientProtocol,
+        graph_db: GraphDB,
+        settings: Settings,
         turn_threshold: int,
         clear_turns_after: bool = False,
         max_tokens: int = 300,
@@ -64,6 +74,8 @@ class MemoryConsolidationEngine:
         Args:
             session_store: SessionStore to read dialogue turns from.
             llm_client: LLM adapter for generating the summary paragraph.
+            graph_db: GraphDB driver for opening per-task Neo4j sessions in run_tick.
+            settings: Application settings (supplies MAX_CONCURRENT_TICKS).
             turn_threshold: Minimum turn count before consolidation triggers.
             clear_turns_after: When True, clears consolidated turns from the store.
             max_tokens: Maximum tokens to generate in the summarisation call.
@@ -71,6 +83,8 @@ class MemoryConsolidationEngine:
         """
         self._session_store = session_store
         self._llm_client = llm_client
+        self._graph_db = graph_db
+        self._settings = settings
         self._turn_threshold = turn_threshold
         self._clear_turns = clear_turns_after
         self._max_tokens = max_tokens
@@ -94,7 +108,7 @@ class MemoryConsolidationEngine:
         returns None on failure so the caller can continue safely.
 
         Args:
-            session: Active Neo4j async session.
+            session: Active Neo4j async session (must not be shared concurrently).
             npc_id: ID of the NPC whose turns to consolidate.
             game_time: Game-time snapshot at moment of consolidation.
 
@@ -163,28 +177,59 @@ class MemoryConsolidationEngine:
 
         return memory_id
 
+    async def _consolidate_with_own_session(
+        self,
+        sem: asyncio.Semaphore,
+        npc_id: str,
+        game_time: TimePoint,
+    ) -> str | None:
+        """Acquire the semaphore then open a fresh session and consolidate one NPC.
+
+        Each invocation opens its own Neo4j session to avoid concurrent-use
+        violations (Neo4j AsyncSession is not concurrency-safe). The semaphore
+        caps the number of simultaneously open LLM + graph connections.
+
+        Args:
+            sem: Shared semaphore bounding concurrent tasks.
+            npc_id: NPC to consolidate.
+            game_time: Game-time snapshot passed through to consolidate().
+
+        Returns:
+            Memory ID if consolidation occurred, else None.
+        """
+        async with sem:
+            async with self._graph_db.get_session() as session:
+                return await self.consolidate(session, npc_id=npc_id, game_time=game_time)
+
     async def run_tick(
         self,
-        session: AsyncSession,
+        _session: Any = None,
         *,
         game_time: TimePoint,
     ) -> dict:
-        """Consolidate memories for all NPCs with enough session turns.
+        """Consolidate memories for all eligible NPCs in parallel.
 
-        Called by the tick scheduler on its configured cadence. Iterates all
-        NPCs whose turn count meets the threshold and calls consolidate for each.
+        Called by the tick scheduler on its configured cadence. Fans out one
+        coroutine per eligible NPC, bounded by
+        asyncio.Semaphore(settings.MAX_CONCURRENT_TICKS). Each coroutine opens
+        its own Neo4j session from the injected GraphDB driver (see DEC-058).
+
+        The ``_session`` positional argument is accepted for backward-compatibility
+        with callers that follow the ``run_tick(session, *, game_time)`` contract
+        defined on BaseEngine, but it is unused here — each parallel task manages
+        its own session.
 
         Args:
-            session: Active Neo4j async session.
+            _session: Ignored. Kept for BaseEngine interface compatibility.
             game_time: Current game-time snapshot.
 
         Returns:
             Dict with ``consolidated`` (list of npc_ids whose memory was created).
         """
         npc_ids = await self._session_store.get_active_npc_ids(self._turn_threshold)
-        consolidated: list[str] = []
-        for npc_id in npc_ids:
-            memory_id = await self.consolidate(session, npc_id=npc_id, game_time=game_time)
-            if memory_id is not None:
-                consolidated.append(npc_id)
+        sem = asyncio.Semaphore(self._settings.MAX_CONCURRENT_TICKS)
+        results = await asyncio.gather(
+            *(self._consolidate_with_own_session(sem, n, game_time) for n in npc_ids)
+        )
+        consolidated = [n for n, mid in zip(npc_ids, results) if mid is not None]
         return {"consolidated": consolidated}
