@@ -120,8 +120,8 @@ Verification: adversarial eval with embedded forged fields must not recite them.
 Effort: M · Depends on: SEV-01 (need real assertions to prove the fix).
 
 ---
-**[FIXED 2026-06-04] FINDING [SEV-04]: Cypher and transaction control are pervasive outside `graph/` — 16+ engine files run raw Cypher; engines and every `graph/` sub-writer open/commit their own transactions**
-Severity: HIGH · Confidence: Confirmed · **DONE** (all engine domains migrated: gossip, story_pacing, routine, skill, military, clique, idempotency, events, faction_politics, quest_generation; new graph/ files: event_queries, faction_politics_queries, quest_generation_queries; world_reader/world_writer accept AsyncTransaction; tx ownership in engines deferred to SEV-30)
+**[PARTIAL 2026-06-04] FINDING [SEV-04]: Cypher and transaction control are pervasive outside `graph/` — 16+ engine files run raw Cypher; engines and every `graph/` sub-writer open/commit their own transactions**
+Severity: HIGH · Confidence: Confirmed · **PARTIAL** (relabeled from DONE by the final review, L2-01). The bulk of engine query helpers were migrated to `graph/<domain>_queries.py`, BUT residual raw Cypher remains in `engines/interaction/quest_verifier.py`, `world/`, `scheduler/`, and `retrieval/`, and engine-owned `begin_transaction`/`commit` remain in `event_handler`, `quest_lifecycle_engine`, and `faction_politics_engine`. This residue is grandfathered in `scripts/rules_baseline.txt` (R005) and tracked by ISSUE-053/ISSUE-058; tx ownership is deferred to SEV-30. The verification command below still returns ~30 hits — the original "DONE" status overstated coverage.
 Category: layer-violation / data-integrity
 Absorbs: ARCH-01, ARCH-06, GRAPH-01, GRAPH-02, ARCH-09
 Rule violated: "No Neo4j queries outside `graph/`"; "graph_writer.py is the only file that opens and commits transactions; sub-writers receive `AsyncSession`"

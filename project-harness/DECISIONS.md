@@ -646,3 +646,9 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Context:** SEV-19 added resolve_log_prompts() (6-line helper) to dialogue_handler.py, pushing it from ~306 to 312 lines. All content is the single DialogueHandler orchestration class and its helpers.
 **Decision:** Waiver. Extracting a 6-line helper into a separate module creates more indirection than value. The cohesion is high — resolve_log_prompts reads Settings fields used throughout the same file.
 **Consequence:** make check-rules-update must baseline dialogue_handler.py.
+
+## DEC-069: `observability/` is a non-code asset directory, excluded from the layer-rank model (L2-02)
+**Date:** 2026-06-04
+**Context:** `src/npc_engine/observability/` is absent from the CLAUDE.md layer model. The final review (L2-02) found it contains zero Python — only `README.md`, `staging_alert_rules.yaml`, `staging_dashboard.json`. It imports nothing and is imported by nothing, so `scripts/check_layers.py` (which walks `*.py`) never sees it and it cannot produce a layer violation.
+**Decision:** Treat `observability/` as a non-code asset directory (dashboards/alert rules), explicitly outside the import-rank layer model — the same status as `prompts/`. No rank is assigned because it ships no Python. If Python ever lands there (e.g. a metrics exporter), assign it rank 1 (config/utils peer) and revisit.
+**Consequence:** The layer model need not enumerate `observability/`. A reviewer finding an unranked `src/npc_engine/` subdir should consult this entry.

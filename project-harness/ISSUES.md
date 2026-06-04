@@ -668,6 +668,22 @@ current mapping is good enough for demo badge display and does not affect correc
 **Why deferred:** Not needed for current demo or review hardening; design-phase only.
 **To fix:** Add a `PART_OF` directed edge type to `type_registry/`; update `graph/location_writer.py` to accept an optional `parent_id`; update `demo_game/seed.py` and eval seeders to wire the hierarchy. Add retrieval helpers for ancestor/descendant traversal.
 
+## ISSUE-058: SEV-04 residual — raw Cypher + engine-owned transactions outside `graph/`
+**Found:** 2026-06-04, during final review (L2-01)
+**Severity:** P2 (architecture debt; grandfathered, not blocking)
+**Where:** `engines/interaction/quest_verifier.py`; `world/world_reader.py`,`world/world_writer.py`; `scheduler/tick_scheduler.py`,`scheduler/tick_lease.py`; `retrieval/graph_rag.py`,`retrieval/embedding_reconciler.py`; engine-owned `begin_transaction`/`commit` in `engines/events/event_handler.py`, `engines/quest/quest_lifecycle_engine.py`, `engines/faction_politics/faction_politics_engine.py`
+**Description:** SEV-04 was relabeled DONE→PARTIAL: the bulk of engine query helpers moved to `graph/<domain>_queries.py`, but the above raw Cypher and engine-owned transactions remain. `rg "MATCH \(|begin_transaction|\.commit\(" src/npc_engine/engines src/npc_engine/world` still returns ~30 hits.
+**Why deferred:** Grandfathered in `scripts/rules_baseline.txt` (R005); `make check` is honest (passes by baseline). Relocating `world/`/`scheduler/` own-label Cypher may warrant a DECISIONS carve-out rather than a move. Transaction-ownership centralization is tracked by SEV-30.
+**To fix:** (1) Relocate `quest_verifier.py` Cypher to `graph/quest_verification_queries.py`. (2) Under SEV-30, hoist engine `begin_transaction`/`commit` into a `graph/`-owned coordinator. (3) For `world/`+`scheduler/` own-label queries, either relocate or add a DECISIONS entry permitting each package its own-label Cypher; then ratchet `rules_baseline.txt` down.
+
+## ISSUE-059: tier-A "mandatory" dialogue context is unbounded → TokenBudgetExceededError → canned dialogue (L9-04 root cause)
+**Found:** 2026-06-04, during final review Batch 4 live diagnosis
+**Severity:** P1 (a knowledge-rich NPC's dialogue silently degrades to canned — the headline gossip/memory features stop surfacing)
+**Where:** `src/npc_engine/retrieval/context_builder.py::build_serialized_context`, `src/npc_engine/retrieval/context_budget_enforcer.py::fill_to_budget`
+**Description:** Live diagnosis of the failing eval-llm-demo gossip tests showed the dialogue pipeline raising `TokenBudgetExceededError: Mandatory context (tier0+tierA) requires 20759 tokens, exceeding prompt_token_budget 2896`. Both degradation tiers fail on this and serve a canned response (`degradation_level=canned`), so the planted rumor never reaches mira's dialogue and the eval judge fails. Root cause is NOT the gossip propagation, the prompt-injection fence (Batch 3), or a cold model — it is that tier-A (mandatory) context is not bounded: a gossip-hub NPC accumulates KNOWS_ABOUT/event entries until tier0+tierA (20759 tokens) dwarfs the budget (2896, derived from OLLAMA_CONTEXT_LENGTH=4096-1200). SEV-07 correctly made this fail loudly but did not bound tier-A, so once knowledge accumulates dialogue is always canned. Magnitude is partly inflated by accumulated test state across repeated seed/plant/advance cycles, but the unbounded-tier-A design issue is real and will recur for any active NPC.
+**Why deferred:** The correct fix (curate/cap tier-A to the top-K most relevant+recent mandatory items so it always fits the budget, trimming the rest into optional tier-B) is a context-assembly redesign needing its own TDD and live eval re-verification — too large to land safely inside the security/build remediation batch.
+**To fix:** (1) Bound tier-A in `context_builder`/`context_budget_enforcer`: rank mandatory items (recency + relevance to the player turn) and keep only what fits a configured tier-A sub-budget; demote the remainder to tier-B (already trimmable). (2) Add a unit test asserting tier0+tierA never exceeds the budget for a high-knowledge NPC fixture. (3) Re-run `make eval-llm-demo` on a fresh world and confirm mira surfaces the planted rumor. (4) Consider whether the planted-rumor KNOWS_ABOUT should be prioritized into tier-A so gossip consequences are guaranteed to surface.
+
 <!--
 Template for a new issue:
 

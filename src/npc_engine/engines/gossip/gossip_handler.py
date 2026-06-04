@@ -159,7 +159,7 @@ class GossipHandler:
             pair_lookup[key] = (sharer, receiver, faction_ctx)
             pair_params.append({"sharer_id": sharer["id"], "receiver_id": receiver["id"]})
 
-        # 1 session.run: fetch event + trust for all pairs.
+        # 1 batched graph read (via select_batch_event_trust): event + trust for all pairs.
         batch_rows = await select_batch_event_trust(session, pairs=pair_params)
         event_trust_map: dict[tuple[str, str], dict] = {
             (row["sharer_id"], row["receiver_id"]): row
@@ -173,7 +173,7 @@ class GossipHandler:
             tick_id=tick_id,
         )
 
-        # 1 session.run: write all propagations in one UNWIND MERGE.
+        # 1 batched graph write (via write_batch_knowledge_propagation): one UNWIND MERGE.
         await write_batch_knowledge_propagation(session, writes=write_params)
 
         # Conditional per-pair side effects (rumor, emotion, log, embedding invalidation).

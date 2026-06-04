@@ -53,7 +53,7 @@ make demo-snapshot            # snapshot current demo state to cache
 | `demo_game/seed.py` | Demo world seeder (5 NPCs, 3 locations, 3 factions) |
 | `seeds/worlds/seed_village_world.py` | Village eval world (vw_ prefix) |
 | `seeds/worlds/seed_tavern_world.py` | Tavern eval world (tw_ prefix) |
-| `prompts/` | All LLM prompt YAML files (no prompt strings in Python) |
+| `src/npc_engine/prompts/` | All runtime LLM prompt YAML files (no prompt strings in Python). Eval-judge prompts live under `src/npc_engine/prompts/eval/`. |
 | `src/npc_engine/engines/` | Domain engines (dialogue, gossip, emotion, quest) |
 | `docs/DEMO_SCRIPT.md` | Scripted 5-minute demo scenario |
 | `project-harness/ROADMAP.md` | Two-week hackathon plan |

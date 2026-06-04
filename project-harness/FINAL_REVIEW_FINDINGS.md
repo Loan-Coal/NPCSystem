@@ -61,7 +61,7 @@ Legend: **Fix now** = Phase 2 this session · **Log** = ISSUES.md, defer · **De
 |----|-----|-------|------|-------------|
 | L9-01 | 🔴CRIT | Fresh build can't boot — `game_schema.yaml` deleted by SEV-24 | live | **Fix now** (restored; commit + CI boot gate) |
 | L9-02 | HIGH | `make demo-run` breaks at ACT 1 — world_state partial-update 422 | live | **Fix now** |
-| L9-04 | HIGH | Eval gossip-propagation guard tests fail (rumor not surfaced) | live | **Fix now** (diagnose first) |
+| L9-04 | HIGH | Eval gossip guard tests fail — DIAGNOSED: tier-A context unbounded → TokenBudgetExceededError → canned dialogue (not gossip/fence/model). See ISSUE-059 | live | **Logged** (context-builder redesign, ISSUE-059) |
 | L4-01 | HIGH | 8 unit failures (ISSUE-056) — `make check` red; 4 test-only root causes | tests | **Fix now** |
 | L1-02 | HIGH | `graph_error_to_http` leaks node_type/node_id in 19 handlers (SEV-16 gap) | sec | **Fix now** |
 | L1-01 | HIGH | WS per-key connection cap defined but never enforced (SEV-20 gap) | sec | **Fix now** |

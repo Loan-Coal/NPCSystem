@@ -18,6 +18,7 @@ Rules:
   R003 swallow     - `except ...: pass` (CLAUDE.md "never swallow errors")
   R004 raise-exc   - `raise Exception(` (CLAUDE.md "custom exception hierarchy only")
   R005 cypher-leak - Cypher / session.run / begin_transaction outside graph/ (layer rule)
+  R006 fn-length   - function/method over 40 lines (CLAUDE.md "no function exceeds 40 lines")
   R007 demo-import - demo_game importing npc_engine (zero-src-import contract)
 
 Signatures are file-level ("RULE|relative/path") so they stay stable across edits.
@@ -26,6 +27,7 @@ Signatures are file-level ("RULE|relative/path") so they stay stable across edit
 from __future__ import annotations
 
 import argparse
+import ast
 import re
 import sys
 from pathlib import Path
@@ -34,6 +36,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 BASELINE_PATH = Path(__file__).resolve().parent / "rules_baseline.txt"
 
 MAX_NON_TEST_LINES = 300
+MAX_FUNCTION_LINES = 40  # CLAUDE.md: "no function or method may exceed 40 lines"
 
 # Cypher / transaction patterns that must live in graph/ only.
 _CYPHER_RE = re.compile(r"\b(?:MATCH|MERGE|CREATE)\s*\(|session\.run\(|tx\.run\(|begin_transaction\(")
@@ -69,6 +72,36 @@ def _iter_py(root: Path) -> list[Path]:
     return sorted(base.rglob("*.py")) if base.exists() else []
 
 
+def _oversized_functions(text: str, rel: str) -> set[str]:
+    """Return R006 signatures for functions/methods exceeding MAX_FUNCTION_LINES.
+
+    Signature is `R006|path::Qualified.name` (no line numbers) so it stays stable
+    across edits that keep the function over-limit; a newly oversized function
+    produces a new signature the ratchet will flag.
+    """
+    out: set[str] = set()
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return out
+
+    def walk(node: ast.AST, prefix: str) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                span = (child.end_lineno or child.lineno) - child.lineno + 1
+                qual = f"{prefix}{child.name}"
+                if span > MAX_FUNCTION_LINES:
+                    out.add(f"R006|{rel}::{qual}")
+                walk(child, f"{qual}.")
+            elif isinstance(child, ast.ClassDef):
+                walk(child, f"{prefix}{child.name}.")
+            else:
+                walk(child, prefix)
+
+    walk(tree, "")
+    return out
+
+
 def _collect() -> set[str]:
     """Scan the tree and return the set of current rule-violation signatures."""
     found: set[str] = set()
@@ -85,6 +118,7 @@ def _collect() -> set[str]:
             continue
         text = _read(path)
         rel = _rel(path)
+        found |= _oversized_functions(text, rel)
         if _PRINT_RE.search(text):
             found.add(f"R002|{rel}")
         if _SWALLOW_RE.search(text):
@@ -124,6 +158,7 @@ _RULE_HELP = {
     "R003": "swallowed error (`except: pass`) - log-and-(re)raise",
     "R004": "raise Exception(...) - use a typed error from utils/errors.py",
     "R005": "Cypher/transaction outside graph/ - move it into graph/<domain>_queries.py",
+    "R006": "function/method exceeds 40 lines - extract a named helper",
     "R007": "demo_game imports npc_engine - use the HTTP client only",
 }
 
