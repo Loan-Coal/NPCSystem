@@ -609,8 +609,22 @@ class EngineClient:
     # ------------------------------------------------------------------
 
     def _raise_for_status(self, response: httpx.Response, context: str) -> None:
-        """Raise EngineClientError when the response status is 4xx or 5xx."""
+        """Raise EngineClientError when the response status is 4xx or 5xx.
+
+        Reads the canonical ErrorEnvelope shape: ``{"error": {"code": ..., "message": ...}}``.
+
+        Args:
+            response: HTTP response to inspect.
+            context: Human-readable description of the call (method + path).
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
         if response.status_code >= 400:
-            raise EngineClientError(
-                f"{context} → HTTP {response.status_code}: {response.text[:200]}"
-            )
+            try:
+                body = response.json()
+                error_block = body.get("error") or {}
+                msg = error_block.get("message") or response.text[:200]
+            except Exception:
+                msg = response.text[:200]
+            raise EngineClientError(f"{context} → HTTP {response.status_code}: {msg}")

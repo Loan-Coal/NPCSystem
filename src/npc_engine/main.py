@@ -15,8 +15,11 @@ import logging
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from starlette.responses import JSONResponse
 
+from npc_engine.api.error_envelope import ErrorBody, ErrorDetail, ErrorEnvelope
 from npc_engine.api.rate_limit import RateLimitMiddleware
 from npc_engine.api.routes.action import router as action_router
 from npc_engine.api.routes.batch import router as batch_router
@@ -80,9 +83,78 @@ from npc_engine.engines.llm_config_loader import validate_all_engine_llm_configs
 from npc_engine.engines.idempotency.cleanup_scheduler import IdempotencyCleanupScheduler
 from npc_engine.retrieval.embedding_reconciler import EmbeddingReconciler
 from npc_engine.scheduler.tick_lease import TickLeaseRepository
-from npc_engine.utils.logging import configure_logging
+from npc_engine.utils.logging import configure_logging, get_logger
 
 _logger = logging.getLogger(__name__)
+_handler_logger = get_logger(__name__)
+
+
+async def _validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Convert FastAPI RequestValidationError to a canonical ErrorEnvelope (422).
+
+    Args:
+        request: Incoming FastAPI request.
+        exc: The validation exception raised by FastAPI.
+
+    Returns:
+        JSONResponse with ErrorEnvelope shape and HTTP 422 status.
+    """
+    details = [
+        ErrorDetail(field=".".join(str(s) for s in e["loc"]), reason=e["msg"])
+        for e in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=422,
+        content=ErrorEnvelope(
+            error=ErrorBody(
+                code="validation_error",
+                message="request validation failed",
+                details=details,
+            )
+        ).model_dump(),
+    )
+
+
+async def _http_error_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    """Convert FastAPI HTTPException to a canonical ErrorEnvelope.
+
+    Args:
+        request: Incoming FastAPI request.
+        exc: The HTTP exception raised by route handlers or middleware.
+
+    Returns:
+        JSONResponse with ErrorEnvelope shape and the exception's status code.
+    """
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ErrorEnvelope(
+            error=ErrorBody(
+                code=f"http_{exc.status_code}",
+                message=str(exc.detail) if exc.detail else "error",
+            )
+        ).model_dump(),
+    )
+
+
+async def _internal_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Convert unhandled exceptions to a canonical ErrorEnvelope (500).
+
+    Never leaks stack traces or internal details to the caller.
+
+    Args:
+        request: Incoming FastAPI request.
+        exc: The unhandled exception.
+
+    Returns:
+        JSONResponse with ErrorEnvelope shape and HTTP 500 status.
+    """
+    _handler_logger.error("unhandled_exception", extra={"exc": str(exc)})
+    return JSONResponse(
+        status_code=500,
+        content=ErrorEnvelope(
+            error=ErrorBody(code="internal_error", message="internal error")
+        ).model_dump(),
+    )
 
 
 @asynccontextmanager
@@ -193,6 +265,11 @@ def create_app() -> FastAPI:
     configure_logging(level=settings.LOG_LEVEL)
 
     app = FastAPI(title="NPC Engine", version="0.1.0", lifespan=lifespan)
+
+    # Exception handlers — registered before middleware so they apply to all errors.
+    app.add_exception_handler(RequestValidationError, _validation_error_handler)
+    app.add_exception_handler(HTTPException, _http_error_handler)
+    app.add_exception_handler(Exception, _internal_error_handler)
 
     # Middleware is applied in reverse registration order (last added = outermost).
     # RateLimitMiddleware is added first so it runs AFTER auth (inner layer).

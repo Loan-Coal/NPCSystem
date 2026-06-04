@@ -89,7 +89,7 @@ def test_mutating_request_without_x_idempotency_key_returns_400_idempotency_key_
     response = client.post("/v1/dialogue", headers=AUTH_HEADER)
 
     assert response.status_code == 400
-    assert response.json()["error"] == "IDEMPOTENCY_KEY_REQUIRED"
+    assert response.json()["error"]["code"] == "IDEMPOTENCY_KEY_REQUIRED"
 
 
 def test_mutating_request_with_invalid_idempotency_key_returns_422() -> None:
@@ -103,7 +103,7 @@ def test_mutating_request_with_invalid_idempotency_key_returns_422() -> None:
     )
 
     assert response.status_code == 422
-    assert response.json()["error"] == "IDEMPOTENCY_KEY_INVALID"
+    assert response.json()["error"]["code"] == "IDEMPOTENCY_KEY_INVALID"
 
 
 def test_mutating_request_with_valid_uuid_v4_key_passes() -> None:
@@ -159,7 +159,7 @@ def test_idempotency_error_message_uses_configured_header_name() -> None:
     response = client.post("/v1/dialogue", headers=AUTH_HEADER)
 
     assert response.status_code == 400
-    assert response.json()["message"] == f"{custom_header_name} header is required."
+    assert response.json()["error"]["message"] == f"{custom_header_name} header is required."
 
 
 def test_preflight_replay_returns_cached_response_without_calling_route() -> None:
@@ -202,7 +202,7 @@ def test_preflight_conflict_returns_409_contract_error() -> None:
     )
 
     assert response.status_code == 409
-    assert response.json()["error"] == "IDEMPOTENCY_KEY_CONFLICT"
+    assert response.json()["error"]["code"] == "IDEMPOTENCY_KEY_CONFLICT"
 
 
 def test_preflight_in_flight_returns_409_contract_error() -> None:
@@ -223,7 +223,7 @@ def test_preflight_in_flight_returns_409_contract_error() -> None:
     )
 
     assert response.status_code == 409
-    assert response.json()["error"] == "IDEMPOTENCY_IN_FLIGHT"
+    assert response.json()["error"]["code"] == "IDEMPOTENCY_IN_FLIGHT"
 
 
 def test_preflight_proceed_triggers_finalize_after_route_execution() -> None:

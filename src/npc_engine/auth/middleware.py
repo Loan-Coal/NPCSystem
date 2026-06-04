@@ -14,6 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
 from npc_engine.auth.api_key import resolve_scope_from_authorization
+from npc_engine.api.error_envelope import ErrorBody, ErrorEnvelope
 from npc_engine.auth.middleware_helpers import (
     DOCS_PATHS,
     HEALTH_PATH,
@@ -108,7 +109,12 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                 api_v1_prefix=self._settings.API_V1_PREFIX,
             )
             if required_scope and not has_scope(granted_scope=granted_scope, required_scope=required_scope):
-                response = JSONResponse(status_code=HTTP_STATUS_FORBIDDEN, content={"detail": "Forbidden"})
+                response = JSONResponse(
+                    status_code=HTTP_STATUS_FORBIDDEN,
+                    content=ErrorEnvelope(
+                        error=ErrorBody(code="http_403", message="Forbidden")
+                    ).model_dump(),
+                )
                 return _finalize_validation_failure_response(
                     request=request,
                     request_id=request_id,
@@ -119,7 +125,12 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                 )
             request.state.api_scope = granted_scope
         except AuthError:
-            response = JSONResponse(status_code=HTTP_STATUS_UNAUTHORIZED, content={"detail": "Unauthorized"})
+            response = JSONResponse(
+                status_code=HTTP_STATUS_UNAUTHORIZED,
+                content=ErrorEnvelope(
+                    error=ErrorBody(code="http_401", message="Unauthorized")
+                ).model_dump(),
+            )
             return _finalize_validation_failure_response(
                 request=request,
                 request_id=request_id,
