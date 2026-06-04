@@ -99,6 +99,8 @@ class Settings(BaseSettings):
     CONSOLIDATION_TURN_THRESHOLD: int = 10
     CONSOLIDATION_CLEAR_TURNS: bool = False
 
+    STRUCTURED_OUTPUT_TEMPERATURE: float = 0.1
+
     MAX_CONCURRENT_TICKS: int = 20
 
     DISTRIBUTED_TICK_LEASE_ENABLED: bool = True

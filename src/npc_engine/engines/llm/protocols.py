@@ -65,6 +65,11 @@ class LLMClientProtocol(Protocol):
         Raises:
             LLMTimeoutError: If the request exceeds the configured timeout.
             LLMRequestError: If the backend returns an error or invalid/non-dict JSON.
+
+        Note:
+            Callers (e.g. DialogueLLMClient) perform one repair retry when
+            ValidationError is raised. A WARNING is logged per failed attempt;
+            an ERROR is logged when the canned fallback is ultimately served.
         """
 
     def stream(
