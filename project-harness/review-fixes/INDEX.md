@@ -19,7 +19,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - SEV-18 DONE: degradation/memory_consolidation log warnings; gossip rumor-record now re-raises (not atomic — defer to SEV-04); TTS logs warning + increments `tts_failures_total`. Tests: `tests/unit/test_error_swallowing_sev18.py` (patch logger directly — caplog fails due to `propagate=False`).
 - SEV-02 DONE: `game_controller._dispatch_proposal` now calls `client.post_interaction(player_id, npc_id, proposal_dict)`; `run.py` uses `DEMO_CACHE_VERSION` from `demo_game/constants.py`. Test: `tests/unit/test_sev02_no_engine_imports.py`.
 - SEV-13 DONE: `_WORLD_STATE_ID="world"` in seed.py; `put_world_state` now sends `id="world"` and drops faction_standings/time_of_day/weather clobber. SEV-11 (game losable/winnable) builds on this same world-state arc.
-- Hard ordering: **SEV-31 → SEV-04 → {SEV-08, SEV-30, SEV-12}**; do SEV-42 before SEV-23 (avoids moving reindex_job_service twice).
+- Hard ordering: **SEV-31 → SEV-04 → {SEV-08, SEV-30, SEV-12}**; SEV-42 DONE so SEV-23 ordering constraint satisfied.
 - SEV-05 DONE: `EmotionStore.get/set` and all `SessionStore` mutation methods are now `async def` + `asyncio.Lock`. `EmotionUpdater` methods also async. Callers updated: `dialogue_handler`, `gossip_handler`, `mood_contagion_engine`, `memory_consolidation_engine`, `npc_state` route. SEV-06 (Semaphore fan-out) follows same scheduler path — no further interface changes needed.
 - **SEV-10 APPROVED**: schema change confirmed. api_seeder idempotency strategy still open — see FIX-SEV-10.md (get-then-skip vs client-supplied stable id).
 - **SEV-24 APPROVED**: delete 6 nested infra files under src/npc_engine/. **SEV-12 still needs DECISIONS + SEV-04 + SEV-10**.
@@ -52,7 +52,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - [x] **FIX-SEV-31** — Layer model + contract checker · MEDIUM · M · deps: none → **blocks SEV-04**
 - [ ] **FIX-SEV-04** — Move Cypher + transactions into `graph/` · HIGH · L · deps: SEV-31; folds in SEV-17, SEV-30
 - [x] **FIX-SEV-14** — Pydantic exit schemas + mypy burn-down · HIGH · L · deps: none; completes SEV-15 gating
-- [ ] **FIX-SEV-10** — Core-node constraints + seeder idempotency · HIGH · M · deps: approved (see FIX-SEV-10.md for open api_seeder idempotency strategy Q)
+- [x] **FIX-SEV-10** — Core-node constraints + seeder idempotency · HIGH · M · deps: approved (see FIX-SEV-10.md for open api_seeder idempotency strategy Q)
 - [ ] **FIX-SEV-29** — Batch N+1 graph queries (gossip + embedding reconciler) · MEDIUM · M · deps: none
 
 ### Block E — product & demo
@@ -61,21 +61,21 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - [x] **FIX-SEV-11** — Make game losable/winnable; fix attribution/neutral bribes · HIGH · M · deps: none
 - [ ] **FIX-SEV-12** — Multi-tenant / world isolation · HIGH · XL · **deps: DECISIONS approval + SEV-04 + SEV-10**
 - [x] **FIX-SEV-28** — WS recv timeout + watchdog · MEDIUM · S · deps: none
-- [ ] **FIX-SEV-33** — Consistent error envelope for integrators · MEDIUM · M · deps: none
+- [x] **FIX-SEV-33** — Consistent error envelope for integrators · MEDIUM · M · deps: none
 - [x] **FIX-SEV-34** — Fix stale README + command table · MEDIUM · S · deps: none
 
 ### Block F — hygiene & docs (low-risk, batchable)
 - [x] **FIX-SEV-24** — Delete stale nested infra files under `src/npc_engine/` · MEDIUM · S · deps: approved
 - [x] **FIX-SEV-26** — Repo hygiene: git rm cached logs; fix .gitignore · MEDIUM · S · deps: none
 - [ ] **FIX-SEV-23** — Split unwaived over-300-line files · MEDIUM · L · deps: none (do SEV-42 first to avoid moving reindex_job_service twice)
-- [ ] **FIX-SEV-27** — Structured-output reliability (temperature + schema + retry) · MEDIUM · M · deps: SEV-01 done
+- [x] **FIX-SEV-27** — Structured-output reliability (temperature + schema + retry) · MEDIUM · M · deps: SEV-01 done
 - [ ] **FIX-SEV-32** — Bulk-migrate module docstrings to canonical format · MEDIUM · L · deps: none
-- [ ] **FIX-SEV-35** — Unify `delta_ticks` bound to `MAX_DELTA_TICKS=1000` · LOW · S · deps: none
+- [x] **FIX-SEV-35** — Unify `delta_ticks` bound to `MAX_DELTA_TICKS=1000` · LOW · S · deps: none
 - [ ] **FIX-SEV-36** — Separate gossip distortion probability from confidence · LOW · M · deps: none (shock behavior intentional — see brief)
 - [ ] **FIX-SEV-37** — Demo low-severity cluster (magic strings, print, config, QUIT) · LOW · S · deps: none
 - [ ] **FIX-SEV-38** — Eval-matcher weaknesses + mock LSP · LOW · M · deps: none
 - [ ] **FIX-SEV-39** — Targeted tests for worst-covered risk modules · LOW · L · deps: none
-- [ ] **FIX-SEV-42** — Rename duplicate llm_config_loader; relocate reindex_job_service · LOW · S · deps: none
+- [x] **FIX-SEV-42** — Rename duplicate llm_config_loader; relocate reindex_job_service · LOW · S · deps: none
 - [ ] **FIX-SEV-43** — Contract guards: assert test paths exist + parse symbols · LOW · M · deps: none
 - *(SEV-30 event atomicity — MEDIUM · M · deps: SEV-04; no brief yet)*
 
