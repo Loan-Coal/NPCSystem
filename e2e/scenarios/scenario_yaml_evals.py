@@ -43,7 +43,7 @@ _EVALS_DIR = Path(__file__).resolve().parents[2] / "evals"
 if str(_EVALS_DIR) not in sys.path:
     sys.path.insert(0, str(_EVALS_DIR))
 
-from matchers import evaluate  # noqa: E402 (after sys.path patch)
+from matchers import EvalConfigError, JudgeResult, evaluate  # noqa: E402 (after sys.path patch)
 
 from e2e.scenarios.conftest import api_post  # noqa: E402
 
@@ -172,9 +172,19 @@ def test_eval_case(case: dict, http_client: httpx.Client) -> None:
     for exp in case.get("expected", []):
         if exp.get("skip_until_implemented"):
             continue
-        passed, detail = evaluate(expectation=exp, response=response_body)
-        if not passed:
-            failures.append(f"  [{exp['kind']}] FAIL: {detail}")
+        try:
+            result = evaluate(expectation=exp, response=response_body)
+        except EvalConfigError as cfg_exc:
+            failures.append(f"  [{exp.get('kind', 'unknown')}] EVAL_CONFIG_ERROR: {cfg_exc}")
+            continue
+        if isinstance(result, JudgeResult):
+            # tone_judge: score=None is infra-inconclusive (not a content fail).
+            if result.score is False:
+                failures.append(f"  [{exp['kind']}] FAIL: {result.error}")
+        else:
+            passed, detail = result
+            if not passed:
+                failures.append(f"  [{exp['kind']}] FAIL: {detail}")
 
     assert not failures, (
         f"{case_id} — {len(failures)} expectation(s) failed:\n" + "\n".join(failures)

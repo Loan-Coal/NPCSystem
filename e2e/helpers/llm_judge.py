@@ -15,35 +15,42 @@ Notes:
   - Tests marked @pytest.mark.llm_eval are probabilistic by nature.
   - A single retry is built in; treat failures as warnings, not hard blockers.
   - Uses the plain `generate()` call — does not require structured output.
+  - The judge prompt template is loaded from prompts/eval/tone_judge.yaml (SEV-38).
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
+
+import yaml
 
 
 @dataclass
 class JudgeVerdict:
+    """Verdict from the LLM judge.
+
+    Attributes:
+        passed: True if the LLM judged YES, False if NO.
+        reasoning: One-sentence explanation from the LLM.
+    """
+
     passed: bool
     reasoning: str
 
 
-_JUDGE_PROMPT = """\
-You are a strict YES/NO evaluator. Your task:
+_PROMPT_YAML_PATH = Path(__file__).resolve().parents[2] / "prompts" / "eval" / "tone_judge.yaml"
 
-Criterion: {criteria}
 
-Text to evaluate:
----
-{content}
----
+def _load_judge_prompt() -> str:
+    """Load the judge prompt template from prompts/eval/tone_judge.yaml."""
+    with _PROMPT_YAML_PATH.open(encoding="utf-8") as fh:
+        data = yaml.safe_load(fh)
+    return str(data["template"])
 
-Answer with exactly one of:
-YES - <one-sentence explanation>
-NO  - <one-sentence explanation>
 
-Do not write anything else."""
+_JUDGE_PROMPT: str = _load_judge_prompt()
 
 
 async def llm_judge(
