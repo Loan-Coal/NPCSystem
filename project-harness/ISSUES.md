@@ -634,6 +634,14 @@ current mapping is good enough for demo badge display and does not affect correc
 
 ---
 
+## ISSUE-055: `api_seeder.py` uses get-then-skip; consider client-supplied stable ids long-term
+**Found:** 2026-06-04, during SEV-10 planning
+**Severity:** P3 (nice-to-fix)
+**Where:** `data/api_seeder.py`; all typed admin endpoints that auto-generate IDs
+**Description:** SEV-10 implements idempotency via get-then-skip (mirror the village seeder). The architecturally correct solution for a multi-tenant middleware product is to let callers supply a stable `id` on creation endpoints and use `MERGE` instead of `CREATE` — this makes seeding and re-seeding fully deterministic without an extra GET round-trip, and aligns the API with idiomatic graph semantics. That change touches endpoint schemas and all callers and was deferred.
+**Why deferred:** Scope; get-then-skip is sufficient for current single-world demo use. Client-supplied ids requires coordinating endpoint schema changes with SEV-12 (multi-tenant) and SEV-33 (error envelope).
+**To fix:** Change typed admin endpoints (`/characters`, `/items`, `/beliefs`, `/goals`, `/secrets`, `/memories`, etc.) to accept an optional `id` field; use `MERGE (n {id: $id})` when provided. Apply same contract to `api_seeder.py`, `seed_village_world.py`, `demo_game/seed.py`. Document as the canonical seeding contract in `docs/API.md`.
+
 <!--
 Template for a new issue:
 

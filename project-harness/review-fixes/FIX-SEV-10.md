@@ -21,7 +21,7 @@ A single startup bootstrap creates `IS UNIQUE` constraints for all core labels; 
 1. Create `graph/schema_bootstrap.py` with `async def ensure_core_constraints(session)` issuing, for each of `Character, Event, Location, WorldState, Item, Quest, Faction`:
    `CREATE CONSTRAINT <name> IF NOT EXISTS FOR (n:<Label>) REQUIRE n.id IS UNIQUE`.
 2. `await ensure_core_constraints(...)` in the `main.py` lifespan alongside the lease/idempotency calls. Consolidate the relevant `scripts/migrations/` constraints into this path.
-3. Make `api_seeder.py` idempotent: either (a) `get_*`-then-skip mirroring the village seeder, or (b) make typed admin endpoints accept a client-supplied stable id and MERGE. Pick one and apply the same contract to all three seeders; update the `api_seeder` docstring.
+3. Make `api_seeder.py` idempotent using **get-then-skip** (mirrors `seed_village_world.py`): before each POST, call the corresponding GET endpoint with the stable name/id; if it returns a result, skip creation. Apply the same contract to all three seeders (`api_seeder.py`, `seed_village_world.py`, `demo_game/seed.py` — the latter two likely already do this; verify). Update the `api_seeder` docstring to document the contract. Note: ISSUE-055 tracks the long-term alternative (client-supplied stable ids + MERGE) for when SEV-12 multi-tenant work begins.
 
 ## Verification
 - Fresh `docker-compose up` + startup → `SHOW CONSTRAINTS` lists all core labels.
