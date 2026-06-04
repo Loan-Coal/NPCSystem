@@ -3,7 +3,8 @@ Module: seed_http
 Layer: data (tooling, not application code)
 Purpose: HTTP helpers for the world seeder — issue GET/POST requests to the API,
          track success/skip/failure counts, and expose existence checks.
-Dependencies: npc_engine.utils.logging (structured logging only — no domain imports).
+Does NOT: connect to Neo4j directly or import any npc_engine domain/engine code.
+Dependencies: npc_engine.utils.logging (structured logging only).
 Dependencies injected: base_url and api_key passed per call.
 Used by: data.api_seeder
 """

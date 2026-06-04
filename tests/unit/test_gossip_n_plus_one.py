@@ -125,9 +125,9 @@ async def test_gossip_tick_at_most_2_session_run_calls_for_3_pairs():
             "npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely",
             new_callable=AsyncMock,
         ),
-        patch("npc_engine.engines.gossip.gossip_handler.random") as mock_random,
+        patch("npc_engine.engines.gossip.gossip_handler.select_gossip_secret", new_callable=AsyncMock, return_value=None),
+        patch("npc_engine.engines.gossip.gossip_handler.propagate_secret", new_callable=AsyncMock),
     ):
-        mock_random.random.return_value = 1.0  # skip secret propagation branch
 
         await handler.run_tick(session=session, tick_id=1)
 
@@ -171,9 +171,9 @@ async def test_gossip_tick_result_counts_match_pairs():
             "npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely",
             new_callable=AsyncMock,
         ),
-        patch("npc_engine.engines.gossip.gossip_handler.random") as mock_random,
+        patch("npc_engine.engines.gossip.gossip_handler.select_gossip_secret", new_callable=AsyncMock, return_value=None),
+        patch("npc_engine.engines.gossip.gossip_handler.propagate_secret", new_callable=AsyncMock),
     ):
-        mock_random.random.return_value = 1.0
 
         result = await handler.run_tick(session=session, tick_id=5)
 
@@ -234,9 +234,9 @@ async def test_gossip_tick_skips_pairs_with_no_event():
             "npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely",
             new_callable=AsyncMock,
         ),
-        patch("npc_engine.engines.gossip.gossip_handler.random") as mock_random,
+        patch("npc_engine.engines.gossip.gossip_handler.select_gossip_secret", new_callable=AsyncMock, return_value=None),
+        patch("npc_engine.engines.gossip.gossip_handler.propagate_secret", new_callable=AsyncMock),
     ):
-        mock_random.random.return_value = 1.0
 
         result = await handler.run_tick(session=session, tick_id=1)
 

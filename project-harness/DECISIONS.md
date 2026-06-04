@@ -627,3 +627,15 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Decision:** No new field added. `compute_distortion_probability` takes a `base: float` parameter; callers pass `settings.GOSSIP_DISTORTION_BASE`.
 **Why:** Adding a duplicate config key with a different name would create ambiguity and require migration of all callers.
 **Consequence:** Future callers must use `settings.GOSSIP_DISTORTION_BASE`, not `BASE_DISTORTION_RATE`.
+
+## DEC-066: api_seeder.py waived at 306 lines (SEV-40)
+**Date:** 2026-06-04
+**Context:** SEV-40 added resolve_api_key() + get_logger import to api_seeder.py, pushing it from ~280 to 306 lines. The R002 baseline entry (pre-existing over-300) is now an R001 NEW violation because those 2 baseline resolutions were also counted.
+**Decision:** Waiver. All content is cohesive CLI seeder logic (seed data wiring, HTTP orchestration, key resolution). Splitting resolve_api_key to a new module is artificial — it directly uses the same logger and is called only once.
+**Consequence:** make check-rules-update must baseline api_seeder.py.
+
+## DEC-067: dialogue_handler.py waived at 312 lines (SEV-19)
+**Date:** 2026-06-04
+**Context:** SEV-19 added resolve_log_prompts() (6-line helper) to dialogue_handler.py, pushing it from ~306 to 312 lines. All content is the single DialogueHandler orchestration class and its helpers.
+**Decision:** Waiver. Extracting a 6-line helper into a separate module creates more indirection than value. The cohesion is high — resolve_log_prompts reads Settings fields used throughout the same file.
+**Consequence:** make check-rules-update must baseline dialogue_handler.py.
