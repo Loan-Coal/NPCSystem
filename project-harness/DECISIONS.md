@@ -233,15 +233,15 @@ to `QuestTradeController`.
 
 ---
 
-## DEC-016: context_builder.py accepted at 367 lines (300-line limit exception)
-**Date:** 2026-05-18
-**Context:** After Phase 6 additions (two-pass reranking, query expansion, trust scoring, second-hop events, quest state, cross-encoder gating), `context_builder.py` is 367 lines. CLAUDE.md hard limit is 300 lines.
+## DEC-016: context_builder.py accepted at ~464 lines (300-line limit exception, updated SEV-23)
+**Date:** 2026-05-18, updated 2026-06-04 (SEV-23)
+**Context:** After Phase 6 additions (two-pass reranking, query expansion, trust scoring, second-hop events, quest state, cross-encoder gating), `context_builder.py` was 367 lines. SEV-23 extracted `EmbeddingIndexProtocol` to `context_protocols.py` and removed backward-compat shims, but the file grew to ~464 lines due to accumulated context features. CLAUDE.md hard limit is 300 lines.
 **Options considered:**
-  1. Split `_build_secondary_tier_a_items(...)` — saves ~30 lines, adds ~20-line helper with 12 parameters. Net −10 lines; still over 300.
-  2. Extract Stage 4 gather into `_fetch_enrichment(...)` — saves 12 lines, adds 15-line helper. Net +3 lines; still over 300.
+  1. Split `_build_secondary_tier_a_items(...)` — saves ~30 lines, adds helper with 12 parameters.
+  2. Extract Stage 4 gather into `_fetch_enrichment(...)` — saves ~12 lines.
   3. Accept the overrun with a justifying comment and this entry.
 **Decision:** Option 3. `build_serialized_context` is a single async orchestration pipeline: every line is part of one logical flow. Splitting distributes one function across two modules with no encapsulation benefit.
-**Limit:** If it grows to 500 lines, split then — 367 is defensible, 500 is not.
+**Limit:** If it grows to 500 lines, split then — 464 is at the boundary; do not allow further growth.
 
 ---
 
@@ -600,3 +600,9 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Decision:** Waiver granted. Splitting is artificial.
 **Why:** execute_currency_transfer_in_tx shares _try_replay and _raise_transfer_failure private helpers with transfer_currency_atomic. Extracting it to a new module would require exposing those helpers or duplicating 40 lines of error-handling logic. The cohesion is high — all three functions implement the same atomic-write contract, differing only in who owns the transaction boundary. SEV-23 may revisit.
 **Consequence:** make check-rules-update must baseline currency_writer.py. SEV-23 may split if a natural boundary is found.
+
+## DEC-062: chapter_engine.py waived at ~322 lines (SEV-23 split)
+**Date:** 2026-06-04
+**Context:** SEV-23 extracted `_rule_based_label` → `chapter_labeler.py`, reducing chapter_engine.py from 347 to 322 lines. Still 22 lines over the 300-line limit.
+**Decision:** Waiver. The remaining 322 lines are a single cohesive `ChapterEngine` class; all six async methods share injected state (`_llm`, thresholds). Further splitting (e.g., extracting `_link_recent_events`) would move methods into module-level helpers that need to accept `self`-equivalent arguments, adding noise without encapsulation benefit.
+**Consequence:** `make check-rules` baseline must include chapter_engine.py. Will revisit if the class grows.

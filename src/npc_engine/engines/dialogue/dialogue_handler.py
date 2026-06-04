@@ -32,8 +32,8 @@ from npc_engine.engines.tts.protocols import TTSClientProtocol
 from npc_engine.engines.tts.voice_modulator import modulate as modulate_voice
 from npc_engine.engines.tts.voice_params import VoiceParams
 from npc_engine.graph.graph_reader import get_npc_voice_descriptor
-from npc_engine.retrieval.context_builder import EmbeddingIndexProtocol
 from npc_engine.retrieval.context_builder import build_serialized_context
+from npc_engine.retrieval.context_protocols import EmbeddingIndexProtocol
 from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache, PartialDialogueContextCache
 from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.utils.metrics import increment_metric

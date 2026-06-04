@@ -85,12 +85,7 @@
       "Bash(Select-Object FullName)",
       "Read(//tmp/**)",
       "PowerShell(cd \"C:\\\\Users\\\\lohan\\\\Documents\\\\hackathons\\\\NPCSystem\"; \\(Get-Content \"demo_game\\\\ui\\\\right_panel.py\"\\).Count; \\(Get-Content \"demo_game\\\\ui\\\\game_window.py\"\\).Count; \\(Get-Content \"demo_game\\\\client.py\"\\).Count)",
-      "Read(//c/Users/lohan/Documents/hackathons/NPCSystem/src/**)"
-    ],
-    "additionalDirectories": [
-      "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem",
-      "c:\\Users\\lohan\\.claude\\plans",
-      "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem\\.cache\\demo"
+      "Read(//c/Users/lohan/Documents/hackathons/NPCSystem/src/**)",
       "Bash(python -m pytest tests/unit/ -q --ignore=tests/unit/test_architecture_conformance.py)",
       "Bash(python -m pytest tests/unit/test_generic_graph_service.py::test_upsert_node_serializes_dict_fields_for_storage -q -s)",
       "Bash(python -m pytest tests/unit/test_quest_event_provenance_v14.py -q)",
@@ -108,6 +103,11 @@
       "Bash(xargs wc *)",
       "Bash(python -m pytest --tb=no -q)",
       "Bash(python -m pytest tests/unit/utils/ -v --tb=short)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem",
+      "c:\\Users\\lohan\\.claude\\plans",
+      "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem\\.cache\\demo"
     ]
   }
 }

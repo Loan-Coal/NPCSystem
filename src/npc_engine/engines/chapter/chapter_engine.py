@@ -4,9 +4,13 @@ Layer: engines
 Purpose: Detects chapter transitions via quest density and creates LLM-labeled CHAPTER nodes.
 Does NOT: perform graph writes directly — delegates to graph.chapter_writer.
 Dependencies: graph.chapter_queries, graph.chapter_writer, engines.llm.protocols,
-              common.yaml_utils
+              common.yaml_utils, engines.chapter.chapter_labeler
 Dependencies injected: LLMClientProtocol, AsyncSession (per call).
 Used by: scheduler.tick_scheduler, api.dependency_singletons
+
+NOTE: ~320 lines after extracting label_chapter_by_rules to chapter_labeler.py.
+ChapterEngine is a single cohesive class; six tightly-coupled async methods share
+injected state. Further splitting separates behaviour from state without gain. DEC-059.
 """
 
 from __future__ import annotations
@@ -36,6 +40,7 @@ from npc_engine.graph.chapter_writer import (
 )
 from npc_engine.config import get_settings
 from npc_engine.world.world_reader import get_world_state
+from npc_engine.engines.chapter.chapter_labeler import label_chapter_by_rules
 
 if TYPE_CHECKING:
     from npc_engine.engines.llm.protocols import LLMClientProtocol
@@ -260,7 +265,7 @@ class ChapterEngine:
             LOGGER.exception(
                 "LLM chapter labeling failed at tick %d — using rule-based fallback", tick_id
             )
-            return _rule_based_label(events)
+            return label_chapter_by_rules(events)
 
     async def _open_new_chapter(
         self,
@@ -315,33 +320,3 @@ class ChapterEngine:
                     chapter_id=chapter_id,
                     tick_id=tick_id,
                 )
-
-
-def _rule_based_label(events: list[dict]) -> dict:
-    """Return a deterministic chapter label based on dominant event types.
-
-    Args:
-        events: List of recent event dicts.
-
-    Returns:
-        Dict with ``title``, ``description``, ``theme``.
-    """
-    if not events:
-        return {
-            "title": "The Quiet Before",
-            "description": "A period of calm between greater storms.",
-            "theme": "calm",
-        }
-    dominant_type = events[0].get("event_type", "unknown")
-    theme_map = {
-        "battle": ("The Blood Tide", "War sweeps across the land.", "conflict"),
-        "assassination": ("Shadows Fall", "A blade in the dark changes everything.", "betrayal"),
-        "alliance": ("The Grand Accord", "Unlikely allies forge a new pact.", "alliance"),
-        "discovery": ("The Uncharted Path", "Ancient secrets come to light.", "discovery"),
-        "disaster": ("The Breaking Storm", "Nature itself turns against the realm.", "crisis"),
-    }
-    title, description, theme = theme_map.get(
-        dominant_type,
-        ("A Turning of the Tide", "Events shift the course of history.", "mystery"),
-    )
-    return {"title": title, "description": description, "theme": theme}

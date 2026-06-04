@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from npc_engine.engines.chapter.chapter_engine import ChapterEngine, _rule_based_label
+from npc_engine.engines.chapter.chapter_engine import ChapterEngine
+from npc_engine.engines.chapter.chapter_labeler import label_chapter_by_rules as _rule_based_label
 from npc_engine.engines.gossip.gossip_distort import gossip_distort
 
 

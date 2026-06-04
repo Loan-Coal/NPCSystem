@@ -20,7 +20,7 @@ from npc_engine.graph.political_queries import (
     get_heirs_for_character,
     get_vacant_inheritable_titles,
 )
-from npc_engine.graph.political_writer import grant_title
+from npc_engine.graph.political_title_writer import grant_title
 
 _LOGGER = logging.getLogger(__name__)
 

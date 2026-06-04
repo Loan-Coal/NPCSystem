@@ -3,20 +3,19 @@ Module: context_builder
 Layer: retrieval
 Purpose: Orchestrates context merge, relevance scoring, budget enforcement, and serialization.
 Does NOT: call LLM adapters.
-Dependencies injected: EmbeddingIndex.
+Dependencies injected: EmbeddingIndex (via EmbeddingIndexProtocol from context_protocols).
 Used by: engines.dialogue.dialogue_handler
 
-NOTE: This file exceeds the 300-line limit (currently ~367 lines). The single public function
-build_serialized_context is an async pipeline — every line is part of one cohesive orchestration
-flow. Splitting it would create helpers with no encapsulation value. See DECISIONS.md entry
-"context_builder.py exceeds 300-line limit (Phase 6)" for the full analysis.
+NOTE: ~460 lines after extracting EmbeddingIndexProtocol to context_protocols.py. The single
+public function build_serialized_context is an async pipeline — every line is part of one
+cohesive orchestration flow. Splitting it would create helpers with no encapsulation value.
+See DECISIONS.md DEC-016 (updated) and DEC-059.
 """
 
 from __future__ import annotations
 
 import logging
 import time
-from typing import Protocol
 
 from neo4j import AsyncSession
 
@@ -43,6 +42,7 @@ from npc_engine.graph.trust_queries import get_second_hop_events, get_trust_scor
 from npc_engine.graph.quest_queries import get_active_quest_for_player, get_offered_quests_for_npc
 from npc_engine.graph.interaction_queries import get_sellable_items_for_npc
 from npc_engine.retrieval.context_budget_enforcer import ContextCompressionCache, fill_to_budget
+from npc_engine.retrieval.context_protocols import EmbeddingIndexProtocol
 from npc_engine.retrieval.context_builder_helpers import (
     expand_query,
     normalize_ratio,
@@ -63,33 +63,11 @@ from npc_engine.world.time_utils import TimePoint
 from npc_engine.retrieval.context_utils import serialize_json
 from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache, PartialDialogueContextCache
 from npc_engine.retrieval.subgraph_retriever import assemble_tier_a_context
-from npc_engine.retrieval.vector_store_protocol import VectorSearchResult
 from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.utils.metrics import increment_metric
 from npc_engine.world.world_reader import get_world_state
 
 logger = logging.getLogger(__name__)
-
-
-class EmbeddingIndexProtocol(Protocol):
-    """Minimal protocol required by context builder."""
-
-    async def search(
-        self,
-        query: str,
-        top_k: int,
-        filter_ids: set[str] | None = None,
-    ) -> list[VectorSearchResult]:
-        """Return top-k semantic retrieval rows.
-
-        Args:
-            query: Text query to embed and search.
-            top_k: Maximum number of results to return.
-            filter_ids: When provided, restrict results to items with these IDs.
-
-        Returns:
-            List of VectorSearchResult dicts sorted by descending score.
-        """
 
 
 async def build_serialized_context(

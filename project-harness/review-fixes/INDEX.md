@@ -30,6 +30,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - SEV-31 DONE: `scripts/check_layers.py` + `make check-layers` enforce layer ranks; `world/` and `mutation/` assigned rank 2 (graph peer, per actual import edges); `reindex_job_service` moved to `retrieval/`; two engines' upward api imports removed (now raise ValueError if registry not injected). SEV-04 is now unblocked.
 - test_action_workers + test_spread_rumor_worker have 2 pre-existing failures (unrelated); do not confuse with regressions.
 - SEV-36: shock on any high-severity event (incl. positive) is INTENTIONAL — do not add valence gate. Quest terminal state deferred to DECISIONS.
+- SEV-23 DONE: dependency_singletons split → dependencies_infra/stores/engines/advanced + thin re-exporter. political_writer split into 3. api_seeder split into api_seeder/seed_data/seed_http. quest.py helpers → quest_helpers.py. chapter_labeler.py extracted. EmbeddingIndexProtocol → context_protocols.py. Waivers: chapter_engine.py ~322 lines (DEC-062), context_builder.py ~464 lines (DEC-016 updated). rules baseline ratcheted to 38.
 
 ## Ordered checklist
 
@@ -70,7 +71,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 ### Block F — hygiene & docs (low-risk, batchable)
 - [x] **FIX-SEV-24** — Delete stale nested infra files under `src/npc_engine/` · MEDIUM · S · deps: approved
 - [x] **FIX-SEV-26** — Repo hygiene: git rm cached logs; fix .gitignore · MEDIUM · S · deps: none
-- [ ] **FIX-SEV-23** — Split unwaived over-300-line files · MEDIUM · L · deps: none (do SEV-42 first to avoid moving reindex_job_service twice)
+- [x] **FIX-SEV-23** — Split unwaived over-300-line files · MEDIUM · L · deps: none (do SEV-42 first to avoid moving reindex_job_service twice)
 - [x] **FIX-SEV-27** — Structured-output reliability (temperature + schema + retry) · MEDIUM · M · deps: SEV-01 done
 - [ ] **FIX-SEV-32** — Bulk-migrate module docstrings to canonical format · MEDIUM · L · deps: none
 - [x] **FIX-SEV-35** — Unify `delta_ticks` bound to `MAX_DELTA_TICKS=1000` · LOW · S · deps: none

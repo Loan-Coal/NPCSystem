@@ -17,7 +17,7 @@ from typing import Any
 from neo4j import AsyncSession
 
 from npc_engine.graph.political_queries import get_agenda_votes, get_expired_open_agendas
-from npc_engine.graph.political_writer import set_agenda_status
+from npc_engine.graph.political_agenda_writer import set_agenda_status
 
 _LOGGER = logging.getLogger(__name__)
 

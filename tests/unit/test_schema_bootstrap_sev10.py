@@ -105,7 +105,7 @@ def _make_call_side_effect(existing_ids: set[str]):
 
 def test_seeder_skips_existing_factions(monkeypatch) -> None:
     """When a faction already exists, the seeder records it as skipped (no POST)."""
-    from npc_engine.data import api_seeder
+    from npc_engine.data import api_seeder, seed_http
 
     existing = {"guild"}  # faction id that already exists
     call_log: list[tuple[str, str]] = []
@@ -114,11 +114,11 @@ def test_seeder_skips_existing_factions(monkeypatch) -> None:
         call_log.append((method, url))
         return _make_call_side_effect(existing)(method, url, api_key, body)
 
-    monkeypatch.setattr(api_seeder, "_call", _mock_call)
+    monkeypatch.setattr(seed_http, "call", _mock_call)
 
-    # Only test the faction seeding portion in isolation by calling _faction_exists
+    # Only test the faction seeding portion in isolation by calling faction_exists
     # and verifying no POST is issued for an existing faction.
-    result = api_seeder._faction_exists("http://host", "key", "guild")
+    result = seed_http.faction_exists("http://host", "key", "guild")
     assert result is True
 
     post_calls = [m for m, _ in call_log if m == "POST"]
@@ -127,44 +127,44 @@ def test_seeder_skips_existing_factions(monkeypatch) -> None:
 
 def test_seeder_creates_missing_factions(monkeypatch) -> None:
     """When a faction does not exist, the seeder issues a POST to create it."""
-    from npc_engine.data import api_seeder
+    from npc_engine.data import seed_http
 
     existing: set[str] = set()
 
     def _mock_call(method, url, api_key, body=None):
         return _make_call_side_effect(existing)(method, url, api_key, body)
 
-    monkeypatch.setattr(api_seeder, "_call", _mock_call)
+    monkeypatch.setattr(seed_http, "call", _mock_call)
 
-    result = api_seeder._faction_exists("http://host", "key", "new_faction")
+    result = seed_http.faction_exists("http://host", "key", "new_faction")
     assert result is False
 
 
 def test_seeder_skips_existing_nodes(monkeypatch) -> None:
-    """_node_exists returns True for a node the API reports as existing."""
-    from npc_engine.data import api_seeder
+    """node_exists returns True for a node the API reports as existing."""
+    from npc_engine.data import seed_http
 
     existing = {"loc_tavern"}
 
     def _mock_call(method, url, api_key, body=None):
         return _make_call_side_effect(existing)(method, url, api_key, body)
 
-    monkeypatch.setattr(api_seeder, "_call", _mock_call)
+    monkeypatch.setattr(seed_http, "call", _mock_call)
 
-    assert api_seeder._node_exists("http://host", "key", "Location", "loc_tavern") is True
-    assert api_seeder._node_exists("http://host", "key", "Location", "loc_unknown") is False
+    assert seed_http.node_exists("http://host", "key", "Location", "loc_tavern") is True
+    assert seed_http.node_exists("http://host", "key", "Location", "loc_unknown") is False
 
 
 def test_seed_skips_all_resources_when_all_exist(monkeypatch) -> None:
     """Running seed() on a fully-populated world skips all stable-ID resources."""
-    from npc_engine.data import api_seeder
+    from npc_engine.data import api_seeder, seed_data, seed_http
 
-    # Every stable ID is in the existing set.
+    ts = "2026-01-01T00:00:00+00:00"
     all_stable_ids = (
-        {f["id"] for f in api_seeder._FACTIONS}
-        | {loc["id"] for loc in api_seeder._locations("2026-01-01T00:00:00+00:00")}
-        | {char["id"] for char in api_seeder._characters("2026-01-01T00:00:00+00:00")}
-        | {evt["id"] for evt in api_seeder._events("2026-01-01T00:00:00+00:00")}
+        {f["id"] for f in seed_data.get_factions()}
+        | {loc["id"] for loc in seed_data.get_locations(ts)}
+        | {char["id"] for char in seed_data.get_characters(ts)}
+        | {evt["id"] for evt in seed_data.get_events(ts)}
     )
 
     post_count = 0
@@ -181,7 +181,9 @@ def test_seed_skips_all_resources_when_all_exist(monkeypatch) -> None:
             return 200, {"data": {"id": resource_id}}
         return 404, {}
 
-    monkeypatch.setattr(api_seeder, "_call", _mock_call)
+    # Patch at both levels: api_seeder uses call directly; helpers use seed_http.call
+    monkeypatch.setattr(api_seeder, "call", _mock_call)
+    monkeypatch.setattr(seed_http, "call", _mock_call)
 
     exit_code = api_seeder.seed("http://host", "key")
 
@@ -189,15 +191,15 @@ def test_seed_skips_all_resources_when_all_exist(monkeypatch) -> None:
     # POSTs should only come from auto-ID resources (beliefs, goals, items,
     # secrets, memories, debts) — not from stable-ID resources.
     stable_resource_count = (
-        len(api_seeder._FACTIONS)
-        + len(api_seeder._locations(""))
-        + len(api_seeder._characters(""))
-        + len(api_seeder._FACTION_MEMBERS)
-        + len(api_seeder._CHARACTER_LOCATION)
-        + len(api_seeder._RELATES_TO_PAIRS)
-        + len(api_seeder._events(""))
-        + len(api_seeder._EVENT_PARTICIPATION)
-        + len(api_seeder._NPC_IDS) * len(api_seeder._events(""))
+        len(seed_data.get_factions())
+        + len(seed_data.get_locations(""))
+        + len(seed_data.get_characters(""))
+        + len(seed_data.get_faction_members())
+        + len(seed_data.get_character_location())
+        + len(seed_data.get_relates_to_pairs())
+        + len(seed_data.get_events(""))
+        + len(seed_data.get_event_participation())
+        + len(seed_data.get_npc_ids()) * len(seed_data.get_events(""))
     )
     # post_count must be strictly less than total resources (some were skipped)
     # We can't assert post_count == 0 because auto-ID resources still POST.
