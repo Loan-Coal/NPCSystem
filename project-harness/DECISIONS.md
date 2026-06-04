@@ -561,3 +561,10 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Decision:** Accepted. `QuestLifecycleEngine` is a single-class module (SRP satisfied). Its length comes from five distinct lifecycle methods (`offer_draft_quest`, `offer_quest`, `accept_quest`, `update_objective`, `evaluate_completion`, `apply_rewards`) each with full docstrings and narrow logic. Each method is under 40 lines. Splitting into two classes would require coordinating shared constants (`STATUS_*`) and dependencies across modules with no gain in cohesion.
 **Why:** The 300-line limit targets wide classes with unrelated responsibilities. This class has one responsibility (quest lifecycle state machine) and is long due to the number of transitions in that machine, not due to sprawl.
 **Consequence:** Acceptable until Phase 3 requires adding quest-type-specific transition logic — at that point extract per-type handlers via the Strategy pattern.
+
+## DEC-058: Delete nested infra copies under src/npc_engine/
+**Date:** 2026-06-04
+**Context:** Six infra files under `src/npc_engine/` (docker-compose.yml, Dockerfile, mypy.ini, requirements.txt, game_schema.yaml, README.md) had drifted from root canonical copies and were actively harmful.
+**Decision:** Root-level copies are canonical. Nested copies under `src/npc_engine/` deleted via `git rm`.
+**Why:** The nested mypy.ini pinned `python_version = 3.11` (stack is 3.14), silently inflating error counts. The nested docker-compose.yml used a module path that no longer exists. All copies had diverged from root versions.
+**Consequence:** None — no Makefile or CI reference pointed to these paths.
