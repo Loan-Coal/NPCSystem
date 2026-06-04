@@ -593,3 +593,10 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Decision:** Option B. `GraphDB` and `Settings` are injected at construction. `run_tick` ignores the caller-supplied `_session` (kept for `BaseEngine` interface compatibility) and opens per-task sessions. `asyncio.Semaphore(settings.MAX_CONCURRENT_TICKS)` bounds concurrent open sessions.
 **Why:** Neo4j connection pools are designed for this pattern. Option A would violate SRP. Option C yields no speedup.
 **Consequence:** `dependency_singletons.get_memory_consolidation_engine` now passes `graph_db` and `settings`. Callers in `tick_scheduler` that pass a session continue to work.
+
+## DEC-058: currency_writer.py waived at 327 lines (SEV-08 atomicity)
+**Date:** 2026-06-04
+**Context:** SEV-08 added execute_currency_transfer_in_tx (~90 lines) to currency_writer.py, pushing it from ~233 to 327 lines.
+**Decision:** Waiver granted. Splitting is artificial.
+**Why:** execute_currency_transfer_in_tx shares _try_replay and _raise_transfer_failure private helpers with transfer_currency_atomic. Extracting it to a new module would require exposing those helpers or duplicating 40 lines of error-handling logic. The cohesion is high — all three functions implement the same atomic-write contract, differing only in who owns the transaction boundary. SEV-23 may revisit.
+**Consequence:** make check-rules-update must baseline currency_writer.py. SEV-23 may split if a natural boundary is found.

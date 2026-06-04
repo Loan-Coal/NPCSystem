@@ -634,13 +634,14 @@ current mapping is good enough for demo badge display and does not affect correc
 
 ---
 
-## ISSUE-056: 20 pre-existing test failures in HEAD blocking `make check`
+## ISSUE-056: 8 remaining pre-existing test failures in HEAD blocking `make check`
 **Found:** 2026-06-04, during SEV-04 gossip migration
-**Severity:** P2 (test suite not green; `make check` was already failing in HEAD before SEV-04)
-**Where:** tests/unit/test_quest_lifecycle_engine_v14.py (8), test_quest_reward_routing_v14.py (4), test_quest_event_provenance_v14.py (3), test_sev06_semaphore.py (2), test_structured_output_sev27.py (2), test_error_swallowing_sev18.py (1)
-**Description:** These tests were committed in prior sessions but their production code later diverged. Root causes vary: `QuestLifecycleEngine.__init__` now requires `TypeRegistry` but tests don't inject it; `SessionStore.append_turns` is now async (SEV-05) but sev06 test calls it synchronously; structured-output test mocks differ from the SEV-27 implementation; sev18 witnessed-query test patch path is wrong.
-**Why deferred:** Pre-existing in HEAD before SEV-04. Fixing 20 unrelated test failures is outside SEV-04 scope. Each requires understanding the specific module's current interface.
-**To fix:** Fix each test group separately: (1) Update `test_quest_lifecycle_engine_v14.py` to inject `TypeRegistry`; (2) Update `test_sev06_semaphore.py` to `await store.append_turns()`; (3) Reconcile `test_structured_output_sev27.py` mock with actual llm_client interface; (4) Fix patch path in `test_error_swallowing_sev18.py::test_witnessed_query_failure_logs_warning`. Consider fixing during SEV-39 (targeted tests for worst-covered risk modules).
+**Severity:** P2 (test suite not green; `make check` failing)
+**Where:** test_quest_event_provenance_v14.py (3), test_sev06_semaphore.py (2), test_structured_output_sev27.py (2), test_error_swallowing_sev18.py (1)
+**Description:** 20 failures originally; 12 fixed by SEV-08 (quest_lifecycle+routing TypeRegistry injection + monkeypatch update). Remaining 8: quest_event_provenance needs game_schema.yaml; sev06 calls append_turns synchronously; sev27 caplog fails due to propagate=False; sev18 witnessed-query patch path wrong.
+**Why deferred:** Each requires understanding a specific module's current interface unrelated to SEV-08.
+**To fix:** (1) Update `test_sev06_semaphore.py` to `await store.append_turns()`; (2) Fix caplog in `test_structured_output_sev27.py`; (3) Fix patch path in `test_error_swallowing_sev18.py`; (4) Fix schema path in `test_quest_event_provenance_v14.py`. Consider during SEV-39.
+**Partial fix:** 2026-06-04, SEV-08 fixed 12/20 (test_quest_lifecycle_engine_v14.py + test_quest_reward_routing_v14.py).
 
 ## ISSUE-056: graph_rag.py MATCH (seed) full-scan — no label filter
 **Found:** 2026-06-04, during SEV-39 coverage fix

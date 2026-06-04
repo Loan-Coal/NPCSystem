@@ -12,11 +12,24 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
+from pydantic import BaseModel, ConfigDict
 
 from npc_engine.config import Settings
 from npc_engine.engines.quest.models import QuestObjectiveInput, QuestRewardCurrency, QuestRewardItem, QuestTransitionMeta
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
+from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.utils.errors import QuestTransitionError
+
+
+class _FakeEventModel(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    id: str = ""
+    summary: str = ""
+    provenance: dict = {}
+
+
+def _fake_registry() -> TypeRegistry:
+    return TypeRegistry(schema_version="1.0", node_models={"event": _FakeEventModel})
 
 
 def _settings() -> Settings:
@@ -105,11 +118,14 @@ async def test_offer_accept_update_evaluate_and_apply_rewards_happy_path(monkeyp
     async def fake_event_write(*, tx, event):
         return None
 
-    async def fake_item_transfer(**kwargs):
-        return {"item_id": kwargs["item_id"], "quantity": kwargs["quantity"]}
+    async def fake_item_transfer_in_tx(tx, *, source_id, destination_id, item_id, quantity, reason, request_id, idempotency_key, transfer_kind):
+        return {"item_id": item_id, "quantity": quantity, "replayed": False, "request_id": request_id}
 
-    async def fake_currency_transfer(**kwargs):
-        return {"amount": kwargs["amount"], "replayed": False}
+    async def fake_currency_transfer_in_tx(tx, *, settings, source_id, destination_id, amount, reason, request_id, idempotency_key, session_scope, transfer_kind):
+        return {"amount": amount, "replayed": False, "request_id": request_id}
+
+    async def fake_check_possession(tx, *, player_id, item_id, min_quantity):
+        return True
 
     monkeypatch.setattr(
         "npc_engine.engines.quest.quest_lifecycle_engine.create_quest_state_if_absent",
@@ -118,15 +134,16 @@ async def test_offer_accept_update_evaluate_and_apply_rewards_happy_path(monkeyp
     monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest_state", fake_get_quest_state)
     monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_state", fake_upsert_quest_state)
     monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_lifecycle_event", fake_event_write)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.apply_item_transfer", fake_item_transfer)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.apply_currency_transfer", fake_currency_transfer)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.execute_item_transfer_in_tx", fake_item_transfer_in_tx)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.execute_currency_transfer_in_tx", fake_currency_transfer_in_tx)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.check_item_possession_in_tx", fake_check_possession)
 
     async def fake_node_status_update(*, session, quest_id: str, status: str) -> None:
         pass
 
     monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.update_quest_node_status", fake_node_status_update)
 
-    engine = QuestLifecycleEngine(settings=_settings())
+    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
     offered = await engine.offer_quest(
         session=_fake_session(),  # type: ignore[arg-type]
         quest_id="quest-1",
@@ -190,7 +207,7 @@ async def test_accept_requires_offered_state(monkeypatch) -> None:
 
     monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest_state", fake_get_quest_state)
 
-    engine = QuestLifecycleEngine(settings=_settings())
+    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
     with pytest.raises(QuestTransitionError):
         await engine.accept_quest(
             session=_fake_session(),  # type: ignore[arg-type]
@@ -223,7 +240,7 @@ async def test_offer_rejects_existing_offered_state_with_empty_reward_source(mon
         fake_create_quest_state_if_absent,
     )
 
-    engine = QuestLifecycleEngine(settings=_settings())
+    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
     with pytest.raises(QuestTransitionError) as error:
         await engine.offer_quest(
             session=_fake_session(),  # type: ignore[arg-type]
@@ -265,20 +282,24 @@ async def test_apply_rewards_emits_provenance_event_with_transaction_support(mon
         state_store[(quest_id, player_id)] = dict(state_payload)
         return dict(state_payload)
 
-    async def fake_item_transfer(**kwargs):
-        return {"request_id": kwargs["request_id"], "item_id": kwargs["item_id"]}
+    async def fake_item_transfer_in_tx(tx, *, source_id, destination_id, item_id, quantity, reason, request_id, idempotency_key, transfer_kind):
+        return {"request_id": request_id, "item_id": item_id, "quantity": quantity, "replayed": False}
+
+    async def fake_check_possession(tx, *, player_id, item_id, min_quantity):
+        return True
 
     async def fake_upsert_event(*, tx, event):
         captured_event["event"] = event
 
     monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest_state", fake_get_quest_state)
     monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_state", fake_upsert_quest_state)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.apply_item_transfer", fake_item_transfer)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.execute_item_transfer_in_tx", fake_item_transfer_in_tx)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.check_item_possession_in_tx", fake_check_possession)
     monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_lifecycle_event", fake_upsert_event)
 
     tx = _FakeTx()
     session = _FakeSession(tx=tx)
-    engine = QuestLifecycleEngine(settings=_settings())
+    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
     await engine.apply_rewards(
         session=session,  # type: ignore[arg-type]
         quest_id="quest-6",
@@ -312,7 +333,7 @@ async def test_offer_rolls_back_state_when_event_write_fails(monkeypatch) -> Non
 
     tx = _RollbackTx(state_store=state_store)
     session = _RollbackSession(tx=tx)
-    engine = QuestLifecycleEngine(settings=_settings())
+    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
 
     with pytest.raises(RuntimeError, match="event write failure"):
         await engine.offer_quest(
@@ -362,7 +383,7 @@ async def test_offer_draft_quest_happy_path(monkeypatch) -> None:
     monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.create_quest_state_if_absent", fake_create_quest_state_if_absent)
     monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_lifecycle_event", fake_event_write)
 
-    engine = QuestLifecycleEngine(settings=_settings())
+    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
     state = await engine.offer_draft_quest(
         session=_fake_session(),  # type: ignore[arg-type]
         quest_id="quest-draft-1",
@@ -386,7 +407,7 @@ async def test_offer_draft_quest_non_draft_raises(monkeypatch) -> None:
 
     monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest", fake_get_quest)
 
-    engine = QuestLifecycleEngine(settings=_settings())
+    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
     with pytest.raises(QuestTransitionError) as exc:
         await engine.offer_draft_quest(
             session=_fake_session(),  # type: ignore[arg-type]
@@ -409,7 +430,7 @@ async def test_offer_draft_quest_not_found_raises(monkeypatch) -> None:
 
     monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest", fake_get_quest)
 
-    engine = QuestLifecycleEngine(settings=_settings())
+    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
     with pytest.raises(QuestTransitionError) as exc:
         await engine.offer_draft_quest(
             session=_fake_session(),  # type: ignore[arg-type]

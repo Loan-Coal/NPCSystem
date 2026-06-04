@@ -21,7 +21,8 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - SEV-13 DONE: `_WORLD_STATE_ID="world"` in seed.py; `put_world_state` now sends `id="world"` and drops faction_standings/time_of_day/weather clobber. SEV-11 (game losable/winnable) builds on this same world-state arc.
 - Hard ordering: **SEV-31 → SEV-04 → {SEV-08, SEV-30, SEV-12}**; SEV-42 DONE so SEV-23 ordering constraint satisfied.
 - SEV-04 FULLY DONE (engines): all engine domains migrated to graph/. New files: `graph/event_queries.py`, `graph/faction_politics_queries.py`, `graph/quest_generation_queries.py`. world_reader/world_writer now accept AsyncTransaction for in-tx world state ops. rules_baseline ratcheted to 40. Remaining raw Cypher: `retrieval/`, `world/`, `scheduler/` — not engine violations, lower priority, SEV-08 unblocked.
-- ISSUE-056: 20 pre-existing test failures in HEAD (quest_lifecycle, sev06, sev27, sev18, quest_event_provenance) — see ISSUES.md. Not caused by SEV-04.
+- ISSUE-056: 8 remaining pre-existing test failures (sev06, sev27, sev18, quest_event_provenance) — quest_lifecycle+routing fixed by SEV-08. Not caused by SEV-08.
+- SEV-08 DONE: `check_item_possession_in_tx` (item_queries), `execute_item_transfer_in_tx` (item_writer), `execute_currency_transfer_in_tx` (currency_writer) are new tx-accepting helpers. `apply_rewards` now opens one tx: possession check → delivery collect → reward grants → state+flag+event. DEC-058 waives currency_writer.py 327-line limit.
 - SEV-05 DONE: `EmotionStore.get/set` and all `SessionStore` mutation methods are now `async def` + `asyncio.Lock`. `EmotionUpdater` methods also async. Callers updated: `dialogue_handler`, `gossip_handler`, `mood_contagion_engine`, `memory_consolidation_engine`, `npc_state` route. SEV-06 (Semaphore fan-out) follows same scheduler path — no further interface changes needed.
 - **SEV-10 APPROVED**: schema change confirmed. api_seeder idempotency strategy still open — see FIX-SEV-10.md (get-then-skip vs client-supplied stable id).
 - **SEV-24 APPROVED**: delete 6 nested infra files under src/npc_engine/. **SEV-12 still needs DECISIONS + SEV-04 + SEV-10**.
@@ -47,7 +48,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - [x] **FIX-SEV-05** — Lock `emotion_store`/`session_store` · HIGH · M · deps: approved
 - [x] **FIX-SEV-06** — Cap consolidation fan-out with a Semaphore · HIGH · M · deps: SEV-05 (same path)
 - [x] **FIX-SEV-07** — Raise `TokenBudgetExceededError` (no silent Tier-A drop) · HIGH · S · deps: none
-- [ ] **FIX-SEV-08** — Atomic, possession-checked quest rewards · HIGH · M · deps: SEV-04 (tx ownership)
+- [x] **FIX-SEV-08** — Atomic, possession-checked quest rewards · HIGH · M · deps: SEV-04 (tx ownership)
 - [x] **FIX-SEV-18** — Log-and-(re)raise instead of swallowing · HIGH · S · deps: gossip site couples to SEV-04
 
 ### Block D — layer & type campaigns (large, sequence internally)

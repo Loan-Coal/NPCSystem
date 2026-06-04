@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 # ---------------------------------------------------------------------------
 # OWNS-based queries (Feature 3.6 — item nodes and ownership)
@@ -68,6 +68,41 @@ CYPHER_ATTACH_ITEM_OWNER = """
 MATCH (c:Character {id: $character_id}), (i:Item {id: $item_id})
 MERGE (c)-[:OWNS {acquired_at: $acquired_at}]->(i)
 """
+
+CYPHER_CHECK_ITEM_POSSESSION = """
+MATCH (c:Character {id: $player_id})-[:OWNS]->(i:Item {id: $item_id})
+RETURN count(i) >= $min_quantity AS has_sufficient
+"""
+
+
+async def check_item_possession_in_tx(
+    tx: AsyncTransaction,
+    *,
+    player_id: str,
+    item_id: str,
+    min_quantity: int,
+) -> bool:
+    """Return True when the player owns at least min_quantity of item_id within a transaction.
+
+    Args:
+        tx: Active Neo4j transaction (caller owns commit/rollback).
+        player_id: ID of the player character.
+        item_id: ID of the Item node to check.
+        min_quantity: Minimum required owned count.
+
+    Returns:
+        True if player owns at least min_quantity of item_id; False otherwise.
+    """
+    result = await tx.run(
+        CYPHER_CHECK_ITEM_POSSESSION,
+        player_id=player_id,
+        item_id=item_id,
+        min_quantity=min_quantity,
+    )
+    record = await result.single()
+    if record is None:
+        return False
+    return bool(record["has_sufficient"])
 
 
 async def get_items_for_character(
