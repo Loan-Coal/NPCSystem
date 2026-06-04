@@ -42,7 +42,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 
 ### Block C — concurrency & engine integrity
 - [x] **FIX-SEV-05** — Lock `emotion_store`/`session_store` · HIGH · M · deps: approved
-- [ ] **FIX-SEV-06** — Cap consolidation fan-out with a Semaphore · HIGH · M · deps: SEV-05 (same path)
+- [x] **FIX-SEV-06** — Cap consolidation fan-out with a Semaphore · HIGH · M · deps: SEV-05 (same path)
 - [x] **FIX-SEV-07** — Raise `TokenBudgetExceededError` (no silent Tier-A drop) · HIGH · S · deps: none
 - [ ] **FIX-SEV-08** — Atomic, possession-checked quest rewards · HIGH · M · deps: SEV-04 (tx ownership)
 - [x] **FIX-SEV-18** — Log-and-(re)raise instead of swallowing · HIGH · S · deps: gossip site couples to SEV-04
@@ -59,13 +59,13 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - [x] **FIX-SEV-13** — Restore canonical WorldState id `world` · HIGH · S · deps: none (coordinate with SEV-11)
 - [x] **FIX-SEV-11** — Make game losable/winnable; fix attribution/neutral bribes · HIGH · M · deps: none
 - [ ] **FIX-SEV-12** — Multi-tenant / world isolation · HIGH · XL · **deps: DECISIONS approval + SEV-04 + SEV-10**
-- [ ] **FIX-SEV-28** — WS recv timeout + watchdog · MEDIUM · S · deps: none
+- [x] **FIX-SEV-28** — WS recv timeout + watchdog · MEDIUM · S · deps: none
 - [ ] **FIX-SEV-33** — Consistent error envelope for integrators · MEDIUM · M · deps: none
-- [ ] **FIX-SEV-34** — Fix stale README + command table · MEDIUM · S · deps: none
+- [x] **FIX-SEV-34** — Fix stale README + command table · MEDIUM · S · deps: none
 
 ### Block F — hygiene & docs (low-risk, batchable)
-- [ ] **FIX-SEV-24** — Delete stale nested infra files under `src/npc_engine/` · MEDIUM · S · deps: approved
-- [ ] **FIX-SEV-26** — Repo hygiene: git rm cached logs; fix .gitignore · MEDIUM · S · deps: none
+- [x] **FIX-SEV-24** — Delete stale nested infra files under `src/npc_engine/` · MEDIUM · S · deps: approved
+- [x] **FIX-SEV-26** — Repo hygiene: git rm cached logs; fix .gitignore · MEDIUM · S · deps: none
 - [ ] **FIX-SEV-23** — Split unwaived over-300-line files · MEDIUM · L · deps: none (do SEV-42 first to avoid moving reindex_job_service twice)
 - [ ] **FIX-SEV-27** — Structured-output reliability (temperature + schema + retry) · MEDIUM · M · deps: SEV-01 done
 - [ ] **FIX-SEV-32** — Bulk-migrate module docstrings to canonical format · MEDIUM · L · deps: none
