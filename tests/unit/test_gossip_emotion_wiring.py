@@ -39,17 +39,21 @@ def _make_handler(emotion_updater=None, emotion_threshold: int = 50):
 
 
 def _make_mock_session() -> AsyncMock:
-    """Return an AsyncMock session (graph functions are patched separately)."""
     return AsyncMock()
 
 
-def _event_data(severity: int) -> dict:
-    return {
-        "event_id": "e-rumor",
-        "summary": "The captain is a traitor",
-        "severity": severity,
-        "is_canonical": False,
-    }
+def _batch_row(severity: int) -> list[dict]:
+    return [
+        {
+            "sharer_id": "sharer-1",
+            "receiver_id": "receiver-1",
+            "event_id": "e-rumor",
+            "summary": "The captain is a traitor",
+            "severity": severity,
+            "is_canonical": False,
+            "trust": 50,
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -64,16 +68,16 @@ async def test_emotion_shock_called_for_high_severity():
     ]
     session = _make_mock_session()
 
-    with patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new_callable=AsyncMock, return_value=pairs), \
-         patch("npc_engine.engines.gossip.gossip_handler.select_gossip_event", new_callable=AsyncMock, return_value=_event_data(75)), \
-         patch("npc_engine.engines.gossip.gossip_handler.select_relation_trust", new_callable=AsyncMock, return_value=50), \
-         patch("npc_engine.engines.gossip.gossip_handler.propagate", new_callable=AsyncMock), \
-         patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock), \
-         patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock), \
-         patch("npc_engine.engines.gossip.gossip_handler.create_rumor", new_callable=AsyncMock, return_value="r-1"), \
-         patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock), \
-         patch("npc_engine.engines.gossip.gossip_handler.random") as mock_random:
-
+    with (
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new_callable=AsyncMock, return_value=pairs),
+        patch("npc_engine.engines.gossip.gossip_handler.select_batch_event_trust", new_callable=AsyncMock, return_value=_batch_row(75)),
+        patch("npc_engine.engines.gossip.gossip_handler.write_batch_knowledge_propagation", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.create_rumor", new_callable=AsyncMock, return_value="r-1"),
+        patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.random") as mock_random,
+    ):
         mock_random.random.return_value = 1.0  # skip secret branch
 
         await handler.run_tick(session=session, tick_id=10)
@@ -93,16 +97,16 @@ async def test_emotion_shock_not_called_for_low_severity():
     ]
     session = _make_mock_session()
 
-    with patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new_callable=AsyncMock, return_value=pairs), \
-         patch("npc_engine.engines.gossip.gossip_handler.select_gossip_event", new_callable=AsyncMock, return_value=_event_data(30)), \
-         patch("npc_engine.engines.gossip.gossip_handler.select_relation_trust", new_callable=AsyncMock, return_value=50), \
-         patch("npc_engine.engines.gossip.gossip_handler.propagate", new_callable=AsyncMock), \
-         patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock), \
-         patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock), \
-         patch("npc_engine.engines.gossip.gossip_handler.create_rumor", new_callable=AsyncMock, return_value="r-1"), \
-         patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock), \
-         patch("npc_engine.engines.gossip.gossip_handler.random") as mock_random:
-
+    with (
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new_callable=AsyncMock, return_value=pairs),
+        patch("npc_engine.engines.gossip.gossip_handler.select_batch_event_trust", new_callable=AsyncMock, return_value=_batch_row(30)),
+        patch("npc_engine.engines.gossip.gossip_handler.write_batch_knowledge_propagation", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.create_rumor", new_callable=AsyncMock, return_value="r-1"),
+        patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.random") as mock_random,
+    ):
         mock_random.random.return_value = 1.0
 
         await handler.run_tick(session=session, tick_id=10)
@@ -120,16 +124,16 @@ async def test_emotion_shock_skipped_when_no_updater():
     ]
     session = _make_mock_session()
 
-    with patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new_callable=AsyncMock, return_value=pairs), \
-         patch("npc_engine.engines.gossip.gossip_handler.select_gossip_event", new_callable=AsyncMock, return_value=_event_data(90)), \
-         patch("npc_engine.engines.gossip.gossip_handler.select_relation_trust", new_callable=AsyncMock, return_value=50), \
-         patch("npc_engine.engines.gossip.gossip_handler.propagate", new_callable=AsyncMock), \
-         patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock), \
-         patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock), \
-         patch("npc_engine.engines.gossip.gossip_handler.create_rumor", new_callable=AsyncMock, return_value="r-1"), \
-         patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock), \
-         patch("npc_engine.engines.gossip.gossip_handler.random") as mock_random:
-
+    with (
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new_callable=AsyncMock, return_value=pairs),
+        patch("npc_engine.engines.gossip.gossip_handler.select_batch_event_trust", new_callable=AsyncMock, return_value=_batch_row(90)),
+        patch("npc_engine.engines.gossip.gossip_handler.write_batch_knowledge_propagation", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.create_rumor", new_callable=AsyncMock, return_value="r-1"),
+        patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.random") as mock_random,
+    ):
         mock_random.random.return_value = 1.0
 
         result = await handler.run_tick(session=session, tick_id=10)
@@ -149,16 +153,16 @@ async def test_emotion_shock_at_exact_threshold():
     ]
     session = _make_mock_session()
 
-    with patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new_callable=AsyncMock, return_value=pairs), \
-         patch("npc_engine.engines.gossip.gossip_handler.select_gossip_event", new_callable=AsyncMock, return_value=_event_data(50)), \
-         patch("npc_engine.engines.gossip.gossip_handler.select_relation_trust", new_callable=AsyncMock, return_value=50), \
-         patch("npc_engine.engines.gossip.gossip_handler.propagate", new_callable=AsyncMock), \
-         patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock), \
-         patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock), \
-         patch("npc_engine.engines.gossip.gossip_handler.create_rumor", new_callable=AsyncMock, return_value="r-1"), \
-         patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock), \
-         patch("npc_engine.engines.gossip.gossip_handler.random") as mock_random:
-
+    with (
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new_callable=AsyncMock, return_value=pairs),
+        patch("npc_engine.engines.gossip.gossip_handler.select_batch_event_trust", new_callable=AsyncMock, return_value=_batch_row(50)),
+        patch("npc_engine.engines.gossip.gossip_handler.write_batch_knowledge_propagation", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.create_rumor", new_callable=AsyncMock, return_value="r-1"),
+        patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.random") as mock_random,
+    ):
         mock_random.random.return_value = 1.0
 
         await handler.run_tick(session=session, tick_id=10)

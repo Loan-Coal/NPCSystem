@@ -445,6 +445,10 @@ Execute top-to-bottom; items in the same block are independent and parallelizabl
 **Block F — hygiene & docs (low-risk, batchable):**
 - [ ] SEV-23 (file size) · SEV-24 (nested infra — needs delete approval) · SEV-26 (repo hygiene) · SEV-32 (docstrings) · SEV-35/36/[x]SEV-37/38/39/42/43 · SEV-27 (structured output, after SEV-01)
   - [x] SEV-37 DONE 2026-06-04: TRADE_INTENT_MESSAGE constant; print()→logger in all pollers/controllers; NPC_API_KEY sentinel removed + get_demo_config() lazy accessor; player_message capped at DEMO_MAX_MESSAGE_CHARS=1000; QUIT guard with self._running flag. Tests: test_sev37_demo_hygiene.py (24 tests).
+  - [x] SEV-38 DONE 2026-06-04: EvalConfigError raised for keyword_any<2 items and context_block_expected with no context; tone_judge infra failure returns JudgeResult(score=None) instead of fail-open; shared judge prompt extracted to prompts/eval/tone_judge.yaml; MockLLMAdapter gains raise_on_generate mode. Tests: test_eval_matchers_sev38.py (14 tests).
+  - [x] SEV-39 DONE 2026-06-04: 5 risk modules covered — graph_rag 88% (RAG weights extracted to config.py), pair_selector determinism+observability, neo4j_store replay contract, modifier_bounds_validator boundary tests, relation_delta_writer typed-error tests. ISSUE-056 logged for label-less MATCH full-scan. Tests: 5 new test files (36 tests total).
+  - [x] SEV-43 DONE 2026-06-04: check_contracts.py exits 1 when declared test path missing from disk; guard_contract_test_sync exits 1 when test file doesn't reference contract name symbol; 3 stub contract test files added. Tests: test_contract_guards_sev43.py (7 tests).
+  - [x] SEV-29 DONE 2026-06-04: gossip N×3 per-pair session.run replaced with 1 batch read (UNWIND $pairs) + 1 batch write (UNWIND $writes) via gossip_batch_queries.py; embedding reconciler uses embed_batch() + single UNWIND SET write. DEC-061 added for 310-line gossip_handler.py waiver. Tests: test_gossip_n_plus_one.py, test_embedding_reconciler_batch.py.
 
 ---
 

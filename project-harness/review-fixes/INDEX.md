@@ -55,7 +55,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - [ ] **FIX-SEV-04** — Move Cypher + transactions into `graph/` · HIGH · L · deps: SEV-31; folds in SEV-17, SEV-30
 - [x] **FIX-SEV-14** — Pydantic exit schemas + mypy burn-down · HIGH · L · deps: none; completes SEV-15 gating
 - [x] **FIX-SEV-10** — Core-node constraints + seeder idempotency · HIGH · M · deps: approved (see FIX-SEV-10.md for open api_seeder idempotency strategy Q)
-- [ ] **FIX-SEV-29** — Batch N+1 graph queries (gossip + embedding reconciler) · MEDIUM · M · deps: none
+- [x] **FIX-SEV-29** — Batch N+1 graph queries (gossip + embedding reconciler) · MEDIUM · M · deps: none
 
 ### Block E — product & demo
 - [x] **FIX-SEV-02** — Remove `npc_engine` imports from `demo_game` · **CRITICAL** · M · deps: none
@@ -76,9 +76,9 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - [ ] **FIX-SEV-36** — Separate gossip distortion probability from confidence · LOW · M · deps: none (shock behavior intentional — see brief)
 - [x] **FIX-SEV-37** — Demo low-severity cluster (magic strings, print, config, QUIT) · LOW · S · deps: none
 - [x] **FIX-SEV-38** — Eval-matcher weaknesses + mock LSP · LOW · M · deps: none
-- [ ] **FIX-SEV-39** — Targeted tests for worst-covered risk modules · LOW · L · deps: none
+- [x] **FIX-SEV-39** — Targeted tests for worst-covered risk modules · LOW · L · deps: none
 - [x] **FIX-SEV-42** — Rename duplicate llm_config_loader; relocate reindex_job_service · LOW · S · deps: none
-- [ ] **FIX-SEV-43** — Contract guards: assert test paths exist + parse symbols · LOW · M · deps: none
+- [x] **FIX-SEV-43** — Contract guards: assert test paths exist + parse symbols · LOW · M · deps: none
 - *(SEV-30 event atomicity — MEDIUM · M · deps: SEV-04; no brief yet)*
 
 ## Summary

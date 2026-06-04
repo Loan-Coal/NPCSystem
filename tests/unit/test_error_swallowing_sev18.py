@@ -204,6 +204,17 @@ async def test_gossip_rumor_record_failure_reraises():
 
     sharer = {"id": "npc_a", "honesty": 10}
     receiver = {"id": "npc_b"}
+    batch_row = [
+        {
+            "sharer_id": "npc_a",
+            "receiver_id": "npc_b",
+            "event_id": "evt-1",
+            "summary": "war breaks out",
+            "severity": 80,
+            "is_canonical": False,
+            "trust": 50,
+        }
+    ]
 
     with (
         patch(
@@ -211,7 +222,11 @@ async def test_gossip_rumor_record_failure_reraises():
             new=AsyncMock(return_value=[(sharer, receiver, MagicMock(), {"best_standing": None})]),
         ),
         patch(
-            "npc_engine.engines.gossip.gossip_handler.propagate",
+            "npc_engine.engines.gossip.gossip_handler.select_batch_event_trust",
+            new=AsyncMock(return_value=batch_row),
+        ),
+        patch(
+            "npc_engine.engines.gossip.gossip_handler.write_batch_knowledge_propagation",
             new=AsyncMock(return_value=None),
         ),
         patch(

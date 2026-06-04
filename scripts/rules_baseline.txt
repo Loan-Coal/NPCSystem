@@ -19,6 +19,7 @@ R001|src/npc_engine/api/routes/quest.py
 R001|src/npc_engine/auth/middleware_helpers.py
 R001|src/npc_engine/data/api_seeder.py
 R001|src/npc_engine/engines/chapter/chapter_engine.py
+R001|src/npc_engine/engines/gossip/gossip_handler.py
 R001|src/npc_engine/engines/quest/quest_lifecycle_engine.py
 R001|src/npc_engine/engines/quest_generation/quest_generation_engine.py
 R001|src/npc_engine/graph/political_writer.py
@@ -27,6 +28,7 @@ R001|src/npc_engine/retrieval/context_builder.py
 R001|src/npc_engine/scheduler/tick_scheduler.py
 R001|src/npc_engine/utils/errors.py
 R002|src/npc_engine/data/api_seeder.py
+R002|src/npc_engine/scripts/check_contracts.py
 R002|src/npc_engine/scripts/guard_contract_test_sync.py
 R002|src/npc_engine/scripts/simulate_world_flow.py
 R005|src/npc_engine/engines/clique/clique_formation_engine.py
