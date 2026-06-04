@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import cast
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -23,6 +23,7 @@ class _GraphDbStub:
     def __init__(self):
         self.connected = False
         self.closed = False
+        self._session = AsyncMock()
 
     async def connect(self) -> None:
         self.connected = True
@@ -32,7 +33,7 @@ class _GraphDbStub:
 
     @asynccontextmanager
     async def get_session(self):
-        yield cast(object, None)
+        yield self._session
 
 
 class _SchemaLoaderStub:

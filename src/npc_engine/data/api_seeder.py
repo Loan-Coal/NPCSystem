@@ -9,9 +9,19 @@ Purpose: World seed via the publicly-exposed HTTP API. All resources use their
 Does NOT: connect to Neo4j or import any npc_engine application code.
 Dependencies injected: base_url and api_key via CLI args or env vars.
 Used by: make seed-api, manual tooling.
-Note: Re-running the seeder on a populated DB will create duplicate beliefs,
-      goals, items, secrets, and memories (typed endpoints auto-generate IDs).
-      Wipe the DB before re-seeding to avoid duplicates.
+
+Idempotency contract (get-then-skip):
+  Resources with stable IDs (Faction, Location, Character, Event, edges):
+    Before each POST, a GET is issued for the stable ID.  If the resource
+    already exists (HTTP 200) the creation is skipped entirely.  This makes
+    the seeder safe to re-run on a populated database.
+
+  Resources without stable IDs (Belief, Goal, Item, Secret, Memory, Debt):
+    These endpoints auto-generate IDs, so there is no reliable GET-by-content
+    lookup.  If the server returns HTTP 409 Conflict the call is recorded as
+    skipped; all other 2xx responses are recorded as created.  Re-running on
+    a populated DB will therefore still create duplicates for these resource
+    types — wipe the DB if that is undesirable.
 """
 
 from __future__ import annotations
@@ -260,6 +270,37 @@ def _post_edge(base: str, api_key: str, edge_type: str, src: str, dst: str, prop
     return status
 
 
+def _node_exists(base: str, api_key: str, node_type: str, node_id: str) -> bool:
+    """Return True when a node with the given type and stable id already exists.
+
+    Uses GET /v1/graph/nodes/{node_type}/{node_id}.  Any non-200 response
+    (including 404) is treated as "does not exist".
+    """
+    status, _ = _call("GET", f"{base}/v1/graph/nodes/{node_type}/{node_id}", api_key)
+    return status == 200
+
+
+def _faction_exists(base: str, api_key: str, faction_id: str) -> bool:
+    """Return True when the faction with the given stable id already exists.
+
+    Uses GET /v1/admin/factions/{faction_id}.  Any non-200 response is treated
+    as "does not exist".
+    """
+    status, _ = _call("GET", f"{base}/v1/admin/factions/{faction_id}", api_key)
+    return status == 200
+
+
+def _edge_exists(base: str, api_key: str, edge_type: str, src: str, dst: str) -> bool:
+    """Return True when the directed edge between src and dst already exists.
+
+    Uses GET /v1/graph/edges/{edge_type}?src_id={src}&dst_id={dst}.  Any
+    non-200 response is treated as "does not exist".
+    """
+    url = f"{base}/v1/graph/edges/{edge_type}?src_id={src}&dst_id={dst}"
+    status, _ = _call("GET", url, api_key)
+    return status == 200
+
+
 # ---------------------------------------------------------------------------
 # Seeding
 # ---------------------------------------------------------------------------
@@ -280,64 +321,100 @@ def seed(base_url: str, api_key: str) -> int:
 
     print("Seeding factions ...")
     for faction in _FACTIONS:
-        status, _ = _call("POST", f"{base_url}/v1/admin/factions/", api_key, faction)
-        c.record(f"Faction:{faction['id']}", status)
+        label = f"Faction:{faction['id']}"
+        if _faction_exists(base_url, api_key, faction["id"]):
+            c.record(label, 409)
+        else:
+            status, _ = _call("POST", f"{base_url}/v1/admin/factions/", api_key, faction)
+            c.record(label, status)
     c.abort_if_failed()
 
     print("Seeding locations ...")
     for loc in _locations(now):
-        c.record(f"Location:{loc['id']}", _post_node(base_url, api_key, "Location", loc))
+        label = f"Location:{loc['id']}"
+        if _node_exists(base_url, api_key, "Location", loc["id"]):
+            c.record(label, 409)
+        else:
+            c.record(label, _post_node(base_url, api_key, "Location", loc))
     c.abort_if_failed()
 
     print("Seeding characters ...")
     for char in _characters(now):
-        c.record(f"Character:{char['id']}", _post_node(base_url, api_key, "Character", char))
+        label = f"Character:{char['id']}"
+        if _node_exists(base_url, api_key, "Character", char["id"]):
+            c.record(label, 409)
+        else:
+            c.record(label, _post_node(base_url, api_key, "Character", char))
     c.abort_if_failed()
 
     print("Seeding MEMBER_OF edges ...")
     for char_id, faction_id, role in _FACTION_MEMBERS:
-        status, _ = _call("POST", f"{base_url}/v1/admin/factions/{faction_id}/members", api_key, {"character_id": char_id, "role": role, "status": "active"})
-        c.record(f"MEMBER_OF:{char_id}->{faction_id}", status)
+        label = f"MEMBER_OF:{char_id}->{faction_id}"
+        if _edge_exists(base_url, api_key, "MEMBER_OF", char_id, faction_id):
+            c.record(label, 409)
+        else:
+            status, _ = _call("POST", f"{base_url}/v1/admin/factions/{faction_id}/members", api_key, {"character_id": char_id, "role": role, "status": "active"})
+            c.record(label, status)
     c.abort_if_failed()
 
     print("Seeding LOCATED_AT edges ...")
     for char_id, (loc_id, permanent) in _CHARACTER_LOCATION.items():
-        status = _post_edge(base_url, api_key, "LOCATED_AT", char_id, loc_id, {"is_permanent_resident": permanent, "arrived_at": now})
-        c.record(f"LOCATED_AT:{char_id}->{loc_id}", status)
+        label = f"LOCATED_AT:{char_id}->{loc_id}"
+        if _edge_exists(base_url, api_key, "LOCATED_AT", char_id, loc_id):
+            c.record(label, 409)
+        else:
+            status = _post_edge(base_url, api_key, "LOCATED_AT", char_id, loc_id, {"is_permanent_resident": permanent, "arrived_at": now})
+            c.record(label, status)
     c.abort_if_failed()
 
     print("Seeding RELATES_TO edges ...")
     for src, dst in _RELATES_TO_PAIRS:
-        status = _post_edge(base_url, api_key, "RELATES_TO", src, dst, {"trust": 50, "fear": 50, "affection": 50, "interaction_count": 0, "last_updated_at": now, "relevance_score": 0.5})
-        c.record(f"RELATES_TO:{src}->{dst}", status)
+        label = f"RELATES_TO:{src}->{dst}"
+        if _edge_exists(base_url, api_key, "RELATES_TO", src, dst):
+            c.record(label, 409)
+        else:
+            status = _post_edge(base_url, api_key, "RELATES_TO", src, dst, {"trust": 50, "fear": 50, "affection": 50, "interaction_count": 0, "last_updated_at": now, "relevance_score": 0.5})
+            c.record(label, status)
     c.abort_if_failed()
 
     events = _events(now)
     print("Seeding events ...")
     for evt in events:
-        c.record(f"Event:{evt['id']}", _post_node(base_url, api_key, "Event", evt))
+        label = f"Event:{evt['id']}"
+        if _node_exists(base_url, api_key, "Event", evt["id"]):
+            c.record(label, 409)
+        else:
+            c.record(label, _post_node(base_url, api_key, "Event", evt))
     c.abort_if_failed()
 
     print("Seeding PARTICIPATED_IN edges ...")
     for row in _EVENT_PARTICIPATION:
-        status = _post_edge(base_url, api_key, "PARTICIPATED_IN", row["character_id"], row["event_id"], {"role": row["role"], "participated_at": now})
-        c.record(f"PARTICIPATED_IN:{row['character_id']}->{row['event_id']}", status)
+        label = f"PARTICIPATED_IN:{row['character_id']}->{row['event_id']}"
+        if _edge_exists(base_url, api_key, "PARTICIPATED_IN", row["character_id"], row["event_id"]):
+            c.record(label, 409)
+        else:
+            status = _post_edge(base_url, api_key, "PARTICIPATED_IN", row["character_id"], row["event_id"], {"role": row["role"], "participated_at": now})
+            c.record(label, status)
     c.abort_if_failed()
 
     print("Seeding KNOWS_ABOUT edges ...")
     events_by_id = {e["id"]: e for e in events}
     for npc_id in _NPC_IDS:
         for evt in events:
-            props = {
-                "knowledge_state": "knows",
-                "learned_at_tick": events_by_id[evt["id"]]["tick_id"],
-                "distortion_type": None,
-                "distortion_level": None,
-                "distorted_summary": None,
-                "source_character_id": None,
-            }
-            status = _post_edge(base_url, api_key, "KNOWS_ABOUT", npc_id, evt["id"], props)
-            c.record(f"KNOWS_ABOUT:{npc_id}->{evt['id']}", status)
+            label = f"KNOWS_ABOUT:{npc_id}->{evt['id']}"
+            if _edge_exists(base_url, api_key, "KNOWS_ABOUT", npc_id, evt["id"]):
+                c.record(label, 409)
+            else:
+                props = {
+                    "knowledge_state": "knows",
+                    "learned_at_tick": events_by_id[evt["id"]]["tick_id"],
+                    "distortion_type": None,
+                    "distortion_level": None,
+                    "distorted_summary": None,
+                    "source_character_id": None,
+                }
+                status = _post_edge(base_url, api_key, "KNOWS_ABOUT", npc_id, evt["id"], props)
+                c.record(label, status)
     c.abort_if_failed()
 
     print("Seeding Phase 3 — Beliefs ...")
