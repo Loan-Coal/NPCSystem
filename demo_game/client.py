@@ -265,7 +265,7 @@ class EngineClient:
         """Advance the game clock and trigger all due engine ticks.
 
         Args:
-            delta_ticks: Number of ticks to advance (1–200).
+            delta_ticks: Number of ticks to advance (1–1000).
             game_time_seconds: Simulated seconds per tick delta.
             advance_time_field: Optional structured time field to also advance
                 (e.g. "day", "season"). Must be a valid WorldState time field.

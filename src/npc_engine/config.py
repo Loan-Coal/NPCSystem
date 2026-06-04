@@ -32,9 +32,10 @@ from npc_engine.config_validators import (
 
 _PROJECT_ROOT = Path(__file__).resolve().parent
 
-# Module-level constant so DialogueRequest can import it at field-definition time
+# Module-level constants so request models can import them at field-definition time
 # without calling get_settings() (which would trigger env loading during model definition).
 MAX_PLAYER_MESSAGE_CHARS: int = 1000
+MAX_DELTA_TICKS: int = 1000
 
 
 class Settings(BaseSettings):
@@ -119,6 +120,7 @@ class Settings(BaseSettings):
     CONSOLIDATION_CLEAR_TURNS: bool = False
 
     MAX_CONCURRENT_TICKS: int = 20
+    MAX_DELTA_TICKS: int = MAX_DELTA_TICKS
 
     DISTRIBUTED_TICK_LEASE_ENABLED: bool = True
     TICK_SCHEDULER_ID: str = "main"
