@@ -20,7 +20,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - SEV-02 DONE: `game_controller._dispatch_proposal` now calls `client.post_interaction(player_id, npc_id, proposal_dict)`; `run.py` uses `DEMO_CACHE_VERSION` from `demo_game/constants.py`. Test: `tests/unit/test_sev02_no_engine_imports.py`.
 - SEV-13 DONE: `_WORLD_STATE_ID="world"` in seed.py; `put_world_state` now sends `id="world"` and drops faction_standings/time_of_day/weather clobber. SEV-11 (game losable/winnable) builds on this same world-state arc.
 - Hard ordering: **SEV-31 → SEV-04 → {SEV-08, SEV-30, SEV-12}**; do SEV-42 before SEV-23 (avoids moving reindex_job_service twice).
-- **SEV-05 APPROVED**: public-interface async change confirmed. Convert store methods to async def + lock; update all callers. SEV-06 follows same path.
+- SEV-05 DONE: `EmotionStore.get/set` and all `SessionStore` mutation methods are now `async def` + `asyncio.Lock`. `EmotionUpdater` methods also async. Callers updated: `dialogue_handler`, `gossip_handler`, `mood_contagion_engine`, `memory_consolidation_engine`, `npc_state` route. SEV-06 (Semaphore fan-out) follows same scheduler path — no further interface changes needed.
 - **SEV-10 APPROVED**: schema change confirmed. api_seeder idempotency strategy still open — see FIX-SEV-10.md (get-then-skip vs client-supplied stable id).
 - **SEV-24 APPROVED**: delete 6 nested infra files under src/npc_engine/. **SEV-12 still needs DECISIONS + SEV-04 + SEV-10**.
 - All medium/low briefs now written (SEV-23 through SEV-43 except SEV-30). Next issue id: **ISSUE-055**.
@@ -41,7 +41,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - *(SEV-19, SEV-20, SEV-21, SEV-22, SEV-40, SEV-41 — done in earlier sessions, no brief files)*
 
 ### Block C — concurrency & engine integrity
-- [ ] **FIX-SEV-05** — Lock `emotion_store`/`session_store` · HIGH · M · deps: approved
+- [x] **FIX-SEV-05** — Lock `emotion_store`/`session_store` · HIGH · M · deps: approved
 - [ ] **FIX-SEV-06** — Cap consolidation fan-out with a Semaphore · HIGH · M · deps: SEV-05 (same path)
 - [x] **FIX-SEV-07** — Raise `TokenBudgetExceededError` (no silent Tier-A drop) · HIGH · S · deps: none
 - [ ] **FIX-SEV-08** — Atomic, possession-checked quest rewards · HIGH · M · deps: SEV-04 (tx ownership)

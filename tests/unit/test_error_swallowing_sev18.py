@@ -54,7 +54,7 @@ async def test_witnessed_query_failure_logs_warning():
 
     session = AsyncMock()
     session_store = MagicMock()
-    session_store.get_all_turns_for_npc.return_value = ["turn1", "turn2", "turn3"]
+    session_store.get_all_turns_for_npc = AsyncMock(return_value=["turn1", "turn2", "turn3"])
     llm_client = AsyncMock()
     llm_client.generate = AsyncMock(return_value="summary text")
 
@@ -118,7 +118,7 @@ async def test_tts_failure_logs_warning_and_increments_metric():
     handler._tts_client = tts_client
 
     emotion_updater = MagicMock()
-    emotion_updater.get_state = MagicMock(return_value=MagicMock())
+    emotion_updater.get_state = AsyncMock(return_value=MagicMock())
     handler._emotion_updater = emotion_updater
     handler._session = AsyncMock()
 

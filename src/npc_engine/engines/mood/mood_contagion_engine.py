@@ -84,7 +84,7 @@ class MoodContagionEngine:
             intensity = row["intensity"]
             valence, arousal = _label_to_state(label, intensity)
             state = EmotionState(valence=valence, arousal=arousal, label=label)
-            self._store.set(npc_id=char_id, state=state)
+            await self._store.set(npc_id=char_id, state=state)
         LOGGER.info("MoodContagionEngine: loaded %d moods from Neo4j", len(rows))
         return len(rows)
 
@@ -104,14 +104,14 @@ class MoodContagionEngine:
 
         affected = 0
         for npc_a, npc_b in pairs:
-            state_a = self._store.get(npc_a)
-            state_b = self._store.get(npc_b)
+            state_a = await self._store.get(npc_a)
+            state_b = await self._store.get(npc_b)
 
             new_a = _blend(state_a, state_b)
             new_b = _blend(state_b, state_a)
 
-            self._store.set(npc_id=npc_a, state=new_a)
-            self._store.set(npc_id=npc_b, state=new_b)
+            await self._store.set(npc_id=npc_a, state=new_a)
+            await self._store.set(npc_id=npc_b, state=new_b)
 
             await set_character_mood(
                 session,

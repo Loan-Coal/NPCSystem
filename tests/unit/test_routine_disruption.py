@@ -157,11 +157,12 @@ def _make_dialogue_handler(valence_after_mood: int):
 
     emotion_state = EmotionState(valence=valence_after_mood, arousal=50, label="test")
     emotion_updater = MagicMock()
-    emotion_updater.get_state.return_value = EmotionState(valence=0, arousal=0, label="neutral")
-    emotion_updater.apply_dialogue_mood.return_value = emotion_state
+    emotion_updater.get_state = AsyncMock(return_value=EmotionState(valence=0, arousal=0, label="neutral"))
+    emotion_updater.apply_dialogue_mood = AsyncMock(return_value=emotion_state)
 
     session_store = MagicMock(spec=SessionStore)
-    session_store.get_turns.return_value = []
+    session_store.get_turns = AsyncMock(return_value=[])
+    session_store.append_turns = AsyncMock()
 
     settings = MagicMock()
     settings.CANNED_RESPONSES_DIR = "/tmp/canned"

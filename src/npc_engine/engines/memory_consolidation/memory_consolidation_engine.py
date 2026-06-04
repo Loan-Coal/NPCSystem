@@ -101,7 +101,7 @@ class MemoryConsolidationEngine:
         Returns:
             Memory ID string if consolidation occurred, else None.
         """
-        turns = self._session_store.get_all_turns_for_npc(npc_id)
+        turns = await self._session_store.get_all_turns_for_npc(npc_id)
         if len(turns) < self._turn_threshold:
             return None
 
@@ -159,7 +159,7 @@ class MemoryConsolidationEngine:
         )
 
         if self._clear_turns:
-            self._session_store.clear_all_turns_for_npc(npc_id)
+            await self._session_store.clear_all_turns_for_npc(npc_id)
 
         return memory_id
 
@@ -181,7 +181,7 @@ class MemoryConsolidationEngine:
         Returns:
             Dict with ``consolidated`` (list of npc_ids whose memory was created).
         """
-        npc_ids = self._session_store.get_active_npc_ids(self._turn_threshold)
+        npc_ids = await self._session_store.get_active_npc_ids(self._turn_threshold)
         consolidated: list[str] = []
         for npc_id in npc_ids:
             memory_id = await self.consolidate(session, npc_id=npc_id, game_time=game_time)

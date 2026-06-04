@@ -4,6 +4,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_asyncio
 
 from npc_engine.engines.emotion.emotion_state import EmotionState
 from npc_engine.engines.emotion.emotion_store import EmotionStore
@@ -51,11 +52,11 @@ def test_blend_neutral_npc_unaffected_by_neutral():
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def emotion_store():
+@pytest_asyncio.fixture
+async def emotion_store():
     store = EmotionStore()
-    store.set("npc_a", EmotionState(valence=80, arousal=70, label="elated"))
-    store.set("npc_b", EmotionState(valence=-60, arousal=20, label="melancholic"))
+    await store.set("npc_a", EmotionState(valence=80, arousal=70, label="elated"))
+    await store.set("npc_b", EmotionState(valence=-60, arousal=20, label="melancholic"))
     return store
 
 
@@ -79,7 +80,7 @@ async def test_mood_blends_correctly(engine, emotion_store):
     ):
         await engine.run_tick(session=session, tick_id=1)
 
-    state_a = emotion_store.get("npc_a")
+    state_a = await emotion_store.get("npc_a")
     assert state_a.valence < 80, "happy NPC should drift toward sad partner"
 
 
@@ -163,8 +164,8 @@ async def test_initialize_loads_moods_into_store():
         count = await engine.initialize(session=session)
 
     assert count == 2
-    assert store.get("npc_x").label == "warm"
-    assert store.get("npc_y").label == "melancholic"
+    assert (await store.get("npc_x")).label == "warm"
+    assert (await store.get("npc_y")).label == "melancholic"
 
 
 @pytest.mark.asyncio

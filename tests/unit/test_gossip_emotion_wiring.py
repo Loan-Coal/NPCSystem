@@ -75,6 +75,7 @@ def _make_mock_session(severity: int):
 async def test_emotion_shock_called_for_high_severity():
     """apply_event_shock must be called when severity >= threshold."""
     emotion_updater = MagicMock()
+    emotion_updater.apply_event_shock = AsyncMock()
     handler = _make_handler(emotion_updater=emotion_updater, emotion_threshold=50)
 
     pairs = [
@@ -101,6 +102,7 @@ async def test_emotion_shock_called_for_high_severity():
 async def test_emotion_shock_not_called_for_low_severity():
     """apply_event_shock must NOT be called when severity < threshold."""
     emotion_updater = MagicMock()
+    emotion_updater.apply_event_shock = AsyncMock()
     handler = _make_handler(emotion_updater=emotion_updater, emotion_threshold=50)
 
     pairs = [
@@ -152,6 +154,7 @@ async def test_emotion_shock_skipped_when_no_updater():
 async def test_emotion_shock_at_exact_threshold():
     """apply_event_shock must be called when severity == threshold (inclusive)."""
     emotion_updater = MagicMock()
+    emotion_updater.apply_event_shock = AsyncMock()
     handler = _make_handler(emotion_updater=emotion_updater, emotion_threshold=50)
 
     pairs = [

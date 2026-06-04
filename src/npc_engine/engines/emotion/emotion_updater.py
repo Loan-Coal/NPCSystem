@@ -1,10 +1,14 @@
 """
-emotion_updater.py - Applies mood updates and decay rules to emotion states.
-
+Module: emotion_updater
+Layer: engines
+Purpose: Applies mood updates and decay rules to emotion states via async store calls.
 Does NOT: read or write graph data.
-
+Dependencies: engines/emotion/emotion_store, engines/emotion/emotion_state
 Dependencies injected: EmotionStore.
+Used by: engines/dialogue/dialogue_handler, engines/gossip/gossip_handler
 """
+
+from __future__ import annotations
 
 from npc_engine.engines.emotion.emotion_state import EmotionState, derive_label
 from npc_engine.engines.emotion.emotion_store import EmotionStore
@@ -28,7 +32,7 @@ class EmotionUpdater:
         self._store = emotion_store
         self._decay_rate = decay_rate
 
-    def apply_dialogue_mood(self, npc_id: str, mood_update: str | None) -> EmotionState:
+    async def apply_dialogue_mood(self, npc_id: str, mood_update: str | None) -> EmotionState:
         """Apply an optional mood label hint from dialogue output and persist the result.
 
         If mood_update is None, the current state is decayed toward neutral.
@@ -41,7 +45,7 @@ class EmotionUpdater:
         Returns:
             The newly computed and stored EmotionState.
         """
-        previous = self._store.get(npc_id=npc_id)
+        previous = await self._store.get(npc_id=npc_id)
         if mood_update is None:
             next_state = self._decay(previous)
         else:
@@ -50,10 +54,10 @@ class EmotionUpdater:
                 arousal=min(100, previous.arousal + 5),
                 label=mood_update,
             )
-        self._store.set(npc_id=npc_id, state=next_state)
+        await self._store.set(npc_id=npc_id, state=next_state)
         return next_state
 
-    def get_state(self, npc_id: str) -> EmotionState:
+    async def get_state(self, npc_id: str) -> EmotionState:
         """Return the current emotion state for an NPC.
 
         Args:
@@ -62,9 +66,9 @@ class EmotionUpdater:
         Returns:
             Stored EmotionState, or a neutral default if none has been set.
         """
-        return self._store.get(npc_id=npc_id)
+        return await self._store.get(npc_id=npc_id)
 
-    def apply_event_shock(self, npc_id: str, severity: int) -> EmotionState:
+    async def apply_event_shock(self, npc_id: str, severity: int) -> EmotionState:
         """Apply an emotional shock when an NPC receives a high-severity rumour or event.
 
         Decreases valence and increases arousal proportionally to event severity,
@@ -78,7 +82,7 @@ class EmotionUpdater:
         Returns:
             The newly computed and stored EmotionState.
         """
-        previous = self._store.get(npc_id=npc_id)
+        previous = await self._store.get(npc_id=npc_id)
         valence_delta = min(_SHOCK_VALENCE_CAP, severity // _SHOCK_VALENCE_DIVISOR)
         arousal_delta = min(_SHOCK_AROUSAL_CAP, severity // _SHOCK_AROUSAL_DIVISOR)
         new_valence = max(-100, previous.valence - valence_delta)
@@ -88,7 +92,7 @@ class EmotionUpdater:
             arousal=new_arousal,
             label=derive_label(new_valence, new_arousal),
         )
-        self._store.set(npc_id=npc_id, state=next_state)
+        await self._store.set(npc_id=npc_id, state=next_state)
         return next_state
 
     def _decay(self, state: EmotionState) -> EmotionState:

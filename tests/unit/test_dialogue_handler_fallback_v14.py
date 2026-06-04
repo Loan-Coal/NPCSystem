@@ -70,10 +70,10 @@ class MinimalLLMClient:
 class FakeEmotionUpdater:
     """Deterministic emotion updater for dialogue handler tests."""
 
-    def get_state(self, npc_id: str):
+    async def get_state(self, npc_id: str):
         return SimpleNamespace(label="neutral")
 
-    def apply_dialogue_mood(self, npc_id: str, mood_update: str | None):
+    async def apply_dialogue_mood(self, npc_id: str, mood_update: str | None):
         return SimpleNamespace(label=mood_update or "neutral", valence=0)
 
 

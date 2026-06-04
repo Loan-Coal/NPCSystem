@@ -177,7 +177,7 @@ class GossipHandler:
                     self._emotion_updater is not None
                     and severity_int >= self._settings.RUMOR_EMOTION_SEVERITY_THRESHOLD
                 ):
-                    self._emotion_updater.apply_event_shock(
+                    await self._emotion_updater.apply_event_shock(
                         npc_id=receiver["id"],
                         severity=severity_int,
                     )

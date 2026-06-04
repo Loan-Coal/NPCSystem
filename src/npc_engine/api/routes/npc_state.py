@@ -40,7 +40,7 @@ async def npc_state(
 async def npc_emotion(npc_id: str, emotion_store: EmotionStore = Depends(get_emotion_store)) -> EmotionResponse:
     """Return current in-memory emotion snapshot for NPC."""
 
-    state = emotion_store.get(npc_id=npc_id)
+    state = await emotion_store.get(npc_id=npc_id)
     return EmotionResponse(
         npc_id=npc_id,
         label=state.label,

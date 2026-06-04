@@ -135,7 +135,7 @@ Verification: `rg "MATCH \(|MERGE \(|begin_transaction|\.commit\(" src/npc_engin
 Effort: L · Depends on: SEV-31 (topology + checker).
 
 ---
-**FINDING [SEV-05]: Shared `emotion_store` and `session_store` singletons mutated from async handlers with no `asyncio.Lock` (strict rule)**
+**[FIXED] FINDING [SEV-05]: Shared `emotion_store` and `session_store` singletons mutated from async handlers with no `asyncio.Lock` (strict rule)**
 Severity: HIGH · Confidence: Confirmed
 Category: concurrency
 Absorbs: ENG-02, PY-09

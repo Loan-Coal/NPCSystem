@@ -46,9 +46,9 @@ def _make_game_time() -> TimePoint:
     return TimePoint(year=1, season="spring", day=5, time_of_day="afternoon")
 
 
-def _make_store_with_turns(npc_id: str, turns: list[str]) -> SessionStore:
+async def _make_store_with_turns(npc_id: str, turns: list[str]) -> SessionStore:
     store = SessionStore(ttl_seconds=300, max_turns=100)
-    store.append_turns(player_id="player1", npc_id=npc_id, new_turns=turns)
+    await store.append_turns(player_id="player1", npc_id=npc_id, new_turns=turns)
     return store
 
 
@@ -93,7 +93,7 @@ def _make_engine(store: SessionStore, llm: MagicMock, threshold: int = 5, clear:
 async def test_consolidate_enough_turns_creates_memory():
     npc_id = "npc_inn"
     turns = [f"Turn {i}" for i in range(10)]
-    store = _make_store_with_turns(npc_id, turns)
+    store = await _make_store_with_turns(npc_id, turns)
     llm = _make_llm("We talked about the festival.")
     engine = _make_engine(store, llm, threshold=5)
     session = _make_session()
@@ -122,7 +122,7 @@ async def test_consolidate_enough_turns_creates_memory():
 @pytest.mark.asyncio
 async def test_consolidate_below_threshold_returns_none():
     npc_id = "npc_blacksmith"
-    store = _make_store_with_turns(npc_id, ["Hello", "Goodbye"])  # 2 turns < threshold 5
+    store = await _make_store_with_turns(npc_id, ["Hello", "Goodbye"])  # 2 turns < threshold 5
     llm = _make_llm()
     engine = _make_engine(store, llm, threshold=5)
     session = _make_session()
@@ -147,7 +147,7 @@ async def test_consolidate_below_threshold_returns_none():
 async def test_consolidate_llm_failure_returns_none_without_crash():
     npc_id = "npc_guard"
     turns = [f"Turn {i}" for i in range(10)]
-    store = _make_store_with_turns(npc_id, turns)
+    store = await _make_store_with_turns(npc_id, turns)
     llm = MagicMock()
     llm.generate = AsyncMock(side_effect=RuntimeError("LLM timed out"))
     engine = _make_engine(store, llm, threshold=5)
@@ -172,7 +172,7 @@ async def test_consolidate_llm_failure_returns_none_without_crash():
 async def test_consolidate_clears_turns_when_configured():
     npc_id = "npc_merchant"
     turns = [f"Turn {i}" for i in range(10)]
-    store = _make_store_with_turns(npc_id, turns)
+    store = await _make_store_with_turns(npc_id, turns)
     llm = _make_llm("The merchant remembered the trade.")
     engine = _make_engine(store, llm, threshold=5, clear=True)
     session = _make_session()
@@ -184,7 +184,7 @@ async def test_consolidate_clears_turns_when_configured():
     ):
         await engine.consolidate(session, npc_id=npc_id, game_time=_make_game_time())
 
-    assert store.get_all_turns_for_npc(npc_id) == []
+    assert await store.get_all_turns_for_npc(npc_id) == []
 
 
 # ---------------------------------------------------------------------------
@@ -195,9 +195,9 @@ async def test_consolidate_clears_turns_when_configured():
 @pytest.mark.asyncio
 async def test_run_tick_consolidates_all_eligible_npcs():
     store = SessionStore(ttl_seconds=300, max_turns=100)
-    store.append_turns("player1", "npc_a", [f"Turn {i}" for i in range(10)])
-    store.append_turns("player1", "npc_b", [f"Turn {i}" for i in range(10)])
-    store.append_turns("player1", "npc_c", ["Only one turn"])  # below threshold
+    await store.append_turns("player1", "npc_a", [f"Turn {i}" for i in range(10)])
+    await store.append_turns("player1", "npc_b", [f"Turn {i}" for i in range(10)])
+    await store.append_turns("player1", "npc_c", ["Only one turn"])  # below threshold
 
     llm = _make_llm("Summary.")
     engine = _make_engine(store, llm, threshold=5)

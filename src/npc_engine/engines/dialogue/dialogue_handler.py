@@ -110,8 +110,8 @@ class DialogueHandler:
             degradation level indicating which tier produced the response.
         """
 
-        turns = self._session_store.get_turns(player_id=request.player_id, npc_id=request.npc_id)
-        current_emotion = self._emotion_updater.get_state(npc_id=request.npc_id)
+        turns = await self._session_store.get_turns(player_id=request.player_id, npc_id=request.npc_id)
+        current_emotion = await self._emotion_updater.get_state(npc_id=request.npc_id)
 
         parsed_response, level = await execute_with_degradation(
             full_factory=lambda: self._run_llm_pipeline(
@@ -148,7 +148,7 @@ class DialogueHandler:
                 tick_id=tick_id,
             )
 
-        new_emotion = self._emotion_updater.apply_dialogue_mood(
+        new_emotion = await self._emotion_updater.apply_dialogue_mood(
             npc_id=request.npc_id, mood_update=final_response.mood_update
         )
         if getattr(new_emotion, "arousal", 0) > 70:
@@ -173,7 +173,7 @@ class DialogueHandler:
                 location_id="home",
                 expires_at_tick=tick_id + 5,
             )
-        self._session_store.append_turns(
+        await self._session_store.append_turns(
             player_id=request.player_id,
             npc_id=request.npc_id,
             new_turns=[
@@ -207,7 +207,7 @@ class DialogueHandler:
             session=self._session, npc_id=npc_id
         )
         base_params = VoiceParams(voice_id=voice_descriptor or "default")
-        current_emotion = self._emotion_updater.get_state(npc_id=npc_id)
+        current_emotion = await self._emotion_updater.get_state(npc_id=npc_id)
         voice_params = modulate_voice(base_params=base_params, emotion_state=current_emotion)
         try:
             audio = await self._tts_client.synthesize(  # type: ignore[union-attr]
@@ -234,8 +234,8 @@ class DialogueHandler:
             string on LLM error.
         """
 
-        turns = self._session_store.get_turns(player_id=request.player_id, npc_id=request.npc_id)
-        current_emotion = self._emotion_updater.get_state(npc_id=request.npc_id)
+        turns = await self._session_store.get_turns(player_id=request.player_id, npc_id=request.npc_id)
+        current_emotion = await self._emotion_updater.get_state(npc_id=request.npc_id)
         prompt = await self._build_dialogue_prompt(
             request=request,
             turns=turns,
