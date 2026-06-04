@@ -59,7 +59,7 @@ logging with RNG-seed + duration; typed exception hierarchy; mypy 0; 98% coverag
 
 > ⚠️ API contract caveat: most routes do not yet declare `response_model=`, so the **OpenAPI schema
 > emits empty bodies** for ~120 routes — client codegen is not yet usable. Fixing this is the planned
-> Batch 5 (`refactor/BATCH5_RESPONSE_MODEL.md`).
+> Batch 5 (`project-harness/BATCH5_RESPONSE_MODEL.md`).
 
 ### B.3 Configuration knobs (`Settings`, env-driven)
 Neo4j connection; LLM backend + per-engine model/timeouts; Ollama context length + derived prompt
