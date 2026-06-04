@@ -30,6 +30,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - SEV-31 DONE: `scripts/check_layers.py` + `make check-layers` enforce layer ranks; `world/` and `mutation/` assigned rank 2 (graph peer, per actual import edges); `reindex_job_service` moved to `retrieval/`; two engines' upward api imports removed (now raise ValueError if registry not injected). SEV-04 is now unblocked.
 - test_action_workers + test_spread_rumor_worker have 2 pre-existing failures (unrelated); do not confuse with regressions.
 - SEV-36 DONE: `compute_distortion_probability`, `compute_confidence`, `compute_seed_value` now public in `gossip_distort.py`; `_build_write_params` logs `distortion_probability` + `seed` per pair; `believe_rumor` gets `belief_confidence` from trust (not distortion_level). DEC-064 (quest completed deferred), DEC-065 (no BASE_DISTORTION_RATE alias). gossip_handler.py waiver extended to ~351 lines (DEC-061).
+- SEV-19/20/21/22/40/41 DONE (batch): resolve_log_prompts() in dialogue_handler; is_public_path() env-gated + MAX_WS_CONNECTIONS_PER_KEY=5; check_neo4j_password validator + MAX_RATE_LIMIT_BUCKETS eviction; _secret_rng_seed/_quest_rng_seed seeded RNG; seeder print→LOGGER + fail-fast API key; ensure_utf8_stdout() in demo/scenarios. Tests: 26+9+6+5+6 = 52 new. DEC-066/067 (line waivers). Tests in gossip_emotion_wiring/n_plus_one updated to patch propagate_secret + select_gossip_secret instead of random module.
 - SEV-23 DONE: dependency_singletons split → dependencies_infra/stores/engines/advanced + thin re-exporter. political_writer split into 3. api_seeder split into api_seeder/seed_data/seed_http. quest.py helpers → quest_helpers.py. chapter_labeler.py extracted. EmbeddingIndexProtocol → context_protocols.py. Waivers: chapter_engine.py ~322 lines (DEC-062), context_builder.py ~464 lines (DEC-016 updated). rules baseline ratcheted to 38.
 - SEV-32 DONE: scripts/docstring_audit.py (CI gate) + scripts/migrate_docstrings.py (one-shot migration); 154 files got Layer: added; check-docstrings added to make check. DEC-063. Placeholder Purpose:/Dependencies:/Used by: values should be filled over time.
 
@@ -64,6 +65,12 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - [x] **FIX-SEV-02** — Remove `npc_engine` imports from `demo_game` · **CRITICAL** · M · deps: none
 - [x] **FIX-SEV-13** — Restore canonical WorldState id `world` · HIGH · S · deps: none (coordinate with SEV-11)
 - [x] **FIX-SEV-11** — Make game losable/winnable; fix attribution/neutral bribes · HIGH · M · deps: none
+- [x] **FIX-SEV-19** — Env-gate LLM prompt logging (LOG_LLM_PROMPTS AND ENV==dev) · MEDIUM · S · deps: none
+- [x] **FIX-SEV-20** — Close auth surface gaps (/readiness, docs, WS limits) · MEDIUM · M · deps: none
+- [x] **FIX-SEV-21** — NEO4J_PASSWORD validator, bounded rate-limit dict, idempotency guidance · MEDIUM · M · deps: none
+- [x] **FIX-SEV-22** — Seed + log RNG on gossip secret + quest-generation paths · MEDIUM · S · deps: none
+- [x] **FIX-SEV-40** — Replace print() + hardcoded API-key default in seeder · LOW · S · deps: none
+- [x] **FIX-SEV-41** — Force UTF-8 stdout in demo/scenario entrypoints · LOW · S · deps: none
 - [ ] **FIX-SEV-12** — Multi-tenant / world isolation · HIGH · XL · **deps: DECISIONS approval + SEV-04 + SEV-10**
 - [x] **FIX-SEV-28** — WS recv timeout + watchdog · MEDIUM · S · deps: none
 - [x] **FIX-SEV-33** — Consistent error envelope for integrators · MEDIUM · M · deps: none
