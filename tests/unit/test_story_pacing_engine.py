@@ -1,14 +1,13 @@
 """
 Unit tests for the story pacing engine (Phase 4.3).
 
-Tests use fake async session stubs — no live DB required.
+After SEV-04: the engine delegates DB calls to graph.story_pacing_queries.
+Tests patch those graph functions directly.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -18,59 +17,10 @@ from npc_engine.engines.story_pacing.story_pacing_engine import StoryPacingEngin
 from npc_engine.world.world_state import WorldState
 
 
-# ---------------------------------------------------------------------------
-# Async session stubs
-# ---------------------------------------------------------------------------
-
 _RULES_PATH = (
     Path(__file__).resolve().parent.parent.parent
     / "src" / "npc_engine" / "engines" / "story_pacing" / "pacing_rules.yaml"
 )
-
-
-@dataclass
-class _AsyncIter:
-    _items: list[Any]
-    _idx: int = field(default=0, init=False)
-
-    def __aiter__(self) -> "_AsyncIter":
-        return self
-
-    async def __anext__(self) -> Any:
-        if self._idx >= len(self._items):
-            raise StopAsyncIteration
-        item = self._items[self._idx]
-        self._idx += 1
-        return item
-
-
-@dataclass
-class _FakeResult:
-    _records: list[dict]
-
-    def __aiter__(self) -> _AsyncIter:
-        return _AsyncIter(self._records)
-
-    async def single(self) -> dict | None:
-        return self._records[0] if self._records else None
-
-
-def _make_session(quest_rows: list[dict], event_rows: list[dict]) -> Any:
-    """Build a fake async session that returns specified rows per query."""
-    call_count = [0]
-
-    async def fake_run(query: str, **kwargs: Any) -> _FakeResult:
-        # First call = high-severity quests; second call = recent events.
-        idx = call_count[0]
-        call_count[0] += 1
-        if idx == 0:
-            return _FakeResult(quest_rows)
-        return _FakeResult(event_rows)
-
-    session = AsyncMock()
-    session.run = fake_run
-    return session
-
 
 _DEFAULT_RULES = PacingRules(
     high_severity_quest_threshold=70,
@@ -80,10 +30,6 @@ _DEFAULT_RULES = PacingRules(
     major_event_severity_floor=60,
 )
 
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 
 def test_pacing_rules_loader_loads_yaml() -> None:
     """load_pacing_rules reads the real pacing_rules.yaml and populates all fields."""
@@ -98,14 +44,19 @@ def test_pacing_rules_loader_loads_yaml() -> None:
 @pytest.mark.asyncio
 async def test_run_tick_suppresses_when_high_severity_quest_active() -> None:
     """When a high-severity quest is active, max_event_severity drops to suppression cap."""
-    quest_rows = [{"quest_id": "q1", "severity": 80}]
-    event_rows: list[dict] = []
-    session = _make_session(quest_rows, event_rows)
-
+    session = AsyncMock()
     engine = StoryPacingEngine(rules=_DEFAULT_RULES)
     world_state = WorldState()
 
     with patch(
+        "npc_engine.engines.story_pacing.story_pacing_engine.get_active_high_severity_quests",
+        new_callable=AsyncMock,
+        return_value=[{"quest_id": "q1", "severity": 80}],
+    ), patch(
+        "npc_engine.engines.story_pacing.story_pacing_engine.get_recent_major_events",
+        new_callable=AsyncMock,
+        return_value=[],
+    ), patch(
         "npc_engine.engines.story_pacing.story_pacing_engine.get_world_state",
         return_value=world_state,
     ), patch(
@@ -122,14 +73,19 @@ async def test_run_tick_suppresses_when_high_severity_quest_active() -> None:
 @pytest.mark.asyncio
 async def test_run_tick_normal_when_no_high_severity_quest() -> None:
     """When no high-severity quests are active, max_event_severity stays at 100."""
-    quest_rows: list[dict] = []
-    event_rows: list[dict] = []
-    session = _make_session(quest_rows, event_rows)
-
+    session = AsyncMock()
     engine = StoryPacingEngine(rules=_DEFAULT_RULES)
     world_state = WorldState()
 
     with patch(
+        "npc_engine.engines.story_pacing.story_pacing_engine.get_active_high_severity_quests",
+        new_callable=AsyncMock,
+        return_value=[],
+    ), patch(
+        "npc_engine.engines.story_pacing.story_pacing_engine.get_recent_major_events",
+        new_callable=AsyncMock,
+        return_value=[],
+    ), patch(
         "npc_engine.engines.story_pacing.story_pacing_engine.get_world_state",
         return_value=world_state,
     ), patch(
@@ -146,14 +102,19 @@ async def test_run_tick_normal_when_no_high_severity_quest() -> None:
 @pytest.mark.asyncio
 async def test_run_tick_relaxes_after_cooldown() -> None:
     """When no major events occurred in the cooldown window, quest rate stays normal."""
-    quest_rows: list[dict] = []
-    event_rows: list[dict] = []  # no recent events → relaxed
-    session = _make_session(quest_rows, event_rows)
-
+    session = AsyncMock()
     engine = StoryPacingEngine(rules=_DEFAULT_RULES)
     world_state = WorldState()
 
     with patch(
+        "npc_engine.engines.story_pacing.story_pacing_engine.get_active_high_severity_quests",
+        new_callable=AsyncMock,
+        return_value=[],
+    ), patch(
+        "npc_engine.engines.story_pacing.story_pacing_engine.get_recent_major_events",
+        new_callable=AsyncMock,
+        return_value=[],
+    ), patch(
         "npc_engine.engines.story_pacing.story_pacing_engine.get_world_state",
         return_value=world_state,
     ), patch(
@@ -169,10 +130,9 @@ async def test_run_tick_relaxes_after_cooldown() -> None:
 @pytest.mark.asyncio
 async def test_run_tick_writes_updated_world_state() -> None:
     """run_tick calls upsert_world_state with the computed suppression values."""
-    quest_rows = [{"quest_id": "q1", "severity": 75}]
-    event_rows: list[dict] = []
-    session = _make_session(quest_rows, event_rows)
+    from typing import Any
 
+    session = AsyncMock()
     engine = StoryPacingEngine(rules=_DEFAULT_RULES)
     world_state = WorldState()
     captured: list[WorldState] = []
@@ -182,6 +142,14 @@ async def test_run_tick_writes_updated_world_state() -> None:
         return world_state
 
     with patch(
+        "npc_engine.engines.story_pacing.story_pacing_engine.get_active_high_severity_quests",
+        new_callable=AsyncMock,
+        return_value=[{"quest_id": "q1", "severity": 75}],
+    ), patch(
+        "npc_engine.engines.story_pacing.story_pacing_engine.get_recent_major_events",
+        new_callable=AsyncMock,
+        return_value=[],
+    ), patch(
         "npc_engine.engines.story_pacing.story_pacing_engine.get_world_state",
         return_value=world_state,
     ), patch(

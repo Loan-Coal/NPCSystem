@@ -5,7 +5,7 @@ Purpose: Meta-engine that reads active quests and recent events each tick, then 
          max_event_severity and quest_generation_rate multipliers to WorldState so other
          engines can gate their sampling accordingly.
 Does NOT: call LLMs, create graph nodes/edges, or expose HTTP routes.
-Dependencies: engines.story_pacing.pacing_rules_loader, engines.story_pacing.pacing_queries,
+Dependencies: engines.story_pacing.pacing_rules_loader, graph.story_pacing_queries,
               world.world_reader, world.world_writer
 Dependencies injected: PacingRules (via constructor), AsyncSession (per tick call).
 Used by: npc_engine.scheduler.tick_scheduler
@@ -19,11 +19,11 @@ from typing import Any
 
 from neo4j import AsyncSession
 
-from npc_engine.engines.story_pacing.pacing_queries import (
-    CYPHER_GET_ACTIVE_HIGH_SEVERITY_QUESTS,
-    CYPHER_GET_RECENT_MAJOR_EVENTS,
-)
 from npc_engine.engines.story_pacing.pacing_rules_loader import PacingRules
+from npc_engine.graph.story_pacing_queries import (
+    get_active_high_severity_quests,
+    get_recent_major_events,
+)
 from npc_engine.config import get_settings
 from npc_engine.world.world_reader import get_world_state
 from npc_engine.world.world_writer import upsert_world_state
@@ -109,14 +109,10 @@ class StoryPacingEngine:
         Returns:
             List of dicts with quest_id and severity keys.
         """
-        result = await session.run(
-            CYPHER_GET_ACTIVE_HIGH_SEVERITY_QUESTS,
+        return await get_active_high_severity_quests(
+            session=session,
             threshold=self._rules.high_severity_quest_threshold,
         )
-        return [
-            {"quest_id": r["quest_id"], "severity": int(r["severity"])}
-            async for r in result
-        ]
 
     async def _get_recent_major_events(
         self, session: AsyncSession, tick_id: int
@@ -131,16 +127,8 @@ class StoryPacingEngine:
             List of dicts with event_id, severity, and tick_id keys.
         """
         min_tick = max(0, tick_id - self._rules.cooldown_ticks)
-        result = await session.run(
-            CYPHER_GET_RECENT_MAJOR_EVENTS,
+        return await get_recent_major_events(
+            session=session,
             min_tick_id=min_tick,
             floor=self._rules.major_event_severity_floor,
         )
-        return [
-            {
-                "event_id": r["event_id"],
-                "severity": int(r["severity"]),
-                "tick_id": int(r["tick_id"]),
-            }
-            async for r in result
-        ]

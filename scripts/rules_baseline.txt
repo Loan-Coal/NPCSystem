@@ -43,8 +43,6 @@ R005|src/npc_engine/engines/quest_generation/quest_generation_engine.py
 R005|src/npc_engine/engines/quest_generation/slot_validator.py
 R005|src/npc_engine/engines/routine/routine_queries.py
 R005|src/npc_engine/engines/skill/skill_progression_engine.py
-R005|src/npc_engine/engines/story_pacing/pacing_queries.py
-R005|src/npc_engine/engines/story_pacing/story_pacing_engine.py
 R005|src/npc_engine/retrieval/embedding_reconciler.py
 R005|src/npc_engine/retrieval/graph_rag.py
 R005|src/npc_engine/scheduler/tick_lease.py
