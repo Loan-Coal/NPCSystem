@@ -3,13 +3,15 @@ world_writer.py - Persists WorldState updates and returns stored state.
 
 Does NOT: decide event-driven world transitions.
 
-Dependencies injected: AsyncSession.
+Dependencies injected: AsyncSession or AsyncTransaction.
 """
+
+from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import cast
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.common.json_utils import dump_json, parse_json_list, parse_json_object
 from npc_engine.world.world_state import WorldState
@@ -30,6 +32,33 @@ SET w.epoch = $epoch,
     w.last_updated_at = datetime()
 RETURN properties(w) AS world
 """
+
+
+async def upsert_world_state_tx(tx: AsyncTransaction, world_state: WorldState) -> None:
+    """Insert or update world state within an already-open transaction.
+
+    Unlike upsert_world_state this variant does NOT return the confirmed state
+    (the transaction has not committed yet). Callers that need the confirmed
+    state must read it after the commit.
+
+    Args:
+        tx: Active Neo4j async transaction.
+        world_state: Validated WorldState model whose fields are persisted.
+    """
+    await tx.run(
+        CYPHER_MERGE_WORLD_STATE,
+        id=world_state.id,
+        epoch=world_state.epoch,
+        faction_standings=dump_json(world_state.faction_standings),
+        active_conditions=dump_json(world_state.active_conditions),
+        weather=world_state.weather,
+        time_of_day=world_state.time_of_day,
+        year=world_state.year,
+        season=world_state.season,
+        day=world_state.day,
+        max_event_severity=world_state.max_event_severity,
+        quest_generation_rate=world_state.quest_generation_rate,
+    )
 
 
 async def upsert_world_state(session: AsyncSession, world_state: WorldState) -> WorldState:

@@ -121,7 +121,7 @@ Effort: M · Depends on: SEV-01 (need real assertions to prove the fix).
 
 ---
 **FINDING [SEV-04]: Cypher and transaction control are pervasive outside `graph/` — 16+ engine files run raw Cypher; engines and every `graph/` sub-writer open/commit their own transactions**
-Severity: HIGH · Confidence: Confirmed · **In Progress** (gossip, story_pacing, routine, skill, military, clique, idempotency migrated; remaining: events, faction_politics, quest_generation)
+Severity: HIGH · Confidence: Confirmed · **DONE** (all engine domains migrated: gossip, story_pacing, routine, skill, military, clique, idempotency, events, faction_politics, quest_generation; new graph/ files: event_queries, faction_politics_queries, quest_generation_queries; world_reader/world_writer accept AsyncTransaction; tx ownership in engines deferred to SEV-30)
 Category: layer-violation / data-integrity
 Absorbs: ARCH-01, ARCH-06, GRAPH-01, GRAPH-02, ARCH-09
 Rule violated: "No Neo4j queries outside `graph/`"; "graph_writer.py is the only file that opens and commits transactions; sub-writers receive `AsyncSession`"

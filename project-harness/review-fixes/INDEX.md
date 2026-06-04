@@ -20,7 +20,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - SEV-02 DONE: `game_controller._dispatch_proposal` now calls `client.post_interaction(player_id, npc_id, proposal_dict)`; `run.py` uses `DEMO_CACHE_VERSION` from `demo_game/constants.py`. Test: `tests/unit/test_sev02_no_engine_imports.py`.
 - SEV-13 DONE: `_WORLD_STATE_ID="world"` in seed.py; `put_world_state` now sends `id="world"` and drops faction_standings/time_of_day/weather clobber. SEV-11 (game losable/winnable) builds on this same world-state arc.
 - Hard ordering: **SEV-31 → SEV-04 → {SEV-08, SEV-30, SEV-12}**; SEV-42 DONE so SEV-23 ordering constraint satisfied.
-- SEV-04 GOSSIP+STORY_PACING+ROUTINE+SKILL+MILITARY+CLIQUE+IDEMPOTENCY DONE: idempotency domain: `graph/idempotency_models.py` (IdempotencyRecord), `graph/idempotency_queries.py` (Cypher), `graph/idempotency_writer.py` (Neo4jIdempotencyStore); old `engines/idempotency/neo4j_store.py` + `neo4j_queries.py` deleted; callers updated. Remaining domains: events, faction_politics, quest_generation. Also retrieval/world/scheduler have raw Cypher — do these domain by domain.
+- SEV-04 FULLY DONE (engines): all engine domains migrated to graph/. New files: `graph/event_queries.py`, `graph/faction_politics_queries.py`, `graph/quest_generation_queries.py`. world_reader/world_writer now accept AsyncTransaction for in-tx world state ops. rules_baseline ratcheted to 40. Remaining raw Cypher: `retrieval/`, `world/`, `scheduler/` — not engine violations, lower priority, SEV-08 unblocked.
 - ISSUE-056: 20 pre-existing test failures in HEAD (quest_lifecycle, sev06, sev27, sev18, quest_event_provenance) — see ISSUES.md. Not caused by SEV-04.
 - SEV-05 DONE: `EmotionStore.get/set` and all `SessionStore` mutation methods are now `async def` + `asyncio.Lock`. `EmotionUpdater` methods also async. Callers updated: `dialogue_handler`, `gossip_handler`, `mood_contagion_engine`, `memory_consolidation_engine`, `npc_state` route. SEV-06 (Semaphore fan-out) follows same scheduler path — no further interface changes needed.
 - **SEV-10 APPROVED**: schema change confirmed. api_seeder idempotency strategy still open — see FIX-SEV-10.md (get-then-skip vs client-supplied stable id).
@@ -52,7 +52,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 
 ### Block D — layer & type campaigns (large, sequence internally)
 - [x] **FIX-SEV-31** — Layer model + contract checker · MEDIUM · M · deps: none → **blocks SEV-04**
-- [ ] **FIX-SEV-04** — Move Cypher + transactions into `graph/` · HIGH · L · deps: SEV-31; folds in SEV-17, SEV-30
+- [x] **FIX-SEV-04** — Move Cypher + transactions into `graph/` · HIGH · L · deps: SEV-31; folds in SEV-17, SEV-30
 - [x] **FIX-SEV-14** — Pydantic exit schemas + mypy burn-down · HIGH · L · deps: none; completes SEV-15 gating
 - [x] **FIX-SEV-10** — Core-node constraints + seeder idempotency · HIGH · M · deps: approved (see FIX-SEV-10.md for open api_seeder idempotency strategy Q)
 - [x] **FIX-SEV-29** — Batch N+1 graph queries (gossip + embedding reconciler) · MEDIUM · M · deps: none

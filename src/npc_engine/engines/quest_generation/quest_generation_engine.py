@@ -46,20 +46,22 @@ from npc_engine.engines.quest_generation.slot_models import (
 from npc_engine.engines.quest_generation.slot_validator import SlotValidator
 from npc_engine.graph.belief_queries import get_beliefs_for_character
 from npc_engine.graph.causality_service import record_causation
-from npc_engine.graph.generic_graph_utils import cypher_identifier, resolve_node_label
+from npc_engine.graph.generic_graph_utils import resolve_node_label
 from npc_engine.graph.goal_queries import get_goals_for_character
 from npc_engine.graph.graph_reader import get_npc_location_id
 from npc_engine.graph.group_service import get_groups_for_character_svc
 from npc_engine.graph.item_queries import get_items_for_character
 from npc_engine.graph.mood_queries import get_character_mood
 from npc_engine.graph.need_queries import get_needs_for_character
+from npc_engine.graph.quest_generation_queries import (
+    get_candidate_ids_by_label,
+    get_character_info,
+)
 from npc_engine.graph.quest_node_service import create_quest
 
 _logger = logging.getLogger(__name__)
 
 _MAX_RETRIES = 3
-_CYPHER_GET_CHARACTER = "MATCH (c:Character {id: $character_id}) RETURN c.archetype AS archetype, c.name AS name"
-_CYPHER_GET_NODES_BY_TYPE = "MATCH (n:{label}) RETURN n.id AS id LIMIT 20"
 
 
 def _load_prompt(prompt_path: Path) -> dict[str, str]:
@@ -176,12 +178,7 @@ class QuestGenerationEngine:
         character_id: str,
     ) -> tuple[str, str]:
         """Fetch archetype and name for a character node."""
-        result = await session.run(_CYPHER_GET_CHARACTER, character_id=character_id)
-        records = [dict(r) async for r in result]
-        if not records:
-            raise ValueError(f"Character '{character_id}' not found in graph")
-        row = records[0]
-        return str(row.get("archetype") or "default"), str(row.get("name") or character_id)
+        return await get_character_info(session, character_id=character_id)
 
     async def _get_giver_context(
         self,
@@ -378,10 +375,8 @@ class QuestGenerationEngine:
             if node_type in seen_types:
                 continue
             seen_types.add(node_type)
-            label = cypher_identifier(resolve_node_label(node_type))
-            cypher = f"MATCH (n:{label}) RETURN n.id AS id LIMIT 20"
-            result = await session.run(cypher)
-            ids = [str(r["id"]) async for r in result if r.get("id") is not None]
+            label = resolve_node_label(node_type)
+            ids = await get_candidate_ids_by_label(session, label=label)
             candidates[node_type] = ids
         return candidates
 

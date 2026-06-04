@@ -16,16 +16,14 @@ from typing import TYPE_CHECKING
 from neo4j import AsyncSession
 
 from npc_engine.engines.quest_generation.slot_models import SlotDefinition, SlotFill
+from npc_engine.graph.quest_generation_queries import (
+    check_node_labels,
+    get_template_skill_requirements,
+)
 from npc_engine.graph.skill_queries import check_skill_threshold
 
 if TYPE_CHECKING:
     pass
-
-_CYPHER_CHECK_NODE = "MATCH (n {id: $node_id}) RETURN labels(n) AS labels LIMIT 1"
-_CYPHER_TEMPLATE_SKILL_REQS = """
-MATCH (qt:QuestTemplate {id: $template_id})-[r:REQUIRES_SKILL]->(s:Skill)
-RETURN s.id AS skill_id, toInteger(r.min_level) AS min_level
-"""
 
 
 class SlotValidator:
@@ -96,8 +94,7 @@ class SlotValidator:
         Returns:
             List of violation strings; empty means all skill requirements are satisfied.
         """
-        result = await self._session.run(_CYPHER_TEMPLATE_SKILL_REQS, template_id=template_id)
-        requirements = [dict(r) async for r in result]
+        requirements = await get_template_skill_requirements(self._session, template_id=template_id)
         if not requirements:
             return []
         violations: list[str] = []
@@ -120,11 +117,7 @@ class SlotValidator:
 
     async def _get_labels(self, node_id: str) -> list[str] | None:
         """Return labels for a node ID, or None if the node does not exist."""
-        result = await self._session.run(_CYPHER_CHECK_NODE, node_id=node_id)
-        records = [dict(r) async for r in result]
-        if not records:
-            return None
-        return list(records[0].get("labels", []))
+        return await check_node_labels(self._session, node_id=node_id)
 
     def build_fills(
         self,

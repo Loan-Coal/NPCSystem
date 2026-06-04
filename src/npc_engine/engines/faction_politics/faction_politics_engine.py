@@ -18,35 +18,14 @@ from neo4j import AsyncSession
 
 from npc_engine.engines.faction_politics.rules_loader import FactionPoliticsRules
 from npc_engine.graph.faction_history_service import record_standing_change
+from npc_engine.graph.faction_politics_queries import (
+    get_all_standings,
+    get_character_factions,
+    get_recent_events,
+)
 from npc_engine.graph.faction_writer import set_standing
 
 _LOGGER = logging.getLogger(__name__)
-
-_DEFAULT_EVENT_LIMIT = 20
-
-# ---------------------------------------------------------------------------
-# Cypher constants
-# ---------------------------------------------------------------------------
-
-CYPHER_GET_RECENT_EVENTS = """
-MATCH (e:Event)
-WHERE e.src_character_id IS NOT NULL
-  AND e.event_type IS NOT NULL
-RETURN e.id AS event_id, e.event_type AS event_type, e.src_character_id AS src_character_id
-ORDER BY e.tick_id DESC
-LIMIT $limit
-"""
-
-CYPHER_GET_CHARACTER_FACTIONS = """
-MATCH (c:Character {id: $character_id})-[:MEMBER_OF]->(f:Faction)
-WHERE f.is_active = true
-RETURN f.id AS faction_id
-"""
-
-CYPHER_GET_ALL_STANDINGS = """
-MATCH (a:Faction)-[r:STANDS_WITH]->(b:Faction)
-RETURN a.id AS src_id, b.id AS dst_id, r.standing AS standing
-"""
 
 
 class FactionPoliticsEngine:
@@ -102,15 +81,7 @@ class FactionPoliticsEngine:
         Returns:
             Tuple of (number of standing updates applied, set of (src_id, dst_id) pairs modified).
         """
-        result = await session.run(CYPHER_GET_RECENT_EVENTS, limit=_DEFAULT_EVENT_LIMIT)
-        events: list[dict[str, str]] = [
-            {
-                "event_id": r["event_id"],
-                "event_type": r["event_type"],
-                "src_character_id": r["src_character_id"],
-            }
-            async for r in result
-        ]
+        events: list[dict[str, str]] = await get_recent_events(session)
 
         applied = 0
         modified_pairs: set[tuple[str, str]] = set()
@@ -204,8 +175,7 @@ class FactionPoliticsEngine:
         Returns:
             List of faction ID strings.
         """
-        result = await session.run(CYPHER_GET_CHARACTER_FACTIONS, character_id=character_id)
-        return [r["faction_id"] async for r in result]
+        return await get_character_factions(session, character_id=character_id)
 
     async def _get_all_standings(self, session: AsyncSession) -> list[dict[str, Any]]:
         """Fetch all STANDS_WITH edges from the graph.
@@ -216,8 +186,4 @@ class FactionPoliticsEngine:
         Returns:
             List of dicts with src_id, dst_id, standing keys.
         """
-        result = await session.run(CYPHER_GET_ALL_STANDINGS)
-        return [
-            {"src_id": r["src_id"], "dst_id": r["dst_id"], "standing": int(r["standing"])}
-            async for r in result
-        ]
+        return await get_all_standings(session)

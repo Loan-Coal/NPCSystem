@@ -31,16 +31,10 @@ R002|src/npc_engine/data/api_seeder.py
 R002|src/npc_engine/scripts/check_contracts.py
 R002|src/npc_engine/scripts/guard_contract_test_sync.py
 R002|src/npc_engine/scripts/simulate_world_flow.py
-R005|src/npc_engine/engines/events/awareness_seeder.py
 R005|src/npc_engine/engines/events/event_handler.py
-R005|src/npc_engine/engines/events/location_scoper.py
 R005|src/npc_engine/engines/faction_politics/faction_politics_engine.py
-R005|src/npc_engine/engines/idempotency/neo4j_queries.py
-R005|src/npc_engine/engines/idempotency/neo4j_store.py
 R005|src/npc_engine/engines/interaction/quest_verifier.py
 R005|src/npc_engine/engines/quest/quest_lifecycle_engine.py
-R005|src/npc_engine/engines/quest_generation/quest_generation_engine.py
-R005|src/npc_engine/engines/quest_generation/slot_validator.py
 R005|src/npc_engine/retrieval/embedding_reconciler.py
 R005|src/npc_engine/retrieval/graph_rag.py
 R005|src/npc_engine/scheduler/tick_lease.py

@@ -84,12 +84,13 @@ def test_gossip_pair_selector_query_requires_active_characters() -> None:
 
 
 def test_awareness_seeder_query_requires_active_characters() -> None:
-    """Awareness seeding query must exclude inactive characters."""
+    """Awareness seeding query must exclude inactive characters (SEV-04: now in graph layer)."""
 
-    awareness_seeder_path = PROJECT_ROOT / "engines" / "events" / "awareness_seeder.py"
-    awareness_seeder_text = awareness_seeder_path.read_text(encoding="utf-8")
+    # After SEV-04 the CYPHER_SEED_AWARENESS query lives in graph/event_queries.py.
+    event_queries_path = PROJECT_ROOT / "graph" / "event_queries.py"
+    event_queries_text = event_queries_path.read_text(encoding="utf-8")
 
-    assert "c.is_active = true" in awareness_seeder_text
+    assert "c.is_active = true" in event_queries_text
 
 
 def test_dialogue_stream_path_includes_emotion_state_in_context_builder_call() -> None:

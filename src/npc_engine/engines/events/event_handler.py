@@ -15,7 +15,6 @@ from pathlib import Path
 
 from neo4j import AsyncSession
 
-from npc_engine.common.json_utils import dump_json, parse_json_list, parse_json_object
 from npc_engine.config import Settings
 from npc_engine.engines.embedding_invalidation import invalidate_embedding_safely
 from npc_engine.engines.events.awareness_seeder import seed_awareness_tx
@@ -24,6 +23,7 @@ from npc_engine.engines.events.event_pool import EventTemplate, load_event_pool
 from npc_engine.engines.events.location_scoper import resolve_locations
 from npc_engine.engines.routine.routine_queries import set_routine_override
 from npc_engine.graph.causality_service import record_causation
+from npc_engine.graph.event_queries import get_characters_at_location
 from npc_engine.graph.event_writer import upsert_event
 from npc_engine.graph.reputation_writer import adjust_reputation_for_event
 from npc_engine.utils.errors import ReputationNotFoundError
@@ -32,34 +32,10 @@ from npc_engine.retrieval.embedding_index import EmbeddingIndex
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.type_registry.node_validator import validate_node_write
 from npc_engine.world.world_reader import get_world_state
-from npc_engine.world.world_state import WorldState
+from npc_engine.world.world_writer import upsert_world_state_tx
 
 
 LOGGER = logging.getLogger(__name__)
-
-CYPHER_CHARACTERS_AT_LOCATION = """
-MATCH (c:Character {is_active: true})-[:LOCATED_AT]->(loc:Location {id: $location_id})
-RETURN c.id AS character_id
-"""
-
-CYPHER_GET_WORLD_STATE = """
-MATCH (w:WorldState {id: $world_id})
-RETURN properties(w) AS world
-"""
-
-
-CYPHER_MERGE_WORLD_STATE = """
-MERGE (w:WorldState {id: $id})
-SET w.epoch = $epoch,
-    w.faction_standings = $faction_standings,
-    w.active_conditions = $active_conditions,
-    w.weather = $weather,
-    w.time_of_day = $time_of_day,
-    w.year = $year,
-    w.season = $season,
-    w.day = $day,
-    w.last_updated_at = datetime()
-"""
 
 
 class EventHandler:
@@ -183,10 +159,7 @@ class EventHandler:
                 await upsert_event(tx=tx, event=event)  # type: ignore[arg-type]
                 await seed_awareness_tx(tx=tx, event_id=event_id, location_id=location_id, tick_id=tick_id)
                 if template.faction_id is not None and template.reputation_delta is not None:
-                    rep_chars_result = await tx.run(
-                        CYPHER_CHARACTERS_AT_LOCATION, location_id=location_id
-                    )
-                    rep_char_ids = [record["character_id"] async for record in rep_chars_result]
+                    rep_char_ids = await get_characters_at_location(tx, location_id=location_id)  # type: ignore[arg-type]
                     for char_id in rep_char_ids:
                         try:
                             await adjust_reputation_for_event(
@@ -205,10 +178,7 @@ class EventHandler:
                     self._disruption_rules, template.event_type, template.severity
                 )
                 if matched_rules:
-                    chars_result = await tx.run(
-                        CYPHER_CHARACTERS_AT_LOCATION, location_id=location_id
-                    )
-                    char_ids = [record["character_id"] async for record in chars_result]
+                    char_ids = await get_characters_at_location(tx, location_id=location_id)  # type: ignore[arg-type]
                     for rule in matched_rules:
                         for char_id in char_ids:
                             await set_routine_override(
@@ -218,47 +188,16 @@ class EventHandler:
                                 expires_at_tick=tick_id + rule.duration_ticks,
                             )
                 if template.severity >= 80:
-                    world_result = await tx.run(CYPHER_GET_WORLD_STATE, world_id=self._settings.WORLD_ID)
-                    world_record = await world_result.single()
-                    if world_record is None:
-                        world_state = WorldState()
-                    else:
-                        payload = dict(world_record["world"])
-                        world_state = WorldState(
-                            id=payload.get("id", "world"),
-                            epoch=payload.get("epoch", "age_of_peace"),
-                            faction_standings=parse_json_object(payload.get("faction_standings", {})),
-                            active_conditions=parse_json_list(payload.get("active_conditions", [])),
-                            weather=payload.get("weather", "clear"),
-                            time_of_day=payload.get("time_of_day", "morning"),
-                            year=int(payload.get("year", 1)),
-                            season=payload.get("season", "spring"),
-                            day=int(payload.get("day", 1)),
-                        )
-                    updated_world = world_state
+                    world_state = await get_world_state(tx, world_id=self._settings.WORLD_ID)
                     if template.event_type not in world_state.active_conditions:
                         updated_world = world_state.model_copy(
                             update={"active_conditions": [*world_state.active_conditions, template.event_type]}
                         )
-                    await tx.run(
-                        CYPHER_MERGE_WORLD_STATE,
-                        id=updated_world.id,
-                        epoch=updated_world.epoch,
-                        faction_standings=dump_json(updated_world.faction_standings),
-                        active_conditions=dump_json(updated_world.active_conditions),
-                        weather=updated_world.weather,
-                        time_of_day=updated_world.time_of_day,
-                        year=updated_world.year,
-                        season=updated_world.season,
-                        day=updated_world.day,
-                    )
+                        await upsert_world_state_tx(tx=tx, world_state=updated_world)
                 await tx.commit()
 
             if template.severity >= 80:
-                chars_result2 = await session.run(
-                    CYPHER_CHARACTERS_AT_LOCATION, location_id=location_id
-                )
-                witness_ids = [rec["character_id"] async for rec in chars_result2]
+                witness_ids = await get_characters_at_location(session, location_id=location_id)
                 actor_id = str(raw_props.get("src_character_id", "")) or None
                 if actor_id and witness_ids:
                     max_witnesses = self._settings.WITNESSED_MAX_PER_EVENT
