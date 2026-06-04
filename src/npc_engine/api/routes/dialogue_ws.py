@@ -33,6 +33,23 @@ from npc_engine.utils.logging import get_logger
 router = APIRouter()
 logger = get_logger(__name__)
 
+# Maximum number of concurrent WebSocket connections allowed per API key.
+# Requests that would exceed this cap are rejected before accepting the socket,
+# preventing per-frame LLM calls from being used as an unmetered amplification vector.
+MAX_WS_CONNECTIONS_PER_KEY: int = 5
+
+
+def check_ws_connection_limit(current_count: int) -> bool:
+    """Return True when a new WS connection may be opened for a given key.
+
+    Args:
+        current_count: Number of active WebSocket connections for this key.
+
+    Returns:
+        True when current_count is below MAX_WS_CONNECTIONS_PER_KEY.
+    """
+    return current_count < MAX_WS_CONNECTIONS_PER_KEY
+
 
 def _build_done_data(response: DialogueResponse) -> dict[str, Any]:
     """Assemble the payload for the ``done`` WebSocket message.

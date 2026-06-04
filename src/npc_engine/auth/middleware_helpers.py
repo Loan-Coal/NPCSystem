@@ -53,18 +53,29 @@ REQUEST_ID_FALLBACK_PREFIX = "req"
 LOGGER = get_logger(__name__)
 
 
-def is_public_path(path: str) -> bool:
-    """Return True for paths served without authentication.
+def is_public_path(path: str, *, env: str = "dev") -> bool:
+    """Return True when the path may be accessed without an API key.
 
-    Covers the health probe, the OpenAPI docs, and the static designer dashboard
-    assets (which carry no secrets; their API calls supply their own Bearer token).
+    Rules:
+    - /health is always public (liveness probe must work in all environments).
+    - /docs, /redoc, /openapi.json are public only when ENV == "dev" so that
+      the full API surface is not enumerable in staging/prod.
+    - /readiness is NOT public; only /health has that exemption.
+    - Dashboard assets are public in dev only (they supply their own Bearer tokens).
 
     Args:
-        path: Incoming request path.
+        path: Incoming request URL path.
+        env: Current ENV value ("dev", "staging", or "prod"). Defaults to "dev"
+            for backward-compatibility with call sites that don't pass env yet.
+
     Returns:
-        True when the path must bypass the auth check.
+        True when the path is exempt from authentication for the given env.
     """
-    return path == HEALTH_PATH or path in DOCS_PATHS or path.startswith(DASHBOARD_PATH_PREFIX)
+    if path == HEALTH_PATH:
+        return True
+    if path in DOCS_PATHS or path.startswith(DASHBOARD_PATH_PREFIX):
+        return env == "dev"
+    return False
 
 
 def _required_scope_for_path(path: str, api_v1_prefix: str) -> str | None:

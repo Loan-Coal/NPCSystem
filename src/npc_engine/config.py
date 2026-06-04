@@ -25,6 +25,7 @@ from npc_engine.config_validators import (
     check_game_schema_path,
     check_idempotency_header_name,
     check_llm_config_path,
+    check_neo4j_password,
     check_package_data_path,
     check_positive_idempotency_value,
     check_redis_connect_timeout,
@@ -175,6 +176,12 @@ class Settings(BaseSettings):
         """
         if self.PROMPT_TOKEN_BUDGET == 0:
             object.__setattr__(self, "PROMPT_TOKEN_BUDGET", self.OLLAMA_CONTEXT_LENGTH - 1200)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_neo4j_password(self) -> "Settings":
+        """Reject the default NEO4J_PASSWORD in staging/prod (SEV-21)."""
+        check_neo4j_password(self.NEO4J_PASSWORD, env=self.ENV)
         return self
 
     @field_validator("API_KEY_SECRET")

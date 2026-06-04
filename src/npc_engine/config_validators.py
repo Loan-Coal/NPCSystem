@@ -233,3 +233,31 @@ def check_package_data_path(value: str, project_root: Path) -> str:
     if candidate.is_absolute():
         return str(candidate)
     return str((project_root / candidate).resolve())
+
+
+_NEO4J_WEAK_PASSWORD = "password"
+
+
+def check_neo4j_password(value: str, env: str) -> str:
+    """Reject the default weak NEO4J_PASSWORD when running outside dev.
+
+    In dev the literal "password" is allowed so the shared suite and local
+    Docker Compose setup work without config changes. In staging/prod the
+    literal is rejected to prevent accidental DB compromise.
+
+    Args:
+        value: Raw NEO4J_PASSWORD value from the environment.
+        env: Current ENV value ("dev", "staging", or "prod").
+
+    Returns:
+        The password string unchanged when valid.
+
+    Raises:
+        ValueError: when value equals the weak literal and env is not "dev".
+    """
+    if value == _NEO4J_WEAK_PASSWORD and env != "dev":
+        raise ValueError(
+            "NEO4J_PASSWORD must not use the default 'password' value in staging/prod. "
+            "Set a strong, unique password via the NEO4J_PASSWORD environment variable."
+        )
+    return value

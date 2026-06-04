@@ -78,7 +78,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         route_label = route_label_from_path(path=request.url.path, api_v1_prefix=self._settings.API_V1_PREFIX)
         started_at = perf_counter()
 
-        if is_public_path(request.url.path):
+        if is_public_path(request.url.path, env=self._settings.ENV):
             try:
                 response = await call_next(request)
             except Exception:
