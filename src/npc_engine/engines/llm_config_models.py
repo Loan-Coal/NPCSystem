@@ -11,17 +11,16 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-_VALID_BACKENDS = Literal["ollama", "mistral7b", "llama8b", "mock"]
 _VALID_FALLBACK_POLICIES = Literal["graceful_degradation", "fail_fast"]
 
 
 class EngineModelParams(BaseModel):
     """LLM adapter identity and per-call generation parameters for one engine."""
 
-    backend: _VALID_BACKENDS
+    backend: str = Field(min_length=1)
     model: str = Field(min_length=1)
     temperature: float = Field(ge=0.0, le=2.0)
     max_tokens: int = Field(gt=0)
@@ -29,6 +28,24 @@ class EngineModelParams(BaseModel):
     stop_sequences: list[str]
 
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+
+    @field_validator("backend")
+    @classmethod
+    def _backend_must_be_registered(cls, value: str) -> str:
+        """Reject backends with no registered adapter (L7-03).
+
+        Validates against the factory registry — the single source of truth — so a
+        config naming an unbuilt backend fails at load instead of crashing at the
+        first generate() call. The import is deferred to avoid an import cycle.
+        """
+        from npc_engine.engines.llm.factory import registered_backends
+
+        valid = registered_backends()
+        if value not in valid:
+            raise ValueError(
+                f"Unknown LLM backend {value!r}; registered backends: {sorted(valid)}"
+            )
+        return value
 
 
 class EnginePromptRef(BaseModel):

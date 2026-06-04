@@ -97,17 +97,32 @@ def test_get_config_returns_valid_model_for_well_formed_yaml(tmp_path: Path, mon
     assert config.fallback.tiers == ["full", "graph_only", "canned"]
 
 
-def test_get_config_accepts_all_valid_backends(tmp_path: Path, monkeypatch) -> None:
-    """Loader should accept each declared backend literal."""
+def test_get_config_accepts_registered_backends(tmp_path: Path, monkeypatch) -> None:
+    """Loader accepts every backend that has a registered adapter (L7-03)."""
 
     import npc_engine.engines.llm_runtime_config as loader_mod
     monkeypatch.setattr(loader_mod, "_ENGINES_PKG_DIR", tmp_path)
 
-    for backend in ("mock", "ollama", "mistral7b", "llama8b"):
+    for backend in ("mock", "ollama"):
         yaml_content = _VALID_YAML.replace("backend: mock", f"backend: {backend}")
         _write_engine_config(tmp_path, f"engine_{backend}", yaml_content.replace("engine: dialogue", f"engine: engine_{backend}"))
         config = get_config(f"engine_{backend}")
         assert config.llm.backend == backend
+
+
+def test_get_config_rejects_unregistered_backend(tmp_path: Path, monkeypatch) -> None:
+    """A backend with no registered adapter fails at load, not at first generate (L7-03).
+
+    Previously 'mistral7b'/'llama8b' validated via a Literal but had no constructor,
+    crashing only at runtime. Validation now checks the factory registry.
+    """
+    import npc_engine.engines.llm_runtime_config as loader_mod
+    monkeypatch.setattr(loader_mod, "_ENGINES_PKG_DIR", tmp_path)
+
+    yaml_content = _VALID_YAML.replace("backend: mock", "backend: mistral7b")
+    _write_engine_config(tmp_path, "engine_bad", yaml_content.replace("engine: dialogue", "engine: engine_bad"))
+    with pytest.raises(EngineModelConfigValidationError):
+        get_config("engine_bad")
 
 
 # ---------------------------------------------------------------------------

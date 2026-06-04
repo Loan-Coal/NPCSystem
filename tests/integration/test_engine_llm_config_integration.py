@@ -123,7 +123,7 @@ def test_dialogue_engine_real_config_loads_correctly() -> None:
     config = get_config("dialogue")
 
     assert config.engine == "dialogue"
-    assert config.llm.backend in ("mock", "ollama", "mistral7b", "llama8b")
+    assert config.llm.backend in ("mock", "ollama")
     assert config.llm.max_tokens > 0
     assert 0.0 <= config.llm.temperature <= 2.0
     assert config.timeouts_ms.full > 0

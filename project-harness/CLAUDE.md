@@ -19,7 +19,7 @@ Exposes HTTP + WebSocket API for licensing to game studios as middleware.
 |-----------|-----------|
 | API server | FastAPI + Uvicorn |
 | Knowledge graph | Neo4j 5 (Docker) |
-| LLM | Ollama (`qwen2.5:14b`) or OpenAI GPT-4o |
+| LLM | Ollama (`qwen2.5:14b`); pluggable via `LLMClientProtocol` + factory registry (add a local or API backend by registering an adapter — no OpenAI adapter ships today) |
 | Demo UI | pygame-ce (Python 3.14 — **not** `pygame`) |
 | Tests | pytest |
 
