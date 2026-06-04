@@ -75,7 +75,7 @@ _`/fix-next` maintains this: add a line when a fix affects a later one, delete c
 - [x] **FIX-SEV-35** — Unify `delta_ticks` bound to `MAX_DELTA_TICKS=1000` · LOW · S · deps: none
 - [ ] **FIX-SEV-36** — Separate gossip distortion probability from confidence · LOW · M · deps: none (shock behavior intentional — see brief)
 - [x] **FIX-SEV-37** — Demo low-severity cluster (magic strings, print, config, QUIT) · LOW · S · deps: none
-- [ ] **FIX-SEV-38** — Eval-matcher weaknesses + mock LSP · LOW · M · deps: none
+- [x] **FIX-SEV-38** — Eval-matcher weaknesses + mock LSP · LOW · M · deps: none
 - [ ] **FIX-SEV-39** — Targeted tests for worst-covered risk modules · LOW · L · deps: none
 - [x] **FIX-SEV-42** — Rename duplicate llm_config_loader; relocate reindex_job_service · LOW · S · deps: none
 - [ ] **FIX-SEV-43** — Contract guards: assert test paths exist + parse symbols · LOW · M · deps: none

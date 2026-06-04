@@ -2,17 +2,85 @@
 matchers.py - Expectation evaluators for eval cases.
 
 Supported kinds: schema, min_length, keyword_any, keyword_all, keyword_none,
-in_set, range, substring, regex, tone_judge.
+in_set, range, substring, regex, tone_judge, context_block_expected.
+
+SEV-38 changes:
+- Added EvalConfigError for configuration-time validation failures.
+- Added JudgeResult dataclass so tone_judge can signal infra failure distinctly.
+- tone_judge infra failure now returns JudgeResult(score=None, error="infra_failure")
+  instead of a plain (False, ...) tuple; callers treat score=None as "inconclusive".
+- keyword_any raises EvalConfigError when fewer than 2 keywords (near-tautological guard).
+- context_block_expected raises EvalConfigError when no runner context is provided.
+- Shared judge-prompt template loaded from prompts/eval/tone_judge.yaml (no inline string).
 """
 
 from __future__ import annotations
 
+import logging as _logging
 import os
 import re
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
+import yaml
 
+
+# ---------------------------------------------------------------------------
+# Public exceptions and return types
+# ---------------------------------------------------------------------------
+
+
+class EvalConfigError(Exception):
+    """Raised when an eval expectation is mis-configured (e.g. too few keywords)."""
+
+
+@dataclass
+class JudgeResult:
+    """Result from tone_judge that can carry an infra-failure signal.
+
+    Attributes:
+        score: True (pass) / False (fail) / None (infra failure — inconclusive).
+        error: Human-readable error string when score is None or False.
+    """
+
+    score: bool | None
+    error: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Judge-prompt template (loaded from prompts/eval/tone_judge.yaml)
+# ---------------------------------------------------------------------------
+
+_PROMPT_YAML_PATH = Path(__file__).resolve().parents[1] / "prompts" / "eval" / "tone_judge.yaml"
+
+
+def _load_judge_prompt_template() -> str:
+    """Load the shared tone_judge prompt template from YAML.
+
+    Returns:
+        The raw template string with {criteria} and {content} placeholders.
+
+    Raises:
+        FileNotFoundError: If prompts/eval/tone_judge.yaml does not exist.
+    """
+    with _PROMPT_YAML_PATH.open(encoding="utf-8") as fh:
+        data = yaml.safe_load(fh)
+    return str(data["template"])
+
+
+_JUDGE_PROMPT_TMPL: str = _load_judge_prompt_template()
+
+# ---------------------------------------------------------------------------
+# Structured logger
+# ---------------------------------------------------------------------------
+
+_logger = _logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Judge config
+# ---------------------------------------------------------------------------
 
 # Guard cases must produce a substantive answer: an empty or near-empty response
 # can never demonstrate the anti-hallucination guarantee. Override via env for tuning.
@@ -22,27 +90,16 @@ _JUDGE_URL = os.getenv("JUDGE_OLLAMA_URL", "http://localhost:11434")
 _JUDGE_MODEL = os.getenv("JUDGE_MODEL", "qwen2.5:14b")
 _JUDGE_TIMEOUT = float(os.getenv("JUDGE_TIMEOUT_SECONDS", "30"))
 
-_JUDGE_PROMPT_TMPL = """\
-You are a strict YES/NO evaluator. Your task:
 
-Criterion: {criteria}
-
-Text to evaluate:
----
-{content}
----
-
-Answer with exactly one of:
-YES - <one-sentence explanation>
-NO  - <one-sentence explanation>
-
-Do not write anything else."""
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
 
 
 def _get_nested(obj: dict, field: str) -> Any:
     """Resolve dot-notation field path from a dict."""
     parts = field.split(".")
-    cur = obj
+    cur: Any = obj
     for part in parts:
         if not isinstance(cur, dict):
             return None
@@ -50,11 +107,29 @@ def _get_nested(obj: dict, field: str) -> Any:
     return cur
 
 
-def evaluate(expectation: dict, response: dict) -> tuple[bool, str]:
-    """
-    Evaluate one expectation against an API response dict.
+def _parse_judge_verdict(raw: str) -> tuple[bool, str]:
+    match = re.match(r"^(YES|NO)\s*[-–—:]?\s*(.*)", raw.strip(), re.IGNORECASE | re.DOTALL)
+    if not match:
+        return False, f"tone_judge: unparseable verdict: {raw[:80]!r}"
+    passed = match.group(1).upper() == "YES"
+    reasoning = match.group(2).strip()
+    return passed, reasoning[:200] if reasoning else raw.strip()[:200]
 
-    Returns (passed: bool, detail: str).
+
+# ---------------------------------------------------------------------------
+# Public evaluate dispatcher
+# ---------------------------------------------------------------------------
+
+
+def evaluate(expectation: dict, response: dict) -> tuple[bool, str] | JudgeResult:
+    """Evaluate one expectation against an API response dict.
+
+    Returns:
+        (passed: bool, detail: str) for most matchers.
+        JudgeResult for tone_judge (score=None signals infra failure).
+
+    Raises:
+        EvalConfigError: If the expectation is mis-configured.
     """
     kind = expectation.get("kind", "")
 
@@ -78,27 +153,37 @@ def evaluate(expectation: dict, response: dict) -> tuple[bool, str]:
         return _eval_regex(expectation, response)
     if kind == "tone_judge":
         return _eval_tone_judge(expectation, response)
+    if kind == "context_block_expected":
+        return _eval_context_block_expected(expectation, response)
 
     return False, f"unknown expectation kind: {kind!r}"
 
 
-def _parse_judge_verdict(raw: str) -> tuple[bool, str]:
-    match = re.match(r"^(YES|NO)\s*[-–—:]?\s*(.*)", raw.strip(), re.IGNORECASE | re.DOTALL)
-    if not match:
-        return False, f"tone_judge: unparseable verdict: {raw[:80]!r}"
-    passed = match.group(1).upper() == "YES"
-    reasoning = match.group(2).strip()
-    return passed, reasoning[:200] if reasoning else raw.strip()[:200]
+# ---------------------------------------------------------------------------
+# Matcher implementations
+# ---------------------------------------------------------------------------
 
 
-def _eval_tone_judge(exp: dict, resp: dict) -> tuple[bool, str]:
+def _eval_tone_judge(exp: dict, resp: dict) -> JudgeResult:
+    """Call the Ollama LLM judge and return a JudgeResult.
+
+    Infra failures (network errors, timeouts) return JudgeResult(score=None,
+    error="infra_failure") — callers must NOT count these as passing guard turns.
+
+    Args:
+        exp: Expectation dict with judge_prompt or description field.
+        resp: API response dict.
+
+    Returns:
+        JudgeResult with score=True/False on success, score=None on infra failure.
+    """
     npc_response: str = _get_nested(resp, "npc_response") or ""
     if not npc_response:
-        return False, "tone_judge: npc_response is empty"
+        return JudgeResult(score=False, error="npc_response is empty")
 
     criteria = exp.get("judge_prompt") or exp.get("description", "")
     if not criteria:
-        return False, "tone_judge: no judge_prompt or description in expectation"
+        return JudgeResult(score=False, error="no judge_prompt or description in expectation")
 
     prompt = _JUDGE_PROMPT_TMPL.format(criteria=criteria.strip(), content=npc_response)
     payload: dict = {
@@ -113,12 +198,41 @@ def _eval_tone_judge(exp: dict, resp: dict) -> tuple[bool, str]:
         r.raise_for_status()
         data = r.json()
         raw = str(data.get("response", ""))
-    except httpx.TimeoutException:
-        return False, f"tone_judge: Ollama timed out after {_JUDGE_TIMEOUT}s"
     except Exception as exc:
-        return False, f"tone_judge: Ollama unreachable: {exc}"
+        _logger.warning("tone_judge_infra_failure", extra={"error": str(exc)})
+        return JudgeResult(score=None, error="infra_failure")
 
-    return _parse_judge_verdict(raw)
+    passed, reasoning = _parse_judge_verdict(raw)
+    return JudgeResult(score=passed, error="" if passed else reasoning)
+
+
+def _eval_context_block_expected(exp: dict, resp: dict) -> tuple[bool, str]:
+    """Check that expected strings appear in the runner-injected context block.
+
+    Args:
+        exp: Expectation dict; must contain ``_runner_context`` (injected by
+             the runner before evaluate() is called) and ``expected_strings``.
+        resp: API response dict (not used; context lives in exp).
+
+    Returns:
+        (True, detail) if all expected_strings found; (False, detail) otherwise.
+
+    Raises:
+        EvalConfigError: If ``_runner_context`` key is absent (runner did not
+            inject context — configuration error, not a soft failure).
+    """
+    context: str | None = exp.get("_runner_context")
+    if context is None:
+        raise EvalConfigError(
+            "context_block_expected matcher requires runner context: "
+            "the runner must inject '_runner_context' before calling evaluate(). "
+            "This is a configuration error — the eval case cannot be evaluated."
+        )
+    expected_strings: list[str] = exp.get("expected_strings", [])
+    missing = [s for s in expected_strings if s not in context]
+    if missing:
+        return False, f"context_block_expected: missing strings {missing!r}"
+    return True, f"context_block_expected: all {len(expected_strings)} string(s) found"
 
 
 def _eval_schema(exp: dict, resp: dict) -> tuple[bool, str]:
@@ -158,13 +272,27 @@ def _eval_min_length(exp: dict, resp: dict) -> tuple[bool, str]:
 
 
 def _eval_keyword_any(exp: dict, resp: dict) -> tuple[bool, str]:
-    """At least one keyword must appear in npc_response (case-insensitive)."""
+    """At least one keyword must appear in npc_response (case-insensitive).
+
+    Args:
+        exp: Expectation dict with ``keywords`` list (minimum 2 items).
+        resp: API response dict.
+
+    Raises:
+        EvalConfigError: If fewer than 2 keywords are supplied (near-tautological).
+    """
+    keywords: list[str] = exp.get("keywords", [])
+    if len(keywords) < 2:
+        raise EvalConfigError(
+            f"keyword_any requires at least 2 keywords to be meaningful; "
+            f"got {len(keywords)}: {keywords!r}"
+        )
     text: str = (_get_nested(resp, "npc_response") or "").lower()
-    keywords: list[str] = [kw.lower() for kw in exp.get("keywords", [])]
-    matched = [kw for kw in keywords if kw in text]
+    lowered = [kw.lower() for kw in keywords]
+    matched = [kw for kw in lowered if kw in text]
     if matched:
         return True, f"keyword_any matched: {matched}"
-    return False, f"none of {keywords!r} found in response: {text[:120]!r}"
+    return False, f"none of {lowered!r} found in response: {text[:120]!r}"
 
 
 def _eval_keyword_all(exp: dict, resp: dict) -> tuple[bool, str]:
@@ -204,7 +332,7 @@ def _eval_range(exp: dict, resp: dict) -> tuple[bool, str]:
     max_val = exp.get("max")
     value = _get_nested(resp, field)
     try:
-        numeric = float(value)  # type: ignore[arg-type]
+        numeric = float(value)
     except (TypeError, ValueError):
         return False, f"{field}={value!r} is not numeric"
     if min_val is not None and numeric < min_val:

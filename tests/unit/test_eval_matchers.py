@@ -110,8 +110,9 @@ def test_keyword_any_matches() -> None:
 
 
 def test_keyword_any_no_match_fails() -> None:
+    # keyword_any requires at least 2 keywords (SEV-38 guard); use 2 here.
     passed, _ = matchers.evaluate(
-        {"kind": "keyword_any", "keywords": ["war"]}, _resp("Quiet day.")
+        {"kind": "keyword_any", "keywords": ["war", "peace"]}, _resp("Quiet day.")
     )
     assert passed is False
 
@@ -251,20 +252,23 @@ def test_tone_judge_yes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         matchers.httpx, "post", lambda *a, **k: _FakeResponse("YES - stays in character")
     )
-    passed, _ = matchers.evaluate(
+    result = matchers.evaluate(
         {"kind": "tone_judge", "description": "in character"}, _resp("I heard whispers, friend.")
     )
-    assert passed is True
+    # tone_judge returns JudgeResult (SEV-38); score=True means passed.
+    assert isinstance(result, matchers.JudgeResult)
+    assert result.score is True
 
 
 def test_tone_judge_no(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         matchers.httpx, "post", lambda *a, **k: _FakeResponse("NO - breaks character")
     )
-    passed, _ = matchers.evaluate(
+    result = matchers.evaluate(
         {"kind": "tone_judge", "description": "in character"}, _resp("As an AI model...")
     )
-    assert passed is False
+    assert isinstance(result, matchers.JudgeResult)
+    assert result.score is False
 
 
 def test_tone_judge_empty_response_fails_without_calling_judge(
@@ -274,8 +278,9 @@ def test_tone_judge_empty_response_fails_without_calling_judge(
         raise AssertionError("judge must not be called for empty npc_response")
 
     monkeypatch.setattr(matchers.httpx, "post", _boom)
-    passed, _ = matchers.evaluate({"kind": "tone_judge", "description": "x"}, _resp(""))
-    assert passed is False
+    result = matchers.evaluate({"kind": "tone_judge", "description": "x"}, _resp(""))
+    assert isinstance(result, matchers.JudgeResult)
+    assert result.score is False
 
 
 def test_tone_judge_timeout_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -283,9 +288,11 @@ def test_tone_judge_timeout_fails_closed(monkeypatch: pytest.MonkeyPatch) -> Non
         raise httpx.TimeoutException("slow")
 
     monkeypatch.setattr(matchers.httpx, "post", _timeout)
-    passed, detail = matchers.evaluate({"kind": "tone_judge", "description": "x"}, _resp("hello"))
-    assert passed is False
-    assert "timed out" in detail
+    result = matchers.evaluate({"kind": "tone_judge", "description": "x"}, _resp("hello"))
+    # Infra failure → score=None, error="infra_failure" (SEV-38)
+    assert isinstance(result, matchers.JudgeResult)
+    assert result.score is None
+    assert result.error == "infra_failure"
 
 
 def test_tone_judge_unreachable_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -293,13 +300,14 @@ def test_tone_judge_unreachable_fails_closed(monkeypatch: pytest.MonkeyPatch) ->
         raise httpx.ConnectError("refused")
 
     monkeypatch.setattr(matchers.httpx, "post", _down)
-    passed, detail = matchers.evaluate({"kind": "tone_judge", "description": "x"}, _resp("hello"))
-    assert passed is False
-    assert "unreachable" in detail
+    result = matchers.evaluate({"kind": "tone_judge", "description": "x"}, _resp("hello"))
+    assert isinstance(result, matchers.JudgeResult)
+    assert result.score is None
+    assert result.error == "infra_failure"
 
 
 def test_tone_judge_unparseable_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(matchers.httpx, "post", lambda *a, **k: _FakeResponse("maybe?"))
-    passed, detail = matchers.evaluate({"kind": "tone_judge", "description": "x"}, _resp("hello"))
-    assert passed is False
-    assert "unparseable" in detail
+    result = matchers.evaluate({"kind": "tone_judge", "description": "x"}, _resp("hello"))
+    assert isinstance(result, matchers.JudgeResult)
+    assert result.score is False

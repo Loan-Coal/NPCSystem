@@ -27,8 +27,11 @@ _GARBAGE_RESPONSE: dict[str, Any] = {"__garbage__": True}
 class MockLLMAdapter(LLMClientProtocol):
     """Deterministic adapter that always returns configured payload.
 
-    Supports three fault-injection modes via keyword-only constructor flags:
+    Supports four fault-injection modes via keyword-only constructor flags:
 
+    - ``raise_on_generate=<exception>``: every call to ``generate()`` raises the
+      given exception instance or class. Used to test the fallback contract.
+      Does NOT affect ``generate_structured()``.
     - ``fail_first_call=True``: raises ``ValidationError`` on the first call to
       ``generate_structured``, then returns the normal payload on subsequent calls.
       Used to verify that the one-repair-retry path succeeds.
@@ -43,6 +46,7 @@ class MockLLMAdapter(LLMClientProtocol):
         response: dict[str, Any] | None = None,
         structured_response: dict[str, Any] | None = None,
         *,
+        raise_on_generate: type[Exception] | Exception | None = None,
         fail_first_call: bool = False,
         return_garbage: bool = False,
     ) -> None:
@@ -50,23 +54,35 @@ class MockLLMAdapter(LLMClientProtocol):
 
         Args:
             response: Dict returned by generate() and stream(). Defaults to DEFAULT_RESPONSE.
-            structured_response: Dict returned by generate_structured(). Defaults to response if omitted.
-            fail_first_call: When True, raise ValidationError on the first generate_structured call
-                only. Subsequent calls return the normal structured_response. Mutually exclusive
-                with return_garbage.
+            structured_response: Dict returned by generate_structured(). Defaults to response.
+            raise_on_generate: When set, every call to ``generate()`` raises this exception.
+                May be an exception *class* (raised as ``raise_on_generate("mock-error")``)
+                or an exception *instance* (re-raised directly). Mutually exclusive with
+                return_garbage.
+            fail_first_call: When True, raise ValidationError on the first generate_structured
+                call only. Subsequent calls return the normal structured_response. Mutually
+                exclusive with return_garbage.
             return_garbage: When True, every generate_structured call returns a dict that fails
                 Pydantic validation (``{"__garbage__": True}``). Mutually exclusive with
-                fail_first_call.
+                fail_first_call and raise_on_generate.
 
         Raises:
-            ValueError: If both fail_first_call and return_garbage are True simultaneously.
+            ValueError: If mutually exclusive flags are combined.
         """
-        if fail_first_call and return_garbage:
-            raise ValueError("fail_first_call and return_garbage are mutually exclusive")
+        mutual_excl_flags = sum([
+            raise_on_generate is not None,
+            fail_first_call,
+            return_garbage,
+        ])
+        if mutual_excl_flags > 1:
+            raise ValueError(
+                "raise_on_generate, fail_first_call, and return_garbage are mutually exclusive"
+            )
         self._response = dict(response) if response is not None else dict(DEFAULT_RESPONSE)
         self._structured_response = (
             dict(structured_response) if structured_response is not None else dict(self._response)
         )
+        self._raise_on_generate = raise_on_generate
         self._fail_first_call = fail_first_call
         self._return_garbage = return_garbage
         self._call_count = 0
@@ -103,7 +119,15 @@ class MockLLMAdapter(LLMClientProtocol):
 
         Returns:
             str representation of _response["npc_response"], or "" if absent.
+
+        Raises:
+            raise_on_generate: If that flag was set at construction.
         """
+        if self._raise_on_generate is not None:
+            exc = self._raise_on_generate
+            if isinstance(exc, type):
+                raise exc("mock-generate-error")
+            raise exc
         return str(self._response.get("npc_response", ""))
 
     async def generate_structured(

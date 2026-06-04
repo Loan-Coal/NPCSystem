@@ -22,7 +22,7 @@ from typing import Any
 import httpx
 import yaml
 
-from matchers import evaluate
+from matchers import EvalConfigError, JudgeResult, evaluate
 from report import write_report
 from summary import format_summary_lines, summarize
 
@@ -182,17 +182,57 @@ def _run_case(case: dict, client: httpx.Client, base_url: str) -> dict:
             case_passed = False
             continue
 
-        passed, detail = evaluate(expectation=exp, response=response_body)
-        if not passed:
+        try:
+            result = evaluate(expectation=exp, response=response_body)
+        except EvalConfigError as cfg_exc:
+            exp_results.append(
+                {
+                    "kind": exp.get("kind", "unknown"),
+                    "passed": False,
+                    "skipped": False,
+                    "detail": f"eval_config_error: {cfg_exc}",
+                }
+            )
             case_passed = False
-        exp_results.append(
-            {
-                "kind": exp["kind"],
-                "passed": passed,
-                "skipped": False,
-                "detail": detail,
-            }
-        )
+            continue
+
+        if isinstance(result, JudgeResult):
+            # tone_judge: score=None means infra failure — treat as inconclusive
+            # (not a passing guard turn; log but do not count as content failure).
+            if result.score is None:
+                exp_results.append(
+                    {
+                        "kind": exp["kind"],
+                        "passed": False,
+                        "skipped": False,
+                        "inconclusive": True,
+                        "detail": f"tone_judge_infra_failure: {result.error}",
+                    }
+                )
+                case_passed = False
+            else:
+                if not result.score:
+                    case_passed = False
+                exp_results.append(
+                    {
+                        "kind": exp["kind"],
+                        "passed": bool(result.score),
+                        "skipped": False,
+                        "detail": result.error,
+                    }
+                )
+        else:
+            passed, detail = result
+            if not passed:
+                case_passed = False
+            exp_results.append(
+                {
+                    "kind": exp["kind"],
+                    "passed": passed,
+                    "skipped": False,
+                    "detail": detail,
+                }
+            )
 
     return {
         "case_id": case_id,
