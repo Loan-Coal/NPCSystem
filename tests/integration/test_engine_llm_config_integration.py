@@ -26,7 +26,7 @@ from npc_engine.engines.llm_config_models import (
     EnginePromptRef,
     EngineTimeoutsMs,
 )
-from npc_engine.engines.llm_config_loader import get_config
+from npc_engine.engines.llm_runtime_config import get_config
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]

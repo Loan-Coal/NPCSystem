@@ -4,7 +4,7 @@ Layer: engines
 Purpose: Typed Pydantic models for per-engine LLM configuration YAML files.
 Does NOT: load files from disk or select LLM adapters.
 Dependencies injected: None.
-Used by: engines.llm_config_loader, engines.llm.factory.
+Used by: engines.llm_runtime_config, engines.llm.factory.
 """
 
 from __future__ import annotations

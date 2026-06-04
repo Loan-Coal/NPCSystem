@@ -1,5 +1,5 @@
 """
-Module: llm_config_loader
+Module: llm_runtime_config
 Layer: engines
 Purpose: Loads and validates per-engine LLM config YAML files; enforces startup completeness.
 Does NOT: select or instantiate LLM adapters.
