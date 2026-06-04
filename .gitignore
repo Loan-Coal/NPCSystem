@@ -26,6 +26,12 @@ transcripts/
 # REVIEW_FINDINGS.md + review-fixes/, which ARE committed)
 project-harness/review-evidence/
 
+# Logs
+*.log
+
+# Generated reports
+/reports/
+
 # Local agent tooling + caches (not product code)
 .cache/
 .claude/
