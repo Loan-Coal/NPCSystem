@@ -13,6 +13,14 @@ Rules:
 
 ## Open
 
+## ISSUE-068: test_game_window.py layout tests fail — WorldStatePoller not imported in game_window.py
+**Found:** 2026-06-05, during EXP-80 batch fan-in (make test-demo gate)
+**Severity:** P2 (annoying)
+**Where:** `demo_game/tests/test_game_window.py:33` — monkeypatches `demo_game.ui.game_window.WorldStatePoller` which is not imported in `game_window.py`
+**Description:** 6 layout tests in `TestGameWindowLayout` fail because `test_game_window.py` patches `WorldStatePoller` via `patch("demo_game.ui.game_window.WorldStatePoller")`, but `WorldStatePoller` is never imported into `game_window.py`. Pre-existing before this expansion batch (confirmed by reverting changes and re-running).
+**Why deferred:** Pre-existing issue discovered at gate time; not introduced by this batch. Fixing requires either adding the import to game_window.py (if it uses WorldStatePoller) or removing the stale patch from the tests.
+**To fix:** Check if `GameWindow` actually uses `WorldStatePoller`; if yes, add the import; if not (it was removed in a refactor), update the test to mock the correct poller class.
+
 ## ISSUE-054: redundant `token_budget_enforcer.py` superseded by `fill_to_budget`
 **Found:** 2026-06-03, during SEV-07
 **Severity:** P3 (nice-to-fix)

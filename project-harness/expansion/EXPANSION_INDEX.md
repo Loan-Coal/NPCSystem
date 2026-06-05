@@ -14,15 +14,18 @@ _State that survives between expansion sessions so a fresh `/expand-parallel` ru
 _The orchestrator maintains this: add a line when an item unlocks/affects a later one; delete consumed lines; keep it tight._
 
 - **Gates:** `make check` = lint + check-rules + type-ratchet + check-harness + test-cov(80%). Demo work also runs `make test-demo`. New code: TDD (failing test first), CLAUDE.md OCP add-by-new-file, layers, 300-line/40-line, prompts-in-YAML, Pydantic boundaries.
-- **Phase 0 demo-repair DONE** (2026-06-05): engines-500 double-serialize (`system.py`), pledges path drift (`client.py`→`/v1/admin/pledges`), embedding `to_thread` offload (`embedding_index.py`), WS dialogue timeout 120s (`constants.py`), trade empty-`item_type` (`quest_trade_controller.py`). Demo is playable. Only EXP-00c (CI smoke test) remains in Phase 0.
-- **Pattern — offload CPU on the event loop:** sync model inference must run via `await asyncio.to_thread(...)` (done for embeddings). REUSE for the cross-encoder reranker (ISSUE-064) and any new sync ML call.
-- **Pattern — `pinned`/`never_forget` flag:** EXP-30 adds a `pinned: bool` on `ContextItem` (non-droppable core); EXP-17 adds `never_forget: bool` on Memory (plot-load-bearing). Same concept — use one shared convention across both.
-- **DEC-070:** context = pinned-core + ranked pool (supersedes tier A/B/C). v1 orders the pool by `priority` only; relevance (`context_relevance_engine`/`context_scoring`) is the fast-follow. **DEC-072:** NPCs learn facts via a single-pass `learned_facts` field on the dialogue output → existing `BELIEVES` edge (+3 optional provenance fields on `believes.yaml`, approved); no `LEARNED_FROM` edge, no 2nd LLM pass; player-sourced facts are grounded; learned beliefs are gossipable; contradictions keep both + `CONTRADICTS`. **DEC-071:** `PART_OF` location edge + `location_writer.py` approved (EXP-87).
-- **Affinity (EXP-50):** 5 bands on `standing = clamp(trust+affection−fear, −100, 100)` — HOSTILE[-100,-50) WARY[-50,-15) NEUTRAL[-15,15] FRIENDLY(15,50] ALLIED(50,100]; enum + named config cutoffs. Consumer refactor order: gossip secret-share gate first, then dialogue tone. First slice = `derive_standing` + read route (no consumer edit → conflict-free).
-- **Player is a `character` node** (`seed.py`, `player_demo`, `is_player:true`). Reuse `relates_to`/`has_reputation_with`/`knows_about` with the player as endpoint — no `player_model` node now (EXP-55 deferred; second-order ToM via memories).
-- **Eval metrics report-only** (no SLA gate). EXP-32/31 Q&A label-set authoring task: `expansion/EXP32_EVAL_QA_TASK.md` (recommend local Opus generation against the seed graph).
-- **Schema/DECISIONS-gated (DROP from parallel batches until granted):** EXP-51 (`GOAL_TARGETS` edge), EXP-17-full (`Memory.salience/recall_count/never_forget` fields — first slice charge-weighted decay is NOT gated), EXP-87 (`PART_OF` — approved DEC-071 but coordinate the base-edge add). EXP-53 (`believes.yaml` +3 optional fields — approved DEC-072). EXP-55 deferred.
-- **Open residuals (logged):** ISSUE-064 (reranker sync-on-loop), ISSUE-066 (2 pre-existing demo-worker test fails — bribe/spread-rumor clock fallback), ISSUE-067 deeper (engine should populate `negotiation_state.item_type` — ties to EXP-40). Next ISSUE id: **ISSUE-068**.
+- **Phase 0 demo-repair DONE** (2026-06-05): engines-500 double-serialize, pledges path drift, embedding offload, WS timeout 120s, trade empty-item_type. EXP-00c (CI smoke) deferred (stop-and-ask for CI config).
+- **Pattern — offload CPU on the event loop:** sync model inference via `await asyncio.to_thread(...)` (embeddings done). REUSE for cross-encoder reranker (ISSUE-064) and any new sync ML call.
+- **EXP-30 DONE (KEYSTONE):** `ContextItem.pinned: bool` now exists (`context_merger.py`). Pinned-core + ranked-pool policy live in BOTH enforcement paths. `EXP-17` `never_forget` mirrors this convention. EXP-32, EXP-81, EXP-11, EXP-53 now unblocked (Tier-A overflow no longer raises for knowledge-rich NPCs).
+- **EXP-50 DONE:** `Standing` enum + `derive_standing` in `engines/relationship/standing.py`; `GET /v1/npc/{id}/relationship/{other_id}` route live; `RelationReader` in `graph/relation_reader.py`. Consumer refactor (gossip gate, dialogue tone) is the next slice — wire using `Standing` import.
+- **EXP-31 DONE:** `evals/retrieval_runner.py` + 20 labeled demo-world cases in `evals/cases/retrieval_demo.json`; `make eval-retrieval` target live. EXP-32 still needs Q&A label set; run `make eval-retrieval` to see baseline precision@5/recall@5/MRR before EXP-32.
+- **EXP-83 DONE:** `demo_game/quickstart.py` + `make hello` live. Standalone 177-line httpx-only seeder+dialogue script.
+- **EXP-84 DONE:** Gossip chain CHAIN tab now shows distortion-type badges ([EXAGGERATION] etc.) per hop.
+- **EXP-85 DONE:** `AntiHallucinationBeat` scripted beat in `run_scenes.py`; asks `aldric_merchant` about war, confirms 0 KNOWS_ABOUT edges. Registered as ACT 8 in SCENES. EXP-93 (BribeScene fix) deferred to next batch — same files (`run_scenes.py`/`run.py`), risk of uncovering cascade failures.
+- **EXP-80 DONE:** `demo_game/sandbox_loop.py` + S-key toggle in `GameWindow`. Pre-existing `test_game_window.py` layout failures (ISSUE-068) not introduced by this batch.
+- **DEC-070/072/071 still apply.** DEC-073: `context_budget_enforcer.py` 323-line waiver. DEC-074: `game_window.py` 350-line waiver.
+- **Schema/DECISIONS-gated (DROP from parallel batches):** EXP-51, EXP-17-full, EXP-87, EXP-53. EXP-55 deferred.
+- **Open residuals:** ISSUE-064 (reranker sync-on-loop), ISSUE-066 (2 pre-existing demo-worker test fails), ISSUE-068 (test_game_window.py WorldStatePoller missing import). Next ISSUE id: **ISSUE-069**.
 
 ## Ordered checklist
 
@@ -37,10 +40,10 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 - [ ] **EXP-00c** — boot + demo-endpoint smoke test in CI (also runs `make test-demo`) · M · deps: none · unblocks regression-proofing all of Phase 0
 
 ### Phase 1 — Prove & unblock (parallelizable batch — all new-file-add or single-module, conflict-free)
-- [ ] **EXP-30** — context: pinned-core + ranked pool (DEC-070) · M · deps: none · KEYSTONE · edits `retrieval/context_builder.py`+`context_budget_enforcer.py`
-- [ ] **EXP-50** — relationship/affinity engine (first slice: `derive_standing` + read route) · S · deps: none · new `engines/relationship/`
-- [ ] **EXP-31** — retrieval precision@k/recall eval harness · M · deps: none · new eval files
-- [ ] **EXP-83** — integrator hello-world quickstart · S · deps: none · new `demo_game/quickstart.py` + Makefile
+- [x] **EXP-30** — context: pinned-core + ranked pool (DEC-070) · M · deps: none · KEYSTONE · edits `retrieval/context_builder.py`+`context_budget_enforcer.py`
+- [x] **EXP-50** — relationship/affinity engine (first slice: `derive_standing` + read route) · S · deps: none · new `engines/relationship/`
+- [x] **EXP-31** — retrieval precision@k/recall eval harness · M · deps: none · new eval files
+- [x] **EXP-83** — integrator hello-world quickstart · S · deps: none · new `demo_game/quickstart.py` + Makefile
 - [ ] **EXP-32** — measured anti-hallucination eval · M · deps: EXP-30 (soft), Q&A label set · new eval files
 
 ### Phase 2 — Dialogue + Gossip showcase (the priority)
@@ -50,11 +53,11 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 - [ ] **EXP-15** — distortion-strategy registry (open L7-01 if-chain) · M · deps: none · refactor `gossip_distort.py`
 - [ ] **EXP-16** — belief/secret-selective, prompt-driven distortion · M · deps: EXP-15
 - [ ] **EXP-81** — cross-session "remembers you" demo · M · deps: EXP-30
-- [ ] **EXP-84** — gossip telephone-diff view (demo) · S · deps: EXP-15 (soft)
-- [ ] **EXP-85** — anti-hallucination "I don't know" demo beat · S · deps: none
+- [x] **EXP-84** — gossip telephone-diff view (demo) · S · deps: EXP-15 (soft)
+- [x] **EXP-85** — anti-hallucination "I don't know" demo beat · S · deps: none
 - [ ] **EXP-92** — determinism/replay toggle (demo) · M · deps: KE-6 stable-id seeding
 - [ ] **EXP-91** — relationship-delta live ticker (demo) · S · deps: EXP-50
-- [ ] **EXP-80** — free-play/sandbox mode (demo) · M · deps: none
+- [x] **EXP-80** — free-play/sandbox mode (demo) · M · deps: none
 - [ ] **EXP-93** — fix ISSUE-060 bribe → `HAS_REPUTATION_WITH` (demo) · S · deps: none
 - [ ] **EXP-95** — in-window scenario picker (demo) · M · deps: KE-6
 
@@ -77,7 +80,5 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 ### Dropped (out of scope)
 - ~~EXP-56 localization~~ · ~~EXP-57 voice/STT~~
 
-## First runnable parallel batch (suggested)
-**EXP-30, EXP-50 (first slice), EXP-31, EXP-83** — four disjoint file sets (retrieval / new engine / eval / demo),
-zero schema, zero shared existing files. Briefs written. EXP-32 follows once EXP-30 lands (shares the eval dir
-with EXP-31 — sequence them, don't parallelize the two eval items).
+## Next parallel batch (suggested)
+**EXP-93, EXP-81 (first-slice low-knowledge NPC), EXP-91, EXP-11** — disjoint file sets, EXP-30 now landed so EXP-81 and EXP-11 are unblocked. EXP-93 (BribeScene fix) edits `run_scenes.py`/`run.py` so keep it in its own worker. EXP-32 can run once Q&A label set is authored (see `EXP32_EVAL_QA_TASK.md`).
