@@ -719,3 +719,22 @@ def test_post_quest_accept_raises_on_4xx(mock_http: MagicMock, make_response) ->
     mock_http.post.return_value = make_response(409, {"detail": "already accepted"})
     with pytest.raises(EngineClientError, match="HTTP 409"):
         _client(mock_http).post_quest_accept("q_001", "player")
+
+
+# ---------------------------------------------------------------------------
+# pledges (ISSUE-061 path-drift regression — route is mounted at /v1/admin)
+# ---------------------------------------------------------------------------
+
+
+def test_post_pledge_uses_admin_path(mock_http: MagicMock, make_response) -> None:
+    """post_pledge targets /v1/admin/pledges/... (pledges_router is under admin_prefix)."""
+    mock_http.post.return_value = make_response(200, {"data": {}})
+    _client(mock_http).post_pledge("lira_fence", "thieves_guild", "loyalty", 1)
+    assert mock_http.post.call_args.args[0] == "/v1/admin/pledges/characters/lira_fence"
+
+
+def test_get_pledges_for_npc_uses_admin_path(mock_http: MagicMock, make_response) -> None:
+    """get_pledges_for_npc targets /v1/admin/pledges/... (was /v1/pledges → 404)."""
+    mock_http.get.return_value = make_response(200, {"data": {"pledges": []}})
+    _client(mock_http).get_pledges_for_npc("lira_fence")
+    assert mock_http.get.call_args.args[0] == "/v1/admin/pledges/characters/lira_fence"

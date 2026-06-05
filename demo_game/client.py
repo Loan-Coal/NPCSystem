@@ -1159,11 +1159,11 @@ class EngineClient:
             EngineClientError: On any 4xx or 5xx response.
         """
         resp = self._client.post(
-            f"/v1/pledges/characters/{pledger_id}",
+            f"/v1/admin/pledges/characters/{pledger_id}",
             json={"pledgee_id": pledgee_id, "pledge_type": pledge_type, "tick": tick, "severity": severity},
             timeout=self._graph_timeout,
         )
-        self._raise_for_status(resp, f"POST /v1/pledges/characters/{pledger_id}")
+        self._raise_for_status(resp, f"POST /v1/admin/pledges/characters/{pledger_id}")
         return resp.json()
 
     def get_pledges_for_npc(self, npc_id: str) -> list[dict]:
@@ -1179,11 +1179,11 @@ class EngineClient:
             EngineClientError: On any 4xx or 5xx response.
         """
         resp = self._client.get(
-            f"/v1/pledges/characters/{npc_id}",
+            f"/v1/admin/pledges/characters/{npc_id}",
             params={"active_only": True},
             timeout=self._graph_timeout,
         )
-        self._raise_for_status(resp, f"GET /v1/pledges/characters/{npc_id}")
+        self._raise_for_status(resp, f"GET /v1/admin/pledges/characters/{npc_id}")
         return resp.json().get("data", {}).get("pledges", [])
 
     def get_leverage_for_npc(self, npc_id: str) -> list[dict]:
