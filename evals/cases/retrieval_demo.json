@@ -1,0 +1,162 @@
+[
+  {
+    "id": "RET-001",
+    "npc_id": "captain_sorn",
+    "query": "What do you know about the northern war?",
+    "relevant_node_ids": ["northern_war_begins"],
+    "k": 5,
+    "notes": "captain_sorn has direct KNOWS_ABOUT edge to northern_war_begins; must rank in top-5"
+  },
+  {
+    "id": "RET-002",
+    "npc_id": "captain_sorn",
+    "query": "Tell me about the border armies crossing.",
+    "relevant_node_ids": ["northern_war_begins"],
+    "k": 5,
+    "notes": "Synonym query for the war event; should still surface northern_war_begins"
+  },
+  {
+    "id": "RET-003",
+    "npc_id": "captain_sorn",
+    "query": "What threats does the city face?",
+    "relevant_node_ids": ["northern_war_begins"],
+    "k": 5,
+    "notes": "Belief about thieves guild + war fear; northern_war_begins is most salient threat"
+  },
+  {
+    "id": "RET-004",
+    "npc_id": "mira_innkeeper",
+    "query": "Have you heard anything about the war in the north?",
+    "relevant_node_ids": ["northern_war_begins"],
+    "k": 5,
+    "notes": "Mira has belief about war coming; war event may have propagated via gossip"
+  },
+  {
+    "id": "RET-005",
+    "npc_id": "mira_innkeeper",
+    "query": "What happened to your regulars who went to war?",
+    "relevant_node_ids": ["northern_war_begins"],
+    "k": 5,
+    "notes": "Mira's memory of last war is strongly relevant to any war query"
+  },
+  {
+    "id": "RET-006",
+    "npc_id": "mira_innkeeper",
+    "query": "Tell me about the deserter who sheltered here.",
+    "relevant_node_ids": ["mira_innkeeper"],
+    "k": 5,
+    "notes": "Mira's secret about hiding a deserter — character node with secret should rank high"
+  },
+  {
+    "id": "RET-007",
+    "npc_id": "old_henryk",
+    "query": "What do you know about the war?",
+    "relevant_node_ids": ["northern_war_begins"],
+    "k": 5,
+    "notes": "Old Henryk has heard about war via gossip path; distorted version still linked to the event"
+  },
+  {
+    "id": "RET-008",
+    "npc_id": "old_henryk",
+    "query": "Do you know where a hidden cache or smuggler stash might be?",
+    "relevant_node_ids": ["old_henryk"],
+    "k": 5,
+    "notes": "Henryk's secret about the smuggler cache beneath north mill; character node is relevant"
+  },
+  {
+    "id": "RET-009",
+    "npc_id": "old_henryk",
+    "query": "Tell me about running dispatches through enemy lines.",
+    "relevant_node_ids": ["old_henryk"],
+    "k": 5,
+    "notes": "Specific vivid memory of the north pass — should surface old_henryk's memory context"
+  },
+  {
+    "id": "RET-010",
+    "npc_id": "aldric_merchant",
+    "query": "Tell me about the warehouse fire.",
+    "relevant_node_ids": ["aldric_merchant"],
+    "k": 5,
+    "notes": "Aldric's vivid memory of the south warehouse fire — character node with memory"
+  },
+  {
+    "id": "RET-011",
+    "npc_id": "aldric_merchant",
+    "query": "What do you know about the guild spy skimming money?",
+    "relevant_node_ids": ["aldric_merchant"],
+    "k": 5,
+    "notes": "Aldric's goal to expose guild spy + his own secret about skimming his tithe"
+  },
+  {
+    "id": "RET-012",
+    "npc_id": "aldric_merchant",
+    "query": "How is trade affected by the war to the north?",
+    "relevant_node_ids": ["northern_war_begins", "aldric_merchant"],
+    "k": 5,
+    "notes": "Both the war event and Aldric's goal about cornering spice trade before road closes are relevant"
+  },
+  {
+    "id": "RET-013",
+    "npc_id": "lira_fence",
+    "query": "Tell me what you know about Aldric's ledger.",
+    "relevant_node_ids": ["lira_fence", "aldric_merchant"],
+    "k": 5,
+    "notes": "Lira's belief + goal both reference Aldric's ledger; both character nodes are relevant"
+  },
+  {
+    "id": "RET-014",
+    "npc_id": "lira_fence",
+    "query": "Are you moving any stolen guard armor?",
+    "relevant_node_ids": ["lira_fence"],
+    "k": 5,
+    "notes": "Lira's secret about fencing stolen city guard armor — character node is the relevant context"
+  },
+  {
+    "id": "RET-015",
+    "npc_id": "lira_fence",
+    "query": "What do you know about Captain Sorn?",
+    "relevant_node_ids": ["captain_sorn", "lira_fence"],
+    "k": 5,
+    "notes": "OPPOSES edge between sorn and lira; sorn opposes lira — both character nodes relevant"
+  },
+  {
+    "id": "RET-016",
+    "npc_id": "captain_sorn",
+    "query": "What evidence do you have against the thieves guild?",
+    "relevant_node_ids": ["lira_fence", "captain_sorn"],
+    "k": 5,
+    "notes": "Sorn's goal is to catch Lira; both nodes carry the relevant context"
+  },
+  {
+    "id": "RET-017",
+    "npc_id": "mira_innkeeper",
+    "query": "How are things at the tavern these days?",
+    "relevant_node_ids": ["loc_tavern", "mira_innkeeper"],
+    "k": 5,
+    "notes": "Location context for the tavern + innkeeper character should be top results"
+  },
+  {
+    "id": "RET-018",
+    "npc_id": "aldric_merchant",
+    "query": "How are things at the market square?",
+    "relevant_node_ids": ["loc_market_square", "aldric_merchant"],
+    "k": 5,
+    "notes": "Location context for market_square + merchant character are primary relevant items"
+  },
+  {
+    "id": "RET-019",
+    "npc_id": "captain_sorn",
+    "query": "Tell me about the city walls and defenses.",
+    "relevant_node_ids": ["captain_sorn", "loc_guard_barracks"],
+    "k": 5,
+    "notes": "Sorn's belief about the city walls in disrepair + barracks location context"
+  },
+  {
+    "id": "RET-020",
+    "npc_id": "lira_fence",
+    "query": "What is the thieves guild planning?",
+    "relevant_node_ids": ["lira_fence"],
+    "k": 5,
+    "notes": "Lira is the insider; her character node + goals are the most relevant context"
+  }
+]
