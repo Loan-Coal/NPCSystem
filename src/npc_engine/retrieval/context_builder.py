@@ -200,7 +200,7 @@ async def build_serialized_context(
     # Stage 3: graph queries, skipping sub-caches that are warm.
     # All queries use the same session sequentially — concurrent use causes BufferError.
     async def _fetch_profile() -> tuple:
-        location_context = await get_location_context(session=session, location_id=location_id)
+        location_context = await get_location_context(session=session, location_id=location_id or "")
         events = await get_events_for_npc(session=session, npc_id=npc_id, limit=settings.RAG_TOP_K)
         reputation_items = await get_reputation_context_for_npc(
             session,

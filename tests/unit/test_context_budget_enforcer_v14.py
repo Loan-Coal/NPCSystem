@@ -254,18 +254,27 @@ def test_fill_to_budget_keeps_all_mandatory_tier_a_when_it_fits() -> None:
     assert len(serialized) > 0
 
 
-def test_fill_to_budget_raises_when_mandatory_tier_a_exceeds_budget() -> None:
-    """fill_to_budget raises TokenBudgetExceededError when tier0+tierA alone exceed the budget."""
+def test_fill_to_budget_drops_oversized_non_pinned_tier_a_without_raising() -> None:
+    """fill_to_budget drops non-pinned tier-A items that don't fit instead of raising.
+
+    EXP-30 changed the contract: non-pinned tier-A items are dropped by the pinned-pool
+    policy when they exceed the budget; only pinned items are truly mandatory.
+    (Pinned items that exceed the budget are still included — the pinned invariant wins.)
+    """
     context = MergedContext(
         items=[
             _make_item("world", "tier0", 100, chars=40),
-            _make_item("session", "tierA", 95, chars=3200),
+            _make_item("session", "tierA", 95, chars=3200),  # non-pinned, too large
         ]
     )
     llm_config = _llm_config_large()
 
-    with pytest.raises(TokenBudgetExceededError):
-        fill_to_budget(context=context, llm_config=llm_config, prompt_token_budget=800)
+    filled, serialized = fill_to_budget(context=context, llm_config=llm_config, prompt_token_budget=800)
+
+    tier_keys = {item.key for item in filled.items}
+    assert "world" in tier_keys  # tier0 always present
+    assert "session" not in tier_keys  # non-pinned oversized item was dropped
+    assert isinstance(serialized, str)
 
 
 def test_fill_to_budget_trims_tier_b_over_budget_without_raising() -> None:
@@ -311,8 +320,12 @@ def test_fill_to_budget_large_budget_includes_all_tiers() -> None:
     assert "rag:2" in tier_keys
 
 
-def test_fill_to_budget_tier_a_fraction_does_not_drop_mandatory_tier_a() -> None:
-    """tier_a_fraction must not drop mandatory tier_a context; all tier_a is kept when it fits."""
+def test_fill_to_budget_pinned_tier_a_never_dropped_by_narrow_fraction() -> None:
+    """Pinned tier-A items are never dropped regardless of the tier_a_fraction setting.
+
+    EXP-30 contract: PINNED items are the mandatory core; non-pinned items may be
+    dropped when the budget is tight. A narrow tier_a_fraction cannot evict pinned items.
+    """
     from npc_engine.schema.context_config_models import TierBudgetTokens
 
     config_narrow_a = LLMConfig(
@@ -328,23 +341,34 @@ def test_fill_to_budget_tier_a_fraction_does_not_drop_mandatory_tier_a() -> None
         tier_a_fraction=0.10,
         tier_b_fraction=0.30,
     )
+    # Build items with two PINNED (mandatory) and two non-pinned.
+    pinned_session = ContextItem(key="session", text="s" * 300, tier="tierA", priority=95, pinned=True)
+    pinned_persona = ContextItem(key="character:npc_1", text="p" * 300, tier="tierA", priority=80, pinned=True)
+    non_pinned_2 = _make_item("character:npc_2", "tierA", 60, chars=300)  # pinned=False
+    non_pinned_3 = _make_item("character:npc_3", "tierA", 40, chars=300)  # pinned=False
+
     context = MergedContext(
         items=[
             _make_item("world", "tier0", 100, chars=40),
-            _make_item("session", "tierA", 95, chars=300),
-            _make_item("character:npc_1", "tierA", 80, chars=300),
-            _make_item("character:npc_2", "tierA", 60, chars=300),
-            _make_item("character:npc_3", "tierA", 40, chars=300),
+            pinned_session,
+            pinned_persona,
+            non_pinned_2,
+            non_pinned_3,
         ]
     )
 
     filled_narrow, _ = fill_to_budget(context=context, llm_config=config_narrow_a, prompt_token_budget=2000)
     filled_wide, _ = fill_to_budget(context=context, llm_config=_llm_config_large(), prompt_token_budget=2000)
 
+    narrow_keys = {i.key for i in filled_narrow.items}
+    wide_keys = {i.key for i in filled_wide.items}
+    # Pinned items are always present regardless of narrow fraction.
+    assert "session" in narrow_keys
+    assert "character:npc_1" in narrow_keys
+    # Non-pinned items may differ between narrow and wide — just check wide has more.
     narrow_a_count = sum(1 for i in filled_narrow.items if i.tier == "tierA")
     wide_a_count = sum(1 for i in filled_wide.items if i.tier == "tierA")
-    # Tier A is mandatory: a narrow tier_a_fraction does not drop it.
-    assert narrow_a_count == wide_a_count == 4
+    assert narrow_a_count <= wide_a_count  # narrow may drop non-pinned; wide keeps more
 
 
 def test_fill_to_budget_tier0_overflow_raises() -> None:

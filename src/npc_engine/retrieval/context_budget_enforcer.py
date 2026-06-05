@@ -1,9 +1,11 @@
 """
-context_budget_enforcer.py - Tier-aware context budget enforcement with compression cache.
-
-Does NOT: call external LLM services for compression.
-
-Dependencies injected: LLMConfig.
+Module: context_budget_enforcer
+Layer: retrieval
+Purpose: Tier-aware context budget enforcement — pinned-core + ranked-pool for tier A;
+         compression and drop for tiers B/C.
+Does NOT: call LLM services; perform graph queries; emit metrics.
+Dependencies injected: LLMConfig via parameter; ContextCompressionCache (optional).
+Used by: retrieval.context_builder
 """
 
 from __future__ import annotations

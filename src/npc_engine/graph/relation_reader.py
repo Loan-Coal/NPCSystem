@@ -14,7 +14,6 @@ from __future__ import annotations
 from neo4j import AsyncSession
 
 from npc_engine.graph.relation_writer import get_relation_values
-from npc_engine.utils.errors import RelationEdgeNotFoundError
 
 
 class RelationReader:

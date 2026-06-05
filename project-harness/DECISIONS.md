@@ -3,6 +3,26 @@
 Non-obvious architectural choices. Each entry explains what was decided and why,
 so future maintainers can judge edge cases without re-deriving the rationale.
 
+## DEC-073: context_budget_enforcer.py accepted at 323 lines (300-line exception)
+**Date:** 2026-06-05
+**Context:** EXP-30 added `_fit_tier_a_pinned_pool` (38 lines) to replace the hard-raise
+tier-A overflow path. The file was ~290 lines before; it is now 323.
+**Options considered:**
+  1. Extract `_fit_tier_a_pinned_pool` to a separate `context_tier_a_policy.py` (saves 38 lines here; adds a single-function module with a 12-param signature).
+  2. Accept the overrun with this DECISIONS entry and a comment at the module top.
+**Decision:** Option 2. `context_budget_enforcer.py` is a cohesive enforcement module; splitting off one policy function into a peer module adds indirection with no encapsulation gain. 323 lines is close to the 300 limit and does not warrant a structural split.
+**Limit:** Do not grow this file further without splitting. If new tier policies are added, extract the policy functions first.
+
+## DEC-074: game_window.py accepted at 350 lines (pre-existing 300-line exception)
+**Date:** 2026-06-05
+**Context:** `demo_game/ui/game_window.py` was already ~327 lines before EXP-80 (a pre-existing condition, no prior DECISIONS entry). EXP-80 added 23 lines (sandbox toggle + status line + DI param). The file is now 350 lines.
+**Options considered:**
+  1. Extract sandbox-related methods into a `GameWindowSandboxMixin` — artificial; the toggle is 4 lines.
+  2. Split into `game_window_input.py` + `game_window_render.py` — possible but would split a single coherent game loop across files, increasing coupling.
+  3. Accept the overrun (demo file, cohesive single class).
+**Decision:** Option 3. `GameWindow` is a single pygame window class; splitting it is artificial. No further growth should be allowed without a real extraction (e.g. a dedicated `RenderLayer`).
+**Limit:** Do not grow this file further without extracting a cohesive subsystem (e.g. `demo_game/ui/poller_registry.py` for the 9 pollers).
+
 Rules:
 - Append-only. Never delete entries.
 - Monotonic DEC-NNN IDs. Never reuse.

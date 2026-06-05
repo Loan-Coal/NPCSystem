@@ -133,17 +133,9 @@ async def test_context_builder_emits_tier_item_and_token_metrics(monkeypatch) ->
     async def fake_active_quest(session, *, player_id):
         return None
 
-    async def fake_sellable_items(session, *, npc_id, limit=5):
-        return []
-
-    async def fake_offered_quests(session, *, npc_id):
-        return []
-
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_trust_scores_for_events", fake_trust_scores)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_second_hop_events", fake_second_hop)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_active_quest_for_player", fake_active_quest)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_offered_quests_for_npc", fake_offered_quests)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_sellable_items_for_npc", fake_sellable_items)
 
     settings = Settings(API_KEY_SECRET="npc_dev_secret_2026_alpha")
 
