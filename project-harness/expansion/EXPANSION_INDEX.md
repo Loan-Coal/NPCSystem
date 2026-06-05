@@ -21,7 +21,11 @@ _The orchestrator maintains this: add a line when an item unlocks/affects a late
 - **EXP-31 DONE:** `evals/retrieval_runner.py` + 20 labeled demo-world cases in `evals/cases/retrieval_demo.json`; `make eval-retrieval` target live. EXP-32 still needs Q&A label set; run `make eval-retrieval` to see baseline precision@5/recall@5/MRR before EXP-32.
 - **EXP-83 DONE:** `demo_game/quickstart.py` + `make hello` live. Standalone 177-line httpx-only seeder+dialogue script.
 - **EXP-84 DONE:** Gossip chain CHAIN tab now shows distortion-type badges ([EXAGGERATION] etc.) per hop.
-- **EXP-85 DONE:** `AntiHallucinationBeat` scripted beat in `run_scenes.py`; asks `aldric_merchant` about war, confirms 0 KNOWS_ABOUT edges. Registered as ACT 8 in SCENES. EXP-93 (BribeScene fix) deferred to next batch — same files (`run_scenes.py`/`run.py`), risk of uncovering cascade failures.
+- **EXP-85 DONE:** `AntiHallucinationBeat` scripted beat in `run_scenes.py`; asks `aldric_merchant` about war, confirms 0 KNOWS_ABOUT edges. Registered as ACT 8 in SCENES.
+- **EXP-93 brief ready:** BribeScene fix (`run_scenes.py` only; run.py unchanged). EXP-93 does NOT conflict with EXP-81 (which edits run.py, not run_scenes.py).
+- **EXP-81 brief ready:** `RemembersYouBeat` in new `demo_game/remembers_you_beat.py` + ACT 9 in `run.py`. Needs `get_npc_relationship` in client.py (orchestrator pre-dispatch).
+- **EXP-91 brief ready:** `RelationTicker` in new `demo_game/ui/relation_ticker.py` + status overlay in `game_window.py`. Needs same `get_npc_relationship` (orchestrator pre-dispatch).
+- **EXP-11 brief ready:** adds `player_relation` ContextItem to `context_builder.py` Tier-A when `player_id` is set. Uses existing `get_npc_player_edge` from `graph_reader.py`.
 - **EXP-80 DONE:** `demo_game/sandbox_loop.py` + S-key toggle in `GameWindow`. Pre-existing `test_game_window.py` layout failures (ISSUE-068) not introduced by this batch.
 - **DEC-070/072/071 still apply.** DEC-073: `context_budget_enforcer.py` 323-line waiver. DEC-074: `game_window.py` 350-line waiver.
 - **Schema/DECISIONS-gated (DROP from parallel batches):** EXP-51, EXP-17-full, EXP-87, EXP-53. EXP-55 deferred.
@@ -81,4 +85,18 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 - ~~EXP-56 localization~~ · ~~EXP-57 voice/STT~~
 
 ## Next parallel batch (suggested)
-**EXP-93, EXP-81 (first-slice low-knowledge NPC), EXP-91, EXP-11** — disjoint file sets, EXP-30 now landed so EXP-81 and EXP-11 are unblocked. EXP-93 (BribeScene fix) edits `run_scenes.py`/`run.py` so keep it in its own worker. EXP-32 can run once Q&A label set is authored (see `EXP32_EVAL_QA_TASK.md`).
+
+**EXP-93, EXP-81, EXP-91, EXP-11** — all four have disjoint file sets (verified):
+- EXP-93: `demo_game/run_scenes.py` + bribe tests only (no run.py needed)
+- EXP-81: new `demo_game/remembers_you_beat.py` + `demo_game/run.py` only
+- EXP-91: new `demo_game/ui/relation_ticker.py` + `demo_game/ui/game_window.py` only
+- EXP-11: `src/npc_engine/retrieval/context_builder.py` only
+
+**Orchestrator pre-dispatch:** before dispatching workers, add `get_npc_relationship` method
+to `demo_game/client.py` (5-10 lines; calls `GET /v1/npc/{npc_id}/relationship/{other_id}`,
+returns `data` dict or None on 404). Both EXP-81 and EXP-91 depend on this method;
+it is NOT delegated to either worker to avoid a client.py fan-in conflict.
+
+**Fan-in:** no Makefile changes this batch — no target needed.
+
+EXP-32 can run once Q&A label set is authored (see `EXP32_EVAL_QA_TASK.md`).
