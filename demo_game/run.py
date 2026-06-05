@@ -47,6 +47,7 @@ from demo_game.run_scenes import (
     StreamingDialogueBeat,
     WorldFeed,
 )
+from demo_game.remembers_you_beat import RemembersYouBeat
 from demo_game.constants import DEMO_CACHE_VERSION as _PROMPT_VERSION
 
 # ---------------------------------------------------------------------------
@@ -421,13 +422,20 @@ SCENES: list[Scene] = [
         delay_before_ms=500,
     ),
 
+    # -----------------------------------------------------------------------
+    # ACT 9 -- Cross-session memory recall (EXP-81)
+    # -----------------------------------------------------------------------
+    NarratorCue(name="act9_narrator", delay_before_ms=800,
+        text="ACT 9 — Memory: The innkeeper recalls your history."),
+    RemembersYouBeat(name="act9_remembers_you"),
+
     NarratorCue(
         name="outro",
         delay_before_ms=1000,
         text=(
-            "=== Demo complete. 8 acts. "
+            "=== Demo complete. 9 acts. "
             "Phase 6 + Phase 8 networked reputation + Phase 10 rumor warfare "
-            "+ EXP-85 anti-hallucination guard covered. ==="
+            "+ EXP-85 anti-hallucination guard + EXP-81 cross-session memory covered. ==="
         ),
     ),
 ]
