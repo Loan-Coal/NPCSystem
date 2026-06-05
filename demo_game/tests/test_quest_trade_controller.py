@@ -169,3 +169,27 @@ def test_give_item_refreshes_inventory_after_open_response() -> None:
     right = _make_right()
     ctrl.on_give_item("mira_innkeeper", item, right)
     right.set_inventory.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# on_trade_confirm — empty item_type from server (ISSUE-067)
+# ---------------------------------------------------------------------------
+
+
+def test_trade_confirm_substitutes_empty_item_type() -> None:
+    """on_trade_confirm sends a non-empty item_type even when the server's
+    negotiation_state returns item_type="" — else POST /economy/trade 422s."""
+    client = MagicMock()
+    ctrl, _ = _make_controller(client=client)
+    right = MagicMock()
+    right.get_trade_state.return_value = {
+        "status": "pending_confirm",
+        "item_id": "northern_spice_bundle",
+        "item_type": "",
+        "current_offer": 5,
+    }
+
+    ctrl.on_trade_confirm("aldric_merchant", right)
+
+    client.post_trade.assert_called_once()
+    assert client.post_trade.call_args.kwargs["item_type"] == "spice"

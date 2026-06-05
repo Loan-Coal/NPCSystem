@@ -132,7 +132,10 @@ class QuestTradeController:
                 buyer_id=self._player_id,
                 seller_id=npc_id,
                 item_id=state["item_id"],
-                item_type=state.get("item_type", "spice"),
+                # `or` (not get-default): the server's negotiation_state returns
+                # item_type="" (present-but-empty), which /economy/trade rejects with
+                # 422 (min_length=1). Substitute the demo's item type. (ISSUE-067)
+                item_type=state.get("item_type") or "spice",
                 offered_price=int(offered_price),
                 tick=0,
             )
