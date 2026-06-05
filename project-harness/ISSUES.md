@@ -745,6 +745,16 @@ current mapping is good enough for demo badge display and does not affect correc
 **Why deferred:** Single-task focus — not the ISSUE-065 dialogue-timeout task; logged to fix separately.
 **To fix:** Reproduce the `make test-demo` failures, find where the worker returns `None` instead of an unpackable tuple in the no-tick/clock-unavailable branch, fix the worker or the test mock, and fold `make test-demo` into the EXP-00c CI smoke gate so demo-test failures fail CI.
 
+## [FIXED] ISSUE-067: confirm-trade 422 — empty `item_type` passed to /economy/trade
+**Found:** 2026-06-05, during demo-game trade triage (`trade failed: POST /v1/admin/economy/trade → HTTP 422`)
+**Fixed:** 2026-06-05, in `demo_game/quest_trade_controller.py` (Phase 0) + regression test `demo_game/tests/test_quest_trade_controller.py::test_trade_confirm_substitutes_empty_item_type`.
+**Severity:** P2 (confirming a trade always 422s — the trade flow is unusable)
+**Where:** `demo_game/quest_trade_controller.py:135` (`on_trade_confirm`) → `POST /v1/admin/economy/trade`; server model `src/npc_engine/api/routes/economy.py:42-52` (`TradeOfferRequest.item_type: str = Field(..., min_length=1)`).
+**Root cause (confirmed live):** the server's `propose_trade` interaction returns `negotiation_state.item_type = ""` (present-but-empty — verified via a live `/v1/interaction` call). `on_trade_confirm` then did `state.get("item_type", "spice")`, but `dict.get(k, default)` returns the default only when the key is *absent*, not when it's `""` — so it sent `item_type=""` to `/economy/trade`, which rejects empty with 422. (Not a routing bug; the trade endpoint works with a valid body — a clean `current_tick` body returns 200/accepted.)
+**Fix:** `item_type = state.get("item_type") or "spice"` (substitute on empty). Verified: the body now passes validation and reaches the domain layer.
+**Deeper issue (logged, not fixed):** the server interaction engine should populate `negotiation_state.item_type` (it loses the proposed `item_type`, returning `""`). The demo workaround masks it; the engine fix belongs to the interaction/trade dispatch (ties to EXP-40 trade-dispatch maturity). The demo only trades spice, so the fallback is safe.
+**Note (UI):** the "trade failed" status text the user saw appear at *dialogue-send* time was a stale/lingering status message (dialogue itself worked); fixing the 422 removes the message. A separate status-message-timing cleanup is minor and not logged.
+
 <!--
 Template for a new issue:
 
