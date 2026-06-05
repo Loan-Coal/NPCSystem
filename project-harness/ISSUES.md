@@ -694,7 +694,8 @@ current mapping is good enough for demo badge display and does not affect correc
 **To fix:** (1) Bound tier-A in `context_builder`/`context_budget_enforcer`: rank mandatory items (recency + relevance to the player turn) and keep only what fits a configured tier-A sub-budget; demote the remainder to tier-B (already trimmable). (2) Add a unit test asserting tier0+tierA never exceeds the budget for a high-knowledge NPC fixture. (3) Re-run `make eval-llm-demo` on a fresh world and confirm mira surfaces the planted rumor. (4) Consider whether the planted-rumor KNOWS_ABOUT should be prioritized into tier-A so gossip consequences are guaranteed to surface.
 **Update 2026-06-05:** Fix direction DECIDED — see DEC-070 / EXP-30. Supersedes the "tier-A sub-budget" approach above with a cleaner model: collapse tiers into a small **pinned set** (`world`/`emotion`/persona/session-window/`active_quest`, marked `pinned:true`) + one **ranked pool** filled by `priority × relevance`. The overflow failure becomes impossible by construction. Implementation pending.
 
-## ISSUE-060: demo-run ACT 3 bribe uses STANDS_WITH (faction→faction) for a player→faction standing → 404
+## [FIXED] ISSUE-060: demo-run ACT 3 bribe uses STANDS_WITH (faction→faction) for a player→faction standing → 404
+**Fixed:** 2026-06-05, in EXP-93 — `BribeScene.execute()` now calls `adjust_npc_reputation` (Character→Faction `HAS_REPUTATION_WITH` edge) instead of `put_npc_reputation` (Faction→Faction `STANDS_WITH`).
 **Found:** 2026-06-04, during final-review demo walkthrough (fresh world, after the ACT-1 world_state fix unmasked it)
 **Severity:** P2 (scripted `make demo-run` cannot complete past ACT 3; pre-existing, was masked by the ACT-1 422)
 **Where:** `demo_game/run_scenes.py:239` (`BribeScene` → `runner.client.put_npc_reputation`), `demo_game/client.py::put_npc_reputation` (emits `STANDS_WITH`), vs `src/npc_engine/type_registry/base_edges/stands_with.yaml` (`src_type: faction, dst_type: faction`)
@@ -745,7 +746,8 @@ current mapping is good enough for demo badge display and does not affect correc
 **Fix:** raise `NPC_DIALOGUE_TIMEOUT_S` to 120.0 (matches `config.DemoConfig`). Regression test asserts the WS timeout is never below the HTTP dialogue timeout. Verified by probe: server delivers the first frame at 38s < 120s.
 **Enhancement (not done):** the WS path fake-streams (generate-then-chunk); real token streaming from Ollama would make the first token arrive in ~1-2s and remove the long wait. Future dialogue-UX improvement, not a Phase-0 blocker.
 
-## ISSUE-066: two demo worker tests fail (clock-unavailable fallback) — pre-existing
+## [FIXED] ISSUE-066: two demo worker tests fail (clock-unavailable fallback) — pre-existing
+**Fixed:** 2026-06-05, in EXP-93 — `TestBribeScene` rewritten to assert `adjust_npc_reputation`; `_make_client(tick_id=None)` mock fixed in both `test_action_workers.py` and `test_spread_rumor_worker.py`.
 **Found:** 2026-06-05, during ISSUE-065 fix (`make test-demo` showed 2 failures, confirmed present on commit 73a68c0 before this turn's change)
 **Severity:** P3 (test-only; the bribe/spread-rumor clock-fallback path)
 **Where:** `demo_game/tests/test_action_workers.py::TestBribeWorker::test_bribe_ok_falls_back_to_put_when_no_tick`, `demo_game/tests/test_spread_rumor_worker.py::TestSpreadRumorWorker::test_falls_back_to_tick_zero_when_clock_unavailable` (fails at `test_spread_rumor_worker.py:59`).
@@ -762,6 +764,22 @@ current mapping is good enough for demo badge display and does not affect correc
 **Fix:** `item_type = state.get("item_type") or "spice"` (substitute on empty). Verified: the body now passes validation and reaches the domain layer.
 **Deeper issue (logged, not fixed):** the server interaction engine should populate `negotiation_state.item_type` (it loses the proposed `item_type`, returning `""`). The demo workaround masks it; the engine fix belongs to the interaction/trade dispatch (ties to EXP-40 trade-dispatch maturity). The demo only trades spice, so the fallback is safe.
 **Note (UI):** the "trade failed" status text the user saw appear at *dialogue-send* time was a stale/lingering status message (dialogue itself worked); fixing the 422 removes the message. A separate status-message-timing cleanup is minor and not logged.
+
+## ISSUE-069: action_workers.py `_get_current_tick` catches only `EngineClientError` — non-engine errors escape
+**Found:** 2026-06-05, during EXP-93 integration (spotted by worker, not fixed)
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/action_workers.py` — `_get_current_tick` helper
+**Description:** The helper catches only `EngineClientError` for the clock fallback. Any other exception (network timeout, unexpected response shape) would propagate uncaught instead of falling back to `tick_id=0`. The EXP-93 test fix sidestepped this via mock shape rather than fixing the guard.
+**Why deferred:** Out of scope for EXP-93; non-blocking (demo scale, not production path).
+**To fix:** Broaden the `except` to `Exception` (or at minimum `httpx.TimeoutException`) and log the non-client-error case.
+
+## ISSUE-070: `relation:player` key may collide between EXP-11 direct edge and subgraph_retriever bundle
+**Found:** 2026-06-05, during EXP-11 integration (spotted by worker, not fixed)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/retrieval/context_builder.py` (EXP-11 addition) vs `src/npc_engine/retrieval/subgraph_retriever.py:64–74`
+**Description:** Both EXP-11 and `subgraph_retriever` can emit a `ContextItem(key="relation:player")`. The budget enforcer keeps the higher-priority item (EXP-11 uses priority=88; subgraph_retriever's priority TBD). No correctness bug — just potential deduplication noise.
+**Why deferred:** Not blocking; enforcer handles it correctly by priority.
+**To fix:** Confirm subgraph_retriever's priority for this key; if lower, it's fine. If equal, add explicit deduplication or rename one key.
 
 <!--
 Template for a new issue:

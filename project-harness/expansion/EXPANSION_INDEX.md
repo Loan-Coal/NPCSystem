@@ -22,14 +22,14 @@ _The orchestrator maintains this: add a line when an item unlocks/affects a late
 - **EXP-83 DONE:** `demo_game/quickstart.py` + `make hello` live. Standalone 177-line httpx-only seeder+dialogue script.
 - **EXP-84 DONE:** Gossip chain CHAIN tab now shows distortion-type badges ([EXAGGERATION] etc.) per hop.
 - **EXP-85 DONE:** `AntiHallucinationBeat` scripted beat in `run_scenes.py`; asks `aldric_merchant` about war, confirms 0 KNOWS_ABOUT edges. Registered as ACT 8 in SCENES.
-- **EXP-93 brief ready:** BribeScene fix (`run_scenes.py` only; run.py unchanged). EXP-93 does NOT conflict with EXP-81 (which edits run.py, not run_scenes.py).
-- **EXP-81 brief ready:** `RemembersYouBeat` in new `demo_game/remembers_you_beat.py` + ACT 9 in `run.py`. Needs `get_npc_relationship` in client.py (orchestrator pre-dispatch).
-- **EXP-91 brief ready:** `RelationTicker` in new `demo_game/ui/relation_ticker.py` + status overlay in `game_window.py`. Needs same `get_npc_relationship` (orchestrator pre-dispatch).
-- **EXP-11 brief ready:** adds `player_relation` ContextItem to `context_builder.py` Tier-A when `player_id` is set. Uses existing `get_npc_player_edge` from `graph_reader.py`.
+- **EXP-93 DONE:** BribeScene now uses `adjust_npc_reputation` (HAS_REPUTATION_WITH). ISSUE-060 and ISSUE-066 closed.
+- **EXP-81 DONE:** `RemembersYouBeat` in `demo_game/remembers_you_beat.py`; ACT 9 added to `run.py`. `get_npc_relationship` in `client.py` (added by orchestrator pre-dispatch).
+- **EXP-91 DONE:** `RelationTicker` in `demo_game/ui/relation_ticker.py`; trust/fear/affection delta overlay in `game_window.py`. TTL=4s polling, best-effort (swallows errors). game_window.py now 337 lines (under DEC-074 ceiling of 350).
+- **EXP-11 DONE:** `player_relation` ContextItem in context_builder.py Tier-A (key `"relation:player"`, priority=88, non-pinned). Uses `get_npc_player_edge`. context_builder.py now 446 lines (DEC-073 waiver updated). Potential key collision with subgraph_retriever logged as ISSUE-070.
 - **EXP-80 DONE:** `demo_game/sandbox_loop.py` + S-key toggle in `GameWindow`. Pre-existing `test_game_window.py` layout failures (ISSUE-068) not introduced by this batch.
-- **DEC-070/072/071 still apply.** DEC-073: `context_budget_enforcer.py` 323-line waiver. DEC-074: `game_window.py` 350-line waiver.
+- **DEC-070/072/071 still apply.** DEC-073: `context_builder.py` 446-line waiver (up from 323). DEC-074: `game_window.py` 337-line (under 350 ceiling).
 - **Schema/DECISIONS-gated (DROP from parallel batches):** EXP-51, EXP-17-full, EXP-87, EXP-53. EXP-55 deferred.
-- **Open residuals:** ISSUE-064 (reranker sync-on-loop), ISSUE-066 (2 pre-existing demo-worker test fails), ISSUE-068 (test_game_window.py WorldStatePoller missing import). Next ISSUE id: **ISSUE-069**.
+- **Open residuals:** ISSUE-064 (reranker sync-on-loop), ISSUE-068 (test_game_window.py WorldStatePoller), ISSUE-069 (action_workers catch scope), ISSUE-070 (relation:player key collision). Next ISSUE id: **ISSUE-071**.
 
 ## Ordered checklist
 
@@ -52,17 +52,17 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 
 ### Phase 2 — Dialogue + Gossip showcase (the priority)
 - [ ] **EXP-53** — dialogue-driven knowledge learning (`learned_facts`→`BELIEVES`, DEC-072) · M · deps: EXP-32 (soft) · `🔶` believes.yaml +3 fields (approved)
-- [ ] **EXP-11** — player-scoped long-term memory recall in dialogue · M · deps: EXP-30
+- [x] **EXP-11** — player-scoped long-term memory recall in dialogue · M · deps: EXP-30
 - [ ] **EXP-17** — salience forgetting curve (first slice: charge-weighted decay) · M · deps: EXP-30 · full version `🔶`
 - [ ] **EXP-15** — distortion-strategy registry (open L7-01 if-chain) · M · deps: none · refactor `gossip_distort.py`
 - [ ] **EXP-16** — belief/secret-selective, prompt-driven distortion · M · deps: EXP-15
-- [ ] **EXP-81** — cross-session "remembers you" demo · M · deps: EXP-30
+- [x] **EXP-81** — cross-session "remembers you" demo · M · deps: EXP-30
 - [x] **EXP-84** — gossip telephone-diff view (demo) · S · deps: EXP-15 (soft)
 - [x] **EXP-85** — anti-hallucination "I don't know" demo beat · S · deps: none
 - [ ] **EXP-92** — determinism/replay toggle (demo) · M · deps: KE-6 stable-id seeding
-- [ ] **EXP-91** — relationship-delta live ticker (demo) · S · deps: EXP-50
+- [x] **EXP-91** — relationship-delta live ticker (demo) · S · deps: EXP-50
 - [x] **EXP-80** — free-play/sandbox mode (demo) · M · deps: none
-- [ ] **EXP-93** — fix ISSUE-060 bribe → `HAS_REPUTATION_WITH` (demo) · S · deps: none
+- [x] **EXP-93** — fix ISSUE-060 bribe → `HAS_REPUTATION_WITH` (demo) · S · deps: none
 - [ ] **EXP-95** — in-window scenario picker (demo) · M · deps: KE-6
 
 ### Phase 3 — Agentic NPCs
@@ -86,17 +86,14 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 
 ## Next parallel batch (suggested)
 
-**EXP-93, EXP-81, EXP-91, EXP-11** — all four have disjoint file sets (verified):
-- EXP-93: `demo_game/run_scenes.py` + bribe tests only (no run.py needed)
-- EXP-81: new `demo_game/remembers_you_beat.py` + `demo_game/run.py` only
-- EXP-91: new `demo_game/ui/relation_ticker.py` + `demo_game/ui/game_window.py` only
-- EXP-11: `src/npc_engine/retrieval/context_builder.py` only
+**EXP-15, EXP-32 (soft), EXP-17 (first slice only), EXP-13** — candidates from Phase 2/3:
+- EXP-15: refactor `gossip_distort.py` open L7-01 if-chain → distortion-strategy registry. New file `engines/gossip/distortion_registry.py` + edits `gossip_distort.py`. No schema change.
+- EXP-32: measured anti-hallucination eval (new eval files only; deps EXP-30 done, needs Q&A label set — drop if not authored yet).
+- EXP-17 (first slice — charge-weighted decay only, NOT the full schema-gated version): edit `retrieval/` decay logic only; no new node/edge. Confirm the brief restricts scope to the non-gated slice.
+- EXP-13: `EmotionModelProtocol` + personality modulation — refactor `emotion_updater.py`. No schema change, new protocol file.
 
-**Orchestrator pre-dispatch:** before dispatching workers, add `get_npc_relationship` method
-to `demo_game/client.py` (5-10 lines; calls `GET /v1/npc/{npc_id}/relationship/{other_id}`,
-returns `data` dict or None on 404). Both EXP-81 and EXP-91 depend on this method;
-it is NOT delegated to either worker to avoid a client.py fan-in conflict.
+**Conflicts to verify before dispatch:** EXP-15 and EXP-17 both touch `retrieval/` adjacently — confirm disjoint files. EXP-13 edits `emotion_updater.py` only.
 
-**Fan-in:** no Makefile changes this batch — no target needed.
+**Drop from this batch:** EXP-32 if Q&A label set is not ready. EXP-17 full version (schema-gated).
 
 EXP-32 can run once Q&A label set is authored (see `EXP32_EVAL_QA_TASK.md`).
