@@ -88,10 +88,9 @@ async def engine_status(scheduler: TickScheduler = Depends(get_tick_scheduler)) 
     Returns:
         Dict with ``data`` list of EngineStatusRecord dicts.
     """
-    records = [
-        record.model_dump()
-        for record in scheduler.engine_status.values()
-    ]
+    # TickScheduler.engine_status already returns serialized dicts (see its
+    # property docstring); pass them through. Re-dumping caused ISSUE-062 (500).
+    records = list(scheduler.engine_status.values())
     return ok_response(records)
 
 

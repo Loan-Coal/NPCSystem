@@ -86,6 +86,37 @@ def test_metrics_route_reflects_recorded_counters() -> None:
     reset_metrics_registry()
 
 
+# --- /v1/system/engines (ISSUE-062 regression) -------------------------------
+
+
+def test_engines_route_passes_serialized_records_through() -> None:
+    """Engine-status route returns already-serialized dicts without re-dumping.
+
+    Regression for ISSUE-062: the handler called .model_dump() on the property's
+    values, but TickScheduler.engine_status already returns dicts → AttributeError
+    → HTTP 500 on every poll.
+    """
+    from types import SimpleNamespace
+
+    from npc_engine.api.dependencies_engines import get_tick_scheduler
+    from npc_engine.scheduler.engine_status_store import EngineStatusRecord
+
+    record = EngineStatusRecord(engine_name="gossip", last_tick_id=7, error_count=0)
+    app = _app_with_v1_router()
+    app.dependency_overrides[get_tick_scheduler] = lambda: SimpleNamespace(
+        engine_status={"gossip": record.model_dump()}
+    )
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.get("/v1/system/engines")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["success"] is True
+    assert payload["data"][0]["engine_name"] == "gossip"
+    assert payload["data"][0]["last_tick_id"] == 7
+
+
 # --- auth public-path exemption ----------------------------------------------
 
 
