@@ -29,7 +29,8 @@ if TYPE_CHECKING:
     from demo_game.run import DemoRunner
 
 _CHAR_TYPE = "Character"
-_STANDING_CAP = 100
+# lira_fence lives in loc_tavern per NPC_LOCATION_MAP in constants.py (EXP-93).
+_BRIBE_LOCATION: str = "loc_tavern"
 
 
 # ---------------------------------------------------------------------------
@@ -216,7 +217,12 @@ class BribeScene(Scene):
     faction_id: str = "thieves_guild"
 
     def execute(self, runner: DemoRunner) -> None:
-        """Read player gold, validate, improve standing, deduct cost."""
+        """Read player gold, validate, adjust standing via HAS_REPUTATION_WITH, deduct cost.
+
+        Uses adjust_npc_reputation (Character→Faction HAS_REPUTATION_WITH edge) instead
+        of put_npc_reputation (Faction→Faction STANDS_WITH edge) — EXP-93 / ISSUE-060.
+        The delta is clamped server-side; tick_id is read from the clock state.
+        """
         runner.print_step(
             f"Bribing {self.npc_id} -- paying {BRIBE_GOLD_COST}g for "
             f"+{BRIBE_STANDING_GAIN} standing with {self.faction_id}"
@@ -230,16 +236,16 @@ class BribeScene(Scene):
             runner.print_ok(f"[skip] Not enough gold (have {gold}, need {BRIBE_GOLD_COST})")
             return
 
-        reps = runner.client.get_npc_reputation(self.player_id)
-        current = next(
-            (int(r.get("standing") or 0) for r in reps if r.get("faction_id") == self.faction_id),
-            0,
+        clock = runner.client.get_clock_state()
+        tick_id: int = clock.get("data", {}).get("current_tick", 1)
+
+        result = runner.client.adjust_npc_reputation(
+            self.player_id, self.faction_id, BRIBE_STANDING_GAIN, _BRIBE_LOCATION, tick_id
         )
-        new_standing = min(_STANDING_CAP, current + BRIBE_STANDING_GAIN)
-        runner.client.put_npc_reputation(self.player_id, self.faction_id, new_standing)
+        new_standing = (result.get("data") or {}).get("standing", "?")
         runner.client.patch_node(_CHAR_TYPE, self.player_id, {"currency_balance": gold - BRIBE_GOLD_COST})
         runner.print_ok(
-            f"Bribe paid -- {self.faction_id} standing: {current} -> {new_standing} "
+            f"Bribe paid -- {self.faction_id} standing={new_standing} "
             f"(gold {gold} -> {gold - BRIBE_GOLD_COST})"
         )
 

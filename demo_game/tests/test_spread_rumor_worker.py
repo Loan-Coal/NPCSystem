@@ -18,7 +18,9 @@ def _make_client(
 ) -> MagicMock:
     client = MagicMock()
     if tick_id is None:
-        client.get_clock_state.side_effect = Exception("clock unavailable")
+        # Return a response with no tick_id key — _get_current_tick returns None,
+        # which spread_rumor_worker converts to 0 via `or 0` (EXP-93 / ISSUE-066).
+        client.get_clock_state.return_value = {"data": {}}
     else:
         client.get_clock_state.return_value = {"data": {"tick_id": tick_id}}
 

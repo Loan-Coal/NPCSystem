@@ -1,20 +1,24 @@
 """
 Module: test_action_workers
 Layer: demo_game (tests)
-Purpose: Unit tests for action_workers background-thread functions.
-Dependencies: demo_game.action_workers, unittest.mock, queue
+Purpose: Unit tests for action_workers background-thread functions and BribeScene
+         from run_scenes (EXP-93: fix BribeScene to use adjust_npc_reputation).
+Dependencies: demo_game.action_workers, demo_game.run_scenes, unittest.mock, queue
 Used by: make test-demo
 """
 
 from __future__ import annotations
 
 import queue
+from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
 import pytest
 
 from demo_game.action_workers import bribe_worker, travel_worker
 from demo_game.constants import BRIBE_GOLD_COST, BRIBE_STANDING_GAIN
+from demo_game.run_scenes import BribeScene
+from demo_game.run_scenes import _BRIBE_LOCATION
 
 _EXPECTED_STANDING = 10 + BRIBE_STANDING_GAIN
 
@@ -42,7 +46,9 @@ class TestBribeWorker:
         if tick_id is not None:
             client.get_clock_state.return_value = {"data": {"tick_id": tick_id}}
         else:
-            client.get_clock_state.side_effect = Exception("clock unavailable")
+            # Return a response with no tick_id key — _get_current_tick returns None,
+            # triggering the put_npc_reputation fallback (EXP-93 / ISSUE-066).
+            client.get_clock_state.return_value = {"data": {}}
         expected = min(100, current_standing + BRIBE_STANDING_GAIN)
         client.adjust_npc_reputation.return_value = {"data": {"standing": expected}}
         return client
@@ -213,3 +219,46 @@ class TestTravelWorker:
         item = result_q.get_nowait()
         assert item[0] == "err"
         assert item[1] == "loc_tavern"
+
+
+class TestBribeScene:
+    """EXP-93: BribeScene must call adjust_npc_reputation, not put_npc_reputation."""
+
+    def _make_runner(
+        self,
+        gold: int = 100,
+        current_standing: int = 0,
+        tick: int = 3,
+    ) -> MagicMock:
+        """Build a mock DemoRunner with client pre-wired for BribeScene."""
+        runner = MagicMock()
+        runner.dry_run = False
+        runner.client.get_node.return_value = {"currency_balance": gold}
+        runner.client.get_npc_reputation.return_value = [
+            {"faction_id": "thieves_guild", "standing": current_standing}
+        ]
+        runner.client.get_clock_state.return_value = {"data": {"current_tick": tick}}
+        runner.client.adjust_npc_reputation.return_value = {
+            "data": {"standing": current_standing + BRIBE_STANDING_GAIN}
+        }
+        return runner
+
+    def test_bribe_scene_calls_adjust_npc_reputation(self) -> None:
+        """Happy path: BribeScene calls adjust_npc_reputation with correct args."""
+        runner = self._make_runner(gold=100, current_standing=0, tick=3)
+        scene = BribeScene(name="bribe_test", player_id="player_demo", faction_id="thieves_guild")
+        scene.execute(runner)
+
+        runner.client.adjust_npc_reputation.assert_called_once_with(
+            "player_demo", "thieves_guild", BRIBE_STANDING_GAIN, _BRIBE_LOCATION, 3
+        )
+        runner.client.put_npc_reputation.assert_not_called()
+
+    def test_bribe_scene_skips_when_insufficient_gold(self) -> None:
+        """BribeScene skips the write when player cannot afford the bribe."""
+        runner = self._make_runner(gold=BRIBE_GOLD_COST - 1)
+        scene = BribeScene(name="bribe_test", player_id="player_demo", faction_id="thieves_guild")
+        scene.execute(runner)
+
+        runner.client.adjust_npc_reputation.assert_not_called()
+        runner.client.put_npc_reputation.assert_not_called()
