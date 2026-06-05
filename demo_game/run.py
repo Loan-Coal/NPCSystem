@@ -26,8 +26,9 @@ from pathlib import Path
 from typing import Any
 
 from demo_game.client import EngineClient
-from demo_game.config import get_demo_config
+from demo_game.config import DemoConfig
 from demo_game.run_scenes import (
+    AntiHallucinationBeat,
     BribeScene,
     ClockTick,
     CorrectRumorScene,
@@ -404,12 +405,29 @@ SCENES: list[Scene] = [
         player_input="Henryk, did you hear anything odd about the castle guards recently?",
     ),
 
+    # -----------------------------------------------------------------------
+    # ACT 8 -- Anti-hallucination guard (EXP-85)
+    # -----------------------------------------------------------------------
+    NarratorCue(
+        name="pre_anti_halluc_cue",
+        delay_before_ms=2000,
+        text=(
+            "[ACT 8] Anti-hallucination guard. Aldric is NOT in the gossip chain. "
+            "Ask him about the war -- he has no KNOWS_ABOUT edge, so the engine deflects."
+        ),
+    ),
+    AntiHallucinationBeat(
+        name="beat_anti_hallucination",
+        delay_before_ms=500,
+    ),
+
     NarratorCue(
         name="outro",
         delay_before_ms=1000,
         text=(
-            "=== Demo complete. 7 acts. "
-            "Phase 6 + Phase 8 networked reputation + Phase 10 rumor warfare covered. ==="
+            "=== Demo complete. 8 acts. "
+            "Phase 6 + Phase 8 networked reputation + Phase 10 rumor warfare "
+            "+ EXP-85 anti-hallucination guard covered. ==="
         ),
     ),
 ]
@@ -424,7 +442,7 @@ class DemoRunner:
     def __init__(self, dry_run: bool = False, cached: bool = False) -> None:
         self.dry_run = dry_run
         self.cache = LLMCache(readonly=cached)
-        cfg = get_demo_config()
+        cfg = DemoConfig()
         self.client: EngineClient = EngineClient(
             base_url=cfg.NPC_BASE_URL,
             api_key=cfg.NPC_API_KEY,
@@ -469,8 +487,6 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """Entry point."""
-    from demo_game.encoding_utils import ensure_utf8_stdout
-    ensure_utf8_stdout()
     args = _parse_args()
 
     if args.dry_run and args.cached:

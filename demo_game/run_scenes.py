@@ -507,3 +507,56 @@ class CorrectRumorScene(Scene):
         runner.print_ok(
             f"[rumor] {self.npc_id} corrected={corrected} (event_id={event_id!r})"
         )
+
+
+# ---------------------------------------------------------------------------
+# Anti-hallucination beat (EXP-85)
+# ---------------------------------------------------------------------------
+
+_ANTI_HALLUCINATION_NPC = "aldric_merchant"
+_ANTI_HALLUCINATION_PLAYER = "player_demo"
+_ANTI_HALLUCINATION_MESSAGE = "Aldric, what do you know about the war in the north?"
+_ANTI_HALLUCINATION_EVENT = "northern_war_begins"
+
+
+@dataclass
+class AntiHallucinationBeat(Scene):
+    """Ask aldric_merchant about northern_war_begins — an event he has no KNOWS_ABOUT edge for.
+
+    Demonstrates the anti-hallucination guard: Aldric is at market_square and is
+    not in the Sorn→Mira→Henryk gossip chain, so the engine has no context to inject
+    and the NPC deflects in-character rather than confabulating.
+
+    Steps:
+    1. Print narrator cue.
+    2. Fetch KNOWS_ABOUT edges for aldric_merchant (expected: 0 for this event).
+    3. Call POST /v1/dialogue (REST) — no streaming.
+    4. Print the NPC response.
+    5. Print the edge-count confirmation note.
+    """
+
+    def execute(self, runner: DemoRunner) -> None:
+        """Run the anti-hallucination beat against the engine."""
+        runner.print_step(
+            "[ANTI-HALLUCINATION] Asking Aldric about the northern war..."
+        )
+        if runner.dry_run:
+            return
+
+        edges = runner.client.get_graph_edges(
+            "KNOWS_ABOUT",
+            src_id=_ANTI_HALLUCINATION_NPC,
+        )
+        edge_count = len(edges)
+
+        response = runner.client.post_dialogue(
+            player_id=_ANTI_HALLUCINATION_PLAYER,
+            npc_id=_ANTI_HALLUCINATION_NPC,
+            player_message=_ANTI_HALLUCINATION_MESSAGE,
+        )
+        npc_text: str = response.get("npc_response", "")
+        runner.print_ok(f"[anti-halluc] {_ANTI_HALLUCINATION_NPC}: {npc_text[:120]}")
+        runner.print_ok(
+            f"Graph: {edge_count} KNOWS_ABOUT {_ANTI_HALLUCINATION_EVENT!r} "
+            f"edges for {_ANTI_HALLUCINATION_NPC} (expected 0)"
+        )
