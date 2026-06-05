@@ -48,6 +48,7 @@ from npc_engine.api.routes.location_history import router as location_history_ro
 from npc_engine.api.routes.causality import router as causality_router
 from npc_engine.api.routes.witnessed import router as witnessed_router
 from npc_engine.api.routes.groups import router as groups_router
+from npc_engine.api.routes.relationship import router as relationship_router
 from npc_engine.api.routes.rumors import router as rumors_router
 from npc_engine.api.routes.gossip_spread import router as gossip_spread_router
 from npc_engine.api.routes.rumor_trace import router as rumor_trace_router
@@ -324,6 +325,7 @@ def create_app() -> FastAPI:
     app.include_router(system_v1_router, prefix=settings.API_V1_PREFIX)
     app.include_router(graph_router, prefix=settings.API_V1_PREFIX)
     app.include_router(reputation_graph_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(relationship_router, prefix=settings.API_V1_PREFIX)
 
     # Admin / designer-tooling surface under /v1/admin/
     app.include_router(system_admin_router, prefix=admin_prefix)
