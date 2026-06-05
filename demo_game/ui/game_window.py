@@ -4,7 +4,8 @@ Layer: demo_game.ui
 Purpose: Main Pygame game window — left dialogue panel, right live graph panel,
          bottom location nav. Non-blocking dialogue and graph polling via daemon threads.
 Dependencies: pygame, demo_game.client, demo_game.config, demo_game.dialogue,
-              demo_game.constants, demo_game.ui.widgets, demo_game.graph_panel.poller
+              demo_game.constants, demo_game.ui.widgets, demo_game.graph_panel.poller,
+              demo_game.sandbox_loop
 Used by: demo_game.__main__
 """
 
@@ -13,6 +14,7 @@ from __future__ import annotations
 import queue
 import threading
 import time
+from typing import TYPE_CHECKING
 
 import pygame
 
@@ -28,6 +30,9 @@ from demo_game.constants import (
 )
 from demo_game.dialogue import build_dialogue_payload, degradation_color, parse_dialogue_response
 from demo_game.ui.widgets import DegradationBadge, InputBox, NpcListWidget, ScrollableLog
+
+if TYPE_CHECKING:
+    from demo_game.sandbox_loop import SandboxLoop
 
 # ---------------------------------------------------------------------------
 # Layout constants
@@ -72,9 +77,15 @@ class GameWindow:
         cfg: Demo runtime configuration.
     """
 
-    def __init__(self, client: EngineClient, cfg: DemoConfig) -> None:
+    def __init__(
+        self,
+        client: EngineClient,
+        cfg: DemoConfig,
+        sandbox_loop: SandboxLoop | None = None,
+    ) -> None:
         self._client = client
         self._cfg = cfg
+        self._sandbox_loop = sandbox_loop
         self._response_q: queue.Queue = queue.Queue()
         self._is_waiting = False
 
@@ -180,6 +191,13 @@ class GameWindow:
                 self._set_status("Clock advanced")
             except EngineClientError as exc:
                 self._set_status(f"C error: {exc}")
+        elif key == pygame.K_s and self._sandbox_loop is not None:
+            if self._sandbox_loop.is_running:
+                self._sandbox_loop.stop()
+                self._set_status("Auto-tick OFF")
+            else:
+                self._sandbox_loop.start()
+                self._set_status("Auto-tick ON")
 
     def _set_status(self, text: str, duration: float = 2.0) -> None:
         self._status_text = text
@@ -289,6 +307,12 @@ class GameWindow:
             self._screen.blit(ts, (rect.right - ts.get_width() - 6, rect.bottom - ts.get_height() - 4))
 
     def _draw_status_overlay(self) -> None:
+        if self._sandbox_loop is not None:
+            on = self._sandbox_loop.is_running
+            label = "AUTO-TICK: ON" if on else "AUTO-TICK: OFF"
+            color = (200, 140, 30) if on else (90, 90, 110)
+            tick_surf = self._font_nav.render(label, True, color)
+            self._screen.blit(tick_surf, (8, WINDOW_H - NAV_BAR_H - 36))
         if not self._status_text or time.monotonic() > self._status_until:
             return
         surf = self._font_nav.render(self._status_text, True, (240, 230, 80))
