@@ -9,6 +9,8 @@ Used by: retrieval.context_builder, engines.gossip.gossip_handler, engines.event
 
 from __future__ import annotations
 
+import asyncio
+
 from npc_engine.retrieval.vector_store_protocol import VectorSearchResult, VectorStoreProtocol
 
 EMBED_DIMENSION = 384  # all-MiniLM-L6-v2 output dimension
@@ -50,7 +52,9 @@ class EmbeddingIndex:
             payload: Arbitrary metadata stored alongside the embedding.
         """
 
-        vector = _embed_text(text, self._model_name)
+        # Offload the CPU-bound sentence-transformers encode to a worker thread so
+        # it never blocks the asyncio event loop (ISSUE-063).
+        vector = await asyncio.to_thread(_embed_text, text, self._model_name)
         await self._vector_store.upsert(item_id=item_id, vector=vector, payload=payload)
 
     async def search(
@@ -77,7 +81,7 @@ class EmbeddingIndex:
 
         if top_k <= 0:
             raise ValueError("top_k must be greater than 0")
-        query_vector = _embed_text(query, self._model_name)
+        query_vector = await asyncio.to_thread(_embed_text, query, self._model_name)
         results = await self._vector_store.search(query_vector=query_vector, top_k=top_k)
         if filter_ids is not None:
             results = [r for r in results if r["id"] in filter_ids]
@@ -97,7 +101,7 @@ class EmbeddingIndex:
             Empty texts produce a zero vector of length EMBED_DIMENSION.
         """
 
-        return _embed_texts_batch(texts, self._model_name)
+        return await asyncio.to_thread(_embed_texts_batch, texts, self._model_name)
 
     async def invalidate(self, item_id: str) -> None:
         """Remove one indexed entry from the vector store.
