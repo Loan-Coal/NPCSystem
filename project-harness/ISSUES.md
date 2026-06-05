@@ -728,6 +728,23 @@ current mapping is good enough for demo badge display and does not affect correc
 **Why deferred:** Out of scope for the ISSUE-063 fix (one item, no scope creep); separate call path with its own sync/async chain to confirm.
 **To fix:** Offload the cross-encoder `predict()` off the event loop (mirror the `embedding_index` `to_thread` fix); add a regression test asserting it runs off the main thread.
 
+## [FIXED] ISSUE-065: WS dialogue times out — client frame timeout (30s) shorter than full LLM generation (~38s)
+**Found:** 2026-06-05, during demo-game dialogue triage (`ws_recv_timeout`)
+**Fixed:** 2026-06-05, in `demo_game/constants.py` (Phase 0) + regression test `demo_game/tests/test_dialogue_ws_timeout.py`.
+**Severity:** P2 (talking to an NPC times out — dialogue, the headline feature, is unusable on the cold 14b model)
+**Where:** `demo_game/constants.py:104` (`NPC_DIALOGUE_TIMEOUT_S=30.0`, imported by `demo_game/dialogue_ws.py:22,86`) vs `demo_game/config.py:33` (`DemoConfig.NPC_DIALOGUE_TIMEOUT_S=120.0`, used for the HTTP dialogue path).
+**Root cause (measured live):** the WS server fully generates the response before streaming (`src/npc_engine/api/routes/dialogue_ws.py:161` — `await handler.handle(...)` then chunks the finished text), so time-to-first-frame equals the full `qwen2.5:14b` generation. A live WS probe measured the first frame at **38.1s**. The client WS recv timeout was a stale **30s** (the HTTP path already uses 120s), so `ws.recv()` raised `TimeoutError` → `ws_recv_timeout` before the first token. Not a routing/server bug — a client timeout shorter than the model latency, and inconsistent with the HTTP path.
+**Fix:** raise `NPC_DIALOGUE_TIMEOUT_S` to 120.0 (matches `config.DemoConfig`). Regression test asserts the WS timeout is never below the HTTP dialogue timeout. Verified by probe: server delivers the first frame at 38s < 120s.
+**Enhancement (not done):** the WS path fake-streams (generate-then-chunk); real token streaming from Ollama would make the first token arrive in ~1-2s and remove the long wait. Future dialogue-UX improvement, not a Phase-0 blocker.
+
+## ISSUE-066: two demo worker tests fail (clock-unavailable fallback) — pre-existing
+**Found:** 2026-06-05, during ISSUE-065 fix (`make test-demo` showed 2 failures, confirmed present on commit 73a68c0 before this turn's change)
+**Severity:** P3 (test-only; the bribe/spread-rumor clock-fallback path)
+**Where:** `demo_game/tests/test_action_workers.py::TestBribeWorker::test_bribe_ok_falls_back_to_put_when_no_tick`, `demo_game/tests/test_spread_rumor_worker.py::TestSpreadRumorWorker::test_falls_back_to_tick_zero_when_clock_unavailable` (fails at `test_spread_rumor_worker.py:59`).
+**Description:** `TypeError: cannot unpack non-iterable NoneType object` in the clock-unavailable fallback path of the bribe and spread-rumor workers — a test/code mismatch, most likely fallout from the hardening refactor's client changes (not from this turn's dialogue-timeout fix; confirmed pre-existing via `git stash`). `make check` does not run `demo_game/tests/`, so it stayed green and these went unnoticed.
+**Why deferred:** Single-task focus — not the ISSUE-065 dialogue-timeout task; logged to fix separately.
+**To fix:** Reproduce the `make test-demo` failures, find where the worker returns `None` instead of an unpackable tuple in the no-tick/clock-unavailable branch, fix the worker or the test mock, and fold `make test-demo` into the EXP-00c CI smoke gate so demo-test failures fail CI.
+
 <!--
 Template for a new issue:
 
