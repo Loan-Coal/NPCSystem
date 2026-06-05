@@ -49,3 +49,6 @@ project-harness/review-evidence/
 # OS
 .DS_Store
 Thumbs.db
+
+# Archived review evidence (kept local-only, as the original review-evidence/ was)
+project-harness/archive/review-2026-06-03/review-evidence/
