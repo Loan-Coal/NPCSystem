@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 import pygame
 
 from demo_game.client import EngineClient, EngineClientError
+from demo_game.ui.relation_ticker import RelationTicker
 from demo_game.graph_panel.poller import GraphPoller
 from demo_game.config import DemoConfig
 from demo_game.constants import (
@@ -121,6 +122,8 @@ class GameWindow:
         self._graph_poller = GraphPoller(client, cfg, _RIGHT_W, _RIGHT_H)
         self._graph_poller.start()
 
+        self._relation_ticker: RelationTicker = RelationTicker(client)
+
     # ------------------------------------------------------------------
     # Public entry point
     # ------------------------------------------------------------------
@@ -154,7 +157,8 @@ class GameWindow:
         self._log.handle_event(event)
 
         clicked_npc = self._npc_list.handle_event(event)
-        if clicked_npc:
+        if clicked_npc and clicked_npc != self._active_npc_id:
+            self._relation_ticker.reset_baseline(self._active_npc_id)
             self._active_npc_id = clicked_npc
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -208,6 +212,7 @@ class GameWindow:
     # ------------------------------------------------------------------
 
     def _change_location(self, loc_id: str) -> None:
+        self._relation_ticker.reset_baseline(self._active_npc_id)
         self._active_location_id = loc_id
         npcs = LOCATION_NPC_MAP[loc_id]
         self._active_npc_id = npcs[0]
@@ -307,6 +312,12 @@ class GameWindow:
             self._screen.blit(ts, (rect.right - ts.get_width() - 6, rect.bottom - ts.get_height() - 4))
 
     def _draw_status_overlay(self) -> None:
+        if self._active_npc_id:
+            self._relation_ticker.tick(self._active_npc_id)
+            delta_text = self._relation_ticker.get_delta_text(self._active_npc_id)
+            if delta_text:
+                rel_surf = self._font_nav.render(delta_text, True, (120, 200, 240))
+                self._screen.blit(rel_surf, (8, WINDOW_H - NAV_BAR_H - 52))
         if self._sandbox_loop is not None:
             on = self._sandbox_loop.is_running
             label = "AUTO-TICK: ON" if on else "AUTO-TICK: OFF"
