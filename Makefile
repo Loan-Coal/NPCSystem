@@ -169,6 +169,10 @@ eval-llm:
 eval-llm-demo:
 	$(PYTHON) -m pytest e2e/scenarios/scenario_demo_game_judge.py -v -s -m llm_eval --scenarios-only -p no:cacheprovider
 
+# eval-retrieval: measure retrieval precision@k/recall@k/MRR against demo world labels
+eval-retrieval:
+	$(PYTHON) -m evals.retrieval_runner
+
 # ---------------------------------------------------------------------------
 # Demo game targets (Phase 2)
 # Run from repo root so demo_game/ is on sys.path.
