@@ -711,13 +711,22 @@ current mapping is good enough for demo badge display and does not affect correc
 **Fix:** pass the property's dict values through unchanged: `records = list(scheduler.engine_status.values())`. Verified live: `GET /v1/system/engines` → HTTP 200 with the full engine list. `make check` green (1600 passed, 98.31%).
 **Note:** the demo *timeout cascade* (`poll failed: timed out`, `ws_recv_timeout`) is a SEPARATE concern, not caused by this fast 500 — split out to ISSUE-063.
 
-## ISSUE-063: demo timeout cascade under load (poll/WS timeouts during trade/dialogue)
+## [FIXED] ISSUE-063: demo timeout cascade — synchronous embedding encode blocking the event loop
 **Found:** 2026-06-05, during demo-game regression triage (observed alongside ISSUE-062, but distinct)
-**Severity:** P2 (the playable demo stalls — many pollers + a slow LLM call time out together)
-**Where:** demo pollers (`demo_game/*_poller.py`, ~12 concurrent) vs single-worker uvicorn + Ollama (`qwen2.5:14b`); client timeouts `graph_timeout=15s`, `dialogue_timeout=120s` (`demo_game/client.py:42-50`).
-**Description:** After ISSUE-062 was fixed, a slow/queued LLM call (trade/dialogue via Ollama) coincides with many concurrent graph pollers; reads exceed the 15s `graph_timeout` and the WS `recv` times out → cascade (`poll failed: timed out`, `ws_recv_timeout`, `recent_events error: timed out`). Likely Ollama serializing requests and/or a blocking call on the single worker. Trade routes are correctly mounted (not a routing bug).
-**Why deferred:** Not the EXP-00a item; needs its own characterization (is it Ollama queueing, a sync call blocking the event loop, or just poller fan-out?). Belongs to Phase 0 EXP-00c (boot+endpoint smoke test) / a concurrency pass.
-**To fix:** (1) Reproduce under a trade action and capture which calls time out and whether the event loop is blocked. (2) Consider: throttle/stagger demo pollers, raise `graph_timeout`, bound concurrent Ollama calls, or confirm all engine I/O is truly async. (3) Add the smoke test to catch regressions.
+**Fixed:** 2026-06-05, in `src/npc_engine/retrieval/embedding_index.py` (Phase 0) + regression tests `tests/unit/test_embedding_index_offload.py`.
+**Severity:** P2 (the playable demo stalls — every poller + the quest/trade POST time out together)
+**Where:** `src/npc_engine/retrieval/embedding_index.py` (`upsert`/`search`/`embed_batch`), `src/npc_engine/retrieval/sentence_encoder.py:50-62` (sync `encode()`); single-worker uvicorn (`Dockerfile:28`, no `--workers`).
+**Root cause (confirmed live):** the server is healthy at rest (all demo endpoints 6–18ms), so it was not a hung server or a slow endpoint. `EmbeddingIndex.upsert/search/embed_batch` are `async def` but called the **synchronous** sentence-transformers `encode()` **directly on the asyncio event loop** (no `to_thread`). At startup the embedding reconciler calls `embed_batch` over every seeded node — the first call also lazy-loads the MiniLM model — blocking the single worker for several seconds; during that window the demo's startup poll burst + WS all time out (`poll failed: timed out`, `ws_recv_timeout`, and the `on_quest_accept` POST → `httpx.ReadTimeout`). Once reconciliation completes the loop is free → 8ms. (Ollama is reachable and its adapter is correctly async — not the cause.) Also violated CLAUDE.md "Async: never block in an async context."
+**Fix:** offload all three encodes via `await asyncio.to_thread(...)` so CPU-bound encoding runs on a worker thread and never blocks the loop. Verified live: after rebuild, 24 concurrent demo polls returned with a slowest time of 42ms (no stall). `make check` green (1603 passed). Regression tests assert the encode runs off the main thread.
+**Residual (logged separately):** the cross-encoder reranker has the same sync-on-loop pattern on the dialogue path → ISSUE-064.
+
+## ISSUE-064: cross-encoder reranker runs synchronous model inference on the event loop (dialogue path)
+**Found:** 2026-06-05, during ISSUE-063 fix (same bug class, different call path)
+**Severity:** P3 (a shorter, dialogue-only block, not the startup cascade — but still blocks the single worker during retrieval rerank)
+**Where:** `src/npc_engine/retrieval/cross_encoder_reranker.py:31-56` (sync `rerank()` → `model.predict()`), called at `src/npc_engine/retrieval/context_builder.py:268`.
+**Description:** `rerank()` is a synchronous function doing CPU-bound cross-encoder `predict()`; invoked during Tier B/C context assembly on dialogue turns. If its call chain runs on the event loop, each rerank blocks the single worker for the predict duration (and the first call loads the cross-encoder model). Same fix pattern as ISSUE-063 — offload via `asyncio.to_thread` at the async call site (confirm `context_builder`'s enclosing function is async first; if sync, offload at its nearest async caller).
+**Why deferred:** Out of scope for the ISSUE-063 fix (one item, no scope creep); separate call path with its own sync/async chain to confirm.
+**To fix:** Offload the cross-encoder `predict()` off the event loop (mirror the `embedding_index` `to_thread` fix); add a regression test asserting it runs off the main thread.
 
 <!--
 Template for a new issue:
