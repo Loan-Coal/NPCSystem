@@ -254,6 +254,28 @@ class EngineClient:
         self._raise_for_status(resp, f"GET /v1/npc/{npc_id}/emotion")
         return resp.json()
 
+    def get_npc_relationship(self, npc_id: str, other_id: str) -> dict | None:
+        """Fetch RELATES_TO edge properties between two characters via EXP-50 route.
+
+        Args:
+            npc_id: Source character node ID.
+            other_id: Target character node ID.
+
+        Returns:
+            Dict with trust, fear, affection, interaction_count fields, or None on 404.
+
+        Raises:
+            EngineClientError: On any non-404 4xx or 5xx response.
+        """
+        resp = self._client.get(
+            f"/v1/npc/{npc_id}/relationship/{other_id}",
+            timeout=self._graph_timeout,
+        )
+        if resp.status_code == 404:
+            return None
+        self._raise_for_status(resp, f"GET /v1/npc/{npc_id}/relationship/{other_id}")
+        return resp.json().get("data")
+
     # ------------------------------------------------------------------
     # Clock
     # ------------------------------------------------------------------
