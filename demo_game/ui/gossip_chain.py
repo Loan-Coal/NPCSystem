@@ -2,7 +2,8 @@
 Module: gossip_chain
 Layer: demo_game.ui
 Purpose: Renders the Sorn→Mira→Henryk gossip distortion chain in the CHAIN tab.
-         Shows each NPC's distorted knowledge with a distortion percentage.
+         Shows each NPC's distorted knowledge with distortion percentage and
+         distortion-type badge (EXAGGERATION, OMISSION, ROLE_SWAP, TIMELINE_SHIFT).
          Colour-coded: white (0%), amber (1–30%), red (31%+).
 Dependencies: pygame, demo_game.constants
 Used by: demo_game.ui.right_panel
@@ -86,6 +87,35 @@ class GossipChainWidget:
             surface.blit(txt, (rect.centerx - txt.get_width() // 2, y))
             y += lh
 
+    def _draw_hop_header(
+        self,
+        surface: pygame.Surface,
+        x: int,
+        y: int,
+        name: str,
+        pct: int,
+        colour: tuple[int, int, int],
+        distortion_type: str | None,
+        body_lh: int,
+        label_lh: int,
+    ) -> int:
+        """Render one hop header: [Name] (pct%) [TYPE] badge. Returns new y."""
+        name_surf = self._font_body.render(f"[{name}]", True, colour)
+        surface.blit(name_surf, (x, y))
+
+        pct_x = x + name_surf.get_width()
+        pct_y = y + (body_lh - label_lh) // 2
+        pct_surf = self._font_label.render(f"  ({pct}%)", True, colour)
+        surface.blit(pct_surf, (pct_x, pct_y))
+
+        if distortion_type:
+            badge_x = pct_x + pct_surf.get_width()
+            badge = f"  [{distortion_type.upper()}]"
+            badge_surf = self._font_label.render(badge, True, PALETTE["amber"])
+            surface.blit(badge_surf, (badge_x, pct_y))
+
+        return y + body_lh + 2
+
     def _draw_chain(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         x = rect.x + 12
         y = rect.y + 12
@@ -96,17 +126,14 @@ class GossipChainWidget:
             src_id = edge.get("src_id", "?")
             level = float(edge.get("distortion_level", 0.0))
             summary = str(edge.get("distorted_summary") or "")
+            distortion_type = edge.get("distortion_type") or None
             colour = _distortion_colour(level)
             pct = int(round(level * 100))
-
-            # NPC name + distortion percentage on one line
             name = NPC_DISPLAY_NAMES.get(src_id, src_id)
-            name_surf = self._font_body.render(f"[{name}]", True, colour)
-            surface.blit(name_surf, (x, y))
 
-            pct_surf = self._font_label.render(f"  ({pct}%)", True, colour)
-            surface.blit(pct_surf, (x + name_surf.get_width(), y + (body_lh - label_lh) // 2))
-            y += body_lh + 2
+            y = self._draw_hop_header(
+                surface, x, y, name, pct, colour, distortion_type, body_lh, label_lh
+            )
 
             # Truncated distorted summary snippet
             snippet = summary[:_SUMMARY_MAX_CHARS] + ("…" if len(summary) > _SUMMARY_MAX_CHARS else "")
