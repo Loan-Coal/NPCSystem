@@ -36,7 +36,9 @@ def enforce_context_budget(
 ) -> MergedContext:
     """Apply tier-aware budget policy with compression for compressible tiers.
 
-    Tier A is validated against a hard token budget and is not compressed.
+    Tier 0 is always included and validated against TIER0_MAX_TOKENS (data error if exceeded).
+    Tier A uses pinned-core + ranked-pool fill: pinned items are always included; the
+    remaining budget is filled from non-pinned pool ordered by priority descending.
     Tiers B and C are compressed and/or dropped to fit their configured budgets.
 
     Args:
@@ -45,11 +47,11 @@ def enforce_context_budget(
         compression_cache: Optional pre-warmed compression cache; a new cache is created if omitted.
 
     Returns:
-        A new MergedContext with tier B/C items compressed or dropped to satisfy budgets.
+        A new MergedContext with tier A trimmed to budget and tier B/C compressed or dropped.
 
     Raises:
-        ContextBudgetError: If tier A or session-turns exceed their non-compressible budgets,
-            or if a compressible tier cannot fit within budget after compression and dropping.
+        ContextBudgetError: Only if tier0 exceeds TIER0_MAX_TOKENS or session turns exceed
+            their sub-budget (both are data errors, not pool-overflow conditions).
     """
 
     TIER0_MAX_TOKENS = 380  # matches legacy token_budget_enforcer constant
@@ -70,16 +72,6 @@ def enforce_context_budget(
             detail="Tier 0 (world + emotion) exceeds non-compressible cap.",
         )
 
-    tier_a_tokens = sum(estimate_tokens(item.text) for item in tier_a_items)
-    tier_a_budget = llm_config.tier_budget_tokens.tier_a
-    if tier_a_tokens > tier_a_budget:
-        raise ContextBudgetError(
-            tier="tier_a",
-            used_tokens=tier_a_tokens,
-            budget_tokens=tier_a_budget,
-            detail="Tier A exceeds configured budget and is non-compressible.",
-        )
-
     session_items = [item for item in tier_a_items if item.key == "session"]
     session_tokens = sum(estimate_tokens(item.text) for item in session_items)
     if session_tokens > llm_config.session_turns_budget_tokens:
@@ -89,6 +81,11 @@ def enforce_context_budget(
             budget_tokens=llm_config.session_turns_budget_tokens,
             detail="Session turns exceed Tier A sub-budget and are non-compressible.",
         )
+
+    tier_a_fitted = _fit_tier_a_pinned_pool(
+        items=tier_a_items,
+        budget_tokens=llm_config.tier_budget_tokens.tier_a,
+    )
 
     tier_b_fitted = _fit_compressible_tier(
         tier_name="tier_b",
@@ -105,7 +102,7 @@ def enforce_context_budget(
         cache=cache,
     )
 
-    return MergedContext(items=[*tier0_items, *tier_a_items, *tier_b_fitted, *tier_c_fitted])
+    return MergedContext(items=[*tier0_items, *tier_a_fitted, *tier_b_fitted, *tier_c_fitted])
 
 
 def _fit_compressible_tier(
@@ -151,6 +148,42 @@ def _fit_compressible_tier(
     return fitted
 
 
+def _fit_tier_a_pinned_pool(
+    *,
+    items: list[ContextItem],
+    budget_tokens: int,
+) -> list[ContextItem]:
+    """Apply pinned-core + ranked-pool policy to a tier-A item list.
+
+    Pinned items are always included regardless of budget. The remaining budget
+    is filled from non-pinned items sorted by priority descending (lowest priority
+    dropped first when budget is exceeded).
+
+    Args:
+        items: All tier-A ContextItems to consider.
+        budget_tokens: Maximum tokens allowed for the returned tier-A list.
+
+    Returns:
+        Filtered list containing all pinned items plus as many non-pinned items
+        as fit within the remaining budget, ordered by priority descending.
+    """
+    pinned = [item for item in items if item.pinned]
+    non_pinned = sorted(
+        [item for item in items if not item.pinned],
+        key=lambda item: (-item.priority, item.key),
+    )
+    pinned_tokens = sum(estimate_tokens(item.text) for item in pinned)
+    remaining = budget_tokens - pinned_tokens
+    selected_non_pinned: list[ContextItem] = []
+    for item in non_pinned:
+        tok = estimate_tokens(item.text)
+        if remaining - tok < 0:
+            break
+        selected_non_pinned.append(item)
+        remaining -= tok
+    return [*pinned, *selected_non_pinned]
+
+
 TIER0_MAX_TOKENS = 380
 
 
@@ -185,10 +218,7 @@ def fill_to_budget(
     cache = compression_cache or ContextCompressionCache()
 
     tier0_items = [item for item in context.items if item.tier == "tier0"]
-    tier_a_items = sorted(
-        [item for item in context.items if item.tier == "tierA"],
-        key=lambda i: (-i.priority, i.key),
-    )
+    tier_a_items_raw = [item for item in context.items if item.tier == "tierA"]
     tier_b_items = [item for item in context.items if item.tier == "tierB"]
     tier_c_items = [item for item in context.items if item.tier == "tierC"]
 
@@ -242,15 +272,16 @@ def fill_to_budget(
     selected: list[ContextItem] = list(tier0_items)
     running = tier0_tokens
 
-    tier_a_running = 0
-    for item in tier_a_items:
+    # Tier A: pinned items always included; remaining budget filled from non-pinned pool.
+    tier_a_fitted = _fit_tier_a_pinned_pool(
+        items=tier_a_items_raw,
+        budget_tokens=tier_a_soft_cap,
+    )
+    for item in tier_a_fitted:
         tok = estimate_tokens(item.text)
-        if tier_a_running + tok > tier_a_soft_cap:
-            break
         if running + tok > prompt_token_budget:
             break
         selected.append(item)
-        tier_a_running += tok
         running += tok
 
     tier_b_running = 0
@@ -276,9 +307,9 @@ def fill_to_budget(
     # Verify actual serialized size (corrects for JSON skeleton overhead) and trim if needed.
     serialized = serialize_context(filled)
     while estimate_tokens(serialized) > prompt_token_budget:
-        droppable = [item for item in filled.items if item.tier != "tier0"]
+        droppable = [item for item in filled.items if item.tier != "tier0" and not item.pinned]
         if not droppable:
-            break  # only tier0 remains; return as-is
+            break  # only tier0 and pinned items remain; return as-is
         # Drop from tier_c first, then tier_b, then tier_a — lowest priority first within each.
         to_drop = sorted(
             droppable,

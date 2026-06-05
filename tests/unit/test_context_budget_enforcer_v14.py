@@ -37,7 +37,12 @@ def _llm_config() -> LLMConfig:
     )
 
 
-def test_enforce_context_budget_raises_typed_error_when_tier_a_overflow() -> None:
+def test_enforce_context_budget_raises_typed_error_when_session_turns_overflow() -> None:
+    """Session turns exceeding their sub-budget still raises ContextBudgetError.
+
+    Tier-A non-pinned overflow no longer raises (pinned-pool policy); only the
+    session sub-budget and tier-0 cap are hard limits in enforce_context_budget.
+    """
     context = MergedContext(
         items=[
             ContextItem(key="world", text="w" * 40, tier="tier0", priority=100),
@@ -48,7 +53,7 @@ def test_enforce_context_budget_raises_typed_error_when_tier_a_overflow() -> Non
     with pytest.raises(ContextBudgetError) as error:
         enforce_context_budget(context=context, llm_config=_llm_config())
 
-    assert error.value.tier == "tier_a"
+    assert error.value.tier == "session_turns"
     assert error.value.used_tokens > error.value.budget_tokens
 
 

@@ -58,6 +58,7 @@ def assemble_tier_a_context(
                 text=serialize_json(character_payload),
                 tier="tierA",
                 priority=100,
+                pinned=True,
             )
         )
 

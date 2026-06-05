@@ -274,12 +274,12 @@ async def build_serialized_context(
 
     # Assemble tiers from pre-fetched data
     tier0 = [
-        ContextItem(key="world", text=world_state.model_dump_json(), tier="tier0", priority=100),
-        ContextItem(key="emotion", text=serialize_json(emotion_snapshot), tier="tier0", priority=95),
+        ContextItem(key="world", text=world_state.model_dump_json(), tier="tier0", priority=100, pinned=True),
+        ContextItem(key="emotion", text=serialize_json(emotion_snapshot), tier="tier0", priority=95, pinned=True),
     ]
 
     tier_a_raw = [
-        ContextItem(key="session", text=serialize_json(session_turns), tier="tierA", priority=99),
+        ContextItem(key="session", text=serialize_json(session_turns), tier="tierA", priority=99, pinned=True),
     ]
     tier_a_raw.extend(
         assemble_tier_a_context(
@@ -306,7 +306,7 @@ async def build_serialized_context(
         )
 
     if active_quest:
-        tier_a_raw.append(ContextItem(key="active_quest", text=serialize_json(active_quest), tier="tierA", priority=89))
+        tier_a_raw.append(ContextItem(key="active_quest", text=serialize_json(active_quest), tier="tierA", priority=89, pinned=True))
     if memories:
         tier_a_raw.append(ContextItem(key="memories", text=serialize_json(memories), tier="tierA", priority=90))
     if beliefs:
