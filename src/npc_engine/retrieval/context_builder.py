@@ -25,6 +25,7 @@ from npc_engine.graph.graph_reader import (
     get_known_event_ids_for_npc,
     get_location_context,
     get_npc_location_id,
+    get_npc_player_edge,
 )
 from npc_engine.graph.belief_queries import get_beliefs_for_character
 from npc_engine.graph.goal_queries import get_goals_for_character
@@ -267,6 +268,12 @@ async def build_serialized_context(
     second_hop_events = await get_second_hop_events(session, npc_id=npc_id)
     active_quest = await get_active_quest_for_player(session, player_id=player_id) if player_id else None
 
+    player_relation_edge: dict | None = None
+    if player_id:
+        player_relation_edge = await get_npc_player_edge(
+            session, npc_id=npc_id, player_id=player_id
+        )
+
     # 6.5: Cross-encoder rerank Tier B/C vector results before building ContextItems.
     if settings.CROSS_ENCODER_ENABLED and tier_b_results:
         from npc_engine.retrieval.cross_encoder_reranker import rerank as cross_encode_rerank
@@ -307,6 +314,15 @@ async def build_serialized_context(
 
     if active_quest:
         tier_a_raw.append(ContextItem(key="active_quest", text=serialize_json(active_quest), tier="tierA", priority=89, pinned=True))
+    if player_relation_edge is not None:
+        tier_a_raw.append(
+            ContextItem(
+                key="relation:player",
+                text=serialize_json(player_relation_edge),
+                tier="tierA",
+                priority=88,
+            )
+        )
     if memories:
         tier_a_raw.append(ContextItem(key="memories", text=serialize_json(memories), tier="tierA", priority=90))
     if beliefs:
