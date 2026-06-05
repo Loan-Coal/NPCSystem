@@ -1,7 +1,5 @@
 """
 context_budget_enforcer.py - Tier-aware context budget enforcement with compression cache.
-Layer: retrieval
-Purpose: (auto-detected — review)
 
 Does NOT: call external LLM services for compression.
 
@@ -18,11 +16,10 @@ from npc_engine.retrieval.context_compression import (
 from npc_engine.retrieval.context_merger import ContextItem, MergedContext
 from npc_engine.retrieval.context_utils import estimate_tokens
 from npc_engine.schema.context_config_models import LLMConfig
-from npc_engine.utils.errors import ContextBudgetError, TokenBudgetExceededError
+from npc_engine.utils.errors import ContextBudgetError
 
 __all__ = [
     "ContextBudgetError",
-    "TokenBudgetExceededError",
     "ContextCompressionCache",
     "COMPRESSION_SUFFIX",
     "build_compression_cache_key",
@@ -39,7 +36,9 @@ def enforce_context_budget(
 ) -> MergedContext:
     """Apply tier-aware budget policy with compression for compressible tiers.
 
-    Tier A is validated against a hard token budget and is not compressed.
+    Tier 0 is always included and validated against TIER0_MAX_TOKENS (data error if exceeded).
+    Tier A uses pinned-core + ranked-pool fill: pinned items are always included; the
+    remaining budget is filled from non-pinned pool ordered by priority descending.
     Tiers B and C are compressed and/or dropped to fit their configured budgets.
 
     Args:
@@ -48,11 +47,11 @@ def enforce_context_budget(
         compression_cache: Optional pre-warmed compression cache; a new cache is created if omitted.
 
     Returns:
-        A new MergedContext with tier B/C items compressed or dropped to satisfy budgets.
+        A new MergedContext with tier A trimmed to budget and tier B/C compressed or dropped.
 
     Raises:
-        ContextBudgetError: If tier A or session-turns exceed their non-compressible budgets,
-            or if a compressible tier cannot fit within budget after compression and dropping.
+        ContextBudgetError: Only if tier0 exceeds TIER0_MAX_TOKENS or session turns exceed
+            their sub-budget (both are data errors, not pool-overflow conditions).
     """
 
     TIER0_MAX_TOKENS = 380  # matches legacy token_budget_enforcer constant
@@ -73,16 +72,6 @@ def enforce_context_budget(
             detail="Tier 0 (world + emotion) exceeds non-compressible cap.",
         )
 
-    tier_a_tokens = sum(estimate_tokens(item.text) for item in tier_a_items)
-    tier_a_budget = llm_config.tier_budget_tokens.tier_a
-    if tier_a_tokens > tier_a_budget:
-        raise ContextBudgetError(
-            tier="tier_a",
-            used_tokens=tier_a_tokens,
-            budget_tokens=tier_a_budget,
-            detail="Tier A exceeds configured budget and is non-compressible.",
-        )
-
     session_items = [item for item in tier_a_items if item.key == "session"]
     session_tokens = sum(estimate_tokens(item.text) for item in session_items)
     if session_tokens > llm_config.session_turns_budget_tokens:
@@ -92,6 +81,11 @@ def enforce_context_budget(
             budget_tokens=llm_config.session_turns_budget_tokens,
             detail="Session turns exceed Tier A sub-budget and are non-compressible.",
         )
+
+    tier_a_fitted = _fit_tier_a_pinned_pool(
+        items=tier_a_items,
+        budget_tokens=llm_config.tier_budget_tokens.tier_a,
+    )
 
     tier_b_fitted = _fit_compressible_tier(
         tier_name="tier_b",
@@ -108,7 +102,7 @@ def enforce_context_budget(
         cache=cache,
     )
 
-    return MergedContext(items=[*tier0_items, *tier_a_items, *tier_b_fitted, *tier_c_fitted])
+    return MergedContext(items=[*tier0_items, *tier_a_fitted, *tier_b_fitted, *tier_c_fitted])
 
 
 def _fit_compressible_tier(
@@ -154,6 +148,42 @@ def _fit_compressible_tier(
     return fitted
 
 
+def _fit_tier_a_pinned_pool(
+    *,
+    items: list[ContextItem],
+    budget_tokens: int,
+) -> list[ContextItem]:
+    """Apply pinned-core + ranked-pool policy to a tier-A item list.
+
+    Pinned items are always included regardless of budget. The remaining budget
+    is filled from non-pinned items sorted by priority descending (lowest priority
+    dropped first when budget is exceeded).
+
+    Args:
+        items: All tier-A ContextItems to consider.
+        budget_tokens: Maximum tokens allowed for the returned tier-A list.
+
+    Returns:
+        Filtered list containing all pinned items plus as many non-pinned items
+        as fit within the remaining budget, ordered by priority descending.
+    """
+    pinned = [item for item in items if item.pinned]
+    non_pinned = sorted(
+        [item for item in items if not item.pinned],
+        key=lambda item: (-item.priority, item.key),
+    )
+    pinned_tokens = sum(estimate_tokens(item.text) for item in pinned)
+    remaining = budget_tokens - pinned_tokens
+    selected_non_pinned: list[ContextItem] = []
+    for item in non_pinned:
+        tok = estimate_tokens(item.text)
+        if remaining - tok < 0:
+            break
+        selected_non_pinned.append(item)
+        remaining -= tok
+    return [*pinned, *selected_non_pinned]
+
+
 TIER0_MAX_TOKENS = 380
 
 
@@ -166,10 +196,10 @@ def fill_to_budget(
 ) -> tuple[MergedContext, str]:
     """Fill context tiers greedily into prompt_token_budget.
 
-    Tier0 and Tier A are mandatory and always included in full: if their combined
-    token cost exceeds prompt_token_budget, TokenBudgetExceededError is raised
-    rather than silently dropping identity/session context. Only Tier B and Tier C
-    are trimmable; lower-priority items are dropped tier_c first, then tier_b.
+    Tier0 is always included. Tier A, B, C are filled in priority order up to
+    their per-engine soft caps (derived as fractions of prompt_token_budget).
+    When budget is tight, lower-priority items are dropped: tier_c first, then
+    tier_b, then tier_a. Never raises ContextBudgetError for budget reasons.
 
     Args:
         context: Merged context from all tiers.
@@ -181,19 +211,14 @@ def fill_to_budget(
         Tuple of (final MergedContext, serialized JSON string).
 
     Raises:
-        ContextBudgetError: If tier0 alone exceeds TIER0_MAX_TOKENS (data error).
-        TokenBudgetExceededError: If mandatory Tier0+TierA exceed prompt_token_budget
-            (including after serialization overhead, once all Tier B/C is dropped).
+        ContextBudgetError: Only if tier0 alone exceeds TIER0_MAX_TOKENS (data error).
     """
     from npc_engine.retrieval.context_serializer import serialize_context
 
     cache = compression_cache or ContextCompressionCache()
 
     tier0_items = [item for item in context.items if item.tier == "tier0"]
-    tier_a_items = sorted(
-        [item for item in context.items if item.tier == "tierA"],
-        key=lambda i: (-i.priority, i.key),
-    )
+    tier_a_items_raw = [item for item in context.items if item.tier == "tierA"]
     tier_b_items = [item for item in context.items if item.tier == "tierB"]
     tier_c_items = [item for item in context.items if item.tier == "tierC"]
 
@@ -206,18 +231,11 @@ def fill_to_budget(
             detail="Tier 0 (world + emotion) exceeds non-compressible cap.",
         )
 
-    # Tier0 + Tier A are mandatory and non-droppable. If they alone exceed the
-    # budget, fail loud rather than silently truncating identity/session context.
-    tier_a_tokens = sum(estimate_tokens(item.text) for item in tier_a_items)
-    mandatory_tokens = tier0_tokens + tier_a_tokens
-    if mandatory_tokens > prompt_token_budget:
-        raise TokenBudgetExceededError(
-            f"Mandatory context (tier0+tierA) requires {mandatory_tokens} tokens, "
-            f"exceeding prompt_token_budget {prompt_token_budget}"
-        )
-
-    # Tier B soft cap: smallest of the per-tier config budget and the fraction-derived budget.
-    # Tier A has no soft cap — it is mandatory and was budget-checked above.
+    # Soft caps: smallest of the per-tier config budget and the fraction-derived budget.
+    tier_a_soft_cap = min(
+        llm_config.tier_budget_tokens.tier_a,
+        int(prompt_token_budget * llm_config.tier_a_fraction),
+    )
     tier_b_soft_cap = min(
         llm_config.tier_budget_tokens.tier_b,
         int(prompt_token_budget * llm_config.tier_b_fraction),
@@ -250,9 +268,21 @@ def fill_to_budget(
     compressed_b_sorted = sorted(compressed_b, key=lambda i: (-i.priority, i.key))
     compressed_c_sorted = sorted(compressed_c, key=lambda i: (-i.priority, i.key))
 
-    # Mandatory tier0 + tier A are always included in full (budget-checked above).
-    selected: list[ContextItem] = [*tier0_items, *tier_a_items]
-    running = mandatory_tokens
+    # Greedy fill using estimated token counts per item.
+    selected: list[ContextItem] = list(tier0_items)
+    running = tier0_tokens
+
+    # Tier A: pinned items always included; remaining budget filled from non-pinned pool.
+    tier_a_fitted = _fit_tier_a_pinned_pool(
+        items=tier_a_items_raw,
+        budget_tokens=tier_a_soft_cap,
+    )
+    for item in tier_a_fitted:
+        tok = estimate_tokens(item.text)
+        if running + tok > prompt_token_budget:
+            break
+        selected.append(item)
+        running += tok
 
     tier_b_running = 0
     for item in compressed_b_sorted:
@@ -275,20 +305,15 @@ def fill_to_budget(
     filled = MergedContext(items=selected)
 
     # Verify actual serialized size (corrects for JSON skeleton overhead) and trim if needed.
-    # Only Tier B/C are droppable; tier0 + tier A are mandatory.
     serialized = serialize_context(filled)
     while estimate_tokens(serialized) > prompt_token_budget:
-        droppable = [item for item in filled.items if item.tier in ("tierB", "tierC")]
+        droppable = [item for item in filled.items if item.tier != "tier0" and not item.pinned]
         if not droppable:
-            raise TokenBudgetExceededError(
-                f"Mandatory context (tier0+tierA) plus serialization overhead requires "
-                f"{estimate_tokens(serialized)} tokens, exceeding prompt_token_budget "
-                f"{prompt_token_budget}"
-            )
-        # Drop from tier_c first, then tier_b — lowest priority first within each.
+            break  # only tier0 and pinned items remain; return as-is
+        # Drop from tier_c first, then tier_b, then tier_a — lowest priority first within each.
         to_drop = sorted(
             droppable,
-            key=lambda i: ({"tierB": 1, "tierC": 0}[i.tier], i.priority),
+            key=lambda i: ({"tierA": 2, "tierB": 1, "tierC": 0}[i.tier], i.priority),
         )[0]
         filled = filled.model_copy(
             update={"items": [i for i in filled.items if i.key != to_drop.key]}

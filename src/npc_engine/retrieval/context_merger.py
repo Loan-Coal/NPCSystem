@@ -17,12 +17,18 @@ ContextTier = Literal["tier0", "tierA", "tierB", "tierC"]
 
 
 class ContextItem(BaseModel):
-    """One context item with tier and priority metadata."""
+    """One context item with tier, priority, and pinned metadata.
+
+    Pinned items are always included in the context output regardless of budget
+    pressure. The enforcer includes all pinned items unconditionally and fills
+    remaining budget from the non-pinned pool ordered by priority descending.
+    """
 
     key: str
     text: str
     tier: ContextTier
     priority: int
+    pinned: bool = False
 
     model_config = ConfigDict(frozen=True)
 
