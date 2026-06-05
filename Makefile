@@ -185,6 +185,10 @@ demo:
 dashboard:
 	@echo "Designer dashboard: http://localhost:8000/dashboard/  (start backend first: docker-compose up -d)"
 
+# hello: integrator hello-world — seed one NPC, send one dialogue turn, print reply
+hello:
+	$(PYTHON) -m demo_game.quickstart
+
 # demo-seed: seed the demo world via the HTTP API (idempotent — safe to re-run)
 demo-seed:
 	$(PYTHON) -m demo_game.seed
