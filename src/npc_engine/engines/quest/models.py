@@ -1,18 +1,45 @@
 """
-models.py - Typed quest lifecycle models for engine orchestration.
+Module: models
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Typed quest lifecycle models for engine orchestration, including the
+    QuestStatus enum and QuestStateRecord for per-player quest state.
+Dependencies: pydantic, enum (stdlib only).
+Used by: engines/quest/quest_lifecycle_engine.py, api quest routes.
 
 Does NOT: execute graph writes.
-
-Dependencies injected: None.
 """
 
 from __future__ import annotations
 
+import enum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class QuestStatus(str, enum.Enum):
+    """Valid lifecycle states for a quest.
+
+    Inherits from ``str`` so Pydantic v2 serialises the value without a
+    custom validator, and Neo4j receives a plain string via ``.value``.
+
+    Members:
+        DRAFT: Quest generated but not yet offered to any player.
+        OFFERED: Quest presented to a specific player, awaiting acceptance.
+        ACCEPTED: Player accepted the quest; objectives not yet started.
+        IN_PROGRESS: At least one objective has been updated.
+        COMPLETED: All objectives met; rewards pending or applied.
+        FAILED: Quest ended without completion (slice-2 adds transition logic).
+        EXPIRED: Quest timed out before player could complete it (slice-2).
+    """
+
+    DRAFT = "draft"
+    OFFERED = "offered"
+    ACCEPTED = "accepted"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    EXPIRED = "expired"
 
 
 class QuestObjectiveInput(BaseModel):
@@ -64,13 +91,18 @@ class QuestTransitionMeta(BaseModel):
 
 
 class QuestStateRecord(BaseModel):
-    """Canonical persisted quest state for one player and quest pair."""
+    """Canonical persisted quest state for one player and quest pair.
+
+    The ``status`` field uses ``QuestStatus`` (a ``str``-based enum).
+    Pydantic v2 coerces valid raw strings automatically, so callers that
+    pass ``status="offered"`` continue to work without modification.
+    """
 
     quest_id: str
     player_id: str
     reward_source_id: str = "system"
     title: str
-    status: str
+    status: QuestStatus
     objectives: list[QuestObjectiveInput]
     objective_progress: dict[str, int]
     item_rewards: list[QuestRewardItem]

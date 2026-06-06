@@ -1,11 +1,14 @@
 """
-quest_lifecycle_engine.py - P3 quest lifecycle orchestration service.
+Module: quest_lifecycle_engine
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Quest lifecycle state machine — orchestrates status transitions,
+    objective progress, and atomic reward routing for per-player quest state.
+Dependencies: npc_engine.config, npc_engine.engines.quest.models,
+    npc_engine.engines.quest.quest_engine_helpers, npc_engine.graph.*,
+    npc_engine.type_registry, npc_engine.utils.errors.
+Used by: api quest routes (via dependency injection).
 
 Does NOT: expose HTTP routing concerns.
-
-Dependencies injected: Settings and graph/session collaborators.
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ from npc_engine.engines.quest.models import (
     QuestRewardCurrency,
     QuestRewardItem,
     QuestStateRecord,
+    QuestStatus,
     QuestTransitionMeta,
 )
 from npc_engine.engines.quest.quest_engine_helpers import (
@@ -39,12 +43,6 @@ from npc_engine.utils.errors import QuestTransitionError
 
 
 _logger = logging.getLogger(__name__)
-
-STATUS_DRAFT = "draft"
-STATUS_OFFERED = "offered"
-STATUS_ACCEPTED = "accepted"
-STATUS_IN_PROGRESS = "in_progress"
-STATUS_COMPLETED = "completed"
 
 
 class QuestLifecycleEngine:
@@ -174,12 +172,12 @@ class QuestLifecycleEngine:
                 code="QUEST_NOT_FOUND",
                 detail=f"Quest node not found: quest_id={quest_id}",
             )
-        if quest_node.get("status") != STATUS_DRAFT:
+        if quest_node.get("status") != QuestStatus.DRAFT:
             raise QuestTransitionError(
                 code="QUEST_TRANSITION_INVALID",
                 detail=f"Quest must be in draft status to be offered; current status={quest_node.get('status')}",
             )
-        await update_quest_node_status(session=session, quest_id=quest_id, status=STATUS_OFFERED)
+        await update_quest_node_status(session=session, quest_id=quest_id, status=QuestStatus.OFFERED)
         return await self.offer_quest(
             session=session,
             quest_id=quest_id,
@@ -238,7 +236,7 @@ class QuestLifecycleEngine:
             player_id=player_id,
             reward_source_id=reward_source_id,
             title=title,
-            status=STATUS_OFFERED,
+            status=QuestStatus.OFFERED,
             objectives=objectives,
             objective_progress=progress,
             item_rewards=item_rewards,
@@ -262,7 +260,7 @@ class QuestLifecycleEngine:
                     code="QUEST_REWARD_SOURCE_INVALID",
                     detail="reward_source_id must be a trusted system source",
                 )
-            if offered_state.status != STATUS_OFFERED:
+            if offered_state.status != QuestStatus.OFFERED:
                 raise QuestTransitionError(
                     code="QUEST_TRANSITION_INVALID",
                     detail=f"Quest cannot be re-offered from status={offered_state.status}",
@@ -304,7 +302,7 @@ class QuestLifecycleEngine:
         """
 
         state = await self._require_state(session=session, quest_id=quest_id, player_id=player_id)
-        if state.status == STATUS_ACCEPTED:
+        if state.status == QuestStatus.ACCEPTED:
             await self._emit_lifecycle_event(
                 session=session,
                 quest_id=quest_id,
@@ -314,13 +312,13 @@ class QuestLifecycleEngine:
                 meta=meta,
             )
             return state.model_dump(mode="python")
-        if state.status != STATUS_OFFERED:
+        if state.status != QuestStatus.OFFERED:
             raise QuestTransitionError(
                 code="QUEST_TRANSITION_INVALID",
                 detail=f"Quest cannot be accepted from status={state.status}",
             )
 
-        next_state = state.model_copy(update={"status": STATUS_ACCEPTED})
+        next_state = state.model_copy(update={"status": QuestStatus.ACCEPTED})
         stored = await self._persist_state_and_event(
             session=session,
             quest_id=quest_id,
@@ -330,7 +328,7 @@ class QuestLifecycleEngine:
             summary=f"Quest accepted: {state.title}",
             meta=meta,
         )
-        await update_quest_node_status(session=session, quest_id=quest_id, status=STATUS_ACCEPTED)
+        await update_quest_node_status(session=session, quest_id=quest_id, status=QuestStatus.ACCEPTED)
         return stored
 
     async def update_objective(
@@ -362,7 +360,7 @@ class QuestLifecycleEngine:
         """
 
         state = await self._require_state(session=session, quest_id=quest_id, player_id=player_id)
-        if state.status not in {STATUS_ACCEPTED, STATUS_IN_PROGRESS}:
+        if state.status not in {QuestStatus.ACCEPTED, QuestStatus.IN_PROGRESS}:
             raise QuestTransitionError(
                 code="QUEST_TRANSITION_INVALID",
                 detail=f"Quest objective cannot be updated from status={state.status}",
@@ -379,7 +377,7 @@ class QuestLifecycleEngine:
 
         next_state = state.model_copy(
             update={
-                "status": STATUS_IN_PROGRESS,
+                "status": QuestStatus.IN_PROGRESS,
                 "objective_progress": next_progress,
             }
         )
@@ -417,7 +415,7 @@ class QuestLifecycleEngine:
         """
 
         state = await self._require_state(session=session, quest_id=quest_id, player_id=player_id)
-        if state.status not in {STATUS_ACCEPTED, STATUS_IN_PROGRESS, STATUS_COMPLETED}:
+        if state.status not in {QuestStatus.ACCEPTED, QuestStatus.IN_PROGRESS, QuestStatus.COMPLETED}:
             raise QuestTransitionError(
                 code="QUEST_TRANSITION_INVALID",
                 detail=f"Quest completion cannot be evaluated from status={state.status}",
@@ -427,7 +425,7 @@ class QuestLifecycleEngine:
             state.objective_progress.get(objective.objective_id, 0) >= objective.target_count
             for objective in state.objectives
         )
-        next_status = STATUS_COMPLETED if is_completed else STATUS_IN_PROGRESS
+        next_status = QuestStatus.COMPLETED if is_completed else QuestStatus.IN_PROGRESS
         next_state = state.model_copy(update={"status": next_status})
 
         stored = await self._persist_state_and_event(
@@ -442,7 +440,7 @@ class QuestLifecycleEngine:
             meta=meta,
         )
         if is_completed:
-            await update_quest_node_status(session=session, quest_id=quest_id, status=STATUS_COMPLETED)
+            await update_quest_node_status(session=session, quest_id=quest_id, status=QuestStatus.COMPLETED)
         return stored
 
     async def apply_rewards(
@@ -472,10 +470,10 @@ class QuestLifecycleEngine:
                 player lacks a delivery item, or delivery transfer fails.
         """
         state = await self._require_state(session=session, quest_id=quest_id, player_id=player_id)
-        if state.status != STATUS_COMPLETED:
+        if state.status != QuestStatus.COMPLETED:
             raise QuestTransitionError(
                 code="QUEST_TRANSITION_INVALID",
-                detail=f"Quest rewards can only be applied from status={STATUS_COMPLETED}",
+                detail=f"Quest rewards can only be applied from status={QuestStatus.COMPLETED}",
             )
         if state.rewards_applied:
             await self._emit_lifecycle_event(
