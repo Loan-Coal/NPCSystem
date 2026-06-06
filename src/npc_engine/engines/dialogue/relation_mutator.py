@@ -28,6 +28,32 @@ from npc_engine.utils.logging import get_logger
 _LOGGER = get_logger(__name__)
 
 
+async def _write_delta(
+    session: AsyncSession,
+    settings: Settings,
+    npc_id: str,
+    player_id: str,
+    relation_deltas: RelationDeltas,
+    cause_id: str,
+    tick_id: int,
+    log_extra: dict[str, object],
+) -> None:
+    """Attempt the graph write and emit applied/missing audit events."""
+    try:
+        await apply_relation_delta(
+            session=session,
+            settings=settings,
+            src_id=npc_id,
+            dst_id=player_id,
+            deltas=relation_deltas.model_dump(),
+            cause_id=cause_id,
+            tick_id=tick_id,
+        )
+        _LOGGER.info("relation_delta_applied", extra=log_extra)
+    except RelationEdgeNotFoundError:
+        _LOGGER.warning("relation_edge_missing", extra=log_extra)
+
+
 async def apply_dialogue_relation_deltas(
     session: AsyncSession,
     settings: Settings,
@@ -52,7 +78,7 @@ async def apply_dialogue_relation_deltas(
         cause_id: Opaque string identifying the cause for audit logging.
         tick_id: Game tick identifier for delta log attribution.
     """
-    _log_extra = {
+    log_extra: dict[str, object] = {
         "npc_id": npc_id,
         "player_id": player_id,
         "tick_id": tick_id,
@@ -60,19 +86,6 @@ async def apply_dialogue_relation_deltas(
     }
     _LOGGER.info(
         "relation_delta_attempt",
-        extra={**_log_extra, "deltas": str(relation_deltas.model_dump())},
+        extra={**log_extra, "deltas": str(relation_deltas.model_dump())},
     )
-    try:
-        await apply_relation_delta(
-            session=session,
-            settings=settings,
-            src_id=npc_id,
-            dst_id=player_id,
-            deltas=relation_deltas.model_dump(),
-            cause_id=cause_id,
-            tick_id=tick_id,
-        )
-        _LOGGER.info("relation_delta_applied", extra=_log_extra)
-    except RelationEdgeNotFoundError:
-        _LOGGER.warning("relation_edge_missing", extra=_log_extra)
-        return
+    await _write_delta(session, settings, npc_id, player_id, relation_deltas, cause_id, tick_id, log_extra)

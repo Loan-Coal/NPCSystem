@@ -2,7 +2,9 @@
 Module: prefix_loader
 Layer: engines
 Purpose: Load and cache distortion prefix strings from the YAML config file.
-Dependencies: pathlib (stdlib), yaml (pyyaml)
+Does NOT: perform I/O beyond the one-time YAML read at module load time; never calls LLMs or the graph.
+Dependencies: pathlib (stdlib), yaml (pyyaml); reads src/npc_engine/prompts/gossip/distortion.yaml.
+Dependencies injected: None.
 Used by: engines/gossip/strategies/exaggeration.py,
          engines/gossip/strategies/role_swap.py,
          engines/gossip/strategies/timeline_shift.py

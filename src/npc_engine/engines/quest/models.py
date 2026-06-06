@@ -7,6 +7,7 @@ Dependencies: pydantic, enum (stdlib only).
 Used by: engines/quest/quest_lifecycle_engine.py, api quest routes.
 
 Does NOT: execute graph writes.
+Dependencies injected: None.
 """
 
 from __future__ import annotations

@@ -9,6 +9,7 @@ Dependencies: npc_engine.config, npc_engine.engines.quest.models,
 Used by: api quest routes (via dependency injection).
 
 Does NOT: expose HTTP routing concerns.
+Dependencies injected: Settings, TypeRegistry (via __init__); AsyncSession (per method).
 """
 
 from __future__ import annotations
