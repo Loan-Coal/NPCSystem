@@ -2,35 +2,47 @@
 Module: emotion_updater
 Layer: engines
 Purpose: Applies mood updates and decay rules to emotion states via async store calls.
-Does NOT: read or write graph data.
-Dependencies: engines/emotion/emotion_store, engines/emotion/emotion_state
-Dependencies injected: EmotionStore.
+Does NOT: read or write graph data. Does NOT compute emotion arithmetic directly —
+          delegates all computation to the injected EmotionModelProtocol.
+Dependencies: engines/emotion/emotion_store, engines/emotion/emotion_model_protocol,
+              engines/emotion/vad_emotion_model
+Dependencies injected: EmotionStore, EmotionModelProtocol.
 Used by: engines/dialogue/dialogue_handler, engines/gossip/gossip_handler
 """
 
 from __future__ import annotations
 
-from npc_engine.engines.emotion.emotion_state import EmotionState, derive_label
+from npc_engine.engines.emotion.emotion_model_protocol import EmotionModelProtocol
+from npc_engine.engines.emotion.emotion_state import EmotionState
 from npc_engine.engines.emotion.emotion_store import EmotionStore
+from npc_engine.engines.emotion.vad_emotion_model import VadEmotionModel
 
-_SHOCK_VALENCE_DIVISOR = 3
-_SHOCK_VALENCE_CAP = 30
-_SHOCK_AROUSAL_DIVISOR = 2
-_SHOCK_AROUSAL_CAP = 40
+_MOOD_AROUSAL_INCREMENT = 5
 
 
 class EmotionUpdater:
-    """Service that updates stored emotion states."""
+    """Service that updates stored emotion states.
 
-    def __init__(self, emotion_store: EmotionStore, decay_rate: int = 2) -> None:
-        """Initialise the updater with a backing store and decay configuration.
+    All emotion computation is delegated to the injected EmotionModelProtocol.
+    This class owns only store I/O and method orchestration (OCP / DIP).
+    """
+
+    def __init__(
+        self,
+        emotion_store: EmotionStore,
+        decay_rate: int = 2,
+        model: EmotionModelProtocol = None,  # type: ignore[assignment]
+    ) -> None:
+        """Initialise the updater with a backing store, decay rate, and optional model.
 
         Args:
             emotion_store: Store used to read and persist NPC emotion states.
             decay_rate: Absolute units per tick that valence and arousal decay toward neutral.
+            model: EmotionModelProtocol implementation.  Defaults to VadEmotionModel().
         """
         self._store = emotion_store
         self._decay_rate = decay_rate
+        self._model: EmotionModelProtocol = model if model is not None else VadEmotionModel()
 
     async def apply_dialogue_mood(self, npc_id: str, mood_update: str | None) -> EmotionState:
         """Apply an optional mood label hint from dialogue output and persist the result.
@@ -47,12 +59,12 @@ class EmotionUpdater:
         """
         previous = await self._store.get(npc_id=npc_id)
         if mood_update is None:
-            next_state = self._decay(previous)
+            next_state = self._model.decay(previous, self._decay_rate)
         else:
-            next_state = EmotionState(
-                valence=previous.valence,
-                arousal=min(100, previous.arousal + 5),
-                label=mood_update,
+            next_state = self._model.apply_mood_hint(
+                previous,
+                mood_label=mood_update,
+                arousal_increment=_MOOD_AROUSAL_INCREMENT,
             )
         await self._store.set(npc_id=npc_id, state=next_state)
         return next_state
@@ -72,7 +84,7 @@ class EmotionUpdater:
         """Apply an emotional shock when an NPC receives a high-severity rumour or event.
 
         Decreases valence and increases arousal proportionally to event severity,
-        pushing the NPC toward "agitated" or "melancholic". The effect is bounded
+        pushing the NPC toward "agitated" or "melancholic".  The effect is bounded
         so a single event cannot force an extreme state.
 
         Args:
@@ -83,23 +95,6 @@ class EmotionUpdater:
             The newly computed and stored EmotionState.
         """
         previous = await self._store.get(npc_id=npc_id)
-        valence_delta = min(_SHOCK_VALENCE_CAP, severity // _SHOCK_VALENCE_DIVISOR)
-        arousal_delta = min(_SHOCK_AROUSAL_CAP, severity // _SHOCK_AROUSAL_DIVISOR)
-        new_valence = max(-100, previous.valence - valence_delta)
-        new_arousal = min(100, previous.arousal + arousal_delta)
-        next_state = EmotionState(
-            valence=new_valence,
-            arousal=new_arousal,
-            label=derive_label(new_valence, new_arousal),
-        )
+        next_state = self._model.apply_shock(previous, severity)
         await self._store.set(npc_id=npc_id, state=next_state)
         return next_state
-
-    def _decay(self, state: EmotionState) -> EmotionState:
-        valence = state.valence
-        if valence > 0:
-            valence = max(0, valence - self._decay_rate)
-        elif valence < 0:
-            valence = min(0, valence + self._decay_rate)
-        arousal = max(0, state.arousal - self._decay_rate)
-        return EmotionState(valence=valence, arousal=arousal, label=derive_label(valence, arousal))
