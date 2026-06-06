@@ -2,15 +2,17 @@
 Module: timeline_shift
 Layer: engines
 Purpose: Timeline-shift distortion strategy — relocates an event to the distant past.
-Does NOT: perform I/O, access the graph, or call LLMs.
-Dependencies: none
+Does NOT: perform graph I/O or call LLMs. Reads prefix from distortion.yaml via prefix_loader.
+Dependencies: engines/gossip/strategies/prefix_loader
 Dependencies injected: None.
 Used by: distortion_strategy.STRATEGY_REGISTRY
 """
 
 from __future__ import annotations
 
-_PREFIX = "Long ago, "
+from npc_engine.engines.gossip.strategies.prefix_loader import get_distortion_prefix
+
+_PREFIX = get_distortion_prefix("timeline_shift")
 
 
 class TimelineShiftStrategy:

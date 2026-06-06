@@ -1,0 +1,7 @@
+# Distortion prefix strings for gossip distortion strategies.
+# Keys match the STRATEGY_REGISTRY keys in distortion_strategy.py.
+# Designers: edit these strings to tune gossip flavour text without touching Python code.
+
+exaggeration: "It was utterly catastrophic: "
+role_swap: "They say the opposite happened: "
+timeline_shift: "Long ago, "

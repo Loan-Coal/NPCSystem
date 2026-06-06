@@ -2,15 +2,17 @@
 Module: role_swap
 Layer: engines
 Purpose: Role-swap distortion strategy — frames the event as having happened in reverse.
-Does NOT: perform I/O, access the graph, or call LLMs.
-Dependencies: none
+Does NOT: perform graph I/O or call LLMs. Reads prefix from distortion.yaml via prefix_loader.
+Dependencies: engines/gossip/strategies/prefix_loader
 Dependencies injected: None.
 Used by: distortion_strategy.STRATEGY_REGISTRY
 """
 
 from __future__ import annotations
 
-_PREFIX = "They say the opposite happened: "
+from npc_engine.engines.gossip.strategies.prefix_loader import get_distortion_prefix
+
+_PREFIX = get_distortion_prefix("role_swap")
 
 
 class RoleSwapStrategy:
