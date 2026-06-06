@@ -13,6 +13,8 @@ from typing import cast, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from npc_engine.engines.gossip.distortion_strategy import STRATEGY_REGISTRY, REGISTRY_KEYS
+
 
 DistortionType = Literal["omission", "exaggeration", "role_swap", "timeline_shift"]
 
@@ -90,19 +92,6 @@ _distortion_probability = compute_distortion_probability
 _seed_value = compute_seed_value
 
 
-def _apply_template(summary: str, distortion_type: str) -> str:
-    if distortion_type == "omission":
-        words = summary.split()
-        return " ".join(words[: max(1, len(words) // 2)])
-    if distortion_type == "exaggeration":
-        return f"It was utterly catastrophic: {summary}"
-    if distortion_type == "role_swap":
-        return f"They say the opposite happened: {summary}"
-    if distortion_type == "timeline_shift":
-        return f"Long ago, {summary}"
-    return summary
-
-
 def gossip_distort(
     event_summary: str,
     sharer_honesty: int,
@@ -159,8 +148,7 @@ def gossip_distort(
     if gate > probability:
         return GossipDistortion(summary=event_summary, distortion_type=None, distortion_level=0)
 
-    distortion_types = ["omission", "exaggeration", "role_swap", "timeline_shift"]
-    distortion_type = cast(DistortionType, distortion_types[seed % len(distortion_types)])
+    distortion_type = cast(DistortionType, REGISTRY_KEYS[seed % len(REGISTRY_KEYS)])
     level = int(min(100, max(1, int(probability * 100))))
-    distorted = _apply_template(event_summary, distortion_type=distortion_type)
+    distorted = STRATEGY_REGISTRY[distortion_type](event_summary)
     return GossipDistortion(summary=distorted, distortion_type=distortion_type, distortion_level=level)
