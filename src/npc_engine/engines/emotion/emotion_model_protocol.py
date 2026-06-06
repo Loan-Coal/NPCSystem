@@ -2,7 +2,9 @@
 Module: emotion_model_protocol
 Layer: engines
 Purpose: Runtime-checkable Protocol defining the emotion computation contract.
+Does NOT: persist state, access the graph, or call LLMs.
 Dependencies: engines/emotion/emotion_state
+Dependencies injected: None.
 Used by: engines/emotion/emotion_updater, engines/emotion/vad_emotion_model
 """
 from __future__ import annotations

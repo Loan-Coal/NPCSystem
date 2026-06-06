@@ -2,7 +2,9 @@
 Module: timeline_shift
 Layer: engines
 Purpose: Timeline-shift distortion strategy — relocates an event to the distant past.
+Does NOT: perform I/O, access the graph, or call LLMs.
 Dependencies: none
+Dependencies injected: None.
 Used by: distortion_strategy.STRATEGY_REGISTRY
 """
 

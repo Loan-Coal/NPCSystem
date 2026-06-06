@@ -38,44 +38,17 @@ async def apply_trust_nudge(
     delta_trust: int,
     delta_affection: int,
 ) -> None:
-    """Apply bounded trust and affection deltas to an existing RELATES_TO edge.
+    """Apply bounded trust/affection deltas to an existing RELATES_TO edge.
 
-    Opens a single transaction, reads the current scalars, applies the deltas
-    (clamped to [SCALAR_MIN, SCALAR_MAX]), and writes back. If no edge exists
-    between src_id and dst_id the function returns silently without creating one.
-
-    Args:
-        session: Active Neo4j async session used to open the transaction.
-        src_id: ID of the source character node (the bridge NPC in propagation).
-        dst_id: ID of the destination character node (typically the player).
-        delta_trust: Signed trust delta to apply. Clamped after application.
-        delta_affection: Signed affection delta to apply. Clamped after application.
-
-    Raises:
-        No domain errors propagated — missing edges are silently skipped.
-        Unexpected Neo4j transport errors are re-raised as-is.
+    Returns silently if the edge does not exist; never creates new edges.
     """
-    tx = await session.begin_transaction()
-    async with tx:
-        try:
-            current = await get_relation_values(tx=tx, src_id=src_id, dst_id=dst_id)
-        except RelationEdgeNotFoundError:
-            return
-
-        new_trust = _clamp(current["trust"] + delta_trust)
-        new_affection = _clamp(current["affection"] + delta_affection)
-
-        await set_relation_values(
-            tx=tx,
-            src_id=src_id,
-            dst_id=dst_id,
-            new_values={
-                "trust": new_trust,
-                "fear": current["fear"],
-                "affection": new_affection,
-            },
-        )
-
+    result = await _read_modify_write(
+        session, src_id=src_id, dst_id=dst_id,
+        delta_trust=delta_trust, delta_affection=delta_affection,
+    )
+    if result is None:
+        return
+    new_trust, new_affection = result
     logger.info(
         "reputation_nudge_written",
         extra={
@@ -86,6 +59,32 @@ async def apply_trust_nudge(
             "new_trust": new_trust,
         },
     )
+
+
+async def _read_modify_write(
+    session: AsyncSession,
+    *,
+    src_id: str,
+    dst_id: str,
+    delta_trust: int,
+    delta_affection: int,
+) -> tuple[int, int] | None:
+    """Read-modify-write RELATES_TO scalars in one transaction; returns None if edge missing."""
+    tx = await session.begin_transaction()
+    async with tx:
+        try:
+            current = await get_relation_values(tx=tx, src_id=src_id, dst_id=dst_id)
+        except RelationEdgeNotFoundError:
+            return None
+        new_trust = _clamp(current["trust"] + delta_trust)
+        new_affection = _clamp(current["affection"] + delta_affection)
+        await set_relation_values(
+            tx=tx,
+            src_id=src_id,
+            dst_id=dst_id,
+            new_values={"trust": new_trust, "fear": current["fear"], "affection": new_affection},
+        )
+    return new_trust, new_affection
 
 
 def _clamp(value: int) -> int:

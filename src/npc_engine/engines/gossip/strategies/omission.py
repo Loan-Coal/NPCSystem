@@ -2,7 +2,9 @@
 Module: omission
 Layer: engines
 Purpose: Omission distortion strategy — trims a summary to the first half of its words.
+Does NOT: perform I/O, access the graph, or call LLMs.
 Dependencies: none
+Dependencies injected: None.
 Used by: distortion_strategy.STRATEGY_REGISTRY
 """
 

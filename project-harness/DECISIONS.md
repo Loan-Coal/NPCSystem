@@ -3,6 +3,15 @@
 Non-obvious architectural choices. Each entry explains what was decided and why,
 so future maintainers can judge edge cases without re-deriving the rationale.
 
+## DEC-075: quest_trade_controller.py accepted at 312 lines (300-line exception)
+**Date:** 2026-06-06
+**Context:** `demo_game/quest_trade_controller.py` grew to 312 lines when `fix(demo): substitute empty item_type in confirm-trade` (ISSUE-067) added input-sanitization helpers. The file handles quest + trade controller logic for the demo layer.
+**Options considered:**
+  1. Extract trade sanitization helpers to `quest_trade_sanitizer.py` — the 3 helper functions are only ~20 lines combined; creating a peer module for them adds indirection without real encapsulation.
+  2. Accept the overrun with this entry.
+**Decision:** Option 2. The overrun is small (12 lines) and the helpers are cohesive with the controller. No further growth without extracting either the trade or quest side into a dedicated controller.
+**Limit:** Do not grow this file further. If new trade or quest demo logic is added, extract to `demo_game/trade_controller.py` and `demo_game/quest_controller.py`.
+
 ## DEC-073: context_budget_enforcer.py accepted at 323 lines (300-line exception)
 **Date:** 2026-06-05
 **Context:** EXP-30 added `_fit_tier_a_pinned_pool` (38 lines) to replace the hard-raise

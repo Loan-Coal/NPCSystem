@@ -2,7 +2,9 @@
 Module: exaggeration
 Layer: engines
 Purpose: Exaggeration distortion strategy — prepends a catastrophic framing prefix.
+Does NOT: perform I/O, access the graph, or call LLMs.
 Dependencies: none
+Dependencies injected: None.
 Used by: distortion_strategy.STRATEGY_REGISTRY
 """
 

@@ -116,6 +116,26 @@ Commit the coordination-file updates in one `docs(expansion): batch <EXPs> integ
 slice commits are already in history from fan-in). Remove worktrees (they auto-clean if unchanged;
 otherwise prune them).
 
+## 7.5. Prepare for next invocation (mandatory — do this before stopping)
+After the commit, make the index ready for the next `/expand-parallel` call:
+1. **EXPANSION_INDEX.md carry-forward notes** — rewrite the block from scratch (≤10 lines total).
+   Remove any line whose seam/helper has now been consumed. Add one line per new seam, protocol, or
+   populated field unlocked by this batch that a downstream EXP will build on. Format:
+   `- EXP-NN: <what was added> → usable by <EXP-NN|layer|pattern>`.
+2. **EXPANSION_INDEX.md dependency closure** — for every remaining `[ ]` item, re-check that its
+   `deps:` are still pointing at real IDs (not stale names). Mark any item whose dep was just
+   satisfied in this batch so `§1` auto-selects it next time.
+3. **EXPANSION_ROADMAP.md** — update the "Last batch" line and the "Next candidate batch" preview
+   (the conflict-free set §1 would select right now). This is a one-line update per section.
+4. **ISSUES.md** — flush any adjacent-issue notes the workers surfaced into proper `ISSUE-NNN`
+   entries. Do not leave inline TODO comments in source as a substitute.
+5. Commit these readiness updates in a second focused commit:
+   `docs(expansion): index + roadmap ready for next batch` (separate from the integration commit
+   so history is clean and reviewable). If no changes are needed, skip the commit.
+
+After this step a cold `/expand-parallel` with no arguments must select the correct next batch
+immediately, without the user needing to hand-edit the index.
+
 ## 8. Stop
 STOP. In ≤8 lines: the worker grouping that ran, per-EXP pass/fail, the single `make check` (+ demo)
 result, anything sent back for rework, the keystones/seams now unlocked for the next batch, and the

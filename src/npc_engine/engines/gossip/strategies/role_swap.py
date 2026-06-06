@@ -2,7 +2,9 @@
 Module: role_swap
 Layer: engines
 Purpose: Role-swap distortion strategy — frames the event as having happened in reverse.
+Does NOT: perform I/O, access the graph, or call LLMs.
 Dependencies: none
+Dependencies injected: None.
 Used by: distortion_strategy.STRATEGY_REGISTRY
 """
 

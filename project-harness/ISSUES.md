@@ -781,6 +781,54 @@ current mapping is good enough for demo badge display and does not affect correc
 **Why deferred:** Not blocking; enforcer handles it correctly by priority.
 **To fix:** Confirm subgraph_retriever's priority for this key; if lower, it's fine. If equal, add explicit deduplication or rename one key.
 
+## ISSUE-072: `gossip_distort.py` module docstring is a stale placeholder
+**Found:** 2026-06-06, during EXP-15 (distortion strategy registry)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/engines/gossip/gossip_distort.py:1-8`
+**Description:** Module docstring says `Purpose: (auto-detected — review)` — a stale placeholder from initial scaffolding, not an accurate description.
+**Why deferred:** Cosmetic; not blocking anything.
+**To fix:** Update to a proper one-sentence description of the module's purpose.
+
+## ISSUE-075: `reputation_nudge.py` variable scope — `new_trust` logged outside `async with tx` block
+**Found:** 2026-06-06, during EXP-52 (reputation propagation)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/graph/reputation_nudge.py`
+**Description:** `new_trust` is defined inside a `try` block, but the `logger.info` call that references it is outside the `async with tx` block. Technically always defined when the log line is reached (function returns early on edge-not-found), but linter may warn and the scope is non-obvious.
+**Why deferred:** Not a bug; not blocking.
+**To fix:** Move the logger.info call inside the `async with tx` block, or assign `new_trust` a sentinel default before the try.
+
+## ISSUE-076: `relation_writer.py` module docstring is a stale placeholder
+**Found:** 2026-06-06, during EXP-52 (reputation propagation)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/graph/relation_writer.py:1-8`
+**Description:** Module docstring says "(auto-detected — review)" — predates the mandatory docstring rule.
+**Why deferred:** Cosmetic.
+**To fix:** Update to a proper one-sentence module description.
+
+## ISSUE-074: `EmotionUpdater.__init__` uses `model=None` with `# type: ignore[assignment]` instead of `Optional` typing
+**Found:** 2026-06-06, during EXP-13 (EmotionModelProtocol)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/engines/emotion/emotion_updater.py:__init__`
+**Description:** Default model injection uses `model: EmotionModelProtocol = None` with a `# type: ignore[assignment]` guard rather than the cleaner `Optional[EmotionModelProtocol] = None` + sentinel pattern. Behavior is correct and all tests pass.
+**Why deferred:** Cosmetic typing issue; not blocking.
+**To fix:** Change to `model: EmotionModelProtocol | None = None` with a `self._model = model or VadEmotionModel()` guard in the body.
+
+## ISSUE-073: `memory_service.py` inconsistent transaction ownership — decay functions bypass transaction wrapper
+**Found:** 2026-06-06, during EXP-17 (charge-weighted decay)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/graph/memory_service.py:92-128`
+**Description:** `create_memory` (line 57) uses `session.begin_transaction()` / `async with tx` pattern per CLAUDE.md session-ownership rule. But `decay_all_vividness` and the new `decay_all_vividness_weighted` call `session.run()` directly without a transaction wrapper — inconsistency that could matter for write atomicity under load.
+**Why deferred:** Not blocking; decay is a best-effort bulk operation.
+**To fix:** Wrap decay Cypher calls in `session.begin_transaction()` / `async with tx` to match the pattern used in `create_memory`.
+
+## ISSUE-071: Dialogue engine not grounded in live engine state — NPC contradicts trade/quest reality
+**Found:** 2026-06-05, during trade-engine bug fix (Mira hardcoded item)
+**Severity:** P2 (annoying — breaks immersion, confuses players)
+**Where:** `src/npc_engine/engines/dialogue/` + `src/npc_engine/retrieval/context_builder.py`
+**Description:** The dialogue engine generates NPC responses from graph context alone; it has no awareness of live engine state from other engines (trade, quest, economy). Example: after the trade engine determines that Mira has no inventory and cannot trade, Mira's LLM-generated dialogue still says "I've got a couple of things that might interest you" — because the prompt context only includes graph facts, not the trade engine's real-time evaluation. The same class of bug can occur with quest state (NPC says "bring me the item" after quest is already complete) and emotion state.
+**Why deferred:** Requires a design decision on how to pass engine-resolved facts into the dialogue context assembly pipeline without creating layer violations (dialogue engine calling trade engine, or context_builder calling both). Involves a new "system state" tier in the prompt context.
+**To fix:** Introduce a `SystemStateContext` bag — a dict of engine-resolved facts assembled at the API route layer before the dialogue call — and inject it as a new Tier 0 block in `context_builder.py`. The route handler (`api/routes/dialogue.py`) would resolve trade/quest state for the current NPC and player, then pass it into the context builder. This keeps layer boundaries clean (engines do not call each other; the route layer orchestrates).
+
 <!--
 Template for a new issue:
 

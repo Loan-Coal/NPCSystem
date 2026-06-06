@@ -207,10 +207,22 @@ class QuestTradeController:
         except EngineClientError as exc:
             _logger.warning("npc gold fetch failed: %s", exc)
         try:
+            items = self._client.get_items_for_character(npc_id)
+        except EngineClientError as exc:
+            _logger.warning("npc inventory fetch failed: %s", exc)
+            items = []
+        if not items:
+            self._status(f"{npc_id} has nothing to sell", 3.0)
+            return
+        item = items[0]
+        item_id = item.get("id") or ""
+        item_type = item.get("type") or "unknown"
+        merged_payload = {**payload, "item_type": item_type}
+        try:
             result = self._client.post_interaction(
                 player_id=self._player_id,
                 npc_id=npc_id,
-                proposal={"kind": "propose_trade", "target_id": "northern_spice_bundle", "payload": payload},
+                proposal={"kind": "propose_trade", "target_id": item_id, "payload": merged_payload},
             )
             right.set_negotiation_state((result.get("data") or {}).get("negotiation_state"))
             right.switch_to(_RP.TRADE)
@@ -262,10 +274,21 @@ class QuestTradeController:
         except EngineClientError as exc:
             _logger.warning("npc gold fetch failed: %s", exc)
         try:
+            items = self._client.get_items_for_character(npc_id)
+        except EngineClientError as exc:
+            _logger.warning("npc inventory fetch failed: %s", exc)
+            items = []
+        if not items:
+            self._status(f"{npc_id} has nothing to sell", 3.0)
+            return
+        item = items[0]
+        item_id = item.get("id") or ""
+        item_type = item.get("type") or "unknown"
+        try:
             result = self._client.post_interaction(
                 player_id=self._player_id,
                 npc_id=npc_id,
-                proposal={"kind": "propose_trade", "target_id": "northern_spice_bundle", "payload": {"item_type": "spice"}},
+                proposal={"kind": "propose_trade", "target_id": item_id, "payload": {"item_type": item_type}},
             )
             right.set_negotiation_state((result.get("data") or {}).get("negotiation_state"))
             right.switch_to(_RP.TRADE)

@@ -2,7 +2,9 @@
 Module: distortion_strategy
 Layer: engines
 Purpose: DistortionStrategy Protocol and STRATEGY_REGISTRY mapping stable keys to callables.
+Does NOT: perform I/O, call LLMs, or access the graph.
 Dependencies: engines/gossip/strategies/*
+Dependencies injected: None.
 Used by: gossip_distort.py
 """
 

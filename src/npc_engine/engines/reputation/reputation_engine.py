@@ -119,19 +119,7 @@ class ReputationEngine:
         min_src: Standing,
         min_bridge: Standing,
     ) -> None:
-        """Attempt propagation from a single source NPC.
-
-        Skipped silently if the source has no edge toward the player or
-        if the source's standing is below min_src.
-
-        Args:
-            session: Active Neo4j session.
-            source_id: ID of the candidate source NPC.
-            player_id: ID of the player.
-            npc_ids: Full list of NPCs (candidates for bridge).
-            min_src: Minimum Standing required on the source→player edge.
-            min_bridge: Minimum Standing required on the source→bridge edge.
-        """
+        """Propagate from one source NPC; skip silently if edge missing or standing too low."""
         try:
             scalars_s_player = await self._reader.get_relation_scalars(
                 src_id=source_id, dst_id=player_id
@@ -167,20 +155,7 @@ class ReputationEngine:
         source_trust: int,
         min_bridge: Standing,
     ) -> None:
-        """Nudge the bridge NPC's trust toward the player if conditions are met.
-
-        Skipped silently when:
-          - source→bridge edge is missing or below min_bridge standing.
-          - bridge→player edge does not exist (first-slice constraint: no new edges).
-
-        Args:
-            session: Active Neo4j session forwarded to the nudge writer.
-            source_id: ID of the source NPC.
-            bridge_id: ID of the candidate bridge NPC.
-            player_id: ID of the player.
-            source_trust: Raw trust scalar on the source→player edge.
-            min_bridge: Minimum Standing required on the source→bridge edge.
-        """
+        """Nudge bridge NPC trust toward player if source→bridge and bridge→player edges pass thresholds."""
         try:
             scalars_s_bridge = await self._reader.get_relation_scalars(
                 src_id=source_id, dst_id=bridge_id
@@ -197,9 +172,25 @@ class ReputationEngine:
         except RelationEdgeNotFoundError:
             return  # first-slice: skip B if no existing edge to player
 
-        nudge = min(self._config.max_nudge_per_tick, source_trust // 10)
-        nudge = max(0, nudge)  # clamp to non-negative
+        await self._compute_and_apply_nudge(
+            session=session,
+            source_id=source_id,
+            bridge_id=bridge_id,
+            player_id=player_id,
+            source_trust=source_trust,
+        )
 
+    async def _compute_and_apply_nudge(
+        self,
+        *,
+        session: AsyncSession,
+        source_id: str,
+        bridge_id: str,
+        player_id: str,
+        source_trust: int,
+    ) -> None:
+        """Compute nudge magnitude, log it, and write it via the injected nudge function."""
+        nudge = max(0, min(self._config.max_nudge_per_tick, source_trust // 10))
         logger.info(
             "reputation_nudge",
             extra={
@@ -209,7 +200,6 @@ class ReputationEngine:
                 "delta_trust": nudge,
             },
         )
-
         await self._apply_nudge_fn(
             session,
             src_id=bridge_id,

@@ -3,7 +3,9 @@ Module: vad_emotion_model
 Layer: engines
 Purpose: Concrete VAD (Valence-Arousal-Dominance) implementation of EmotionModelProtocol.
          Ports the shock/decay/mood-hint computations formerly embedded in EmotionUpdater.
+Does NOT: persist state, access the graph, or call LLMs.
 Dependencies: engines/emotion/emotion_model_protocol, engines/emotion/emotion_state
+Dependencies injected: None.
 Used by: engines/emotion/emotion_updater (default injection)
 """
 from __future__ import annotations

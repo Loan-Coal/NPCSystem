@@ -53,8 +53,8 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 ### Phase 2 — Dialogue + Gossip showcase (the priority)
 - [ ] **EXP-53** — dialogue-driven knowledge learning (`learned_facts`→`BELIEVES`, DEC-072) · M · deps: EXP-32 (soft) · `🔶` believes.yaml +3 fields (approved)
 - [x] **EXP-11** — player-scoped long-term memory recall in dialogue · M · deps: EXP-30
-- [ ] **EXP-17** — salience forgetting curve (first slice: charge-weighted decay) · M · deps: EXP-30 · full version `🔶`
-- [ ] **EXP-15** — distortion-strategy registry (open L7-01 if-chain) · M · deps: none · refactor `gossip_distort.py`
+- [x] **EXP-17** — salience forgetting curve (first slice: charge-weighted decay) · M · deps: EXP-30 · full version `🔶`
+- [x] **EXP-15** — distortion-strategy registry (open L7-01 if-chain) · M · deps: none · refactor `gossip_distort.py`
 - [ ] **EXP-16** — belief/secret-selective, prompt-driven distortion · M · deps: EXP-15
 - [x] **EXP-81** — cross-session "remembers you" demo · M · deps: EXP-30
 - [x] **EXP-84** — gossip telephone-diff view (demo) · S · deps: EXP-15 (soft)
@@ -68,8 +68,8 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 ### Phase 3 — Agentic NPCs
 - [ ] **EXP-10** — proactive dialogue + WS `proactive_line` push · L · deps: EXP-30 · API-surface add
 - [ ] **EXP-51** — NPC goal-formation/GOAP (goal.urgency vs routine) · L · `🔶` `GOAL_TARGETS` edge + precedence DEC
-- [ ] **EXP-52** — personal reputation propagation engine · M · deps: EXP-50
-- [ ] **EXP-13** — `EmotionModelProtocol` + personality modulation · M · deps: none · refactor `emotion_updater.py`
+- [x] **EXP-52** — personal reputation propagation engine · M · deps: EXP-50
+- [x] **EXP-13** — `EmotionModelProtocol` + personality modulation · M · deps: none · refactor `emotion_updater.py`
 - [ ] **EXP-14** — persistent emotion state (survive restart) · M · `🔶` emotion node/field
 
 ### Phase 4 — World richness & deep systems (later / schema-heavy)

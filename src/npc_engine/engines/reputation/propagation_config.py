@@ -5,6 +5,7 @@ Purpose: Pydantic model for reputation propagation tuning constants and YAML loa
          Parses reputation_rules.yaml into a validated PropagationConfig instance.
 Does NOT: perform graph queries, open sessions, or call any I/O beyond file reads.
 Dependencies: pydantic, npc_engine.common.yaml_utils
+Dependencies injected: None (file path resolved from package directory).
 Used by: npc_engine.engines.reputation.reputation_engine
 """
 
