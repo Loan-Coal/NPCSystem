@@ -13,23 +13,17 @@ in `briefs/EXP-NN-<slug>.md`. Full mini-specs (the "why" + deep detail) live in 
 _State that survives between expansion sessions so a fresh `/expand-parallel` run needn't rediscover it._
 _The orchestrator maintains this: add a line when an item unlocks/affects a later one; delete consumed lines; keep it tight._
 
-- **Gates:** `make check` = lint + check-rules + type-ratchet + check-harness + test-cov(80%). Demo work also runs `make test-demo`. New code: TDD (failing test first), CLAUDE.md OCP add-by-new-file, layers, 300-line/40-line, prompts-in-YAML, Pydantic boundaries.
-- **Phase 0 demo-repair DONE** (2026-06-05): engines-500 double-serialize, pledges path drift, embedding offload, WS timeout 120s, trade empty-item_type. EXP-00c (CI smoke) deferred (stop-and-ask for CI config).
-- **Pattern — offload CPU on the event loop:** sync model inference via `await asyncio.to_thread(...)` (embeddings done). REUSE for cross-encoder reranker (ISSUE-064) and any new sync ML call.
-- **EXP-30 DONE (KEYSTONE):** `ContextItem.pinned: bool` now exists (`context_merger.py`). Pinned-core + ranked-pool policy live in BOTH enforcement paths. `EXP-17` `never_forget` mirrors this convention. EXP-32, EXP-81, EXP-11, EXP-53 now unblocked (Tier-A overflow no longer raises for knowledge-rich NPCs).
-- **EXP-50 DONE:** `Standing` enum + `derive_standing` in `engines/relationship/standing.py`; `GET /v1/npc/{id}/relationship/{other_id}` route live; `RelationReader` in `graph/relation_reader.py`. Consumer refactor (gossip gate, dialogue tone) is the next slice — wire using `Standing` import.
-- **EXP-31 DONE:** `evals/retrieval_runner.py` + 20 labeled demo-world cases in `evals/cases/retrieval_demo.json`; `make eval-retrieval` target live. EXP-32 still needs Q&A label set; run `make eval-retrieval` to see baseline precision@5/recall@5/MRR before EXP-32.
-- **EXP-83 DONE:** `demo_game/quickstart.py` + `make hello` live. Standalone 177-line httpx-only seeder+dialogue script.
-- **EXP-84 DONE:** Gossip chain CHAIN tab now shows distortion-type badges ([EXAGGERATION] etc.) per hop.
-- **EXP-85 DONE:** `AntiHallucinationBeat` scripted beat in `run_scenes.py`; asks `aldric_merchant` about war, confirms 0 KNOWS_ABOUT edges. Registered as ACT 8 in SCENES.
-- **EXP-93 DONE:** BribeScene now uses `adjust_npc_reputation` (HAS_REPUTATION_WITH). ISSUE-060 and ISSUE-066 closed.
-- **EXP-81 DONE:** `RemembersYouBeat` in `demo_game/remembers_you_beat.py`; ACT 9 added to `run.py`. `get_npc_relationship` in `client.py` (added by orchestrator pre-dispatch).
-- **EXP-91 DONE:** `RelationTicker` in `demo_game/ui/relation_ticker.py`; trust/fear/affection delta overlay in `game_window.py`. TTL=4s polling, best-effort (swallows errors). game_window.py now 337 lines (under DEC-074 ceiling of 350).
-- **EXP-11 DONE:** `player_relation` ContextItem in context_builder.py Tier-A (key `"relation:player"`, priority=88, non-pinned). Uses `get_npc_player_edge`. context_builder.py now 446 lines (DEC-073 waiver updated). Potential key collision with subgraph_retriever logged as ISSUE-070.
-- **EXP-80 DONE:** `demo_game/sandbox_loop.py` + S-key toggle in `GameWindow`. Pre-existing `test_game_window.py` layout failures (ISSUE-068) not introduced by this batch.
-- **DEC-070/072/071 still apply.** DEC-073: `context_builder.py` 446-line waiver (up from 323). DEC-074: `game_window.py` 337-line (under 350 ceiling).
-- **Schema/DECISIONS-gated (DROP from parallel batches):** EXP-51, EXP-17-full, EXP-87, EXP-53. EXP-55 deferred.
-- **Open residuals:** ISSUE-064 (reranker sync-on-loop), ISSUE-068 (test_game_window.py WorldStatePoller), ISSUE-069 (action_workers catch scope), ISSUE-070 (relation:player key collision). Next ISSUE id: **ISSUE-071**.
+- **Gates:** `make check` = lint + check-rules + type-ratchet + check-harness + test-cov(80%). Demo work also runs `make test-demo`. New code: TDD (failing test first), CLAUDE.md OCP add-by-new-file, layers, 300-line/40-line, prompts-in-YAML, Pydantic boundaries. All new `src/npc_engine/` files must have `Does NOT:` + `Dependencies injected:` in module docstring (architecture conformance test).
+- **Phase 0 demo-repair DONE** (2026-06-05): engines-500, pledges drift, embedding offload, WS timeout, trade 422. EXP-00c (CI smoke) deferred.
+- **Pattern — offload CPU on the event loop:** sync model inference via `await asyncio.to_thread(...)`. REUSE for reranker (ISSUE-064) and any new sync ML call.
+- **EXP-30/50/31/83/84/85/93/81/91/11/80 DONE** (2026-06-05). EXP-32 needs Q&A fixture before dispatch.
+- **EXP-15 DONE:** `STRATEGY_REGISTRY` + `DistortionStrategy` Protocol in `engines/gossip/distortion_strategy.py`. EXP-16 now unblocked — move hardcoded template strings to `prompts/gossip/distortion.yaml`.
+- **EXP-17 DONE (slice-1):** `decay_vividness_weighted` + `CYPHER_DECAY_VIVIDNESS_WEIGHTED` in `memory_service.py`/`memory_queries.py`. Full-version `recall_count`/`never_forget` fields still schema-gated. EXP-18 unblocked by this slice (formation beyond arousal threshold can proceed).
+- **EXP-13 DONE:** `EmotionModelProtocol` (runtime_checkable) in `engines/emotion/emotion_model_protocol.py`; `VadEmotionModel` in `vad_emotion_model.py`. `EmotionUpdater` now accepts the protocol. New emotion models = new files. Inject via `EmotionUpdater(store, model=YourModel())`.
+- **EXP-52 DONE (slice-1):** `ReputationEngine` in `engines/reputation/reputation_engine.py` + `apply_trust_nudge` in `graph/reputation_nudge.py`. Off by default (`reputation_rules.yaml enabled: false`). Next slice: wire into tick scheduler + evaluate diffusion.
+- **DEC-070/072/071/073/074/075 still apply.** DEC-073: `context_builder.py` 446-line waiver. DEC-074: `game_window.py` 337-line. DEC-075: `quest_trade_controller.py` 312-line.
+- **Schema/DECISIONS-gated (DROP from parallel batches):** EXP-51, EXP-17-full, EXP-87, EXP-53 (needs EXP-32 first), EXP-55 deferred.
+- **Open residuals:** ISSUE-064..070, ISSUE-072..076. Next ISSUE id: **ISSUE-077**.
 
 ## Ordered checklist
 
@@ -86,14 +80,12 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 
 ## Next parallel batch (suggested)
 
-**EXP-15, EXP-32 (soft), EXP-17 (first slice only), EXP-13** — candidates from Phase 2/3:
-- EXP-15: refactor `gossip_distort.py` open L7-01 if-chain → distortion-strategy registry. New file `engines/gossip/distortion_registry.py` + edits `gossip_distort.py`. No schema change.
-- EXP-32: measured anti-hallucination eval (new eval files only; deps EXP-30 done, needs Q&A label set — drop if not authored yet).
-- EXP-17 (first slice — charge-weighted decay only, NOT the full schema-gated version): edit `retrieval/` decay logic only; no new node/edge. Confirm the brief restricts scope to the non-gated slice.
-- EXP-13: `EmotionModelProtocol` + personality modulation — refactor `emotion_updater.py`. No schema change, new protocol file.
+**EXP-16, EXP-18, EXP-12, EXP-20** — candidates from Phase 2/3/4 (all deps satisfied, no schema changes):
+- **EXP-16**: distortion content → YAML. Deps: EXP-15 ✅. New `prompts/gossip/distortion.yaml`; edits `distortion_strategy.py` strategy callables to load prefix strings from YAML instead of hardcoded `_PREFIX` constants. No other file.
+- **EXP-18**: semantic memory formation beyond arousal threshold. Deps: EXP-17 ✅. Edits `memory_engine.py` + `memory_queries.py` (new Cypher), no schema change (reuses existing `Memory` node fields).
+- **EXP-12**: relation-delta provenance & audit trail. Deps: none. Edits `mutation/relation_mutator.py` only — adds structured log entry per write.
+- **EXP-20**: Quest status as enum + fail/expire states. Deps: none. Edits `engines/quest/quest_lifecycle_engine.py` + `models.py` — adds `QuestStatus` enum (no new edge/node).
 
-**Conflicts to verify before dispatch:** EXP-15 and EXP-17 both touch `retrieval/` adjacently — confirm disjoint files. EXP-13 edits `emotion_updater.py` only.
+**Conflicts:** EXP-16 (new yaml + edits `distortion_strategy.py`) and EXP-18 (edits `memory_engine.py`+`memory_queries.py`) are fully disjoint. EXP-12 and EXP-20 each touch a single distinct file. All four are safe to dispatch in parallel.
 
-**Drop from this batch:** EXP-32 if Q&A label set is not ready. EXP-17 full version (schema-gated).
-
-EXP-32 can run once Q&A label set is authored (see `EXP32_EVAL_QA_TASK.md`).
+**Drop if not ready:** EXP-32 (still needs Q&A label set). EXP-40 (interaction dispatch — confirm brief before dispatch).
