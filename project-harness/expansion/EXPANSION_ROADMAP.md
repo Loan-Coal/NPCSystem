@@ -1,6 +1,6 @@
 # EXPANSION_ROADMAP.md — Synthesis & Prioritization (Lens X5)
 
-> **Updated 2026-06-06 — last batch EXP-15/17/13/52 integrated.** Next candidate batch: **EXP-16, EXP-18, EXP-12, EXP-20** (all deps satisfied, no schema changes, fully disjoint file sets).
+> **Updated 2026-06-06 — last batch EXP-16/18/12/20 integrated.** Next candidate batch: **EXP-10 (brief needed + WS shape DECISIONS), EXP-21, EXP-40** (Phase 3/4; EXP-14 schema-gated; EXP-32 needs Q&A fixture).
 > **Prior update 2026-06-05 with human resolutions** (see `OPEN_QUESTIONS.md` §A, `DECISIONS.md` DEC-070/071/072).
 > Net effect: (1) **dialogue + gossip are the priority** — show they work in the playable demo; (2) several
 > proposals lost their schema cost by reusing existing graph vocabulary (EXP-53→`BELIEVES`, EXP-50 schema-free,

@@ -13,6 +13,22 @@ Rules:
 
 ## Open
 
+## ISSUE-077: quest_lifecycle_engine.py is 643 lines — pre-existing over 300-line limit
+**Found:** 2026-06-06, during EXP-20 fan-in
+**Severity:** P2 (annoying)
+**Where:** `src/npc_engine/engines/quest/quest_lifecycle_engine.py` (643 lines)
+**Description:** File exceeds the 300-line hard limit (CLAUDE.md). Pre-existing before EXP-20 (EXP-20 reduced it by 2 lines net). The file is grandfathered in `scripts/rules_baseline.txt`.
+**Why deferred:** Splitting would require either a new `quest_reward_engine.py` (reward routing logic) + `quest_objective_engine.py` (objective verification) or a `quest_transition_engine.py` for the state machine. This is a non-trivial refactor requiring its own task. A DECISIONS.md entry would be needed to approve the split boundary.
+**To fix:** Split into at least two files: `quest_lifecycle_engine.py` (state transitions only, ≤300 lines) + `quest_reward_router.py` (reward routing + item transfer logic). Write a DECISIONS.md entry proposing the split boundary first.
+
+## ISSUE-078: gossip_handler.py uses stdlib logging.getLogger directly — bypasses npc_engine logging setup
+**Found:** 2026-06-06, during EXP-12 fan-in (worker observation)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/engines/gossip/gossip_handler.py` — `import logging; LOGGER = logging.getLogger(__name__)`
+**Description:** Uses stdlib `logging.getLogger` directly instead of `npc_engine.utils.logging.get_logger`. This means gossip handler log records go through a different logger hierarchy. In production, if `configure_logging()` is not applied to the root logger, gossip events may not be captured correctly. Inconsistent with the project logging pattern.
+**Why deferred:** Low-severity; gossip logs still appear but via a different path. Out of scope for EXP-12 which only touched `relation_mutator.py`.
+**To fix:** Replace `import logging; LOGGER = logging.getLogger(__name__)` with `from npc_engine.utils.logging import get_logger; _LOGGER = get_logger(__name__)` in `gossip_handler.py`. Verify existing gossip tests still pass.
+
 ## ISSUE-068: test_game_window.py layout tests fail — WorldStatePoller not imported in game_window.py
 **Found:** 2026-06-05, during EXP-80 batch fan-in (make test-demo gate)
 **Severity:** P2 (annoying)

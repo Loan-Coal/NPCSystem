@@ -17,10 +17,12 @@ _The orchestrator maintains this: add a line when an item unlocks/affects a late
 - **Phase 0 demo-repair DONE** (2026-06-05): engines-500, pledges drift, embedding offload, WS timeout, trade 422. EXP-00c (CI smoke) deferred.
 - **Pattern — offload CPU on the event loop:** sync model inference via `await asyncio.to_thread(...)`. REUSE for reranker (ISSUE-064) and any new sync ML call.
 - **EXP-30/50/31/83/84/85/93/81/91/11/80 DONE** (2026-06-05). EXP-32 needs Q&A fixture before dispatch.
-- **EXP-15 DONE:** `STRATEGY_REGISTRY` + `DistortionStrategy` Protocol in `engines/gossip/distortion_strategy.py`. EXP-16 now unblocked — move hardcoded template strings to `prompts/gossip/distortion.yaml`.
-- **EXP-17 DONE (slice-1):** `decay_vividness_weighted` + `CYPHER_DECAY_VIVIDNESS_WEIGHTED` in `memory_service.py`/`memory_queries.py`. Full-version `recall_count`/`never_forget` fields still schema-gated. EXP-18 unblocked by this slice (formation beyond arousal threshold can proceed).
-- **EXP-13 DONE:** `EmotionModelProtocol` (runtime_checkable) in `engines/emotion/emotion_model_protocol.py`; `VadEmotionModel` in `vad_emotion_model.py`. `EmotionUpdater` now accepts the protocol. New emotion models = new files. Inject via `EmotionUpdater(store, model=YourModel())`.
-- **EXP-52 DONE (slice-1):** `ReputationEngine` in `engines/reputation/reputation_engine.py` + `apply_trust_nudge` in `graph/reputation_nudge.py`. Off by default (`reputation_rules.yaml enabled: false`). Next slice: wire into tick scheduler + evaluate diffusion.
+- **EXP-15/16 DONE:** `STRATEGY_REGISTRY` + `DistortionStrategy` Protocol; prefixes moved to `prompts/gossip/distortion.yaml` via `prefix_loader.py`. Add new distortion type = new file + YAML entry only.
+- **EXP-17/18 DONE:** `decay_vividness_weighted` in `memory_service.py`; `create_from_semantic_triggers()` in `memory_engine.py` (8 keywords, vividness=60). EXP-18 full-version (recall_count/never_forget) still schema-gated.
+- **EXP-13 DONE:** `EmotionModelProtocol` + `VadEmotionModel`. Inject via `EmotionUpdater(store, model=YourModel())`.
+- **EXP-52 DONE (slice-1):** `ReputationEngine` + `apply_trust_nudge`. Off by default. Next slice: wire into tick scheduler.
+- **EXP-12 DONE:** Structured audit log in `engines/dialogue/relation_mutator.py` (attempt/applied/edge_missing). Tests use `patch("...._LOGGER")` not caplog (configure_logging sets propagate=False).
+- **EXP-20 DONE:** `QuestStatus(str, enum.Enum)` in `engines/quest/models.py` (7 members incl. FAILED/EXPIRED). `QuestStateRecord.status: QuestStatus`. Slice-2 (transition logic for FAILED/EXPIRED) still open.
 - **DEC-070/072/071/073/074/075 still apply.** DEC-073: `context_builder.py` 446-line waiver. DEC-074: `game_window.py` 337-line. DEC-075: `quest_trade_controller.py` 312-line.
 - **Schema/DECISIONS-gated (DROP from parallel batches):** EXP-51, EXP-17-full, EXP-87, EXP-53 (needs EXP-32 first), EXP-55 deferred.
 - **Open residuals:** ISSUE-064..070, ISSUE-072..076. Next ISSUE id: **ISSUE-077**.
@@ -47,9 +49,10 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 ### Phase 2 — Dialogue + Gossip showcase (the priority)
 - [ ] **EXP-53** — dialogue-driven knowledge learning (`learned_facts`→`BELIEVES`, DEC-072) · M · deps: EXP-32 (soft) · `🔶` believes.yaml +3 fields (approved)
 - [x] **EXP-11** — player-scoped long-term memory recall in dialogue · M · deps: EXP-30
+- [x] **EXP-12** — relation-delta provenance & audit trail · S · deps: none · structured log in `engines/dialogue/relation_mutator.py`
 - [x] **EXP-17** — salience forgetting curve (first slice: charge-weighted decay) · M · deps: EXP-30 · full version `🔶`
 - [x] **EXP-15** — distortion-strategy registry (open L7-01 if-chain) · M · deps: none · refactor `gossip_distort.py`
-- [ ] **EXP-16** — belief/secret-selective, prompt-driven distortion · M · deps: EXP-15
+- [x] **EXP-16** — belief/secret-selective, prompt-driven distortion · M · deps: EXP-15
 - [x] **EXP-81** — cross-session "remembers you" demo · M · deps: EXP-30
 - [x] **EXP-84** — gossip telephone-diff view (demo) · S · deps: EXP-15 (soft)
 - [x] **EXP-85** — anti-hallucination "I don't know" demo beat · S · deps: none
@@ -69,7 +72,8 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 ### Phase 4 — World richness & deep systems (later / schema-heavy)
 - [ ] **EXP-87** — location hierarchy `PART_OF` + `location_writer.py` (DEC-071) · L · `🔶` (approved)
 - [ ] **EXP-19** — branching quests & consequence chains · L · `🔶`
-- [ ] **EXP-18** — semantic memory formation beyond arousal · M · deps: EXP-17
+- [x] **EXP-18** — semantic memory formation beyond arousal · M · deps: EXP-17
+- [x] **EXP-20** — Quest status as enum + fail/expire states · S · deps: none · `QuestStatus` enum in `engines/quest/models.py`
 - [ ] **EXP-21** — world-state-aware dynamic quest generation · M · deps: none
 - [ ] **EXP-40** — interaction trade-dispatch (stub → real; fixes ISSUE-067 deeper) · M · deps: none
 - [ ] **EXP-42** — niche-engine expansions + demo integration (deprioritized) · — · deps: none
@@ -80,12 +84,10 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 
 ## Next parallel batch (suggested)
 
-**EXP-16, EXP-18, EXP-12, EXP-20** — candidates from Phase 2/3/4 (all deps satisfied, no schema changes):
-- **EXP-16**: distortion content → YAML. Deps: EXP-15 ✅. New `prompts/gossip/distortion.yaml`; edits `distortion_strategy.py` strategy callables to load prefix strings from YAML instead of hardcoded `_PREFIX` constants. No other file.
-- **EXP-18**: semantic memory formation beyond arousal threshold. Deps: EXP-17 ✅. Edits `memory_engine.py` + `memory_queries.py` (new Cypher), no schema change (reuses existing `Memory` node fields).
-- **EXP-12**: relation-delta provenance & audit trail. Deps: none. Edits `mutation/relation_mutator.py` only — adds structured log entry per write.
-- **EXP-20**: Quest status as enum + fail/expire states. Deps: none. Edits `engines/quest/quest_lifecycle_engine.py` + `models.py` — adds `QuestStatus` enum (no new edge/node).
+**EXP-10, EXP-21, EXP-40, EXP-14** — candidates from Phase 3/4 (all deps satisfied or eligible for a first slice):
+- **EXP-10**: proactive dialogue + WS `proactive_line` push. Deps: EXP-30 ✅. First slice: new `engines/dialogue/proactive_engine.py` that selects a topic and calls LLM; new WS push path. API-surface add — needs DECISIONS sign-off on the WS message shape before dispatch.
+- **EXP-21**: world-state-aware dynamic quest generation. Deps: none. Edits `engines/quest/quest_generation_engine.py` — reads world-state node properties to weight quest templates. No schema change.
+- **EXP-40**: interaction trade-dispatch (stub → real). Deps: none. Edits `engines/interaction/` — replaces stub with real item-ownership check and transfer. Fixes ISSUE-067 deeper.
+- **EXP-14**: persistent emotion state. `🔶` requires emotion node/field schema change — DROP unless schema is approved.
 
-**Conflicts:** EXP-16 (new yaml + edits `distortion_strategy.py`) and EXP-18 (edits `memory_engine.py`+`memory_queries.py`) are fully disjoint. EXP-12 and EXP-20 each touch a single distinct file. All four are safe to dispatch in parallel.
-
-**Drop if not ready:** EXP-32 (still needs Q&A label set). EXP-40 (interaction dispatch — confirm brief before dispatch).
+**Drop if not ready:** EXP-32 (still needs Q&A label set). EXP-14 (schema-gated). EXP-10 (needs WS shape DECISIONS before dispatch — write the brief first).
