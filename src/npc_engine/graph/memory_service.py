@@ -18,6 +18,7 @@ from npc_engine.common.json_utils import dump_json
 from npc_engine.graph.memory_queries import (
     CYPHER_CREATE_MEMORY,
     CYPHER_DECAY_VIVIDNESS,
+    CYPHER_DECAY_VIVIDNESS_WEIGHTED,
     get_memories_for_character,
 )
 from npc_engine.world.time_utils import TimePoint
@@ -104,6 +105,36 @@ async def decay_all_vividness(
         Number of Memory nodes whose vividness was reduced.
     """
     result = await session.run(CYPHER_DECAY_VIVIDNESS, decay=decay_per_day)
+    record = await result.single()
+    await result.consume()
+    return int(record["affected"]) if record else 0
+
+
+async def decay_all_vividness_weighted(
+    session: AsyncSession,
+    *,
+    base_decay: int = 5,
+    charge_divisor: int = 20,
+) -> int:
+    """Reduce vividness using a charge-weighted rate (high emotional_charge → slower decay).
+
+    The per-node decay rate is: max(1, base_decay - floor(emotional_charge / charge_divisor)).
+    At emotional_charge=0 the rate equals base_decay; at emotional_charge=80 (with defaults)
+    the rate is 1, ensuring traumatic memories persist longer.
+
+    Args:
+        session: Active Neo4j async session.
+        base_decay: Maximum decay per day applied to low-charge memories.
+        charge_divisor: Divisor applied to emotional_charge to compute rate reduction.
+
+    Returns:
+        Number of Memory nodes whose vividness was reduced.
+    """
+    result = await session.run(
+        CYPHER_DECAY_VIVIDNESS_WEIGHTED,
+        base_decay=base_decay,
+        charge_divisor=charge_divisor,
+    )
     record = await result.single()
     await result.consume()
     return int(record["affected"]) if record else 0

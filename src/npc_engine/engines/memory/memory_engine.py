@@ -12,11 +12,17 @@ from __future__ import annotations
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.memory_service import create_memory, decay_all_vividness
+from npc_engine.graph.memory_service import (
+    create_memory,
+    decay_all_vividness,
+    decay_all_vividness_weighted,
+)
 from npc_engine.world.time_utils import TimePoint
 
 _HIGH_AROUSAL_THRESHOLD = 70
 _HIGH_AROUSAL_VIVIDNESS = 80
+_DECAY_BASE_RATE = 5
+_DECAY_CHARGE_DIVISOR = 20
 
 
 class MemoryEngine:
@@ -69,3 +75,21 @@ class MemoryEngine:
             Number of Memory nodes updated.
         """
         return await decay_all_vividness(session)
+
+    async def decay_vividness_weighted(self, session: AsyncSession) -> int:
+        """Reduce memory vividness using a charge-weighted rate.
+
+        High emotional_charge memories decay slower; trivial memories decay faster.
+        Uses _DECAY_BASE_RATE and _DECAY_CHARGE_DIVISOR module constants.
+
+        Args:
+            session: Active Neo4j async session.
+
+        Returns:
+            Number of Memory nodes whose vividness was reduced.
+        """
+        return await decay_all_vividness_weighted(
+            session,
+            base_decay=_DECAY_BASE_RATE,
+            charge_divisor=_DECAY_CHARGE_DIVISOR,
+        )

@@ -51,6 +51,19 @@ END
 RETURN count(m) AS affected
 """
 
+CYPHER_DECAY_VIVIDNESS_WEIGHTED = """
+MATCH (m:Memory)
+WHERE toInteger(m.vividness) > 0
+WITH m,
+     $base_decay - (toInteger(coalesce(m.emotional_charge, 0)) / $charge_divisor) AS node_decay
+WITH m, CASE WHEN node_decay < 1 THEN 1 ELSE node_decay END AS clamped_decay
+SET m.vividness = CASE
+    WHEN toInteger(m.vividness) - clamped_decay < 0 THEN 0
+    ELSE toInteger(m.vividness) - clamped_decay
+END
+RETURN count(m) AS affected
+"""
+
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
