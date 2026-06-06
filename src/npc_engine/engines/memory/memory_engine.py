@@ -23,6 +23,17 @@ _HIGH_AROUSAL_THRESHOLD = 70
 _HIGH_AROUSAL_VIVIDNESS = 80
 _DECAY_BASE_RATE = 5
 _DECAY_CHARGE_DIVISOR = 20
+_SEMANTIC_VIVIDNESS = 60
+_SEMANTIC_KEYWORDS: tuple[str, ...] = (
+    "death",
+    "betrayal",
+    "war",
+    "assassination",
+    "plague",
+    "execution",
+    "exile",
+    "coup",
+)
 
 
 class MemoryEngine:
@@ -62,6 +73,47 @@ class MemoryEngine:
             content=content,
             vividness=_HIGH_AROUSAL_VIVIDNESS,
             emotional_charge=min(100, arousal - 50),
+            game_time=game_time,
+        )
+
+    async def create_from_semantic_triggers(
+        self,
+        session: AsyncSession,
+        *,
+        character_id: str,
+        content: str,
+        emotional_charge: int,
+        game_time: TimePoint,
+    ) -> str | None:
+        """Create a memory if content contains a semantically significant keyword.
+
+        Checks `content` (case-insensitively) against `_SEMANTIC_KEYWORDS`. If
+        any keyword matches, a memory is formed at `_SEMANTIC_VIVIDNESS` (60)
+        regardless of NPC arousal level. This is an OCP extension — it does not
+        modify `create_from_arousal`.
+
+        Args:
+            session: Active Neo4j async session.
+            character_id: ID of the NPC who formed the memory.
+            content: Description of the moment to test for significance.
+            emotional_charge: Emotional intensity (-100–100) passed through to
+                the memory node unchanged.
+            game_time: Game-time snapshot at moment of formation.
+
+        Returns:
+            Memory ID string if a keyword matched and a memory was created,
+            else None.
+        """
+        lowered = content.lower()
+        matched = any(keyword in lowered for keyword in _SEMANTIC_KEYWORDS)
+        if not matched:
+            return None
+        return await create_memory(
+            session,
+            character_id=character_id,
+            content=content,
+            vividness=_SEMANTIC_VIVIDNESS,
+            emotional_charge=emotional_charge,
             game_time=game_time,
         )
 
