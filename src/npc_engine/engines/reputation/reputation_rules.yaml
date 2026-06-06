@@ -1,0 +1,4 @@
+max_nudge_per_tick: 2
+min_source_standing: "FRIENDLY"   # propagate only if source→player standing >= this
+min_bridge_standing: "NEUTRAL"    # propagate via intermediary only if their mutual standing >= this
+enabled: false                    # off by default — tick scheduler wiring is a follow-up slice
