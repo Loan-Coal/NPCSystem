@@ -15,7 +15,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-layers check-docstrings type-ratchet type-ratchet-update check-harness \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-e2e scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo seed-api smoke \
+        eval eval-report eval-e2e scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world
@@ -172,6 +172,9 @@ eval-llm-demo:
 # eval-retrieval: measure retrieval precision@k/recall@k/MRR against demo world labels
 eval-retrieval:
 	$(PYTHON) -m evals.retrieval_runner
+
+# eval-combined: one command that runs dialogue evals + retrieval evals and prints both summaries
+eval-combined: eval eval-retrieval
 
 # ---------------------------------------------------------------------------
 # Demo game targets (Phase 2)

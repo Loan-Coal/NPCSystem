@@ -7,10 +7,19 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from summary import format_summary_markdown, summarize
+from summary import (
+    RetrievalSummary,
+    format_retrieval_summary_markdown,
+    format_summary_markdown,
+    summarize,
+)
 
 
-def write_report(results: list[dict], output_dir: Path) -> Path:
+def write_report(
+    results: list[dict],
+    output_dir: Path,
+    retrieval_summary: RetrievalSummary | None = None,
+) -> Path:
     """
     Write a markdown report for a completed eval run.
 
@@ -37,6 +46,8 @@ def write_report(results: list[dict], output_dir: Path) -> Path:
         "",
     ]
     lines.extend(format_summary_markdown(summarize(results)))
+    if retrieval_summary is not None:
+        lines.extend(format_retrieval_summary_markdown(retrieval_summary))
 
     for result in results:
         status = "PASS" if result["passed"] else "FAIL"
