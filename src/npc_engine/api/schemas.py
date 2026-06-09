@@ -14,6 +14,8 @@ from typing import Literal
 
 from pydantic import Field
 
+from npc_engine.common.intent_models import TriggerType
+
 from npc_engine.engines.dialogue.dialogue_models import (
     ActionModel,
     ActionType,
@@ -58,6 +60,7 @@ __all__ = [
     "QuestObjectiveUpdateRequest",
     "QuestEvaluateRequest",
     "QuestRewardApplyRequest",
+    "ConversationIntentResponse",
 ]
 
 
@@ -161,4 +164,21 @@ class QuestRewardApplyRequest(FrozenApiModel):
 
     quest_id: str
     player_id: str
+
+
+class ConversationIntentResponse(FrozenApiModel):
+    """Public API response schema for a pending NPC intent (Phase 14).
+
+    Converted from the internal ConversationIntent model by the route handler.
+    Never exposes internal node IDs or graph implementation details beyond
+    those needed by the client to open the dialogue panel.
+    """
+
+    intent_id: str = Field(..., description="Unique id for marking the intent delivered.")
+    npc_id: str = Field(..., description="ID of the NPC that wants to speak.")
+    tick: int = Field(..., description="Game tick at which the intent was formed.")
+    score: float = Field(..., description="Intent urgency score (0–1).")
+    reason: str = Field(..., description="Human-readable trigger phrase.")
+    trigger_type: TriggerType = Field(..., description="Trigger category: need, event, or goal.")
+    trigger_ref: str = Field(..., description="ID of the triggering Need, Event, or Goal node.")
 
