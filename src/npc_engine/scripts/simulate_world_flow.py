@@ -11,6 +11,7 @@ Dependencies injected: None.
 from __future__ import annotations
 
 import json
+import sys
 from typing import Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -121,7 +122,7 @@ def main() -> int:
     """Run simulation CLI entry point and return shell exit code."""
 
     summary = run_simulation()
-    print(format_summary_json(summary=summary))
+    sys.stdout.write(format_summary_json(summary=summary) + "\n")
     return EXIT_SUCCESS if not summary.errors else EXIT_FAILURE
 
 

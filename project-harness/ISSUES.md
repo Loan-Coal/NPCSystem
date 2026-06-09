@@ -114,8 +114,9 @@ every other NPC skips the loop, so the bug never fired for them.
 **Why deferred:** Splitting would require either a new `quest_reward_engine.py` (reward routing logic) + `quest_objective_engine.py` (objective verification) or a `quest_transition_engine.py` for the state machine. This is a non-trivial refactor requiring its own task. A DECISIONS.md entry would be needed to approve the split boundary.
 **To fix:** Split into at least two files: `quest_lifecycle_engine.py` (state transitions only, ≤300 lines) + `quest_reward_router.py` (reward routing + item transfer logic). Write a DECISIONS.md entry proposing the split boundary first.
 
-## ISSUE-078: gossip_handler.py uses stdlib logging.getLogger directly — bypasses npc_engine logging setup
+## [FIXED] ISSUE-078: gossip_handler.py uses stdlib logging.getLogger directly — bypasses npc_engine logging setup
 **Found:** 2026-06-06, during EXP-12 fan-in (worker observation)
+**Fixed:** 2026-06-09, Batch A gate-fixes (replace `logging.getLogger` with `get_logger` from `npc_engine.utils.logging`)
 **Severity:** P3 (nice-to-fix)
 **Where:** `src/npc_engine/engines/gossip/gossip_handler.py` — `import logging; LOGGER = logging.getLogger(__name__)`
 **Description:** Uses stdlib `logging.getLogger` directly instead of `npc_engine.utils.logging.get_logger`. This means gossip handler log records go through a different logger hierarchy. In production, if `configure_logging()` is not applied to the root logger, gossip events may not be captured correctly. Inconsistent with the project logging pattern.
@@ -914,8 +915,9 @@ current mapping is good enough for demo badge display and does not affect correc
 **Why deferred:** Cosmetic.
 **To fix:** Update to a proper one-sentence module description.
 
-## ISSUE-074: `EmotionUpdater.__init__` uses `model=None` with `# type: ignore[assignment]` instead of `Optional` typing
+## [FIXED] ISSUE-074: `EmotionUpdater.__init__` uses `model=None` with `# type: ignore[assignment]` instead of `Optional` typing
 **Found:** 2026-06-06, during EXP-13 (EmotionModelProtocol)
+**Fixed:** 2026-06-09, Batch A gate-fixes (changed to `model: EmotionModelProtocol | None = None`)
 **Severity:** P3 (nice-to-fix)
 **Where:** `src/npc_engine/engines/emotion/emotion_updater.py:__init__`
 **Description:** Default model injection uses `model: EmotionModelProtocol = None` with a `# type: ignore[assignment]` guard rather than the cleaner `Optional[EmotionModelProtocol] = None` + sentinel pattern. Behavior is correct and all tests pass.
@@ -987,8 +989,9 @@ And add:
 **Why deferred:** Minor perf; both branches are conditionally guarded and rarely co-occur. Out of scope for EXP-53.
 **To fix:** Hoist the `get_world_state` call to before both branches; pass `world_state` into both.
 
-## ISSUE-088: `DialogueResponse.learned_facts` is `list[str]` in a frozen Pydantic model (should be `tuple[str, ...]`)
+## [FIXED] ISSUE-088: `DialogueResponse.learned_facts` is `list[str]` in a frozen Pydantic model (should be `tuple[str, ...]`)
 **Found:** 2026-06-09, during EXP-53 (W2)
+**Fixed:** 2026-06-09, Batch A gate-fixes (changed to `tuple[str, ...] = Field(default=())`)
 **Severity:** P3 (nice-to-fix — minor inconsistency with the frozen model convention)
 **Where:** `src/npc_engine/engines/dialogue/dialogue_models.py` — `DialogueResponse.learned_facts`
 **Description:** `DialogueResponse` is `frozen=True` but `learned_facts: list[str]` is a mutable field. Other ordered fields on the model use immutable types. A tuple would be strictly correct.

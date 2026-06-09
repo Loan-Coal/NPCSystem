@@ -31,7 +31,7 @@ class EmotionUpdater:
         self,
         emotion_store: EmotionStore,
         decay_rate: int = 2,
-        model: EmotionModelProtocol = None,  # type: ignore[assignment]
+        model: EmotionModelProtocol | None = None,
     ) -> None:
         """Initialise the updater with a backing store, decay rate, and optional model.
 

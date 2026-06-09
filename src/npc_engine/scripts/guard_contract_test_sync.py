@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from pathlib import PurePosixPath
@@ -281,7 +282,7 @@ def main() -> int:
     args = _build_parser().parse_args()
     changed_paths = args.changed_path if args.changed_path else _changed_paths_from_git(base_ref=args.base_ref)
     result = evaluate_contract_test_sync(changed_paths=changed_paths)
-    print(result.message)
+    sys.stdout.write(result.message + "\n")
     return EXIT_SUCCESS if result.is_valid else EXIT_FAILURE
 
 

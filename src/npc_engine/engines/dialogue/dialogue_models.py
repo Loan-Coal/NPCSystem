@@ -102,7 +102,7 @@ class DialogueResponse(FrozenDialogueModel):
     emotion: str | None = None
     action: ActionModel = Field(default_factory=ActionModel)
     facial_expression: FacialExpressionModel = Field(default_factory=FacialExpressionModel)
-    learned_facts: list[str] = Field(default_factory=list)
+    learned_facts: tuple[str, ...] = Field(default=())
     session_id: str | None = None
     cached: bool = False
     degradation_level: str = "full"

@@ -11,6 +11,7 @@ Dependencies injected: None.
 from __future__ import annotations
 
 import logging
+import sys
 from pathlib import Path
 
 from npc_engine.engines.contracts.contract_loader import load_engine_contracts
@@ -79,7 +80,7 @@ def validate_contracts(contracts_dir: Path, tests_root: Path | None = None) -> i
     if path_errors:
         for error_line in path_errors:
             logger.error("contract_test_path_error", extra={"detail": error_line})
-        print("\n".join(path_errors))
+        sys.stdout.write("\n".join(path_errors) + "\n")
         return EXIT_FAILURE
 
     logger.info("contract_validation_passed", extra={"count": len(contracts)})

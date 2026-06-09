@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import logging
 import random
 
 from neo4j import AsyncSession
@@ -46,6 +45,7 @@ from npc_engine.graph.gossip_batch_queries import (
 from npc_engine.graph.rumor_service import believe_rumor, create_rumor
 from npc_engine.engines.gossip.pair_selector import select_pairs
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
+from npc_engine.utils.logging import get_logger
 
 from typing import TYPE_CHECKING
 
@@ -53,7 +53,7 @@ if TYPE_CHECKING:
     from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
 
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = get_logger(__name__)
 
 _SECRET_SEED_NAMESPACE = "gossip_secret"
 
