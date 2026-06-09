@@ -29,6 +29,7 @@ from npc_engine.api.schemas import DialogueRequest
 from npc_engine.auth.api_key import resolve_scope_from_authorization
 from npc_engine.config import get_settings
 from npc_engine.engines.dialogue.dialogue_models import DialogueResponse
+from npc_engine.engines.proactive_dialogue.models import ProactiveLine
 from npc_engine.utils.errors import AuthError
 from npc_engine.utils.logging import get_logger
 
@@ -120,6 +121,20 @@ def _iter_token_chunks(text: str) -> Iterator[str]:
         chunk = match.group(0)
         if chunk != "":
             yield chunk
+
+
+async def push_proactive_line(ws: WebSocket, line: ProactiveLine) -> None:
+    """Send a proactive_line push message over an open WebSocket connection.
+
+    This is a standalone helper used by (slice 2) scheduler wiring and any
+    future caller that holds an open WebSocket and a ProactiveLine. It does
+    NOT modify the existing dialogue WS handler loop.
+
+    Args:
+        ws: The already-accepted WebSocket connection to push to.
+        line: ProactiveLine produced by ProactiveDialogueEngine.generate_line.
+    """
+    await ws.send_json(line.to_ws_message())
 
 
 @router.websocket("/ws/dialogue")
