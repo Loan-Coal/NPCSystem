@@ -19,6 +19,7 @@ from npc_engine.engines.interaction.dispatch import dispatch_interaction
 from npc_engine.engines.interaction.models import (
     InteractionProposal,
     STATUS_OPEN,
+    STATUS_PENDING,
     UI_DIRECTIVE_STUB,
 )
 from demo_game.dialogue import parse_dialogue_response, DialogueTurn
@@ -54,12 +55,21 @@ def test_allowed_actions_contains_new_types() -> None:
 # interaction dispatch: stub routing
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("kind", ["propose_trade", "propose_quest", "claim_completion", "give_item"])
-def test_dispatch_known_kind_returns_open_stub(kind: str) -> None:
+@pytest.mark.parametrize("kind", ["propose_quest", "claim_completion"])
+def test_dispatch_stub_kinds_return_open_stub(kind: str) -> None:
     proposal = InteractionProposal(kind=kind, target_id=None)
     state = dispatch_interaction(proposal)
     assert state.status == STATUS_OPEN
     assert state.ui_directive == UI_DIRECTIVE_STUB
+
+
+@pytest.mark.parametrize("kind", ["propose_trade", "give_item"])
+def test_dispatch_trade_kinds_return_pending(kind: str) -> None:
+    # EXP-40: propose_trade and give_item now delegate to MinimalSyncTradeHandler
+    # which returns STATUS_PENDING (not the open stub) when item_type is provided.
+    proposal = InteractionProposal(kind=kind, target_id="item_spice", payload={"item_type": "spice"})
+    state = dispatch_interaction(proposal)
+    assert state.status == STATUS_PENDING
 
 
 def test_dispatch_unknown_kind_returns_none_directive() -> None:

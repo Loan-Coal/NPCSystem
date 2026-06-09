@@ -953,3 +953,27 @@ When fixed, change the heading to:
 And add:
 **Fixed:** YYYY-MM-DD, in <commit/task>
 -->
+
+## ISSUE-084: `build_world_state_payload` returns raw dict instead of Pydantic model
+**Found:** 2026-06-09, during ISSUE-080 fix (W1)
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/seed.py::build_world_state_payload` (returns `dict`)
+**Description:** CLAUDE.md strict rule: no raw dict crossing a module boundary. `build_world_state_payload` returns a plain `dict` that is passed to `_seed_node` and `_force_patch_world_state`. Should be a Pydantic `BaseModel` (or `TypedDict` if demo_game keeps it lightweight).
+**Why deferred:** Out of scope for the ISSUE-080 fix.
+**To fix:** Define a `WorldStatePayload(BaseModel)` in `demo_game/seed.py` and return it from `build_world_state_payload`; update callers.
+
+## ISSUE-085: `world_state.py` uses deprecated `datetime.utcnow()` (Python 3.12+)
+**Found:** 2026-06-09, during EXP-21 (W3)
+**Severity:** P3 (nice-to-fix — deprecation warning only, not an error)
+**Where:** `src/npc_engine/world/world_state.py` (grep `utcnow`)
+**Description:** `datetime.utcnow()` is deprecated in Python 3.12 and triggers warnings in every test run. Replace with `datetime.now(timezone.utc)`.
+**Why deferred:** Out of scope for EXP-21; affects test noise only.
+**To fix:** `s/datetime.utcnow()/datetime.now(timezone.utc)/g` and add `from datetime import timezone` import.
+
+## ISSUE-086: `InteractionState`/`InteractionProposal` are `dataclass(frozen=True)` instead of Pydantic v2 `BaseModel`
+**Found:** 2026-06-09, during EXP-40 (W4)
+**Severity:** P2 (annoying — violates CLAUDE.md Pydantic-v2 boundary rule)
+**Where:** `src/npc_engine/engines/interaction/models.py`
+**Description:** Both `InteractionProposal` and `InteractionState` are plain `dataclass(frozen=True)` objects, not Pydantic v2 `BaseModel`. They cross module boundaries (used by `dispatch.py`, `demo_game`), violating the strict rule.
+**Why deferred:** Migrating would require updating all callers; out of scope for EXP-40 first slice.
+**To fix:** Migrate both classes to `BaseModel` with `model_config = ConfigDict(frozen=True)`; update all callers.
