@@ -84,6 +84,8 @@ from npc_engine.api.dependency_singletons import (
     get_trade_engine,
     get_type_registry,
 )
+from npc_engine.api.dependencies import get_sync_trade_handler
+from npc_engine.engines.interaction.dispatch import set_trade_handler
 from npc_engine.config import get_settings
 from npc_engine.engines.contracts.contract_loader import load_engine_contracts
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
@@ -186,6 +188,7 @@ async def lifespan(_app: FastAPI):
         get_story_pacing_engine.cache_clear()
         get_pricing_engine.cache_clear()
         get_trade_engine.cache_clear()
+        set_trade_handler(get_sync_trade_handler())
         get_quest_generation_engine.cache_clear()
         get_routine_engine.cache_clear()
         get_game_schema.cache_clear()

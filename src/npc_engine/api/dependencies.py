@@ -33,10 +33,7 @@ from npc_engine.api.dependency_singletons import (
     get_type_registry,
 )
 from npc_engine.engines.interaction.negotiation_store import NegotiationStore
-from npc_engine.engines.interaction.trade_handler_sync import (
-    NegotiationBackedSyncTradeHandler,
-    set_trade_handler,
-)
+from npc_engine.engines.interaction.trade_handler_sync import NegotiationBackedSyncTradeHandler
 from npc_engine.config import Settings, get_settings
 from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
@@ -74,12 +71,6 @@ def get_sync_trade_handler() -> NegotiationBackedSyncTradeHandler:
         store=get_negotiation_store(),
         pricing_engine=get_pricing_engine(),
     )
-
-
-# Wire the production trade handler into dispatch on module load.
-# dispatch.py defaults to MinimalSyncTradeHandler; this replaces it with the
-# real negotiation-backed handler when the API layer is imported.
-set_trade_handler(get_sync_trade_handler())
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:

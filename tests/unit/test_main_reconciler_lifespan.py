@@ -125,6 +125,7 @@ async def test_lifespan_starts_reconciler_task(monkeypatch) -> None:
     monkeypatch.setattr(main, "get_idempotency_service", lambda: idempotency_service)
     monkeypatch.setattr(main, "get_redis_runtime", lambda: redis_runtime)
     monkeypatch.setattr(main, "EmbeddingReconciler", lambda **_: reconciler_instance)
+    monkeypatch.setattr(main, "set_trade_handler", lambda _: None)
     monkeypatch.setattr(
         main,
         "get_settings",
@@ -175,6 +176,7 @@ async def test_lifespan_cancels_reconciler_task_on_shutdown(monkeypatch) -> None
     monkeypatch.setattr(main, "get_idempotency_service", lambda: idempotency_service)
     monkeypatch.setattr(main, "get_redis_runtime", lambda: redis_runtime)
     monkeypatch.setattr(main, "EmbeddingReconciler", lambda **_: reconciler_instance)
+    monkeypatch.setattr(main, "set_trade_handler", lambda _: None)
     monkeypatch.setattr(
         main,
         "get_settings",
@@ -211,6 +213,7 @@ async def test_lifespan_closes_graph_db_when_startup_fails_after_connect(monkeyp
     monkeypatch.setattr(main, "get_idempotency_service", lambda: idempotency_service)
     monkeypatch.setattr(main, "get_redis_runtime", lambda: redis_runtime)
     monkeypatch.setattr(main, "EmbeddingReconciler", _ReconcilerStub)
+    monkeypatch.setattr(main, "set_trade_handler", lambda _: None)
     monkeypatch.setattr(
         main,
         "get_settings",
