@@ -102,7 +102,9 @@
       "Bash(python -m pytest tests/unit/ --tb=no -q)",
       "Bash(xargs wc *)",
       "Bash(python -m pytest --tb=no -q)",
-      "Bash(python -m pytest tests/unit/utils/ -v --tb=short)"
+      "Bash(python -m pytest tests/unit/utils/ -v --tb=short)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3)"
     ],
     "additionalDirectories": [
       "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem",

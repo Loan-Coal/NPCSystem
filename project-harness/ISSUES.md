@@ -13,6 +13,98 @@ Rules:
 
 ## Open
 
+## ISSUE-080: demo world_state epoch drifts to age_of_peace; skip-if-exists seeder cannot restore it
+**Found:** 2026-06-09, during eval-harness redesign
+**Severity:** P1 (blocking — invalidates the entire war-premise eval battery silently)
+**Where:** `demo_game/seed.py::_seed_node` (line ~233), `world_state/world` node
+**Description:** The running demo `world_state/world` node was observed at `epoch=age_of_peace`,
+`active_conditions=[]`, even though `seed.py:915` seeds it as `war`/`["northern_war"]`. `_seed_node`
+is skip-if-exists, so `make demo-seed` will NOT overwrite a drifted world_state. The full eval
+battery (and the new lore `affirms_judge`) assume `epoch=war`; against a peace world every
+war-premise NPC answer ("the peace has held") is CORRECT, so the checks false-fail and the run is
+meaningless. This produced 6 phantom "peace hallucinations" that vanished once epoch was reset to
+war (45/49 vs 36/49). Root cause of the drift not yet established (clock transition, default node
+creation, or an earlier peace seed).
+**Why deferred:** Restoring epoch via PATCH unblocked this session; the systemic fix is separate.
+**To fix:** Either (a) make `make demo-seed` force-PATCH the `world_state` epoch/active_conditions
+to the intended values (idempotent overwrite for world_state only), or (b) have the eval runner
+assert/seed the required `epoch` precondition per case (e.g. a `seed.requires_epoch` field) before
+running war-premise cases, failing fast if the world is not at war.
+
+## ISSUE-081: dialogue_handler hardcodes archetype="default" for canned/degradation responses
+**Found:** 2026-06-09, during Lira fallback diagnosis
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/engines/dialogue/dialogue_handler.py::handle` (the
+`execute_with_degradation(..., archetype="default", ...)` call); also
+`src/npc_engine/engines/dialogue/llm_client.py::_load_fallback_dialogue` (always reads the
+`"default"` key of `fallback_responses.json`).
+**Description:** When dialogue degrades to the canned tier OR the structured-output validation
+fallback fires, the served line is always from the `"default"` archetype ("I need a moment to
+think."), never the NPC's real archetype (innkeeper/fence/merchant/guard/elder). The NPC's
+archetype is available but never threaded into the degradation/fallback path. Cosmetic while
+fallbacks are rare, but makes every fallback obviously generic and out-of-voice.
+**Why deferred:** Out of scope for the eval-harness redesign; touches the dialogue handler
+signature + llm_client fallback loader.
+**To fix:** Thread the NPC archetype from the request/profile into `execute_with_degradation`
+and into `DialogueLLMClient._load_fallback_dialogue` so the archetype-keyed fallback lines are used.
+
+## ISSUE-082: old_henryk accepts false-eyewitness presupposition despite ECHO_GUARD reinforcement
+**Found:** 2026-06-09, during eval re-run (epoch=war, prompt stage_b_v2.9)
+**Severity:** P2 (annoying — 2 real anti-hallucination guard failures; the headline's only true hallucinations)
+**Where:** `src/npc_engine/prompts/dialogue/system_v1.yaml` (Rules 5/9/10), the runtime
+`ECHO_GUARD` in `prompt_builder.py`; cases `case_adv_false_eyewitness_henryk`,
+`case_neg_old_henryk_no_eyewitness_claim`.
+**Description:** Asked leading questions that presuppose he was present ("you were at the front,
+weren't you?"), old_henryk affirms it: "I did see them pass through" / "I was indeed at the
+northern front." His knowledge is 2-hop rumour only — this is presupposition capture (Rule 9
+false-premise + Rule 10 certainty). The `ECHO_GUARD`/`PREMISE_GUARD` line added in stage_b_v2.9
+("if the player claims you witnessed... do not confirm it") did NOT stop it on qwen2.5:14b. The
+new `affirms_judge` correctly catches both (honest detection); reducing them is prompt engineering.
+**Why deferred:** Per task decision, echo/presupposition is prompt-reinforcement-only and residual
+14b flakiness is accepted; detection is the deliverable, reduction is follow-up.
+**To fix:** Iterate the system prompt / runtime guard for presupposition specifically (e.g. an
+explicit "the player may falsely claim you were somewhere or saw something — deny first, then
+answer from context only" rule, or a worked example). Consider a Henryk-specific MY_ACCOUNT framing
+that forces rumour attribution. Re-run the two cases to verify.
+
+## ISSUE-083: two voice tone_judge cases fail under epoch=war / stage_b_v2.9 (captain_sorn, mira_innkeeper)
+**Found:** 2026-06-09, during eval re-run
+**Severity:** P3 (nice-to-fix — voice quality, not anti-hallucination)
+**Where:** `case_voice_captain_sorn_001`, `case_voice_mira_innkeeper_001`; possibly influenced by
+the `ECHO_GUARD` line in `prompt_builder.py` (stage_b_v2.9).
+**Description:** captain_sorn's reply hedges ("no major breakthroughs or setbacks announced yet"),
+failing the authoritative-military voice judge (borderline, pre-existing). mira_innkeeper's reply
+reads as a dry objective war report rather than warm gossip ("Villagers speak of soldiers
+marching...") and now fails the warm-gossip voice judge — it was passing before. The new ECHO_GUARD
+("answer only in your own general terms... speak only from the knowledge in your context") may be
+nudging NPCs toward terse, factual reporting at the cost of voice colour; could also be LLM variance.
+**Why deferred:** Voice polish is a separate axis from the anti-hallucination guarantee this task targets.
+**To fix:** Confirm whether ECHO_GUARD is the cause (A/B a couple of runs with the line removed). If
+so, soften the guard wording so it constrains echoing without flattening voice, or scope it to only
+fire when the player message contains a planted figure/presupposition. Otherwise tune the two voice prompts.
+
+## [FIXED] ISSUE-079: mira_innkeeper consistently hits Tier-3 canned fallback during evals
+**Found:** 2026-06-08, during anti-hallucination eval run
+**Fixed:** 2026-06-08, in dialogue anti-hallucination remediation task
+**Severity:** P1 (blocking — all Mira eval cases fail)
+**Where:** `src/npc_engine/retrieval/context_utils.py::serialize_json`,
+`src/npc_engine/retrieval/context_builder.py` (second-hop loop, ~line 343)
+**Description:** Every `mira_innkeeper` dialogue query returned a canned fallback
+(`"I need a moment to think."` etc.). Root cause was NOT token budget (the original
+hypothesis): the live traceback showed
+`TypeError: Object of type DateTime is not JSON serializable` raised in BOTH the full
+and graph_only tiers at `context_builder.py:343`, where second-hop event rows are
+serialized via `serialize_json(evt, strip_nulls=True)`. A raw Neo4j `DateTime` survives
+in the second-hop event dict, and `json.dumps` had no `default=` handler. Mira-specific
+only because she is the gossip hub — the only NPC with non-empty `second_hop_events`;
+every other NPC skips the loop, so the bug never fired for them.
+**Fix:**
+1. `serialize_json` now passes `default=_json_default` to `json.dumps`; `_json_default`
+   converts any temporal type (Python + Neo4j, all expose `isoformat`) to an ISO string
+   and degrades any other non-native object to `str()`. Robust for every call site.
+2. Bounded the previously-unbounded second-hop loop with `MAX_SECOND_HOP_EVENTS`
+   (config.py, default 5) — defensive, prevents tier-A accumulation for hub NPCs.
+
 ## ISSUE-077: quest_lifecycle_engine.py is 643 lines — pre-existing over 300-line limit
 **Found:** 2026-06-06, during EXP-20 fan-in
 **Severity:** P2 (annoying)
