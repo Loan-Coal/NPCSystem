@@ -6,7 +6,7 @@ All tests are pure unit tests — no I/O, no Neo4j, no network.
 
 from __future__ import annotations
 
-from evals.summary import (
+from evals.retrieval_summary import (
     PRECISION_THRESHOLD,
     RetrievalSummary,
     format_retrieval_summary_lines,

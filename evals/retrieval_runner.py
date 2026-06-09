@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from evals.retrieval_matchers import mrr, precision_at_k, recall_at_k
-from evals.summary import format_retrieval_summary_lines, summarize_retrieval
+from evals.retrieval_summary import format_retrieval_summary_lines, summarize_retrieval
 
 _CASES_PATH = Path(__file__).parent / "cases" / "retrieval_demo.json"
 _LOG_FORMAT = "%(levelname)s %(name)s %(message)s"

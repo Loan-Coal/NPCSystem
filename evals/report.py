@@ -7,12 +7,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from summary import (
-    RetrievalSummary,
-    format_retrieval_summary_markdown,
-    format_summary_markdown,
-    summarize,
-)
+from retrieval_summary import RetrievalSummary, format_retrieval_summary_markdown
+from summary import format_summary_markdown, summarize
 
 
 def write_report(
