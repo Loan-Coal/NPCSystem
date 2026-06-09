@@ -87,10 +87,11 @@ class Settings(BaseSettings):
     MISTRAL_API_URL: str | None = None
     LLAMA_API_URL: str | None = None
     OLLAMA_API_URL: str = "http://localhost:11434"
-    # Must match OLLAMA_CONTEXT_LENGTH passed to `ollama serve`.
-    # On RTX 5070 Ti Laptop (9.5 GiB available): 4096 fits cleanly in VRAM.
-    # 6144 is usable with a small KV-cache spill (~330 MB to shared memory).
-    # Set OLLAMA_CONTEXT_LENGTH=<value> in .env and restart both ollama and the engine.
+    # KV-cache window passed as num_ctx to Ollama on every request.
+    # system_v1.yaml is ~4200 tokens; dialogue prompt adds ~3200 tokens → total ~7400.
+    # Minimum recommended value: 8192. On RTX cards with ≥9GB VRAM this adds ~400 MB KV cache.
+    # On RTX 5070 Ti Laptop (9.5 GiB): 8192 fits with ~350 MB headroom.
+    # Set OLLAMA_CONTEXT_LENGTH=8192 (or higher) in .env; restart the engine to pick it up.
     OLLAMA_CONTEXT_LENGTH: int = 4096
 
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
@@ -98,11 +99,14 @@ class Settings(BaseSettings):
     QDRANT_URL: str | None = None
     EMBEDDING_REFRESH_ON_WRITE: bool = True
     EMBEDDING_RECONCILE_INTERVAL_SECONDS: int = 300
-    # Derived from OLLAMA_CONTEXT_LENGTH. Reserve 1200 tokens for system prompt,
-    # prompt headers (NPC_ID, VOICE_DESCRIPTOR, PLAYER_MESSAGE), and model output.
-    # Override via PROMPT_TOKEN_BUDGET in .env only if you need a non-standard split.
+    # Maximum tokens the context_builder may fill. Derived from OLLAMA_CONTEXT_LENGTH.
+    # Overhead = system_v1.yaml (~4200 tokens) + output cap (512) + prompt headers (~500) ≈ 5200.
+    # At OLLAMA_CONTEXT_LENGTH=8192 → budget ≈ 2992. Override in .env if you resize the system prompt.
     PROMPT_TOKEN_BUDGET: int = 0
     RAG_TOP_K: int = 5
+    # Cap on second-hop (friend-of-friend) events injected into dialogue context.
+    # Bounds an otherwise-unbounded accumulation for highly-connected NPCs (gossip hubs).
+    MAX_SECOND_HOP_EVENTS: int = 5
 
     DIALOGUE_SESSION_TURNS: int = 10
     DIALOGUE_SESSION_TTL: int = 300
@@ -177,11 +181,17 @@ class Settings(BaseSettings):
     def _derive_prompt_token_budget(self) -> "Settings":
         """Derive PROMPT_TOKEN_BUDGET from OLLAMA_CONTEXT_LENGTH when not explicitly set.
 
-        Reserves 1200 tokens for the system prompt, prompt headers, and model output.
-        Override PROMPT_TOKEN_BUDGET in .env only for non-standard splits.
+        Overhead breakdown: system_v1.yaml prompt (~4200 tokens) + output cap (512)
+        + dialogue headers / fences (~500) ≈ 5200 tokens reserved for the model.
+        The remaining tokens are available for the context_builder to fill.
+        Override PROMPT_TOKEN_BUDGET in .env only for non-standard system prompt sizes.
         """
         if self.PROMPT_TOKEN_BUDGET == 0:
-            object.__setattr__(self, "PROMPT_TOKEN_BUDGET", self.OLLAMA_CONTEXT_LENGTH - 1200)
+            object.__setattr__(
+                self,
+                "PROMPT_TOKEN_BUDGET",
+                max(512, self.OLLAMA_CONTEXT_LENGTH - 5200),
+            )
         return self
 
     @model_validator(mode="after")

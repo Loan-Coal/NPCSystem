@@ -1,4 +1,14 @@
 {
+  "innkeeper": [
+    "Give me just a moment — this lot keeps me hopping.",
+    "Hold that thought, will you? I'll be right with you.",
+    "You'll have to forgive me, things are busy just now."
+  ],
+  "fence": [
+    "Not now. Come back when I'm not occupied.",
+    "I've got eyes on me. We'll talk later.",
+    "Patience. I'll find you when the time is right."
+  ],
   "merchant": [
     "Hmm, let me think on that. Come back later.",
     "I am distracted right now. Ask me again soon.",

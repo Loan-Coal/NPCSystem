@@ -336,7 +336,8 @@ async def build_serialized_context(
     if obligations:
         tier_a_raw.append(ContextItem(key="obligations", text=serialize_json(obligations), tier="tierA", priority=83))
     # 6.6: second-hop events from trusted friends at lower priority than direct events.
-    for idx, evt in enumerate(second_hop_events or []):
+    # Bounded to avoid unbounded tier-A accumulation for highly-connected NPCs.
+    for idx, evt in enumerate((second_hop_events or [])[: settings.MAX_SECOND_HOP_EVENTS]):
         tier_a_raw.append(
             ContextItem(
                 key=f"second_hop:{idx}:{npc_id}",

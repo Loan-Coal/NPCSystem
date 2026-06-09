@@ -75,7 +75,29 @@ def serialize_json(
     if strip_nulls or strip_fields:
         value = _clean(value, strip_nulls=strip_nulls, strip_fields=strip_fields or frozenset())
     separators = (",", ":") if compact else None
-    return json.dumps(value, ensure_ascii=True, sort_keys=True, separators=separators)
+    return json.dumps(
+        value, ensure_ascii=True, sort_keys=True, separators=separators, default=_json_default
+    )
+
+
+def _json_default(obj: Any) -> str:
+    """Fallback encoder for values json.dumps cannot natively serialize.
+
+    Converts temporal types (Python datetime/date/time and Neo4j DateTime/Date/Time,
+    which all expose isoformat) to ISO strings; any other non-native object degrades
+    to its str() form. Keeps serialize_json robust against raw graph values (e.g.
+    second-hop event rows) without requiring every caller to pre-normalize.
+
+    Args:
+        obj: A value json.dumps could not encode with the default JSON types.
+    Returns:
+        A JSON-safe string representation of obj.
+    """
+
+    isoformat = getattr(obj, "isoformat", None)
+    if callable(isoformat):
+        return str(isoformat())
+    return str(obj)
 
 
 def _clean(
