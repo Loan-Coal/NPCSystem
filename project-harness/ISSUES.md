@@ -925,8 +925,9 @@ current mapping is good enough for demo badge display and does not affect correc
 **Why deferred:** Cosmetic typing issue; not blocking.
 **To fix:** Change to `model: EmotionModelProtocol | None = None` with a `self._model = model or VadEmotionModel()` guard in the body.
 
-## ISSUE-073: `memory_service.py` inconsistent transaction ownership — decay functions bypass transaction wrapper
+## [FIXED] ISSUE-073: `memory_service.py` inconsistent transaction ownership — decay functions bypass transaction wrapper
 **Found:** 2026-06-06, during EXP-17 (charge-weighted decay)
+**Fixed:** 2026-06-09, Batch E — wrapped both decay functions in `session.begin_transaction()` / `async with tx`; updated test mock accordingly.
 **Severity:** P3 (nice-to-fix)
 **Where:** `src/npc_engine/graph/memory_service.py:92-128`
 **Description:** `create_memory` (line 57) uses `session.begin_transaction()` / `async with tx` pattern per CLAUDE.md session-ownership rule. But `decay_all_vividness` and the new `decay_all_vividness_weighted` call `session.run()` directly without a transaction wrapper — inconsistency that could matter for write atomicity under load.
@@ -974,8 +975,9 @@ And add:
 **Why deferred:** Out of scope for EXP-21; affects test noise only.
 **To fix:** `s/datetime.utcnow()/datetime.now(timezone.utc)/g` and add `from datetime import timezone` import.
 
-## ISSUE-086: `InteractionState`/`InteractionProposal` are `dataclass(frozen=True)` instead of Pydantic v2 `BaseModel`
+## [FIXED] ISSUE-086: `InteractionState`/`InteractionProposal` are `dataclass(frozen=True)` instead of Pydantic v2 `BaseModel`
 **Found:** 2026-06-09, during EXP-40 (W4)
+**Fixed:** 2026-06-09, Batch E — migrated both classes to `BaseModel` with `model_config = ConfigDict(frozen=True)`; no caller changes needed (all use keyword constructors and attribute access).
 **Severity:** P2 (annoying — violates CLAUDE.md Pydantic-v2 boundary rule)
 **Where:** `src/npc_engine/engines/interaction/models.py`
 **Description:** Both `InteractionProposal` and `InteractionState` are plain `dataclass(frozen=True)` objects, not Pydantic v2 `BaseModel`. They cross module boundaries (used by `dispatch.py`, `demo_game`), violating the strict rule.

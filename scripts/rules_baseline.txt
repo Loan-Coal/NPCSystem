@@ -21,7 +21,6 @@ R001|src/npc_engine/config.py
 R001|src/npc_engine/data/api_seeder.py
 R001|src/npc_engine/engines/chapter/chapter_engine.py
 R001|src/npc_engine/engines/gossip/gossip_handler.py
-R001|src/npc_engine/engines/quest/quest_lifecycle_engine.py
 R001|src/npc_engine/engines/quest_generation/quest_generation_engine.py
 R001|src/npc_engine/main.py
 R001|src/npc_engine/retrieval/context_budget_enforcer.py
@@ -31,6 +30,8 @@ R001|src/npc_engine/utils/errors.py
 R005|src/npc_engine/engines/events/event_handler.py
 R005|src/npc_engine/engines/faction_politics/faction_politics_engine.py
 R005|src/npc_engine/engines/quest/quest_lifecycle_engine.py
+R005|src/npc_engine/engines/quest/quest_offer_service.py
+R005|src/npc_engine/engines/quest/quest_reward_router.py
 R005|src/npc_engine/world/world_reader.py
 R005|src/npc_engine/world/world_writer.py
 R006|src/npc_engine/api/dependencies_engines.py::get_tick_scheduler
@@ -86,14 +87,14 @@ R006|src/npc_engine/engines/need/need_decay_engine.py::NeedDecayEngine.run_tick
 R006|src/npc_engine/engines/proactive_dialogue/proactive_engine.py::ProactiveDialogueEngine.check_trigger
 R006|src/npc_engine/engines/proactive_dialogue/proactive_engine.py::ProactiveDialogueEngine.generate_line
 R006|src/npc_engine/engines/quest/quest_engine_helpers.py::build_lifecycle_event
-R006|src/npc_engine/engines/quest/quest_lifecycle_engine.py::QuestLifecycleEngine._apply_rewards_in_tx
-R006|src/npc_engine/engines/quest/quest_lifecycle_engine.py::QuestLifecycleEngine._collect_delivery_items_in_tx
 R006|src/npc_engine/engines/quest/quest_lifecycle_engine.py::QuestLifecycleEngine.accept_quest
-R006|src/npc_engine/engines/quest/quest_lifecycle_engine.py::QuestLifecycleEngine.apply_rewards
 R006|src/npc_engine/engines/quest/quest_lifecycle_engine.py::QuestLifecycleEngine.evaluate_completion
-R006|src/npc_engine/engines/quest/quest_lifecycle_engine.py::QuestLifecycleEngine.offer_draft_quest
-R006|src/npc_engine/engines/quest/quest_lifecycle_engine.py::QuestLifecycleEngine.offer_quest
 R006|src/npc_engine/engines/quest/quest_lifecycle_engine.py::QuestLifecycleEngine.update_objective
+R006|src/npc_engine/engines/quest/quest_offer_service.py::QuestOfferService.offer_draft_quest
+R006|src/npc_engine/engines/quest/quest_offer_service.py::QuestOfferService.offer_quest
+R006|src/npc_engine/engines/quest/quest_reward_router.py::QuestRewardRouter._apply_rewards_in_tx
+R006|src/npc_engine/engines/quest/quest_reward_router.py::QuestRewardRouter._collect_delivery_items_in_tx
+R006|src/npc_engine/engines/quest/quest_reward_router.py::QuestRewardRouter.apply_rewards
 R006|src/npc_engine/engines/quest_generation/event_quest_trigger.py::EventQuestTrigger._process_event
 R006|src/npc_engine/engines/quest_generation/need_quest_trigger.py::NeedQuestTrigger._process_need
 R006|src/npc_engine/engines/quest_generation/quest_generation_engine.py::QuestGenerationEngine._ask_llm_for_fills

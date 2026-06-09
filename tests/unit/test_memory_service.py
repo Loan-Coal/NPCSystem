@@ -127,19 +127,23 @@ async def test_get_memories_returns_list_from_query():
 
 # ---------------------------------------------------------------------------
 # decay_all_vividness — clamps to 0
-# decay_all_vividness calls session.run() directly (not begin_transaction).
+# decay_all_vividness uses session.begin_transaction() like create_memory.
 # ---------------------------------------------------------------------------
 
 
 def _make_decay_session(affected: int | None) -> MagicMock:
-    """Return a session mock wired for decay_all_vividness (uses session.run directly)."""
+    """Return a session mock wired for decay_all_vividness (uses begin_transaction)."""
     session = MagicMock()
+    tx = AsyncMock()
+    tx.__aenter__ = AsyncMock(return_value=tx)
+    tx.__aexit__ = AsyncMock(return_value=False)
     record = MagicMock() if affected is not None else None
     if record is not None:
         record.__getitem__ = MagicMock(side_effect=lambda k: affected if k == "affected" else None)
     mock_result = AsyncMock()
     mock_result.single = AsyncMock(return_value=record)
-    session.run = AsyncMock(return_value=mock_result)
+    tx.run = AsyncMock(return_value=mock_result)
+    session.begin_transaction = AsyncMock(return_value=tx)
     return session
 
 

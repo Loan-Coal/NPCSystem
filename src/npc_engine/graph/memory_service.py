@@ -104,10 +104,12 @@ async def decay_all_vividness(
     Returns:
         Number of Memory nodes whose vividness was reduced.
     """
-    result = await session.run(CYPHER_DECAY_VIVIDNESS, decay=decay_per_day)
-    record = await result.single()
-    await result.consume()
-    return int(record["affected"]) if record else 0
+    tx = await session.begin_transaction()
+    async with tx:
+        result = await tx.run(CYPHER_DECAY_VIVIDNESS, decay=decay_per_day)
+        record = await result.single()
+        await result.consume()
+        return int(record["affected"]) if record else 0
 
 
 async def decay_all_vividness_weighted(
@@ -130,14 +132,16 @@ async def decay_all_vividness_weighted(
     Returns:
         Number of Memory nodes whose vividness was reduced.
     """
-    result = await session.run(
-        CYPHER_DECAY_VIVIDNESS_WEIGHTED,
-        base_decay=base_decay,
-        charge_divisor=charge_divisor,
-    )
-    record = await result.single()
-    await result.consume()
-    return int(record["affected"]) if record else 0
+    tx = await session.begin_transaction()
+    async with tx:
+        result = await tx.run(
+            CYPHER_DECAY_VIVIDNESS_WEIGHTED,
+            base_decay=base_decay,
+            charge_divisor=charge_divisor,
+        )
+        record = await result.single()
+        await result.consume()
+        return int(record["affected"]) if record else 0
 
 
 async def delete_memory(

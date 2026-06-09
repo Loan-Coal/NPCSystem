@@ -9,8 +9,9 @@ Used by: engines.interaction.dispatch, demo_game.dialogue
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 _PROPOSAL_KINDS = frozenset({"propose_trade", "propose_quest", "claim_completion", "give_item"})
@@ -28,8 +29,7 @@ STATUS_ACCEPTED = "accepted"
 STATUS_DECLINED = "declined"
 
 
-@dataclass(frozen=True)
-class InteractionProposal:
+class InteractionProposal(BaseModel):
     """An interaction surfaced by the LLM that requires deterministic adjudication.
 
     Carries the raw action from the dialogue engine. Handlers in the dispatch
@@ -41,17 +41,18 @@ class InteractionProposal:
         payload: Free-form parameters dict from ActionModel.parameters.
     """
 
+    model_config = ConfigDict(frozen=True)
+
     kind: str
     target_id: str | None
-    payload: dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, Any] = Field(default_factory=dict)
 
     def is_interaction_kind(self) -> bool:
         """Return True when kind is a proposal that the dispatch layer handles."""
         return self.kind in _PROPOSAL_KINDS
 
 
-@dataclass(frozen=True)
-class InteractionState:
+class InteractionState(BaseModel):
     """Result returned by an interaction handler after processing one proposal.
 
     Attributes:
@@ -59,7 +60,10 @@ class InteractionState:
         ui_directive: Token telling the demo which panel/overlay to show.
         narration_hint: Optional hint for the NPC's next narrated response.
         data: Optional snapshot payload (e.g. NegotiationSession dict).
+        metadata: Optional auxiliary data (e.g. item_type, qty for trade).
     """
+
+    model_config = ConfigDict(frozen=True)
 
     status: str
     ui_directive: str
