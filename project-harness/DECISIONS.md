@@ -772,6 +772,19 @@ rewards = economic settlement. Each is independently testable. No delegation ind
 **Consequence:** DEC-044 superseded. ISSUE-077 closed. Test imports updated for offer and reward
 test modules.
 
+## DEC-080: per-world content-rating override deferred (Phase 16 S16.1)
+**Context:** Phase 16 introduces a configurable content ceiling (`ContentRating = Literal["everyone", "teen", "mature"]`).
+The plan called for per-world overrides so different game worlds can have different ceilings.
+**Decision:** Defer per-world override. `ContentRatingResolver.resolve()` always returns the global
+`Settings.CONTENT_RATING` value. The two viable override mechanisms are: (a) store the ceiling as a
+property on the world Neo4j node (requires graph schema change + migration), or (b) declare it in the
+game schema YAML (requires schema extension and a loader change). Neither is trivially safe.
+**Why:** Adding a new Neo4j property requires a schema bootstrap change and a migration run against
+all existing world nodes. Adding it to the YAML schema requires changes to `schema/game_schema_loader.py`
+and the context pipeline. Both touch more than the services layer and risk regressions during a demo sprint.
+**Consequence:** Studios set one ceiling per deployment via the `CONTENT_RATING` env var. Per-world
+differentiation deferred to a follow-up session once the schema decision is confirmed.
+
 ## DEC-079: intent_queries.py accepted over 300-line limit (~334 lines, Phase 14 S14.1+S14.2)
 **Context:** `graph/intent_queries.py` contains all Cypher constants and async query functions
 for Phase 14 intent operations: location reads (S14.1) and queue operations (S14.2). At 334 lines

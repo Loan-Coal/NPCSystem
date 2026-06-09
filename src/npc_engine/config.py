@@ -51,6 +51,9 @@ RAG_RECENCY_WEIGHT: float = 0.2     # temporal recency component weight
 RAG_RECENCY_DAYS_SOFT: float = 365.0   # game-time: full decay over this many game-days
 RAG_RECENCY_DAYS_HARD: float = 72.0    # wall-clock: full decay over this many real hours
 
+# Content-rating ceiling type.  "mature" is fully permissive (no restrictions).
+ContentRating = Literal["everyone", "teen", "mature"]
+
 
 class Settings(BaseSettings):
     """Typed environment configuration for the NPC Engine."""
@@ -170,6 +173,12 @@ class Settings(BaseSettings):
     RUMOR_EMOTION_SEVERITY_THRESHOLD: int = 50
 
     KNOWLEDGE_LEARNING_ENABLED: bool = False
+
+    # Content-moderation ceiling (S16.1). "mature" = no restrictions (default).
+    CONTENT_RATING: ContentRating = Field(
+        default="mature",
+        description="Global content ceiling. 'mature' is the default (no restrictions).",
+    )
 
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     LOG_LLM_PROMPTS: bool = False

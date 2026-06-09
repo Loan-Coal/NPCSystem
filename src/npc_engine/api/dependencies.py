@@ -34,8 +34,9 @@ from npc_engine.api.dependency_singletons import (
 )
 from npc_engine.engines.interaction.negotiation_store import NegotiationStore
 from npc_engine.engines.interaction.trade_handler_sync import NegotiationBackedSyncTradeHandler
-from npc_engine.config import Settings, get_settings
+from npc_engine.config import ContentRating, Settings, get_settings
 from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
+from npc_engine.services.content_rating_resolver import ContentRatingResolver
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm_config_models import EngineModelConfig
 from npc_engine.engines.tts.mock_adapter import MockTTSAdapter
@@ -71,6 +72,16 @@ def get_sync_trade_handler() -> NegotiationBackedSyncTradeHandler:
         store=get_negotiation_store(),
         pricing_engine=get_pricing_engine(),
     )
+
+
+@lru_cache
+def get_content_rating_resolver() -> ContentRatingResolver:
+    """Return the singleton ContentRatingResolver for the process lifetime.
+
+    Returns:
+        ContentRatingResolver seeded from Settings.CONTENT_RATING.
+    """
+    return ContentRatingResolver(default_rating=get_settings().CONTENT_RATING)
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
