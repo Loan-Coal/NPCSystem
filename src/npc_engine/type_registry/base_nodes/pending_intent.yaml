@@ -1,0 +1,32 @@
+node_type: PendingIntent
+fields:
+  id:
+    type: str
+    required: true
+  npc_id:
+    type: str
+    required: true
+  player_id:
+    type: str
+    required: true
+  tick:
+    type: int
+    required: true
+  score:
+    type: float
+    required: true
+  reason:
+    type: str
+    required: true
+  trigger_type:
+    type: str
+    required: true   # pending | delivered | expired
+  trigger_ref:
+    type: str
+    required: true
+  status:
+    type: str
+    required: true   # pending | delivered | expired
+  created_tick:
+    type: int
+    required: true
