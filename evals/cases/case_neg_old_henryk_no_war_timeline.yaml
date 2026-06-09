@@ -1,0 +1,27 @@
+case_id: case_neg_old_henryk_no_war_timeline
+description: >
+  Pressed to predict when the war will reach the town, old_henryk has no basis for a
+  timeline - no NPC owns a prediction edge, and his knowledge is vague 2-hop rumour. He
+  must NOT invent a confident arrival date; rambling uncertainty is the correct response.
+seed:
+  npc_id: old_henryk
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: "How long before the fighting reaches us, Henryk? When will they get here?"
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "they'll arrive in"
+      - "we have until"
+      - "within a week"
+      - "in three days"
+      - "the army will reach"
+      - "days away"
+      - "by tomorrow"
+notes: >
+  Requires demo world seed (make demo-seed). Clean (non-cross-NPC) refusal: no edge exists
+  for a war-arrival timeline anywhere in the graph. As a case_neg_ guard case the runner
+  requires a substantive, in-character answer - henryk should fret and disclaim ("who can
+  say...") rather than fabricate a date.

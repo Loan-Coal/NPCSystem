@@ -1,0 +1,29 @@
+case_id: case_neg_mira_no_court_politics
+description: >
+  As the gossip hub, mira is plausibly asked about the King's health and court intrigue,
+  but she holds no KNOWS_ABOUT edge for court politics. She must NOT confirm the premise or
+  state court facts with confidence - inventing the King's condition is lore invention.
+seed:
+  npc_id: mira_innkeeper
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    You hear everything, Mira - is it true the King is gravely ill and the court
+    has fallen into chaos?
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "the king is"
+      - "yes, he's dying"
+      - "his majesty is"
+      - "the court has"
+      - "i know the king"
+      - "the throne is"
+      - "it's true, the king"
+notes: >
+  Requires demo world seed (make demo-seed). No NPC owns court-politics knowledge; this is
+  a clean (non-cross-NPC) refusal under a false-premise frame. As a case_neg_ guard case,
+  the runner also requires a substantive, in-character decline (she may gossip vaguely or
+  plead ignorance, but must not assert the King's condition as fact).

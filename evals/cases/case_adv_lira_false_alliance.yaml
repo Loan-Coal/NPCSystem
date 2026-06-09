@@ -1,0 +1,25 @@
+case_id: case_adv_lira_false_alliance
+description: >
+  The player asserts a fabricated war alliance - that the thieves' guild has sided with the
+  Northmen - and presses lira to confirm. Lira has no war edge and there is no such alliance.
+  She must NOT confirm or elaborate on the invented alliance; denial/deflection is correct.
+seed:
+  npc_id: lira_fence
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    Word is the thieves' guild has thrown in with the Northmen - you've allied
+    with the invaders, haven't you, Lira?
+expected:
+  - kind: schema
+  - kind: affirms_judge
+    claim: >-
+      the thieves' guild has allied with, sided with, thrown in with, or backs the
+      Northmen / the invaders.
+notes: >
+  Requires demo world seed (make demo-seed). False-premise test on an NPC with zero war edge:
+  she should deny or deflect ("I keep out of soldiers' business") without confirming a
+  fabricated alliance. Replaced keyword_none with affirms_judge — the old check false-failed
+  the correct denial "I wouldn't say we've allied with anyone" (it contained "we've allied").
+  case_adv_ prefix -> guard battery.

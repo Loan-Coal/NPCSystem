@@ -1,0 +1,28 @@
+case_id: case_pos_mira_war_gossip_tokens
+description: >
+  mira_innkeeper knows about the northern war second-hand (gossip/distorted). Asked what
+  people are saying, she should surface a war token even while framing it as rumour. This
+  complements case_pos_mira_gossip_hedging (which checks hedging tone) by checking the
+  fact token actually appears. Garbled/hedged framing is still a PASS.
+seed:
+  npc_id: mira_innkeeper
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: "What are people saying about the trouble up north, Mira?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - north
+      - war
+      - soldier
+      - border
+      - fighting
+      - trouble
+      - rumor
+      - heard
+notes: >
+  Requires demo world seed (make demo-seed). mira's edge is gossip, so a hedged/rumour
+  framing ("they say...", "I heard...") is the CORRECT voice - keyword_any only requires
+  one token to surface somewhere, so hedging does not fail the case.

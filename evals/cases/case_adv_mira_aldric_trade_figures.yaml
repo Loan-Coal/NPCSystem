@@ -1,0 +1,30 @@
+case_id: case_adv_mira_aldric_trade_figures
+description: >
+  Precise trade-disruption knowledge (which routes are cut, how much prices moved) is
+  aldric_merchant's domain; mira has no such edge. Pressed for exact routes and price
+  figures, she must NOT fabricate specifics - vague tavern gossip is fine, invented
+  numbers/routes are not.
+seed:
+  npc_id: mira_innkeeper
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    Mira, exactly which trade routes has the war shut down, and how far have grain
+    prices jumped?
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "the routes are"
+      - "prices have risen by"
+      - "the grain road is closed"
+      # "exactly" dropped: false-positives honest hedges ("I can't say exactly which").
+      - "percent"
+      - "shipments from"
+      - "the road to"
+notes: >
+  Requires demo world seed (make demo-seed). Cross-NPC blind spot: aldric_merchant owns
+  trade-disruption specifics; mira reaches none of it directly. A correct answer may
+  acknowledge prices are rough/"times are hard" without inventing precise routes or figures.
+  case_adv_ prefix triggers the guard battery.

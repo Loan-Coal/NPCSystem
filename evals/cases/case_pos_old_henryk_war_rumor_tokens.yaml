@@ -1,0 +1,29 @@
+case_id: case_pos_old_henryk_war_rumor_tokens
+description: >
+  old_henryk knows of the northern war only through 2-hop distorted gossip. Asked what he's
+  heard, he should engage with his (garbled) rumour rather than refuse. A war token must
+  surface; his distorted/rambling framing ("thousands dead", "through the mountains") is
+  still a PASS - the case checks engagement with owned knowledge, not factual precision.
+seed:
+  npc_id: old_henryk
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: "Henryk, you've lived here a long time - what have you heard about the war?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - north
+      - war
+      - king's pass
+      - mountains
+      - dead
+      - fighting
+      - soldiers
+      - heard
+notes: >
+  Requires demo world seed (make demo-seed). henryk's edge is 2-hop gossip, so a rambling,
+  hedged, even factually-garbled answer is the CORRECT voice. keyword_any needs only one
+  war token; this case proves he engages with his rumour rather than refusing outright.
+  Complements no_direct_facts (which forbids him asserting captain_sorn's CLEAN facts).

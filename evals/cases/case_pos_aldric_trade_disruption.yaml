@@ -1,0 +1,29 @@
+case_id: case_pos_aldric_trade_disruption
+description: >
+  aldric_merchant holds a KNOWS_ABOUT edge for the war's trade/economic disruption (supply
+  chains, prices, caravans). Asked how the war is affecting business, he should speak to the
+  economic impact confidently - his domain, so no hedging required.
+seed:
+  npc_id: aldric_merchant
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: "Aldric, how's the war affecting business? What's it done to your trade?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - trade
+      - prices
+      - goods
+      - supply
+      - caravan
+      - shipment
+      - business
+      - cost
+      - profit
+      - war
+notes: >
+  Requires demo world seed (make demo-seed). Grounded positive on aldric's economic edge.
+  Unlike the gossip NPCs he may answer with merchant's confidence about disruption to trade;
+  keyword_any needs only one economic/war token to surface.
