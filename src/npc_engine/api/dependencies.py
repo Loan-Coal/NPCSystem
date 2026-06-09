@@ -1,18 +1,20 @@
 """
 dependencies.py - FastAPI dependency composition root for session-scoped and composed services.
 Layer: api
-Purpose: (auto-detected — review)
+Purpose: Per-request dependency wiring and singleton trade-handler wiring for dispatch.
 
-Does NOT: define singleton application-level providers.
+Does NOT: define the main lifespan. Singleton lifecycle is managed in main.py.
 
-Dependencies injected: Settings.
+Dependencies injected: Settings, NegotiationStore, PricingEngine, NegotiationBackedSyncTradeHandler.
 """
 
+from functools import lru_cache
 from typing import AsyncGenerator
 
 from fastapi import Depends
 from neo4j import AsyncSession
 
+from npc_engine.api.dependencies_engines import get_pricing_engine
 from npc_engine.api.dependency_singletons import (
     get_context_cache,
     get_dialogue_engine_model_config,
@@ -30,6 +32,11 @@ from npc_engine.api.dependency_singletons import (
     get_tick_scheduler,  # noqa: F401  re-exported for api.routes.clock
     get_type_registry,
 )
+from npc_engine.engines.interaction.negotiation_store import NegotiationStore
+from npc_engine.engines.interaction.trade_handler_sync import (
+    NegotiationBackedSyncTradeHandler,
+    set_trade_handler,
+)
 from npc_engine.config import Settings, get_settings
 from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
@@ -44,6 +51,35 @@ from npc_engine.graph.generic_graph_service import GenericGraphService
 from npc_engine.graph.graph_admin_service import GraphAdminService
 from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.type_registry.contracts import TypeRegistry
+
+
+@lru_cache
+def get_negotiation_store() -> NegotiationStore:
+    """Return the singleton NegotiationStore for the lifetime of the process.
+
+    Returns:
+        Shared NegotiationStore instance (one active session per player).
+    """
+    return NegotiationStore()
+
+
+@lru_cache
+def get_sync_trade_handler() -> NegotiationBackedSyncTradeHandler:
+    """Return the singleton NegotiationBackedSyncTradeHandler.
+
+    Returns:
+        Handler wired with the shared NegotiationStore and PricingEngine.
+    """
+    return NegotiationBackedSyncTradeHandler(
+        store=get_negotiation_store(),
+        pricing_engine=get_pricing_engine(),
+    )
+
+
+# Wire the production trade handler into dispatch on module load.
+# dispatch.py defaults to MinimalSyncTradeHandler; this replaces it with the
+# real negotiation-backed handler when the API layer is imported.
+set_trade_handler(get_sync_trade_handler())
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:

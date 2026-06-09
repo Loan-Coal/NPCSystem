@@ -70,7 +70,11 @@ _STUB_DISPATCH: dict[str, Callable[[InteractionProposal], InteractionState]] = {
 _TRADE_KINDS = frozenset({"propose_trade", "give_item"})
 
 
-def dispatch_interaction(proposal: InteractionProposal) -> InteractionState:
+def dispatch_interaction(
+    proposal: InteractionProposal,
+    player_id: str = "",
+    npc_id: str = "",
+) -> InteractionState:
     """Route a proposal to its registered handler and return the result.
 
     propose_trade and give_item are delegated to the injected SyncTradeHandlerProtocol.
@@ -79,12 +83,14 @@ def dispatch_interaction(proposal: InteractionProposal) -> InteractionState:
 
     Args:
         proposal: Interaction proposal extracted from a dialogue action field.
+        player_id: Player character ID forwarded to trade handlers.
+        npc_id: NPC character ID forwarded to trade handlers.
 
     Returns:
         InteractionState describing the outcome and which UI to show.
     """
     if proposal.kind in _TRADE_KINDS:
-        return _trade_handler.handle(proposal)
+        return _trade_handler.handle(proposal, player_id, npc_id)
     handler = _STUB_DISPATCH.get(proposal.kind)
     if handler is None:
         return InteractionState(status=STATUS_OPEN, ui_directive="none")
