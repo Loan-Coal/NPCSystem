@@ -13,7 +13,7 @@ Rules:
 
 ## Open
 
-## ISSUE-080: demo world_state epoch drifts to age_of_peace; skip-if-exists seeder cannot restore it
+## [FIXED] ISSUE-080: demo world_state epoch drifts to age_of_peace; skip-if-exists seeder cannot restore it
 **Found:** 2026-06-09, during eval-harness redesign
 **Severity:** P1 (blocking — invalidates the entire war-premise eval battery silently)
 **Where:** `demo_game/seed.py::_seed_node` (line ~233), `world_state/world` node
@@ -26,6 +26,7 @@ meaningless. This produced 6 phantom "peace hallucinations" that vanished once e
 war (45/49 vs 36/49). Root cause of the drift not yet established (clock transition, default node
 creation, or an earlier peace seed).
 **Why deferred:** Restoring epoch via PATCH unblocked this session; the systemic fix is separate.
+**Fixed:** 2026-06-09, commit 068b0e1 — `_force_patch_world_state` always-patches epoch=war in `demo_game/seed.py`.
 **To fix:** Either (a) make `make demo-seed` force-PATCH the `world_state` epoch/active_conditions
 to the intended values (idempotent overwrite for world_state only), or (b) have the eval runner
 assert/seed the required `epoch` precondition per case (e.g. a `seed.requires_epoch` field) before
