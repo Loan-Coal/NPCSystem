@@ -703,3 +703,23 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Why:** A second pass would be a per-turn latency/cost hit on the gameplay path; the graph already models provenance on `KNOWS_ABOUT`/`KNOWS_SECRET`/`BELIEVES_RUMOR`, so a dedicated `LEARNED_FROM` edge is redundant. Routing arbitrary asserted facts to `belief` (not `event`) keeps the world-event model clean.
 **Consequence:** EXP-53 drops from L to M. The only schema touch is 3 optional fields on `believes.yaml`. A new `graph/knowledge_writer.py` (graph-owned) does the write. Implementation pending; gate behind EXP-32 so the loop is measured.
 **Fact visibility & contradictions (resolved 2026-06-05):** (a) learned facts **CAN be gossiped onward** — a player-taught `belief` is a valid gossip source and propagates through the gossip engine with normal per-pair distortion (the player can seed a rumor by telling one NPC). (b) When a player-taught fact **contradicts** a known one, **keep both** and link with the existing `CONTRADICTS` edge (`contradicts.yaml`); at answer time prefer the higher-confidence / higher-trust-source belief, but never overwrite — an NPC may voice the conflict. This binds EXP-53 to the gossip expansion (EXP-15/16).
+
+## DEC-073: EXP-10 proactive dialogue WS `proactive_line` message shape approved
+**Date:** 2026-06-09
+**Context:** EXP-10 (proactive NPC-initiated dialogue) requires the NPC to push an unsolicited line
+over the existing WebSocket dialogue path. The message type and shape were "pending DECISIONS" in
+the EXPANSION_INDEX carry-forward notes before dispatch could be authorized.
+**Decision:** The new WS server-push message type `proactive_line` is approved with this shape:
+```json
+{"type": "proactive_line", "npc_id": "<str>", "content": "<str>", "reason": "<str>", "tick": <int>}
+```
+The client receives it on the same NPC dialogue socket. It is additive — no existing message types
+are changed. `reason` is one of `["unshared_memory", "unmet_need", "pending_rumor"]` (a `Literal`).
+**Why:** A new message type on an existing socket is the smallest viable API surface for proactive
+push. Reusing the existing socket avoids a new WebSocket route. The shape mirrors `dialogue_response`
+(npc_id + content) with an added `reason` field so clients can display or ignore the trigger.
+**Consequence:** EXP-10 is unblocked for dispatch. `engines/proactive_dialogue/` is a new module;
+no edits to `dialogue_handler.py`. The scheduler registration edits `tick_scheduler.py`. The WS
+push edits `api/routes/dialogue_ws.py` — that is the one existing file EXP-10 must touch.
+EXP-10 conflicts with EXP-33 on `main.py` (both add router registration); they must be sequenced
+(EXP-33 first, then EXP-10 in the next batch after EXP-33 is merged).
