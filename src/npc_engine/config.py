@@ -177,6 +177,12 @@ class Settings(BaseSettings):
     GOSSIP_RNG_SEED: int | None = None
     EVENT_RNG_SEED: int | None = None
 
+    # Intent formation engine config (Phase 14)
+    MIN_INTENT_SCORE: float = Field(default=0.3, ge=0.0, le=1.0)
+    MAX_PENDING_INTENTS_PER_NPC: int = Field(default=5, gt=0)
+    MAX_PENDING_INTENTS_PER_PLAYER: int = Field(default=10, gt=0)
+    INTENT_EXPIRY_TICKS: int = Field(default=20, gt=0)
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
 
     @model_validator(mode="after")

@@ -55,6 +55,7 @@ from npc_engine.engines.story_pacing.pacing_rules_loader import load_pacing_rule
 from npc_engine.engines.story_pacing.story_pacing_engine import StoryPacingEngine
 from npc_engine.engines.proactive_dialogue.proactive_engine import ProactiveDialogueEngine
 from npc_engine.engines.proactive_dialogue.proactive_tick_adapter import ProactiveDialogueTick
+from npc_engine.engines.agenda.intent_formation_engine import IntentFormationEngine
 from npc_engine.graph.player_location_reader import PlayerLocationReader
 from npc_engine.graph.proactive_memory_reader import ProactiveMemoryReader
 from npc_engine.graph.character_reader import get_npc_ids as _graph_get_npc_ids
@@ -248,6 +249,16 @@ def get_proactive_dialogue_engine() -> ProactiveDialogueTick:
     return ProactiveDialogueTick(engine=engine, location_reader=location_reader)
 
 
+@lru_cache
+def get_intent_formation_engine() -> IntentFormationEngine:
+    """Create singleton IntentFormationEngine wired to the shared location reader.
+
+    Returns:
+        IntentFormationEngine ready for the tick scheduler.
+    """
+    return IntentFormationEngine(location_reader=PlayerLocationReader())
+
+
 class _CharacterReaderWrapper:
     """Module-level adapter exposing get_npc_ids as a method for DI into ReputationTickAdapter.
 
@@ -346,6 +357,7 @@ def get_tick_scheduler() -> TickScheduler:
         world_state_quest_trigger=get_world_state_quest_trigger(),
         proactive_dialogue_engine=get_proactive_dialogue_engine(),
         reputation_engine=get_reputation_engine(),
+        intent_formation_engine=get_intent_formation_engine(),
         engine_status_store=get_engine_status_store(),
         gossip_interval=settings.GOSSIP_TICK_INTERVAL,
         event_interval=settings.EVENT_TICK_INTERVAL,
