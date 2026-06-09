@@ -19,6 +19,7 @@ _GUARD_PREFIXES: tuple[str, ...] = ("case_adv_", "case_neg_")
 _KIND_SCHEMA: str = "schema"
 _KIND_KEYWORD_NONE: str = "keyword_none"
 _KIND_TONE_JUDGE: str = "tone_judge"
+_KIND_AFFIRMS_JUDGE: str = "affirms_judge"
 
 _SEPARATOR: str = "=" * 60
 
@@ -35,10 +36,11 @@ class EvalSummary:
         total_turns: Cases that actually invoked the NPC (not fully skipped).
         guard_cases: Adversarial + negative cases (the anti-hallucination battery).
         guard_turns: Guard cases that actually ran (denominator of the headline).
-        hallucination_failures: keyword_none failures within guard cases.
+        hallucination_failures: keyword_none + affirms_judge failures within guard cases.
         schema_failures: Failed schema expectations across all cases.
         keyword_none_failures: Failed keyword_none expectations across all cases.
         tone_judge_failures: Failed tone_judge expectations across all cases.
+        affirms_judge_failures: Failed affirms_judge expectations across all cases.
         other_failures: Failed expectations of any other kind.
         skipped_cases: Cases where every expectation was skipped.
     """
@@ -51,6 +53,7 @@ class EvalSummary:
     schema_failures: int
     keyword_none_failures: int
     tone_judge_failures: int
+    affirms_judge_failures: int
     other_failures: int
     skipped_cases: int
 
@@ -127,14 +130,27 @@ def summarize(results: list[dict]) -> EvalSummary:
         schema_failures=tally["schema"],
         keyword_none_failures=tally["keyword_none"],
         tone_judge_failures=tally["tone_judge"],
+        affirms_judge_failures=tally["affirms_judge"],
         other_failures=tally["other"],
         skipped_cases=skipped_cases,
     )
 
 
 def _tally_failures(results: list[dict]) -> dict[str, int]:
-    """Bucket failing expectations by matcher kind and lore-hallucination scope."""
-    tally = {"schema": 0, "keyword_none": 0, "tone_judge": 0, "other": 0, "hallucination": 0}
+    """Bucket failing expectations by matcher kind and lore-hallucination scope.
+
+    Both keyword_none and affirms_judge failures inside a guard case count as
+    lore hallucinations, so the headline metric reflects every caught false-claim
+    affirmation — not just literal forbidden-substring hits.
+    """
+    tally = {
+        "schema": 0,
+        "keyword_none": 0,
+        "tone_judge": 0,
+        "affirms_judge": 0,
+        "other": 0,
+        "hallucination": 0,
+    }
     for result in results:
         is_guard = _is_guard_case(result.get("case_id", ""))
         for exp in _failed_expectations(result):
@@ -147,6 +163,10 @@ def _tally_failures(results: list[dict]) -> dict[str, int]:
                     tally["hallucination"] += 1
             elif kind == _KIND_TONE_JUDGE:
                 tally["tone_judge"] += 1
+            elif kind == _KIND_AFFIRMS_JUDGE:
+                tally["affirms_judge"] += 1
+                if is_guard:
+                    tally["hallucination"] += 1
             else:
                 tally["other"] += 1
     return tally
@@ -166,10 +186,11 @@ def format_summary_lines(summary: EvalSummary) -> list[str]:
         f"{summary.skipped_cases} skipped)",
         "",
         "  Failure breakdown:",
-        f"    schema failures:       {summary.schema_failures}",
-        f"    keyword_none failures: {summary.keyword_none_failures}",
-        f"    tone_judge failures:   {summary.tone_judge_failures}",
-        f"    other failures:        {summary.other_failures}",
+        f"    schema failures:        {summary.schema_failures}",
+        f"    keyword_none failures:  {summary.keyword_none_failures}",
+        f"    tone_judge failures:    {summary.tone_judge_failures}",
+        f"    affirms_judge failures: {summary.affirms_judge_failures}",
+        f"    other failures:         {summary.other_failures}",
         _SEPARATOR,
     ]
 
@@ -191,6 +212,7 @@ def format_summary_markdown(summary: EvalSummary) -> list[str]:
         f"| schema | {summary.schema_failures} |",
         f"| keyword_none | {summary.keyword_none_failures} |",
         f"| tone_judge | {summary.tone_judge_failures} |",
+        f"| affirms_judge | {summary.affirms_judge_failures} |",
         f"| other | {summary.other_failures} |",
         "",
         "---",

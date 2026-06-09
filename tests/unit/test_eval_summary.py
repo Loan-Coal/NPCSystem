@@ -82,6 +82,28 @@ def test_failure_breakdown_by_kind() -> None:
     assert s.other_failures == 1
 
 
+def test_affirms_judge_failure_in_guard_case_is_hallucination() -> None:
+    # An affirms_judge failure inside a guard case must count toward the headline
+    # lore-hallucination number — not just literal keyword_none hits.
+    results = [
+        _case("case_neg_aldric_no_war_outcome", [_exp("schema", True), _exp("affirms_judge", False)]),
+    ]
+    s = summary.summarize(results)
+    assert s.affirms_judge_failures == 1
+    assert s.hallucination_failures == 1
+    assert "1 lore hallucination " in s.headline
+    assert s.guarantee_demonstrated is False
+
+
+def test_non_guard_affirms_judge_failure_not_a_hallucination() -> None:
+    results = [
+        _case("case_pos_lira_fence_trade", [_exp("affirms_judge", False)]),
+    ]
+    s = summary.summarize(results)
+    assert s.affirms_judge_failures == 1
+    assert s.hallucination_failures == 0
+
+
 def test_non_guard_keyword_none_failure_not_a_hallucination() -> None:
     # A positive (non-guard) case using keyword_none should count toward
     # keyword_none_failures but NOT toward the lore-hallucination headline.

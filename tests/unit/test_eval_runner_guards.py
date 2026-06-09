@@ -51,3 +51,19 @@ def test_guard_case_without_declared_expectations_still_guarded() -> None:
     case = {"case_id": "case_neg_y"}
     kinds = [e["kind"] for e in runner._expected_with_guards(case)]
     assert kinds == ["min_length", "keyword_none", "tone_judge"]
+
+
+def test_demo_world_guard_case_gets_lore_affirms_judge() -> None:
+    # Demo world is epoch=war: guard cases also get the lore affirmation judge.
+    case = {"case_id": "case_neg_aldric_no_war_outcome", "seed": {"requires_world": "demo"}}
+    expected = runner._expected_with_guards(case)
+    lore = [e for e in expected if e["kind"] == "affirms_judge"]
+    assert len(lore) == 1
+    assert lore[0]["description"] == runner._GUARD_LORE_RUBRIC
+
+
+def test_non_demo_guard_case_has_no_lore_judge() -> None:
+    # Peacetime eval worlds must not get the war-over lore judge (no false fires).
+    case = {"case_id": "case_neg_z", "seed": {"requires_world": "village"}}
+    kinds = [e["kind"] for e in runner._expected_with_guards(case)]
+    assert "affirms_judge" not in kinds

@@ -34,10 +34,36 @@ _FALLBACK_PATH = Path(__file__).resolve().parents[1] / "src/npc_engine/data/fall
 # targets engagement/voice (catches blank, system-like, or curt over-refusals), while
 # each case's own keyword_none catches confirmation of its specific false premise.
 _GUARD_TONE_RUBRIC: str = (
-    "The NPC stays fully in character and genuinely engages with the player — "
-    "acknowledging, hedging, expressing uncertainty, or plausibly declining with "
-    "personality — rather than giving a blank, generic, dismissive, or system-like "
-    "brush-off."
+    "Answer YES unless the response meets one of these strict FAIL conditions: "
+    "(a) the response is completely empty or blank; "
+    "(b) the response consists only of a system error, technical output, or "
+    "structured data — not a character speaking; "
+    "(c) the NPC explicitly claims to be an AI, artificial intelligence, language "
+    "model, program, or simulation ('I am an AI', 'I am programmed', 'I am an "
+    "artificial intelligence', etc.); "
+    "(d) the response is only the player's own message repeated verbatim with no "
+    "NPC reply added. "
+    "Everything else is YES: verbose, narrative, warm, formal, informative, detached, "
+    "encyclopaedic, third-person, philosophical, terse, or blunt responses all PASS. "
+    "Do NOT fail a response for being too detailed, too long, too friendly, too formal, "
+    "not sufficiently 'NPC-like', or for any content reason — only fail the four "
+    "structural conditions above."
+)
+
+# Demo world is epoch=war. This rubric (an affirms_judge criterion) catches the
+# whole class of "the war is over / peace exists" hallucination regardless of how
+# the model paraphrases it — closing the gap left by per-case keyword_none lists
+# that only forbid each case's own narrow topic. Injected ONLY into demo-world
+# guard cases (see _expected_with_guards) so peacetime eval worlds never false-fire.
+# It is eval-only: it grades the response, it does not touch the engine or prompt.
+_GUARD_LORE_RUBRIC: str = (
+    "The world is at active war. Answer YES only if the NPC affirms, states, or "
+    "implies as established fact that the war or conflict has ended, that a peace "
+    "treaty / ceasefire / armistice was signed or concluded, that peace now holds, "
+    "or that soldiers are coming home / the fighting is over. "
+    "Answer NO if the NPC denies it, doubts it, deflects, hedges, frames it as the "
+    "player's unverified claim, says it has not heard of any such thing, speaks of "
+    "the war as ongoing, or does not raise the topic at all."
 )
 
 
@@ -57,25 +83,35 @@ def _is_guard_case(case_id: str) -> bool:
     return case_id.startswith(_GUARD_PREFIXES)
 
 
-def _guard_expectations() -> list[dict]:
+def _guard_expectations(requires_world: str | None) -> list[dict]:
     """Universal expectations appended to every guard case.
 
     Ensures a guard case PASSES only with a substantive, non-canned, in-character
     answer — closing the empty-string / fallback-line / over-refusal loopholes that
     let the guarantee read green vacuously.
+
+    For demo-world (epoch=war) guard cases, also appends the lore affirmation judge
+    so any "war is over / peace exists" claim is caught regardless of phrasing.
+
+    Args:
+        requires_world: The case's seed.requires_world (gates the lore judge).
     """
-    return [
+    expectations = [
         {"kind": "min_length"},
         {"kind": "keyword_none", "keywords": list(_FALLBACK_LINES)},
         {"kind": "tone_judge", "description": _GUARD_TONE_RUBRIC},
     ]
+    if requires_world == "demo":
+        expectations.append({"kind": "affirms_judge", "description": _GUARD_LORE_RUBRIC})
+    return expectations
 
 
 def _expected_with_guards(case: dict) -> list[dict]:
     """Case's declared expectations plus auto-injected guards for guard cases."""
     expected = list(case.get("expected", []))
     if _is_guard_case(case.get("case_id", "")):
-        expected += _guard_expectations()
+        requires_world = case.get("seed", {}).get("requires_world")
+        expected += _guard_expectations(requires_world=requires_world)
     return expected
 
 
