@@ -22,40 +22,15 @@ import logging
 from neo4j import AsyncSession
 
 from npc_engine.engines.quest.models import QuestObjectiveInput
+from npc_engine.graph.quest_verification_queries import (
+    count_player_co_located_with,
+    count_player_has_item,
+    count_player_located_at,
+    count_player_was_at,
+    count_target_inactive,
+)
 
 _logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Cypher constants
-# ---------------------------------------------------------------------------
-
-_CYPHER_PLAYER_HAS_ITEM = """
-MATCH (p:Character {id: $player_id})-[:OWNS]->(i:Item {id: $item_id})
-RETURN count(i) AS cnt
-"""
-
-_CYPHER_PLAYER_LOCATED_AT = """
-MATCH (p:Character {id: $player_id})-[:LOCATED_AT]->(l:Location {id: $location_id})
-RETURN count(l) AS cnt
-"""
-
-_CYPHER_PLAYER_WAS_AT = """
-MATCH (p:Character {id: $player_id})-[:WAS_AT]->(l:Location {id: $location_id})
-RETURN count(l) AS cnt
-"""
-
-_CYPHER_TARGET_INACTIVE = """
-MATCH (c:Character {id: $target_id})
-WHERE c.is_active = false
-RETURN count(c) AS cnt
-"""
-
-_CYPHER_PLAYER_CO_LOCATED_WITH = """
-MATCH (p:Character {id: $player_id})-[:LOCATED_AT]->(loc:Location)<-[:LOCATED_AT]-(t:Character {id: $target_id})
-RETURN count(loc) AS cnt
-"""
-
-_MIN_COUNT = 1
 
 
 # ---------------------------------------------------------------------------
@@ -88,15 +63,8 @@ class DeliverVerifier:
                 objective.objective_id,
             )
             return False
-        result = await session.run(
-            _CYPHER_PLAYER_HAS_ITEM,
-            player_id=player_id,
-            item_id=objective.target_id,
-        )
-        record = await result.single()
-        if record is None:
-            return False
-        return int(record["cnt"]) >= objective.target_count
+        cnt = await count_player_has_item(session, player_id=player_id, item_id=objective.target_id)
+        return cnt >= objective.target_count
 
 
 class VisitVerifier:
@@ -131,23 +99,11 @@ class VisitVerifier:
                 objective.objective_id,
             )
             return False
-        current_result = await session.run(
-            _CYPHER_PLAYER_LOCATED_AT,
-            player_id=player_id,
-            location_id=objective.target_id,
-        )
-        current_record = await current_result.single()
-        if current_record is not None and int(current_record["cnt"]) >= _MIN_COUNT:
+        current = await count_player_located_at(session, player_id=player_id, location_id=objective.target_id)
+        if current >= 1:
             return True
-        historical_result = await session.run(
-            _CYPHER_PLAYER_WAS_AT,
-            player_id=player_id,
-            location_id=objective.target_id,
-        )
-        historical_record = await historical_result.single()
-        if historical_record is None:
-            return False
-        return int(historical_record["cnt"]) >= _MIN_COUNT
+        historical = await count_player_was_at(session, player_id=player_id, location_id=objective.target_id)
+        return historical >= 1
 
 
 class KillVerifier:
@@ -182,14 +138,8 @@ class KillVerifier:
                 objective.objective_id,
             )
             return False
-        result = await session.run(
-            _CYPHER_TARGET_INACTIVE,
-            target_id=objective.target_id,
-        )
-        record = await result.single()
-        if record is None:
-            return False
-        return int(record["cnt"]) >= _MIN_COUNT
+        cnt = await count_target_inactive(session, target_id=objective.target_id)
+        return cnt >= 1
 
 
 class TalkVerifier:
@@ -225,15 +175,8 @@ class TalkVerifier:
                 objective.objective_id,
             )
             return False
-        result = await session.run(
-            _CYPHER_PLAYER_CO_LOCATED_WITH,
-            player_id=player_id,
-            target_id=objective.target_id,
-        )
-        record = await result.single()
-        if record is None:
-            return False
-        return int(record["cnt"]) >= _MIN_COUNT
+        cnt = await count_player_co_located_with(session, player_id=player_id, target_id=objective.target_id)
+        return cnt >= 1
 
 
 # ---------------------------------------------------------------------------

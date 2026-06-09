@@ -1,77 +1,30 @@
 """
-tick_lease.py - Distributed lease/claim storage for scheduler ticks in Neo4j.
-Layer: engines
-Purpose: (auto-detected — review)
-
+Module: tick_lease
+Layer: scheduler
+Purpose: Distributed lease/claim storage for scheduler ticks in Neo4j.
 Does NOT: run engine handlers or advance clock state.
-
-Dependencies injected: AsyncSession.
+Dependencies injected: AsyncSession (caller-managed).
+Used by: scheduler.tick_scheduler_engine
 """
+from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Protocol
 
 from neo4j import AsyncSession
 
-
-CYPHER_ENSURE_TICK_LEASE_CONSTRAINT = """
-CREATE CONSTRAINT tick_lease_key IF NOT EXISTS
-FOR (l:TickLease)
-REQUIRE (l.scheduler_id, l.engine, l.tick_id) IS UNIQUE
-"""
-
-
-CYPHER_TRY_CLAIM = """
-MERGE (l:TickLease {scheduler_id: $scheduler_id, engine: $engine, tick_id: $tick_id})
-ON CREATE SET
-    l.owner = $owner_id,
-    l.lease_until_ms = $lease_until_ms,
-    l.status = 'claimed',
-    l.updated_at = datetime()
-WITH l,
-     CASE
-       WHEN l.status = 'done' THEN false
-       WHEN l.owner = $owner_id OR coalesce(l.lease_until_ms, 0) <= $now_ms THEN true
-       ELSE false
-     END AS should_claim
-FOREACH (x IN CASE WHEN should_claim THEN [1] ELSE [] END |
-    SET l.owner = $owner_id,
-        l.lease_until_ms = $lease_until_ms,
-        l.status = 'claimed',
-        l.updated_at = datetime()
+from npc_engine.graph.tick_lease_queries import (
+    ensure_tick_lease_constraint,
+    is_lease_done,
+    mark_lease_done,
+    mark_lease_failed,
+    try_claim_lease,
 )
-RETURN should_claim AS claimed
-"""
-
-
-CYPHER_MARK_DONE = """
-MATCH (l:TickLease {scheduler_id: $scheduler_id, engine: $engine, tick_id: $tick_id})
-WHERE l.owner = $owner_id AND l.status = 'claimed'
-SET l.status = 'done',
-    l.lease_until_ms = 0,
-    l.completed_at = datetime(),
-    l.updated_at = datetime()
-RETURN true AS done
-"""
-
-
-CYPHER_MARK_FAILED = """
-MATCH (l:TickLease {scheduler_id: $scheduler_id, engine: $engine, tick_id: $tick_id})
-WHERE l.owner = $owner_id AND l.status = 'claimed'
-SET l.lease_until_ms = 0,
-    l.last_error = $error,
-    l.updated_at = datetime()
-RETURN true AS failed
-"""
-
-
-CYPHER_IS_DONE = """
-MATCH (l:TickLease {scheduler_id: $scheduler_id, engine: $engine, tick_id: $tick_id})
-RETURN coalesce(l.status, '') = 'done' AS done
-"""
 
 
 class TickLeaseRepositoryProtocol(Protocol):
+    """Protocol for distributed tick-lease coordination."""
+
     async def try_claim(self, session: AsyncSession, engine: str, tick_id: int) -> bool: ...
 
     async def mark_done(self, session: AsyncSession, engine: str, tick_id: int) -> bool: ...
@@ -92,7 +45,6 @@ class TickLeaseRepository:
             owner_id: Worker identifier used in lease ownership claims.
             lease_ttl_seconds: Lease duration; clamped to a minimum of 1.
         """
-
         self._scheduler_id = scheduler_id
         self._owner_id = owner_id
         self._lease_ttl_seconds = max(1, lease_ttl_seconds)
@@ -103,8 +55,7 @@ class TickLeaseRepository:
         Args:
             session: Active Neo4j async session.
         """
-
-        await session.run(CYPHER_ENSURE_TICK_LEASE_CONSTRAINT)
+        await ensure_tick_lease_constraint(session)
 
     async def try_claim(self, session: AsyncSession, engine: str, tick_id: int) -> bool:
         """Attempt to claim the lease for this engine tick.
@@ -118,11 +69,10 @@ class TickLeaseRepository:
             True when the lease was successfully claimed; False if already owned
             by another worker or already completed.
         """
-
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         lease_until_ms = now_ms + self._lease_ttl_seconds * 1000
-        result = await session.run(
-            CYPHER_TRY_CLAIM,
+        return await try_claim_lease(
+            session,
             scheduler_id=self._scheduler_id,
             owner_id=self._owner_id,
             engine=engine,
@@ -130,8 +80,6 @@ class TickLeaseRepository:
             now_ms=now_ms,
             lease_until_ms=lease_until_ms,
         )
-        row = await result.single()
-        return bool(row["claimed"]) if row is not None else False
 
     async def mark_done(self, session: AsyncSession, engine: str, tick_id: int) -> bool:
         """Mark the claimed lease as done.
@@ -144,16 +92,13 @@ class TickLeaseRepository:
         Returns:
             True when the update matched an owned, claimed lease; False otherwise.
         """
-
-        result = await session.run(
-            CYPHER_MARK_DONE,
+        return await mark_lease_done(
+            session,
             scheduler_id=self._scheduler_id,
             owner_id=self._owner_id,
             engine=engine,
             tick_id=tick_id,
         )
-        row = await result.single()
-        return bool(row["done"]) if row is not None else False
 
     async def is_done(self, session: AsyncSession, engine: str, tick_id: int) -> bool:
         """Return True when the lease record has status ``'done'``.
@@ -166,15 +111,12 @@ class TickLeaseRepository:
         Returns:
             True if the lease exists and its status is ``'done'``; False otherwise.
         """
-
-        result = await session.run(
-            CYPHER_IS_DONE,
+        return await is_lease_done(
+            session,
             scheduler_id=self._scheduler_id,
             engine=engine,
             tick_id=tick_id,
         )
-        row = await result.single()
-        return bool(row["done"]) if row is not None else False
 
     async def mark_failed(self, session: AsyncSession, engine: str, tick_id: int, error: str) -> None:
         """Record an error and expire the lease so another worker may retry.
@@ -185,9 +127,8 @@ class TickLeaseRepository:
             tick_id: Tick that failed.
             error: Error string stored on the lease node (truncated to 500 chars).
         """
-
-        await session.run(
-            CYPHER_MARK_FAILED,
+        await mark_lease_failed(
+            session,
             scheduler_id=self._scheduler_id,
             owner_id=self._owner_id,
             engine=engine,

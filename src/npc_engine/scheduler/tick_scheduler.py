@@ -26,6 +26,7 @@ from collections.abc import Awaitable, Callable
 from neo4j import AsyncSession
 
 from npc_engine.engines.base_engine import BaseEngine
+from npc_engine.graph.tick_scheduler_queries import is_tick_done, mark_tick_done
 from npc_engine.scheduler.engine_status_store import EngineStatusStore
 from npc_engine.scheduler.game_clock import ClockState, GameClock
 from npc_engine.scheduler.tick_lease import TickLeaseRepository, TickLeaseRepositoryProtocol
@@ -35,23 +36,6 @@ from npc_engine.world.world_reader import get_world_state
 
 
 LOGGER = logging.getLogger(__name__)
-
-
-CYPHER_TICK_DONE = """
-MERGE (s:SchedulerState {id: $scheduler_id})
-WITH s, coalesce(s[$key], []) AS completed
-RETURN $tick_id IN completed AS done
-"""
-
-
-CYPHER_MARK_TICK_DONE = """
-MERGE (s:SchedulerState {id: $scheduler_id})
-WITH s, coalesce(s[$key], []) AS completed
-SET s[$key] = CASE
-    WHEN $tick_id IN completed THEN completed
-    ELSE completed + $tick_id
-END
-"""
 
 
 class TickScheduler:
@@ -231,22 +215,27 @@ class TickScheduler:
         return await asyncio.wait_for(coro, timeout=timeout_seconds)
 
     async def _is_tick_done(self, session: AsyncSession, key: str, tick_id: int) -> bool:
-        result = await session.run(
-            CYPHER_TICK_DONE,
-            scheduler_id=self._scheduler_id,
-            key=key,
-            tick_id=tick_id,
-        )
-        row = await result.single()
-        return bool(row["done"]) if row is not None else False
+        """Return True when tick_id is already recorded as done for the given key.
+
+        Args:
+            session: Active Neo4j async session.
+            key: Property key on the SchedulerState node (e.g. 'gossip_ticks').
+            tick_id: Tick ID to look up.
+
+        Returns:
+            True if tick_id is in the completed list; False otherwise.
+        """
+        return await is_tick_done(session, scheduler_id=self._scheduler_id, key=key, tick_id=tick_id)
 
     async def _mark_tick_done(self, session: AsyncSession, key: str, tick_id: int) -> None:
-        await session.run(
-            CYPHER_MARK_TICK_DONE,
-            scheduler_id=self._scheduler_id,
-            key=key,
-            tick_id=tick_id,
-        )
+        """Append tick_id to the SchedulerState node's completed list for key (idempotent).
+
+        Args:
+            session: Active Neo4j async session.
+            key: Property key on the SchedulerState node.
+            tick_id: Tick ID to record as done.
+        """
+        await mark_tick_done(session, scheduler_id=self._scheduler_id, key=key, tick_id=tick_id)
 
     async def _run_distributed_engine_tick(
         self,

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -29,14 +29,6 @@ from npc_engine.world.time_utils import TimePoint
 
 def _make_result(node_id: str, score: float, payload: dict | None = None) -> VectorSearchResult:
     return VectorSearchResult(id=node_id, score=score, payload=payload or {})
-
-
-def _make_session(expansion_rows: list[dict[str, Any]]) -> AsyncMock:
-    cursor = AsyncMock()
-    cursor.data = AsyncMock(return_value=expansion_rows)
-    session = AsyncMock()
-    session.run = AsyncMock(return_value=cursor)
-    return session
 
 
 def _make_index(seed_results: list[VectorSearchResult]) -> MagicMock:
@@ -102,17 +94,21 @@ async def test_graph_rag_retrieve_ranking() -> None:
             "edge_weight": 0.7,
         }
     ]
-    session = _make_session(expansion_rows)
+    session = AsyncMock()
     idx = _make_index([seed_a, seed_b])
 
-    results = await graph_rag_retrieve(
-        session=session,
-        embedding_index=idx,
-        query="test query",
-        npc_id="npc_01",
-        known_event_ids={"ev_a", "ev_b"},
-        top_k=3,
-    )
+    with patch(
+        "npc_engine.retrieval.graph_rag.expand_seeds",
+        new=AsyncMock(return_value=expansion_rows),
+    ):
+        results = await graph_rag_retrieve(
+            session=session,
+            embedding_index=idx,
+            query="test query",
+            npc_id="npc_01",
+            known_event_ids={"ev_a", "ev_b"},
+            top_k=3,
+        )
 
     assert len(results) >= 1
     ids = [r["id"] for r in results]
@@ -124,7 +120,7 @@ async def test_graph_rag_retrieve_ranking() -> None:
 @pytest.mark.asyncio
 async def test_graph_rag_retrieve_empty_seeds() -> None:
     """When embedding search returns nothing, result must be empty."""
-    session = _make_session([])
+    session = AsyncMock()
     idx = _make_index([])
 
     results = await graph_rag_retrieve(
@@ -142,17 +138,21 @@ async def test_graph_rag_retrieve_empty_seeds() -> None:
 async def test_graph_rag_retrieve_top_k_limit() -> None:
     """Result length must never exceed top_k."""
     seeds = [_make_result(f"ev_{i}", score=float(i) / 10) for i in range(10)]
-    session = _make_session([])
+    session = AsyncMock()
     idx = _make_index(seeds)
 
-    results = await graph_rag_retrieve(
-        session=session,
-        embedding_index=idx,
-        query="q",
-        npc_id="npc_01",
-        known_event_ids=set(),
-        top_k=3,
-    )
+    with patch(
+        "npc_engine.retrieval.graph_rag.expand_seeds",
+        new=AsyncMock(return_value=[]),
+    ):
+        results = await graph_rag_retrieve(
+            session=session,
+            embedding_index=idx,
+            query="q",
+            npc_id="npc_01",
+            known_event_ids=set(),
+            top_k=3,
+        )
     assert len(results) <= 3
 
 

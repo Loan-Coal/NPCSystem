@@ -1,11 +1,12 @@
 """
 embedding_reconciler.py - Background stale-embedding reconciliation worker.
 Layer: retrieval
-Purpose: (auto-detected — review)
+Purpose: Periodic worker that heals stale embeddings using graph timestamps.
 
 Does NOT: mutate core graph properties other than embedding index timestamps.
 
 Dependencies injected: GraphDB and EmbeddingIndex.
+Used by: api/dependencies.py (scheduler wiring).
 """
 
 from __future__ import annotations
@@ -15,57 +16,10 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
+from npc_engine.graph.embedding_sync_queries import batch_set_embeddings, select_stale_nodes
+
 
 LOGGER = logging.getLogger(__name__)
-
-
-CYPHER_SELECT_STALE_NODES = """
-MATCH (n:Character)
-WHERE n.is_active = true
-  AND n.id IS NOT NULL
-  AND n.last_graph_updated_at IS NOT NULL
-  AND (
-      n.last_embedding_indexed_at IS NULL
-      OR n.last_graph_updated_at > n.last_embedding_indexed_at
-  )
-RETURN n.id AS id,
-       'Character' AS kind,
-       trim(coalesce(n.name, '') + ' ' + coalesce(n.archetype, '') + ' ' + coalesce(n.biography, '') + ' ' + coalesce(n.current_mood, '')) AS text,
-       properties(n) AS payload
-UNION ALL
-MATCH (n:Event)
-WHERE n.id IS NOT NULL
-  AND n.last_graph_updated_at IS NOT NULL
-  AND (
-      n.last_embedding_indexed_at IS NULL
-      OR n.last_graph_updated_at > n.last_embedding_indexed_at
-  )
-RETURN n.id AS id,
-       'Event' AS kind,
-       trim(coalesce(n.summary, '') + ' ' + coalesce(n.event_type, '') + ' ' + coalesce(n.location_id, '')) AS text,
-       properties(n) AS payload
-UNION ALL
-MATCH (n:Location)
-WHERE n.id IS NOT NULL
-  AND n.last_graph_updated_at IS NOT NULL
-  AND (
-      n.last_embedding_indexed_at IS NULL
-      OR n.last_graph_updated_at > n.last_embedding_indexed_at
-  )
-RETURN n.id AS id,
-       'Location' AS kind,
-       trim(coalesce(n.name, '') + ' ' + coalesce(n.descriptor, '') + ' ' + coalesce(n.region, '') + ' ' + coalesce(n.location_tag, '')) AS text,
-       properties(n) AS payload
-"""
-
-# Batch write: store embedding vectors and mark-indexed timestamps in one query.
-# This replaces N individual per-node mark-indexed calls.
-CYPHER_BATCH_SET_EMBEDDINGS = """
-UNWIND $nodes AS n
-MATCH (m {id: n.id})
-SET m.embedding = n.embedding,
-    m.last_embedding_indexed_at = datetime(n.indexed_at)
-"""
 
 
 class _SessionProtocol(Protocol):
@@ -179,46 +133,19 @@ class EmbeddingReconciler:
                 await asyncio.sleep(self._interval_seconds)
 
     async def _reconcile_in_session(self, session: _SessionProtocol) -> dict[str, int]:
-        # Phase 1: collect stale node records, fully consuming the result before
-        # running any write queries (session allows only one active result at a time).
-        result = await session.run(CYPHER_SELECT_STALE_NODES)
-        batch: list[dict] = []
-        try:
-            async for record in result:
-                if len(batch) >= self._batch_size:
-                    break
-                batch.append({
-                    "node_id": str(_record_value(record=record, key="id", default="")),
-                    "kind": str(_record_value(record=record, key="kind", default="")),
-                    "text": str(_record_value(record=record, key="text", default="")).strip(),
-                    "payload": _record_value(record=record, key="payload", default={}),
-                })
-        finally:
-            await result.consume()
+        batch = await select_stale_nodes(session, self._batch_size)  # type: ignore[arg-type]
 
         if not batch:
             return {"processed": 0, "failed": 0}
 
-        # Phase 2: encode all texts in one batch call instead of N individual encodes.
         indexed_at = datetime.now(timezone.utc).isoformat()
         texts = [item["text"] or item["node_id"] for item in batch]
         vectors = await self._embedding_index.embed_batch(texts)
 
-        # Phase 3: write all embedding vectors and mark-indexed timestamps in one query.
         write_nodes = [
             {"id": item["node_id"], "embedding": vector, "indexed_at": indexed_at}
             for item, vector in zip(batch, vectors)
         ]
-        write_result = await session.run(CYPHER_BATCH_SET_EMBEDDINGS, nodes=write_nodes)
-        await write_result.consume()
-
+        await batch_set_embeddings(session, write_nodes)  # type: ignore[arg-type]
         return {"processed": len(batch), "failed": 0}
 
-
-def _record_value(record: Any, key: str, default: Any) -> Any:
-    if isinstance(record, dict):
-        return record.get(key, default)
-    try:
-        return record[key]
-    except Exception:
-        return default
