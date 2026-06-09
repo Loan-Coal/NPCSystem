@@ -6,7 +6,13 @@ Purpose: (auto-detected — review)
 Does NOT: implement HTTP transport concerns.
 
 Dependencies injected: AsyncSession, Settings, LLMClientProtocol, EngineModelConfig,
-                       SessionStore, EmotionUpdater.
+                       SessionStore, EmotionUpdater, KnowledgeExtractionEngine (optional).
+
+300-LINE WAIVER: This file is the central orchestrator for the dialogue turn pipeline.
+A split would be artificial — all methods belong to a single handler class. The file
+was already 312 lines before EXP-53 added 27 lines (DI wiring + guarded call block).
+Splitting DialogueHandler across files would harm cohesion with no meaningful gain.
+Ref: DECISIONS.md (DEC-072 OCP note).
 """
 
 import logging
@@ -39,6 +45,9 @@ from npc_engine.retrieval.context_protocols import EmbeddingIndexProtocol
 from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache, PartialDialogueContextCache
 from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.utils.metrics import increment_metric
+from npc_engine.engines.knowledge_learning.knowledge_extraction_engine import (
+    KnowledgeExtractionEngine,
+)
 from npc_engine.world.time_utils import TimePoint
 from npc_engine.world.world_reader import get_world_state
 
@@ -79,6 +88,7 @@ class DialogueHandler:
         embedding_index: EmbeddingIndexProtocol,
         context_cache: PartialDialogueContextCache | DialogueContextCache | None = None,
         tts_client: TTSClientProtocol | None = None,
+        knowledge_engine: KnowledgeExtractionEngine | None = None,
     ) -> None:
         """Initialise the dialogue handler with all engine dependencies.
 
@@ -93,6 +103,8 @@ class DialogueHandler:
             embedding_index: Vector index supporting the EmbeddingIndexProtocol.
             context_cache: Optional in-memory dialogue context cache.
             tts_client: Optional TTS adapter; used when settings.TTS_ENABLED is True.
+            knowledge_engine: Optional engine for persisting player-stated facts as
+                belief nodes (EXP-53).  Guarded by KNOWLEDGE_LEARNING_ENABLED flag.
         """
 
         self._session = session
@@ -104,6 +116,7 @@ class DialogueHandler:
         self._embedding_index = embedding_index
         self._context_cache = context_cache
         self._tts_client = tts_client
+        self._knowledge_engine = knowledge_engine
         self._memory_engine = MemoryEngine()
         self._llm = DialogueLLMClient(
             llm_client=llm_client,
@@ -182,6 +195,26 @@ class DialogueHandler:
                 arousal=new_emotion.arousal,
                 content=f"{request.player_message} — {final_response.npc_response}",
                 game_time=game_time,
+            )
+        if (
+            self._knowledge_engine is not None
+            and getattr(self._settings, "KNOWLEDGE_LEARNING_ENABLED", False)
+            and final_response.learned_facts
+        ):
+            world_state = await get_world_state(
+                session=self._session, world_id=self._settings.WORLD_ID
+            )
+            game_time_str = (
+                f"Year {world_state.year} {world_state.season} "
+                f"Day {world_state.day} {world_state.time_of_day}"
+            )
+            await self._knowledge_engine.process(
+                self._session,
+                npc_id=request.npc_id,
+                player_id=request.player_id,
+                tick=tick_id,
+                learned_facts=list(final_response.learned_facts),
+                game_time_str=game_time_str,
             )
         if new_emotion.valence < -60:
             await set_routine_override(

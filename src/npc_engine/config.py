@@ -169,6 +169,8 @@ class Settings(BaseSettings):
     RUMOR_DISTORTION_THRESHOLD: int = 50
     RUMOR_EMOTION_SEVERITY_THRESHOLD: int = 50
 
+    KNOWLEDGE_LEARNING_ENABLED: bool = False
+
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     LOG_LLM_PROMPTS: bool = False
     ENV: Literal["dev", "staging", "prod"] = "dev"

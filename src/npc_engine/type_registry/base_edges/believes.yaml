@@ -1,4 +1,7 @@
 edge_type: BELIEVES
 src_type: character
 dst_type: belief
-fields: {}
+fields:
+  source_character_id: { type: str, required: false }
+  learned_at_tick:     { type: int, required: false }
+  confidence:          { type: int, required: false, range: [0, 100] }

@@ -249,6 +249,11 @@ system: >-
   - `action.parameters`: Extra key-value pairs (e.g. `item_type` for trade).
   - `relation_deltas.trust`, `relation_deltas.affection`: integer in [-15, 15].
     Positive when the exchange builds rapport; negative when it damages it.
+  - `learned_facts`: optional list of strings — facts the player explicitly stated
+    about themselves or the world (e.g., "I am the new captain", "the bandits moved
+    to the old mill").  Omit or leave empty if the player stated no new facts.
+    Include ONLY facts the player explicitly asserted, NOT inferences, NPC beliefs,
+    or narration.
   - Do NOT break character, mention JSON, or reference game mechanics.
   - Do NOT repeat the player's message verbatim.
   - Do NOT prefix your response with "player:", "npc:", or any character name label.

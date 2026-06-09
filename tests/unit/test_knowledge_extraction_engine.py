@@ -1,0 +1,449 @@
+"""
+test_knowledge_extraction_engine.py - Unit tests for KnowledgeExtractionEngine.
+
+Covers:
+- process(): writes a belief for each valid fact.
+- process(): skips facts that are too short (< 5 chars) or empty.
+- process(): skips facts that are too long (> 300 chars).
+- process(): returns correct written/skipped counts.
+- write_belief(): calls session.run with the correct Cypher parameters.
+- DialogueHandler: calls engine when KNOWLEDGE_LEARNING_ENABLED=True.
+- DialogueHandler: skips engine call when KNOWLEDGE_LEARNING_ENABLED=False.
+- DialogueHandler: does not raise AttributeError when knowledge_engine=None.
+
+Does NOT: connect to Neo4j, call an LLM, or read from disk.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, AsyncIterator
+from unittest.mock import AsyncMock, MagicMock, call, patch
+
+import pytest
+
+pytest.importorskip("neo4j")
+
+_ENGINE_MODULE = "npc_engine.engines.knowledge_learning.knowledge_extraction_engine"
+_WRITER_MODULE = "npc_engine.graph.knowledge_writer"
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_FALLBACK_PATH = str(_REPO_ROOT / "src" / "npc_engine" / "data" / "fallback_responses.json")
+_CANNED_DIR = str(_REPO_ROOT / "prompts" / "canned")
+
+
+# ---------------------------------------------------------------------------
+# Helpers / fixtures
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_session() -> MagicMock:
+    """Return a MagicMock that behaves like an AsyncSession with a transaction."""
+    session = MagicMock()
+    tx = AsyncMock()
+    tx.__aenter__ = AsyncMock(return_value=tx)
+    tx.__aexit__ = AsyncMock(return_value=False)
+    session.begin_transaction = AsyncMock(return_value=tx)
+    session.run = AsyncMock()
+    return session
+
+
+# ---------------------------------------------------------------------------
+# KnowledgeExtractionEngine.process — core behaviour
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_writes_belief_for_each_fact():
+    """Two valid facts should cause write_belief to be called exactly twice."""
+    from npc_engine.engines.knowledge_learning.knowledge_extraction_engine import (
+        KnowledgeExtractionEngine,
+    )
+
+    mock_session = _make_mock_session()
+
+    with patch(f"{_ENGINE_MODULE}.write_belief", new_callable=AsyncMock) as mock_write:
+        engine = KnowledgeExtractionEngine()
+        await engine.process(
+            mock_session,
+            npc_id="mira_innkeeper",
+            player_id="player_1",
+            tick=42,
+            learned_facts=["I am the new captain", "the bandits moved to the old mill"],
+            game_time_str="Year 1 Spring Day 1 Morning",
+        )
+
+    assert mock_write.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_skips_empty_or_too_short_facts():
+    """Empty string and strings shorter than 5 chars should be skipped."""
+    from npc_engine.engines.knowledge_learning.knowledge_extraction_engine import (
+        KnowledgeExtractionEngine,
+    )
+
+    mock_session = _make_mock_session()
+
+    with patch(f"{_ENGINE_MODULE}.write_belief", new_callable=AsyncMock) as mock_write:
+        engine = KnowledgeExtractionEngine()
+        result = await engine.process(
+            mock_session,
+            npc_id="mira_innkeeper",
+            player_id="player_1",
+            tick=1,
+            learned_facts=["", "ab", "xy"],
+            game_time_str="Year 1 Spring Day 1 Morning",
+        )
+
+    mock_write.assert_not_awaited()
+    assert result.written == 0
+    assert result.skipped == 3
+
+
+@pytest.mark.asyncio
+async def test_skips_too_long_facts():
+    """Facts longer than 300 characters should be skipped."""
+    from npc_engine.engines.knowledge_learning.knowledge_extraction_engine import (
+        KnowledgeExtractionEngine,
+    )
+
+    mock_session = _make_mock_session()
+    too_long = "x" * 301
+
+    with patch(f"{_ENGINE_MODULE}.write_belief", new_callable=AsyncMock) as mock_write:
+        engine = KnowledgeExtractionEngine()
+        result = await engine.process(
+            mock_session,
+            npc_id="mira_innkeeper",
+            player_id="player_1",
+            tick=1,
+            learned_facts=[too_long],
+            game_time_str="Year 1 Spring Day 1 Morning",
+        )
+
+    mock_write.assert_not_awaited()
+    assert result.written == 0
+    assert result.skipped == 1
+
+
+@pytest.mark.asyncio
+async def test_returns_correct_written_count():
+    """Three valid facts should produce result.written == 3."""
+    from npc_engine.engines.knowledge_learning.knowledge_extraction_engine import (
+        KnowledgeExtractionEngine,
+    )
+
+    mock_session = _make_mock_session()
+    facts = ["I hail from the north", "I carry a royal seal", "I seek the hidden vault"]
+
+    with patch(f"{_ENGINE_MODULE}.write_belief", new_callable=AsyncMock):
+        engine = KnowledgeExtractionEngine()
+        result = await engine.process(
+            mock_session,
+            npc_id="mira_innkeeper",
+            player_id="player_1",
+            tick=5,
+            learned_facts=facts,
+            game_time_str="Year 1 Spring Day 1 Morning",
+        )
+
+    assert result.written == 3
+    assert result.skipped == 0
+
+
+@pytest.mark.asyncio
+async def test_mixed_valid_and_invalid_facts():
+    """Mix of valid and invalid facts: only valid ones written."""
+    from npc_engine.engines.knowledge_learning.knowledge_extraction_engine import (
+        KnowledgeExtractionEngine,
+    )
+
+    mock_session = _make_mock_session()
+    too_long = "y" * 301
+
+    with patch(f"{_ENGINE_MODULE}.write_belief", new_callable=AsyncMock) as mock_write:
+        engine = KnowledgeExtractionEngine()
+        result = await engine.process(
+            mock_session,
+            npc_id="mira_innkeeper",
+            player_id="player_1",
+            tick=3,
+            learned_facts=["ok fact here", "", too_long, "another valid fact"],
+            game_time_str="Year 1 Spring Day 1 Morning",
+        )
+
+    assert mock_write.await_count == 2
+    assert result.written == 2
+    assert result.skipped == 2
+
+
+# ---------------------------------------------------------------------------
+# knowledge_writer.write_belief — unit test with mocked session
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_knowledge_writer_merges_belief_node():
+    """write_belief must call tx.run with correct Cypher params."""
+    from npc_engine.graph.knowledge_writer import write_belief
+
+    tx = AsyncMock()
+    tx.__aenter__ = AsyncMock(return_value=tx)
+    tx.__aexit__ = AsyncMock(return_value=False)
+    session = MagicMock()
+    session.begin_transaction = AsyncMock(return_value=tx)
+
+    belief_id = await write_belief(
+        session,
+        npc_id="mira_innkeeper",
+        content="the north road is blocked",
+        confidence=70,
+        source_character_id="player_1",
+        learned_at_tick=10,
+        game_time_str="Year 1 Spring Day 2 Evening",
+    )
+
+    assert isinstance(belief_id, str) and len(belief_id) > 0
+    tx.run.assert_awaited_once()
+    call_kwargs = tx.run.call_args
+    # Verify params passed to the Cypher include the key facts
+    params = call_kwargs.kwargs if call_kwargs.kwargs else {}
+    if not params and call_kwargs.args:
+        # Some callers pass params as positional kwargs after the query
+        params = call_kwargs.args[1] if len(call_kwargs.args) > 1 else {}
+    assert params.get("content") == "the north road is blocked" or any(
+        "the north road is blocked" in str(a) for a in call_kwargs.args
+    )
+
+
+# ---------------------------------------------------------------------------
+# DialogueHandler integration: engine call gating
+# ---------------------------------------------------------------------------
+
+
+class _MinimalLLMClient:
+    """Minimal fake LLM client for constructing a DialogueHandler in tests."""
+
+    async def generate(self, prompt: str, max_tokens: int, temperature: float, **_: Any) -> str:
+        return "ok"
+
+    async def generate_structured(self, prompt: str, schema: dict[str, Any], max_tokens: int, **_: Any) -> dict[str, Any]:
+        return {
+            "npc_response": "I hear you.",
+            "action": {"type": "speak"},
+            "relation_deltas": {"trust": 0, "fear": 0, "affection": 0},
+            "learned_facts": ["I am the new captain"],
+        }
+
+    async def stream(self, prompt: str, max_tokens: int, temperature: float, **_: Any) -> AsyncIterator[str]:
+        if False:
+            yield ""
+
+    def model_name(self) -> str:
+        return "mock"
+
+
+class _FakeEmotionUpdater:
+    async def get_state(self, npc_id: str) -> Any:
+        return SimpleNamespace(label="neutral", arousal=10, valence=0)
+
+    async def apply_dialogue_mood(self, npc_id: str, mood_update: str | None) -> Any:
+        return SimpleNamespace(label=mood_update or "neutral", arousal=10, valence=0)
+
+
+def _make_engine_model_config():  # type: ignore[return]
+    from npc_engine.engines.llm_config_models import (
+        EngineFallbackPolicy,
+        EngineModelConfig,
+        EngineModelParams,
+        EnginePromptRef,
+        EngineTimeoutsMs,
+    )
+
+    return EngineModelConfig(
+        engine="dialogue",
+        llm=EngineModelParams(
+            backend="mock",
+            model="mock",
+            temperature=0.7,
+            max_tokens=512,
+            top_p=0.95,
+            stop_sequences=[],
+        ),
+        prompt=EnginePromptRef(name="dialogue_main", version=1),
+        output_schema_ref="dialogue_response_v1",
+        fallback=EngineFallbackPolicy(
+            policy="graceful_degradation", tiers=["full", "graph_only", "canned"]
+        ),
+        timeouts_ms=EngineTimeoutsMs(full=30000, graph_only=10000, canned=100),
+    )
+
+
+def _make_handler(knowledge_engine=None, knowledge_learning_enabled: bool = False):
+    from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
+    from npc_engine.engines.dialogue.session_store import SessionStore
+
+    settings = SimpleNamespace(
+        LLM_FALLBACK_PATH=_FALLBACK_PATH,
+        CANNED_RESPONSES_DIR=_CANNED_DIR,
+        LOG_LLM_PROMPTS=False,
+        ENV="dev",
+        TTS_ENABLED=False,
+        WORLD_ID="world",
+        KNOWLEDGE_LEARNING_ENABLED=knowledge_learning_enabled,
+    )
+
+    return DialogueHandler(
+        session=None,
+        settings=settings,
+        llm_client=_MinimalLLMClient(),
+        llm_config=SimpleNamespace(),
+        engine_model_config=_make_engine_model_config(),
+        session_store=SessionStore(ttl_seconds=300, max_turns=10),
+        emotion_updater=_FakeEmotionUpdater(),
+        embedding_index=None,
+        knowledge_engine=knowledge_engine,
+    )
+
+
+@pytest.mark.asyncio
+async def test_handler_calls_engine_when_enabled(monkeypatch):
+    """knowledge_engine.process must be called once when KNOWLEDGE_LEARNING_ENABLED=True."""
+    from npc_engine.api.schemas import DialogueRequest
+
+    mock_knowledge_engine = AsyncMock()
+    from npc_engine.engines.knowledge_learning.models import KnowledgeExtractionResult
+
+    mock_knowledge_engine.process = AsyncMock(
+        return_value=KnowledgeExtractionResult(written=1, skipped=0)
+    )
+
+    monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.build_serialized_context",
+        AsyncMock(return_value="{}"),
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.build_dialogue_prompt",
+        lambda request, serialized_context: "prompt",
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas",
+        AsyncMock(),
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.get_world_state",
+        AsyncMock(
+            return_value=SimpleNamespace(
+                year=1, season="spring", day=1, time_of_day="morning"
+            )
+        ),
+    )
+
+    handler = _make_handler(
+        knowledge_engine=mock_knowledge_engine, knowledge_learning_enabled=True
+    )
+    handler._llm.generate_response = AsyncMock(
+        return_value={
+            "npc_response": "Indeed, captain.",
+            "action": {"type": "speak"},
+            "relation_deltas": {"trust": 1, "fear": 0, "affection": 0},
+            "learned_facts": ["I am the new captain"],
+        }
+    )
+
+    await handler.handle(
+        DialogueRequest(
+            player_id="player_1",
+            npc_id="mira_innkeeper",
+            player_message="I am the new captain",
+            location_id="tavern",
+        )
+    )
+
+    mock_knowledge_engine.process.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_handler_skips_engine_when_disabled(monkeypatch):
+    """knowledge_engine.process must NOT be called when KNOWLEDGE_LEARNING_ENABLED=False."""
+    from npc_engine.api.schemas import DialogueRequest
+
+    mock_knowledge_engine = AsyncMock()
+    mock_knowledge_engine.process = AsyncMock()
+
+    monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.build_serialized_context",
+        AsyncMock(return_value="{}"),
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.build_dialogue_prompt",
+        lambda request, serialized_context: "prompt",
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas",
+        AsyncMock(),
+    )
+
+    handler = _make_handler(
+        knowledge_engine=mock_knowledge_engine, knowledge_learning_enabled=False
+    )
+    handler._llm.generate_response = AsyncMock(
+        return_value={
+            "npc_response": "Interesting.",
+            "action": {"type": "speak"},
+            "relation_deltas": {"trust": 0, "fear": 0, "affection": 0},
+            "learned_facts": ["I am the new captain"],
+        }
+    )
+
+    await handler.handle(
+        DialogueRequest(
+            player_id="player_1",
+            npc_id="mira_innkeeper",
+            player_message="I am the new captain",
+            location_id="tavern",
+        )
+    )
+
+    mock_knowledge_engine.process.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_handler_skips_when_engine_none(monkeypatch):
+    """No AttributeError should occur when knowledge_engine=None."""
+    from npc_engine.api.schemas import DialogueRequest
+
+    monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.build_serialized_context",
+        AsyncMock(return_value="{}"),
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.build_dialogue_prompt",
+        lambda request, serialized_context: "prompt",
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas",
+        AsyncMock(),
+    )
+
+    handler = _make_handler(knowledge_engine=None, knowledge_learning_enabled=True)
+    handler._llm.generate_response = AsyncMock(
+        return_value={
+            "npc_response": "Understood.",
+            "action": {"type": "speak"},
+            "relation_deltas": {"trust": 0, "fear": 0, "affection": 0},
+            "learned_facts": ["I am the new captain"],
+        }
+    )
+
+    # Must not raise
+    await handler.handle(
+        DialogueRequest(
+            player_id="player_1",
+            npc_id="mira_innkeeper",
+            player_message="I am the new captain",
+            location_id="tavern",
+        )
+    )
