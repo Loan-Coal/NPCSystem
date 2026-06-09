@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict
 
 from npc_engine.config import Settings
 from npc_engine.engines.quest.models import QuestTransitionMeta
-from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
+from npc_engine.engines.quest.quest_reward_router import QuestRewardRouter
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.utils.errors import QuestTransitionError
 
@@ -102,15 +102,15 @@ async def test_apply_rewards_routes_item_and_currency_through_graph_writer(monke
     async def fake_check_possession(tx, *, player_id, item_id, min_quantity):
         return True
 
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest_state", fake_get_quest_state)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_state", fake_upsert_quest_state)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_lifecycle_event", fake_event_write)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.execute_item_transfer_in_tx", fake_item_transfer_in_tx)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.execute_currency_transfer_in_tx", fake_currency_transfer_in_tx)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.check_item_possession_in_tx", fake_check_possession)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.get_quest_state", fake_get_quest_state)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.upsert_quest_state", fake_upsert_quest_state)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.upsert_quest_lifecycle_event", fake_event_write)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.execute_item_transfer_in_tx", fake_item_transfer_in_tx)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.execute_currency_transfer_in_tx", fake_currency_transfer_in_tx)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.check_item_possession_in_tx", fake_check_possession)
 
-    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
-    result = await engine.apply_rewards(
+    reward_router = QuestRewardRouter(settings=_settings(), registry=_fake_registry())
+    result = await reward_router.apply_rewards(
         session=_fake_session(),  # type: ignore[arg-type]
         quest_id="quest-2",
         player_id="player-1",
@@ -137,11 +137,11 @@ async def test_apply_rewards_rejects_non_completed_quest(monkeypatch) -> None:
             "rewards_applied": False,
         }
 
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest_state", fake_get_quest_state)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.get_quest_state", fake_get_quest_state)
 
-    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
+    reward_router = QuestRewardRouter(settings=_settings(), registry=_fake_registry())
     with pytest.raises(QuestTransitionError):
-        await engine.apply_rewards(
+        await reward_router.apply_rewards(
             session=_fake_session(),  # type: ignore[arg-type]
             quest_id="quest-3",
             player_id="player-1",
@@ -184,14 +184,14 @@ async def test_apply_rewards_aggregates_duplicate_item_rewards(monkeypatch) -> N
     async def fake_check_possession(tx, *, player_id, item_id, min_quantity):
         return True
 
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest_state", fake_get_quest_state)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_state", fake_upsert_quest_state)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_lifecycle_event", fake_event_write)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.execute_item_transfer_in_tx", fake_item_transfer_in_tx)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.check_item_possession_in_tx", fake_check_possession)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.get_quest_state", fake_get_quest_state)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.upsert_quest_state", fake_upsert_quest_state)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.upsert_quest_lifecycle_event", fake_event_write)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.execute_item_transfer_in_tx", fake_item_transfer_in_tx)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.check_item_possession_in_tx", fake_check_possession)
 
-    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
-    await engine.apply_rewards(
+    reward_router = QuestRewardRouter(settings=_settings(), registry=_fake_registry())
+    await reward_router.apply_rewards(
         session=_fake_session(),  # type: ignore[arg-type]
         quest_id="quest-4",
         player_id="player-1",
@@ -220,11 +220,11 @@ async def test_apply_rewards_rejects_empty_reward_source(monkeypatch) -> None:
             "rewards_applied": False,
         }
 
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest_state", fake_get_quest_state)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.get_quest_state", fake_get_quest_state)
 
-    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
+    reward_router = QuestRewardRouter(settings=_settings(), registry=_fake_registry())
     with pytest.raises(QuestTransitionError) as error:
-        await engine.apply_rewards(
+        await reward_router.apply_rewards(
             session=_fake_session(),  # type: ignore[arg-type]
             quest_id="quest-5",
             player_id="player-1",

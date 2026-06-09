@@ -40,6 +40,8 @@ from npc_engine.engines.gossip.gossip_handler import GossipHandler
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm_runtime_config import get_config as get_engine_model_config_for
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
+from npc_engine.engines.quest.quest_offer_service import QuestOfferService
+from npc_engine.engines.quest.quest_reward_router import QuestRewardRouter
 from npc_engine.engines.quest_generation.event_quest_trigger import EventQuestTrigger
 from npc_engine.engines.quest_generation.need_quest_trigger import NeedQuestTrigger
 from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
@@ -97,6 +99,28 @@ def get_quest_lifecycle_engine() -> QuestLifecycleEngine:
     """
     settings = get_settings()
     return QuestLifecycleEngine(settings=settings, registry=get_type_registry())
+
+
+@lru_cache
+def get_quest_offer_service() -> QuestOfferService:
+    """Create singleton quest offer service with shared type registry.
+
+    Returns:
+        QuestOfferService wired to the singleton TypeRegistry.
+    """
+    settings = get_settings()
+    return QuestOfferService(settings=settings, registry=get_type_registry())
+
+
+@lru_cache
+def get_quest_reward_router() -> QuestRewardRouter:
+    """Create singleton quest reward router with shared type registry.
+
+    Returns:
+        QuestRewardRouter wired to the singleton TypeRegistry.
+    """
+    settings = get_settings()
+    return QuestRewardRouter(settings=settings, registry=get_type_registry())
 
 
 @lru_cache

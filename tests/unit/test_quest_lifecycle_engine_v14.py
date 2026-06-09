@@ -17,6 +17,8 @@ from pydantic import BaseModel, ConfigDict
 from npc_engine.config import Settings
 from npc_engine.engines.quest.models import QuestObjectiveInput, QuestRewardCurrency, QuestRewardItem, QuestTransitionMeta
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
+from npc_engine.engines.quest.quest_offer_service import QuestOfferService
+from npc_engine.engines.quest.quest_reward_router import QuestRewardRouter
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.utils.errors import QuestTransitionError
 
@@ -127,24 +129,33 @@ async def test_offer_accept_update_evaluate_and_apply_rewards_happy_path(monkeyp
     async def fake_check_possession(tx, *, player_id, item_id, min_quantity):
         return True
 
-    monkeypatch.setattr(
-        "npc_engine.engines.quest.quest_lifecycle_engine.create_quest_state_if_absent",
-        fake_create_quest_state_if_absent,
-    )
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest_state", fake_get_quest_state)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_state", fake_upsert_quest_state)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_lifecycle_event", fake_event_write)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.execute_item_transfer_in_tx", fake_item_transfer_in_tx)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.execute_currency_transfer_in_tx", fake_currency_transfer_in_tx)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.check_item_possession_in_tx", fake_check_possession)
-
     async def fake_node_status_update(*, session, quest_id: str, status: str) -> None:
         pass
 
+    # Offer service patches
+    monkeypatch.setattr("npc_engine.engines.quest.quest_offer_service.create_quest_state_if_absent", fake_create_quest_state_if_absent)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_offer_service.upsert_quest_lifecycle_event", fake_event_write)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_offer_service.update_quest_node_status", fake_node_status_update)
+
+    # Lifecycle engine patches (accept/update/evaluate)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest_state", fake_get_quest_state)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_state", fake_upsert_quest_state)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_lifecycle_event", fake_event_write)
     monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.update_quest_node_status", fake_node_status_update)
 
+    # Reward router patches
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.get_quest_state", fake_get_quest_state)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.upsert_quest_state", fake_upsert_quest_state)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.upsert_quest_lifecycle_event", fake_event_write)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.execute_item_transfer_in_tx", fake_item_transfer_in_tx)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.execute_currency_transfer_in_tx", fake_currency_transfer_in_tx)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.check_item_possession_in_tx", fake_check_possession)
+
+    offer_service = QuestOfferService(settings=_settings(), registry=_fake_registry())
     engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
-    offered = await engine.offer_quest(
+    reward_router = QuestRewardRouter(settings=_settings(), registry=_fake_registry())
+
+    offered = await offer_service.offer_quest(
         session=_fake_session(),  # type: ignore[arg-type]
         quest_id="quest-1",
         player_id="player-1",
@@ -190,7 +201,7 @@ async def test_offer_accept_update_evaluate_and_apply_rewards_happy_path(monkeyp
     )
     assert completed["status"] == "completed"
 
-    reward_result = await engine.apply_rewards(
+    reward_result = await reward_router.apply_rewards(
         session=_fake_session(),  # type: ignore[arg-type]
         quest_id="quest-1",
         player_id="player-1",
@@ -236,13 +247,13 @@ async def test_offer_rejects_existing_offered_state_with_empty_reward_source(mon
         }
 
     monkeypatch.setattr(
-        "npc_engine.engines.quest.quest_lifecycle_engine.create_quest_state_if_absent",
+        "npc_engine.engines.quest.quest_offer_service.create_quest_state_if_absent",
         fake_create_quest_state_if_absent,
     )
 
-    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
+    offer_service = QuestOfferService(settings=_settings(), registry=_fake_registry())
     with pytest.raises(QuestTransitionError) as error:
-        await engine.offer_quest(
+        await offer_service.offer_quest(
             session=_fake_session(),  # type: ignore[arg-type]
             quest_id="quest-1",
             player_id="player-1",
@@ -291,16 +302,16 @@ async def test_apply_rewards_emits_provenance_event_with_transaction_support(mon
     async def fake_upsert_event(*, tx, event):
         captured_event["event"] = event
 
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest_state", fake_get_quest_state)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_state", fake_upsert_quest_state)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.execute_item_transfer_in_tx", fake_item_transfer_in_tx)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.check_item_possession_in_tx", fake_check_possession)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_lifecycle_event", fake_upsert_event)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.get_quest_state", fake_get_quest_state)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.upsert_quest_state", fake_upsert_quest_state)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.execute_item_transfer_in_tx", fake_item_transfer_in_tx)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.check_item_possession_in_tx", fake_check_possession)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_reward_router.upsert_quest_lifecycle_event", fake_upsert_event)
 
     tx = _FakeTx()
     session = _FakeSession(tx=tx)
-    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
-    await engine.apply_rewards(
+    reward_router = QuestRewardRouter(settings=_settings(), registry=_fake_registry())
+    await reward_router.apply_rewards(
         session=session,  # type: ignore[arg-type]
         quest_id="quest-6",
         player_id="player-1",
@@ -326,17 +337,17 @@ async def test_offer_rolls_back_state_when_event_write_fails(monkeypatch) -> Non
         raise RuntimeError("event write failure")
 
     monkeypatch.setattr(
-        "npc_engine.engines.quest.quest_lifecycle_engine.create_quest_state_if_absent",
+        "npc_engine.engines.quest.quest_offer_service.create_quest_state_if_absent",
         fake_create_quest_state_if_absent,
     )
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_lifecycle_event", failing_event_write)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_offer_service.upsert_quest_lifecycle_event", failing_event_write)
 
     tx = _RollbackTx(state_store=state_store)
     session = _RollbackSession(tx=tx)
-    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
+    offer_service = QuestOfferService(settings=_settings(), registry=_fake_registry())
 
     with pytest.raises(RuntimeError, match="event write failure"):
-        await engine.offer_quest(
+        await offer_service.offer_quest(
             session=session,  # type: ignore[arg-type]
             quest_id="quest-rollback-1",
             player_id="player-1",
@@ -378,13 +389,13 @@ async def test_offer_draft_quest_happy_path(monkeypatch) -> None:
     async def fake_event_write(*, tx: Any, event: Any) -> None:
         return None
 
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest", fake_get_quest)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.update_quest_node_status", fake_update_quest_node_status)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.create_quest_state_if_absent", fake_create_quest_state_if_absent)
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_lifecycle_event", fake_event_write)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_offer_service.get_quest", fake_get_quest)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_offer_service.update_quest_node_status", fake_update_quest_node_status)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_offer_service.create_quest_state_if_absent", fake_create_quest_state_if_absent)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_offer_service.upsert_quest_lifecycle_event", fake_event_write)
 
-    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
-    state = await engine.offer_draft_quest(
+    offer_service = QuestOfferService(settings=_settings(), registry=_fake_registry())
+    state = await offer_service.offer_draft_quest(
         session=_fake_session(),  # type: ignore[arg-type]
         quest_id="quest-draft-1",
         player_id="player-1",
@@ -405,11 +416,11 @@ async def test_offer_draft_quest_non_draft_raises(monkeypatch) -> None:
     async def fake_get_quest(session: Any, quest_id: str) -> dict[str, Any]:
         return {"status": "offered", "id": quest_id}
 
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest", fake_get_quest)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_offer_service.get_quest", fake_get_quest)
 
-    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
+    offer_service = QuestOfferService(settings=_settings(), registry=_fake_registry())
     with pytest.raises(QuestTransitionError) as exc:
-        await engine.offer_draft_quest(
+        await offer_service.offer_draft_quest(
             session=_fake_session(),  # type: ignore[arg-type]
             quest_id="quest-already-offered",
             player_id="player-1",
@@ -428,11 +439,11 @@ async def test_offer_draft_quest_not_found_raises(monkeypatch) -> None:
     async def fake_get_quest(session: Any, quest_id: str) -> None:
         return None
 
-    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest", fake_get_quest)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_offer_service.get_quest", fake_get_quest)
 
-    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
+    offer_service = QuestOfferService(settings=_settings(), registry=_fake_registry())
     with pytest.raises(QuestTransitionError) as exc:
-        await engine.offer_draft_quest(
+        await offer_service.offer_draft_quest(
             session=_fake_session(),  # type: ignore[arg-type]
             quest_id="quest-missing",
             player_id="player-1",
