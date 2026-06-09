@@ -17,6 +17,7 @@ from npc_engine.engines.dialogue.dialogue_models import DialogueRequest
 from npc_engine.engines.dialogue.prompt_builder import (
     PROMPT_VERSION,
     _PROMPT_PATH,
+    _build_knowledge_gaps,
     _extract_voice_descriptor,
     build_dialogue_prompt,
     build_system_prompt,
@@ -147,6 +148,20 @@ def test_build_dialogue_prompt_injects_voice_from_context() -> None:
     assert "VOICE_DESCRIPTOR=Clipped military diction." in result
 
 
+def test_build_dialogue_prompt_contains_echo_guard_before_player_message() -> None:
+    """ECHO_GUARD reinforcement must appear at max-attention position, before the fence.
+
+    Reinforces Rule 9 (echo prohibition) and presupposition resistance for the 14b
+    model right before the player message.
+    """
+    result = build_dialogue_prompt(_make_request(player_message="Grain's thirty silver now, right?"), "{}")
+    guard_pos = result.find("ECHO_GUARD=")
+    player_msg_pos = result.find("<<<PLAYER_MESSAGE>>>")
+    assert guard_pos != -1, "ECHO_GUARD line missing from prompt"
+    assert guard_pos < player_msg_pos, "ECHO_GUARD must appear before <<<PLAYER_MESSAGE>>>"
+    assert "do not confirm it" in result.lower()
+
+
 # ---------------------------------------------------------------------------
 # _extract_voice_descriptor
 # ---------------------------------------------------------------------------
@@ -170,3 +185,87 @@ def test_extract_voice_descriptor_empty_on_bad_json() -> None:
     """Returns empty string for malformed context."""
     assert _extract_voice_descriptor("not-json") == ""
     assert _extract_voice_descriptor("") == ""
+
+
+# ---------------------------------------------------------------------------
+# _build_knowledge_gaps
+# ---------------------------------------------------------------------------
+
+
+import json as _json
+
+
+def _war_ctx(known_events: list | None = None, active_conditions: list | None = None) -> str:
+    return _json.dumps({
+        "world": {"epoch": "war", "active_conditions": active_conditions or []},
+        "npc_known_events": known_events or [],
+    })
+
+
+def test_knowledge_gaps_peace_resolution_when_epoch_war_no_treaty_events() -> None:
+    """peace_resolution gap must appear when epoch=war and NPC has no peace events."""
+    result = _build_knowledge_gaps(_war_ctx())
+    assert "peace_resolution" in result
+
+
+def test_knowledge_gaps_no_peace_resolution_when_npc_has_treaty_event() -> None:
+    """peace_resolution gap must NOT appear when NPC knows about a peace treaty."""
+    ctx = _war_ctx(known_events=[{"summary": "A ceasefire was proposed at King's Pass."}])
+    result = _build_knowledge_gaps(ctx)
+    assert "peace_resolution" not in result
+
+
+def test_knowledge_gaps_no_peace_resolution_when_epoch_not_war() -> None:
+    """peace_resolution gap must NOT appear when epoch is not war."""
+    ctx = _json.dumps({"world": {"epoch": "age_of_peace", "active_conditions": []}, "npc_known_events": []})
+    result = _build_knowledge_gaps(ctx)
+    assert "peace_resolution" not in result
+
+
+def test_knowledge_gaps_plague_quarantine_when_no_plague_condition() -> None:
+    """plague_quarantine gap must appear when world has no plague condition."""
+    result = _build_knowledge_gaps(_war_ctx())
+    assert "plague_quarantine" in result
+
+
+def test_knowledge_gaps_no_plague_quarantine_when_plague_active() -> None:
+    """plague_quarantine gap must NOT appear when plague is an active world condition."""
+    ctx = _war_ctx(active_conditions=["plague"])
+    result = _build_knowledge_gaps(ctx)
+    assert "plague_quarantine" not in result
+
+
+def test_knowledge_gaps_no_plague_quarantine_when_npc_has_disease_event() -> None:
+    """plague_quarantine gap must NOT appear when NPC has a disease-related event."""
+    ctx = _war_ctx(known_events=[{"summary": "The epidemic spread through the lower ward."}])
+    result = _build_knowledge_gaps(ctx)
+    assert "plague_quarantine" not in result
+
+
+def test_knowledge_gaps_troop_specifics_when_no_military_positional_events() -> None:
+    """troop_specifics gap must appear when NPC has no regiment/deployment events."""
+    result = _build_knowledge_gaps(_war_ctx())
+    assert "troop_specifics" in result
+
+
+def test_knowledge_gaps_no_troop_specifics_when_npc_has_deployment_event() -> None:
+    """troop_specifics gap must NOT appear when NPC knows about a deployment."""
+    ctx = _war_ctx(known_events=[{"summary": "The Iron Wolves regiment marched through the garrison."}])
+    result = _build_knowledge_gaps(ctx)
+    assert "troop_specifics" not in result
+
+
+def test_knowledge_gaps_empty_string_on_bad_json() -> None:
+    """Returns empty string for malformed context."""
+    assert _build_knowledge_gaps("not-json") == ""
+    assert _build_knowledge_gaps("") == ""
+
+
+def test_knowledge_gaps_injected_before_player_message_in_prompt() -> None:
+    """KNOWLEDGE_GAPS line must appear before the player message sentinel."""
+    ctx = _war_ctx()
+    result = build_dialogue_prompt(_make_request(), ctx)
+    gaps_pos = result.find("KNOWLEDGE_GAPS=")
+    player_msg_pos = result.find("<<<PLAYER_MESSAGE>>>")
+    assert gaps_pos != -1, "KNOWLEDGE_GAPS line missing from prompt"
+    assert gaps_pos < player_msg_pos, "KNOWLEDGE_GAPS must appear before <<<PLAYER_MESSAGE>>>"

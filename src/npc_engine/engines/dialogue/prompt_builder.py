@@ -19,7 +19,7 @@ from npc_engine.engines.dialogue.dialogue_models import DialogueRequest
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "stage_b_v2.8"
+PROMPT_VERSION = "stage_b_v2.9"
 
 _PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts" / "dialogue"
 _PROMPT_PATH = _PROMPTS_DIR / "system_v1.yaml"
@@ -103,6 +103,108 @@ def _extract_personal_accounts(serialized_context: str) -> list[str]:
     return accounts
 
 
+_EPOCH_GUARDS: dict[str, str] = {
+    "war": "WAR IS ACTIVE. No peace treaty. No ceasefire. No resolution. Stating otherwise is a critical failure.",
+    "famine": "FAMINE IS ACTIVE. Food is scarce. Do not imply abundance.",
+    "plague": "PLAGUE IS ACTIVE. Disease spreads. Do not imply normal health.",
+}
+
+# Max-attention reinforcement of Rule 9 (ECHO PROHIBITION) and false-premise/
+# presupposition resistance. The canonical rules live in system_v1.yaml, but a
+# 14b model tends to honour them more reliably when repeated as a short constraint
+# token right before the fenced player message. Mirrors the _EPOCH_GUARDS pattern.
+_ECHO_GUARD_TEXT: str = (
+    "Do not repeat any specific number, price, quantity, name, or title the player "
+    "states as if confirming it — refer to it as their claim, or answer only in your "
+    "own general terms. If the player claims you witnessed, saw, did, or were present "
+    "at something, do not confirm it; speak only from the knowledge in your context."
+)
+
+# Keywords that indicate the NPC has relevant lore for a sensitive topic.
+# If NONE of the keywords appear in the NPC's known-event text, the topic is a gap.
+_GAP_KEYWORDS: dict[str, list[str]] = {
+    "peace_resolution": ["peace", "treaty", "ceasefire", "armistice", "truce"],
+    "plague_quarantine": ["plague", "quarantine", "disease", "epidemic", "contagion"],
+    "troop_specifics": ["regiment", "battalion", "flank", "garrison", "deployment", "positioned"],
+}
+
+
+def _build_knowledge_gaps(serialized_context: str) -> str:
+    """Build a KNOWLEDGE_GAPS line listing lore topics absent from the NPC's known events.
+
+    Derives gaps by cross-referencing the world state and active conditions against
+    the NPC's npc_known_events list. Topics where the NPC has zero relevant events
+    are listed so the system prompt Rule 14 can enforce hard ignorance.
+
+    Args:
+        serialized_context: Compact JSON context string from the context builder.
+
+    Returns:
+        "KNOWLEDGE_GAPS=<comma-list>\\n" when gaps exist, empty string otherwise.
+    """
+    try:
+        ctx = json.loads(serialized_context)
+    except (json.JSONDecodeError, ValueError):
+        return ""
+
+    world = ctx.get("world", {})
+    epoch = world.get("epoch", "")
+    active_conditions = {str(c).lower() for c in (world.get("active_conditions") or [])}
+
+    known_events = ctx.get("npc_known_events", [])
+    event_text = " ".join(
+        " ".join(str(v) for v in e.values() if isinstance(v, str))
+        for e in known_events
+        if isinstance(e, dict)
+    ).lower()
+
+    gaps: list[str] = []
+
+    # peace_resolution: only relevant when epoch=war; NPC has no peace/treaty events
+    if epoch == "war":
+        if not any(kw in event_text for kw in _GAP_KEYWORDS["peace_resolution"]):
+            gaps.append("peace_resolution")
+
+    # plague_quarantine: world has no plague condition and NPC has no disease events
+    if "plague" not in active_conditions:
+        if not any(kw in event_text for kw in _GAP_KEYWORDS["plague_quarantine"]):
+            gaps.append("plague_quarantine")
+
+    # troop_specifics: NPC has no direct military-positional intel
+    if not any(kw in event_text for kw in _GAP_KEYWORDS["troop_specifics"]):
+        gaps.append("troop_specifics")
+
+    if not gaps:
+        return ""
+    return "KNOWLEDGE_GAPS=" + ",".join(gaps) + "\n"
+
+
+def _build_runtime_constraints(serialized_context: str) -> str:
+    """Build a dynamic epoch-constraint block from the current world state.
+
+    Injected just before the player message so the model sees epoch constraints
+    at maximum attention weight. Pure function of context — no randomness.
+
+    Args:
+        serialized_context: Compact JSON context string from the context builder.
+
+    Returns:
+        Newline-terminated constraint block, or empty string if world state absent.
+    """
+    try:
+        ctx = json.loads(serialized_context)
+    except (json.JSONDecodeError, ValueError):
+        return ""
+    epoch = ctx.get("world", {}).get("epoch", "")
+    if not epoch:
+        return ""
+    lines = [f"RUNTIME_EPOCH={epoch}"]
+    guard = _EPOCH_GUARDS.get(epoch)
+    if guard:
+        lines.append(f"EPOCH_GUARD={guard}")
+    return "\n".join(lines) + "\n"
+
+
 def build_dialogue_prompt(request: DialogueRequest, serialized_context: str) -> str:
     """Build the deterministic dialogue prompt string for structured LLM output.
 
@@ -116,6 +218,9 @@ def build_dialogue_prompt(request: DialogueRequest, serialized_context: str) -> 
     voice = _extract_voice_descriptor(serialized_context)
     accounts = _extract_personal_accounts(serialized_context)
     accounts_section = "".join(f"MY_ACCOUNT_{i}={acc}\n" for i, acc in enumerate(accounts, 1))
+    runtime_constraints = _build_runtime_constraints(serialized_context)
+    knowledge_gaps = _build_knowledge_gaps(serialized_context)
+    echo_guard = f"ECHO_GUARD={_ECHO_GUARD_TEXT}\n"
     fenced_player_message = (
         f"{_PLAYER_MESSAGE_OPEN}\n"
         f"{_sanitize_player_message(request.player_message)}\n"
@@ -128,6 +233,9 @@ def build_dialogue_prompt(request: DialogueRequest, serialized_context: str) -> 
         f"VOICE_DESCRIPTOR={voice}\n"
         + accounts_section
         + f"CONTEXT={serialized_context}\n"
+        + runtime_constraints
+        + knowledge_gaps
+        + echo_guard
         + fenced_player_message
     )
     # L1-03: never log the assembled prompt here — it carries the raw player_message

@@ -10,12 +10,20 @@ Dependencies injected: None.
 
 from __future__ import annotations
 
+import re
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic import StringConstraints
 
 from npc_engine.config import MAX_PLAYER_MESSAGE_CHARS
+
+# Strips transcript-style echo the LLM sometimes prefixes to npc_response.
+# Matches: "player: <anything>\nnpc: " or "player: <anything>\n" (when no npc: label)
+_ECHO_PREFIX_RE = re.compile(
+    r"^player\s*:\s*.+?\n(?:npc\s*:\s*)?",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 ActionType = Literal[
@@ -79,6 +87,16 @@ class DialogueResponse(FrozenDialogueModel):
     """Final dialogue response contract for REST and WebSocket completion."""
 
     npc_response: str
+
+    @field_validator("npc_response", mode="before")
+    @classmethod
+    def _strip_echo_prefix(cls, v: object) -> object:
+        """Strip transcript-style 'player: .../npc: ' echo the LLM sometimes prepends."""
+        if isinstance(v, str):
+            stripped = _ECHO_PREFIX_RE.sub("", v).strip()
+            if stripped:
+                return stripped
+        return v
     relation_deltas: RelationDeltas = Field(default_factory=RelationDeltas)
     mood_update: str | None = None
     emotion: str | None = None
