@@ -27,7 +27,7 @@ run:
 	uvicorn npc_engine.main:app --reload --reload-include="*.yaml" --reload-include="*.json"
 
 smoke:
-	$(PYTHON) e2e/scripts/gateway_smoke.py --base-url $(BASE_URL) --api-key $(API_KEY)
+	$(PYTHON) -m pytest tests/unit/test_boot_smoke.py -q
 
 # Boot gate (L9-01 / L9-05): rebuild the app image stamped with the current git
 # SHA, start it, and fail if it never becomes healthy or if /health reports a
