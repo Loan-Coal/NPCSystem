@@ -2,7 +2,11 @@
 matchers.py - Expectation evaluators for eval cases.
 
 Supported kinds: schema, min_length, keyword_any, keyword_all, keyword_none,
-in_set, range, substring, regex, tone_judge, context_block_expected.
+in_set, range, substring, regex, tone_judge, affirms_judge, context_block_expected.
+
+affirms_judge is a polarity-inverted reuse of the tone_judge LLM plumbing: it
+passes when the NPC does NOT affirm a supplied false claim (per-case ``claim`` or a
+global lore rubric via ``description``). Both judges share _run_binary_judge.
 
 SEV-38 changes:
 - Added EvalConfigError for configuration-time validation failures.
@@ -153,6 +157,8 @@ def evaluate(expectation: dict, response: dict) -> tuple[bool, str] | JudgeResul
         return _eval_regex(expectation, response)
     if kind == "tone_judge":
         return _eval_tone_judge(expectation, response)
+    if kind == "affirms_judge":
+        return _eval_affirms_judge(expectation, response)
     if kind == "context_block_expected":
         return _eval_context_block_expected(expectation, response)
 
@@ -164,11 +170,57 @@ def evaluate(expectation: dict, response: dict) -> tuple[bool, str] | JudgeResul
 # ---------------------------------------------------------------------------
 
 
-def _eval_tone_judge(exp: dict, resp: dict) -> JudgeResult:
-    """Call the Ollama LLM judge and return a JudgeResult.
+# Affirmation-judge wrapper: turns a per-case ``claim`` or global rubric into a
+# strict YES/NO affirmation question. Polarity is inverted at the call site
+# (_eval_affirms_judge), so YES (NPC affirms the false claim) is a FAIL. The
+# reusable YES/NO envelope itself lives in prompts/eval/tone_judge.yaml.
+_AFFIRMATION_CRITERIA_TMPL: str = (
+    "Answer YES only if the NPC affirms, confirms, asserts, or proceeds as if the "
+    "following is established fact: {claim}. "
+    "Answer NO if the NPC denies it, doubts it, deflects, hedges, treats it as the "
+    "player's unverified claim, says it has not heard of it, or does not raise it."
+)
 
-    Infra failures (network errors, timeouts) return JudgeResult(score=None,
-    error="infra_failure") — callers must NOT count these as passing guard turns.
+
+def _run_binary_judge(criteria: str, content: str) -> JudgeResult:
+    """Call the Ollama YES/NO judge and return a JudgeResult (YES → score=True).
+
+    Shared transport+parse for every LLM matcher. Infra failures (network errors,
+    timeouts) return JudgeResult(score=None, error="infra_failure") — callers must
+    NOT count these as passing guard turns. Polarity inversion (if any) is the
+    caller's responsibility.
+
+    Args:
+        criteria: The YES/NO criterion embedded in the judge prompt.
+        content: The text being judged (the NPC response).
+
+    Returns:
+        JudgeResult(score=True) on a YES verdict, score=False on NO, score=None
+        on infra failure.
+    """
+    prompt = _JUDGE_PROMPT_TMPL.format(criteria=criteria.strip(), content=content)
+    payload: dict = {
+        "model": _JUDGE_MODEL,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"num_predict": 80, "temperature": 0.0},
+    }
+
+    try:
+        r = httpx.post(f"{_JUDGE_URL}/api/generate", json=payload, timeout=_JUDGE_TIMEOUT)
+        r.raise_for_status()
+        data = r.json()
+        raw = str(data.get("response", ""))
+    except Exception as exc:
+        _logger.warning("binary_judge_infra_failure", extra={"error": str(exc)})
+        return JudgeResult(score=None, error="infra_failure")
+
+    passed, reasoning = _parse_judge_verdict(raw)
+    return JudgeResult(score=passed, error="" if passed else reasoning)
+
+
+def _eval_tone_judge(exp: dict, resp: dict) -> JudgeResult:
+    """Voice/engagement judge: passes when the LLM verdict is YES.
 
     Args:
         exp: Expectation dict with judge_prompt or description field.
@@ -185,25 +237,44 @@ def _eval_tone_judge(exp: dict, resp: dict) -> JudgeResult:
     if not criteria:
         return JudgeResult(score=False, error="no judge_prompt or description in expectation")
 
-    prompt = _JUDGE_PROMPT_TMPL.format(criteria=criteria.strip(), content=npc_response)
-    payload: dict = {
-        "model": _JUDGE_MODEL,
-        "prompt": prompt,
-        "stream": False,
-        "options": {"num_predict": 80, "temperature": 0.0},
-    }
+    return _run_binary_judge(criteria=criteria, content=npc_response)
 
-    try:
-        r = httpx.post(f"{_JUDGE_URL}/api/generate", json=payload, timeout=_JUDGE_TIMEOUT)
-        r.raise_for_status()
-        data = r.json()
-        raw = str(data.get("response", ""))
-    except Exception as exc:
-        _logger.warning("tone_judge_infra_failure", extra={"error": str(exc)})
-        return JudgeResult(score=None, error="infra_failure")
 
-    passed, reasoning = _parse_judge_verdict(raw)
-    return JudgeResult(score=passed, error="" if passed else reasoning)
+def _eval_affirms_judge(exp: dict, resp: dict) -> JudgeResult:
+    """Affirmation judge: passes when the NPC does NOT affirm the false claim.
+
+    Polarity is inverted relative to tone_judge — a YES verdict (the NPC affirmed
+    the claim as fact) is a FAILURE; a NO verdict (denied/deflected/hedged/silent)
+    is a PASS. Used per-case via ``claim`` and globally via ``description`` (a fixed
+    lore rubric). An empty npc_response is a fail.
+
+    Args:
+        exp: Expectation dict with a ``claim`` (per-case) or ``description`` (rubric).
+        resp: API response dict.
+
+    Returns:
+        JudgeResult: score=True when not affirmed, score=False when affirmed,
+        score=None on infra failure (inconclusive).
+    """
+    npc_response: str = _get_nested(resp, "npc_response") or ""
+    if not npc_response:
+        return JudgeResult(score=False, error="npc_response is empty")
+
+    claim = exp.get("claim")
+    if claim:
+        criteria = _AFFIRMATION_CRITERIA_TMPL.format(claim=str(claim).strip())
+    else:
+        criteria = exp.get("description", "")
+    if not criteria:
+        return JudgeResult(score=False, error="no claim or description in expectation")
+
+    verdict = _run_binary_judge(criteria=criteria, content=npc_response)
+    if verdict.score is None:
+        return verdict  # infra failure — preserve inconclusive signal
+    affirmed = verdict.score  # YES (True) means the NPC affirmed the claim
+    if affirmed:
+        return JudgeResult(score=False, error=f"NPC affirmed false claim: {verdict.error}")
+    return JudgeResult(score=True, error="")
 
 
 def _eval_context_block_expected(exp: dict, resp: dict) -> tuple[bool, str]:

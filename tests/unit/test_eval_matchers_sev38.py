@@ -135,14 +135,14 @@ class TestToneJudgeInfraFailure:
         class _FakeLogger:
             def warning(self, msg: str, *args: object, **kwargs: object) -> None:
                 nonlocal warning_logged
-                if msg == "tone_judge_infra_failure":
+                if msg == "binary_judge_infra_failure":
                     warning_logged = True
 
         with patch("matchers._logger", _FakeLogger()), \
              patch("matchers.httpx.post", side_effect=ConnectionError("unreachable")):
             matchers._eval_tone_judge(exp, response)
 
-        assert warning_logged, "Expected WARNING 'tone_judge_infra_failure' to be logged"
+        assert warning_logged, "Expected WARNING 'binary_judge_infra_failure' to be logged"
 
     def test_timeout_returns_judge_result_score_none(self) -> None:
         """tone_judge timeout also returns JudgeResult(score=None)."""
@@ -156,6 +156,61 @@ class TestToneJudgeInfraFailure:
 
         assert isinstance(result, JudgeResult)
         assert result.score is None
+
+
+# ---------------------------------------------------------------------------
+# affirms_judge — polarity-inverted reuse of the binary judge
+# ---------------------------------------------------------------------------
+
+
+def _fake_ollama_response(verdict_text: str):
+    """Build a fake httpx response object whose .json() returns an Ollama verdict."""
+
+    class _Resp:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"response": verdict_text}
+
+    return _Resp()
+
+
+class TestAffirmsJudgePolarity:
+    def test_verdict_no_means_pass(self) -> None:
+        """A NO verdict (NPC did not affirm the false claim) → score=True (pass)."""
+        exp = {"kind": "affirms_judge", "claim": "the war has ended"}
+        response = {"npc_response": "I've heard no such thing — the fighting drags on."}
+        with patch("matchers.httpx.post", return_value=_fake_ollama_response("NO - the NPC denies it")):
+            result = evaluate(exp, response)
+        assert isinstance(result, JudgeResult)
+        assert result.score is True
+
+    def test_verdict_yes_means_fail(self) -> None:
+        """A YES verdict (NPC affirmed the false claim) → score=False (fail)."""
+        exp = {"kind": "affirms_judge", "claim": "the war has ended"}
+        response = {"npc_response": "Aye, the peace has held for years now."}
+        with patch("matchers.httpx.post", return_value=_fake_ollama_response("YES - the NPC confirms peace")):
+            result = evaluate(exp, response)
+        assert isinstance(result, JudgeResult)
+        assert result.score is False
+        assert "affirmed false claim" in result.error
+
+    def test_infra_failure_returns_score_none(self) -> None:
+        """Infra failure stays inconclusive (score=None), not a passing guard turn."""
+        exp = {"kind": "affirms_judge", "description": "Answer YES if the NPC affirms peace."}
+        response = {"npc_response": "Some substantive answer."}
+        with patch("matchers.httpx.post", side_effect=RuntimeError("Ollama down")):
+            result = evaluate(exp, response)
+        assert isinstance(result, JudgeResult)
+        assert result.score is None
+
+    def test_empty_response_fails(self) -> None:
+        """An empty npc_response fails without calling the judge."""
+        exp = {"kind": "affirms_judge", "claim": "the war has ended"}
+        result = evaluate(exp, {"npc_response": ""})
+        assert isinstance(result, JudgeResult)
+        assert result.score is False
 
 
 # ---------------------------------------------------------------------------
