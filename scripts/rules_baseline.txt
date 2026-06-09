@@ -20,6 +20,7 @@ R001|src/npc_engine/auth/middleware_helpers.py
 R001|src/npc_engine/config.py
 R001|src/npc_engine/data/api_seeder.py
 R001|src/npc_engine/engines/chapter/chapter_engine.py
+R001|src/npc_engine/engines/dialogue/dialogue_handler.py
 R001|src/npc_engine/engines/gossip/gossip_handler.py
 R001|src/npc_engine/engines/quest_generation/quest_generation_engine.py
 R001|src/npc_engine/graph/intent_queries.py

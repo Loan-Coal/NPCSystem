@@ -796,3 +796,16 @@ with mandatory docstrings and try/finally consume patterns. Splitting into
 functions that share no state and have identical structural patterns. All existing Cypher-only
 files in the codebase (e.g., `quest_verification_queries.py`) follow this single-file pattern.
 **Consequence:** R001 baseline entry added for `intent_queries.py`. No callers need changes.
+
+
+## DEC-081: dialogue_handler.py accepted over 300-line limit (~321 lines, Phase 16 S16.3)
+**Context:** Phase 16 S16.3 added output moderation wiring (`_apply_output_ceiling`, `_build_llm_client`)
+and the associated `effective_rating` parameter, growing the file from ~303 to ~321 lines.
+**Decision:** Accept the R001 baseline entry for `dialogue_handler.py`. A 300-line waiver already
+existed since DEC-072. The two new private helpers extracted to satisfy R006 are cohesive with the
+handler and would harm readability if split to a separate module.
+**Why:** `DialogueHandler` is the central orchestrator for the dialogue turn pipeline. Every method
+belongs to the same class and concerns the same single responsibility: executing a dialogue turn.
+Splitting across files would require dependency injection of the sub-object, adding indirection with no
+architectural benefit. All growth since DEC-072 is justified dialogue-pipeline code.
+**Consequence:** R001 baseline entry added for `dialogue_handler.py`. No callers need changes.

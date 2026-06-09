@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import cast
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
+from npc_engine.config import ContentRating
 from npc_engine.engines.dialogue.dialogue_models import DialogueRequest
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,9 @@ PROMPT_VERSION = "stage_b_v2.9"
 
 _PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts" / "dialogue"
 _PROMPT_PATH = _PROMPTS_DIR / "system_v1.yaml"
+_CONTENT_CEILING_YAML: Path = (
+    Path(__file__).resolve().parents[2] / "prompts" / "moderation" / "content_ceiling_v1.yaml"
+)
 
 # Sentinels that fence untrusted player input (L1-05). The system prompt instructs
 # the model that anything between these markers is player speech, never an
@@ -68,11 +72,18 @@ def _extract_voice_descriptor(serialized_context: str) -> str:
     return ctx.get("npc", {}).get("profile", {}).get("voice_descriptor") or ""
 
 
-def build_system_prompt() -> str:
-    """Return the static behavioral system prompt for the dialogue LLM.
+def build_system_prompt(content_rating: ContentRating = "mature") -> str:
+    """Return the behavioral system prompt for the dialogue LLM.
+
+    When content_rating is not 'mature', appends the ceiling rule from
+    prompts/moderation/content_ceiling_v1.yaml so the LLM self-censors.
+    The 'mature' default preserves all existing behaviour unchanged.
+
+    Args:
+        content_rating: The effective content ceiling for this deployment.
 
     Returns:
-        System prompt string loaded from prompts/dialogue/system_v1.yaml.
+        System prompt string, optionally with a content-ceiling rule appended.
 
     Raises:
         FileNotFoundError: if the YAML file is missing.
@@ -81,7 +92,14 @@ def build_system_prompt() -> str:
     prompt_data = load_yaml_mapping(
         _PROMPT_PATH, "prompts/dialogue/system_v1.yaml must be a mapping"
     )
-    return cast(str, prompt_data["system"])
+    base_prompt = cast(str, prompt_data["system"])
+    if content_rating == "mature":
+        return base_prompt
+    ceiling_data = load_yaml_mapping(
+        _CONTENT_CEILING_YAML, "content_ceiling_v1.yaml must be a mapping"
+    )
+    rule = cast(str, ceiling_data.get("rules", {}).get(content_rating, ""))
+    return base_prompt + "\n" + rule if rule else base_prompt
 
 
 def _extract_personal_accounts(serialized_context: str) -> list[str]:

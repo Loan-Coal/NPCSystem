@@ -285,6 +285,7 @@ def _make_handler(knowledge_engine=None, knowledge_learning_enabled: bool = Fals
     from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
     from npc_engine.engines.dialogue.session_store import SessionStore
     from npc_engine.services.input_moderation import build_input_moderation_service
+    from npc_engine.services.output_moderation import build_output_moderation_service
 
     settings = SimpleNamespace(
         LLM_FALLBACK_PATH=_FALLBACK_PATH,
@@ -306,6 +307,7 @@ def _make_handler(knowledge_engine=None, knowledge_learning_enabled: bool = Fals
         emotion_updater=_FakeEmotionUpdater(),
         embedding_index=None,
         input_moderation=build_input_moderation_service("mature"),
+        output_moderation=build_output_moderation_service("mature"),
         knowledge_engine=knowledge_engine,
     )
 

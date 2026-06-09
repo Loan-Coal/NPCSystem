@@ -34,10 +34,11 @@ from npc_engine.api.dependency_singletons import (
 )
 from npc_engine.engines.interaction.negotiation_store import NegotiationStore
 from npc_engine.engines.interaction.trade_handler_sync import NegotiationBackedSyncTradeHandler
-from npc_engine.config import ContentRating, Settings, get_settings
+from npc_engine.config import Settings, get_settings
 from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
 from npc_engine.services.content_rating_resolver import ContentRatingResolver
 from npc_engine.services.input_moderation import InputModerationService, build_input_moderation_service
+from npc_engine.services.output_moderation import OutputModerationService, build_output_moderation_service
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm_config_models import EngineModelConfig
 from npc_engine.engines.tts.mock_adapter import MockTTSAdapter
@@ -83,6 +84,16 @@ def get_input_moderation_service() -> InputModerationService:
         InputModerationService wired to the global content rating ceiling.
     """
     return build_input_moderation_service(get_settings().CONTENT_RATING)
+
+
+@lru_cache
+def get_output_moderation_service() -> OutputModerationService:
+    """Return the singleton OutputModerationService for the process lifetime.
+
+    Returns:
+        OutputModerationService wired to the global content rating ceiling.
+    """
+    return build_output_moderation_service(get_settings().CONTENT_RATING)
 
 
 @lru_cache
@@ -176,6 +187,8 @@ def build_dialogue_handler(
         emotion_updater=get_emotion_updater(),
         embedding_index=get_embedding_index(),
         input_moderation=get_input_moderation_service(),
+        output_moderation=get_output_moderation_service(),
+        effective_rating=get_settings().CONTENT_RATING,
         context_cache=get_context_cache(),
         tts_client=tts_client,
     )

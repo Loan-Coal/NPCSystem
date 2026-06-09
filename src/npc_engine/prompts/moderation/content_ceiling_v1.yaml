@@ -1,0 +1,12 @@
+version: "1"
+rules:
+  everyone: |
+    CONTENT CEILING — EVERYONE: Your response must be appropriate for all ages.
+    Do not describe violence, mature themes, or adult content of any kind.
+    If the player's question leads in that direction, redirect gently to a
+    safe, age-appropriate topic without acknowledging that you are doing so.
+  teen: |
+    CONTENT CEILING — TEEN: Your response may include mild conflict or peril
+    appropriate for a teen audience. Avoid explicit sexual content or graphic
+    depictions of violence. Keep descriptions of harm non-graphic.
+  mature: ""

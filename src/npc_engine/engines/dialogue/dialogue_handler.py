@@ -25,7 +25,7 @@ from pydantic import ValidationError
 from npc_engine.engines.dialogue.dialogue_models import DialogueRequest, DialogueResponse
 from npc_engine.config import Settings
 from npc_engine.engines.dialogue.action_resolver import resolve_action
-from npc_engine.engines.dialogue.degradation import execute_with_degradation
+from npc_engine.engines.dialogue.degradation import DegradationLevel, execute_with_degradation, get_canned_response
 from npc_engine.engines.dialogue.llm_client import DialogueLLMClient
 from npc_engine.engines.dialogue.prompt_builder import build_dialogue_prompt, build_system_prompt
 from npc_engine.engines.dialogue.relation_mutator import apply_dialogue_relation_deltas
@@ -48,7 +48,9 @@ from npc_engine.utils.metrics import increment_metric
 from npc_engine.engines.knowledge_learning.knowledge_extraction_engine import (
     KnowledgeExtractionEngine,
 )
+from npc_engine.config import ContentRating
 from npc_engine.services.input_moderation import InputModerationService
+from npc_engine.services.output_moderation import OutputModerationService
 from npc_engine.world.time_utils import TimePoint
 from npc_engine.world.world_reader import get_world_state
 
@@ -82,6 +84,8 @@ class DialogueHandler:
         llm_config: LLMConfig, engine_model_config: EngineModelConfig, session_store: SessionStore,
         emotion_updater: EmotionUpdater, embedding_index: EmbeddingIndexProtocol,
         input_moderation: InputModerationService,
+        output_moderation: OutputModerationService,
+        effective_rating: ContentRating = "mature",
         context_cache: PartialDialogueContextCache | DialogueContextCache | None = None,
         tts_client: TTSClientProtocol | None = None,
         knowledge_engine: KnowledgeExtractionEngine | None = None,
@@ -90,6 +94,8 @@ class DialogueHandler:
 
         Args:
             input_moderation: Checks player input against the content ceiling (S16.2).
+            output_moderation: Flags NPC responses that exceed the content ceiling (S16.3).
+            effective_rating: The active content ceiling; informs the system prompt (S16.3).
             knowledge_engine: Optional; persists player facts as BELIEVES nodes (EXP-53),
                 guarded by KNOWLEDGE_LEARNING_ENABLED.
         """
@@ -104,17 +110,33 @@ class DialogueHandler:
         self._tts_client = tts_client
         self._knowledge_engine = knowledge_engine
         self._input_moderation = input_moderation
+        self._output_moderation = output_moderation
+        self._effective_rating = effective_rating
         self._memory_engine = MemoryEngine()
-        self._llm = DialogueLLMClient(
+        self._llm = self._build_llm_client(llm_client)
+        self._system_prompt = build_system_prompt(content_rating=effective_rating)
+
+    def _build_llm_client(self, llm_client: LLMClientProtocol) -> DialogueLLMClient:
+        """Construct DialogueLLMClient from stored settings and engine config."""
+        cfg = self._engine_model_config.llm
+        return DialogueLLMClient(
             llm_client=llm_client,
-            fallback_path=settings.LLM_FALLBACK_PATH,
-            max_tokens=engine_model_config.llm.max_tokens,
-            temperature=engine_model_config.llm.temperature,
-            top_p=engine_model_config.llm.top_p,
-            stop_sequences=list(engine_model_config.llm.stop_sequences),
-            log_prompts=resolve_log_prompts(settings),
+            fallback_path=self._settings.LLM_FALLBACK_PATH,
+            max_tokens=cfg.max_tokens,
+            temperature=cfg.temperature,
+            top_p=cfg.top_p,
+            stop_sequences=list(cfg.stop_sequences),
+            log_prompts=resolve_log_prompts(self._settings),
         )
-        self._system_prompt = build_system_prompt()
+
+    def _apply_output_ceiling(
+        self, parsed: DialogueResponse, level: DegradationLevel, canned_dir: Path, npc_id: str,
+    ) -> tuple[DialogueResponse, DegradationLevel]:
+        """Return a canned fallback when NPC output exceeds the content ceiling."""
+        if not self._output_moderation.is_over_ceiling(parsed.npc_response):
+            return parsed, level
+        _logger.warning("output_ceiling_violation", extra={"npc_id": npc_id, "rating": self._effective_rating})
+        return get_canned_response(archetype="default", canned_dir=canned_dir), "canned"
 
     async def handle(self, request: DialogueRequest) -> DialogueResponse:
         """Execute the full dialogue flow with tiered degradation and return the response.
@@ -130,14 +152,16 @@ class DialogueHandler:
         )
         turns = await self._session_store.get_turns(player_id=request.player_id, npc_id=request.npc_id)
         current_emotion = await self._emotion_updater.get_state(npc_id=request.npc_id)
+        canned_dir = Path(self._settings.CANNED_RESPONSES_DIR)
         parsed_response, level = await execute_with_degradation(
             full_factory=lambda: self._run_llm_pipeline(request=request, turns=turns, current_emotion=current_emotion, skip_rag=False),
             graph_only_factory=lambda: self._run_llm_pipeline(request=request, turns=turns, current_emotion=current_emotion, skip_rag=True),
             archetype="default",
-            canned_dir=Path(self._settings.CANNED_RESPONSES_DIR),
+            canned_dir=canned_dir,
             full_timeout=self._engine_model_config.timeouts_ms.full / 1000.0,
             graph_only_timeout=(self._engine_model_config.timeouts_ms.graph_only or 0) / 1000.0,
         )
+        parsed_response, level = self._apply_output_ceiling(parsed_response, level, canned_dir, request.npc_id)
         resolved_action = resolve_action(action=parsed_response.action)
         final_response = parsed_response.model_copy(update={
             "action": resolved_action,
