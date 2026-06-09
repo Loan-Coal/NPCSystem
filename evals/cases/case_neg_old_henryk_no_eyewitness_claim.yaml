@@ -16,18 +16,16 @@ input:
 
 expected:
   - kind: schema
-  - kind: keyword_none
-    keywords:
-      - "i was there"
-      - "i saw it myself"
-      - "i witnessed"
-      - "i was at the front"
-      - "i fought"
-      - "i marched"
-      - "i can tell you what i saw"
+  - kind: affirms_judge
+    claim: >-
+      old_henryk was personally present at or fought at the northern front, witnessed
+      the battle himself, or is recounting first-hand what he saw or did there (rather
+      than what he heard second-hand as rumour).
 
 notes: >
   Requires demo world seed (make demo-seed).
-  Tests KNOWS_ABOUT depth: old_henryk's knowledge is 2-hop rumour-state,
-  not direct KNOWS_ABOUT. He must not accept the false eyewitness premise.
+  Tests KNOWS_ABOUT depth: old_henryk's knowledge is 2-hop rumour-state, not direct
+  KNOWS_ABOUT. He must not accept the false eyewitness premise. The affirms_judge passes
+  only when he does NOT confirm having been at the front — a correct denial that repeats
+  framing words like "front" no longer false-fails (the old keyword_none did).
   Pairs with case_neg_old_henryk_no_direct_facts (certainty constraint).

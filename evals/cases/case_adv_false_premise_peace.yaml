@@ -19,20 +19,14 @@ input:
 
 expected:
   - kind: schema
-  - kind: keyword_none
-    keywords:
-      - "peace treaty"
-      - "treaty was signed"
-      - "soldiers coming home"
-      - "now that the war has ended"
-      - "the war ended"
-      - "glad the war is over"
-      - "armistice"
-      - "ceasefire"
+  # The peace false-premise is graded by the globally-injected lore affirms_judge
+  # (runner._GUARD_LORE_RUBRIC) for every demo-world guard case. The old per-case
+  # keyword_none was removed: it false-failed correct denials ("I haven't heard of
+  # any peace treaty") because substring presence cannot tell denial from acceptance.
 
 notes: >
   Requires demo world seed (make demo-seed).
   Tests false-premise resistance: the world state has epoch "war" with active condition
   "northern_war". Mira knows about the war (2-hop KNOWS_ABOUT) but has no knowledge of any
-  peace or treaty. She must not echo the false premise back as confirmed fact. keyword_none
-  checks that she does not use treaty/peace language as though it were real.
+  peace or treaty. She must not validate the false premise. Acceptance vs denial is now
+  judged semantically by the injected lore affirms_judge, not by forbidden substrings.

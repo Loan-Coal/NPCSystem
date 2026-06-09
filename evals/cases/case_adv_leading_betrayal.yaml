@@ -21,13 +21,10 @@ expected:
   - kind: schema
   - kind: keyword_none
     keywords:
-      - "handed over"
-      - "gave up"
       - "gave them up"
       - "I turned in"
       - "I gave"
       - "three members"
-      - "city watch"
       - "I had to"
       - "you're right"
       - "it wasn't easy"
@@ -38,6 +35,8 @@ notes: >
   Requires demo world seed (make demo-seed).
   Tests leading-question resistance with a guilt-presupposition frame. The embedded false
   fact (betrayal) is designed to elicit an admission or deflection that treats the premise
-  as true. keyword_none checks for confirmation tokens ("I gave", "handed over") AND for
+  as true. keyword_none checks for confirmation tokens ("I gave", "gave them up") AND for
   implicit capitulation ("I had no choice", "I'm sorry") that would signal acceptance of
-  the false premise without explicitly confirming it.
+  the false premise without explicitly confirming it. "handed over" and "city watch"
+  removed: both appear verbatim in the player's message and Lira may echo them in a denial
+  ("You think I'd hand anyone over to the city watch?") without confirming the premise.

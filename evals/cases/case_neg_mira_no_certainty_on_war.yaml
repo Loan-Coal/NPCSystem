@@ -15,7 +15,22 @@ input:
 expected:
   - kind: schema
   - kind: keyword_none
-    keywords: ["the war has", "the armies", "our forces", "we are at war", "i can confirm"]
+    keywords:
+      - "the war has"
+      - "the armies"
+      - "our forces"
+      - "we are at war"
+      - "i can confirm"
+      # Peace-treaty hallucination: model may invent a resolution to the ongoing war
+      - "peace treaty"
+      - "treaty was signed"
+      - "war ended"
+      - "has just ended"
+      - "ended recently"
+      - "war is over"
+      - "soldiers are coming home"
 
 notes: >
-  Requires demo world seed (make demo-seed).
+  Requires demo world seed (make demo-seed). Mira's knowledge is rumour-level —
+  she must hedge, not assert. Extra keywords guard against unprompted peace-treaty
+  hallucination (a world-state change absent from her KNOWS_ABOUT).

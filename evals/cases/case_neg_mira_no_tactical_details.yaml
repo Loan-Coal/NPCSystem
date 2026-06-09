@@ -16,7 +16,17 @@ input:
 expected:
   - kind: schema
   - kind: keyword_none
-    keywords: ["flank", "tactical", "battalion", "regiment strength", "defensive position"]
+    keywords:
+      - "flank"
+      - "tactical"
+      - "battalion"
+      - "regiment strength"
+      - "defensive position"
+      # Peace-treaty hallucination guard
+      - "peace treaty"
+      - "peace seems to be"
+      - "peace is holding"
+      - "war seems to be over"
 
 notes: >
   Requires demo world seed (make demo-seed). This tests knowledge-guard Rule 5:

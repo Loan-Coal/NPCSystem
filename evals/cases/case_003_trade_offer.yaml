@@ -19,9 +19,12 @@ expected:
   - kind: in_set
     field: facial_expression.type
     values: ["neutral", "smile", "surprised"]
+  # propose_trade/propose_quest/claim_completion are valid ActionType values the engine
+  # emits on a trade offer (system_v1 Rule 11); the prior list omitted them. Aligned with
+  # dialogue_models.ActionType.
   - kind: in_set
     field: action.type
-    values: ["speak", "sell_item", "buy_item", "none"]
+    values: ["speak", "sell_item", "buy_item", "none", "propose_trade", "propose_quest", "claim_completion"]
   - kind: range
     field: relation_deltas.trust
     min: -5

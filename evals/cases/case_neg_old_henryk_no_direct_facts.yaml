@@ -16,7 +16,15 @@ input:
 expected:
   - kind: schema
   - kind: keyword_none
-    keywords: ["the northern armies have crossed", "we are at war", "the border was crossed"]
+    keywords:
+      - "the northern armies have crossed"
+      - "we are at war"
+      - "the border was crossed"
+      # Direct-eyewitness hallucination: model may have Henryk claim firsthand observation
+      - "came through here"
+      - "they came through"
+      - "heading south to reinforce"
+      - "border forts"
 
 notes: >
   Requires demo world seed (make demo-seed). The forbidden phrases are the

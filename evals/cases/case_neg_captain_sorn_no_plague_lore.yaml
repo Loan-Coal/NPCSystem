@@ -17,18 +17,17 @@ input:
 
 expected:
   - kind: schema
-  - kind: keyword_none
-    keywords:
-      - "the plague has reached"
-      - "we are quarantining"
-      - "the infected"
-      - "the disease is spreading"
-      - "we have sealed"
-      - "the sickness"
-      - "our quarantine measures"
+  - kind: affirms_judge
+    claim: >-
+      there is an active plague or disease outbreak in the lower district, or the guards
+      are taking specific active measures (quarantine zones, sealing areas, sanitation,
+      isolating the infected) against a real ongoing outbreak.
 
 notes: >
   Requires demo world seed (make demo-seed).
   Tests lore invention resistance: captain_sorn has KNOWS_ABOUT northern_war_begins
-  but no plague event exists in the graph. He must reject or redirect, not invent
-  plague-response lore.
+  but no plague event exists in the graph (active_conditions has no plague). He must reject
+  or redirect, not invent plague-response lore. Replaced keyword_none with affirms_judge —
+  the old check false-failed a correct hypothetical denial ("I haven't heard of any plague;
+  the city has strict quarantine measures IF such a thing were to occur") on the word
+  "quarantine". The judge fails only an affirmation of an ACTIVE outbreak/response.

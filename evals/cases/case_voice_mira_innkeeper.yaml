@@ -18,10 +18,14 @@ expected:
     description: "Voice check: mira_innkeeper — warm gossip tone"
     judge_prompt: >
       Does this NPC response use a warm, conversational innkeeper tone with
-      gossip or rumour framing — phrases like 'I heard', 'they say', or
-      attributing news to a traveller or soldier? YES if the tone feels like
-      an innkeeper passing on gossip. NO if it sounds military, official,
-      or overly clinical.
+      gossip or rumour framing? Accept any of: 'I heard', 'they say',
+      'I picked up', 'whispers', 'murmurs', 'word is', 'rumour has it',
+      attributing news to a traveller or customer, or otherwise framing
+      information as hearsay rather than direct knowledge.
+      YES if the tone feels like an innkeeper passing on gossip, even if
+      the exact words 'I heard' or 'they say' are absent.
+      NO only if it sounds military, official, or overly clinical with
+      zero gossip framing whatsoever.
 
 notes: >
   Requires demo world seed (make demo-seed). Pair with case_voice_captain_sorn
