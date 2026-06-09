@@ -221,6 +221,25 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _force_patch_world_state(client: EngineClient) -> None:
+    """Force-patch world_state epoch and active_conditions to the demo values.
+
+    Called unconditionally after the _seed_node upsert so that a pre-existing
+    node with a drifted epoch (e.g. 'age_of_peace') is always corrected.
+
+    Args:
+        client: Live EngineClient instance used to reach the HTTP API.
+    """
+    client.patch_node(
+        "world_state",
+        _WORLD_STATE_ID,
+        {
+            "epoch": "war",
+            "active_conditions": ["northern_war"],
+        },
+    )
+
+
 def _seed_node(
     client: EngineClient,
     node_type: str,
@@ -913,6 +932,7 @@ def seed_all(client: EngineClient) -> dict:
     # 8. world_state (id="world" — canonical; see DEC-022)
     logger.info("[seed] world_state")
     _tally(_seed_node(client, "world_state", build_world_state_payload("war", ["northern_war"])))
+    _force_patch_world_state(client)  # always correct epoch even if node was skipped
 
     # 9. NPC-NPC structural edges
     logger.info("[seed] NPC-NPC edges")
