@@ -24,12 +24,11 @@ _The orchestrator maintains this: add a line when an item unlocks/affects a late
 - **EXP-12 DONE:** Structured audit log in `engines/dialogue/relation_mutator.py` (attempt/applied/edge_missing). Tests use `patch("...._LOGGER")` not caplog (configure_logging sets propagate=False).
 - **EXP-20 DONE:** `QuestStatus(str, enum.Enum)` in `engines/quest/models.py` (7 members incl. FAILED/EXPIRED). `QuestStateRecord.status: QuestStatus`. Slice-2 (transition logic for FAILED/EXPIRED) still open.
 - **DEC-070/071/072/073 still apply.** DEC-073 (old numbering): `context_builder.py` 446-line waiver. DEC-074: `game_window.py` 337-line. DEC-075: `quest_trade_controller.py` 312-line.
-- **DEC-073 (2026-06-09): EXP-10 WS `proactive_line` shape approved** — `{type, npc_id, content, reason, tick}`. EXP-10 unblocked; dispatch in next batch (EXP-33 now merged — `main.py` conflict resolved).
-- **EXP-33 DONE (2026-06-09):** `GET /admin/debug/retrieval` live. Note: tier/priority metadata is sentinel (`"unknown"/0`) — real metadata needs calling `merge_context` before `fill_to_budget` (follow-up slice).
-- **EXP-21 slice-1 DONE:** `WorldStateQuestTrigger` class only. Slice-2 needed: wire into `tick_scheduler.py` + `dependencies_engines.py`.
-- **EXP-40 slice-1 DONE:** `SyncTradeHandlerProtocol` + `MinimalSyncTradeHandler`. Slice-2: inject async economy handler. Note: `InteractionState`/`InteractionProposal` should migrate to Pydantic v2 (ISSUE-086).
-- **EXP-00c DONE:** `make smoke` target + `test_boot_smoke.py`. API_KEY_SECRET must be ≥16 chars in test fixtures.
-- **ISSUE-080 FIXED:** `_force_patch_world_state` added to `demo_game/seed.py` — always force-patches epoch=war.
+- **DEC-073:** `proactive_line` WS shape `{type, npc_id, content, reason, tick}` approved. `push_proactive_line(ws, line)` helper in `dialogue_ws.py`. Slice-2 needs `get_unshared_memories` graph query + `LocationServiceProtocol` adapter (no graph impl yet).
+- **EXP-21 DONE (both slices):** `WorldStateQuestTrigger` + wired into `tick_scheduler.py`/`dependencies_engines.py`. Pattern: `world_state_quest_trigger` kwarg follows `event_quest_trigger`/`need_quest_trigger` exactly.
+- **EXP-40 DONE (both slices):** `NegotiationBackedSyncTradeHandler` wraps `open_or_resume_trade`. `set_trade_handler()` called in `main.py` lifespan (not module-level — avoids test pollution). Protocol extended: `handle(proposal, player_id, npc_id)`.
+- **EXP-33 DONE:** `GET /admin/debug/retrieval` live. Tier/priority sentinel — real metadata deferred.
+- **EXP-10 slice-1 DONE:** `ProactiveDialogueEngine` + `MemoryServiceProtocol` + `LocationServiceProtocol`. Slice-2: wire into tick scheduler + implement graph adapters for unshared-memory queries + idle-tick counting.
 - **Schema/DECISIONS-gated (DROP from parallel batches):** EXP-51, EXP-17-full, EXP-87, EXP-53 (needs EXP-32 first), EXP-55 deferred.
 - **Open residuals:** ISSUE-064..076, ISSUE-082..086. Next ISSUE id: **ISSUE-087**.
 
@@ -70,7 +69,7 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 - [ ] **EXP-95** — in-window scenario picker (demo) · M · deps: KE-6
 
 ### Phase 3 — Agentic NPCs
-- [ ] **EXP-10** — proactive dialogue + WS `proactive_line` push · L · deps: EXP-30 ✅, EXP-33 (must merge first — shared `main.py`) · DEC-073 approved · brief: `briefs/EXP-10-proactive-dialogue-first-slice.md`
+- [x] **EXP-10** — proactive dialogue + WS `proactive_line` push (first slice: `ProactiveDialogueEngine` + `push_proactive_line`) · L · deps: EXP-30 ✅, EXP-33 ✅ · slice-2 (scheduler wiring + graph queries for unshared memories) still open
 - [ ] **EXP-51** — NPC goal-formation/GOAP (goal.urgency vs routine) · L · `🔶` `GOAL_TARGETS` edge + precedence DEC
 - [x] **EXP-52** — personal reputation propagation engine · M · deps: EXP-50
 - [x] **EXP-13** — `EmotionModelProtocol` + personality modulation · M · deps: none · refactor `emotion_updater.py`
@@ -81,8 +80,8 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 - [ ] **EXP-19** — branching quests & consequence chains · L · `🔶`
 - [x] **EXP-18** — semantic memory formation beyond arousal · M · deps: EXP-17
 - [x] **EXP-20** — Quest status as enum + fail/expire states · S · deps: none · `QuestStatus` enum in `engines/quest/models.py`
-- [x] **EXP-21** — world-state-aware quest trigger (first slice: new `WorldStateQuestTrigger`) · M · deps: none · brief: `briefs/EXP-21-world-state-quest-trigger.md` · slice-2 (scheduler wiring) still open
-- [x] **EXP-40** — trade dispatch: inject `SyncTradeHandlerProtocol` (first slice) · M · deps: none · brief: `briefs/EXP-40-trade-dispatch-sync-handler.md` · slice-2 (async economy wiring) still open
+- [x] **EXP-21** — world-state-aware quest trigger (first slice + slice-2: scheduler wiring complete) · M · deps: none
+- [x] **EXP-40** — trade dispatch: `NegotiationBackedSyncTradeHandler` wired via `dependencies.py` + `main.py` lifespan · M · deps: none
 - [ ] **EXP-42** — niche-engine expansions + demo integration (deprioritized) · — · deps: none
 - [ ] **EXP-55** — player-model / theory-of-mind · M · `🔶` `player_model` node · DEFERRED (via memories for now)
 
@@ -91,11 +90,15 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 
 ## Next parallel batch (suggested)
 
-**BATCH 2026-06-09 COMPLETE:** ISSUE-080 · EXP-33 · EXP-21 slice-1 · EXP-40 slice-1 · EXP-00c — all merged, 1754 unit tests green.
+**BATCH 2026-06-09 COMPLETE:** ISSUE-080 · EXP-33 · EXP-21 slice-1 · EXP-40 slice-1 · EXP-00c — all merged, 1763 unit tests green.
 
-**NEXT BATCH:** EXP-10 · EXP-21 slice-2 · EXP-40 slice-2 · EXP-32 (if Q&A ready)
-- **EXP-10**: proactive dialogue. Deps: EXP-33 merged ✅. Edits `main.py` + `dialogue_ws.py` + new engine files. Brief + DEC-073 ready.
-- **EXP-21 slice-2**: wire `WorldStateQuestTrigger` into `tick_scheduler.py` + `dependencies_engines.py`. May conflict with EXP-10 on `tick_scheduler.py` — group if so.
-- **EXP-40 slice-2**: inject async economy handler. Edits `dispatch.py` + `dependencies.py`. No conflict with EXP-10.
-- **EXP-32**: measured anti-hallucination eval. Still needs Q&A label set from `EXP32_EVAL_QA_TASK.md` — DROP until ready.
-- **EXP-14**: schema-gated — DROP until emotion node approved.
+**BATCH 2026-06-09 #2 COMPLETE:** EXP-10 s1 · EXP-21 s2 · EXP-40 s2 — all merged, 1774 unit tests green.
+
+**NEXT BATCH candidates:**
+- **EXP-10 slice-2** (M): wire `ProactiveDialogueEngine` into `tick_scheduler.py` + `dependencies_engines.py`; write `get_unshared_memories` graph query in `graph/memory_queries.py`; write `LocationServiceProtocol` adapter. Conflicts with `tick_scheduler.py` + `dependencies_engines.py` — must be solo worker.
+- **EXP-52 slice-2** (S): wire `ReputationEngine` into tick scheduler. Same files as EXP-10 s2 — group together.
+- **EXP-53** (M): dialogue-driven knowledge learning (`learned_facts`→`BELIEVES`). Needs brief update; `🔶` BELIEVES fields approved.
+- **EXP-32** (M): anti-hallucination eval — DROP until Q&A label set is ready.
+- **EXP-14, EXP-51**: schema-gated — DROP.
+
+**Suggested grouping:** W1 = EXP-10 s2 + EXP-52 s2 (both edit `tick_scheduler.py`/`dependencies_engines.py`); W2 = EXP-53 (new engine files only, no conflict with W1). Write EXP-10-s2 + EXP-52-s2 briefs + EXP-53 brief before dispatching.
