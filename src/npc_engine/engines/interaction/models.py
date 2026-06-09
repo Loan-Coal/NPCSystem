@@ -22,6 +22,7 @@ UI_DIRECTIVE_QUEST = "show_quest_panel"
 UI_DIRECTIVE_REWARD = "show_reward_overlay"
 
 STATUS_OPEN = "open"
+STATUS_PENDING = "pending"
 STATUS_PENDING_CONFIRM = "pending_confirm"
 STATUS_ACCEPTED = "accepted"
 STATUS_DECLINED = "declined"
@@ -64,3 +65,4 @@ class InteractionState:
     ui_directive: str
     narration_hint: str | None = None
     data: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
