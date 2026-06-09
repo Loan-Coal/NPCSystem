@@ -978,3 +978,27 @@ And add:
 **Description:** Both `InteractionProposal` and `InteractionState` are plain `dataclass(frozen=True)` objects, not Pydantic v2 `BaseModel`. They cross module boundaries (used by `dispatch.py`, `demo_game`), violating the strict rule.
 **Why deferred:** Migrating would require updating all callers; out of scope for EXP-40 first slice.
 **To fix:** Migrate both classes to `BaseModel` with `model_config = ConfigDict(frozen=True)`; update all callers.
+
+## ISSUE-087: `dialogue_handler.py` calls `get_world_state` twice when arousal>70 AND `learned_facts` non-empty
+**Found:** 2026-06-09, during EXP-53 (W2)
+**Severity:** P3 (nice-to-fix — duplicate Neo4j read per dialogue turn in hot path)
+**Where:** `src/npc_engine/engines/dialogue/dialogue_handler.py` — arousal block (~line 185) + knowledge block (~line 204)
+**Description:** Both the arousal-memory branch and the knowledge-learning branch independently call `get_world_state`. When both conditions are true on the same turn, the world state is fetched twice.
+**Why deferred:** Minor perf; both branches are conditionally guarded and rarely co-occur. Out of scope for EXP-53.
+**To fix:** Hoist the `get_world_state` call to before both branches; pass `world_state` into both.
+
+## ISSUE-088: `DialogueResponse.learned_facts` is `list[str]` in a frozen Pydantic model (should be `tuple[str, ...]`)
+**Found:** 2026-06-09, during EXP-53 (W2)
+**Severity:** P3 (nice-to-fix — minor inconsistency with the frozen model convention)
+**Where:** `src/npc_engine/engines/dialogue/dialogue_models.py` — `DialogueResponse.learned_facts`
+**Description:** `DialogueResponse` is `frozen=True` but `learned_facts: list[str]` is a mutable field. Other ordered fields on the model use immutable types. A tuple would be strictly correct.
+**Why deferred:** No current mutation of this field; out of scope for EXP-53.
+**To fix:** Change `learned_facts: list[str] = Field(default_factory=list)` to `learned_facts: tuple[str, ...] = ()`.
+
+## ISSUE-089: `knowledge_writer.write_belief` generates a fresh UUID on every call, making MERGE behave like CREATE (no dedup)
+**Found:** 2026-06-09, during EXP-53 (W2)
+**Severity:** P3 (nice-to-fix — same fact can be persisted multiple times)
+**Where:** `src/npc_engine/graph/knowledge_writer.py:66` — `belief_id = str(uuid.uuid4())`
+**Description:** The MERGE clause keys on `id`, which is a fresh UUID each call, so the MERGE always inserts. The same fact will be duplicated if stated by the player across multiple turns.
+**Why deferred:** Dedup/contradiction detection is explicitly deferred to EXP-53 slice-3 per brief.
+**To fix:** Key the MERGE on a stable hash of `(npc_id, content)` to deduplicate, OR use a separate dedup check before calling write_belief. Link with `CONTRADICTS` edge handling (EXP-53 slice-3).

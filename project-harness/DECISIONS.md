@@ -3,6 +3,30 @@
 Non-obvious architectural choices. Each entry explains what was decided and why,
 so future maintainers can judge edge cases without re-deriving the rationale.
 
+## DEC-076: `dependencies_engines.py` accepted at 333 lines (300-line exception)
+**Date:** 2026-06-09
+**Context:** EXP-10 s2 and EXP-52 s2 added `get_proactive_dialogue_engine()`, `get_reputation_engine()`,
+`_CharacterReaderWrapper`, and corresponding wiring in `get_tick_scheduler()`. The file was 243 lines
+before; it is now 333.
+**Options considered:**
+  1. Split into `dependencies_engines_advanced.py` — would create two composition roots with unclear
+     ownership boundary; `get_tick_scheduler()` must import from both, defeating the split.
+  2. Accept with this entry.
+**Decision:** Option 2. This is the sole composition root for engine singletons (DEC-042 rationale).
+Every new engine that wires into the scheduler must touch this file. Splitting it creates indirection
+without real encapsulation. Do not grow past 400 lines without creating a per-engine submodule pattern.
+
+## DEC-077: `config.py` accepted at 309 lines (300-line exception)
+**Date:** 2026-06-09
+**Context:** EXP-53 added `KNOWLEDGE_LEARNING_ENABLED: bool = False` to `Settings`. The file was just
+at the limit before; it is now 9 lines over.
+**Options considered:**
+  1. Extract domain-specific flags into sub-Settings classes — changes the import path for all callers;
+     high disruption for 9 lines.
+  2. Accept with this entry.
+**Decision:** Option 2. Config is a flat-settings file by convention; splitting it would require
+updating every `get_settings()` call site. Do not add more than ~5 new flags before refactoring.
+
 ## DEC-075: quest_trade_controller.py accepted at 312 lines (300-line exception)
 **Date:** 2026-06-06
 **Context:** `demo_game/quest_trade_controller.py` grew to 312 lines when `fix(demo): substitute empty item_type in confirm-trade` (ISSUE-067) added input-sanitization helpers. The file handles quest + trade controller logic for the demo layer.

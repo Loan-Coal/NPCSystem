@@ -1,6 +1,6 @@
 # EXPANSION_ROADMAP.md — Synthesis & Prioritization (Lens X5)
 
-> **Updated 2026-06-09 — last batch: eval-harness hardening (affirms_judge, 32 eval cases, prompt v2.9, engine fixes) merged. Current batch in flight: ISSUE-080 · EXP-33 · EXP-21 slice-1 · EXP-40 slice-1 · EXP-00c. Next batch after merge: EXP-10 (DEC-073 approved, brief ready; gates on EXP-33 main.py merge) + EXP-32 (needs Q&A fixture).**
+> **Updated 2026-06-09 — last batch: EXP-10 s2 + EXP-52 s2 + EXP-53 merged (1796 tests green). Next batch: EXP-87 solo (location hierarchy, DEC-071 approved, needs brief). EXP-32 blocked on Q&A label set. All other remaining items are schema-gated or KE-6-gated.**
 > **Prior update 2026-06-05 with human resolutions** (see `OPEN_QUESTIONS.md` §A, `DECISIONS.md` DEC-070/071/072).
 > Net effect: (1) **dialogue + gossip are the priority** — show they work in the playable demo; (2) several
 > proposals lost their schema cost by reusing existing graph vocabulary (EXP-53→`BELIEVES`, EXP-50 schema-free,
