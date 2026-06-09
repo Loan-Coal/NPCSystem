@@ -87,6 +87,7 @@ from npc_engine.api.dependency_singletons import (
 from npc_engine.api.dependencies import get_sync_trade_handler
 from npc_engine.engines.interaction.dispatch import set_trade_handler
 from npc_engine.config import get_settings
+from npc_engine.utils.errors import ContentRatingViolationError
 from npc_engine.engines.contracts.contract_loader import load_engine_contracts
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm_runtime_config import validate_all_engine_llm_configs
@@ -166,6 +167,24 @@ async def _internal_error_handler(request: Request, exc: Exception) -> JSONRespo
         status_code=500,
         content=ErrorEnvelope(
             error=ErrorBody(code="internal_error", message="internal error")
+        ).model_dump(),
+    )
+
+
+async def _content_rating_violation_handler(request: Request, exc: ContentRatingViolationError) -> JSONResponse:
+    """Convert ContentRatingViolationError to a canonical ErrorEnvelope (422).
+
+    Args:
+        request: Incoming FastAPI request.
+        exc: The content rating violation raised by the dialogue handler.
+
+    Returns:
+        JSONResponse with ErrorEnvelope shape and HTTP 422 status.
+    """
+    return JSONResponse(
+        status_code=422,
+        content=ErrorEnvelope(
+            error=ErrorBody(code="content_rating_violation", message=str(exc))
         ).model_dump(),
     )
 
@@ -299,6 +318,7 @@ def create_app() -> FastAPI:
     # Exception handlers — registered before middleware so they apply to all errors.
     app.add_exception_handler(RequestValidationError, _validation_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(HTTPException, _http_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(ContentRatingViolationError, _content_rating_violation_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, _internal_error_handler)
 
     # Middleware is applied in reverse registration order (last added = outermost).

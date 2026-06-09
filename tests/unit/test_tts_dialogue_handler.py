@@ -103,6 +103,7 @@ def minimal_handler_with_tts():
     from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
     from npc_engine.engines.dialogue.session_store import SessionStore
     from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
+    from npc_engine.services.input_moderation import build_input_moderation_service
 
     mock_settings = MagicMock()
     mock_settings.TTS_ENABLED = True
@@ -134,6 +135,7 @@ def minimal_handler_with_tts():
         session_store=mock_session_store,
         emotion_updater=mock_emotion_updater,
         embedding_index=MagicMock(),
+        input_moderation=build_input_moderation_service("mature"),
         tts_client=tts,
     )
     return handler, tts

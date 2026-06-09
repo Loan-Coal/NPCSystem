@@ -48,6 +48,7 @@ from npc_engine.utils.metrics import increment_metric
 from npc_engine.engines.knowledge_learning.knowledge_extraction_engine import (
     KnowledgeExtractionEngine,
 )
+from npc_engine.services.input_moderation import InputModerationService
 from npc_engine.world.time_utils import TimePoint
 from npc_engine.world.world_reader import get_world_state
 
@@ -80,6 +81,7 @@ class DialogueHandler:
         self, session: AsyncSession, settings: Settings, llm_client: LLMClientProtocol,
         llm_config: LLMConfig, engine_model_config: EngineModelConfig, session_store: SessionStore,
         emotion_updater: EmotionUpdater, embedding_index: EmbeddingIndexProtocol,
+        input_moderation: InputModerationService,
         context_cache: PartialDialogueContextCache | DialogueContextCache | None = None,
         tts_client: TTSClientProtocol | None = None,
         knowledge_engine: KnowledgeExtractionEngine | None = None,
@@ -87,6 +89,7 @@ class DialogueHandler:
         """Initialise with all engine dependencies injected.
 
         Args:
+            input_moderation: Checks player input against the content ceiling (S16.2).
             knowledge_engine: Optional; persists player facts as BELIEVES nodes (EXP-53),
                 guarded by KNOWLEDGE_LEARNING_ENABLED.
         """
@@ -100,6 +103,7 @@ class DialogueHandler:
         self._context_cache = context_cache
         self._tts_client = tts_client
         self._knowledge_engine = knowledge_engine
+        self._input_moderation = input_moderation
         self._memory_engine = MemoryEngine()
         self._llm = DialogueLLMClient(
             llm_client=llm_client,
@@ -115,9 +119,15 @@ class DialogueHandler:
     async def handle(self, request: DialogueRequest) -> DialogueResponse:
         """Execute the full dialogue flow with tiered degradation and return the response.
 
+        Raises ContentRatingViolationError (→ HTTP 422) when input exceeds the ceiling.
+
         Returns:
             DialogueResponse with resolved action, updated session_id, and degradation level.
         """
+        self._input_moderation.check(
+            player_message=request.player_message,
+            player_id=request.player_id,
+        )
         turns = await self._session_store.get_turns(player_id=request.player_id, npc_id=request.npc_id)
         current_emotion = await self._emotion_updater.get_state(npc_id=request.npc_id)
         parsed_response, level = await execute_with_degradation(

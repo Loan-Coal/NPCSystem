@@ -21,6 +21,7 @@ pytest.importorskip("neo4j")
 
 from npc_engine.api.schemas import DialogueRequest
 from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler, LLM_VALIDATION_FAILURES_METRIC
+from npc_engine.services.input_moderation import build_input_moderation_service
 from npc_engine.engines.dialogue.session_store import SessionStore
 from npc_engine.engines.llm_config_models import (
     EngineModelConfig,
@@ -114,6 +115,7 @@ async def test_dialogue_handler_recovers_from_validation_failure(monkeypatch) ->
         session_store=SessionStore(ttl_seconds=300, max_turns=10),
         emotion_updater=FakeEmotionUpdater(),
         embedding_index=None,
+        input_moderation=build_input_moderation_service("mature"),
     )
     handler._llm.generate_response = AsyncMock(return_value={"bad": "payload"})
 
@@ -157,6 +159,7 @@ async def test_stream_passes_emotion_state_to_context_builder(monkeypatch) -> No
         session_store=SessionStore(ttl_seconds=300, max_turns=10),
         emotion_updater=FakeEmotionUpdater(),
         embedding_index=None,
+        input_moderation=build_input_moderation_service("mature"),
     )
     handler._llm.stream_text = AsyncMock(return_value=["chunk"])
 

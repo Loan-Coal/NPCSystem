@@ -171,6 +171,8 @@ def _make_dialogue_handler(valence_after_mood: int):
     engine_model_config.timeouts_ms.full = 5000
     engine_model_config.timeouts_ms.graph_only = 3000
 
+    from npc_engine.services.input_moderation import build_input_moderation_service
+
     handler = DialogueHandler.__new__(DialogueHandler)
     handler._session = session
     handler._emotion_updater = emotion_updater
@@ -178,6 +180,7 @@ def _make_dialogue_handler(valence_after_mood: int):
     handler._settings = settings
     handler._engine_model_config = engine_model_config
     handler._knowledge_engine = None
+    handler._input_moderation = build_input_moderation_service("mature")
     return handler, session
 
 

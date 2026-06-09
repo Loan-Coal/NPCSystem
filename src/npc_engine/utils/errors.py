@@ -13,6 +13,8 @@ Dependencies injected: None.
 # which frozen=True would otherwise block.
 # All P1 deferred migrations completed as of service #17.
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 
@@ -290,6 +292,19 @@ class TTSSynthesisError(StructuredNPCSystemError):
 
     backend: str
     detail: str
+
+
+@dataclass(frozen=True)
+class ContentRatingViolationError(StructuredNPCSystemError):
+    """Raised when player input exceeds the world's content rating ceiling.
+
+    Attributes:
+        player_id: The player who sent the over-ceiling message.
+        rating: The effective content ceiling that was violated (e.g. 'everyone').
+    """
+
+    player_id: str
+    rating: str
 
 
 class TokenBudgetExceededError(Exception):
