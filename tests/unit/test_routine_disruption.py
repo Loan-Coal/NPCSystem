@@ -177,6 +177,7 @@ def _make_dialogue_handler(valence_after_mood: int):
     handler._session_store = session_store
     handler._settings = settings
     handler._engine_model_config = engine_model_config
+    handler._knowledge_engine = None
     return handler, session
 
 

@@ -231,7 +231,7 @@ class _CharacterReaderWrapper:
     _CharacterReaderProtocol interface expected by ReputationTickAdapter.
     """
 
-    async def get_npc_ids(self, session) -> list[str]:  # type: ignore[return]
+    async def get_npc_ids(self, session) -> list[str]:
         """Return IDs of all active non-player characters.
 
         Args:

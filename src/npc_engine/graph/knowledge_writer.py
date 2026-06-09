@@ -2,7 +2,9 @@
 Module: knowledge_writer
 Layer: graph
 Purpose: Writes learned-fact belief nodes and provenance-annotated BELIEVES edges.
-Dependencies: None (Cypher only; uuid from stdlib).
+Does NOT: contain engine logic, call LLMs, or validate facts — validation is in KnowledgeExtractionEngine.
+Dependencies: neo4j.AsyncSession, stdlib uuid.
+Dependencies injected: AsyncSession (per call).
 Used by: engines.knowledge_learning.knowledge_extraction_engine
 """
 
@@ -47,9 +49,8 @@ async def write_belief(
     game_time_str: str,
 ) -> str:
     """Merge a Belief node and create/update the BELIEVES edge with provenance fields.
-
-    Opens a single transaction, merges the belief by generated UUID, creates or
-    updates the BELIEVES edge from the NPC character node, and commits.
+    Opens a single transaction, merges the belief by UUID, creates/updates the
+    BELIEVES edge from the NPC character node with DEC-072 provenance fields.
 
     Args:
         session: Active Neo4j async session.
@@ -65,7 +66,7 @@ async def write_belief(
     """
     belief_id = str(uuid.uuid4())
     tx = await session.begin_transaction()
-    async with tx:
+    async with tx:  # noqa: SIM117
         await tx.run(
             _CYPHER_WRITE_BELIEF_WITH_PROVENANCE,
             belief_id=belief_id,

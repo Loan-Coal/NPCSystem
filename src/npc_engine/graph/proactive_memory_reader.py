@@ -3,9 +3,8 @@ Module: proactive_memory_reader
 Layer: graph
 Purpose: Read-only Cypher accessor that fetches unshared memories for an NPC,
          implementing MemoryServiceProtocol from the proactive dialogue engine.
-         Uses REMEMBERS edges, ordered by vividness DESC, limited to k rows.
-Known limitation: memory.yaml has no 'shared' field; every returned memory has
-         shared=False in this slice (EXP-10 slice-2 schema waiver).
+Does NOT: write to the graph, apply distortion, or filter by shared flag (schema waiver: memory.yaml
+         has no 'shared' field; every returned memory has shared=False in this slice).
 Dependencies: neo4j.AsyncSession
 Dependencies injected: AsyncSession (per call — no constructor args required).
 Used by: engines.proactive_dialogue.proactive_tick_adapter

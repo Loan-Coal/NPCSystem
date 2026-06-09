@@ -2,16 +2,13 @@
 Module: player_location_reader
 Layer: graph
 Purpose: Read-only Cypher accessors for player/NPC co-location queries via LOCATED_AT edges.
-         Implements LocationServiceProtocol from the proactive dialogue engine.
-         Exposes get_player_idle_ticks() and get_collocated_pairs().
+Does NOT: write to the graph or run non-LOCATED_AT queries.
 Dependencies: neo4j.AsyncSession
 Dependencies injected: AsyncSession (per call — no constructor args required).
 Used by: engines.proactive_dialogue.proactive_tick_adapter
 """
 
 from __future__ import annotations
-
-from typing import Any
 
 from neo4j import AsyncSession
 

@@ -2,6 +2,8 @@
 Package: knowledge_learning
 Layer: engines
 Purpose: Engine for extracting and persisting player-stated facts as NPC belief nodes.
+Does NOT: contain Cypher queries or LLM calls — delegates to graph.knowledge_writer.
+Dependencies injected: none (re-export package).
 Public surface: KnowledgeExtractionEngine, KnowledgeExtractionResult, LearnedFact
 """
 

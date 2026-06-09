@@ -2,9 +2,10 @@
 Module: models
 Layer: engines
 Purpose: Pydantic v2 data models for the knowledge learning engine input/output boundary.
+Does NOT: contain engine logic, write to the graph, or call LLMs.
 Dependencies: pydantic
-Used by: engines.knowledge_learning.knowledge_extraction_engine,
-         engines.dialogue.dialogue_handler
+Dependencies injected: none.
+Used by: engines.knowledge_learning.knowledge_extraction_engine, engines.dialogue.dialogue_handler
 """
 
 from __future__ import annotations
