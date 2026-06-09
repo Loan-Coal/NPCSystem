@@ -20,11 +20,9 @@ R001|src/npc_engine/auth/middleware_helpers.py
 R001|src/npc_engine/config.py
 R001|src/npc_engine/data/api_seeder.py
 R001|src/npc_engine/engines/chapter/chapter_engine.py
-R001|src/npc_engine/engines/dialogue/dialogue_handler.py
 R001|src/npc_engine/engines/gossip/gossip_handler.py
 R001|src/npc_engine/engines/quest/quest_lifecycle_engine.py
 R001|src/npc_engine/engines/quest_generation/quest_generation_engine.py
-R001|src/npc_engine/graph/currency_writer.py
 R001|src/npc_engine/main.py
 R001|src/npc_engine/retrieval/context_budget_enforcer.py
 R001|src/npc_engine/retrieval/context_builder.py
@@ -32,12 +30,7 @@ R001|src/npc_engine/scheduler/tick_scheduler.py
 R001|src/npc_engine/utils/errors.py
 R005|src/npc_engine/engines/events/event_handler.py
 R005|src/npc_engine/engines/faction_politics/faction_politics_engine.py
-R005|src/npc_engine/engines/interaction/quest_verifier.py
 R005|src/npc_engine/engines/quest/quest_lifecycle_engine.py
-R005|src/npc_engine/retrieval/embedding_reconciler.py
-R005|src/npc_engine/retrieval/graph_rag.py
-R005|src/npc_engine/scheduler/tick_lease.py
-R005|src/npc_engine/scheduler/tick_scheduler.py
 R005|src/npc_engine/world/world_reader.py
 R005|src/npc_engine/world/world_writer.py
 R006|src/npc_engine/api/dependencies_engines.py::get_tick_scheduler
@@ -56,8 +49,6 @@ R006|src/npc_engine/engines/chapter/chapter_engine.py::ChapterEngine._label_chap
 R006|src/npc_engine/engines/chapter/chapter_engine.py::ChapterEngine.run_tick
 R006|src/npc_engine/engines/clique/clique_formation_engine.py::CliqueFormationEngine._run_formation
 R006|src/npc_engine/engines/dialogue/degradation.py::execute_with_degradation
-R006|src/npc_engine/engines/dialogue/dialogue_handler.py::DialogueHandler.__init__
-R006|src/npc_engine/engines/dialogue/dialogue_handler.py::DialogueHandler.handle
 R006|src/npc_engine/engines/dialogue/llm_client.py::DialogueLLMClient._generate_with_retry
 R006|src/npc_engine/engines/dialogue/llm_client.py::DialogueLLMClient.stream_text
 R006|src/npc_engine/engines/dialogue/prompt_builder.py::_build_knowledge_gaps
@@ -110,8 +101,6 @@ R006|src/npc_engine/engines/quest_generation/quest_generation_engine.py::QuestGe
 R006|src/npc_engine/engines/quest_generation/world_state_quest_trigger.py::WorldStateQuestTrigger._generate_for_epoch
 R006|src/npc_engine/engines/routine/routine_engine.py::RoutineEngine.run_tick
 R006|src/npc_engine/engines/story_pacing/story_pacing_engine.py::StoryPacingEngine.run_tick
-R006|src/npc_engine/graph/currency_writer.py::execute_currency_transfer_in_tx
-R006|src/npc_engine/graph/currency_writer.py::transfer_currency_atomic
 R006|src/npc_engine/graph/generic_edge_service.py::GenericEdgeService.list_edges
 R006|src/npc_engine/graph/generic_edge_service.py::GenericEdgeService.upsert_edge
 R006|src/npc_engine/graph/goal_service.py::create_goal
@@ -146,12 +135,10 @@ R006|src/npc_engine/main.py::lifespan
 R006|src/npc_engine/retrieval/context_budget_enforcer.py::_fit_compressible_tier
 R006|src/npc_engine/retrieval/context_budget_enforcer.py::enforce_context_budget
 R006|src/npc_engine/retrieval/context_budget_enforcer.py::fill_to_budget
-R006|src/npc_engine/retrieval/context_builder.py::build_serialized_context
 R006|src/npc_engine/retrieval/context_builder_helpers.py::enforce_final_serialized_budget_with_context
 R006|src/npc_engine/retrieval/context_relevance_engine.py::rank_context_candidates
 R006|src/npc_engine/retrieval/context_scoring.py::rank_tier_items
 R006|src/npc_engine/retrieval/context_serializer.py::serialize_context
-R006|src/npc_engine/retrieval/graph_rag.py::graph_rag_retrieve
 R006|src/npc_engine/retrieval/subgraph_retriever.py::assemble_tier_a_context
 R006|src/npc_engine/retrieval/subgraph_retriever.py::retrieve_tier_a_context
 R006|src/npc_engine/retrieval/token_budget_enforcer.py::enforce_budget

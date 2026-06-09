@@ -27,6 +27,7 @@ from typing import Any, Protocol
 
 from neo4j import AsyncSession
 
+from npc_engine.graph.graph_rag_queries import expand_seeds
 from npc_engine.retrieval.vector_store_protocol import VectorSearchResult
 from npc_engine.world.time_utils import TimePoint, total_days
 
@@ -53,25 +54,6 @@ _EXPANSION_EDGE_TYPES = frozenset({
     "PART_OF_CHAPTER",
 })
 
-_CYPHER_EXPAND_SEEDS = """
-UNWIND $seed_ids AS seed_id
-MATCH (seed) WHERE seed.id = seed_id
-MATCH (seed)-[r]-(neighbor)
-WHERE type(r) IN $edge_types
-  AND neighbor.id IS NOT NULL
-RETURN
-    seed_id,
-    neighbor.id AS neighbor_id,
-    properties(neighbor) AS neighbor_props,
-    type(r) AS edge_type,
-    CASE
-        WHEN r.trust IS NOT NULL THEN toFloat(r.trust) / 100.0
-        WHEN r.confidence IS NOT NULL THEN toFloat(r.confidence) / 100.0
-        ELSE 0.5
-    END AS edge_weight
-"""
-
-
 class EmbeddingIndexProtocol(Protocol):
     async def search(
         self,
@@ -79,6 +61,42 @@ class EmbeddingIndexProtocol(Protocol):
         top_k: int,
         filter_ids: set[str] | None = None,
     ) -> list[VectorSearchResult]: ...
+
+
+def _update_best(best_scores: dict[str, tuple[float, dict]], node_id: str, score: float, props: dict) -> None:
+    existing = best_scores.get(node_id)
+    if existing is None or score > existing[0]:
+        best_scores[node_id] = (score, props)
+
+
+def _score_all_seeds(
+    best_scores: dict[str, tuple[float, dict]],
+    seed_scores: dict[str, float],
+    seed_payloads: dict[str, dict],
+    game_time: TimePoint | None,
+) -> None:
+    """Score each seed node using vector similarity and recency; update best_scores in-place."""
+    for seed_id, vec_sim in seed_scores.items():
+        recency = _recency_score(seed_payloads.get(seed_id, {}), game_time)
+        composite = vec_sim * _RAG_RELEVANCE_WEIGHT + _RAG_RECENCY_WEIGHT * recency
+        _update_best(best_scores, seed_id, composite, seed_payloads.get(seed_id, {}))
+
+
+def _score_expansion_records(
+    best_scores: dict[str, tuple[float, dict]],
+    expansion_records: list[Any],
+    seed_scores: dict[str, float],
+    game_time: TimePoint | None,
+) -> None:
+    """Score each expanded neighbor using composite weights; update best_scores in-place."""
+    for row in expansion_records:
+        neighbor_id = row["neighbor_id"]
+        neighbor_props = dict(row.get("neighbor_props") or {})
+        edge_weight = float(row.get("edge_weight") or 0.5)
+        vec_sim = seed_scores.get(row["seed_id"], 0.0)
+        recency = _recency_score(neighbor_props, game_time)
+        composite = vec_sim * _RAG_RELEVANCE_WEIGHT + edge_weight * _RAG_TRUST_WEIGHT + recency * _RAG_RECENCY_WEIGHT
+        _update_best(best_scores, neighbor_id, composite, neighbor_props)
 
 
 def _recency_score(props: dict[str, Any], game_time: TimePoint | None) -> float:
@@ -114,75 +132,25 @@ def _recency_score(props: dict[str, Any], game_time: TimePoint | None) -> float:
 
 
 async def graph_rag_retrieve(
-    session: AsyncSession,
-    embedding_index: EmbeddingIndexProtocol,
-    query: str,
-    npc_id: str,
-    known_event_ids: set[str],
-    top_k: int,
-    game_time: TimePoint | None = None,
+    session: AsyncSession, embedding_index: EmbeddingIndexProtocol, query: str,
+    npc_id: str, known_event_ids: set[str], top_k: int, game_time: TimePoint | None = None,
 ) -> list[VectorSearchResult]:
-    """GraphRAG unified retrieval: vector seeds → graph expansion → composite scoring.
+    """GraphRAG retrieval: vector seeds → 1-hop graph expansion → composite scoring.
 
-    Args:
-        session: Active Neo4j async session.
-        embedding_index: Vector search backend.
-        query: Expanded query string for vector search.
-        npc_id: ID of the NPC; used to enforce knowledge boundary via known_event_ids.
-        known_event_ids: Set of event IDs the NPC has KNOWS_ABOUT edges for.
-        top_k: Number of results to return.
-        game_time: Current game time for recency scoring (optional).
-
-    Returns:
-        Ranked list of VectorSearchResult dicts, length ≤ top_k.
+    Returns ranked list of VectorSearchResult dicts, length ≤ top_k.
     """
-    rag_filter = known_event_ids if known_event_ids else None
     seed_results: list[VectorSearchResult] = await embedding_index.search(
-        query=query,
-        top_k=top_k * 2,  # fetch extra seeds to allow for graph expansion filtering
-        filter_ids=rag_filter,
+        query=query, top_k=top_k * 2, filter_ids=known_event_ids or None,
     )
     if not seed_results:
         return []
-
     seed_scores: dict[str, float] = {r["id"]: float(r.get("score", 0.0)) for r in seed_results}
     seed_payloads: dict[str, dict] = {r["id"]: r.get("payload", {}) for r in seed_results}
-    seed_ids = list(seed_scores.keys())
-
-    # Expand 1 hop from each seed along semantically relevant edges.
-    expansion_result = await session.run(
-        _CYPHER_EXPAND_SEEDS,
-        seed_ids=seed_ids,
-        edge_types=list(_EXPANSION_EDGE_TYPES),
+    expansion_records = await expand_seeds(
+        session, seed_ids=list(seed_scores.keys()), edge_types=list(_EXPANSION_EDGE_TYPES),
     )
-    expansion_records = await expansion_result.data()
-
-    # Accumulate best score per node (seed + neighbors).
     best_scores: dict[str, tuple[float, dict]] = {}
-
-    def _update_best(node_id: str, score: float, props: dict) -> None:
-        existing = best_scores.get(node_id)
-        if existing is None or score > existing[0]:
-            best_scores[node_id] = (score, props)
-
-    for seed_id, vec_sim in seed_scores.items():
-        recency = _recency_score(seed_payloads.get(seed_id, {}), game_time)
-        composite = vec_sim * _RAG_RELEVANCE_WEIGHT + _RAG_RECENCY_WEIGHT * recency  # seed: no edge_weight component
-        _update_best(seed_id, composite, seed_payloads.get(seed_id, {}))
-
-    for row in expansion_records:
-        seed_id = row["seed_id"]
-        neighbor_id = row["neighbor_id"]
-        neighbor_props = dict(row.get("neighbor_props") or {})
-        edge_weight = float(row.get("edge_weight") or 0.5)
-        vec_sim = seed_scores.get(seed_id, 0.0)
-        recency = _recency_score(neighbor_props, game_time)
-        composite = vec_sim * _RAG_RELEVANCE_WEIGHT + edge_weight * _RAG_TRUST_WEIGHT + recency * _RAG_RECENCY_WEIGHT
-        _update_best(neighbor_id, composite, neighbor_props)
-
-    # Sort by score descending, take top_k, return as VectorSearchResult dicts.
+    _score_all_seeds(best_scores, seed_scores, seed_payloads, game_time)
+    _score_expansion_records(best_scores, expansion_records, seed_scores, game_time)
     ranked = sorted(best_scores.items(), key=lambda kv: kv[1][0], reverse=True)
-    return [
-        VectorSearchResult(id=node_id, score=score, payload=props)
-        for node_id, (score, props) in ranked[:top_k]
-    ]
+    return [VectorSearchResult(id=nid, score=s, payload=p) for nid, (s, p) in ranked[:top_k]]

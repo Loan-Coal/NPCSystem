@@ -77,36 +77,19 @@ class DialogueHandler:
     """Dialogue engine orchestrator."""
 
     def __init__(
-        self,
-        session: AsyncSession,
-        settings: Settings,
-        llm_client: LLMClientProtocol,
-        llm_config: LLMConfig,
-        engine_model_config: EngineModelConfig,
-        session_store: SessionStore,
-        emotion_updater: EmotionUpdater,
-        embedding_index: EmbeddingIndexProtocol,
+        self, session: AsyncSession, settings: Settings, llm_client: LLMClientProtocol,
+        llm_config: LLMConfig, engine_model_config: EngineModelConfig, session_store: SessionStore,
+        emotion_updater: EmotionUpdater, embedding_index: EmbeddingIndexProtocol,
         context_cache: PartialDialogueContextCache | DialogueContextCache | None = None,
         tts_client: TTSClientProtocol | None = None,
         knowledge_engine: KnowledgeExtractionEngine | None = None,
     ) -> None:
-        """Initialise the dialogue handler with all engine dependencies.
+        """Initialise with all engine dependencies injected.
 
         Args:
-            session: Active Neo4j async session.
-            settings: Application settings.
-            llm_client: LLM adapter for text generation.
-            llm_config: Context pipeline config (tier budgets and relevance weights).
-            engine_model_config: Per-engine LLM config (model params, timeouts, fallback).
-            session_store: In-memory session turn store.
-            emotion_updater: Engine for reading and updating NPC emotion state.
-            embedding_index: Vector index supporting the EmbeddingIndexProtocol.
-            context_cache: Optional in-memory dialogue context cache.
-            tts_client: Optional TTS adapter; used when settings.TTS_ENABLED is True.
-            knowledge_engine: Optional engine for persisting player-stated facts as
-                belief nodes (EXP-53).  Guarded by KNOWLEDGE_LEARNING_ENABLED flag.
+            knowledge_engine: Optional; persists player facts as BELIEVES nodes (EXP-53),
+                guarded by KNOWLEDGE_LEARNING_ENABLED.
         """
-
         self._session = session
         self._settings = settings
         self._llm_config = llm_config
@@ -132,110 +115,69 @@ class DialogueHandler:
     async def handle(self, request: DialogueRequest) -> DialogueResponse:
         """Execute the full dialogue flow with tiered degradation and return the response.
 
-        Args:
-            request: Incoming dialogue request from the player.
-
         Returns:
-            Final DialogueResponse with resolved action, updated session_id, and
-            degradation level indicating which tier produced the response.
+            DialogueResponse with resolved action, updated session_id, and degradation level.
         """
-
         turns = await self._session_store.get_turns(player_id=request.player_id, npc_id=request.npc_id)
         current_emotion = await self._emotion_updater.get_state(npc_id=request.npc_id)
-
         parsed_response, level = await execute_with_degradation(
-            full_factory=lambda: self._run_llm_pipeline(
-                request=request, turns=turns, current_emotion=current_emotion, skip_rag=False
-            ),
-            graph_only_factory=lambda: self._run_llm_pipeline(
-                request=request, turns=turns, current_emotion=current_emotion, skip_rag=True
-            ),
+            full_factory=lambda: self._run_llm_pipeline(request=request, turns=turns, current_emotion=current_emotion, skip_rag=False),
+            graph_only_factory=lambda: self._run_llm_pipeline(request=request, turns=turns, current_emotion=current_emotion, skip_rag=True),
             archetype="default",
             canned_dir=Path(self._settings.CANNED_RESPONSES_DIR),
             full_timeout=self._engine_model_config.timeouts_ms.full / 1000.0,
             graph_only_timeout=(self._engine_model_config.timeouts_ms.graph_only or 0) / 1000.0,
         )
-
         resolved_action = resolve_action(action=parsed_response.action)
-        final_response = parsed_response.model_copy(
-            update={
-                "action": resolved_action,
-                "session_id": request.session_id or f"{request.player_id}:{request.npc_id}",
-                "cached": False,
-                "degradation_level": level,
-            }
-        )
-
+        final_response = parsed_response.model_copy(update={
+            "action": resolved_action,
+            "session_id": request.session_id or f"{request.player_id}:{request.npc_id}",
+            "cached": False, "degradation_level": level,
+        })
         tick_id = int(datetime.now(timezone.utc).timestamp())
+        new_emotion = await self._apply_relation_and_emotion(request=request, response=final_response, level=level, tick_id=tick_id)
+        await self._apply_arousal_memory(request=request, response=final_response, new_emotion=new_emotion)
+        await self._apply_knowledge_and_routine(request=request, response=final_response, new_emotion=new_emotion, tick_id=tick_id)
+        if getattr(self._settings, "TTS_ENABLED", False) and getattr(self, "_tts_client", None) is not None:
+            final_response = await self._synthesize_audio(response=final_response, npc_id=request.npc_id)
+        return final_response
+
+    async def _apply_relation_and_emotion(self, *, request: DialogueRequest, response: DialogueResponse, level: str, tick_id: int):
+        """Apply relation deltas (if not canned) and update NPC emotion; return new emotion state."""
         if level != "canned":
             await apply_dialogue_relation_deltas(
-                session=self._session,
-                settings=self._settings,
-                npc_id=request.npc_id,
-                player_id=request.player_id,
-                relation_deltas=final_response.relation_deltas,
-                cause_id=f"dialogue:{request.player_id}:{request.npc_id}",
-                tick_id=tick_id,
+                session=self._session, settings=self._settings, npc_id=request.npc_id,
+                player_id=request.player_id, relation_deltas=response.relation_deltas,
+                cause_id=f"dialogue:{request.player_id}:{request.npc_id}", tick_id=tick_id,
             )
+        return await self._emotion_updater.apply_dialogue_mood(npc_id=request.npc_id, mood_update=response.mood_update)
 
-        new_emotion = await self._emotion_updater.apply_dialogue_mood(
-            npc_id=request.npc_id, mood_update=final_response.mood_update
+    async def _apply_arousal_memory(self, *, request: DialogueRequest, response: DialogueResponse, new_emotion) -> None:
+        """Create an episodic memory when NPC arousal exceeds the high-arousal threshold."""
+        if getattr(new_emotion, "arousal", 0) <= 70:
+            return
+        world_state = await get_world_state(session=self._session, world_id=self._settings.WORLD_ID)
+        game_time = TimePoint(year=world_state.year, season=world_state.season, day=world_state.day, time_of_day=world_state.time_of_day)
+        await self._memory_engine.create_from_arousal(
+            self._session, character_id=request.npc_id, arousal=new_emotion.arousal,
+            content=f"{request.player_message} — {response.npc_response}", game_time=game_time,
         )
-        if getattr(new_emotion, "arousal", 0) > 70:
+
+    async def _apply_knowledge_and_routine(self, *, request: DialogueRequest, response: DialogueResponse, new_emotion, tick_id: int) -> None:
+        """Process knowledge learning, routine override, and session-turn bookkeeping."""
+        if (self._knowledge_engine is not None and getattr(self._settings, "KNOWLEDGE_LEARNING_ENABLED", False) and response.learned_facts):
             world_state = await get_world_state(session=self._session, world_id=self._settings.WORLD_ID)
-            game_time = TimePoint(
-                year=world_state.year,
-                season=world_state.season,
-                day=world_state.day,
-                time_of_day=world_state.time_of_day,
-            )
-            await self._memory_engine.create_from_arousal(
-                self._session,
-                character_id=request.npc_id,
-                arousal=new_emotion.arousal,
-                content=f"{request.player_message} — {final_response.npc_response}",
-                game_time=game_time,
-            )
-        if (
-            self._knowledge_engine is not None
-            and getattr(self._settings, "KNOWLEDGE_LEARNING_ENABLED", False)
-            and final_response.learned_facts
-        ):
-            world_state = await get_world_state(
-                session=self._session, world_id=self._settings.WORLD_ID
-            )
-            game_time_str = (
-                f"Year {world_state.year} {world_state.season} "
-                f"Day {world_state.day} {world_state.time_of_day}"
-            )
+            game_time_str = f"Year {world_state.year} {world_state.season} Day {world_state.day} {world_state.time_of_day}"
             await self._knowledge_engine.process(
-                self._session,
-                npc_id=request.npc_id,
-                player_id=request.player_id,
-                tick=tick_id,
-                learned_facts=list(final_response.learned_facts),
-                game_time_str=game_time_str,
+                self._session, npc_id=request.npc_id, player_id=request.player_id,
+                tick=tick_id, learned_facts=list(response.learned_facts), game_time_str=game_time_str,
             )
         if new_emotion.valence < -60:
-            await set_routine_override(
-                session=self._session,
-                character_id=request.npc_id,
-                location_id="home",
-                expires_at_tick=tick_id + 5,
-            )
+            await set_routine_override(session=self._session, character_id=request.npc_id, location_id="home", expires_at_tick=tick_id + 5)
         await self._session_store.append_turns(
-            player_id=request.player_id,
-            npc_id=request.npc_id,
-            new_turns=[
-                f"player: {request.player_message}",
-                f"npc: {final_response.npc_response}",
-            ],
+            player_id=request.player_id, npc_id=request.npc_id,
+            new_turns=[f"player: {request.player_message}", f"npc: {response.npc_response}"],
         )
-        if getattr(self._settings, "TTS_ENABLED", False) and getattr(self, "_tts_client", None) is not None:
-            final_response = await self._synthesize_audio(
-                response=final_response, npc_id=request.npc_id
-            )
-        return final_response
 
     async def _synthesize_audio(
         self, response: DialogueResponse, npc_id: str
