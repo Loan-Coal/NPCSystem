@@ -104,7 +104,11 @@
       "Bash(python -m pytest --tb=no -q)",
       "Bash(python -m pytest tests/unit/utils/ -v --tb=short)",
       "Bash(python3 -c ' *)",
-      "Bash(python3)"
+      "Bash(python3)",
+      "Bash(python src/npc_engine/scripts/check_contracts.py)",
+      "Bash(python scripts/check_rules.py)",
+      "Bash(python -m mypy src/npc_engine/retrieval/context_builder.py --no-error-summary)",
+      "Bash(python -m mypy src/ --no-error-summary)"
     ],
     "additionalDirectories": [
       "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem",

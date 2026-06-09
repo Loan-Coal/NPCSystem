@@ -106,13 +106,14 @@ every other NPC skips the loop, so the bug never fired for them.
 2. Bounded the previously-unbounded second-hop loop with `MAX_SECOND_HOP_EVENTS`
    (config.py, default 5) — defensive, prevents tier-A accumulation for hub NPCs.
 
-## ISSUE-077: quest_lifecycle_engine.py is 643 lines — pre-existing over 300-line limit
+## [FIXED] ISSUE-077: quest_lifecycle_engine.py is 643 lines — pre-existing over 300-line limit
 **Found:** 2026-06-06, during EXP-20 fan-in
 **Severity:** P2 (annoying)
 **Where:** `src/npc_engine/engines/quest/quest_lifecycle_engine.py` (643 lines)
 **Description:** File exceeds the 300-line hard limit (CLAUDE.md). Pre-existing before EXP-20 (EXP-20 reduced it by 2 lines net). The file is grandfathered in `scripts/rules_baseline.txt`.
 **Why deferred:** Splitting would require either a new `quest_reward_engine.py` (reward routing logic) + `quest_objective_engine.py` (objective verification) or a `quest_transition_engine.py` for the state machine. This is a non-trivial refactor requiring its own task. A DECISIONS.md entry would be needed to approve the split boundary.
 **To fix:** Split into at least two files: `quest_lifecycle_engine.py` (state transitions only, ≤300 lines) + `quest_reward_router.py` (reward routing + item transfer logic). Write a DECISIONS.md entry proposing the split boundary first.
+**Fixed:** 2026-06-09, in Batch D (DEC-078). 3-way split: quest_lifecycle_engine.py (285L, accept/update/evaluate), quest_offer_service.py (213L, offer_draft_quest/offer_quest), quest_reward_router.py (290L, apply_rewards). All 17 affected tests updated; 1783+ unit tests green.
 
 ## [FIXED] ISSUE-078: gossip_handler.py uses stdlib logging.getLogger directly — bypasses npc_engine logging setup
 **Found:** 2026-06-06, during EXP-12 fan-in (worker observation)

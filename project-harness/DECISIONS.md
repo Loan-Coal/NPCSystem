@@ -747,3 +747,27 @@ no edits to `dialogue_handler.py`. The scheduler registration edits `tick_schedu
 push edits `api/routes/dialogue_ws.py` — that is the one existing file EXP-10 must touch.
 EXP-10 conflicts with EXP-33 on `main.py` (both add router registration); they must be sequenced
 (EXP-33 first, then EXP-10 in the next batch after EXP-33 is merged).
+
+## DEC-078: quest_lifecycle_engine.py split into 3 classes (supersedes DEC-044, fixes ISSUE-077)
+**Date:** 2026-06-09
+**Context:** `quest_lifecycle_engine.py` is 645 lines — the DEC-044 waiver said "acceptable until
+Phase 3 requires adding quest-type-specific transition logic." Batch D tech-debt pass (ISSUE-077)
+authorises the split. Analysis shows a simple 2-file split (lifecycle + rewards) leaves the
+lifecycle file at ~447 lines — still over 300 — because 6 public methods with mandatory
+Args/Returns/Raises docstrings and keyword-only signatures each consume 50+ lines. A 3-file
+split is required.
+**Split boundary:**
+- `quest_lifecycle_engine.py` — `QuestLifecycleEngine`: `accept_quest`, `update_objective`,
+  `evaluate_completion` + private helpers (`_require_state`, `_emit_lifecycle_event`,
+  `_persist_state_and_event`). ~290 lines. Callers in `quest_handler.py` and `interaction.py`
+  use only these methods and need no changes.
+- `quest_offer_service.py` — `QuestOfferService`: `offer_draft_quest`, `offer_quest`. ~210 lines.
+- `quest_reward_router.py` — `QuestRewardRouter`: `apply_rewards`, `_apply_rewards_in_tx`,
+  `_collect_delivery_items_in_tx`. ~250 lines.
+**Callers updated:** `api/routes/quest.py` offer routes inject `QuestOfferService`; reward route
+injects `QuestRewardRouter`. `api/dependencies_engines.py` gains two new factory functions.
+`quest_handler.py` and `api/routes/interaction.py` are unchanged.
+**Why:** Three independent classes with SRP: offer = state creation, transitions = state machine,
+rewards = economic settlement. Each is independently testable. No delegation indirection.
+**Consequence:** DEC-044 superseded. ISSUE-077 closed. Test imports updated for offer and reward
+test modules.
