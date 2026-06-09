@@ -38,6 +38,7 @@ from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
 from npc_engine.engines.quest_generation.event_quest_trigger import EventQuestTrigger
 from npc_engine.engines.quest_generation.need_quest_trigger import NeedQuestTrigger
 from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
+from npc_engine.engines.quest_generation.world_state_quest_trigger import WorldStateQuestTrigger
 from npc_engine.engines.quest_generation.template_loader import load_templates
 from npc_engine.engines.routine.routine_engine import RoutineEngine
 from npc_engine.engines.story_pacing.pacing_rules_loader import load_pacing_rules
@@ -121,6 +122,16 @@ def get_need_quest_trigger() -> NeedQuestTrigger:
         NeedQuestTrigger instance using the default need threshold.
     """
     return NeedQuestTrigger(generation_engine=get_quest_generation_engine())
+
+
+@lru_cache
+def get_world_state_quest_trigger() -> WorldStateQuestTrigger:
+    """Create singleton WorldStateQuestTrigger wired to the shared quest generation engine.
+
+    Returns:
+        WorldStateQuestTrigger instance using the default max-per-tick of 1.
+    """
+    return WorldStateQuestTrigger(generation_engine=get_quest_generation_engine())
 
 
 @lru_cache
@@ -219,6 +230,7 @@ def get_tick_scheduler() -> TickScheduler:
         military_engine=get_military_engine(),
         event_quest_trigger=get_event_quest_trigger(),
         need_quest_trigger=get_need_quest_trigger(),
+        world_state_quest_trigger=get_world_state_quest_trigger(),
         engine_status_store=get_engine_status_store(),
         gossip_interval=settings.GOSSIP_TICK_INTERVAL,
         event_interval=settings.EVENT_TICK_INTERVAL,
