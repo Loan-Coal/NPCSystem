@@ -2,10 +2,15 @@
 Module: dependencies_engines
 Layer: api
 Purpose: Singleton factory providers for core domain engines —
-         gossip, events, quest, quest-generation, economy, faction, pacing, routine, scheduler.
+         gossip, events, quest, quest-generation, economy, faction, pacing, routine, scheduler,
+         proactive dialogue (EXP-10 s2), reputation propagation (EXP-52 s2).
 Does NOT: create session-scoped or per-request dependencies.
 Dependencies injected: infra + store singletons from dependencies_infra / dependencies_stores.
 Used by: api.dependency_singletons (re-exporter)
+
+Line-count note: this file is the sole composition root for all engine singletons.
+Splitting into sub-modules would fragment a cohesive wiring responsibility that has no
+natural seam. See DECISIONS.md (DEC-042 rationale applies equally here).
 """
 
 from __future__ import annotations
@@ -40,9 +45,19 @@ from npc_engine.engines.quest_generation.need_quest_trigger import NeedQuestTrig
 from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
 from npc_engine.engines.quest_generation.world_state_quest_trigger import WorldStateQuestTrigger
 from npc_engine.engines.quest_generation.template_loader import load_templates
+from npc_engine.engines.reputation.propagation_config import load_propagation_config
+from npc_engine.engines.reputation.reputation_engine import ReputationEngine
+from npc_engine.engines.reputation.reputation_tick_adapter import ReputationTickAdapter
 from npc_engine.engines.routine.routine_engine import RoutineEngine
 from npc_engine.engines.story_pacing.pacing_rules_loader import load_pacing_rules
 from npc_engine.engines.story_pacing.story_pacing_engine import StoryPacingEngine
+from npc_engine.engines.proactive_dialogue.proactive_engine import ProactiveDialogueEngine
+from npc_engine.engines.proactive_dialogue.proactive_tick_adapter import ProactiveDialogueTick
+from npc_engine.graph.player_location_reader import PlayerLocationReader
+from npc_engine.graph.proactive_memory_reader import ProactiveMemoryReader
+from npc_engine.graph.character_reader import get_npc_ids as _graph_get_npc_ids
+from npc_engine.graph.reputation_nudge import apply_trust_nudge
+from npc_engine.graph.relation_reader import RelationReader
 from npc_engine.scheduler.tick_scheduler import TickScheduler
 
 
@@ -191,6 +206,80 @@ def get_routine_engine() -> RoutineEngine:
 
 
 @lru_cache
+def get_proactive_dialogue_engine() -> ProactiveDialogueTick:
+    """Create singleton ProactiveDialogueTick wired to the shared LLM client and graph readers.
+
+    Returns:
+        ProactiveDialogueTick adapter ready for the tick scheduler.
+    """
+    engine_config = get_engine_model_config_for("proactive_dialogue")
+    llm_client = _register_adapter(create_llm_client_for_engine(engine_config, get_settings()))
+    memory_reader = ProactiveMemoryReader()
+    location_reader = PlayerLocationReader()
+    engine = ProactiveDialogueEngine(
+        llm_client=llm_client,
+        memory_service=memory_reader,
+        location_service=location_reader,
+    )
+    return ProactiveDialogueTick(engine=engine, location_reader=location_reader)
+
+
+class _CharacterReaderWrapper:
+    """Module-level adapter exposing get_npc_ids as a method for DI into ReputationTickAdapter.
+
+    Wraps the graph.character_reader.get_npc_ids module function behind the
+    _CharacterReaderProtocol interface expected by ReputationTickAdapter.
+    """
+
+    async def get_npc_ids(self, session) -> list[str]:  # type: ignore[return]
+        """Return IDs of all active non-player characters.
+
+        Args:
+            session: Active Neo4j async session.
+
+        Returns:
+            List of NPC ID strings.
+        """
+        return await _graph_get_npc_ids(session)
+
+
+_character_reader_singleton = _CharacterReaderWrapper()
+
+
+@lru_cache
+def get_reputation_engine() -> ReputationTickAdapter:
+    """Create singleton ReputationTickAdapter loaded from reputation_rules.yaml.
+
+    Wires RelationReader factory and apply_trust_nudge (graph layer) into
+    ReputationEngine via ReputationTickAdapter.  RelationReader is constructed
+    fresh each tick via the relation_reader_factory to avoid session leakage.
+
+    Returns:
+        ReputationTickAdapter ready for the tick scheduler.
+    """
+    rules_path = (
+        Path(__file__).resolve().parent.parent
+        / "engines"
+        / "reputation"
+        / "reputation_rules.yaml"
+    )
+    config = load_propagation_config(rules_path)
+    reputation_engine = ReputationEngine(
+        config=config,
+        relation_reader=_character_reader_singleton,  # replaced per-tick by factory
+        apply_nudge_fn=apply_trust_nudge,
+    )
+    settings = get_settings()
+    return ReputationTickAdapter(
+        engine=reputation_engine,
+        character_reader=_character_reader_singleton,
+        player_id=settings.WORLD_ID,
+        config=config,
+        relation_reader_factory=RelationReader,
+    )
+
+
+@lru_cache
 def get_tick_scheduler() -> TickScheduler:
     """Create singleton tick scheduler with shared gossip, event, and routine handlers.
 
@@ -231,6 +320,8 @@ def get_tick_scheduler() -> TickScheduler:
         event_quest_trigger=get_event_quest_trigger(),
         need_quest_trigger=get_need_quest_trigger(),
         world_state_quest_trigger=get_world_state_quest_trigger(),
+        proactive_dialogue_engine=get_proactive_dialogue_engine(),
+        reputation_engine=get_reputation_engine(),
         engine_status_store=get_engine_status_store(),
         gossip_interval=settings.GOSSIP_TICK_INTERVAL,
         event_interval=settings.EVENT_TICK_INTERVAL,
