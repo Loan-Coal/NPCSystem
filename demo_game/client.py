@@ -1248,6 +1248,30 @@ class EngineClient:
         all_needs = self.get_graph_nodes("Need", limit=200)
         return [n for n in all_needs if n.get("character_id") == npc_id]
 
+    def get_pending_intents(self, player_id: str) -> list[dict]:
+        """Fetch and consume pending NPC-initiated dialogue intents for a player.
+
+        Calls GET /v1/dialogue/pending. The endpoint is destructive: each call
+        marks returned intents as delivered; do not call concurrently.
+
+        Args:
+            player_id: Character ID of the player to fetch intents for.
+
+        Returns:
+            List of ConversationIntentResponse dicts ordered by score DESC.
+            Empty list when no intents are pending.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        resp = self._client.get(
+            "/v1/dialogue/pending",
+            params={"player_id": player_id},
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, "GET /v1/dialogue/pending")
+        return resp.json()
+
     def get_items_for_character(self, character_id: str) -> list[dict]:
         """Return all items owned by a character.
 

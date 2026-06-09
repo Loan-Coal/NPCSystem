@@ -31,6 +31,37 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 
+async def _apply_cap_enforcement(
+    session: AsyncSession,
+    intent: "ConversationIntent",
+    settings: "Settings",
+) -> bool:
+    """Enforce per-NPC cap; return True if the intent should be enqueued.
+
+    If the NPC is at capacity and the new intent has a higher score than the
+    lowest-score existing intent, the lowest is deleted and True is returned.
+    If the new intent scores lower, it is dropped (False returned).
+
+    Args:
+        session: Active Neo4j async session.
+        intent: Candidate intent to check against the cap.
+        settings: Provides MAX_PENDING_INTENTS_PER_NPC.
+
+    Returns:
+        True if the intent should proceed to MERGE; False if it should be dropped.
+    """
+    count = await count_npc_pending_intents(session, intent.npc_id)
+    if count < settings.MAX_PENDING_INTENTS_PER_NPC:
+        return True
+    lowest = await get_lowest_score_pending(session, intent.npc_id)
+    if lowest is not None and float(lowest["score"]) < intent.score:
+        await delete_intent_by_id(session, lowest["id"])
+        _logger.debug("intent_cap_evict", extra={"npc_id": intent.npc_id, "evicted_id": lowest["id"]})
+        return True
+    _logger.debug("intent_cap_drop", extra={"npc_id": intent.npc_id, "dropped_score": intent.score})
+    return False
+
+
 async def enqueue_intent(
     session: AsyncSession,
     intent: "ConversationIntent",
@@ -39,8 +70,6 @@ async def enqueue_intent(
 ) -> None:
     """Enqueue a ConversationIntent as a PendingIntent node.
 
-    Enforces per-NPC cap: if the NPC already has >= MAX_PENDING_INTENTS_PER_NPC
-    pending intents, the lowest-score one is deleted before the new one is merged.
     MERGE on a deterministic id prevents duplicate enqueues for the same
     (npc_id, player_id, tick, trigger_type) combination.
 
@@ -50,23 +79,8 @@ async def enqueue_intent(
         settings: Application settings for cap values.
     """
     intent_id = f"{intent.npc_id}:{intent.player_id}:{intent.tick}:{intent.trigger_type}"
-
-    count = await count_npc_pending_intents(session, intent.npc_id)
-    if count >= settings.MAX_PENDING_INTENTS_PER_NPC:
-        lowest = await get_lowest_score_pending(session, intent.npc_id)
-        if lowest is not None and float(lowest["score"]) < intent.score:
-            await delete_intent_by_id(session, lowest["id"])
-            _logger.debug(
-                "intent_cap_evict",
-                extra={"npc_id": intent.npc_id, "evicted_id": lowest["id"]},
-            )
-        elif lowest is not None:
-            _logger.debug(
-                "intent_cap_drop",
-                extra={"npc_id": intent.npc_id, "dropped_score": intent.score},
-            )
-            return
-
+    if not await _apply_cap_enforcement(session, intent, settings):
+        return
     await merge_pending_intent(
         session,
         id=intent_id,

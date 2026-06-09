@@ -771,3 +771,15 @@ injects `QuestRewardRouter`. `api/dependencies_engines.py` gains two new factory
 rewards = economic settlement. Each is independently testable. No delegation indirection.
 **Consequence:** DEC-044 superseded. ISSUE-077 closed. Test imports updated for offer and reward
 test modules.
+
+## DEC-079: intent_queries.py accepted over 300-line limit (~334 lines, Phase 14 S14.1+S14.2)
+**Context:** `graph/intent_queries.py` contains all Cypher constants and async query functions
+for Phase 14 intent operations: location reads (S14.1) and queue operations (S14.2). At 334 lines
+it exceeds the 300-line hard limit.
+**Why:** The 300-line limit targets wide modules with unrelated concerns. This file has one
+concern — PendingIntent Cypher — and is long because it hosts 12 async query functions each
+with mandatory docstrings and try/finally consume patterns. Splitting into
+`intent_read_queries.py` + `intent_queue_queries.py` would create artificial separation of
+functions that share no state and have identical structural patterns. All existing Cypher-only
+files in the codebase (e.g., `quest_verification_queries.py`) follow this single-file pattern.
+**Consequence:** R001 baseline entry added for `intent_queries.py`. No callers need changes.

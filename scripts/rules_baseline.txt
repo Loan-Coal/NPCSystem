@@ -22,6 +22,7 @@ R001|src/npc_engine/data/api_seeder.py
 R001|src/npc_engine/engines/chapter/chapter_engine.py
 R001|src/npc_engine/engines/gossip/gossip_handler.py
 R001|src/npc_engine/engines/quest_generation/quest_generation_engine.py
+R001|src/npc_engine/graph/intent_queries.py
 R001|src/npc_engine/main.py
 R001|src/npc_engine/retrieval/context_budget_enforcer.py
 R001|src/npc_engine/retrieval/context_builder.py

@@ -8,7 +8,8 @@ Purpose: Main pygame game window — thin coordinator. Owns the event loop and
 Dependencies: pygame, demo_game.client, demo_game.config, demo_game.constants,
               demo_game.game_controller, demo_game.emotion_poller,
               demo_game.graph_panel.poller, demo_game.world_state_poller,
-              demo_game.npc_politics_poller, demo_game.sandbox_loop,
+              demo_game.npc_politics_poller, demo_game.npc_initiative_poller,
+              demo_game.intent_ui, demo_game.sandbox_loop,
               demo_game.ui.left_panel, demo_game.ui.right_panel,
               demo_game.ui.relation_ticker
 Used by: demo_game.__main__
@@ -33,6 +34,8 @@ from demo_game.game_end_poller import GameEndPoller
 from demo_game.gold_poller import GoldPoller
 from demo_game.emotion_poller import EmotionPoller
 from demo_game.graph_panel.poller import GraphPoller
+from demo_game.intent_ui import INTENT_BUBBLE_DISPLAY_SECONDS, INTENT_POLL_INTERVAL_SECONDS, TRIGGER_PHRASES
+from demo_game.npc_initiative_poller import NpcInitiativePoller
 from demo_game.npc_needs_poller import NpcNeedsPoller
 from demo_game.npc_goals_poller import NpcGoalsPoller
 from demo_game.npc_memory_poller import NpcMemoryPoller
@@ -105,6 +108,9 @@ class GameWindow:
         self._game_over: bool = False
         self._game_over_outcome: str = ""  # "win" or "lose"
         self._running: bool = True
+        self._intent_bubble_text: str = ""
+        self._intent_bubble_npc: str = ""
+        self._intent_bubble_until: float = 0.0
 
         pygame.init()
         self._screen = pygame.display.set_mode((window_w, window_h))
@@ -156,6 +162,11 @@ class GameWindow:
         self._memory_poller = NpcMemoryPoller(client, interval_s=5.0)
         self._memory_poller.set_active_npc(self._active_npc_id)
         self._memory_poller.start()
+
+        self._initiative_poller = NpcInitiativePoller(
+            client, cfg.DEMO_PLAYER_ID, interval_s=INTENT_POLL_INTERVAL_SECONDS
+        )
+        self._initiative_poller.start()
 
         self._ctrl = GameController(
             client,
@@ -259,6 +270,7 @@ class GameWindow:
             self._ctrl.poll_consolidate_memory_queue(
                 on_created=lambda _: self._memory_poller.refresh()
             )
+            self._poll_intent_queue()
             self._left.set_waiting(self._ctrl.is_waiting)
             self._render()
             pygame.display.flip()
@@ -415,9 +427,47 @@ class GameWindow:
         self._left.draw(self._screen, self._left_w, self._usable_h, epoch, conditions)
         self._right.draw(self._screen, pygame.Rect(self._right_x, 0, self._right_w, self._usable_h))
         self._draw_status_overlay()
+        self._draw_intent_bubble()
         if self._game_over:
             self._draw_game_over_overlay()
         self._draw_nav_bar(pygame.Rect(0, self._usable_h, self._window_w, _NAV_BAR_H))
+
+    def _poll_intent_queue(self) -> None:
+        """Drain pending NPC intents and queue the highest-score one as a bubble."""
+        if time.monotonic() < self._intent_bubble_until:
+            return
+        intents = self._initiative_poller.pop_pending()
+        if not intents:
+            return
+        best = max(intents, key=lambda i: i.get("score", 0.0))
+        npc_id = best.get("npc_id", "")
+        trigger_type = best.get("trigger_type", "")
+        phrase = TRIGGER_PHRASES.get(trigger_type, "I'd like to talk...")
+        display_name = NPC_DISPLAY_NAMES.get(npc_id, npc_id)
+        self._intent_bubble_npc = npc_id
+        self._intent_bubble_text = f"{display_name}: {phrase}"
+        self._intent_bubble_until = time.monotonic() + INTENT_BUBBLE_DISPLAY_SECONDS
+
+    def _draw_intent_bubble(self) -> None:
+        """Render the NPC-initiative intent bubble if one is active."""
+        if not self._intent_bubble_text or time.monotonic() > self._intent_bubble_until:
+            return
+        font = FontLoader.get(14)
+        text_surf = font.render(self._intent_bubble_text, True, (255, 255, 180))
+        padding = 10
+        bubble_w = text_surf.get_width() + padding * 2
+        bubble_h = text_surf.get_height() + padding * 2
+        bubble_x = self._left_w // 2 - bubble_w // 2
+        bubble_y = 12
+        bubble_surf = pygame.Surface((bubble_w, bubble_h), pygame.SRCALPHA)
+        bubble_surf.fill((30, 30, 50, 210))
+        self._screen.blit(bubble_surf, (bubble_x, bubble_y))
+        pygame.draw.rect(
+            self._screen, (120, 140, 220),
+            pygame.Rect(bubble_x, bubble_y, bubble_w, bubble_h),
+            width=1, border_radius=4,
+        )
+        self._screen.blit(text_surf, (bubble_x + padding, bubble_y + padding))
 
     def _draw_status_overlay(self) -> None:
         if self._active_npc_id:
