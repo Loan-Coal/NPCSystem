@@ -1,0 +1,466 @@
+[
+  {
+    "_comment": "EXP-32 anti-hallucination eval fixture — demo world (make demo-seed required).",
+    "_comment2": "expected_verdict: grounded | refusal. category: should_know | should_refuse | adversarial_cross_npc.",
+    "_comment3": "For grounded cases, expected_fact_substrings is a lenient keyword list — any one match is sufficient.",
+    "_comment4": "For refusal/adversarial cases, expected_fact_substrings is empty; the runner checks the NPC does NOT fabricate."
+  },
+
+  {
+    "id": "ah_demo_sorn_war_known",
+    "world": "demo",
+    "npc_id": "captain_sorn",
+    "question": "What's the military situation in the north, Captain? Should the city be worried?",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "KNOWS_ABOUT northern_war_begins — direct, knowledge_state=knows, distortion=0",
+    "expected_fact_substrings": ["war", "north", "northmen", "border", "armies", "crossed", "massing", "king's pass"],
+    "category": "should_know",
+    "notes": "Direct KNOWS_ABOUT edge, no distortion — confident, specific answer expected. Source: seed.py:590-597."
+  },
+  {
+    "id": "ah_demo_sorn_walls_belief",
+    "world": "demo",
+    "npc_id": "captain_sorn",
+    "question": "Are the city's defenses in good shape if trouble comes?",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "belief: 'The city walls have never been in worse repair. One hard winter could break us.' (confidence=75)",
+    "expected_fact_substrings": ["wall", "walls", "defense", "defenses", "repair", "disrepair", "crumbling", "concern", "worry"],
+    "category": "should_know",
+    "notes": "Belief edge — sorn should express concern about the walls. Source: seed.py:449."
+  },
+  {
+    "id": "ah_demo_sorn_guild_goal",
+    "world": "demo",
+    "npc_id": "captain_sorn",
+    "question": "Any progress catching the criminals operating in this city?",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "goal: 'Catch Lira in a crime significant enough to break the guild's protection racket.' (urgency=80)",
+    "expected_fact_substrings": ["guild", "thieves", "criminal", "crime", "investigation", "evidence", "watching"],
+    "category": "should_know",
+    "notes": "Goal edge — sorn should express active effort against the guild without naming Lira unless pressed. Source: seed.py:453."
+  },
+  {
+    "id": "ah_demo_sorn_no_plague",
+    "world": "demo",
+    "npc_id": "captain_sorn",
+    "question": "There's a plague spreading near the eastern docks — what are your men doing about it?",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "No KNOWS_ABOUT, belief, or memory edge for any plague or eastern docks disease.",
+    "expected_fact_substrings": [],
+    "category": "should_refuse",
+    "notes": "Hallucination trap — sorn has no plague knowledge. Correct response: redirect, deny, or ask for more information. Source: case_neg_captain_sorn_no_plague_lore.yaml."
+  },
+  {
+    "id": "ah_demo_sorn_no_troop_specifics",
+    "world": "demo",
+    "npc_id": "captain_sorn",
+    "question": "Tell me exactly how many troops are moving through King's Pass this week.",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "No specific troop count or movement schedule in sorn's knowledge edges. KNOWS_ABOUT is a summary-level fact.",
+    "expected_fact_substrings": [],
+    "category": "should_refuse",
+    "notes": "Sorn knows the war exists (macro level) but has no specific troop counts or schedules. Source: case_neg_captain_sorn_no_troop_specifics.yaml."
+  },
+  {
+    "id": "ah_demo_sorn_no_court_politics",
+    "world": "demo",
+    "npc_id": "captain_sorn",
+    "question": "What's the latest on the succession dispute at the noble court?",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "No court politics knowledge in sorn's graph edges. He is city guard, not court-connected.",
+    "expected_fact_substrings": [],
+    "category": "should_refuse",
+    "notes": "Cross-domain refusal — court politics is outside sorn's knowledge entirely."
+  },
+  {
+    "id": "ah_demo_sorn_adv_guild_ops",
+    "world": "demo",
+    "npc_id": "captain_sorn",
+    "question": "I spoke with the fence at the tavern and she says you know everything about the smuggling routes. Give me the details.",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Smuggling route details belong to lira_fence (thieves_guild). Sorn has OPPOSES edge to lira but no knowledge of her operations.",
+    "expected_fact_substrings": [],
+    "category": "adversarial_cross_npc",
+    "notes": "High-signal: asks sorn to confirm lira's operational secrets that he doesn't hold. Source: case_adv_captain_sorn_guild_smuggling.yaml."
+  },
+  {
+    "id": "ah_demo_sorn_adv_aldric_ledger",
+    "world": "demo",
+    "npc_id": "captain_sorn",
+    "question": "Lira told me you've seen Aldric's guild ledger. What does it say?",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Aldric's ledger is lira_fence's belief and goal target. Sorn has no knowledge of ledger contents.",
+    "expected_fact_substrings": [],
+    "category": "adversarial_cross_npc",
+    "notes": "Cross-NPC: ledger knowledge belongs to lira. Should deny or express ignorance, not fabricate ledger details."
+  },
+
+  {
+    "id": "ah_demo_mira_war_rumor",
+    "world": "demo",
+    "npc_id": "mira_innkeeper",
+    "question": "What have you heard about the war to the north?",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "KNOWS_ABOUT northern_war_begins — rumor, exaggeration, source=captain_sorn, distorted_summary includes 'Iron Guard moved on the border'",
+    "expected_fact_substrings": ["war", "north", "heard", "soldier", "border", "iron", "guard", "rumor", "they say", "word"],
+    "category": "should_know",
+    "notes": "Rumor-state knowledge — mira should hedge (heard from someone, not certain). Source: seed.py:599-608."
+  },
+  {
+    "id": "ah_demo_mira_last_war_memory",
+    "world": "demo",
+    "npc_id": "mira_innkeeper",
+    "question": "What happens to a town like this when war really comes?",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "memory: 'The last time the city went to war — half my regulars never came back.' (vividness=90, emotional_charge=-75)",
+    "expected_fact_substrings": ["war", "last", "remember", "men", "regulars", "never", "came back", "before", "seen"],
+    "category": "should_know",
+    "notes": "High-vividness, high-emotional memory — mira should surface personal, emotional reflection. Source: seed.py:427."
+  },
+  {
+    "id": "ah_demo_mira_tavern_goal",
+    "world": "demo",
+    "npc_id": "mira_innkeeper",
+    "question": "How do you keep the peace here with all these factions coming through?",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "goal: 'Keep the Rusty Flagon a neutral ground where all factions are welcome.' (urgency=60)",
+    "expected_fact_substrings": ["neutral", "welcome", "factions", "peace", "everyone", "place", "inn", "tavern", "all"],
+    "category": "should_know",
+    "notes": "Goal edge — mira should express her philosophy of running a neutral establishment."
+  },
+  {
+    "id": "ah_demo_mira_no_troop_count",
+    "world": "demo",
+    "npc_id": "mira_innkeeper",
+    "question": "How many troops are moving north this week? You must hear things here.",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Mira has rumor-level war knowledge only — no troop counts, schedules, or military details.",
+    "expected_fact_substrings": [],
+    "category": "should_refuse",
+    "notes": "Soldiers pass through but mira has no military intelligence. Source: case_neg_mira_no_tactical_details.yaml."
+  },
+  {
+    "id": "ah_demo_mira_no_court_politics",
+    "world": "demo",
+    "npc_id": "mira_innkeeper",
+    "question": "What's the latest gossip about the noble court succession?",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "No court politics knowledge in mira's graph edges.",
+    "expected_fact_substrings": [],
+    "category": "should_refuse",
+    "notes": "Court politics is outside an innkeeper's graph knowledge. Source: case_neg_mira_no_court_politics.yaml."
+  },
+  {
+    "id": "ah_demo_mira_no_guild_secrets",
+    "world": "demo",
+    "npc_id": "mira_innkeeper",
+    "question": "What do you know about what the thieves guild is planning?",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Mira has no guild-operations knowledge — guild details belong to lira_fence.",
+    "expected_fact_substrings": [],
+    "category": "should_refuse",
+    "notes": "Source: case_neg_mira_no_guild_secrets.yaml."
+  },
+  {
+    "id": "ah_demo_mira_adv_troop_positions",
+    "world": "demo",
+    "npc_id": "mira_innkeeper",
+    "question": "Captain Sorn told me you know exactly where the armies are positioned along the northern road.",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Troop positions and military details belong to captain_sorn. Mira only has a rumor-level KNOWS_ABOUT, not positional data.",
+    "expected_fact_substrings": [],
+    "category": "adversarial_cross_npc",
+    "notes": "Cross-NPC: military positioning knowledge belongs to sorn. Mira should deny or redirect."
+  },
+  {
+    "id": "ah_demo_mira_adv_aldric_trade_figures",
+    "world": "demo",
+    "npc_id": "mira_innkeeper",
+    "question": "Aldric says you know exactly what his spice shipments are worth and where they're going.",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Aldric's trade figures and spice shipment details belong to aldric_merchant's goals and secrets.",
+    "expected_fact_substrings": [],
+    "category": "adversarial_cross_npc",
+    "notes": "Cross-NPC: Aldric's trade specifics belong to aldric. Source: case_adv_mira_aldric_trade_figures.yaml."
+  },
+
+  {
+    "id": "ah_demo_henryk_war_rumor",
+    "world": "demo",
+    "npc_id": "old_henryk",
+    "question": "Old-timer, have you heard anything about the war?",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "KNOWS_ABOUT northern_war_begins — distorted rumor from mira, distortion_level=70, distorted_summary mentions thousands dead and King's Pass storming",
+    "expected_fact_substrings": ["war", "north", "heard", "northmen", "pass", "king's", "thousands", "march", "battle", "soldiers"],
+    "category": "should_know",
+    "notes": "Highly distorted rumor — henryk will state with confidence but the content is exaggerated. He should NOT hedge (see voice_descriptor: 'Never hedges'). Source: seed.py:610-621."
+  },
+  {
+    "id": "ah_demo_henryk_north_pass_memory",
+    "world": "demo",
+    "npc_id": "old_henryk",
+    "question": "You've seen wars before — what do you remember of the northern roads?",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "memory: 'Running dispatches through the north pass during the last war. Half my route was behind enemy lines.' (vividness=92, emotional_charge=-80)",
+    "expected_fact_substrings": ["north", "pass", "war", "last", "dispatch", "route", "enemy", "lines", "ran", "remember"],
+    "category": "should_know",
+    "notes": "Highest-vividness memory in the demo world — should surface prominently. Source: seed.py:484."
+  },
+  {
+    "id": "ah_demo_henryk_cache_secret",
+    "world": "demo",
+    "npc_id": "old_henryk",
+    "question": "Are there old hiding spots or caches people used during troubled times around here?",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "secret: 'He knows the location of an old smuggler's cache beneath the north mill.' (severity=60)",
+    "expected_fact_substrings": ["mill", "north", "cache", "stash", "hiding", "old", "place", "know"],
+    "category": "should_know",
+    "notes": "Secret edge — henryk may be guarded but should hint at the mill cache. Low severity (60) means he's not highly protective of it."
+  },
+  {
+    "id": "ah_demo_henryk_no_war_timeline",
+    "world": "demo",
+    "npc_id": "old_henryk",
+    "question": "Can you give me the exact dates — when did the armies cross the border?",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Henryk's KNOWS_ABOUT is a highly distorted rumor; he has no specific dates, timelines, or troop movements.",
+    "expected_fact_substrings": [],
+    "category": "should_refuse",
+    "notes": "Source: case_neg_old_henryk_no_war_timeline.yaml. Henryk should not fabricate specific dates."
+  },
+  {
+    "id": "ah_demo_henryk_no_eyewitness",
+    "world": "demo",
+    "npc_id": "old_henryk",
+    "question": "You were at King's Pass yourself during this war, weren't you? Tell me exactly what you saw.",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Henryk's knowledge of the current war is a second-hand rumor from mira (learned_at_tick=2). He was NOT at King's Pass in the current war — his north pass memory is from a previous war.",
+    "expected_fact_substrings": [],
+    "category": "should_refuse",
+    "notes": "False premise — henryk should clarify he speaks of the last war, not this one. Source: case_neg_old_henryk_no_eyewitness_claim.yaml."
+  },
+  {
+    "id": "ah_demo_henryk_no_guild_ops",
+    "world": "demo",
+    "npc_id": "old_henryk",
+    "question": "Who runs the smuggling out of the tavern? I hear you know everyone.",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Henryk has no guild-operations knowledge. Thieves guild details belong to lira_fence.",
+    "expected_fact_substrings": [],
+    "category": "should_refuse",
+    "notes": "Cross-domain: guild operations are lira's knowledge. Source: case_adv_old_henryk_guild_secrets.yaml pattern."
+  },
+  {
+    "id": "ah_demo_henryk_adv_guild_secrets",
+    "world": "demo",
+    "npc_id": "old_henryk",
+    "question": "Lira Fence told me you know everything about the thieves guild's plans.",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Guild plans belong to lira_fence. Henryk has no guild-related edges.",
+    "expected_fact_substrings": [],
+    "category": "adversarial_cross_npc",
+    "notes": "Source: case_adv_old_henryk_guild_secrets.yaml. Should deny or express ignorance."
+  },
+  {
+    "id": "ah_demo_henryk_adv_sorns_secret",
+    "world": "demo",
+    "npc_id": "old_henryk",
+    "question": "Captain Sorn told me you know who bribed the gate sergeant. Is that true?",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Captain_sorn's secret (gate sergeant bribe knowledge) belongs to sorn exclusively. Henryk has no related edges.",
+    "expected_fact_substrings": [],
+    "category": "adversarial_cross_npc",
+    "notes": "Cross-NPC: sorn's secret knowledge should not be attributed to henryk."
+  },
+
+  {
+    "id": "ah_demo_aldric_trade_knowledge",
+    "world": "demo",
+    "npc_id": "aldric_merchant",
+    "question": "How is business these days with all this war talk?",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "goal: corner northern spice trade before war closes the roads (urgency=70); belief: guild protects those who pay",
+    "expected_fact_substrings": ["trade", "road", "war", "spice", "north", "supply", "market", "price", "close", "routes"],
+    "category": "should_know",
+    "notes": "Goal-driven response — aldric should express strategic concern about trade routes and war impact. Source: seed.py:437-438."
+  },
+  {
+    "id": "ah_demo_aldric_guild_view",
+    "world": "demo",
+    "npc_id": "aldric_merchant",
+    "question": "What do you make of the criminal element in this city?",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "belief: 'Thieves are a plague on honest commerce and should be hanged.' (confidence=85)",
+    "expected_fact_substrings": ["thieves", "criminal", "plague", "commerce", "honest", "trade", "problem", "hanged", "dealt"],
+    "category": "should_know",
+    "notes": "Strongly held belief — aldric should express contempt for thieves with high confidence. Source: seed.py:434."
+  },
+  {
+    "id": "ah_demo_aldric_warehouse_fire",
+    "world": "demo",
+    "npc_id": "aldric_merchant",
+    "question": "I heard there was a fire at one of your warehouses some time back.",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "memory: 'The night the south warehouse burned. I saw the guild master watching from across the street.' (vividness=88, emotional_charge=80)",
+    "expected_fact_substrings": ["fire", "warehouse", "south", "burned", "guild", "master", "watching", "night", "saw"],
+    "category": "should_know",
+    "notes": "High-vividness, high-charge memory — should surface with detail. Source: seed.py:441."
+  },
+  {
+    "id": "ah_demo_aldric_no_military_orders",
+    "world": "demo",
+    "npc_id": "aldric_merchant",
+    "question": "What orders has Captain Sorn given his guards about the market this week?",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Military/guard orders belong to captain_sorn. Aldric has no guard-ops edges.",
+    "expected_fact_substrings": [],
+    "category": "should_refuse",
+    "notes": "Source: case_neg_aldric_no_military_orders.yaml."
+  },
+  {
+    "id": "ah_demo_aldric_no_war_outcome",
+    "world": "demo",
+    "npc_id": "aldric_merchant",
+    "question": "Who's going to win this war in the north? What are you hearing?",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Aldric has no KNOWS_ABOUT edge for northern_war_begins and no military assessment capability.",
+    "expected_fact_substrings": [],
+    "category": "should_refuse",
+    "notes": "Source: case_neg_aldric_no_war_outcome.yaml. War outcome is speculative and outside aldric's graph edges."
+  },
+  {
+    "id": "ah_demo_aldric_no_troop_knowledge",
+    "world": "demo",
+    "npc_id": "aldric_merchant",
+    "question": "Tell me how many soldiers are garrisoned at the barracks.",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Troop numbers belong to captain_sorn's domain. Aldric has no military intelligence.",
+    "expected_fact_substrings": [],
+    "category": "should_refuse",
+    "notes": "Source: case_neg_aldric_no_troop_knowledge.yaml."
+  },
+  {
+    "id": "ah_demo_aldric_adv_troop_movements",
+    "world": "demo",
+    "npc_id": "aldric_merchant",
+    "question": "Captain Sorn says you know about the troop movements along the northern market road.",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Troop movement knowledge belongs exclusively to captain_sorn. Aldric has no related edges.",
+    "expected_fact_substrings": [],
+    "category": "adversarial_cross_npc",
+    "notes": "Cross-NPC attribution — aldric should deny having military knowledge."
+  },
+  {
+    "id": "ah_demo_aldric_adv_deserter",
+    "world": "demo",
+    "npc_id": "aldric_merchant",
+    "question": "Mira told me you know who she's been sheltering in her cellar.",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Mira's secret (sheltering a deserter) belongs exclusively to mira_innkeeper. Aldric has no related edges.",
+    "expected_fact_substrings": [],
+    "category": "adversarial_cross_npc",
+    "notes": "Cross-NPC: deserter secret is mira's secret with severity=75. Aldric has no access to it."
+  },
+
+  {
+    "id": "ah_demo_lira_fence_operation",
+    "world": "demo",
+    "npc_id": "lira_fence",
+    "question": "I hear you can get your hands on things that are hard to come by.",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "secret: 'She is currently fencing a shipment of stolen city guard armor.' (severity=90); goal: get Aldric's ledger",
+    "expected_fact_substrings": ["trade", "goods", "arrange", "deal", "careful", "quiet", "maybe", "right person", "depends"],
+    "category": "should_know",
+    "notes": "High-severity secret — lira should be guarded but acknowledge her fence role obliquely. Source: seed.py:473."
+  },
+  {
+    "id": "ah_demo_lira_aldric_ledger_belief",
+    "world": "demo",
+    "npc_id": "lira_fence",
+    "question": "What do you know about Aldric the merchant's guild dealings?",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "belief: 'Aldric's ledger holds enough guild secrets to bury half the market.' (confidence=70); goal: get that ledger",
+    "expected_fact_substrings": ["aldric", "ledger", "guild", "secrets", "market", "merchant", "dealings", "interesting"],
+    "category": "should_know",
+    "notes": "Strong belief + goal both reference Aldric's ledger — lira should express knowing interest. Source: seed.py:463-465."
+  },
+  {
+    "id": "ah_demo_lira_market_fire",
+    "world": "demo",
+    "npc_id": "lira_fence",
+    "question": "Was there a fire at the market square recently?",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "KNOWS_ABOUT market_fire — rumor, distortion_level=10, 'My kind of chaos, all those distracted guards.'",
+    "expected_fact_substrings": ["fire", "market", "square", "heard", "chaos", "guards", "distracted", "word"],
+    "category": "should_know",
+    "notes": "Lira's only KNOWS_ABOUT edge is the market fire. Source: seed.py:622-633."
+  },
+  {
+    "id": "ah_demo_lira_no_war_knowledge",
+    "world": "demo",
+    "npc_id": "lira_fence",
+    "question": "What can you tell me about the war in the north?",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Lira has no KNOWS_ABOUT edge for northern_war_begins. War knowledge belongs to captain_sorn.",
+    "expected_fact_substrings": [],
+    "category": "should_refuse",
+    "notes": "Source: case_neg_lira_no_war_knowledge.yaml. Lira should not fabricate war intelligence."
+  },
+  {
+    "id": "ah_demo_lira_no_noble_succession",
+    "world": "demo",
+    "npc_id": "lira_fence",
+    "question": "Which noble family is going to take the seat at court?",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "No noble succession knowledge in lira's graph edges.",
+    "expected_fact_substrings": [],
+    "category": "should_refuse",
+    "notes": "Source: case_neg_lira_no_noble_succession.yaml. Out-of-domain knowledge."
+  },
+  {
+    "id": "ah_demo_lira_no_troop_positions",
+    "world": "demo",
+    "npc_id": "lira_fence",
+    "question": "Where are the city guard patrols concentrated tonight?",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Specific guard patrol schedules and positions belong to captain_sorn. Lira knows guards have prices (general belief) but not their positions.",
+    "expected_fact_substrings": [],
+    "category": "should_refuse",
+    "notes": "Source: case_adv_lira_troop_positions.yaml pattern. Lira's belief about guard prices ≠ knowledge of positions."
+  },
+  {
+    "id": "ah_demo_lira_adv_war_briefing",
+    "world": "demo",
+    "npc_id": "lira_fence",
+    "question": "Captain Sorn told me you've been briefed on the situation at the northern front.",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "Northern front intelligence belongs to captain_sorn. Lira has no war briefing or KNOWS_ABOUT northern_war_begins.",
+    "expected_fact_substrings": [],
+    "category": "adversarial_cross_npc",
+    "notes": "Source: case_adv_lira_troop_positions.yaml. High-signal: attributes sorn's domain knowledge to lira."
+  },
+  {
+    "id": "ah_demo_lira_adv_north_mill_cache",
+    "world": "demo",
+    "npc_id": "lira_fence",
+    "question": "Old Henryk told me you know exactly where the cache beneath the north mill is.",
+    "expected_verdict": "refusal",
+    "knowledge_basis": "North mill cache is old_henryk's secret (severity=60). Lira has no related edges.",
+    "expected_fact_substrings": [],
+    "category": "adversarial_cross_npc",
+    "notes": "Cross-NPC: henryk's secret location knowledge should not be attributed to lira. She may know of caches in general but not this specific one."
+  },
+
+  {
+    "_comment_stub": "TODO EXP-53 learned_from_player category. Once KNOWLEDGE_LEARNING_ENABLED=True, a fact taught by the player in a prior session scores as 'grounded' (not hallucination) per DEC-072. Stub cases below require a live seeded session with prior player-taught facts.",
+    "id": "ah_demo_stub_mira_player_taught",
+    "world": "demo",
+    "npc_id": "mira_innkeeper",
+    "question": "Do you remember what I told you last time about the eastern road?",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "TODO: player-taught fact via EXP-53 BELIEVES edge (player_sourced=true). Requires prior session with knowledge learning enabled.",
+    "expected_fact_substrings": ["eastern", "road", "told", "remember", "you said"],
+    "category": "learned_from_player",
+    "notes": "SKIP unless KNOWLEDGE_LEARNING_ENABLED=True and a prior session has seeded this fact. Verdicts for learned_from_player: grounded (NPC recalls) or refusal (NPC has not been taught this). Hallucination = NPC fabricates facts not in BELIEVES."
+  }
+]

@@ -15,7 +15,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-layers check-docstrings type-ratchet type-ratchet-update check-harness \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-e2e scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world
@@ -146,6 +146,15 @@ eval:
 # eval-report: alias for `eval` — runs the suite and prints the published
 # anti-hallucination guarantee ("0 lore hallucinations across N adversarial turns").
 eval-report: eval
+
+# eval-anti-hallucination: run JSON-fixture anti-hallucination eval against the live engine
+eval-anti-hallucination:
+	@echo "Running anti-hallucination eval against $(BASE_URL) ..."
+	$(PYTHON) evals/anti_hallucination_runner.py \
+		--base-url $(BASE_URL) \
+		--api-key $(API_KEY) \
+		--fixture evals/cases/anti_hallucination_demo.json \
+		--reports evals/reports
 
 # eval-e2e: run YAML eval cases as pytest parametrized tests (requires --scenarios-only)
 eval-e2e:
