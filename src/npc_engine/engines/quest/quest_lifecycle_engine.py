@@ -304,6 +304,8 @@ class QuestLifecycleEngine:
                 )
         return stored
 
+    _TERMINAL_STATUSES = frozenset({QuestStatus.COMPLETED, QuestStatus.FAILED, QuestStatus.EXPIRED})
+
     async def fail_quest(
         self,
         *,
@@ -324,11 +326,10 @@ class QuestLifecycleEngine:
             Persisted quest state payload dict with status ``"failed"``.
 
         Raises:
-            QuestTransitionError: If quest is already in a terminal state (completed/failed).
+            QuestTransitionError: If quest is already in a terminal state.
         """
         state = await self._require_state(session=session, quest_id=quest_id, player_id=player_id)
-        _TERMINAL = {QuestStatus.COMPLETED, QuestStatus.FAILED, QuestStatus.EXPIRED}
-        if state.status in _TERMINAL:
+        if state.status in self._TERMINAL_STATUSES:
             raise QuestTransitionError(
                 code="QUEST_TRANSITION_INVALID",
                 detail=f"Quest cannot be failed from terminal status={state.status}",
@@ -343,12 +344,14 @@ class QuestLifecycleEngine:
             summary=f"Quest failed: {state.title}",
             meta=meta,
         )
+        await self._apply_fail_side_effects(session=session, quest_id=quest_id, player_id=player_id)
+        return stored
+
+    async def _apply_fail_side_effects(
+        self, *, session: AsyncSession, quest_id: str, player_id: str
+    ) -> None:
         await update_quest_node_status(session=session, quest_id=quest_id, status=QuestStatus.FAILED)
         if self._chain_resolver is not None:
             await self._chain_resolver.resolve(
-                session=session,
-                quest_id=quest_id,
-                player_id=player_id,
-                outcome="fail",
+                session=session, quest_id=quest_id, player_id=player_id, outcome="fail"
             )
-        return stored
