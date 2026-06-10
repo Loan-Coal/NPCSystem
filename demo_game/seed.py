@@ -862,6 +862,43 @@ def _seed_quests(client: EngineClient) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Quest UNLOCKS chains (EXP-19)
+# ---------------------------------------------------------------------------
+
+_QUEST_UNLOCKS_CHAINS: list[tuple[str, str, str]] = [
+    ("demo_patrol_duty", "demo_captain_report", "complete"),
+    ("demo_missing_goods", "demo_fence_confrontation", "complete"),
+]
+
+
+def _seed_quest_unlocks_chains(client: EngineClient) -> int:
+    """Seed hand-authored UNLOCKS edges between quest pairs (EXP-19 slice-1).
+
+    These edges drive automatic quest-chain offers when the source quest
+    reaches the given outcome. The upsert is idempotent — re-running seed_all
+    skips any edge that already exists.
+
+    Args:
+        client: Authenticated EngineClient.
+
+    Returns:
+        Number of UNLOCKS edges created (0 if all already existed).
+    """
+    created = 0
+    for src_id, dst_id, on_outcome in _QUEST_UNLOCKS_CHAINS:
+        result = _seed_edge(
+            client,
+            "UNLOCKS",
+            src_id,
+            dst_id,
+            {"on_outcome": on_outcome},
+        )
+        if result == "created":
+            created += 1
+    return created
+
+
+# ---------------------------------------------------------------------------
 # seed_all
 # ---------------------------------------------------------------------------
 
@@ -1079,6 +1116,10 @@ def seed_all(client: EngineClient) -> dict:
     logger.info("[seed] Location hierarchy")
     hierarchy_created = _seed_location_hierarchy(client)
     created += hierarchy_created
+
+    # 13. Quest UNLOCKS chains (EXP-19)
+    logger.info("[seed] Quest UNLOCKS chains")
+    created += _seed_quest_unlocks_chains(client)
 
     logger.info("[seed] Done — created=%d skipped=%d", created, skipped)
     return {"created": created, "skipped": skipped}
