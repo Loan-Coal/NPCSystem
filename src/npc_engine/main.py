@@ -67,6 +67,7 @@ from npc_engine.api.dependency_singletons import (
     close_registered_llm_adapters,
     get_dialogue_engine_model_config,
     get_embedding_index,
+    get_emotion_store,
     get_faction_politics_engine,
     get_game_schema,
     get_graph_db,
@@ -86,6 +87,8 @@ from npc_engine.api.dependency_singletons import (
     get_trade_engine,
     get_type_registry,
 )
+from npc_engine.engines.emotion.emotion_bootstrap import EmotionBootstrapper
+from npc_engine.graph.character_reader import get_npc_ids
 from npc_engine.api.dependencies import get_sync_trade_handler
 from npc_engine.engines.interaction.dispatch import set_trade_handler
 from npc_engine.config import get_settings
@@ -247,6 +250,11 @@ async def lifespan(_app: FastAPI):
         connected = True
         async with graph_db.get_session() as session:
             await ensure_core_constraints(session=session)
+        async with graph_db.get_session() as session:
+            npc_ids = await get_npc_ids(session)
+            await EmotionBootstrapper().load_from_graph(
+                session=session, store=get_emotion_store(), npc_ids=npc_ids
+            )
         await redis_runtime.connect()
         _dialogue_probe_adapter = create_llm_client_for_engine(
             engine_config=dialogue_engine_config, settings=settings
