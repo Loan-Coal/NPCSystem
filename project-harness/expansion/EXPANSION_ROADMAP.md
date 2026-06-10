@@ -1,6 +1,6 @@
 # EXPANSION_ROADMAP.md — Synthesis & Prioritization (Lens X5)
 
-> **Updated 2026-06-10 — last batch: KE-6 + EXP-32 + EXP-87 merged (1876 unit + 601 demo tests green). Next batch: EXP-92 (determinism/replay toggle; brief needed) + EXP-95 (in-window scenario picker; brief needed) — both now unblocked by KE-6. All other remaining items are schema-gated.**
+> **Updated 2026-06-10 — last batch: KE-6 + EXP-32 + EXP-87 merged (1876 unit + 601 demo tests green). Next batch: EXP-92 + EXP-95 — briefs written, deps satisfied, no file conflicts. EXP-92 edits `gossip_handler.py`; EXP-95 is new-file-only. Ready to dispatch.**
 > **Prior update 2026-06-05 with human resolutions** (see `OPEN_QUESTIONS.md` §A, `DECISIONS.md` DEC-070/071/072).
 > Net effect: (1) **dialogue + gossip are the priority** — show they work in the playable demo; (2) several
 > proposals lost their schema cost by reusing existing graph vocabulary (EXP-53→`BELIEVES`, EXP-50 schema-free,

@@ -22,7 +22,7 @@ _The orchestrator maintains this: add a line when an item unlocks/affects a late
 - **DEC-070/071/072/073/076/077/082 apply.** DEC-076: `dependencies_engines.py` 333-line. DEC-077: `config.py` 309-line. DEC-082: `anti_hallucination_runner.py` 314-line.
 - **Schema/DECISIONS-gated (DROP):** EXP-51, EXP-17-full, EXP-14, EXP-55 deferred.
 - **Open residuals:** ISSUE-064..076, ISSUE-082..090. Next ISSUE id: **ISSUE-091**.
-- **Phase 17 remaining:** EXP-92 (determinism/replay toggle; brief needed) · EXP-95 (scenario picker; brief needed) — both unblocked by KE-6.
+- **Phase 17 remaining:** EXP-92 · EXP-95 — briefs written; ready to dispatch. EXP-92 edits `gossip_handler.py` (seed surface) + new `demo_game/determinism_beat.py`. EXP-95 new `demo_game/ui/start_menu.py` + `arc_choice.py` + edit `__main__.py`. No file conflicts between them.
 
 ## Ordered checklist
 
@@ -108,8 +108,8 @@ parallel with KE-6 (no file conflicts). Schema-gated items are drop-from-batch u
 - [x] **KE-6** — stable-ID seeding (ISSUE-055) · M · deps: none · ENABLER · brief: `briefs/KE-6-stable-id-seeding.md`
 - [x] **EXP-32** — anti-hallucination eval runner + `make eval-anti-hallucination` · M · deps: none (fixture done) · brief: `briefs/EXP-32-anti-hallucination-eval-runner.md`
 - [x] **EXP-87** — location hierarchy `PART_OF` + `location_writer.py` · L · `🔶` DEC-071 approved · brief: `briefs/EXP-87-location-hierarchy.md`
-- [ ] **EXP-92** — determinism/replay toggle (demo) · M · deps: KE-6 · brief: to be written
-- [ ] **EXP-95** — in-window scenario picker (demo) · M · deps: KE-6 · brief: to be written
+- [ ] **EXP-92** — determinism/replay toggle (demo) · M · deps: KE-6 ✅ · brief: `briefs/EXP-92-determinism-replay-proof.md`
+- [ ] **EXP-95** — in-window scenario picker (demo) · M · deps: KE-6 ✅ · brief: `briefs/EXP-95-scenario-picker.md`
 
 ### Phase 17 — Schema-gated (hold until DECISIONS approval)
 
