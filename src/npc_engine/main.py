@@ -57,6 +57,8 @@ from npc_engine.api.routes.traits import router as traits_router
 from npc_engine.api.routes.pledges import router as pledges_router
 from npc_engine.api.routes.treaties import router as treaties_router
 from npc_engine.api.routes.debug_retrieval import router as debug_retrieval_router
+from npc_engine.api.routes.locations import admin_router as locations_admin_router
+from npc_engine.api.routes.locations import read_router as locations_read_router
 from npc_engine.api.routes.system import admin_router as system_admin_router
 from npc_engine.api.routes.system import router as system_router
 from npc_engine.api.routes.system import v1_router as system_v1_router
@@ -378,6 +380,8 @@ def create_app() -> FastAPI:
     app.include_router(pledges_router, prefix=admin_prefix)
     app.include_router(treaties_router, prefix=admin_prefix)
     app.include_router(debug_retrieval_router, prefix=admin_prefix)
+    app.include_router(locations_admin_router, prefix=admin_prefix)
+    app.include_router(locations_read_router, prefix=settings.API_V1_PREFIX)
 
     # Designer web dashboard (Phase 12) — auth-exempt static assets.
     register_dashboard(app)

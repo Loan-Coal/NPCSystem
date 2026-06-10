@@ -765,6 +765,35 @@ class EngineClient:
         self._raise_for_status(resp, f"POST /v1/admin/secrets/{character_id}")
         return resp.json()
 
+    def post_part_of(
+        self,
+        child_id: str,
+        parent_id: str,
+        hierarchy_level: int,
+    ) -> dict:
+        """Create or update a PART_OF containment edge between two Location nodes.
+
+        Uses MERGE semantics — idempotent on repeated calls.
+
+        Args:
+            child_id: ID of the child Location node.
+            parent_id: ID of the parent Location node.
+            hierarchy_level: Depth level (0=venue, 1=district, 2=city, 3=region, 4=world).
+
+        Returns:
+            Response dict confirming the edge was written.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        resp = self._client.post(
+            f"/v1/admin/locations/{child_id}/part_of",
+            json={"parent_id": parent_id, "hierarchy_level": hierarchy_level},
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, f"POST /v1/admin/locations/{child_id}/part_of")
+        return resp.json()
+
     # ------------------------------------------------------------------
     # Convenience write wrappers (P2.5 UI trigger surface)
     # ------------------------------------------------------------------

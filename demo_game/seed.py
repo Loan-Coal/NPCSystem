@@ -377,6 +377,38 @@ def _seed_npc_inner_life(
     return created
 
 
+def _seed_location_hierarchy(client: EngineClient) -> int:
+    """Seed the city-level location hierarchy for the demo world (EXP-87).
+
+    Creates a ``loc_city`` Location node and wires the three existing demo
+    locations into it via PART_OF edges. All calls use MERGE semantics so
+    this function is idempotent on repeated runs.
+
+    Args:
+        client: Authenticated EngineClient.
+
+    Returns:
+        Number of items created or upserted.
+    """
+    _seed_node(
+        client,
+        "Location",
+        build_location_payload(
+            id="loc_city",
+            name="The City",
+            location_tag="city",
+            descriptor="The city that contains the tavern, market, and barracks.",
+        ),
+    )
+
+    _child_locations = ["loc_tavern", "loc_market_square", "loc_guard_barracks"]
+    for child_id in _child_locations:
+        client.post_part_of(child_id, "loc_city", hierarchy_level=0)
+        logger.info("  upserted PART_OF %s → loc_city", child_id)
+
+    return len(_child_locations) + 1  # +1 for loc_city node
+
+
 # ---------------------------------------------------------------------------
 # Demo world data
 # ---------------------------------------------------------------------------
@@ -1042,6 +1074,11 @@ def seed_all(client: EngineClient) -> dict:
     logger.info("[seed] OCCUPIES edges")
     for army_id, location_id, since_tick in _ARMY_OCCUPIES:
         _tally(_seed_edge(client, "OCCUPIES", army_id, location_id, {"since_tick": since_tick}))
+
+    # 12. Location hierarchy (EXP-87)
+    logger.info("[seed] Location hierarchy")
+    hierarchy_created = _seed_location_hierarchy(client)
+    created += hierarchy_created
 
     logger.info("[seed] Done — created=%d skipped=%d", created, skipped)
     return {"created": created, "skipped": skipped}
