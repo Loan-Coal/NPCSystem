@@ -1,6 +1,6 @@
 # EXPANSION_ROADMAP.md — Synthesis & Prioritization (Lens X5)
 
-> **Updated 2026-06-10 — Phase 17 COMPLETE. Phase 18 READY: EXP-51 + EXP-14 + EXP-19 unblocked (DEC-083/084/085 approved, briefs written). Three-way parallel dispatch available — no file conflicts.**
+> **Updated 2026-06-10 — Phase 18 COMPLETE. EXP-51 + EXP-14 + EXP-19 merged (1894 engine + 618 demo tests green). Phase 19: no conflict-free batch available without new DECISIONS — next step is slice-2 wiring for EXP-51 (tick scheduler), EXP-14 (main.py lifespan bootstrap), and EXP-19 (dependencies.py + FAILED outcome). Schema-gate EXP-55 if player-model priority rises.**
 > **Prior update 2026-06-05 with human resolutions** (see `OPEN_QUESTIONS.md` §A, `DECISIONS.md` DEC-070/071/072).
 > Net effect: (1) **dialogue + gossip are the priority** — show they work in the playable demo; (2) several
 > proposals lost their schema cost by reusing existing graph vocabulary (EXP-53→`BELIEVES`, EXP-50 schema-free,

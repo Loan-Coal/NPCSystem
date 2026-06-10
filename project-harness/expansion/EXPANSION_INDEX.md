@@ -13,19 +13,13 @@ in `briefs/EXP-NN-<slug>.md`. Full mini-specs (the "why" + deep detail) live in 
 _State that survives between expansion sessions so a fresh `/expand-parallel` run needn't rediscover it._
 _The orchestrator maintains this: add a line when an item unlocks/affects a later one; delete consumed lines; keep it tight._
 
-- **Gates:** `make check` = lint + check-rules + type-ratchet + check-harness + test-cov(80%). Demo work also runs `make test-demo`. New code: TDD (failing test first), CLAUDE.md OCP add-by-new-file, layers, 300-line/40-line, prompts-in-YAML, Pydantic boundaries. All new `src/npc_engine/` files must have `Does NOT:` + `Dependencies injected:` in module docstring (architecture conformance test).
-- **Phase 17 COMPLETE (2026-06-10):** KE-6 + EXP-32 + EXP-87 + EXP-92 + EXP-95 all merged. 1879 engine tests + 614 demo tests green.
-- **Pattern — offload CPU on the event loop:** `await asyncio.to_thread(...)`. REUSE for reranker (ISSUE-064).
-- **EXP-92 DONE (2026-06-10):** `gossip_handler.py` now returns `seeds_used: dict[str, int]` (sharer→receiver key). `DeterminismBeat` demo scene proves same `tick_override=42` → same seeds side-by-side. Pre-existing DEC-061 waiver covers handler 386-line overage.
-- **EXP-95 DONE (2026-06-10):** `demo_game/arc_choice.py` + `demo_game/ui/start_menu.py` + `demo_game/__init__._dispatch()`. `make demo` now shows a 4-option pygame start menu. ISSUE-091: `__init__` imports game_window at load time (P3, didn't manifest in test-demo).
-- **DEC-070/071/072/073/076/077/082 apply.** DEC-076: `dependencies_engines.py` 333-line. DEC-077: `config.py` 309-line. DEC-082: `anti_hallucination_runner.py` 314-line.
-- **Schema/DECISIONS-gated (DROP):** EXP-51, EXP-17-full, EXP-14, EXP-55, EXP-19 deferred.
-- **Open residuals:** ISSUE-064..076, ISSUE-082..091. Next ISSUE id: **ISSUE-092**.
-- **Phase 18 READY (2026-06-10):** EXP-51 + EXP-14 + EXP-19 unblocked. DEC-083/084/085 written. Briefs written. No file conflicts between them — safe to dispatch all three in parallel.
-- **EXP-51:** new `engines/planning/` pkg + `base_edges/goal_targets.yaml` + `graph/goal_targets_writer.py`. Edits: none existing. `action_priority.py` ROUTINE_PRIORITY=50.
-- **EXP-14:** edits `character.yaml` (+4 optional fields) + `emotion_updater.py` (optional DI param) + `vad_emotion_model.py` (label inertia constant). New: `graph/emotion_writer.py`, `engines/emotion/emotion_bootstrap.py`.
-- **EXP-19:** new `base_edges/unlocks.yaml` + `graph/quest_chain_queries.py` + `engines/quest/quest_chain_resolver.py`. Edits: `quest_lifecycle_engine.py` (optional DI param) + `demo_game/seed.py` (2 demo chains).
-- **ISSUE-092:** Redis deferred to Unity/Unreal phase. Next ISSUE id: **ISSUE-093**.
+- **Gates:** `make check` = lint + check-rules + type-ratchet + check-harness + test-cov(80%). Demo work also runs `make test-demo`. New code: TDD (failing test first), CLAUDE.md OCP add-by-new-file, layers, 300-line/40-line, prompts-in-YAML, Pydantic boundaries. All new `src/npc_engine/` files must have `Does NOT:` + `Dependencies injected:` in module docstring (architecture conformance test). Logger calls: use `extra={...}` style (not structlog kwargs). Edge YAML: `dst_type` must be a single string (list not supported by BaseEdgeTypeDocument).
+- **Phase 18 COMPLETE (2026-06-10):** EXP-51 + EXP-14 + EXP-19 all merged. 1894 engine tests + 618 demo tests green.
+- **EXP-51 DONE:** `engines/planning/` pkg — `GoalFormer` + `ActionSelector` + `action_priority.py` (ROUTINE_PRIORITY=50). New seam: `graph/goal_targets_writer.create_goal_targets_edge` + `graph/need_queries.get_satisfying_location_for_need`. Slice-2: wire into `tick_scheduler.py`.
+- **EXP-14 DONE:** `character.yaml` +4 emotion fields. `graph/emotion_writer.EmotionGraphWriter` (raw scalars, no engine import). `graph/emotion_reader.get_emotion_fields`. `engines/emotion/emotion_bootstrap.EmotionBootstrapper`. Label inertia constant `_MIN_AROUSAL_TO_SHIFT_LABEL=20` in `vad_emotion_model.py`. Slice-2: wire `emotion_bootstrap` into `main.py` lifespan.
+- **EXP-19 DONE:** `base_edges/unlocks.yaml` + `graph/quest_chain_queries.get_unlocked_quests` + `engines/quest/quest_chain_resolver.QuestChainResolver`. `QuestLifecycleEngine` accepts optional `chain_resolver`. Demo seed: 2 UNLOCKS chains. Slice-2: wire resolver into `api/dependencies.py` + add FAILED outcome support.
+- **DEC-070/071/072/073/076/077/082/086 apply.** DEC-086: `quest_lifecycle_engine.py` 305-line waiver.
+- **Open residuals:** ISSUE-064..076, ISSUE-082..092. Next ISSUE id: **ISSUE-093**.
 
 ## Ordered checklist
 
@@ -65,14 +59,14 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 
 ### Phase 3 — Agentic NPCs
 - [x] **EXP-10** — proactive dialogue + WS `proactive_line` push (both slices complete: `ProactiveDialogueEngine` + `push_proactive_line` + scheduler wiring + `ProactiveMemoryReader` + `PlayerLocationReader`) · L · deps: EXP-30 ✅, EXP-33 ✅
-- [ ] **EXP-51** — NPC goal-formation/GOAP (goal.urgency vs routine) · L · `🔶` `GOAL_TARGETS` edge + precedence DEC
+- [x] **EXP-51** — NPC goal-formation/GOAP (goal.urgency vs routine) · L · `🔶` `GOAL_TARGETS` edge + precedence DEC
 - [x] **EXP-52** — personal reputation propagation engine (both slices: engine + scheduler wiring) · M · deps: EXP-50
 - [x] **EXP-13** — `EmotionModelProtocol` + personality modulation · M · deps: none · refactor `emotion_updater.py`
-- [ ] **EXP-14** — persistent emotion state (survive restart) · M · `🔶` emotion node/field
+- [x] **EXP-14** — persistent emotion state (survive restart) · M · `🔶` emotion node/field
 
 ### Phase 4 — World richness & deep systems (later / schema-heavy)
 - [x] **EXP-87** — location hierarchy `PART_OF` + `location_writer.py` (DEC-071) · L · `🔶` (approved)
-- [ ] **EXP-19** — branching quests & consequence chains · L · `🔶`
+- [x] **EXP-19** — branching quests & consequence chains · L · `🔶`
 - [x] **EXP-18** — semantic memory formation beyond arousal · M · deps: EXP-17
 - [x] **EXP-20** — Quest status as enum + fail/expire states · S · deps: none · `QuestStatus` enum in `engines/quest/models.py`
 - [x] **EXP-21** — world-state-aware quest trigger (first slice + slice-2: scheduler wiring complete) · M · deps: none
@@ -93,11 +87,11 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 
 **BATCH 2026-06-10 COMPLETE:** EXP-92 · EXP-95 — both merged, 1879 engine + 614 demo tests green.
 
-**NEXT BATCH (Phase 18) — conflict-free, ready to dispatch immediately:**
-- **EXP-51** (L): `engines/planning/` new-file-add + `goal_targets.yaml`. DEC-083 ✅.
-- **EXP-14** (M): emotion write-through + label inertia. DEC-084 ✅.
-- **EXP-19** (L): `UNLOCKS` edge + quest chain resolver. DEC-085 ✅.
-All three can run in parallel — no shared existing files.
+**BATCH Phase 18 (2026-06-10) COMPLETE:** EXP-51 + EXP-14 + EXP-19 — all merged, 1894 engine + 618 demo tests green.
+
+**NEXT BATCH (Phase 19) — conflict-free, ready to dispatch:**
+- **EXP-42** (deprioritized — skip) or remaining `[ ]` items: EXP-32, EXP-55 (schema-gated).
+- No clean conflict-free batch available without new DECISIONS. Run `/expand-parallel` with schema approvals for EXP-55, or focus on slice-2 wiring for EXP-51/EXP-14/EXP-19.
 
 ---
 
@@ -116,9 +110,9 @@ parallel with KE-6 (no file conflicts). Schema-gated items are drop-from-batch u
 
 All three items have approved DECISIONS entries and first-slice briefs. No file conflicts between them.
 
-- [ ] **EXP-51** — NPC GOAP goal-formation (needs engine) · L · deps: none · DEC-083 ✅ · brief: `briefs/EXP-51-goap-goal-formation.md`
-- [ ] **EXP-14** — persistent emotion state (Neo4j write-through + label inertia) · M · deps: none · DEC-084 ✅ · brief: `briefs/EXP-14-persistent-emotion-state.md`
-- [ ] **EXP-19** — branching quests & consequence chains (UNLOCKS edge, hand-authored chains) · L · deps: none · DEC-085 ✅ · brief: `briefs/EXP-19-branching-quest-chains.md`
+- [x] **EXP-51** — NPC GOAP goal-formation (needs engine) · L · deps: none · DEC-083 ✅ · brief: `briefs/EXP-51-goap-goal-formation.md`
+- [x] **EXP-14** — persistent emotion state (Neo4j write-through + label inertia) · M · deps: none · DEC-084 ✅ · brief: `briefs/EXP-14-persistent-emotion-state.md`
+- [x] **EXP-19** — branching quests & consequence chains (UNLOCKS edge, hand-authored chains) · L · deps: none · DEC-085 ✅ · brief: `briefs/EXP-19-branching-quest-chains.md`
 
 ### Dropped / Deprioritized
 
