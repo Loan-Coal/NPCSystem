@@ -809,3 +809,16 @@ belongs to the same class and concerns the same single responsibility: executing
 Splitting across files would require dependency injection of the sub-object, adding indirection with no
 architectural benefit. All growth since DEC-072 is justified dialogue-pipeline code.
 **Consequence:** R001 baseline entry added for `dialogue_handler.py`. No callers need changes.
+
+
+## DEC-082: anti_hallucination_runner.py accepted at 314 lines (300-line exception)
+**Date:** 2026-06-10
+**Context:** EXP-32 runner is 314 lines total; 266 non-blank/non-comment lines. The extra lines are
+mandatory module + function docstrings (per CLAUDE.md), the `_REFUSAL_KEYWORDS` constant tuple, and
+blank-line separation between the 8 public/private functions.
+**Decision:** Accept the overage. Splitting would require a separate `_classifiers.py` or `_models.py`
+with no shared state — purely artificial separation.
+**Why:** The file has one concern (run the anti-hallucination fixture and aggregate results) and all
+14 extra lines are either blank separators or docstring content required by CLAUDE.md. No callers
+need changes.
+**Consequence:** R001 baseline entry added for `evals/anti_hallucination_runner.py`.

@@ -277,13 +277,15 @@ def test_seed_all_skips_existing_edges() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_seed_all_skips_inner_life_if_beliefs_exist() -> None:
+def test_seed_all_always_upserts_inner_life_via_merge() -> None:
+    # KE-6: MERGE semantics — inner-life items are always posted even on re-seed.
+    # The server deduplicates via stable node IDs; the seeder never skips.
     client = _mock_client(beliefs_exist=True)
     seed_all(client)
-    assert client.post_belief.call_count == 0
-    assert client.post_goal.call_count == 0
-    assert client.post_memory.call_count == 0
-    assert client.post_secret.call_count == 0
+    assert client.post_belief.called
+    assert client.post_goal.called
+    assert client.post_memory.called
+    assert client.post_secret.called
 
 
 def test_seed_all_creates_inner_life_when_no_beliefs() -> None:
@@ -315,10 +317,12 @@ def test_seed_all_created_count_is_positive_on_empty_db() -> None:
     assert result["created"] > 0
 
 
-def test_seed_all_created_is_zero_when_all_exist() -> None:
+def test_seed_all_skipped_is_positive_when_all_nodes_exist() -> None:
+    # KE-6: nodes/edges are skipped via get-then-check; inner-life items are always
+    # upserted via MERGE. So skipped > 0, created > 0 on a fully-seeded DB.
     client = _mock_client(node_exists=True, edge_exists=True, beliefs_exist=True)
     result = seed_all(client)
-    assert result["created"] == 0
+    assert result["skipped"] > 0
 
 
 # ---------------------------------------------------------------------------

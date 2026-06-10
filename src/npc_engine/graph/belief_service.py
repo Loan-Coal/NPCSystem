@@ -24,6 +24,16 @@ from npc_engine.graph.belief_queries import (
 from npc_engine.world.time_utils import TimePoint
 
 
+def _game_time_json(game_time: TimePoint) -> str:
+    """Serialise a TimePoint to the JSON string expected by Cypher params."""
+    return dump_json({
+        "year": game_time.year,
+        "season": game_time.season,
+        "day": game_time.day,
+        "time_of_day": game_time.time_of_day,
+    })
+
+
 async def create_belief(
     session: AsyncSession,
     *,
@@ -35,8 +45,7 @@ async def create_belief(
 ) -> str:
     """Create a Belief node and link it to a Character via a BELIEVES edge.
 
-    Uses MERGE semantics — safe to call multiple times with the same node_id.
-    When node_id is None a UUID is auto-generated (legacy behaviour).
+    Uses MERGE semantics when node_id is provided; auto-generates a UUID otherwise.
 
     Args:
         session: Active Neo4j async session.
@@ -44,22 +53,12 @@ async def create_belief(
         content: Freeform text describing the belief.
         confidence: Initial confidence level (0–100).
         game_time: Game-time snapshot at which the belief was formed.
-        node_id: Optional caller-supplied stable ID. When provided the node is
-            merged on that ID so repeated calls are idempotent. When None a
-            UUID is generated.
+        node_id: Optional stable ID for idempotent re-seeding.
 
     Returns:
         The node ID used (either supplied or generated).
     """
     belief_id = node_id if node_id is not None else str(uuid.uuid4())
-    game_time_json = dump_json(
-        {
-            "year": game_time.year,
-            "season": game_time.season,
-            "day": game_time.day,
-            "time_of_day": game_time.time_of_day,
-        }
-    )
     tx = await session.begin_transaction()
     async with tx:
         await tx.run(
@@ -67,7 +66,7 @@ async def create_belief(
             belief_id=belief_id,
             content=content,
             confidence=confidence,
-            created_at_game_time=game_time_json,
+            created_at_game_time=_game_time_json(game_time),
             character_id=character_id,
         )
     return belief_id

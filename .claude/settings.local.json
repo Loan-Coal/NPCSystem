@@ -108,7 +108,9 @@
       "Bash(python src/npc_engine/scripts/check_contracts.py)",
       "Bash(python scripts/check_rules.py)",
       "Bash(python -m mypy src/npc_engine/retrieval/context_builder.py --no-error-summary)",
-      "Bash(python -m mypy src/ --no-error-summary)"
+      "Bash(python -m mypy src/ --no-error-summary)",
+      "Bash(python scripts/check_rules.py --update-baseline)",
+      "Bash(python scripts/check_rules.py --help)"
     ],
     "additionalDirectories": [
       "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem",

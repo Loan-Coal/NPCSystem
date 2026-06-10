@@ -1008,3 +1008,11 @@ And add:
 **Description:** The MERGE clause keys on `id`, which is a fresh UUID each call, so the MERGE always inserts. The same fact will be duplicated if stated by the player across multiple turns.
 **Why deferred:** Dedup/contradiction detection is explicitly deferred to EXP-53 slice-3 per brief.
 **To fix:** Key the MERGE on a stable hash of `(npc_id, content)` to deduplicate, OR use a separate dedup check before calling write_belief. Link with `CONTRADICTS` edge handling (EXP-53 slice-3).
+
+## ISSUE-090: `ah_demo_stub_mira_player_taught` case in fixture has no runner support yet
+**Found:** 2026-06-10, during EXP-32 integration
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/cases/anti_hallucination_demo.json` — case `ah_demo_stub_mira_player_taught`, `category: "learned_from_player"`
+**Description:** The fixture contains a stub case for player-taught facts (EXP-53 integration). The runner treats it as a `grounded` case and will SKIP if the world isn't pre-seeded with player-taught facts, or FAIL if mira doesn't surface the fact. The `learned_from_player` category is not yet recognized by the runner's classification logic.
+**Why deferred:** EXP-53 slice-3 (contradiction/dedup handling) is still pending; the category was left as a stub deliberately.
+**To fix:** Once EXP-53 slice-3 lands, add `learned_from_player` category handling to `anti_hallucination_runner.py`: treat like `grounded` but also check that EXP-53 wrote the fact via `write_belief()` before running the case.

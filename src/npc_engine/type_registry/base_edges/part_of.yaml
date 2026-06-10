@@ -1,16 +1,6 @@
 edge_type: PART_OF
-description: >
-  Directed edge from a child Location to its parent Location.
-  Represents geographic containment: a tavern is PART_OF a city,
-  a city is PART_OF a region.
-source_node_type: Location
-target_node_type: Location
-properties:
-  hierarchy_level:
-    type: integer
-    description: "Depth level — 0=venue, 1=district, 2=city, 3=region, 4=world"
-    required: true
-  established_at:
-    type: string
-    description: "ISO-8601 timestamp when the containment relationship was recorded"
-    required: false
+src_type: location
+dst_type: location
+fields:
+  hierarchy_level: { type: int, required: true, range: [0, 4] }
+  established_at: { type: str, required: false }

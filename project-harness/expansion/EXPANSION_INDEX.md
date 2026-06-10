@@ -29,6 +29,10 @@ _The orchestrator maintains this: add a line when an item unlocks/affects a late
 - **DEC-070/071/072/073/076/077 still apply.** DEC-076: `dependencies_engines.py` 333-line waiver. DEC-077: `config.py` 309-line waiver.
 - **Schema/DECISIONS-gated (DROP from parallel batches):** EXP-51, EXP-17-full, EXP-87, EXP-55 deferred.
 - **Open residuals:** ISSUE-064..076, ISSUE-082..089. Next ISSUE id: **ISSUE-090**.
+- **EXP-32 UNBLOCKED (2026-06-10):** `evals/cases/anti_hallucination_demo.json` created — 41 labeled cases (should_know / should_refuse / adversarial_cross_npc for all 5 demo NPCs). Runner extension still needed (JSON loader + grounded/refusal/hallucination aggregation + `make eval-anti-hallucination` target).
+- **KE-6 brief ready (2026-06-10):** `expansion/briefs/KE-6-stable-id-seeding.md`. Dispatch in its own worker first (M effort); unblocks EXP-92 + EXP-95.
+- **EXP-87 brief ready (2026-06-10):** `expansion/briefs/EXP-87-location-hierarchy.md`. L effort; can run parallel to KE-6 (no conflict — adds new files + YAML only).
+- **Phase X:** Phase 17 (Unity/Unreal SDKs) renamed to Phase X in ROADMAP.md. New Phase 17 = KE-6 + EXP-32 + EXP-87 + EXP-92 + EXP-95 + schema-gated items (EXP-51/14/19 deferred).
 
 ## Ordered checklist
 
@@ -102,4 +106,29 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 - **EXP-14** (M): persistent emotion state — `🔶` schema-gated; DROP.
 - **EXP-51** (L): NPC GOAP goal formation — `🔶` schema-gated; DROP.
 
-**Suggested next batch:** EXP-87 solo (schema-heavy L item, needs its own worker + brief). No other clean non-gated items remain. Unblock EXP-32 by providing Q&A label set.
+**Previous suggested batch (superseded 2026-06-10):** ~~EXP-87 solo~~ — brief now written; Phase 17 batch below is the canonical next execution plan.
+
+---
+
+### Phase 17 — Demo Foundation + Missing Expansions
+
+Dependency order: KE-6 must land before EXP-92 and EXP-95. EXP-32 and EXP-87 can run in
+parallel with KE-6 (no file conflicts). Schema-gated items are drop-from-batch until approved.
+
+- [ ] **KE-6** — stable-ID seeding (ISSUE-055) · M · deps: none · ENABLER · brief: `briefs/KE-6-stable-id-seeding.md`
+- [ ] **EXP-32** — anti-hallucination eval runner + `make eval-anti-hallucination` · M · deps: none (fixture done) · brief: `EXP32_EVAL_QA_TASK.md` + `evals/cases/anti_hallucination_demo.json`
+- [ ] **EXP-87** — location hierarchy `PART_OF` + `location_writer.py` · L · `🔶` DEC-071 approved · brief: `briefs/EXP-87-location-hierarchy.md`
+- [ ] **EXP-92** — determinism/replay toggle (demo) · M · deps: KE-6 · brief: to be written
+- [ ] **EXP-95** — in-window scenario picker (demo) · M · deps: KE-6 · brief: to be written
+
+### Phase 17 — Schema-gated (hold until DECISIONS approval)
+
+- [ ] **EXP-51** — NPC GOAP goal-formation · L · `🔶` `GOAL_TARGETS` edge + precedence DEC
+- [ ] **EXP-14** — persistent emotion state · M · `🔶` emotion node/field schema
+- [ ] **EXP-19** — branching quests & consequence chains · L · `🔶` schema change
+
+### Dropped / Deprioritized
+
+- ~~EXP-42~~ niche-engine expansions — deprioritized (low commercial value for demo)
+- ~~EXP-55~~ player-model / theory-of-mind — DEFERRED (via memories for now, schema-gated)
+- ~~EXP-56 localization~~ · ~~EXP-57 voice/STT~~ — dropped out of scope
