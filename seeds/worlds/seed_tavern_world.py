@@ -16,6 +16,7 @@ Run from repo root so demo_game is importable:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import sys
 from datetime import datetime, timezone
@@ -30,7 +31,32 @@ _GAME_TIME: dict = {"year": 1, "season": "spring", "day": 1, "time_of_day": "mor
 
 
 # ---------------------------------------------------------------------------
-# Builder functions (copied from seeds/worlds/seed_demo_world.py — keep in sync)
+# Stable-ID helpers (KE-6)
+# ---------------------------------------------------------------------------
+
+
+def _belief_id(npc_id: str, content: str) -> str:
+    """Derive stable belief node ID: bel_{npc_id}_{sha1(content)[:8]}."""
+    return f"bel_{npc_id}_{hashlib.sha1(content.encode()).hexdigest()[:8]}"
+
+
+def _goal_id(npc_id: str, n: int) -> str:
+    """Derive stable goal node ID: goal_{npc_id}_{n} (0-based index)."""
+    return f"goal_{npc_id}_{n}"
+
+
+def _memory_id(npc_id: str, n: int) -> str:
+    """Derive stable memory node ID: mem_{npc_id}_{n} (0-based index)."""
+    return f"mem_{npc_id}_{n}"
+
+
+def _secret_id(npc_id: str) -> str:
+    """Derive stable secret node ID: sec_{npc_id} (one secret per NPC)."""
+    return f"sec_{npc_id}"
+
+
+# ---------------------------------------------------------------------------
+# Builder functions
 # ---------------------------------------------------------------------------
 
 
@@ -40,6 +66,7 @@ def build_location_payload(
     location_tag: str,
     descriptor: str,
 ) -> dict:
+    """Return a Location node property dict ready for upsert_node."""
     now = _now()
     return {
         "id": id,
@@ -57,6 +84,7 @@ def build_faction_payload(
     archetype: str,
     description: str,
 ) -> dict:
+    """Return a Faction node property dict ready for upsert_node."""
     now = _now()
     return {
         "id": id,
@@ -81,6 +109,7 @@ def build_npc_payload(
     honesty: int,
     voice_descriptor: str | None = None,
 ) -> dict:
+    """Return a Character node property dict ready for upsert_node."""
     now = _now()
     return {
         "id": id,
@@ -110,6 +139,7 @@ def build_event_payload(
     is_public: bool = False,
     tick_id: int = 0,
 ) -> dict:
+    """Return an Event node property dict ready for upsert_node."""
     now = _now()
     return {
         "id": id,
@@ -125,10 +155,12 @@ def build_event_payload(
 
 
 def _now() -> str:
+    """Return current UTC time as ISO-8601 string."""
     return datetime.now(timezone.utc).isoformat()
 
 
 def _seed_node(client: EngineClient, node_type: str, payload: dict) -> str:
+    """Upsert a node, skipping if it already exists."""
     if client.get_node(node_type, payload["id"]) is not None:
         logger.info("  skip %s/%s (exists)", node_type, payload["id"])
         return "skipped"
@@ -144,6 +176,7 @@ def _seed_edge(
     dst_id: str,
     properties: dict | None = None,
 ) -> str:
+    """Upsert an edge (always — graph layer handles idempotency)."""
     client.upsert_edge(edge_type, src_id, dst_id, properties)
     logger.info("  upserted edge %s %s→%s", edge_type, src_id, dst_id)
     return "created"
@@ -157,24 +190,36 @@ def _seed_npc_inner_life(
     memories: list[tuple[str, int, int]],
     secret: tuple[str, int],
 ) -> int:
-    if client.get_beliefs(npc_id):
-        logger.info("  skip inner life for %s (already seeded)", npc_id)
-        return 0
+    """Seed beliefs, goals, memories, and one secret for an NPC.
 
+    Passes stable deterministic IDs to every inner-life item so the underlying
+    graph layer uses MERGE semantics. Re-calling is idempotent — no duplicates.
+
+    Args:
+        client: Engine client.
+        npc_id: Target character node ID.
+        beliefs: List of (content, confidence) tuples.
+        goals: List of (description, urgency) tuples.
+        memories: List of (content, vividness, emotional_charge) tuples.
+        secret: (content, severity) tuple.
+
+    Returns:
+        Number of items upserted.
+    """
     created = 0
     for content, confidence in beliefs:
-        client.post_belief(npc_id, content, confidence, _GAME_TIME)
+        client.post_belief(npc_id, content, confidence, _GAME_TIME, node_id=_belief_id(npc_id, content))
         created += 1
-    for description, urgency in goals:
-        client.post_goal(npc_id, description, urgency, _GAME_TIME)
+    for n, (description, urgency) in enumerate(goals):
+        client.post_goal(npc_id, description, urgency, _GAME_TIME, node_id=_goal_id(npc_id, n))
         created += 1
-    for content, vividness, emotional_charge in memories:
-        client.post_memory(npc_id, content, vividness, emotional_charge, _GAME_TIME)
+    for n, (content, vividness, emotional_charge) in enumerate(memories):
+        client.post_memory(npc_id, content, vividness, emotional_charge, _GAME_TIME, node_id=_memory_id(npc_id, n))
         created += 1
     content, severity = secret
-    client.post_secret(npc_id, content, severity, _GAME_TIME)
+    client.post_secret(npc_id, content, severity, _GAME_TIME, node_id=_secret_id(npc_id))
     created += 1
-    logger.info("  created %d inner-life items for %s", created, npc_id)
+    logger.info("  upserted %d inner-life items for %s", created, npc_id)
     return created
 
 
@@ -298,7 +343,7 @@ def seed_all(client: EngineClient) -> dict:
     2. Factions
     3. Characters
     4. MEMBER_OF edges
-    5. NPC inner life
+    5. NPC inner life (stable IDs — idempotent via MERGE)
     6. Events
     7. KNOWS_ABOUT edges
     8. LOCATED_AT edges
@@ -351,8 +396,6 @@ def seed_all(client: EngineClient) -> dict:
             secret=life["secret"],
         )
         created += n
-        if n == 0:
-            skipped += len(life["beliefs"]) + len(life["goals"]) + len(life["memories"]) + 1
 
     logger.info("[seed-tavern] Events")
     for evt_id, summary, event_type, location_id, severity, is_public in _EVENTS:

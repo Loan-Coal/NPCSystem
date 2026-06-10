@@ -30,8 +30,12 @@ async def create_secret(
     content: str,
     severity: int,
     game_time: TimePoint,
+    node_id: str | None = None,
 ) -> str:
     """Create a Secret node and link it to a Character via a KNOWS_SECRET edge.
+
+    Uses MERGE semantics — safe to call multiple times with the same node_id.
+    When node_id is None a UUID is auto-generated (legacy behaviour).
 
     Args:
         session: Active Neo4j async session.
@@ -39,11 +43,14 @@ async def create_secret(
         content: The secret's textual content.
         severity: Integer severity in the range [0, 100].
         game_time: Game-time snapshot at which the secret was learned.
+        node_id: Optional caller-supplied stable ID. When provided the node is
+            merged on that ID so repeated calls are idempotent. When None a
+            UUID is generated.
 
     Returns:
-        Generated UUID string for the new secret node.
+        The node ID used (either supplied or generated).
     """
-    secret_id = str(uuid.uuid4())
+    secret_id = node_id if node_id is not None else str(uuid.uuid4())
     created_at = dump_json(
         {
             "year": game_time.year,

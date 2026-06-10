@@ -31,8 +31,12 @@ async def create_belief(
     content: str,
     confidence: int,
     game_time: TimePoint,
+    node_id: str | None = None,
 ) -> str:
     """Create a Belief node and link it to a Character via a BELIEVES edge.
+
+    Uses MERGE semantics — safe to call multiple times with the same node_id.
+    When node_id is None a UUID is auto-generated (legacy behaviour).
 
     Args:
         session: Active Neo4j async session.
@@ -40,11 +44,14 @@ async def create_belief(
         content: Freeform text describing the belief.
         confidence: Initial confidence level (0–100).
         game_time: Game-time snapshot at which the belief was formed.
+        node_id: Optional caller-supplied stable ID. When provided the node is
+            merged on that ID so repeated calls are idempotent. When None a
+            UUID is generated.
 
     Returns:
-        Generated UUID string for the new belief node.
+        The node ID used (either supplied or generated).
     """
-    belief_id = str(uuid.uuid4())
+    belief_id = node_id if node_id is not None else str(uuid.uuid4())
     game_time_json = dump_json(
         {
             "year": game_time.year,

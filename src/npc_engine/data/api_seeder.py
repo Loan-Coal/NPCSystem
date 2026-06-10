@@ -28,6 +28,7 @@ Idempotency contract (get-then-skip):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import sys
 
@@ -62,6 +63,31 @@ from npc_engine.data.seed_http import (
 )
 
 _LOGGER = get_logger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Stable-ID helpers (KE-6)
+# ---------------------------------------------------------------------------
+
+
+def _belief_id(npc_id: str, content: str) -> str:
+    """Derive stable belief node ID: bel_{npc_id}_{sha1(content)[:8]}."""
+    return f"bel_{npc_id}_{hashlib.sha1(content.encode()).hexdigest()[:8]}"
+
+
+def _goal_id(npc_id: str, n: int) -> str:
+    """Derive stable goal node ID: goal_{npc_id}_{n} (0-based index)."""
+    return f"goal_{npc_id}_{n}"
+
+
+def _memory_id(npc_id: str, n: int) -> str:
+    """Derive stable memory node ID: mem_{npc_id}_{n} (0-based index)."""
+    return f"mem_{npc_id}_{n}"
+
+
+def _secret_id(npc_id: str) -> str:
+    """Derive stable secret node ID: sec_{npc_id} (one secret per NPC)."""
+    return f"sec_{npc_id}"
 
 
 def resolve_api_key(args_key: str | None) -> str:
@@ -202,18 +228,23 @@ def seed(base_url: str, api_key: str) -> int:
             "POST",
             f"{base_url}/v1/admin/beliefs/{char_id}",
             api_key,
-            {"content": content, "confidence": confidence, "game_time": game_time},
+            {"content": content, "confidence": confidence, "game_time": game_time,
+             "id": _belief_id(char_id, content)},
         )
         c.record(f"Belief:{char_id}:{content[:30]}", status)
     c.abort_if_failed()
 
     _LOGGER.info("seeder_phase", extra={"phase": "goals"})
+    _goal_index: dict[str, int] = {}
     for char_id, description, urgency in get_phase3_goals():
+        n = _goal_index.get(char_id, 0)
+        _goal_index[char_id] = n + 1
         status, _ = call(
             "POST",
             f"{base_url}/v1/admin/goals/{char_id}",
             api_key,
-            {"description": description, "urgency": urgency, "game_time": game_time},
+            {"description": description, "urgency": urgency, "game_time": game_time,
+             "id": _goal_id(char_id, n)},
         )
         c.record(f"Goal:{char_id}:{description[:30]}", status)
     c.abort_if_failed()
@@ -243,13 +274,17 @@ def seed(base_url: str, api_key: str) -> int:
             "POST",
             f"{base_url}/v1/admin/secrets/{char_id}",
             api_key,
-            {"content": content, "severity": severity, "game_time": game_time},
+            {"content": content, "severity": severity, "game_time": game_time,
+             "id": _secret_id(char_id)},
         )
         c.record(f"Secret:{char_id}:{content[:30]}", status)
     c.abort_if_failed()
 
     _LOGGER.info("seeder_phase", extra={"phase": "memories"})
+    _memory_index: dict[str, int] = {}
     for char_id, content, vividness, emotional_charge in get_phase3_memories():
+        n = _memory_index.get(char_id, 0)
+        _memory_index[char_id] = n + 1
         status, _ = call(
             "POST",
             f"{base_url}/v1/admin/memories/{char_id}",
@@ -259,6 +294,7 @@ def seed(base_url: str, api_key: str) -> int:
                 "vividness": vividness,
                 "emotional_charge": emotional_charge,
                 "game_time": game_time,
+                "id": _memory_id(char_id, n),
             },
         )
         c.record(f"Memory:{char_id}:{content[:30]}", status)

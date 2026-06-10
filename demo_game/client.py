@@ -553,17 +553,22 @@ class EngineClient:
         content: str,
         confidence: int,
         game_time: dict,
+        *,
+        node_id: str | None = None,
     ) -> dict:
         """Create a belief on a character via the typed beliefs endpoint.
 
         The endpoint auto-creates the BELIEVES edge from the character to
-        the new Belief node.
+        the new Belief node. When node_id is provided the server merges on
+        that ID, making the call idempotent.
 
         Args:
             character_id: Character node ID.
             content: Belief text (1–512 chars).
             confidence: Confidence level (0–100).
             game_time: Game time dict with year, season, day, time_of_day.
+            node_id: Optional stable ID. When provided the node is merged
+                (idempotent re-seeding). When omitted a UUID is generated.
 
         Returns:
             Response dict containing belief_id.
@@ -571,9 +576,12 @@ class EngineClient:
         Raises:
             EngineClientError: On any 4xx or 5xx response.
         """
+        body: dict = {"content": content, "confidence": confidence, "game_time": game_time}
+        if node_id is not None:
+            body["id"] = node_id
         resp = self._client.post(
             f"/v1/admin/beliefs/{character_id}",
-            json={"content": content, "confidence": confidence, "game_time": game_time},
+            json=body,
             timeout=self._graph_timeout,
         )
         self._raise_for_status(resp, f"POST /v1/admin/beliefs/{character_id}")
@@ -587,11 +595,13 @@ class EngineClient:
         game_time: dict,
         *,
         target_id: str | None = None,
+        node_id: str | None = None,
     ) -> dict:
         """Create a goal on a character via the typed goals endpoint.
 
         The endpoint auto-creates the PURSUES edge from the character to
-        the new Goal node.
+        the new Goal node. When node_id is provided the server merges on
+        that ID, making the call idempotent.
 
         Args:
             character_id: Character node ID.
@@ -599,6 +609,7 @@ class EngineClient:
             urgency: Urgency level (0–100).
             game_time: Game time dict with year, season, day, time_of_day.
             target_id: Optional target entity ID for the goal.
+            node_id: Optional stable ID for idempotent re-seeding.
 
         Returns:
             Response dict containing goal_id.
@@ -609,6 +620,8 @@ class EngineClient:
         body: dict = {"description": description, "urgency": urgency, "game_time": game_time}
         if target_id is not None:
             body["target_id"] = target_id
+        if node_id is not None:
+            body["id"] = node_id
         resp = self._client.post(
             f"/v1/admin/goals/{character_id}",
             json=body,
@@ -624,8 +637,12 @@ class EngineClient:
         vividness: int,
         emotional_charge: int,
         game_time: dict,
+        *,
+        node_id: str | None = None,
     ) -> dict:
         """Create a memory on a character via the typed memories endpoint.
+
+        When node_id is provided the server merges on that ID (idempotent).
 
         Args:
             character_id: Character node ID.
@@ -633,6 +650,7 @@ class EngineClient:
             vividness: How vivid the memory is (0–100).
             emotional_charge: Emotional intensity (-100 to 100; positive=positive).
             game_time: Game time dict with year, season, day, time_of_day.
+            node_id: Optional stable ID for idempotent re-seeding.
 
         Returns:
             Response dict containing memory_id.
@@ -640,14 +658,17 @@ class EngineClient:
         Raises:
             EngineClientError: On any 4xx or 5xx response.
         """
+        body: dict = {
+            "content": content,
+            "vividness": vividness,
+            "emotional_charge": emotional_charge,
+            "game_time": game_time,
+        }
+        if node_id is not None:
+            body["id"] = node_id
         resp = self._client.post(
             f"/v1/admin/memories/{character_id}",
-            json={
-                "content": content,
-                "vividness": vividness,
-                "emotional_charge": emotional_charge,
-                "game_time": game_time,
-            },
+            json=body,
             timeout=self._graph_timeout,
         )
         self._raise_for_status(resp, f"POST /v1/admin/memories/{character_id}")
@@ -713,14 +734,19 @@ class EngineClient:
         content: str,
         severity: int,
         game_time: dict,
+        *,
+        node_id: str | None = None,
     ) -> dict:
         """Create a secret on a character via the typed secrets endpoint.
+
+        When node_id is provided the server merges on that ID (idempotent).
 
         Args:
             character_id: Character node ID.
             content: Secret text (1–512 chars).
             severity: Severity level (0–100).
             game_time: Game time dict with year, season, day, time_of_day.
+            node_id: Optional stable ID for idempotent re-seeding.
 
         Returns:
             Response dict containing secret_id.
@@ -728,9 +754,12 @@ class EngineClient:
         Raises:
             EngineClientError: On any 4xx or 5xx response.
         """
+        body: dict = {"content": content, "severity": severity, "game_time": game_time}
+        if node_id is not None:
+            body["id"] = node_id
         resp = self._client.post(
             f"/v1/admin/secrets/{character_id}",
-            json={"content": content, "severity": severity, "game_time": game_time},
+            json=body,
             timeout=self._graph_timeout,
         )
         self._raise_for_status(resp, f"POST /v1/admin/secrets/{character_id}")

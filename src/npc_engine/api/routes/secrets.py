@@ -38,6 +38,13 @@ class CreateSecretRequest(BaseModel):
     game_time: dict = Field(
         default_factory=lambda: {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
     )
+    id: str | None = Field(
+        default=None,
+        description=(
+            "Caller-supplied stable ID. When provided the node is merged (idempotent). "
+            "When omitted a UUID is auto-generated."
+        ),
+    )
 
     model_config = ConfigDict(frozen=True)
 
@@ -77,6 +84,7 @@ async def create_secret_for_character(
         content=body.content,
         severity=body.severity,
         game_time=game_time,
+        node_id=body.id,
     )
     return ok_response({"secret_id": secret_id})
 

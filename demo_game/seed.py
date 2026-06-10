@@ -14,6 +14,7 @@ back here.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import sys
@@ -221,6 +222,26 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _belief_id(npc_id: str, content: str) -> str:
+    """Derive stable belief node ID: bel_{npc_id}_{sha1(content)[:8]}."""
+    return f"bel_{npc_id}_{hashlib.sha1(content.encode()).hexdigest()[:8]}"
+
+
+def _goal_id(npc_id: str, n: int) -> str:
+    """Derive stable goal node ID: goal_{npc_id}_{n} (0-based index)."""
+    return f"goal_{npc_id}_{n}"
+
+
+def _memory_id(npc_id: str, n: int) -> str:
+    """Derive stable memory node ID: mem_{npc_id}_{n} (0-based index)."""
+    return f"mem_{npc_id}_{n}"
+
+
+def _secret_id(npc_id: str) -> str:
+    """Derive stable secret node ID: sec_{npc_id} (one secret per NPC)."""
+    return f"sec_{npc_id}"
+
+
 def _force_patch_world_state(client: EngineClient) -> None:
     """Force-patch world_state epoch and active_conditions to the demo values.
 
@@ -320,8 +341,9 @@ def _seed_npc_inner_life(
 ) -> int:
     """Seed beliefs, goals, memories, and one secret for an NPC.
 
-    Uses BELIEVES edge count as idempotency proxy: if the NPC already has any
-    BELIEVES edges, all inner-life seeding for this NPC is skipped.
+    Passes stable deterministic IDs to every inner-life item so the underlying
+    graph layer uses MERGE semantics. Re-calling this function is idempotent —
+    no duplicate nodes are created regardless of prior seed runs.
 
     Args:
         client: Engine client.
@@ -332,30 +354,26 @@ def _seed_npc_inner_life(
         secret: (content, severity) tuple.
 
     Returns:
-        Number of items created (0 if skipped).
+        Number of items upserted.
     """
-    if client.get_beliefs(npc_id):
-        logger.info("  skip inner life for %s (already seeded)", npc_id)
-        return 0
-
     created = 0
     for content, confidence in beliefs:
-        client.post_belief(npc_id, content, confidence, _GAME_TIME)
+        client.post_belief(npc_id, content, confidence, _GAME_TIME, node_id=_belief_id(npc_id, content))
         created += 1
 
-    for description, urgency in goals:
-        client.post_goal(npc_id, description, urgency, _GAME_TIME)
+    for n, (description, urgency) in enumerate(goals):
+        client.post_goal(npc_id, description, urgency, _GAME_TIME, node_id=_goal_id(npc_id, n))
         created += 1
 
-    for content, vividness, emotional_charge in memories:
-        client.post_memory(npc_id, content, vividness, emotional_charge, _GAME_TIME)
+    for n, (content, vividness, emotional_charge) in enumerate(memories):
+        client.post_memory(npc_id, content, vividness, emotional_charge, _GAME_TIME, node_id=_memory_id(npc_id, n))
         created += 1
 
     content, severity = secret
-    client.post_secret(npc_id, content, severity, _GAME_TIME)
+    client.post_secret(npc_id, content, severity, _GAME_TIME, node_id=_secret_id(npc_id))
     created += 1
 
-    logger.info("  created %d inner-life items for %s", created, npc_id)
+    logger.info("  upserted %d inner-life items for %s", created, npc_id)
     return created
 
 
