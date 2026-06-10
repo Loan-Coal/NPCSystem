@@ -303,3 +303,52 @@ class QuestLifecycleEngine:
                     outcome="complete",
                 )
         return stored
+
+    async def fail_quest(
+        self,
+        *,
+        session: AsyncSession,
+        quest_id: str,
+        player_id: str,
+        meta: QuestTransitionMeta,
+    ) -> dict:
+        """Transition a quest to failed status and resolve any UNLOCKS(on_outcome:fail) chains.
+
+        Args:
+            session: Active Neo4j async session capable of starting transactions.
+            quest_id: Quest identifier.
+            player_id: Player identifier.
+            meta: Transition metadata for provenance and idempotency fields.
+
+        Returns:
+            Persisted quest state payload dict with status ``"failed"``.
+
+        Raises:
+            QuestTransitionError: If quest is already in a terminal state (completed/failed).
+        """
+        state = await self._require_state(session=session, quest_id=quest_id, player_id=player_id)
+        _TERMINAL = {QuestStatus.COMPLETED, QuestStatus.FAILED, QuestStatus.EXPIRED}
+        if state.status in _TERMINAL:
+            raise QuestTransitionError(
+                code="QUEST_TRANSITION_INVALID",
+                detail=f"Quest cannot be failed from terminal status={state.status}",
+            )
+        next_state = state.model_copy(update={"status": QuestStatus.FAILED})
+        stored = await self._persist_state_and_event(
+            session=session,
+            quest_id=quest_id,
+            player_id=player_id,
+            state_payload=next_state.model_dump(mode="python"),
+            event_type="quest_failed",
+            summary=f"Quest failed: {state.title}",
+            meta=meta,
+        )
+        await update_quest_node_status(session=session, quest_id=quest_id, status=QuestStatus.FAILED)
+        if self._chain_resolver is not None:
+            await self._chain_resolver.resolve(
+                session=session,
+                quest_id=quest_id,
+                player_id=player_id,
+                outcome="fail",
+            )
+        return stored

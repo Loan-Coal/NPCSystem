@@ -39,6 +39,8 @@ from npc_engine.engines.gossip.gossip_config import load_gossip_config
 from npc_engine.engines.gossip.gossip_handler import GossipHandler
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm_runtime_config import get_config as get_engine_model_config_for
+from npc_engine.engines.quest.quest_chain_offer_adapter import QuestChainOfferAdapter
+from npc_engine.engines.quest.quest_chain_resolver import QuestChainResolver
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
 from npc_engine.engines.quest.quest_offer_service import QuestOfferService
 from npc_engine.engines.quest.quest_reward_router import QuestRewardRouter
@@ -92,14 +94,29 @@ def get_event_handler() -> EventHandler:
 
 
 @lru_cache
-def get_quest_lifecycle_engine() -> QuestLifecycleEngine:
-    """Create singleton quest lifecycle engine with shared type registry.
+def get_quest_chain_resolver() -> QuestChainResolver:
+    """Create singleton QuestChainResolver wired to the shared QuestOfferService.
 
     Returns:
-        QuestLifecycleEngine wired to the singleton TypeRegistry.
+        QuestChainResolver with a QuestChainOfferAdapter backed by the singleton QuestOfferService.
+    """
+    adapter = QuestChainOfferAdapter(offer_service=get_quest_offer_service())
+    return QuestChainResolver(offer_service=adapter)
+
+
+@lru_cache
+def get_quest_lifecycle_engine() -> QuestLifecycleEngine:
+    """Create singleton quest lifecycle engine with shared type registry and chain resolver.
+
+    Returns:
+        QuestLifecycleEngine wired to the singleton TypeRegistry and QuestChainResolver.
     """
     settings = get_settings()
-    return QuestLifecycleEngine(settings=settings, registry=get_type_registry())
+    return QuestLifecycleEngine(
+        settings=settings,
+        registry=get_type_registry(),
+        chain_resolver=get_quest_chain_resolver(),
+    )
 
 
 @lru_cache

@@ -454,3 +454,93 @@ async def test_offer_draft_quest_not_found_raises(monkeypatch) -> None:
             meta=_meta(),
         )
     assert exc.value.code == "QUEST_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_fail_quest_transitions_to_failed_and_calls_chain_resolver(monkeypatch) -> None:
+    """fail_quest must persist FAILED status and invoke chain_resolver with outcome 'fail'."""
+    state_store: dict[tuple[str, str], dict] = {
+        ("quest-f1", "player-1"): {
+            "quest_id": "quest-f1",
+            "player_id": "player-1",
+            "status": "in_progress",
+            "reward_source_id": "system",
+            "title": "Risky errand",
+            "objectives": [],
+            "objective_progress": {},
+            "item_rewards": [],
+            "currency_reward": None,
+            "rewards_applied": False,
+        }
+    }
+
+    async def fake_get_quest_state(*, session, quest_id, player_id):
+        return state_store.get((quest_id, player_id))
+
+    async def fake_upsert_quest_state(*, session, quest_id, player_id, state_payload):
+        state_store[(quest_id, player_id)] = dict(state_payload)
+        return dict(state_payload)
+
+    async def fake_event_write(*, tx, event):
+        return None
+
+    async def fake_node_status_update(*, session, quest_id, status):
+        pass
+
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest_state", fake_get_quest_state)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_state", fake_upsert_quest_state)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_lifecycle_event", fake_event_write)
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.update_quest_node_status", fake_node_status_update)
+
+    from unittest.mock import AsyncMock
+    resolver = AsyncMock()
+    resolver.resolve = AsyncMock()
+
+    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry(), chain_resolver=resolver)
+    stored = await engine.fail_quest(
+        session=_fake_session(),  # type: ignore[arg-type]
+        quest_id="quest-f1",
+        player_id="player-1",
+        meta=_meta(),
+    )
+
+    assert stored["status"] == "failed"
+    resolver.resolve.assert_awaited_once()
+    call_kwargs = resolver.resolve.call_args.kwargs
+    assert call_kwargs["quest_id"] == "quest-f1"
+    assert call_kwargs["player_id"] == "player-1"
+    assert call_kwargs["outcome"] == "fail"
+
+
+@pytest.mark.asyncio
+async def test_fail_quest_raises_on_terminal_status(monkeypatch) -> None:
+    """fail_quest must raise QuestTransitionError when quest is already terminal."""
+    state_store = {
+        ("quest-done", "player-1"): {
+            "quest_id": "quest-done",
+            "player_id": "player-1",
+            "status": "completed",
+            "reward_source_id": "system",
+            "title": "Done quest",
+            "objectives": [],
+            "objective_progress": {},
+            "item_rewards": [],
+            "currency_reward": None,
+            "rewards_applied": False,
+        }
+    }
+
+    async def fake_get_quest_state(*, session, quest_id, player_id):
+        return state_store.get((quest_id, player_id))
+
+    monkeypatch.setattr("npc_engine.engines.quest.quest_lifecycle_engine.get_quest_state", fake_get_quest_state)
+
+    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
+    with pytest.raises(QuestTransitionError) as exc:
+        await engine.fail_quest(
+            session=_fake_session(),  # type: ignore[arg-type]
+            quest_id="quest-done",
+            player_id="player-1",
+            meta=_meta(),
+        )
+    assert exc.value.code == "QUEST_TRANSITION_INVALID"
