@@ -1025,3 +1025,17 @@ And add:
 **Description:** `__init__.py` now imports `game_window` at module level to allow `_dispatch` to call `game_window.run()`. If `game_window.py` triggers top-level pygame side-effects (display init, mixer init), any test that does a bare `import demo_game` in a headless CI environment will fail with SDL_Init errors at collection time. EXP-95 tests guard this via lazy imports + monkeypatch, but other existing tests may not.
 **Why deferred:** No failures observed yet; P3 until `make test-demo` reveals a real collection failure.
 **To fix:** Make the `game_window` import lazy inside `_dispatch` (i.e. `import demo_game.ui.game_window as _gw` only when `choice == ArcChoice.FREE_PLAY`) rather than at module level.
+
+## ISSUE-092: Redis-backed emotion (and other high-churn) store — deferred to Unity/Unreal phase
+**Found:** 2026-06-10, during EXP-14 DECISIONS (DEC-084)
+**Severity:** P3 (nice-to-fix — Neo4j write-through is sufficient for now)
+**Where:** `src/npc_engine/engines/emotion/emotion_store.py` + any future high-churn in-memory store
+**Description:** README "What's next" advertises Redis-backed emotion store. Per DEC-084 we are
+using Neo4j write-through for EXP-14 slice-1. Under heavy concurrent dialogue Redis would
+outperform Neo4j for sub-millisecond hot state (valence/arousal); similarly, session_store and
+any tick-rate counters would benefit from Redis TTL semantics.
+**Why deferred:** New infrastructure dependency (redis-py / aioredis + Docker service + config).
+Blocked until the Unity/Unreal SDK integration phase, which already introduces infrastructure
+changes and is a natural inflection point.
+**To fix:** Add Redis adapter behind EmotionStore and SessionStore interfaces; register as a
+new DI option in `api/dependency_singletons.py`; add Docker Compose Redis service.

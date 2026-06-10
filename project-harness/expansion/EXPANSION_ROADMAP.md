@@ -1,6 +1,6 @@
 # EXPANSION_ROADMAP.md — Synthesis & Prioritization (Lens X5)
 
-> **Updated 2026-06-10 — last batch: EXP-92 + EXP-95 merged (1879 unit + 614 demo tests green). Phase 17 COMPLETE. Next batch: all remaining items are schema/DECISIONS-gated (EXP-51, EXP-14, EXP-19). No deployable batch until a DECISIONS entry is approved.**
+> **Updated 2026-06-10 — Phase 17 COMPLETE. Phase 18 READY: EXP-51 + EXP-14 + EXP-19 unblocked (DEC-083/084/085 approved, briefs written). Three-way parallel dispatch available — no file conflicts.**
 > **Prior update 2026-06-05 with human resolutions** (see `OPEN_QUESTIONS.md` §A, `DECISIONS.md` DEC-070/071/072).
 > Net effect: (1) **dialogue + gossip are the priority** — show they work in the playable demo; (2) several
 > proposals lost their schema cost by reusing existing graph vocabulary (EXP-53→`BELIEVES`, EXP-50 schema-free,

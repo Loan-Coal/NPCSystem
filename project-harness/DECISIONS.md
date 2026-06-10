@@ -822,3 +822,71 @@ with no shared state — purely artificial separation.
 14 extra lines are either blank separators or docstring content required by CLAUDE.md. No callers
 need changes.
 **Consequence:** R001 baseline entry added for `evals/anti_hallucination_runner.py`.
+
+
+## DEC-083: EXP-51 — GOAL_TARGETS base edge approved + action priority system (0-100 scale)
+**Date:** 2026-06-10
+**Context:** EXP-51 NPC goal-formation engine needs to record which entity a goal is aimed at.
+User approved a new base edge. User also specified a general priority system applicable to all
+action-dispatching engines (routine, planning, quests).
+**Decision:**
+1. New `base_edges/goal_targets.yaml`: `edge_type: GOAL_TARGETS`, `src_type: goal`,
+   `dst_type: [character, location, faction, item]`, `fields: priority: {type: int, required: true, range: [0,100]}`.
+   Priority is the weight of this target *relative to other targets of the same goal* — separate from goal urgency.
+2. Action priority system lives in `engines/planning/action_priority.py` as named integer constants
+   (`ROUTINE_PRIORITY = 50`; any goal with `urgency > ROUTINE_PRIORITY` overrides routine; goals with
+   `urgency <= ROUTINE_PRIORITY` only fire in unscheduled windows). Range is 0-100; no hidden magic numbers.
+   The same scale is available to quest-trigger engines and future dispatchers.
+**Why:** Goals that target multiple entities (e.g. "make allies") need a queryable, Cypher-traversable
+link, not a string field. The existing `goal.target_id: str` field is not a graph edge and cannot express
+multi-target or edge-level priority. The priority system makes routine/planning precedence explicit and
+reusable rather than encoded as an opaque comparison inside one engine.
+**Consequence:** One new YAML file in `base_edges/`. `goal.target_id` field remains but is deprecated
+in favor of GOAL_TARGETS edges; will be removed in a future clean-up pass.
+
+
+## DEC-084: EXP-14 — Persist NPC emotion to character node (Neo4j write-through); Redis deferred
+**Date:** 2026-06-10
+**Context:** `EmotionStore` is in-memory only. User approved persisting to Neo4j via additive fields on
+`character.yaml`. User also flagged that emotions are too volatile (label flip every dialogue turn).
+Redis deferred to same phase as Unity/Unreal SDK integration.
+**Decision:**
+1. Add 4 optional fields to `base_nodes/character.yaml`:
+   `emotion_valence: {type: int, required: false, range: [-100, 100]}`,
+   `emotion_arousal: {type: int, required: false, range: [0, 100]}`,
+   `emotion_mood_label: {type: str, required: false}`,
+   `emotion_updated_at_tick: {type: int, required: false}`.
+   All optional — existing character nodes without these fields continue to work.
+2. New `graph/emotion_writer.py` writes emotion state to the character node after each update.
+   `EmotionUpdater` accepts an optional `EmotionGraphWriter` via DI; only injects in production.
+3. New `engines/emotion/emotion_bootstrap.py` reads emotion fields from graph on boot, populates store.
+4. Add `_MIN_AROUSAL_TO_SHIFT_LABEL = 20` constant to `VadEmotionModel`: label only changes when
+   arousal >= this threshold, preventing flip-flopping on low-intensity events.
+5. Redis: deferred — log ISSUE for the same phase as Unity/Unreal integration.
+**Why:** Additive optional fields are zero-risk for existing Cypher queries (Neo4j ignores unknown fields
+on existing nodes). Write-through rather than snapshot-on-shutdown gives live persistence without crash-
+state loss. Label-inertia via arousal threshold is the minimal, testable fix for the volatility concern.
+**Consequence:** `character.yaml` grows by 4 optional fields. No existing queries need changes. Redis
+tracked as deferred in ISSUES.md.
+
+
+## DEC-085: EXP-19 — UNLOCKS base edge + LLM-generated quest chains, slot-validator grounded
+**Date:** 2026-06-10
+**Context:** Quests are isolated and linear. User approved a new edge type to chain quests.
+User also approved LLM-generated follow-on quests grounded by existing slot_validator.
+**Decision:**
+1. New `base_edges/unlocks.yaml`: `edge_type: UNLOCKS`, `src_type: quest`, `dst_type: quest`,
+   `fields: on_outcome: {type: str, required: true}`. `on_outcome` is enforced as
+   `Literal["complete", "fail", "expire"]` in the Python model (YAML stores str for registry compat).
+2. New `engines/quest/quest_chain_resolver.py` injected into `QuestLifecycleEngine.__init__`.
+   After evaluate_completion transitions to COMPLETED or FAILED, the resolver queries UNLOCKS edges
+   and calls `quest_offer_service.offer_quest` for each matching next quest.
+   Slice-1 uses only hand-authored UNLOCKS edges (seeded via `demo_game/seed.py` for 2 demo chains).
+   Slice-2 (separate brief): if no UNLOCKS edge exists, call `quest_generation_engine` with chain context,
+   validate slots, offer on success.
+3. New `graph/quest_chain_queries.py` — Cypher query for outgoing UNLOCKS edges.
+**Why:** Edge-modeled chains are Cypher-traversable ("find all quests reachable from A"). String fields
+cannot express multi-outcome branches. LLM generation deferred to slice-2 to keep slice-1 scope clean
+and testable deterministically.
+**Consequence:** One new YAML file in `base_edges/`. `QuestLifecycleEngine` accepts an optional
+`QuestChainResolver` via constructor — existing callers pass `None` (no chains); demo seed wires chains.

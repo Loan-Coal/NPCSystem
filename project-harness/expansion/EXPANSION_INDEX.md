@@ -21,7 +21,11 @@ _The orchestrator maintains this: add a line when an item unlocks/affects a late
 - **DEC-070/071/072/073/076/077/082 apply.** DEC-076: `dependencies_engines.py` 333-line. DEC-077: `config.py` 309-line. DEC-082: `anti_hallucination_runner.py` 314-line.
 - **Schema/DECISIONS-gated (DROP):** EXP-51, EXP-17-full, EXP-14, EXP-55, EXP-19 deferred.
 - **Open residuals:** ISSUE-064..076, ISSUE-082..091. Next ISSUE id: **ISSUE-092**.
-- **No unchecked Phase 17 items remain.** Next batch = schema-gated items only (need DECISIONS approval before dispatch).
+- **Phase 18 READY (2026-06-10):** EXP-51 + EXP-14 + EXP-19 unblocked. DEC-083/084/085 written. Briefs written. No file conflicts between them — safe to dispatch all three in parallel.
+- **EXP-51:** new `engines/planning/` pkg + `base_edges/goal_targets.yaml` + `graph/goal_targets_writer.py`. Edits: none existing. `action_priority.py` ROUTINE_PRIORITY=50.
+- **EXP-14:** edits `character.yaml` (+4 optional fields) + `emotion_updater.py` (optional DI param) + `vad_emotion_model.py` (label inertia constant). New: `graph/emotion_writer.py`, `engines/emotion/emotion_bootstrap.py`.
+- **EXP-19:** new `base_edges/unlocks.yaml` + `graph/quest_chain_queries.py` + `engines/quest/quest_chain_resolver.py`. Edits: `quest_lifecycle_engine.py` (optional DI param) + `demo_game/seed.py` (2 demo chains).
+- **ISSUE-092:** Redis deferred to Unity/Unreal phase. Next ISSUE id: **ISSUE-093**.
 
 ## Ordered checklist
 
@@ -89,12 +93,11 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 
 **BATCH 2026-06-10 COMPLETE:** EXP-92 · EXP-95 — both merged, 1879 engine + 614 demo tests green.
 
-**NEXT BATCH candidates:** All remaining unchecked items are schema/DECISIONS-gated. No conflict-free
-deployable batch exists until at least one of the following DECISIONS entries is approved:
-- **EXP-51** (L): `🔶` requires `GOAL_TARGETS` edge + precedence DEC.
-- **EXP-14** (M): `🔶` requires emotion node/field schema DEC.
-- **EXP-19** (L): `🔶` requires branching quest schema DEC.
-Grant DECISIONS approval and `/expand-parallel` will auto-select the approved item(s).
+**NEXT BATCH (Phase 18) — conflict-free, ready to dispatch immediately:**
+- **EXP-51** (L): `engines/planning/` new-file-add + `goal_targets.yaml`. DEC-083 ✅.
+- **EXP-14** (M): emotion write-through + label inertia. DEC-084 ✅.
+- **EXP-19** (L): `UNLOCKS` edge + quest chain resolver. DEC-085 ✅.
+All three can run in parallel — no shared existing files.
 
 ---
 
@@ -109,11 +112,13 @@ parallel with KE-6 (no file conflicts). Schema-gated items are drop-from-batch u
 - [x] **EXP-92** — determinism/replay toggle (demo) · M · deps: KE-6 ✅ · brief: `briefs/EXP-92-determinism-replay-proof.md`
 - [x] **EXP-95** — in-window scenario picker (demo) · M · deps: KE-6 ✅ · brief: `briefs/EXP-95-scenario-picker.md`
 
-### Phase 17 — Schema-gated (hold until DECISIONS approval)
+### Phase 18 — Schema-approved (DEC-083/084/085), conflict-free, ready to dispatch
 
-- [ ] **EXP-51** — NPC GOAP goal-formation · L · `🔶` `GOAL_TARGETS` edge + precedence DEC
-- [ ] **EXP-14** — persistent emotion state · M · `🔶` emotion node/field schema
-- [ ] **EXP-19** — branching quests & consequence chains · L · `🔶` schema change
+All three items have approved DECISIONS entries and first-slice briefs. No file conflicts between them.
+
+- [ ] **EXP-51** — NPC GOAP goal-formation (needs engine) · L · deps: none · DEC-083 ✅ · brief: `briefs/EXP-51-goap-goal-formation.md`
+- [ ] **EXP-14** — persistent emotion state (Neo4j write-through + label inertia) · M · deps: none · DEC-084 ✅ · brief: `briefs/EXP-14-persistent-emotion-state.md`
+- [ ] **EXP-19** — branching quests & consequence chains (UNLOCKS edge, hand-authored chains) · L · deps: none · DEC-085 ✅ · brief: `briefs/EXP-19-branching-quest-chains.md`
 
 ### Dropped / Deprioritized
 
