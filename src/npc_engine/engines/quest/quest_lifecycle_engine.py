@@ -17,8 +17,12 @@ Dependencies injected: Settings, TypeRegistry (via __init__); AsyncSession (per 
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from neo4j import AsyncSession
+
+if TYPE_CHECKING:
+    from npc_engine.engines.quest.quest_chain_resolver import QuestChainResolver
 
 from npc_engine.config import Settings
 from npc_engine.engines.quest.models import (
@@ -42,13 +46,21 @@ _logger = logging.getLogger(__name__)
 class QuestLifecycleEngine:
     """Quest lifecycle state machine — accept, objective progress, and completion transitions."""
 
-    def __init__(self, settings: Settings, registry: TypeRegistry | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        registry: TypeRegistry | None = None,
+        chain_resolver: QuestChainResolver | None = None,
+    ) -> None:
         """Initialise the quest lifecycle engine.
 
         Args:
             settings: Application settings (kept for interface symmetry with other engines).
             registry: Type registry providing event node model; must be injected
                 by the composition root (``api/dependency_singletons.py``).
+            chain_resolver: Optional injected QuestChainResolver. When set, called
+                after a COMPLETED transition to offer unlocked successor quests.
+                Existing callers that omit this parameter are unaffected.
         Raises:
             ValueError: If registry is None (must be injected via __init__).
         """
@@ -56,6 +68,7 @@ class QuestLifecycleEngine:
         if registry is None:
             raise ValueError("QuestLifecycleEngine requires a TypeRegistry injected via __init__")
         self._registry = registry
+        self._chain_resolver = chain_resolver
 
     async def _require_state(self, *, session: AsyncSession, quest_id: str, player_id: str) -> QuestStateRecord:
         payload = await get_quest_state(session=session, quest_id=quest_id, player_id=player_id)
@@ -282,4 +295,11 @@ class QuestLifecycleEngine:
         )
         if is_completed:
             await update_quest_node_status(session=session, quest_id=quest_id, status=QuestStatus.COMPLETED)
+            if self._chain_resolver is not None:
+                await self._chain_resolver.resolve(
+                    session=session,
+                    quest_id=quest_id,
+                    player_id=player_id,
+                    outcome="complete",
+                )
         return stored
