@@ -1,6 +1,6 @@
 # EXPANSION_ROADMAP.md — Synthesis & Prioritization (Lens X5)
 
-> **Updated 2026-06-10 — last batch: KE-6 + EXP-32 + EXP-87 merged (1876 unit + 601 demo tests green). Next batch: EXP-92 + EXP-95 — briefs written, deps satisfied, no file conflicts. EXP-92 edits `gossip_handler.py`; EXP-95 is new-file-only. Ready to dispatch.**
+> **Updated 2026-06-10 — last batch: EXP-92 + EXP-95 merged (1879 unit + 614 demo tests green). Phase 17 COMPLETE. Next batch: all remaining items are schema/DECISIONS-gated (EXP-51, EXP-14, EXP-19). No deployable batch until a DECISIONS entry is approved.**
 > **Prior update 2026-06-05 with human resolutions** (see `OPEN_QUESTIONS.md` §A, `DECISIONS.md` DEC-070/071/072).
 > Net effect: (1) **dialogue + gossip are the priority** — show they work in the playable demo; (2) several
 > proposals lost their schema cost by reusing existing graph vocabulary (EXP-53→`BELIEVES`, EXP-50 schema-free,

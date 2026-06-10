@@ -1016,3 +1016,12 @@ And add:
 **Description:** The fixture contains a stub case for player-taught facts (EXP-53 integration). The runner treats it as a `grounded` case and will SKIP if the world isn't pre-seeded with player-taught facts, or FAIL if mira doesn't surface the fact. The `learned_from_player` category is not yet recognized by the runner's classification logic.
 **Why deferred:** EXP-53 slice-3 (contradiction/dedup handling) is still pending; the category was left as a stub deliberately.
 **To fix:** Once EXP-53 slice-3 lands, add `learned_from_player` category handling to `anti_hallucination_runner.py`: treat like `grounded` but also check that EXP-53 wrote the fact via `write_belief()` before running the case.
+
+
+## ISSUE-091: demo_game.__init__ imports pygame (via game_window) at module load time — may cause SDL_Init failures in headless test collection
+**Found:** 2026-06-10, during EXP-95 fan-in
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/__init__.py:13` — `import demo_game.ui.game_window as _game_window`
+**Description:** `__init__.py` now imports `game_window` at module level to allow `_dispatch` to call `game_window.run()`. If `game_window.py` triggers top-level pygame side-effects (display init, mixer init), any test that does a bare `import demo_game` in a headless CI environment will fail with SDL_Init errors at collection time. EXP-95 tests guard this via lazy imports + monkeypatch, but other existing tests may not.
+**Why deferred:** No failures observed yet; P3 until `make test-demo` reveals a real collection failure.
+**To fix:** Make the `game_window` import lazy inside `_dispatch` (i.e. `import demo_game.ui.game_window as _gw` only when `choice == ArcChoice.FREE_PLAY`) rather than at module level.

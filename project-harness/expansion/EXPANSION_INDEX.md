@@ -14,15 +14,14 @@ _State that survives between expansion sessions so a fresh `/expand-parallel` ru
 _The orchestrator maintains this: add a line when an item unlocks/affects a later one; delete consumed lines; keep it tight._
 
 - **Gates:** `make check` = lint + check-rules + type-ratchet + check-harness + test-cov(80%). Demo work also runs `make test-demo`. New code: TDD (failing test first), CLAUDE.md OCP add-by-new-file, layers, 300-line/40-line, prompts-in-YAML, Pydantic boundaries. All new `src/npc_engine/` files must have `Does NOT:` + `Dependencies injected:` in module docstring (architecture conformance test).
-- **Phase 0 demo-repair DONE** (2026-06-05). **EXP-15/16/17/18/13/52/10/53/21/40 DONE.** Tech-debt Batch B DONE (2026-06-09).
+- **Phase 17 COMPLETE (2026-06-10):** KE-6 + EXP-32 + EXP-87 + EXP-92 + EXP-95 all merged. 1879 engine tests + 614 demo tests green.
 - **Pattern — offload CPU on the event loop:** `await asyncio.to_thread(...)`. REUSE for reranker (ISSUE-064).
-- **EXP-32 DONE (2026-06-10):** `evals/anti_hallucination_runner.py` + `make eval-anti-hallucination`. JSON fixture at `evals/cases/anti_hallucination_demo.json`. Metrics: grounded/refusal/hallucination counts. DEC-082: 314-line waiver.
-- **KE-6 DONE (2026-06-10):** Stable-ID seeding — `id: str | None` on all inner-life request schemas; MERGE semantics in graph writers; `demo_game/seed.py` + `api_seeder.py` + village/tavern seeds updated. Seeders now always upsert (no get-then-skip). Unblocks EXP-92 + EXP-95.
-- **EXP-87 DONE (2026-06-10):** `PART_OF` edge type + `location_writer.py` + `graph/location_graph_queries.py` (`get_ancestors`/`get_descendants`) + `api/routes/locations.py` (POST/DELETE/GET). `demo_game/seed.py` wires `loc_city` hierarchy. `part_of.yaml` uses `src_type: location` / `dst_type: location` (BaseEdgeTypeDocument schema). Unblocks richer location-aware scenarios.
+- **EXP-92 DONE (2026-06-10):** `gossip_handler.py` now returns `seeds_used: dict[str, int]` (sharer→receiver key). `DeterminismBeat` demo scene proves same `tick_override=42` → same seeds side-by-side. Pre-existing DEC-061 waiver covers handler 386-line overage.
+- **EXP-95 DONE (2026-06-10):** `demo_game/arc_choice.py` + `demo_game/ui/start_menu.py` + `demo_game/__init__._dispatch()`. `make demo` now shows a 4-option pygame start menu. ISSUE-091: `__init__` imports game_window at load time (P3, didn't manifest in test-demo).
 - **DEC-070/071/072/073/076/077/082 apply.** DEC-076: `dependencies_engines.py` 333-line. DEC-077: `config.py` 309-line. DEC-082: `anti_hallucination_runner.py` 314-line.
-- **Schema/DECISIONS-gated (DROP):** EXP-51, EXP-17-full, EXP-14, EXP-55 deferred.
-- **Open residuals:** ISSUE-064..076, ISSUE-082..090. Next ISSUE id: **ISSUE-091**.
-- **Phase 17 remaining:** EXP-92 · EXP-95 — briefs written; ready to dispatch. EXP-92 edits `gossip_handler.py` (seed surface) + new `demo_game/determinism_beat.py`. EXP-95 new `demo_game/ui/start_menu.py` + `arc_choice.py` + edit `__main__.py`. No file conflicts between them.
+- **Schema/DECISIONS-gated (DROP):** EXP-51, EXP-17-full, EXP-14, EXP-55, EXP-19 deferred.
+- **Open residuals:** ISSUE-064..076, ISSUE-082..091. Next ISSUE id: **ISSUE-092**.
+- **No unchecked Phase 17 items remain.** Next batch = schema-gated items only (need DECISIONS approval before dispatch).
 
 ## Ordered checklist
 
@@ -54,11 +53,11 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 - [x] **EXP-81** — cross-session "remembers you" demo · M · deps: EXP-30
 - [x] **EXP-84** — gossip telephone-diff view (demo) · S · deps: EXP-15 (soft)
 - [x] **EXP-85** — anti-hallucination "I don't know" demo beat · S · deps: none
-- [ ] **EXP-92** — determinism/replay toggle (demo) · M · deps: KE-6 stable-id seeding
+- [x] **EXP-92** — determinism/replay toggle (demo) · M · deps: KE-6 stable-id seeding
 - [x] **EXP-91** — relationship-delta live ticker (demo) · S · deps: EXP-50
 - [x] **EXP-80** — free-play/sandbox mode (demo) · M · deps: none
 - [x] **EXP-93** — fix ISSUE-060 bribe → `HAS_REPUTATION_WITH` (demo) · S · deps: none
-- [ ] **EXP-95** — in-window scenario picker (demo) · M · deps: KE-6
+- [x] **EXP-95** — in-window scenario picker (demo) · M · deps: KE-6
 
 ### Phase 3 — Agentic NPCs
 - [x] **EXP-10** — proactive dialogue + WS `proactive_line` push (both slices complete: `ProactiveDialogueEngine` + `push_proactive_line` + scheduler wiring + `ProactiveMemoryReader` + `PlayerLocationReader`) · L · deps: EXP-30 ✅, EXP-33 ✅
@@ -68,7 +67,7 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 - [ ] **EXP-14** — persistent emotion state (survive restart) · M · `🔶` emotion node/field
 
 ### Phase 4 — World richness & deep systems (later / schema-heavy)
-- [ ] **EXP-87** — location hierarchy `PART_OF` + `location_writer.py` (DEC-071) · L · `🔶` (approved)
+- [x] **EXP-87** — location hierarchy `PART_OF` + `location_writer.py` (DEC-071) · L · `🔶` (approved)
 - [ ] **EXP-19** — branching quests & consequence chains · L · `🔶`
 - [x] **EXP-18** — semantic memory formation beyond arousal · M · deps: EXP-17
 - [x] **EXP-20** — Quest status as enum + fail/expire states · S · deps: none · `QuestStatus` enum in `engines/quest/models.py`
@@ -88,15 +87,14 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 
 **BATCH 2026-06-09 #3 COMPLETE:** EXP-10 s2 · EXP-52 s2 · EXP-53 — all merged, 1796 unit tests green.
 
-**NEXT BATCH candidates (conflict-free):**
-- **EXP-32** (M): anti-hallucination eval — DROP until Q&A label set is ready.
-- **EXP-92** (M): determinism/replay toggle — needs KE-6 stable-id seeding; DROP until KE-6 done.
-- **EXP-95** (M): in-window scenario picker — needs KE-6; DROP.
-- **EXP-87** (L): location hierarchy `PART_OF` — `🔶` DEC-071 approved; no conflicting open items. First viable large item.
-- **EXP-14** (M): persistent emotion state — `🔶` schema-gated; DROP.
-- **EXP-51** (L): NPC GOAP goal formation — `🔶` schema-gated; DROP.
+**BATCH 2026-06-10 COMPLETE:** EXP-92 · EXP-95 — both merged, 1879 engine + 614 demo tests green.
 
-**Previous suggested batch (superseded 2026-06-10):** ~~EXP-87 solo~~ — brief now written; Phase 17 batch below is the canonical next execution plan.
+**NEXT BATCH candidates:** All remaining unchecked items are schema/DECISIONS-gated. No conflict-free
+deployable batch exists until at least one of the following DECISIONS entries is approved:
+- **EXP-51** (L): `🔶` requires `GOAL_TARGETS` edge + precedence DEC.
+- **EXP-14** (M): `🔶` requires emotion node/field schema DEC.
+- **EXP-19** (L): `🔶` requires branching quest schema DEC.
+Grant DECISIONS approval and `/expand-parallel` will auto-select the approved item(s).
 
 ---
 
@@ -108,8 +106,8 @@ parallel with KE-6 (no file conflicts). Schema-gated items are drop-from-batch u
 - [x] **KE-6** — stable-ID seeding (ISSUE-055) · M · deps: none · ENABLER · brief: `briefs/KE-6-stable-id-seeding.md`
 - [x] **EXP-32** — anti-hallucination eval runner + `make eval-anti-hallucination` · M · deps: none (fixture done) · brief: `briefs/EXP-32-anti-hallucination-eval-runner.md`
 - [x] **EXP-87** — location hierarchy `PART_OF` + `location_writer.py` · L · `🔶` DEC-071 approved · brief: `briefs/EXP-87-location-hierarchy.md`
-- [ ] **EXP-92** — determinism/replay toggle (demo) · M · deps: KE-6 ✅ · brief: `briefs/EXP-92-determinism-replay-proof.md`
-- [ ] **EXP-95** — in-window scenario picker (demo) · M · deps: KE-6 ✅ · brief: `briefs/EXP-95-scenario-picker.md`
+- [x] **EXP-92** — determinism/replay toggle (demo) · M · deps: KE-6 ✅ · brief: `briefs/EXP-92-determinism-replay-proof.md`
+- [x] **EXP-95** — in-window scenario picker (demo) · M · deps: KE-6 ✅ · brief: `briefs/EXP-95-scenario-picker.md`
 
 ### Phase 17 — Schema-gated (hold until DECISIONS approval)
 
