@@ -69,6 +69,7 @@ class TickScheduler:
         proactive_dialogue_engine: BaseEngine | None = None,
         reputation_engine: BaseEngine | None = None,
         intent_formation_engine: BaseEngine | None = None,
+        goal_formation_engine: BaseEngine | None = None,
         consolidation_advance_interval: int = 1,
         chapter_interval: int = 1,
         distributed_lease_enabled: bool = False,
@@ -166,6 +167,7 @@ class TickScheduler:
         self._proactive_dialogue_engine = proactive_dialogue_engine
         self._reputation_engine = reputation_engine
         self._intent_formation_engine = intent_formation_engine
+        self._goal_formation_engine = goal_formation_engine
         self._consolidation_advance_interval = max(1, consolidation_advance_interval)
         self._chapter_interval = max(1, chapter_interval)
         self._advance_count = 0
@@ -328,6 +330,7 @@ class TickScheduler:
                 "proactive_dialogue": [],
                 "reputation": [],
                 "intent_formation": [],
+                "goal_formation": [],
             }
             world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
             for tick_id in range(start_tick + 1, end_tick + 1):
@@ -560,6 +563,14 @@ class TickScheduler:
                     )
                     if row is not None:
                         response["intent_formation"].append(row)
+
+                if self._goal_formation_engine is not None:
+                    row = await self._run_engine_safe(
+                        "goal_formation", tick_id,
+                        self._goal_formation_engine.run_tick(session=session, tick_id=tick_id),
+                    )
+                    if row is not None:
+                        response["goal_formation"].append(row)
 
                 if unresolved:
                     break
