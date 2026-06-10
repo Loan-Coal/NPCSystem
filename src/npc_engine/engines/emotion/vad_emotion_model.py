@@ -22,12 +22,19 @@ _MOOD_AROUSAL_INCREMENT = 5
 _AROUSAL_MAX = 100
 _AROUSAL_MIN = 0
 
+# Label inertia threshold: arousal must reach this value before the mood label
+# is allowed to change.  Prevents label flips on low-intensity events.
+_MIN_AROUSAL_TO_SHIFT_LABEL: int = 20
+
 
 class VadEmotionModel:
     """VAD emotion model: shock, mood-hint, and decay via valence/arousal arithmetic.
 
     All methods are pure — no I/O, no mutable state.  Safe to share across
     multiple EmotionUpdater instances.
+
+    Label inertia: apply_mood_hint preserves the previous label when the
+    resulting arousal is below _MIN_AROUSAL_TO_SHIFT_LABEL.
     """
 
     def apply_shock(self, state: EmotionState, severity: int) -> EmotionState:
@@ -57,20 +64,29 @@ class VadEmotionModel:
         mood_label: str,
         arousal_increment: int,
     ) -> EmotionState:
-        """Replace label and increment arousal by arousal_increment, capped at 100.
+        """Replace label and increment arousal, with label inertia below threshold.
+
+        If the resulting arousal is below _MIN_AROUSAL_TO_SHIFT_LABEL, the
+        previous label is preserved to prevent mood flips on low-intensity events.
 
         Args:
             state: Current emotion state.
-            mood_label: New label from LLM dialogue output.
+            mood_label: Candidate new label from LLM dialogue output.
             arousal_increment: Amount to add to arousal.
 
         Returns:
-            New EmotionState with updated label and clamped arousal.
+            New EmotionState with updated arousal; label replaced only when
+            arousal >= _MIN_AROUSAL_TO_SHIFT_LABEL.
         """
+        new_arousal = min(_AROUSAL_MAX, state.arousal + arousal_increment)
+        if new_arousal < _MIN_AROUSAL_TO_SHIFT_LABEL:
+            effective_label = state.label
+        else:
+            effective_label = mood_label
         return EmotionState(
             valence=state.valence,
-            arousal=min(_AROUSAL_MAX, state.arousal + arousal_increment),
-            label=mood_label,
+            arousal=new_arousal,
+            label=effective_label,
         )
 
     def decay(self, state: EmotionState, decay_rate: int) -> EmotionState:

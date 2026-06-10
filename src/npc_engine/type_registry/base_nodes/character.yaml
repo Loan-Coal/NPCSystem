@@ -18,3 +18,7 @@ fields:
   routine_override: { type: str, required: false }
   currency_balance: { type: int, required: false }
   voice_descriptor: { type: str, required: false }
+  emotion_valence: { type: int, required: false, range: [-100, 100] }
+  emotion_arousal: { type: int, required: false, range: [0, 100] }
+  emotion_mood_label: { type: str, required: false }
+  emotion_updated_at_tick: { type: int, required: false }

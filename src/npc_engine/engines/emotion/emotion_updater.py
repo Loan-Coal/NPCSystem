@@ -2,20 +2,27 @@
 Module: emotion_updater
 Layer: engines
 Purpose: Applies mood updates and decay rules to emotion states via async store calls.
-Does NOT: read or write graph data. Does NOT compute emotion arithmetic directly —
-          delegates all computation to the injected EmotionModelProtocol.
+Does NOT: read or write graph data directly.  Delegates computation to EmotionModelProtocol.
+          Graph write-through is optional via injected EmotionGraphWriter.
 Dependencies: engines/emotion/emotion_store, engines/emotion/emotion_model_protocol,
-              engines/emotion/vad_emotion_model
-Dependencies injected: EmotionStore, EmotionModelProtocol.
+              engines/emotion/vad_emotion_model, graph/emotion_writer
+Dependencies injected: EmotionStore, EmotionModelProtocol, EmotionGraphWriter (optional).
 Used by: engines/dialogue/dialogue_handler, engines/gossip/gossip_handler
 """
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from npc_engine.engines.emotion.emotion_model_protocol import EmotionModelProtocol
 from npc_engine.engines.emotion.emotion_state import EmotionState
 from npc_engine.engines.emotion.emotion_store import EmotionStore
 from npc_engine.engines.emotion.vad_emotion_model import VadEmotionModel
+
+if TYPE_CHECKING:
+    from neo4j import AsyncSession
+
+    from npc_engine.graph.emotion_writer import EmotionGraphWriter
 
 _MOOD_AROUSAL_INCREMENT = 5
 
@@ -25,6 +32,9 @@ class EmotionUpdater:
 
     All emotion computation is delegated to the injected EmotionModelProtocol.
     This class owns only store I/O and method orchestration (OCP / DIP).
+
+    When an EmotionGraphWriter is injected, every store write is followed by a
+    graph write-through so emotion state survives process restarts.
     """
 
     def __init__(
@@ -32,27 +42,43 @@ class EmotionUpdater:
         emotion_store: EmotionStore,
         decay_rate: int = 2,
         model: EmotionModelProtocol | None = None,
+        writer: EmotionGraphWriter | None = None,
     ) -> None:
-        """Initialise the updater with a backing store, decay rate, and optional model.
+        """Initialise the updater with a backing store, decay rate, and optional deps.
 
         Args:
             emotion_store: Store used to read and persist NPC emotion states.
             decay_rate: Absolute units per tick that valence and arousal decay toward neutral.
             model: EmotionModelProtocol implementation.  Defaults to VadEmotionModel().
+            writer: Optional EmotionGraphWriter for Neo4j write-through.  When None,
+                    state is only stored in-memory (no graph persistence).
         """
         self._store = emotion_store
         self._decay_rate = decay_rate
         self._model: EmotionModelProtocol = model if model is not None else VadEmotionModel()
+        self._writer: EmotionGraphWriter | None = writer
 
-    async def apply_dialogue_mood(self, npc_id: str, mood_update: str | None) -> EmotionState:
+    async def apply_dialogue_mood(
+        self,
+        npc_id: str,
+        mood_update: str | None,
+        session: AsyncSession | None = None,
+        tick: int = 0,
+    ) -> EmotionState:
         """Apply an optional mood label hint from dialogue output and persist the result.
 
         If mood_update is None, the current state is decayed toward neutral.
-        Otherwise arousal is incremented by 5 (capped at 100) and the label is replaced.
+        Otherwise arousal is incremented by 5 (capped at 100) and the label is replaced
+        (subject to VadEmotionModel label-inertia rules).
+
+        When a writer and session are provided, the new state is also written to the
+        character node in Neo4j for restart-safe persistence.
 
         Args:
             npc_id: Unique identifier of the NPC.
             mood_update: New mood label string, or None to apply passive decay.
+            session: Active Neo4j session for write-through.  Ignored when writer is None.
+            tick: Current world-clock tick; stored on the character node.
 
         Returns:
             The newly computed and stored EmotionState.
@@ -67,6 +93,13 @@ class EmotionUpdater:
                 arousal_increment=_MOOD_AROUSAL_INCREMENT,
             )
         await self._store.set(npc_id=npc_id, state=next_state)
+        if self._writer is not None and session is not None:
+            await self._writer.write_emotion(
+                session=session,
+                npc_id=npc_id,
+                state=next_state,
+                tick=tick,
+            )
         return next_state
 
     async def get_state(self, npc_id: str) -> EmotionState:
@@ -80,16 +113,27 @@ class EmotionUpdater:
         """
         return await self._store.get(npc_id=npc_id)
 
-    async def apply_event_shock(self, npc_id: str, severity: int) -> EmotionState:
+    async def apply_event_shock(
+        self,
+        npc_id: str,
+        severity: int,
+        session: AsyncSession | None = None,
+        tick: int = 0,
+    ) -> EmotionState:
         """Apply an emotional shock when an NPC receives a high-severity rumour or event.
 
         Decreases valence and increases arousal proportionally to event severity,
         pushing the NPC toward "agitated" or "melancholic".  The effect is bounded
         so a single event cannot force an extreme state.
 
+        When a writer and session are provided, the new state is also written to the
+        character node in Neo4j for restart-safe persistence.
+
         Args:
             npc_id: Unique identifier of the NPC.
             severity: Event severity 0–100; values below 50 produce small shifts.
+            session: Active Neo4j session for write-through.  Ignored when writer is None.
+            tick: Current world-clock tick; stored on the character node.
 
         Returns:
             The newly computed and stored EmotionState.
@@ -97,4 +141,11 @@ class EmotionUpdater:
         previous = await self._store.get(npc_id=npc_id)
         next_state = self._model.apply_shock(previous, severity)
         await self._store.set(npc_id=npc_id, state=next_state)
+        if self._writer is not None and session is not None:
+            await self._writer.write_emotion(
+                session=session,
+                npc_id=npc_id,
+                state=next_state,
+                tick=tick,
+            )
         return next_state
