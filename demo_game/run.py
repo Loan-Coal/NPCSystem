@@ -47,6 +47,7 @@ from demo_game.run_scenes import (
     StreamingDialogueBeat,
     WorldFeed,
 )
+from demo_game.determinism_beat import DeterminismBeat
 from demo_game.remembers_you_beat import RemembersYouBeat
 from demo_game.constants import DEMO_CACHE_VERSION as _PROMPT_VERSION
 
@@ -407,13 +408,29 @@ SCENES: list[Scene] = [
     ),
 
     # -----------------------------------------------------------------------
-    # ACT 8 -- Anti-hallucination guard (EXP-85)
+    # ACT 8 -- Determinism proof (EXP-92)
+    # -----------------------------------------------------------------------
+    NarratorCue(
+        name="pre_determinism_cue",
+        delay_before_ms=2000,
+        text=(
+            "[ACT 8] Determinism proof. Same tick_override=42 called twice. "
+            "Both runs must produce identical seeds — proving replayable gossip."
+        ),
+    ),
+    DeterminismBeat(
+        name="determinism_check",
+        delay_before_ms=500,
+    ),
+
+    # -----------------------------------------------------------------------
+    # ACT 9 -- Anti-hallucination guard (EXP-85)
     # -----------------------------------------------------------------------
     NarratorCue(
         name="pre_anti_halluc_cue",
         delay_before_ms=2000,
         text=(
-            "[ACT 8] Anti-hallucination guard. Aldric is NOT in the gossip chain. "
+            "[ACT 9] Anti-hallucination guard. Aldric is NOT in the gossip chain. "
             "Ask him about the war -- he has no KNOWS_ABOUT edge, so the engine deflects."
         ),
     ),
@@ -423,19 +440,20 @@ SCENES: list[Scene] = [
     ),
 
     # -----------------------------------------------------------------------
-    # ACT 9 -- Cross-session memory recall (EXP-81)
+    # ACT 10 -- Cross-session memory recall (EXP-81)
     # -----------------------------------------------------------------------
-    NarratorCue(name="act9_narrator", delay_before_ms=800,
-        text="ACT 9 — Memory: The innkeeper recalls your history."),
-    RemembersYouBeat(name="act9_remembers_you"),
+    NarratorCue(name="act10_narrator", delay_before_ms=800,
+        text="ACT 10 — Memory: The innkeeper recalls your history."),
+    RemembersYouBeat(name="act10_remembers_you"),
 
     NarratorCue(
         name="outro",
         delay_before_ms=1000,
         text=(
-            "=== Demo complete. 9 acts. "
+            "=== Demo complete. 10 acts. "
             "Phase 6 + Phase 8 networked reputation + Phase 10 rumor warfare "
-            "+ EXP-85 anti-hallucination guard + EXP-81 cross-session memory covered. ==="
+            "+ EXP-85 anti-hallucination guard + EXP-92 determinism proof "
+            "+ EXP-81 cross-session memory covered. ==="
         ),
     ),
 ]
