@@ -249,7 +249,7 @@ class _FakeEmotionUpdater:
     async def get_state(self, npc_id: str) -> Any:
         return SimpleNamespace(label="neutral", arousal=10, valence=0)
 
-    async def apply_dialogue_mood(self, npc_id: str, mood_update: str | None) -> Any:
+    async def apply_dialogue_mood(self, npc_id: str, mood_update: str | None, session=None, tick: int = 0) -> Any:
         return SimpleNamespace(label=mood_update or "neutral", arousal=10, valence=0)
 
 

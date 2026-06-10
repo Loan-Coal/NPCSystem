@@ -184,7 +184,12 @@ class DialogueHandler:
                 player_id=request.player_id, relation_deltas=response.relation_deltas,
                 cause_id=f"dialogue:{request.player_id}:{request.npc_id}", tick_id=tick_id,
             )
-        return await self._emotion_updater.apply_dialogue_mood(npc_id=request.npc_id, mood_update=response.mood_update)
+        return await self._emotion_updater.apply_dialogue_mood(
+            npc_id=request.npc_id,
+            mood_update=response.mood_update,
+            session=self._session,
+            tick=tick_id,
+        )
 
     async def _apply_arousal_memory(self, *, request: DialogueRequest, response: DialogueResponse, new_emotion) -> None:
         """Create an episodic memory when NPC arousal exceeds the high-arousal threshold."""

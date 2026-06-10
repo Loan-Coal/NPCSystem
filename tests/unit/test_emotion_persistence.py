@@ -2,6 +2,7 @@
 Unit tests for EmotionUpdater write-through, label inertia, and EmotionBootstrapper.
 
 Covers:
+- get_emotion_updater singleton has writer injected (EXP-14 slice-3)
 - apply_dialogue_mood calls EmotionGraphWriter when injected (test 3)
 - apply_dialogue_mood does not crash when no writer injected (test 4)
 - VadEmotionModel label inertia below _MIN_AROUSAL_TO_SHIFT_LABEL (test 5)
@@ -14,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from npc_engine.api.dependencies_stores import get_emotion_updater
 from npc_engine.engines.emotion.emotion_bootstrap import EmotionBootstrapper
 from npc_engine.engines.emotion.emotion_state import EmotionState
 from npc_engine.engines.emotion.emotion_store import EmotionStore
@@ -23,6 +25,19 @@ from npc_engine.engines.emotion.vad_emotion_model import (
     _MIN_AROUSAL_TO_SHIFT_LABEL,
 )
 from npc_engine.graph.emotion_writer import EmotionGraphWriter
+
+
+def test_get_emotion_updater_singleton_has_writer() -> None:
+    """get_emotion_updater() must wire EmotionGraphWriter so writes persist (EXP-14 slice-3)."""
+    get_emotion_updater.cache_clear()
+    try:
+        updater = get_emotion_updater()
+        assert updater._writer is not None, (
+            "EmotionUpdater._writer is None — emotion state will not be persisted at runtime"
+        )
+        assert isinstance(updater._writer, EmotionGraphWriter)
+    finally:
+        get_emotion_updater.cache_clear()
 
 
 @pytest.mark.asyncio

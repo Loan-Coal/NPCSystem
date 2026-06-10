@@ -47,16 +47,18 @@ class GoalFormer:
         *,
         character_id: str,
         game_time: TimePoint,
-    ) -> str | None:
+    ) -> tuple[str, int, str | None] | None:
         """Form a goal for the character's most-decayed need.
+
         Args:
             session: Active Neo4j async session.
             character_id: ID of the character to plan for.
             game_time: Current game time (stamped onto the goal node).
 
         Returns:
-            The goal node ID if a goal was created, or None if the character
-            has no needs.
+            ``(goal_id, urgency, target_location_id)`` if a goal was created, or None
+            if the character has no needs.  target_location_id is None when no
+            satisfying location is found for the need kind.
         """
         needs = await get_needs_for_character(session, character_id)
         if not needs:
@@ -82,8 +84,8 @@ class GoalFormer:
                 "goal_id": goal_id,
             },
         )
-        await self._maybe_write_goal_targets(session, goal_id, worst_need["kind"], urgency)
-        return goal_id
+        target_location_id = await self._maybe_write_goal_targets(session, goal_id, worst_need["kind"], urgency)
+        return goal_id, urgency, target_location_id
 
     async def _maybe_write_goal_targets(
         self,
@@ -91,15 +93,16 @@ class GoalFormer:
         goal_id: str,
         need_kind: str,
         urgency: int,
-    ) -> None:
+    ) -> str | None:
         target_location_id = await get_satisfying_location_for_need(session, need_kind)
         if target_location_id is None:
-            return
+            return None
         await create_goal_targets_edge(session, goal_id, target_location_id, urgency)
         logger.info(
             "goal_former.goal_targets_edge_written",
             extra={"goal_id": goal_id, "target_location_id": target_location_id, "priority": urgency},
         )
+        return target_location_id
 
     @staticmethod
     def _compute_urgency(need_level: int) -> int:

@@ -58,6 +58,7 @@ from npc_engine.engines.story_pacing.story_pacing_engine import StoryPacingEngin
 from npc_engine.engines.proactive_dialogue.proactive_engine import ProactiveDialogueEngine
 from npc_engine.engines.proactive_dialogue.proactive_tick_adapter import ProactiveDialogueTick
 from npc_engine.engines.agenda.intent_formation_engine import IntentFormationEngine
+from npc_engine.engines.planning.action_selector import ActionSelector
 from npc_engine.engines.planning.goal_former_adapter import GoalFormerAdapter
 from npc_engine.graph.player_location_reader import PlayerLocationReader
 from npc_engine.graph.proactive_memory_reader import ProactiveMemoryReader
@@ -282,9 +283,9 @@ def get_goal_formation_engine() -> GoalFormerAdapter:
     """Create singleton GoalFormerAdapter for GOAP goal formation each tick.
 
     Returns:
-        GoalFormerAdapter backed by a default GoalFormer instance.
+        GoalFormerAdapter backed by a default GoalFormer and ActionSelector instance.
     """
-    return GoalFormerAdapter()
+    return GoalFormerAdapter(action_selector=ActionSelector())
 
 
 class _CharacterReaderWrapper:

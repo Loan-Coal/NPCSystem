@@ -72,10 +72,16 @@ class MinimalLLMClient:
 class FakeEmotionUpdater:
     """Deterministic emotion updater for dialogue handler tests."""
 
+    def __init__(self) -> None:
+        self.last_session = None
+        self.last_tick: int = 0
+
     async def get_state(self, npc_id: str):
         return SimpleNamespace(label="neutral")
 
-    async def apply_dialogue_mood(self, npc_id: str, mood_update: str | None):
+    async def apply_dialogue_mood(self, npc_id: str, mood_update: str | None, session=None, tick: int = 0):
+        self.last_session = session
+        self.last_tick = tick
         return SimpleNamespace(label=mood_update or "neutral", valence=0)
 
 
@@ -178,3 +184,60 @@ async def test_stream_passes_emotion_state_to_context_builder(monkeypatch) -> No
 
     assert chunks == ["chunk"]
     assert captured_kwargs["emotion_state"] == {"current_mood": "neutral"}
+
+
+@pytest.mark.asyncio
+async def test_apply_relation_and_emotion_passes_session_and_tick(monkeypatch) -> None:
+    """DialogueHandler must pass session and tick to apply_dialogue_mood (EXP-14 slice-4)."""
+    async def fake_build_serialized_context(**kwargs):
+        return "{}"
+
+    async def fake_apply_dialogue_relation_deltas(**kwargs) -> None:
+        return None
+
+    monkeypatch.setattr("npc_engine.engines.dialogue.dialogue_handler.build_serialized_context", fake_build_serialized_context)
+    monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.build_dialogue_prompt",
+        lambda request, serialized_context: "prompt",
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas",
+        fake_apply_dialogue_relation_deltas,
+    )
+
+    fake_session = object()
+    fake_updater = FakeEmotionUpdater()
+
+    handler = DialogueHandler(
+        session=fake_session,
+        settings=SimpleNamespace(
+            LLM_FALLBACK_PATH=_FALLBACK_PATH,
+            CANNED_RESPONSES_DIR=_CANNED_DIR,
+            LOG_LLM_PROMPTS=False,
+        ),
+        llm_client=MinimalLLMClient(),
+        llm_config=SimpleNamespace(),
+        engine_model_config=_make_engine_model_config(),
+        session_store=SessionStore(ttl_seconds=300, max_turns=10),
+        emotion_updater=fake_updater,
+        embedding_index=None,
+        input_moderation=build_input_moderation_service("mature"),
+        output_moderation=build_output_moderation_service("mature"),
+    )
+
+    await handler.handle(
+        DialogueRequest(
+            player_id="player_1",
+            npc_id="npc_1",
+            player_message="hello",
+            location_id="loc_1",
+            session_id="session_1",
+        )
+    )
+
+    assert fake_updater.last_session is fake_session, (
+        "apply_dialogue_mood must receive the Neo4j session so writes can be persisted"
+    )
+    assert fake_updater.last_tick != 0, (
+        "apply_dialogue_mood must receive a non-zero tick_id"
+    )

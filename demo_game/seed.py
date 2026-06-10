@@ -870,6 +870,112 @@ _QUEST_UNLOCKS_CHAINS: list[tuple[str, str, str]] = [
     ("demo_missing_goods", "demo_fence_confrontation", "complete"),
 ]
 
+# Chain-target Quest nodes that must exist before UNLOCKS edges are wired (EXP-19 slice-3).
+# These are the successor quests unlocked by _QUEST_UNLOCKS_CHAINS above.
+_CHAIN_QUESTS: list[dict] = [
+    {
+        "id": "demo_captain_report",
+        "description": "Report the patrol findings to the Captain.",
+        "quest_giver_id": "captain_sorn",
+        "success_condition": "Deliver the patrol report to Captain Sorn.",
+        "status": "offered",
+        "severity": 40,
+    },
+    {
+        "id": "demo_fence_confrontation",
+        "description": "Confront Lira about the missing goods.",
+        "quest_giver_id": "lira_fence",
+        "success_condition": "Speak with Lira at the tavern about the missing shipment.",
+        "status": "offered",
+        "severity": 50,
+    },
+]
+
+
+# Source/trigger Quest nodes for the UNLOCKS chains (EXP-19 slice-4).
+# These must exist so the chains can be fired by completing them.
+_SOURCE_CHAIN_QUESTS: list[dict] = [
+    {
+        "id": "demo_patrol_duty",
+        "description": "Patrol the northern road and report any suspicious activity.",
+        "quest_giver_id": "captain_sorn",
+        "success_condition": "Complete the patrol route and return to Captain Sorn.",
+        "status": "offered",
+        "severity": 35,
+    },
+    {
+        "id": "demo_missing_goods",
+        "description": "Investigate what happened to Aldric's missing shipment.",
+        "quest_giver_id": "aldric_merchant",
+        "success_condition": "Find out what happened to the missing goods.",
+        "status": "offered",
+        "severity": 45,
+    },
+]
+
+
+def _seed_source_chain_quests(client: EngineClient) -> int:
+    """Seed source/trigger Quest nodes for the UNLOCKS chains (EXP-19 slice-4).
+
+    These are the quests a player completes to trigger the chain.  Without them
+    the UNLOCKS edges in _QUEST_UNLOCKS_CHAINS point from a void and no game
+    interaction can ever fire the chain.
+
+    Idempotent: skips any Quest node that already exists.
+    Non-fatal: logs a warning and continues on error.
+
+    Args:
+        client: Authenticated EngineClient.
+
+    Returns:
+        Number of Quest nodes created (0 if all already existed).
+    """
+    created = 0
+    for quest in _SOURCE_CHAIN_QUESTS:
+        quest_id = quest["id"]
+        try:
+            result = _seed_node(client, "Quest", {**quest, "created_at": _now()})
+            if result == "created":
+                created += 1
+                _seed_edge(client, "HAS_QUEST", quest["quest_giver_id"], quest_id, {})
+                logger.info("[seed] Source chain quest seeded: %s", quest_id)
+            else:
+                logger.info("[seed] Source chain quest %s already exists — skipped", quest_id)
+        except Exception as exc:
+            logger.warning("[seed] Source chain quest %s skipped: %s", quest_id, exc)
+    return created
+
+
+def _seed_chain_quests(client: EngineClient) -> int:
+    """Seed chain-target Quest nodes so QuestChainOfferAdapter can resolve them (EXP-19 slice-3).
+
+    These Quest nodes are the successors referenced in _QUEST_UNLOCKS_CHAINS.  Without them,
+    QuestChainResolver fires → get_quest returns None → QuestTransitionError at runtime.
+
+    Idempotent: skips any Quest node that already exists.
+    Non-fatal: logs a warning and continues on error.
+
+    Args:
+        client: Authenticated EngineClient.
+
+    Returns:
+        Number of Quest nodes created (0 if all already existed).
+    """
+    created = 0
+    for quest in _CHAIN_QUESTS:
+        quest_id = quest["id"]
+        try:
+            result = _seed_node(client, "Quest", {**quest, "created_at": _now()})
+            if result == "created":
+                created += 1
+                _seed_edge(client, "HAS_QUEST", quest["quest_giver_id"], quest_id, {})
+                logger.info("[seed] Chain quest seeded: %s", quest_id)
+            else:
+                logger.info("[seed] Chain quest %s already exists — skipped", quest_id)
+        except Exception as exc:
+            logger.warning("[seed] Chain quest %s skipped: %s", quest_id, exc)
+    return created
+
 
 def _seed_quest_unlocks_chains(client: EngineClient) -> int:
     """Seed hand-authored UNLOCKS edges between quest pairs (EXP-19 slice-1).
@@ -1049,6 +1155,14 @@ def seed_all(client: EngineClient) -> dict:
     # 14. Quests (non-fatal — requires quest engine)
     logger.info("[seed] Quests")
     _seed_quests(client)
+
+    # 14b. Source chain Quest nodes (EXP-19 slice-4) — trigger quests players complete to fire chains
+    logger.info("[seed] Source chain quests")
+    created += _seed_source_chain_quests(client)
+
+    # 14c. Chain-target Quest nodes (EXP-19 slice-3) — must exist before UNLOCKS edges (step 13/end)
+    logger.info("[seed] Chain quests")
+    created += _seed_chain_quests(client)
 
     # 15. NPC Needs
     logger.info("[seed] NPC Needs")

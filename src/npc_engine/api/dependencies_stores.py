@@ -17,6 +17,7 @@ from npc_engine.config import get_settings
 from npc_engine.engines.dialogue.session_store import SessionStore
 from npc_engine.engines.emotion.emotion_store import EmotionStore
 from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
+from npc_engine.graph.emotion_writer import EmotionGraphWriter
 from npc_engine.engines.idempotency.service import IdempotencyService
 from npc_engine.graph.idempotency_writer import Neo4jIdempotencyStore
 from npc_engine.retrieval.dialogue_context_cache import PartialDialogueContextCache
@@ -55,7 +56,7 @@ def get_emotion_updater() -> EmotionUpdater:
     Returns:
         EmotionUpdater wired to the singleton EmotionStore.
     """
-    return EmotionUpdater(emotion_store=get_emotion_store())
+    return EmotionUpdater(emotion_store=get_emotion_store(), writer=EmotionGraphWriter())
 
 
 @lru_cache
