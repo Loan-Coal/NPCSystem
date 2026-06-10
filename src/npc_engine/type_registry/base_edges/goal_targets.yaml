@@ -1,0 +1,8 @@
+edge_type: GOAL_TARGETS
+src_type: goal
+dst_type: [character, location, faction, item]
+fields:
+  priority:
+    type: int
+    required: true
+    range: [0, 100]
