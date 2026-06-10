@@ -46,7 +46,9 @@ async def test_apply_dialogue_mood_writes_through() -> None:
     call_kwargs = mock_writer.write_emotion.call_args[1]
     assert call_kwargs["npc_id"] == "npc-1"
     assert call_kwargs["tick"] == 5
-    assert isinstance(call_kwargs["state"], EmotionState)
+    assert isinstance(call_kwargs["valence"], int)
+    assert isinstance(call_kwargs["arousal"], int)
+    assert isinstance(call_kwargs["label"], str)
 
 
 @pytest.mark.asyncio

@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from npc_engine.engines.emotion.emotion_state import EmotionState
 from npc_engine.graph.emotion_writer import EmotionGraphWriter
 
 
@@ -24,20 +23,18 @@ async def test_write_emotion_sets_all_four_fields() -> None:
     mock_result.consume = AsyncMock()
     mock_session.run = AsyncMock(return_value=mock_result)
 
-    state = EmotionState(valence=42, arousal=30, label="warm")
-
     await writer.write_emotion(
         session=mock_session,
         npc_id="npc-1",
-        state=state,
+        valence=42,
+        arousal=30,
+        label="warm",
         tick=7,
     )
 
     mock_session.run.assert_called_once()
     call_args, call_kwargs = mock_session.run.call_args
 
-    # Parameters may be passed as positional kwargs or keyword args
-    # We collect all non-query arguments into a flat dict
     all_params: dict = {}
     for v in call_args[1:]:
         if isinstance(v, dict):
@@ -59,12 +56,12 @@ async def test_write_emotion_uses_merge_not_create() -> None:
     mock_result.consume = AsyncMock()
     mock_session.run = AsyncMock(return_value=mock_result)
 
-    state = EmotionState(valence=10, arousal=15, label="neutral")
-
     await writer.write_emotion(
         session=mock_session,
         npc_id="npc-2",
-        state=state,
+        valence=10,
+        arousal=15,
+        label="neutral",
         tick=1,
     )
 

@@ -68,11 +68,8 @@ class EmotionUpdater:
         """Apply an optional mood label hint from dialogue output and persist the result.
 
         If mood_update is None, the current state is decayed toward neutral.
-        Otherwise arousal is incremented by 5 (capped at 100) and the label is replaced
-        (subject to VadEmotionModel label-inertia rules).
-
-        When a writer and session are provided, the new state is also written to the
-        character node in Neo4j for restart-safe persistence.
+        Otherwise arousal is incremented by 5 (subject to VadEmotionModel label-inertia rules).
+        When a writer and session are provided, the new state is written to Neo4j.
 
         Args:
             npc_id: Unique identifier of the NPC.
@@ -88,18 +85,10 @@ class EmotionUpdater:
             next_state = self._model.decay(previous, self._decay_rate)
         else:
             next_state = self._model.apply_mood_hint(
-                previous,
-                mood_label=mood_update,
-                arousal_increment=_MOOD_AROUSAL_INCREMENT,
+                previous, mood_label=mood_update, arousal_increment=_MOOD_AROUSAL_INCREMENT,
             )
         await self._store.set(npc_id=npc_id, state=next_state)
-        if self._writer is not None and session is not None:
-            await self._writer.write_emotion(
-                session=session,
-                npc_id=npc_id,
-                state=next_state,
-                tick=tick,
-            )
+        await self._write_through(npc_id=npc_id, state=next_state, session=session, tick=tick)
         return next_state
 
     async def get_state(self, npc_id: str) -> EmotionState:
@@ -141,11 +130,24 @@ class EmotionUpdater:
         previous = await self._store.get(npc_id=npc_id)
         next_state = self._model.apply_shock(previous, severity)
         await self._store.set(npc_id=npc_id, state=next_state)
+        await self._write_through(npc_id=npc_id, state=next_state, session=session, tick=tick)
+        return next_state
+
+    async def _write_through(
+        self,
+        *,
+        npc_id: str,
+        state: EmotionState,
+        session: AsyncSession | None,
+        tick: int,
+    ) -> None:
+        """Write emotion state to Neo4j if a writer and session are both present."""
         if self._writer is not None and session is not None:
             await self._writer.write_emotion(
                 session=session,
                 npc_id=npc_id,
-                state=next_state,
+                valence=state.valence,
+                arousal=state.arousal,
+                label=state.label,
                 tick=tick,
             )
-        return next_state

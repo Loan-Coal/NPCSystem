@@ -110,8 +110,10 @@ class QuestChainResolver:
             )
             _logger.info(
                 "quest_chain_resolved",
-                quest_id=quest_id,
-                next_quest_id=next_quest_id,
-                outcome=outcome,
-                player_id=player_id,
+                extra={
+                    "quest_id": quest_id,
+                    "next_quest_id": next_quest_id,
+                    "outcome": outcome,
+                    "player_id": player_id,
+                },
             )

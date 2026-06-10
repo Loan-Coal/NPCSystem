@@ -65,7 +65,7 @@ async def test_forms_goal_for_lowest_level_need():
             new=AsyncMock(return_value="goal-001"),
         ) as mock_create_goal,
         patch(
-            "npc_engine.engines.planning.goal_former.get_satisfying_location",
+            "npc_engine.engines.planning.goal_former.get_satisfying_location_for_need",
             new=AsyncMock(return_value=None),
         ),
         patch(
@@ -106,7 +106,7 @@ async def test_urgency_clamped_when_need_at_zero():
             new=AsyncMock(return_value="goal-002"),
         ) as mock_create_goal,
         patch(
-            "npc_engine.engines.planning.goal_former.get_satisfying_location",
+            "npc_engine.engines.planning.goal_former.get_satisfying_location_for_need",
             new=AsyncMock(return_value=None),
         ),
         patch(
@@ -144,7 +144,7 @@ async def test_goal_targets_edge_points_to_satisfying_location():
             new=AsyncMock(return_value="goal-003"),
         ),
         patch(
-            "npc_engine.engines.planning.goal_former.get_satisfying_location",
+            "npc_engine.engines.planning.goal_former.get_satisfying_location_for_need",
             new=AsyncMock(return_value="tavern"),
         ),
         patch(

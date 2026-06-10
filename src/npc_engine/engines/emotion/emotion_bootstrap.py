@@ -4,9 +4,9 @@ Layer: engines
 Purpose: Seeds EmotionStore from persisted character-node emotion fields at boot.
          Reads Neo4j character nodes and hydrates the in-memory store so emotion
          state survives process restarts.
-Does NOT: write to the graph, compute emotion arithmetic, call LLMs.
+Does NOT: write to the graph, compute emotion arithmetic, call LLMs, or run Cypher directly.
 Dependencies: neo4j.AsyncSession, engines/emotion/emotion_store,
-              engines/emotion/emotion_state
+              engines/emotion/emotion_state, graph/emotion_reader
 Dependencies injected: AsyncSession (per call), EmotionStore (per call).
 Used by: main.py lifespan (slice-2 wiring — not yet connected).
 """
@@ -17,22 +17,9 @@ from neo4j import AsyncSession
 
 from npc_engine.engines.emotion.emotion_state import EmotionState
 from npc_engine.engines.emotion.emotion_store import EmotionStore
-
-# ---------------------------------------------------------------------------
-# Cypher constants
-# ---------------------------------------------------------------------------
-
-CYPHER_READ_EMOTION = """
-MATCH (c:Character {id: $npc_id})
-RETURN c.emotion_valence          AS emotion_valence,
-       c.emotion_arousal          AS emotion_arousal,
-       c.emotion_mood_label       AS emotion_mood_label,
-       c.emotion_updated_at_tick  AS emotion_updated_at_tick
-"""
+from npc_engine.graph.emotion_reader import get_emotion_fields
 
 _DEFAULT_LABEL = "neutral"
-_DEFAULT_VALENCE = 0
-_DEFAULT_AROUSAL = 0
 
 
 class EmotionBootstrapper:
@@ -63,41 +50,15 @@ class EmotionBootstrapper:
             if state is not None:
                 await store.set(npc_id=npc_id, state=state)
 
-    async def _read_one(
-        self,
-        session: AsyncSession,
-        npc_id: str,
-    ) -> EmotionState | None:
-        """Read emotion fields for a single NPC from the graph.
-
-        Returns None if the node has no persisted emotion data (all fields null).
-
-        Args:
-            session: Active Neo4j async session.
-            npc_id: Unique identifier of the NPC.
-
-        Returns:
-            EmotionState hydrated from the graph, or None if no data found.
-        """
-        result = await session.run(CYPHER_READ_EMOTION, npc_id=npc_id)
-        try:
-            record = None
-            async for row in result:
-                record = row
-                break
-        finally:
-            await result.consume()
-
-        if record is None:
+    async def _read_one(self, session: AsyncSession, npc_id: str) -> EmotionState | None:
+        fields = await get_emotion_fields(session, npc_id)
+        if fields is None:
             return None
-
-        valence = record["emotion_valence"]
-        arousal = record["emotion_arousal"]
-        label = record["emotion_mood_label"]
-
+        valence = fields.get("emotion_valence")
+        arousal = fields.get("emotion_arousal")
+        label = fields.get("emotion_mood_label")
         if valence is None or arousal is None:
             return None
-
         return EmotionState(
             valence=int(valence),
             arousal=int(arousal),

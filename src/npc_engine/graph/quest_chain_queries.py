@@ -55,8 +55,6 @@ async def get_unlocked_quests(
     await result.consume()
     _logger.debug(
         "unlocked_quests_fetched",
-        quest_id=quest_id,
-        outcome=outcome,
-        count=len(records),
+        extra={"quest_id": quest_id, "outcome": outcome, "count": len(records)},
     )
     return records

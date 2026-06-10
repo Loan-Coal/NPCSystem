@@ -71,10 +71,11 @@ def test_vad_decay_does_not_overshoot() -> None:
 # ---------------------------------------------------------------------------
 
 def test_vad_apply_mood_hint_replaces_label() -> None:
-    """apply_mood_hint must update the state label to the supplied mood."""
+    """apply_mood_hint must update the state label when arousal exceeds the inertia threshold."""
     model = VadEmotionModel()
+    # arousal_increment=25 -> resulting arousal=25 >= _MIN_AROUSAL_TO_SHIFT_LABEL(20) -> label replaced
     state = EmotionState(valence=0, arousal=0, label="neutral")
-    result = model.apply_mood_hint(state, mood_label="elated", arousal_increment=5)
+    result = model.apply_mood_hint(state, mood_label="elated", arousal_increment=25)
     assert result.label == "elated"
 
 

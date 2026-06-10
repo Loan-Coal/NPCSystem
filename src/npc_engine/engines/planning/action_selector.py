@@ -53,45 +53,42 @@ class ActionSelector:
                    to keep graph reads in the graph layer.
         """
         if not goals:
-            logger.info("action_selector.no_goals", character_id=character_id)
+            logger.info("action_selector.no_goals", extra={"character_id": character_id})
             return
 
         top_goal = max(goals, key=lambda g: g["urgency"])
         urgency: int = top_goal["urgency"]
-
         logger.info(
             "action_selector.top_goal",
-            character_id=character_id,
-            goal_id=top_goal["goal_id"],
-            urgency=urgency,
-            routine_priority=ROUTINE_PRIORITY,
+            extra={
+                "character_id": character_id,
+                "goal_id": top_goal["goal_id"],
+                "urgency": urgency,
+                "routine_priority": ROUTINE_PRIORITY,
+            },
         )
 
         if urgency <= ROUTINE_PRIORITY:
-            logger.info(
-                "action_selector.deferred_to_routine",
-                character_id=character_id,
-                urgency=urgency,
-            )
+            logger.info("action_selector.deferred_to_routine", extra={"character_id": character_id, "urgency": urgency})
             return
 
-        target_location_id: str | None = top_goal.get("target_location_id")
+        await self._dispatch_move(session, character_id, top_goal)
+
+    async def _dispatch_move(
+        self,
+        session: AsyncSession,
+        character_id: str,
+        goal: dict,
+    ) -> None:
+        target_location_id: str | None = goal.get("target_location_id")
         if target_location_id is None:
             logger.info(
                 "action_selector.no_target_location",
-                character_id=character_id,
-                goal_id=top_goal["goal_id"],
+                extra={"character_id": character_id, "goal_id": goal["goal_id"]},
             )
             return
-
-        await update_character_location(
-            session,
-            character_id=character_id,
-            location_id=target_location_id,
-        )
+        await update_character_location(session, character_id=character_id, location_id=target_location_id)
         logger.info(
             "action_selector.move_dispatched",
-            character_id=character_id,
-            location_id=target_location_id,
-            urgency=urgency,
+            extra={"character_id": character_id, "location_id": target_location_id, "urgency": goal["urgency"]},
         )

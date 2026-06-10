@@ -890,3 +890,13 @@ cannot express multi-outcome branches. LLM generation deferred to slice-2 to kee
 and testable deterministically.
 **Consequence:** One new YAML file in `base_edges/`. `QuestLifecycleEngine` accepts an optional
 `QuestChainResolver` via constructor — existing callers pass `None` (no chains); demo seed wires chains.
+
+## DEC-086: EXP-19 — quest_lifecycle_engine.py 300-line waiver
+**Date:** 2026-06-10
+**Context:** After EXP-19 added the optional chain_resolver param and resolver call,
+`quest_lifecycle_engine.py` reached 305 lines. The file was 285 lines at HEAD before
+this batch; splitting it would require extracting the `evaluate_completion` body into a
+helper module with no natural cohesion boundary — the state machine reads better as one unit.
+**Decision:** Accept 305-line overage under the established split-would-be-artificial
+exception (CLAUDE.md). No further line additions without a re-split.
+**Consequence:** File remains as-is. Next editor must split before adding anything new.

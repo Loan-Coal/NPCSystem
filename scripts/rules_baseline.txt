@@ -22,6 +22,7 @@ R001|src/npc_engine/data/api_seeder.py
 R001|src/npc_engine/engines/chapter/chapter_engine.py
 R001|src/npc_engine/engines/dialogue/dialogue_handler.py
 R001|src/npc_engine/engines/gossip/gossip_handler.py
+R001|src/npc_engine/engines/quest/quest_lifecycle_engine.py
 R001|src/npc_engine/engines/quest_generation/quest_generation_engine.py
 R001|src/npc_engine/graph/intent_queries.py
 R001|src/npc_engine/main.py
@@ -86,6 +87,7 @@ R006|src/npc_engine/engines/military/military_battle_service.py::_resolve_one_ba
 R006|src/npc_engine/engines/military/military_resource_service.py::process_resource_yield
 R006|src/npc_engine/engines/mood/mood_contagion_engine.py::MoodContagionEngine.run_tick
 R006|src/npc_engine/engines/need/need_decay_engine.py::NeedDecayEngine.run_tick
+R006|src/npc_engine/engines/planning/goal_former.py::GoalFormer.form_goal
 R006|src/npc_engine/engines/proactive_dialogue/proactive_engine.py::ProactiveDialogueEngine.check_trigger
 R006|src/npc_engine/engines/proactive_dialogue/proactive_engine.py::ProactiveDialogueEngine.generate_line
 R006|src/npc_engine/engines/quest/quest_engine_helpers.py::build_lifecycle_event

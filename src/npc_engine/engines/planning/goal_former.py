@@ -8,73 +8,24 @@ Dependencies: npc_engine.graph.need_queries, npc_engine.graph.goal_service,
               npc_engine.graph.goal_targets_writer, npc_engine.engines.planning.action_priority,
               npc_engine.utils.logging, npc_engine.world.time_utils
 Used by: npc_engine.scheduler.tick_scheduler (slice-2 wiring)
-Does NOT: call LLMs, open transactions, or import from api/, services/, or retrieval/.
+Does NOT: call LLMs, open transactions, run Cypher, or import from api/, services/, or retrieval/.
 Dependencies injected: AsyncSession (passed per call).
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 from neo4j import AsyncSession
 
 from npc_engine.engines.planning.action_priority import MAX_URGENCY
 from npc_engine.graph.goal_service import create_goal
 from npc_engine.graph.goal_targets_writer import create_goal_targets_edge
-from npc_engine.graph.need_queries import get_needs_for_character
+from npc_engine.graph.need_queries import get_needs_for_character, get_satisfying_location_for_need
 from npc_engine.utils.logging import get_logger
 from npc_engine.world.time_utils import TimePoint
 
-if TYPE_CHECKING:
-    pass
-
 logger: logging.Logger = get_logger("npc_engine.engines.planning.goal_former")
-
-# ---------------------------------------------------------------------------
-# Cypher for satisfying location lookup (graph-layer query, lives here because
-# it is the only caller; extracted to graph layer in slice-2 if reused).
-# ---------------------------------------------------------------------------
-
-_CYPHER_SATISFYING_LOCATION = """
-MATCH (loc:Location)-[:SATISFIES_NEED]->(n:Need)
-WHERE n.kind = $need_kind
-RETURN loc.id AS location_id
-LIMIT 1
-"""
-
-
-# ---------------------------------------------------------------------------
-# Module-level helpers (mockable at test boundary)
-# ---------------------------------------------------------------------------
-
-
-async def get_satisfying_location(
-    session: AsyncSession,
-    need_kind: str,
-) -> str | None:
-    """Return the ID of the first location that satisfies a need of the given kind.
-
-    Args:
-        session: Active Neo4j async session.
-        need_kind: The need kind to satisfy (e.g. 'hunger', 'social').
-
-    Returns:
-        Location node ID string, or None if no satisfying location is found.
-    """
-    result = await session.run(
-        _CYPHER_SATISFYING_LOCATION,
-        need_kind=need_kind,
-    )
-    record = await result.single()
-    if record is None:
-        return None
-    return str(record["location_id"])
-
-
-# ---------------------------------------------------------------------------
-# GoalFormer
-# ---------------------------------------------------------------------------
 
 
 class GoalFormer:
@@ -98,7 +49,6 @@ class GoalFormer:
         game_time: TimePoint,
     ) -> str | None:
         """Form a goal for the character's most-decayed need.
-
         Args:
             session: Active Neo4j async session.
             character_id: ID of the character to plan for.
@@ -110,15 +60,11 @@ class GoalFormer:
         """
         needs = await get_needs_for_character(session, character_id)
         if not needs:
-            logger.info(
-                "goal_former.no_needs",
-                character_id=character_id,
-            )
+            logger.info("goal_former.no_needs", extra={"character_id": character_id})
             return None
 
         worst_need = min(needs, key=lambda n: n["level"])
         urgency = self._compute_urgency(worst_need["level"])
-
         goal_id = await create_goal(
             session,
             character_id=character_id,
@@ -126,32 +72,34 @@ class GoalFormer:
             urgency=urgency,
             game_time=game_time,
         )
-
         logger.info(
             "goal_former.goal_created",
-            character_id=character_id,
-            need_kind=worst_need["kind"],
-            need_level=worst_need["level"],
-            urgency=urgency,
-            goal_id=goal_id,
+            extra={
+                "character_id": character_id,
+                "need_kind": worst_need["kind"],
+                "need_level": worst_need["level"],
+                "urgency": urgency,
+                "goal_id": goal_id,
+            },
         )
-
-        target_location_id = await get_satisfying_location(session, worst_need["kind"])
-        if target_location_id is not None:
-            await create_goal_targets_edge(
-                session,
-                goal_id,
-                target_location_id,
-                urgency,
-            )
-            logger.info(
-                "goal_former.goal_targets_edge_written",
-                goal_id=goal_id,
-                target_location_id=target_location_id,
-                priority=urgency,
-            )
-
+        await self._maybe_write_goal_targets(session, goal_id, worst_need["kind"], urgency)
         return goal_id
+
+    async def _maybe_write_goal_targets(
+        self,
+        session: AsyncSession,
+        goal_id: str,
+        need_kind: str,
+        urgency: int,
+    ) -> None:
+        target_location_id = await get_satisfying_location_for_need(session, need_kind)
+        if target_location_id is None:
+            return
+        await create_goal_targets_edge(session, goal_id, target_location_id, urgency)
+        logger.info(
+            "goal_former.goal_targets_edge_written",
+            extra={"goal_id": goal_id, "target_location_id": target_location_id, "priority": urgency},
+        )
 
     @staticmethod
     def _compute_urgency(need_level: int) -> int:

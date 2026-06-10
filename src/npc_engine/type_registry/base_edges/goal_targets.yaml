@@ -1,6 +1,6 @@
 edge_type: GOAL_TARGETS
 src_type: goal
-dst_type: [character, location, faction, item]
+dst_type: location
 fields:
   priority:
     type: int
