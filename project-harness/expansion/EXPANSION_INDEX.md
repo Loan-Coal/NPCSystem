@@ -14,25 +14,15 @@ _State that survives between expansion sessions so a fresh `/expand-parallel` ru
 _The orchestrator maintains this: add a line when an item unlocks/affects a later one; delete consumed lines; keep it tight._
 
 - **Gates:** `make check` = lint + check-rules + type-ratchet + check-harness + test-cov(80%). Demo work also runs `make test-demo`. New code: TDD (failing test first), CLAUDE.md OCP add-by-new-file, layers, 300-line/40-line, prompts-in-YAML, Pydantic boundaries. All new `src/npc_engine/` files must have `Does NOT:` + `Dependencies injected:` in module docstring (architecture conformance test).
-- **Phase 0 demo-repair DONE** (2026-06-05): engines-500, pledges drift, embedding offload, WS timeout, trade 422. EXP-00c (CI smoke) deferred.
-- **Pattern — offload CPU on the event loop:** sync model inference via `await asyncio.to_thread(...)`. REUSE for reranker (ISSUE-064) and any new sync ML call.
-- **EXP-30/50/31/83/84/85/93/81/91/11/80 DONE** (2026-06-05). EXP-32 needs Q&A fixture before dispatch.
-- **EXP-15/16 DONE:** `STRATEGY_REGISTRY` + `DistortionStrategy` Protocol; prefixes moved to `prompts/gossip/distortion.yaml` via `prefix_loader.py`. Add new distortion type = new file + YAML entry only.
-- **EXP-17/18 DONE:** `decay_vividness_weighted` in `memory_service.py`; `create_from_semantic_triggers()` in `memory_engine.py` (8 keywords, vividness=60). EXP-18 full-version (recall_count/never_forget) still schema-gated.
-- **EXP-13 DONE:** `EmotionModelProtocol` + `VadEmotionModel`. Inject via `EmotionUpdater(store, model=YourModel())`.
-- **EXP-52 DONE (both slices):** `ReputationEngine` + `apply_trust_nudge` (s1); `ReputationTickAdapter` wired into tick scheduler (s2). `relation_reader_factory=RelationReader` injects session-scoped reader per tick to avoid leaks.
-- **EXP-10 DONE (both slices):** `ProactiveDialogueEngine` + `MemoryServiceProtocol` + `LocationServiceProtocol` (s1); `ProactiveDialogueTick` adapter + `ProactiveMemoryReader` + `PlayerLocationReader` wired into tick scheduler (s2). `llm_config.yaml` requires `output_schema_ref` (non-empty string; use `_response_v1` convention).
-- **EXP-53 DONE:** `KnowledgeExtractionEngine` + `write_belief()` graph writer. `DialogueResponse.learned_facts: list[str]` drives BELIEVES edges. Feature-gated: `KNOWLEDGE_LEARNING_ENABLED=False`. `dialogue_handler.py` accepts optional `knowledge_engine` kwarg.
-- **Tech-debt Batch B DONE (2026-06-09):** R005 Cypher-outside-graph fixes — 5 new graph query modules: `quest_verification_queries`, `embedding_sync_queries`, `graph_rag_queries`, `tick_scheduler_queries`, `tick_lease_queries`. Baseline ratcheted 163→155.
-- **EXP-21 DONE (both slices):** `WorldStateQuestTrigger` wired. Pattern for new optional tick-engine kwargs: add to `TickScheduler.__init__` as `BaseEngine | None = None`, use in `run_tick()`, add to `get_tick_scheduler()` in `dependencies_engines.py`.
-- **EXP-40 DONE (both slices):** `NegotiationBackedSyncTradeHandler` wired. `set_trade_handler()` called in `main.py` lifespan (not module-level). Tests that bypass `__init__` via `__new__` must manually set all injected attrs (incl. `_knowledge_engine = None`).
-- **DEC-070/071/072/073/076/077 still apply.** DEC-076: `dependencies_engines.py` 333-line waiver. DEC-077: `config.py` 309-line waiver.
-- **Schema/DECISIONS-gated (DROP from parallel batches):** EXP-51, EXP-17-full, EXP-87, EXP-55 deferred.
-- **Open residuals:** ISSUE-064..076, ISSUE-082..089. Next ISSUE id: **ISSUE-090**.
-- **EXP-32 UNBLOCKED (2026-06-10):** `evals/cases/anti_hallucination_demo.json` created — 41 labeled cases (should_know / should_refuse / adversarial_cross_npc for all 5 demo NPCs). Runner extension still needed (JSON loader + grounded/refusal/hallucination aggregation + `make eval-anti-hallucination` target).
-- **KE-6 brief ready (2026-06-10):** `expansion/briefs/KE-6-stable-id-seeding.md`. Dispatch in its own worker first (M effort); unblocks EXP-92 + EXP-95.
-- **EXP-87 brief ready (2026-06-10):** `expansion/briefs/EXP-87-location-hierarchy.md`. L effort; can run parallel to KE-6 (no conflict — adds new files + YAML only).
-- **Phase X:** Phase 17 (Unity/Unreal SDKs) renamed to Phase X in ROADMAP.md. New Phase 17 = KE-6 + EXP-32 + EXP-87 + EXP-92 + EXP-95 + schema-gated items (EXP-51/14/19 deferred).
+- **Phase 0 demo-repair DONE** (2026-06-05). **EXP-15/16/17/18/13/52/10/53/21/40 DONE.** Tech-debt Batch B DONE (2026-06-09).
+- **Pattern — offload CPU on the event loop:** `await asyncio.to_thread(...)`. REUSE for reranker (ISSUE-064).
+- **EXP-32 DONE (2026-06-10):** `evals/anti_hallucination_runner.py` + `make eval-anti-hallucination`. JSON fixture at `evals/cases/anti_hallucination_demo.json`. Metrics: grounded/refusal/hallucination counts. DEC-082: 314-line waiver.
+- **KE-6 DONE (2026-06-10):** Stable-ID seeding — `id: str | None` on all inner-life request schemas; MERGE semantics in graph writers; `demo_game/seed.py` + `api_seeder.py` + village/tavern seeds updated. Seeders now always upsert (no get-then-skip). Unblocks EXP-92 + EXP-95.
+- **EXP-87 DONE (2026-06-10):** `PART_OF` edge type + `location_writer.py` + `graph/location_graph_queries.py` (`get_ancestors`/`get_descendants`) + `api/routes/locations.py` (POST/DELETE/GET). `demo_game/seed.py` wires `loc_city` hierarchy. `part_of.yaml` uses `src_type: location` / `dst_type: location` (BaseEdgeTypeDocument schema). Unblocks richer location-aware scenarios.
+- **DEC-070/071/072/073/076/077/082 apply.** DEC-076: `dependencies_engines.py` 333-line. DEC-077: `config.py` 309-line. DEC-082: `anti_hallucination_runner.py` 314-line.
+- **Schema/DECISIONS-gated (DROP):** EXP-51, EXP-17-full, EXP-14, EXP-55 deferred.
+- **Open residuals:** ISSUE-064..076, ISSUE-082..090. Next ISSUE id: **ISSUE-091**.
+- **Phase 17 remaining:** EXP-92 (determinism/replay toggle; brief needed) · EXP-95 (scenario picker; brief needed) — both unblocked by KE-6.
 
 ## Ordered checklist
 
@@ -115,9 +105,9 @@ Effort: S/M/L/XL · `🔶` = schema/DECISIONS-gated (drop from parallel until gr
 Dependency order: KE-6 must land before EXP-92 and EXP-95. EXP-32 and EXP-87 can run in
 parallel with KE-6 (no file conflicts). Schema-gated items are drop-from-batch until approved.
 
-- [ ] **KE-6** — stable-ID seeding (ISSUE-055) · M · deps: none · ENABLER · brief: `briefs/KE-6-stable-id-seeding.md`
-- [ ] **EXP-32** — anti-hallucination eval runner + `make eval-anti-hallucination` · M · deps: none (fixture done) · brief: `EXP32_EVAL_QA_TASK.md` + `evals/cases/anti_hallucination_demo.json`
-- [ ] **EXP-87** — location hierarchy `PART_OF` + `location_writer.py` · L · `🔶` DEC-071 approved · brief: `briefs/EXP-87-location-hierarchy.md`
+- [x] **KE-6** — stable-ID seeding (ISSUE-055) · M · deps: none · ENABLER · brief: `briefs/KE-6-stable-id-seeding.md`
+- [x] **EXP-32** — anti-hallucination eval runner + `make eval-anti-hallucination` · M · deps: none (fixture done) · brief: `briefs/EXP-32-anti-hallucination-eval-runner.md`
+- [x] **EXP-87** — location hierarchy `PART_OF` + `location_writer.py` · L · `🔶` DEC-071 approved · brief: `briefs/EXP-87-location-hierarchy.md`
 - [ ] **EXP-92** — determinism/replay toggle (demo) · M · deps: KE-6 · brief: to be written
 - [ ] **EXP-95** — in-window scenario picker (demo) · M · deps: KE-6 · brief: to be written
 

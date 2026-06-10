@@ -1,6 +1,6 @@
 # EXPANSION_ROADMAP.md — Synthesis & Prioritization (Lens X5)
 
-> **Updated 2026-06-09 — last batch: EXP-10 s2 + EXP-52 s2 + EXP-53 merged (1796 tests green). Next batch: EXP-87 solo (location hierarchy, DEC-071 approved, needs brief). EXP-32 blocked on Q&A label set. All other remaining items are schema-gated or KE-6-gated.**
+> **Updated 2026-06-10 — last batch: KE-6 + EXP-32 + EXP-87 merged (1876 unit + 601 demo tests green). Next batch: EXP-92 (determinism/replay toggle; brief needed) + EXP-95 (in-window scenario picker; brief needed) — both now unblocked by KE-6. All other remaining items are schema-gated.**
 > **Prior update 2026-06-05 with human resolutions** (see `OPEN_QUESTIONS.md` §A, `DECISIONS.md` DEC-070/071/072).
 > Net effect: (1) **dialogue + gossip are the priority** — show they work in the playable demo; (2) several
 > proposals lost their schema cost by reusing existing graph vocabulary (EXP-53→`BELIEVES`, EXP-50 schema-free,
