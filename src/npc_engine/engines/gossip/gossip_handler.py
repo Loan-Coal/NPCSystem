@@ -120,7 +120,9 @@ class GossipHandler:
             npc_ids: Optional allowlist; only pairs containing at least one listed ID are processed.
 
         Returns:
-            Dict with keys ``tick_id``, ``pairs`` (pairs evaluated), and ``propagated`` (successful propagations).
+            Dict with keys ``tick_id``, ``pairs`` (pairs evaluated), ``propagated``
+            (successful propagations), and ``seeds_used`` (mapping of
+            ``"sharer_id→receiver_id"`` to the deterministic seed used for that pair).
         """
 
         async with self._lock:
@@ -149,7 +151,7 @@ class GossipHandler:
             tick_id: Current game tick.
 
         Returns:
-            Dict with keys ``tick_id``, ``pairs``, ``propagated``.
+            Dict with keys ``tick_id``, ``pairs``, ``propagated``, and ``seeds_used``.
         """
         # Build pair lookup and params for the batch read query.
         pair_lookup: dict[tuple[str, str], tuple[dict, dict, dict]] = {}
@@ -167,7 +169,7 @@ class GossipHandler:
         }
 
         # Python-side: compute distortions for all pairs with a qualifying event.
-        write_params, distortion_map = self._build_write_params(
+        write_params, distortion_map, seeds_used = self._build_write_params(
             pair_lookup=pair_lookup,
             event_trust_map=event_trust_map,
             tick_id=tick_id,
@@ -185,14 +187,19 @@ class GossipHandler:
             tick_id=tick_id,
         )
 
-        return {"tick_id": tick_id, "pairs": len(pairs), "propagated": propagated}
+        return {
+            "tick_id": tick_id,
+            "pairs": len(pairs),
+            "propagated": propagated,
+            "seeds_used": seeds_used,
+        }
 
     def _build_write_params(
         self,
         pair_lookup: dict[tuple[str, str], tuple[dict, dict, dict]],
         event_trust_map: dict[tuple[str, str], dict],
         tick_id: int,
-    ) -> tuple[list[dict], dict[tuple[str, str], dict]]:
+    ) -> tuple[list[dict], dict[tuple[str, str], dict], dict[str, int]]:
         """Compute per-pair distortions and assemble batch write parameters.
 
         Args:
@@ -201,10 +208,12 @@ class GossipHandler:
             tick_id: Current game tick.
 
         Returns:
-            Tuple of (write_params list, distortion_map dict keyed by (sharer_id, receiver_id)).
+            Tuple of (write_params list, distortion_map dict keyed by (sharer_id, receiver_id),
+            seeds_used dict keyed by ``"sharer_id→receiver_id"``).
         """
         write_params: list[dict] = []
         distortion_map: dict[tuple[str, str], dict] = {}
+        seeds_used: dict[str, int] = {}
 
         for key, (sharer, receiver, faction_ctx) in pair_lookup.items():
             row = event_trust_map.get(key)
@@ -228,6 +237,8 @@ class GossipHandler:
                 trust=trust,
                 tick_id=tick_id,
             )
+            pair_key = f"{sharer['id']}→{receiver['id']}"
+            seeds_used[pair_key] = seed
             LOGGER.debug(
                 "gossip_pair sharer=%s receiver=%s tick=%d "
                 "distortion_probability=%.3f seed=%d",
@@ -267,7 +278,7 @@ class GossipHandler:
             write_params.append(write_entry)
             distortion_map[key] = write_entry
 
-        return write_params, distortion_map
+        return write_params, distortion_map, seeds_used
 
     async def _run_side_effects(
         self,
