@@ -7,6 +7,11 @@ Does NOT: map errors to HTTP responses or log exceptions.
 
 Dependencies injected: None.
 """
+# DEC-091 waiver: this file intentionally exceeds the 300-line limit. It is a flat
+# catalog of ~35 one-class exception dataclasses sharing one base; splitting it would
+# fragment a cohesive registry behind an exhaustive re-export hub with no encapsulation
+# gain. Do not grow without a real split (a new error *family* with shared behaviour).
+#
 # Exception classes use @dataclass(frozen=True) for field immutability (STRUCT-06).
 # StructuredNPCSystemError.__init_subclass__ patches each frozen subclass's __setattr__
 # to allow Python's exception machinery to set __traceback__, __cause__, and __context__,

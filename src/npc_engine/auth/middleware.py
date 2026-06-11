@@ -25,15 +25,17 @@ from npc_engine.auth.middleware_helpers import (
     IDEMPOTENCY_INVALID_CODE,
     IDEMPOTENCY_REQUIRED_CODE,
     _build_idempotency_decision_response,
-    _finalize_validation_failure_response,
     _idempotency_error_response,
     _materialize_response,
-    _record_request_observability,
     _required_scope_for_path,
     _requires_idempotency_key,
-    _resolve_request_id,
     _validate_idempotency_key,
     is_public_path,
+)
+from npc_engine.auth.request_observability import (
+    _finalize_validation_failure_response,
+    _record_request_observability,
+    _resolve_request_id,
 )
 from npc_engine.auth.permissions import has_scope
 from npc_engine.config import Settings

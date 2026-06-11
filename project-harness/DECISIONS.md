@@ -951,3 +951,42 @@ lifespan state — the cleanest natural seams. Keeping `lifespan` in `main` pres
 **Consequence:** `R001|src/npc_engine/main.py` and `R006|…main.py::create_app` removed from the
 baseline. `test_error_envelope_sev33.py` now imports the handlers from `api/exception_handlers.py`
 (their new home). DEC-060 resolved.
+
+## DEC-090: S21.1 — middleware_helpers.py split; observability helpers → auth/request_observability.py
+**Date:** 2026-06-11
+**Context:** Phase 21 S21.1 (SEV-23). `auth/middleware_helpers.py` was 333 lines and mixed two
+concerns: (a) auth/routing/idempotency-key validation helpers and (b) request observability
+(correlation-id resolution, metrics, structured request logging).
+**Options considered:**
+  1. Waiver. Rejected — unlike a flat catalog, this file has a real SRP seam.
+  2. Extract the observability group (`_resolve_request_id`, `_record_request_observability`,
+     `_finalize_validation_failure_response` + their metric/request-id constants and LOGGER) into a
+     new `auth/request_observability.py`. The two groups share no symbols; the only importer of the
+     moved functions is `middleware.py` (no test imports the privates), so the blast radius is one
+     import statement.
+**Decision:** Option 2. `middleware_helpers.py` drops from 333 → 229 lines; `request_observability.py`
+is 118 lines. `middleware.py` now imports the three observability functions from the new module.
+**Why:** Observability (metrics/logging) and auth/idempotency validation are independent
+responsibilities with no shared state — a clean, low-risk cut that genuinely shrinks R001.
+**Consequence:** `R001|src/npc_engine/auth/middleware_helpers.py` removed from the baseline.
+
+## DEC-091: S21.1 — errors.py kept at 329 lines (split would be artificial; waiver)
+**Date:** 2026-06-11
+**Context:** Phase 21 S21.1 (SEV-23). `utils/errors.py` is 329 lines: a flat catalog of ~35
+`@dataclass(frozen=True)` exception types all subclassing `StructuredNPCSystemError`, imported as
+`from npc_engine.utils.errors import X` across nearly every package.
+**Options considered:**
+  1. Split by domain (graph / llm / quest / economy / schema errors) into peer modules, with
+     `errors.py` re-exporting all names. Adds ~5 files plus an exhaustive re-export hub; every error
+     class must stay importable from `utils.errors`, so the public surface is unchanged but the file
+     count and an error-prone re-export list grow for no encapsulation gain. Highest blast radius in
+     the codebase (every importer of any error).
+  2. Keep the flat catalog and accept the overage with a documented waiver (CLAUDE.md "if a split
+     would be artificial, write a justifying comment + DECISIONS entry").
+**Decision:** Option 2, consistent with DEC-077 (config.py flat-settings) and DEC-073
+(context_budget_enforcer). One class per error, one shared base, one import path — splitting trades a
+cohesive registry for indirection.
+**Why:** The exception catalog is a single conceptual unit; the 300-line rule exists to prevent
+monolithic *logic*, not to fragment a flat list of 3-field dataclasses.
+**Limit:** Do not grow further without a real split. If a new error *family* with shared behaviour
+(not just fields) appears, extract that family to its own module then.
