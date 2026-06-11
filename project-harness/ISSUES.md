@@ -124,7 +124,10 @@ every other NPC skips the loop, so the bug never fired for them.
 **Why deferred:** Low-severity; gossip logs still appear but via a different path. Out of scope for EXP-12 which only touched `relation_mutator.py`.
 **To fix:** Replace `import logging; LOGGER = logging.getLogger(__name__)` with `from npc_engine.utils.logging import get_logger; _LOGGER = get_logger(__name__)` in `gossip_handler.py`. Verify existing gossip tests still pass.
 
-## ISSUE-068: test_game_window.py layout tests fail — WorldStatePoller not imported in game_window.py
+## [FIXED] ISSUE-068: test_game_window.py layout tests fail — WorldStatePoller not imported in game_window.py
+**Fixed:** 2026-06-11, S22.3 (reconcile) — `game_window.py` now imports `WorldStatePoller` (line 44)
+and instantiates it (line 134), so the test patch resolves; all 6 `TestGameWindowLayout` tests pass
+(618 demo tests green). The import was added by a later refactor; no code change needed this session.
 **Found:** 2026-06-05, during EXP-80 batch fan-in (make test-demo gate)
 **Severity:** P2 (annoying)
 **Where:** `demo_game/tests/test_game_window.py:33` — monkeypatches `demo_game.ui.game_window.WorldStatePoller` which is not imported in `game_window.py`
