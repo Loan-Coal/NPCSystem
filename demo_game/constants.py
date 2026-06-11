@@ -11,15 +11,32 @@ Used by: demo_game.ui.game_window, demo_game.ui.widgets, demo_game.ui.left_panel
 FACTION_COLOURS and NPC_FACTIONS are hardcoded from the demo seed (DEC-028).
 Faction membership is stable for the 5-NPC Munich demo world; no API call needed.
 PALETTE is the single source of truth for all UI colours (DEC-035).
+
+EXP-223: added 3 new NPCs (sera_barmaid, harwick_guard, nel_pickpocket) and
+         1 new location (loc_chapel) within existing factions.
 """
 
 from __future__ import annotations
 
+# ---------------------------------------------------------------------------
+# EXP-223: stable NPC and location ID constants for the expanded world
+# ---------------------------------------------------------------------------
+
+NPC_ID_SERA_BARMAID: str = "sera_barmaid"
+NPC_ID_HARWICK_GUARD: str = "harwick_guard"
+NPC_ID_NEL_PICKPOCKET: str = "nel_pickpocket"
+
+LOC_ID_CHAPEL: str = "loc_chapel"
+
 # Mapping from location_id to the NPC IDs present there (seeded in P2.2).
+# EXP-223: sera_barmaid and nel_pickpocket added to loc_tavern;
+#          harwick_guard added to loc_guard_barracks;
+#          loc_chapel added as a quiet neutral zone.
 LOCATION_NPC_MAP: dict[str, list[str]] = {
-    "loc_tavern": ["mira_innkeeper", "lira_fence"],
+    "loc_tavern": ["mira_innkeeper", "lira_fence", NPC_ID_SERA_BARMAID, NPC_ID_NEL_PICKPOCKET],
     "loc_market_square": ["aldric_merchant", "old_henryk"],
-    "loc_guard_barracks": ["captain_sorn"],
+    "loc_guard_barracks": ["captain_sorn", NPC_ID_HARWICK_GUARD],
+    LOC_ID_CHAPEL: [],
 }
 
 # Human-readable names for each location button.
@@ -27,6 +44,7 @@ LOCATION_DISPLAY_NAMES: dict[str, str] = {
     "loc_tavern": "The Tavern",
     "loc_market_square": "Market Square",
     "loc_guard_barracks": "Guard Barracks",
+    LOC_ID_CHAPEL: "The Chapel",
 }
 
 # Human-readable NPC display names shown in the NPC list and response log.
@@ -36,6 +54,9 @@ NPC_DISPLAY_NAMES: dict[str, str] = {
     "captain_sorn": "Captain Sorn",
     "lira_fence": "Lira (Fence)",
     "old_henryk": "Old Henryk",
+    NPC_ID_SERA_BARMAID: "Sera (Barmaid)",
+    NPC_ID_HARWICK_GUARD: "Harwick (Guard)",
+    NPC_ID_NEL_PICKPOCKET: "Nel (Pickpocket)",
 }
 
 # Ordered list of location IDs; determines button order in the nav bar.
@@ -53,6 +74,7 @@ LOCATION_TINTS: dict[str, tuple[int, int, int]] = {
     "loc_tavern": (60, 35, 20),          # warm brown
     "loc_market_square": (30, 55, 30),   # muted green
     "loc_guard_barracks": (30, 30, 60),  # dark blue
+    LOC_ID_CHAPEL: (50, 45, 30),         # muted gold — quiet stone
 }
 
 # Centralised UI colour palette — single source of truth for all demo_game UI colours.
@@ -113,10 +135,14 @@ SPREAD_RUMOR_SEVERITY: int = 70
 
 # Faction membership for each demo NPC — derived from seed, stable for Munich demo.
 # See DEC-028 for why this is hardcoded rather than fetched from the graph.
+# EXP-223: three new NPCs added; all use existing factions (no new faction added).
 NPC_FACTIONS: dict[str, str] = {
-    "mira_innkeeper":  "neutral",
-    "aldric_merchant": "merchants_guild",
-    "captain_sorn":    "city_guard",
-    "lira_fence":      "thieves_guild",
-    "old_henryk":      "neutral",
+    "mira_innkeeper":       "neutral",
+    "aldric_merchant":      "merchants_guild",
+    "captain_sorn":         "city_guard",
+    "lira_fence":           "thieves_guild",
+    "old_henryk":           "neutral",
+    NPC_ID_SERA_BARMAID:    "neutral",
+    NPC_ID_HARWICK_GUARD:   "city_guard",
+    NPC_ID_NEL_PICKPOCKET:  "thieves_guild",
 }

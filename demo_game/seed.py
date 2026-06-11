@@ -2,7 +2,7 @@
 Module: seed
 Layer: demo_game (external client)
 Purpose: Seed the demo world via the NPC Engine HTTP API. Idempotent on re-run.
-Dependencies: demo_game.client, demo_game.config
+Dependencies: demo_game.client, demo_game.config, demo_game.constants
 Used by: make demo-seed, demo_game/tests/test_seed.py
 
 See project-harness/DECISIONS.md DEC-020, DEC-021, DEC-022 for seeder conventions.
@@ -23,6 +23,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
+
+from demo_game.constants import (
+    LOC_ID_CHAPEL,
+    NPC_ID_HARWICK_GUARD,
+    NPC_ID_NEL_PICKPOCKET,
+    NPC_ID_SERA_BARMAID,
+)
 
 if TYPE_CHECKING:
     from demo_game.client import EngineClient
@@ -445,7 +452,8 @@ def _seed_location_hierarchy(client: EngineClient) -> int:
         ),
     )
 
-    _child_locations = ["loc_tavern", "loc_market_square", "loc_guard_barracks"]
+    # EXP-223: loc_chapel added to the city hierarchy.
+    _child_locations = ["loc_tavern", "loc_market_square", "loc_guard_barracks", LOC_ID_CHAPEL]
     for child_id in _child_locations:
         client.post_part_of(child_id, "loc_city", hierarchy_level=0)
         logger.info("  upserted PART_OF %s → loc_city", child_id)
@@ -461,6 +469,8 @@ _LOCATIONS = [
     ("loc_tavern", "The Rusty Flagon", "tavern", "A well-worn tavern where travelers and locals share ale and secrets."),
     ("loc_market_square", "Market Square", "market", "The beating heart of commerce, loud with haggling and rumor."),
     ("loc_guard_barracks", "Guard Barracks", "barracks", "The disciplined quarters of the city guard, smelling of iron and duty."),
+    # EXP-223: new chapel location — quiet neutral ground between factions.
+    (LOC_ID_CHAPEL, "The Chapel", "chapel", "A soot-stained stone chapel; the one place all factions leave alone."),
 ]
 
 _FACTIONS = [
@@ -497,13 +507,26 @@ _NPCS = [
      "A retired courier who has seen three wars and remembers every one.", 80, 70, 80,
      "Rambling. Mixes current rumour with personal memories from decades ago."
      " Speaks with complete confidence even about details he has wrong. Never hedges."),
+    # EXP-223: three new NPCs within existing factions
+    (NPC_ID_SERA_BARMAID, "Sera", "barmaid", "neutral", "loc_tavern",
+     "Mira's assistant, quick with a cloth and quicker with her ears.", 70, 65, 60,
+     "Friendly and light, but vague when asked directly. Deflects with chores and small talk."),
+    (NPC_ID_HARWICK_GUARD, "Harwick", "guard", "city_guard", "loc_guard_barracks",
+     "A rank-and-file soldier who follows orders and tries not to think too hard.", 30, 60, 75,
+     "Blunt and literal. Trusts his officers. Uncomfortable with ambiguity."),
+    (NPC_ID_NEL_PICKPOCKET, "Nel", "pickpocket", "thieves_guild", "loc_tavern",
+     "A young guild runner who moves between tables and pockets without anyone noticing.", 65, 55, 25,
+     "Evasive, fast-talking. Denies everything. Pretends to be younger and more innocent than she is."),
 ]
 
 # NPC faction membership: (npc_id, faction_id, role)
+# EXP-223: harwick_guard and nel_pickpocket added to existing factions.
 _NPC_MEMBER_OF = [
     ("aldric_merchant", "merchants_guild", "officer"),
     ("captain_sorn", "city_guard", "officer"),
     ("lira_fence", "thieves_guild", "member"),
+    (NPC_ID_HARWICK_GUARD, "city_guard", "soldier"),
+    (NPC_ID_NEL_PICKPOCKET, "thieves_guild", "runner"),
 ]
 
 # Inner life: keyed by npc_id
@@ -580,6 +603,49 @@ _NPC_INNER_LIFE: dict[str, dict] = {
         ],
         "secret": ("He knows the location of an old smuggler's cache beneath the north mill.", 60),
     },
+    # EXP-223: inner life for the three new NPCs
+    NPC_ID_SERA_BARMAID: {
+        "beliefs": [
+            ("The Rusty Flagon is the safest place in the city — as long as Mira keeps it neutral.", 70),
+            ("People talk too freely after the second round. I make sure to remember.", 75),
+        ],
+        "goals": [
+            ("Save enough to leave the city before the war reaches the gates.", 55),
+        ],
+        "memories": [
+            ("A hooded man slipped Lira a folded note last Tenday. Neither noticed me refilling their cups.", 78, 40),
+            ("The night a drunk guard let slip where the captain hides his private ledger.", 82, 50),
+        ],
+        "secret": ("She has been passing small items to a guild contact — unaware she is being used as a dead drop.", 65),
+    },
+    NPC_ID_HARWICK_GUARD: {
+        "beliefs": [
+            ("The captain's orders come down clean and you follow them. That is the whole job.", 80),
+            ("Something is off at the south gate — the sergeant is too relaxed for a wartime posting.", 55),
+        ],
+        "goals": [
+            ("Get through this posting without ending up on the wrong side of the captain's temper.", 60),
+        ],
+        "memories": [
+            ("The morning a merchant bribed the gate sergeant and I pretended not to see.", 70, -45),
+            ("Drill practice the week before the war declaration — nobody believed the orders were real.", 65, 30),
+        ],
+        "secret": ("He reported the bribe anonymously to the watch but the note was never acknowledged.", 50),
+    },
+    NPC_ID_NEL_PICKPOCKET: {
+        "beliefs": [
+            ("Everyone in this city is running a con. The only difference is how big.", 80),
+            ("Lira is testing me. Every job she gives me is a test.", 70),
+        ],
+        "goals": [
+            ("Prove herself to Lira by lifting something from the merchant quarter without getting caught.", 75),
+        ],
+        "memories": [
+            ("The first purse I ever cut — a guild veteran's, as a test. He let me keep three coins.", 85, 60),
+            ("Hiding under a market stall when the guard swept the square looking for a thief. Not me, that time.", 75, 35),
+        ],
+        "secret": ("She took a personal ring from the last job and hid it — Lira does not know yet.", 70),
+    },
 }
 
 # NPC Needs: (npc_id, kind, level 0-100 where 0=critical, decay_rate per tick)
@@ -599,6 +665,16 @@ _NPC_NEEDS: list[tuple[str, str, int, int]] = [
     # old_henryk — worn down, needs rest most
     ("old_henryk", "rest",           15, 4),
     ("old_henryk", "hunger",         50, 3),
+    # EXP-223 new NPCs
+    # sera_barmaid — always on her feet, socially fulfilled but physically exhausted
+    (NPC_ID_SERA_BARMAID, "rest",    25, 5),
+    (NPC_ID_SERA_BARMAID, "social",  75, 1),
+    # harwick_guard — disciplined routine, bored from repetitive duty
+    (NPC_ID_HARWICK_GUARD, "recreation", 30, 2),
+    (NPC_ID_HARWICK_GUARD, "rest",       55, 3),
+    # nel_pickpocket — anxious, high social need (information gathering)
+    (NPC_ID_NEL_PICKPOCKET, "social",    80, 3),
+    (NPC_ID_NEL_PICKPOCKET, "hunger",    40, 4),
 ]
 
 # Leverage nodes: (id, demand, status, created_at_tick)
@@ -730,12 +806,16 @@ _NPC_NPC_EDGES: list[tuple[str, str, str, dict]] = [
 ]
 
 # LOCATED_AT edges: (npc_id, location_id)
+# EXP-223: three new NPCs added at their home locations.
 _NPC_LOCATED_AT: list[tuple[str, str]] = [
     ("mira_innkeeper", "loc_tavern"),
     ("lira_fence", "loc_tavern"),
     ("aldric_merchant", "loc_market_square"),
     ("old_henryk", "loc_market_square"),
     ("captain_sorn", "loc_guard_barracks"),
+    (NPC_ID_SERA_BARMAID, "loc_tavern"),
+    (NPC_ID_HARWICK_GUARD, "loc_guard_barracks"),
+    (NPC_ID_NEL_PICKPOCKET, "loc_tavern"),
 ]
 
 
