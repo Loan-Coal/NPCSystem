@@ -28,6 +28,7 @@ from npc_engine.graph.graph_reader import (
     get_npc_location_id,
     get_npc_player_edge,
 )
+from npc_engine.graph.need_queries import get_needs_for_character
 from npc_engine.graph.belief_queries import get_beliefs_for_character
 from npc_engine.graph.goal_queries import get_goals_for_character
 from npc_engine.graph.item_queries import get_items_for_character
@@ -69,6 +70,30 @@ from npc_engine.utils.metrics import increment_metric
 from npc_engine.graph.world_state_reader import get_world_state
 
 
+from pydantic import BaseModel
+
+
+# Level below which a need is considered "unmet" and surfaced to dialogue context.
+# Needs are modelled on a 0-100 scale; lower = more urgent.
+NEED_UNMET_LEVEL_THRESHOLD: int = 50
+
+
+class NeedSnapshot(BaseModel):
+    """Typed snapshot of a single NPC need node — no raw dict crosses module boundary.
+
+    Attributes:
+        need_id: Unique node ID in the graph.
+        kind:    Semantic kind (e.g. "hunger", "social", "rest").
+        level:   Current level on a 0-100 scale.  Lower = more urgent.
+        character_id: Owning NPC node ID.
+    """
+
+    need_id: str
+    kind: str
+    level: int
+    character_id: str
+
+
 class EmbeddingIndexProtocol(Protocol):
     """Minimal protocol required by context builder."""
 
@@ -88,6 +113,44 @@ class EmbeddingIndexProtocol(Protocol):
         Returns:
             List of VectorSearchResult dicts sorted by descending score.
         """
+
+
+# ---------------------------------------------------------------------------
+# Need helpers
+# ---------------------------------------------------------------------------
+
+async def _fetch_top_unmet_need(
+    session: AsyncSession,
+    npc_id: str,
+) -> NeedSnapshot | None:
+    """Return the most urgent unmet need for an NPC, or None if all needs are met.
+
+    A need is considered unmet when its level is strictly below
+    NEED_UNMET_LEVEL_THRESHOLD (0-100 scale; lower = more urgent).  The most
+    urgent need is the one with the lowest level.
+
+    Args:
+        session:  Active Neo4j async session.
+        npc_id:   The NPC whose needs to inspect.
+
+    Returns:
+        NeedSnapshot of the highest-urgency unmet need, or None.
+    """
+    raw_needs = await get_needs_for_character(session=session, character_id=npc_id)
+    unmet = [
+        n for n in raw_needs
+        if isinstance(n.get("level"), (int, float))
+        and int(n["level"]) < NEED_UNMET_LEVEL_THRESHOLD
+    ]
+    if not unmet:
+        return None
+    most_urgent = min(unmet, key=lambda n: int(n["level"]))
+    return NeedSnapshot(
+        need_id=str(most_urgent.get("need_id", "")),
+        kind=str(most_urgent.get("kind", "unknown")),
+        level=int(most_urgent["level"]),
+        character_id=npc_id,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -409,6 +472,17 @@ async def build_serialized_context(
     tier_a_raw = _build_tier_a_base(npc_id, character_bundle, events, location_id, location_context, group_memberships, believed_rumors, traits, active_pledges, session_turns)
     tier_a_raw.extend(_build_tier_a_extended(player_id, reputation_items, active_quest, player_relation_edge, memories, beliefs, goals, owned_items, secrets, obligations, second_hop_events, settings, npc_id, current_game_time))
     tier_b_raw, tier_c_raw, vector_scores = _build_tier_b_c_items(tier_b_results)
+    top_need = await _fetch_top_unmet_need(session=session, npc_id=npc_id)
+    if top_need is not None:
+        tier_b_raw = [
+            *tier_b_raw,
+            ContextItem(
+                key="top_need",
+                text=top_need.model_dump_json(),
+                tier="tierB",
+                priority=55,
+            ),
+        ]
     event_key_trust = _build_event_trust_map(events, trust_scores, npc_id)
     serialized = _rank_and_serialize_tiers(
         tier0=tier0, tier_a_raw=tier_a_raw, tier_b_raw=tier_b_raw, tier_c_raw=tier_c_raw,

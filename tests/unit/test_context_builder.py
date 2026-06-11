@@ -129,6 +129,11 @@ def _patch_graph_calls(monkeypatch, tier_a_items=None) -> None:
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_traits_svc", fake_traits)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_pledges_for_character_svc", fake_pledges)
 
+    async def fake_needs(session, character_id):
+        return []
+
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_needs_for_character", fake_needs)
+
     async def fake_trust_scores(session, *, npc_id, event_ids):
         return {}
 
@@ -306,3 +311,95 @@ def test_final_serialized_budget_drops_tier_c_before_tier_b_when_over_budget() -
 
     assert "BBBB" in serialized
     assert "CCCC" not in serialized
+
+
+# ---------------------------------------------------------------------------
+# EXP-204: top unmet need surfaces in dialogue context (Tier B, trim-first)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_top_unmet_need_appears_in_context(monkeypatch) -> None:
+    """An NPC with an urgent unmet need gets a 'top_need' key in the serialized context.
+
+    The need line is a Tier B optional item (trim-first). With a generous budget
+    it must survive into the final serialized output.
+    """
+    urgent_need = {
+        "need_id": "need_hunger_1",
+        "kind": "hunger",
+        "level": 15,
+        "decay_rate": 5,
+        "character_id": "npc_1",
+    }
+
+    async def fake_needs(session, character_id):
+        return [urgent_need]
+
+    _patch_graph_calls(monkeypatch)
+    monkeypatch.setattr(
+        "npc_engine.retrieval.context_builder.get_needs_for_character",
+        fake_needs,
+    )
+
+    settings = Settings(
+        API_KEY_SECRET="npc_dev_secret_2026_alpha",
+        NEO4J_URI="bolt://localhost:7687",
+        NEO4J_USER="neo4j",
+        NEO4J_PASSWORD="password",
+        PROMPT_TOKEN_BUDGET=2500,
+    )
+
+    serialized = await build_serialized_context(
+        session=None,  # type: ignore[arg-type]
+        settings=settings,
+        llm_config=_llm_config(),
+        embedding_index=FakeEmbeddingIndex(rows=[]),
+        npc_id="npc_1",
+        player_message="hello",
+        session_turns=[],
+    )
+
+    payload = json.loads(serialized)
+    assert "top_need" in payload.get("npc", {}), (
+        "Expected 'top_need' under npc key when NPC has an urgent unmet need"
+    )
+    assert payload["npc"]["top_need"]["kind"] == "hunger"
+    assert payload["npc"]["top_need"]["level"] == 15
+
+
+@pytest.mark.asyncio
+async def test_no_top_need_when_npc_has_no_needs(monkeypatch) -> None:
+    """When get_needs_for_character returns [], 'top_need' must be absent (or None)."""
+
+    async def fake_no_needs(session, character_id):
+        return []
+
+    _patch_graph_calls(monkeypatch)
+    monkeypatch.setattr(
+        "npc_engine.retrieval.context_builder.get_needs_for_character",
+        fake_no_needs,
+    )
+
+    settings = Settings(
+        API_KEY_SECRET="npc_dev_secret_2026_alpha",
+        NEO4J_URI="bolt://localhost:7687",
+        NEO4J_USER="neo4j",
+        NEO4J_PASSWORD="password",
+        PROMPT_TOKEN_BUDGET=2500,
+    )
+
+    serialized = await build_serialized_context(
+        session=None,  # type: ignore[arg-type]
+        settings=settings,
+        llm_config=_llm_config(),
+        embedding_index=FakeEmbeddingIndex(rows=[]),
+        npc_id="npc_1",
+        player_message="hello",
+        session_turns=[],
+    )
+
+    payload = json.loads(serialized)
+    # Either key absent or explicitly None — either is acceptable
+    assert payload.get("npc", {}).get("top_need") is None, (
+        "Expected no top_need when NPC has no needs"
+    )

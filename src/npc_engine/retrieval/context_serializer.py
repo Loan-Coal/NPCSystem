@@ -84,6 +84,8 @@ def serialize_context(context: MergedContext) -> str:
     goals_payload = _safe_parse(mapped.get("goals", "[]"))
     beliefs_payload = _safe_parse(mapped.get("beliefs", "[]"))
     memories_payload = _safe_parse(mapped.get("memories", "[]"))
+    raw_top_need = mapped.get("top_need")
+    top_need_payload = _safe_parse(raw_top_need) if raw_top_need is not None else None
 
     skeleton = {
         "world": world_payload if isinstance(world_payload, dict) else {},
@@ -93,6 +95,7 @@ def serialize_context(context: MergedContext) -> str:
             "goals": goals_payload if isinstance(goals_payload, list) else [],
             "beliefs": beliefs_payload if isinstance(beliefs_payload, list) else [],
             "memories": memories_payload if isinstance(memories_payload, list) else [],
+            "top_need": top_need_payload if isinstance(top_need_payload, dict) else None,
         },
         "player_reputation": reputation_payload if isinstance(reputation_payload, list) else [],
         "propagated_reputation": propagated_reputation_payload if isinstance(propagated_reputation_payload, list) else [],
