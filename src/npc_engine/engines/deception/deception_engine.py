@@ -78,24 +78,9 @@ class DeceptionEngine:
         learned_at_tick: int,
         game_time_str: str,
     ) -> DeceptionBelief:
-        """Persist a deliberately false belief on the target NPC.
-
-        Writes a BELIEVES edge with is_deception=True and deception_goal_id set
-        to the supplied goal identifier.  Existing callers of write_belief are
-        unaffected (back-compat defaults on the writer).
-
-        Args:
-            session: Active Neo4j async session.
-            npc_id: ID of the NPC who will hold the false belief.
-            target_belief_content: Text of the false belief to plant.
-            deception_goal_id: Identifier of the goal that motivates this deception.
-            confidence: Confidence stored on the BELIEVES edge (default 75).
-            source_character_id: ID of the character planting the belief (provenance).
-            learned_at_tick: Game tick at which the belief was planted (provenance).
-            game_time_str: Human-readable game-time string for the belief node.
-
-        Returns:
-            DeceptionBelief with is_deception=True and the supplied deception_goal_id.
+        """Persist a deliberately false belief (BELIEVES edge with is_deception=True +
+        deception_goal_id) on the target NPC and return the DeceptionBelief. Existing
+        write_belief callers are unaffected (back-compat defaults on the writer).
         """
         belief_id = await write_belief(
             session,

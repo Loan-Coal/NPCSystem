@@ -61,25 +61,9 @@ async def write_belief(
 ) -> str:
     """Merge a Belief node and create/update the BELIEVES edge with provenance fields.
 
-    Merges the belief by a stable (npc_id, content) hash so repeated identical facts
-    dedup, and creates/updates the BELIEVES edge with DEC-072 provenance fields.
-    Optional deception fields (DEC-103 / EXP-228) are back-compat — defaults preserve
-    existing callers that do not pass them.
-
-    Args:
-        session: Active Neo4j async session.
-        npc_id: ID of the NPC character node who holds the belief.
-        content: Freeform text of the learned fact.
-        confidence: Confidence level (0–100); stored on both node and edge.
-        source_character_id: ID of the character who stated the fact (provenance).
-        learned_at_tick: Game tick at which the fact was learned (provenance).
-        game_time_str: Human-readable game-time string stored on the belief node.
-        is_deception: True when this belief is a deliberate false-belief (EXP-228).
-            Defaults to False for all existing callers (back-compat).
-        deception_goal_id: Goal ID that motivated the deception; None for ordinary beliefs.
-
-    Returns:
-        Stable belief id (truncated SHA-256 of npc_id:content); identical facts dedup.
+    Dedups by a stable (npc_id, content) hash. DEC-072 provenance + optional deception
+    fields (DEC-103/EXP-228, default False/None — back-compat for existing callers) are
+    written on the edge. Returns the stable belief id (truncated SHA-256 of npc_id:content).
     """
     belief_id = hashlib.sha256(f"{npc_id}:{content}".encode()).hexdigest()[:_BELIEF_ID_HASH_LENGTH]
     tx = await session.begin_transaction()
