@@ -21,12 +21,12 @@ from npc_engine.engines.dialogue.prompt_builder import (
     _ECHO_GUARD_TEXT,
     _PROMPT_PATH,
     _build_knowledge_gaps,
-    _build_standing_line,
     _extract_personal_accounts,
     _extract_voice_descriptor,
     build_dialogue_prompt,
     build_system_prompt,
 )
+from npc_engine.engines.dialogue.prompt_builder_standing import build_standing_line
 
 
 # ---------------------------------------------------------------------------
@@ -397,15 +397,15 @@ def test_standing_line_before_player_message() -> None:
 def test_build_standing_line_neutral_for_zero_scalars() -> None:
     """_build_standing_line returns NEUTRAL band for zero relation scalars."""
     ctx = _ctx_with_player_relation(trust=0, fear=0, affection=0)
-    result = _build_standing_line(ctx)
+    result = build_standing_line(ctx)
     assert result == "STANDING=NEUTRAL\n"
 
 
 def test_build_standing_line_empty_when_no_scalars() -> None:
     """_build_standing_line returns empty string when player_relation has no scalars."""
-    assert _build_standing_line(_json.dumps({})) == ""
-    assert _build_standing_line(_json.dumps({"player_relation": {}})) == ""
-    assert _build_standing_line("not-json") == ""
+    assert build_standing_line(_json.dumps({})) == ""
+    assert build_standing_line(_json.dumps({"player_relation": {}})) == ""
+    assert build_standing_line("not-json") == ""
 
 
 def test_system_prompt_contains_standing_tone_rule() -> None:
