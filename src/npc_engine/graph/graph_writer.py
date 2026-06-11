@@ -1,13 +1,18 @@
 """
-graph_writer.py - Transaction coordinator for currency and item mutation workflows.
+graph_writer.py - Transaction coordinator for currency, item, and relation mutation workflows.
 Layer: graph
-Purpose: (auto-detected — review)
+Purpose: Coordinate validated writes for currency transfers, item transfers, and relation-edge
+         creation.  All Neo4j transactions are owned here or delegated to sub-writers that
+         accept an injected session.
 
 Does NOT: define mutation policy bounds or apply relation deltas.
 
 Dependencies injected: AsyncSession, Settings.
 """
 
+from __future__ import annotations
+
+from datetime import datetime, timezone
 from time import perf_counter
 from typing import Literal
 
@@ -26,7 +31,43 @@ __all__ = [
     "apply_currency_transfer",
     "apply_item_transfer",
     "apply_relation_delta",
+    "ensure_relation_edge",
 ]
+
+_CYPHER_ENSURE_RELATES_TO = (
+    "MATCH (a:Character {id: $src_id}), (b:Character {id: $dst_id}) "
+    "MERGE (a)-[r:RELATES_TO]->(b) "
+    "ON CREATE SET "
+    "  r.trust = 0, "
+    "  r.fear = 0, "
+    "  r.affection = 0, "
+    "  r.interaction_count = 0, "
+    "  r.relevance_score = 0.0, "
+    "  r.last_updated_at = $now "
+    "RETURN r"
+)
+
+
+async def ensure_relation_edge(
+    session: AsyncSession,
+    src_id: str,
+    dst_id: str,
+) -> None:
+    """Create a baseline RELATES_TO edge if one does not already exist.
+
+    Uses MERGE so the call is safe to issue concurrently or multiple times — an
+    existing edge is left untouched.  Required fields are set to their schema
+    defaults (trust/fear/affection/interaction_count = 0, relevance_score = 0.0).
+
+    Args:
+        session: Active Neo4j async session; opens and commits its own transaction.
+        src_id: ID of the source Character node.
+        dst_id: ID of the destination Character node.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    async with await session.begin_transaction() as tx:
+        await tx.run(_CYPHER_ENSURE_RELATES_TO, src_id=src_id, dst_id=dst_id, now=now)
+        await tx.commit()
 
 
 async def apply_buy_sell_currency_transfer(

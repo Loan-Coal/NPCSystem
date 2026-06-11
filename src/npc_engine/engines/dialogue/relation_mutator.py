@@ -1,7 +1,9 @@
 """
 relation_mutator.py - Applies validated relation deltas through graph writer.
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Apply per-turn relation deltas from dialogue to the graph.  On first
+         contact (no RELATES_TO edge yet) the edge is created with baseline
+         values before the delta is applied.
 
 Does NOT: decide delta policy rules.
 
@@ -10,7 +12,7 @@ Dependencies injected: AsyncSession, Settings.
 Structured audit log events emitted:
 - ``relation_delta_attempt``: before the graph write (INFO).
 - ``relation_delta_applied``: after a successful write (INFO).
-- ``relation_edge_missing``: when no RELATES_TO edge exists (WARNING).
+- ``relation_first_contact``: when no edge existed and one was created (INFO).
 All events carry npc_id, player_id, tick_id, and cause_id as extra fields.
 """
 
@@ -20,12 +22,33 @@ from neo4j import AsyncSession
 
 from npc_engine.config import Settings
 from npc_engine.engines.dialogue.dialogue_models import RelationDeltas
-from npc_engine.graph.graph_writer import apply_relation_delta
+from npc_engine.graph.graph_writer import apply_relation_delta, ensure_relation_edge
 from npc_engine.utils.errors import RelationEdgeNotFoundError
 from npc_engine.utils.logging import get_logger
 
 
 _LOGGER = get_logger(__name__)
+
+
+async def _apply_delta_call(
+    session: AsyncSession,
+    settings: Settings,
+    npc_id: str,
+    player_id: str,
+    relation_deltas: RelationDeltas,
+    cause_id: str,
+    tick_id: int,
+) -> None:
+    """Invoke graph writer to apply one relation delta (no error handling)."""
+    await apply_relation_delta(
+        session=session,
+        settings=settings,
+        src_id=npc_id,
+        dst_id=player_id,
+        deltas=relation_deltas.model_dump(),
+        cause_id=cause_id,
+        tick_id=tick_id,
+    )
 
 
 async def _write_delta(
@@ -38,20 +61,20 @@ async def _write_delta(
     tick_id: int,
     log_extra: dict[str, object],
 ) -> None:
-    """Attempt the graph write and emit applied/missing audit events."""
+    """Attempt the graph write; on first contact create the edge then retry.
+
+    On RelationEdgeNotFoundError the baseline RELATES_TO edge is created via
+    ensure_relation_edge and the delta is applied in a second call.  Any other
+    exception propagates to the caller unchanged.
+    """
     try:
-        await apply_relation_delta(
-            session=session,
-            settings=settings,
-            src_id=npc_id,
-            dst_id=player_id,
-            deltas=relation_deltas.model_dump(),
-            cause_id=cause_id,
-            tick_id=tick_id,
-        )
+        await _apply_delta_call(session, settings, npc_id, player_id, relation_deltas, cause_id, tick_id)
         _LOGGER.info("relation_delta_applied", extra=log_extra)
     except RelationEdgeNotFoundError:
-        _LOGGER.warning("relation_edge_missing", extra=log_extra)
+        _LOGGER.info("relation_first_contact", extra=log_extra)
+        await ensure_relation_edge(session=session, src_id=npc_id, dst_id=player_id)
+        await _apply_delta_call(session, settings, npc_id, player_id, relation_deltas, cause_id, tick_id)
+        _LOGGER.info("relation_delta_applied", extra=log_extra)
 
 
 async def apply_dialogue_relation_deltas(
@@ -65,9 +88,11 @@ async def apply_dialogue_relation_deltas(
 ) -> None:
     """Apply validated relation deltas from a dialogue turn to the graph.
 
-    Emits structured audit log events before the write, after success, and
-    when the target RELATES_TO edge is not found. Missing-edge errors are
-    caught and logged so the caller's response flow is not interrupted.
+    On first contact (no RELATES_TO edge exists yet) a baseline edge is created
+    automatically and the delta is applied immediately after.
+
+    Emits structured audit log events before the write, on first-contact edge
+    creation, and after a successful write.
 
     Args:
         session: Active Neo4j async session.
