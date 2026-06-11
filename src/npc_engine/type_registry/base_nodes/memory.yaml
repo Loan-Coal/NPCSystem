@@ -11,3 +11,4 @@ fields:
   subject_player_id: { type: str, required: false }
   recall_count: { type: int, required: false }
   never_forget: { type: bool, required: false }
+  kind: { type: str, required: false }

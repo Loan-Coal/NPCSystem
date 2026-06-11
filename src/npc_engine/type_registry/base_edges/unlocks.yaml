@@ -5,3 +5,6 @@ fields:
   on_outcome:
     type: str
     required: true
+  on_choice_id:
+    type: str
+    required: false
