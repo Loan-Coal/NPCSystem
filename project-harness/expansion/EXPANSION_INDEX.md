@@ -69,12 +69,16 @@ _The orchestrator maintains this: add a line when an item unlocks a later one; d
   `faction_board.py`+`RightPanel.FACTION`, emotion pair view. DEC-105 waives emotion_panel size.
 - **PHASE D batch-3 DONE** (EXP-221/222/223 ✅, clean one-shot). 22 items done; only the 2 Phase D schema
   items remain before Phase E.
-- **NEXT BATCH (Phase D schema):** orchestrator FIRST applies DEC-100 (memory.yaml `kind`: Literal
-  episodic|commitment|fact, optional) + DEC-101 (unlocks.yaml `on_choice_id`: str, optional), commit + gate
-  green. THEN dispatch [EXP-214 (memory_engine `create_from_commitment` + context_builder — WATCH R006 +
-  mock new memory call in the 3 context test files)], [EXP-218 (quest_chain_resolver.choose + new
-  POST /quest/{id}/choose route)]. Disjoint → 2 workers.
-- **THEN Phase E:** apply DEC-102 → EXP-226 (+EXP-227 no-schema), DEC-103 → EXP-228, DEC-104 → EXP-229; EXP-230.
+- **PHASE D COMPLETE** (EXP-213..225 all ✅; DEC-100/101 applied 6430d34). **25 of 30 done.**
+- **NEXT BATCH (Phase E — flagship, schema-heavy, highest risk):** For each new node/edge type, the
+  orchestrator applies the YAML AND lands it in the SAME batch as its first user (avoid unused-type gate
+  fail); gate ONCE at end; STOP+surface if the type-registry gate can't go green in 2 tries.
+  - **E1:** DEC-102 → new `base_nodes/player_model.yaml` + `base_edges/has_player_model.yaml`; dispatch
+    [EXP-226 player-model engine (its first reader/writer)] + [EXP-227 drama director (no schema, new dir)].
+  - **E2:** DEC-103 → `believes.yaml` +is_deception/+deception_goal_id; [EXP-228 deception engine]
+    (coordinate anti-hallucination eval to treat is_deception=true as intended).
+  - **E3:** DEC-104 → new `scheme.yaml` + `executes_scheme.yaml` + `scheme_step.yaml` +
+    `MAX_ACTIVE_SCHEMES_PER_NPC`; [EXP-229 scheming engine, XL] + [EXP-230 session persistence, no schema].
 
 ## Mapping & reconciliation (analysis id → execution id)
 
@@ -140,11 +144,11 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 
 ### Phase D — Deepen the systems (🔶 DEC-100/101)
 - [x] **EXP-213** belief/confidence-aware distortion routing · M · DONE 7be05fe · `receiver_confidence` biases distortion type (deterministic; guarded to int inputs for back-compat)
-- [ ] **EXP-214** commitment/fact memory formation 🔶DEC-100 · M · deps: none · edit `memory.yaml`(orch), `memory_engine.py`, `engines/quest/quest_lifecycle_engine.py`
+- [x] **EXP-214** commitment memory formation · M · DONE 0adc89f · `create_from_commitment` (kind=commitment) on quest accept (DEC-100). NOTE: quest_lifecycle instantiates MemoryEngine() in __init__ — DI-via-injection cleanup is a follow-up.
 - [x] **EXP-215** belief contradiction detection + dedup · M · DONE 2ac16eb · `find_conflicting_belief` reader + pre-write skip in extraction engine
 - [x] **EXP-216** trade dispatch → NegotiationStore · S · DONE fc56e75 · composition root wires NegotiationBacked default
 - [x] **EXP-217** player event summary endpoint · S · DONE 42682f4 · `GET /player/{id}/events` + `get_recent_player_events` (note: players need KNOWS_ABOUT edges seeded to return data)
-- [ ] **EXP-218** quest branching on player choice 🔶DEC-101 · L · deps: none · edit `unlocks.yaml`(orch), `engines/quest/quest_chain_resolver.py`, new route
+- [x] **EXP-218** quest branching on player choice · L · DONE d9b318a · `QuestChainResolver.choose` + `POST /quest/{id}/choose` (DEC-101); null on_choice_id still auto-unlocks
 - [x] **EXP-219** personality-modulated emotion model · M · DONE 6ca22af · `TraitModulatedEmotionModel` (2nd protocol impl); composition-root wiring = slice 2
 - [x] **EXP-220** faction standing board (demo) · S · DONE 69f7c80 · `faction_board.py` + `get_faction_standings` + `RightPanel.FACTION`
 - [x] **EXP-221** location hierarchy breadcrumb (demo) · S · DONE 8e14e11 · `build_location_breadcrumb` PART_OF walk; draw-loop wiring = slice 2
@@ -162,10 +166,11 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 
 ## Next candidate batch (suggested)
 
-**LAST BATCH (cycle 8):** EXP-221/222/223 ✅ — integrated (8e14e11/6c69444/36bec00), clean one-shot (no fix).
-Gate green (make check 2022, demo 723). **22 items done: EXP-201..213, 215..217, 219..225.**
-**NEXT (Phase D schema):** apply DEC-100 + DEC-101 FIRST, then EXP-214 · EXP-218 (2 workers, disjoint).
-**All workers must `git merge munich-demo` before building; grep new files for `from src`.**
+**LAST BATCH (cycle 9):** EXP-214/218 ✅ — DEC-100/101 applied (6430d34); integrated (0adc89f/d9b318a +
+fix 3d04521). Gate green (make check 2028, 85.99%). 1 fix (R006 choose helper). **PHASE D COMPLETE.
+25 of 30 done (EXP-201..225).**
+**NEXT (Phase E, flagship):** E1 = DEC-102 + EXP-226 + EXP-227; E2 = DEC-103 + EXP-228; E3 = DEC-104 + EXP-229 + EXP-230.
+**Apply each new node type WITH its first user; STOP+surface if type-registry gate resists in 2 tries.**
 
 ---
 

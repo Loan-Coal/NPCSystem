@@ -94,13 +94,15 @@ automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** A
-- **Phase in progress:** D schema (done: 22 items — EXP-201..213, 215..217, 219..225)
-- **Next batch (Phase D schema):** orchestrator applies DEC-100 (memory.yaml `kind` optional) + DEC-101
-  (unlocks.yaml `on_choice_id` optional), commit + gate green. THEN [EXP-214 memory_engine `create_from_commitment`
-  + context_builder (WATCH R006; mock new memory call in 3 context test files)], [EXP-218 quest_chain_resolver.choose
-  + POST /quest/{id}/choose route]. 2 disjoint workers. Merge munich-demo first; grep `from src`.
-- **Then Phase E:** DEC-102 → EXP-226 (+227 no-schema); DEC-103 → EXP-228; DEC-104 → EXP-229; EXP-230.
-- **Last green commit:** 54b363a (EXP-221/222/223 integrated, gate green).
+- **Phase in progress:** E (Phase D COMPLETE; 25 of 30 done: EXP-201..225)
+- **Next batch (Phase E — flagship, highest risk):** apply each new node/edge type AND its first user in
+  ONE batch, gate ONCE. E1: DEC-102 (new `player_model` node + `has_player_model` edge) + dispatch EXP-226
+  (player-model engine) + EXP-227 (drama director, no schema). E2: DEC-103 (`believes` +is_deception
+  +deception_goal_id) + EXP-228 (deception; eval must treat is_deception=true as intended). E3: DEC-104
+  (new `scheme` node + `executes_scheme` + `scheme_step` edges + `MAX_ACTIVE_SCHEMES_PER_NPC`) + EXP-229
+  (scheming, XL) + EXP-230 (session persistence, no schema).
+  **STOP+surface if the type-registry gate can't be made green in 2 tries for a new node type.**
+- **Last green commit:** 3d04521 (EXP-214/218 integrated, gate green).
 
 ## Progress Log
 
@@ -151,3 +153,8 @@ automatically; do not poll.
 - **8 · 2026-06-12 cycle 8** — Phase D batch-3 demo EXP-221/222/223 (merge-first, cherry-picked clean).
   **All 3 ✅** (8e14e11/6c69444/36bec00) — clean one-shot, NO integration fix. Gate green (make check 2022,
   demo 723). **22 items done.** Only Phase D schema items (EXP-214, EXP-218) remain before Phase E.
+- **9 · 2026-06-12 cycle 9** — Phase D schema: applied DEC-100 (memory.kind) + DEC-101 (unlocks.on_choice_id)
+  (6430d34, gate green) THEN EXP-214/218 (merge-first, cherry-picked clean). **Both ✅** (0adc89f/d9b318a).
+  1 fix: R006 `QuestChainResolver.choose` → extracted `_offer_choice_successor`. Fix 3d04521. Green: make
+  check 2028 (85.99%). **PHASE D COMPLETE — 25 of 30 done.** Next: Phase E (flagship cognition, new node types).
+  Follow-up: EXP-214 instantiates MemoryEngine() in quest_lifecycle __init__ (prefer DI injection).
