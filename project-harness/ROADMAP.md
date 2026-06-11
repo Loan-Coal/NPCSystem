@@ -257,8 +257,14 @@ kept OPEN — the two henryk cases need a live `make eval-llm-demo` (Ollama) run
 
 ---
 
-## Phase 23 — P3 cleanup sweep (ISSUE-054, ISSUE-069, ISSUE-070, ISSUE-072, ISSUE-075, ISSUE-076, ISSUE-081, ISSUE-084, ISSUE-085, ISSUE-087, ISSUE-089, ISSUE-091)
+## Phase 23 — P3 cleanup sweep (ISSUE-054, ISSUE-069, ISSUE-070, ISSUE-072, ISSUE-075, ISSUE-076, ISSUE-081, ISSUE-084, ISSUE-085, ISSUE-087, ISSUE-089, ISSUE-091) ✅ (2026-06-11)
 **Goal:** Close all batchable P3 issues in one phase. All items are small, independent, and can be committed in any order. No new files needed except `WorldStatePayload` inline in `demo_game/seed.py`.
+**Completion note (2026-06-11):** all 7 steps landed; `make check` green (1959 passed, 85.70%), `make test-demo`
+green (623). All 12 referenced issues marked [FIXED] — ISSUE-075 and the reputation_nudge half of S23.2 were
+found already resolved by a prior refactor (documented, no code change); the rest were code fixes. Two new
+helper files were not needed beyond `WorldStatePayload` (inline) and `get_npc_archetype` (added to the existing
+`graph_reader.py`). New tests: `test_dialogue_world_state_hoist.py`, `test_knowledge_writer.py`,
+`test_lazy_game_window_import.py`, `test_dialogue_archetype_fallback.py` (+ cases added to existing files).
 **Constraint:** Each commit must keep `make check` green.
 **Notes:** One commit per S23.x step (steps are already grouped by file proximity). For S23.6 deletions, verify zero imports before deleting. S23.4 and S23.7 each need their own test update.
 
@@ -415,3 +421,10 @@ health gate and is green as of Phase 16 completion (1837 passed, 22 skipped, 98%
 | 30 | 2026-06-11 | S26.1+B verify | Rebuilt container (v2.12); **both** henryk eyewitness cases PASS live; 6/6 regression sweep (gossip tokens kept, firsthand confident, no over-hedge) — A+B fix the bug without schema | A+B verified clean; Phase C → hardening |
 | 31 | 2026-06-11 | S26.3 (C) | DEC-094 APPROVED; `occurred_at_game_time` + `is_historical` on Memory (registry+Cypher+service+request+client, all optional); seed split Henryk past-war memory (`is_historical`) from current-war hearsay rumour | Event-time model landed; 1952 passed, demo 619 |
 | 32 | 2026-06-11 | S26.4 (D) | `case_neg_old_henryk_past_war_not_current.yaml` (affirms_judge); live with Phase C seed: 4/4 henryk cases PASS (incl. gossip-token case); Phase 26 ✅ | ISSUE-082 + ISSUE-093 [FIXED]; conflation resolved |
+| 33 | 2026-06-11 | S23.1 | Replaced stale `(auto-detected — review)` docstrings in `gossip_distort.py`/`relation_writer.py`; `world_state.py` `utcnow()`→`datetime.now(timezone.utc)` (tz-aware defaults); `test_world_state.py` tz assertion | ISSUE-072/076/085 [FIXED]; 1953 passed |
+| 34 | 2026-06-11 | S23.2 | `DialogueHandler._maybe_load_world_state`/`_needs_world_state` — single conditional world-state read per turn, threaded into both branches; `HIGH_AROUSAL_THRESHOLD`/`LOW_VALENCE_THRESHOLD` named; `test_dialogue_world_state_hoist.py` | ISSUE-087 [FIXED]; ISSUE-075 found already resolved; 1958 passed |
+| 35 | 2026-06-11 | S23.3 | `_get_current_tick` broadened to catch non-`EngineClientError` (log + None fallback); documented `relation:player` dedup (subgraph 95 > EXP-11 88, deterministic); `TestGetCurrentTick` | ISSUE-069/070 [FIXED]; demo 622 |
+| 36 | 2026-06-11 | S23.4 | `write_belief` belief id → stable `sha256(npc_id:content)[:16]` (`_BELIEF_ID_HASH_LENGTH`); MERGE dedups repeated facts; `test_knowledge_writer.py` | ISSUE-089 [FIXED]; 1961 passed |
+| 37 | 2026-06-11 | S23.5 | `WorldStatePayload(BaseModel)` inline in `demo_game/seed.py`; `build_world_state_payload` returns it; call site `.model_dump()`s into generic `_seed_node`; tests → attribute access | ISSUE-084 [FIXED]; demo green |
+| 38 | 2026-06-11 | S23.6 | Deleted dead `token_budget_enforcer.py` + `test_context_pipeline.py` (0 importers); lazy `game_window` import in `demo_game/__init__.py`; `test_lazy_game_window_import.py` | ISSUE-054/091 [FIXED]; 1953 + 623 |
+| 39 | 2026-06-11 | S23.7 | New `get_npc_archetype` reader; archetype threaded through degradation + canned + LLM structured-output fallback (`DialogueLLMClient` additive `archetype=` params); `test_dialogue_archetype_fallback.py` + handler e2e case | ISSUE-081 [FIXED]; Phase 23 ✅; 1959 + 623 |
