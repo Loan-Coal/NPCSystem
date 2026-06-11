@@ -1,11 +1,11 @@
 """
 Module: belief_queries
 Layer: graph
-Purpose: Cypher string constants and read accessor for Belief nodes and BELIEVES edges.
-Does NOT: execute write operations or open transactions.
+Purpose: Cypher string constants and read accessors for Belief nodes and BELIEVES edges.
+Does NOT: execute write operations, open transactions, or call any LLM.
 Dependencies: None (Cypher strings only).
-Dependencies injected: AsyncSession.
-Used by: npc_engine.graph.belief_service
+Dependencies injected: AsyncSession (per call).
+Used by: npc_engine.graph.belief_service, npc_engine.engines.knowledge_learning.knowledge_extraction_engine
 """
 
 from __future__ import annotations
@@ -13,6 +13,20 @@ from __future__ import annotations
 from typing import Any, cast
 
 from neo4j import AsyncSession
+
+# ---------------------------------------------------------------------------
+# Dedup / conflict detection
+# ---------------------------------------------------------------------------
+
+CYPHER_FIND_CONFLICTING_BELIEF = """
+MATCH (c:Character {id: $character_id})-[:BELIEVES]->(b:Belief)
+WHERE toLower(b.content) = toLower($content)
+RETURN b.id AS id,
+       b.content AS content,
+       toInteger(b.confidence) AS confidence,
+       b.created_at_game_time AS created_at_game_time
+LIMIT 1
+"""
 
 # ---------------------------------------------------------------------------
 # Cypher constants
@@ -77,3 +91,35 @@ async def get_beliefs_for_character(
         )
     finally:
         await result.consume()
+
+
+async def find_conflicting_belief(
+    session: AsyncSession,
+    *,
+    character_id: str,
+    content: str,
+) -> dict[str, Any] | None:
+    """Return an existing belief that duplicates the candidate content, or None.
+
+    Duplicate detection is case-insensitive exact-content match (slice 1).
+    Semantic contradiction detection is deferred to slice 2.
+
+    Args:
+        session: Active Neo4j async session (read-only use; no write).
+        character_id: ID of the character whose beliefs are searched.
+        content: Candidate belief content string to test for duplication.
+
+    Returns:
+        Dict with id, content, confidence, created_at_game_time if a match
+        is found; None otherwise.
+    """
+    result = await session.run(
+        CYPHER_FIND_CONFLICTING_BELIEF,
+        character_id=character_id,
+        content=content,
+    )
+    try:
+        records = [dict(record) async for record in result]
+    finally:
+        await result.consume()
+    return cast(dict[str, Any], records[0]) if records else None

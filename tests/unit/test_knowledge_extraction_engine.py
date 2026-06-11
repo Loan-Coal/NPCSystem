@@ -10,6 +10,8 @@ Covers:
 - DialogueHandler: calls engine when KNOWLEDGE_LEARNING_ENABLED=True.
 - DialogueHandler: skips engine call when KNOWLEDGE_LEARNING_ENABLED=False.
 - DialogueHandler: does not raise AttributeError when knowledge_engine=None.
+- process(): does NOT write a belief when find_conflicting_belief returns a match (dedup).
+- process(): DOES write a belief when find_conflicting_belief returns None (no conflict).
 
 Does NOT: connect to Neo4j, call an LLM, or read from disk.
 """
@@ -27,6 +29,7 @@ pytest.importorskip("neo4j")
 
 _ENGINE_MODULE = "npc_engine.engines.knowledge_learning.knowledge_extraction_engine"
 _WRITER_MODULE = "npc_engine.graph.knowledge_writer"
+_BELIEF_QUERIES_MODULE = "npc_engine.graph.belief_queries"
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _FALLBACK_PATH = str(_REPO_ROOT / "src" / "npc_engine" / "data" / "fallback_responses.json")
@@ -460,3 +463,67 @@ async def test_handler_skips_when_engine_none(monkeypatch):
             location_id="tavern",
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# EXP-215: Belief contradiction / dedup — pre-write check
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_duplicate_belief_is_not_rewritten():
+    """When find_conflicting_belief returns a match, write_belief must NOT be called."""
+    from npc_engine.engines.knowledge_learning.knowledge_extraction_engine import (
+        KnowledgeExtractionEngine,
+    )
+
+    mock_session = _make_mock_session()
+    existing_belief = {"id": "b_existing", "content": "the north road is blocked", "confidence": 70}
+
+    with (
+        patch(f"{_ENGINE_MODULE}.find_conflicting_belief", new_callable=AsyncMock) as mock_find,
+        patch(f"{_ENGINE_MODULE}.write_belief", new_callable=AsyncMock) as mock_write,
+    ):
+        mock_find.return_value = existing_belief
+        engine = KnowledgeExtractionEngine()
+        result = await engine.process(
+            mock_session,
+            npc_id="mira_innkeeper",
+            player_id="player_1",
+            tick=10,
+            learned_facts=["the north road is blocked"],
+            game_time_str="Year 1 Spring Day 2 Evening",
+        )
+
+    mock_write.assert_not_awaited()
+    assert result.written == 0
+    assert result.skipped == 1
+
+
+@pytest.mark.asyncio
+async def test_non_conflicting_belief_is_written():
+    """When find_conflicting_belief returns None, write_belief must be called once."""
+    from npc_engine.engines.knowledge_learning.knowledge_extraction_engine import (
+        KnowledgeExtractionEngine,
+    )
+
+    mock_session = _make_mock_session()
+
+    with (
+        patch(f"{_ENGINE_MODULE}.find_conflicting_belief", new_callable=AsyncMock) as mock_find,
+        patch(f"{_ENGINE_MODULE}.write_belief", new_callable=AsyncMock) as mock_write,
+    ):
+        mock_find.return_value = None
+        engine = KnowledgeExtractionEngine()
+        result = await engine.process(
+            mock_session,
+            npc_id="mira_innkeeper",
+            player_id="player_1",
+            tick=10,
+            learned_facts=["the eastern gate is open"],
+            game_time_str="Year 1 Spring Day 2 Evening",
+        )
+
+    mock_write.assert_awaited_once()
+    assert result.written == 1
+    assert result.skipped == 0
