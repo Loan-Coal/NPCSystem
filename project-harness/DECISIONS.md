@@ -991,8 +991,12 @@ monolithic *logic*, not to fragment a flat list of 3-field dataclasses.
 **Limit:** Do not grow further without a real split. If a new error *family* with shared behaviour
 (not just fields) appears, extract that family to its own module then.
 
-## DEC-087: 🔶 PROPOSED — graph/-owned transaction coordinator for engine-owned writes (S21.4 / SEV-30 / ISSUE-058)
-**Status:** 🔶 PROPOSED — **awaiting human approval. Do not implement S21.4 until this is accepted.**
+## DEC-087: ✅ APPROVED — graph/-owned transaction coordinator for engine-owned writes (S21.4 / SEV-30 / ISSUE-058)
+**Status:** ✅ APPROVED 2026-06-11 — Option 1 (callback unit-of-work coordinator).
+**Resolved open questions:** (1) standardize on the callback coordinator `run_in_tx`. (2) keep the
+existing `quest_engine_helpers` `hasattr(session, "begin_transaction")` guard engine-side — not folded
+into the coordinator. (3) rollback semantics: coordinator rolls back on any exception and re-raises the
+**original, unwrapped** exception, mirroring today's `async with tx:` behaviour.
 **Date:** 2026-06-11
 **Context:** CLAUDE.md (strict): *"`graph_writer.py` is the only file that opens and commits
 transactions"* and *"No Neo4j queries outside `graph/`."* Five engine files currently own the
