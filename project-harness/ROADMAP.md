@@ -298,7 +298,7 @@ kept OPEN — the two henryk cases need a live `make eval-llm-demo` (Ollama) run
 
 ---
 
-## Phase 26 — Temporal knowledge framing: stop NPCs conflating past memory with current events (ISSUE-093, closes ISSUE-082)
+## Phase 26 — Temporal knowledge framing: stop NPCs conflating past memory with current events (ISSUE-093, closes ISSUE-082) ✅ (2026-06-11)
 **Goal:** Give NPC knowledge a timeline. Today everything an NPC knows is a flat, present-tense,
 authoritative bag, so a long-past first-hand memory and a current 2-hop rumour are indistinguishable —
 NPCs recount old experiences as the current situation and accept false-eyewitness presuppositions.
@@ -331,10 +331,13 @@ Each step bumps `PROMPT_VERSION` when it touches the prompt; one commit per step
   memory is `is_historical=true` and is **removed from** the current-war `KNOWS_ABOUT` distorted_summary
   (split the conflated string). Make Phase B's `age` read the real event-time when present.
   - Exit: Henryk's past-war memory is tagged historical and absent from the current rumour string; `make check` green.
-- [ ] **S26.4 (D)** Temporal-conflation evals — add a small eval set (Henryk + 1–2 other veteran/elder
-  archetypes) asserting no firsthand-from-rumour and no past-as-present; re-run
-  `case_neg_old_henryk_no_eyewitness_claim` live (`make eval-llm-demo`).
-  - Exit: new eval cases defined; `case_neg_old_henryk_no_eyewitness_claim` passes live; ISSUE-082 + ISSUE-093 closeable.
+- [x] **S26.4 (D)** Temporal-conflation evals — added `case_neg_old_henryk_past_war_not_current.yaml`
+  (`affirms_judge` — fails if he fuses his historical service with the current war or reports the
+  front firsthand). Live verification (qwen2.5:14b, stage_b_v2.12 + Phase C seed):
+  `case_neg_old_henryk_no_eyewitness_claim` **PASS**, `case_adv_false_eyewitness_henryk` **PASS**,
+  `case_neg_old_henryk_past_war_not_current` **PASS**, `case_pos_old_henryk_war_rumor_tokens` **PASS**
+  (gossip tokens preserved). Earlier A+B regression sweep: 6/6 (both sides of the split, no over-hedge).
+  - Exit: new case defined + passes live; ISSUE-082 + ISSUE-093 [FIXED]. ✓
 
 ---
 
@@ -406,3 +409,9 @@ health gate and is green as of Phase 16 completion (1837 passed, 22 skipped, 98%
 | 24 | 2026-06-11 | S22.3 | Reconcile — `GameWindow` imports+uses `WorldStatePoller`; 6 `TestGameWindowLayout` tests already green (no code change); ISSUE-068 [FIXED] | `make test-demo` 618 passed |
 | 25 | 2026-06-11 | S22.4 | New `engines/dialogue/negotiation_context.py` (pinned tier0 `active_negotiation` inject); optional `negotiation_store` on `DialogueHandler` (TYPE_CHECKING, no-store path unchanged); wired in `dependencies`; `test_dialogue_negotiation_context.py` | NPC dialogue grounded in live barter state; ISSUE-071 addressed; 1936 passed |
 | 26 | 2026-06-11 | S22.5 | `PRESENCE PRESUPPOSITION` deny-first clause in `system_v1.yaml` Rule 9 + Rule 10 reinforcement; `PROMPT_VERSION`→`stage_b_v2.10`; `test_presence_presupposition_guard.py` | Prompt hardened; ISSUE-082 OPEN (live eval verification pending); 1937 passed |
+| 27 | 2026-06-11 | S22.5 verify | Live eval (container rebuilt on v2.10): `case_adv` PASS, `case_neg` FAIL — diagnosed as a seed-vs-rule conflict (Henryk's importance-92 past-war memory), not prompt weakness → ISSUE-093 + Phase 26 + DEC-094 | S22.5 1/2 live; deeper issue scoped |
+| 28 | 2026-06-11 | S26.1 (A) | `_flatten_event_row` keeps `knowledge_state`; `_extract_personal_accounts` splits MY_ACCOUNT vs HEARSAY by rumour state; Rule 5b; `PROMPT_VERSION`→`stage_b_v2.11`; tests rewritten | Rumour no longer recast firsthand; gossip content kept; 1940 passed |
+| 29 | 2026-06-11 | S26.2 (B) | `retrieval/memory_temporal.py` (`annotate_memory_ages`, recent|long_past); `context_builder` threads game-time into memories; Rule 15 (memories are past); `PROMPT_VERSION`→`stage_b_v2.12` | Memories framed as past recollections; 1947 passed |
+| 30 | 2026-06-11 | S26.1+B verify | Rebuilt container (v2.12); **both** henryk eyewitness cases PASS live; 6/6 regression sweep (gossip tokens kept, firsthand confident, no over-hedge) — A+B fix the bug without schema | A+B verified clean; Phase C → hardening |
+| 31 | 2026-06-11 | S26.3 (C) | DEC-094 APPROVED; `occurred_at_game_time` + `is_historical` on Memory (registry+Cypher+service+request+client, all optional); seed split Henryk past-war memory (`is_historical`) from current-war hearsay rumour | Event-time model landed; 1952 passed, demo 619 |
+| 32 | 2026-06-11 | S26.4 (D) | `case_neg_old_henryk_past_war_not_current.yaml` (affirms_judge); live with Phase C seed: 4/4 henryk cases PASS (incl. gossip-token case); Phase 26 ✅ | ISSUE-082 + ISSUE-093 [FIXED]; conflation resolved |

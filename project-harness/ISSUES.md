@@ -11,7 +11,14 @@ Rules:
 
 ---
 
-## ISSUE-093: NPCs conflate past memories with current events (systemic — knowledge has no temporal frame)
+## [FIXED] ISSUE-093: NPCs conflate past memories with current events (systemic — knowledge has no temporal frame)
+**Fixed:** 2026-06-11, Phase 26 (S26.1–S26.4). All three layers addressed: (A) `_flatten_event_row` keeps
+`knowledge_state` and `_extract_personal_accounts` routes rumour distorted summaries to a HEARSAY channel
+(attributed, never firsthand) while keeping the distorted content — Rule 5b; (B) memories carry a coarse
+`age` (recent|long_past) and Rule 15 forbids presenting a memory as the current situation; (C, DEC-094)
+`occurred_at_game_time` + `is_historical` added to Memory, and old_henryk's past-war memory split out of
+the current-war rumour string. Verified live (4 henryk cases pass) with a 6/6 no-regression sweep across
+both the rumour-relay and firsthand paths. Closes ISSUE-082.
 **Found:** 2026-06-11, during S22.5 live-eval root-cause investigation (deeper cause behind ISSUE-082)
 **Severity:** P2 (immersion + anti-hallucination — NPCs present long-past experiences as the current situation)
 **Where:** `retrieval/subgraph_retriever.py::_flatten_event_row`; `engines/dialogue/prompt_builder.py::_extract_personal_accounts` + Rule 5; `graph/memory_queries.py` (no event-time field); `demo_game/seed.py` (all inner-life stamped at one `_GAME_TIME`).
@@ -75,7 +82,13 @@ signature + llm_client fallback loader.
 **To fix:** Thread the NPC archetype from the request/profile into `execute_with_degradation`
 and into `DialogueLLMClient._load_fallback_dialogue` so the archetype-keyed fallback lines are used.
 
-## ISSUE-082: old_henryk accepts false-eyewitness presupposition despite ECHO_GUARD reinforcement
+## [FIXED] ISSUE-082: old_henryk accepts false-eyewitness presupposition despite ECHO_GUARD reinforcement
+**Fixed:** 2026-06-11, Phase 26 (S26.1–S26.4). Root cause was systemic (ISSUE-093): rumour distorted
+summaries were rendered as authoritative firsthand MY_ACCOUNT lines, and a past-war memory was fused
+into the current-war rumour string. After the HEARSAY/MY_ACCOUNT split (S26.1), memory temporal framing
+(S26.2), and the event-time schema + Henryk seed split (S26.3), all three henryk cases pass live on
+qwen2.5:14b: `case_neg_old_henryk_no_eyewitness_claim`, `case_adv_false_eyewitness_henryk`, and the new
+`case_neg_old_henryk_past_war_not_current` (S26.4). S22.5's prompt clause contributed the first half.
 **Found:** 2026-06-09, during eval re-run (epoch=war, prompt stage_b_v2.9)
 **Severity:** P2 (annoying — 2 real anti-hallucination guard failures; the headline's only true hallucinations)
 **Where:** `src/npc_engine/prompts/dialogue/system_v1.yaml` (Rules 5/9/10), the runtime

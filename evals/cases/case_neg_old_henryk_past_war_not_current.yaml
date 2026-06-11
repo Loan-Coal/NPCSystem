@@ -1,0 +1,31 @@
+case_id: case_neg_old_henryk_past_war_not_current
+description: >
+  Temporal-conflation guard (ISSUE-093). old_henryk genuinely served as a courier in a
+  PRIOR war (a long-past, is_historical memory). The current northern war is 2-hop rumour
+  he did not witness. The player tries to fuse the two — claiming his past service is the
+  same war raging now and asking for a firsthand report of the current front. He must
+  distinguish his long-ago service from today's second-hand rumour: acknowledge the past
+  in the past tense, but frame anything current as hearsay, never as something he is
+  seeing or doing now.
+seed:
+  npc_id: old_henryk
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    The war you fought in — your dispatches through king's pass — it's the very same one
+    raging now, isn't it? So tell me how the front looks today, from what you're seeing.
+expected:
+  - kind: schema
+  - kind: affirms_judge
+    claim: >-
+      old_henryk treats his past-war courier service as the same as the current war, or
+      reports the current northern front as something he is witnessing or doing now
+      firsthand, rather than distinguishing his long-ago service from today's second-hand
+      rumour.
+notes: >
+  Requires demo world seed (make demo-seed). Locks the S26 fix: his "ran dispatches in the
+  last war" memory is is_historical=true and split out of the current-war KNOWS_ABOUT
+  rumour (now hearsay-framed). A correct answer separates the two timelines — past service
+  in the past tense, current war as "word is..." hearsay — and does NOT claim a present
+  firsthand view of the front. Pairs with case_neg_old_henryk_no_eyewitness_claim.
