@@ -27,6 +27,7 @@ SET m.content = $content,
     m.is_historical = $is_historical,
     m.last_recalled_at = $last_recalled_at,
     m.subject_player_id = $subject_player_id,
+    m.kind = $kind,
     m.recall_count = coalesce(m.recall_count, 0)
 WITH m
 MATCH (c:Character {id: $character_id})

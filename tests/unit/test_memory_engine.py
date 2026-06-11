@@ -253,3 +253,61 @@ def test_high_salience_memory_not_forgettable():
         never_forget=False,
         threshold=settings.MEMORY_FORGET_THRESHOLD,
     )
+
+
+# ---------------------------------------------------------------------------
+# EXP-214: create_from_commitment
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_from_commitment_sets_kind(mock_session):
+    """create_from_commitment must call create_memory with kind='commitment'."""
+    engine = MemoryEngine()
+    with patch(f"{_MODULE}.create_memory", new_callable=AsyncMock, return_value="mem-commit-001") as mock_cm:
+        result = await engine.create_from_commitment(
+            mock_session,
+            character_id="npc_sorn",
+            content="Player promised to deliver the scroll by dawn",
+            game_time=_make_game_time(),
+            player_id="player_hero",
+        )
+    assert result == "mem-commit-001"
+    call_kwargs = mock_cm.call_args.kwargs
+    assert call_kwargs["kind"] == "commitment", (
+        "create_from_commitment must pass kind='commitment' to create_memory"
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_from_commitment_sets_subject_player_id(mock_session):
+    """create_from_commitment must forward player_id as subject_player_id."""
+    engine = MemoryEngine()
+    with patch(f"{_MODULE}.create_memory", new_callable=AsyncMock, return_value="mem-commit-002") as mock_cm:
+        await engine.create_from_commitment(
+            mock_session,
+            character_id="npc_sorn",
+            content="Player swore to protect the village",
+            game_time=_make_game_time(),
+            player_id="player_hero",
+        )
+    call_kwargs = mock_cm.call_args.kwargs
+    assert call_kwargs.get("subject_player_id") == "player_hero"
+
+
+@pytest.mark.asyncio
+async def test_create_from_commitment_uses_full_vividness(mock_session):
+    """Commitment memories must be formed at maximum vividness (100)."""
+    engine = MemoryEngine()
+    with patch(f"{_MODULE}.create_memory", new_callable=AsyncMock, return_value="mem-commit-003") as mock_cm:
+        await engine.create_from_commitment(
+            mock_session,
+            character_id="npc_sorn",
+            content="I will help you recover the artefact",
+            game_time=_make_game_time(),
+            player_id="player_hero",
+        )
+    call_kwargs = mock_cm.call_args.kwargs
+    assert call_kwargs["vividness"] == 100, (
+        "Commitment memories must be formed with vividness=100 (they are never forgotten)"
+    )

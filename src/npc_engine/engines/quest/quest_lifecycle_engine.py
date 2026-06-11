@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from npc_engine.engines.quest.quest_chain_resolver import QuestChainResolver
 
 from npc_engine.config import Settings
+from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.engines.quest.models import (
     QuestStateRecord,
     QuestStatus,
@@ -37,8 +38,10 @@ from npc_engine.engines.quest.quest_engine_helpers import (
 from npc_engine.graph.event_writer import upsert_quest_lifecycle_event
 from npc_engine.graph.quest_writer import get_quest_state, update_quest_node_status, upsert_quest_state
 from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.world_state_reader import get_world_state
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.utils.errors import QuestTransitionError
+from npc_engine.world.time_utils import TimePoint
 
 
 _logger = logging.getLogger(__name__)
@@ -70,6 +73,40 @@ class QuestLifecycleEngine:
             raise ValueError("QuestLifecycleEngine requires a TypeRegistry injected via __init__")
         self._registry = registry
         self._chain_resolver = chain_resolver
+        self._memory_engine = MemoryEngine()
+
+    async def _form_commitment_memory(
+        self,
+        *,
+        session: AsyncSession,
+        quest_id: str,
+        player_id: str,
+        quest_title: str,
+    ) -> None:
+        """Form a commitment memory on quest accept (EXP-214). Best-effort — skips on error."""
+        try:
+            world_state = await get_world_state(session)
+            game_time = TimePoint(
+                year=world_state.year,
+                season=world_state.season,
+                day=world_state.day,
+                time_of_day=world_state.time_of_day,
+            )
+        except Exception:
+            _logger.warning(
+                "commitment_memory_skipped_no_world_state quest_id=%s player_id=%s",
+                quest_id,
+                player_id,
+            )
+            return
+        content = f"Player accepted quest '{quest_title}' (id={quest_id})"
+        await self._memory_engine.create_from_commitment(
+            session,
+            character_id=player_id,
+            content=content,
+            game_time=game_time,
+            player_id=player_id,
+        )
 
     async def _require_state(self, *, session: AsyncSession, quest_id: str, player_id: str) -> QuestStateRecord:
         payload = await get_quest_state(session=session, quest_id=quest_id, player_id=player_id)
@@ -186,6 +223,12 @@ class QuestLifecycleEngine:
             meta=meta,
         )
         await update_quest_node_status(session=session, quest_id=quest_id, status=QuestStatus.ACCEPTED)
+        await self._form_commitment_memory(
+            session=session,
+            quest_id=quest_id,
+            player_id=player_id,
+            quest_title=state.title,
+        )
         return stored
 
     async def update_objective(

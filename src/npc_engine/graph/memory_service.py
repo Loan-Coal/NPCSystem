@@ -36,6 +36,7 @@ async def create_memory(
     occurred_at_game_time: TimePoint | None = None,
     is_historical: bool = False,
     subject_player_id: str | None = None,
+    kind: str | None = None,
 ) -> str:
     """Create a Memory node and link it to a Character via a REMEMBERS edge.
 
@@ -59,6 +60,8 @@ async def create_memory(
         subject_player_id: When the memory concerns a specific player, supply their
             ID here so the memory can be retrieved via player-scoped queries (EXP-211).
             None means the memory is not player-scoped.
+        kind: Memory kind tag (DEC-100). One of ``episodic``, ``commitment``,
+            ``fact``, or None (treated as ``episodic`` by downstream consumers).
 
     Returns:
         The node ID used (either supplied or generated).
@@ -81,6 +84,7 @@ async def create_memory(
             character_id=character_id,
             since_game_time=game_time_json,
             subject_player_id=subject_player_id,
+            kind=kind,
         )
     return memory_id
 

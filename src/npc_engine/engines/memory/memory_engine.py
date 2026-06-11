@@ -1,12 +1,14 @@
 """
 Module: memory_engine
 Layer: engines
-Purpose: Rules-based engine for forming memories from high-arousal moments, running daily
-    vividness decay, computing memory salience, and deciding forgettability (EXP-212).
+Purpose: Rules-based engine for forming memories from high-arousal moments, commitment
+    events, running daily vividness decay, computing memory salience, and deciding
+    forgettability (EXP-212, EXP-214).
 Does NOT: query or persist state directly — all I/O is delegated to graph.memory_service.
 Dependencies: graph.memory_service, world.time_utils
 Dependencies injected: AsyncSession (per method call).
-Used by: engines.dialogue.dialogue_handler, api.routes.clock
+Used by: engines.dialogue.dialogue_handler, api.routes.clock,
+         engines.quest.quest_lifecycle_engine
 """
 
 from __future__ import annotations
@@ -20,8 +22,22 @@ from npc_engine.graph.memory_service import (
 )
 from npc_engine.world.time_utils import TimePoint
 
+# ---------------------------------------------------------------------------
+# Memory kind constants (DEC-100 — values must match memory.yaml schema).
+# ---------------------------------------------------------------------------
+
+MEMORY_KIND_EPISODIC: str = "episodic"
+MEMORY_KIND_COMMITMENT: str = "commitment"
+MEMORY_KIND_FACT: str = "fact"
+
+# ---------------------------------------------------------------------------
+# Arousal / semantic formation thresholds
+# ---------------------------------------------------------------------------
+
 _HIGH_AROUSAL_THRESHOLD = 70
 _HIGH_AROUSAL_VIVIDNESS = 80
+_COMMITMENT_VIVIDNESS = 100
+_COMMITMENT_EMOTIONAL_CHARGE = 50
 _DECAY_BASE_RATE = 5
 _DECAY_CHARGE_DIVISOR = 20
 _SEMANTIC_VIVIDNESS = 60
@@ -146,6 +162,45 @@ class MemoryEngine:
             emotional_charge=min(100, arousal - 50),
             game_time=game_time,
             subject_player_id=player_id,
+        )
+
+    async def create_from_commitment(
+        self,
+        session: AsyncSession,
+        *,
+        character_id: str,
+        content: str,
+        game_time: TimePoint,
+        player_id: str | None = None,
+    ) -> str:
+        """Create a commitment memory for a promise made between NPC and player.
+
+        Commitment memories are always formed at maximum vividness and tagged with
+        ``kind=MEMORY_KIND_COMMITMENT`` so they can be recalled distinctly from
+        arousal-formed episodic memories.  They are never gated by an arousal
+        threshold — any quiet promise is remembered.
+
+        Args:
+            session: Active Neo4j async session.
+            character_id: ID of the NPC who witnessed / made the commitment.
+            content: Description of the promise or agreement.
+            game_time: Game-time snapshot at moment of formation.
+            player_id: Optional player whose commitment this records.  Stored as
+                ``subject_player_id`` so the memory can be retrieved via
+                player-scoped queries (EXP-211).
+
+        Returns:
+            Memory ID string of the newly created node.
+        """
+        return await create_memory(
+            session,
+            character_id=character_id,
+            content=content,
+            vividness=_COMMITMENT_VIVIDNESS,
+            emotional_charge=_COMMITMENT_EMOTIONAL_CHARGE,
+            game_time=game_time,
+            subject_player_id=player_id,
+            kind=MEMORY_KIND_COMMITMENT,
         )
 
     async def create_from_semantic_triggers(
