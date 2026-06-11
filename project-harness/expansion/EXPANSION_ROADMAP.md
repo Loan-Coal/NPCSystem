@@ -1,230 +1,211 @@
-# EXPANSION_ROADMAP.md — Synthesis & Prioritization (Lens X5)
+# NPC Engine — Expansion Roadmap (X5 synthesis)
 
-> **Updated 2026-06-10 — Phase 18 COMPLETE. EXP-51 + EXP-14 + EXP-19 merged (1894 engine + 618 demo tests green). Phase 19: no conflict-free batch available without new DECISIONS — next step is slice-2 wiring for EXP-51 (tick scheduler), EXP-14 (main.py lifespan bootstrap), and EXP-19 (dependencies.py + FAILED outcome). Schema-gate EXP-55 if player-model priority rises.**
-> **Prior update 2026-06-05 with human resolutions** (see `OPEN_QUESTIONS.md` §A, `DECISIONS.md` DEC-070/071/072).
-> Net effect: (1) **dialogue + gossip are the priority** — show they work in the playable demo; (2) several
-> proposals lost their schema cost by reusing existing graph vocabulary (EXP-53→`BELIEVES`, EXP-50 schema-free,
-> EXP-55 deferred); (3) EXP-30 is reframed as **pinned-core + ranked-pool** (not "trim Tier A"); (4) gossip
-> mechanics (EXP-15/16) pulled up into the showcase phase; (5) localization/voice dropped; (6) the demo is a
-> **playable game to strengthen**, not a single run-through.
-
-**Inputs:** `BUSINESS_INTENT.md` (rubric), `ENGINE_GAPS.md` (EXP-10..42), `NEW_ENGINES.md` (EXP-50..57),
-`DEMO_EXPANSIONS.md` (EXP-80..99), `FEASIBILITY.md` (architecture fit + keystones).
-**Method:** every proposal scored on **business-fit** (traceability to BUSINESS_INTENT), **value**
-(studio-perceived impact), **effort** (from X3), **arch-fit** (✅ new-file-add · ⚠️ edits closed module ·
-🔶 schema/DECISIONS call), then sequenced so each phase clears the prerequisites of the next.
+**Written:** 2026-06-11. Orchestrator synthesis of lenses X0–X4 + X3 feasibility.
+**Inputs:** `BUSINESS_INTENT.md` (rubric), `ENGINE_GAPS.md` (EXP-10..38), `NEW_ENGINES.md` (EXP-40..44),
+`DEMO_EXPANSIONS.md` (EXP-70..99), `FEASIBILITY.md` (architecture fit + keystones).
+**State of the codebase:** Phases 0–26 complete; the engine is mature. This is **not** a greenfield
+plan — most "obvious" engines already exist (relationship, reputation, economy/currency, planning,
+knowledge_learning, need, routine, proactive_dialogue, oath, treaty, succession). The expansion frontier
+is now **depth, wiring, and visibility**, not breadth. Several proposals were found **already shipped**
+during feasibility (EXP-14, EXP-21, EXP-30, EXP-80/81/83/85/92) and are excluded from the active plan.
 
 ---
 
-## 1. The one-paragraph thesis (from BUSINESS_INTENT)
+## 1. The throughline (read this first)
 
-NPC Engine sells **licensable game middleware** (HTTP+WS, one deployment per studio, single world, no
-multi-tenant per DEC-068) whose differentiator is **NPCs with persistent memory, relationships, and
-emotion plus a living off-screen world**. A studio judges it on: (1) a *measured* anti-hallucination
-guarantee, (2) a clean integrator hello-world + working OpenAPI client codegen, (3) agentic NPCs
-(proactive dialogue), (4) retrieval quality (precision@k). Every expansion below traces to one of
-those four. The recurring theme across all four lenses: **the engine already ships the capabilities;
-what it lacks is (a) proof they work, (b) the ability to grow knowledge, and (c) a demo that shows the
-headline claims.** The product is feature-rich and proof-poor — so the highest-value work is
-unblock-and-prove, not greenfield.
+Three independent lenses converged on the **same** structural finding:
 
----
+> **The simulation runs correctly but is invisible to the dialogue layer and to the buyer.**
 
-## 2. Master scored table
+- **Engines compute, dialogue ignores.** Emotion, need, mood, memory, and relationship engines tick and
+  write state every loop, but the dialogue context builder never surfaces most of it (X1: EXP-22, 34;
+  cross-engine theme). NPCs are still effectively reactive.
+- **Built engines are unwired or undelivered.** ProactiveDialogue + IntentFormation generate lines that
+  are logged and discarded — never reach the player (X1: EXP-10/35).
+- **Shipped capability is unshown.** Retrieval explainability, gossip distortion text, proactive
+  initiation, temporal memory, faction standings — all have live routes/data but no demo surface
+  (X4: EXP-71/72/73/74/70).
 
-Arch-fit legend: ✅ clean new-file add · ⚠️ edits one closed module (no schema) · 🔶 needs schema/DECISIONS call.
-Score = qualitative roll-up; "Phase" column is the sequencing decision in §3.
-
-### Tier S — keystone & lowest-friction high-value (Phase 1)
-
-| ID | Title | Type | Bus-fit | Value | Effort | Arch-fit | Phase |
-|----|-------|------|--------|-------|--------|----------|-------|
-| **EXP-30** | Bounded/graceful Tier-A (fix ISSUE-059) | engine-gap | high | high | M | ⚠️ `context_budget_enforcer.py` | **1** |
-| **EXP-50/22** | Relationship/affinity engine (fills `relates_to.yaml:11-12` dead fields) | new-engine | high | high | S | ✅ | **1** |
-| **EXP-83** | Integrator hello-world quickstart | demo | high | high | S | ✅ demo-only | **1** |
-| **EXP-31** | Retrieval-quality eval (precision@k/recall) | engine-gap | high | high | M | ✅ | **1** |
-| **EXP-32** | Measured anti-hallucination eval | engine-gap | high | high | M | ✅ (after EXP-30) | **1** |
-
-### Tier A — high value, behind a Phase-1 enabler (Phase 2)
-
-| ID | Title | Type | Bus-fit | Value | Effort | Arch-fit | Phase |
-|----|-------|------|--------|-------|--------|----------|-------|
-| **EXP-10** | Proactive / NPC-initiated dialogue (agentic loop) | engine-gap | high | high | L | ✅ new engine + WS (API add) | **2** |
-| **EXP-81** | Cross-session memory recall demo ("remembers you") | demo | high | high | M | ✅ demo-only (needs EXP-30) | **2** |
-| **EXP-11** | Player-scoped long-term memory recall in dialogue | engine-gap | high | high | M | ⚠️ retrieval edit | **2** |
-| **EXP-80** | Free-play / sandbox demo mode | demo | high | high | M | ✅ demo-only | **2** |
-| **EXP-93** | Fix ISSUE-060 (7-act scripted demo completes) | demo | med | high | S/M | ✅/🔶 (verify `client.py:1274`) | **2** |
-| **EXP-17** | Salience-weighted forgetting curve (first slice) | engine-gap | high | high | M | ⚠️ `memory_engine.py` (slice); 🔶 full | **2** |
-
-### Tier B — strong, schema-gated or refactor-gated (Phase 3)
-
-| ID | Title | Type | Bus-fit | Value | Effort | Arch-fit | Phase |
-|----|-------|------|--------|-------|--------|----------|-------|
-| **EXP-53** | Dialogue-driven knowledge extraction (NPCs learn facts) | new-engine | high | high | L | 🔶 `LEARNED_FROM` edge + `knowledge_writer.py` | **3** |
-| **EXP-15** | Distortion-strategy registry (open L7-01 if-chain) | engine-gap | med | med | M | ⚠️ refactor `gossip_distort.py` | **3** |
-| **EXP-16** | Belief/secret-selective, prompt-driven distortion | engine-gap | med | med | M | ⚠️ (needs EXP-15) | **3** |
-| **EXP-13** | `EmotionModelProtocol` + personality modulation | engine-gap | med | med | M | ⚠️ refactor `emotion_updater.py` | **3** |
-| **EXP-14** | Persistent emotion state (survive restart) | engine-gap | med | med | M | 🔶 emotion node/field | **3** |
-| **EXP-52** | Personal reputation propagation engine | new-engine | med | med | M | ✅/🔶 (avoid cached field) | **3** |
-| **EXP-12** | Relation-delta provenance & audit at dialogue boundary | engine-gap | med | med | S | ⚠️ | **3** |
-| **EXP-20** | Quest status enum + explicit fail/expire states | engine-gap | med | med | S | 🔶 (enum field) | **3** |
-
-### Tier C — high-ceiling but expensive / later (Phase 4)
-
-| ID | Title | Type | Bus-fit | Value | Effort | Arch-fit | Phase |
-|----|-------|------|--------|-------|--------|----------|-------|
-| **EXP-51** | NPC goal-formation & action-selection (GOAP) | new-engine | high | high | L | 🔶 `GOAL_TARGETS` edge + precedence DEC | **4** |
-| **EXP-55** | Player-model / theory-of-mind engine | new-engine | med | med | M | 🔶 `player_model` node | **4** |
-| **EXP-54** | Player-aware drama director engine | new-engine | med | med | L | 🔶 | **4** |
-| **EXP-19** | Branching quests & consequence chains | engine-gap | med | high | L | 🔶 | **4** |
-| **EXP-18** | Memory formation beyond arousal (semantic salience) | engine-gap | med | med | M | ⚠️/🔶 | **4** |
-| **EXP-21** | World-state-aware dynamic quest generation | engine-gap | med | med | M | ⚠️ | **4** |
-| **EXP-40** | Interaction dispatch trade path (currently stub) | engine-gap | med | med | M | ⚠️ | **4** (unblocks EXP-51) |
-| **EXP-87** | Richer world on a location hierarchy (ISSUE-057) | demo | med | med | L | 🔶 `PART_OF` edge | **4** |
-
-### Tier D — demo polish & niche (opportunistic, Phase 2–4 as cheap wins)
-
-| ID | Title | Effort | Note |
-|----|-------|--------|------|
-| EXP-84 | Gossip distortion diff view ("telephone") | S | great sales visual; pairs with EXP-15/16 |
-| EXP-85 | Anti-hallucination "I don't know" demo beat | S | showcases the moat; pairs with EXP-32 |
-| EXP-86 | Degradation-as-a-feature banner | S | turns ISSUE-059 optics into a selling point |
-| EXP-88 | Recording / marketing mode (deterministic playback) | M | needs KE-6 stable-id seeding |
-| EXP-89 | Mood-contagion visualiser | S | surfaces an unshowcased engine |
-| EXP-90 | Retrieval-explainer panel ("why did NPC say that?") | M | needs S15.1 debug route |
-| EXP-91 | Relationship-delta live ticker | S | pairs with EXP-50 |
-| EXP-92 | Determinism / replay proof toggle | M | needs KE-6 |
-| EXP-94 | Facial-expression / portrait rendering | M | dialogue already returns expression |
-| EXP-95 | In-window scenario picker (unify arcs+free-play) | M | pairs with EXP-80 |
-| EXP-96/97/98/99 | Pacing readout / gossip-pairs counter / treaty board / needs demo | S–M | each surfaces one unshowcased engine |
-| EXP-41 | Mood/need/faction surfacing & coupling | M | partly delivered by Tier-D demo panels |
-| EXP-42 | Graveyard-engine depth (succession/clique/etc.) | — | **defer/keep as-is** — surface area without buyer value |
-| EXP-56 | Localization / multi-language output | M | real for non-EN studios; route to OPEN_QUESTIONS |
-| EXP-57 | Voice / STT input | L | complements TTS; market-driven, defer |
-| EXP-82 | Demo surface for proactive dialogue | S | demo half of EXP-10 |
+The highest-leverage work is therefore **connective**, not additive: wire what computes into what the
+player sees and what the LLM reads. This is also the cheapest work (mostly S/M, new-file-add or
+demo-side) and the most defensible against the product thesis (the moat is *persistent, visible* state).
 
 ---
 
-## 3. Phase plan (re-weighted 2026-06-05 — dialogue + gossip are the priority)
+## 2. Scoring model
 
-**Organizing principle (human steer):** the product story to prove *now* is **dialogue + gossip working in
-the playable demo**. Everything in Phases 1–2 serves that; deep autonomy and world richness move later.
+Each active proposal is scored on four axes, then assigned a **composite priority** (P0 highest):
 
-### Phase 0 — Demo repair + endpoint-contract guard 🔴 BLOCKER (do before anything else)
-**Fix the regressions that currently make the playable demo unusable, then lock the demo↔API contract so it
-can't silently drift again.** The demo is the thing we're expanding (Phase 2) — it must run first.
-- **EXP-00a — fix `/v1/system/engines` 500 (ISSUE-062, P1). ✅ DONE 2026-06-05.** Actual root cause (live traceback): **double serialization** — `TickScheduler.engine_status` already returns serialized dicts and the handler re-called `.model_dump()` → `AttributeError` → 500. (The "rebuild storm" hypothesis was wrong; the scheduler ticks fine.) Fix: pass the property's dicts through (`system.py:91-95`) + regression test. Verified live HTTP 200; `make check` green. The separate demo timeout cascade split out to **ISSUE-063** (EXP-00c / concurrency pass).
-- **EXP-00b — fix demo↔API path drift (ISSUE-061, P2). ✅ DONE 2026-06-05.** `/v1/pledges/...` 404'd because pledges moved to `/v1/admin/pledges/...`; fixed by aligning the client (consistent with the other `/v1/admin` inner-life reads; no API-surface change). Full path audit done: pledges was the ONLY real drift (the suspected `/v1/quests/offer` is a docstring, not a call). Regression tests added; seed + live verified 200.
-- **EXP-00d — fix demo timeout cascade (ISSUE-063, P2). ✅ DONE 2026-06-05.** Root cause (confirmed live): `EmbeddingIndex.upsert/search/embed_batch` called the **synchronous** sentence-transformers `encode()` directly on the asyncio event loop; the startup embedding reconciler blocked the single worker for seconds → every demo poller + the quest/trade POST timed out. Fixed by offloading the encode via `asyncio.to_thread`. Verified live: 24 concurrent polls, slowest 42ms. (Residual same-pattern reranker block → ISSUE-064.)
-- **EXP-00e — fix WS dialogue timeout (ISSUE-065, P2). ✅ DONE 2026-06-05.** Talking to an NPC `ws_recv_timeout`'d: the WS server fully generates before streaming (first frame measured live at 38.1s) but the client WS timeout was a stale 30s (HTTP path uses 120s). Raised `constants.NPC_DIALOGUE_TIMEOUT_S` to 120s + regression test. (Pre-existing demo-worker test failures spotted → ISSUE-066. Future UX: real token streaming from Ollama.)
-- **EXP-00f — fix confirm-trade 422 (ISSUE-067, P2). ✅ DONE 2026-06-05.** Trade confirm always 422'd: the server's `propose_trade` returns `negotiation_state.item_type=""`, and `on_trade_confirm`'s `state.get("item_type","spice")` passed the empty string through (dict.get only defaults on *absent* keys) → `/economy/trade` rejects empty (`min_length=1`). Fixed demo-side with `... or "spice"`. (Deeper: the engine should populate `item_type` in negotiation_state — logged, ties to EXP-40.)
-- **EXP-00c — boot + demo-endpoint smoke test in CI.** A test that boots the stack and hits every endpoint the demo calls (asserting non-5xx / non-404) **and runs `make test-demo`**, so path drift, construction errors, event-loop stalls, and demo-test breakage (ISSUE-066) all fail CI. Closes the long-standing "live-only breaks are unguarded" gap (L9-01/02/05, SEV-02). **Still TODO** — the only remaining Phase 0 item.
-**Exit:** `make demo-seed && make demo` runs with zero `error:`/`500`/`404`/`timed out` lines in the console; `make demo-run` reaches at least ACT 3 (then EXP-93 for the bribe). **No Phase-1 work starts until Phase 0 is green.**
+- **Value** — studio-perceived impact toward a `BUSINESS_INTENT.md` success criterion (low/med/high).
+- **Business-fit** — traceability to an explicit commitment vs an implied ambition (low/med/high).
+- **Effort** — from `FEASIBILITY.md`, reconciled (S/M/L/XL).
+- **Arch-fit** — new-file-add (✅ cleanest) | closed-edit (⚠) | needs DECISIONS (🔒) | demo-side (🎮).
 
-### Phase 1 — Prove & unblock the core
-**EXP-30 (pinned-core + ranked pool) → EXP-32, EXP-31, EXP-50.** (+ EXP-83 hello-world as a cheap parallel.)
-Rationale: EXP-30 is the keystone (KE-1) — reframed per DEC-070 as **two classes: a tiny pinned set
-(`world`, `emotion`, persona, session window, `active_quest`, marked `pinned:true`) + one ranked pool filled
-by `priority × relevance`**. This *deletes* the "Tier-A exceeded → canned" failure by construction and is the
-hard/soft prerequisite for every memory/knowledge/dialogue item below. With it in, EXP-32 (anti-hallucination)
-and EXP-31 (retrieval precision@k) turn the two asserted buyer metrics into **reported numbers** (no SLA gate,
-OQ-D2). EXP-50 (affinity) is schema-free (fills `relates_to.yaml:11-12`, reuses the `event` node for any
-history — OQ-A3). **All Phase 1 items are S/M, none needs a schema call.**
-
-### Phase 2 — Dialogue + Gossip showcase (THE priority)
-**Dialogue:** EXP-53 (knowledge learning), EXP-11 (player-scoped recall), EXP-17 (forgetting curve + `never_forget`).
-**Gossip:** EXP-15 (distortion-strategy registry) → EXP-16 (belief/secret-selective, prompt-driven distortion).
-**Demo (make it visible & playable):** EXP-81 ("remembers you"), EXP-84 (telephone-diff view), EXP-85
-("I don't know" beat), EXP-92 (determinism toggle), EXP-91 (relationship ticker), EXP-80 (free-play depth),
-EXP-93 (bribe fix), EXP-95 (scenario picker).
-Rationale: this is where the product proves itself. EXP-53 is now **M, not L** (DEC-072: single-pass
-`learned_facts` output, writes to existing `BELIEVES` edge with 3 added provenance fields — no second LLM
-pass, no `LEARNED_FROM` edge), so the learn→ground→answer moat ships here, measured by EXP-32. Gossip
-mechanics are **expanded now** (EXP-15/16, pulled up from the old Phase 3) and surfaced in the demo
-(EXP-84/92). The KE-4 distortion registry also fixes a live "prompt strings outside prompts/" violation
-(`gossip_distort.py:94-101`). The demo is treated as a **playable game to strengthen**, not a recording.
-
-### Phase 3 — Agentic NPCs
-**EXP-10 (proactive dialogue + new WS `proactive_line` push, OQ-D8/9), EXP-51 (GOAP — goal `urgency` vs
-routine, OQ-D5), EXP-52 (reputation propagation), EXP-13/EXP-14 (EmotionModelProtocol + persistent emotion).**
-Rationale: with the core proven, make the world act on its own. EXP-10 adds the public WS push surface so an
-NPC can hail the player. EXP-51 uses the existing `goal.urgency` field (no schema, no LLM threshold).
-KE-3 (`EmotionModelProtocol`) is a pure-additive OCP refactor unlocking emotion variants.
-
-### Phase 4 — World richness & deep systems (schema-heavy / niche, later)
-**EXP-87 (location hierarchy — `PART_OF` edge + `location_writer.py`, APPROVED DEC-071), EXP-19 (branching
-quests), EXP-18 (semantic memory formation), EXP-21 (world-aware quests), EXP-40 (trade dispatch),
-EXP-42 (niche-engine expansions: investigation/skill/treaty/military/etc. — planned + demo-integrated but
-deprioritized), EXP-55 (second-order theory-of-mind — future, via memories for now per OQ-D6).**
-Dropped: **EXP-56 (localization), EXP-57 (voice/STT)** — out of scope.
+**Composite priority rule:** P0 = high value × (S/M effort) × (✅/🎮 arch-fit) × unblocks others.
+P1 = high value but needs a DECISIONS call, or med value + cheap. P2 = real but lower leverage.
+P3 = niche / deferred / graveyard-adjacent.
 
 ---
 
-## 4. Top 5 do-next (with one-line justifications)
+## 3. Master ranked table
 
-1. **EXP-30 — Context: pinned-core + ranked pool (DEC-070, supersedes ISSUE-059 fix).** The keystone:
-   one/two-module change that *deletes* the canned-dialogue failure and unblocks the whole dialogue+memory
-   line. Pinned set is small and bounded by construction, so "Tier-A exceeded" can't recur.
-2. **EXP-50 — Relationship/affinity engine.** Highest value-per-effort (S): fills already-declared
-   `relates_to.yaml:11-12` fields, reuses the `event` node for history (no new node), kills `if trust > N`
-   magic numbers, delivers the expected "relationships" headline.
-3. **EXP-53 — Dialogue-driven knowledge learning (now M, DEC-072).** The anti-hallucination moat: NPCs
-   learn facts the player states via a single-pass `learned_facts` output → `BELIEVES` edge (player-sourced
-   knowledge is legitimate). The core of the dialogue showcase.
-4. **EXP-32 — Measured anti-hallucination eval.** Turns the #1 product claim (SEV-01, *asserted not proven*)
-   into a reported number; the rubric that keeps EXP-53 honest.
-5. **EXP-15 → EXP-16 — Expand gossip mechanics now.** Open the closed distortion if-chain into a strategy
-   registry, then make distortion belief/secret-selective and prompt-driven — the second headline system,
-   surfaced in the demo via the telephone-diff view (EXP-84).
+| Pri | EXP | Title | Type | Value | Fit | Effort | Arch | Unblocks |
+|-----|-----|-------|------|-------|-----|--------|------|----------|
+| **P0** | EXP-40 | Relationship affinity phase engine | new-engine | high | high | S | ✅ | EXP-22/41/42/43 (Keystone 2) |
+| **P0** | EXP-72 | Gossip distortion diff view (demo) | demo | high | high | S | 🎮 | demo credibility (Keystone 3) |
+| **P0** | EXP-70 | Proactive dialogue act in scripted runner | demo | high | high | S | 🎮 | demo "NPCs initiate" claim (Keystone 3) |
+| **P0** | EXP-93 | Fix ISSUE-060 ACT-3 abort | demo | high | high | S | 🎮 | EXP-79, full-arc recording (Keystone 3) |
+| **P0** | EXP-12 | Relation-delta first-contact fix | engine-gap | med | high | S | ⚠ | correctness (CLAUDE.md "never swallow") |
+| **P0** | EXP-22 | Standing → dialogue tone + secret gate | engine-gap | high | high | M | ⚠ | makes relationships *felt* in dialogue |
+| **P1** | EXP-10 | Unified proactive-trigger surface | engine-gap | high | high | M | ✅ | EXP-35 |
+| **P1** | EXP-35 | Proactive line delivered over WS | engine-gap | high | high | S | 🔒 | closes agentic-NPC loop |
+| **P1** | EXP-11 | Player-scoped memory recall in dialogue | engine-gap | high | high | M | 🔒 | headline "remembers you" claim (Keystone 1) |
+| **P1** | EXP-17 | Salience-weighted forgetting curve | engine-gap | high | med | M | 🔒 | believable memory (Keystone 1) |
+| **P1** | EXP-32 | Anti-hallucination eval battery | engine-gap | high | high | M | ✅ | proves the moat claim |
+| **P1** | EXP-31 | Retrieval-quality eval (precision@k) | engine-gap | med | high | M | ✅ | proves retrieval quality |
+| **P1** | EXP-71 | Retrieval-explainer panel (demo) | demo | high | med | M | 🎮 | "LLM is not a black box" pitch |
+| **P1** | EXP-34 | Need/mood fed into dialogue context | engine-gap | med | high | S | 🔒 | living-NPC feel |
+| **P1** | EXP-74 | Temporal memory readout (demo) | demo | med | med | S | 🎮 | surfaces Phase-26 temporal cognition |
+| **P2** | EXP-13 | Personality-modulated emotion model | engine-gap | med | med | M | ✅ | distinct NPC personalities |
+| **P2** | EXP-15 | Distortion content → prompts YAML | engine-gap | med | med | S | ⚠ | EXP-16; authoring surface |
+| **P2** | EXP-16 | Belief-confidence-aware distortion | engine-gap | med | med | M | ⚠ | richer gossip drift |
+| **P2** | EXP-18 | Commitment/fact memory formation | engine-gap | med | med | M | 🔒 | quests/promises remembered |
+| **P2** | EXP-36 | Belief contradiction detection/dedup | engine-gap | med | med | M | ⚠ | clean learned-knowledge graph |
+| **P2** | EXP-37 | Trade dispatch → NegotiationStore | engine-gap | med | med | M | ⚠ | economy becomes interactive |
+| **P2** | EXP-38 | Player-observable event endpoint | engine-gap | med | med | S | ✅ | SDK integration story |
+| **P2** | EXP-73 | Faction standing board (demo) | demo | med | med | S | 🎮 | politics visibility |
+| **P2** | EXP-75 | Location hierarchy breadcrumb (demo) | demo | med | low | S | 🎮 | surfaces ISSUE-057 fix |
+| **P2** | EXP-76/77/78 | Degradation label / face glyph / delta ticker | demo | med | med | S | 🎮 | polish cluster, data already parsed |
+| **P2** | EXP-19 | Quest branching on player choice | engine-gap | high | med | L | 🔒 | consequence chains |
+| **P2** | EXP-79 | Cinematic / recording mode (demo) | demo | med | med | M | 🎮 | marketing asset (needs EXP-93) |
+| **P2** | EXP-87 | Richer world (more NPCs/locations) | demo | med | med | M/L | 🎮 | game depth (gated on faction logic) |
+| **P2** | EXP-89 | Mood-contagion visualiser (demo) | demo | med | low | M | 🎮 | surfaces contagion engine |
+| **P2** | EXP-82/95 | Proactive window surface / scenario picker | demo | med | med | S | 🎮 | interactive-mode polish |
+| **P3** | EXP-41 | Player-model / theory-of-mind engine | new-engine | high | med | M | 🔒 | EXP-42/43 (advanced cognition) |
+| **P3** | EXP-42 | Player-aware drama director engine | new-engine | med | med | M | ✅/🔒 | engagement management |
+| **P3** | EXP-43 | NPC deception / false-belief engine | new-engine | high | med | L | 🔒 | EXP-44; emergent intrigue |
+| **P3** | EXP-44 | Long-horizon covert scheming engine | new-engine | high | low | XL | 🔒 | flagship emergent-drama feature |
+| **P3** | EXP-20 | World-state-driven dynamic quests | engine-gap | med | med | L | ⚠ | living-world quests (verify stubs) |
+| **P3** | EXP-33 | Session history persisted across restart | engine-gap | med | med | M | 🔒 | continuity (verify vs EXP-14/cache) |
+| **P3** | EXP-96/97/99 | Pacing readout / gossip counter / needs demo | demo | low/med | low | M | engine-dep | need engine-side route/metric first |
+
+*Excluded — already shipped (confirmed in FEASIBILITY §Orientation/§4):* EXP-14 (emotion persistence),
+EXP-21 (reputation wiring), EXP-30 (pinned-core context), EXP-80 (sandbox), EXP-81 (cross-session recall
+scripted), EXP-83 (quickstart), EXP-85 (anti-hallucination beat), EXP-92 (determinism beat). Several have
+S-effort residuals (e.g. EXP-83 field-name bug, `make hello`); these are tracked as cleanup, not phases.
 
 ---
 
-## 5. Keystone enablers (the 2–3 that unlock the most downstream value)
+## 4. Top 5 do-next
 
-1. **KE-1 / EXP-30 — Tier-A bounding.** *The* keystone. Hard/soft-unblocks EXP-81, EXP-32, EXP-11,
-   EXP-17, EXP-53, EXP-55, EXP-10. Fix one module → three+ high-value items unlock. Already has the data
-   model (`priority` exists on Tier-A items); only the trim policy is missing. **Lowest cost, highest leverage.**
-2. **KE-2 — `learned_facts` on the dialogue output + `graph/knowledge_writer.py` (DEC-072).** The gate for
-   the learning moat (EXP-53). **Reduced from the original `LEARNED_FROM`-edge design:** facts ride the
-   *existing* single dialogue LLM pass as a `learned_facts` field and persist to the existing `BELIEVES`
-   edge (+3 optional provenance fields on `believes.yaml`). The only graph touch is those optional fields.
-3. **KE-6 / ISSUE-055 — stable-id idempotent seeding.** Low-risk, no-schema enabler for every
-   demo-scale/replay item (EXP-87, EXP-92, EXP-95) and reliable seeding of the strengthened playable demo.
-
-Secondary refactor enablers (no schema, unlock variant families): **KE-3** `EmotionModelProtocol`
-(→ EXP-13/14/41), **KE-4** distortion-strategy registry (→ EXP-15/16/84). **KE-5** location hierarchy
-(ISSUE-057, `PART_OF`) is schema-gated and **off** the top-5 critical path — flat world expansion needs it not.
+1. **EXP-40 — Relationship affinity phase engine** *(P0, S, ✅)*. The single highest-leverage item:
+   zero-schema new-file-add that fills already-declared `relates_to.yaml` fields and is a soft prereq for
+   four downstream proposals (Keystone 2). Makes relationships a first-class, queryable arc, not a scalar.
+2. **EXP-93 + EXP-72 + EXP-70 — the demo-credibility cluster** *(P0, all S, 🎮)*. One bug fix + two
+   demo surfaces that together turn the scripted runner into a recordable, end-to-end pitch (Keystone 3).
+   EXP-72 makes the gossip "telephone game" visually undeniable using data already fetched.
+3. **EXP-22 — Standing → dialogue tone & secret-share gate** *(P0, M, ⚠)*. EXP-21 is done, so this is
+   unblocked. Turns the now-running reputation/relationship state into something the player *hears* —
+   directly attacks the "simulation is invisible" throughline.
+4. **EXP-10 + EXP-35 — proactive trigger surface + WS delivery** *(P1, M+S)*. Closes the agentic-NPC
+   loop: lines the engine already generates finally reach the player. Needs one DECISIONS call (EXP-35
+   scheduler→api queue pattern) — see OPEN_QUESTIONS.
+5. **EXP-32 — anti-hallucination eval battery** *(P1, M, ✅)*. The product's headline claim ("NPCs never
+   assert what they don't know") is currently *asserted, not measured*. This makes it provable and
+   regression-guarded — pure eval-layer, no engine edits.
 
 ---
 
-## 6. Dependency graph (who unblocks whom)
+## 5. Keystone enablers (the multipliers)
+
+From `FEASIBILITY.md §2` — build these early to unlock the most downstream value:
+
+1. **Keystone 1 — Memory schema DECISIONS call** (`subject_player_id`, `recall_count`, `never_forget`,
+   `kind`). One batched `memory.yaml` edit unlocks EXP-11, EXP-17, EXP-18 (two HIGH-value memory features).
+2. **Keystone 2 — EXP-40 (relationship phase engine)**. S-effort, no schema change; soft-unblocks
+   EXP-22/41/42/43. The cleanest high-multiplier build in the set.
+3. **Keystone 3 — EXP-93 + EXP-72 + EXP-70 (demo credibility)**. Three S items that make the engine's
+   differentiators *visible in a recording* — the artifact that actually closes studios.
+
+---
+
+## 6. Dependency graph
 
 ```
-EXP-30 (pinned-core + ranked pool) ──┬─► EXP-32 (anti-hallucination eval) ──► EXP-53 (knowledge learning)
-                                     ├─► EXP-81 (remembers-you demo)
-                                     ├─► EXP-11 (player-scoped recall) ──► EXP-17 (forgetting + never_forget)
-                                     └─► EXP-10 (proactive dialogue) ◄── EXP-51 (GOAP intent, optional)
+Keystone 1 (memory.yaml DECISIONS) ──► EXP-11 ─┐
+                                   └─► EXP-17 ──► EXP-18
+EXP-30 (DONE) ────────────────────────► EXP-11, EXP-32, EXP-34
 
-EXP-50 (affinity, schema-free) ──┬─► EXP-52 (reputation propagation)
-                                 └─► EXP-91 (relationship ticker demo)
-
-KE-4 (distortion registry) ──► EXP-15 ──► EXP-16 ──► EXP-84 (telephone demo) ─┐
-                                                       EXP-92 (determinism)  ─┴─► gossip showcase
-KE-3 (emotion protocol)    ──► EXP-13 ──► EXP-14
-KE-2 (learned_facts output + knowledge_writer; reuse BELIEVES) ──► EXP-53
-KE-6 (stable-id seeding)   ──► EXP-87, EXP-92, EXP-95
-EXP-40 (trade dispatch)    ──► EXP-51 (GOAP action execution)
-ISSUE-057 / KE-5 (PART_OF, APPROVED) ──► EXP-87 (hierarchy)
-
-Deferred: EXP-55 (second-order ToM → via memories for now). Dropped: EXP-56, EXP-57.
-Independent / no blockers: EXP-31 (retrieval eval), EXP-83 (hello-world), EXP-80 (free-play),
-                           EXP-93 (bribe → HAS_REPUTATION_WITH), most demo polish.
+EXP-40 (Keystone 2) ─┬─► EXP-22 (also needs EXP-21 DONE ✓)
+                     ├─► EXP-41 ──► EXP-42
+                     │         └──► EXP-43 ──► EXP-44
+EXP-10 ──► EXP-35 (needs scheduler→api DECISIONS)
+EXP-15 ──► EXP-16
+EXP-93 (Keystone 3) ──► EXP-79 (cinematic) ──► EXP-87 (richer world; also gated on faction logic)
+EXP-43 ──► EXP-44 (also wants un-graveyarding `investigation` for detection)
+engine route enablers ──► EXP-96 (chapter route) / EXP-97 (gossip metric) / EXP-99 (need→behaviour)
 ```
 
 ---
 
-## 7. Cross-references
-- Per-proposal mini-specs: `ENGINE_GAPS.md` (EXP-10..42), `NEW_ENGINES.md` (EXP-50..57), `DEMO_EXPANSIONS.md` (EXP-80..99).
-- Architecture verdicts, schema-call flags, keystone analysis: `FEASIBILITY.md`.
-- The rubric every score traces to: `BUSINESS_INTENT.md`.
-- Human-only decisions + assumed defaults: `OPEN_QUESTIONS.md`.
+## 7. Sequenced phase plan
+
+Each phase is sized to land green under `make check` (≥80% cov) with tests-first. Phases are ordered by
+value × friction × unblock-multiplier. This is the block to promote into `ROADMAP.md`'s "Next" section.
+
+### Phase A — "Make it visible" (the throughline; mostly S, no schema)
+*Goal:* connect computed state to player + buyer; convert the demo into a recordable pitch.
+- EXP-40 (relationship phase engine) · EXP-22 (standing→dialogue) · EXP-12 (relation-delta fix)
+- EXP-93 + EXP-72 + EXP-70 (demo credibility cluster) · EXP-74/76/77/78 (demo polish, data-already-parsed)
+- EXP-34 (need/mood→dialogue context)
+*Exit:* an unassisted scripted run shows persistent relationships shaping tone, visible gossip drift,
+an NPC-initiated beat, and temporal memory — recorded end-to-end without the ACT-3 abort.
+
+### Phase B — "Prove the moat" (eval-layer; ✅ new-file-add)
+*Goal:* make the headline claims measurable and regression-guarded.
+- EXP-32 (anti-hallucination battery) · EXP-31 (retrieval precision@k) · EXP-71 (retrieval-explainer panel)
+*Exit:* `make eval-retrieval` reports precision@k and known-fact recall; a buyer-facing panel shows *why*
+each line was grounded. Zero hallucination failures in the battery.
+
+### Phase C — "Close the agentic loop" (1–2 DECISIONS calls)
+*Goal:* NPCs that act on their own state reach the player.
+- DECISIONS: scheduler→api queue pattern (EXP-35) · EXP-10 (trigger surface) · EXP-35 (WS delivery)
+- DECISIONS: Memory schema batch (Keystone 1) · EXP-11 (player-scoped recall) · EXP-17 (forgetting curve)
+*Exit:* an idle player receives an NPC-initiated line grounded in that NPC's need/memory; memories decay
+by salience and player-specific recall surfaces in conversation.
+
+### Phase D — "Deepen the systems" (content + economy + gossip authoring)
+*Goal:* more game, richer drift, interactive economy.
+- EXP-15→EXP-16 (gossip authoring + belief-confidence) · EXP-18 (commitment memories) · EXP-36 (belief dedup)
+- EXP-37 (trade dispatch) · EXP-38 (player event endpoint) · EXP-73/75 (politics + location demo surfaces)
+- EXP-87 (richer world — first resolve faction-count assumption in `game_end_checker.py`)
+*Exit:* trades negotiate, gossip drift is authorable, the world has more NPCs/locations, and politics +
+hierarchy are visible.
+
+### Phase E — "Emergent cognition" (flagship, schema-heavy, P3)
+*Goal:* the demo-defining "NPCs scheme and deceive" capability. Gated on multiple DECISIONS calls.
+- EXP-41 (player-model) · EXP-42 (drama director) · EXP-43 (deception) · EXP-44 (scheming) · EXP-13
+  (personality emotion) · EXP-19 (quest branching) · EXP-20 (dynamic quests — verify stubs first)
+*Exit:* NPCs form theory-of-mind of the player, hold and act on false beliefs, and pursue multi-step
+covert goals — the emergent-drama story that differentiates from every LLM-bolt-on competitor.
+
+### Parked / deferred (unchanged from ROADMAP)
+- **Phase X — Unity/Unreal SDK** (deferred commercial milestone; sequenced after OpenAPI freeze).
+- **S17.9 niche engines** (succession, clique, investigation, skill, military) — graveyard unless a
+  Phase-E proposal (EXP-44 detection) revives `investigation`.
+- **S21.6 demo file-size** cluster.
+- Engine-route-dependent demo items EXP-96/97/99 (need new read routes/metrics first).
+
+---
+
+## 8. Cross-references & caveats
+
+- Every EXP-NN mini-spec lives in its source lens file (`ENGINE_GAPS.md`, `NEW_ENGINES.md`,
+  `DEMO_EXPANSIONS.md`); feasibility and seams in `FEASIBILITY.md`; the rubric in `BUSINESS_INTENT.md`.
+- **Verify-before-design flags** (FEASIBILITY §5): EXP-20/37 stubs may be partly wired; EXP-93 needs
+  `stands_with.yaml` character→faction check; EXP-87 needs `game_end_checker.py` faction-count review;
+  EXP-99 needs confirmation the routine engine consumes Need thresholds.
+- **Human decisions** that gate phases C/D/E are compiled in `OPEN_QUESTIONS.md`, each with an
+  educated-guess default so no phase is blocked overnight.
+- This roadmap stops at planning. No source/config/test was modified. To activate: promote Phase A into
+  `ROADMAP.md`'s "Next" block (the human action this analysis was run to enable).

@@ -1,249 +1,443 @@
-# Expansion Lens X2 — Missing Engines / New Domains
+# Expansion Lens X2 — Missing Engines / New Domains (Refresh 2026-06-11)
 
 **Lens:** X2 (new engines/domains the product vision implies but that do not exist).
 **Mode:** READ-ONLY. Rubric: `project-harness/expansion/BUSINESS_INTENT.md`.
+**Codebase state:** Phases 0–26 complete, branch `munich-demo`. `make check` green
+(1967 passed, 22 skipped, 85.70% coverage). All EXPANSION_INDEX Phase 0–4 items
+completed as of this refresh.
 **Constraints honored:** layer model (downward-only), LLM only in `engines/`, Cypher only
 in `graph/`, prompts in YAML only, OCP add-by-new-file via `type_registry/base_nodes|edges/`,
-Pydantic v2, single-tenant (DEC-068 — no multi-tenant `world_id` proposed anywhere below).
+Pydantic v2, single-tenant (DEC-068 — no `world_id` proposed anywhere below).
 
-IDs run EXP-50..EXP-79. Numbered top-down by combined Value × Business-fit.
+IDs run EXP-40 through EXP-69. Numbered top-down by combined Value × Business-fit.
 
 ---
 
-## Reconnaissance: what already exists (so these are NOT re-proposed)
+## What already exists — do NOT re-propose
 
-| Candidate territory | Verdict | Evidence |
+| Candidate territory | Verdict | Confirmatory evidence |
 |---|---|---|
-| Personal NPC relationships (trust/fear/affection) | **Primitive exists; affinity *semantics* do not** | `type_registry/base_edges/relates_to.yaml:5-12` carries trust/fear/affection/interaction_count + a **declared-but-dead** `relationship_phase`/`phase_started_at_tick`; `relationship_phase` is used in **zero** Python files (grep hit only the YAML). Deltas are applied raw by `engines/dialogue/relation_mutator.py` with no phase/affinity layer. → **EXP-50 keeps** (fill the dead field). |
-| Reputation propagation | **Partial: faction standing + gossip exist, propagation does not** | `has_reputation_with.yaml` (character→faction standing), `faction_politics` drifts standings deterministically, `gossip` spreads rumors. No engine propagates *personal* reputation across the social graph. → **EXP-52 keeps (narrowed)**. |
-| NPC goal/GOAP autonomy | **Schema + CRUD only; no autonomy** | `goal.yaml` node + `PURSUES` edge exist, but goals are only **seeded via API** (`api/routes/goals.py:62 seed_goal`, plus GET/PATCH/DELETE). `agenda_engine` is **faction voting**, not personal planning. No engine forms goals or selects actions toward them. → **EXP-51 keeps**. |
-| Daily-life world-simulation tick | **Mostly exists** | `routine` (location by schedule), `need` (need decay), `mood` (contagion), `agenda`/`succession`/`oath`/`military`/`economy` all run per-tick. → **DROPPED** as net-new; folded as the consumer of EXP-51. |
-| Dynamic world-event / drama director | **Partial: generator + gater exist; targeted director does not** | `events` engine generates autonomous world events; `story_pacing` writes `max_event_severity`/`quest_generation_rate` *multipliers* to gate them (`story_pacing_engine` docstring). Neither **targets** drama at a specific player/NPC based on player state. → **EXP-54 keeps (narrowed to a player-aware director)**. |
-| Dialogue-driven knowledge extraction | **None** | `dialogue_handler` only writes memory from arousal (`dialogue_handler.py:179 create_from_arousal`); it never writes new `KNOWS_ABOUT`/belief facts the player tells the NPC. → **EXP-53 keeps (highest moat-fit)**. |
-| Player-modeling / theory-of-mind | **None** | No `player` node beyond a relation target; no NPC model of player intent/style. → **EXP-55 keeps**. |
-| Localization / multi-language | **None** | Only hit is an instruction inside `prompts/dialogue/system_v1.yaml`; no output-language pipeline. → **EXP-56 keeps (low business-fit, see note)**. |
-| Voice / STT input | **None (TTS only)** | `tts` engine exists; no STT/transcription anywhere (grep empty). → **EXP-57 keeps (low fit)**. |
+| Personal NPC relationships (trust/fear/affection scalars) | **Built** | `type_registry/base_edges/relates_to.yaml:4-12` |
+| Reputation propagation | **Built** | `engines/reputation/reputation_engine.py` (1-hop, player-personal) |
+| NPC GOAP goal/planning | **Built** | `engines/planning/goal_former.py` + `action_selector.py` |
+| Daily-life scheduling / routine | **Built** | `engines/routine/routine_engine.py` |
+| Dialogue-driven knowledge extraction | **Built** | `engines/knowledge_learning/knowledge_extraction_engine.py` |
+| Need decay | **Built** | `engines/need/need_decay_engine.py` |
+| NPC-initiated / proactive dialogue | **Built** | `engines/proactive_dialogue/proactive_engine.py` + `proactive_tick_adapter.py` |
+| EmotionModelProtocol OCP seam | **Built** | `engines/emotion/emotion_model_protocol.py` |
+| Distortion-strategy registry | **Built** | `engines/gossip/distortion_strategy.py` STRATEGY_REGISTRY |
+| Location hierarchy (PART_OF) | **Built** | `type_registry/base_edges/part_of.yaml` + `graph/location_writer.py` (ISSUE-057 FIXED) |
+| Branching quests / UNLOCKS chain | **Built** | `engines/quest/quest_chain_resolver.py` + `base_edges/unlocks.yaml` |
+| Persistent emotion (survive restart) | **Built** | `graph/emotion_writer.py` + `engines/emotion/emotion_bootstrap.py` (EXP-14) |
+| Clique / group formation | **Built (graveyard)** | `engines/clique/clique_formation_engine.py` |
+| Military / battle | **Built (graveyard)** | `engines/military/military_battle_service.py` |
+| Trade / economy / pricing | **Built** | `engines/economy/trade_engine.py` + `pricing_engine.py` |
+| Content moderation (input + output blocklist + ESRB/PEGI ceiling) | **Built** | `services/input_moderation.py` + `services/output_moderation.py` + `services/content_rating_resolver.py` |
+| TTS output | **Built** | `engines/tts/` (protocols + piper_adapter + mock) |
+| Localization / multi-language | **Dropped** | OQ-D11 (out of scope) |
+| Voice / STT input | **Dropped** | OQ-D11 (out of scope) |
+| Multi-tenant world isolation | **Forbidden** | DEC-068 |
+
+**Confirmed absent (candidate territory for this lens):**
+- Relationship affinity engine (phase mapping over existing dead `relationship_phase` field)
+- Player-model / theory-of-mind engine (second-order belief)
+- Player-aware drama director engine (targeted engagement manager)
+- NPC deception / betrayal engine (covert goal concealment + false-belief seeding)
+- Long-horizon NPC scheming engine (multi-step covert plan execution)
 
 ---
 
-## TOP 3 (highest value — flagged)
+## Index table
 
-> **EXP-53 (knowledge extraction), EXP-50 (affinity), EXP-51 (goal autonomy)** are the
-> three highest-value proposals. EXP-53 is the strongest *business-fit* because it directly
-> feeds the anti-hallucination moat (Success Criterion 1): an NPC that can *learn* facts
-> from the player and ground future answers in them is the differentiator a studio buys.
+| EXP | Title | Effort | Value | Fit | Status |
+|-----|-------|--------|-------|-----|--------|
+| EXP-40 | Relationship affinity phase engine | S | high | high | First-slice ready |
+| EXP-41 | Player-model / theory-of-mind engine | M | high | high | Schema-gated (DECISIONS req.) |
+| EXP-42 | Player-aware drama director engine | M | med | high | New-file-add; soft deps on EXP-40/41 |
+| EXP-43 | NPC deception / false-belief engine | L | high | high | Schema-gated; prompts-gated |
+| EXP-44 | Long-horizon covert scheming engine | XL | med | med | Requires EXP-41 + EXP-43 |
 
 ---
 
-### EXP-53: Dialogue-Driven Knowledge Learning ⭐ TOP-1 (RESOLVED DEC-072 — now M, single-pass, no new edge)
+## TOP 1 — highest combined value × fit
+
+### EXP-40: Relationship Affinity Phase Engine
 Type: new-engine
-**RESOLVED 2026-06-05 (DEC-072).** Simplified: no second LLM pass, no `LEARNED_FROM` edge — reuse `BELIEVES`.
-Business rationale: Anti-hallucination is the core moat — "NPCs answer only from known context" (Success Criterion 1, `BUSINESS_INTENT.md:74`; commitment `FEATURES.md:31-33`). Today an NPC can *forget* what the player just told it because dialogue never writes new facts to the graph; the moat is half-built. This closes the learn→ground→answer loop, and is part of the **dialogue showcase priority**.
-What it does: The dialogue LLM already returns structured output (response + relation deltas + action + expression). Extend that **same schema** with an optional **`learned_facts`** list — facts the player asserted ("the bandits moved to the old mill", "I am the new captain") emitted **in the same single pass** (no extra round-trip, ≈ a few output tokens). A deterministic validator gates them; accepted facts are written as `belief` nodes via a `BELIEVES` edge from the speaking NPC, with provenance `source_character_id = player_demo`. Retrieval then surfaces these so the NPC answers from what it *learned*. **Player-sourced knowledge is legitimate** (OQ-D3): the anti-hallucination eval (EXP-32) scores a repeated player-taught fact as grounded, authorized by the provenance.
-Current state: `dialogue_handler.py:179` writes arousal-driven `memory` nodes only; no fact/belief write. `believes.yaml` (char→belief, currently empty fields) is the write target.
-Graph/schema additions (RESOLVED): **reuse the `belief` node + `BELIEVES` edge.** Player-taught facts land on `belief` nodes (NOT `event`/`KNOWS_ABOUT` — events are reserved for world-happenings). The only schema touch is **3 optional provenance fields on `believes.yaml`**:
+Business rationale: "Persistent NPC relationships" is an explicit commitment
+(`BUSINESS_INTENT.md:35`; `docs/BUSINESS_REQUIREMENTS.md:58`). The `relates_to.yaml`
+schema already declares `relationship_phase` (optional `str`) and `phase_started_at_tick`
+(optional `int`) — both fields are populated in **zero Python files** (`grep
+relationship_phase src/npc_engine` → single hit: the YAML itself). A studio reading the
+OpenAPI spec sees these fields on every `RELATES_TO` edge and gets nothing back. Turning raw
+trust/fear/affection scalars into named, queryable relationship phases (STRANGER →
+ACQUAINTANCE → ALLY/RIVAL → CONFIDANT/NEMESIS) is the semantic layer studios pay for — it
+drives dialogue tone, unlocks quests by relationship depth, and makes the social graph
+legible to designers without inspecting raw integers.
+What it does: Per-tick (and post-dialogue) engine that maps the composite affinity score
+(derived by the already-built `engines/relationship/standing.py::derive_standing`) onto a
+named `relationship_phase`, records `phase_started_at_tick`, and emits a phase-transition
+event to the WS stream when a boundary is crossed. Dialogue prompt builder reads the phase
+string to set conversational tone (no raw `if trust > N` comparisons in prompt templates).
+Quest engine can gate offers on phase (e.g. "CONFIDANT" unlocks personal-secret quest).
+Current state: `engines/relationship/standing.py` provides `derive_standing()` and the
+`Standing` enum, but no engine reads these and writes back to the graph.
+`type_registry/base_edges/relates_to.yaml:11-12` has `relationship_phase` and
+`phase_started_at_tick` with `required: false` — populating them requires **no schema
+change**. The only absent piece is the engine that calls `derive_standing`, compares to the
+current phase, and writes through `graph/`.
+Graph/schema additions:
 ```yaml
-# believes.yaml — add optional provenance (no new edge type)
-edge_type: BELIEVES
-src_type: character
-dst_type: belief
-fields:
-  source_character_id: { type: str, required: false }   # = player_demo when player-taught
-  learned_at_tick:     { type: int, required: false }
-  confidence:          { type: int, required: false, range: [0, 100] }
+# No new base node or edge. Populate existing optional fields only.
+# relates_to.yaml already has:
+#   relationship_phase:     { type: str, required: false }
+#   phase_started_at_tick:  { type: int, required: false }
+#
+# Phase thresholds: new YAML file (designer-editable, no Python edit):
+# src/npc_engine/engines/relationship/phase_rules.yaml
+phases:
+  STRANGER:    { min: -100, max: -50 }   # maps to Standing.HOSTILE
+  WARY:        { min: -50,  max: -15 }   # maps to Standing.WARY
+  NEUTRAL:     { min: -15,  max:  15 }   # maps to Standing.NEUTRAL
+  ALLY:        { min:  15,  max:  50 }   # maps to Standing.FRIENDLY
+  CONFIDANT:   { min:  50,  max: 100 }   # maps to Standing.ALLIED
 ```
-API surface: none new on the LLM path (rides the existing dialogue structured output); optional admin `GET /v1/admin/characters/{id}/beliefs` for the designer dashboard.
-Composition: `engines/knowledge_learning/` validates the `learned_facts` slice of the dialogue output through a Pydantic model, dedupes against known beliefs via `retrieval/`, and writes through a new graph sub-writer `graph/knowledge_writer.py` (graph-owned, `AsyncSession`-injected). No second LLM client, no new prompt file (the field is added to the existing dialogue prompt schema).
-Architecture fit: new engine dir + one graph sub-writer + 3 optional fields on an existing edge. The provenance-field add is a **minor schema change → DEC-072** (approved).
-Prerequisite enablers: EXP-32 (so the learn-loop is *measured*); EXP-30 (learned beliefs enter the ranked pool, not an overflowing tier).
-Effort: **M** (was L)   Value: high   Business-fit: high
-Risks / unknowns: extraction hallucination (LLM emits a fact the player never stated) — strict validator + low-confidence quarantine; contradiction handling (`contradicts.yaml` edge exists — keep both, prefer higher-confidence/recent at retrieval); trust model (should a hostile NPC believe the player? — gate by affinity later).
-First slice: emit + persist only **self-assertions** ("I am X") as one `BELIEVES` edge, behind a config flag; prove the NPC repeats the learned fact a turn later in an eval (EXP-32).
-Fact visibility & contradictions (RESOLVED 2026-06-05, DEC-072): learned beliefs **are gossipable** — they feed the gossip engine like any knowledge (player can seed a rumor by telling one NPC). On contradiction, **keep both + link with the existing `CONTRADICTS` edge**; prefer higher-confidence/higher-trust-source at answer time, never overwrite. Binds EXP-53 to the gossip expansion (EXP-15/16).
-
----
-
-### EXP-50: Relationship / Affinity engine ⭐ TOP-2
-Type: new-engine
-Business rationale: "Persistent relationships per NPC" is an explicit commitment (`BUSINESS_INTENT.md:35`). The schema already promises *relationship phases* but the field is dead — a studio reading the OpenAPI sees `relationship_phase` and gets nothing. This turns raw trust/fear/affection scalars into named, queryable relationship states (stranger → acquaintance → ally → rival → confidant) that drive dialogue tone and gate quests.
-What it does: Per-tick (and post-dialogue) engine that maps the trust/fear/affection vector + interaction_count onto a `relationship_phase` via deterministic thresholds, records `phase_started_at_tick`, and emits phase-transition events ("X now considers you an ally"). Dialogue reads the phase to set tone; quests can require a phase. Distinct from `relation_mutator` (which only clamps raw deltas) — this is the *semantic* layer over the scalars.
-Current state: scalars + dead phase fields exist at `type_registry/base_edges/relates_to.yaml:5-12`; `relationship_phase` referenced in **zero** Python files. `relation_mutator.py` applies raw deltas with no phase logic.
-Graph/schema additions: no new node/edge — fills existing `relationship_phase` (make it a `Literal`-backed enum) and `phase_started_at_tick`; optional transition-audit node:
-```yaml
-# base_nodes/relationship_event.yaml
-node_type: relationship_event
-fields:
-  id: { type: str, required: true }
-  character_id: { type: str, required: true }
-  other_id: { type: str, required: true }
-  from_phase: { type: str, required: true }
-  to_phase: { type: str, required: true }
-  at_tick: { type: int, required: true }
-```
-API surface: `GET /v1/characters/{id}/relationships` (returns phase + scalars) for the dashboard; phase-transition events on the existing WS event stream. Mostly tick-driven.
-Composition: `engines/affinity/` with a `phase_rules_loader.py` (YAML thresholds, mirrors `economy/pricing_rules_loader.py` pattern). Reads `relates_to` via `retrieval/`, writes phase via `graph/` (existing relation writer). No LLM. Dialogue prompt builder reads the phase string.
-Architecture fit: new-file-add (new engine dir + a thresholds rules YAML + optional new node YAML). Populating an existing-but-empty schema field is low-risk; the optional `relationship_event` node is a **schema addition → DECISIONS entry**.
-Prerequisite enablers: none (scalars already populated by dialogue). Synergizes with EXP-52 (reputation) and EXP-51 (goals can target high-affinity NPCs).
+API surface: `GET /v1/characters/{npc_id}/relationships` already exists
+(`api/routes/relationship.py`) — extend its response model to include `phase` + `phase_since_tick`.
+Phase-transition events pushed on existing WS event stream (additive push, no route change).
+Composition:
+- New file: `engines/relationship/affinity_engine.py` — `AffinityEngine.run_tick(session, tick_id)` reads all `RELATES_TO` edges via `retrieval/`, calls `derive_standing()`, compares to stored `relationship_phase`, writes updated phase via a new `graph/relation_phase_writer.py` (graph-layer file, `AsyncSession`-injected, follows session-ownership rule). Post-dialogue trigger also wired from `dialogue_handler` (one additive call site after `relation_mutator.apply()`).
+- New file: `engines/relationship/phase_rules_loader.py` — YAML loader (mirrors `economy/pricing_rules_loader.py` pattern).
+- New file: `graph/relation_phase_writer.py` — writes `relationship_phase` + `phase_started_at_tick` on `RELATES_TO` (one function, `AsyncSession`-injected).
+- No edit to `dialogue_handler`, `relation_mutator`, or `standing.py`.
+Architecture fit: Pure new-file-add through the existing engine OCP seam. No schema change (populating an already-declared optional field is not a schema addition). No DECISIONS entry required unless the opt-in tick cadence or hysteresis config is non-obvious — if so, log in DECISIONS.
+Prerequisite enablers: none (scalars are already written by `relation_mutator.apply()`). Synergizes with EXP-42 (drama director reads phase) and EXP-43 (deception engine needs phase to know who is CONFIDANT).
 Effort: S   Value: high   Business-fit: high
-Risks / unknowns: threshold tuning is content, not code — must be designer-editable YAML (honor "designers extend without engineers", SC-8); phase thrash near boundaries → add hysteresis.
-First slice: deterministic 4-phase mapping from trust/affection thresholds written to the existing field on each dialogue turn; expose in the existing character GET; one eval asserting tone shift.
-Open questions: are phases symmetric (mutual) or directed per edge? `relates_to` is directed → assume directed. (ASSUMPTION: directed.)
+Risks / unknowns: phase thrash at boundaries (A is ALLY one tick, NEUTRAL the next) → hysteresis band (±5 pts dead zone around phase boundary) configurable in YAML; directed edges mean A's phase toward B may differ from B's phase toward A — both are populated independently (correct behavior, explicitly asymmetric).
+First slice: deterministic phase write on every dialogue turn (not full tick scan), triggered from `dialogue_handler` post-`relation_mutator`; expose phase in the existing relationship GET; one eval asserting tone shift when phase crosses ALLY.
+Open questions: Should phase-transition events be gossipable (e.g. "Mira became an Ally of the player")? → `OPEN_QUESTIONS.md`.
 
 ---
 
-### EXP-51: NPC Goal-Formation & Action-Selection (lightweight GOAP) engine ⭐ TOP-3
+## TOP 2
+
+### EXP-41: Player-Model / Theory-of-Mind Engine
 Type: new-engine
-Business rationale: Implied ambition "agentic NPCs that initiate, not just react" (`BUSINESS_INTENT.md:59`, Phase 14). The `goal` node + `PURSUES` edge already exist but goals are only **human-seeded** (`api/routes/goals.py:62`); no NPC ever *forms* a goal or acts on one. This is the missing "autonomous, not reactive" core.
-What it does: Per-tick engine that (1) **forms** goals for NPCs from drives — unmet `need` nodes, faction `agenda`s they support, broken `oath`s, low-affinity rivals — writing `PURSUES` edges with urgency; and (2) **selects** the next action toward the highest-urgency goal from a fixed action vocabulary (move-to, seek-NPC, gossip, propose-trade, advance-quest), dispatched through the existing `interaction` dispatcher. Deterministic action scoring; LLM only used (optionally) to phrase the *intent line* for proactive dialogue (EXP-58 dependency).
-Current state: `goal.yaml` + `pursues.yaml` exist; CRUD-only via `goals.py`. `agenda_engine` is faction voting, not personal planning. `routine` moves NPCs by fixed schedule, not by goal. → greenfield engine over existing schema.
-Graph/schema additions: reuse `goal`/`PURSUES`; add satisfaction provenance reusing existing `satisfies_need.yaml` pattern; add:
+Business rationale: Implied agentic ambition (`BUSINESS_INTENT.md:59` Phase 14 "agentic
+NPCs") + retrieval-precision ambition (Phase 15 — "the right memories are retrieved"). An
+NPC that maintains a per-(NPC, player) model of the player's disposition, reliability
+(promise-keeping), and inferred playstyle retrieves **more relevant memories** and generates
+**more in-character responses**. This is the natural attribution sink for facts learned via
+`engines/knowledge_learning/` (EXP-53, already built). OQ-D6 deferred this on 2026-06-05
+with "express second-order belief through memories for now" — the deferral is now ripe to
+revisit because `knowledge_extraction_engine.py` is shipping and needs a per-player model
+to contextualize which facts were told by whom and with what reliability.
+What it does: Maintains a per-(NPC, player) `player_model` node — updated post-dialogue and
+post-quest outcome — tracking: `inferred_style` (AGGRESSIVE/DIPLOMATIC/MANIPULATIVE/NEUTRAL
+Literal enum), `reliability` (0-100, computed deterministically from kept/broken `PLEDGE`
+edges and quest outcomes), and an optional LLM-generated `summary` string ("this NPC thinks
+the player is a cautious opportunist who honored past deals"). The model is injected into the
+dialogue prompt as a Tier-B (droppable) context block so budget is never blown. Enables
+NPCs to be surprised when the player breaks character ("You seemed more diplomatic before…").
+Current state: deferred by OQ-D6 (`OPEN_QUESTIONS.md:100`). The player is already a
+`character` node (`seed.py`, `is_player: true`). Perceived trust/affection/fear live on
+`RELATES_TO` edges (already built). The ONLY genuinely absent piece is the persisted
+per-(NPC, player) inference node and the engine that updates it. Zero Python files reference
+`player_model` or `PlayerModel` — confirmed absent.
+Graph/schema additions:
 ```yaml
-# base_edges/goal_targets.yaml
-edge_type: GOAL_TARGETS
-src_type: goal
-dst_type: character        # or location / item / faction (union via multiple files, OCP)
-fields:
-  priority: { type: int, required: true, range: [0, 100] }
-```
-API surface: engine-internal/tick-only; admin `GET /v1/admin/characters/{id}/goals` already partly covered by `goals.py` GET.
-Composition: `engines/planning/` — `goal_former.py` (drives→goals, deterministic), `action_selector.py` (goal→action score). Reads needs/agendas/oaths via `retrieval/`, writes goals via existing `graph/goal_service.py`, dispatches actions via `engines/interaction/dispatch`. No Neo4j or LLM in selection (LLM optional, phrasing only).
-Architecture fit: new-file-add (new engine dir + one edge YAML). Net-new edge type → **DECISIONS entry**. Action vocabulary must be a `Literal`/Enum (no magic strings).
-Prerequisite enablers: EXP-50 (affinity, for rival-targeting goals) is a soft dep; EXP-58 (proactive dialogue) consumes the selected intent. None hard-blocking.
-Effort: L   Value: high   Business-fit: med
-Risks / unknowns: combinatorial action explosion → cap action set + semaphore-bounded per-tick goal formation; determinism + RNG-seed logging required (CLAUDE.md Observability); avoid double-driving NPCs already moved by `routine` (define precedence in DECISIONS).
-First slice: form **one** goal type — "satisfy most-decayed need" — and select move-to-need-location, reusing `routine` movement; prove an NPC walks to the tavern when "social" need is low, with seed logged.
-Open questions: precedence between `routine` (schedule) and `planning` (goal) when they conflict → OPEN_QUESTIONS.
-
----
-
-## STRONG (rank 4–7)
-
-### EXP-52: Personal Reputation Propagation engine
-Type: new-engine
-Business rationale: Off-screen social simulation commitment (`BUSINESS_INTENT.md:36`) + "world changes opinions while player away". Gossip spreads *rumors* and faction-politics drifts *faction* standing, but a player's **personal reputation** (how NPC B feels about the player having never met them) never propagates through the social graph. This is what makes a reputation "precede" the player.
-What it does: Per-tick engine that propagates a player's affinity/standing along `relates_to`/`member_of` edges with distance decay — if A trusts the player and A trusts B, B's baseline disposition toward the player nudges. Distinct from gossip (facts) and faction_politics (faction-level). Deterministic, seeded.
-Current state: `has_reputation_with` (character→faction) + `gossip` + `faction_politics` exist; no *interpersonal* reputation diffusion. Partial overlap → narrowed to player-reputation diffusion only.
-Graph/schema additions: reuse `relates_to`; optionally a cached baseline field:
-```yaml
-# extend base_nodes/character.yaml (new optional field, additive)
-fields:
-  player_reputation_baseline: { type: int, required: false, range: [0, 100] }
-```
-API surface: tick-only; surfaced via EXP-50's relationship GET.
-Composition: `engines/reputation/` reads social edges via `retrieval/`, writes baseline via `graph/`. No LLM. Bounded by `MAX_CONCURRENT_TICKS` semaphore; must honor existing per-turn/windowed mutation caps (mutation layer).
-Architecture fit: additive optional field on `character` = **schema change → DECISIONS entry**; otherwise new-file-add.
-Prerequisite enablers: EXP-50 (affinity phases give the propagation source signal). Soft.
-Effort: M   Value: med   Business-fit: high
-Risks / unknowns: feedback loops / runaway diffusion → decay + clamp + cap per tick; interaction with bounded-mutation audit log (must log propagated deltas too).
-First slice: 1-hop propagation only, decay constant in YAML, behind a flag; eval: NPC never-met-player has nonzero disposition after a trusted intermediary.
-Open questions: should propagation be symmetric with gossip distortion (reputation degrades over hops)? → OPEN_QUESTIONS.
-
-### EXP-55: Player-Model / Theory-of-Mind engine — 🟡 DEFERRED (future expansion; via memories for now)
-Type: new-engine
-**RESOLVED 2026-06-05 (OQ-D6): do NOT add a `player_model` node now.** The player is already a `character`
-node (`seed.py:658`, `is_player:true`, `player_demo`), so perceived trust/affection/fear, faction lean, and
-known facts are already modeled via `relates_to` / `has_reputation_with` / `knows_about` (player as the other
-endpoint), and reliability derives from the existing `PLEDGE` edge `is_active` + quest outcomes — no node
-needed. **Second-order belief** ("what the NPC thinks the *player* knows/believes") is a good FUTURE expansion;
-**for now it is expressed through memories.** The first-slice `reliability` signal (below) can still be built
-deterministically and injected as context without any new node — schedule it opportunistically, not as a
-near-term engine. The original node sketch is retained below for the future expansion only.
-Business rationale: Implied agentic ambition (`BUSINESS_INTENT.md:59`) + retrieval-precision Phase 15: an NPC that models *who the player is to them* (playstyle, past betrayals, stated goals) retrieves more relevant memory and answers more in-character. Also the natural attribution sink for EXP-53's learned facts.
-What it does: Maintains a per-(NPC, player) model node: inferred player disposition (aggressive/diplomatic), reliability (kept vs broken promises via `PLEDGE`), and a short "what this NPC expects the player to do" summary. Updated post-dialogue and post-quest. Feeds prompt context as a pooled (droppable) block.
-Current state: player IS a `character` node; perceived state already expressible via existing edges. Only second-order belief + persisted inference is greenfield.
-Graph/schema additions (FUTURE ONLY — not now):
-```yaml
-# base_nodes/player_model.yaml
+# NEW: type_registry/base_nodes/player_model.yaml   → DECISIONS entry required
 node_type: player_model
 fields:
-  id: { type: str, required: true }
-  npc_id: { type: str, required: true }
+  id:               { type: str, required: true }
+  npc_id:           { type: str, required: true }
+  player_id:        { type: str, required: true }
+  inferred_style:   { type: str, required: true }   # Literal-backed enum in code
+  reliability:      { type: int, required: true, range: [0, 100] }
+  summary:          { type: str, required: false }
+  updated_at_tick:  { type: int, required: true }
+
+# NEW: type_registry/base_edges/has_player_model.yaml   → DECISIONS entry required
+edge_type: HAS_PLAYER_MODEL
+src_type: character   # the NPC
+dst_type: player_model
+fields:
   player_id: { type: str, required: true }
-  inferred_style: { type: str, required: true }   # Literal-backed enum in code
-  reliability: { type: int, required: true, range: [0, 100] }
-  summary: { type: str, required: false }
-  updated_at_tick: { type: int, required: true }
 ```
-API surface: admin GET for dashboard; engine-internal otherwise.
-Composition: `engines/player_model/`; LLM optional for `summary` (prompt YAML), deterministic for `reliability` (from `oath`/quest outcomes). Reads via `retrieval/`, writes via `graph/`. Token-budget: summary is Tier-B (droppable first).
-Architecture fit: new node type = **schema change → DECISIONS**; otherwise new-file-add.
-Prerequisite enablers: EXP-53 (learned facts attach here); EXP-50 (affinity input). Soft.
-Effort: M   Value: med   Business-fit: med
-Risks / unknowns: token budget pressure (must be Tier-B); privacy of inference is N/A single-tenant; risk of overfitting tone.
-First slice: deterministic `reliability` only (from kept/broken oaths), injected into dialogue prompt; eval: NPC distrusts a player who broke an oath.
-Open questions: one model per NPC-player pair vs one shared player profile? (single-player vs party) → OPEN_QUESTIONS.
-
-### EXP-54: Player-Aware Drama Director engine
-Type: new-engine
-Business rationale: "Living off-screen world" commitment + Phase 14 agentic ambition (`BUSINESS_INTENT.md:36,59`). `events` generates world events and `story_pacing` *gates* them, but nothing **targets** drama at the current player's state (idle too long, quest stalled, relationship plateau). A director that injects a beat aimed at re-engaging the player is the classic "drama manager".
-What it does: Per-tick reads player engagement signals (last interaction tick, open quests, affinity plateaus) and, within `story_pacing` severity budget, selects + injects a *targeted* event ("a rival NPC seeks the player out", "a quest deadline looms"). Deterministic selection over a YAML beat library; LLM optional for flavor text.
-Current state: `events` (untargeted generation) + `story_pacing` (gating multipliers) exist; no player-aware targeting. Narrowed to the director layer on top.
-Graph/schema additions: reuse `event`/`narrative_beat` nodes; optional `targets` edge `event→character`. (additive)
-API surface: tick-only; emits beats on WS event stream.
-Composition: `engines/director/` reads engagement via `retrieval/`, respects `story_pacing` WorldState multipliers (reads, does not write them), creates events via existing `events`/graph path. Composes *below* story_pacing's budget.
-Architecture fit: new-file-add + optional edge YAML (**DECISIONS** if edge added). Must NOT edit `story_pacing` (OCP).
-Prerequisite enablers: EXP-55 (engagement signal quality), EXP-51 (rival-seeks-player action). Soft.
-Effort: M   Value: med   Business-fit: med
-Risks / unknowns: clashing with `story_pacing` budget (read-only on its multipliers); over-firing → cooldown in YAML; determinism + seed logging.
-First slice: single beat — "idle N ticks → nearest NPC initiates" — gated by story_pacing severity; cooldown config; eval on idle trigger.
-Open questions: does the director own engagement metrics or read them from metrics_snapshot? → OPEN_QUESTIONS.
-
----
-
-## SPECULATIVE / LOWER-FIT (rank 8–9) — kept with caveats
-
-### EXP-56: Localization / Multi-Language Output engine
-Type: new-engine
-Business rationale: Implied by "licensable to game studios" globally + buyer-facing compliance posture (`BUSINESS_INTENT.md:62`). A studio shipping in 8 languages needs NPC output localized. Currently only a prompt instruction touches language.
-What it does: Post-generation language layer — either prompts the LLM in the target language or post-translates structured `response` text (NOT the structured action/expression fields). Per-world default language + per-request override.
-Current state: none beyond `prompts/dialogue/system_v1.yaml` instruction. greenfield.
-Graph/schema additions: none (config-level world language setting).
-API surface: `language` field on dialogue request (capped Literal of supported locales); world default in config.
-Composition: `engines/localization/` wraps the dialogue output; LLM via existing protocol or a translation adapter (new adapter file, OCP). Prompt strings in YAML.
-Architecture fit: new-file-add (engine + prompt YAML + config key). No schema change.
-Prerequisite enablers: none.
-Effort: M   Value: low   Business-fit: med
-Risks / unknowns: quality of small-model translation; structured fields must stay canonical (English enums); doubles LLM cost/latency per turn.
-First slice: target-language *generation* (system prompt swap) for the `response` field only, one extra locale, behind config; eval round-trips meaning.
-Open questions: translate vs generate-in-language; do learned facts (EXP-53) store original or localized? → OPEN_QUESTIONS.
-
-### EXP-57: Voice / STT Input engine
-Type: new-engine
-Business rationale: Complements the existing `tts` engine for full voice loop; implied by immersion thesis. But the engine is a *backend middleware* — STT typically lives client-side in Unity/Unreal, weakening fit.
-What it does: Accepts audio (or a client-side transcript) and produces the `player_message` string fed to dialogue. Mirrors `tts` adapter shape (`STTClientProtocol`, mock + real adapter).
-Current state: none (grep for stt/whisper/transcribe empty). `tts` engine is the symmetric precedent.
-Graph/schema additions: none.
-API surface: `POST /v1/dialogue/{npc}/voice` (audio in) → same dialogue response; or accept transcript field.
-Composition: `engines/stt/` adapter behind a protocol (OCP), output handed to existing `dialogue_handler`. No graph/LLM in STT itself.
-Architecture fit: new-file-add (engine + protocol + adapters).
-Prerequisite enablers: none.
-Effort: M   Value: low   Business-fit: low
-Risks / unknowns: audio upload size caps (security: input caps at boundary); most studios do STT client-side, so this may be redundant — likely better left to the SDK. Recommend **defer** unless a buyer asks.
-First slice: accept a client transcript (no audio decode) and validate/cap it, proving the protocol seam; real STT adapter later.
-Open questions: is STT in-scope for backend middleware at all, or an SDK concern? → OPEN_QUESTIONS (likely SDK).
+API surface: admin `GET /v1/admin/characters/{npc_id}/player-model` for the designer
+dashboard (read-only); engine-internal write path.
+Composition: `engines/player_model/` — `player_model_updater.py` (post-dialogue hook,
+deterministic reliability from PLEDGE + quest graph reads; optional LLM summary behind
+`PLAYER_MODEL_LLM_SUMMARY_ENABLED` config flag, prompt YAML in `prompts/player_model/`);
+`player_model_reader.py` (Tier-B context block assembly). Graph reads via `retrieval/`,
+writes via a new `graph/player_model_writer.py` (session-injected). No LLM required for
+slice-1 (reliability is deterministic).
+Architecture fit: Net-new node + edge = **schema change requiring DECISIONS entry** (per
+CLAUDE.md "Asking before doing"). Once approved, pure new-file-add. Token-budget: summary
+must be Tier-B (droppable first per context_budget_enforcer ranked pool — OQ-D1 resolved).
+Prerequisite enablers: EXP-40 (affinity phase gives richer input signal, soft); EXP-53
+already built (learned facts per-player provenance makes more sense with a model). Hard dep:
+DECISIONS approval for new node/edge.
+Effort: M   Value: high   Business-fit: high
+Risks / unknowns: one model per NPC-player pair → `O(N_npcs)` nodes, bounded by world
+size (acceptable under single-game-deployment model, DEC-068); privacy of inference is N/A
+single-tenant; risk of tone overfitting (NPC labels player as AGGRESSIVE after one choice
+→ mitigated by decay + multi-turn averaging).
+First slice: deterministic `reliability` only (from kept/broken `PLEDGE` edge `is_active`
+status + quest outcomes), no LLM summary, no new node in slice-1 (can be injected as a
+transient computed block); schema + persisted node in slice-2.
+Open questions: one model per NPC-player pair vs one shared player profile across NPCs?
+(single-player world → either works; directed per-(NPC, player) is more realistic) → `OPEN_QUESTIONS.md`.
 
 ---
 
-## Dropped (one-line justification each)
+## TOP 3
 
-- **Daily-life world-simulation tick** — already covered by `routine`+`need`+`mood`+`agenda`+`economy` per-tick engines; net-new not warranted (becomes EXP-51's consumer).
-- **Generic "trade/economy" engine** — `economy`+`currency`+`interaction` already implement pricing, trade evaluation, and atomic transfer.
-- **Crowd/clique formation** — `clique` (CliqueFormationEngine) already detects groups by affection.
-- **Warfare engine** — `military` (battle resolution + resource yield) exists.
-- **Faction reputation drift** — `faction_politics` already drifts faction standings; EXP-52 narrowed to *interpersonal* propagation only.
-- **Multi-tenant world isolation** — forbidden by DEC-068; not proposed.
+### EXP-42: Player-Aware Drama Director Engine
+Type: new-engine
+Business rationale: "Living off-screen world" commitment (`BUSINESS_INTENT.md:36`) + Phase
+14 agentic ambition. The existing `events` engine generates world events unconditionally and
+`story_pacing` gates their severity globally. Neither **targets** drama at the specific player's
+current engagement state. A drama director that reads player idle-time, stalled quests, and
+relationship plateaus and injects a beat aimed at re-engagement is the classic "drama manager"
+differentiator studios look for in middleware vs a raw event system. It converts a procedural
+event engine into a narrative co-author.
+What it does: Per-tick reads player engagement signals — `last_interaction_tick` (from
+dialogue session), open quests with `expires_at_tick`, and EXP-40's `relationship_phase` for
+plateau detection — and within `story_pacing`'s `max_event_severity` WorldState budget,
+selects + injects a *targeted* world event or NPC proactive intent aimed at re-engaging
+the player. Event selection is deterministic over a YAML beat library with configurable
+cooldowns (no spam). LLM optional for flavor-text variation; the selection itself is a
+deterministic rule engine.
+Current state: `engines/events/event_pool.py:17-30` generates weighted events from
+`event_pool.json`; `engines/story_pacing/story_pacing_engine.py` writes severity multipliers
+to WorldState. No file reads player engagement signals or targets beats at a specific player.
+`grep director` → 15 hits, none in engine logic (only `retrieval/cross_encoder_reranker.py`
+internal variable name, `prompts/chapter/chapter_label_v1.yaml` prose, and
+`observability/README.md`). Confirmed absent as an engine.
+Graph/schema additions:
+```yaml
+# OPTIONAL (additive): extend base_edges/has_quest.yaml with expires_at_tick
+# (already present? check: has_quest.yaml fields — if absent, add optional field)
+# OR: additive optional field on base_nodes/event.yaml:
+#   targets_player_id: { type: str, required: false }
+# This is a single-optional-field addition to an existing node → minor schema addition
+# → DECISIONS entry if targets_player_id is added; otherwise engine-internal state only.
+```
+API surface: tick-only; beats surface on existing WS event stream as typed push events
+(additive). New `GET /v1/admin/director/status` (current cooldown state, last beat injected)
+for designer dashboard.
+Composition: `engines/director/` — `engagement_reader.py` (reads dialogue session
+`last_interaction_tick` + quest deadlines via `retrieval/`); `beat_library_loader.py` (YAML
+beat templates, mirrors `event_pool.py` pattern); `director_engine.py` (deterministic beat
+selection, respects `story_pacing` WorldState multipliers via read-only graph query, never
+edits `story_pacing` — OCP strict). Emits event injection calls through existing
+`events`/graph path. No LLM for slice-1.
+Architecture fit: New-file-add if the optional `targets_player_id` field is not added (event
+creation re-uses existing event fields). If the field is added → single-field schema addition
+→ DECISIONS entry. OCP strictly respected: director reads `story_pacing` WorldState values
+but never edits `story_pacing_engine.py`.
+Prerequisite enablers: EXP-40 (relationship plateau signal, soft); EXP-41 (engagement
+quality, soft). No hard deps — can ship without either.
+Effort: M   Value: med   Business-fit: high
+Risks / unknowns: clashing with `story_pacing` budget (read-only on its multipliers so no
+clash possible by design); over-firing without cooldown → configurable per-beat cooldown in
+YAML; determinism + RNG seed logging required (CLAUDE.md Observability strict rule).
+First slice: single beat type — "player idle ≥N ticks → nearest co-located NPC pushes
+a proactive intent" — gated by `story_pacing` severity budget; cooldown config; eval that
+verifies the beat fires once per cooldown window, not every tick.
+Open questions: Does the director own engagement metrics or read them from a
+`metrics_snapshot` node? If a `metrics_snapshot` node is needed → schema call.
+→ `OPEN_QUESTIONS.md`.
+
+---
+
+## STRONG (rank 4–5)
+
+### EXP-43: NPC Deception / False-Belief Engine
+Type: new-engine
+Business rationale: "Anti-hallucination guarantee" (`BUSINESS_INTENT.md:43`) + implied
+ambition "NPCs initiate, not just react" + "betrayal/deception modeling" as a candidate
+territory. The graph already has `secret` nodes, `leverage` nodes (with `GROUNDED_IN →
+Secret`), and a `SUSPECTS` edge. The missing piece is an **active** engine that lets an NPC
+*deliberately* plant a false belief in another NPC (or the player) — seeding a `belief` node
+with intentionally false content and provenance. This is the "deception" half of the social
+graph and is deeply connected to the anti-hallucination moat: an NPC who was *deliberately
+lied to* should have that marked so the anti-hallucination pipeline does not suppress the
+false belief as an error. Studios building political intrigue, heist, or mystery games require
+this.
+What it does: Adds a deception intent formation layer to the planning engine and a false-
+belief write path. An NPC with a `secret` they wish to protect and an NPC target with
+`WARY` or lower standing can form a "deceive" goal. The engine selects a plausible false
+belief to plant (drawn from a deception-strategy YAML, analogous to gossip distortion
+strategies), produces it as a `belief` node with `source_character_id = deceiving_npc`,
+`is_deception: bool = true`, and optionally injects it into a future proactive-dialogue turn.
+The anti-hallucination pipeline is extended to treat a `is_deception: true` belief as an
+*intended* false claim (not a hallucination guard failure).
+Current state: `engines/gossip/distortion_strategy.py` provides STRATEGY_REGISTRY for
+distortion of rumors; no parallel mechanism exists for intentional deception.
+`type_registry/base_edges/believes.yaml` has `source_character_id`, `learned_at_tick`,
+`confidence` provenance fields (added by EXP-53, already built) but no `is_deception` flag.
+`engines/planning/goal_former.py` forms only need-satisfaction goals; no deception goal type
+exists. Zero Python files contain "deception", "false_belief", or "misinform" as
+logic-level terms — confirmed absent.
+Graph/schema additions:
+```yaml
+# Extend base_edges/believes.yaml (additive optional field) → minor schema addition → DECISIONS
+# believes.yaml — add:
+#   is_deception: { type: bool, required: false }    # true = NPC planted this deliberately
+#   deception_goal_id: { type: str, required: false } # back-link to the goal that generated it
+
+# New: type_registry/base_nodes/deception_strategy.yaml → DECISIONS
+node_type: deception_strategy
+fields:
+  id:          { type: str, required: true }
+  name:        { type: str, required: true }   # e.g. "false_alibi", "blame_shift", "flattery_plant"
+  target_type: { type: str, required: true }   # "belief" | "rumor"
+  template:    { type: str, required: true }   # moustache-style template string
+```
+API surface: admin `GET /v1/admin/characters/{npc_id}/deceptions` (beliefs NPC planted,
+for designer debug); engine-internal write path.
+Composition: `engines/deception/` — `deception_goal_former.py` (extends `planning/goal_former.py`
+via separate file, not edit — reads secrets + leverage + affinity phase to decide whether to
+deceive); `deception_strategy_loader.py` (YAML strategy registry, mirrors
+`gossip/distortion_strategy.py` pattern); `false_belief_writer.py` (calls
+`graph/knowledge_writer.py` with `is_deception=True` provenance). Prompt YAML in
+`prompts/deception/` for any LLM-flavored false-belief phrasing (optional in slice-1).
+Architecture fit: `believes.yaml` optional field addition → **minor schema change →
+DECISIONS entry**. New engine dir is pure new-file-add. OCP: `planning/goal_former.py` is
+**not** edited; deception goal formation is a separate `deception_goal_former.py` that
+reads the same graph inputs. Must coordinate with anti-hallucination eval runner to prevent
+false-positives on `is_deception: true` beliefs.
+Prerequisite enablers: EXP-40 (affinity phase to target WARY/HOSTILE relationships for
+deception, soft); EXP-53 already built (belief write path exists). Hard dep: DECISIONS
+approval for `is_deception` field addition.
+Effort: L   Value: high   Business-fit: high
+Risks / unknowns: anti-hallucination eval must be updated to treat `is_deception: true`
+beliefs as intended (not guard failures) — requires a new eval matcher; without this the
+deception engine would fail the eval battery; template injection risk (deception templates
+must be bounded by the existing `config.MAX_PLAYER_MESSAGE_CHARS` equivalent for template
+output); the first-slice limits to NPC→NPC deception only (not player-targeted) to avoid
+prompt-injection surface.
+First slice: NPC with a secret and a HOSTILE/WARY target forms a "false-alibi" deception goal;
+seeds one `belief` node with `is_deception: true`; eval verifies the belief is retrievable
+by the target NPC and the anti-hallucination pipeline does not suppress it.
+Open questions: Can the player discover that a belief was a deception? (`investigate` engine
+already exists in graveyard — `SUSPECTS` edge is there; wire them?) → `OPEN_QUESTIONS.md`.
+
+### EXP-44: Long-Horizon Covert Scheming Engine
+Type: new-engine
+Business rationale: Implied agentic ambition (`BUSINESS_INTENT.md:59`, Phase 14) + NPC
+theory-of-mind (EXP-41). The current planning engine (`engines/planning/`) forms single-tick
+goals from need urgency. A covert scheming engine enables NPCs with complex agendas —
+conspiring against rivals, staging a coup, orchestrating a trade embargo — to form and
+execute multi-step hidden plans spanning many ticks. This is the "faction villain" and
+"master manipulator" archetype studios sell in political RPGs and mystery games. It
+directly extends the existing `agenda` / `faction_politics` / `oath` / `secret` graph
+vocabulary.
+What it does: An NPC with a high-urgency `agenda` they support, a target faction/character to
+undermine, and sufficient ALLY-phase relationships (EXP-40) forms a covert multi-step `scheme`
+node. Each step in the scheme maps to an existing action primitive (seed-rumor, plant-belief,
+forge-alliance, trigger-event) scheduled across future ticks. The scheme is invisible to
+outside NPCs unless discovered via the `investigation` engine (graveyard, but wired here).
+Progress is tracked on the scheme node; if a step is blocked (target NPC dies, plan exposed)
+the scheme branches or aborts.
+Current state: `engines/agenda/agenda_engine.py` resolves faction votes (who-won-the-agenda)
+but never forms or executes a covert plan. `engines/planning/goal_former.py` forms single-
+step need-satisfaction goals only. No "scheme" or "plot" concept exists anywhere in the
+engines or type_registry — confirmed absent from all Python and YAML.
+Graph/schema additions:
+```yaml
+# NEW: type_registry/base_nodes/scheme.yaml → DECISIONS entry required
+node_type: scheme
+fields:
+  id:              { type: str, required: true }
+  instigator_id:   { type: str, required: true }   # the scheming NPC
+  target_id:       { type: str, required: true }   # character or faction
+  goal_type:       { type: str, required: true }   # Literal: "undermine" | "alliance" | "expose"
+  steps_total:     { type: int, required: true }
+  steps_completed: { type: int, required: true }
+  status:          { type: str, required: true }   # active | paused | succeeded | failed | exposed
+  created_at_tick: { type: int, required: true }
+  expires_at_tick: { type: int, required: false }
+  is_covert:       { type: bool, required: true }
+
+# NEW: type_registry/base_edges/executes_scheme.yaml → DECISIONS entry required
+edge_type: EXECUTES_SCHEME
+src_type: character
+dst_type: scheme
+fields:
+  role: { type: str, required: true }   # Literal: "instigator" | "accomplice" | "target"
+
+# NEW: type_registry/base_edges/scheme_step.yaml → DECISIONS entry required
+edge_type: SCHEME_STEP
+src_type: scheme
+dst_type: goal          # reuse existing goal node; each step is a goal
+fields:
+  step_order:  { type: int, required: true }
+  completed:   { type: bool, required: true }
+```
+API surface: admin `GET /v1/admin/characters/{npc_id}/schemes` (all active schemes for an
+NPC, designer debug only); engine-internal execution path.
+Composition: `engines/scheming/` — `scheme_planner.py` (forms the scheme: reads agenda
+support, leverage, and alliances via `retrieval/`; emits a scheme node with ordered steps via
+`graph/scheme_writer.py`); `scheme_executor.py` (per-tick step dispatcher — maps step type
+to existing action primitives: `engines/deception/` for false-belief steps, `engines/gossip/`
+for rumor-injection steps, `engines/interaction/` for trade/alliance steps). No LLM for plan
+formation (deterministic rule engine over graph state); LLM optional for flavor text in
+proactive-dialogue turns announcing a scheme. Requires `asyncio.Semaphore` bounding (per
+`MAX_CONCURRENT_TICKS` config).
+Architecture fit: Three new base nodes/edges = **schema-heavy → multiple DECISIONS entries
+required**. Once approved, pure new-file-add engine dir. Dispatcher calls into *existing*
+engines (deception, gossip, interaction) — OCP compliant: no edits to those engines.
+Prerequisite enablers: EXP-40 (affinity phase for alliance detection, soft); EXP-41
+(player-model for targeting quality, soft); EXP-43 (deception step primitive, hard dep for
+"plant false belief" steps). Without EXP-43, scheme can still ship with rumor-injection +
+trade steps only.
+Effort: XL   Value: med   Business-fit: med
+Risks / unknowns: scheme explosion — a greedy schemer fills the tick budget →
+`MAX_ACTIVE_SCHEMES_PER_NPC` config cap; cross-scheme conflicts (two NPCs scheming against
+each other) must be deterministic; determinism + RNG seed logging required (CLAUDE.md
+Observability strict rule); exposing a scheme via `investigation` engine (graveyard) would
+need that engine un-graveyarded — scope risk.
+First slice: single-step "undermine-faction" scheme (one agenda vote manipulation: one
+`OPPOSES_AGENDA` edge planted); prove the scheme executes at the right tick and the
+`agenda_engine` reflects it; no multi-step chaining in slice-1.
+Open questions: Should a discovered scheme become gossipable as a `secret` → `rumor`
+cascade? What is the investigation trigger cost? → `OPEN_QUESTIONS.md`.
+
+---
+
+## Dropped / not re-proposed (one-line each)
+
+- **Relationship/affinity scalars** — already in `RELATES_TO`, populated by `relation_mutator.apply()`.
+- **Economy/trade** — `engines/economy/trade_engine.py` + `pricing_engine.py` + `engines/currency/` already built.
+- **Reputation propagation** — `engines/reputation/reputation_engine.py` already built (EXP-52 done).
+- **NPC goal/GOAP** — `engines/planning/goal_former.py` + `action_selector.py` already built (EXP-51 done).
+- **Daily scheduling** — `engines/routine/routine_engine.py` already built.
+- **Dialogue-driven knowledge extraction** — `engines/knowledge_learning/knowledge_extraction_engine.py` built.
+- **Need decay** — `engines/need/need_decay_engine.py` built.
+- **Proactive dialogue** — `engines/proactive_dialogue/proactive_engine.py` built (EXP-10 done).
+- **Clique/crowd/group formation** — `engines/clique/clique_formation_engine.py` built (graveyard).
+- **Military/battle** — `engines/military/military_battle_service.py` built (graveyard).
+- **Content moderation** — `services/output_moderation.py` + `input_moderation.py` + `content_rating_resolver.py` built (Phase 16).
+- **TTS output voice** — `engines/tts/` built (piper + mock adapters).
+- **Localization / multi-language** — dropped OQ-D11.
+- **Voice / STT input** — dropped OQ-D11.
+- **Multi-tenant isolation** — forbidden DEC-068.
+- **Player-faction standing** — already `has_reputation_with.yaml` character→faction.
+- **EmotionModelProtocol OCP seam** — `engines/emotion/emotion_model_protocol.py` built (EXP-13 done).
+- **Distortion-strategy registry** — `engines/gossip/distortion_strategy.py` STRATEGY_REGISTRY built (EXP-15 done).
+- **Location hierarchy** — `type_registry/base_edges/part_of.yaml` + `graph/location_writer.py` built (EXP-87 done, ISSUE-057 fixed).
+- **Branching quests** — `engines/quest/quest_chain_resolver.py` + `base_edges/unlocks.yaml` built (EXP-19 done).
 
 ---
 
 ## Summary ranking
 
-| Rank | EXP | Title | Effort | Value | Fit |
-|------|-----|-------|--------|-------|-----|
-| 1 ⭐ | EXP-53 | Dialogue-driven knowledge extraction | L | high | high |
-| 2 ⭐ | EXP-50 | Relationship / affinity engine | S | high | high |
-| 3 ⭐ | EXP-51 | NPC goal-formation & action-selection (GOAP) | L | high | med |
-| 4 | EXP-52 | Personal reputation propagation | M | med | high |
-| 5 | EXP-55 | Player-model / theory-of-mind | M | med | med |
-| 6 | EXP-54 | Player-aware drama director | M | med | med |
-| 7 | EXP-56 | Localization / multi-language output | M | low | med |
-| 8 | EXP-57 | Voice / STT input | M | low | low |
+| Rank | EXP | Title | Effort | Value | Fit | Schema-gated? |
+|------|-----|-------|--------|-------|-----|---------------|
+| 1 ⭐ | EXP-40 | Relationship affinity phase engine | S | high | high | No (fills existing optional fields) |
+| 2 ⭐ | EXP-41 | Player-model / theory-of-mind | M | high | high | Yes (new node + edge → DECISIONS) |
+| 3 ⭐ | EXP-42 | Player-aware drama director | M | med | high | Optional (1 field addition → DECISIONS if used) |
+| 4 | EXP-43 | NPC deception / false-belief | L | high | high | Yes (1 optional field on believes.yaml → DECISIONS) |
+| 5 | EXP-44 | Long-horizon covert scheming | XL | med | med | Yes (3 new nodes/edges → multiple DECISIONS) |

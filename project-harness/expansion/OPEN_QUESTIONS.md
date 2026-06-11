@@ -1,116 +1,150 @@
-# OPEN_QUESTIONS.md — decisions + resolutions
+# OPEN_QUESTIONS.md — human decisions (each with an educated-guess default)
 
-This started as the autonomous run's open-questions log. **As of 2026-06-05 the human reviewed it and
-resolved every item.** Below: §A resolved decisions (now binding on the roadmap), §B the few items left
-open / deferred, §C attestation. Resolved items that change the graph schema or an existing module's
-contract also have a `DECISIONS.md` entry (DEC-070..072) and/or an updated `ISSUES.md` entry.
+**Written:** 2026-06-11. Companion to `EXPANSION_ROADMAP.md` / `FEASIBILITY.md`.
+**Rule:** every item below has a **Default** = the assumption the analysis used so nothing is blocked.
+If you do nothing, the roadmap proceeds on the Default. Override only where you disagree.
 
-Legend: ✅ RESOLVED · 🟡 DEFERRED (decided to not do now) · ⏳ STILL OPEN.
-
----
-
-## A. Resolved decisions (binding)
-
-### ✅ OQ-D1 — Context model: collapse tiers into pinned-core + ranked pool (→ DEC-070, supersedes ISSUE-059 fix)
-**Decision:** Replace the tier-A/B/C budget model with **two classes**:
-- a **pinned set** that is never dropped — `world`, `emotion`, persona, the **session window**, `active_quest` — carrying an explicit **`pinned: bool`** flag so the guarantee is in the model, not implied by a tier label;
-- a single **ranked pool** of everything else (memories, beliefs, goals, items, secrets, obligations, knows_about facts), filled by **`priority × relevance`** until the budget is hit, dropping from the bottom.
-**Why this is correct:** the "Tier A never trims" invariant broke because *unbounded, accumulating* categories were placed inside the never-trim tier. The only un-droppable set is now small and **bounded by construction** (persona + a windowed session, not an accumulating fact list), so a "Tier A exceeded" failure cannot occur. Every item already carries a `priority` (`context_builder.py:272-359`); tiers were just coarse priority bands.
-**Caveat:** the session window must stay bounded (last-N turns) so even the pinned set can't exceed budget.
-**Affects:** EXP-30 (reframed: "pinned-core + ranked-pool fill", not "trim Tier A"). Edits `context_budget_enforcer.py` + `context_builder.py`. No schema change.
-
-### ✅ OQ-D1b — EXP-30 pool ordering: priority-only v1, relevance fast-follow
-**Decision:** The ranked pool is ordered by **`priority` only in v1** (deterministic, no tuning needed). The
-existing relevance signal (`context_relevance_engine.py` / `context_scoring.py`) is wired in as the
-`× relevance` factor as an **immediate fast-follow** (the long-term target is `priority × relevance`). The
-keystone ships without waiting on relevance tuning. *(Reconciles the two steers given — "reuse relevance"
-+ "priority only" — as priority-only-now, relevance-next.)*
-
-### ✅ OQ-A-affinity — Relationship standing: 5 bands, composite score, gossip-then-dialogue refactor
-**Decision:** **5 bands** on `standing = clamp(trust + affection − fear, −100, 100)`:
-`HOSTILE [−100,−50) · WARY [−50,−15) · NEUTRAL [−15,15] · FRIENDLY (15,50] · ALLIED (50,100]`
-(enum + cutoffs as named config constants — tunable; the goal is to *have* bands and test them, not find
-optimal values). **Consumer refactor order: gossip first** (secret-sharing gate), **then dialogue** (tone).
-
-### ✅ OQ-Phase0 — Demo is currently broken; Phase 0 added as a blocker
-**Decision/finding:** the playable demo is currently unusable (engines 500 + timeout storm, pledges 404).
-Root-caused to ISSUE-061 (path drift) + ISSUE-062 (engines-500 rebuild storm). Added **Phase 0** to
-`EXPANSION_ROADMAP.md` (EXP-00a/b/c) as a hard blocker before Phase 1, including a CI smoke test so it
-can't silently regress. Trade itself is not broken — it was collateral from the storm.
-
-### ✅ OQ-D2 — Eval metrics: report, do not gate
-**Decision:** EXP-32 reports the anti-hallucination rate; EXP-31 reports precision@k / recall@k (k=5). **No committed SLA / floor in v1.** Publish numbers first; commit to a contractual floor later.
-
-### ✅ OQ-D3 — Knowledge learning: single-pass `learned_facts` output, write to `belief` nodes, no new edge (→ DEC-072)
-**Decision (three parts):**
-1. **No second LLM pass, no `LEARNED_FROM` edge.** Add an optional **`learned_facts`** field to the *existing* dialogue structured-output schema so the model emits learned facts **in the same single pass** (parsed by `response_parser`). Cost ≈ a few output tokens; zero extra round-trips; no gameplay-speed hit.
-2. **Player-taught facts land on `belief` nodes** via the `BELIEVES` edge (not `event`/`KNOWS_ABOUT`). `believes.yaml` currently has empty fields → add optional `source_character_id`, `learned_at_tick`, `confidence` provenance fields. Events stay reserved for actual world-happenings (and `event.yaml` already carries `event_type`/`src_character_id`).
-3. **Player-sourced knowledge is legitimate, not hallucination.** The anti-hallucination eval (EXP-32) must score "NPC repeated a fact the player taught it" as **grounded** — the `source_character_id = player_demo` provenance is what authorizes it. EXP-53 and EXP-32 must agree on this.
-**Affects:** EXP-53 drops from "L, new base edge + 2nd pass" to "**M, reuse `BELIEVES` + 3 optional fields + single-pass extraction**". The provenance-field add to `believes.yaml` is the only schema touch (→ DEC-072).
-
-### ✅ OQ-D4 — Memory salience: approved; one new field (`recall_count`)
-**Decision:** Build the salience model + forgetting curve. `memory.yaml` already has `vividness`, `emotional_charge`, **and `last_recalled_at`** — so the only genuinely new field is **`recall_count: int`**. `salience` is *computed* (`f(vividness, |emotional_charge|, recency, recall_count)`), not stored. Curve: vividness decays per tick, emotionally-charged memories decay slower, each recall boosts vividness (spacing effect); below a floor a memory is forgotten (un-retrieved / optionally pruned). **Never delete graph nodes silently** — mark below-floor.
-**Plus (from OQ-D-new1):** a **`never_forget: bool`** (pinned) flag on plot-load-bearing memories so the curve can never drop quest-critical knowledge. Symmetric with the context `pinned` flag (OQ-D1).
-**Affects:** EXP-17 (field list trimmed to `recall_count` + `never_forget`), EXP-18.
-
-### ✅ OQ-D5 — GOAP precedence: goal `urgency` vs routine, no LLM
-**Decision:** A goal overrides the active routine when **`goal.urgency` exceeds the routine's priority** — `goal.yaml` already has `urgency` (0-100) + `target_id`, so **no schema change** and **no LLM-decided threshold for now** (deferred as a possible future refinement). Generation sets `urgency` per goal at creation.
-**Affects:** EXP-51 (precedence rule fixed; drops the dynamic-threshold complexity).
-
-### ✅ OQ-D6 — Player-model node: not now; second-order belief via memories (future expansion)
-**Decision:** **Do not add a `player_model` node now.** The player is already a `character` node (`seed.py:658`, `is_player:true`, `player_demo`), so perceived trust/affection/fear, faction lean, and known-facts are already modeled via `relates_to` / `has_reputation_with` / `knows_about` (player as the other endpoint). Reliability derives from existing `PLEDGE` edge `is_active` + quest outcomes. **Second-order belief** ("what the NPC thinks the player knows/believes") is a **good future expansion**, expressed **through memories for now**.
-**Affects:** EXP-55 demoted to a future-expansion note; no near-term schema.
-
-### ✅ OQ-D7 — Bribe points to the existing `HAS_REPUTATION_WITH` edge
-**Decision:** Character→faction standing already exists as **`HAS_REPUTATION_WITH`** (`standing` -100..100). Re-point the demo's ACT-3 bribe from `STANDS_WITH` (faction→faction) to `HAS_REPUTATION_WITH`. **No schema change.**
-**Affects:** EXP-93 / ISSUE-060 → S effort, demo-only.
-
-### ✅ OQ-D8 / OQ-D9 — Proactive dialogue + WS push: build it
-**Decision:** Build the proactive engine **and** the new public WS server-push surface `proactive_line` (the NPC initiates, so there's no request to answer — the server must push an unsolicited line carrying `npc_id` + opening line + trigger reason). Keep `GET /v1/dialogue/pending` as the poll fallback for non-WS integrators. Cadence = per-NPC cooldown + global per-tick cap via config (ROADMAP S14.2 backpressure); urgency from need thresholds / unresolved goals; co-located players only.
-**Affects:** EXP-10 / EXP-82.
-
-### ✅ OQ-D10 — Location hierarchy: add `PART_OF` edge + `location_writer.py` (→ DEC-071, ISSUE-057)
-**Decision:** **Approved.** Add the `PART_OF` base edge and the missing `location_writer.py`. Schema change accepted.
-**Affects:** EXP-87 hierarchy; ISSUE-057 unblocked.
-
-### ✅ OQ-D11 / OQ-A-localization — No localization, no voice
-**Decision:** Out of scope. **Drop EXP-56 (localization) and EXP-57 (voice/STT).**
-
-### ✅ OQ-A1 — Plugin later; HTTP service is the near-term test target
-**Decision:** Product is ultimately a Unity/Unreal plugin, but for now we test/harden the **HTTP service**; the plugin wraps it later. Keeps EXP-83 (hello-world) and Batch 5 (typed OpenAPI) relevant.
-
-### ✅ OQ-A3 / relationship_event — Reuse the `event` node, no new node
-**Decision:** No `relationship_event` node. `event.yaml` already has `event_type` (+ `subkind`, `reputation_delta`, `src_character_id`) — relationship changes are events with an appropriate `event_type`. EXP-50 stays **schema-free**.
-
-### ✅ OQ-A6 — Single-world, single-player, single-tenant
-**Decision:** Confirmed. One world, one player node (`player_demo`) for now, one deployment (DEC-068). No multi-tenant, no multi-player.
-
-### ✅ OQ-A5 / non-critical engines — planned expansion + demo integration, deprioritized
-**Decision:** The graveyard/niche engines (investigation, skill, treaty, military, succession, clique, oath, chapter, story_pacing, contracts) get **planned expansions and demo-game integration on the roadmap, but are NOT the priority.** **The priority is the dialogue + gossip systems and showing they work in the playable demo.** (Reframes EXP-42 from "keep as-is" to "planned, deprioritized.")
-
-### ✅ Demo direction — strengthen the playable game (not a single run-through)
-**Decision:** The demo is a **small playable game** (already started) to be **expanded and strengthened**. It is NOT a single scripted run-through — those are the evals/tests. So the demo work foregrounds free-play depth (EXP-80/95), surfacing dialogue+gossip richly (EXP-84/85/89/91), and the cross-session memory showcase (EXP-81) — as a *game*, not a recording.
-
-### ✅ Gossip direction — expand the mechanics now AND make it visible in the demo
-**Decision:** Actually **expand gossip mechanics now** (EXP-15 distortion-strategy registry, EXP-16 belief/secret-selective + prompt-driven distortion content) **and** make gossip visible/usable in the playable demo (EXP-84 telephone-diff view, EXP-92 determinism toggle). Pull these **up** from Phase 3 into the showcase phase.
+These are grouped: **(A) schema/layer decisions that gate phases**, **(B) product-shape decisions**,
+**(C) commercial/sequencing decisions**, **(D) assumptions the run made about already-built code**.
 
 ---
 
-## B. Deferred / still-open
+## A. Schema & layer decisions (gate Phases C/D/E)
 
-- 🟡 **OQ-D6 second-order theory-of-mind** — good future expansion; deferred, expressed via memories for now.
-- 🟡 **Localization / voice (EXP-56/57)** — dropped.
-- 🟡 **LLM-decided goal-override threshold** — deferred; flat `urgency` vs routine priority for now.
-- ✅ **EXP-53 fact visibility — RESOLVED 2026-06-05:** learned facts **CAN be gossiped onward** — a player-taught `belief` is a valid gossip source, so it propagates through the gossip engine like any other knowledge (subject to the usual per-pair distortion). This ties EXP-53 directly into the gossip expansion (EXP-15/16): the player can seed a rumor into the world by telling one NPC.
-- ✅ **EXP-53/EXP-16 contradiction handling — RESOLVED 2026-06-05:** when a player teaches a fact that contradicts a known one, **keep BOTH and link them with a `CONTRADICTS` edge** (`contradicts.yaml` already exists). At retrieval/answer time, **prefer the higher-confidence / higher-trust-source belief**, but both remain in the graph (an NPC can knowingly hold a disputed belief and even voice the conflict — "some say X, but I heard Y"). No destructive overwrite.
+### OQ-1 — Memory node schema batch *(Keystone 1; gates EXP-11/17/18)*
+**Question:** Add `subject_player_id: str|None`, `recall_count: int=0`, `never_forget: bool=false`, and
+`kind: Literal["episodic","commitment","fact"]|None` to `memory.yaml` as optional/back-compat fields?
+**Default:** **Yes, as one batched DECISIONS entry.** All four are nullable/defaulted, so existing
+memories stay valid (null `subject_player_id` = world memory; null `kind` = episodic). This unlocks the
+two highest-value memory features at once. Risk: forget-threshold tuning — set a conservative
+`MEMORY_FORGET_THRESHOLD` constant and gate forgetting behind `never_forget=false`.
+
+### OQ-2 — Scheduler → API delivery pattern *(gates EXP-35)*
+**Question:** How does a tick-scheduler-generated proactive line reach a connected WebSocket without an
+upward layer import (scheduler is `engines` peer; WS is `api`)?
+**Default:** **In-process async queue** — new `engines/proactive_dialogue/proactive_queue.py` (an
+`asyncio.Queue` owned in `engines`), the scheduler enqueues, the `api` WS handler drains. No upward
+import; `api` depends on `engines` (allowed). Document in DECISIONS. Reject alternatives (callback
+injection, polling) as either layer-violating or higher-latency.
+
+### OQ-3 — Canonical NPC emotion source *(gates EXP-34 and EXP-42)*
+**Question:** When `EmotionStore` (in-memory, `EmotionUpdater`) and graph mood (`MoodContagionEngine`
+writes) diverge, which is the source of truth for dialogue context?
+**Default:** **In-memory `EmotionStore` is canonical for the current tick; graph mood is the durable
+snapshot written at tick end.** Dialogue reads `EmotionStore`. Resolve divergence by having the
+contagion engine write *through* the store, not around it. Needs a DECISIONS entry before EXP-34.
+
+### OQ-4 — UNLOCKS edge: `on_choice_id` *(gates EXP-19 quest branching)*
+**Question:** Add optional `on_choice_id: str|None` to `unlocks.yaml` so a quest's successor depends on a
+player choice?
+**Default:** **Yes.** Null = auto-unlock (current behaviour preserved); set = player choice selects the
+branch. Back-compat. Defer the richer "weighted/conditional unlock" model — single choice id is enough
+for the first consequence-chain slice.
+
+### OQ-5 — Player-model node + edge *(gates EXP-41)*
+**Question:** Approve new `base_nodes/player_model.yaml` + `base_edges/has_player_model.yaml` for NPC
+theory-of-mind of the player?
+**Default:** **Approve, but Phase E only.** This is the entry point to the flagship emergent-cognition
+story, but it is the first genuinely new schema territory since Phase 26. Gate it behind Phase A–D
+landing first so the social-graph depth (EXP-40) exists to anchor it.
+
+### OQ-6 — Deception fields on `believes.yaml` *(gates EXP-43)*
+**Question:** Add `is_deception: bool=false` + `deception_goal_id: str|None` to `believes.yaml`?
+**Default:** **Approve in Phase E, coupled with an anti-hallucination eval update.** The eval battery
+(EXP-32) must treat `is_deception=true` beliefs as *intended* behaviour, not guard failures — otherwise
+the deception engine and the moat eval fight each other. Do not ship EXP-43 before EXP-32 can distinguish
+them.
+
+### OQ-7 — Scheme node + edges *(gates EXP-44)*
+**Question:** Approve `scheme` node + `EXECUTES_SCHEME` + `SCHEME_STEP` edges, and a per-NPC active-scheme
+cap?
+**Default:** **Defer to end of Phase E.** XL effort, depends on EXP-43, and is only detectable if
+`investigation` (graveyard) is revived. Treat as the flagship capstone, not near-term. Default cap:
+`MAX_ACTIVE_SCHEMES_PER_NPC = 2`.
+
+### OQ-8 — `stands_with.yaml` character→faction *(gates EXP-93 fix)*
+**Question:** Does the existing `stands_with` edge support a *character→faction* standing, or does the
+ACT-3 fix need a new edge type?
+**Default:** **Assume the existing edge supports it; the bug is a wrong client method
+(`put_npc_reputation` → `adjust_npc_reputation`), not a schema gap.** Verify in code first (FEASIBILITY
+§5). If a new edge is actually required, that escalates EXP-93 from S to M and needs its own DECISIONS
+entry.
+
+### OQ-9 — Session persistence storage model *(gates EXP-33)*
+**Question:** Persist dialogue session history as a Character property, a new `SESSION_TURNS` node, or an
+external store (Redis)?
+**Default:** **New `SESSION_TURNS` node in Neo4j**, capped to last N turns per (npc, player). Keeps the
+single-deployment-per-studio model (DEC-068) with no new infra dependency. Reject Redis (adds a service
+to every studio deployment). Low priority (P3) — verify it isn't already covered by the dialogue cache
+first.
 
 ---
 
-## C. Attestation
+## B. Product-shape decisions
 
-- The analysis run (2026-06-04) was autonomous, overnight, **read-only** — only the six `expansion/*.md`
-  deliverables were written.
-- The resolutions above (2026-06-05) were made by the human reviewer. Doc updates applied: this file,
-  `EXPANSION_ROADMAP.md`, `FEASIBILITY.md` (addendum), the affected mini-specs in `ENGINE_GAPS.md` /
-  `NEW_ENGINES.md`, plus `DECISIONS.md` (DEC-070/071/072) and `ISSUES.md` (ISSUE-057/059 cross-refs).
-  **No source/test/config code was modified** — these are still planning docs; implementation has not started.
+### OQ-10 — Is the demo a sandbox or an authored campaign?
+**Question:** Should demo investment go toward an open-ended sandbox or a tighter authored 5–10 min arc?
+**Default:** **Both, but the authored scripted arc is the sales artifact and gets priority.** Sandbox
+already exists (EXP-80). The recordable scripted run (Keystone 3) is what closes studios, so Phase A
+hardens *that*. Sandbox depth is Phase D polish.
+
+### OQ-11 — Event `targets_player_id` field *(EXP-42 drama director)*
+**Question:** Add an optional `targets_player_id` to `event.yaml` so the director can aim beats at a
+specific player?
+**Default:** **No — ship the director without it (slice 1).** The director can infer the target from
+player location/session; adding a graph field is a schema cost not yet justified. Revisit if multi-player
+targeting becomes real (out of scope under single-deployment).
+
+### OQ-12 — Revive `investigation` engine? *(EXP-44 detection)*
+**Question:** Un-graveyard `investigation` so schemes/deceptions are *discoverable* by other NPCs?
+**Default:** **Yes, but only as part of Phase E EXP-44.** Undetectable schemes are a design dead-end
+(nothing surfaces to the player). If EXP-44 is built, reviving `investigation` is its detection half and
+should be scoped together, not separately.
+
+---
+
+## C. Commercial / sequencing decisions (the only ones outside the engineering plan)
+
+### OQ-13 — When does the Unity/Unreal SDK (Phase X) start? *(highest commercial-ROI question)*
+**Question:** Phase X is the deferred commercial milestone gated on an OpenAPI contract freeze (delivered
+in Phases 20–21 per ROADMAP). Do we start it now, or finish the engine-depth Phases A–E first?
+**Default:** **Finish Phase A (demo credibility) first, then start Phase X in parallel with Phase B.**
+Rationale: the SDK sells the engine, but a studio evaluating the SDK still judges it by the demo. A
+credible recorded demo (Phase A) + a frozen contract (done) is the minimum viable sales package; the SDK
+can then proceed against a stable surface while eval/depth work continues. This is a business call —
+flagged explicitly because it trades near-term commercial reach against demo polish.
+
+### OQ-14 — Eval rigor bar for the moat claim
+**Question:** What pass bar makes the anti-hallucination claim "provable" to a technical buyer?
+**Default:** **Zero hallucination failures across the EXP-32 battery + precision@k ≥ 0.8 on the EXP-31
+labeled set, reported by `make eval-*` and regression-gated in CI.** Deflections do not count as passes
+(per BUSINESS_INTENT success criterion 1). Tighten later; this is the credible opening bar.
+
+---
+
+## D. Assumptions the run made about already-built code (verify, don't re-derive)
+
+These are not decisions — they are claims the analysis relied on. Each should be code-verified before the
+dependent EXP is implemented (all flagged in `FEASIBILITY.md §5`).
+
+- **EXP-14 emotion persistence is wired** (`EmotionBootstrapper` in `main.py:125`). *Verify:* is
+  `EmotionGraphWriter` injected into `EmotionUpdater` for write-through? If not, one composition-root line.
+- **EXP-21 reputation is wired** (`dependencies_engines.py:388`, `tick_scheduler.py:551`). *Verify:* the
+  stale "not wired in this slice" docstring should be corrected; update ISSUES.
+- **EXP-30 pinned-core context model is done** (ISSUE-059 fixed). *Verify:* `TokenBudgetExceededError` is
+  structurally unreachable on Tier0+TierA.
+- **EXP-20 / EXP-37 stubs may be partly wired** (`event_quest_trigger.py`, `world_state_quest_trigger.py`
+  passed to `TickScheduler`; `trade_handler_sync.py`). *Verify:* are the trigger bodies real or no-ops?
+- **EXP-99 need→behaviour coupling.** *Verify:* does `routine_engine` actually consume Need thresholds, or
+  do needs only decay?
+- **EXP-87 faction-count assumption.** *Verify:* `game_end_checker.py` 3-faction gate before adding factions.
+
+---
+
+## Attestation (what the run assumed and why)
+
+The analysis proceeded autonomously on every Default above. The defaults were chosen to be the most
+**business-aligned, lowest-schema-cost, layer-clean** option in each case, consistent with DEC-068
+(single deployment) and the layer model. The two genuinely human calls that the engineering plan cannot
+make for you are **OQ-13** (when to start the commercial SDK) and **OQ-1** (the only schema change on the
+critical path of the top-5). Everything else can run on its Default without blocking.

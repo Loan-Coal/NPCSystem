@@ -1183,3 +1183,80 @@ is voice-judge strictness + a "reports/scouts" secondary-source habit — a voic
 ECHO_GUARD. ISSUE-083 stays OPEN with that narrowed residual.
 **Consequence:** ECHO_GUARD reinforcement is now plant-scoped; NPC voice is freed on neutral questions while
 the number-echo and false-presence guards remain. Residual voice gap tracked under ISSUE-083.
+
+---
+
+# Expansion program grants (2026-06-11)
+
+> The 2026-06-11 EXPANSION_ANALYSIS produced `project-harness/expansion/OPEN_QUESTIONS.md` with an
+> educated-guess Default per human decision. The project owner authorized **auto-approve everything**
+> for the autonomous overnight expansion run. DEC-097..104 record those grants so the
+> `/expand-parallel` loop is not blocked. Every grant is **additive / back-compatible / git-reversible**.
+> Schema changes are applied by the orchestrator (never by parallel workers) just-in-time before the
+> batch that needs them; if the type-registry gate cannot be made green, the loop STOPs and surfaces.
+> NOTE on ids: the "Unlocks EXP-NN" references below use the **analysis** ids. After reconciliation
+> against code, the execution ids are **EXP-201..230** in `EXPANSION_INDEX.md`. Map: EXP-11→EXP-211,
+> EXP-17→EXP-212, EXP-18→EXP-214, EXP-19→EXP-218, EXP-34→EXP-204, EXP-35→EXP-210, EXP-41→EXP-226,
+> EXP-43→EXP-228, EXP-44→EXP-229 (full map in EXPANSION_INDEX.md §mapping).
+
+## DEC-097: Memory node — additive player-scope + salience fields (`subject_player_id`, `recall_count`, `never_forget`)
+**Date:** 2026-06-11 · **Status:** ✅ ACCEPTED (grants OQ-1)
+**Decision:** Add to `src/npc_engine/type_registry/base_nodes/memory.yaml` three optional, back-compat
+fields: `subject_player_id: str|None` (null = world/un-scoped memory), `recall_count: int` (default 0),
+`never_forget: bool` (default false). Define `MEMORY_FORGET_THRESHOLD` as a named `config.py` constant;
+forgetting is gated behind `never_forget == false`. Unlocks EXP-11, EXP-17.
+**Consequence:** existing memories remain valid (defaults apply). Player-scoped recall + salience-decay
+become buildable as code-only changes against the extended node.
+
+## DEC-098: Scheduler→API proactive delivery via in-process async queue
+**Date:** 2026-06-11 · **Status:** ✅ ACCEPTED (grants OQ-2)
+**Decision:** Deliver tick-scheduler-generated proactive lines to the WS layer through a new
+`engines/proactive_dialogue/proactive_queue.py` (`asyncio.Queue` owned in `engines`); the `api` WS
+handler drains it (`api`→`engines` is an allowed downward dependency — no upward import). Rejected:
+callback injection (layer-violating) and polling (latency). Unlocks EXP-35.
+**Consequence:** no layer-rule violation; proactive lines reach connected players.
+
+## DEC-099: Canonical NPC emotion source = in-memory `EmotionStore` (graph mood = durable snapshot)
+**Date:** 2026-06-11 · **Status:** ✅ ACCEPTED (grants OQ-3)
+**Decision:** `EmotionStore` is the source of truth for the current tick and what dialogue reads; the
+`MoodContagionEngine` writes **through** the store rather than around it; graph mood is the durable
+end-of-tick snapshot. Resolves the EmotionStore/graph divergence. Unlocks EXP-34, de-risks EXP-42.
+**Consequence:** dialogue context and director read one consistent emotion source.
+
+## DEC-100: Memory node — additive `kind` discriminator
+**Date:** 2026-06-11 · **Status:** ✅ ACCEPTED (grants OQ — EXP-18)
+**Decision:** Add `kind: Literal["episodic","commitment","fact"]|None` to `memory.yaml` (null =
+episodic, back-compat). Unlocks EXP-18 commitment/fact memory formation.
+**Consequence:** promises and learned facts form distinct, retrievable memory kinds.
+
+## DEC-101: UNLOCKS edge — additive `on_choice_id`
+**Date:** 2026-06-11 · **Status:** ✅ ACCEPTED (grants OQ-4)
+**Decision:** Add `on_choice_id: str|None` to `base_edges/unlocks.yaml` (null = auto-unlock, preserving
+current behaviour; set = player choice selects the branch). Unlocks EXP-19 quest branching.
+**Consequence:** quest chains gain single-choice consequence branching without breaking existing chains.
+
+## DEC-102: New type — `player_model` node + `HAS_PLAYER_MODEL` edge
+**Date:** 2026-06-11 · **Status:** ✅ ACCEPTED (grants OQ-5; Phase E)
+**Decision:** Approve `base_nodes/player_model.yaml` + `base_edges/has_player_model.yaml` for NPC
+theory-of-mind of the player (second-order belief, per-player provenance). Applied just-in-time before
+the Phase-E batch that builds EXP-41, landed together with its first reader to avoid an unused-type gate
+failure. Unlocks EXP-41 → EXP-42/43.
+**Consequence:** opens the emergent-cognition schema territory; gated behind A–D landing first.
+
+## DEC-103: BELIEVES edge — additive deception fields (`is_deception`, `deception_goal_id`)
+**Date:** 2026-06-11 · **Status:** ✅ ACCEPTED (grants OQ-6; Phase E)
+**Decision:** Add `is_deception: bool` (default false) + `deception_goal_id: str|None` to
+`base_edges/believes.yaml`. **Coupling requirement:** the EXP-32 anti-hallucination eval must treat
+`is_deception == true` beliefs as *intended* behaviour, not guard failures — EXP-43 must not ship before
+EXP-32 can distinguish them. Unlocks EXP-43.
+**Consequence:** NPCs can hold deliberate false beliefs the moat eval will not flag.
+
+## DEC-104: New type — `scheme` node + `EXECUTES_SCHEME` / `SCHEME_STEP` edges + active-scheme cap
+**Date:** 2026-06-11 · **Status:** ✅ ACCEPTED (grants OQ-7 + OQ-12; Phase E capstone)
+**Decision:** Approve `base_nodes/scheme.yaml` + `base_edges/executes_scheme.yaml` +
+`base_edges/scheme_step.yaml` for long-horizon covert NPC goals; define
+`MAX_ACTIVE_SCHEMES_PER_NPC = 2` (named config constant). Detection (so schemes surface to the player)
+revives the graveyard `investigation` engine as EXP-44's detection half (OQ-12), scoped inside EXP-44.
+Applied just-in-time before the EXP-44 batch. Unlocks EXP-44.
+**Consequence:** the flagship emergent-drama capability; XL, sequenced last; STOP + surface if the
+type-registry gate cannot be made green.
