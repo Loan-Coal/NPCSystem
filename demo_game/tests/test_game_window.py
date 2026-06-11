@@ -1,8 +1,8 @@
 """
 Module: test_game_window
 Layer: demo_game (tests)
-Purpose: Unit tests for GameWindow layout attribute computation. No pygame display
-         required — pygame.display.set_mode is mocked to avoid headless failures.
+Purpose: Unit tests for GameWindow layout attribute computation and intent-bubble
+         highlight + pre-fill behaviour. No pygame display required — set_mode mocked.
 Dependencies: demo_game.ui.game_window, unittest.mock
 Used by: make test-demo
 """
@@ -83,3 +83,66 @@ class TestGameWindowLayout:
         assert gw_large._left_w > gw_small._left_w
         assert gw_large._right_w > gw_small._right_w
         assert gw_large._usable_h > gw_small._usable_h
+
+
+# ---------------------------------------------------------------------------
+# Intent bubble highlight + pre-fill (EXP-225)
+# ---------------------------------------------------------------------------
+
+_INTENT_NPC = "captain_sorn"
+_INTENT_SCORE = 0.9
+_TRIGGER_TYPE = "event"
+
+
+def _make_intent(npc_id: str = _INTENT_NPC, score: float = _INTENT_SCORE, trigger_type: str = _TRIGGER_TYPE) -> dict:
+    """Build a minimal intent dict matching the server payload shape."""
+    return {"npc_id": npc_id, "score": score, "trigger_type": trigger_type}
+
+
+class TestIntentBubbleHighlightAndPrefill:
+    """EXP-225: arriving intent highlights initiating NPC + pre-fills input."""
+
+    def test_intent_arrival_highlights_npc(self) -> None:
+        """NPC list active_id switches to the intent NPC when bubble appears."""
+        gw, _, _ = _make_game_window(1280, 720)
+        # Inject a pending intent directly into the poller buffer (thread-safe).
+        gw._initiative_poller._pending.append(_make_intent())
+
+        gw._poll_intent_queue()
+
+        assert gw._left.npc_list._active_id == _INTENT_NPC
+
+    def test_intent_arrival_prefills_input(self) -> None:
+        """Input box is pre-filled with a greeting to the intent NPC."""
+        gw, _, _ = _make_game_window(1280, 720)
+        gw._initiative_poller._pending.append(_make_intent())
+
+        gw._poll_intent_queue()
+
+        prefill: str = gw._left.input.set_text.call_args[0][0]
+        assert prefill  # non-empty
+        assert _INTENT_NPC in prefill or "Captain Sorn" in prefill
+
+    def test_no_intent_leaves_active_npc_unchanged(self) -> None:
+        """When the queue is empty the active NPC and input are untouched."""
+        gw, _, _ = _make_game_window(1280, 720)
+        original_active = gw._left.npc_list._active_id
+
+        gw._poll_intent_queue()
+
+        assert gw._left.npc_list._active_id == original_active
+        gw._left.input.set_text.assert_not_called()
+
+    def test_bubble_suppressed_while_active(self) -> None:
+        """A new intent is ignored while an existing bubble is still showing."""
+        import time
+
+        gw, _, _ = _make_game_window(1280, 720)
+        # Prime an active bubble so the guard fires.
+        gw._intent_bubble_until = time.monotonic() + 60.0
+        gw._initiative_poller._pending.append(_make_intent())
+
+        gw._poll_intent_queue()
+
+        # Guard should have returned early — set_text never called.
+        gw._left.input.set_text.assert_not_called()

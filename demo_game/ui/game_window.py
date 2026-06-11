@@ -27,7 +27,7 @@ import pygame
 
 from demo_game.client import EngineClient, EngineClientError
 from demo_game.config import DemoConfig, get_demo_config
-from demo_game.constants import LOCATION_DISPLAY_NAMES, LOCATION_NPC_MAP, LOCATIONS, NPC_LOCATION_MAP, PALETTE
+from demo_game.constants import LOCATION_DISPLAY_NAMES, LOCATION_NPC_MAP, LOCATIONS, NPC_DISPLAY_NAMES, NPC_LOCATION_MAP, PALETTE
 from demo_game.game_end_checker import ARC_WIN_SUBTITLES
 from demo_game.game_controller import ControllerCallbacks, GameController
 from demo_game.game_end_poller import GameEndPoller
@@ -447,6 +447,20 @@ class GameWindow:
         self._intent_bubble_npc = npc_id
         self._intent_bubble_text = f"{display_name}: {phrase}"
         self._intent_bubble_until = time.monotonic() + INTENT_BUBBLE_DISPLAY_SECONDS
+        self._apply_intent_highlight(npc_id, display_name)
+
+    def _apply_intent_highlight(self, npc_id: str, display_name: str) -> None:
+        """Highlight the intent NPC in the list and pre-fill the input box.
+
+        Called when a proactive NPC-initiative bubble is shown so the player
+        can respond immediately without manually selecting the NPC.
+
+        Args:
+            npc_id: Internal NPC identifier (e.g. ``captain_sorn``).
+            display_name: Human-readable name shown in the input pre-fill.
+        """
+        self._left.npc_list._active_id = npc_id
+        self._left.input.set_text(f"[{display_name}] ")
 
     def _draw_intent_bubble(self) -> None:
         """Render the NPC-initiative intent bubble if one is active."""
