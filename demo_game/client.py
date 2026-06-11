@@ -508,6 +508,34 @@ class EngineClient:
     # Typed write endpoints (auto-create character-linked nodes + edges)
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Debug / retrieval inspection
+    # ------------------------------------------------------------------
+
+    def get_retrieval_debug(self, npc_id: str, query: str) -> dict | None:
+        """Return the ranked retrieval-context payload for an NPC + query.
+
+        Calls GET /v1/admin/debug/retrieval. Returns None on any non-2xx
+        response so callers can degrade gracefully without crashing.
+
+        Args:
+            npc_id: NPC identifier to retrieve context for.
+            query: Player message used as the retrieval signal.
+
+        Returns:
+            Dict matching DebugRetrievalResponse (npc_id, query,
+            context_items, total_tokens), or None when the endpoint
+            is unavailable or returns a non-2xx status.
+        """
+        resp = self._client.get(
+            "/v1/admin/debug/retrieval",
+            params={"npc_id": npc_id, "query": query},
+            timeout=self._graph_timeout,
+        )
+        if resp.status_code >= 400:
+            return None
+        return resp.json()
+
     def get_beliefs(self, character_id: str) -> list[dict]:
         """Return all beliefs for a character via the typed beliefs endpoint.
 
