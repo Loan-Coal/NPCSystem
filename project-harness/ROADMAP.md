@@ -143,6 +143,110 @@ re-seeding); **EXP-32 + EXP-87 can run in parallel with KE-6** (no conflict).
 
 ---
 
+## Phase 20 — API Exit Contract: `response_model` on all routes (BATCH5, ISSUE-052 side-effect)
+**Goal:** Every route emits a typed OpenAPI schema body. Game studios generating a client from `/openapi.json` get real stubs, not empty `{}`. Closes ISSUE-052 (mypy `no-any-return` from dict returns) as a side-effect.
+**Effort:** L (120 routes, ~30 files). No runtime behaviour changes — schema + exit-validation only.
+**Constraint:** 300-line file limit. If adding models pushes a route file over 300 lines, extract models into `api/response_models/<module>.py` rather than waiving. `api/schemas.py` is already near the limit — extract, do not waive.
+**Notes:**
+- Write S20.6's contract test (zero routes missing `response_model`, excluding `/health` + WS) **first** — it is the phase's RED and will fail with ~120 routes.
+- `OkEnvelope[T]` lives in `api/route_helpers.py`. Keep the runtime `ok_response()` dict-returning path unchanged — FastAPI validates on the way out. No runtime behaviour change.
+- Dynamic graph routes may use `OkEnvelope[dict[str, Any]]` where a tighter model is impractical (the registry is dynamic). Document the choice with an inline comment; no DECISIONS entry unless a reviewer flags it.
+- Run the FA102 future-annotations `--fix` sweep as its own separate commit (`chore(types): add future-annotations to all src files`).
+
+- [ ] **S20.1** Envelope — add `OkEnvelope[T](BaseModel, Generic[T])` with `success: bool`, `data: T`, `meta: dict | None` to `api/route_helpers.py`; annotate `ok_response()` return type. Add `ErrEnvelope` for documented error responses.
+  - Exit: `make type` still 0; `OkEnvelope` importable.
+- [ ] **S20.2** Typed sub-models — replace raw `dict`/`list[dict]` in `NPCStateResponse` (`character`, `relations`, `events` fields → `CharacterNode`, `RelationEdge`, `EventNode`); type `generic_node_service.upsert_node/patch_node` and `generic_edge_service.upsert_edge` against registry-validated Pydantic models instead of `dict[str, Any]`.
+  - Exit: `NPCStateResponse` fields are typed Pydantic models; `make type` 0.
+- [ ] **S20.3** Route sweep batch A — add `response_model=OkEnvelope[X]` to: `action`, `batch`, `beliefs`, `causality`, `clock`, `debts`, `economy`, `factions`, `goals`.
+  - Exit: `make check` green after each commit.
+- [ ] **S20.4** Route sweep batch B — `gossip_spread`, `graph`, `graph_admin`, `groups`, `interaction`, `items`, `location_graph`, `location_history`, `memories`, `pledges`.
+  - Exit: `make check` green.
+- [ ] **S20.5** Route sweep batch C — `quest`, `quest_generation`, `rumor_trace`, `rumors`, `schedules`, `secrets`, `skills`, `system`, `traits`, `treaties`, `witnessed`. Exempt: `/health` (bare 200), WebSocket route.
+  - Exit: `make check` green.
+- [ ] **S20.6** Verification — add test asserting zero routes are missing `response_model` (excluding `/health` + WS). Run `curl /openapi.json` spot-check; assert no route body is `{}`. Ruff FA102 `future-annotations` sweep (automated `--fix`).
+  - Exit: `make check` green; OpenAPI non-empty assertion passes; ISSUE-052 closed.
+
+---
+
+## Phase 21 — Architectural debt: rule violations + Cypher migration (ISSUE-053, ISSUE-058)
+**Goal:** Drain the `scripts/rules_baseline.txt` down to zero and relocate remaining raw Cypher outside `graph/`. Both tracks touch different files and can run in parallel.
+**Constraints:** After each cluster, run `make check-rules-update` to shrink the baseline. No new violations may be introduced. Each Cypher relocation needs a new `graph/<domain>_queries.py` file — no editing existing query files, add-by-new-file (OCP).
+**Notes:** Work the two tracks (rule violations and Cypher migration) as separate commits — they touch different files and must not be mixed.
+
+- [ ] **S21.1** Rule violations — file-size cluster (SEV-23): split any remaining files > 300 lines that are in the baseline. DECISIONS entry required for each split boundary.
+  - Exit: `make check-rules` baseline shrunken for R001.
+- [ ] **S21.2** Rule violations — error-swallowing cluster (SEV-18): replace `except: pass` and bare `except Exception: pass` with typed re-raises or `log-and-re-raise`. `utils/errors.py` typed exceptions only.
+  - Exit: R003 hits in baseline gone.
+- [ ] **S21.3** Rule violations — print/Cypher-outside-graph cluster (SEV-40 + SEV-04 partial): replace `print()` with structured logger calls; move `engines/interaction/quest_verifier.py` Cypher to new `graph/quest_verification_queries.py`.
+  - Exit: R004 (prints) + partial R005 (Cypher) baseline entries removed.
+- [ ] **S21.4** Cypher migration — transaction ownership (SEV-04 / ISSUE-058): create `graph/` coordinator for engine-owned `begin_transaction`/`commit` calls in `event_handler.py`, `quest_lifecycle_engine.py`, `faction_politics_engine.py`. Write DECISIONS entry first (DEC-087) proposing the coordinator boundary; implement only after approved.
+  - Exit: engine-owned transactions behind a single `graph/`-owned coordinator; `rg "begin_transaction|\.commit\("` in `src/npc_engine/engines/` returns 0 hits; baseline shrunk.
+- [ ] **S21.5** Rule violations — demo-imports cluster (SEV-02): ensure `demo_game/` has zero imports from `src/npc_engine/`; any remaining `npc_engine` imports in demo replaced with equivalent `EngineClient` REST calls.
+  - Exit: `rg "from npc_engine\|import npc_engine" demo_game/` returns 0; baseline empty.
+
+---
+
+## Phase 22 — Runtime correctness (ISSUE-056, ISSUE-064, ISSUE-068, ISSUE-071, ISSUE-082)
+**Goal:** Fix the remaining P2 correctness issues. All items are independent and conflict-free — parallelizable.
+**Notes:**
+- S22.2: mirror `tests/unit/test_embedding_index_offload.py` exactly — same pattern, different class.
+- S22.4: pass `NegotiationStore` as an optional constructor param (`negotiation_store: NegotiationStore | None = None`); do **not** import it at module level in `dialogue_handler.py`. The no-store path must behave identically to today — no regression for callers that don't pass it.
+- S22.5: YAML-only edit; bump the `PROMPT_VERSION` constant. Do not touch other `.py` files.
+
+- [ ] **S22.1** graph_rag label filter (ISSUE-056) — add `(seed:Event|Knowledge)` label filter to `_CYPHER_EXPAND_SEEDS` in `retrieval/graph_rag.py`. Add integration test asserting only Event/Knowledge nodes are returned.
+  - Exit: `rg "MATCH \(seed\)" src/npc_engine/retrieval/graph_rag.py` shows a labelled match; `make check` green.
+- [ ] **S22.2** Reranker off event loop (ISSUE-064) — mirror the ISSUE-063 fix: offload `cross_encoder_reranker.rerank()` via `await asyncio.to_thread(...)` at its async call site in `context_builder.py`. Add regression test asserting predict runs off the main thread (same pattern as `test_embedding_index_offload.py`).
+  - Exit: `make check` green; test passes.
+- [ ] **S22.3** Game-window test mock (ISSUE-068) — check whether `GameWindow` actually uses `WorldStatePoller`; if yes, add the missing import; if no, remove the stale `patch` from the 6 failing `TestGameWindowLayout` tests.
+  - Exit: `make test-demo` fully green (no layout test failures).
+- [ ] **S22.4** Dialogue live interaction state (ISSUE-071) — inject `NegotiationStore` into `DialogueHandler.__init__` (constructor injection, consistent with existing pattern). In `_build_context_prompt`, look up any active session for `(npc_id, player_id)` before calling `build_serialized_context`; if found, prepend a single `ContextItem(key="active_negotiation", tier="tier0", pinned=True)` with the session summary. Add unit test covering the injection path and the no-active-session path.
+  - Exit: during an active barter loop, the NPC's dialogue context includes the negotiation state; `make check` green.
+- [ ] **S22.5** old_henryk presupposition guard (ISSUE-082) — edit `src/npc_engine/prompts/dialogue/system_v1.yaml` only (no `.py` change): strengthen Rule 9 / Rule 10 with an explicit "if the player claims you witnessed or were present at an event — deny first, then answer from your own context only" clause. Bump `PROMPT_VERSION`. Re-run the two failing cases to verify.
+  - Exit: `case_adv_false_eyewitness_henryk` and `case_neg_old_henryk_no_eyewitness_claim` pass; `make check` green.
+
+---
+
+## Phase 23 — P3 cleanup sweep (ISSUE-054, ISSUE-069, ISSUE-070, ISSUE-072, ISSUE-075, ISSUE-076, ISSUE-081, ISSUE-084, ISSUE-085, ISSUE-087, ISSUE-089, ISSUE-091)
+**Goal:** Close all batchable P3 issues in one phase. All items are small, independent, and can be committed in any order. No new files needed except `WorldStatePayload` inline in `demo_game/seed.py`.
+**Constraint:** Each commit must keep `make check` green.
+**Notes:** One commit per S23.x step (steps are already grouped by file proximity). For S23.6 deletions, verify zero imports before deleting. S23.4 and S23.7 each need their own test update.
+
+- [ ] **S23.1** Docstring + deprecation sweep (ISSUE-072, ISSUE-076, ISSUE-085) — update the two stale `(auto-detected — review)` module docstrings in `gossip_distort.py` and `relation_writer.py`; replace all `datetime.utcnow()` calls in `world/world_state.py` with `datetime.now(timezone.utc)` and add `from datetime import timezone`.
+  - Exit: `make check-docstrings` passes for both files; no `utcnow` in `world_state.py`.
+- [ ] **S23.2** Scope + transaction fixes (ISSUE-075, ISSUE-087) — move the `logger.info` call in `reputation_nudge.py` inside the `async with tx` block; hoist the `get_world_state` call in `dialogue_handler.py` to before both the arousal and learned-facts branches.
+  - Exit: `make check` green; no functional change.
+- [ ] **S23.3** Error handling (ISSUE-069, ISSUE-070) — broaden `except EngineClientError` in `action_workers._get_current_tick` to `except Exception` with structured logging; confirm `subgraph_retriever`'s `relation:player` priority is lower than EXP-11's (88) so dedup is deterministic — add a comment if so, rename the key if not.
+  - Exit: `make test-demo` green.
+- [ ] **S23.4** Write-belief dedup (ISSUE-089) — replace `str(uuid.uuid4())` in `knowledge_writer.write_belief` with a stable `hashlib.sha256(f"{npc_id}:{content}".encode()).hexdigest()[:16]` so MERGE deduplicates repeated facts. Add unit test asserting two identical fact writes produce one node.
+  - Exit: `make check` green; duplicate belief test passes.
+- [ ] **S23.5** WorldStatePayload model (ISSUE-084) — define `WorldStatePayload(BaseModel)` inline in `demo_game/seed.py` (4 fields); return it from `build_world_state_payload`; update the two callers.
+  - Exit: `rg "build_world_state_payload" demo_game/seed.py` shows typed return; `make test-demo` green.
+- [ ] **S23.6** Dead code + lazy import (ISSUE-054, ISSUE-091) — delete `src/npc_engine/retrieval/token_budget_enforcer.py` and its test `tests/unit/test_context_pipeline.py` (confirm zero imports first); make the `game_window` import in `demo_game/__init__.py` lazy (inside `_dispatch` body only).
+  - Exit: `rg "token_budget_enforcer" src/` returns 0; `make check` green; `make test-demo` green.
+- [ ] **S23.7** Archetype in fallback (ISSUE-081) — thread the NPC archetype from `request.npc_id`→profile into `execute_with_degradation` and `DialogueLLMClient._load_fallback_dialogue` so the archetype-keyed fallback line is used instead of hardcoded `"default"`. Update unit test for the degradation path.
+  - Exit: a non-default-archetype NPC in degradation mode returns its archetype line; `make check` green.
+
+---
+
+## Phase 24 — Eval fixture completion (ISSUE-090)
+**Goal:** Wire the `learned_from_player` category into the anti-hallucination runner so the stub eval case is no longer silently skipped.
+**Dependency:** EXP-53 slice-3 (contradiction/dedup handling) should land before or concurrently.
+**Notes:** Small — a single commit.
+
+- [ ] **S24.1** Runner support for `learned_from_player` — add `learned_from_player` category handling to `evals/anti_hallucination_runner.py`: treat like `grounded` but add a pre-flight check that `write_belief()` has persisted the fact for the NPC before running the case. Update `ah_demo_stub_mira_player_taught` to remove `stub` from the ID once EXP-53 slice-3 is confirmed. Add unit test for the new category path.
+  - Exit: `make eval-anti-hallucination` no longer skips the player-taught case; `make check` green.
+
+---
+
+## Phase 25 — Voice polish: ECHO_GUARD A/B (ISSUE-083) + prompt-only (no .py)
+**Goal:** Determine whether ECHO_GUARD hurts voice colour and tune the prompt accordingly. YAML-only — no Python changes.
+**Notes:** Single commit. YAML-only — if you find yourself editing a `.py` file, stop and reconsider.
+
+- [ ] **S25.1** ECHO_GUARD A/B (ISSUE-083) — run `make eval-llm-demo` twice: once with the current ECHO_GUARD clause in `system_v1.yaml` and once with it softened to scope only to explicit player-presupposition patterns. Record pass rates for `case_voice_captain_sorn_001` and `case_voice_mira_innkeeper_001` in both runs. If softened version recovers both cases without regressing anti-hallucination scores, commit the softened wording and bump `PROMPT_VERSION`.
+  - Exit: both voice cases pass; anti-hallucination score does not drop; or decision to accept the current trade-off is documented in DECISIONS.md.
+
+---
+
 ## Phase X — Engine SDKs (Unity / Unreal) — DEFERRED COMMERCIAL MILESTONE
 **Goal:** Drop-in plugins wrapping the REST/WS API — highest commercial ROI.
 **Sessions:** 8+ (its own milestone, not a sprint task). Own-game milestone (Phase 7) is complete, so

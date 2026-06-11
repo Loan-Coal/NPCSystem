@@ -771,15 +771,16 @@ current mapping is good enough for demo badge display and does not affect correc
 **Why deferred:** Fixing requires knowing the correct label(s) for seed nodes (Event, Knowledge, etc.) which may shift as SEV-04 migrates Cypher domains. Touching the query now risks coupling to SEV-04 in-flight work.
 **To fix:** After SEV-04 completes, add `(seed:Event|Knowledge)` label filter (or the appropriate type-registry label constant) to `_CYPHER_EXPAND_SEEDS`. Verify with integration tests against test DB.
 
-## ISSUE-055: `api_seeder.py` uses get-then-skip; consider client-supplied stable ids long-term
+## [FIXED] ISSUE-055: `api_seeder.py` uses get-then-skip; consider client-supplied stable ids long-term
 **Found:** 2026-06-04, during SEV-10 planning
 **Severity:** P3 (nice-to-fix)
 **Where:** `data/api_seeder.py`; all typed admin endpoints that auto-generate IDs
 **Description:** SEV-10 implements idempotency via get-then-skip (mirror the village seeder). The architecturally correct solution for a multi-tenant middleware product is to let callers supply a stable `id` on creation endpoints and use `MERGE` instead of `CREATE` — this makes seeding and re-seeding fully deterministic without an extra GET round-trip, and aligns the API with idiomatic graph semantics. That change touches endpoint schemas and all callers and was deferred.
 **Why deferred:** Scope; get-then-skip is sufficient for current single-world demo use. Client-supplied ids requires coordinating endpoint schema changes with SEV-12 (multi-tenant) and SEV-33 (error envelope).
 **To fix:** Change typed admin endpoints (`/characters`, `/items`, `/beliefs`, `/goals`, `/secrets`, `/memories`, etc.) to accept an optional `id` field; use `MERGE (n {id: $id})` when provided. Apply same contract to `api_seeder.py`, `seed_village_world.py`, `demo_game/seed.py`. Document as the canonical seeding contract in `docs/API.md`.
+**Fixed:** 2026-06-10, in KE-6 — beliefs, goals, memories, secrets routes accept optional caller-supplied `id`; node is MERGEd when provided, UUID auto-generated when omitted.
 
-## ISSUE-057: Location hierarchy (PART_OF edges between Location nodes) not yet modeled
+## [FIXED] ISSUE-057: Location hierarchy (PART_OF edges between Location nodes) not yet modeled
 **Found:** 2026-06-04, during SEV-12 architectural review
 **Severity:** P3 (nice-to-fix)
 **Where:** `src/npc_engine/graph/`, `demo_game/seed.py`, `seeds/worlds/`
@@ -787,6 +788,7 @@ current mapping is good enough for demo badge display and does not affect correc
 **Why deferred:** Not needed for current demo or review hardening; design-phase only.
 **To fix:** Add a `PART_OF` directed edge type to `type_registry/`; update `graph/location_writer.py` to accept an optional `parent_id`; update `demo_game/seed.py` and eval seeders to wire the hierarchy. Add retrieval helpers for ancestor/descendant traversal.
 **Update 2026-06-05:** APPROVED for implementation — see DEC-071 and EXP-87 (`project-harness/expansion/`). Note `location_writer.py` does not yet exist (only `location_graph_queries.py`); it must be created as part of this.
+**Fixed:** 2026-06-10, in EXP-87 — `type_registry/base_edges/part_of.yaml` and `graph/location_writer.py` created.
 
 ## ISSUE-058: SEV-04 residual — raw Cypher + engine-owned transactions outside `graph/`
 **Found:** 2026-06-04, during final review (L2-01)
@@ -796,7 +798,7 @@ current mapping is good enough for demo badge display and does not affect correc
 **Why deferred:** Grandfathered in `scripts/rules_baseline.txt` (R005); `make check` is honest (passes by baseline). Relocating `world/`/`scheduler/` own-label Cypher may warrant a DECISIONS carve-out rather than a move. Transaction-ownership centralization is tracked by SEV-30.
 **To fix:** (1) Relocate `quest_verifier.py` Cypher to `graph/quest_verification_queries.py`. (2) Under SEV-30, hoist engine `begin_transaction`/`commit` into a `graph/`-owned coordinator. (3) For `world/`+`scheduler/` own-label queries, either relocate or add a DECISIONS entry permitting each package its own-label Cypher; then ratchet `rules_baseline.txt` down.
 
-## ISSUE-059: tier-A "mandatory" dialogue context is unbounded → TokenBudgetExceededError → canned dialogue (L9-04 root cause)
+## [FIXED] ISSUE-059: tier-A "mandatory" dialogue context is unbounded → TokenBudgetExceededError → canned dialogue (L9-04 root cause)
 **Found:** 2026-06-04, during final review Batch 4 live diagnosis
 **Severity:** P1 (a knowledge-rich NPC's dialogue silently degrades to canned — the headline gossip/memory features stop surfacing)
 **Where:** `src/npc_engine/retrieval/context_builder.py::build_serialized_context`, `src/npc_engine/retrieval/context_budget_enforcer.py::fill_to_budget`
@@ -804,6 +806,7 @@ current mapping is good enough for demo badge display and does not affect correc
 **Why deferred:** The correct fix (curate/cap tier-A to the top-K most relevant+recent mandatory items so it always fits the budget, trimming the rest into optional tier-B) is a context-assembly redesign needing its own TDD and live eval re-verification — too large to land safely inside the security/build remediation batch.
 **To fix:** (1) Bound tier-A in `context_builder`/`context_budget_enforcer`: rank mandatory items (recency + relevance to the player turn) and keep only what fits a configured tier-A sub-budget; demote the remainder to tier-B (already trimmable). (2) Add a unit test asserting tier0+tierA never exceeds the budget for a high-knowledge NPC fixture. (3) Re-run `make eval-llm-demo` on a fresh world and confirm mira surfaces the planted rumor. (4) Consider whether the planted-rumor KNOWS_ABOUT should be prioritized into tier-A so gossip consequences are guaranteed to surface.
 **Update 2026-06-05:** Fix direction DECIDED — see DEC-070 / EXP-30. Supersedes the "tier-A sub-budget" approach above with a cleaner model: collapse tiers into a small **pinned set** (`world`/`emotion`/persona/session-window/`active_quest`, marked `pinned:true`) + one **ranked pool** filled by `priority × relevance`. The overflow failure becomes impossible by construction. Implementation pending.
+**Fixed:** 2026-06-09, in EXP-30 — `context_builder.py` + `context_budget_enforcer.py` rewritten with pinned-core + ranked-pool model; `TokenBudgetExceededError` on tier0+tierA is now structurally impossible.
 
 ## [FIXED] ISSUE-060: demo-run ACT 3 bribe uses STANDS_WITH (faction→faction) for a player→faction standing → 404
 **Fixed:** 2026-06-05, in EXP-93 — `BribeScene.execute()` now calls `adjust_npc_reputation` (Character→Faction `HAS_REPUTATION_WITH` edge) instead of `put_npc_reputation` (Faction→Faction `STANDS_WITH`).
