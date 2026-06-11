@@ -990,3 +990,46 @@ cohesive registry for indirection.
 monolithic *logic*, not to fragment a flat list of 3-field dataclasses.
 **Limit:** Do not grow further without a real split. If a new error *family* with shared behaviour
 (not just fields) appears, extract that family to its own module then.
+
+## DEC-087: 🔶 PROPOSED — graph/-owned transaction coordinator for engine-owned writes (S21.4 / SEV-30 / ISSUE-058)
+**Status:** 🔶 PROPOSED — **awaiting human approval. Do not implement S21.4 until this is accepted.**
+**Date:** 2026-06-11
+**Context:** CLAUDE.md (strict): *"`graph_writer.py` is the only file that opens and commits
+transactions"* and *"No Neo4j queries outside `graph/`."* Five engine files currently own the
+transaction lifecycle directly — `session.begin_transaction()` … N `graph/` writer calls on `tx` …
+`tx.commit()`:
+  - `engines/events/event_handler.py` (1 tx: upsert_event + awareness + reputation + routine overrides + world-state)
+  - `engines/faction_politics/faction_politics_engine.py` (2 tx sites)
+  - `engines/quest/quest_lifecycle_engine.py` (2 tx sites)
+  - `engines/quest/quest_offer_service.py` (1 tx site)
+  - `engines/quest/quest_reward_router.py` (2 tx sites)
+(The step text named only the first three; `quest_offer_service` + `quest_reward_router` also qualify
+and must be in scope.) These are grandfathered as R005 in `rules_baseline.txt`. The transactions are
+**multi-statement units of work**: each wraps several `graph/` writer calls that must commit atomically,
+often interleaved with engine-side decisions (rule matching, severity branches, per-character loops).
+**Options considered:**
+  1. **Callback unit-of-work coordinator** (recommended). Add `graph/transaction_coordinator.py`
+     exposing `async def run_in_tx(session, work: Callable[[AsyncTransaction], Awaitable[T]]) -> T`
+     that owns `begin_transaction()` / `commit()` / rollback-on-error. Each engine passes an
+     `async def _work(tx): …` closure containing only the existing writer calls; the engine no longer
+     touches `begin_transaction`/`commit`. Minimal behaviour change, preserves atomic boundaries,
+     keeps engine decision logic where it is.
+  2. **Per-use-case named coordinators in `graph/`** (e.g. `graph/event_emit_coordinator.py`,
+     `graph/quest_reward_coordinator.py`). Moves the whole unit of work into `graph/`. Cleaner layering
+     but relocates engine decision logic (rule matching, severity branches) into `graph/`, which would
+     itself violate "no domain logic in graph/" — large, invasive, and blurs the layer it intends to fix.
+  3. **Waiver** (carve-out permitting engine-owned tx for multi-writer units). Cheapest, but concedes a
+     strict layer rule permanently and leaves `tx` plumbing scattered across engines.
+**Recommendation:** Option 1. It satisfies the strict rule (`begin_transaction`/`commit` live only in
+`graph/`), is mechanical and low-risk (closure extraction, no logic moves), and the atomic boundary of
+each existing `async with tx:` block maps 1:1 to one `run_in_tx(...)` call. The R005 baseline entries for
+the five engine files are then removed after `rg "begin_transaction|\.commit\(" src/npc_engine/engines`
+returns 0.
+**Open questions for the approver:**
+  - OK to standardize on the callback coordinator (Option 1), or prefer named per-use-case coordinators?
+  - Is `quest_engine_helpers._require_tx_capable_session` (the `hasattr(session, "begin_transaction")`
+    guard) folded into the coordinator, or kept engine-side?
+  - Rollback semantics: coordinator rolls back on any exception and re-raises the original (vs. wrapping
+    in a domain error)?
+**Consequence if approved:** new `graph/transaction_coordinator.py`; five engine files refactored to
+closures; R005 baseline shrunk by 5; ISSUE-058 item (2) closed. **Not started** — this entry is the gate.
