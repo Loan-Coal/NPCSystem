@@ -48,6 +48,7 @@ from demo_game.run_scenes import (
     WorldFeed,
 )
 from demo_game.determinism_beat import DeterminismBeat
+from demo_game.proactive_dialogue_beat import ProactiveDialogueBeat
 from demo_game.remembers_you_beat import RemembersYouBeat
 from demo_game.constants import DEMO_CACHE_VERSION as _PROMPT_VERSION
 
@@ -446,14 +447,27 @@ SCENES: list[Scene] = [
         text="ACT 10 — Memory: The innkeeper recalls your history."),
     RemembersYouBeat(name="act10_remembers_you"),
 
+    # -----------------------------------------------------------------------
+    # ACT 11 -- Proactive NPC dialogue (EXP-205)
+    # -----------------------------------------------------------------------
+    NarratorCue(
+        name="act11_narrator",
+        delay_before_ms=2000,
+        text=(
+            "[ACT 11] Proactive NPC dialogue. An NPC hails the player "
+            "without being prompted — the engine initiates."
+        ),
+    ),
+    ProactiveDialogueBeat(name="act11_proactive"),
+
     NarratorCue(
         name="outro",
         delay_before_ms=1000,
         text=(
-            "=== Demo complete. 10 acts. "
+            "=== Demo complete. 11 acts. "
             "Phase 6 + Phase 8 networked reputation + Phase 10 rumor warfare "
             "+ EXP-85 anti-hallucination guard + EXP-92 determinism proof "
-            "+ EXP-81 cross-session memory covered. ==="
+            "+ EXP-81 cross-session memory + EXP-205 proactive NPC dialogue covered. ==="
         ),
     ),
 ]
