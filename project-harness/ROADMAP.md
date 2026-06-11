@@ -34,10 +34,10 @@ analysis, reconciled against code (10 re-proposed items were already built and d
 - **Constraints:** demo is a pure REST/WS client (zero `src/` imports); no graph schema change.
 - [x] **EXP-201** relationship affinity phase engine (slice 1: `derive_phase` + `relation_phase_writer`, new files; unit tests green, a397661). Slice-2 call-site wiring in `dialogue_handler.py` deferred.
 - [ ] **EXP-202** standing → dialogue tone + secret-share gate. Exit: dialogue prompt reflects Standing; gate test green.
-- [ ] **EXP-203** relation-delta first-contact fix (creates edge instead of swallowing error). Exit: first-contact delta persists; regression test green.
-- [ ] **EXP-204** need/mood fed into dialogue context (DEC-099 canonical source). Exit: context includes need/mood line; test green.
+- [x] **EXP-203** relation-delta first-contact fix (creates edge instead of swallowing error; f511d42). first-contact delta persists; regression test green.
+- [x] **EXP-204** need fed into dialogue context (slice 1; DEC-099; e0ec882). Top unmet need surfaces as optional Tier-B item; mood slice 2 deferred.
 - [ ] **EXP-205** proactive dialogue act in scripted runner (demo). Exit: ACT-11 NPC-initiated beat plays.
-- [ ] **EXP-206** temporal memory readout (demo). Exit: memory panel shows occurred_at/is_historical.
+- [x] **EXP-206** temporal memory readout (demo; 62975ea). Memory panel shows occurred_at + historical marker.
 - [ ] **EXP-207** facial-expression glyph rendering (demo). Exit: portrait zone renders glyph from parsed field.
 
 ### Phase B — "Prove the moat"

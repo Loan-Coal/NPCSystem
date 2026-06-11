@@ -94,10 +94,10 @@ automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** A
-- **Next batch to run:** EXP-203 · EXP-204 · EXP-205 · EXP-206 · EXP-207 (Phase A, no schema) — workers
-  MUST merge munich-demo first. Then EXP-202 (soft dep EXP-201, satisfied).
-- **Then:** Phase B EXP-208 → Phase C (apply DEC-097/098) → D → E.
-- **Last green commit:** a397661 (EXP-201 slice-1 integrated, gate green).
+- **Next batch to run:** EXP-205 · EXP-207 · EXP-202 (Phase A remainder, no schema) — workers MUST
+  merge munich-demo first. Then Phase B EXP-208.
+- **Then:** Phase C (apply DEC-097/098) → D (DEC-100/101) → E (DEC-102/103/104).
+- **Last green commit:** 86fd746 (EXP-203/204/206 integrated, gate green).
 
 ## Progress Log
 
@@ -110,3 +110,10 @@ automatically; do not poll.
   from stale origin base and cherry-pick conflicted; commits discarded, re-dispatch next cycle with the
   mandatory merge-first worker instruction (now in §The cycle step 4). Learning: worktree.baseRef=fresh
   is stale vs unpushed local munich-demo.
+- **2 · 2026-06-11 cycle 2** — Batch EXP-203/204/206 (3 worktree workers, merge-first mandated).
+  **All 3 ✅** (f511d42/e0ec882/62975ea) — merge-first WORKED, all cherry-picked clean (fix validated).
+  Gate: fixed R006 (EXP-204 pushed `build_serialized_context` >40 lines → extracted `_maybe_append_top_need`)
+  and a multi-file mock gap (new `get_needs_for_character` call needed mocking in 2 more context test
+  files — exactly 3 such files exist, all now patched). Final fix 86fd746. Green: 1978 passed, 22 skipped,
+  85.76% cov; demo 625 passed. Learning: a new graph call in a shared builder must be mocked in EVERY
+  test file that drives it (grep the call site before gating).

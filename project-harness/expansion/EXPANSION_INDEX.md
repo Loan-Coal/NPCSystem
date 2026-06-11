@@ -42,10 +42,14 @@ _The orchestrator maintains this: add a line when an item unlocks a later one; d
   `derive_phase`) + `graph/relation_phase_writer.py` (`write_relationship_phase(session,src,dst,phase:str,tick)`)
   → slice-2 wiring (call after relation mutation in `engines/dialogue/dialogue_handler.py`) is a small
   follow-up usable by EXP-202/227. The writer takes phase as **str** (pass `RelationshipPhase.value`).
-- **NEXT BATCH:** EXP-203, EXP-204 (re-dispatch with merge-first — prior worktree commits discarded),
-  EXP-205, EXP-206, EXP-207 (Phase A demo + engine, conflict-free). Then EXP-202 (soft dep EXP-201, now
-  satisfied). EXP-207 & EXP-221 both edit left_panel.py (different batches); EXP-205 & EXP-222 both edit
-  run.py (different batches) — fine as sequenced.
+- **MERGE-FIRST PROVEN (cycle 2):** with the mandatory `git merge munich-demo` first, all 3 edit-based
+  workers cherry-picked clean. Keep mandating it every cycle. Integration may still surface gate issues
+  (a new graph call must be mocked in EVERY test file that drives the caller — grep for the call site).
+- **EXP-204 seam:** `get_needs_for_character` is now called in `context_builder.build_serialized_context`
+  via `_maybe_append_top_need`; any new test exercising that builder must mock
+  `context_builder.get_needs_for_character`. `ensure_relation_edge` now exists in `graph_writer.py` (EXP-203).
+- **NEXT BATCH:** EXP-205, EXP-207, EXP-202 (Phase A remainder — conflict-free). Then Phase B EXP-208.
+  EXP-207 & EXP-221 both edit left_panel.py (different batches); EXP-205 & EXP-222 both edit run.py.
 
 ## Mapping & reconciliation (analysis id → execution id)
 
@@ -94,10 +98,10 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 ### Phase A — Make it visible (no schema)
 - [x] **EXP-201** relationship affinity phase engine (slice 1: derive_phase + writer, new files) · S · DONE a397661 · slice-2 wiring (call `write_relationship_phase` after relation mutation in `dialogue_handler.py`) deferred — see carry-forward
 - [ ] **EXP-202** standing → dialogue tone + secret-share gate · M · deps: EXP-201 (soft) · edits `engines/gossip/knowledge_propagator.py`, `engines/dialogue/prompt_builder.py`, `prompts/dialogue/system_v1.yaml`
-- [ ] **EXP-203** relation-delta first-contact fix · S · deps: none · edit `engines/dialogue/relation_mutator.py`
-- [ ] **EXP-204** need/mood → dialogue context (DEC-099) · S · deps: none · edit `retrieval/context_builder.py`
+- [x] **EXP-203** relation-delta first-contact fix · S · DONE f511d42 · `ensure_relation_edge` added to `graph_writer.py`
+- [x] **EXP-204** need/mood → dialogue context (DEC-099) · S · DONE e0ec882 · slice 1 = needs (top unmet → Tier-B); mood slice 2 deferred
 - [ ] **EXP-205** proactive act in scripted runner (demo) · S · deps: none · new beat in `demo_game/run_scenes.py`; edit `demo_game/run.py` ⚠conflict(run.py: EXP-222)
-- [ ] **EXP-206** temporal memory readout (demo) · S · deps: none · edit `demo_game/ui/memory_panel.py`
+- [x] **EXP-206** temporal memory readout (demo) · S · DONE 62975ea · memory_panel renders occurred_at + historical marker
 - [ ] **EXP-207** facial-expression glyph (demo) · S · deps: none · edit `demo_game/ui/left_panel.py` ⚠conflict(left_panel.py: EXP-221)
 
 ### Phase B — Prove the moat
@@ -133,11 +137,10 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 
 ## Next candidate batch (suggested)
 
-**LAST BATCH (cycle 1):** EXP-201 ✅ (slice 1) — integrated a397661, gate green (1976 passed, 85.75%).
-EXP-203/204 were dispatched but their worktrees forked stale and conflicted → discarded, re-dispatch
-next cycle with merge-first.
-**NEXT:** EXP-203 · EXP-204 · EXP-205 · EXP-206 · EXP-207 (5 workers, no schema; conflict-free). Then
-EXP-202 (soft dep EXP-201, satisfied). **All workers must `git merge munich-demo` before building.**
+**LAST BATCH (cycle 2):** EXP-203 ✅ · EXP-204 ✅ · EXP-206 ✅ — integrated (f511d42/e0ec882/62975ea +
+fix 86fd746), gate green (1978 passed, 85.76%; demo 625). Merge-first worked: all 3 cherry-picked clean.
+**NEXT:** EXP-205 · EXP-207 · EXP-202 (Phase A remainder, conflict-free). Then Phase B EXP-208.
+**All workers must `git merge munich-demo` before building.**
 
 ---
 
