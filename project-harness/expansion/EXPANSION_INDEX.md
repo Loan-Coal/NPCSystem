@@ -67,11 +67,14 @@ _The orchestrator maintains this: add a line when an item unlocks a later one; d
   inline (so mypy narrows) or use module defaults. New seam: `trait_modulated_model.py` (2nd EmotionModel).
 - **PHASE D batch-2 DONE** (EXP-215/220/224/225 ✅). New seams: `find_conflicting_belief`,
   `faction_board.py`+`RightPanel.FACTION`, emotion pair view. DEC-105 waives emotion_panel size.
-- **NEXT BATCH (Phase D batch-3, no-schema):** EXP-221 (left_panel breadcrumb), EXP-222 (cinematic run.py),
-  EXP-223 (richer world seed.py — verify game_end_checker faction count) — conflict-free demo.
-- **THEN (Phase D schema):** apply DEC-100 (memory.yaml `kind`) → EXP-214 (memory_engine + context_builder;
-  WATCH context_builder R006 + mock the new call everywhere); DEC-101 (unlocks.yaml `on_choice_id`) → EXP-218.
-- **THEN Phase E:** apply DEC-102 → EXP-226, EXP-227; DEC-103 → EXP-228; DEC-104 → EXP-229; EXP-230.
+- **PHASE D batch-3 DONE** (EXP-221/222/223 ✅, clean one-shot). 22 items done; only the 2 Phase D schema
+  items remain before Phase E.
+- **NEXT BATCH (Phase D schema):** orchestrator FIRST applies DEC-100 (memory.yaml `kind`: Literal
+  episodic|commitment|fact, optional) + DEC-101 (unlocks.yaml `on_choice_id`: str, optional), commit + gate
+  green. THEN dispatch [EXP-214 (memory_engine `create_from_commitment` + context_builder — WATCH R006 +
+  mock new memory call in the 3 context test files)], [EXP-218 (quest_chain_resolver.choose + new
+  POST /quest/{id}/choose route)]. Disjoint → 2 workers.
+- **THEN Phase E:** apply DEC-102 → EXP-226 (+EXP-227 no-schema), DEC-103 → EXP-228, DEC-104 → EXP-229; EXP-230.
 
 ## Mapping & reconciliation (analysis id → execution id)
 
@@ -144,9 +147,9 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 - [ ] **EXP-218** quest branching on player choice 🔶DEC-101 · L · deps: none · edit `unlocks.yaml`(orch), `engines/quest/quest_chain_resolver.py`, new route
 - [x] **EXP-219** personality-modulated emotion model · M · DONE 6ca22af · `TraitModulatedEmotionModel` (2nd protocol impl); composition-root wiring = slice 2
 - [x] **EXP-220** faction standing board (demo) · S · DONE 69f7c80 · `faction_board.py` + `get_faction_standings` + `RightPanel.FACTION`
-- [ ] **EXP-221** location hierarchy breadcrumb (demo) · S · deps: none · edit `demo_game/ui/left_panel.py` ⚠conflict(left_panel.py: EXP-207)
-- [ ] **EXP-222** cinematic / recording mode (demo) · M · deps: EXP-205 (soft) · edit `demo_game/run.py` ⚠conflict(run.py: EXP-205)
-- [ ] **EXP-223** richer world (demo) · M · deps: none · edit `demo_game/seed.py`, `constants.py`; verify `game_end_checker.py` faction-count first
+- [x] **EXP-221** location hierarchy breadcrumb (demo) · S · DONE 8e14e11 · `build_location_breadcrumb` PART_OF walk; draw-loop wiring = slice 2
+- [x] **EXP-222** cinematic / recording mode (demo) · M · DONE 6c69444 · `--cinematic` formatted output; default unchanged
+- [x] **EXP-223** richer world (demo) · M · DONE 36bec00 · +3 NPCs +1 location (chapel) in existing factions; game_end_checker 3-faction assumption confirmed intact
 - [x] **EXP-224** mood-contagion visualiser (demo) · M · DONE 5e1f230 · pair view in emotion_panel + back-compat EmotionPoller pair (DEC-105 size waiver); game_window pair wiring = slice 2
 - [x] **EXP-225** proactive window surface (demo) · S · DONE c26c224 · intent highlights NPC + pre-fills input (also fixed a latent NPC_DISPLAY_NAMES import crash)
 
@@ -159,10 +162,9 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 
 ## Next candidate batch (suggested)
 
-**LAST BATCH (cycle 7):** EXP-215/220/224/225 ✅ — integrated (2ac16eb/69f7c80/5e1f230/c26c224 + fix 4d8fd71).
-Gate green (make check 2022, 85.99%; demo 694). 2 fixes (DEC-105 emotion_panel waiver + redundant cast).
-**19 items done: EXP-201..217 (most), 219, 220.**
-**NEXT (Phase D batch-3):** EXP-221 · EXP-222 · EXP-223 (no-schema demo, conflict-free).
+**LAST BATCH (cycle 8):** EXP-221/222/223 ✅ — integrated (8e14e11/6c69444/36bec00), clean one-shot (no fix).
+Gate green (make check 2022, demo 723). **22 items done: EXP-201..213, 215..217, 219..225.**
+**NEXT (Phase D schema):** apply DEC-100 + DEC-101 FIRST, then EXP-214 · EXP-218 (2 workers, disjoint).
 **All workers must `git merge munich-demo` before building; grep new files for `from src`.**
 
 ---

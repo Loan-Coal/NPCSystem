@@ -94,13 +94,13 @@ automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** A
-- **Phase in progress:** D batch-3 (done: EXP-201..217 most, 219, 220, 224, 225 = 19 items)
-- **Next batch (Phase D batch-3, no-schema demo):** EXP-221 (left_panel PART_OF breadcrumb), EXP-222
-  (cinematic run.py), EXP-223 (richer world seed.py — verify game_end_checker faction count). Conflict-free.
-  Merge munich-demo first; grep `from src`.
-- **Then (Phase D schema):** DEC-100 (memory.yaml `kind`) → EXP-214 (watch context_builder R006 + mock new
-  call everywhere); DEC-101 (unlocks.yaml `on_choice_id`) → EXP-218. → Phase E (DEC-102/103/104 new node types).
-- **Last green commit:** 4d8fd71 (EXP-215/220/224/225 integrated, gate green).
+- **Phase in progress:** D schema (done: 22 items — EXP-201..213, 215..217, 219..225)
+- **Next batch (Phase D schema):** orchestrator applies DEC-100 (memory.yaml `kind` optional) + DEC-101
+  (unlocks.yaml `on_choice_id` optional), commit + gate green. THEN [EXP-214 memory_engine `create_from_commitment`
+  + context_builder (WATCH R006; mock new memory call in 3 context test files)], [EXP-218 quest_chain_resolver.choose
+  + POST /quest/{id}/choose route]. 2 disjoint workers. Merge munich-demo first; grep `from src`.
+- **Then Phase E:** DEC-102 → EXP-226 (+227 no-schema); DEC-103 → EXP-228; DEC-104 → EXP-229; EXP-230.
+- **Last green commit:** 54b363a (EXP-221/222/223 integrated, gate green).
 
 ## Progress Log
 
@@ -148,3 +148,6 @@ automatically; do not poll.
   re-baseline (demo UI widget, splitting artificial — like DEC-036); EXP-215 redundant `cast` → removed.
   Fix 4d8fd71. Green: make check 2022 (85.99%), demo 694. **19 items done.** EXP-225 also fixed a latent
   `NPC_DISPLAY_NAMES` import crash in game_window.
+- **8 · 2026-06-12 cycle 8** — Phase D batch-3 demo EXP-221/222/223 (merge-first, cherry-picked clean).
+  **All 3 ✅** (8e14e11/6c69444/36bec00) — clean one-shot, NO integration fix. Gate green (make check 2022,
+  demo 723). **22 items done.** Only Phase D schema items (EXP-214, EXP-218) remain before Phase E.

@@ -66,9 +66,9 @@ analysis, reconciled against code (10 re-proposed items were already built and d
 - [ ] **EXP-218** quest branching on player choice (DEC-101 `unlocks.on_choice_id`). Exit: choice selects successor quest.
 - [x] **EXP-219** personality-modulated emotion model (6ca22af). `TraitModulatedEmotionModel` 2nd impl; wiring = slice 2.
 - [x] **EXP-220** faction standing board (demo; 69f7c80). FACTION tab shows standings.
-- [ ] **EXP-221** location hierarchy breadcrumb (demo). Exit: panel shows PART_OF chain.
-- [ ] **EXP-222** cinematic / recording mode (demo; needs EXP-205). Exit: `--cinematic` produces formatted run.
-- [ ] **EXP-223** richer world (more NPCs/locations; resolve faction-count first). Exit: seed adds NPCs/locations idempotently.
+- [x] **EXP-221** location hierarchy breadcrumb (demo; 8e14e11). PART_OF breadcrumb builder; draw wiring = slice 2.
+- [x] **EXP-222** cinematic / recording mode (demo; 6c69444). `--cinematic` formatted run; default unchanged.
+- [x] **EXP-223** richer world (demo; 36bec00). +3 NPCs +1 location in existing factions; faction count intact.
 - [x] **EXP-224** mood-contagion visualiser (demo; 5e1f230). Emotion panel shows a contagion pair (DEC-105 size waiver).
 - [x] **EXP-225** proactive window surface (demo; c26c224). Intent NPC highlighted + input pre-filled.
 
