@@ -31,6 +31,30 @@ class MyServiceError(StructuredNPCSystemError):
 
 ---
 
+## Pattern: Typed route exit contract via `OkEnvelope[T]`
+
+Every HTTP route declares `response_model=OkEnvelope[T]` so `/openapi.json` emits a
+real body schema (generated clients get stubs, not empty `{}`). The runtime path is
+unchanged — handlers still return `ok_response(...)` (a plain dict); FastAPI validates
+it against the envelope on the way out.
+
+```python
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
+
+@router.get("/{id}", response_model=OkEnvelope[dict[str, Any]])
+async def get_thing(id: str) -> dict[str, Any]:
+    return ok_response({"thing_id": id})   # data is a dict
+```
+
+- `data` is a dict → `OkEnvelope[dict[str, Any]]`; a list → `OkEnvelope[list[dict[str, Any]]]`.
+- Routes that return a **bare** (non-enveloped) dict use `response_model=dict[str, Any]`.
+- Dynamic registry routes (`graph`, `graph_admin`) stay `dict[str, Any]` (DEC-088).
+- `tests/unit/test_route_response_model_contract.py` enforces "no route missing `response_model`".
+
+**First applied in:** api (Phase 20, S20.1–S20.6) — swept across ~125 routes.
+
+---
+
 ## Anti-Pattern: Common Mistakes to Avoid
 
 A condensed reference of recurring mistakes observed during development. Each row
