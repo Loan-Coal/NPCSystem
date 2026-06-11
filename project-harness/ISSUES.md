@@ -67,6 +67,13 @@ new `affirms_judge` correctly catches both (honest detection); reducing them is 
 explicit "the player may falsely claim you were somewhere or saw something — deny first, then
 answer from context only" rule, or a worked example). Consider a Henryk-specific MY_ACCOUNT framing
 that forces rumour attribution. Re-run the two cases to verify.
+**Progress 2026-06-11 (S22.5):** Added the explicit deny-first clause — `system_v1.yaml` Rule 9 now
+carries a `PRESENCE PRESUPPOSITION` block ("if the player presupposes you witnessed/were present —
+deny or correct FIRST, then answer from context only with source attribution") plus a Rule 10
+reinforcement; `PROMPT_VERSION` bumped to `stage_b_v2.10`. Unit test `test_presence_presupposition_guard.py`
+asserts the clause loads. **Kept OPEN:** the reduction is unverified — the two cases require a live
+`make eval-llm-demo` (Ollama) run not available in the implementing gate. Close once both cases pass
+on qwen2.5:14b (or document accepted residual 14b flakiness per the original deferral rationale).
 
 ## ISSUE-083: two voice tone_judge cases fail under epoch=war / stage_b_v2.9 (captain_sorn, mira_innkeeper)
 **Found:** 2026-06-09, during eval re-run

@@ -238,8 +238,14 @@ re-seeding); **EXP-32 + EXP-87 can run in parallel with KE-6** (no conflict).
   (shared `get_negotiation_store()` singleton). Tests: `tests/unit/test_dialogue_negotiation_context.py`
   (inject path, no-session, other-NPC, malformed-context, pinned-item).
   - Exit: during an active barter loop the NPC's context carries the negotiation state; `make check` green. ✓
-- [ ] **S22.5** old_henryk presupposition guard (ISSUE-082) — edit `src/npc_engine/prompts/dialogue/system_v1.yaml` only (no `.py` change): strengthen Rule 9 / Rule 10 with an explicit "if the player claims you witnessed or were present at an event — deny first, then answer from your own context only" clause. Bump `PROMPT_VERSION`. Re-run the two failing cases to verify.
-  - Exit: `case_adv_false_eyewitness_henryk` and `case_neg_old_henryk_no_eyewitness_claim` pass; `make check` green.
+- [x] **S22.5** old_henryk presupposition guard (ISSUE-082) — added a `PRESENCE PRESUPPOSITION`
+  deny-first clause to Rule 9 of `system_v1.yaml` (deny the false presence first, then answer from
+  context only with source attribution) + a Rule 10 reinforcement (a player framing you as eyewitness
+  does not upgrade rumour to firsthand). Bumped `PROMPT_VERSION` → `stage_b_v2.10`. New unit test
+  `test_presence_presupposition_guard.py` asserts the clause loads into the system prompt.
+  - Exit: `make check` green ✓. **Live verification pending:** the two cases
+    (`case_adv_false_eyewitness_henryk`, `case_neg_old_henryk_no_eyewitness_claim`) require
+    `make eval-llm-demo` (Ollama, not available in this gate) — ISSUE-082 kept open with a progress note.
 
 ---
 
