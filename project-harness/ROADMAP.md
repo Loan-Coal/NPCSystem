@@ -173,19 +173,19 @@ re-seeding); **EXP-32 + EXP-87 can run in parallel with KE-6** (no conflict).
 
 ---
 
-## Phase 21 — Architectural debt: rule violations + Cypher migration (ISSUE-053, ISSUE-058)
+## Phase 21 — Architectural debt: rule violations + Cypher migration (ISSUE-053, ISSUE-058) ✅ (2026-06-11, src scope; demo_game S21.6 deprioritized)
 **Goal:** Drain the `scripts/rules_baseline.txt` down to zero and relocate remaining raw Cypher outside `graph/`. Both tracks touch different files and can run in parallel.
 **Constraints:** After each cluster, run `make check-rules-update` to shrink the baseline. No new violations may be introduced. Each Cypher relocation needs a new `graph/<domain>_queries.py` file — no editing existing query files, add-by-new-file (OCP).
 **Notes:** Work the two tracks (rule violations and Cypher migration) as separate commits — they touch different files and must not be mixed.
 **Reconciliation note (2026-06-11):** S21.2, S21.3, S21.5 were found **already satisfied** against the current `rules_baseline.txt` — the baseline carries **no** R002 (print), R003 (swallow), R004 (`raise Exception`), or R007 (demo import) entries, and `engines/interaction/quest_verifier.py` has **zero** Cypher. Verified and ticked (no code change). S21.1 is scoped this session to **src/npc_engine engine+api files only** (demo_game monsters deferred). Discovery: **most R001 baseline files already carry approved 300-line waivers** and are excluded from the split set — `context_builder` (DEC-016), `tick_scheduler` (DEC-042), `quest_lifecycle_engine` (DEC-044/078/086), `quest_generation_engine` (DEC-046), `gossip_handler` (DEC-061), `chapter_engine` (DEC-062), `api_seeder` (DEC-066), `dialogue_handler` (DEC-067/081), `context_budget_enforcer` (DEC-073), `dependencies_engines` (DEC-076), `config` (DEC-077), `intent_queries` (DEC-079), plus all `demo_game/*` (DEC-029/032/034/049/074/075). The only genuinely **unwaived** src targets are `main.py` (DEC-060 grandfather explicitly says *"resolved when SEV-23 executes"* = this step), `errors.py`, and `middleware_helpers.py`. S21.4 is **blocked** pending DEC-087 approval.
 
-- [ ] **S21.1** Rule violations — file-size cluster (SEV-23): split any remaining files > 300 lines that are in the baseline. DECISIONS entry required for each split boundary.
-  - Exit: `make check-rules` baseline shrunken for R001.
-  - **Progress (2026-06-11):** src/ engine+api portion **done** — `main.py` split (DEC-089) and
+- [x] **S21.1** Rule violations — file-size cluster (SEV-23), **src/ scope**: split any remaining src/npc_engine files > 300 lines that are in the baseline. DECISIONS entry required for each split boundary.
+  - Exit: `make check-rules` baseline shrunken for R001. ✓
+  - **Done (2026-06-11):** src/ engine+api portion complete — `main.py` split (DEC-089) and
     `middleware_helpers.py` split (DEC-090) removed from baseline; every other src `>300` file now
     carries a documented waiver (DEC-016/042/044/046/061/062/066/067/073/076/077/079/081/091).
-    Remaining R001 entries are all `demo_game/*` — **deferred** to a future session per the scope
-    decision. Baseline R001 (src) is fully resolved/waived; baseline 152→149.
+    **Every src R001 entry is now split-or-waived.** The `demo_game/*` file-size cluster is split out
+    as deprioritized **S21.6** (below) per the scope decision.
 - [x] **S21.2** Rule violations — error-swallowing cluster (SEV-18): replace `except: pass` and bare `except Exception: pass` with typed re-raises or `log-and-re-raise`. `utils/errors.py` typed exceptions only.
   - Exit: R003 hits in baseline gone. ✓ (found already satisfied — 0 R003 in baseline/src, 2026-06-11)
 - [x] **S21.3** Rule violations — print/Cypher-outside-graph cluster (SEV-40 + SEV-04 partial): replace `print()` with structured logger calls; move `engines/interaction/quest_verifier.py` Cypher to new `graph/quest_verification_queries.py`.
@@ -195,6 +195,16 @@ re-seeding); **EXP-32 + EXP-87 can run in parallel with KE-6** (no conflict).
   - **Done (2026-06-11):** DEC-087 approved (Option 1). New `graph/transaction_coordinator.py` `run_in_tx(session, work)` owns begin/commit/rollback. All **5** engine files (`event_handler`, `faction_politics_engine`, `quest_lifecycle_engine`, `quest_offer_service`, `quest_reward_router`) refactored to closures — zero `begin_transaction(`/`commit(` calls remain in `engines/`; R005 baseline shrunk 5 (149→144). The two residual textual `begin_transaction` hits are the `ensure_transaction_session` capability guard (`hasattr`) kept engine-side per DEC-087 Q2, not transaction ownership. Closes ISSUE-058 item (2).
 - [x] **S21.5** Rule violations — demo-imports cluster (SEV-02): ensure `demo_game/` has zero imports from `src/npc_engine/`; any remaining `npc_engine` imports in demo replaced with equivalent `EngineClient` REST calls.
   - Exit: `rg "from npc_engine\|import npc_engine" demo_game/` returns 0; baseline empty. ✓ (found already satisfied — 0 R007 in baseline/demo_game, 2026-06-11)
+
+### Deprioritized
+
+- [ ] **S21.6** Rule violations — file-size cluster, **demo_game/ scope** (SEV-23 remainder): split the
+  remaining `demo_game/*` files > 300 lines in `rules_baseline.txt` (`client.py` 1524L, `seed.py` 1265L,
+  `run.py`, `run_scenes.py`, `game_controller.py`, `ui/*`, `scenarios/*`). **Deprioritized — no active
+  development.** Demo code, not the licensed engine; high split risk (`make demo` breakage), low value,
+  and several already carry waivers (DEC-029/032/034/049/074/075). Pick up only if the demo is being
+  reworked anyway. Does not gate any feature phase.
+  - Exit: `make check-rules` R001 `demo_game/*` entries split or explicitly waived.
 
 ---
 
