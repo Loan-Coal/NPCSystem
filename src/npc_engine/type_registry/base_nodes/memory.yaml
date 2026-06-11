@@ -8,3 +8,6 @@ fields:
   occurred_at_game_time: { type: str, required: false }
   is_historical: { type: bool, required: false }
   last_recalled_at: { type: str, required: false }
+  subject_player_id: { type: str, required: false }
+  recall_count: { type: int, required: false }
+  never_forget: { type: bool, required: false }
