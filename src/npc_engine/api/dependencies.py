@@ -15,6 +15,7 @@ from fastapi import Depends
 from neo4j import AsyncSession
 
 from npc_engine.api.dependencies_engines import get_pricing_engine
+from npc_engine.engines.interaction.dispatch import set_trade_handler
 from npc_engine.api.dependency_singletons import (
     get_context_cache,
     get_dialogue_engine_model_config,
@@ -65,15 +66,21 @@ def get_negotiation_store() -> NegotiationStore:
 
 @lru_cache
 def get_sync_trade_handler() -> NegotiationBackedSyncTradeHandler:
-    """Return the singleton NegotiationBackedSyncTradeHandler.
+    """Return the singleton NegotiationBackedSyncTradeHandler and wire it into dispatch.
+
+    Side-effect: calls set_trade_handler so dispatch_interaction immediately routes
+    propose_trade through NegotiationBackedSyncTradeHandler without requiring a
+    separate lifespan call. Idempotent — lru_cache ensures one construction.
 
     Returns:
         Handler wired with the shared NegotiationStore and PricingEngine.
     """
-    return NegotiationBackedSyncTradeHandler(
+    handler = NegotiationBackedSyncTradeHandler(
         store=get_negotiation_store(),
         pricing_engine=get_pricing_engine(),
     )
+    set_trade_handler(handler)
+    return handler
 
 
 @lru_cache
