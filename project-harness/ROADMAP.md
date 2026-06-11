@@ -177,17 +177,18 @@ re-seeding); **EXP-32 + EXP-87 can run in parallel with KE-6** (no conflict).
 **Goal:** Drain the `scripts/rules_baseline.txt` down to zero and relocate remaining raw Cypher outside `graph/`. Both tracks touch different files and can run in parallel.
 **Constraints:** After each cluster, run `make check-rules-update` to shrink the baseline. No new violations may be introduced. Each Cypher relocation needs a new `graph/<domain>_queries.py` file — no editing existing query files, add-by-new-file (OCP).
 **Notes:** Work the two tracks (rule violations and Cypher migration) as separate commits — they touch different files and must not be mixed.
+**Reconciliation note (2026-06-11):** S21.2, S21.3, S21.5 were found **already satisfied** against the current `rules_baseline.txt` — the baseline carries **no** R002 (print), R003 (swallow), R004 (`raise Exception`), or R007 (demo import) entries, and `engines/interaction/quest_verifier.py` has **zero** Cypher. Verified and ticked (no code change). S21.1 is scoped this session to **src/npc_engine engine+api files only** (demo_game monsters deferred); three R001 entries are intentional 300-line waivers (DEC-079 `intent_queries`, DEC-081 `dialogue_handler`, DEC-086 `quest_lifecycle_engine`) and are excluded from the split set. S21.4 is **blocked** pending DEC-087 approval.
 
 - [ ] **S21.1** Rule violations — file-size cluster (SEV-23): split any remaining files > 300 lines that are in the baseline. DECISIONS entry required for each split boundary.
   - Exit: `make check-rules` baseline shrunken for R001.
-- [ ] **S21.2** Rule violations — error-swallowing cluster (SEV-18): replace `except: pass` and bare `except Exception: pass` with typed re-raises or `log-and-re-raise`. `utils/errors.py` typed exceptions only.
-  - Exit: R003 hits in baseline gone.
-- [ ] **S21.3** Rule violations — print/Cypher-outside-graph cluster (SEV-40 + SEV-04 partial): replace `print()` with structured logger calls; move `engines/interaction/quest_verifier.py` Cypher to new `graph/quest_verification_queries.py`.
-  - Exit: R004 (prints) + partial R005 (Cypher) baseline entries removed.
+- [x] **S21.2** Rule violations — error-swallowing cluster (SEV-18): replace `except: pass` and bare `except Exception: pass` with typed re-raises or `log-and-re-raise`. `utils/errors.py` typed exceptions only.
+  - Exit: R003 hits in baseline gone. ✓ (found already satisfied — 0 R003 in baseline/src, 2026-06-11)
+- [x] **S21.3** Rule violations — print/Cypher-outside-graph cluster (SEV-40 + SEV-04 partial): replace `print()` with structured logger calls; move `engines/interaction/quest_verifier.py` Cypher to new `graph/quest_verification_queries.py`.
+  - Exit: R004 (prints) + partial R005 (Cypher) baseline entries removed. ✓ (found already satisfied — 0 R002/R004 in src, `quest_verifier.py` has 0 Cypher, 2026-06-11)
 - [ ] **S21.4** Cypher migration — transaction ownership (SEV-04 / ISSUE-058): create `graph/` coordinator for engine-owned `begin_transaction`/`commit` calls in `event_handler.py`, `quest_lifecycle_engine.py`, `faction_politics_engine.py`. Write DECISIONS entry first (DEC-087) proposing the coordinator boundary; implement only after approved.
   - Exit: engine-owned transactions behind a single `graph/`-owned coordinator; `rg "begin_transaction|\.commit\("` in `src/npc_engine/engines/` returns 0 hits; baseline shrunk.
-- [ ] **S21.5** Rule violations — demo-imports cluster (SEV-02): ensure `demo_game/` has zero imports from `src/npc_engine/`; any remaining `npc_engine` imports in demo replaced with equivalent `EngineClient` REST calls.
-  - Exit: `rg "from npc_engine\|import npc_engine" demo_game/` returns 0; baseline empty.
+- [x] **S21.5** Rule violations — demo-imports cluster (SEV-02): ensure `demo_game/` has zero imports from `src/npc_engine/`; any remaining `npc_engine` imports in demo replaced with equivalent `EngineClient` REST calls.
+  - Exit: `rg "from npc_engine\|import npc_engine" demo_game/` returns 0; baseline empty. ✓ (found already satisfied — 0 R007 in baseline/demo_game, 2026-06-11)
 
 ---
 
@@ -309,3 +310,4 @@ health gate and is green as of Phase 16 completion (1837 passed, 22 skipped, 98%
 | 13 | 2026-06-11 | S20.1–S20.2 | `OkEnvelope[T]` + `ErrEnvelope` in `route_helpers.py` (`test_route_helpers.py`); `NPCStateResponse` typed via new `api/response_models/npc_state.py` (CharacterNode/RelationEdge/EventNode); DEC-088 (generic services stay dynamic) | Envelope importable; NPCStateResponse typed; `make type` 0 |
 | 14 | 2026-06-11 | S20.3–S20.5 | `response_model` swept across all ~125 routes (batches A/B/C + locations/reputation); `OkEnvelope[dict\|list]`, bare `action` route `dict[str, Any]` | Every route declares a typed body; gate green each batch |
 | 15 | 2026-06-11 | S20.6 | `test_route_response_model_contract.py` (zero routes missing `response_model`; non-empty OpenAPI bodies; OkEnvelope component present); FA102 sweep no-op; ISSUE-052 [FIXED] | Phase 20 ✅; 1924 tests green, mypy 0 |
+| 16 | 2026-06-11 | S21.2/S21.3/S21.5 | Reconcile: verified the current `rules_baseline.txt` carries 0 R002/R003/R004/R007 entries and `quest_verifier.py` has 0 Cypher; ticked the three already-satisfied steps (no code change) | S21.2/S21.3/S21.5 ✅ (found satisfied); S21.1 + S21.4 remain |
