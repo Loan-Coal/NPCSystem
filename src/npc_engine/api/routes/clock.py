@@ -17,7 +17,7 @@ from neo4j import AsyncSession
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session, get_tick_scheduler
-from npc_engine.api.route_helpers import error_response, ok_response
+from npc_engine.api.route_helpers import OkEnvelope, error_response, ok_response
 from npc_engine.config import MAX_DELTA_TICKS, Settings, get_settings
 from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.scheduler.tick_scheduler import TickScheduler
@@ -44,7 +44,7 @@ class ClockAdvanceRequest(BaseModel):
 router = APIRouter()
 
 
-@router.post("/clock/advance")
+@router.post("/clock/advance", response_model=OkEnvelope[dict[str, Any]])
 async def advance_clock(
     request: ClockAdvanceRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -113,7 +113,7 @@ async def advance_clock(
         ) from exc
 
 
-@router.get("/clock/state")
+@router.get("/clock/state", response_model=OkEnvelope[dict[str, Any]])
 async def clock_state(scheduler: TickScheduler = Depends(get_tick_scheduler)) -> dict[str, Any]:
     """Return current clock snapshot with per-engine status.
 

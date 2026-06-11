@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.belief_service import (
     create_belief,
     delete_belief,
@@ -65,7 +65,7 @@ class UpdateConfidenceRequest(BaseModel):
 router = APIRouter(prefix="/beliefs", tags=["beliefs"])
 
 
-@router.post("/{character_id}")
+@router.post("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def seed_belief(
     character_id: str,
     body: CreateBeliefRequest,
@@ -98,7 +98,7 @@ async def seed_belief(
     return ok_response({"belief_id": belief_id})
 
 
-@router.get("/{character_id}")
+@router.get("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def list_beliefs(
     character_id: str,
     k: int = 10,
@@ -117,7 +117,7 @@ async def list_beliefs(
     return ok_response({"beliefs": beliefs})
 
 
-@router.patch("/{belief_id}/confidence")
+@router.patch("/{belief_id}/confidence", response_model=OkEnvelope[dict[str, Any]])
 async def patch_confidence(
     belief_id: str,
     body: UpdateConfidenceRequest,
@@ -136,7 +136,7 @@ async def patch_confidence(
     return ok_response({"belief_id": belief_id})
 
 
-@router.delete("/{belief_id}")
+@router.delete("/{belief_id}", response_model=OkEnvelope[dict[str, Any]])
 async def remove_belief(
     belief_id: str,
     session: AsyncSession = Depends(get_db_session),

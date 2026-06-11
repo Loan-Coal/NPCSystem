@@ -16,7 +16,7 @@ from neo4j import AsyncSession
 from fastapi import APIRouter, Depends, Query
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.causality_service import (
     get_causes_svc,
     get_consequence_chain_svc,
@@ -25,7 +25,7 @@ from npc_engine.graph.causality_service import (
 router = APIRouter(prefix="/causality", tags=["causality"])
 
 
-@router.get("/chain/{event_id}")
+@router.get("/chain/{event_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_consequence_chain(
     event_id: str,
     max_depth: int = Query(default=5, ge=1, le=20),
@@ -46,7 +46,7 @@ async def get_consequence_chain(
     return ok_response({"chain": chain})
 
 
-@router.get("/causes/{node_id}")
+@router.get("/causes/{node_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_direct_causes(
     node_id: str,
     node_type: str = Query(default="Event"),

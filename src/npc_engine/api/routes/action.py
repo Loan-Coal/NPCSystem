@@ -32,7 +32,7 @@ from npc_engine.utils.errors import CurrencyInsufficientFundsError, CurrencyVali
 router = APIRouter()
 
 
-@router.post("/action")
+@router.post("/action", response_model=dict[str, Any])
 async def report_action(
     payload: ActionReportRequest,
     http_request: Request,

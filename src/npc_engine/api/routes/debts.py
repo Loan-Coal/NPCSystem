@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import error_response, ok_response
+from npc_engine.api.route_helpers import OkEnvelope, error_response, ok_response
 from npc_engine.graph.owes_service import (
     create_debt,
     get_debts_for_character_svc,
@@ -62,7 +62,7 @@ class UpdateDebtStatusRequest(BaseModel):
 router = APIRouter(prefix="/debts", tags=["debts"])
 
 
-@router.post("/{debtor_id}")
+@router.post("/{debtor_id}", response_model=OkEnvelope[dict[str, Any]])
 async def create_debt_for_character(
     debtor_id: str,
     body: CreateDebtRequest,
@@ -92,7 +92,7 @@ async def create_debt_for_character(
     return ok_response({"debtor_id": debtor_id, "creditor_id": body.creditor_id})
 
 
-@router.get("/{character_id}")
+@router.get("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def list_debts_for_character(
     character_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -109,7 +109,7 @@ async def list_debts_for_character(
     return ok_response({"debts": debts})
 
 
-@router.patch("/{debtor_id}/{creditor_id}")
+@router.patch("/{debtor_id}/{creditor_id}", response_model=OkEnvelope[dict[str, Any]])
 async def patch_debt_status(
     debtor_id: str,
     creditor_id: str,

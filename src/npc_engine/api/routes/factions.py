@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_faction_service
-from npc_engine.api.route_helpers import graph_error_to_http, ok_response, require_node
+from npc_engine.api.route_helpers import OkEnvelope, graph_error_to_http, ok_response, require_node
 from npc_engine.graph.faction_service import FactionService
 from npc_engine.utils.errors import FactionMembershipError, FactionNotFoundError
 
@@ -84,7 +84,7 @@ class _FactionNode(BaseModel):
 router = APIRouter(prefix="/factions", tags=["factions"])
 
 
-@router.post("/", status_code=201)
+@router.post("/", status_code=201, response_model=OkEnvelope[dict[str, Any]])
 async def create_faction(
     request: CreateFactionRequest,
     service: FactionService = Depends(get_faction_service),
@@ -104,7 +104,7 @@ async def create_faction(
     return ok_response({"id": request.id})
 
 
-@router.get("/")
+@router.get("/", response_model=OkEnvelope[list[dict[str, Any]]])
 async def list_factions(
     is_active: bool | None = None,
     service: FactionService = Depends(get_faction_service),
@@ -114,7 +114,7 @@ async def list_factions(
     return ok_response(factions)
 
 
-@router.get("/{faction_id}")
+@router.get("/{faction_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_faction(
     faction_id: str,
     service: FactionService = Depends(get_faction_service),
@@ -124,7 +124,7 @@ async def get_faction(
     return ok_response(require_node(faction, node_type="Faction"))
 
 
-@router.post("/{faction_id}/members", status_code=201)
+@router.post("/{faction_id}/members", status_code=201, response_model=OkEnvelope[dict[str, Any]])
 async def add_member(
     faction_id: str,
     request: AddMemberRequest,
@@ -143,7 +143,7 @@ async def add_member(
     return ok_response({"character_id": request.character_id, "faction_id": faction_id})
 
 
-@router.get("/{faction_id}/members")
+@router.get("/{faction_id}/members", response_model=OkEnvelope[list[dict[str, Any]]])
 async def list_members(
     faction_id: str,
     service: FactionService = Depends(get_faction_service),
@@ -153,7 +153,7 @@ async def list_members(
     return ok_response(members)
 
 
-@router.delete("/{faction_id}/members/{character_id}")
+@router.delete("/{faction_id}/members/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def remove_member(
     faction_id: str,
     character_id: str,
@@ -167,7 +167,7 @@ async def remove_member(
     return ok_response({"character_id": character_id, "faction_id": faction_id})
 
 
-@router.put("/{faction_id}/standings/{target_id}")
+@router.put("/{faction_id}/standings/{target_id}", response_model=OkEnvelope[dict[str, Any]])
 async def set_standing(
     faction_id: str,
     target_id: str,
@@ -182,7 +182,7 @@ async def set_standing(
     return ok_response({"src_id": faction_id, "dst_id": target_id, "standing": request.standing})
 
 
-@router.get("/{faction_id}/standings")
+@router.get("/{faction_id}/standings", response_model=OkEnvelope[list[dict[str, Any]]])
 async def list_standings(
     faction_id: str,
     service: FactionService = Depends(get_faction_service),
@@ -192,7 +192,7 @@ async def list_standings(
     return ok_response(standings)
 
 
-@router.post("/{faction_id}/controls/{location_id}", status_code=201)
+@router.post("/{faction_id}/controls/{location_id}", status_code=201, response_model=OkEnvelope[dict[str, Any]])
 async def set_controls(
     faction_id: str,
     location_id: str,
@@ -206,7 +206,7 @@ async def set_controls(
     return ok_response({"faction_id": faction_id, "location_id": location_id})
 
 
-@router.delete("/{faction_id}/controls/{location_id}")
+@router.delete("/{faction_id}/controls/{location_id}", response_model=OkEnvelope[dict[str, Any]])
 async def remove_controls(
     faction_id: str,
     location_id: str,

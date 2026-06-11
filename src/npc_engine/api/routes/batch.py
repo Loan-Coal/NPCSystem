@@ -15,7 +15,7 @@ from neo4j import AsyncSession
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session, get_event_handler, get_gossip_handler
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.engines.events.event_handler import EventHandler
 from npc_engine.engines.gossip.gossip_handler import GossipHandler
 
@@ -42,7 +42,7 @@ class EventTickRequest(BaseModel):
 router = APIRouter()
 
 
-@router.post("/batch/gossip_tick")
+@router.post("/batch/gossip_tick", response_model=OkEnvelope[dict[str, Any]])
 async def run_gossip_tick(
     request: GossipTickRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -60,7 +60,7 @@ async def run_gossip_tick(
     return ok_response(result)
 
 
-@router.post("/batch/event_tick")
+@router.post("/batch/event_tick", response_model=OkEnvelope[dict[str, Any]])
 async def run_event_tick(
     request: EventTickRequest,
     session: AsyncSession = Depends(get_db_session),

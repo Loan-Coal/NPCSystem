@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.goal_service import (
     create_goal,
     delete_goal,
@@ -66,7 +66,7 @@ class UpdateGoalStatusRequest(BaseModel):
 router = APIRouter(prefix="/goals", tags=["goals"])
 
 
-@router.post("/{character_id}")
+@router.post("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def seed_goal(
     character_id: str,
     body: CreateGoalRequest,
@@ -100,7 +100,7 @@ async def seed_goal(
     return ok_response({"goal_id": goal_id})
 
 
-@router.get("/{character_id}")
+@router.get("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def list_goals(
     character_id: str,
     k: int = 10,
@@ -123,7 +123,7 @@ async def list_goals(
     return ok_response({"goals": goals})
 
 
-@router.patch("/{goal_id}/status")
+@router.patch("/{goal_id}/status", response_model=OkEnvelope[dict[str, Any]])
 async def patch_goal_status(
     goal_id: str,
     body: UpdateGoalStatusRequest,
@@ -142,7 +142,7 @@ async def patch_goal_status(
     return ok_response({"goal_id": goal_id})
 
 
-@router.delete("/{goal_id}")
+@router.delete("/{goal_id}", response_model=OkEnvelope[dict[str, Any]])
 async def remove_goal(
     goal_id: str,
     session: AsyncSession = Depends(get_db_session),

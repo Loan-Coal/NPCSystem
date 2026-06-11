@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.dependency_singletons import get_pricing_engine, get_trade_engine
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.engines.economy.pricing_engine import PricingEngine
 from npc_engine.engines.economy.trade_engine import TradeEngine
 from npc_engine.graph.pricing_queries import (
@@ -52,7 +52,7 @@ class TradeOfferRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
-@router.get("/price")
+@router.get("/price", response_model=OkEnvelope[dict[str, Any]])
 async def get_item_price(
     item_type: str = Query(..., min_length=1),
     character_id: str = Query(..., min_length=1),
@@ -88,7 +88,7 @@ async def get_item_price(
     return ok_response({"price": price})
 
 
-@router.post("/trade")
+@router.post("/trade", response_model=OkEnvelope[dict[str, Any]])
 async def evaluate_trade(
     body: TradeOfferRequest,
     session: AsyncSession = Depends(get_db_session),
