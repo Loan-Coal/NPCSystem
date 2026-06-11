@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.dependency_singletons import get_quest_generation_engine
-from npc_engine.api.route_helpers import error_response, ok_response
+from npc_engine.api.route_helpers import OkEnvelope, error_response, ok_response
 from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
 from npc_engine.graph.quest_node_service import get_draft_quests, get_quest, offer_quest
 from npc_engine.utils.logging import get_logger
@@ -37,7 +37,7 @@ class GenerateQuestRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
-@router.post("/generate")
+@router.post("/generate", response_model=OkEnvelope[dict[str, Any]])
 async def generate_quest(
     body: GenerateQuestRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -67,7 +67,7 @@ async def generate_quest(
     return ok_response({"quest_id": result.quest_id, "description": result.description})
 
 
-@router.get("/drafts")
+@router.get("/drafts", response_model=OkEnvelope[dict[str, Any]])
 async def list_draft_quests(
     quest_giver_id: str | None = None,
     session: AsyncSession = Depends(get_db_session),
@@ -85,7 +85,7 @@ async def list_draft_quests(
     return ok_response({"drafts": drafts, "count": len(drafts)})
 
 
-@router.post("/{quest_id}/offer")
+@router.post("/{quest_id}/offer", response_model=OkEnvelope[dict[str, Any]])
 async def offer_draft_quest_simple(
     quest_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -114,7 +114,7 @@ async def offer_draft_quest_simple(
     return ok_response({"quest_id": result["quest_id"], "status": result["status"]})
 
 
-@router.get("/{quest_id}")
+@router.get("/{quest_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_quest_by_id(
     quest_id: str,
     session: AsyncSession = Depends(get_db_session),

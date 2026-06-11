@@ -16,7 +16,7 @@ from neo4j import AsyncSession
 from fastapi import APIRouter, Depends, Query
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.witnessed_service import (
     get_witnessed_by_svc,
     get_witnesses_of_event_svc,
@@ -26,7 +26,7 @@ from npc_engine.graph.witnessed_service import (
 router = APIRouter(prefix="/witnessed", tags=["witnessed"])
 
 
-@router.get("/event/{event_id}")
+@router.get("/event/{event_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_event_witnesses(
     event_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -43,7 +43,7 @@ async def get_event_witnesses(
     return ok_response({"witnesses": witnesses})
 
 
-@router.get("/by/{subject_id}")
+@router.get("/by/{subject_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_observations_of_subject(
     subject_id: str,
     limit: int = Query(default=20, ge=1, le=100),
@@ -62,7 +62,7 @@ async def get_observations_of_subject(
     return ok_response({"observations": observations})
 
 
-@router.patch("/disclose")
+@router.patch("/disclose", response_model=OkEnvelope[dict[str, Any]])
 async def disclose_witness(
     witness_id: str = Query(...),
     subject_id: str = Query(...),

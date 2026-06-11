@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.rumor_service import (
     believe_rumor,
     create_rumor,
@@ -61,7 +61,7 @@ class BelieveRumorRequest(BaseModel):
 router = APIRouter(prefix="/rumors", tags=["rumors"])
 
 
-@router.post("")
+@router.post("", response_model=OkEnvelope[dict[str, Any]])
 async def create_rumor_route(
     body: CreateRumorRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -85,7 +85,7 @@ async def create_rumor_route(
     return ok_response({"rumor_id": rumor_id})
 
 
-@router.post("/{rumor_id}/believe")
+@router.post("/{rumor_id}/believe", response_model=OkEnvelope[dict[str, Any]])
 async def believe_rumor_route(
     rumor_id: str,
     body: BelieveRumorRequest,
@@ -111,7 +111,7 @@ async def believe_rumor_route(
     return ok_response({"rumor_id": rumor_id, "character_id": body.character_id})
 
 
-@router.get("/{character_id}")
+@router.get("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def list_rumors_for_character(
     character_id: str,
     min_confidence: int = 30,
@@ -132,7 +132,7 @@ async def list_rumors_for_character(
     return ok_response({"rumors": rumors})
 
 
-@router.get("/tree/{rumor_id}")
+@router.get("/tree/{rumor_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_rumor_tree_route(
     rumor_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -149,7 +149,7 @@ async def get_rumor_tree_route(
     return ok_response({"tree": tree})
 
 
-@router.get("/event/{event_id}")
+@router.get("/event/{event_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_rumors_about_event_route(
     event_id: str,
     session: AsyncSession = Depends(get_db_session),

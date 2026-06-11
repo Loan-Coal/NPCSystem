@@ -28,7 +28,7 @@ from npc_engine.api.quest_helpers import (
     quest_error_to_http,
     to_objective_inputs,
 )
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.api.schemas import (
     QuestAcceptRequest,
     QuestEvaluateRequest,
@@ -47,7 +47,7 @@ from npc_engine.utils.errors import QuestTransitionError
 router = APIRouter(prefix="/quest")
 
 
-@router.post("/offer-draft")
+@router.post("/offer-draft", response_model=OkEnvelope[dict[str, Any]])
 async def offer_draft_quest(
     body: QuestOfferRequest,
     http_request: Request,
@@ -87,7 +87,7 @@ async def offer_draft_quest(
     return ok_response({"quest_state": state})
 
 
-@router.post("/offer")
+@router.post("/offer", response_model=OkEnvelope[dict[str, Any]])
 async def offer_quest(
     body: QuestOfferRequest,
     http_request: Request,
@@ -125,7 +125,7 @@ async def offer_quest(
     return ok_response({"quest_state": state})
 
 
-@router.post("/accept")
+@router.post("/accept", response_model=OkEnvelope[dict[str, Any]])
 async def accept_quest(
     body: QuestAcceptRequest,
     http_request: Request,
@@ -154,7 +154,7 @@ async def accept_quest(
     return ok_response({"quest_state": state})
 
 
-@router.post("/objective")
+@router.post("/objective", response_model=OkEnvelope[dict[str, Any]])
 async def update_objective(
     body: QuestObjectiveUpdateRequest,
     http_request: Request,
@@ -185,7 +185,7 @@ async def update_objective(
     return ok_response({"quest_state": state})
 
 
-@router.post("/evaluate")
+@router.post("/evaluate", response_model=OkEnvelope[dict[str, Any]])
 async def evaluate_completion(
     body: QuestEvaluateRequest,
     http_request: Request,
@@ -214,7 +214,7 @@ async def evaluate_completion(
     return ok_response({"quest_state": state})
 
 
-@router.post("/reward")
+@router.post("/reward", response_model=OkEnvelope[dict[str, Any]])
 async def apply_rewards(
     body: QuestRewardApplyRequest,
     http_request: Request,

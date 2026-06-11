@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.treaty_service import (
     TreatyCondition,
     break_treaty,
@@ -68,7 +68,7 @@ class BreakTreatyRequest(BaseModel):
 router = APIRouter(prefix="/treaties", tags=["treaties"])
 
 
-@router.post("/")
+@router.post("/", response_model=OkEnvelope[dict[str, Any]])
 async def create_treaty_route(
     body: CreateTreatyRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -93,7 +93,7 @@ async def create_treaty_route(
     return ok_response({"treaty_id": treaty_id})
 
 
-@router.get("/factions/{faction_id}")
+@router.get("/factions/{faction_id}", response_model=OkEnvelope[dict[str, Any]])
 async def list_faction_treaties(
     faction_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -110,7 +110,7 @@ async def list_faction_treaties(
     return ok_response({"treaties": treaties})
 
 
-@router.post("/{treaty_id}/expire")
+@router.post("/{treaty_id}/expire", response_model=OkEnvelope[dict[str, Any]])
 async def expire_treaty_route(
     treaty_id: str,
     body: ExpireTreatyRequest,
@@ -129,7 +129,7 @@ async def expire_treaty_route(
     return ok_response({"treaty_id": treaty_id, "status": "expired"})
 
 
-@router.post("/{treaty_id}/break")
+@router.post("/{treaty_id}/break", response_model=OkEnvelope[dict[str, Any]])
 async def break_treaty_route(
     treaty_id: str,
     body: BreakTreatyRequest,

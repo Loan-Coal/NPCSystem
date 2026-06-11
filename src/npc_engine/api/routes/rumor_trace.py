@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.rumor_trace_service import correct_rumor_at_npc, trace_rumor_chain
 
 router = APIRouter(prefix="/gossip", tags=["gossip"])
@@ -37,7 +37,7 @@ class CorrectRumorRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
-@router.get("/trace/{event_id}")
+@router.get("/trace/{event_id}", response_model=OkEnvelope[dict[str, Any]])
 async def trace_rumor_route(
     event_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -57,7 +57,7 @@ async def trace_rumor_route(
     return ok_response({"event_id": event_id, "chain": chain})
 
 
-@router.post("/correct")
+@router.post("/correct", response_model=OkEnvelope[dict[str, Any]])
 async def correct_rumor_route(
     body: CorrectRumorRequest,
     session: AsyncSession = Depends(get_db_session),

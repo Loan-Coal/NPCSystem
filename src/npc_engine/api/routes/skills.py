@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.skill_service import (
     add_skill,
     check_skill_threshold_svc,
@@ -57,7 +57,7 @@ class IncrementXpRequest(BaseModel):
 router = APIRouter(prefix="/skills", tags=["skills"])
 
 
-@router.post("/characters/{character_id}")
+@router.post("/characters/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def add_character_skill(
     character_id: str,
     body: AddSkillRequest,
@@ -82,7 +82,7 @@ async def add_character_skill(
     return ok_response({"character_id": character_id, "skill_id": body.skill_id})
 
 
-@router.get("/characters/{character_id}")
+@router.get("/characters/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def list_character_skills(
     character_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -99,7 +99,7 @@ async def list_character_skills(
     return ok_response({"skills": skills})
 
 
-@router.post("/characters/{character_id}/xp")
+@router.post("/characters/{character_id}/xp", response_model=OkEnvelope[dict[str, Any]])
 async def award_xp(
     character_id: str,
     body: IncrementXpRequest,
@@ -117,7 +117,7 @@ async def award_xp(
     raise HTTPException(status_code=422, detail="skill_id must be provided as query param; use /skills/characters/{character_id}/{skill_id}/xp")
 
 
-@router.post("/characters/{character_id}/{skill_id}/xp")
+@router.post("/characters/{character_id}/{skill_id}/xp", response_model=OkEnvelope[dict[str, Any]])
 async def award_xp_for_skill(
     character_id: str,
     skill_id: str,
@@ -144,7 +144,7 @@ async def award_xp_for_skill(
     return ok_response({"character_id": character_id, "skill_id": skill_id, "new_level": new_level})
 
 
-@router.get("/characters/{character_id}/{skill_id}/check")
+@router.get("/characters/{character_id}/{skill_id}/check", response_model=OkEnvelope[dict[str, Any]])
 async def check_skill(
     character_id: str,
     skill_id: str,
@@ -170,7 +170,7 @@ async def check_skill(
     return ok_response({"meets_threshold": meets})
 
 
-@router.get("/{skill_id}/characters")
+@router.get("/{skill_id}/characters", response_model=OkEnvelope[dict[str, Any]])
 async def list_characters_with_skill(
     skill_id: str,
     min_level: int = 0,

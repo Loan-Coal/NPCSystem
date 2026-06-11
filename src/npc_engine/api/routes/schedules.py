@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_schedule_service
-from npc_engine.api.route_helpers import graph_error_to_http, ok_response, require_node
+from npc_engine.api.route_helpers import OkEnvelope, graph_error_to_http, ok_response, require_node
 from npc_engine.graph.schedule_service import ScheduleService
 from npc_engine.utils.errors import ScheduleAssignmentError, ScheduleNotFoundError
 
@@ -58,7 +58,7 @@ class CreateScheduleRequest(BaseModel):
 router = APIRouter(prefix="/schedules", tags=["schedules"])
 
 
-@router.post("/", status_code=201)
+@router.post("/", status_code=201, response_model=OkEnvelope[dict[str, Any]])
 async def create_schedule(
     request: CreateScheduleRequest,
     service: ScheduleService = Depends(get_schedule_service),
@@ -74,7 +74,7 @@ async def create_schedule(
     return ok_response({"id": schedule["id"]})
 
 
-@router.get("/{schedule_id}")
+@router.get("/{schedule_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_schedule(
     schedule_id: str,
     service: ScheduleService = Depends(get_schedule_service),
@@ -87,7 +87,7 @@ async def get_schedule(
     return ok_response(schedule)
 
 
-@router.post("/{schedule_id}/assign/{character_id}", status_code=201)
+@router.post("/{schedule_id}/assign/{character_id}", status_code=201, response_model=OkEnvelope[dict[str, Any]])
 async def assign_schedule(
     schedule_id: str,
     character_id: str,
@@ -101,7 +101,7 @@ async def assign_schedule(
     return ok_response({"character_id": character_id, "schedule_id": schedule_id})
 
 
-@router.delete("/{character_id}/unassign")
+@router.delete("/{character_id}/unassign", response_model=OkEnvelope[dict[str, Any]])
 async def unassign_schedule(
     character_id: str,
     service: ScheduleService = Depends(get_schedule_service),
@@ -111,7 +111,7 @@ async def unassign_schedule(
     return ok_response({"character_id": character_id})
 
 
-@router.get("/character/{character_id}")
+@router.get("/character/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_character_schedule(
     character_id: str,
     service: ScheduleService = Depends(get_schedule_service),
@@ -121,7 +121,7 @@ async def get_character_schedule(
     return ok_response(require_node(schedule, node_type="Schedule"))
 
 
-@router.get("/character/{character_id}/at")
+@router.get("/character/{character_id}/at", response_model=OkEnvelope[dict[str, Any]])
 async def get_character_location_at(
     character_id: str,
     time_of_day: TimeOfDay,
@@ -132,7 +132,7 @@ async def get_character_location_at(
     return ok_response({"character_id": character_id, "time_of_day": time_of_day, "location_id": location_id})
 
 
-@router.get("/location/{location_id}/at")
+@router.get("/location/{location_id}/at", response_model=OkEnvelope[dict[str, Any]])
 async def get_characters_at_location(
     location_id: str,
     time_of_day: TimeOfDay,

@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.trait_service import add_trait, get_traits_svc, remove_trait
 
 # ---------------------------------------------------------------------------
@@ -42,7 +42,7 @@ class AddTraitRequest(BaseModel):
 router = APIRouter(prefix="/traits", tags=["traits"])
 
 
-@router.post("/characters/{character_id}")
+@router.post("/characters/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def add_character_trait(
     character_id: str,
     body: AddTraitRequest,
@@ -67,7 +67,7 @@ async def add_character_trait(
     return ok_response({"character_id": character_id, "trait_id": body.trait_id})
 
 
-@router.get("/characters/{character_id}")
+@router.get("/characters/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def list_character_traits(
     character_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -84,7 +84,7 @@ async def list_character_traits(
     return ok_response({"traits": traits})
 
 
-@router.delete("/characters/{character_id}/{trait_id}")
+@router.delete("/characters/{character_id}/{trait_id}", response_model=OkEnvelope[dict[str, Any]])
 async def remove_character_trait(
     character_id: str,
     trait_id: str,

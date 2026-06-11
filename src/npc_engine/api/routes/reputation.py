@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_reputation_service
-from npc_engine.api.route_helpers import graph_error_to_http, ok_response, require_node
+from npc_engine.api.route_helpers import OkEnvelope, graph_error_to_http, ok_response, require_node
 from npc_engine.graph.reputation_service import ReputationService
 from npc_engine.utils.errors import ReputationNotFoundError
 
@@ -54,7 +54,7 @@ class AdjustReputationRequest(BaseModel):
 graph_router = APIRouter(prefix="/graph/characters", tags=["reputation"])
 
 
-@graph_router.get("/{character_id}/reputation")
+@graph_router.get("/{character_id}/reputation", response_model=OkEnvelope[list[dict[str, Any]]])
 async def list_reputations(
     character_id: str,
     service: ReputationService = Depends(get_reputation_service),
@@ -64,7 +64,7 @@ async def list_reputations(
     return ok_response(reputations)
 
 
-@graph_router.get("/{character_id}/reputation/{faction_id}")
+@graph_router.get("/{character_id}/reputation/{faction_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_reputation(
     character_id: str,
     faction_id: str,
@@ -82,7 +82,7 @@ async def get_reputation(
 admin_router = APIRouter(prefix="/characters", tags=["reputation"])
 
 
-@admin_router.put("/{character_id}/reputation/{faction_id}", status_code=200)
+@admin_router.put("/{character_id}/reputation/{faction_id}", status_code=200, response_model=OkEnvelope[dict[str, Any]])
 async def set_reputation(
     character_id: str,
     faction_id: str,
@@ -101,7 +101,7 @@ async def set_reputation(
     return ok_response({"character_id": character_id, "faction_id": faction_id, "standing": request.standing})
 
 
-@admin_router.post("/{character_id}/reputation/{faction_id}/adjust", status_code=200)
+@admin_router.post("/{character_id}/reputation/{faction_id}/adjust", status_code=200, response_model=OkEnvelope[dict[str, Any]])
 async def adjust_reputation(
     character_id: str,
     faction_id: str,

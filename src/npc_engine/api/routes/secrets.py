@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.secret_service import (
     create_secret,
     delete_secret,
@@ -56,7 +56,7 @@ class CreateSecretRequest(BaseModel):
 router = APIRouter(prefix="/secrets", tags=["secrets"])
 
 
-@router.post("/{character_id}")
+@router.post("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def create_secret_for_character(
     character_id: str,
     body: CreateSecretRequest,
@@ -89,7 +89,7 @@ async def create_secret_for_character(
     return ok_response({"secret_id": secret_id})
 
 
-@router.get("/{character_id}")
+@router.get("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def list_secrets_for_character(
     character_id: str,
     k: int = 3,
@@ -108,7 +108,7 @@ async def list_secrets_for_character(
     return ok_response({"secrets": secrets})
 
 
-@router.delete("/{secret_id}")
+@router.delete("/{secret_id}", response_model=OkEnvelope[dict[str, Any]])
 async def remove_secret(
     secret_id: str,
     session: AsyncSession = Depends(get_db_session),

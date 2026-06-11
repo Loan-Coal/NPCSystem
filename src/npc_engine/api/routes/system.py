@@ -18,7 +18,7 @@ from neo4j import AsyncSession
 from npc_engine.api.dashboard_models import DashboardConfigView
 from npc_engine.api.dependencies import get_db_session, get_game_schema, get_tick_scheduler, get_type_registry
 from npc_engine.api.dependency_singletons import _llm_adapters_to_close
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.config import Settings, get_settings
 from npc_engine.graph.event_feed_queries import get_recent_event_feed
 from npc_engine.scheduler.tick_scheduler import TickScheduler
@@ -35,7 +35,7 @@ admin_router = APIRouter()
 v1_router = APIRouter(prefix="/system")
 
 
-@router.get("/health")
+@router.get("/health", response_model=OkEnvelope[dict[str, Any]])
 async def health() -> dict[str, Any]:
     """Return process liveness and the running build identifier.
 
@@ -47,7 +47,7 @@ async def health() -> dict[str, Any]:
     return ok_response({"status": "ok", "version": get_settings().BUILD_SHA})
 
 
-@router.get("/readiness")
+@router.get("/readiness", response_model=OkEnvelope[dict[str, Any]])
 async def readiness() -> dict[str, Any]:
     """Return readiness including LLM backend reachability."""
     llm_ready = True
@@ -60,25 +60,25 @@ async def readiness() -> dict[str, Any]:
     return ok_response({"status": status, "llm": "ok" if llm_ready else "unreachable"})
 
 
-@admin_router.get("/protected")
+@admin_router.get("/protected", response_model=OkEnvelope[dict[str, Any]])
 async def protected_probe() -> dict[str, Any]:
     """Simple protected route for auth smoke testing."""
     return ok_response({"status": "authorized"})
 
 
-@admin_router.get("/schema")
+@admin_router.get("/schema", response_model=OkEnvelope[dict[str, Any]])
 async def schema_snapshot(schema: SchemaConfig = Depends(get_game_schema)) -> dict[str, Any]:
     """Expose loaded game schema for authenticated admin clients."""
     return ok_response(schema.model_dump(mode="json"))
 
 
-@admin_router.get("/schema/registry")
+@admin_router.get("/schema/registry", response_model=OkEnvelope[dict[str, Any]])
 async def registry_schema_snapshot(registry: TypeRegistry = Depends(get_type_registry)) -> dict[str, Any]:
     """Expose type-registry snapshot for authenticated admin clients."""
     return ok_response(serialize_registry_snapshot(registry=registry))
 
 
-@v1_router.get("/engines")
+@v1_router.get("/engines", response_model=OkEnvelope[list[dict[str, Any]]])
 async def engine_status(scheduler: TickScheduler = Depends(get_tick_scheduler)) -> dict[str, Any]:
     """Return per-engine last-run tick, last error, and error count.
 
@@ -94,7 +94,7 @@ async def engine_status(scheduler: TickScheduler = Depends(get_tick_scheduler)) 
     return ok_response(records)
 
 
-@v1_router.get("/config")
+@v1_router.get("/config", response_model=OkEnvelope[dict[str, Any]])
 async def runtime_config(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
     """Return a curated, read-only view of cadence and cost settings.
 
@@ -107,7 +107,7 @@ async def runtime_config(settings: Settings = Depends(get_settings)) -> dict[str
     return ok_response(DashboardConfigView.from_settings(settings).model_dump())
 
 
-@v1_router.get("/metrics")
+@v1_router.get("/metrics", response_model=OkEnvelope[dict[str, Any]])
 async def metrics_snapshot() -> dict[str, Any]:
     """Return an immutable snapshot of in-process request and engine metrics.
 
@@ -121,7 +121,7 @@ async def metrics_snapshot() -> dict[str, Any]:
     return ok_response(get_metrics_registry().snapshot())
 
 
-@v1_router.get("/events")
+@v1_router.get("/events", response_model=OkEnvelope[list[dict[str, Any]]])
 async def recent_events(
     limit: int = Query(default=_DEFAULT_EVENT_LIMIT, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
