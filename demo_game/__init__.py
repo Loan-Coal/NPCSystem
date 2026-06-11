@@ -10,7 +10,6 @@ from __future__ import annotations
 import subprocess
 import sys
 
-import demo_game.ui.game_window as _game_window
 from demo_game.arc_choice import ArcChoice
 from demo_game.ui.start_menu import StartMenu
 
@@ -40,6 +39,10 @@ def _dispatch(window_w: int, window_h: int) -> None:
     choice = StartMenu().show(window_w=window_w, window_h=window_h)
 
     if choice == ArcChoice.FREE_PLAY:
+        # Lazy import: keep the pygame-backed game_window off the `import demo_game`
+        # path so headless test collection never triggers SDL_Init (ISSUE-091).
+        import demo_game.ui.game_window as _game_window
+
         _game_window.run(window_w=window_w, window_h=window_h)
         return
 

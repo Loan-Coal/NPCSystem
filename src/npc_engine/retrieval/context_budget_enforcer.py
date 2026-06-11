@@ -56,7 +56,7 @@ def enforce_context_budget(
             their sub-budget (both are data errors, not pool-overflow conditions).
     """
 
-    TIER0_MAX_TOKENS = 380  # matches legacy token_budget_enforcer constant
+    TIER0_MAX_TOKENS = 380  # fixed tier0 ceiling (the canonical budget enforcer)
 
     cache = compression_cache or ContextCompressionCache()
 

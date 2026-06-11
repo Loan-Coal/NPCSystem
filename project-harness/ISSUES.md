@@ -199,7 +199,11 @@ and instantiates it (line 134), so the test patch resolves; all 6 `TestGameWindo
 **Why deferred:** Pre-existing issue discovered at gate time; not introduced by this batch. Fixing requires either adding the import to game_window.py (if it uses WorldStatePoller) or removing the stale patch from the tests.
 **To fix:** Check if `GameWindow` actually uses `WorldStatePoller`; if yes, add the import; if not (it was removed in a refactor), update the test to mock the correct poller class.
 
-## ISSUE-054: redundant `token_budget_enforcer.py` superseded by `fill_to_budget`
+## [FIXED] ISSUE-054: redundant `token_budget_enforcer.py` superseded by `fill_to_budget`
+**Fixed:** 2026-06-11, S23.6 — deleted `src/npc_engine/retrieval/token_budget_enforcer.py` and its test
+`tests/unit/test_context_pipeline.py` after confirming zero importers (the only consumer was the deleted
+test; the `TokenBudgetExceededError` class lives canonically in `utils/errors.py` and is unaffected). A stale
+comment referencing the module was cleaned. `rg "token_budget_enforcer" src/` now returns 0.
 **Found:** 2026-06-03, during SEV-07
 **Severity:** P3 (nice-to-fix)
 **Where:** `src/npc_engine/retrieval/token_budget_enforcer.py` + `tests/unit/test_context_pipeline.py`
@@ -1120,7 +1124,11 @@ for different content or different NPC).
 **To fix:** Once EXP-53 slice-3 lands, add `learned_from_player` category handling to `anti_hallucination_runner.py`: treat like `grounded` but also check that EXP-53 wrote the fact via `write_belief()` before running the case.
 
 
-## ISSUE-091: demo_game.__init__ imports pygame (via game_window) at module load time — may cause SDL_Init failures in headless test collection
+## [FIXED] ISSUE-091: demo_game.__init__ imports pygame (via game_window) at module load time — may cause SDL_Init failures in headless test collection
+**Fixed:** 2026-06-11, S23.6 — moved `import demo_game.ui.game_window` out of module scope and into the
+`_dispatch` FREE_PLAY branch (lazy import), so a bare `import demo_game` no longer pulls in the pygame-backed
+window. Regression test `demo_game/tests/test_lazy_game_window_import.py` asserts (via a clean subprocess)
+that `demo_game.ui.game_window` is absent from `sys.modules` after `import demo_game`.
 **Found:** 2026-06-10, during EXP-95 fan-in
 **Severity:** P3 (nice-to-fix)
 **Where:** `demo_game/__init__.py:13` — `import demo_game.ui.game_window as _game_window`
