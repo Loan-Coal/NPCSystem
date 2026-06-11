@@ -5,3 +5,5 @@ fields:
   source_character_id: { type: str, required: false }
   learned_at_tick:     { type: int, required: false }
   confidence:          { type: int, required: false, range: [0, 100] }
+  is_deception:        { type: bool, required: false }
+  deception_goal_id:   { type: str, required: false }
