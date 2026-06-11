@@ -49,6 +49,17 @@ class CreateMemoryRequest(BaseModel):
             "When omitted a UUID is auto-generated."
         ),
     )
+    occurred_at_game_time: dict | None = Field(
+        default=None,
+        description=(
+            "When the remembered event actually happened (distinct from game_time, the "
+            "record time). When omitted it defaults to game_time (S26.3, DEC-094)."
+        ),
+    )
+    is_historical: bool = Field(
+        default=False,
+        description="True when the memory is of a prior era / long-past event.",
+    )
 
     model_config = ConfigDict(frozen=True)
 
@@ -158,13 +169,8 @@ async def seed_memory(
     Returns:
         Envelope with the new memory_id.
     """
-    gt = body.game_time
-    game_time = TimePoint(
-        year=int(gt.get("year", 1)),
-        season=str(gt.get("season", "spring")),
-        day=int(gt.get("day", 1)),
-        time_of_day=str(gt.get("time_of_day", "morning")),
-    )
+    game_time = _time_point_from_dict(body.game_time)
+    occurred = _time_point_from_dict(body.occurred_at_game_time) if body.occurred_at_game_time else None
     memory_id = await create_memory(
         session,
         character_id=character_id,
@@ -173,8 +179,20 @@ async def seed_memory(
         emotional_charge=body.emotional_charge,
         game_time=game_time,
         node_id=body.id,
+        occurred_at_game_time=occurred,
+        is_historical=body.is_historical,
     )
     return ok_response({"memory_id": memory_id})
+
+
+def _time_point_from_dict(gt: dict) -> TimePoint:
+    """Build a TimePoint from a partial game-time dict with safe defaults."""
+    return TimePoint(
+        year=int(gt.get("year", 1)),
+        season=str(gt.get("season", "spring")),
+        day=int(gt.get("day", 1)),
+        time_of_day=str(gt.get("time_of_day", "morning")),
+    )
 
 
 @router.get("/{character_id}", response_model=OkEnvelope[dict[str, Any]])

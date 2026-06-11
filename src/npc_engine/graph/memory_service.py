@@ -33,6 +33,8 @@ async def create_memory(
     emotional_charge: int,
     game_time: TimePoint,
     node_id: str | None = None,
+    occurred_at_game_time: TimePoint | None = None,
+    is_historical: bool = False,
 ) -> str:
     """Create a Memory node and link it to a Character via a REMEMBERS edge.
 
@@ -45,23 +47,21 @@ async def create_memory(
         content: Text description of the memorable moment.
         vividness: Initial vividness level (0–100).
         emotional_charge: Emotional intensity (-100–100).
-        game_time: Game-time snapshot at which the memory formed.
+        game_time: Game-time snapshot at which the memory was recorded.
         node_id: Optional caller-supplied stable ID. When provided the node is
             merged on that ID so repeated calls are idempotent. When None a
             UUID is generated.
+        occurred_at_game_time: When the remembered event actually happened, distinct
+            from the record time (S26.3, DEC-094). Defaults to game_time when None.
+        is_historical: True when the memory is of a prior era / long-past event; the
+            prompt frames such memories as past, not current.
 
     Returns:
         The node ID used (either supplied or generated).
     """
     memory_id = node_id if node_id is not None else str(uuid.uuid4())
-    game_time_json = dump_json(
-        {
-            "year": game_time.year,
-            "season": game_time.season,
-            "day": game_time.day,
-            "time_of_day": game_time.time_of_day,
-        }
-    )
+    game_time_json = _dump_game_time(game_time)
+    occurred_json = _dump_game_time(occurred_at_game_time) if occurred_at_game_time is not None else game_time_json
     tx = await session.begin_transaction()
     async with tx:
         await tx.run(
@@ -71,11 +71,25 @@ async def create_memory(
             vividness=vividness,
             emotional_charge=emotional_charge,
             created_at_game_time=game_time_json,
+            occurred_at_game_time=occurred_json,
+            is_historical=is_historical,
             last_recalled_at=game_time_json,
             character_id=character_id,
             since_game_time=game_time_json,
         )
     return memory_id
+
+
+def _dump_game_time(game_time: TimePoint) -> str:
+    """Serialize a TimePoint to the canonical game-time JSON string."""
+    return dump_json(
+        {
+            "year": game_time.year,
+            "season": game_time.season,
+            "day": game_time.day,
+            "time_of_day": game_time.time_of_day,
+        }
+    )
 
 
 async def get_memories_for_character_svc(

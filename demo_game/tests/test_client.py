@@ -433,9 +433,25 @@ def test_post_memory_success(mock_http: MagicMock, make_response) -> None:
     assert result == {"memory_id": "m_1"}
     mock_http.post.assert_called_once_with(
         "/v1/admin/memories/npc_1",
-        json={"content": "I saw the fire", "vividness": 85, "emotional_charge": 70, "game_time": _GAME_TIME},
+        json={
+            "content": "I saw the fire", "vividness": 85, "emotional_charge": 70,
+            "game_time": _GAME_TIME, "is_historical": False,
+        },
         timeout=15.0,
     )
+
+
+def test_post_memory_historical_includes_occurred_at(mock_http: MagicMock, make_response) -> None:
+    """A historical memory sends is_historical=True and an occurred_at_game_time (S26.3)."""
+    mock_http.post.return_value = make_response(201, {"memory_id": "m_2"})
+    occurred = {"year": 0, "season": "autumn", "day": 1, "time_of_day": "night"}
+    _client(mock_http).post_memory(
+        "npc_1", "the old war", 90, -50, _GAME_TIME,
+        occurred_at_game_time=occurred, is_historical=True,
+    )
+    body = mock_http.post.call_args.kwargs["json"]
+    assert body["is_historical"] is True
+    assert body["occurred_at_game_time"] == occurred
 
 
 def test_post_memory_raises_on_422(mock_http: MagicMock, make_response) -> None:

@@ -5,4 +5,6 @@ fields:
   vividness: { type: int, required: true, range: [0, 100] }
   emotional_charge: { type: int, required: true, range: [-100, 100] }
   created_at_game_time: { type: str, required: true }
+  occurred_at_game_time: { type: str, required: false }
+  is_historical: { type: bool, required: false }
   last_recalled_at: { type: str, required: false }

@@ -325,7 +325,7 @@ Each step bumps `PROMPT_VERSION` when it touches the prompt; one commit per step
   recollections of *past* events — never present a past experience as the current situation, and never
   assume a past event is the same as one the player asks about now. Bump `PROMPT_VERSION`.
   - Exit: serialized memories carry an `age` hint; prompt rule present; `make check` green.
-- [ ] **S26.3 (C) [SCHEMA — gated on DEC-094]** Event-time model — add `occurred_at_game_time`
+- [x] **S26.3 (C) [SCHEMA — DEC-094 APPROVED]** Event-time model — add `occurred_at_game_time`
   (event time, distinct from `created_at_game_time`) + `is_historical: bool` to `Memory` (and `Event`)
   type-registry nodes + write path; update `demo_game/seed.py` so Henryk's "ran dispatches in the last war"
   memory is `is_historical=true` and is **removed from** the current-war `KNOWS_ABOUT` distorted_summary

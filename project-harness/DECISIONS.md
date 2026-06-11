@@ -1088,9 +1088,11 @@ S22.1 exit is reinterpreted to target `graph/graph_rag_queries.py` (noted in the
 
 ---
 
-## DEC-094: 🔶 PROPOSED — event-time fields on Memory/Event (`occurred_at_game_time` + `is_historical`)
+## DEC-094: ✅ APPROVED — event-time fields on Memory/Event (`occurred_at_game_time` + `is_historical`)
 **Date:** 2026-06-11
-**Status:** 🔶 PROPOSED — gates ROADMAP S26.3 (Phase C). Awaiting human approval. A/B/D proceed without it.
+**Status:** ✅ APPROVED (2026-06-11, Option A) — gates ROADMAP S26.3 (Phase C). Approved even though A+B
+already fixed both henryk cases live, because the data-model gap remains (the seeder stamps every memory
+at "now" and `recency_score` mis-ranks ancient memories as fresh). Implementing as hardening.
 **Context (ISSUE-093):** `Memory` and `Event` nodes carry only `created_at_game_time` (when the memory
 was *recorded*). There is no field for *when the remembered event actually happened*. The seeder stamps
 every memory at the current world time, so a decades-old war memory and a fresh one are indistinguishable,

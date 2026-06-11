@@ -32,6 +32,10 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _GAME_TIME: dict = {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
+# Prior-era timestamp for is_historical memories (e.g. a war fought long before the
+# current year-1 epoch). Marks a memory as long-past so the NPC frames it as a past
+# recollection, never the current situation (S26.3, ISSUE-093).
+_HISTORICAL_GAME_TIME: dict = {"year": 0, "season": "autumn", "day": 1, "time_of_day": "night"}
 _WORLD_STATE_ID = "world"
 # Scarcity constraint (S7.2): bribing all 3 factions to win threshold costs 4*20*3=240 gold.
 # Starting at 60 the player demonstrably cannot win by bribing alone; must earn via quest/trade.
@@ -331,12 +335,38 @@ def _seed_item_edge_if_unowned(
     return "created"
 
 
+def _seed_memories(
+    client: EngineClient,
+    npc_id: str,
+    memories: list[tuple[str, int, int] | tuple[str, int, int, bool]],
+) -> int:
+    """Seed an NPC's memories; a 4th tuple element flags a historical (prior-era) memory.
+
+    Args:
+        client: Engine client.
+        npc_id: Target character node ID.
+        memories: (content, vividness, emotional_charge[, is_historical]) tuples.
+    Returns:
+        Number of memories upserted.
+    """
+    for n, mem in enumerate(memories):
+        is_historical = bool(mem[3]) if len(mem) > 3 else False
+        occurred = _HISTORICAL_GAME_TIME if is_historical else None
+        client.post_memory(
+            npc_id, mem[0], mem[1], mem[2], _GAME_TIME,
+            node_id=_memory_id(npc_id, n),
+            occurred_at_game_time=occurred,
+            is_historical=is_historical,
+        )
+    return len(memories)
+
+
 def _seed_npc_inner_life(
     client: EngineClient,
     npc_id: str,
     beliefs: list[tuple[str, int]],
     goals: list[tuple[str, int]],
-    memories: list[tuple[str, int, int]],
+    memories: list[tuple[str, int, int] | tuple[str, int, int, bool]],
     secret: tuple[str, int],
 ) -> int:
     """Seed beliefs, goals, memories, and one secret for an NPC.
@@ -350,7 +380,8 @@ def _seed_npc_inner_life(
         npc_id: Target character node ID.
         beliefs: List of (content, confidence) tuples.
         goals: List of (description, urgency) tuples.
-        memories: List of (content, vividness, emotional_charge) tuples.
+        memories: List of (content, vividness, emotional_charge) tuples; an optional
+            4th bool element marks the memory as historical (a prior-era recollection).
         secret: (content, severity) tuple.
 
     Returns:
@@ -365,9 +396,7 @@ def _seed_npc_inner_life(
         client.post_goal(npc_id, description, urgency, _GAME_TIME, node_id=_goal_id(npc_id, n))
         created += 1
 
-    for n, (content, vividness, emotional_charge) in enumerate(memories):
-        client.post_memory(npc_id, content, vividness, emotional_charge, _GAME_TIME, node_id=_memory_id(npc_id, n))
-        created += 1
+    created += _seed_memories(client, npc_id, memories)
 
     content, severity = secret
     client.post_secret(npc_id, content, severity, _GAME_TIME, node_id=_secret_id(npc_id))
@@ -531,7 +560,7 @@ _NPC_INNER_LIFE: dict[str, dict] = {
             ("Warn the right people before it is too late — but find out who the right people are first.", 50),
         ],
         "memories": [
-            ("Running dispatches through the north pass during the last war. Half my route was behind enemy lines.", 92, -80),
+            ("Running dispatches through the north pass during the last war. Half my route was behind enemy lines.", 92, -80, True),
             ("The evening I found the smuggler's cache in the old mill — I marked it and walked away.", 80, 45),
         ],
         "secret": ("He knows the location of an old smuggler's cache beneath the north mill.", 60),
@@ -661,10 +690,12 @@ _NPC_NPC_EDGES: list[tuple[str, str, str, dict]] = [
         "knowledge_state": "rumor",
         "distortion_type": "exaggeration",
         "distortion_level": 70,
+        # S26.3 (ISSUE-093): the firsthand past-war clause ("I ran dispatches through
+        # king's pass in the last war") was split out into old_henryk's is_historical
+        # memory. This rumour is current-war hearsay only — no firsthand framing.
         "distorted_summary": (
-            "I ran dispatches through king's pass in the last war — I know that road."
-            " And now they say the northmen have poured through it, thousands dead."
-            " Utterly catastrophic, those northmen storming king's pass like that."
+            "Word reached me the northmen have poured through king's pass, thousands dead."
+            " Utterly catastrophic, they say — the northmen storming king's pass like that."
         ),
         "learned_at_tick": 2,
         "source_character_id": "mira_innkeeper",

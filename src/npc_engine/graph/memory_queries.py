@@ -23,6 +23,8 @@ SET m.content = $content,
     m.vividness = $vividness,
     m.emotional_charge = $emotional_charge,
     m.created_at_game_time = $created_at_game_time,
+    m.occurred_at_game_time = $occurred_at_game_time,
+    m.is_historical = $is_historical,
     m.last_recalled_at = $last_recalled_at
 WITH m
 MATCH (c:Character {id: $character_id})
@@ -36,7 +38,9 @@ RETURN m.id AS id,
        m.content AS content,
        toInteger(m.vividness) AS vividness,
        toInteger(m.emotional_charge) AS emotional_charge,
-       m.created_at_game_time AS created_at_game_time
+       m.created_at_game_time AS created_at_game_time,
+       m.occurred_at_game_time AS occurred_at_game_time,
+       coalesce(m.is_historical, false) AS is_historical
 ORDER BY m.vividness DESC
 LIMIT $k
 """

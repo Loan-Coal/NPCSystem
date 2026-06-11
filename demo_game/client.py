@@ -639,6 +639,8 @@ class EngineClient:
         game_time: dict,
         *,
         node_id: str | None = None,
+        occurred_at_game_time: dict | None = None,
+        is_historical: bool = False,
     ) -> dict:
         """Create a memory on a character via the typed memories endpoint.
 
@@ -649,8 +651,11 @@ class EngineClient:
             content: Memory text (1–1024 chars).
             vividness: How vivid the memory is (0–100).
             emotional_charge: Emotional intensity (-100 to 100; positive=positive).
-            game_time: Game time dict with year, season, day, time_of_day.
+            game_time: Game time dict with year, season, day, time_of_day (record time).
             node_id: Optional stable ID for idempotent re-seeding.
+            occurred_at_game_time: When the remembered event happened (distinct from the
+                record time); defaults server-side to game_time when omitted.
+            is_historical: True when the memory is of a prior era / long-past event.
 
         Returns:
             Response dict containing memory_id.
@@ -663,7 +668,10 @@ class EngineClient:
             "vividness": vividness,
             "emotional_charge": emotional_charge,
             "game_time": game_time,
+            "is_historical": is_historical,
         }
+        if occurred_at_game_time is not None:
+            body["occurred_at_game_time"] = occurred_at_game_time
         if node_id is not None:
             body["id"] = node_id
         resp = self._client.post(
