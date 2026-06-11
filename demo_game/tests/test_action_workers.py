@@ -15,7 +15,8 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from demo_game.action_workers import bribe_worker, travel_worker
+from demo_game.action_workers import _get_current_tick, bribe_worker, travel_worker
+from demo_game.client import EngineClientError
 from demo_game.constants import BRIBE_GOLD_COST, BRIBE_STANDING_GAIN
 from demo_game.run_scenes import BribeScene
 from demo_game.run_scenes import _BRIBE_LOCATION
@@ -142,6 +143,26 @@ class TestBribeWorker:
         item = result_q.get_nowait()
         assert item[0] == "err"
         assert item[1] == "captain_sorn"
+
+
+class TestGetCurrentTick:
+    def test_returns_tick_on_success(self) -> None:
+        """Happy path: the tick_id from the clock state is returned as an int."""
+        client = MagicMock()
+        client.get_clock_state.return_value = {"data": {"tick_id": 7}}
+        assert _get_current_tick(client) == 7
+
+    def test_returns_none_on_engine_client_error(self) -> None:
+        """An EngineClientError falls back to None (expected outage path)."""
+        client = MagicMock()
+        client.get_clock_state.side_effect = EngineClientError("clock unreachable")
+        assert _get_current_tick(client) is None
+
+    def test_returns_none_on_non_client_error(self) -> None:
+        """A non-EngineClientError (e.g. timeout/unexpected shape) is caught, not propagated (ISSUE-069)."""
+        client = MagicMock()
+        client.get_clock_state.side_effect = TimeoutError("network timeout")
+        assert _get_current_tick(client) is None
 
 
 class TestTravelWorker:

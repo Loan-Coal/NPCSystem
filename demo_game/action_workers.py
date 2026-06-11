@@ -41,7 +41,10 @@ def _get_current_tick(client: EngineClient) -> int | None:
         tick = state.get("data", {}).get("tick_id")
         return int(tick) if tick is not None else None
     except EngineClientError as exc:
-        _logger.warning("get_current_tick failed: %s", exc)
+        _logger.warning("get_current_tick failed (engine error): %s", exc)
+        return None
+    except Exception as exc:  # noqa: BLE001 — non-client errors (timeout, bad shape) must also fall back to None, not escape (ISSUE-069)
+        _logger.warning("get_current_tick failed (unexpected error): %s", exc)
         return None
 
 

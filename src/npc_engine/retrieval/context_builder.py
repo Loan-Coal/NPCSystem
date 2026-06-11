@@ -299,6 +299,9 @@ def _build_tier_a_extended(
     if active_quest:
         items.append(ContextItem(key="active_quest", text=serialize_json(active_quest), tier="tierA", priority=89, pinned=True))
     if player_relation_edge is not None:
+        # ISSUE-070: subgraph_retriever also emits key="relation:player" (priority=95). merge_context dedups
+        # by key keeping the higher priority, so the subgraph item wins deterministically when both are
+        # present; this 88 applies only when subgraph_retriever produced no relation edge.
         items.append(ContextItem(key="relation:player", text=serialize_json(player_relation_edge), tier="tierA", priority=88))
     if memories:
         aged_memories = annotate_memory_ages(memories, game_time)

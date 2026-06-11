@@ -99,6 +99,9 @@ def assemble_tier_a_context(
             player_relation = relation_entry.get("relation", {})
             break
     if len(player_relation) > 0:
+        # ISSUE-070: EXP-11 in context_builder also emits key="relation:player" (priority=88).
+        # merge_context dedups by key keeping the higher priority, so this 95 deterministically
+        # wins over EXP-11's 88 — distinct priorities, no insertion-order ambiguity.
         items.append(
             ContextItem(
                 key="relation:player",

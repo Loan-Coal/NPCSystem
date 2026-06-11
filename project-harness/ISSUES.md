@@ -951,7 +951,11 @@ current mapping is good enough for demo badge display and does not affect correc
 **Deeper issue (logged, not fixed):** the server interaction engine should populate `negotiation_state.item_type` (it loses the proposed `item_type`, returning `""`). The demo workaround masks it; the engine fix belongs to the interaction/trade dispatch (ties to EXP-40 trade-dispatch maturity). The demo only trades spice, so the fallback is safe.
 **Note (UI):** the "trade failed" status text the user saw appear at *dialogue-send* time was a stale/lingering status message (dialogue itself worked); fixing the 422 removes the message. A separate status-message-timing cleanup is minor and not logged.
 
-## ISSUE-069: action_workers.py `_get_current_tick` catches only `EngineClientError` — non-engine errors escape
+## [FIXED] ISSUE-069: action_workers.py `_get_current_tick` catches only `EngineClientError` — non-engine errors escape
+**Fixed:** 2026-06-11, S23.3 — added a second `except Exception` branch to `_get_current_tick` so non-client
+errors (timeout, unexpected response shape) are logged and fall back to `None` instead of propagating. The
+`EngineClientError` branch is retained with a distinct log message. Test: `TestGetCurrentTick` in
+`demo_game/tests/test_action_workers.py`.
 **Found:** 2026-06-05, during EXP-93 integration (spotted by worker, not fixed)
 **Severity:** P3 (nice-to-fix)
 **Where:** `demo_game/action_workers.py` — `_get_current_tick` helper
@@ -959,7 +963,13 @@ current mapping is good enough for demo badge display and does not affect correc
 **Why deferred:** Out of scope for EXP-93; non-blocking (demo scale, not production path).
 **To fix:** Broaden the `except` to `Exception` (or at minimum `httpx.TimeoutException`) and log the non-client-error case.
 
-## ISSUE-070: `relation:player` key may collide between EXP-11 direct edge and subgraph_retriever bundle
+## [FIXED] ISSUE-070: `relation:player` key may collide between EXP-11 direct edge and subgraph_retriever bundle
+**Fixed:** 2026-06-11, S23.3 — confirmed deterministic, no rename needed. subgraph_retriever emits
+`relation:player` at **priority=95**; EXP-11 in context_builder at **priority=88**. `context_merger.merge_context`
+dedups by key keeping the strictly-higher priority (`item.priority > existing.priority`), so the subgraph item
+(95) wins deterministically whenever both are present — distinct priorities, no insertion-order ambiguity.
+(The issue assumed subgraph was lower; it is actually higher, but determinism holds either way since 95 ≠ 88.)
+Added cross-referencing comments at both emission sites.
 **Found:** 2026-06-05, during EXP-11 integration (spotted by worker, not fixed)
 **Severity:** P3 (nice-to-fix)
 **Where:** `src/npc_engine/retrieval/context_builder.py` (EXP-11 addition) vs `src/npc_engine/retrieval/subgraph_retriever.py:64–74`
