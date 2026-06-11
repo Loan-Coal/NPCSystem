@@ -1,7 +1,7 @@
 """
 gossip_distort.py - Pure deterministic gossip distortion function.
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Apply a deterministic, hash-seeded distortion strategy to a rumour summary so gossip mutates predictably as it propagates.
 
 Does NOT: access databases or external services.
 

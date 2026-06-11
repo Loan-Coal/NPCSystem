@@ -55,6 +55,12 @@ def test_world_state_last_graph_updated_at_is_datetime():
     assert isinstance(ws.last_graph_updated_at, datetime)
 
 
+def test_world_state_default_timestamps_are_timezone_aware():
+    ws = WorldState()
+    assert ws.last_updated_at.tzinfo is not None
+    assert ws.last_graph_updated_at.tzinfo is not None
+
+
 # ---------------------------------------------------------------------------
 # Immutability
 # ---------------------------------------------------------------------------

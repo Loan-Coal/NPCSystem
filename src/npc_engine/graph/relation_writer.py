@@ -1,7 +1,7 @@
 """
 relation_writer.py - Applies RELATES_TO updates with bounded relation values.
 Layer: graph
-Purpose: (auto-detected — review)
+Purpose: Apply bounded RELATES_TO updates (trust/fear/affection) to a Character→Character edge within an injected transaction.
 
 Does NOT: validate window constraints.
 
