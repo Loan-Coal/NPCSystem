@@ -94,15 +94,15 @@ automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** A
-- **Phase in progress:** E2 (E1 done; 27 of 30: EXP-201..227)
-- **Next batch (E2):** orchestrator adds `is_deception` (bool, opt) + `deception_goal_id` (str, opt) to
-  `base_edges/believes.yaml`; validate via `pytest -k 'type_registry or contract or registry'`; commit; then
-  dispatch EXP-228 (deception engine — coordinate the anti-hallucination eval to treat `is_deception=true`
-  as intended). Gate once.
-- **Then E3:** DEC-104 — new `base_nodes/scheme.yaml` + `base_edges/executes_scheme.yaml` + `scheme_step.yaml`
-  + `MAX_ACTIVE_SCHEMES_PER_NPC` const; dispatch EXP-229 (scheming, XL) + EXP-230 (session persistence, no schema).
-  Land each new node type WITH its first user. **On all EXP-201..230 [x], STOP with a final wrap-up.**
-- **Last green commit:** 0a31882 (E1 EXP-226/227 integrated, gate green).
+- **Phase in progress:** E3 (FINAL; E1+E2 done; 28 of 30: EXP-201..228)
+- **Next batch (E3, FINAL):** orchestrator creates `base_nodes/scheme.yaml` (id, npc_id, goal, status,
+  created_at) + `base_edges/executes_scheme.yaml` (character→scheme) + `base_edges/scheme_step.yaml`
+  (single-string dst_type) + `MAX_ACTIVE_SCHEMES_PER_NPC` in config.py; validate via `pytest -k
+  'type_registry or contract or registry'`; commit; then dispatch EXP-229 (scheming engine, XL — first
+  reader/writer) + EXP-230 (session persistence, no schema: SessionStore save_to_graph/load_to_graph +
+  lifespan hooks). Gate once.
+- **On all EXP-201..230 [x]: STOP the loop with a final wrap-up (do NOT schedule another wake).**
+- **Last green commit:** d4d06fa (E2 EXP-228 integrated, gate green).
 
 ## Progress Log
 
@@ -164,3 +164,7 @@ automatically; do not poll.
   (node YAML is a generic contract; no per-node Pydantic model needed). 2 fixes: R006 director `decide` →
   `_engagement_beat`; player_model `__init__.py` missing `Does NOT:`/`Dependencies injected:` (conformance
   test). Fix 0a31882. Green: make check 2045 (86.07%). **27 of 30 done.**
+- **11 · 2026-06-12 cycle 11** — Phase E2: added believes.yaml is_deception+deception_goal_id (DEC-103,
+  validated 94 tests, committed 86f53f8), THEN EXP-228 (merge-first, clean cherry-pick). **✅** (3b42061).
+  1 fix: R006 on plant_belief + write_belief (verbose Args docstrings → trimmed). Fix d4d06fa. Green: make
+  check 2048 (86.09%). **28 of 30 done.** (`from src` grep hit was a docstring, not an import.)

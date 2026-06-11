@@ -78,7 +78,7 @@ analysis, reconciled against code (10 re-proposed items were already built and d
 - **Constraints:** new node/edge types applied just-in-time by orchestrator (DEC-102/103/104); EXP-228 requires the anti-hallucination eval to treat `is_deception=true` as intended; EXP-229 revives `investigation` for detection. STOP + surface if the type-registry gate can't be made green.
 - [x] **EXP-226** player-model / theory-of-mind engine (DEC-102; 4148fef). player_model node upsert/read via HAS_PLAYER_MODEL; wiring = slice 2.
 - [x] **EXP-227** player-aware drama director engine (7b0f1d9). `decide` injects a beat on idle/plateau/hostile; wiring = slice 2.
-- [ ] **EXP-228** NPC deception / false-belief engine (DEC-103 believes deception fields). Exit: NPC holds a flagged false belief; eval treats it as intended.
+- [x] **EXP-228** NPC deception / false-belief engine (DEC-103; 3b42061). NPC plants a flagged false belief; eval has a deception carve-out (live wiring = slice 2).
 - [ ] **EXP-229** long-horizon covert scheming engine (DEC-104 scheme node+edges). Exit: a 2-step scheme advances across ticks.
 - [ ] **EXP-230** session history persisted across restart (SESSION_TURNS). Exit: session survives a restart.
 

@@ -76,11 +76,14 @@ _The orchestrator maintains this: add a line when an item unlocks a later one; d
   - **E1 DONE** (EXP-226/227 ✅; DEC-102 player_model node/edge applied 76424e4). New node type landed
     cleanly (no unused-type gate fail — `node_type` YAML is a generic contract, no per-node model needed).
     Seams: `engines/player_model/` + `graph/player_model_writer`, `engines/director/`.
-  - **NEXT E2:** orchestrator adds `is_deception` (bool, optional) + `deception_goal_id` (str, optional) to
-    `base_edges/believes.yaml`; validate via type_registry tests; dispatch [EXP-228 deception engine]
-    (coordinate the anti-hallucination eval to treat `is_deception=true` as intended, NOT a guard failure).
-  - **E3:** DEC-104 → new `scheme.yaml` (node) + `executes_scheme.yaml` + `scheme_step.yaml` (edges) +
-    `MAX_ACTIVE_SCHEMES_PER_NPC` const; [EXP-229 scheming engine, XL] + [EXP-230 session persistence, no schema].
+  - **E2 DONE** (EXP-228 ✅; DEC-103 believes fields applied 86f53f8). Seams: `engines/deception/`
+    plant_belief, `knowledge_writer.write_belief` is_deception/goal kwargs, eval `classify_deception_belief`.
+  - **NEXT E3 (final batch):** orchestrator creates `base_nodes/scheme.yaml` (node: id, npc_id, goal,
+    status, created_at) + `base_edges/executes_scheme.yaml` (character→scheme) + `base_edges/scheme_step.yaml`
+    (scheme→? — use scheme→event or scheme→scheme step semantics; keep dst_type a single string) +
+    `MAX_ACTIVE_SCHEMES_PER_NPC` const (config.py); validate via type_registry tests; commit; THEN dispatch
+    [EXP-229 scheming engine, XL — its first reader/writer] + [EXP-230 session persistence, no schema:
+    SessionStore save_to_graph/load_to_graph + lifespan hooks]. Gate once. **On all [x] → STOP + final wrap-up.**
 
 ## Mapping & reconciliation (analysis id → execution id)
 
@@ -162,16 +165,15 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 ### Phase E — Emergent cognition (🔶 DEC-102/103/104; flagship, schema-heavy)
 - [x] **EXP-226** player-model / theory-of-mind engine · M · DONE 4148fef · DEC-102 node/edge + `engines/player_model/` + `graph/player_model_writer` (upsert/get); scheduler wiring = slice 2
 - [x] **EXP-227** player-aware drama director engine · M · DONE 7b0f1d9 · `engines/director/` pure `decide`; scheduler wiring = slice 2
-- [ ] **EXP-228** NPC deception / false-belief engine 🔶DEC-103 · L · deps: EXP-32(done, eval coupling) · edit `believes.yaml`(orch) + new `engines/deception/`
+- [x] **EXP-228** NPC deception / false-belief engine · L · DONE 3b42061 · DEC-103 fields + `engines/deception/` plant_belief (is_deception=true) + eval `classify_deception_belief` carve-out (live-loop wiring = slice 2)
 - [ ] **EXP-229** long-horizon covert scheming engine 🔶DEC-104 · XL · deps: EXP-228 · new `scheme.yaml`+2 edges(orch) + engine + revive `investigation`
 - [ ] **EXP-230** session history persisted across restart · M · deps: none · edit `engines/dialogue/session_store.py` + lifespan hooks
 
 ## Next candidate batch (suggested)
 
-**LAST BATCH (cycle 10):** E1 EXP-226/227 ✅ — DEC-102 applied (76424e4); integrated (4148fef/7b0f1d9 +
-fix 0a31882). Gate green (make check 2045, 86.07%). 2 fixes (R006 + __init__ docstring contract).
-**27 of 30 done. First new node type landed cleanly.**
-**NEXT (E2):** add believes.yaml is_deception+deception_goal_id, then EXP-228. Then E3: scheme nodes + EXP-229 + EXP-230.
+**LAST BATCH (cycle 11):** E2 EXP-228 ✅ — DEC-103 applied (86f53f8); integrated (3b42061 + fix d4d06fa).
+Gate green (make check 2048, 86.09%). 1 fix (R006 ×2 docstring trims). **28 of 30 done.**
+**NEXT (E3, FINAL):** scheme node + 2 edges + MAX_ACTIVE_SCHEMES_PER_NPC, then EXP-229 + EXP-230. On all [x] → STOP + wrap-up.
 **Apply each new node type WITH its first user; STOP+surface if type-registry gate resists in 2 tries.**
 
 ---
