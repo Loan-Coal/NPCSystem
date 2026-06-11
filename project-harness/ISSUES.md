@@ -74,6 +74,24 @@ reinforcement; `PROMPT_VERSION` bumped to `stage_b_v2.10`. Unit test `test_prese
 asserts the clause loads. **Kept OPEN:** the reduction is unverified — the two cases require a live
 `make eval-llm-demo` (Ollama) run not available in the implementing gate. Close once both cases pass
 on qwen2.5:14b (or document accepted residual 14b flakiness per the original deferral rationale).
+**Live verification 2026-06-11 (qwen2.5:14b, stage_b_v2.10, demo world, container confirmed serving
+the new clause):** `case_adv_false_eyewitness_henryk` now **PASSES** (the harder presupposition-frame
+variant — the deny-first clause works where there is no competing memory). `case_neg_old_henryk_no_eyewitness_claim`
+still **FAILS** — response: *"Oh, the northern front! I was there during the last big push. Saw plenty
+of action... soldiers march through the village square..."*
+**Root cause (newly diagnosed): seed-vs-rule conflict, not prompt weakness.** old_henryk's seed
+(`demo_game/seed.py`) makes him a *"retired courier who has seen three wars"*, bio *"Mixes current
+rumour with personal memories from decades ago... Never hedges"*, with an **importance-92** memory
+*"Running dispatches through the north pass during the last war — half my route was behind enemy
+lines"* and a **first-person** `KNOWS_ABOUT` distorted_summary *"I ran dispatches through king's pass
+in the last war..."*. He genuinely served at the northern front in a *past* war; the *current*
+`northern_war_begins` is 2-hop rumour. The model transfers firsthand authority from the past event to
+the current one — exactly his characterization. `case_adv` (asks re: the village *square*, no memory
+anchor) is unaffected; `case_neg` (asks re: the *northern front*) collides with the importance-92 memory.
+**Revised fix options:** (1) re-seed Henryk's war memory to explicitly tag it as a *prior* war and add
+a temporal-disambiguation rule ("do not transfer firsthand authority from a long-past event to a current
+one you only heard about"); or (2) Henryk-specific MY_ACCOUNT rumour-attribution framing. Both exceed
+S22.5's YAML-only scope (touch `demo_game/seed.py` and/or the voice descriptor) → follow-up work.
 
 ## ISSUE-083: two voice tone_judge cases fail under epoch=war / stage_b_v2.9 (captain_sorn, mira_innkeeper)
 **Found:** 2026-06-09, during eval re-run

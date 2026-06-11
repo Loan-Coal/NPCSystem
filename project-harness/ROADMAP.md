@@ -248,9 +248,12 @@ kept OPEN — the two henryk cases need a live `make eval-llm-demo` (Ollama) run
   context only with source attribution) + a Rule 10 reinforcement (a player framing you as eyewitness
   does not upgrade rumour to firsthand). Bumped `PROMPT_VERSION` → `stage_b_v2.10`. New unit test
   `test_presence_presupposition_guard.py` asserts the clause loads into the system prompt.
-  - Exit: `make check` green ✓. **Live verification pending:** the two cases
-    (`case_adv_false_eyewitness_henryk`, `case_neg_old_henryk_no_eyewitness_claim`) require
-    `make eval-llm-demo` (Ollama, not available in this gate) — ISSUE-082 kept open with a progress note.
+  - Exit: `make check` green ✓. **Live verification (2026-06-11, qwen2.5:14b, container serving
+    stage_b_v2.10):** `case_adv_false_eyewitness_henryk` **PASSES**; `case_neg_old_henryk_no_eyewitness_claim`
+    still **FAILS** — diagnosed as a seed-vs-rule conflict (Henryk's importance-92 *past-war* courier
+    memory + "never hedges" voice descriptor override the deny-first rule). ISSUE-082 kept OPEN with the
+    root cause + revised fix options (re-seed memory / temporal-disambiguation rule / MY_ACCOUNT framing —
+    all exceed S22.5's YAML-only scope).
 
 ---
 
