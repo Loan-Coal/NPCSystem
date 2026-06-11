@@ -208,8 +208,13 @@ re-seeding); **EXP-32 + EXP-87 can run in parallel with KE-6** (no conflict).
 
 ---
 
-## Phase 22 — Runtime correctness (ISSUE-056, ISSUE-064, ISSUE-068, ISSUE-071, ISSUE-082)
+## Phase 22 — Runtime correctness (ISSUE-056, ISSUE-064, ISSUE-068, ISSUE-071, ISSUE-082) ✅ (2026-06-11)
 **Goal:** Fix the remaining P2 correctness issues. All items are independent and conflict-free — parallelizable.
+**Completion note (2026-06-11):** all 5 steps landed; `make check` green (1937 passed, 85.65%),
+`make test-demo` green (618). ISSUE-056 fixed (label filter in `graph_rag_queries.py` per DEC-093),
+ISSUE-064 fixed (rerank offloaded), ISSUE-068 [FIXED] (found already resolved). ISSUE-071 grounded
+via the `active_negotiation` context inject. ISSUE-082 prompt hardening shipped (`stage_b_v2.10`) but
+kept OPEN — the two henryk cases need a live `make eval-llm-demo` (Ollama) run to confirm reduction.
 **Notes:**
 - S22.2: mirror `tests/unit/test_embedding_index_offload.py` exactly — same pattern, different class.
 - S22.4: pass `NegotiationStore` as an optional constructor param (`negotiation_store: NegotiationStore | None = None`); do **not** import it at module level in `dialogue_handler.py`. The no-store path must behave identically to today — no regression for callers that don't pass it.
@@ -353,3 +358,8 @@ health gate and is green as of Phase 16 completion (1837 passed, 22 skipped, 98%
 | 19 | 2026-06-11 | S21.4 (proposal) | Wrote DEC-087 🔶 PROPOSED (graph/ transaction coordinator); inspected the 5 engine files with engine-owned `begin_transaction`/`commit`; recommended callback unit-of-work boundary. **No code change — blocked on human approval** | S21.4 gated; awaiting approval |
 | 20 | 2026-06-11 | S21.4 | DEC-087 approved (Option 1). New `graph/transaction_coordinator.py` `run_in_tx` (TDD, `test_transaction_coordinator.py`); migrated all 5 engines to closures; `faction_politics` test fake tx gained `commit` (LSP); R005 baseline 149→144 | S21.4 ✅; engine tx ownership gone; ISSUE-058(2) closed; 1926 passed, 85.59% |
 | 21 | 2026-06-11 | S21.4 follow-up | Relocated world-state DB access `world/world_reader.py`+`world/world_writer.py` → `graph/world_state_reader.py`+`graph/world_state_writer.py` (DEC-092); repointed 13 callers; deleted old files + renamed test; refactored `upsert_world_state` under 40L via shared param/record helpers; R005 baseline 144→141 | **R005 baseline empty**; ISSUE-058 [FIXED]; 1926 passed, 85.59% |
+| 22 | 2026-06-11 | S22.1 | `:Event` label filter on `_CYPHER_EXPAND_SEEDS` in `graph/graph_rag_queries.py` (Cypher relocated there in S21.4; DEC-093 — no `:Knowledge` label); `test_graph_rag_queries.py` | Full-node scan removed; ISSUE-056 fixed; 1928 passed |
+| 23 | 2026-06-11 | S22.2 | `_maybe_cross_encode` → async, offloads rerank via `asyncio.to_thread`; call site awaits; `test_cross_encode_offload.py` (thread-name spy) | Reranker off the event loop; ISSUE-064 fixed; 1931 passed |
+| 24 | 2026-06-11 | S22.3 | Reconcile — `GameWindow` imports+uses `WorldStatePoller`; 6 `TestGameWindowLayout` tests already green (no code change); ISSUE-068 [FIXED] | `make test-demo` 618 passed |
+| 25 | 2026-06-11 | S22.4 | New `engines/dialogue/negotiation_context.py` (pinned tier0 `active_negotiation` inject); optional `negotiation_store` on `DialogueHandler` (TYPE_CHECKING, no-store path unchanged); wired in `dependencies`; `test_dialogue_negotiation_context.py` | NPC dialogue grounded in live barter state; ISSUE-071 addressed; 1936 passed |
+| 26 | 2026-06-11 | S22.5 | `PRESENCE PRESUPPOSITION` deny-first clause in `system_v1.yaml` Rule 9 + Rule 10 reinforcement; `PROMPT_VERSION`→`stage_b_v2.10`; `test_presence_presupposition_guard.py` | Prompt hardened; ISSUE-082 OPEN (live eval verification pending); 1937 passed |
