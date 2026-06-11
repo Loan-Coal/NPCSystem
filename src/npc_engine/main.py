@@ -1,10 +1,10 @@
 """
 Module: main
 Layer: api
-Purpose: FastAPI application entry point — lifespan management and route registration.
+Purpose: FastAPI application entry point — lifespan management and app assembly.
 Does NOT: implement business logic, call LLMs, or write to the graph directly.
-Dependencies injected: all api routes, auth.middleware, api.rate_limit, config, engines,
-                       retrieval, scheduler, utils
+Dependencies injected: api.router_registry, api.exception_handlers, auth.middleware,
+                       api.rate_limit, config, engines, retrieval, scheduler, utils
 Used by: uvicorn at process start.
 """
 
@@ -15,53 +15,11 @@ import logging
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.exceptions import RequestValidationError
-from starlette.responses import JSONResponse
+from fastapi import FastAPI
 
-from npc_engine.api.dashboard_static import register_dashboard
-from npc_engine.api.error_envelope import ErrorBody, ErrorDetail, ErrorEnvelope
+from npc_engine.api.exception_handlers import register_exception_handlers
 from npc_engine.api.rate_limit import RateLimitMiddleware
-from npc_engine.api.routes.action import router as action_router
-from npc_engine.api.routes.batch import router as batch_router
-from npc_engine.api.routes.clock import router as clock_router
-from npc_engine.api.routes.dialogue import router as dialogue_router
-from npc_engine.api.routes.dialogue_ws import router as dialogue_ws_router
-from npc_engine.api.routes.graph import router as graph_router
-from npc_engine.api.routes.beliefs import router as beliefs_router
-from npc_engine.api.routes.goals import router as goals_router
-from npc_engine.api.routes.items import router as items_router
-from npc_engine.api.routes.memories import router as memories_router
-from npc_engine.api.routes.secrets import router as secrets_router
-from npc_engine.api.routes.debts import router as debts_router
-from npc_engine.api.routes.factions import router as factions_router
-from npc_engine.api.routes.schedules import router as schedules_router
-from npc_engine.api.routes.reputation import admin_router as reputation_admin_router
-from npc_engine.api.routes.reputation import graph_router as reputation_graph_router
-from npc_engine.api.routes.graph_admin import router as graph_admin_router
-from npc_engine.api.routes.npc_state import router as npc_state_router
-from npc_engine.api.routes.interaction import router as interaction_router
-from npc_engine.api.routes.quest import router as quest_router
-from npc_engine.api.routes.quest_generation import router as quest_generation_router
-from npc_engine.api.routes.economy import router as economy_router
-from npc_engine.api.routes.location_history import router as location_history_router
-from npc_engine.api.routes.causality import router as causality_router
-from npc_engine.api.routes.witnessed import router as witnessed_router
-from npc_engine.api.routes.groups import router as groups_router
-from npc_engine.api.routes.relationship import router as relationship_router
-from npc_engine.api.routes.rumors import router as rumors_router
-from npc_engine.api.routes.gossip_spread import router as gossip_spread_router
-from npc_engine.api.routes.rumor_trace import router as rumor_trace_router
-from npc_engine.api.routes.skills import router as skills_router
-from npc_engine.api.routes.traits import router as traits_router
-from npc_engine.api.routes.pledges import router as pledges_router
-from npc_engine.api.routes.treaties import router as treaties_router
-from npc_engine.api.routes.debug_retrieval import router as debug_retrieval_router
-from npc_engine.api.routes.locations import admin_router as locations_admin_router
-from npc_engine.api.routes.locations import read_router as locations_read_router
-from npc_engine.api.routes.system import admin_router as system_admin_router
-from npc_engine.api.routes.system import router as system_router
-from npc_engine.api.routes.system import v1_router as system_v1_router
+from npc_engine.api.router_registry import register_routers
 from npc_engine.auth.middleware import ApiKeyMiddleware
 from npc_engine.api.dependency_singletons import (
     close_registered_llm_adapters,
@@ -92,7 +50,6 @@ from npc_engine.graph.character_reader import get_npc_ids
 from npc_engine.api.dependencies import get_sync_trade_handler
 from npc_engine.engines.interaction.dispatch import set_trade_handler
 from npc_engine.config import get_settings
-from npc_engine.utils.errors import ContentRatingViolationError
 from npc_engine.engines.contracts.contract_loader import load_engine_contracts
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm_runtime_config import validate_all_engine_llm_configs
@@ -102,96 +59,9 @@ from npc_engine.graph.schema_bootstrap import ensure_core_constraints
 from npc_engine.scheduler.tick_autopilot import TickAutopilot
 from npc_engine.scheduler.tick_budget_guard import TickBudgetGuard
 from npc_engine.scheduler.tick_lease import TickLeaseRepository
-from npc_engine.utils.logging import configure_logging, get_logger
+from npc_engine.utils.logging import configure_logging
 
 _logger = logging.getLogger(__name__)
-_handler_logger = get_logger(__name__)
-
-
-async def _validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
-    """Convert FastAPI RequestValidationError to a canonical ErrorEnvelope (422).
-
-    Args:
-        request: Incoming FastAPI request.
-        exc: The validation exception raised by FastAPI.
-
-    Returns:
-        JSONResponse with ErrorEnvelope shape and HTTP 422 status.
-    """
-    details = [
-        ErrorDetail(field=".".join(str(s) for s in e["loc"]), reason=e["msg"])
-        for e in exc.errors()
-    ]
-    return JSONResponse(
-        status_code=422,
-        content=ErrorEnvelope(
-            error=ErrorBody(
-                code="validation_error",
-                message="request validation failed",
-                details=details,
-            )
-        ).model_dump(),
-    )
-
-
-async def _http_error_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    """Convert FastAPI HTTPException to a canonical ErrorEnvelope.
-
-    Args:
-        request: Incoming FastAPI request.
-        exc: The HTTP exception raised by route handlers or middleware.
-
-    Returns:
-        JSONResponse with ErrorEnvelope shape and the exception's status code.
-    """
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=ErrorEnvelope(
-            error=ErrorBody(
-                code=f"http_{exc.status_code}",
-                message=str(exc.detail) if exc.detail else "error",
-            )
-        ).model_dump(),
-    )
-
-
-async def _internal_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Convert unhandled exceptions to a canonical ErrorEnvelope (500).
-
-    Never leaks stack traces or internal details to the caller.
-
-    Args:
-        request: Incoming FastAPI request.
-        exc: The unhandled exception.
-
-    Returns:
-        JSONResponse with ErrorEnvelope shape and HTTP 500 status.
-    """
-    _handler_logger.error("unhandled_exception", extra={"exc": str(exc)})
-    return JSONResponse(
-        status_code=500,
-        content=ErrorEnvelope(
-            error=ErrorBody(code="internal_error", message="internal error")
-        ).model_dump(),
-    )
-
-
-async def _content_rating_violation_handler(request: Request, exc: ContentRatingViolationError) -> JSONResponse:
-    """Convert ContentRatingViolationError to a canonical ErrorEnvelope (422).
-
-    Args:
-        request: Incoming FastAPI request.
-        exc: The content rating violation raised by the dialogue handler.
-
-    Returns:
-        JSONResponse with ErrorEnvelope shape and HTTP 422 status.
-    """
-    return JSONResponse(
-        status_code=422,
-        content=ErrorEnvelope(
-            error=ErrorBody(code="content_rating_violation", message=str(exc))
-        ).model_dump(),
-    )
 
 
 @asynccontextmanager
@@ -326,10 +196,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="NPC Engine", version="0.1.0", lifespan=lifespan)
 
     # Exception handlers — registered before middleware so they apply to all errors.
-    app.add_exception_handler(RequestValidationError, _validation_error_handler)  # type: ignore[arg-type]
-    app.add_exception_handler(HTTPException, _http_error_handler)  # type: ignore[arg-type]
-    app.add_exception_handler(ContentRatingViolationError, _content_rating_violation_handler)  # type: ignore[arg-type]
-    app.add_exception_handler(Exception, _internal_error_handler)
+    register_exception_handlers(app)
 
     # Middleware is applied in reverse registration order (last added = outermost).
     # RateLimitMiddleware is added first so it runs AFTER auth (inner layer).
@@ -342,57 +209,7 @@ def create_app() -> FastAPI:
         idempotency_service=get_idempotency_service(),
     )
 
-    admin_prefix = f"{settings.API_V1_PREFIX}/admin"
-
-    # Public system routes (no auth)
-    app.include_router(system_router)
-
-    # Game-engine public surface under /v1/
-    app.include_router(dialogue_router, prefix=settings.API_V1_PREFIX)
-    if settings.DIALOGUE_STREAM_ENABLED:
-        app.include_router(dialogue_ws_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(npc_state_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(action_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(interaction_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(quest_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(clock_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(system_v1_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(graph_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(reputation_graph_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(relationship_router, prefix=settings.API_V1_PREFIX)
-
-    # Admin / designer-tooling surface under /v1/admin/
-    app.include_router(system_admin_router, prefix=admin_prefix)
-    app.include_router(batch_router, prefix=admin_prefix)
-    app.include_router(graph_admin_router, prefix=admin_prefix)
-    app.include_router(beliefs_router, prefix=admin_prefix)
-    app.include_router(goals_router, prefix=admin_prefix)
-    app.include_router(items_router, prefix=admin_prefix)
-    app.include_router(memories_router, prefix=admin_prefix)
-    app.include_router(secrets_router, prefix=admin_prefix)
-    app.include_router(debts_router, prefix=admin_prefix)
-    app.include_router(factions_router, prefix=admin_prefix)
-    app.include_router(schedules_router, prefix=admin_prefix)
-    app.include_router(reputation_admin_router, prefix=admin_prefix)
-    app.include_router(quest_generation_router, prefix=admin_prefix)
-    app.include_router(economy_router, prefix=admin_prefix)
-    app.include_router(location_history_router, prefix=admin_prefix)
-    app.include_router(causality_router, prefix=admin_prefix)
-    app.include_router(witnessed_router, prefix=admin_prefix)
-    app.include_router(groups_router, prefix=admin_prefix)
-    app.include_router(rumors_router, prefix=admin_prefix)
-    app.include_router(gossip_spread_router, prefix=admin_prefix)
-    app.include_router(rumor_trace_router, prefix=admin_prefix)
-    app.include_router(skills_router, prefix=admin_prefix)
-    app.include_router(traits_router, prefix=admin_prefix)
-    app.include_router(pledges_router, prefix=admin_prefix)
-    app.include_router(treaties_router, prefix=admin_prefix)
-    app.include_router(debug_retrieval_router, prefix=admin_prefix)
-    app.include_router(locations_admin_router, prefix=admin_prefix)
-    app.include_router(locations_read_router, prefix=settings.API_V1_PREFIX)
-
-    # Designer web dashboard (Phase 12) — auth-exempt static assets.
-    register_dashboard(app)
+    register_routers(app, settings)
 
     return app
 

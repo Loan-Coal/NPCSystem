@@ -25,7 +25,6 @@ R001|src/npc_engine/engines/gossip/gossip_handler.py
 R001|src/npc_engine/engines/quest/quest_lifecycle_engine.py
 R001|src/npc_engine/engines/quest_generation/quest_generation_engine.py
 R001|src/npc_engine/graph/intent_queries.py
-R001|src/npc_engine/main.py
 R001|src/npc_engine/retrieval/context_budget_enforcer.py
 R001|src/npc_engine/retrieval/context_builder.py
 R001|src/npc_engine/scheduler/tick_scheduler.py
@@ -135,7 +134,6 @@ R006|src/npc_engine/graph/transfer_validators.py::build_item_transfer_command
 R006|src/npc_engine/graph/treaty_service.py::check_treaty_conditions_mechanical
 R006|src/npc_engine/graph/treaty_service.py::create_treaty
 R006|src/npc_engine/graph/trust_queries.py::get_second_hop_events
-R006|src/npc_engine/main.py::create_app
 R006|src/npc_engine/main.py::lifespan
 R006|src/npc_engine/retrieval/context_budget_enforcer.py::_fit_compressible_tier
 R006|src/npc_engine/retrieval/context_budget_enforcer.py::enforce_context_budget

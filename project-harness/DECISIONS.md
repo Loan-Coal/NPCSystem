@@ -628,6 +628,7 @@ the data but is never drawn. This is correct exit state for S3.3.
 **Decision:** Waiver granted. `main.py` added to the rules baseline as a grandfathered violation. Will be resolved when SEV-23 executes.
 **Why:** Splitting `main.py` mid-session during SEV-04 would expand scope and risk regressions in unrelated code. The violation was introduced by a committed prior fix, not by the current change.
 **Consequence:** `make check-rules` passes with a baselined exception. SEV-23 must un-grandfather this when it splits the file.
+**Resolved:** 2026-06-11 (Phase 21 S21.1) — superseded by DEC-089; `main.py` split to 217 lines, R001 baseline entry removed.
 
 ## DEC-061: gossip_handler.py waived at ~310→351 lines (soft 300-line limit)
 **Date:** 2026-06-04
@@ -924,3 +925,29 @@ a false one and churns every graph-route signature for no client benefit. The dy
 already document their payloads via the registry's own contract YAML.
 **Consequence:** `graph_admin`/`graph` dynamic routes use `OkEnvelope[dict[str, Any]]` in the
 S20.4 sweep. If the registry ever freezes to a closed node set, revisit and generate typed models.
+
+## DEC-089: S21.1 — main.py split into main + router_registry + exception_handlers (resolves DEC-060)
+**Date:** 2026-06-11
+**Context:** Phase 21 S21.1 (SEV-23, file-size cluster) un-grandfathers `main.py`, which DEC-060
+parked in the R001 baseline at 361 lines "pending SEV-23". It had since grown to 400 lines.
+The file mixed three responsibilities: the FastAPI app factory + lifespan (startup/shutdown
+orchestration), four ErrorEnvelope exception handlers, and the registration of ~40 route routers.
+**Options considered:**
+  1. Waiver (keep over 300). Rejected — DEC-060 explicitly deferred to this step; a waiver would
+     defeat the purpose and leave R001 in the baseline.
+  2. Extract the `lifespan` context manager to its own module. Rejected — `lifespan` resolves many
+     module-global names (`get_graph_db`, `EmbeddingReconciler`, …) that `test_main_reconciler_lifespan.py`
+     monkeypatches via the `main` namespace; moving it would silently break those patches.
+  3. Extract the two zero-entanglement seams: route-router imports + `include_router` calls →
+     `api/router_registry.py` (`register_routers(app, settings)`, split into public/admin helpers to
+     stay under the 40-line function limit); and the four exception handlers + their registration →
+     `api/exception_handlers.py` (`register_exception_handlers(app)`). `lifespan` stays in `main.py`.
+**Decision:** Option 3. `main.py` drops from 400 → 217 lines; both new files are well under 300.
+The split boundary is by responsibility (app assembly vs. routing table vs. error mapping), each
+new module is single-purpose, and no test monkeypatch targets move.
+**Why:** Route registration and error-envelope mapping are mechanical tables with no dependency on
+lifespan state — the cleanest natural seams. Keeping `lifespan` in `main` preserves the existing
+`main.<name>` monkeypatch surface (no test behaviour change).
+**Consequence:** `R001|src/npc_engine/main.py` and `R006|…main.py::create_app` removed from the
+baseline. `test_error_envelope_sev33.py` now imports the handlers from `api/exception_handlers.py`
+(their new home). DEC-060 resolved.
