@@ -1260,3 +1260,14 @@ revives the graveyard `investigation` engine as EXP-44's detection half (OQ-12),
 Applied just-in-time before the EXP-44 batch. Unlocks EXP-44.
 **Consequence:** the flagship emergent-drama capability; XL, sequenced last; STOP + surface if the
 type-registry gate cannot be made green.
+
+## DEC-105: `demo_game/ui/emotion_panel.py` 300-line waiver (mood-contagion pair view, EXP-224)
+**Date:** 2026-06-12 · **Status:** ✅ ACCEPTED (demo UI file-size waiver, consistent with DEC-029/032/034/036/049/074/075)
+**Context:** EXP-224 added the mood-contagion pair view (`set_pair_emotion`/`clear_pair_emotion`/
+`_draw_pair_section`) to `emotion_panel.py`, taking it to ~335 lines. The file is a single cohesive
+pygame panel widget; the pair section shares the widget's render state and fonts. Splitting it into a
+sibling module would scatter one renderer's logic across two files for no cohesion benefit — the same
+rationale as the `left_panel.py` waiver (DEC-036).
+**Decision:** Waive the 300-line rule for `demo_game/ui/emotion_panel.py`; re-baseline via
+`make check-rules-update`. Each function remains ≤40 lines / ≤3 nesting; only the file-size rule is waived.
+**Consequence:** demo emotion panel can render a contagion pair without an artificial split.

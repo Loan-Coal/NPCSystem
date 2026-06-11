@@ -122,4 +122,4 @@ async def find_conflicting_belief(
         records = [dict(record) async for record in result]
     finally:
         await result.consume()
-    return cast(dict[str, Any], records[0]) if records else None
+    return records[0] if records else None
