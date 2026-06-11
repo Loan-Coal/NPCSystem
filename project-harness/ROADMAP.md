@@ -181,6 +181,11 @@ re-seeding); **EXP-32 + EXP-87 can run in parallel with KE-6** (no conflict).
 
 - [ ] **S21.1** Rule violations — file-size cluster (SEV-23): split any remaining files > 300 lines that are in the baseline. DECISIONS entry required for each split boundary.
   - Exit: `make check-rules` baseline shrunken for R001.
+  - **Progress (2026-06-11):** src/ engine+api portion **done** — `main.py` split (DEC-089) and
+    `middleware_helpers.py` split (DEC-090) removed from baseline; every other src `>300` file now
+    carries a documented waiver (DEC-016/042/044/046/061/062/066/067/073/076/077/079/081/091).
+    Remaining R001 entries are all `demo_game/*` — **deferred** to a future session per the scope
+    decision. Baseline R001 (src) is fully resolved/waived; baseline 152→149.
 - [x] **S21.2** Rule violations — error-swallowing cluster (SEV-18): replace `except: pass` and bare `except Exception: pass` with typed re-raises or `log-and-re-raise`. `utils/errors.py` typed exceptions only.
   - Exit: R003 hits in baseline gone. ✓ (found already satisfied — 0 R003 in baseline/src, 2026-06-11)
 - [x] **S21.3** Rule violations — print/Cypher-outside-graph cluster (SEV-40 + SEV-04 partial): replace `print()` with structured logger calls; move `engines/interaction/quest_verifier.py` Cypher to new `graph/quest_verification_queries.py`.
@@ -312,3 +317,4 @@ health gate and is green as of Phase 16 completion (1837 passed, 22 skipped, 98%
 | 15 | 2026-06-11 | S20.6 | `test_route_response_model_contract.py` (zero routes missing `response_model`; non-empty OpenAPI bodies; OkEnvelope component present); FA102 sweep no-op; ISSUE-052 [FIXED] | Phase 20 ✅; 1924 tests green, mypy 0 |
 | 16 | 2026-06-11 | S21.2/S21.3/S21.5 | Reconcile: verified the current `rules_baseline.txt` carries 0 R002/R003/R004/R007 entries and `quest_verifier.py` has 0 Cypher; ticked the three already-satisfied steps (no code change) | S21.2/S21.3/S21.5 ✅ (found satisfied); S21.1 + S21.4 remain |
 | 17 | 2026-06-11 | S21.1 (main.py) | Split `main.py` 400→217L into `api/router_registry.py` (`register_routers`, public/admin helpers) + `api/exception_handlers.py` (4 handlers + `register_exception_handlers`); `lifespan` kept in `main` (test monkeypatch surface); DEC-089 resolves DEC-060; `test_error_envelope_sev33` import updated; baseline 152→150 | R001 main.py removed; `make check` green (1924 passed, 85.56%) |
+| 18 | 2026-06-11 | S21.1 (auth+errors) | Split `middleware_helpers.py` 333→229L: observability helpers → new `auth/request_observability.py` (118L), `middleware.py` import updated (DEC-090); `errors.py` (329L) kept with documented waiver (DEC-091, flat exception catalog). src/ R001 cluster now fully split-or-waived; `demo_game/*` deferred | baseline 150→149; `make check` green (1924 passed, 85.57%) |
