@@ -148,6 +148,11 @@ def _patch_graph_calls(monkeypatch) -> None:
 
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_needs_for_character", fake_needs)
 
+    async def fake_player_memories(session, *, npc_id, player_id, k=5):
+        return []
+
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_player_memories_for_npc", fake_player_memories)
+
 
 class FakeEmbeddingIndex:
     """Minimal fake embedding index — returns empty results."""

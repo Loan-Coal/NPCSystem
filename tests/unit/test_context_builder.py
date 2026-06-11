@@ -143,9 +143,18 @@ def _patch_graph_calls(monkeypatch, tier_a_items=None) -> None:
     async def fake_active_quest(session, *, player_id):
         return None
 
+    async def fake_npc_player_edge(session, *, npc_id, player_id):
+        return None
+
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_trust_scores_for_events", fake_trust_scores)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_second_hop_events", fake_second_hop)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_active_quest_for_player", fake_active_quest)
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_npc_player_edge", fake_npc_player_edge)
+
+    async def fake_player_memories(session, *, npc_id, player_id, k=5):
+        return []
+
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_player_memories_for_npc", fake_player_memories)
 
 
 @pytest.mark.asyncio
@@ -402,4 +411,76 @@ async def test_no_top_need_when_npc_has_no_needs(monkeypatch) -> None:
     # Either key absent or explicitly None — either is acceptable
     assert payload.get("npc", {}).get("top_need") is None, (
         "Expected no top_need when NPC has no needs"
+    )
+
+
+# ---------------------------------------------------------------------------
+# EXP-211: player-scoped memory surfaces in dialogue context
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_player_scoped_memory_in_context(monkeypatch) -> None:
+    """Memories tagged with the requesting player_id must appear under 'player_memories'
+    in the serialized context; memories for a different player must not appear there."""
+    player_memory = {
+        "id": "mem-001",
+        "content": "The hero saved the village",
+        "vividness": 80,
+        "emotional_charge": 60,
+        "subject_player_id": "player_hero",
+        "recall_count": 3,
+        "never_forget": False,
+        "created_at_game_time": '{"year":1,"season":"spring","day":1,"time_of_day":"morning"}',
+    }
+
+    async def fake_player_memories(session, *, npc_id, player_id, k=5):
+        if player_id == "player_hero":
+            return [player_memory]
+        return []
+
+    _patch_graph_calls(monkeypatch)
+    monkeypatch.setattr(
+        "npc_engine.retrieval.context_builder.get_player_memories_for_npc",
+        fake_player_memories,
+    )
+
+    settings = Settings(
+        API_KEY_SECRET="npc_dev_secret_2026_alpha",
+        NEO4J_URI="bolt://localhost:7687",
+        NEO4J_USER="neo4j",
+        NEO4J_PASSWORD="password",
+        PROMPT_TOKEN_BUDGET=2500,
+    )
+
+    # Request as the matching player — memory must surface
+    serialized = await build_serialized_context(
+        session=None,  # type: ignore[arg-type]
+        settings=settings,
+        llm_config=_llm_config(),
+        embedding_index=FakeEmbeddingIndex(rows=[]),
+        npc_id="npc_1",
+        player_message="do you remember what happened?",
+        session_turns=[],
+        player_id="player_hero",
+    )
+    payload = json.loads(serialized)
+    assert "player_memories" in payload.get("npc", {}), (
+        "Expected 'player_memories' in context when NPC has memories for the requesting player"
+    )
+
+    # Request as a different player — memory must be absent
+    serialized_other = await build_serialized_context(
+        session=None,  # type: ignore[arg-type]
+        settings=settings,
+        llm_config=_llm_config(),
+        embedding_index=FakeEmbeddingIndex(rows=[]),
+        npc_id="npc_1",
+        player_message="do you remember what happened?",
+        session_turns=[],
+        player_id="player_villain",
+    )
+    payload_other = json.loads(serialized_other)
+    assert payload_other.get("npc", {}).get("player_memories") is None, (
+        "Expected no 'player_memories' for a different player"
     )

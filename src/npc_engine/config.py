@@ -174,6 +174,11 @@ class Settings(BaseSettings):
 
     KNOWLEDGE_LEARNING_ENABLED: bool = False
 
+    # EXP-212: salience threshold below which a memory is considered forgettable.
+    # Salience is computed from vividness (40 %), emotional_charge (40 %), and
+    # recall_count (20 %). A value of 20 means low-activity memories are prunable.
+    MEMORY_FORGET_THRESHOLD: float = Field(default=20.0, ge=0.0, le=100.0)
+
     # Content-moderation ceiling (S16.1). "mature" = no restrictions (default).
     CONTENT_RATING: ContentRating = Field(
         default="mature",

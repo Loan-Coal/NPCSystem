@@ -142,6 +142,11 @@ async def test_context_builder_emits_tier_item_and_token_metrics(monkeypatch) ->
 
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_needs_for_character", fake_needs)
 
+    async def fake_player_memories(session, *, npc_id, player_id, k=5):
+        return []
+
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_player_memories_for_npc", fake_player_memories)
+
     settings = Settings(API_KEY_SECRET="npc_dev_secret_2026_alpha")
 
     await build_serialized_context(

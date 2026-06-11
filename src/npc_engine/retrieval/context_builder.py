@@ -38,7 +38,10 @@ from npc_engine.graph.group_service import get_groups_for_character_svc
 from npc_engine.graph.rumor_service import get_rumors_for_character_svc
 from npc_engine.graph.trait_service import get_traits_svc
 from npc_engine.graph.pledge_service import get_pledges_for_character_svc
-from npc_engine.graph.memory_queries import get_memories_for_character
+from npc_engine.graph.memory_queries import (
+    get_memories_for_character,
+    get_player_memories_for_npc,
+)
 from npc_engine.graph.reputation_queries import get_reputation_context_for_npc
 from npc_engine.graph.trust_queries import get_second_hop_events, get_trust_scores_for_events
 from npc_engine.graph.quest_queries import get_active_quest_for_player
@@ -445,6 +448,37 @@ def _rank_and_serialize_tiers(
 _TOP_NEED_TIER_B_PRIORITY = 55
 
 
+async def _fetch_player_memory_item(
+    session: AsyncSession,
+    npc_id: str,
+    player_id: str | None,
+    game_time: TimePoint | None,
+) -> ContextItem | None:
+    """Fetch player-scoped memories and return a Tier-A ContextItem, or None.
+
+    Only executes the graph read when ``player_id`` is non-None.  Results are
+    annotated with temporal age metadata before serialization.
+
+    Args:
+        session: Active Neo4j async session.
+        npc_id: ID of the NPC whose memories to query.
+        player_id: ID of the player for whom to filter memories.  When None
+            the function returns None immediately (no graph call).
+        game_time: Current game-time snapshot used for age annotation.
+
+    Returns:
+        A ContextItem keyed ``"player_memories"`` when the NPC holds memories
+        for that player; None otherwise.
+    """
+    if not player_id:
+        return None
+    raw = await get_player_memories_for_npc(session, npc_id=npc_id, player_id=player_id, k=5)
+    if not raw:
+        return None
+    aged = annotate_memory_ages(raw, game_time)
+    return ContextItem(key="player_memories", text=serialize_json(aged), tier="tierA", priority=91)
+
+
 async def _maybe_append_top_need(session: AsyncSession, npc_id: str, tier_b_raw: list) -> list:
     """Return tier_b_raw with the NPC's top unmet need appended as an optional Tier-B item, if any."""
     top_need = await _fetch_top_unmet_need(session=session, npc_id=npc_id)
@@ -482,6 +516,9 @@ async def build_serialized_context(
     tier0 = _build_tier0_items(world_state, emotion_snapshot)
     tier_a_raw = _build_tier_a_base(npc_id, character_bundle, events, location_id, location_context, group_memberships, believed_rumors, traits, active_pledges, session_turns)
     tier_a_raw.extend(_build_tier_a_extended(player_id, reputation_items, active_quest, player_relation_edge, memories, beliefs, goals, owned_items, secrets, obligations, second_hop_events, settings, npc_id, current_game_time))
+    player_mem_item = await _fetch_player_memory_item(session, npc_id, player_id, current_game_time)
+    if player_mem_item is not None:
+        tier_a_raw.append(player_mem_item)
     tier_b_raw, tier_c_raw, vector_scores = _build_tier_b_c_items(tier_b_results)
     tier_b_raw = await _maybe_append_top_need(session, npc_id, tier_b_raw)
     event_key_trust = _build_event_trust_map(events, trust_scores, npc_id)

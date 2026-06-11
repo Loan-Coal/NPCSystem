@@ -156,3 +156,100 @@ async def test_create_from_semantic_triggers_forwards_emotional_charge(mock_sess
         )
     call_kwargs = mock_cm.call_args.kwargs
     assert call_kwargs["emotional_charge"] == 42
+
+
+# ---------------------------------------------------------------------------
+# EXP-211: subject_player_id population
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_memory_tagged_with_subject_player_id(mock_session):
+    """When a player_id is supplied to create_from_arousal, it must be forwarded to
+    create_memory as subject_player_id so the memory is player-scoped."""
+    engine = MemoryEngine()
+    with patch(f"{_MODULE}.create_memory", new_callable=AsyncMock, return_value="mem-p001") as mock_cm:
+        result = await engine.create_from_arousal(
+            mock_session,
+            character_id="npc_1",
+            arousal=85,
+            content="The player revealed a shocking secret",
+            game_time=_make_game_time(),
+            player_id="player_hero",
+        )
+    assert result == "mem-p001"
+    call_kwargs = mock_cm.call_args.kwargs
+    assert call_kwargs.get("subject_player_id") == "player_hero", (
+        "subject_player_id must be forwarded to create_memory when player_id is given"
+    )
+
+
+@pytest.mark.asyncio
+async def test_memory_without_player_id_has_no_subject_player_id(mock_session):
+    """When player_id is not supplied, subject_player_id must be absent (None) in create_memory."""
+    engine = MemoryEngine()
+    with patch(f"{_MODULE}.create_memory", new_callable=AsyncMock, return_value="mem-p002") as mock_cm:
+        await engine.create_from_arousal(
+            mock_session,
+            character_id="npc_2",
+            arousal=90,
+            content="The dragon attacked the village",
+            game_time=_make_game_time(),
+        )
+    call_kwargs = mock_cm.call_args.kwargs
+    assert call_kwargs.get("subject_player_id") is None, (
+        "subject_player_id must be None when no player_id is given"
+    )
+
+
+# ---------------------------------------------------------------------------
+# EXP-212: compute_salience
+# ---------------------------------------------------------------------------
+
+
+def test_compute_salience_forgettable_below_threshold():
+    """A memory with low recall_count, low vividness, low charge is forgettable."""
+    from npc_engine.engines.memory.memory_engine import compute_salience, is_forgettable
+    from npc_engine.config import Settings
+
+    settings = Settings(API_KEY_SECRET="npc_dev_secret_2026_alpha")  # type: ignore[call-arg]
+    salience = compute_salience(vividness=5, emotional_charge=5, recall_count=0)
+    assert salience < settings.MEMORY_FORGET_THRESHOLD, (
+        "Memory with low vividness/charge/recall should be below forget threshold"
+    )
+    assert is_forgettable(
+        salience=salience,
+        never_forget=False,
+        threshold=settings.MEMORY_FORGET_THRESHOLD,
+    ), "Low-salience memory with never_forget=False should be forgettable"
+
+
+def test_never_forget_memory_not_forgettable():
+    """A memory with never_forget=True must never be forgettable, regardless of salience."""
+    from npc_engine.engines.memory.memory_engine import compute_salience, is_forgettable
+    from npc_engine.config import Settings
+
+    settings = Settings(API_KEY_SECRET="npc_dev_secret_2026_alpha")  # type: ignore[call-arg]
+    salience = compute_salience(vividness=0, emotional_charge=0, recall_count=0)
+    assert not is_forgettable(
+        salience=salience,
+        never_forget=True,
+        threshold=settings.MEMORY_FORGET_THRESHOLD,
+    ), "A never_forget memory must never be marked forgettable"
+
+
+def test_high_salience_memory_not_forgettable():
+    """A memory with high vividness and charge must exceed the threshold."""
+    from npc_engine.engines.memory.memory_engine import compute_salience, is_forgettable
+    from npc_engine.config import Settings
+
+    settings = Settings(API_KEY_SECRET="npc_dev_secret_2026_alpha")  # type: ignore[call-arg]
+    salience = compute_salience(vividness=90, emotional_charge=80, recall_count=10)
+    assert salience >= settings.MEMORY_FORGET_THRESHOLD, (
+        "High vividness/charge/recall memory must exceed forget threshold"
+    )
+    assert not is_forgettable(
+        salience=salience,
+        never_forget=False,
+        threshold=settings.MEMORY_FORGET_THRESHOLD,
+    )

@@ -1,7 +1,8 @@
 """
 Module: memory_engine
 Layer: engines
-Purpose: Rules-based engine for forming memories from high-arousal moments and running daily vividness decay.
+Purpose: Rules-based engine for forming memories from high-arousal moments, running daily
+    vividness decay, computing memory salience, and deciding forgettability (EXP-212).
 Does NOT: query or persist state directly — all I/O is delegated to graph.memory_service.
 Dependencies: graph.memory_service, world.time_utils
 Dependencies injected: AsyncSession (per method call).
@@ -35,6 +36,69 @@ _SEMANTIC_KEYWORDS: tuple[str, ...] = (
     "coup",
 )
 
+# Salience component weights — must sum to 1.0.
+_SALIENCE_VIVIDNESS_WEIGHT: float = 0.4
+_SALIENCE_CHARGE_WEIGHT: float = 0.4
+_SALIENCE_RECALL_WEIGHT: float = 0.2
+
+# Cap used when normalising recall_count to a 0-100 scale.
+_RECALL_COUNT_SATURATION: int = 10
+
+
+def compute_salience(
+    *,
+    vividness: int,
+    emotional_charge: int,
+    recall_count: int,
+) -> float:
+    """Compute a salience score (0–100) for a memory node.
+
+    Salience combines vividness (40 %), absolute emotional charge (40 %),
+    and recall_count normalised to a 0–100 scale capped at
+    ``_RECALL_COUNT_SATURATION`` (20 %).  Higher salience = more memorable.
+
+    Args:
+        vividness: Current vividness value (0–100).
+        emotional_charge: Emotional intensity.  Accepts negative values; only
+            magnitude is used so pain and joy contribute equally.
+        recall_count: How many times the memory has been recalled (0+).
+
+    Returns:
+        Float salience score in [0.0, 100.0].
+    """
+    normalised_charge = min(100, abs(emotional_charge))
+    normalised_recall = min(100, (recall_count / _RECALL_COUNT_SATURATION) * 100)
+    return (
+        _SALIENCE_VIVIDNESS_WEIGHT * vividness
+        + _SALIENCE_CHARGE_WEIGHT * normalised_charge
+        + _SALIENCE_RECALL_WEIGHT * normalised_recall
+    )
+
+
+def is_forgettable(
+    *,
+    salience: float,
+    never_forget: bool,
+    threshold: float,
+) -> bool:
+    """Return True when a memory qualifies for scheduled forgetting.
+
+    A memory is forgettable only when its salience is below ``threshold``
+    AND ``never_forget`` is False.  Pinned memories (``never_forget=True``)
+    are never forgettable regardless of salience.
+
+    Args:
+        salience: Pre-computed salience score (use ``compute_salience``).
+        never_forget: When True the memory is permanently pinned.
+        threshold: The ``MEMORY_FORGET_THRESHOLD`` value from settings.
+
+    Returns:
+        True when the memory should be scheduled for decay/deletion.
+    """
+    if never_forget:
+        return False
+    return salience < threshold
+
 
 class MemoryEngine:
     """Rules-based engine for memory formation and vividness decay.
@@ -52,8 +116,13 @@ class MemoryEngine:
         arousal: int,
         content: str,
         game_time: TimePoint,
+        player_id: str | None = None,
     ) -> str | None:
         """Create a memory if arousal exceeds the high-arousal threshold.
+
+        When ``player_id`` is supplied the memory is tagged with
+        ``subject_player_id`` so it can be retrieved via player-scoped
+        queries (EXP-211).
 
         Args:
             session: Active Neo4j async session.
@@ -61,6 +130,8 @@ class MemoryEngine:
             arousal: Current arousal level (0–100).
             content: Description of the memorable moment.
             game_time: Game-time snapshot at moment of formation.
+            player_id: Optional player whose interaction triggered this
+                memory.  Stored as ``subject_player_id`` on the node.
 
         Returns:
             Memory ID string if a memory was created, else None.
@@ -74,6 +145,7 @@ class MemoryEngine:
             vividness=_HIGH_AROUSAL_VIVIDNESS,
             emotional_charge=min(100, arousal - 50),
             game_time=game_time,
+            subject_player_id=player_id,
         )
 
     async def create_from_semantic_triggers(
