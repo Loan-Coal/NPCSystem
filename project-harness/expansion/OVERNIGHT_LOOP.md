@@ -94,15 +94,15 @@ automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** A
-- **Phase in progress:** E (Phase D COMPLETE; 25 of 30 done: EXP-201..225)
-- **Next batch (Phase E — flagship, highest risk):** apply each new node/edge type AND its first user in
-  ONE batch, gate ONCE. E1: DEC-102 (new `player_model` node + `has_player_model` edge) + dispatch EXP-226
-  (player-model engine) + EXP-227 (drama director, no schema). E2: DEC-103 (`believes` +is_deception
-  +deception_goal_id) + EXP-228 (deception; eval must treat is_deception=true as intended). E3: DEC-104
-  (new `scheme` node + `executes_scheme` + `scheme_step` edges + `MAX_ACTIVE_SCHEMES_PER_NPC`) + EXP-229
-  (scheming, XL) + EXP-230 (session persistence, no schema).
-  **STOP+surface if the type-registry gate can't be made green in 2 tries for a new node type.**
-- **Last green commit:** 3d04521 (EXP-214/218 integrated, gate green).
+- **Phase in progress:** E2 (E1 done; 27 of 30: EXP-201..227)
+- **Next batch (E2):** orchestrator adds `is_deception` (bool, opt) + `deception_goal_id` (str, opt) to
+  `base_edges/believes.yaml`; validate via `pytest -k 'type_registry or contract or registry'`; commit; then
+  dispatch EXP-228 (deception engine — coordinate the anti-hallucination eval to treat `is_deception=true`
+  as intended). Gate once.
+- **Then E3:** DEC-104 — new `base_nodes/scheme.yaml` + `base_edges/executes_scheme.yaml` + `scheme_step.yaml`
+  + `MAX_ACTIVE_SCHEMES_PER_NPC` const; dispatch EXP-229 (scheming, XL) + EXP-230 (session persistence, no schema).
+  Land each new node type WITH its first user. **On all EXP-201..230 [x], STOP with a final wrap-up.**
+- **Last green commit:** 0a31882 (E1 EXP-226/227 integrated, gate green).
 
 ## Progress Log
 
@@ -158,3 +158,9 @@ automatically; do not poll.
   1 fix: R006 `QuestChainResolver.choose` → extracted `_offer_choice_successor`. Fix 3d04521. Green: make
   check 2028 (85.99%). **PHASE D COMPLETE — 25 of 30 done.** Next: Phase E (flagship cognition, new node types).
   Follow-up: EXP-214 instantiates MemoryEngine() in quest_lifecycle __init__ (prefer DI injection).
+- **10 · 2026-06-12 cycle 10** — Phase E1: created `player_model.yaml` + `has_player_model.yaml` (DEC-102),
+  validated via type_registry tests (63 pass), committed 76424e4, THEN EXP-226/227 (merge-first, clean
+  cherry-pick). **Both ✅** (4148fef/7b0f1d9). **First brand-new node type — no unused-type gate fail**
+  (node YAML is a generic contract; no per-node Pydantic model needed). 2 fixes: R006 director `decide` →
+  `_engagement_beat`; player_model `__init__.py` missing `Does NOT:`/`Dependencies injected:` (conformance
+  test). Fix 0a31882. Green: make check 2045 (86.07%). **27 of 30 done.**

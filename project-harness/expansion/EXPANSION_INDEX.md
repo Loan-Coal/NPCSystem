@@ -73,12 +73,14 @@ _The orchestrator maintains this: add a line when an item unlocks a later one; d
 - **NEXT BATCH (Phase E — flagship, schema-heavy, highest risk):** For each new node/edge type, the
   orchestrator applies the YAML AND lands it in the SAME batch as its first user (avoid unused-type gate
   fail); gate ONCE at end; STOP+surface if the type-registry gate can't go green in 2 tries.
-  - **E1:** DEC-102 → new `base_nodes/player_model.yaml` + `base_edges/has_player_model.yaml`; dispatch
-    [EXP-226 player-model engine (its first reader/writer)] + [EXP-227 drama director (no schema, new dir)].
-  - **E2:** DEC-103 → `believes.yaml` +is_deception/+deception_goal_id; [EXP-228 deception engine]
-    (coordinate anti-hallucination eval to treat is_deception=true as intended).
-  - **E3:** DEC-104 → new `scheme.yaml` + `executes_scheme.yaml` + `scheme_step.yaml` +
-    `MAX_ACTIVE_SCHEMES_PER_NPC`; [EXP-229 scheming engine, XL] + [EXP-230 session persistence, no schema].
+  - **E1 DONE** (EXP-226/227 ✅; DEC-102 player_model node/edge applied 76424e4). New node type landed
+    cleanly (no unused-type gate fail — `node_type` YAML is a generic contract, no per-node model needed).
+    Seams: `engines/player_model/` + `graph/player_model_writer`, `engines/director/`.
+  - **NEXT E2:** orchestrator adds `is_deception` (bool, optional) + `deception_goal_id` (str, optional) to
+    `base_edges/believes.yaml`; validate via type_registry tests; dispatch [EXP-228 deception engine]
+    (coordinate the anti-hallucination eval to treat `is_deception=true` as intended, NOT a guard failure).
+  - **E3:** DEC-104 → new `scheme.yaml` (node) + `executes_scheme.yaml` + `scheme_step.yaml` (edges) +
+    `MAX_ACTIVE_SCHEMES_PER_NPC` const; [EXP-229 scheming engine, XL] + [EXP-230 session persistence, no schema].
 
 ## Mapping & reconciliation (analysis id → execution id)
 
@@ -158,18 +160,18 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 - [x] **EXP-225** proactive window surface (demo) · S · DONE c26c224 · intent highlights NPC + pre-fills input (also fixed a latent NPC_DISPLAY_NAMES import crash)
 
 ### Phase E — Emergent cognition (🔶 DEC-102/103/104; flagship, schema-heavy)
-- [ ] **EXP-226** player-model / theory-of-mind engine 🔶DEC-102 · M · deps: none · new `base_nodes/player_model.yaml`+`base_edges/has_player_model.yaml`(orch) + `engines/player_model/`
-- [ ] **EXP-227** player-aware drama director engine · M · deps: EXP-201 (soft) · new `engines/director/`
+- [x] **EXP-226** player-model / theory-of-mind engine · M · DONE 4148fef · DEC-102 node/edge + `engines/player_model/` + `graph/player_model_writer` (upsert/get); scheduler wiring = slice 2
+- [x] **EXP-227** player-aware drama director engine · M · DONE 7b0f1d9 · `engines/director/` pure `decide`; scheduler wiring = slice 2
 - [ ] **EXP-228** NPC deception / false-belief engine 🔶DEC-103 · L · deps: EXP-32(done, eval coupling) · edit `believes.yaml`(orch) + new `engines/deception/`
 - [ ] **EXP-229** long-horizon covert scheming engine 🔶DEC-104 · XL · deps: EXP-228 · new `scheme.yaml`+2 edges(orch) + engine + revive `investigation`
 - [ ] **EXP-230** session history persisted across restart · M · deps: none · edit `engines/dialogue/session_store.py` + lifespan hooks
 
 ## Next candidate batch (suggested)
 
-**LAST BATCH (cycle 9):** EXP-214/218 ✅ — DEC-100/101 applied (6430d34); integrated (0adc89f/d9b318a +
-fix 3d04521). Gate green (make check 2028, 85.99%). 1 fix (R006 choose helper). **PHASE D COMPLETE.
-25 of 30 done (EXP-201..225).**
-**NEXT (Phase E, flagship):** E1 = DEC-102 + EXP-226 + EXP-227; E2 = DEC-103 + EXP-228; E3 = DEC-104 + EXP-229 + EXP-230.
+**LAST BATCH (cycle 10):** E1 EXP-226/227 ✅ — DEC-102 applied (76424e4); integrated (4148fef/7b0f1d9 +
+fix 0a31882). Gate green (make check 2045, 86.07%). 2 fixes (R006 + __init__ docstring contract).
+**27 of 30 done. First new node type landed cleanly.**
+**NEXT (E2):** add believes.yaml is_deception+deception_goal_id, then EXP-228. Then E3: scheme nodes + EXP-229 + EXP-230.
 **Apply each new node type WITH its first user; STOP+surface if type-registry gate resists in 2 tries.**
 
 ---
