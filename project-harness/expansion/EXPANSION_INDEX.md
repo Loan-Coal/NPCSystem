@@ -62,10 +62,13 @@ _The orchestrator maintains this: add a line when an item unlocks a later one; d
   writer signature (e.g. create_memory + subject_player_id) breaks `test_memory_service.py` mocks — add
   `**_kwargs` tolerance. (3) big multi-file workers (EXP-211+212 = 10 files) are integration-heavy —
   prefer ≤3-file slices.
-- **NEXT BATCH (Phase D, no-schema subset):** EXP-216 (dependencies.py wire), EXP-217 (new event route +
-  graph reader), EXP-219 (new `trait_modulated_model.py`), EXP-213 (gossip distort routing) — conflict-free.
-  Schema items EXP-214 (DEC-100 memory.kind) + EXP-218 (DEC-101 unlocks.on_choice_id) need orchestrator
-  schema-apply first (later batch).
+- **PHASE D batch-1 DONE** (EXP-213/216/217/219 ✅). Lesson: a worker that threads config-derived values
+  into a pure helper (EXP-213 thresholds) breaks mocked-config tests — guard with `isinstance(x, int)`
+  inline (so mypy narrows) or use module defaults. New seam: `trait_modulated_model.py` (2nd EmotionModel).
+- **NEXT BATCH (Phase D, no-schema):** EXP-215 (belief contradiction dedup — knowledge engine + new graph
+  reader), EXP-220 (faction board demo), EXP-224 (mood-contagion demo), EXP-225 (proactive window demo) —
+  conflict-free (different files). THEN schema batches: DEC-100 → EXP-214; DEC-101 → EXP-218; remaining
+  demo EXP-221 (left_panel)/EXP-222 (run.py)/EXP-223 (seed). Then Phase E.
 
 ## Mapping & reconciliation (analysis id → execution id)
 
@@ -130,13 +133,13 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 - [x] **EXP-212** salience forgetting curve · M · DONE c571ae7 · `compute_salience`/`is_forgettable` + `MEMORY_FORGET_THRESHOLD`; decay scheduling = slice 2
 
 ### Phase D — Deepen the systems (🔶 DEC-100/101)
-- [ ] **EXP-213** belief/confidence-aware distortion routing · M · deps: none · edit `engines/gossip/gossip_distort.py`, `gossip_handler.py`, `prompts/gossip/gossip_config.yaml`
+- [x] **EXP-213** belief/confidence-aware distortion routing · M · DONE 7be05fe · `receiver_confidence` biases distortion type (deterministic; guarded to int inputs for back-compat)
 - [ ] **EXP-214** commitment/fact memory formation 🔶DEC-100 · M · deps: none · edit `memory.yaml`(orch), `memory_engine.py`, `engines/quest/quest_lifecycle_engine.py`
 - [ ] **EXP-215** belief contradiction detection + dedup · M · deps: none · new `graph/` reader; edit `engines/knowledge_learning/knowledge_extraction_engine.py`
-- [ ] **EXP-216** trade dispatch → NegotiationStore (PARTIAL) · S · deps: none · edit `api/dependencies.py`
-- [ ] **EXP-217** player event summary endpoint · S · deps: none · new `graph/event_queries.py` + `api/routes/player_events.py`
+- [x] **EXP-216** trade dispatch → NegotiationStore · S · DONE fc56e75 · composition root wires NegotiationBacked default
+- [x] **EXP-217** player event summary endpoint · S · DONE 42682f4 · `GET /player/{id}/events` + `get_recent_player_events` (note: players need KNOWS_ABOUT edges seeded to return data)
 - [ ] **EXP-218** quest branching on player choice 🔶DEC-101 · L · deps: none · edit `unlocks.yaml`(orch), `engines/quest/quest_chain_resolver.py`, new route
-- [ ] **EXP-219** personality-modulated emotion model · M · deps: none · new `engines/emotion/trait_modulated_model.py`
+- [x] **EXP-219** personality-modulated emotion model · M · DONE 6ca22af · `TraitModulatedEmotionModel` (2nd protocol impl); composition-root wiring = slice 2
 - [ ] **EXP-220** faction standing board (demo) · S · deps: none · new `EngineClient.get_faction_standings()` + UI tab
 - [ ] **EXP-221** location hierarchy breadcrumb (demo) · S · deps: none · edit `demo_game/ui/left_panel.py` ⚠conflict(left_panel.py: EXP-207)
 - [ ] **EXP-222** cinematic / recording mode (demo) · M · deps: EXP-205 (soft) · edit `demo_game/run.py` ⚠conflict(run.py: EXP-205)
@@ -153,10 +156,10 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 
 ## Next candidate batch (suggested)
 
-**LAST BATCH (cycle 5):** EXP-209/210/211/212 ✅ — DEC-097 applied (e6f54b2); integrated
-(dc18e67/e958799/c571ae7 + fix 7a07737). Gate green (make check 2005, demo 661). **Phase C COMPLETE.**
-4 integration fixes needed (R006, src-import/mypy, 2 memory mocks). **Phases A+B+C done: EXP-201..212.**
-**NEXT (Phase D):** EXP-216 · EXP-217 · EXP-219 · EXP-213 (no-schema, conflict-free). EXP-214/218 need schema first.
+**LAST BATCH (cycle 6):** EXP-213/216/217/219 ✅ — integrated (7be05fe/fc56e75/42682f4/6ca22af + fix f8a5fcc).
+Gate green (make check 2020, 85.97%). 3 fixes (R006 + gossip back-compat guards). **Phases A+B+C done +
+Phase D batch-1: EXP-201..213, 216, 217, 219 (15 items).**
+**NEXT (Phase D batch-2):** EXP-215 · EXP-220 · EXP-224 · EXP-225 (no-schema, conflict-free).
 **All workers must `git merge munich-demo` before building; grep new files for `from src`.**
 
 ---

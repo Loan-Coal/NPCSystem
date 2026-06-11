@@ -58,13 +58,13 @@ analysis, reconciled against code (10 re-proposed items were already built and d
 - **Goal:** richer gossip drift, interactive economy, visible politics, more game.
 - **Effort:** ~2 sessions · **Leverages:** distortion registry, NegotiationStore, location PART_OF (fixed).
 - **Constraints:** EXP-223 needs faction-count review in `game_end_checker.py`; EXP-207 & EXP-221 both edit `left_panel.py` (one worker); EXP-205 & EXP-222 both edit `run.py` (one worker).
-- [ ] **EXP-213** belief/confidence-aware distortion routing. Exit: receiver confidence biases distortion type.
+- [x] **EXP-213** belief/confidence-aware distortion routing (7be05fe). Receiver confidence biases distortion type (deterministic).
 - [ ] **EXP-214** commitment/fact memory formation (DEC-100 `Memory.kind`). Exit: promises form retrievable memories.
 - [ ] **EXP-215** belief contradiction detection + dedup. Exit: contradictory learned beliefs flagged/merged.
-- [ ] **EXP-216** trade dispatch → NegotiationStore (PARTIAL: wire `NegotiationBackedSyncTradeHandler` default). Exit: propose_trade opens a negotiation session.
-- [ ] **EXP-217** player-observable event summary endpoint. Exit: `GET` returns recent events; route test green.
+- [x] **EXP-216** trade dispatch → NegotiationStore (fc56e75). Composition root wires NegotiationBacked default.
+- [x] **EXP-217** player-observable event summary endpoint (42682f4). `GET /player/{id}/events` + reader + tests green.
 - [ ] **EXP-218** quest branching on player choice (DEC-101 `unlocks.on_choice_id`). Exit: choice selects successor quest.
-- [ ] **EXP-219** personality-modulated emotion model (2nd `EmotionModelProtocol` impl). Exit: trait-driven emotion deltas; test green.
+- [x] **EXP-219** personality-modulated emotion model (6ca22af). `TraitModulatedEmotionModel` 2nd impl; wiring = slice 2.
 - [ ] **EXP-220** faction standing board (demo). Exit: FACTION tab shows standings.
 - [ ] **EXP-221** location hierarchy breadcrumb (demo). Exit: panel shows PART_OF chain.
 - [ ] **EXP-222** cinematic / recording mode (demo; needs EXP-205). Exit: `--cinematic` produces formatted run.

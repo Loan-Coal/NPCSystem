@@ -94,13 +94,13 @@ automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** A
-- **Phase in progress:** D (Phases A+B+C COMPLETE: EXP-201..212)
-- **Next batch to run (Phase D, no-schema):** EXP-216 (wire NegotiationBacked default in api/dependencies.py),
-  EXP-217 (new graph/event_queries + api/routes/player_events.py), EXP-219 (new engines/emotion/trait_modulated_model.py),
-  EXP-213 (gossip_distort receiver_confidence). Conflict-free. Workers merge munich-demo first; grep new files for `from src`.
-- **Then (Phase D schema):** apply DEC-100 (memory.yaml `kind`) before EXP-214; DEC-101 (unlocks.yaml `on_choice_id`)
-  before EXP-218. Remaining D: EXP-220/221/222/223/224/225 (mostly demo). → Phase E (DEC-102/103/104 new node types).
-- **Last green commit:** 7a07737 (EXP-209/210/211/212 integrated, gate green).
+- **Phase in progress:** D batch-2 (A+B+C + D batch-1 done: EXP-201..213, 216, 217, 219)
+- **Next batch to run (Phase D batch-2, no-schema):** EXP-215 (belief contradiction dedup), EXP-220 (faction
+  board demo), EXP-224 (mood-contagion demo), EXP-225 (proactive window demo). Conflict-free. Merge munich-demo
+  first; grep `from src`.
+- **Then (Phase D schema):** apply DEC-100 (memory.yaml `kind`) → EXP-214; DEC-101 (unlocks.yaml `on_choice_id`)
+  → EXP-218; remaining demo EXP-221 (left_panel)/EXP-222 (run.py)/EXP-223 (seed). → Phase E (DEC-102/103/104).
+- **Last green commit:** f8a5fcc (EXP-213/216/217/219 integrated, gate green).
 
 ## Progress Log
 
@@ -137,3 +137,9 @@ automatically; do not poll.
   mocks broke on the new `create_memory(subject_player_id=...)` kwarg → added `**_kwargs`. Fix 7a07737.
   Green: make check 2005 (85.83%), demo 661. **PHASES A+B+C COMPLETE (12 items).** Lessons in index
   carry-forward (grep `from src`; mock-signature tolerance; ≤3-file slices).
+- **6 · 2026-06-12 cycle 6** — Phase D batch-1 EXP-213/216/217/219 (merge-first, cherry-picked clean).
+  **All 4 ✅** (7be05fe/fc56e75/42682f4/6ca22af). 3 fixes: R006 (event_queries row-map → helper); EXP-213
+  threaded config thresholds into a pure helper → 8 mocked-config gossip tests hit `int >= MagicMock` →
+  guarded the bias block with inline `isinstance(...,int)` ×3 (lets mypy narrow). Fix f8a5fcc. Green: make
+  check 2020 (85.97%). **15 items done (EXP-201..213, 216, 217, 219).** Lesson: don't thread mockable config
+  into pure helpers — guard or use module defaults.
