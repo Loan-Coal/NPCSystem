@@ -1,0 +1,8 @@
+node_type: player_model
+fields:
+  id: { type: str, required: true }
+  npc_id: { type: str, required: true }
+  player_id: { type: str, required: true }
+  perceived_trust: { type: int, required: false, range: [0, 100] }
+  perceived_intent: { type: str, required: false }
+  last_updated_at: { type: str, required: false }

@@ -1,0 +1,7 @@
+edge_type: HAS_PLAYER_MODEL
+src_type: character
+dst_type: player_model
+fields:
+  created_at_game_time:
+    type: str
+    required: false
