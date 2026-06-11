@@ -3,16 +3,23 @@ Module: knowledge_writer
 Layer: graph
 Purpose: Writes learned-fact belief nodes and provenance-annotated BELIEVES edges.
 Does NOT: contain engine logic, call LLMs, or validate facts — validation is in KnowledgeExtractionEngine.
-Dependencies: neo4j.AsyncSession, stdlib uuid.
+Dependencies: neo4j.AsyncSession, stdlib hashlib.
 Dependencies injected: AsyncSession (per call).
 Used by: engines.knowledge_learning.knowledge_extraction_engine
 """
 
 from __future__ import annotations
 
-import uuid
+import hashlib
 
 from neo4j import AsyncSession
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+# Length of the truncated SHA-256 hex digest used as the stable belief id (ISSUE-089).
+_BELIEF_ID_HASH_LENGTH = 16
 
 # ---------------------------------------------------------------------------
 # Cypher constants
@@ -49,8 +56,8 @@ async def write_belief(
     game_time_str: str,
 ) -> str:
     """Merge a Belief node and create/update the BELIEVES edge with provenance fields.
-    Opens a single transaction, merges the belief by UUID, creates/updates the
-    BELIEVES edge from the NPC character node with DEC-072 provenance fields.
+    Merges the belief by a stable (npc_id, content) hash so repeated identical facts
+    dedup, and creates/updates the BELIEVES edge with DEC-072 provenance fields.
 
     Args:
         session: Active Neo4j async session.
@@ -62,9 +69,9 @@ async def write_belief(
         game_time_str: Human-readable game-time string stored on the belief node.
 
     Returns:
-        Generated UUID string for the new or merged belief node.
+        Stable belief id (truncated SHA-256 of npc_id:content); identical facts dedup.
     """
-    belief_id = str(uuid.uuid4())
+    belief_id = hashlib.sha256(f"{npc_id}:{content}".encode()).hexdigest()[:_BELIEF_ID_HASH_LENGTH]
     tx = await session.begin_transaction()
     async with tx:  # noqa: SIM117
         await tx.run(

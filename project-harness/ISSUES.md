@@ -1095,7 +1095,11 @@ named. Tests: `test_dialogue_world_state_hoist.py`.
 **Why deferred:** No current mutation of this field; out of scope for EXP-53.
 **To fix:** Change `learned_facts: list[str] = Field(default_factory=list)` to `learned_facts: tuple[str, ...] = ()`.
 
-## ISSUE-089: `knowledge_writer.write_belief` generates a fresh UUID on every call, making MERGE behave like CREATE (no dedup)
+## [FIXED] ISSUE-089: `knowledge_writer.write_belief` generates a fresh UUID on every call, making MERGE behave like CREATE (no dedup)
+**Fixed:** 2026-06-11, S23.4 — `belief_id` is now `hashlib.sha256(f"{npc_id}:{content}".encode()).hexdigest()[:16]`
+(`_BELIEF_ID_HASH_LENGTH=16`), so the MERGE keys on a stable per-(npc, content) id and repeated identical
+facts collapse onto one node. Tests: `test_knowledge_writer.py` (same id for identical writes; distinct id
+for different content or different NPC).
 **Found:** 2026-06-09, during EXP-53 (W2)
 **Severity:** P3 (nice-to-fix — same fact can be persisted multiple times)
 **Where:** `src/npc_engine/graph/knowledge_writer.py:66` — `belief_id = str(uuid.uuid4())`
