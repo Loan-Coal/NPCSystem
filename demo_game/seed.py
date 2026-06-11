@@ -22,6 +22,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from pydantic import BaseModel, Field
+
 if TYPE_CHECKING:
     from demo_game.client import EngineClient
 
@@ -190,30 +192,43 @@ def build_event_payload(
     }
 
 
+class WorldStatePayload(BaseModel):
+    """Typed world_state node property payload for the demo seeder (ISSUE-084).
+
+    `.model_dump()` yields the property dict consumed by the generic node upsert.
+    """
+
+    id: str
+    epoch: str
+    active_conditions: list[str]
+    faction_standings: dict[str, int] = Field(default_factory=dict)
+    time_of_day: str = "morning"
+    weather: str = "clear"
+    last_updated_at: str
+    last_graph_updated_at: str
+
+
 def build_world_state_payload(
     epoch: str,
     active_conditions: list[str],
-) -> dict:
-    """Return a world_state node property dict.
+) -> WorldStatePayload:
+    """Return a typed world_state node property payload.
 
     Args:
         epoch: Current epoch name (e.g. "peace", "war").
         active_conditions: List of active condition IDs.
 
     Returns:
-        Dict with all required world_state properties.
+        WorldStatePayload with all required world_state properties.
     """
     now = _now()
-    return {
-        "id": _WORLD_STATE_ID,
-        "epoch": epoch,
-        "active_conditions": active_conditions,
-        "faction_standings": {},
-        "time_of_day": "morning",
-        "weather": "clear",
-        "last_updated_at": now,
-        "last_graph_updated_at": now,
-    }
+    return WorldStatePayload(
+        id=_WORLD_STATE_ID,
+        epoch=epoch,
+        active_conditions=active_conditions,
+        last_updated_at=now,
+        last_graph_updated_at=now,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1155,7 +1170,7 @@ def seed_all(client: EngineClient) -> dict:
 
     # 8. world_state (id="world" — canonical; see DEC-022)
     logger.info("[seed] world_state")
-    _tally(_seed_node(client, "world_state", build_world_state_payload("war", ["northern_war"])))
+    _tally(_seed_node(client, "world_state", build_world_state_payload("war", ["northern_war"]).model_dump()))
     _force_patch_world_state(client)  # always correct epoch even if node was skipped
 
     # 9. NPC-NPC structural edges

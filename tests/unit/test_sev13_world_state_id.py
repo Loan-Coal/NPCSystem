@@ -22,8 +22,8 @@ def test_build_world_state_payload_uses_canonical_id() -> None:
     from demo_game.seed import build_world_state_payload  # type: ignore[import]
 
     payload = build_world_state_payload("peace", [])
-    assert payload["id"] == "world", (
-        f"payload['id']={payload['id']!r}; must be 'world' (DEC-022)."
+    assert payload.id == "world", (
+        f"payload.id={payload.id!r}; must be 'world' (DEC-022)."
     )
 
 

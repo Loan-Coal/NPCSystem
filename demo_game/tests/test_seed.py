@@ -18,6 +18,7 @@ from demo_game.seed import (
     build_location_payload,
     build_npc_payload,
     build_world_state_payload,
+    WorldStatePayload,
     seed_all,
 )
 
@@ -166,17 +167,22 @@ def test_build_event_payload_returns_correct_shape() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_build_world_state_payload_returns_correct_shape() -> None:
+def test_build_world_state_payload_returns_typed_model() -> None:
     payload = build_world_state_payload(epoch="peace", active_conditions=[])
-    assert payload["id"] == "world"
-    assert payload["epoch"] == "peace"
-    assert payload["active_conditions"] == []
+    assert isinstance(payload, WorldStatePayload)
+    assert payload.id == "world"
+    assert payload.epoch == "peace"
+    assert payload.active_conditions == []
 
 
 def test_build_world_state_payload_with_active_conditions() -> None:
     payload = build_world_state_payload(epoch="war", active_conditions=["northern_war"])
-    assert payload["epoch"] == "war"
-    assert payload["active_conditions"] == ["northern_war"]
+    assert payload.epoch == "war"
+    assert payload.active_conditions == ["northern_war"]
+    # model_dump() must still produce the full upsert property set.
+    dumped = payload.model_dump()
+    assert dumped["id"] == "world"
+    assert "last_updated_at" in dumped and "last_graph_updated_at" in dumped
 
 
 # ---------------------------------------------------------------------------

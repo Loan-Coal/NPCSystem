@@ -270,8 +270,8 @@ kept OPEN — the two henryk cases need a live `make eval-llm-demo` (Ollama) run
   - Exit: `make test-demo` green. ✓ (priorities are 95 vs 88 — distinct, so merge_context dedup is deterministic; documented, no rename.)
 - [x] **S23.4** Write-belief dedup (ISSUE-089) — replace `str(uuid.uuid4())` in `knowledge_writer.write_belief` with a stable `hashlib.sha256(f"{npc_id}:{content}".encode()).hexdigest()[:16]` so MERGE deduplicates repeated facts. Add unit test asserting two identical fact writes produce one node.
   - Exit: `make check` green; duplicate belief test passes. ✓
-- [ ] **S23.5** WorldStatePayload model (ISSUE-084) — define `WorldStatePayload(BaseModel)` inline in `demo_game/seed.py` (4 fields); return it from `build_world_state_payload`; update the two callers.
-  - Exit: `rg "build_world_state_payload" demo_game/seed.py` shows typed return; `make test-demo` green.
+- [x] **S23.5** WorldStatePayload model (ISSUE-084) — define `WorldStatePayload(BaseModel)` inline in `demo_game/seed.py` (4 fields); return it from `build_world_state_payload`; update the two callers.
+  - Exit: `rg "build_world_state_payload" demo_game/seed.py` shows typed return; `make test-demo` green. ✓ (call site passes `.model_dump()` to the generic `_seed_node`; test_seed + test_sev13 updated to attribute access.)
 - [ ] **S23.6** Dead code + lazy import (ISSUE-054, ISSUE-091) — delete `src/npc_engine/retrieval/token_budget_enforcer.py` and its test `tests/unit/test_context_pipeline.py` (confirm zero imports first); make the `game_window` import in `demo_game/__init__.py` lazy (inside `_dispatch` body only).
   - Exit: `rg "token_budget_enforcer" src/` returns 0; `make check` green; `make test-demo` green.
 - [ ] **S23.7** Archetype in fallback (ISSUE-081) — thread the NPC archetype from `request.npc_id`→profile into `execute_with_degradation` and `DialogueLLMClient._load_fallback_dialogue` so the archetype-keyed fallback line is used instead of hardcoded `"default"`. Update unit test for the degradation path.

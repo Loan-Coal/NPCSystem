@@ -1048,7 +1048,11 @@ And add:
 **Fixed:** YYYY-MM-DD, in <commit/task>
 -->
 
-## ISSUE-084: `build_world_state_payload` returns raw dict instead of Pydantic model
+## [FIXED] ISSUE-084: `build_world_state_payload` returns raw dict instead of Pydantic model
+**Fixed:** 2026-06-11, S23.5 — added `WorldStatePayload(BaseModel)` inline in `demo_game/seed.py`;
+`build_world_state_payload` now returns it. The single production call site passes `.model_dump()` into the
+generic dict-based `_seed_node` (kept generic for all node types). Tests updated to attribute access
+(`test_seed.py`, `test_sev13_world_state_id.py`).
 **Found:** 2026-06-09, during ISSUE-080 fix (W1)
 **Severity:** P3 (nice-to-fix)
 **Where:** `demo_game/seed.py::build_world_state_payload` (returns `dict`)
