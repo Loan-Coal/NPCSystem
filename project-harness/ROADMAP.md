@@ -312,7 +312,7 @@ rumour content*; we only strip the *firsthand framing*, not the distortion. Sche
 **Notes:** Phases A/B/D need no approval. C is a graph-schema change → DEC-094 must be approved first.
 Each step bumps `PROMPT_VERSION` when it touches the prompt; one commit per step.
 
-- [ ] **S26.1 (A)** Rumour vs firsthand channel split — restore `knowledge_state` in
+- [x] **S26.1 (A)** Rumour vs firsthand channel split — restore `knowledge_state` in
   `subgraph_retriever._flatten_event_row` (keep `distorted_summary` AND `knowledge_state`); in
   `prompt_builder._extract_personal_accounts`, route `knowledge_state=="rumor"` distorted summaries to a
   new `HEARSAY_N=` channel and the rest to `MY_ACCOUNT_N=`. Add Rule 5b to `system_v1.yaml`: HEARSAY lines

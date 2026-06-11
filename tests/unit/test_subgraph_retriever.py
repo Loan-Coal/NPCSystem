@@ -28,7 +28,10 @@ class TestFlattenEventRow:
         assert "distorted_summary" not in result
         assert "event" not in result
 
-    def test_distortion_suppresses_summary(self):
+    def test_distortion_suppresses_ground_truth_but_keeps_knowledge_state(self):
+        # S26.1 (ISSUE-093): keep the rumour signal (knowledge_state) alongside the
+        # distorted account so the prompt can frame it as hearsay, not firsthand —
+        # while still suppressing the competing ground-truth summary.
         row = {
             "event": {"id": "evt_1", "summary": "Armies crossed the border", "event_type": "conflict"},
             "knowledge_state": "rumor",
@@ -36,19 +39,18 @@ class TestFlattenEventRow:
         }
         result = _flatten_event_row(row)
         assert result["distorted_summary"] == "northmen have poured through the king's pass"
+        assert result["knowledge_state"] == "rumor"
         assert "summary" not in result
-        # knowledge_state stripped when distorted_summary present — prevents LLM hedging
-        assert "knowledge_state" not in result
         assert "event" not in result
 
-    def test_distortion_returns_only_distorted_summary(self):
+    def test_distortion_returns_distorted_summary_and_state_only(self):
         row = {
             "event": {"id": "evt_1", "summary": "...", "event_type": "conflict", "severity": 90},
             "knowledge_state": "rumor",
             "distorted_summary": "garbled account",
         }
         result = _flatten_event_row(row)
-        assert result == {"distorted_summary": "garbled account"}
+        assert result == {"distorted_summary": "garbled account", "knowledge_state": "rumor"}
 
     def test_missing_event_key_returns_empty_base(self):
         row = {"event": None, "knowledge_state": "knows", "distorted_summary": None}

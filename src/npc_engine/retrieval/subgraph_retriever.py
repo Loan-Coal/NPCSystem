@@ -23,9 +23,10 @@ def _flatten_event_row(event_row: dict) -> dict:
 
     The graph reader returns KNOWS_ABOUT edge fields (knowledge_state, distorted_summary)
     as siblings of the nested event dict. When distorted_summary is present the NPC has a
-    personal (possibly wrong) account — returning ONLY that field prevents knowledge_state
-    ("rumor") and other metadata from giving the LLM competing signals that cause hedging
-    or reversion to ground-truth content.
+    personal (possibly wrong) account — we surface ONLY that account and suppress the
+    competing ground-truth summary (to keep the gossip-distortion content, not revert to
+    ground truth). We retain knowledge_state alongside it (S26.1, ISSUE-093) so the prompt
+    can frame a rumour as hearsay rather than recasting it as a firsthand MY_ACCOUNT.
 
     Args:
         event_row: Raw row from get_events_for_npc with keys "event", "knowledge_state",
@@ -35,10 +36,13 @@ def _flatten_event_row(event_row: dict) -> dict:
         Flat dict suitable for serialization into the LLM context.
     """
     distorted = event_row.get("distorted_summary")
-    if distorted:
-        return {"distorted_summary": distorted}
-    flat = dict(event_row.get("event") or {})
     knowledge_state = event_row.get("knowledge_state")
+    if distorted:
+        account: dict = {"distorted_summary": distorted}
+        if knowledge_state is not None:
+            account["knowledge_state"] = knowledge_state
+        return account
+    flat = dict(event_row.get("event") or {})
     if knowledge_state is not None:
         flat["knowledge_state"] = knowledge_state
     return flat

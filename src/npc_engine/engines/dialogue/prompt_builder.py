@@ -20,7 +20,7 @@ from npc_engine.engines.dialogue.dialogue_models import DialogueRequest
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "stage_b_v2.10"
+PROMPT_VERSION = "stage_b_v2.11"
 
 _PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts" / "dialogue"
 _PROMPT_PATH = _PROMPTS_DIR / "system_v1.yaml"
@@ -102,23 +102,39 @@ def build_system_prompt(content_rating: ContentRating = "mature") -> str:
     return base_prompt + "\n" + rule if rule else base_prompt
 
 
-def _extract_personal_accounts(serialized_context: str) -> list[str]:
-    """Extract distorted_summary strings from npc_known_events in serialized context.
+_RUMOR_KNOWLEDGE_STATE = "rumor"
+
+
+def _extract_personal_accounts(serialized_context: str) -> tuple[list[str], list[str]]:
+    """Split distorted_summary accounts into firsthand vs hearsay (S26.1, ISSUE-093).
+
+    An account whose event carries ``knowledge_state == "rumor"`` is second-hand and is
+    returned as hearsay; any other distorted account (``knows`` or no state) is firsthand.
+    The distorted content is preserved verbatim in both channels — only the framing
+    (firsthand MY_ACCOUNT vs attributed HEARSAY) differs, so the gossip-distortion feature
+    is kept while a rumour is no longer recast as something the NPC witnessed.
 
     Returns:
-        Ordered list of distorted_summary strings, one per distorted event.
+        Tuple of (firsthand_accounts, hearsay_accounts), each an ordered list of
+        distorted_summary strings.
     """
     try:
         ctx = json.loads(serialized_context)
     except (json.JSONDecodeError, ValueError):
-        return []
-    accounts = []
+        return [], []
+    firsthand: list[str] = []
+    hearsay: list[str] = []
     for item in ctx.get("npc_known_events", []):
-        if isinstance(item, dict):
-            ds = item.get("distorted_summary")
-            if ds:
-                accounts.append(ds)
-    return accounts
+        if not isinstance(item, dict):
+            continue
+        ds = item.get("distorted_summary")
+        if not ds:
+            continue
+        if item.get("knowledge_state") == _RUMOR_KNOWLEDGE_STATE:
+            hearsay.append(ds)
+        else:
+            firsthand.append(ds)
+    return firsthand, hearsay
 
 
 _EPOCH_GUARDS: dict[str, str] = {
@@ -234,8 +250,9 @@ def build_dialogue_prompt(request: DialogueRequest, serialized_context: str) -> 
         Newline-delimited prompt string including version, context, voice, and player message.
     """
     voice = _extract_voice_descriptor(serialized_context)
-    accounts = _extract_personal_accounts(serialized_context)
-    accounts_section = "".join(f"MY_ACCOUNT_{i}={acc}\n" for i, acc in enumerate(accounts, 1))
+    firsthand_accounts, hearsay_accounts = _extract_personal_accounts(serialized_context)
+    accounts_section = "".join(f"MY_ACCOUNT_{i}={acc}\n" for i, acc in enumerate(firsthand_accounts, 1))
+    hearsay_section = "".join(f"HEARSAY_{i}={acc}\n" for i, acc in enumerate(hearsay_accounts, 1))
     runtime_constraints = _build_runtime_constraints(serialized_context)
     knowledge_gaps = _build_knowledge_gaps(serialized_context)
     echo_guard = f"ECHO_GUARD={_ECHO_GUARD_TEXT}\n"
@@ -250,6 +267,7 @@ def build_dialogue_prompt(request: DialogueRequest, serialized_context: str) -> 
         f"PLAYER_ID={request.player_id}\n"
         f"VOICE_DESCRIPTOR={voice}\n"
         + accounts_section
+        + hearsay_section
         + f"CONTEXT={serialized_context}\n"
         + runtime_constraints
         + knowledge_gaps

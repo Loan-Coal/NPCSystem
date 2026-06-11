@@ -13,15 +13,59 @@ from unittest.mock import patch
 
 import pytest
 
+import json
+
 from npc_engine.engines.dialogue.dialogue_models import DialogueRequest
 from npc_engine.engines.dialogue.prompt_builder import (
     PROMPT_VERSION,
     _PROMPT_PATH,
     _build_knowledge_gaps,
+    _extract_personal_accounts,
     _extract_voice_descriptor,
     build_dialogue_prompt,
     build_system_prompt,
 )
+
+
+# ---------------------------------------------------------------------------
+# S26.1 — rumour vs firsthand account split (ISSUE-093)
+# ---------------------------------------------------------------------------
+
+
+def _ctx_with_events(events: list[dict]) -> str:
+    return json.dumps({"npc_known_events": events})
+
+
+def test_extract_accounts_routes_rumor_to_hearsay() -> None:
+    """A knowledge_state='rumor' distorted account is hearsay, not firsthand."""
+    ctx = _ctx_with_events([
+        {"distorted_summary": "they say thousands fell at king's pass", "knowledge_state": "rumor"},
+    ])
+    firsthand, hearsay = _extract_personal_accounts(ctx)
+    assert firsthand == []
+    assert hearsay == ["they say thousands fell at king's pass"]
+
+
+def test_extract_accounts_routes_knows_to_firsthand() -> None:
+    """A first-hand (knows / no state) distorted account stays MY_ACCOUNT."""
+    ctx = _ctx_with_events([
+        {"distorted_summary": "I watched the gate fall", "knowledge_state": "knows"},
+        {"distorted_summary": "I signed the ledger myself"},
+    ])
+    firsthand, hearsay = _extract_personal_accounts(ctx)
+    assert firsthand == ["I watched the gate fall", "I signed the ledger myself"]
+    assert hearsay == []
+
+
+def test_build_prompt_emits_hearsay_channel_for_rumor() -> None:
+    """build_dialogue_prompt renders rumour accounts under HEARSAY_, not MY_ACCOUNT_."""
+    ctx = _ctx_with_events([
+        {"distorted_summary": "they say the northmen poured through", "knowledge_state": "rumor"},
+    ])
+    req = DialogueRequest(npc_id="old_henryk", player_id="player_eval", player_message="hi")
+    prompt = build_dialogue_prompt(request=req, serialized_context=ctx)
+    assert "HEARSAY_1=they say the northmen poured through" in prompt
+    assert "MY_ACCOUNT_1=" not in prompt
 
 
 # ---------------------------------------------------------------------------
