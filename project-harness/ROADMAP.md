@@ -220,8 +220,11 @@ re-seeding); **EXP-32 + EXP-87 can run in parallel with KE-6** (no conflict).
   `retrieval/graph_rag.py`. Filter is `:Event` only (DEC-093: no `:Knowledge` label in schema; seeds
   are `KNOWS_ABOUT`→Event). Test `tests/unit/test_graph_rag_queries.py` asserts the label filter.
   - Exit: `_CYPHER_EXPAND_SEEDS` matches `(seed:Event)`, not bare `MATCH (seed)`; `make check` green. ✓
-- [ ] **S22.2** Reranker off event loop (ISSUE-064) — mirror the ISSUE-063 fix: offload `cross_encoder_reranker.rerank()` via `await asyncio.to_thread(...)` at its async call site in `context_builder.py`. Add regression test asserting predict runs off the main thread (same pattern as `test_embedding_index_offload.py`).
-  - Exit: `make check` green; test passes.
+- [x] **S22.2** Reranker off event loop (ISSUE-064) — `_maybe_cross_encode` is now `async` and offloads
+  `cross_encoder_reranker.rerank()` via `await asyncio.to_thread(...)`; call site in `build_serialized_context`
+  awaits it. Regression test `tests/unit/test_cross_encode_offload.py` asserts rerank runs off the
+  main thread (+ disabled/empty short-circuits).
+  - Exit: `make check` green; test passes. ✓
 - [ ] **S22.3** Game-window test mock (ISSUE-068) — check whether `GameWindow` actually uses `WorldStatePoller`; if yes, add the missing import; if no, remove the stale `patch` from the 6 failing `TestGameWindowLayout` tests.
   - Exit: `make test-demo` fully green (no layout test failures).
 - [ ] **S22.4** Dialogue live interaction state (ISSUE-071) — inject `NegotiationStore` into `DialogueHandler.__init__` (constructor injection, consistent with existing pattern). In `_build_context_prompt`, look up any active session for `(npc_id, player_id)` before calling `build_serialized_context`; if found, prepend a single `ContextItem(key="active_negotiation", tier="tier0", pinned=True)` with the session summary. Add unit test covering the injection path and the no-active-session path.

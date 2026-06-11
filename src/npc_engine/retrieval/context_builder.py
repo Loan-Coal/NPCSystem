@@ -14,6 +14,7 @@ flow. Each stage is extracted into a private helper. See DECISIONS.md entry
 
 from __future__ import annotations
 
+import asyncio
 from typing import Protocol
 
 from neo4j import AsyncSession
@@ -249,12 +250,18 @@ async def _fetch_player_data(
     return trust_scores, second_hop_events, active_quest, player_relation_edge
 
 
-def _maybe_cross_encode(settings: Settings, player_message: str, tier_b_results: list) -> list:
-    """Apply cross-encoder reranking if CROSS_ENCODER_ENABLED and results are non-empty."""
+async def _maybe_cross_encode(settings: Settings, player_message: str, tier_b_results: list) -> list:
+    """Apply cross-encoder reranking if CROSS_ENCODER_ENABLED and results are non-empty.
+
+    The rerank does synchronous sentence-transformers inference, so it is offloaded
+    to a worker thread (asyncio.to_thread) to keep the event loop unblocked (ISSUE-064,
+    mirroring the ISSUE-063 embedding-index fix).
+    """
     if not (settings.CROSS_ENCODER_ENABLED and tier_b_results):
         return tier_b_results
-    from npc_engine.retrieval.cross_encoder_reranker import rerank as cross_encode_rerank
-    return list(cross_encode_rerank(player_message, tier_b_results))
+    from npc_engine.retrieval import cross_encoder_reranker
+    reranked = await asyncio.to_thread(cross_encoder_reranker.rerank, player_message, tier_b_results)
+    return list(reranked)
 
 
 def _build_tier0_items(world_state, emotion_snapshot: dict) -> list:
@@ -392,7 +399,7 @@ async def build_serialized_context(
     profile_data, beliefs, goals, secrets, obligations = await _resolve_npc_context_with_cache(session, npc_id, settings, player_id, location_id, partial_cache, profile_key, bg_key, cached_profile, cached_bg, player_message)
     location_context, events, reputation_items, memories, owned_items, group_memberships, believed_rumors, traits, active_pledges = profile_data
     trust_scores, second_hop_events, active_quest, player_relation_edge = await _fetch_player_data(session, npc_id, player_id, events)
-    tier_b_results = _maybe_cross_encode(settings, player_message, tier_b_results)
+    tier_b_results = await _maybe_cross_encode(settings, player_message, tier_b_results)
     tier0 = _build_tier0_items(world_state, emotion_snapshot)
     tier_a_raw = _build_tier_a_base(npc_id, character_bundle, events, location_id, location_context, group_memberships, believed_rumors, traits, active_pledges, session_turns)
     tier_a_raw.extend(_build_tier_a_extended(player_id, reputation_items, active_quest, player_relation_edge, memories, beliefs, goals, owned_items, secrets, obligations, second_hop_events, settings, npc_id))
