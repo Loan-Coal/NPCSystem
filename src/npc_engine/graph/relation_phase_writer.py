@@ -11,8 +11,6 @@ from __future__ import annotations
 
 from neo4j import AsyncSession
 
-from npc_engine.engines.relationship.affinity_engine import RelationshipPhase
-
 
 _CYPHER_SET_RELATIONSHIP_PHASE = """
 MATCH (a:Character {id: $src_id})-[r:RELATES_TO]->(b:Character {id: $dst_id})
@@ -25,7 +23,7 @@ async def write_relationship_phase(
     session: AsyncSession,
     src_id: str,
     dst_id: str,
-    phase: RelationshipPhase,
+    phase: str,
     tick: int,
 ) -> None:
     """Persist relationship_phase and phase_started_at_tick on the RELATES_TO edge.
@@ -36,7 +34,7 @@ async def write_relationship_phase(
         session: Active Neo4j async session used to begin the transaction.
         src_id: ID of the source character node.
         dst_id: ID of the destination character node.
-        phase: The new RelationshipPhase to persist on the edge.
+        phase: The new relationship phase string (RelationshipPhase value) to persist.
         tick: The game tick at which the phase transition occurred.
 
     Raises:
@@ -48,7 +46,7 @@ async def write_relationship_phase(
             _CYPHER_SET_RELATIONSHIP_PHASE,
             src_id=src_id,
             dst_id=dst_id,
-            relationship_phase=phase.value,
+            relationship_phase=phase,
             phase_started_at_tick=tick,
         )
         await tx.commit()

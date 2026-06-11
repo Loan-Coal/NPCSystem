@@ -136,7 +136,6 @@ R006|src/npc_engine/retrieval/context_scoring.py::rank_tier_items
 R006|src/npc_engine/retrieval/context_serializer.py::serialize_context
 R006|src/npc_engine/retrieval/subgraph_retriever.py::assemble_tier_a_context
 R006|src/npc_engine/retrieval/subgraph_retriever.py::retrieve_tier_a_context
-R006|src/npc_engine/retrieval/token_budget_enforcer.py::enforce_budget
 R006|src/npc_engine/scheduler/tick_scheduler.py::TickScheduler.__init__
 R006|src/npc_engine/scheduler/tick_scheduler.py::TickScheduler.advance
 R006|src/npc_engine/schema/schema_loader.py::load_game_schema

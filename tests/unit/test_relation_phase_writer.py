@@ -86,7 +86,7 @@ async def test_writes_phase_fields() -> None:
         session=session,
         src_id="npc_a",
         dst_id="npc_b",
-        phase=RelationshipPhase.FRIEND,
+        phase=RelationshipPhase.FRIEND.value,
         tick=15,
     )
 
@@ -108,7 +108,7 @@ async def test_cypher_targets_relates_to_edge() -> None:
         session=session,
         src_id="npc_x",
         dst_id="npc_y",
-        phase=RelationshipPhase.HOSTILE,
+        phase=RelationshipPhase.HOSTILE.value,
         tick=1,
     )
 
