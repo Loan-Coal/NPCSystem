@@ -40,6 +40,23 @@ _CLR_NPC_HEADER_BG   = PALETTE["bg"]
 _CLR_NPC_HEADER_TEXT = PALETTE["amber"]
 _CLR_NPC_HEADER_IDLE = PALETTE["grey"]
 
+# Maps NPC facial_expression strings to display glyphs.
+# Unknown or None expressions fall back to the "neutral" entry — no crash.
+EXPRESSION_GLYPHS: dict[str, str] = {
+    "neutral":   "😐",
+    "happy":     "😊",
+    "sad":       "😢",
+    "angry":     "😠",
+    "fearful":   "😨",
+    "surprised": "😲",
+    "disgusted": "🤢",
+    "confused":  "😕",
+    "smug":      "😏",
+    "worried":   "😟",
+}
+
+_NEUTRAL_GLYPH: str = EXPRESSION_GLYPHS["neutral"]
+
 
 class LeftPanelRenderer:
     """Owns and renders all left-panel widgets.
@@ -77,6 +94,7 @@ class LeftPanelRenderer:
         self._active_npc_id: str = ""
         self._active_location_id: str = ""
         self._player_gold: int | None = None
+        self._facial_expression: str | None = None
         self._gradient_cache: dict[str, pygame.Surface] = {}
         # None sentinel means "tried loading PNG, failed — use geometric fallback".
         self._portrait_cache: dict[str, pygame.Surface | None] = {}
@@ -108,6 +126,15 @@ class LeftPanelRenderer:
     def set_player_gold(self, gold: int | None) -> None:
         """Update the displayed player gold balance in the world-state bar."""
         self._player_gold = gold
+
+    def set_facial_expression(self, expression: str | None) -> None:
+        """Store the NPC's current facial expression for glyph rendering.
+
+        Args:
+            expression: Expression key matching EXPRESSION_GLYPHS (e.g. ``"angry"``),
+                or None. Unknown/None values fall back to the neutral glyph — no crash.
+        """
+        self._facial_expression = expression
 
     def set_waiting(self, waiting: bool) -> None:
         """Disable the input box while a dialogue reply is in-flight."""
@@ -320,7 +347,7 @@ class LeftPanelRenderer:
         screen.blit(txt, (rect.x + 10, rect.centery - txt.get_height() // 2))
 
     def _draw_portrait_zone(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
-        """Draw the active NPC's portrait (PNG or geometric fallback) in rect."""
+        """Draw the active NPC's portrait (PNG or geometric fallback) plus expression glyph."""
         pygame.draw.rect(surface, PALETTE["bg"], rect)
         npc_id = self._active_npc_id
         if not npc_id:
@@ -336,6 +363,7 @@ class LeftPanelRenderer:
             surface.blit(cached, (rect.centerx - 40, rect.centery - 40))
         else:
             self._draw_portrait_geometric(surface, rect, npc_id)
+        self._draw_expression_glyph(surface, rect)
 
     def _draw_portrait_geometric(
         self, surface: pygame.Surface, rect: pygame.Rect, npc_id: str
@@ -349,3 +377,19 @@ class LeftPanelRenderer:
         initial = name[0].upper() if name else "?"
         txt = self._font_loc.render(initial, True, PALETTE["white"])
         surface.blit(txt, (centre[0] - txt.get_width() // 2, centre[1] - txt.get_height() // 2))
+
+    def _draw_expression_glyph(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        """Render the expression glyph in the lower-right corner of the portrait zone.
+
+        Resolves the stored facial_expression via EXPRESSION_GLYPHS; unknown or None
+        values fall back to the neutral glyph so the UI never crashes.
+
+        Args:
+            surface: Target surface (the portrait zone's parent surface).
+            rect: Bounding rect of the portrait zone.
+        """
+        glyph = EXPRESSION_GLYPHS.get(self._facial_expression or "", _NEUTRAL_GLYPH)
+        txt = self._font_loc.render(glyph, True, PALETTE["white"])
+        x = rect.right - txt.get_width() - 4
+        y = rect.bottom - txt.get_height() - 4
+        surface.blit(txt, (x, y))
