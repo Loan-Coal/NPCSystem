@@ -452,15 +452,16 @@
   },
 
   {
-    "_comment_stub": "TODO EXP-53 learned_from_player category. Once KNOWLEDGE_LEARNING_ENABLED=True, a fact taught by the player in a prior session scores as 'grounded' (not hallucination) per DEC-072. Stub cases below require a live seeded session with prior player-taught facts.",
-    "id": "ah_demo_stub_mira_player_taught",
+    "_comment": "EXP-53 learned_from_player category (runner-supported as of S24.1). A fact taught by the player in a prior session scores as 'grounded' (not hallucination) per DEC-072. The runner pre-flights GET /v1/admin/beliefs/{npc_id} (DEC-095): if no persisted belief matches preflight_belief_substrings the case is SKIPPED, not failed — so the case is a no-op until KNOWLEDGE_LEARNING_ENABLED=True and a prior session has seeded the BELIEVES edge.",
+    "id": "ah_demo_mira_player_taught",
     "world": "demo",
     "npc_id": "mira_innkeeper",
     "question": "Do you remember what I told you last time about the eastern road?",
     "expected_verdict": "grounded",
-    "knowledge_basis": "TODO: player-taught fact via EXP-53 BELIEVES edge (player_sourced=true). Requires prior session with knowledge learning enabled.",
+    "knowledge_basis": "Player-taught fact via EXP-53 BELIEVES edge (player_sourced=true). Requires a prior session with knowledge learning enabled.",
     "expected_fact_substrings": ["eastern", "road", "told", "remember", "you said"],
+    "preflight_belief_substrings": ["eastern", "road"],
     "category": "learned_from_player",
-    "notes": "SKIP unless KNOWLEDGE_LEARNING_ENABLED=True and a prior session has seeded this fact. Verdicts for learned_from_player: grounded (NPC recalls) or refusal (NPC has not been taught this). Hallucination = NPC fabricates facts not in BELIEVES."
+    "notes": "Player-taught fact. Pre-flight checks a persisted belief (preflight_belief_substrings) exists; if absent the case is SKIPPED. Verdicts: grounded (NPC recalls) or refusal (NPC has not been taught this). Hallucination = NPC fabricates facts not in BELIEVES."
   }
 ]

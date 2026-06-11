@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "evals"))
 from anti_hallucination_runner import (
     AntiHallucinationSummary,
     _REFUSAL_KEYWORDS,
+    _belief_fact_persisted,
     format_summary,
     run,
 )
@@ -76,6 +77,41 @@ COMMENT_OBJECT = {
     "_comment": "This is a fixture comment — no id key.",
     "_comment2": "Should be skipped by the runner.",
 }
+
+LEARNED_FROM_PLAYER_CASE = {
+    "id": "test_learned_player",
+    "world": "demo",
+    "npc_id": "mira_innkeeper",
+    "question": "Do you remember what I told you about the eastern road?",
+    "expected_verdict": "grounded",
+    "knowledge_basis": "Player-taught BELIEVES edge (player_sourced=true).",
+    "expected_fact_substrings": ["eastern", "road"],
+    "preflight_belief_substrings": ["eastern", "road"],
+    "category": "learned_from_player",
+    "notes": "Player-taught fact: grounded if the NPC recalls it.",
+}
+
+
+def _make_beliefs_response(contents: list[str]) -> MagicMock:
+    """Return a mock httpx Response for GET /v1/admin/beliefs/{npc_id}."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "success": True,
+        "data": {"beliefs": [{"content": c, "confidence": 80} for c in contents]},
+        "meta": None,
+    }
+    mock_resp.raise_for_status = MagicMock()
+    return mock_resp
+
+
+def _get_router(health_resp: MagicMock, beliefs_resp: MagicMock):
+    """Build a side_effect routing GET /health vs the beliefs pre-flight endpoint."""
+
+    def _route(url: str, **_kwargs: object) -> MagicMock:
+        return health_resp if url.endswith("/health") else beliefs_resp
+
+    return _route
 
 
 def _make_dialogue_response(npc_text: str) -> MagicMock:
@@ -341,3 +377,102 @@ def test_comment_objects_are_skipped(tmp_path: Path) -> None:
 
     # Only one real case (grounded, passes) → exit 0
     assert exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# Test 9: learned_from_player — fact persisted → scored as grounded, PASS
+# ---------------------------------------------------------------------------
+
+
+def test_learned_from_player_runs_grounded_when_belief_persisted(tmp_path: Path) -> None:
+    """learned_from_player: pre-flight finds the persisted belief → grounded PASS, exit 0."""
+    fixture = _write_fixture(tmp_path, [LEARNED_FROM_PLAYER_CASE])
+    report_dir = tmp_path / "reports"
+
+    health_resp = _make_health_response()
+    beliefs_resp = _make_beliefs_response(["the eastern road is washed out"])
+    dialogue_resp = _make_dialogue_response("Aye, you told me the eastern road is washed out.")
+
+    with patch("httpx.Client") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_client_cls.return_value.__enter__.return_value = mock_client
+        mock_client.get.side_effect = _get_router(health_resp, beliefs_resp)
+        mock_client.post.return_value = dialogue_resp
+
+        exit_code = run(
+            base_url="http://localhost:8000",
+            api_key="test-key",
+            fixture_path=fixture,
+            report_dir=report_dir,
+        )
+
+    assert exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# Test 10: learned_from_player — fact not persisted → SKIP (counts unaffected)
+# ---------------------------------------------------------------------------
+
+
+def test_learned_from_player_skips_when_belief_absent(tmp_path: Path) -> None:
+    """learned_from_player: pre-flight finds no matching belief → skipped, exit 0 (not scored)."""
+    fixture = _write_fixture(tmp_path, [LEARNED_FROM_PLAYER_CASE])
+    report_dir = tmp_path / "reports"
+
+    health_resp = _make_health_response()
+    beliefs_resp = _make_beliefs_response([])  # nothing persisted
+    # A non-grounded answer that WOULD fail if scored — proves the case was skipped, not scored.
+    dialogue_resp = _make_dialogue_response("The weather is fine today.")
+
+    with patch("httpx.Client") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_client_cls.return_value.__enter__.return_value = mock_client
+        mock_client.get.side_effect = _get_router(health_resp, beliefs_resp)
+        mock_client.post.return_value = dialogue_resp
+
+        exit_code = run(
+            base_url="http://localhost:8000",
+            api_key="test-key",
+            fixture_path=fixture,
+            report_dir=report_dir,
+        )
+
+    assert exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# Test 11: _belief_fact_persisted helper — match / no-match / empty / error
+# ---------------------------------------------------------------------------
+
+
+def test_belief_fact_persisted_matches_content() -> None:
+    """Returns True when a belief content contains one of the substrings."""
+    client = MagicMock()
+    client.get.return_value = _make_beliefs_response(["the eastern road is washed out"])
+    assert _belief_fact_persisted(
+        "mira_innkeeper", client, "http://localhost:8000", ["eastern", "road"]
+    )
+
+
+def test_belief_fact_persisted_false_when_no_match() -> None:
+    """Returns False when no belief content matches any substring."""
+    client = MagicMock()
+    client.get.return_value = _make_beliefs_response(["the price of bread rose"])
+    assert not _belief_fact_persisted(
+        "mira_innkeeper", client, "http://localhost:8000", ["eastern", "road"]
+    )
+
+
+def test_belief_fact_persisted_false_when_no_substrings() -> None:
+    """Returns False (cannot verify) when the case supplies no pre-flight substrings."""
+    client = MagicMock()
+    assert not _belief_fact_persisted("mira_innkeeper", client, "http://localhost:8000", [])
+
+
+def test_belief_fact_persisted_false_on_query_error() -> None:
+    """Returns False (→ skip) when the beliefs query raises."""
+    client = MagicMock()
+    client.get.side_effect = RuntimeError("connection refused")
+    assert not _belief_fact_persisted(
+        "mira_innkeeper", client, "http://localhost:8000", ["eastern"]
+    )

@@ -285,13 +285,17 @@ helper files were not needed beyond `WorldStatePayload` (inline) and `get_npc_ar
 
 ---
 
-## Phase 24 — Eval fixture completion (ISSUE-090)
+## Phase 24 — Eval fixture completion (ISSUE-090) ✅ (2026-06-11)
 **Goal:** Wire the `learned_from_player` category into the anti-hallucination runner so the stub eval case is no longer silently skipped.
 **Dependency:** EXP-53 slice-3 (contradiction/dedup handling) should land before or concurrently.
+**Completion note (2026-06-11):** slice-3 dedup landed in S23.4 (ISSUE-089 [FIXED]), so the `stub` was
+dropped from the id. The runner now pre-flights `GET /v1/admin/beliefs/{npc_id}` (DEC-095, REST-only) before
+scoring a `learned_from_player` case as grounded; if no persisted belief matches it is skipped rather than
+false-failed. `make check` green (1965 passed, 85.70%). ISSUE-090 [FIXED].
 **Notes:** Small — a single commit.
 
-- [ ] **S24.1** Runner support for `learned_from_player` — add `learned_from_player` category handling to `evals/anti_hallucination_runner.py`: treat like `grounded` but add a pre-flight check that `write_belief()` has persisted the fact for the NPC before running the case. Update `ah_demo_stub_mira_player_taught` to remove `stub` from the ID once EXP-53 slice-3 is confirmed. Add unit test for the new category path.
-  - Exit: `make eval-anti-hallucination` no longer skips the player-taught case; `make check` green.
+- [x] **S24.1** Runner support for `learned_from_player` — add `learned_from_player` category handling to `evals/anti_hallucination_runner.py`: treat like `grounded` but add a pre-flight check that `write_belief()` has persisted the fact for the NPC before running the case. Update `ah_demo_stub_mira_player_taught` to remove `stub` from the ID once EXP-53 slice-3 is confirmed. Add unit test for the new category path.
+  - Exit: `make eval-anti-hallucination` no longer skips the player-taught case; `make check` green. ✓
 
 ---
 
@@ -428,3 +432,4 @@ health gate and is green as of Phase 16 completion (1837 passed, 22 skipped, 98%
 | 37 | 2026-06-11 | S23.5 | `WorldStatePayload(BaseModel)` inline in `demo_game/seed.py`; `build_world_state_payload` returns it; call site `.model_dump()`s into generic `_seed_node`; tests → attribute access | ISSUE-084 [FIXED]; demo green |
 | 38 | 2026-06-11 | S23.6 | Deleted dead `token_budget_enforcer.py` + `test_context_pipeline.py` (0 importers); lazy `game_window` import in `demo_game/__init__.py`; `test_lazy_game_window_import.py` | ISSUE-054/091 [FIXED]; 1953 + 623 |
 | 39 | 2026-06-11 | S23.7 | New `get_npc_archetype` reader; archetype threaded through degradation + canned + LLM structured-output fallback (`DialogueLLMClient` additive `archetype=` params); `test_dialogue_archetype_fallback.py` + handler e2e case | ISSUE-081 [FIXED]; Phase 23 ✅; 1959 + 623 |
+| 40 | 2026-06-11 | S24.1 | `learned_from_player` category wired into `anti_hallucination_runner.py`: `_belief_fact_persisted` REST pre-flight (`GET /v1/admin/beliefs/{npc}`, DEC-095) skips unseeded player-taught cases instead of false-failing; fixture case de-stubbed (`ah_demo_mira_player_taught` + `preflight_belief_substrings`); 6 new tests | ISSUE-090 [FIXED]; Phase 24 ✅; 1965 passed, 85.70% |

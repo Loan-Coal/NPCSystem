@@ -1124,7 +1124,14 @@ for different content or different NPC).
 **Why deferred:** Dedup/contradiction detection is explicitly deferred to EXP-53 slice-3 per brief.
 **To fix:** Key the MERGE on a stable hash of `(npc_id, content)` to deduplicate, OR use a separate dedup check before calling write_belief. Link with `CONTRADICTS` edge handling (EXP-53 slice-3).
 
-## ISSUE-090: `ah_demo_stub_mira_player_taught` case in fixture has no runner support yet
+## [FIXED] ISSUE-090: `ah_demo_stub_mira_player_taught` case in fixture has no runner support yet
+**Fixed:** 2026-06-11, S24.1 — `anti_hallucination_runner.py` now recognizes the `learned_from_player`
+category. Before scoring, it pre-flights `GET /v1/admin/beliefs/{npc_id}` (DEC-095, REST-only — the runner
+does not import `src/`) and confirms a persisted belief matches `preflight_belief_substrings`; if absent or
+the query errors, the case is **skipped** (counts unaffected) rather than false-failed, otherwise it is
+scored as `grounded`. Fixture case renamed `ah_demo_stub_mira_player_taught` → `ah_demo_mira_player_taught`
+and given `preflight_belief_substrings: ["eastern", "road"]`. Tests: `test_anti_hallucination_runner.py`
+(persisted→grounded, absent→skip, + 4 helper unit cases).
 **Found:** 2026-06-10, during EXP-32 integration
 **Severity:** P3 (nice-to-fix)
 **Where:** `evals/cases/anti_hallucination_demo.json` — case `ah_demo_stub_mira_player_taught`, `category: "learned_from_player"`

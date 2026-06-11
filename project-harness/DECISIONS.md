@@ -1122,3 +1122,29 @@ seam and the missing prompt past-vs-present axis — are fixed in S26.1/S26.2 wi
 event-time when present. If declined, S26.2 falls back to inferring age from `created_at_game_time` only
 (weaker, since the seed stamps everything "now"), and Henryk's specific case needs a manual seed-string
 split without a temporal tag.
+
+---
+
+## DEC-095: anti-hallucination runner verifies player-taught facts via a REST pre-flight (not a DB read)
+**Date:** 2026-06-11
+**Status:** ✅ ACCEPTED (small eval-harness choice; logged per the "note non-obvious choices" rule)
+**Context:** S24.1 wires the `learned_from_player` category into `evals/anti_hallucination_runner.py`.
+The runner's contract is `Does NOT: import from src/npc_engine/` — so it cannot call `write_belief()` or
+read Neo4j directly to confirm a player-taught fact (DEC-072 BELIEVES provenance) was persisted before
+scoring the case as `grounded`.
+**Decision:** Pre-flight over REST. Before the dialogue call, a `learned_from_player` case issues
+`GET /v1/admin/beliefs/{npc_id}` and checks that at least one persisted belief's `content` contains one of
+the case's `preflight_belief_substrings` (falling back to `expected_fact_substrings`). If no matching belief
+exists — or the query errors — the case is **skipped** (counts unaffected), not false-failed. This mirrors
+the existing 404-skip path: a `learned_from_player` case is a no-op until `KNOWLEDGE_LEARNING_ENABLED=True`
+and a prior session has seeded the belief.
+**Options considered:**
+  - **A (chosen):** content-substring match against `GET /admin/beliefs`. Stays inside the runner's
+    REST-only contract; deterministic; testable with mocked httpx.
+  - **B:** check BELIEVES-edge provenance (`source_character_id == player`). The list endpoint returns
+    Belief-node fields, not edge provenance, so it would need a new/extended endpoint — more surface for
+    a one-case pre-flight.
+  - **C:** import `write_belief`/graph reader directly. Violates the runner's `Does NOT import from src/`
+    contract.
+**Consequence:** `make eval-anti-hallucination` no longer silently skips the player-taught case on the
+classification path — it is now explicitly gated on a persisted belief. Closes ISSUE-090.

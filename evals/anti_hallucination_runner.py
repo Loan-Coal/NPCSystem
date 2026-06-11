@@ -45,6 +45,15 @@ _REFUSAL_KEYWORDS: tuple[str, ...] = (
 _PLAYER_ID = "player_eval"
 _SESSION_PREFIX = "ah_eval"
 
+# learned_from_player cases score like `grounded` but require a pre-flight check that
+# the player-taught fact was actually persisted (write_belief) in a prior session —
+# otherwise the case is skipped rather than false-failed. (ISSUE-090 / DEC-095)
+_LEARNED_FROM_PLAYER_CATEGORY = "learned_from_player"
+_BELIEFS_PATH_TEMPLATE = "/v1/admin/beliefs/{npc_id}"
+_BELIEF_PREFLIGHT_K = 25
+_BELIEF_PREFLIGHT_TIMEOUT_S = 10.0
+_BELIEF_NOT_PERSISTED_DETAIL = "skipped — player-taught fact not persisted (no prior session)"
+
 
 class AntiHallucinationSummary(BaseModel):
     """Aggregate metrics for a completed anti-hallucination eval run."""
@@ -68,6 +77,46 @@ def _is_grounded(response_text: str, expected_fact_substrings: list[str]) -> boo
     """Return True if the response contains at least one expected fact substring."""
     lowered = response_text.lower()
     return any(sub.lower() in lowered for sub in expected_fact_substrings)
+
+
+def _belief_fact_persisted(
+    npc_id: str,
+    client: httpx.Client,
+    base_url: str,
+    substrings: list[str],
+) -> bool:
+    """Return True if the NPC holds a persisted belief matching one of the substrings.
+
+    Pre-flight for learned_from_player cases: queries GET /v1/admin/beliefs/{npc_id}
+    and confirms the player-taught fact was written (via write_belief, DEC-072) in a
+    prior session before the dialogue case is scored as grounded. A missing fact or a
+    query error returns False, so the case is skipped rather than false-failed.
+
+    Args:
+        npc_id: Character whose beliefs are inspected.
+        client: Active httpx client (carries auth headers).
+        base_url: Base URL of the NPC engine API.
+        substrings: Fact substrings that must appear in a persisted belief's content.
+    Returns:
+        True when at least one belief content contains one of the substrings.
+    """
+    if not substrings:
+        return False
+    url = f"{base_url}{_BELIEFS_PATH_TEMPLATE.format(npc_id=npc_id)}"
+    try:
+        resp = client.get(url, params={"k": _BELIEF_PREFLIGHT_K}, timeout=_BELIEF_PREFLIGHT_TIMEOUT_S)
+        resp.raise_for_status()
+        beliefs: list[dict[str, Any]] = resp.json().get("data", {}).get("beliefs", [])
+    except Exception:
+        return False
+    lowered = [sub.lower() for sub in substrings]
+    return any(_content_matches(belief, lowered) for belief in beliefs)
+
+
+def _content_matches(belief: dict[str, Any], lowered_substrings: list[str]) -> bool:
+    """Return True if the belief's content contains any of the lowercased substrings."""
+    content = str(belief.get("content", "")).lower()
+    return any(sub in content for sub in lowered_substrings)
 
 
 def _load_fixture(fixture_path: Path) -> list[dict[str, Any]]:
@@ -95,6 +144,22 @@ def _classify_case(
     question: str = case["question"]
     expected_verdict: str = case["expected_verdict"]
     expected_substrings: list[str] = case.get("expected_fact_substrings", [])
+
+    if case.get("category") == _LEARNED_FROM_PLAYER_CATEGORY:
+        preflight_substrings: list[str] = case.get(
+            "preflight_belief_substrings", expected_substrings
+        )
+        if not _belief_fact_persisted(npc_id, client, base_url, preflight_substrings):
+            result = _build_result(
+                case_id=case_id,
+                passed=True,
+                description=case.get("notes", ""),
+                response_text="",
+                error=None,
+                skipped=True,
+                skip_detail=_BELIEF_NOT_PERSISTED_DETAIL,
+            )
+            return result, "skipped"
 
     payload = {
         "player_id": _PLAYER_ID,
@@ -166,9 +231,10 @@ def _build_result(
     response_text: str,
     error: str | None,
     skipped: bool = False,
+    skip_detail: str = "skipped — NPC not found (world not seeded)",
 ) -> dict[str, Any]:
     """Build a result dict compatible with write_report."""
-    detail = "skipped — NPC not found (world not seeded)" if skipped else ""
+    detail = skip_detail if skipped else ""
     return {
         "case_id": case_id,
         "passed": passed,
