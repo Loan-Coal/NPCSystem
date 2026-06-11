@@ -215,8 +215,11 @@ re-seeding); **EXP-32 + EXP-87 can run in parallel with KE-6** (no conflict).
 - S22.4: pass `NegotiationStore` as an optional constructor param (`negotiation_store: NegotiationStore | None = None`); do **not** import it at module level in `dialogue_handler.py`. The no-store path must behave identically to today — no regression for callers that don't pass it.
 - S22.5: YAML-only edit; bump the `PROMPT_VERSION` constant. Do not touch other `.py` files.
 
-- [ ] **S22.1** graph_rag label filter (ISSUE-056) — add `(seed:Event|Knowledge)` label filter to `_CYPHER_EXPAND_SEEDS` in `retrieval/graph_rag.py`. Add integration test asserting only Event/Knowledge nodes are returned.
-  - Exit: `rg "MATCH \(seed\)" src/npc_engine/retrieval/graph_rag.py` shows a labelled match; `make check` green.
+- [x] **S22.1** graph_rag label filter (ISSUE-056) — add label filter to `_CYPHER_EXPAND_SEEDS`.
+  Cypher relocated to `graph/graph_rag_queries.py` in Phase 21 (S21.4), so the fix landed there, not
+  `retrieval/graph_rag.py`. Filter is `:Event` only (DEC-093: no `:Knowledge` label in schema; seeds
+  are `KNOWS_ABOUT`→Event). Test `tests/unit/test_graph_rag_queries.py` asserts the label filter.
+  - Exit: `_CYPHER_EXPAND_SEEDS` matches `(seed:Event)`, not bare `MATCH (seed)`; `make check` green. ✓
 - [ ] **S22.2** Reranker off event loop (ISSUE-064) — mirror the ISSUE-063 fix: offload `cross_encoder_reranker.rerank()` via `await asyncio.to_thread(...)` at its async call site in `context_builder.py`. Add regression test asserting predict runs off the main thread (same pattern as `test_embedding_index_offload.py`).
   - Exit: `make check` green; test passes.
 - [ ] **S22.3** Game-window test mock (ISSUE-068) — check whether `GameWindow` actually uses `WorldStatePoller`; if yes, add the missing import; if no, remove the stale `patch` from the 6 failing `TestGameWindowLayout` tests.

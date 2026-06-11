@@ -1060,3 +1060,28 @@ so no R006 debt was relocated.
 `world/` is "world-state data model + time utils". The split now matches every other domain.
 **Consequence:** **R005 baseline is empty** (all Cypher-outside-`graph/` debt cleared). Imports of
 `get_world_state`/`upsert_world_state*` now come from `graph.world_state_*`. ISSUE-058 fully resolved.
+
+---
+
+## DEC-093: S22.1 — GraphRAG seed label filter is `:Event` only (no `:Knowledge` label exists)
+**Date:** 2026-06-11
+**Status:** ✅ ACCEPTED (small choice, noted per CLAUDE.md token-efficiency rule)
+**Context:** ISSUE-056 / roadmap S22.1 asked for a `(seed:Event|Knowledge)` label filter on
+`_CYPHER_EXPAND_SEEDS` to stop the GraphRAG expansion full-node scan. Two deviations from the
+literal roadmap text surfaced during implementation:
+  1. **No `:Knowledge` label exists** in the schema. The node labels are enumerated in
+     `graph/labels.py` (Character, Event, Secret, Location, Faction, Quest, Item, WorldState);
+     `grep -r ":Knowledge"` across `src/` returns zero. GraphRAG seeds come exclusively from
+     `graph_reader.get_known_event_ids_for_npc` (the NPC's `KNOWS_ABOUT` → **Event** set), so the
+     only real seed label is `:Event`.
+  2. **The Cypher no longer lives in `retrieval/graph_rag.py`.** It was relocated to
+     `graph/graph_rag_queries.py` in Phase 21 (S21.4 Cypher migration, DEC-087/092). The roadmap's
+     exit string `rg "MATCH \(seed\)" src/npc_engine/retrieval/graph_rag.py` is therefore stale.
+**Decision:** Filter the seed match to `:Event` only, using the `EVENT` constant from
+`graph/labels.py` (no raw label string). Apply the fix in `graph/graph_rag_queries.py` (the
+correct post-S21.4 location). Adding a non-existent `:Knowledge` alternation would be a misleading
+magic label that matches nothing.
+**Why:** Seeds are provably Event-only; an `Event|Knowledge` filter would imply a node type the
+schema does not have. If a `Knowledge` label is introduced later, extend the filter then.
+**Consequence:** Expansion anchors only on `:Event` seeds; full-node scan eliminated. The roadmap
+S22.1 exit is reinterpreted to target `graph/graph_rag_queries.py` (noted in the ROADMAP step).

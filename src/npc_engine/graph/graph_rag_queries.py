@@ -12,9 +12,16 @@ from typing import Any
 
 from neo4j import AsyncSession
 
-_CYPHER_EXPAND_SEEDS = """
+from npc_engine.graph.labels import EVENT
+
+# Seeds originate from the NPC's KNOWS_ABOUT set (Event nodes only — see
+# graph_reader.get_known_event_ids_for_npc), so the seed match is label-filtered
+# to :Event. This avoids the full-node scan flagged in ISSUE-056 and prevents
+# anchoring expansion on unintended node types. (DEC-093: the schema has no
+# :Knowledge label, so the roadmap's `Event|Knowledge` reduces to :Event.)
+_CYPHER_EXPAND_SEEDS = f"""
 UNWIND $seed_ids AS seed_id
-MATCH (seed) WHERE seed.id = seed_id
+MATCH (seed:{EVENT}) WHERE seed.id = seed_id
 MATCH (seed)-[r]-(neighbor)
 WHERE type(r) IN $edge_types
   AND neighbor.id IS NOT NULL
