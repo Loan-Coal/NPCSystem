@@ -1,0 +1,10 @@
+edge_type: SCHEME_STEP
+src_type: scheme
+dst_type: event
+fields:
+  step_order:
+    type: int
+    required: false
+  completed:
+    type: bool
+    required: false

@@ -1,0 +1,7 @@
+edge_type: EXECUTES_SCHEME
+src_type: character
+dst_type: scheme
+fields:
+  started_at_tick:
+    type: int
+    required: false

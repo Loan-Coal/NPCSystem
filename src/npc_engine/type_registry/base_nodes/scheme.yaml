@@ -1,0 +1,7 @@
+node_type: scheme
+fields:
+  id: { type: str, required: true }
+  npc_id: { type: str, required: true }
+  goal: { type: str, required: true }
+  status: { type: str, required: false }
+  created_at_game_time: { type: str, required: false }
