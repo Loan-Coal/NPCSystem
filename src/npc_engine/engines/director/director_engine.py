@@ -71,6 +71,21 @@ class DirectorDecision(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _engagement_beat(player_idle_ticks: int, relationship_plateau_ticks: int) -> DirectorDecision | None:
+    """Return an idle/plateau re-engagement beat, or None when the player is engaged."""
+    if player_idle_ticks > IDLE_INJECT_THRESHOLD_TICKS:
+        return DirectorDecision(
+            should_inject=True, beat_kind="re_engage_idle",
+            reason=f"player_idle_ticks={player_idle_ticks} exceeds threshold={IDLE_INJECT_THRESHOLD_TICKS}",
+        )
+    if relationship_plateau_ticks > PLATEAU_INJECT_THRESHOLD_TICKS:
+        return DirectorDecision(
+            should_inject=True, beat_kind="relationship_catalyst",
+            reason=f"plateau_ticks={relationship_plateau_ticks} exceeds threshold={PLATEAU_INJECT_THRESHOLD_TICKS}",
+        )
+    return None
+
+
 def decide(
     *,
     player_idle_ticks: int,
@@ -105,24 +120,4 @@ def decide(
             reason=f"relationship_phase={relationship_phase.value} triggers escalation",
         )
 
-    if player_idle_ticks > IDLE_INJECT_THRESHOLD_TICKS:
-        return DirectorDecision(
-            should_inject=True,
-            beat_kind="re_engage_idle",
-            reason=(
-                f"player_idle_ticks={player_idle_ticks} "
-                f"exceeds threshold={IDLE_INJECT_THRESHOLD_TICKS}"
-            ),
-        )
-
-    if relationship_plateau_ticks > PLATEAU_INJECT_THRESHOLD_TICKS:
-        return DirectorDecision(
-            should_inject=True,
-            beat_kind="relationship_catalyst",
-            reason=(
-                f"plateau_ticks={relationship_plateau_ticks} "
-                f"exceeds threshold={PLATEAU_INJECT_THRESHOLD_TICKS}"
-            ),
-        )
-
-    return None
+    return _engagement_beat(player_idle_ticks, relationship_plateau_ticks)
