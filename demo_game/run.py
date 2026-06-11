@@ -474,13 +474,49 @@ SCENES: list[Scene] = [
 
 
 # ---------------------------------------------------------------------------
+# Cinematic formatting constants
+# ---------------------------------------------------------------------------
+_CUE_RULE_DEFAULT_CHAR: str = "-"
+_CUE_RULE_DEFAULT_WIDTH: int = 60
+_CUE_RULE_CINEMATIC_CHAR: str = "="
+_CUE_RULE_CINEMATIC_WIDTH: int = 78
+_STEP_PREFIX_DEFAULT: str = "  >  "
+_STEP_PREFIX_CINEMATIC: str = "  >>  "
+_OK_PREFIX_DEFAULT: str = "  ok "
+_OK_PREFIX_CINEMATIC: str = "  [ok] "
+_DONE_PREFIX_CINEMATIC: str = "  DONE  "
+
+
+def _format_cue(msg: str, *, cinematic: bool) -> str:
+    """Return a formatted narration cue string.
+
+    Args:
+        msg: The cue text to display.
+        cinematic: When True use wide '=' rules; when False use 60-char '-' rules.
+    Returns:
+        A multi-line string with rule, message, rule.
+    """
+    if cinematic:
+        rule = _CUE_RULE_CINEMATIC_CHAR * _CUE_RULE_CINEMATIC_WIDTH
+        return f"\n{rule}\n  {msg}\n{rule}"
+    rule = _CUE_RULE_DEFAULT_CHAR * _CUE_RULE_DEFAULT_WIDTH
+    return f"\n{rule}\n  {msg}\n{rule}"
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 class DemoRunner:
     """Executes the scripted demo scene list against the engine HTTP API."""
 
-    def __init__(self, dry_run: bool = False, cached: bool = False) -> None:
+    def __init__(
+        self,
+        dry_run: bool = False,
+        cached: bool = False,
+        cinematic: bool = False,
+    ) -> None:
         self.dry_run = dry_run
+        self.cinematic = cinematic
         self.cache = LLMCache(readonly=cached)
         cfg = DemoConfig()
         self.client: EngineClient = EngineClient(
@@ -497,31 +533,43 @@ class DemoRunner:
                 time.sleep(scene.delay_before_ms / 1000)
             scene.execute(self)
         elapsed = time.monotonic() - start
-        print(f"\n[done] {elapsed:.1f}s elapsed")
+        self.print_done(elapsed_s=elapsed)
 
     def print_step(self, msg: str) -> None:
-        """Print a step line."""
-        print(f"  >  {msg}")
+        """Print a step line (cinematic: wider arrow prefix)."""
+        prefix = _STEP_PREFIX_CINEMATIC if self.cinematic else _STEP_PREFIX_DEFAULT
+        print(f"{prefix}{msg}")
 
     def print_ok(self, msg: str) -> None:
-        """Print a result line."""
-        print(f"  ok {msg}")
+        """Print a result line (cinematic: bracketed ok prefix)."""
+        prefix = _OK_PREFIX_CINEMATIC if self.cinematic else _OK_PREFIX_DEFAULT
+        print(f"{prefix}{msg}")
 
     def print_cue(self, msg: str) -> None:
-        """Print a narration bar."""
-        bar = "-" * 60
-        print(f"\n{bar}\n  {msg}\n{bar}")
+        """Print a narration bar (cinematic: wide '=' rules)."""
+        print(_format_cue(msg, cinematic=self.cinematic))
+
+    def print_done(self, elapsed_s: float) -> None:
+        """Print the run-complete line (cinematic: rule + DONE block)."""
+        if self.cinematic:
+            rule = _CUE_RULE_CINEMATIC_CHAR * _CUE_RULE_CINEMATIC_WIDTH
+            print(f"\n{rule}\n{_DONE_PREFIX_CINEMATIC}{elapsed_s:.1f}s elapsed\n{rule}")
+        else:
+            print(f"\n[done] {elapsed_s:.1f}s elapsed")
 
 
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 def _parse_args() -> argparse.Namespace:
+    """Parse CLI arguments for the demo runner."""
     parser = argparse.ArgumentParser(description="NPCSystem scripted demo runner")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print scene sequence without API calls.")
     parser.add_argument("--cached", action="store_true",
                         help="Read-only cache; error on miss. Use for final recording.")
+    parser.add_argument("--cinematic", action="store_true",
+                        help="Formatted, recording-friendly output (wide rules, clean spacing).")
     return parser.parse_args()
 
 
@@ -534,9 +582,10 @@ def main() -> None:
         sys.exit(1)
 
     mode = "DRY-RUN" if args.dry_run else ("CACHED" if args.cached else "LIVE")
-    print(f"[demo_run] mode={mode}")
+    cinematic_tag = " CINEMATIC" if args.cinematic else ""
+    print(f"[demo_run] mode={mode}{cinematic_tag}")
 
-    runner = DemoRunner(dry_run=args.dry_run, cached=args.cached)
+    runner = DemoRunner(dry_run=args.dry_run, cached=args.cached, cinematic=args.cinematic)
     try:
         runner.run()
     except LLMCache.CacheMissError as exc:
