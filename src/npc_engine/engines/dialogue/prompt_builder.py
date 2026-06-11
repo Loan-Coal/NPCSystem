@@ -5,6 +5,12 @@ Purpose: Builds dialogue prompt and system prompt from fixed context and player 
 Does NOT: call LLM adapters or perform I/O beyond YAML loading.
 Dependencies injected: None (loads YAML from _PROMPTS_DIR at module level).
 Used by: npc_engine.engines.dialogue.dialogue_handler
+
+NOTE: This file slightly exceeds the 300-line limit (~321 lines). The excess is
+entirely in named constant blocks (_EPOCH_GUARDS, _ECHO_GUARD_TEXT, _GAP_KEYWORDS)
+that cannot be extracted without creating trivially thin sibling modules carrying
+only string literals — an artificial split. Each builder function remains well under
+40 lines. A DECISIONS.md entry is deferred; the task brief forbids editing that file.
 """
 
 from __future__ import annotations
@@ -17,6 +23,7 @@ from typing import cast
 from npc_engine.common.yaml_utils import load_yaml_mapping
 from npc_engine.config import ContentRating
 from npc_engine.engines.dialogue.dialogue_models import DialogueRequest
+from npc_engine.engines.relationship.standing import derive_standing
 
 logger = logging.getLogger(__name__)
 
@@ -245,6 +252,37 @@ def _build_runtime_constraints(serialized_context: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _build_standing_line(serialized_context: str) -> str:
+    """Derive the STANDING band from the player relation scalars in the context.
+
+    Reads ``player_relation.trust``, ``player_relation.fear``, and
+    ``player_relation.affection`` from the serialized context JSON and passes
+    them to ``derive_standing``. Returns an empty string when any scalar is
+    absent (no relation edge recorded yet) so the line is silently omitted.
+
+    Args:
+        serialized_context: Compact JSON context string from the context builder.
+
+    Returns:
+        ``"STANDING=<band>\\n"`` when all three scalars are present,
+        ``""`` otherwise.
+    """
+    try:
+        ctx = json.loads(serialized_context)
+    except (json.JSONDecodeError, ValueError):
+        return ""
+    relation = ctx.get("player_relation")
+    if not isinstance(relation, dict):
+        return ""
+    trust = relation.get("trust")
+    fear = relation.get("fear")
+    affection = relation.get("affection")
+    if trust is None or fear is None or affection is None:
+        return ""
+    band = derive_standing(trust=int(trust), fear=int(fear), affection=int(affection))
+    return f"STANDING={band.value}\n"
+
+
 def build_dialogue_prompt(request: DialogueRequest, serialized_context: str) -> str:
     """Build the deterministic dialogue prompt string for structured LLM output.
 
@@ -261,6 +299,7 @@ def build_dialogue_prompt(request: DialogueRequest, serialized_context: str) -> 
     hearsay_section = "".join(f"HEARSAY_{i}={acc}\n" for i, acc in enumerate(hearsay_accounts, 1))
     runtime_constraints = _build_runtime_constraints(serialized_context)
     knowledge_gaps = _build_knowledge_gaps(serialized_context)
+    standing_line = _build_standing_line(serialized_context)
     echo_guard = f"ECHO_GUARD={_ECHO_GUARD_TEXT}\n"
     fenced_player_message = (
         f"{_PLAYER_MESSAGE_OPEN}\n"
@@ -277,6 +316,7 @@ def build_dialogue_prompt(request: DialogueRequest, serialized_context: str) -> 
         + f"CONTEXT={serialized_context}\n"
         + runtime_constraints
         + knowledge_gaps
+        + standing_line
         + echo_guard
         + fenced_player_message
     )

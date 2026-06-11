@@ -21,6 +21,7 @@ from npc_engine.engines.dialogue.prompt_builder import (
     _ECHO_GUARD_TEXT,
     _PROMPT_PATH,
     _build_knowledge_gaps,
+    _build_standing_line,
     _extract_personal_accounts,
     _extract_voice_descriptor,
     build_dialogue_prompt,
@@ -342,3 +343,72 @@ def test_knowledge_gaps_injected_before_player_message_in_prompt() -> None:
     player_msg_pos = result.find("<<<PLAYER_MESSAGE>>>")
     assert gaps_pos != -1, "KNOWLEDGE_GAPS line missing from prompt"
     assert gaps_pos < player_msg_pos, "KNOWLEDGE_GAPS must appear before <<<PLAYER_MESSAGE>>>"
+
+
+# ---------------------------------------------------------------------------
+# EXP-202 — STANDING tone line derived from player relation scalars
+# ---------------------------------------------------------------------------
+
+
+def _ctx_with_player_relation(trust: int, fear: int, affection: int) -> str:
+    """Build a minimal serialized context with a player_relation block."""
+    return _json.dumps({"player_relation": {"trust": trust, "fear": fear, "affection": affection}})
+
+
+def test_standing_line_in_prompt_when_relation_present_allied() -> None:
+    """STANDING=ALLIED must appear in prompt when trust+affection-fear > 50."""
+    ctx = _ctx_with_player_relation(trust=60, fear=0, affection=10)
+    req = DialogueRequest(npc_id="mira_innkeeper", player_id="player_eval", player_message="hello")
+    prompt = build_dialogue_prompt(request=req, serialized_context=ctx)
+    assert "STANDING=ALLIED" in prompt
+
+
+def test_standing_line_in_prompt_when_relation_present_hostile() -> None:
+    """STANDING=HOSTILE must appear in prompt when trust+affection-fear < -50."""
+    ctx = _ctx_with_player_relation(trust=0, fear=80, affection=0)
+    req = DialogueRequest(npc_id="captain_sorn", player_id="player_eval", player_message="hello")
+    prompt = build_dialogue_prompt(request=req, serialized_context=ctx)
+    assert "STANDING=HOSTILE" in prompt
+
+
+def test_standing_line_absent_when_no_relation_present() -> None:
+    """STANDING line must be absent when player_relation is empty or missing."""
+    ctx_empty_relation = _json.dumps({"player_relation": {}})
+    req = DialogueRequest(npc_id="mira_innkeeper", player_id="player_eval", player_message="hello")
+    prompt_empty = build_dialogue_prompt(request=req, serialized_context=ctx_empty_relation)
+    assert "STANDING=" not in prompt_empty
+
+    ctx_no_relation = _json.dumps({"world": {"epoch": "age_of_peace"}})
+    prompt_no_rel = build_dialogue_prompt(request=req, serialized_context=ctx_no_relation)
+    assert "STANDING=" not in prompt_no_rel
+
+
+def test_standing_line_before_player_message() -> None:
+    """STANDING line must appear before the player message sentinel."""
+    ctx = _ctx_with_player_relation(trust=30, fear=0, affection=5)
+    req = DialogueRequest(npc_id="mira_innkeeper", player_id="player_eval", player_message="hello")
+    prompt = build_dialogue_prompt(request=req, serialized_context=ctx)
+    standing_pos = prompt.find("STANDING=")
+    player_msg_pos = prompt.find("<<<PLAYER_MESSAGE>>>")
+    assert standing_pos != -1, "STANDING line missing from prompt"
+    assert standing_pos < player_msg_pos, "STANDING must appear before <<<PLAYER_MESSAGE>>>"
+
+
+def test_build_standing_line_neutral_for_zero_scalars() -> None:
+    """_build_standing_line returns NEUTRAL band for zero relation scalars."""
+    ctx = _ctx_with_player_relation(trust=0, fear=0, affection=0)
+    result = _build_standing_line(ctx)
+    assert result == "STANDING=NEUTRAL\n"
+
+
+def test_build_standing_line_empty_when_no_scalars() -> None:
+    """_build_standing_line returns empty string when player_relation has no scalars."""
+    assert _build_standing_line(_json.dumps({})) == ""
+    assert _build_standing_line(_json.dumps({"player_relation": {}})) == ""
+    assert _build_standing_line("not-json") == ""
+
+
+def test_system_prompt_contains_standing_tone_rule() -> None:
+    """system_v1.yaml must contain a STANDING tone rule referencing the band."""
+    result = build_system_prompt()
+    assert "STANDING" in result
