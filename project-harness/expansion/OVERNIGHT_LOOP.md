@@ -40,6 +40,13 @@ cycle, update the Progress Log + State pointer at the bottom, then schedule the 
 4. **Run the batch.** Invoke `/expand-parallel` (no args → it auto-selects the conflict-free batch).
    Let it dispatch workers, integrate serially, run the one global gate, update coordination files, and
    self-prepare the index (its §7.5). Honor its grouping of `⚠conflict` items into one worker.
+   **WORKTREE-BASE RULE (learned cycle 1):** worktrees fork from `worktree.baseRef=fresh` = origin
+   (STALE — local setup commits are unpushed). So **every worker prompt MUST start with: "FIRST run
+   `git merge munich-demo` in your worktree (resolve any conflict keeping current code) before
+   building, so your commit applies cleanly on integration."** Integrate by cherry-picking each
+   worker's feature commit; if it still conflicts, the worker didn't merge — re-dispatch it. Do not
+   hand-resolve stale-base conflicts. (If the user sets `worktree.baseRef: head` in settings, this
+   per-worker merge becomes unnecessary — the orchestrator cannot edit settings itself.)
 5. **Verify + record.** Confirm the skill reported green gate. Append a one-line entry to §Progress Log
    (batch ids, pass/fail, test counts, anything sent back). Update §State pointer.
 6. **Continue or stop.** If unchecked ready `[ ]` items remain → schedule the next wake (see §Pacing)
@@ -87,11 +94,19 @@ automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** A
-- **Next batch to run:** EXP-201 · EXP-203 · EXP-204 · EXP-205 · EXP-206 · EXP-207 (Phase A, no schema)
-- **Then:** EXP-202 (soft dep on EXP-201) → Phase B EXP-208 → Phase C (apply DEC-097/098) → D → E.
-- **Last green commit:** (setup commit — see Progress Log entry 0)
+- **Next batch to run:** EXP-203 · EXP-204 · EXP-205 · EXP-206 · EXP-207 (Phase A, no schema) — workers
+  MUST merge munich-demo first. Then EXP-202 (soft dep EXP-201, satisfied).
+- **Then:** Phase B EXP-208 → Phase C (apply DEC-097/098) → D → E.
+- **Last green commit:** a397661 (EXP-201 slice-1 integrated, gate green).
 
 ## Progress Log
 
 - **0 · 2026-06-11 setup** — promoted Phases A–E to ROADMAP; granted DEC-097..104; reconciled index to
   EXP-201..230 (dropped 10 built items); wrote this runbook; pruned stale worktrees. Loop armed.
+- **1 · 2026-06-11 cycle 1** — Batch EXP-201/203/204 dispatched (3 worktree workers). **EXP-201 ✅**
+  integrated (a397661): slice-1 derive_phase + relation_phase_writer; orchestrator fixed a layer
+  violation (graph importing engines → phase param now str). Gate green: 1976 passed, 22 skipped,
+  85.75% cov; rules baseline ratcheted 141→140. **EXP-203/204 NOT landed** — their worktrees forked
+  from stale origin base and cherry-pick conflicted; commits discarded, re-dispatch next cycle with the
+  mandatory merge-first worker instruction (now in §The cycle step 4). Learning: worktree.baseRef=fresh
+  is stale vs unpushed local munich-demo.

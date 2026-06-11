@@ -32,8 +32,20 @@ _The orchestrator maintains this: add a line when an item unlocks a later one; d
   `NegotiationBackedSyncTradeHandler` in `engines/interaction/trade_handler_sync.py:104` (built, unwired);
   distortion prompts in `prompts/gossip/distortion.yaml`; PART_OF edges seeded (`seed.py:450`); temporal
   memory fields on Memory nodes (Phase 26); `EmotionModelProtocol` (one impl `VadEmotionModel`).
-- **NEXT BATCH (cold start):** Phase A — EXP-201, EXP-203, EXP-204, EXP-205, EXP-206, EXP-207 (all
-  conflict-free, no schema). EXP-202 depends-soft on EXP-201 (run after). See §Ordered checklist.
+- **WORKTREE BASE (critical for integration):** `isolation:worktree` forks from `worktree.baseRef`
+  = `fresh` (origin/<default>), which is STALE vs local munich-demo (setup commits are unpushed). The
+  EXP-201 worker that ran `git merge munich-demo` FIRST integrated cleanly; the two that didn't
+  conflicted. **Every worker prompt MUST instruct: `git merge munich-demo` in the worktree before
+  building.** (User could instead set `worktree.baseRef: head` in settings.local.json to remove the
+  per-worker merge — orchestrator can't edit settings.) Integrate by cherry-picking the feature commit.
+- **EXP-201 seam:** `engines/relationship/affinity_engine.py` (`RelationshipPhase` enum + pure
+  `derive_phase`) + `graph/relation_phase_writer.py` (`write_relationship_phase(session,src,dst,phase:str,tick)`)
+  → slice-2 wiring (call after relation mutation in `engines/dialogue/dialogue_handler.py`) is a small
+  follow-up usable by EXP-202/227. The writer takes phase as **str** (pass `RelationshipPhase.value`).
+- **NEXT BATCH:** EXP-203, EXP-204 (re-dispatch with merge-first — prior worktree commits discarded),
+  EXP-205, EXP-206, EXP-207 (Phase A demo + engine, conflict-free). Then EXP-202 (soft dep EXP-201, now
+  satisfied). EXP-207 & EXP-221 both edit left_panel.py (different batches); EXP-205 & EXP-222 both edit
+  run.py (different batches) — fine as sequenced.
 
 ## Mapping & reconciliation (analysis id → execution id)
 
@@ -80,7 +92,7 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 `⚠conflict` = shares an existing file with another item (group into one worker).
 
 ### Phase A — Make it visible (no schema)
-- [ ] **EXP-201** relationship affinity phase engine · S · deps: none · new `engines/relationship/affinity_engine.py`+`phase_rules_loader.py`+`graph/relation_phase_writer.py`; edit `engines/dialogue/dialogue_handler.py` (call site)
+- [x] **EXP-201** relationship affinity phase engine (slice 1: derive_phase + writer, new files) · S · DONE a397661 · slice-2 wiring (call `write_relationship_phase` after relation mutation in `dialogue_handler.py`) deferred — see carry-forward
 - [ ] **EXP-202** standing → dialogue tone + secret-share gate · M · deps: EXP-201 (soft) · edits `engines/gossip/knowledge_propagator.py`, `engines/dialogue/prompt_builder.py`, `prompts/dialogue/system_v1.yaml`
 - [ ] **EXP-203** relation-delta first-contact fix · S · deps: none · edit `engines/dialogue/relation_mutator.py`
 - [ ] **EXP-204** need/mood → dialogue context (DEC-099) · S · deps: none · edit `retrieval/context_builder.py`
@@ -121,10 +133,11 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 
 ## Next candidate batch (suggested)
 
-**LAST BATCH:** none yet (program just reconciled). **NEXT:** Phase A conflict-free set —
-EXP-201 · EXP-203 · EXP-204 · EXP-205 · EXP-206 · EXP-207 (6 workers, no schema, no shared existing
-file except the noted run.py/left_panel.py pairs which are split across phases). EXP-202 runs in the
-following batch (soft dep on EXP-201).
+**LAST BATCH (cycle 1):** EXP-201 ✅ (slice 1) — integrated a397661, gate green (1976 passed, 85.75%).
+EXP-203/204 were dispatched but their worktrees forked stale and conflicted → discarded, re-dispatch
+next cycle with merge-first.
+**NEXT:** EXP-203 · EXP-204 · EXP-205 · EXP-206 · EXP-207 (5 workers, no schema; conflict-free). Then
+EXP-202 (soft dep EXP-201, satisfied). **All workers must `git merge munich-demo` before building.**
 
 ---
 
