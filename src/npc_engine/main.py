@@ -36,6 +36,7 @@ from npc_engine.api.dependency_singletons import (
     get_oath_engine,
     get_treaty_engine,
     get_pricing_engine,
+    get_session_store,
     get_skill_progression_engine,
     get_quest_generation_engine,
     get_redis_runtime,
@@ -125,6 +126,8 @@ async def lifespan(_app: FastAPI):
             await EmotionBootstrapper().load_from_graph(
                 session=session, store=get_emotion_store(), npc_ids=npc_ids
             )
+            await get_session_store().load_from_graph(session=session)
+            _logger.info("session_store.loaded_from_graph")
         await redis_runtime.connect()
         _dialogue_probe_adapter = create_llm_client_for_engine(
             engine_config=dialogue_engine_config, settings=settings
@@ -181,6 +184,16 @@ async def lifespan(_app: FastAPI):
         await close_registered_llm_adapters()
         await redis_runtime.close()
         if connected:
+            try:
+                settings = get_settings()
+                async with graph_db.get_session() as session:
+                    await get_session_store().save_to_graph(
+                        session=session,
+                        max_persisted_turns=settings.MAX_PERSISTED_SESSION_TURNS,
+                    )
+                _logger.info("session_store.saved_to_graph")
+            except Exception as exc:  # noqa: BLE001
+                _logger.warning("session_store.save_on_shutdown_failed", extra={"error": str(exc)})
             await graph_db.close()
 
 

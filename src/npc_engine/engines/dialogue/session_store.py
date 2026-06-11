@@ -2,16 +2,21 @@
 Module: session_store
 Layer: engines
 Purpose: Async-safe in-memory TTL session store for dialogue turns.
-Does NOT: persist sessions across process restarts.
-Dependencies: none
+Does NOT: persist sessions across process restarts on its own; uses
+          graph/session_persistence helpers for save_to_graph/load_from_graph.
+Dependencies: graph/session_persistence (write_session_turns, read_all_session_turns)
 Dependencies injected: None.
-Used by: engines/dialogue/dialogue_handler, engines/memory_consolidation/memory_consolidation_engine
+Used by: engines/dialogue/dialogue_handler, engines/memory_consolidation/memory_consolidation_engine,
+         main.py lifespan (save on shutdown, load on startup).
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
+
+_logger = logging.getLogger(__name__)
 
 
 class SessionStore:
@@ -146,3 +151,58 @@ class SessionStore:
                     "expires_at": datetime.now(timezone.utc) + timedelta(seconds=self._ttl_seconds),
                 },
             }
+
+    async def save_to_graph(
+        self,
+        session: object,
+        max_persisted_turns: int,
+    ) -> None:
+        """Persist all active sessions to the graph as JSON blobs on Character nodes.
+
+        Best-effort: any exception from the graph layer is logged at WARNING and
+        swallowed so that a database outage cannot crash process shutdown.
+
+        Args:
+            session: Active Neo4j ``AsyncSession``.
+            max_persisted_turns: Cap on turns written per (player, npc) pair.
+        """
+        from npc_engine.graph.session_persistence import write_session_turns
+
+        async with self._lock:
+            snapshot = dict(self._sessions)
+
+        for composite_key, entry in snapshot.items():
+            player_id, npc_id = composite_key.split(":", 1)
+            turns: list[str] = entry["turns"][-max_persisted_turns:]
+            try:
+                await write_session_turns(
+                    session=session,  # type: ignore[arg-type]
+                    npc_id=npc_id,
+                    player_id=player_id,
+                    turns=turns,
+                )
+            except Exception as exc:  # noqa: BLE001
+                _logger.warning(
+                    "session_store.save_failed",
+                    extra={"npc_id": npc_id, "player_id": player_id, "error": str(exc)},
+                )
+
+    async def load_from_graph(self, session: object) -> None:
+        """Populate this store with session turns previously persisted to the graph.
+
+        Reads all Character nodes carrying ``session_turns_*`` properties and
+        inserts the decoded turns via ``append_turns`` so that normal TTL and
+        max-turns caps apply.
+
+        Args:
+            session: Active Neo4j ``AsyncSession``.
+        """
+        from npc_engine.graph.session_persistence import read_all_session_turns
+
+        records = await read_all_session_turns(session=session)  # type: ignore[arg-type]
+        for rec in records:
+            await self.append_turns(
+                player_id=rec["player_id"],
+                npc_id=rec["npc_id"],
+                new_turns=rec["turns"],
+            )
