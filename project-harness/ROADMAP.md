@@ -60,17 +60,17 @@ analysis, reconciled against code (10 re-proposed items were already built and d
 - **Constraints:** EXP-223 needs faction-count review in `game_end_checker.py`; EXP-207 & EXP-221 both edit `left_panel.py` (one worker); EXP-205 & EXP-222 both edit `run.py` (one worker).
 - [x] **EXP-213** belief/confidence-aware distortion routing (7be05fe). Receiver confidence biases distortion type (deterministic).
 - [ ] **EXP-214** commitment/fact memory formation (DEC-100 `Memory.kind`). Exit: promises form retrievable memories.
-- [ ] **EXP-215** belief contradiction detection + dedup. Exit: contradictory learned beliefs flagged/merged.
+- [x] **EXP-215** belief contradiction detection + dedup (2ac16eb). Duplicate/contradictory learned beliefs skipped pre-write.
 - [x] **EXP-216** trade dispatch → NegotiationStore (fc56e75). Composition root wires NegotiationBacked default.
 - [x] **EXP-217** player-observable event summary endpoint (42682f4). `GET /player/{id}/events` + reader + tests green.
 - [ ] **EXP-218** quest branching on player choice (DEC-101 `unlocks.on_choice_id`). Exit: choice selects successor quest.
 - [x] **EXP-219** personality-modulated emotion model (6ca22af). `TraitModulatedEmotionModel` 2nd impl; wiring = slice 2.
-- [ ] **EXP-220** faction standing board (demo). Exit: FACTION tab shows standings.
+- [x] **EXP-220** faction standing board (demo; 69f7c80). FACTION tab shows standings.
 - [ ] **EXP-221** location hierarchy breadcrumb (demo). Exit: panel shows PART_OF chain.
 - [ ] **EXP-222** cinematic / recording mode (demo; needs EXP-205). Exit: `--cinematic` produces formatted run.
 - [ ] **EXP-223** richer world (more NPCs/locations; resolve faction-count first). Exit: seed adds NPCs/locations idempotently.
-- [ ] **EXP-224** mood-contagion visualiser (demo). Exit: emotion panel shows contagion across a pair.
-- [ ] **EXP-225** proactive window surface (demo PARTIAL: NPC highlight + input pre-fill). Exit: intent NPC highlighted, input pre-filled.
+- [x] **EXP-224** mood-contagion visualiser (demo; 5e1f230). Emotion panel shows a contagion pair (DEC-105 size waiver).
+- [x] **EXP-225** proactive window surface (demo; c26c224). Intent NPC highlighted + input pre-filled.
 
 ### Phase E — "Emergent cognition" (flagship; schema: DEC-102/103/104)
 - **Goal:** NPCs that model the player, hold/act on false beliefs, and pursue multi-step covert goals.

@@ -94,13 +94,13 @@ automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** A
-- **Phase in progress:** D batch-2 (A+B+C + D batch-1 done: EXP-201..213, 216, 217, 219)
-- **Next batch to run (Phase D batch-2, no-schema):** EXP-215 (belief contradiction dedup), EXP-220 (faction
-  board demo), EXP-224 (mood-contagion demo), EXP-225 (proactive window demo). Conflict-free. Merge munich-demo
-  first; grep `from src`.
-- **Then (Phase D schema):** apply DEC-100 (memory.yaml `kind`) → EXP-214; DEC-101 (unlocks.yaml `on_choice_id`)
-  → EXP-218; remaining demo EXP-221 (left_panel)/EXP-222 (run.py)/EXP-223 (seed). → Phase E (DEC-102/103/104).
-- **Last green commit:** f8a5fcc (EXP-213/216/217/219 integrated, gate green).
+- **Phase in progress:** D batch-3 (done: EXP-201..217 most, 219, 220, 224, 225 = 19 items)
+- **Next batch (Phase D batch-3, no-schema demo):** EXP-221 (left_panel PART_OF breadcrumb), EXP-222
+  (cinematic run.py), EXP-223 (richer world seed.py — verify game_end_checker faction count). Conflict-free.
+  Merge munich-demo first; grep `from src`.
+- **Then (Phase D schema):** DEC-100 (memory.yaml `kind`) → EXP-214 (watch context_builder R006 + mock new
+  call everywhere); DEC-101 (unlocks.yaml `on_choice_id`) → EXP-218. → Phase E (DEC-102/103/104 new node types).
+- **Last green commit:** 4d8fd71 (EXP-215/220/224/225 integrated, gate green).
 
 ## Progress Log
 
@@ -143,3 +143,8 @@ automatically; do not poll.
   guarded the bias block with inline `isinstance(...,int)` ×3 (lets mypy narrow). Fix f8a5fcc. Green: make
   check 2020 (85.97%). **15 items done (EXP-201..213, 216, 217, 219).** Lesson: don't thread mockable config
   into pure helpers — guard or use module defaults.
+- **7 · 2026-06-12 cycle 7** — Phase D batch-2 EXP-215/220/224/225 (merge-first, cherry-picked clean).
+  **All 4 ✅** (2ac16eb/69f7c80/5e1f230/c26c224). 2 fixes: EXP-224 emotion_panel >300 → DEC-105 waiver +
+  re-baseline (demo UI widget, splitting artificial — like DEC-036); EXP-215 redundant `cast` → removed.
+  Fix 4d8fd71. Green: make check 2022 (85.99%), demo 694. **19 items done.** EXP-225 also fixed a latent
+  `NPC_DISPLAY_NAMES` import crash in game_window.

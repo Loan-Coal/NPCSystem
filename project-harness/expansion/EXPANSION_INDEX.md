@@ -65,10 +65,13 @@ _The orchestrator maintains this: add a line when an item unlocks a later one; d
 - **PHASE D batch-1 DONE** (EXP-213/216/217/219 ✅). Lesson: a worker that threads config-derived values
   into a pure helper (EXP-213 thresholds) breaks mocked-config tests — guard with `isinstance(x, int)`
   inline (so mypy narrows) or use module defaults. New seam: `trait_modulated_model.py` (2nd EmotionModel).
-- **NEXT BATCH (Phase D, no-schema):** EXP-215 (belief contradiction dedup — knowledge engine + new graph
-  reader), EXP-220 (faction board demo), EXP-224 (mood-contagion demo), EXP-225 (proactive window demo) —
-  conflict-free (different files). THEN schema batches: DEC-100 → EXP-214; DEC-101 → EXP-218; remaining
-  demo EXP-221 (left_panel)/EXP-222 (run.py)/EXP-223 (seed). Then Phase E.
+- **PHASE D batch-2 DONE** (EXP-215/220/224/225 ✅). New seams: `find_conflicting_belief`,
+  `faction_board.py`+`RightPanel.FACTION`, emotion pair view. DEC-105 waives emotion_panel size.
+- **NEXT BATCH (Phase D batch-3, no-schema):** EXP-221 (left_panel breadcrumb), EXP-222 (cinematic run.py),
+  EXP-223 (richer world seed.py — verify game_end_checker faction count) — conflict-free demo.
+- **THEN (Phase D schema):** apply DEC-100 (memory.yaml `kind`) → EXP-214 (memory_engine + context_builder;
+  WATCH context_builder R006 + mock the new call everywhere); DEC-101 (unlocks.yaml `on_choice_id`) → EXP-218.
+- **THEN Phase E:** apply DEC-102 → EXP-226, EXP-227; DEC-103 → EXP-228; DEC-104 → EXP-229; EXP-230.
 
 ## Mapping & reconciliation (analysis id → execution id)
 
@@ -135,17 +138,17 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 ### Phase D — Deepen the systems (🔶 DEC-100/101)
 - [x] **EXP-213** belief/confidence-aware distortion routing · M · DONE 7be05fe · `receiver_confidence` biases distortion type (deterministic; guarded to int inputs for back-compat)
 - [ ] **EXP-214** commitment/fact memory formation 🔶DEC-100 · M · deps: none · edit `memory.yaml`(orch), `memory_engine.py`, `engines/quest/quest_lifecycle_engine.py`
-- [ ] **EXP-215** belief contradiction detection + dedup · M · deps: none · new `graph/` reader; edit `engines/knowledge_learning/knowledge_extraction_engine.py`
+- [x] **EXP-215** belief contradiction detection + dedup · M · DONE 2ac16eb · `find_conflicting_belief` reader + pre-write skip in extraction engine
 - [x] **EXP-216** trade dispatch → NegotiationStore · S · DONE fc56e75 · composition root wires NegotiationBacked default
 - [x] **EXP-217** player event summary endpoint · S · DONE 42682f4 · `GET /player/{id}/events` + `get_recent_player_events` (note: players need KNOWS_ABOUT edges seeded to return data)
 - [ ] **EXP-218** quest branching on player choice 🔶DEC-101 · L · deps: none · edit `unlocks.yaml`(orch), `engines/quest/quest_chain_resolver.py`, new route
 - [x] **EXP-219** personality-modulated emotion model · M · DONE 6ca22af · `TraitModulatedEmotionModel` (2nd protocol impl); composition-root wiring = slice 2
-- [ ] **EXP-220** faction standing board (demo) · S · deps: none · new `EngineClient.get_faction_standings()` + UI tab
+- [x] **EXP-220** faction standing board (demo) · S · DONE 69f7c80 · `faction_board.py` + `get_faction_standings` + `RightPanel.FACTION`
 - [ ] **EXP-221** location hierarchy breadcrumb (demo) · S · deps: none · edit `demo_game/ui/left_panel.py` ⚠conflict(left_panel.py: EXP-207)
 - [ ] **EXP-222** cinematic / recording mode (demo) · M · deps: EXP-205 (soft) · edit `demo_game/run.py` ⚠conflict(run.py: EXP-205)
 - [ ] **EXP-223** richer world (demo) · M · deps: none · edit `demo_game/seed.py`, `constants.py`; verify `game_end_checker.py` faction-count first
-- [ ] **EXP-224** mood-contagion visualiser (demo) · M · deps: none · edit `demo_game/ui/emotion_panel.py` + EmotionPoller
-- [ ] **EXP-225** proactive window surface (demo PARTIAL) · S · deps: none · edit `demo_game/ui/game_window.py`
+- [x] **EXP-224** mood-contagion visualiser (demo) · M · DONE 5e1f230 · pair view in emotion_panel + back-compat EmotionPoller pair (DEC-105 size waiver); game_window pair wiring = slice 2
+- [x] **EXP-225** proactive window surface (demo) · S · DONE c26c224 · intent highlights NPC + pre-fills input (also fixed a latent NPC_DISPLAY_NAMES import crash)
 
 ### Phase E — Emergent cognition (🔶 DEC-102/103/104; flagship, schema-heavy)
 - [ ] **EXP-226** player-model / theory-of-mind engine 🔶DEC-102 · M · deps: none · new `base_nodes/player_model.yaml`+`base_edges/has_player_model.yaml`(orch) + `engines/player_model/`
@@ -156,10 +159,10 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 
 ## Next candidate batch (suggested)
 
-**LAST BATCH (cycle 6):** EXP-213/216/217/219 ✅ — integrated (7be05fe/fc56e75/42682f4/6ca22af + fix f8a5fcc).
-Gate green (make check 2020, 85.97%). 3 fixes (R006 + gossip back-compat guards). **Phases A+B+C done +
-Phase D batch-1: EXP-201..213, 216, 217, 219 (15 items).**
-**NEXT (Phase D batch-2):** EXP-215 · EXP-220 · EXP-224 · EXP-225 (no-schema, conflict-free).
+**LAST BATCH (cycle 7):** EXP-215/220/224/225 ✅ — integrated (2ac16eb/69f7c80/5e1f230/c26c224 + fix 4d8fd71).
+Gate green (make check 2022, 85.99%; demo 694). 2 fixes (DEC-105 emotion_panel waiver + redundant cast).
+**19 items done: EXP-201..217 (most), 219, 220.**
+**NEXT (Phase D batch-3):** EXP-221 · EXP-222 · EXP-223 (no-schema demo, conflict-free).
 **All workers must `git merge munich-demo` before building; grep new files for `from src`.**
 
 ---
