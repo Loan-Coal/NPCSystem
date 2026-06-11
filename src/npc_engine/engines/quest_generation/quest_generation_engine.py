@@ -31,7 +31,7 @@ from typing import Any
 from neo4j import AsyncSession
 
 from npc_engine.config import get_settings
-from npc_engine.world.world_reader import get_world_state
+from npc_engine.graph.world_state_reader import get_world_state
 
 from pydantic import ValidationError
 

@@ -64,7 +64,7 @@ from npc_engine.retrieval.subgraph_retriever import assemble_tier_a_context
 from npc_engine.retrieval.vector_store_protocol import VectorSearchResult
 from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.utils.metrics import increment_metric
-from npc_engine.world.world_reader import get_world_state
+from npc_engine.graph.world_state_reader import get_world_state
 
 
 class EmbeddingIndexProtocol(Protocol):

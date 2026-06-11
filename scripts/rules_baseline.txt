@@ -28,8 +28,6 @@ R001|src/npc_engine/retrieval/context_budget_enforcer.py
 R001|src/npc_engine/retrieval/context_builder.py
 R001|src/npc_engine/scheduler/tick_scheduler.py
 R001|src/npc_engine/utils/errors.py
-R005|src/npc_engine/world/world_reader.py
-R005|src/npc_engine/world/world_writer.py
 R006|src/npc_engine/api/dependencies_engines.py::get_tick_scheduler
 R006|src/npc_engine/api/quest_helpers.py::build_transition_meta
 R006|src/npc_engine/api/routes/action.py::report_action
@@ -144,4 +142,3 @@ R006|src/npc_engine/scheduler/tick_scheduler.py::TickScheduler.advance
 R006|src/npc_engine/schema/schema_loader.py::load_game_schema
 R006|src/npc_engine/scripts/guard_contract_test_sync.py::evaluate_contract_test_sync
 R006|src/npc_engine/type_registry/validation.py::validate_node_payload
-R006|src/npc_engine/world/world_writer.py::upsert_world_state

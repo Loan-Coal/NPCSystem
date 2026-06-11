@@ -34,8 +34,8 @@ from npc_engine.graph.witnessed_service import record_witness
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.type_registry.node_validator import validate_node_write
-from npc_engine.world.world_reader import get_world_state
-from npc_engine.world.world_writer import upsert_world_state_tx
+from npc_engine.graph.world_state_reader import get_world_state
+from npc_engine.graph.world_state_writer import upsert_world_state_tx
 
 
 LOGGER = logging.getLogger(__name__)

@@ -8,7 +8,7 @@ Purpose: Adapts GoalFormer to the BaseEngine protocol — on each tick fetches a
 Dependencies: npc_engine.engines.planning.goal_former,
               npc_engine.engines.planning.action_selector,
               npc_engine.graph.character_reader (get_npc_ids),
-              npc_engine.world.world_reader (get_world_state),
+              npc_engine.graph.world_state_reader (get_world_state),
               npc_engine.config (get_settings).
 Used by: npc_engine.scheduler.tick_scheduler (injected as goal_formation_engine),
          npc_engine.api.dependencies_engines.get_goal_formation_engine.
@@ -28,7 +28,7 @@ from npc_engine.engines.planning.action_selector import ActionSelector
 from npc_engine.engines.planning.goal_former import GoalFormer
 from npc_engine.graph.character_reader import get_npc_ids
 from npc_engine.world.time_utils import TimePoint
-from npc_engine.world.world_reader import get_world_state
+from npc_engine.graph.world_state_reader import get_world_state
 
 
 class GoalFormerAdapter:

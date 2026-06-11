@@ -1037,3 +1037,26 @@ returns 0.
     in a domain error)?
 **Consequence if approved:** new `graph/transaction_coordinator.py`; five engine files refactored to
 closures; R005 baseline shrunk by 5; ISSUE-058 item (2) closed. **Not started** — this entry is the gate.
+
+## DEC-092: world-state DB access relocated from `world/` into `graph/` (S21.4 follow-up, ISSUE-058 item 3)
+**Date:** 2026-06-11
+**Context:** `world/world_reader.py` (`get_world_state`) and `world/world_writer.py`
+(`upsert_world_state`, `upsert_world_state_tx`) held raw Cypher (`MATCH`/`MERGE` on `WorldState`),
+the last two R005 (Cypher-outside-`graph/`) baseline entries. ISSUE-058 item (3) offered two paths:
+relocate, or add a carve-out permitting each graph-peer package its own-label Cypher.
+**Options considered:**
+  1. Carve-out waiver: document that `world/` (a rank-2 graph-peer) may own its world-state Cypher.
+     Inconsistent — every other domain's node access already lives in `graph/<x>_reader|writer.py`
+     (e.g. `graph/character_reader.py`, `graph/event_writer.py`); `world/` was the lone exception.
+  2. Relocate the DB access into `graph/`, leaving `world/` with only the model + time utils.
+**Decision:** Option 2 (per user direction). New `graph/world_state_reader.py` (`get_world_state`) and
+`graph/world_state_writer.py` (`upsert_world_state`, `upsert_world_state_tx`); moved verbatim, then the
+13 call sites repointed and `world/world_reader.py` + `world/world_writer.py` deleted. `world/` now holds
+only `world_state.py` (model), `time_utils.py`, `world_time_service.py`. The relocated `upsert_world_state`
+(previously R006-baselined and grandfathered) was refactored under the 40-line limit by extracting shared
+`_world_state_write_params` / `_world_state_from_record` helpers (also de-duplicating the two writers),
+so no R006 debt was relocated.
+**Why:** Node read/write is `graph/` responsibility ("Neo4j write operations, schema enforcement");
+`world/` is "world-state data model + time utils". The split now matches every other domain.
+**Consequence:** **R005 baseline is empty** (all Cypher-outside-`graph/` debt cleared). Imports of
+`get_world_state`/`upsert_world_state*` now come from `graph.world_state_*`. ISSUE-058 fully resolved.

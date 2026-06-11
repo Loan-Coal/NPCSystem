@@ -21,9 +21,9 @@ from npc_engine.api.route_helpers import OkEnvelope, error_response, ok_response
 from npc_engine.config import MAX_DELTA_TICKS, Settings, get_settings
 from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.scheduler.tick_scheduler import TickScheduler
-from npc_engine.world.world_reader import get_world_state
+from npc_engine.graph.world_state_reader import get_world_state
 from npc_engine.world.world_time_service import _VALID_FIELDS, advance_time
-from npc_engine.world.world_writer import upsert_world_state
+from npc_engine.graph.world_state_writer import upsert_world_state
 from npc_engine.utils.logging import get_logger
 
 logger = get_logger(__name__)

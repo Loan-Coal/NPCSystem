@@ -32,7 +32,7 @@ from npc_engine.scheduler.game_clock import ClockState, GameClock
 from npc_engine.scheduler.tick_lease import TickLeaseRepository, TickLeaseRepositoryProtocol
 from npc_engine.world.time_utils import TimePoint
 from npc_engine.config import get_settings
-from npc_engine.world.world_reader import get_world_state
+from npc_engine.graph.world_state_reader import get_world_state
 
 
 LOGGER = logging.getLogger(__name__)

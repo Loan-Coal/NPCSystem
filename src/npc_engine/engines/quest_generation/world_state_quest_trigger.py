@@ -6,7 +6,7 @@ Purpose: Reads the current world-state epoch on each tick and triggers quest gen
 Does NOT: expose HTTP routes, manage quest lifecycle, query Neo4j directly, or wire
           itself into the scheduler (slice 2 handles scheduler registration).
 Dependencies: engines.quest_generation.quest_generation_engine,
-              graph.event_trigger_queries, world.world_reader
+              graph.event_trigger_queries, graph.world_state_reader
 Dependencies injected: QuestGenerationEngine (via __init__).
 Used by: npc_engine.scheduler.tick_scheduler (slice 2)
 """
@@ -22,7 +22,7 @@ from npc_engine.engines.quest_generation.event_quest_trigger import (
     DEFAULT_MILITARY_ARCHETYPES,
 )
 from npc_engine.graph.event_trigger_queries import get_any_military_npc
-from npc_engine.world.world_reader import get_world_state
+from npc_engine.graph.world_state_reader import get_world_state
 
 if TYPE_CHECKING:
     from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine

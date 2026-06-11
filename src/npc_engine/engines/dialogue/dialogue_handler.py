@@ -52,7 +52,7 @@ from npc_engine.config import ContentRating
 from npc_engine.services.input_moderation import InputModerationService
 from npc_engine.services.output_moderation import OutputModerationService
 from npc_engine.world.time_utils import TimePoint
-from npc_engine.world.world_reader import get_world_state
+from npc_engine.graph.world_state_reader import get_world_state
 
 
 _logger = logging.getLogger(__name__)

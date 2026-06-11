@@ -6,7 +6,7 @@ Purpose: Meta-engine that reads active quests and recent events each tick, then 
          engines can gate their sampling accordingly.
 Does NOT: call LLMs, create graph nodes/edges, or expose HTTP routes.
 Dependencies: engines.story_pacing.pacing_rules_loader, graph.story_pacing_queries,
-              world.world_reader, world.world_writer
+              graph.world_state_reader, graph.world_state_writer
 Dependencies injected: PacingRules (via constructor), AsyncSession (per tick call).
 Used by: npc_engine.scheduler.tick_scheduler
 """
@@ -25,8 +25,8 @@ from npc_engine.graph.story_pacing_queries import (
     get_recent_major_events,
 )
 from npc_engine.config import get_settings
-from npc_engine.world.world_reader import get_world_state
-from npc_engine.world.world_writer import upsert_world_state
+from npc_engine.graph.world_state_reader import get_world_state
+from npc_engine.graph.world_state_writer import upsert_world_state
 
 _LOGGER = logging.getLogger(__name__)
 

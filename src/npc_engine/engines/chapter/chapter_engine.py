@@ -39,7 +39,7 @@ from npc_engine.graph.chapter_writer import (
     link_event_to_chapter,
 )
 from npc_engine.config import get_settings
-from npc_engine.world.world_reader import get_world_state
+from npc_engine.graph.world_state_reader import get_world_state
 from npc_engine.engines.chapter.chapter_labeler import label_chapter_by_rules
 
 if TYPE_CHECKING:
