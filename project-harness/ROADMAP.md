@@ -274,8 +274,8 @@ kept OPEN — the two henryk cases need a live `make eval-llm-demo` (Ollama) run
   - Exit: `rg "build_world_state_payload" demo_game/seed.py` shows typed return; `make test-demo` green. ✓ (call site passes `.model_dump()` to the generic `_seed_node`; test_seed + test_sev13 updated to attribute access.)
 - [x] **S23.6** Dead code + lazy import (ISSUE-054, ISSUE-091) — delete `src/npc_engine/retrieval/token_budget_enforcer.py` and its test `tests/unit/test_context_pipeline.py` (confirm zero imports first); make the `game_window` import in `demo_game/__init__.py` lazy (inside `_dispatch` body only).
   - Exit: `rg "token_budget_enforcer" src/` returns 0; `make check` green; `make test-demo` green. ✓
-- [ ] **S23.7** Archetype in fallback (ISSUE-081) — thread the NPC archetype from `request.npc_id`→profile into `execute_with_degradation` and `DialogueLLMClient._load_fallback_dialogue` so the archetype-keyed fallback line is used instead of hardcoded `"default"`. Update unit test for the degradation path.
-  - Exit: a non-default-archetype NPC in degradation mode returns its archetype line; `make check` green.
+- [x] **S23.7** Archetype in fallback (ISSUE-081) — thread the NPC archetype from `request.npc_id`→profile into `execute_with_degradation` and `DialogueLLMClient._load_fallback_dialogue` so the archetype-keyed fallback line is used instead of hardcoded `"default"`. Update unit test for the degradation path.
+  - Exit: a non-default-archetype NPC in degradation mode returns its archetype line; `make check` green. ✓ (new `get_npc_archetype` reader; archetype threaded through degradation + canned + LLM-fallback paths.)
 
 ---
 

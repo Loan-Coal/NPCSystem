@@ -38,6 +38,15 @@ _CANNED_DIR = str(_REPO_ROOT / "prompts" / "canned")
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _default_archetype(monkeypatch):
+    """Default the NPC archetype to None (→ 'default') so handler tests need no graph session."""
+    monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.get_npc_archetype",
+        AsyncMock(return_value=None),
+    )
+
+
 def _make_mock_session() -> MagicMock:
     """Return a MagicMock that behaves like an AsyncSession with a transaction."""
     session = MagicMock()

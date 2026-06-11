@@ -65,7 +65,16 @@ to the intended values (idempotent overwrite for world_state only), or (b) have 
 assert/seed the required `epoch` precondition per case (e.g. a `seed.requires_epoch` field) before
 running war-premise cases, failing fast if the world is not at war.
 
-## ISSUE-081: dialogue_handler hardcodes archetype="default" for canned/degradation responses
+## [FIXED] ISSUE-081: dialogue_handler hardcodes archetype="default" for canned/degradation responses
+**Fixed:** 2026-06-11, S23.7 — added `get_npc_archetype(session, npc_id)` reader to `graph_reader.py`;
+`DialogueHandler.handle`/`stream` resolve the NPC's real archetype (falling back to `"default"`) and thread
+it into `execute_with_degradation`, `_apply_output_ceiling`→`get_canned_response`, and the LLM pipeline.
+`DialogueLLMClient` gained backward-compatible `archetype="default"` params on `generate_response`,
+`_generate_with_retry`, `fallback_response_payload`, `_fallback_with_metrics`, `_load_fallback_dialogue`, and
+`stream_text`; `_load_fallback_dialogue` now reads the archetype key (then "default") from
+`fallback_responses.json` (which already has innkeeper/fence/merchant/guard/elder keys). Both the canned
+degradation tier and the structured-output validation fallback now serve the NPC's archetype line. Tests:
+`test_dialogue_archetype_fallback.py` + a handler end-to-end case in `test_dialogue_handler_fallback_v14.py`.
 **Found:** 2026-06-09, during Lira fallback diagnosis
 **Severity:** P3 (nice-to-fix)
 **Where:** `src/npc_engine/engines/dialogue/dialogue_handler.py::handle` (the

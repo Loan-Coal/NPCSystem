@@ -221,6 +221,33 @@ MATCH (c:Character {id: $npc_id})
 RETURN c.voice_descriptor AS voice_descriptor
 """
 
+_CYPHER_GET_ARCHETYPE = """
+MATCH (c:Character {id: $npc_id})
+RETURN c.archetype AS archetype
+"""
+
+
+async def get_npc_archetype(session: AsyncSession, npc_id: str) -> str | None:
+    """Return the archetype property for an NPC, or None if unset.
+
+    Used to key archetype-specific fallback/canned dialogue (ISSUE-081).
+
+    Args:
+        session: Active Neo4j async session.
+        npc_id: Stable NPC identifier.
+
+    Returns:
+        archetype string from the Character node, or None if the node is absent
+        or the property is not set.
+    """
+    result = await session.run(_CYPHER_GET_ARCHETYPE, {"npc_id": npc_id})
+    record = await result.single()
+    await result.consume()
+    if record is None:
+        return None
+    archetype = record["archetype"]
+    return cast(str, archetype) if archetype is not None else None
+
 
 async def get_npc_voice_descriptor(session: AsyncSession, npc_id: str) -> str | None:
     """Return the voice_descriptor property for an NPC, or None if unset.

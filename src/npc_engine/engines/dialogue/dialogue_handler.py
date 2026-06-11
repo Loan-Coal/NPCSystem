@@ -42,7 +42,7 @@ from npc_engine.engines.routine.routine_queries import set_routine_override
 from npc_engine.engines.tts.protocols import TTSClientProtocol
 from npc_engine.engines.tts.voice_modulator import modulate as modulate_voice
 from npc_engine.engines.tts.voice_params import VoiceParams
-from npc_engine.graph.graph_reader import get_npc_voice_descriptor
+from npc_engine.graph.graph_reader import get_npc_archetype, get_npc_voice_descriptor
 from npc_engine.retrieval.context_builder import build_serialized_context
 from npc_engine.retrieval.context_protocols import EmbeddingIndexProtocol
 from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache, PartialDialogueContextCache
@@ -144,13 +144,13 @@ class DialogueHandler:
         )
 
     def _apply_output_ceiling(
-        self, parsed: DialogueResponse, level: DegradationLevel, canned_dir: Path, npc_id: str,
+        self, parsed: DialogueResponse, level: DegradationLevel, canned_dir: Path, npc_id: str, archetype: str,
     ) -> tuple[DialogueResponse, DegradationLevel]:
         """Return a canned fallback when NPC output exceeds the content ceiling."""
         if not self._output_moderation.is_over_ceiling(parsed.npc_response):
             return parsed, level
         _logger.warning("output_ceiling_violation", extra={"npc_id": npc_id, "rating": self._effective_rating})
-        return get_canned_response(archetype="default", canned_dir=canned_dir), "canned"
+        return get_canned_response(archetype=archetype, canned_dir=canned_dir), "canned"
 
     async def handle(self, request: DialogueRequest) -> DialogueResponse:
         """Execute the full dialogue flow with tiered degradation and return the response.
@@ -166,16 +166,17 @@ class DialogueHandler:
         )
         turns = await self._session_store.get_turns(player_id=request.player_id, npc_id=request.npc_id)
         current_emotion = await self._emotion_updater.get_state(npc_id=request.npc_id)
+        archetype = await get_npc_archetype(self._session, request.npc_id) or "default"
         canned_dir = Path(self._settings.CANNED_RESPONSES_DIR)
         parsed_response, level = await execute_with_degradation(
-            full_factory=lambda: self._run_llm_pipeline(request=request, turns=turns, current_emotion=current_emotion, skip_rag=False),
-            graph_only_factory=lambda: self._run_llm_pipeline(request=request, turns=turns, current_emotion=current_emotion, skip_rag=True),
-            archetype="default",
+            full_factory=lambda: self._run_llm_pipeline(request=request, turns=turns, current_emotion=current_emotion, skip_rag=False, archetype=archetype),
+            graph_only_factory=lambda: self._run_llm_pipeline(request=request, turns=turns, current_emotion=current_emotion, skip_rag=True, archetype=archetype),
+            archetype=archetype,
             canned_dir=canned_dir,
             full_timeout=self._engine_model_config.timeouts_ms.full / 1000.0,
             graph_only_timeout=(self._engine_model_config.timeouts_ms.graph_only or 0) / 1000.0,
         )
-        parsed_response, level = self._apply_output_ceiling(parsed_response, level, canned_dir, request.npc_id)
+        parsed_response, level = self._apply_output_ceiling(parsed_response, level, canned_dir, request.npc_id, archetype)
         resolved_action = resolve_action(action=parsed_response.action)
         final_response = parsed_response.model_copy(update={
             "action": resolved_action,
@@ -296,12 +297,13 @@ class DialogueHandler:
 
         turns = await self._session_store.get_turns(player_id=request.player_id, npc_id=request.npc_id)
         current_emotion = await self._emotion_updater.get_state(npc_id=request.npc_id)
+        archetype = await get_npc_archetype(self._session, request.npc_id) or "default"
         prompt = await self._build_dialogue_prompt(
             request=request,
             turns=turns,
             current_emotion=current_emotion,
         )
-        return await self._llm.stream_text(prompt=prompt, system=self._system_prompt)
+        return await self._llm.stream_text(prompt=prompt, system=self._system_prompt, archetype=archetype)
 
     async def _run_llm_pipeline(
         self,
@@ -310,6 +312,7 @@ class DialogueHandler:
         turns: list[str],
         current_emotion,
         skip_rag: bool,
+        archetype: str = "default",
     ) -> DialogueResponse:
         """Build context, call LLM, and parse response for one degradation tier."""
 
@@ -319,12 +322,12 @@ class DialogueHandler:
             current_emotion=current_emotion,
             skip_rag=skip_rag,
         )
-        raw_response = await self._llm.generate_response(prompt=prompt, system=self._system_prompt)
+        raw_response = await self._llm.generate_response(prompt=prompt, system=self._system_prompt, archetype=archetype)
         try:
             return parse_dialogue_response(payload=raw_response)
         except ValidationError:
             increment_metric(metric=LLM_VALIDATION_FAILURES_METRIC, labels={"engine": "dialogue"})
-            fallback_payload = self._llm.fallback_response_payload()
+            fallback_payload = self._llm.fallback_response_payload(archetype=archetype)
             return parse_dialogue_response(payload=fallback_payload)
 
     async def _build_dialogue_prompt(
