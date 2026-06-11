@@ -1,16 +1,21 @@
 """
 Module: event_queries
 Layer: graph
-Purpose: Cypher queries for event awareness seeding and location resolution.
-Does NOT: orchestrate event logic, open transactions, or call LLMs.
-Dependencies: None (Cypher strings only).
-Dependencies injected: AsyncSession or AsyncTransaction.
+Purpose: Cypher queries for event awareness seeding, location resolution, and
+         player-observable event retrieval.
+Does NOT: orchestrate event logic, open transactions, call LLMs, or invent new
+          node/edge types beyond the existing Event + KNOWS_ABOUT schema.
+Dependencies: neo4j (AsyncSession, AsyncTransaction).
+Dependencies injected: AsyncSession (per read call) or AsyncTransaction (seed/write calls).
 Used by: npc_engine.engines.events.event_handler,
          npc_engine.engines.events.awareness_seeder,
-         npc_engine.engines.events.location_scoper
+         npc_engine.engines.events.location_scoper,
+         npc_engine.api.routes.player_events
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from neo4j import AsyncSession, AsyncTransaction
 
@@ -40,6 +45,23 @@ CYPHER_LOCATIONS_BY_TAG = """
 MATCH (loc:Location {location_tag: $location_tag})
 RETURN loc.id AS id
 """
+
+CYPHER_RECENT_PLAYER_EVENTS = """
+MATCH (p:Character {id: $player_id, is_player: true})-[:KNOWS_ABOUT]->(e:Event)
+WHERE e.tick_id IS NOT NULL
+RETURN e.id                                          AS event_id,
+       e.event_type                                  AS event_type,
+       coalesce(e.summary, e.event_type, '')         AS label,
+       e.severity                                    AS severity,
+       e.tick_id                                     AS tick_id,
+       coalesce(e.location_id, '')                   AS location_id,
+       coalesce(e.src_character_id, '')              AS src_character_id
+ORDER BY e.tick_id DESC
+LIMIT $limit
+"""
+
+_PLAYER_EVENTS_DEFAULT_LIMIT = 20
+_PLAYER_EVENTS_MAX_LIMIT = 100
 
 
 # ---------------------------------------------------------------------------
@@ -98,3 +120,47 @@ async def get_locations_by_tag(
     """
     result = await session.run(CYPHER_LOCATIONS_BY_TAG, location_tag=location_tag)
     return [str(record["id"]) async for record in result]
+
+
+async def get_recent_player_events(
+    session: AsyncSession,
+    player_id: str,
+    limit: int = _PLAYER_EVENTS_DEFAULT_LIMIT,
+) -> list[dict[str, Any]]:
+    """Return the most recent events observable by the given player.
+
+    Matches Event nodes that have a KNOWS_ABOUT edge from the player Character
+    node (existing event-awareness schema — no new node/edge types introduced).
+    Results are ordered by tick descending.
+
+    Does NOT: filter by knowledge_state; all KNOWS_ABOUT edges are included.
+    Dependencies injected: AsyncSession.
+
+    Args:
+        session: Active Neo4j async session.
+        player_id: ID of the player Character node.
+        limit: Maximum number of events to return. Clamped to
+               [1, _PLAYER_EVENTS_MAX_LIMIT].
+
+    Returns:
+        List of dicts with keys: event_id, event_type, label, severity,
+        tick_id, location_id, src_character_id.
+        Returns an empty list when the player exists but has no known events,
+        or when the player node is not found.
+    """
+    clamped = max(1, min(limit, _PLAYER_EVENTS_MAX_LIMIT))
+    result = await session.run(CYPHER_RECENT_PLAYER_EVENTS, player_id=player_id, limit=clamped)
+    rows = await result.data()
+    await result.consume()
+    return [
+        {
+            "event_id": row["event_id"],
+            "event_type": row["event_type"],
+            "label": row["label"],
+            "severity": row["severity"],
+            "tick_id": row["tick_id"],
+            "location_id": row["location_id"],
+            "src_character_id": row["src_character_id"],
+        }
+        for row in rows
+    ]
