@@ -92,48 +92,52 @@ critical path in `review-fixes/INDEX.md`); the synthesis is `project-harness/REV
   3 eval cases in `evals/cases/moderation_everyone_*.yaml`; DEC-081 (dialogue_handler.py 300-line waiver).
   - Exit: mature content suppressed under `everyone`; eval cases prove it. ✓
 
-## Phase 17 — Demo Foundation + Missing Expansions
+## Phase 17 — Demo Foundation + Missing Expansions ✅ (2026-06-11)
 **Goal:** Complete the remaining non-schema-gated items from the expansion analysis, land
 KE-6 stable-id seeding (enabler for replay + scenario features), and implement the location
 hierarchy approved in DEC-071. Designed for parallel execution via `/expand-parallel`.
 **Sessions:** estimated 6–8 (mix of S/M/L items; KE-6 + EXP-87 are M/L, others S/M).
+**Reconciliation note (2026-06-11):** all steps landed under the EXP-14/51/19 + EXP-32/87/92/95
+expansion slices ("Phase 18/19" batches); the schema gates for S17.6–S17.8 were approved
+(DEC-083 GOAL_TARGETS, DEC-084 emotion write-through, DEC-085/086 UNLOCKS). Checkboxes were
+ticked retroactively after verifying the landed code. S17.9 remains deprioritized (no active dev).
 
 Dependency order within the phase: **KE-6 first** (enables EXP-92, EXP-95 idempotent
 re-seeding); **EXP-32 + EXP-87 can run in parallel with KE-6** (no conflict).
 
 ### Non-schema-gated (parallelizable after KE-6)
 
-- [ ] **S17.1 KE-6** — Stable-ID idempotent seeding (ISSUE-055). Add optional `id` to
+- [x] **S17.1 KE-6** — Stable-ID idempotent seeding (ISSUE-055). Add optional `id` to
   `CreateBeliefRequest`, `CreateGoalRequest`, `CreateMemoryRequest`, `CreateSecretRequest`;
   MERGE on provided ID; update all seeders. Brief: `expansion/briefs/KE-6-stable-id-seeding.md`.
   - Exit: `make demo-seed` run twice produces zero duplicate nodes. ✓
-- [ ] **S17.2 EXP-32** — Measured anti-hallucination eval harness. Fixture now exists at
+- [x] **S17.2 EXP-32** — Measured anti-hallucination eval harness. Fixture now exists at
   `evals/cases/anti_hallucination_demo.json` (41 labeled cases, all 5 demo NPCs, 3 categories).
   This session adds the runner extension that consumes the JSON format and reports grounded /
   refusal / hallucination aggregate rates. Also wire into `make eval-anti-hallucination`.
   - Exit: `make eval-anti-hallucination` reports a hallucination rate number. ✓
-- [ ] **S17.3 EXP-87** — Location hierarchy `PART_OF` edge (DEC-071 approved).
+- [x] **S17.3 EXP-87** — Location hierarchy `PART_OF` edge (DEC-071 approved).
   `type_registry/base_edges/part_of.yaml` + `graph/location_writer.py` + `location_graph_queries`
   ancestor/descendant helpers + admin routes + demo seed wiring (`loc_city` parent node).
   Brief: `expansion/briefs/EXP-87-location-hierarchy.md`.
   - Exit: `loc_tavern -[:PART_OF]-> loc_city` exists in demo graph after `make demo-seed`. ✓
-- [ ] **S17.4 EXP-92** — Determinism / replay toggle (demo). Needs KE-6.
+- [x] **S17.4 EXP-92** — Determinism / replay toggle (demo). Needs KE-6.
   Brief: `expansion/briefs/` (to be created). Stable IDs from KE-6 make repeated demo runs
   produce the same graph state — surfaces EXP-15/16 gossip replay in the demo.
   - Exit: `make demo-seed && make demo-run ARGS=--cached` produces identical dialogue twice. ✓
-- [ ] **S17.5 EXP-95** — In-window scenario picker (demo). Needs KE-6.
+- [x] **S17.5 EXP-95** — In-window scenario picker (demo). Needs KE-6.
   Brief: `expansion/briefs/` (to be created). Unifies the arcs + free-play modes into a
   single in-window menu so the demo can switch between the village, tavern, and demo worlds.
   - Exit: demo window shows a scenario selection screen at launch. ✓
 
 ### Schema-gated (DECISIONS call needed before implementation)
 
-- [ ] **S17.6 EXP-51** — NPC GOAP goal-formation / action-selection (`GOAL_TARGETS` edge).
-  🔶 Needs a DECISIONS call for the new edge type and precedence rules. Deferred until
-  human approves the schema.
-- [ ] **S17.7 EXP-14** — Persistent emotion state (survive restart). 🔶 Needs emotion
-  node/field schema change. Deferred.
-- [ ] **S17.8 EXP-19** — Branching quests & consequence chains. 🔶 Schema-gated. Deferred.
+- [x] **S17.6 EXP-51** — NPC GOAP goal-formation / action-selection (`GOAL_TARGETS` edge).
+  ✅ Schema approved in DEC-083 (GOAL_TARGETS edge + 0–100 action priority); `engines/planning/`.
+- [x] **S17.7 EXP-14** — Persistent emotion state (survive restart). ✅ Schema approved in
+  DEC-084 (emotion write-through to character node; Redis deferred); `engines/emotion/`.
+- [x] **S17.8 EXP-19** — Branching quests & consequence chains. ✅ Schema approved in
+  DEC-085 (UNLOCKS edge) + DEC-086 (lifecycle waiver); `QuestChainResolver`.
 
 ### Deprioritized
 
@@ -300,3 +304,4 @@ health gate and is green as of Phase 16 completion (1837 passed, 22 skipped, 98%
 | 9 | 2026-06-10 | S16.2 | `ContentRatingViolationError`; `InputModerationService` (per-rating blocklist + regex); 422 handler in `main.py`; wired into `DialogueHandler` + `dependencies.py` | Over-ceiling input rejected with 422 |
 | 10 | 2026-06-10 | S16.3 | `content_ceiling_v1.yaml`; `build_system_prompt(content_rating=)`; `OutputModerationService`; canned fallback on violation; 3 eval cases; `_build_llm_client` + `_apply_output_ceiling` helpers; DEC-081 | NPC output capped under `everyone`; `make check` green (1837 passed) |
 | 11 | 2026-06-10 | Phase 17 planning | `evals/cases/anti_hallucination_demo.json` (41 labeled cases, EXP-32 fixture); `expansion/briefs/KE-6-stable-id-seeding.md`; `expansion/briefs/EXP-87-location-hierarchy.md`; ROADMAP Phase 17 + Phase X restructure; EXPANSION_INDEX Phase 17 items | Phase 17 scoped and ready for `/expand-parallel`; EXP-32 unblocked |
+| 12 | 2026-06-11 | Phase 17 reconcile | Verified all S17.1–S17.8 landed (EXP-14/32/51/87/92/95 + EXP-19 slices); schema gates approved DEC-083/084/085/086; ticked checkboxes + cleared stale 🔶 notes. S17.9 stays deprioritized | Phase 17 marked ✅; next target is Phase 20 |
