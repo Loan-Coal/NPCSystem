@@ -319,7 +319,7 @@ Each step bumps `PROMPT_VERSION` when it touches the prompt; one commit per step
   keep their named details (gossip distortion preserved) but MUST be attributed ("word reached me", "they
   say") and NEVER claimed as firsthand/eyewitness. Bump `PROMPT_VERSION`.
   - Exit: a rumour-state event yields a HEARSAY line, not MY_ACCOUNT; gossip-spread unit tests green; `make check` green.
-- [ ] **S26.2 (B)** Memory temporal framing — compute each memory's age from `created_at_game_time` vs the
+- [x] **S26.2 (B)** Memory temporal framing — compute each memory's age from `created_at_game_time` vs the
   current `world` game-time (via `world.time_utils.total_days`) and surface a coarse `age` hint
   ("recent"/"long_past") on serialized `npc.memories`; add a Rule to `system_v1.yaml`: `npc.memories` are
   recollections of *past* events — never present a past experience as the current situation, and never

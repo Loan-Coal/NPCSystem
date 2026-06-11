@@ -20,7 +20,7 @@ from npc_engine.engines.dialogue.dialogue_models import DialogueRequest
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "stage_b_v2.11"
+PROMPT_VERSION = "stage_b_v2.12"
 
 _PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts" / "dialogue"
 _PROMPT_PATH = _PROMPTS_DIR / "system_v1.yaml"

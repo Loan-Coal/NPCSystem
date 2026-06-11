@@ -49,6 +49,7 @@ from npc_engine.retrieval.context_builder_helpers import (
     to_json_safe,
 )
 from npc_engine.retrieval.context_merger import ContextItem, MergedContext, merge_context
+from npc_engine.retrieval.memory_temporal import annotate_memory_ages
 from npc_engine.retrieval.context_metrics import (
     CONTEXT_CACHE_HITS_METRIC,
     CONTEXT_CACHE_MISSES_METRIC,
@@ -289,7 +290,7 @@ def _build_tier_a_base(
 def _build_tier_a_extended(
     player_id: str | None, reputation_items: list, active_quest, player_relation_edge: dict | None,
     memories: list, beliefs: list, goals: list, owned_items: list, secrets: list, obligations: list,
-    second_hop_events: list, settings: Settings, npc_id: str,
+    second_hop_events: list, settings: Settings, npc_id: str, game_time: TimePoint | None = None,
 ) -> list:
     """Build extended Tier A items: reputation, quest, beliefs, memories, second-hop events, etc."""
     items: list = []
@@ -300,7 +301,8 @@ def _build_tier_a_extended(
     if player_relation_edge is not None:
         items.append(ContextItem(key="relation:player", text=serialize_json(player_relation_edge), tier="tierA", priority=88))
     if memories:
-        items.append(ContextItem(key="memories", text=serialize_json(memories), tier="tierA", priority=90))
+        aged_memories = annotate_memory_ages(memories, game_time)
+        items.append(ContextItem(key="memories", text=serialize_json(aged_memories), tier="tierA", priority=90))
     if beliefs:
         items.append(ContextItem(key="beliefs", text=serialize_json(beliefs), tier="tierA", priority=88))
     if goals:
@@ -402,7 +404,7 @@ async def build_serialized_context(
     tier_b_results = await _maybe_cross_encode(settings, player_message, tier_b_results)
     tier0 = _build_tier0_items(world_state, emotion_snapshot)
     tier_a_raw = _build_tier_a_base(npc_id, character_bundle, events, location_id, location_context, group_memberships, believed_rumors, traits, active_pledges, session_turns)
-    tier_a_raw.extend(_build_tier_a_extended(player_id, reputation_items, active_quest, player_relation_edge, memories, beliefs, goals, owned_items, secrets, obligations, second_hop_events, settings, npc_id))
+    tier_a_raw.extend(_build_tier_a_extended(player_id, reputation_items, active_quest, player_relation_edge, memories, beliefs, goals, owned_items, secrets, obligations, second_hop_events, settings, npc_id, current_game_time))
     tier_b_raw, tier_c_raw, vector_scores = _build_tier_b_c_items(tier_b_results)
     event_key_trust = _build_event_trust_map(events, trust_scores, npc_id)
     serialized = _rank_and_serialize_tiers(
