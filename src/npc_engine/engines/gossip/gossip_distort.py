@@ -212,7 +212,11 @@ def gossip_distort(
         return GossipDistortion(summary=event_summary, distortion_type=None, distortion_level=0)
 
     base_index = seed % len(REGISTRY_KEYS)
-    if receiver_confidence is not None:
+    if (
+        isinstance(receiver_confidence, int)
+        and isinstance(confidence_high_threshold, int)
+        and isinstance(confidence_low_threshold, int)
+    ):
         offset = _confidence_band_offset(
             confidence=receiver_confidence,
             high_threshold=confidence_high_threshold,

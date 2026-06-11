@@ -122,6 +122,19 @@ async def get_locations_by_tag(
     return [str(record["id"]) async for record in result]
 
 
+def _player_event_row_to_dict(row: dict[str, Any]) -> dict[str, Any]:
+    """Project a raw player-event query row into the public event dict."""
+    return {
+        "event_id": row["event_id"],
+        "event_type": row["event_type"],
+        "label": row["label"],
+        "severity": row["severity"],
+        "tick_id": row["tick_id"],
+        "location_id": row["location_id"],
+        "src_character_id": row["src_character_id"],
+    }
+
+
 async def get_recent_player_events(
     session: AsyncSession,
     player_id: str,
@@ -152,15 +165,4 @@ async def get_recent_player_events(
     result = await session.run(CYPHER_RECENT_PLAYER_EVENTS, player_id=player_id, limit=clamped)
     rows = await result.data()
     await result.consume()
-    return [
-        {
-            "event_id": row["event_id"],
-            "event_type": row["event_type"],
-            "label": row["label"],
-            "severity": row["severity"],
-            "tick_id": row["tick_id"],
-            "location_id": row["location_id"],
-            "src_character_id": row["src_character_id"],
-        }
-        for row in rows
-    ]
+    return [_player_event_row_to_dict(row) for row in rows]
