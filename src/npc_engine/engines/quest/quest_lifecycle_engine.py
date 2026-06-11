@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 if TYPE_CHECKING:
     from npc_engine.engines.quest.quest_chain_resolver import QuestChainResolver
@@ -36,6 +36,7 @@ from npc_engine.engines.quest.quest_engine_helpers import (
 )
 from npc_engine.graph.event_writer import upsert_quest_lifecycle_event
 from npc_engine.graph.quest_writer import get_quest_state, update_quest_node_status, upsert_quest_state
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.utils.errors import QuestTransitionError
 
@@ -98,10 +99,10 @@ class QuestLifecycleEngine:
             summary=summary,
             meta=meta,
         )
-        tx = await session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> None:
             await upsert_quest_lifecycle_event(tx=tx, event=event)
-            await tx.commit()
+
+        await run_in_tx(session, _work)
 
     async def _persist_state_and_event(
         self,
@@ -123,8 +124,7 @@ class QuestLifecycleEngine:
             summary=summary,
             meta=meta,
         )
-        tx = await session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> dict:
             stored = await upsert_quest_state(
                 session=tx,
                 quest_id=quest_id,
@@ -132,8 +132,9 @@ class QuestLifecycleEngine:
                 state_payload=state_payload,
             )
             await upsert_quest_lifecycle_event(tx=tx, event=event)
-            await tx.commit()
             return stored
+
+        return await run_in_tx(session, _work)
 
     async def accept_quest(
         self,

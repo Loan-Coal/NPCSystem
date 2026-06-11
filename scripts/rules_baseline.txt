@@ -28,11 +28,6 @@ R001|src/npc_engine/retrieval/context_budget_enforcer.py
 R001|src/npc_engine/retrieval/context_builder.py
 R001|src/npc_engine/scheduler/tick_scheduler.py
 R001|src/npc_engine/utils/errors.py
-R005|src/npc_engine/engines/events/event_handler.py
-R005|src/npc_engine/engines/faction_politics/faction_politics_engine.py
-R005|src/npc_engine/engines/quest/quest_lifecycle_engine.py
-R005|src/npc_engine/engines/quest/quest_offer_service.py
-R005|src/npc_engine/engines/quest/quest_reward_router.py
 R005|src/npc_engine/world/world_reader.py
 R005|src/npc_engine/world/world_writer.py
 R006|src/npc_engine/api/dependencies_engines.py::get_tick_scheduler

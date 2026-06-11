@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.config import Settings
 from npc_engine.engines.quest.models import (
@@ -39,6 +39,7 @@ from npc_engine.graph.quest_writer import (
     create_quest_state_if_absent,
     update_quest_node_status,
 )
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.utils.errors import QuestTransitionError
 
@@ -179,8 +180,7 @@ class QuestOfferService:
         )
         ensure_transaction_session(session=session)
 
-        tx = await session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> dict:
             stored = await create_quest_state_if_absent(
                 session=tx,
                 quest_id=quest_id,
@@ -209,5 +209,6 @@ class QuestOfferService:
                 meta=meta,
             )
             await upsert_quest_lifecycle_event(tx=tx, event=event)
-            await tx.commit()
             return offered_state.model_dump(mode="python")
+
+        return await run_in_tx(session, _work)

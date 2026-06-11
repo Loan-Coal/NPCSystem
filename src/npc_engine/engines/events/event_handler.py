@@ -15,7 +15,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.config import Settings
 from npc_engine.engines.embedding_invalidation import invalidate_embedding_safely
@@ -27,6 +27,7 @@ from npc_engine.engines.routine.routine_queries import set_routine_override
 from npc_engine.graph.causality_service import record_causation
 from npc_engine.graph.event_queries import get_characters_at_location
 from npc_engine.graph.event_writer import upsert_event
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.graph.reputation_writer import adjust_reputation_for_event
 from npc_engine.utils.errors import ReputationNotFoundError
 from npc_engine.graph.witnessed_service import record_witness
@@ -156,8 +157,7 @@ class EventHandler:
             }
             validated_props = validate_node_write(self._registry, "event", raw_props)
             event = self._registry.node_models["event"](**validated_props)
-            tx = await session.begin_transaction()
-            async with tx:
+            async def _emit_event_in_tx(tx: AsyncTransaction) -> None:
                 await upsert_event(tx=tx, event=event)  # type: ignore[arg-type]
                 await seed_awareness_tx(tx=tx, event_id=event_id, location_id=location_id, tick_id=tick_id)
                 if template.faction_id is not None and template.reputation_delta is not None:
@@ -196,7 +196,8 @@ class EventHandler:
                             update={"active_conditions": [*world_state.active_conditions, template.event_type]}
                         )
                         await upsert_world_state_tx(tx=tx, world_state=updated_world)
-                await tx.commit()
+
+            await run_in_tx(session, _emit_event_in_tx)
 
             if template.severity >= 80:
                 witness_ids = await get_characters_at_location(session, location_id=location_id)

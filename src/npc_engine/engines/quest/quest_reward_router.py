@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.config import Settings
 from npc_engine.engines.quest.models import (
@@ -36,6 +36,7 @@ from npc_engine.graph.event_writer import upsert_quest_lifecycle_event
 from npc_engine.graph.item_queries import check_item_possession_in_tx
 from npc_engine.graph.item_writer import execute_item_transfer_in_tx
 from npc_engine.graph.quest_writer import get_quest_state, upsert_quest_state
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.utils.errors import QuestTransitionError
 
@@ -125,8 +126,8 @@ class QuestRewardRouter:
 
         next_state = state.model_copy(update={"rewards_applied": True})
         ensure_transaction_session(session=session)
-        tx = await session.begin_transaction()
-        async with tx:
+
+        async def _work(tx: AsyncTransaction) -> dict:
             await self._apply_rewards_in_tx(
                 tx=tx,
                 state=state,
@@ -149,8 +150,9 @@ class QuestRewardRouter:
                 meta=meta,
             )
             await upsert_quest_lifecycle_event(tx=tx, event=event)
-            await tx.commit()
             return stored
+
+        return await run_in_tx(session, _work)
 
     async def _emit_idempotent_event(
         self,
@@ -170,10 +172,10 @@ class QuestRewardRouter:
             summary=f"Quest rewards applied: {state.title}",
             meta=meta,
         )
-        tx = await session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> None:
             await upsert_quest_lifecycle_event(tx=tx, event=event)
-            await tx.commit()
+
+        await run_in_tx(session, _work)
 
     async def _apply_rewards_in_tx(
         self,

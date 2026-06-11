@@ -14,7 +14,7 @@ import asyncio
 import logging
 from typing import Any
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.engines.faction_politics.rules_loader import FactionPoliticsRules
 from npc_engine.graph.faction_history_service import record_standing_change
@@ -24,6 +24,7 @@ from npc_engine.graph.faction_politics_queries import (
     get_recent_events,
 )
 from npc_engine.graph.faction_writer import set_standing
+from npc_engine.graph.transaction_coordinator import run_in_tx
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -102,9 +103,9 @@ class FactionPoliticsEngine:
                     )
                     new_standing = max(-100, min(100, current + delta))
                     if new_standing != current:
-                        tx = await session.begin_transaction()
-                        async with tx:
-                            await set_standing(tx, src_id=src_faction, dst_id=dst_faction, standing=new_standing)
+                        await self._commit_standing(
+                            session, src_id=src_faction, dst_id=dst_faction, standing=new_standing
+                        )
                         await record_standing_change(
                             session,
                             src_faction_id=src_faction,
@@ -150,9 +151,9 @@ class FactionPoliticsEngine:
             if abs(current) < min_mag:
                 continue
             new_standing = current - rate if current > 0 else current + rate
-            tx = await session.begin_transaction()
-            async with tx:
-                await set_standing(tx, src_id=s["src_id"], dst_id=s["dst_id"], standing=new_standing)
+            await self._commit_standing(
+                session, src_id=s["src_id"], dst_id=s["dst_id"], standing=new_standing
+            )
             await record_standing_change(
                 session,
                 src_faction_id=s["src_id"],
@@ -164,6 +165,23 @@ class FactionPoliticsEngine:
             )
             applied += 1
         return applied
+
+    async def _commit_standing(
+        self, session: AsyncSession, *, src_id: str, dst_id: str, standing: int
+    ) -> None:
+        """Persist one STANDS_WITH standing update inside a single transaction.
+
+        Args:
+            session: Active Neo4j async session.
+            src_id: Source faction id.
+            dst_id: Destination faction id.
+            standing: New standing value to write.
+        """
+
+        async def _work(tx: AsyncTransaction) -> None:
+            await set_standing(tx, src_id=src_id, dst_id=dst_id, standing=standing)
+
+        await run_in_tx(session, _work)
 
     async def _get_character_factions(self, session: AsyncSession, character_id: str) -> list[str]:
         """Return faction IDs the character belongs to.

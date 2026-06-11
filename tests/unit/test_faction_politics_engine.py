@@ -64,12 +64,16 @@ class _FakeTx:
 
     def __init__(self) -> None:
         self.standing_calls: list[dict] = []
+        self.committed = False
 
     async def __aenter__(self) -> "_FakeTx":
         return self
 
     async def __aexit__(self, *args: Any) -> bool:
         return False
+
+    async def commit(self) -> None:
+        self.committed = True
 
     async def run(self, query: str, **kwargs: Any) -> _FakeResult:
         if "standing" in kwargs:
