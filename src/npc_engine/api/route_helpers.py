@@ -9,9 +9,10 @@ Dependencies injected: None.
 
 from __future__ import annotations
 
-from typing import Any, TypeVar
+from typing import Any, Generic, TypeVar
 
 from fastapi import HTTPException
+from pydantic import BaseModel
 
 from npc_engine.utils.errors import (
     FactionMembershipError,
@@ -26,8 +27,32 @@ from npc_engine.utils.logging import get_logger
 
 
 T = TypeVar("T")
+DataT = TypeVar("DataT")
 
 logger = get_logger(__name__)
+
+
+class OkEnvelope(BaseModel, Generic[DataT]):
+    """Canonical success envelope for typed OpenAPI route bodies.
+
+    Used purely as a route `response_model` so generated clients receive a real
+    schema. The runtime path stays `ok_response()` (a plain dict) — FastAPI
+    validates the dict against this model on the way out. No runtime behaviour
+    change.
+    """
+
+    success: bool = True
+    data: DataT
+    meta: dict[str, Any] | None = None
+
+
+class ErrEnvelope(BaseModel):
+    """Canonical error envelope for documented (non-2xx) route responses."""
+
+    success: bool = False
+    error: str
+    message: str
+    detail: Any | None = None
 
 # Redacted, stable client-facing details (L1-02 / SEV-16): never echo a domain
 # error's __str__, which carries internal node ids, type labels, and schema paths.
