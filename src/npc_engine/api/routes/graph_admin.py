@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_embedding_index, get_graph_admin_service, get_reindex_job_service
-from npc_engine.api.route_helpers import graph_error_to_http, ok_response
+from npc_engine.api.route_helpers import OkEnvelope, graph_error_to_http, ok_response
 from npc_engine.graph.graph_admin_service import GraphAdminService
 from npc_engine.retrieval.reindex_job_service import ReindexJobService
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
@@ -56,7 +56,7 @@ class ReindexRequest(BaseModel):
 router = APIRouter(prefix="/graph")
 
 
-@router.delete("/characters/{character_id}")
+@router.delete("/characters/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def hard_delete_character(character_id: str, service: GraphAdminService = Depends(get_graph_admin_service)) -> dict[str, Any]:
     """Hard-delete a character and all associated edges from the graph."""
     try:
@@ -66,7 +66,7 @@ async def hard_delete_character(character_id: str, service: GraphAdminService = 
     return ok_response(data)
 
 
-@router.delete("/events/{event_id}")
+@router.delete("/events/{event_id}", response_model=OkEnvelope[dict[str, Any]])
 async def hard_delete_event(event_id: str, service: GraphAdminService = Depends(get_graph_admin_service)) -> dict[str, Any]:
     """Hard-delete an event and all associated edges from the graph."""
     try:
@@ -76,7 +76,7 @@ async def hard_delete_event(event_id: str, service: GraphAdminService = Depends(
     return ok_response(data)
 
 
-@router.delete("/locations/{location_id}")
+@router.delete("/locations/{location_id}", response_model=OkEnvelope[dict[str, Any]])
 async def hard_delete_location(location_id: str, service: GraphAdminService = Depends(get_graph_admin_service)) -> dict[str, Any]:
     """Hard-delete a location and all associated edges from the graph."""
     try:
@@ -86,7 +86,7 @@ async def hard_delete_location(location_id: str, service: GraphAdminService = De
     return ok_response(data)
 
 
-@router.put("/relations/absolute")
+@router.put("/relations/absolute", response_model=OkEnvelope[dict[str, Any]])
 async def set_relation_absolute(
     request: AbsoluteRelationRequest,
     service: GraphAdminService = Depends(get_graph_admin_service),
@@ -105,7 +105,7 @@ async def set_relation_absolute(
     return ok_response(data)
 
 
-@router.post("/relations/delta")
+@router.post("/relations/delta", response_model=OkEnvelope[dict[str, Any]])
 async def apply_relation_delta(
     request: DeltaRelationRequest,
     service: GraphAdminService = Depends(get_graph_admin_service),
@@ -124,7 +124,7 @@ async def apply_relation_delta(
     return ok_response(data, meta={"clamped_fields": clamped_fields})
 
 
-@router.post("/reindex", status_code=202)
+@router.post("/reindex", status_code=202, response_model=OkEnvelope[dict[str, Any]])
 async def submit_reindex(
     request: ReindexRequest,
     embedding_index: EmbeddingIndex = Depends(get_embedding_index),
@@ -135,7 +135,7 @@ async def submit_reindex(
     return ok_response({"job_id": job_id}, meta={"status": "accepted"})
 
 
-@router.get("/reindex/{job_id}")
+@router.get("/reindex/{job_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_reindex_job(job_id: str, reindex_jobs: ReindexJobService = Depends(get_reindex_job_service)) -> dict[str, Any]:
     """Return the status of a previously submitted reindex job."""
     job = reindex_jobs.get_job(job_id)
@@ -144,7 +144,7 @@ async def get_reindex_job(job_id: str, reindex_jobs: ReindexJobService = Depends
     return ok_response(job)
 
 
-@router.get("/audit_log")
+@router.get("/audit_log", response_model=OkEnvelope[list[dict[str, Any]]])
 async def audit_log(limit: int = 100) -> dict[str, Any]:
     """Return placeholder audit entries until persistent audit storage is implemented."""
 

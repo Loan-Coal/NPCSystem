@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.pledge_service import (
     break_pledge,
     create_pledge,
@@ -63,7 +63,7 @@ class BreakPledgeRequest(BaseModel):
 router = APIRouter(prefix="/pledges", tags=["pledges"])
 
 
-@router.post("/characters/{character_id}")
+@router.post("/characters/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def create_character_pledge(
     character_id: str,
     body: CreatePledgeRequest,
@@ -92,7 +92,7 @@ async def create_character_pledge(
     return ok_response({"pledger_id": character_id, "pledgee_id": body.pledgee_id, "pledge_type": body.pledge_type})
 
 
-@router.get("/characters/{character_id}")
+@router.get("/characters/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def list_character_pledges(
     character_id: str,
     active_only: bool = True,
@@ -111,7 +111,7 @@ async def list_character_pledges(
     return ok_response({"pledges": pledges})
 
 
-@router.post("/characters/{character_id}/break")
+@router.post("/characters/{character_id}/break", response_model=OkEnvelope[dict[str, Any]])
 async def break_character_pledge(
     character_id: str,
     body: BreakPledgeRequest,

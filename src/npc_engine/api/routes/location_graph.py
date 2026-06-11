@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.location_graph_queries import (
     create_connection,
     delete_connection,
@@ -38,7 +38,7 @@ class ConnectLocationRequest(BaseModel):
     is_open: bool = Field(default=True, description="Whether the connection is passable")
 
 
-@router.post("/{from_id}/connects/{to_id}", status_code=201)
+@router.post("/{from_id}/connects/{to_id}", status_code=201, response_model=OkEnvelope[dict[str, Any]])
 async def connect_locations(
     from_id: str,
     to_id: str,
@@ -85,7 +85,7 @@ async def connect_locations(
     )
 
 
-@router.get("/{location_id}/connections")
+@router.get("/{location_id}/connections", response_model=OkEnvelope[dict[str, Any]])
 async def list_connections(
     location_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -102,7 +102,7 @@ async def list_connections(
     return ok_response({"connections": connections})
 
 
-@router.get("/{from_id}/path/{to_id}")
+@router.get("/{from_id}/path/{to_id}", response_model=OkEnvelope[dict[str, Any]])
 async def shortest_path(
     from_id: str,
     to_id: str,
@@ -126,7 +126,7 @@ async def shortest_path(
     return ok_response(path)
 
 
-@router.delete("/{from_id}/connects/{to_id}", status_code=200)
+@router.delete("/{from_id}/connects/{to_id}", status_code=200, response_model=OkEnvelope[dict[str, Any]])
 async def remove_connection(
     from_id: str,
     to_id: str,

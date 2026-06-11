@@ -27,7 +27,7 @@ from npc_engine.api.dependency_singletons import (
     get_pricing_engine,
     get_quest_lifecycle_engine,
 )
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.engines.economy.pricing_engine import PricingEngine
 from npc_engine.engines.interaction.models import InteractionProposal
 from npc_engine.engines.interaction.negotiation_store import NegotiationStore
@@ -104,7 +104,7 @@ async def _compute_center_price(
     )
 
 
-@router.post("")
+@router.post("", response_model=OkEnvelope[dict[str, Any]])
 async def post_interaction(
     body: InteractionRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -244,7 +244,7 @@ async def post_interaction(
     })
 
 
-@router.post("/band")
+@router.post("/band", response_model=OkEnvelope[dict[str, Any]])
 async def update_band(
     body: BandUpdateRequest,
     negotiation_store: NegotiationStore = Depends(get_negotiation_store),

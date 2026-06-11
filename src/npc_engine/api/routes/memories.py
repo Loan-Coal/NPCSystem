@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.dependency_singletons import get_memory_consolidation_engine
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.graph.memory_service import (
     create_memory,
@@ -94,7 +94,7 @@ router = APIRouter(prefix="/memories", tags=["memories"])
 _engine = MemoryEngine()
 
 
-@router.post("/decay")
+@router.post("/decay", response_model=OkEnvelope[dict[str, Any]])
 async def run_decay(
     body: DecayRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -111,7 +111,7 @@ async def run_decay(
     return ok_response({"decayed_count": count})
 
 
-@router.post("/from-arousal/{character_id}")
+@router.post("/from-arousal/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def seed_memory_from_arousal(
     character_id: str,
     body: CreateMemoryFromArousalRequest,
@@ -143,7 +143,7 @@ async def seed_memory_from_arousal(
     return ok_response({"memory_id": memory_id})
 
 
-@router.post("/{character_id}")
+@router.post("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def seed_memory(
     character_id: str,
     body: CreateMemoryRequest,
@@ -177,7 +177,7 @@ async def seed_memory(
     return ok_response({"memory_id": memory_id})
 
 
-@router.get("/{character_id}")
+@router.get("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def list_memories(
     character_id: str,
     k: int = 5,
@@ -196,7 +196,7 @@ async def list_memories(
     return ok_response({"memories": memories})
 
 
-@router.delete("/{memory_id}")
+@router.delete("/{memory_id}", response_model=OkEnvelope[dict[str, Any]])
 async def remove_memory(
     memory_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -213,7 +213,7 @@ async def remove_memory(
     return ok_response({"memory_id": memory_id})
 
 
-@router.post("/consolidate/{npc_id}")
+@router.post("/consolidate/{npc_id}", response_model=OkEnvelope[dict[str, Any]])
 async def consolidate_memories(
     npc_id: str,
     body: ConsolidateRequest,

@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from npc_engine.api.dependencies import get_generic_graph_service
 from npc_engine.api.graph_warning_helpers import attach_warnings_meta, emit_graph_warnings
 from npc_engine.api.pagination import resolve_offset_pagination
-from npc_engine.api.route_helpers import graph_error_to_http, ok_response, require_node
+from npc_engine.api.route_helpers import OkEnvelope, graph_error_to_http, ok_response, require_node
 from npc_engine.graph.generic_graph_service import GenericGraphService
 from npc_engine.utils.errors import NodeNotFoundError, RegistryPayloadValidationError
 
@@ -42,7 +42,7 @@ class EdgeWriteBody(BaseModel):
 router = APIRouter(prefix="/graph")
 
 
-@router.get("/nodes/{node_type}/{node_id}")
+@router.get("/nodes/{node_type}/{node_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_node(
     node_type: str,
     node_id: str,
@@ -57,7 +57,7 @@ async def get_node(
     return ok_response(node, meta=attach_warnings_meta(base_meta=None, warnings=warnings))
 
 
-@router.get("/nodes/{node_type}")
+@router.get("/nodes/{node_type}", response_model=OkEnvelope[list[dict[str, Any]]])
 async def list_nodes(
     node_type: str,
     request: Request,
@@ -90,7 +90,7 @@ async def list_nodes(
     )
 
 
-@router.post("/nodes/{node_type}")
+@router.post("/nodes/{node_type}", response_model=OkEnvelope[dict[str, Any]])
 async def upsert_node(
     node_type: str,
     body: NodeWriteBody,
@@ -108,7 +108,7 @@ async def upsert_node(
     return ok_response(node, meta=attach_warnings_meta(base_meta=None, warnings=warnings))
 
 
-@router.patch("/nodes/{node_type}/{node_id}")
+@router.patch("/nodes/{node_type}/{node_id}", response_model=OkEnvelope[dict[str, Any]])
 async def patch_node(
     node_type: str,
     node_id: str,
@@ -127,7 +127,7 @@ async def patch_node(
     return ok_response(node, meta=attach_warnings_meta(base_meta=None, warnings=warnings))
 
 
-@router.get("/edges/{edge_type}/{src_id}/{dst_id}")
+@router.get("/edges/{edge_type}/{src_id}/{dst_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_edge(
     edge_type: str,
     src_id: str,
@@ -139,7 +139,7 @@ async def get_edge(
     return ok_response(edge)
 
 
-@router.get("/edges/{edge_type}")
+@router.get("/edges/{edge_type}", response_model=OkEnvelope[list[dict[str, Any]]])
 async def list_edges(
     edge_type: str,
     limit: int | None = Query(default=None, ge=1),
@@ -171,7 +171,7 @@ async def list_edges(
     )
 
 
-@router.post("/edges/{edge_type}")
+@router.post("/edges/{edge_type}", response_model=OkEnvelope[dict[str, Any]])
 async def upsert_edge(
     edge_type: str,
     body: EdgeWriteBody,
@@ -190,7 +190,7 @@ async def upsert_edge(
     return ok_response(edge)
 
 
-@router.delete("/edges/{edge_type}/{src_id}/{dst_id}")
+@router.delete("/edges/{edge_type}/{src_id}/{dst_id}", response_model=OkEnvelope[dict[str, Any]])
 async def delete_edge(
     edge_type: str,
     src_id: str,

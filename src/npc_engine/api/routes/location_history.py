@@ -16,7 +16,7 @@ from neo4j import AsyncSession
 from fastapi import APIRouter, Depends, Query
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.location_history_service import (
     get_alibi_window_svc,
     get_location_history_svc,
@@ -26,7 +26,7 @@ from npc_engine.graph.location_history_service import (
 router = APIRouter(prefix="/location-history", tags=["location-history"])
 
 
-@router.get("/{character_id}")
+@router.get("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def list_location_history(
     character_id: str,
     limit: int = Query(default=20, ge=1, le=100),
@@ -47,7 +47,7 @@ async def list_location_history(
     return ok_response({"history": history})
 
 
-@router.get("/alibi/{character_id}")
+@router.get("/alibi/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_alibi(
     character_id: str,
     from_tick: int = Query(..., ge=0),
@@ -73,7 +73,7 @@ async def get_alibi(
     return ok_response({"alibi": records})
 
 
-@router.delete("/{character_id}/prune")
+@router.delete("/{character_id}/prune", response_model=OkEnvelope[dict[str, Any]])
 async def prune_history(
     character_id: str,
     older_than_ticks: int = Query(..., ge=0),

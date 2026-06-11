@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.item_service import (
     create_item,
     delete_item,
@@ -66,7 +66,7 @@ class TransferOwnerRequest(BaseModel):
 router = APIRouter(prefix="/items", tags=["items"])
 
 
-@router.post("/{character_id}")
+@router.post("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def create_item_for_character(
     character_id: str,
     body: CreateItemRequest,
@@ -103,7 +103,7 @@ async def create_item_for_character(
     return ok_response({"item_id": item_id})
 
 
-@router.get("/{character_id}")
+@router.get("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def list_items_for_character(
     character_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -120,7 +120,7 @@ async def list_items_for_character(
     return ok_response({"items": items})
 
 
-@router.patch("/{item_id}/owner")
+@router.patch("/{item_id}/owner", response_model=OkEnvelope[dict[str, Any]])
 async def patch_item_owner(
     item_id: str,
     body: TransferOwnerRequest,
@@ -154,7 +154,7 @@ async def patch_item_owner(
     return ok_response({"item_id": item_id})
 
 
-@router.delete("/{item_id}")
+@router.delete("/{item_id}", response_model=OkEnvelope[dict[str, Any]])
 async def remove_item(
     item_id: str,
     session: AsyncSession = Depends(get_db_session),
