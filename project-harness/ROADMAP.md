@@ -230,8 +230,14 @@ re-seeding); **EXP-32 + EXP-87 can run in parallel with KE-6** (no conflict).
   `patch("demo_game.ui.game_window.WorldStatePoller")` resolves; the 6 `TestGameWindowLayout` tests
   pass (a later refactor added the poller). Verified, no code change.
   - Exit: `make test-demo` fully green — 618 passed, 0 layout failures. ✓
-- [ ] **S22.4** Dialogue live interaction state (ISSUE-071) — inject `NegotiationStore` into `DialogueHandler.__init__` (constructor injection, consistent with existing pattern). In `_build_context_prompt`, look up any active session for `(npc_id, player_id)` before calling `build_serialized_context`; if found, prepend a single `ContextItem(key="active_negotiation", tier="tier0", pinned=True)` with the session summary. Add unit test covering the injection path and the no-active-session path.
-  - Exit: during an active barter loop, the NPC's dialogue context includes the negotiation state; `make check` green.
+- [x] **S22.4** Dialogue live interaction state (ISSUE-071) — `negotiation_store: NegotiationStore | None = None`
+  added to `DialogueHandler.__init__` (TYPE_CHECKING import; no module-level import). New pure module
+  `engines/dialogue/negotiation_context.py` builds the pinned tier0 `active_negotiation` `ContextItem`
+  and merges its summary into the serialized context JSON; `_build_dialogue_prompt` calls it via
+  `_with_active_negotiation` (no-store path unchanged). Wired in `api/dependencies.build_dialogue_handler`
+  (shared `get_negotiation_store()` singleton). Tests: `tests/unit/test_dialogue_negotiation_context.py`
+  (inject path, no-session, other-NPC, malformed-context, pinned-item).
+  - Exit: during an active barter loop the NPC's context carries the negotiation state; `make check` green. ✓
 - [ ] **S22.5** old_henryk presupposition guard (ISSUE-082) — edit `src/npc_engine/prompts/dialogue/system_v1.yaml` only (no `.py` change): strengthen Rule 9 / Rule 10 with an explicit "if the player claims you witnessed or were present at an event — deny first, then answer from your own context only" clause. Bump `PROMPT_VERSION`. Re-run the two failing cases to verify.
   - Exit: `case_adv_false_eyewitness_henryk` and `case_neg_old_henryk_no_eyewitness_claim` pass; `make check` green.
 

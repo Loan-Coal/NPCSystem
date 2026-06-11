@@ -15,9 +15,12 @@ Splitting DialogueHandler across files would harm cohesion with no meaningful ga
 Ref: DECISIONS.md (DEC-072 OCP note).
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from neo4j import AsyncSession
 from pydantic import ValidationError
@@ -53,6 +56,10 @@ from npc_engine.services.input_moderation import InputModerationService
 from npc_engine.services.output_moderation import OutputModerationService
 from npc_engine.world.time_utils import TimePoint
 from npc_engine.graph.world_state_reader import get_world_state
+from npc_engine.engines.dialogue.negotiation_context import inject_active_negotiation
+
+if TYPE_CHECKING:
+    from npc_engine.engines.interaction.negotiation_store import NegotiationStore
 
 
 _logger = logging.getLogger(__name__)
@@ -83,12 +90,12 @@ class DialogueHandler:
         self, session: AsyncSession, settings: Settings, llm_client: LLMClientProtocol,
         llm_config: LLMConfig, engine_model_config: EngineModelConfig, session_store: SessionStore,
         emotion_updater: EmotionUpdater, embedding_index: EmbeddingIndexProtocol,
-        input_moderation: InputModerationService,
-        output_moderation: OutputModerationService,
+        input_moderation: InputModerationService, output_moderation: OutputModerationService,
         effective_rating: ContentRating = "mature",
         context_cache: PartialDialogueContextCache | DialogueContextCache | None = None,
         tts_client: TTSClientProtocol | None = None,
         knowledge_engine: KnowledgeExtractionEngine | None = None,
+        negotiation_store: NegotiationStore | None = None,
     ) -> None:
         """Initialise with all engine dependencies injected.
 
@@ -98,6 +105,9 @@ class DialogueHandler:
             effective_rating: The active content ceiling; informs the system prompt (S16.3).
             knowledge_engine: Optional; persists player facts as BELIEVES nodes (EXP-53),
                 guarded by KNOWLEDGE_LEARNING_ENABLED.
+            negotiation_store: Optional; when supplied, an active barter session is
+                injected into the dialogue context so the NPC reflects live trade
+                reality (S22.4, ISSUE-071). The no-store path is unchanged.
         """
         self._session = session
         self._settings = settings
@@ -112,6 +122,7 @@ class DialogueHandler:
         self._input_moderation = input_moderation
         self._output_moderation = output_moderation
         self._effective_rating = effective_rating
+        self._negotiation_store = negotiation_store
         self._memory_engine = MemoryEngine()
         self._llm = self._build_llm_client(llm_client)
         self._system_prompt = build_system_prompt(content_rating=effective_rating)
@@ -323,4 +334,12 @@ class DialogueHandler:
             player_id=request.player_id,
             explicit_node_ids=frozenset(request.explicit_node_ids),
         )
+        serialized_context = self._with_active_negotiation(serialized_context, request)
         return build_dialogue_prompt(request=request, serialized_context=serialized_context)
+
+    def _with_active_negotiation(self, serialized_context: str, request: DialogueRequest) -> str:
+        """Merge any active barter session for this (npc, player) into the context (S22.4)."""
+        if self._negotiation_store is None:
+            return serialized_context
+        session = self._negotiation_store.get(request.player_id)
+        return inject_active_negotiation(serialized_context, session, request.npc_id)

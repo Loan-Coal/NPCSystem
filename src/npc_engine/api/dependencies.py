@@ -191,6 +191,7 @@ def build_dialogue_handler(
         effective_rating=get_settings().CONTENT_RATING,
         context_cache=get_context_cache(),
         tts_client=tts_client,
+        negotiation_store=get_negotiation_store(),
     )
 
 
