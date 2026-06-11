@@ -2,7 +2,8 @@
 Module: left_panel
 Layer: demo_game.ui
 Purpose: Left panel renderer — location bar, world-state bar, NPC list, dialogue log,
-         degradation badge, action bar, and input box.
+         degradation badge, action bar, and input box. Includes PART_OF breadcrumb
+         helpers (EXP-221) rendered below the location title.
 Dependencies: pygame, demo_game.constants, demo_game.ui.widgets, demo_game.ui.action_bar
 Used by: demo_game.ui.game_window
 
@@ -11,6 +12,9 @@ scatter rendering logic across files with no encapsulation gain. See DEC-036.
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import pygame
 
@@ -56,6 +60,50 @@ EXPRESSION_GLYPHS: dict[str, str] = {
 }
 
 _NEUTRAL_GLYPH: str = EXPRESSION_GLYPHS["neutral"]
+
+# Separator rendered between breadcrumb segments.
+_BREADCRUMB_SEP: str = " ▸ "
+
+# Guard against malformed PART_OF cycles in the graph.
+_BREADCRUMB_MAX_DEPTH: int = 10
+
+
+def build_location_breadcrumb(
+    location_id: str,
+    get_edges: Callable[..., list[dict]],
+) -> str:
+    """Walk PART_OF edges upward from location_id and return a breadcrumb string.
+
+    Queries PART_OF edges using the provided callable (mirrors
+    ``EngineClient.get_graph_edges``). Degrades gracefully when no parent exists —
+    returns the bare location_id. A cycle guard caps traversal at
+    ``_BREADCRUMB_MAX_DEPTH`` hops to prevent infinite loops on malformed graphs.
+
+    Args:
+        location_id: Starting Location node ID.
+        get_edges: Callable matching ``client.get_graph_edges(edge_type, src_id=...)``
+                   signature — returns a list of edge dicts each with a ``dst_id`` key.
+
+    Returns:
+        Breadcrumb string, e.g. ``"tavern ▸ market_district ▸ kingsport"``, or just
+        ``"tavern"`` when no PART_OF parent exists.
+    """
+    segments: list[str] = [location_id]
+    visited: set[str] = {location_id}
+    current = location_id
+
+    for _ in range(_BREADCRUMB_MAX_DEPTH):
+        edges = get_edges("PART_OF", src_id=current)
+        if not edges:
+            break
+        parent_id: str = edges[0].get("dst_id", "")
+        if not parent_id or parent_id in visited:
+            break
+        segments.append(parent_id)
+        visited.add(parent_id)
+        current = parent_id
+
+    return _BREADCRUMB_SEP.join(segments)
 
 
 class LeftPanelRenderer:
@@ -294,6 +342,29 @@ class LeftPanelRenderer:
         name = LOCATION_DISPLAY_NAMES.get(self._active_location_id, self._active_location_id)
         txt = self._font_loc.render(name, True, PALETTE["white"])
         screen.blit(txt, (rect.x + 12, rect.centery - txt.get_height() // 2))
+
+    def _draw_location_breadcrumb(
+        self,
+        screen: pygame.Surface,
+        rect: pygame.Rect,
+        breadcrumb: str,
+    ) -> None:
+        """Render the PART_OF breadcrumb string in the lower portion of the location bar.
+
+        Draws a small label below the location title using ``_font_label``.
+        When the breadcrumb is just the bare location name (no parents) the call
+        is a no-op — the location title already shows the name.
+
+        Args:
+            screen: Target surface.
+            rect: Bounding rect for the location bar area.
+            breadcrumb: Pre-built breadcrumb string from ``build_location_breadcrumb``.
+        """
+        if _BREADCRUMB_SEP not in breadcrumb:
+            return
+        txt = self._font_label.render(breadcrumb, True, PALETTE.get("grey", (150, 150, 150)))
+        y = rect.bottom - txt.get_height() - 4
+        screen.blit(txt, (rect.x + 12, y))
 
     @staticmethod
     def _build_gradient(
