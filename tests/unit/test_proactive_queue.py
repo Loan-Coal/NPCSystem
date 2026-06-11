@@ -13,8 +13,8 @@ import asyncio
 
 import pytest
 
-from src.npc_engine.engines.proactive_dialogue.models import ProactiveLine
-from src.npc_engine.engines.proactive_dialogue.proactive_queue import ProactiveQueue
+from npc_engine.engines.proactive_dialogue.models import ProactiveLine
+from npc_engine.engines.proactive_dialogue.proactive_queue import ProactiveQueue
 
 
 def _make_line(npc_id: str = "npc_a", tick: int = 1) -> ProactiveLine:

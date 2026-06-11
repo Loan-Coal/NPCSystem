@@ -490,6 +490,13 @@ async def _maybe_append_top_need(session: AsyncSession, npc_id: str, tier_b_raw:
     return [*tier_b_raw, need_item]
 
 
+async def _maybe_append_player_memory(session: AsyncSession, npc_id: str, player_id, game_time, tier_a_raw: list) -> None:
+    """Append the player-scoped memory item to tier_a_raw when the NPC holds such memories."""
+    item = await _fetch_player_memory_item(session, npc_id, player_id, game_time)
+    if item is not None:
+        tier_a_raw.append(item)
+
+
 async def build_serialized_context(
     session: AsyncSession, settings: Settings, llm_config: LLMConfig, embedding_index: EmbeddingIndexProtocol,
     npc_id: str, player_message: str, session_turns: list[str], emotion_state: dict | None = None,
@@ -516,9 +523,7 @@ async def build_serialized_context(
     tier0 = _build_tier0_items(world_state, emotion_snapshot)
     tier_a_raw = _build_tier_a_base(npc_id, character_bundle, events, location_id, location_context, group_memberships, believed_rumors, traits, active_pledges, session_turns)
     tier_a_raw.extend(_build_tier_a_extended(player_id, reputation_items, active_quest, player_relation_edge, memories, beliefs, goals, owned_items, secrets, obligations, second_hop_events, settings, npc_id, current_game_time))
-    player_mem_item = await _fetch_player_memory_item(session, npc_id, player_id, current_game_time)
-    if player_mem_item is not None:
-        tier_a_raw.append(player_mem_item)
+    await _maybe_append_player_memory(session, npc_id, player_id, current_game_time, tier_a_raw)
     tier_b_raw, tier_c_raw, vector_scores = _build_tier_b_c_items(tier_b_results)
     tier_b_raw = await _maybe_append_top_need(session, npc_id, tier_b_raw)
     event_key_trust = _build_event_trust_map(events, trust_scores, npc_id)

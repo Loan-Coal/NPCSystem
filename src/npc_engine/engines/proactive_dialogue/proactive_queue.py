@@ -24,7 +24,7 @@ from __future__ import annotations
 import asyncio
 from collections import defaultdict
 
-from src.npc_engine.engines.proactive_dialogue.models import ProactiveLine
+from npc_engine.engines.proactive_dialogue.models import ProactiveLine
 
 # Maximum lines held per recipient before older lines are silently dropped.
 # Prevents unbounded growth when no WS connection is draining the queue.

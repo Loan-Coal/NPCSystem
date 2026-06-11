@@ -280,7 +280,7 @@ async def test_memory_engine_emotional_charge_formula_at_threshold():
     session = _make_session()
     captured: list[dict] = []
 
-    async def _capture(sess, *, character_id, content, vividness, emotional_charge, game_time):
+    async def _capture(sess, *, character_id, content, vividness, emotional_charge, game_time, subject_player_id=None, **_kwargs):
         captured.append({"emotional_charge": emotional_charge})
         return "ec-check-id"
 
@@ -336,7 +336,7 @@ async def test_memory_engine_clamps_emotional_charge_to_100():
     session = _make_session()
     captured_kwargs: list[dict] = []
 
-    async def _capture_create(sess, *, character_id, content, vividness, emotional_charge, game_time):
+    async def _capture_create(sess, *, character_id, content, vividness, emotional_charge, game_time, subject_player_id=None, **_kwargs):
         captured_kwargs.append({"emotional_charge": emotional_charge})
         return "some-id"
 
