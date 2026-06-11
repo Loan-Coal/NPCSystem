@@ -48,8 +48,14 @@ _The orchestrator maintains this: add a line when an item unlocks a later one; d
 - **EXP-204 seam:** `get_needs_for_character` is now called in `context_builder.build_serialized_context`
   via `_maybe_append_top_need`; any new test exercising that builder must mock
   `context_builder.get_needs_for_character`. `ensure_relation_edge` now exists in `graph_writer.py` (EXP-203).
-- **NEXT BATCH:** EXP-205, EXP-207, EXP-202 (Phase A remainder — conflict-free). Then Phase B EXP-208.
-  EXP-207 & EXP-221 both edit left_panel.py (different batches); EXP-205 & EXP-222 both edit run.py.
+- **PHASE A COMPLETE** (EXP-201/202/203/204/205/206/207 all ✅). New seams: `prompt_builder_standing.py`
+  (`build_standing_line`), `demo_game/proactive_dialogue_beat.py` (ACT-11 pattern), `EXPRESSION_GLYPHS`
+  in left_panel. Deferred follow-ups: EXP-201 slice-2 wiring, EXP-202 secret-gate slice-2, EXP-207 live
+  `set_facial_expression` wiring.
+- **NEXT BATCH:** Phase B = EXP-208 (single demo item — retrieval-explainer panel). Then **Phase C**
+  needs schema: orchestrator applies DEC-097 (memory.yaml fields) + DEC-098 (proactive queue) BEFORE
+  dispatching EXP-209/210/211/212; EXP-211 + EXP-212 share memory.yaml/memory_engine/context_builder →
+  ONE worker.
 
 ## Mapping & reconciliation (analysis id → execution id)
 
@@ -97,12 +103,12 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 
 ### Phase A — Make it visible (no schema)
 - [x] **EXP-201** relationship affinity phase engine (slice 1: derive_phase + writer, new files) · S · DONE a397661 · slice-2 wiring (call `write_relationship_phase` after relation mutation in `dialogue_handler.py`) deferred — see carry-forward
-- [ ] **EXP-202** standing → dialogue tone + secret-share gate · M · deps: EXP-201 (soft) · edits `engines/gossip/knowledge_propagator.py`, `engines/dialogue/prompt_builder.py`, `prompts/dialogue/system_v1.yaml`
+- [x] **EXP-202** standing → dialogue tone (slice 1) · M · DONE 0ad8c02 · STANDING line via new `prompt_builder_standing.py` + system_v1 Rule 16; secret-share gate (gossip) = slice 2 deferred
 - [x] **EXP-203** relation-delta first-contact fix · S · DONE f511d42 · `ensure_relation_edge` added to `graph_writer.py`
 - [x] **EXP-204** need/mood → dialogue context (DEC-099) · S · DONE e0ec882 · slice 1 = needs (top unmet → Tier-B); mood slice 2 deferred
-- [ ] **EXP-205** proactive act in scripted runner (demo) · S · deps: none · new beat in `demo_game/run_scenes.py`; edit `demo_game/run.py` ⚠conflict(run.py: EXP-222)
+- [x] **EXP-205** proactive act in scripted runner (demo) · S · DONE 6007e04 · new `demo_game/proactive_dialogue_beat.py` (ACT 11) + run.py; uses `client.get_pending_intents`. (run.py still ⚠conflict EXP-222)
 - [x] **EXP-206** temporal memory readout (demo) · S · DONE 62975ea · memory_panel renders occurred_at + historical marker
-- [ ] **EXP-207** facial-expression glyph (demo) · S · deps: none · edit `demo_game/ui/left_panel.py` ⚠conflict(left_panel.py: EXP-221)
+- [x] **EXP-207** facial-expression glyph (demo) · S · DONE ff126b4 · `EXPRESSION_GLYPHS` + glyph in left_panel; live wiring (`game_window.set_facial_expression`) is a follow-up. (left_panel still ⚠conflict EXP-221)
 
 ### Phase B — Prove the moat
 - [ ] **EXP-208** retrieval-explainer panel (demo) · M · deps: none · new `demo_game/ui/retrieval_panel.py` + `EngineClient.get_retrieval_debug()` + `RightPanel.RETRIEVAL` tab
@@ -137,9 +143,9 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 
 ## Next candidate batch (suggested)
 
-**LAST BATCH (cycle 2):** EXP-203 ✅ · EXP-204 ✅ · EXP-206 ✅ — integrated (f511d42/e0ec882/62975ea +
-fix 86fd746), gate green (1978 passed, 85.76%; demo 625). Merge-first worked: all 3 cherry-picked clean.
-**NEXT:** EXP-205 · EXP-207 · EXP-202 (Phase A remainder, conflict-free). Then Phase B EXP-208.
+**LAST BATCH (cycle 3):** EXP-202 ✅ · EXP-205 ✅ · EXP-207 ✅ — integrated (0ad8c02/6007e04/ff126b4 +
+fix 32adae2), gate green (make check 1985, demo 644). **Phase A COMPLETE.**
+**NEXT:** Phase B = EXP-208 (retrieval-explainer panel, demo, solo). Then Phase C (apply DEC-097/098 schema first).
 **All workers must `git merge munich-demo` before building.**
 
 ---

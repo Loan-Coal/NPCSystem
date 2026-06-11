@@ -94,10 +94,11 @@ automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** A
-- **Next batch to run:** EXP-205 · EXP-207 · EXP-202 (Phase A remainder, no schema) — workers MUST
-  merge munich-demo first. Then Phase B EXP-208.
-- **Then:** Phase C (apply DEC-097/098) → D (DEC-100/101) → E (DEC-102/103/104).
-- **Last green commit:** 86fd746 (EXP-203/204/206 integrated, gate green).
+- **Phase in progress:** B (Phase A COMPLETE: EXP-201/202/203/204/205/206/207)
+- **Next batch to run:** EXP-208 (Phase B, demo, solo — retrieval-explainer panel). Workers merge munich-demo first.
+- **Then:** Phase C — orchestrator applies DEC-097 (memory.yaml fields) + DEC-098 (proactive queue)
+  BEFORE dispatching EXP-209/210/211/212 (EXP-211+212 = one worker, shared files) → D (DEC-100/101) → E (DEC-102/103/104).
+- **Last green commit:** 32adae2 (EXP-202/205/207 integrated, gate green).
 
 ## Progress Log
 
@@ -117,3 +118,9 @@ automatically; do not poll.
   files — exactly 3 such files exist, all now patched). Final fix 86fd746. Green: 1978 passed, 22 skipped,
   85.76% cov; demo 625 passed. Learning: a new graph call in a shared builder must be mocked in EVERY
   test file that drives it (grep the call site before gating).
+- **3 · 2026-06-11 cycle 3** — Batch EXP-202/205/207 (merge-first). **All 3 ✅** (0ad8c02/6007e04/ff126b4),
+  cherry-picked clean. Gate: EXP-202 tipped `prompt_builder.py` over 300 lines (R001) + `build_dialogue_prompt`
+  over 40 (R006) → split `build_standing_line` into new `prompt_builder_standing.py` (engine module needs
+  `Does NOT:`/`Dependencies injected:` docstring lines — conformance test caught it) + compressed a comment.
+  Fix 32adae2. Green: make check 1985, demo 644. **PHASE A COMPLETE (7/7).** Learning: adding a function to a
+  near-300-line file tips R001+R006 together — prefer a sibling-module split over a waiver for engine files.

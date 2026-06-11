@@ -33,12 +33,12 @@ analysis, reconciled against code (10 re-proposed items were already built and d
 - **Effort:** ~1 session · **Leverages:** relationship/reputation engines (wired), parsed-but-unrendered demo data.
 - **Constraints:** demo is a pure REST/WS client (zero `src/` imports); no graph schema change.
 - [x] **EXP-201** relationship affinity phase engine (slice 1: `derive_phase` + `relation_phase_writer`, new files; unit tests green, a397661). Slice-2 call-site wiring in `dialogue_handler.py` deferred.
-- [ ] **EXP-202** standing → dialogue tone + secret-share gate. Exit: dialogue prompt reflects Standing; gate test green.
+- [x] **EXP-202** standing → dialogue tone (slice 1; 0ad8c02). STANDING line in prompt + system_v1 tone rule; secret-share gate = slice 2 deferred.
 - [x] **EXP-203** relation-delta first-contact fix (creates edge instead of swallowing error; f511d42). first-contact delta persists; regression test green.
 - [x] **EXP-204** need fed into dialogue context (slice 1; DEC-099; e0ec882). Top unmet need surfaces as optional Tier-B item; mood slice 2 deferred.
-- [ ] **EXP-205** proactive dialogue act in scripted runner (demo). Exit: ACT-11 NPC-initiated beat plays.
+- [x] **EXP-205** proactive dialogue act in scripted runner (demo; 6007e04). ACT-11 NPC-initiated beat plays.
 - [x] **EXP-206** temporal memory readout (demo; 62975ea). Memory panel shows occurred_at + historical marker.
-- [ ] **EXP-207** facial-expression glyph rendering (demo). Exit: portrait zone renders glyph from parsed field.
+- [x] **EXP-207** facial-expression glyph rendering (demo; ff126b4). Portrait zone renders glyph; live wiring is a follow-up.
 
 ### Phase B — "Prove the moat"
 - **Goal:** surface the (already-built) anti-hallucination + retrieval evals to the buyer.
