@@ -49,11 +49,11 @@ def _make_renderer():
 # ---------------------------------------------------------------------------
 
 
-def test_right_panel_enum_has_fifteen_values() -> None:
+def test_right_panel_enum_has_sixteen_values() -> None:
     from demo_game.ui.right_panel import RightPanel
 
     panels = list(RightPanel)
-    assert len(panels) == 15
+    assert len(panels) == 16  # EXP-220 added FACTION tab
 
 
 def test_right_panel_enum_values() -> None:

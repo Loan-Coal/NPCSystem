@@ -3,8 +3,8 @@ Module: right_panel
 Layer: demo_game.ui
 Purpose: Right panel renderer — cycles GRAPH → KNOWLEDGE → PLAYER STATUS → CHAIN →
          TRADE → INVENTORY → ACTIONS → INSPECT → WORLD → EMOTION → NEEDS → GOALS
-         → POLITICS → MEMORY → RETRIEVAL via Tab. Owns all panel widgets; reads the
-         pre-rendered graph surface from GraphPoller.
+         → POLITICS → MEMORY → RETRIEVAL → FACTION via Tab. Owns all panel widgets;
+         reads the pre-rendered graph surface from GraphPoller.
 Does NOT: make HTTP calls or hold business logic.
 Dependencies injected: None (pure rendering + callback registration).
 Dependencies: pygame, demo_game.graph_panel.poller, demo_game.ui.knowledge_sidebar,
@@ -13,10 +13,11 @@ Dependencies: pygame, demo_game.graph_panel.poller, demo_game.ui.knowledge_sideb
               demo_game.ui.world_panel, demo_game.ui.emotion_panel,
               demo_game.ui.needs_panel, demo_game.ui.goals_panel,
               demo_game.ui.politics_panel, demo_game.ui.memory_panel,
-              demo_game.ui.retrieval_panel, demo_game.game_end_checker
+              demo_game.ui.retrieval_panel, demo_game.ui.faction_board,
+              demo_game.game_end_checker
 Used by: demo_game.ui.game_window
 
-NOTE: ~440 lines — accepted over the 300-line limit (see DEC-047). Single cohesive
+NOTE: ~460 lines — accepted over the 300-line limit (see DEC-047). Single cohesive
 class; overage grows with each new panel tab. Split trigger: second overlay
 workflow of this kind or total > 500 lines.
 """
@@ -37,6 +38,7 @@ from demo_game.ui.emotion_panel import EmotionPanelWidget
 from demo_game.ui.goals_panel import GoalsPanelWidget
 from demo_game.ui.gossip_chain import GossipChainWidget
 from demo_game.ui.memory_panel import MemoryPanelWidget
+from demo_game.ui.faction_board import FactionBoardWidget
 from demo_game.ui.retrieval_panel import RetrievalPanelWidget
 from demo_game.ui.politics_panel import PoliticsPanelWidget
 from demo_game.ui.inspect_panel import InspectPanelWidget
@@ -74,6 +76,7 @@ class RightPanel(enum.Enum):
     POLITICS = "POLITICS"
     MEMORY = "MEMORY"
     RETRIEVAL = "RETRIEVAL"
+    FACTION = "FACTION"
 
 
 class RightPanelRenderer:
@@ -113,6 +116,7 @@ class RightPanelRenderer:
         self._politics_panel = PoliticsPanelWidget(font_body, font_label)
         self._memory_panel = MemoryPanelWidget(font_body, font_label)
         self._retrieval_panel = RetrievalPanelWidget(font_body, font_label)
+        self._faction_board = FactionBoardWidget(font_body, font_label)
         self._active: RightPanel = RightPanel.GRAPH
 
     # ------------------------------------------------------------------
@@ -336,6 +340,20 @@ class RightPanelRenderer:
         """True when the RETRIEVAL tab is active."""
         return self._active == RightPanel.RETRIEVAL
 
+    def set_faction_standings(self, standings: list[dict] | None) -> None:
+        """Push fresh faction standing data into the FACTION panel widget.
+
+        Args:
+            standings: List of dicts from EngineClient.get_faction_standings(),
+                       or None to clear.
+        """
+        self._faction_board.set_standings(standings)
+
+    @property
+    def show_faction_board(self) -> bool:
+        """True when the FACTION tab is active."""
+        return self._active == RightPanel.FACTION
+
     def set_consolidate_memory_callback(self, cb: Callable[[], None]) -> None:
         """Register the callback fired when [Consolidate Memory] is clicked."""
         self._actions_panel.set_consolidate_memory_callback(cb)
@@ -437,6 +455,8 @@ class RightPanelRenderer:
             self._memory_panel.draw(screen, content_rect)
         elif self._active == RightPanel.RETRIEVAL:
             self._retrieval_panel.draw(screen, content_rect)
+        elif self._active == RightPanel.FACTION:
+            self._faction_board.draw(screen, content_rect)
         else:
             self._draw_graph(screen, rect)
 

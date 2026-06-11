@@ -1535,6 +1535,59 @@ class EngineClient:
         return resp.json()
 
     # ------------------------------------------------------------------
+    # Factions
+    # ------------------------------------------------------------------
+
+    def get_faction_standings(self) -> list[dict] | None:
+        """Return all faction nodes with their inter-faction standings.
+
+        Calls GET /v1/admin/factions/ to list all factions, then collects
+        standing records from each faction's /standings sub-resource.
+        Returns None on any non-2xx response from the factions list call;
+        per-faction standing failures are silently skipped.
+
+        Returns:
+            List of dicts, each with faction_id, faction_name, and a
+            ``standings`` list of directed standing dicts (src_id, dst_id,
+            standing). Returns None when the factions endpoint is unavailable.
+        """
+        resp = self._client.get("/v1/admin/factions/", timeout=self._graph_timeout)
+        if resp.status_code >= 400:
+            return None
+        factions: list[dict] = resp.json().get("data") or []
+        if not factions:
+            return []
+        result: list[dict] = []
+        for faction in factions:
+            faction_id = str(faction.get("id") or "")
+            faction_name = str(faction.get("name") or faction_id)
+            standings = self._get_faction_standings_for(faction_id)
+            result.append({
+                "faction_id": faction_id,
+                "faction_name": faction_name,
+                "standings": standings,
+            })
+        return result
+
+    def _get_faction_standings_for(self, faction_id: str) -> list[dict]:
+        """Fetch directed standings outbound from one faction. Returns [] on error.
+
+        Args:
+            faction_id: Faction node ID.
+
+        Returns:
+            List of standing dicts with src_id, dst_id, and standing keys.
+            Returns an empty list when the endpoint returns a non-2xx status.
+        """
+        resp = self._client.get(
+            f"/v1/admin/factions/{faction_id}/standings",
+            timeout=self._graph_timeout,
+        )
+        if resp.status_code >= 400:
+            return []
+        return resp.json().get("data") or []
+
+    # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
