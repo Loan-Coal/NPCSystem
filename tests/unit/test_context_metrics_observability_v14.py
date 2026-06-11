@@ -137,6 +137,11 @@ async def test_context_builder_emits_tier_item_and_token_metrics(monkeypatch) ->
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_second_hop_events", fake_second_hop)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_active_quest_for_player", fake_active_quest)
 
+    async def fake_needs(session, character_id):
+        return []
+
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_needs_for_character", fake_needs)
+
     settings = Settings(API_KEY_SECRET="npc_dev_secret_2026_alpha")
 
     await build_serialized_context(

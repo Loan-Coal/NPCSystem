@@ -442,6 +442,20 @@ def _rank_and_serialize_tiers(
 # Public API
 # ---------------------------------------------------------------------------
 
+_TOP_NEED_TIER_B_PRIORITY = 55
+
+
+async def _maybe_append_top_need(session: AsyncSession, npc_id: str, tier_b_raw: list) -> list:
+    """Return tier_b_raw with the NPC's top unmet need appended as an optional Tier-B item, if any."""
+    top_need = await _fetch_top_unmet_need(session=session, npc_id=npc_id)
+    if top_need is None:
+        return tier_b_raw
+    need_item = ContextItem(
+        key="top_need", text=top_need.model_dump_json(), tier="tierB", priority=_TOP_NEED_TIER_B_PRIORITY,
+    )
+    return [*tier_b_raw, need_item]
+
+
 async def build_serialized_context(
     session: AsyncSession, settings: Settings, llm_config: LLMConfig, embedding_index: EmbeddingIndexProtocol,
     npc_id: str, player_message: str, session_turns: list[str], emotion_state: dict | None = None,
@@ -450,10 +464,7 @@ async def build_serialized_context(
     session_id: str | None = None, skip_rag: bool = False, player_id: str | None = None,
     weight_profile: str | None = None, explicit_node_ids: frozenset[str] = frozenset(),
 ) -> str:
-    """Build the final serialized prompt context string for one dialogue turn.
-
-    Raises: ValueError if RAG_TOP_K is not greater than 0.
-    """
+    """Build the final serialized prompt context string for one dialogue turn (raises ValueError if RAG_TOP_K <= 0)."""
     if settings.RAG_TOP_K <= 0:
         raise ValueError("RAG_TOP_K must be greater than 0")
     character_bundle, world_state, known_event_ids = await _fetch_base_graph_data(session, npc_id)
@@ -472,17 +483,7 @@ async def build_serialized_context(
     tier_a_raw = _build_tier_a_base(npc_id, character_bundle, events, location_id, location_context, group_memberships, believed_rumors, traits, active_pledges, session_turns)
     tier_a_raw.extend(_build_tier_a_extended(player_id, reputation_items, active_quest, player_relation_edge, memories, beliefs, goals, owned_items, secrets, obligations, second_hop_events, settings, npc_id, current_game_time))
     tier_b_raw, tier_c_raw, vector_scores = _build_tier_b_c_items(tier_b_results)
-    top_need = await _fetch_top_unmet_need(session=session, npc_id=npc_id)
-    if top_need is not None:
-        tier_b_raw = [
-            *tier_b_raw,
-            ContextItem(
-                key="top_need",
-                text=top_need.model_dump_json(),
-                tier="tierB",
-                priority=55,
-            ),
-        ]
+    tier_b_raw = await _maybe_append_top_need(session, npc_id, tier_b_raw)
     event_key_trust = _build_event_trust_map(events, trust_scores, npc_id)
     serialized = _rank_and_serialize_tiers(
         tier0=tier0, tier_a_raw=tier_a_raw, tier_b_raw=tier_b_raw, tier_c_raw=tier_c_raw,

@@ -143,6 +143,11 @@ def _patch_graph_calls(monkeypatch) -> None:
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_second_hop_events", fake_second_hop)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_active_quest_for_player", fake_active_quest)
 
+    async def fake_needs(session, character_id):
+        return []
+
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_needs_for_character", fake_needs)
+
 
 class FakeEmbeddingIndex:
     """Minimal fake embedding index — returns empty results."""
