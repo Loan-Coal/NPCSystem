@@ -43,7 +43,7 @@ analysis, reconciled against code (10 re-proposed items were already built and d
 ### Phase B — "Prove the moat"
 - **Goal:** surface the (already-built) anti-hallucination + retrieval evals to the buyer.
 - **Effort:** ~0.5 session · **Notes:** EXP-31/32 eval runners already shipped; only the demo panel remains.
-- [ ] **EXP-208** retrieval-explainer panel (demo) — wraps live `GET /admin/debug/retrieval`. Exit: RETRIEVAL tab shows why each line was grounded.
+- [x] **EXP-208** retrieval-explainer panel (demo; 1caaa04). RETRIEVAL tab renders retrieved items; live poller wiring is a follow-up.
 
 ### Phase C — "Close the agentic loop" (schema: DEC-097/098)
 - **Goal:** NPCs act on their own state and reach the player; memory becomes player-scoped + decaying.

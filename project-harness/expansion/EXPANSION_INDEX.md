@@ -52,10 +52,14 @@ _The orchestrator maintains this: add a line when an item unlocks a later one; d
   (`build_standing_line`), `demo_game/proactive_dialogue_beat.py` (ACT-11 pattern), `EXPRESSION_GLYPHS`
   in left_panel. Deferred follow-ups: EXP-201 slice-2 wiring, EXP-202 secret-gate slice-2, EXP-207 live
   `set_facial_expression` wiring.
-- **NEXT BATCH:** Phase B = EXP-208 (single demo item — retrieval-explainer panel). Then **Phase C**
-  needs schema: orchestrator applies DEC-097 (memory.yaml fields) + DEC-098 (proactive queue) BEFORE
-  dispatching EXP-209/210/211/212; EXP-211 + EXP-212 share memory.yaml/memory_engine/context_builder →
-  ONE worker.
+- **PHASE B COMPLETE** (EXP-208 ✅). New seam: `RightPanel.RETRIEVAL` + `get_retrieval_debug` (demo).
+- **NEXT BATCH (Phase C):** BEFORE dispatch, orchestrator applies **DEC-097** — add `subject_player_id`
+  (str?), `recall_count` (int=0), `never_forget` (bool=false) to `memory.yaml`; add
+  `MEMORY_FORGET_THRESHOLD` to config.py; commit + gate green. THEN dispatch 3 workers:
+  [EXP-209 trigger_router (new)], [EXP-210 proactive_queue (new) + dialogue_ws edit, DEC-098 pattern],
+  [EXP-211+212 ONE worker — memory_engine + context_builder + the new memory fields]. EXP-211+212 add a
+  new graph/memory call → mock it in every context test file (test_context_builder, _player_relation,
+  _context_metrics_observability_v14).
 
 ## Mapping & reconciliation (analysis id → execution id)
 
@@ -111,7 +115,7 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 - [x] **EXP-207** facial-expression glyph (demo) · S · DONE ff126b4 · `EXPRESSION_GLYPHS` + glyph in left_panel; live wiring (`game_window.set_facial_expression`) is a follow-up. (left_panel still ⚠conflict EXP-221)
 
 ### Phase B — Prove the moat
-- [ ] **EXP-208** retrieval-explainer panel (demo) · M · deps: none · new `demo_game/ui/retrieval_panel.py` + `EngineClient.get_retrieval_debug()` + `RightPanel.RETRIEVAL` tab
+- [x] **EXP-208** retrieval-explainer panel (demo) · M · DONE 1caaa04 · `RetrievalPanelWidget` + `get_retrieval_debug` + `RightPanel.RETRIEVAL`; game_window poller auto-refresh is a follow-up
 
 ### Phase C — Close the agentic loop (🔶 DEC-097/098)
 - [ ] **EXP-209** unified proactive-trigger surface · M · deps: none · new `engines/proactive_dialogue/trigger_router.py`
@@ -143,9 +147,9 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 
 ## Next candidate batch (suggested)
 
-**LAST BATCH (cycle 3):** EXP-202 ✅ · EXP-205 ✅ · EXP-207 ✅ — integrated (0ad8c02/6007e04/ff126b4 +
-fix 32adae2), gate green (make check 1985, demo 644). **Phase A COMPLETE.**
-**NEXT:** Phase B = EXP-208 (retrieval-explainer panel, demo, solo). Then Phase C (apply DEC-097/098 schema first).
+**LAST BATCH (cycle 4):** EXP-208 ✅ — integrated 859166f (1caaa04), clean one-shot (no fix needed).
+Gate green (make check 1985, demo 661). **Phase B COMPLETE.**
+**NEXT (Phase C):** apply DEC-097 memory.yaml schema FIRST, then EXP-209 · EXP-210 · EXP-211+212(one worker).
 **All workers must `git merge munich-demo` before building.**
 
 ---

@@ -94,11 +94,12 @@ automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** A
-- **Phase in progress:** B (Phase A COMPLETE: EXP-201/202/203/204/205/206/207)
-- **Next batch to run:** EXP-208 (Phase B, demo, solo — retrieval-explainer panel). Workers merge munich-demo first.
-- **Then:** Phase C — orchestrator applies DEC-097 (memory.yaml fields) + DEC-098 (proactive queue)
-  BEFORE dispatching EXP-209/210/211/212 (EXP-211+212 = one worker, shared files) → D (DEC-100/101) → E (DEC-102/103/104).
-- **Last green commit:** 32adae2 (EXP-202/205/207 integrated, gate green).
+- **Phase in progress:** C (Phases A+B COMPLETE: EXP-201..208)
+- **Next batch to run (Phase C):** FIRST apply DEC-097 schema to `memory.yaml` (`subject_player_id`,
+  `recall_count`=0, `never_forget`=false) + `MEMORY_FORGET_THRESHOLD` const, commit + gate green. THEN
+  dispatch [EXP-209], [EXP-210 (DEC-098 queue pattern)], [EXP-211+212 ONE worker]. Workers merge munich-demo first.
+- **Then:** D (DEC-100/101) → E (DEC-102/103/104).
+- **Last green commit:** 859166f (EXP-208 integrated, gate green).
 
 ## Progress Log
 
@@ -124,3 +125,7 @@ automatically; do not poll.
   `Does NOT:`/`Dependencies injected:` docstring lines — conformance test caught it) + compressed a comment.
   Fix 32adae2. Green: make check 1985, demo 644. **PHASE A COMPLETE (7/7).** Learning: adding a function to a
   near-300-line file tips R001+R006 together — prefer a sibling-module split over a waiver for engine files.
+- **4 · 2026-06-11 cycle 4** — Batch EXP-208 (solo, demo, merge-first). **✅** clean one-shot (1caaa04,
+  integrated 859166f) — NO integration fix needed (first such cycle). Gate green: make check 1985, demo 661.
+  **PHASE B COMPLETE.** Next is Phase C (first schema-touching phase): orchestrator applies DEC-097 memory
+  fields before dispatch.
