@@ -156,18 +156,20 @@ class QuestChainResolver:
                 extra={"quest_id": quest_id, "choice_id": choice_id, "player_id": player_id},
             )
             return None
+        return await self._offer_choice_successor(
+            session=session, quest_id=quest_id, player_id=player_id,
+            choice_id=choice_id, next_quest_id=next_quest_id,
+        )
+
+    async def _offer_choice_successor(
+        self, *, session: AsyncSession, quest_id: str, player_id: str, choice_id: str, next_quest_id: str,
+    ) -> str:
+        """Offer the chosen successor quest and log the resolution."""
         await self._offer_service.offer_quest(
-            session=session,
-            next_quest_id=next_quest_id,
-            player_id=player_id,
+            session=session, next_quest_id=next_quest_id, player_id=player_id,
         )
         _logger.info(
             "quest_choice_resolved",
-            extra={
-                "quest_id": quest_id,
-                "choice_id": choice_id,
-                "next_quest_id": next_quest_id,
-                "player_id": player_id,
-            },
+            extra={"quest_id": quest_id, "choice_id": choice_id, "next_quest_id": next_quest_id, "player_id": player_id},
         )
         return next_quest_id
