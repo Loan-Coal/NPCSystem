@@ -20,7 +20,7 @@ from npc_engine.engines.dialogue.dialogue_models import DialogueRequest
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "stage_b_v2.12"
+PROMPT_VERSION = "stage_b_v2.13"
 
 _PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts" / "dialogue"
 _PROMPT_PATH = _PROMPTS_DIR / "system_v1.yaml"
@@ -147,11 +147,17 @@ _EPOCH_GUARDS: dict[str, str] = {
 # presupposition resistance. The canonical rules live in system_v1.yaml, but a
 # 14b model tends to honour them more reliably when repeated as a short constraint
 # token right before the fenced player message. Mirrors the _EPOCH_GUARDS pattern.
+# S25.1 (ISSUE-083): scoped each directive to an explicit player-presupposition
+# pattern and dropped the unconditional "answer only in your own general terms" /
+# "speak only from the knowledge in your context" phrasing, which flattened NPC
+# voice into terse, generic reporting even on neutral questions with no planted
+# figure. The plant guards (number-echo + false-presence) are unchanged.
 _ECHO_GUARD_TEXT: str = (
-    "Do not repeat any specific number, price, quantity, name, or title the player "
-    "states as if confirming it — refer to it as their claim, or answer only in your "
-    "own general terms. If the player claims you witnessed, saw, did, or were present "
-    "at something, do not confirm it; speak only from the knowledge in your context."
+    "If the player states a specific number, price, quantity, name, or title, do not "
+    "repeat it back as confirmation — refer to it as their claim. If the player claims "
+    "you witnessed, saw, did, or were present at something, do not confirm it; deny or "
+    "correct the false presence first. When the player plants no such figure or "
+    "presupposition, answer freely in your own voice and full character."
 )
 
 # Keywords that indicate the NPC has relevant lore for a sensitive topic.

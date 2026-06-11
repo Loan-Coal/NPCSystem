@@ -156,6 +156,15 @@ nudging NPCs toward terse, factual reporting at the cost of voice colour; could 
 **To fix:** Confirm whether ECHO_GUARD is the cause (A/B a couple of runs with the line removed). If
 so, soften the guard wording so it constrains echoing without flattening voice, or scope it to only
 fire when the player message contains a planted figure/presupposition. Otherwise tune the two voice prompts.
+**Update (2026-06-11, S25.1 / DEC-096):** ECHO_GUARD confirmed as *a* cause and softened in
+`prompt_builder.py` (`_ECHO_GUARD_TEXT`, `stage_b_v2.13`): dropped the always-on "answer only in your own
+general terms" flattener, scoped each directive to an explicit player plant. Live A/B: voice **0/2 → ~1/2**
+(mira recovers gossip framing; captain still borderline-fails on "Reports…/our scouts keep us informed"),
+anti-hallucination **5/5** guards still pass (no moat regression). **Kept OPEN — narrowed residual:** the
+captain_sorn failure is now voice-judge strictness + a secondary-source ("reports/scouts") habit, not the
+ECHO_GUARD. Remaining fix is voice-prompt/seed tuning (out of S25.1's prompt-wording scope) — e.g. a
+VOICE_DESCRIPTOR nudge away from third-person reporting toward first-person command, or relaxing the
+captain tone judge to accept "reports of skirmishes" as a commander relaying field intel.
 
 ## [FIXED] ISSUE-079: mira_innkeeper consistently hits Tier-3 canned fallback during evals
 **Found:** 2026-06-08, during anti-hallucination eval run

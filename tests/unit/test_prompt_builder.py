@@ -18,6 +18,7 @@ import json
 from npc_engine.engines.dialogue.dialogue_models import DialogueRequest
 from npc_engine.engines.dialogue.prompt_builder import (
     PROMPT_VERSION,
+    _ECHO_GUARD_TEXT,
     _PROMPT_PATH,
     _build_knowledge_gaps,
     _extract_personal_accounts,
@@ -204,6 +205,34 @@ def test_build_dialogue_prompt_contains_echo_guard_before_player_message() -> No
     assert guard_pos != -1, "ECHO_GUARD line missing from prompt"
     assert guard_pos < player_msg_pos, "ECHO_GUARD must appear before <<<PLAYER_MESSAGE>>>"
     assert "do not confirm it" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# S25.1 — ECHO_GUARD softened to constrain echo without flattening voice (ISSUE-083)
+# ---------------------------------------------------------------------------
+
+
+def test_echo_guard_drops_general_terms_flattener() -> None:
+    """The voice-flattening 'general terms' directive must be removed (ISSUE-083).
+
+    The unconditional 'answer only in your own general terms' / 'speak only from the
+    knowledge in your context' phrasing nudged every reply toward terse, generic
+    reporting even on neutral questions with no planted figure.
+    """
+    lowered = _ECHO_GUARD_TEXT.lower()
+    assert "general terms" not in lowered
+    assert "speak only from the knowledge in your context" not in lowered
+
+
+def test_echo_guard_keeps_plant_constraints_and_voice_license() -> None:
+    """Softened guard still blocks number-echo + false-presence, and licenses voice."""
+    lowered = _ECHO_GUARD_TEXT.lower()
+    # Number/price echo guard preserved.
+    assert "price" in lowered and "their claim" in lowered
+    # False-presence presupposition guard preserved.
+    assert "present" in lowered and "do not confirm it" in lowered
+    # Explicit license to use full voice when the player plants nothing.
+    assert "your own voice" in lowered
 
 
 # ---------------------------------------------------------------------------

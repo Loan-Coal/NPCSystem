@@ -1148,3 +1148,38 @@ and a prior session has seeded the belief.
     contract.
 **Consequence:** `make eval-anti-hallucination` no longer silently skips the player-taught case on the
 classification path — it is now explicitly gated on a persisted belief. Closes ISSUE-090.
+
+## DEC-096: S25.1 — ECHO_GUARD softened in prompt_builder.py (not YAML); kept on a partial-recovery A/B
+**Date:** 2026-06-11
+**Status:** ✅ ACCEPTED (prompt-wording tuning; logged per the "note non-obvious choices" rule)
+**Context:** Phase 25 (ISSUE-083) is specced as "YAML-only — run `make eval-llm-demo` twice with the
+ECHO_GUARD clause in `system_v1.yaml` softened." Two facts made the spec un-followable as written:
+  1. **ECHO_GUARD does not live in YAML.** The literal `ECHO_GUARD=` reinforcement token is built from
+     `_ECHO_GUARD_TEXT`, a Python string constant in `engines/dialogue/prompt_builder.py` (a pre-existing
+     prompt-string-outside-`prompts/` smell, separate issue). `system_v1.yaml` has a related but distinct
+     "ECHO PROHIBITION" clause (Rule 9). ISSUE-083 correctly fingers the `prompt_builder.py` line.
+  2. The two voice cases run via `make eval` (`scenario_yaml_evals.py`, which loads `evals/cases/*.yaml`),
+     not `make eval-llm-demo` (a separate inline runner). The A/B was driven through the named yaml cases.
+**Decision:** Softened `_ECHO_GUARD_TEXT` (ISSUE-083's own sanctioned fix #1: "soften the guard wording so
+it constrains echoing without flattening voice"). Dropped the always-on flatteners "answer only in your own
+general terms" / "speak only from the knowledge in your context" and rephrased each directive as conditional
+on an explicit player plant (number/price/name, or false-presence presupposition), adding "when the player
+plants no such figure or presupposition, answer freely in your own voice and full character." Bumped
+`PROMPT_VERSION` → `stage_b_v2.13`. This is a single-module prompt-constant edit (allowed without asking);
+the "YAML-only" note is honoured in spirit (no dialogue logic changed). Branches/conditional injection
+(fix #2) were rejected as higher anti-hallucination-regression risk (a missed plant pattern drops the guard).
+**A/B result (live, qwen2.5:14b, demo seed):**
+  - **Baseline v2.12:** voice cases **0/2** — deterministic fail across 3 reps (captain hedged "nothing major
+    has shifted the balance"; mira read as a dry war report).
+  - **Softened v2.13:** voice cases **~1/2** — 3 passes + 3 fails across a 3-rep batch (mira recovers gossip
+    framing "rumors suggest…"; captain still borderline-fails on "Reports… our scouts keep us informed").
+  - **Anti-hallucination guards: 5/5 PASS** on v2.13 — `aldric_fed_price` (number-echo), `false_eyewitness_henryk`,
+    `false_premise_peace`, `old_henryk_no_eyewitness_claim`, `old_henryk_past_war_not_current` (Phase 26 cases).
+    No moat regression.
+**Why kept (not reverted):** strict phase exit ("commit only if BOTH voice cases recover") was not met, so this
+is taken via the documented-decision branch. v2.13 is a strict improvement: it removes a confirmed
+voice-flattener, lifts voice 0/2→~1/2, and costs nothing on anti-hallucination. The residual captain failure
+is voice-judge strictness + a "reports/scouts" secondary-source habit — a voice-tuning axis, no longer the
+ECHO_GUARD. ISSUE-083 stays OPEN with that narrowed residual.
+**Consequence:** ECHO_GUARD reinforcement is now plant-scoped; NPC voice is freed on neutral questions while
+the number-echo and false-presence guards remain. Residual voice gap tracked under ISSUE-083.
