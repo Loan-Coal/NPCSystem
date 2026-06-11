@@ -55,6 +55,7 @@ from npc_engine.config import ContentRating
 from npc_engine.services.input_moderation import InputModerationService
 from npc_engine.services.output_moderation import OutputModerationService
 from npc_engine.world.time_utils import TimePoint
+from npc_engine.world.world_state import WorldState
 from npc_engine.graph.world_state_reader import get_world_state
 from npc_engine.engines.dialogue.negotiation_context import inject_active_negotiation
 
@@ -66,6 +67,8 @@ _logger = logging.getLogger(__name__)
 
 LLM_VALIDATION_FAILURES_METRIC = "llm_validation_failures_total"
 TTS_FAILURES_METRIC = "tts_failures_total"
+HIGH_AROUSAL_THRESHOLD = 70
+LOW_VALENCE_THRESHOLD = -60
 
 
 def resolve_log_prompts(settings: Settings) -> bool:
@@ -181,8 +184,9 @@ class DialogueHandler:
         })
         tick_id = int(datetime.now(timezone.utc).timestamp())
         new_emotion = await self._apply_relation_and_emotion(request=request, response=final_response, level=level, tick_id=tick_id)
-        await self._apply_arousal_memory(request=request, response=final_response, new_emotion=new_emotion)
-        await self._apply_knowledge_and_routine(request=request, response=final_response, new_emotion=new_emotion, tick_id=tick_id)
+        world_state = await self._maybe_load_world_state(response=final_response, new_emotion=new_emotion)
+        await self._apply_arousal_memory(request=request, response=final_response, new_emotion=new_emotion, world_state=world_state)
+        await self._apply_knowledge_and_routine(request=request, response=final_response, new_emotion=new_emotion, tick_id=tick_id, world_state=world_state)
         if getattr(self._settings, "TTS_ENABLED", False) and getattr(self, "_tts_client", None) is not None:
             final_response = await self._synthesize_audio(response=final_response, npc_id=request.npc_id)
         return final_response
@@ -202,27 +206,41 @@ class DialogueHandler:
             tick=tick_id,
         )
 
-    async def _apply_arousal_memory(self, *, request: DialogueRequest, response: DialogueResponse, new_emotion) -> None:
+    def _needs_world_state(self, *, response: DialogueResponse, new_emotion) -> bool:
+        """True when either the arousal-memory or knowledge-learning branch will fire (ISSUE-087)."""
+        arousal_branch = getattr(new_emotion, "arousal", 0) > HIGH_AROUSAL_THRESHOLD
+        knowledge_branch = (
+            self._knowledge_engine is not None
+            and getattr(self._settings, "KNOWLEDGE_LEARNING_ENABLED", False)
+            and bool(response.learned_facts)
+        )
+        return arousal_branch or knowledge_branch
+
+    async def _maybe_load_world_state(self, *, response: DialogueResponse, new_emotion) -> WorldState | None:
+        """Fetch world state once iff a downstream branch needs it; avoids the double read (ISSUE-087)."""
+        if not self._needs_world_state(response=response, new_emotion=new_emotion):
+            return None
+        return await get_world_state(session=self._session, world_id=self._settings.WORLD_ID)
+
+    async def _apply_arousal_memory(self, *, request: DialogueRequest, response: DialogueResponse, new_emotion, world_state: WorldState | None) -> None:
         """Create an episodic memory when NPC arousal exceeds the high-arousal threshold."""
-        if getattr(new_emotion, "arousal", 0) <= 70:
+        if world_state is None or getattr(new_emotion, "arousal", 0) <= HIGH_AROUSAL_THRESHOLD:
             return
-        world_state = await get_world_state(session=self._session, world_id=self._settings.WORLD_ID)
         game_time = TimePoint(year=world_state.year, season=world_state.season, day=world_state.day, time_of_day=world_state.time_of_day)
         await self._memory_engine.create_from_arousal(
             self._session, character_id=request.npc_id, arousal=new_emotion.arousal,
             content=f"{request.player_message} — {response.npc_response}", game_time=game_time,
         )
 
-    async def _apply_knowledge_and_routine(self, *, request: DialogueRequest, response: DialogueResponse, new_emotion, tick_id: int) -> None:
+    async def _apply_knowledge_and_routine(self, *, request: DialogueRequest, response: DialogueResponse, new_emotion, tick_id: int, world_state: WorldState | None) -> None:
         """Process knowledge learning, routine override, and session-turn bookkeeping."""
-        if (self._knowledge_engine is not None and getattr(self._settings, "KNOWLEDGE_LEARNING_ENABLED", False) and response.learned_facts):
-            world_state = await get_world_state(session=self._session, world_id=self._settings.WORLD_ID)
+        if (self._knowledge_engine is not None and getattr(self._settings, "KNOWLEDGE_LEARNING_ENABLED", False) and response.learned_facts and world_state is not None):
             game_time_str = f"Year {world_state.year} {world_state.season} Day {world_state.day} {world_state.time_of_day}"
             await self._knowledge_engine.process(
                 self._session, npc_id=request.npc_id, player_id=request.player_id,
                 tick=tick_id, learned_facts=list(response.learned_facts), game_time_str=game_time_str,
             )
-        if new_emotion.valence < -60:
+        if new_emotion.valence < LOW_VALENCE_THRESHOLD:
             await set_routine_override(session=self._session, character_id=request.npc_id, location_id="home", expires_at_tick=tick_id + 5)
         await self._session_store.append_turns(
             player_id=request.player_id, npc_id=request.npc_id,

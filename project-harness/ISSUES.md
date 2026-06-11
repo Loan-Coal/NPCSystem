@@ -975,7 +975,11 @@ current mapping is good enough for demo badge display and does not affect correc
 **Why deferred:** Cosmetic; not blocking anything.
 **To fix:** Update to a proper one-sentence description of the module's purpose.
 
-## ISSUE-075: `reputation_nudge.py` variable scope — `new_trust` logged outside `async with tx` block
+## [FIXED] ISSUE-075: `reputation_nudge.py` variable scope — `new_trust` logged outside `async with tx` block
+**Fixed:** 2026-06-11, S23.2 — found already resolved by an intervening refactor. The transaction
+body now lives in `_read_modify_write`, which returns `(new_trust, new_affection)` and closes its own
+`async with tx`. `apply_trust_nudge` logs from the `None`-guarded return tuple (`if result is None: return`),
+so `new_trust` is a cleanly-scoped local, never a try-scoped reference outside its block. No code change needed.
 **Found:** 2026-06-06, during EXP-52 (reputation propagation)
 **Severity:** P3 (nice-to-fix)
 **Where:** `src/npc_engine/graph/reputation_nudge.py`
@@ -1059,7 +1063,12 @@ And add:
 **Why deferred:** Migrating would require updating all callers; out of scope for EXP-40 first slice.
 **To fix:** Migrate both classes to `BaseModel` with `model_config = ConfigDict(frozen=True)`; update all callers.
 
-## ISSUE-087: `dialogue_handler.py` calls `get_world_state` twice when arousal>70 AND `learned_facts` non-empty
+## [FIXED] ISSUE-087: `dialogue_handler.py` calls `get_world_state` twice when arousal>70 AND `learned_facts` non-empty
+**Fixed:** 2026-06-11, S23.2 — new `_maybe_load_world_state` fetches the world state at most once per turn
+(guarded by `_needs_world_state`, which mirrors the two branch conditions) and passes the result into both
+`_apply_arousal_memory` and `_apply_knowledge_and_routine`. The double read is gone, and the common-path
+zero-read is preserved (no fetch when neither branch fires). `HIGH_AROUSAL_THRESHOLD`/`LOW_VALENCE_THRESHOLD`
+named. Tests: `test_dialogue_world_state_hoist.py`.
 **Found:** 2026-06-09, during EXP-53 (W2)
 **Severity:** P3 (nice-to-fix — duplicate Neo4j read per dialogue turn in hot path)
 **Where:** `src/npc_engine/engines/dialogue/dialogue_handler.py` — arousal block (~line 185) + knowledge block (~line 204)

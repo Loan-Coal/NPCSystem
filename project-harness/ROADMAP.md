@@ -262,10 +262,10 @@ kept OPEN — the two henryk cases need a live `make eval-llm-demo` (Ollama) run
 **Constraint:** Each commit must keep `make check` green.
 **Notes:** One commit per S23.x step (steps are already grouped by file proximity). For S23.6 deletions, verify zero imports before deleting. S23.4 and S23.7 each need their own test update.
 
-- [ ] **S23.1** Docstring + deprecation sweep (ISSUE-072, ISSUE-076, ISSUE-085) — update the two stale `(auto-detected — review)` module docstrings in `gossip_distort.py` and `relation_writer.py`; replace all `datetime.utcnow()` calls in `world/world_state.py` with `datetime.now(timezone.utc)` and add `from datetime import timezone`.
-  - Exit: `make check-docstrings` passes for both files; no `utcnow` in `world_state.py`.
-- [ ] **S23.2** Scope + transaction fixes (ISSUE-075, ISSUE-087) — move the `logger.info` call in `reputation_nudge.py` inside the `async with tx` block; hoist the `get_world_state` call in `dialogue_handler.py` to before both the arousal and learned-facts branches.
-  - Exit: `make check` green; no functional change.
+- [x] **S23.1** Docstring + deprecation sweep (ISSUE-072, ISSUE-076, ISSUE-085) — update the two stale `(auto-detected — review)` module docstrings in `gossip_distort.py` and `relation_writer.py`; replace all `datetime.utcnow()` calls in `world/world_state.py` with `datetime.now(timezone.utc)` and add `from datetime import timezone`.
+  - Exit: `make check-docstrings` passes for both files; no `utcnow` in `world_state.py`. ✓
+- [x] **S23.2** Scope + transaction fixes (ISSUE-075, ISSUE-087) — move the `logger.info` call in `reputation_nudge.py` inside the `async with tx` block; hoist the `get_world_state` call in `dialogue_handler.py` to before both the arousal and learned-facts branches.
+  - Exit: `make check` green; no functional change. ✓ (ISSUE-075 found already resolved by the `_read_modify_write` refactor; ISSUE-087 hoisted via `_maybe_load_world_state`, single conditional fetch preserves common-path zero-read.)
 - [ ] **S23.3** Error handling (ISSUE-069, ISSUE-070) — broaden `except EngineClientError` in `action_workers._get_current_tick` to `except Exception` with structured logging; confirm `subgraph_retriever`'s `relation:player` priority is lower than EXP-11's (88) so dedup is deterministic — add a comment if so, rename the key if not.
   - Exit: `make test-demo` green.
 - [ ] **S23.4** Write-belief dedup (ISSUE-089) — replace `str(uuid.uuid4())` in `knowledge_writer.write_belief` with a stable `hashlib.sha256(f"{npc_id}:{content}".encode()).hexdigest()[:16]` so MERGE deduplicates repeated facts. Add unit test asserting two identical fact writes produce one node.
