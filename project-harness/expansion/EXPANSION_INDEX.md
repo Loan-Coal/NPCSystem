@@ -52,14 +52,20 @@ _The orchestrator maintains this: add a line when an item unlocks a later one; d
   (`build_standing_line`), `demo_game/proactive_dialogue_beat.py` (ACT-11 pattern), `EXPRESSION_GLYPHS`
   in left_panel. Deferred follow-ups: EXP-201 slice-2 wiring, EXP-202 secret-gate slice-2, EXP-207 live
   `set_facial_expression` wiring.
-- **PHASE B COMPLETE** (EXP-208 ✅). New seam: `RightPanel.RETRIEVAL` + `get_retrieval_debug` (demo).
-- **NEXT BATCH (Phase C):** BEFORE dispatch, orchestrator applies **DEC-097** — add `subject_player_id`
-  (str?), `recall_count` (int=0), `never_forget` (bool=false) to `memory.yaml`; add
-  `MEMORY_FORGET_THRESHOLD` to config.py; commit + gate green. THEN dispatch 3 workers:
-  [EXP-209 trigger_router (new)], [EXP-210 proactive_queue (new) + dialogue_ws edit, DEC-098 pattern],
-  [EXP-211+212 ONE worker — memory_engine + context_builder + the new memory fields]. EXP-211+212 add a
-  new graph/memory call → mock it in every context test file (test_context_builder, _player_relation,
-  _context_metrics_observability_v14).
+- **PHASE C COMPLETE** (EXP-209/210/211/212 ✅; DEC-097 schema applied e6f54b2). New seams:
+  `proactive_dialogue/trigger_router.py` (`select_trigger`), `proactive_queue.py` (`ProactiveQueue`,
+  `ProactiveLine`), `graph/memory_queries.get_player_memories_for_npc`, `memory_engine.compute_salience`/
+  `is_forgettable`, `MEMORY_FORGET_THRESHOLD`. Slice-2 follow-ups: 209 scheduler wiring, 210 dialogue_ws
+  drain, 212 decay scheduling.
+- **CYCLE-5 LESSONS:** (1) workers sometimes write `from src.npc_engine...` — WRONG, breaks mypy
+  (duplicate module) + import rule; grep new files for `from src` before gating. (2) changing a graph
+  writer signature (e.g. create_memory + subject_player_id) breaks `test_memory_service.py` mocks — add
+  `**_kwargs` tolerance. (3) big multi-file workers (EXP-211+212 = 10 files) are integration-heavy —
+  prefer ≤3-file slices.
+- **NEXT BATCH (Phase D, no-schema subset):** EXP-216 (dependencies.py wire), EXP-217 (new event route +
+  graph reader), EXP-219 (new `trait_modulated_model.py`), EXP-213 (gossip distort routing) — conflict-free.
+  Schema items EXP-214 (DEC-100 memory.kind) + EXP-218 (DEC-101 unlocks.on_choice_id) need orchestrator
+  schema-apply first (later batch).
 
 ## Mapping & reconciliation (analysis id → execution id)
 
@@ -118,10 +124,10 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 - [x] **EXP-208** retrieval-explainer panel (demo) · M · DONE 1caaa04 · `RetrievalPanelWidget` + `get_retrieval_debug` + `RightPanel.RETRIEVAL`; game_window poller auto-refresh is a follow-up
 
 ### Phase C — Close the agentic loop (🔶 DEC-097/098)
-- [ ] **EXP-209** unified proactive-trigger surface · M · deps: none · new `engines/proactive_dialogue/trigger_router.py`
-- [ ] **EXP-210** proactive WS delivery 🔶DEC-098 · S · deps: EXP-209 (soft) · new `engines/proactive_dialogue/proactive_queue.py`; edit `api/dialogue_ws.py`
-- [ ] **EXP-211** player-scoped memory recall 🔶DEC-097 · M · deps: none · edit `memory.yaml`(orch), `engines/memory/memory_engine.py`, `retrieval/context_builder.py` ⚠conflict(EXP-212)
-- [ ] **EXP-212** salience forgetting curve 🔶DEC-097 · M · deps: none · edit `memory.yaml`(orch), `engines/memory/memory_engine.py`, `retrieval/context_builder.py` ⚠conflict(EXP-211 — same worker)
+- [x] **EXP-209** unified proactive-trigger surface (slice 1) · M · DONE dc18e67 · `trigger_router.py` (`select_trigger`, `TriggerCandidate`); scheduler wiring = slice 2
+- [x] **EXP-210** proactive delivery queue (slice 1) · S · DONE e958799 · `proactive_queue.py` (`ProactiveQueue`/`ProactiveLine`); dialogue_ws drain = slice 2 (call `push_proactive_line`)
+- [x] **EXP-211** player-scoped memory recall · M · DONE c571ae7 · `subject_player_id` populated + `get_player_memories_for_npc` → `_maybe_append_player_memory` in context_builder
+- [x] **EXP-212** salience forgetting curve · M · DONE c571ae7 · `compute_salience`/`is_forgettable` + `MEMORY_FORGET_THRESHOLD`; decay scheduling = slice 2
 
 ### Phase D — Deepen the systems (🔶 DEC-100/101)
 - [ ] **EXP-213** belief/confidence-aware distortion routing · M · deps: none · edit `engines/gossip/gossip_distort.py`, `gossip_handler.py`, `prompts/gossip/gossip_config.yaml`
@@ -147,10 +153,11 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 
 ## Next candidate batch (suggested)
 
-**LAST BATCH (cycle 4):** EXP-208 ✅ — integrated 859166f (1caaa04), clean one-shot (no fix needed).
-Gate green (make check 1985, demo 661). **Phase B COMPLETE.**
-**NEXT (Phase C):** apply DEC-097 memory.yaml schema FIRST, then EXP-209 · EXP-210 · EXP-211+212(one worker).
-**All workers must `git merge munich-demo` before building.**
+**LAST BATCH (cycle 5):** EXP-209/210/211/212 ✅ — DEC-097 applied (e6f54b2); integrated
+(dc18e67/e958799/c571ae7 + fix 7a07737). Gate green (make check 2005, demo 661). **Phase C COMPLETE.**
+4 integration fixes needed (R006, src-import/mypy, 2 memory mocks). **Phases A+B+C done: EXP-201..212.**
+**NEXT (Phase D):** EXP-216 · EXP-217 · EXP-219 · EXP-213 (no-schema, conflict-free). EXP-214/218 need schema first.
+**All workers must `git merge munich-demo` before building; grep new files for `from src`.**
 
 ---
 

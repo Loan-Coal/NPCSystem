@@ -49,10 +49,10 @@ analysis, reconciled against code (10 re-proposed items were already built and d
 - **Goal:** NPCs act on their own state and reach the player; memory becomes player-scoped + decaying.
 - **Effort:** ~1.5 sessions · **Leverages:** ProactiveDialogue/IntentFormation engines (wired but undelivered), `push_proactive_line()` helper.
 - **Constraints:** DEC-098 (scheduler→api queue), DEC-097 (memory.yaml fields). Orchestrator applies schema before the batch. EXP-211 + EXP-212 share `memory.yaml`/`memory_engine.py`/`context_builder.py` → one worker.
-- [ ] **EXP-209** unified proactive-trigger surface (memory+need+event). Exit: trigger router emits intents; test green.
-- [ ] **EXP-210** proactive line delivered over WS to idle player (DEC-098 queue). Exit: idle player receives NPC-initiated line.
-- [ ] **EXP-211** player-scoped memory recall in dialogue (DEC-097 `subject_player_id`). Exit: player-specific memory surfaces in context.
-- [ ] **EXP-212** salience-weighted forgetting curve (DEC-097 `recall_count`/`never_forget`). Exit: low-salience memories decay; pinned never forget.
+- [x] **EXP-209** unified proactive-trigger surface (slice 1; dc18e67). `select_trigger` router; scheduler wiring = slice 2.
+- [x] **EXP-210** proactive delivery queue (slice 1; e958799). `ProactiveQueue`; dialogue_ws drain = slice 2.
+- [x] **EXP-211** player-scoped memory recall (c571ae7). `subject_player_id` + player-scoped reader surfaces memory in context.
+- [x] **EXP-212** salience forgetting curve (c571ae7). `compute_salience`/`is_forgettable` + `MEMORY_FORGET_THRESHOLD`; decay sched = slice 2.
 
 ### Phase D — "Deepen the systems" (schema: DEC-100/101)
 - **Goal:** richer gossip drift, interactive economy, visible politics, more game.

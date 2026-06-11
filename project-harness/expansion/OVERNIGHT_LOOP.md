@@ -94,12 +94,13 @@ automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** A
-- **Phase in progress:** C (Phases A+B COMPLETE: EXP-201..208)
-- **Next batch to run (Phase C):** FIRST apply DEC-097 schema to `memory.yaml` (`subject_player_id`,
-  `recall_count`=0, `never_forget`=false) + `MEMORY_FORGET_THRESHOLD` const, commit + gate green. THEN
-  dispatch [EXP-209], [EXP-210 (DEC-098 queue pattern)], [EXP-211+212 ONE worker]. Workers merge munich-demo first.
-- **Then:** D (DEC-100/101) → E (DEC-102/103/104).
-- **Last green commit:** 859166f (EXP-208 integrated, gate green).
+- **Phase in progress:** D (Phases A+B+C COMPLETE: EXP-201..212)
+- **Next batch to run (Phase D, no-schema):** EXP-216 (wire NegotiationBacked default in api/dependencies.py),
+  EXP-217 (new graph/event_queries + api/routes/player_events.py), EXP-219 (new engines/emotion/trait_modulated_model.py),
+  EXP-213 (gossip_distort receiver_confidence). Conflict-free. Workers merge munich-demo first; grep new files for `from src`.
+- **Then (Phase D schema):** apply DEC-100 (memory.yaml `kind`) before EXP-214; DEC-101 (unlocks.yaml `on_choice_id`)
+  before EXP-218. Remaining D: EXP-220/221/222/223/224/225 (mostly demo). → Phase E (DEC-102/103/104 new node types).
+- **Last green commit:** 7a07737 (EXP-209/210/211/212 integrated, gate green).
 
 ## Progress Log
 
@@ -129,3 +130,10 @@ automatically; do not poll.
   integrated 859166f) — NO integration fix needed (first such cycle). Gate green: make check 1985, demo 661.
   **PHASE B COMPLETE.** Next is Phase C (first schema-touching phase): orchestrator applies DEC-097 memory
   fields before dispatch.
+- **5 · 2026-06-12 cycle 5** — Phase C: applied DEC-097 schema (e6f54b2, gate green) THEN batch
+  EXP-209/210/211+212 (merge-first). **All 4 ✅** (dc18e67/e958799/c571ae7). 4 integration fixes (most so
+  far): R006 again (player-memory block → `_maybe_append_player_memory`); a worker wrote `from
+  src.npc_engine...` (mypy duplicate-module + import-rule break) → fixed prefix; 2 `test_memory_service.py`
+  mocks broke on the new `create_memory(subject_player_id=...)` kwarg → added `**_kwargs`. Fix 7a07737.
+  Green: make check 2005 (85.83%), demo 661. **PHASES A+B+C COMPLETE (12 items).** Lessons in index
+  carry-forward (grep `from src`; mock-signature tolerance; ≤3-file slices).
