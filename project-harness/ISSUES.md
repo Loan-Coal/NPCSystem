@@ -11,6 +11,32 @@ Rules:
 
 ---
 
+## ISSUE-093: NPCs conflate past memories with current events (systemic — knowledge has no temporal frame)
+**Found:** 2026-06-11, during S22.5 live-eval root-cause investigation (deeper cause behind ISSUE-082)
+**Severity:** P2 (immersion + anti-hallucination — NPCs present long-past experiences as the current situation)
+**Where:** `retrieval/subgraph_retriever.py::_flatten_event_row`; `engines/dialogue/prompt_builder.py::_extract_personal_accounts` + Rule 5; `graph/memory_queries.py` (no event-time field); `demo_game/seed.py` (all inner-life stamped at one `_GAME_TIME`).
+**Description:** The context/prompt has no temporal axis for knowledge — everything an NPC knows is a flat,
+present-tense, authoritative bag. Three compounding layers:
+  1. **Data model:** `Memory`/`Event` nodes carry only `created_at_game_time` (record time), never an
+     `occurred_at`/era for *when the event happened*. The seeder stamps every memory at the current
+     world time, so a decades-old memory is indistinguishable from a fresh one (and `recency_score`
+     ranks it as fresh).
+  2. **MY_ACCOUNT pipeline (root cause):** `_flatten_event_row` **deliberately drops `knowledge_state`**
+     when a `distorted_summary` exists (to stop over-hedging on gossip — undocumented inline fix, no DEC).
+     `_extract_personal_accounts` then renders every `distorted_summary` as an authoritative, verbatim
+     `MY_ACCOUNT_N` line (Rule 5). A 2-hop *rumour* becomes a firsthand account the model is ordered to
+     recite. Rule 5 (authoritative) directly contradicts Rule 10 (hedge rumour); Rule 5 wins.
+  3. **Prompt:** no instruction separates "a finished event I experienced long ago" from "the ongoing
+     situation the player asks about", so a player conflating them ("you were at the front") is accepted.
+**Concrete failure:** `case_neg_old_henryk_no_eyewitness_claim` — Henryk recounts the current war as
+firsthand because his rumour `distorted_summary` is authored first-person and rendered as MY_ACCOUNT.
+**Why deferred from S22.5:** S22.5 was YAML-only; this needs context + prompt + a schema change.
+**To fix:** Phased plan — see ROADMAP **Phase 26**. (A) restore `knowledge_state` + split MY_ACCOUNT vs a
+new HEARSAY channel that keeps the confident distorted content but strips firsthand framing; (B) thread
+memory age into context + add a past-recollection prompt rule; (C, schema/DEC-094) add `occurred_at_game_time`
++ `is_historical` and split Henryk's past-war memory from the current rumour in the seed; (D) temporal-conflation
+eval set. Closing this also closes ISSUE-082.
+
 ## Open
 
 ## [FIXED] ISSUE-080: demo world_state epoch drifts to age_of_peace; skip-if-exists seeder cannot restore it

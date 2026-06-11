@@ -298,6 +298,46 @@ kept OPEN — the two henryk cases need a live `make eval-llm-demo` (Ollama) run
 
 ---
 
+## Phase 26 — Temporal knowledge framing: stop NPCs conflating past memory with current events (ISSUE-093, closes ISSUE-082)
+**Goal:** Give NPC knowledge a timeline. Today everything an NPC knows is a flat, present-tense,
+authoritative bag, so a long-past first-hand memory and a current 2-hop rumour are indistinguishable —
+NPCs recount old experiences as the current situation and accept false-eyewitness presuppositions.
+**Root cause (3 layers):** (1) `Memory`/`Event` carry only record-time, no event-time/era; the seeder
+stamps every memory at "now". (2) `subgraph_retriever._flatten_event_row` drops `knowledge_state` when a
+`distorted_summary` exists, and `_extract_personal_accounts` renders every distorted summary as an
+authoritative verbatim `MY_ACCOUNT_N` — a rumour becomes firsthand (Rule 5 vs Rule 10 contradiction).
+(3) the prompt has no past-vs-present axis.
+**Constraint:** Preserve the gossip-telephone feature — NPCs must still *confidently repeat distorted
+rumour content*; we only strip the *firsthand framing*, not the distortion. Schema steps gated on DEC-094.
+**Notes:** Phases A/B/D need no approval. C is a graph-schema change → DEC-094 must be approved first.
+Each step bumps `PROMPT_VERSION` when it touches the prompt; one commit per step.
+
+- [ ] **S26.1 (A)** Rumour vs firsthand channel split — restore `knowledge_state` in
+  `subgraph_retriever._flatten_event_row` (keep `distorted_summary` AND `knowledge_state`); in
+  `prompt_builder._extract_personal_accounts`, route `knowledge_state=="rumor"` distorted summaries to a
+  new `HEARSAY_N=` channel and the rest to `MY_ACCOUNT_N=`. Add Rule 5b to `system_v1.yaml`: HEARSAY lines
+  keep their named details (gossip distortion preserved) but MUST be attributed ("word reached me", "they
+  say") and NEVER claimed as firsthand/eyewitness. Bump `PROMPT_VERSION`.
+  - Exit: a rumour-state event yields a HEARSAY line, not MY_ACCOUNT; gossip-spread unit tests green; `make check` green.
+- [ ] **S26.2 (B)** Memory temporal framing — compute each memory's age from `created_at_game_time` vs the
+  current `world` game-time (via `world.time_utils.total_days`) and surface a coarse `age` hint
+  ("recent"/"long_past") on serialized `npc.memories`; add a Rule to `system_v1.yaml`: `npc.memories` are
+  recollections of *past* events — never present a past experience as the current situation, and never
+  assume a past event is the same as one the player asks about now. Bump `PROMPT_VERSION`.
+  - Exit: serialized memories carry an `age` hint; prompt rule present; `make check` green.
+- [ ] **S26.3 (C) [SCHEMA — gated on DEC-094]** Event-time model — add `occurred_at_game_time`
+  (event time, distinct from `created_at_game_time`) + `is_historical: bool` to `Memory` (and `Event`)
+  type-registry nodes + write path; update `demo_game/seed.py` so Henryk's "ran dispatches in the last war"
+  memory is `is_historical=true` and is **removed from** the current-war `KNOWS_ABOUT` distorted_summary
+  (split the conflated string). Make Phase B's `age` read the real event-time when present.
+  - Exit: Henryk's past-war memory is tagged historical and absent from the current rumour string; `make check` green.
+- [ ] **S26.4 (D)** Temporal-conflation evals — add a small eval set (Henryk + 1–2 other veteran/elder
+  archetypes) asserting no firsthand-from-rumour and no past-as-present; re-run
+  `case_neg_old_henryk_no_eyewitness_claim` live (`make eval-llm-demo`).
+  - Exit: new eval cases defined; `case_neg_old_henryk_no_eyewitness_claim` passes live; ISSUE-082 + ISSUE-093 closeable.
+
+---
+
 ## Phase X — Engine SDKs (Unity / Unreal) — DEFERRED COMMERCIAL MILESTONE
 **Goal:** Drop-in plugins wrapping the REST/WS API — highest commercial ROI.
 **Sessions:** 8+ (its own milestone, not a sprint task). Own-game milestone (Phase 7) is complete, so

@@ -1085,3 +1085,38 @@ magic label that matches nothing.
 schema does not have. If a `Knowledge` label is introduced later, extend the filter then.
 **Consequence:** Expansion anchors only on `:Event` seeds; full-node scan eliminated. The roadmap
 S22.1 exit is reinterpreted to target `graph/graph_rag_queries.py` (noted in the ROADMAP step).
+
+---
+
+## DEC-094: 🔶 PROPOSED — event-time fields on Memory/Event (`occurred_at_game_time` + `is_historical`)
+**Date:** 2026-06-11
+**Status:** 🔶 PROPOSED — gates ROADMAP S26.3 (Phase C). Awaiting human approval. A/B/D proceed without it.
+**Context (ISSUE-093):** `Memory` and `Event` nodes carry only `created_at_game_time` (when the memory
+was *recorded*). There is no field for *when the remembered event actually happened*. The seeder stamps
+every memory at the current world time, so a decades-old war memory and a fresh one are indistinguishable,
+and the GraphRAG `recency_score` ranks the ancient one as fresh. This is one of the three layers behind
+NPCs presenting past experiences as the current situation (the others — the MY_ACCOUNT/knowledge_state
+seam and the missing prompt past-vs-present axis — are fixed in S26.1/S26.2 without schema change).
+**Proposed change (graph schema — needs approval per CLAUDE.md "ask before changing a node/edge schema"):**
+  1. Add `occurred_at_game_time: GameTime | null` to the `Memory` node (and optionally `Event`) — the
+     in-world time the remembered/recorded event happened, distinct from `created_at_game_time` (record time).
+  2. Add `is_historical: bool = false` — a coarse flag for "this happened in a prior era / long before now",
+     used by the prompt's past-recollection framing and to exclude such nodes from recency-as-fresh ranking.
+  3. `CreateMemoryRequest` / `CYPHER_CREATE_MEMORY` accept and persist both fields (optional; default
+     `occurred_at_game_time = created_at_game_time`, `is_historical = false` → no behaviour change for
+     existing callers).
+  4. Seeder: stamp Henryk's "ran dispatches in the last war" memory `is_historical=true` and split it out of
+     the current-war `KNOWS_ABOUT` distorted_summary (which currently fuses past memory + current rumour in
+     one first-person string).
+**Options considered:**
+  - **A (proposed):** explicit `occurred_at_game_time` + `is_historical` on the node. Clean, queryable,
+    lets `recency_score` and the prompt treat historical knowledge correctly. Additive + optional → backward compatible.
+  - **B:** encode era in `content` text only (no schema). Zero migration but unqueryable; the recency mis-rank
+    and any future region/era features stay broken; relies entirely on the LLM parsing prose.
+  - **C:** a separate `:HistoricalMemory` label. More invasive; fragments the Memory type for one flag.
+**Recommendation:** Option A. Additive, optional, backward-compatible; unblocks both the prompt framing
+(S26.2/S26.3) and correct recency ranking.
+**Consequence if approved:** S26.3 implements the fields + seed split; S26.2's `age` hint reads real
+event-time when present. If declined, S26.2 falls back to inferring age from `created_at_game_time` only
+(weaker, since the seed stamps everything "now"), and Henryk's specific case needs a manual seed-string
+split without a temporal tag.
