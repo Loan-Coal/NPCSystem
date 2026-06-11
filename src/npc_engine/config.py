@@ -180,6 +180,12 @@ class Settings(BaseSettings):
     # recall_count (20 %). A value of 20 means low-activity memories are prunable.
     MEMORY_FORGET_THRESHOLD: float = Field(default=20.0, ge=0.0, le=100.0)
 
+    # EXP-229: max concurrent active schemes a single NPC may run (covert-goal cap, DEC-104).
+    MAX_ACTIVE_SCHEMES_PER_NPC: int = Field(default=2, ge=1, le=20)
+
+    # EXP-230: max dialogue turns persisted per (npc, player) session across restarts.
+    MAX_PERSISTED_SESSION_TURNS: int = Field(default=20, ge=1, le=500)
+
     # Content-moderation ceiling (S16.1). "mature" = no restrictions (default).
     CONTENT_RATING: ContentRating = Field(
         default="mature",
