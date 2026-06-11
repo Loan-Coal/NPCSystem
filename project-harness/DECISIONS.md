@@ -900,3 +900,27 @@ helper module with no natural cohesion boundary — the state machine reads bett
 **Decision:** Accept 305-line overage under the established split-would-be-artificial
 exception (CLAUDE.md). No further line additions without a re-split.
 **Consequence:** File remains as-is. Next editor must split before adding anything new.
+
+## DEC-088: S20.2 — generic node/edge services stay `dict[str, Any]`; only NPCStateResponse is typed
+**Date:** 2026-06-11
+**Context:** Phase 20 S20.2 asks to (a) replace raw `dict`/`list[dict]` in `NPCStateResponse`
+with typed sub-models and (b) type `generic_node_service.upsert_node/patch_node` and
+`generic_edge_service.upsert_edge` against registry-validated Pydantic models instead of
+`dict[str, Any]`.
+**Options considered:**
+  1. Type the generic services' payload/return as a fixed Pydantic model. The registry is
+     dynamic — node/edge property sets are defined at runtime from YAML contracts via
+     `create_model`, and the write path validates through `validate_node_payload` (returns a
+     mutated `dict`, not a model). A single fixed model cannot describe an open registry; a
+     per-type generated model would change the return contract of every dynamic graph route.
+  2. Keep `dict[str, Any]` for the generic services (registry-dynamic boundary) and deliver
+     only the NPCStateResponse typing, which has a stable, known shape.
+**Decision:** Option 2. NPCStateResponse gains `CharacterNode`/`RelationEdge`/`EventNode`
+sub-models (`api/response_models/npc_state.py`). The generic graph services remain
+`dict[str, Any]` — consistent with the Phase 20 Notes allowance ("dynamic graph routes may use
+`OkEnvelope[dict[str, Any]]` where a tighter model is impractical; the registry is dynamic").
+**Why:** Forcing a static model onto an intentionally-dynamic registry trades a real schema for
+a false one and churns every graph-route signature for no client benefit. The dynamic routes
+already document their payloads via the registry's own contract YAML.
+**Consequence:** `graph_admin`/`graph` dynamic routes use `OkEnvelope[dict[str, Any]]` in the
+S20.4 sweep. If the registry ever freezes to a closed node set, revisit and generate typed models.

@@ -14,6 +14,7 @@ from typing import Literal
 
 from pydantic import Field
 
+from npc_engine.api.response_models.npc_state import CharacterNode, EventNode, RelationEdge
 from npc_engine.common.intent_models import TriggerType
 
 from npc_engine.engines.dialogue.dialogue_models import (
@@ -67,9 +68,9 @@ __all__ = [
 class NPCStateResponse(FrozenApiModel):
     """Compact NPC state response model."""
 
-    character: dict | None
-    relations: list[dict]
-    events: list[dict]
+    character: CharacterNode | None
+    relations: list[RelationEdge]
+    events: list[EventNode]
 
 
 class EmotionResponse(FrozenApiModel):
