@@ -40,6 +40,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent
 # without calling get_settings() (which would trigger env loading during model definition).
 MAX_PLAYER_MESSAGE_CHARS: int = 1000
 MAX_DELTA_TICKS: int = 1000
+MAX_CHOICE_ID_CHARS: int = 200
 
 # GraphRAG composite-score weights (must sum to 1.0).
 # Extracted from graph_rag.py to allow test-time verification and future tuning.

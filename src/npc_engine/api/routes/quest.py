@@ -1,16 +1,18 @@
 """
 Module: quest
 Layer: api
-Purpose: v1 quest lifecycle route handlers.
+Purpose: v1 quest lifecycle route handlers, including choice-based branching (EXP-218).
 Does NOT: execute direct Cypher writes in route handlers.
-Dependencies: fastapi, neo4j, npc_engine.api.dependencies, npc_engine.api.quest_helpers,
-              npc_engine.api.route_helpers, npc_engine.api.schemas, npc_engine.config,
-              npc_engine.engines.quest.models, npc_engine.engines.quest.quest_lifecycle_engine,
+Dependencies: fastapi, neo4j, npc_engine.api.dependencies, npc_engine.api.dependencies_engines,
+              npc_engine.api.quest_helpers, npc_engine.api.route_helpers, npc_engine.api.schemas,
+              npc_engine.config, npc_engine.engines.quest.models,
+              npc_engine.engines.quest.quest_chain_resolver,
+              npc_engine.engines.quest.quest_lifecycle_engine,
               npc_engine.engines.quest.quest_offer_service,
               npc_engine.engines.quest.quest_reward_router,
               npc_engine.utils.errors
-Dependencies injected: AsyncSession, QuestLifecycleEngine, QuestOfferService,
-                       QuestRewardRouter, Settings.
+Dependencies injected: AsyncSession, QuestChainResolver, QuestLifecycleEngine,
+                       QuestOfferService, QuestRewardRouter, Settings.
 Used by: api.router
 """
 
@@ -22,7 +24,11 @@ from fastapi import APIRouter, Depends, Request
 from neo4j import AsyncSession
 
 from npc_engine.api.dependencies import get_db_session, get_quest_lifecycle_engine
-from npc_engine.api.dependencies_engines import get_quest_offer_service, get_quest_reward_router
+from npc_engine.api.dependencies_engines import (
+    get_quest_chain_resolver,
+    get_quest_offer_service,
+    get_quest_reward_router,
+)
 from npc_engine.api.quest_helpers import (
     build_transition_meta,
     quest_error_to_http,
@@ -31,6 +37,8 @@ from npc_engine.api.quest_helpers import (
 from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.api.schemas import (
     QuestAcceptRequest,
+    QuestChooseRequest,
+    QuestChooseResponse,
     QuestEvaluateRequest,
     QuestObjectiveUpdateRequest,
     QuestOfferRequest,
@@ -38,6 +46,7 @@ from npc_engine.api.schemas import (
 )
 from npc_engine.config import Settings, get_settings
 from npc_engine.engines.quest.models import QuestRewardCurrency, QuestRewardItem
+from npc_engine.engines.quest.quest_chain_resolver import QuestChainResolver
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
 from npc_engine.engines.quest.quest_offer_service import QuestOfferService
 from npc_engine.engines.quest.quest_reward_router import QuestRewardRouter
@@ -241,3 +250,41 @@ async def apply_rewards(
         raise quest_error_to_http(error) from error
 
     return ok_response({"quest_state": state})
+
+
+@router.post("/{quest_id}/choose", response_model=OkEnvelope[QuestChooseResponse])
+async def choose_quest_branch(
+    quest_id: str,
+    body: QuestChooseRequest,
+    session: AsyncSession = Depends(get_db_session),
+    resolver: QuestChainResolver = Depends(get_quest_chain_resolver),
+) -> dict:
+    """Select the quest branch that matches the player's choice.
+
+    Finds the UNLOCKS edge whose ``on_choice_id`` equals ``body.choice_id`` and
+    offers the successor quest to the player. If no matching edge exists (including
+    all-null ``on_choice_id`` edges), ``next_quest_id`` is ``null`` and no quest is
+    offered — preserving auto-unlock back-compat.
+
+    Args:
+        quest_id: Source quest node ID (from URL path).
+        body: Validated request body containing ``player_id`` and ``choice_id``.
+        session: Injected Neo4j async session.
+        resolver: Injected QuestChainResolver (singleton from composition root).
+
+    Returns:
+        OkEnvelope with QuestChooseResponse payload.
+    """
+    next_quest_id = await resolver.choose(
+        session=session,
+        quest_id=quest_id,
+        player_id=body.player_id,
+        choice_id=body.choice_id,
+    )
+    return ok_response(
+        QuestChooseResponse(
+            quest_id=quest_id,
+            player_id=body.player_id,
+            next_quest_id=next_quest_id,
+        ).model_dump()
+    )

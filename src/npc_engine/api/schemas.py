@@ -17,6 +17,7 @@ from pydantic import Field
 from npc_engine.api.response_models.npc_state import CharacterNode, EventNode, RelationEdge
 from npc_engine.common.intent_models import TriggerType
 
+from npc_engine.config import MAX_CHOICE_ID_CHARS
 from npc_engine.engines.dialogue.dialogue_models import (
     ActionModel,
     ActionType,
@@ -61,6 +62,8 @@ __all__ = [
     "QuestObjectiveUpdateRequest",
     "QuestEvaluateRequest",
     "QuestRewardApplyRequest",
+    "QuestChooseRequest",
+    "QuestChooseResponse",
     "ConversationIntentResponse",
 ]
 
@@ -165,6 +168,32 @@ class QuestRewardApplyRequest(FrozenApiModel):
 
     quest_id: str
     player_id: str
+
+
+class QuestChooseRequest(FrozenApiModel):
+    """Request body for POST /quest/{id}/choose — player selects a choice branch.
+
+    Attributes:
+        player_id: Player character ID.
+        choice_id: Identifier of the player's chosen option; capped at MAX_CHOICE_ID_CHARS.
+    """
+
+    player_id: str
+    choice_id: str = Field(max_length=MAX_CHOICE_ID_CHARS)
+
+
+class QuestChooseResponse(FrozenApiModel):
+    """Response payload for a successful choose transition.
+
+    Attributes:
+        quest_id: The source quest the player chose from.
+        player_id: Player character ID.
+        next_quest_id: The successor quest that was offered, or None if no match.
+    """
+
+    quest_id: str
+    player_id: str
+    next_quest_id: str | None
 
 
 class ConversationIntentResponse(FrozenApiModel):

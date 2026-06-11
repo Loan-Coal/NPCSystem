@@ -2,7 +2,8 @@
 Module: test_quest_chain_resolver
 Layer: tests (unit)
 Purpose: Unit tests for QuestChainResolver — verifies chain resolution, no-op on empty
-    chain, outcome propagation, and lifecycle engine integration.
+    chain, outcome propagation, lifecycle engine integration, and choice-based branching
+    (EXP-218: choose() selects matching on_choice_id successor; null on_choice_id auto-unlocks).
 Dependencies: npc_engine.engines.quest.quest_chain_resolver,
     npc_engine.engines.quest.quest_lifecycle_engine,
     npc_engine.engines.quest.models, unittest.mock
@@ -268,3 +269,67 @@ async def test_lifecycle_engine_calls_resolver_on_completion(monkeypatch: Any) -
         player_id="player_demo",
         outcome="complete",
     )
+
+
+# ---------------------------------------------------------------------------
+# EXP-218 — Test 5: choose() selects the matching on_choice_id successor
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_choose_selects_matching_successor(monkeypatch: Any) -> None:
+    """choose() calls get_choice_unlocked_quest with choice_id and offers the match."""
+    offer_service = MagicMock()
+    offer_service.offer_quest = AsyncMock(return_value={"status": "offered"})
+
+    resolver = QuestChainResolver(offer_service=offer_service)
+    session = _FakeSession()
+
+    monkeypatch.setattr(
+        "npc_engine.engines.quest.quest_chain_resolver.get_choice_unlocked_quest",
+        AsyncMock(return_value="quest_branch_b"),
+    )
+
+    result = await resolver.choose(
+        session=session,  # type: ignore[arg-type]
+        quest_id="quest_a",
+        player_id="player_demo",
+        choice_id="choice_help",
+    )
+
+    offer_service.offer_quest.assert_awaited_once_with(
+        session=session,
+        next_quest_id="quest_branch_b",
+        player_id="player_demo",
+    )
+    assert result == "quest_branch_b"
+
+
+# ---------------------------------------------------------------------------
+# EXP-218 — Test 6: null on_choice_id auto-unlocks (back-compat)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_null_choice_auto_unlocks(monkeypatch: Any) -> None:
+    """choose() with no matching on_choice_id returns None without calling offer_quest."""
+    offer_service = MagicMock()
+    offer_service.offer_quest = AsyncMock(return_value={"status": "offered"})
+
+    resolver = QuestChainResolver(offer_service=offer_service)
+    session = _FakeSession()
+
+    monkeypatch.setattr(
+        "npc_engine.engines.quest.quest_chain_resolver.get_choice_unlocked_quest",
+        AsyncMock(return_value=None),
+    )
+
+    result = await resolver.choose(
+        session=session,  # type: ignore[arg-type]
+        quest_id="quest_a",
+        player_id="player_demo",
+        choice_id="choice_unknown",
+    )
+
+    offer_service.offer_quest.assert_not_awaited()
+    assert result is None

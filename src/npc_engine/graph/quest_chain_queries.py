@@ -2,7 +2,7 @@
 Module: quest_chain_queries
 Layer: graph
 Purpose: Cypher queries for UNLOCKS edge traversal — returns next quest IDs
-    that are unlocked by a given quest and outcome.
+    that are unlocked by a given quest and outcome, or by a specific player choice.
 Dependencies: neo4j (AsyncSession).
 Used by: npc_engine.engines.quest.quest_chain_resolver
 
@@ -23,6 +23,13 @@ _CYPHER_GET_UNLOCKED_QUESTS = """
 MATCH (src:Quest {id: $quest_id})-[r:UNLOCKS]->(dst:Quest)
 WHERE r.on_outcome = $outcome
 RETURN dst.id AS next_quest_id
+"""
+
+_CYPHER_GET_CHOICE_UNLOCKED_QUEST = """
+MATCH (src:Quest {id: $quest_id})-[r:UNLOCKS]->(dst:Quest)
+WHERE r.on_choice_id = $choice_id
+RETURN dst.id AS next_quest_id
+LIMIT 1
 """
 
 
@@ -58,3 +65,39 @@ async def get_unlocked_quests(
         extra={"quest_id": quest_id, "outcome": outcome, "count": len(records)},
     )
     return records
+
+
+async def get_choice_unlocked_quest(
+    *,
+    session: AsyncSession,
+    quest_id: str,
+    choice_id: str,
+) -> str | None:
+    """Return the quest ID unlocked by a specific player choice, or None.
+
+    Queries the graph for an outgoing UNLOCKS edge where ``r.on_choice_id == choice_id``
+    and returns the destination quest ID. LIMIT 1 is applied — only one branch should
+    match a given choice_id; if none match, returns None (back-compat: null on_choice_id
+    edges are not matched by this query).
+
+    Args:
+        session: Active Neo4j async session.
+        quest_id: Source quest node ID.
+        choice_id: Player choice ID to match against UNLOCKS.on_choice_id.
+
+    Returns:
+        Next quest ID if a matching UNLOCKS edge exists, otherwise None.
+    """
+    result = await session.run(
+        _CYPHER_GET_CHOICE_UNLOCKED_QUEST,
+        quest_id=quest_id,
+        choice_id=choice_id,
+    )
+    record = await result.single()
+    await result.consume()
+    next_quest_id: str | None = record["next_quest_id"] if record else None
+    _logger.debug(
+        "choice_unlocked_quest_fetched",
+        extra={"quest_id": quest_id, "choice_id": choice_id, "matched": next_quest_id is not None},
+    )
+    return next_quest_id

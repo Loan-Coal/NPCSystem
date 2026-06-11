@@ -3,8 +3,11 @@ Module: quest_chain_resolver
 Layer: engines
 Purpose: Resolves quest chain transitions — after a quest reaches a terminal outcome,
     queries UNLOCKS edges and calls offer_quest for each unlocked successor.
+    Also supports choice-based branching (EXP-218): choose() selects the successor
+    whose UNLOCKS.on_choice_id matches the player's choice_id.
 Dependencies: npc_engine.graph.quest_chain_queries, npc_engine.utils.logging (structured).
-Used by: npc_engine.engines.quest.quest_lifecycle_engine (injected as optional param)
+Used by: npc_engine.engines.quest.quest_lifecycle_engine (injected as optional param),
+    npc_engine.api.routes.quest (POST /quest/{id}/choose)
 
 Does NOT: call the LLM, generate quests, or modify graph state directly.
 Does NOT: wire into api/dependencies.py (slice-2 responsibility).
@@ -18,7 +21,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.quest_chain_queries import get_unlocked_quests
+from npc_engine.graph.quest_chain_queries import get_choice_unlocked_quest, get_unlocked_quests
 
 
 if TYPE_CHECKING:
@@ -117,3 +120,54 @@ class QuestChainResolver:
                     "player_id": player_id,
                 },
             )
+
+    async def choose(
+        self,
+        *,
+        session: AsyncSession,
+        quest_id: str,
+        player_id: str,
+        choice_id: str,
+    ) -> str | None:
+        """Select and offer the successor quest matching the player's choice.
+
+        Queries for an UNLOCKS edge where ``on_choice_id == choice_id``. If found,
+        calls ``offer_quest`` for the matched successor and returns its ID.
+        If no edge matches (including when all UNLOCKS edges have null on_choice_id),
+        returns None without calling offer_quest — preserving auto-unlock back-compat.
+
+        Args:
+            session: Active Neo4j async session.
+            quest_id: The quest the player just made a choice in.
+            player_id: Player character ID.
+            choice_id: Identifier of the player's chosen option (capped upstream).
+
+        Returns:
+            The next quest ID that was offered, or None if no match.
+        """
+        next_quest_id = await get_choice_unlocked_quest(
+            session=session,
+            quest_id=quest_id,
+            choice_id=choice_id,
+        )
+        if next_quest_id is None:
+            _logger.info(
+                "quest_choice_no_match",
+                extra={"quest_id": quest_id, "choice_id": choice_id, "player_id": player_id},
+            )
+            return None
+        await self._offer_service.offer_quest(
+            session=session,
+            next_quest_id=next_quest_id,
+            player_id=player_id,
+        )
+        _logger.info(
+            "quest_choice_resolved",
+            extra={
+                "quest_id": quest_id,
+                "choice_id": choice_id,
+                "next_quest_id": next_quest_id,
+                "player_id": player_id,
+            },
+        )
+        return next_quest_id
