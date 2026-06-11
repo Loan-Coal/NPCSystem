@@ -147,8 +147,9 @@ re-seeding); **EXP-32 + EXP-87 can run in parallel with KE-6** (no conflict).
 
 ---
 
-## Phase 20 — API Exit Contract: `response_model` on all routes (BATCH5, ISSUE-052 side-effect)
+## Phase 20 — API Exit Contract: `response_model` on all routes (BATCH5, ISSUE-052 side-effect) ✅ (2026-06-11)
 **Goal:** Every route emits a typed OpenAPI schema body. Game studios generating a client from `/openapi.json` get real stubs, not empty `{}`. Closes ISSUE-052 (mypy `no-any-return` from dict returns) as a side-effect.
+**Completion note (2026-06-11):** all ~125 routes now declare `response_model` (`OkEnvelope[dict|list]`; bare `action` route uses `dict[str, Any]`). `NPCStateResponse` typed via `api/response_models/`. Generic graph services kept `dict[str, Any]` per DEC-088. FA102 sweep was a no-op (codebase already has `from __future__ import annotations`). `make type` = 0; ISSUE-052 [FIXED].
 **Effort:** L (120 routes, ~30 files). No runtime behaviour changes — schema + exit-validation only.
 **Constraint:** 300-line file limit. If adding models pushes a route file over 300 lines, extract models into `api/response_models/<module>.py` rather than waiving. `api/schemas.py` is already near the limit — extract, do not waive.
 **Notes:**
@@ -157,17 +158,17 @@ re-seeding); **EXP-32 + EXP-87 can run in parallel with KE-6** (no conflict).
 - Dynamic graph routes may use `OkEnvelope[dict[str, Any]]` where a tighter model is impractical (the registry is dynamic). Document the choice with an inline comment; no DECISIONS entry unless a reviewer flags it.
 - Run the FA102 future-annotations `--fix` sweep as its own separate commit (`chore(types): add future-annotations to all src files`).
 
-- [ ] **S20.1** Envelope — add `OkEnvelope[T](BaseModel, Generic[T])` with `success: bool`, `data: T`, `meta: dict | None` to `api/route_helpers.py`; annotate `ok_response()` return type. Add `ErrEnvelope` for documented error responses.
+- [x] **S20.1** Envelope — add `OkEnvelope[T](BaseModel, Generic[T])` with `success: bool`, `data: T`, `meta: dict | None` to `api/route_helpers.py`; annotate `ok_response()` return type. Add `ErrEnvelope` for documented error responses.
   - Exit: `make type` still 0; `OkEnvelope` importable.
-- [ ] **S20.2** Typed sub-models — replace raw `dict`/`list[dict]` in `NPCStateResponse` (`character`, `relations`, `events` fields → `CharacterNode`, `RelationEdge`, `EventNode`); type `generic_node_service.upsert_node/patch_node` and `generic_edge_service.upsert_edge` against registry-validated Pydantic models instead of `dict[str, Any]`.
+- [x] **S20.2** Typed sub-models — replace raw `dict`/`list[dict]` in `NPCStateResponse` (`character`, `relations`, `events` fields → `CharacterNode`, `RelationEdge`, `EventNode`); type `generic_node_service.upsert_node/patch_node` and `generic_edge_service.upsert_edge` against registry-validated Pydantic models instead of `dict[str, Any]`.
   - Exit: `NPCStateResponse` fields are typed Pydantic models; `make type` 0.
-- [ ] **S20.3** Route sweep batch A — add `response_model=OkEnvelope[X]` to: `action`, `batch`, `beliefs`, `causality`, `clock`, `debts`, `economy`, `factions`, `goals`.
+- [x] **S20.3** Route sweep batch A — add `response_model=OkEnvelope[X]` to: `action`, `batch`, `beliefs`, `causality`, `clock`, `debts`, `economy`, `factions`, `goals`.
   - Exit: `make check` green after each commit.
-- [ ] **S20.4** Route sweep batch B — `gossip_spread`, `graph`, `graph_admin`, `groups`, `interaction`, `items`, `location_graph`, `location_history`, `memories`, `pledges`.
+- [x] **S20.4** Route sweep batch B — `gossip_spread`, `graph`, `graph_admin`, `groups`, `interaction`, `items`, `location_graph`, `location_history`, `memories`, `pledges`.
   - Exit: `make check` green.
-- [ ] **S20.5** Route sweep batch C — `quest`, `quest_generation`, `rumor_trace`, `rumors`, `schedules`, `secrets`, `skills`, `system`, `traits`, `treaties`, `witnessed`. Exempt: `/health` (bare 200), WebSocket route.
+- [x] **S20.5** Route sweep batch C — `quest`, `quest_generation`, `rumor_trace`, `rumors`, `schedules`, `secrets`, `skills`, `system`, `traits`, `treaties`, `witnessed`. Exempt: `/health` (bare 200), WebSocket route.
   - Exit: `make check` green.
-- [ ] **S20.6** Verification — add test asserting zero routes are missing `response_model` (excluding `/health` + WS). Run `curl /openapi.json` spot-check; assert no route body is `{}`. Ruff FA102 `future-annotations` sweep (automated `--fix`).
+- [x] **S20.6** Verification — add test asserting zero routes are missing `response_model` (excluding `/health` + WS). Run `curl /openapi.json` spot-check; assert no route body is `{}`. Ruff FA102 `future-annotations` sweep (automated `--fix`).
   - Exit: `make check` green; OpenAPI non-empty assertion passes; ISSUE-052 closed.
 
 ---
@@ -305,3 +306,6 @@ health gate and is green as of Phase 16 completion (1837 passed, 22 skipped, 98%
 | 10 | 2026-06-10 | S16.3 | `content_ceiling_v1.yaml`; `build_system_prompt(content_rating=)`; `OutputModerationService`; canned fallback on violation; 3 eval cases; `_build_llm_client` + `_apply_output_ceiling` helpers; DEC-081 | NPC output capped under `everyone`; `make check` green (1837 passed) |
 | 11 | 2026-06-10 | Phase 17 planning | `evals/cases/anti_hallucination_demo.json` (41 labeled cases, EXP-32 fixture); `expansion/briefs/KE-6-stable-id-seeding.md`; `expansion/briefs/EXP-87-location-hierarchy.md`; ROADMAP Phase 17 + Phase X restructure; EXPANSION_INDEX Phase 17 items | Phase 17 scoped and ready for `/expand-parallel`; EXP-32 unblocked |
 | 12 | 2026-06-11 | Phase 17 reconcile | Verified all S17.1–S17.8 landed (EXP-14/32/51/87/92/95 + EXP-19 slices); schema gates approved DEC-083/084/085/086; ticked checkboxes + cleared stale 🔶 notes. S17.9 stays deprioritized | Phase 17 marked ✅; next target is Phase 20 |
+| 13 | 2026-06-11 | S20.1–S20.2 | `OkEnvelope[T]` + `ErrEnvelope` in `route_helpers.py` (`test_route_helpers.py`); `NPCStateResponse` typed via new `api/response_models/npc_state.py` (CharacterNode/RelationEdge/EventNode); DEC-088 (generic services stay dynamic) | Envelope importable; NPCStateResponse typed; `make type` 0 |
+| 14 | 2026-06-11 | S20.3–S20.5 | `response_model` swept across all ~125 routes (batches A/B/C + locations/reputation); `OkEnvelope[dict\|list]`, bare `action` route `dict[str, Any]` | Every route declares a typed body; gate green each batch |
+| 15 | 2026-06-11 | S20.6 | `test_route_response_model_contract.py` (zero routes missing `response_model`; non-empty OpenAPI bodies; OkEnvelope component present); FA102 sweep no-op; ISSUE-052 [FIXED] | Phase 20 ✅; 1924 tests green, mypy 0 |

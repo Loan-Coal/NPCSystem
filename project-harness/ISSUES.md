@@ -140,7 +140,10 @@ every other NPC skips the loop, so the bug never fired for them.
 **Why deferred:** Deleting a non-temporary file requires human approval per CLAUDE.md; out of scope for the SEV-07 bug fix.
 **To fix:** With approval, delete `token_budget_enforcer.py` and its `test_context_pipeline.py` tests; confirm no imports remain.
 
-## ISSUE-052: 256 mypy type errors across 86 files (type gate red)
+## [FIXED] ISSUE-052: 256 mypy type errors across 86 files (type gate red)
+**Fixed:** 2026-06-11, in Phase 20 (S20.1–S20.6). `make type` is now 0 errors across 430 files
+(`no-any-return` cluster eliminated); `OkEnvelope[T]` + per-route `response_model` landed and the
+S20.6 contract test asserts every route emits a typed, non-empty OpenAPI body.
 **Found:** 2026-06-03, during the multi-agent codebase review (SEV-14/SEV-15)
 **Severity:** P2 (annoying)
 **Where:** `src/` (86 files); see `project-harness/review-evidence/04_type.log`. Root clusters: ~90 `no-any-return` from `dict[Any,Any]` route returns, 22 `FrozenApiModel`-as-base-class in `api/schemas.py`, `create_model(__config__=...)` in `type_registry/runtime_models.py`, `Record`/`BaseModel` arg/attr errors in `graph/*_writer.py`, 14 validator `no-any-return` in `config.py`.
