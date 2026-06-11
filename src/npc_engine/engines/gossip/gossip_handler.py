@@ -249,6 +249,11 @@ class GossipHandler:
                 seed,
             )
 
+            # Compute belief_confidence before gossip_distort so it can bias
+            # distortion-type selection (EXP-213: receiver_confidence kwarg).
+            belief_confidence = compute_confidence(
+                source_trust=trust, event_severity=severity_int
+            )
             distortion = gossip_distort(
                 event_summary=str(row["summary"]),
                 sharer_honesty=honesty_int,
@@ -259,11 +264,11 @@ class GossipHandler:
                 faction_standing=best_standing,
                 hostile_distortion_factor=self._weight_config.hostile_distortion_factor,
                 is_canonical=bool(row.get("is_canonical", False)),
+                receiver_confidence=belief_confidence,
+                confidence_high_threshold=self._weight_config.confidence_high_threshold,
+                confidence_low_threshold=self._weight_config.confidence_low_threshold,
             )
             knowledge_state = "knows" if distortion.distortion_type is None else "rumor"
-            belief_confidence = compute_confidence(
-                source_trust=trust, event_severity=severity_int
-            )
             write_entry: dict = {
                 "receiver_id": receiver["id"],
                 "event_id": str(row["event_id"]),
