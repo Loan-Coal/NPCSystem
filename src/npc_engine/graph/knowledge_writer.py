@@ -5,7 +5,7 @@ Purpose: Writes learned-fact belief nodes and provenance-annotated BELIEVES edge
 Does NOT: contain engine logic, call LLMs, or validate facts — validation is in KnowledgeExtractionEngine.
 Dependencies: neo4j.AsyncSession, stdlib hashlib.
 Dependencies injected: AsyncSession (per call).
-Used by: engines.knowledge_learning.knowledge_extraction_engine
+Used by: engines.knowledge_learning.knowledge_extraction_engine, engines.deception.deception_engine
 """
 
 from __future__ import annotations
@@ -35,7 +35,9 @@ MATCH (c:Character {id: $npc_id})
 MERGE (c)-[r:BELIEVES]->(b)
 SET r.source_character_id = $source_character_id,
     r.learned_at_tick     = $learned_at_tick,
-    r.confidence          = $confidence
+    r.confidence          = $confidence,
+    r.is_deception        = $is_deception,
+    r.deception_goal_id   = $deception_goal_id
 RETURN b.id AS belief_id
 """
 
@@ -54,10 +56,15 @@ async def write_belief(
     source_character_id: str,
     learned_at_tick: int,
     game_time_str: str,
+    is_deception: bool = False,
+    deception_goal_id: str | None = None,
 ) -> str:
     """Merge a Belief node and create/update the BELIEVES edge with provenance fields.
+
     Merges the belief by a stable (npc_id, content) hash so repeated identical facts
     dedup, and creates/updates the BELIEVES edge with DEC-072 provenance fields.
+    Optional deception fields (DEC-103 / EXP-228) are back-compat — defaults preserve
+    existing callers that do not pass them.
 
     Args:
         session: Active Neo4j async session.
@@ -67,6 +74,9 @@ async def write_belief(
         source_character_id: ID of the character who stated the fact (provenance).
         learned_at_tick: Game tick at which the fact was learned (provenance).
         game_time_str: Human-readable game-time string stored on the belief node.
+        is_deception: True when this belief is a deliberate false-belief (EXP-228).
+            Defaults to False for all existing callers (back-compat).
+        deception_goal_id: Goal ID that motivated the deception; None for ordinary beliefs.
 
     Returns:
         Stable belief id (truncated SHA-256 of npc_id:content); identical facts dedup.
@@ -83,5 +93,7 @@ async def write_belief(
             npc_id=npc_id,
             source_character_id=source_character_id,
             learned_at_tick=learned_at_tick,
+            is_deception=is_deception,
+            deception_goal_id=deception_goal_id,
         )
     return belief_id

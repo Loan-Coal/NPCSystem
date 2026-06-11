@@ -67,6 +67,25 @@ class AntiHallucinationSummary(BaseModel):
     over_refusal_count: int
 
 
+def classify_deception_belief(belief: dict[str, Any]) -> str:
+    """Classify a belief dict as 'intended' or 'hallucination' for eval scoring.
+
+    A belief with is_deception=True is a *deliberate* false claim planted by an
+    NPC to advance a goal (EXP-228 / DEC-103).  The anti-hallucination guard must
+    not treat it as a guard failure — the engine intended the false content.
+    All other beliefs (is_deception absent or False) remain classified as
+    'hallucination' so the guard is not weakened for ordinary unsupported claims.
+
+    Args:
+        belief: Dict with at minimum an 'id' field.  May include 'is_deception' (bool).
+    Returns:
+        'intended' when is_deception is True; 'hallucination' otherwise.
+    """
+    if belief.get("is_deception") is True:
+        return "intended"
+    return "hallucination"
+
+
 def _is_refusal(response_text: str) -> bool:
     """Return True if the response contains at least one refusal keyword."""
     lowered = response_text.lower()
