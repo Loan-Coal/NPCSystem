@@ -136,7 +136,7 @@ top of those APIs. Overnight execution driver: `project-harness/DEMO_BUILD_LOOP.
 - [x] **H2.5 (DEMO-D2-04)** — quests ~6→18 across 6 chains over the full quest lifecycle (`post_quest_*`). Exit: chains are acceptable/completable and feed H1.1's quest-chain win path.
 - [ ] **H2.6 (DEMO-D2-05)** — rival quest variants + a `GameController` accept-guard (can't accept opposing-faction quests simultaneously). Exit: accepting one rival quest locks the other.
 - [ ] **H2.7 (DEMO-D2-08)** — promote Village/Tavern eval worlds to playable Free-Play: de-hardcode `game_end_checker` win/lose constants to be per-world. Exit: all three worlds are pickable + winnable.
-- [ ] **H2.8 (DEMO-D2-07)** — replayable scenario forks: `BranchBeat` in scripted scenes (`scenarios/`) over H2.1, with a persisted `BranchState`. Exit: a scripted scenario replays to a different outcome.
+- [x] **H2.8 (DEMO-D2-07)** — replayable scenario forks: `BranchBeat` in scripted scenes (`scenarios/`) over H2.1, with a persisted `BranchState`. Exit: a scripted scenario replays to a different outcome.
 
 #### H3 — Legacy gameplay-engine surfaces (Pillar 1 · consume H0 enablers)
 - [ ] **H3.1 (DEMO-D1-01/D2-11)** — oath panel + `pledge_poller`: swear/list (type-A over `post_pledge`/`get_pledges_for_npc`) + break (H0.1) + an oath-driven betrayal arc (H2.1). Exit: the player swears, breaks, and the relationship turns.
