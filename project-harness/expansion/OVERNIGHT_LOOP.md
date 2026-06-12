@@ -169,6 +169,10 @@ automatically; do not poll.
   demo 723. **🎉 ALL 30 ITEMS DONE (EXP-201..230). PROGRAM COMPLETE. LOOP STOPPED — no further wake.**
 
 ## Deferred follow-ups (slice-2, for a future session — not blocking)
+
+> **PROMOTED 2026-06-12** → planned into `project-harness/ROADMAP.md` as **Phase F** (activate engines +
+> API routes: F1 wiring, F2 routes, F3 correctness) and **Phase G** (demo expansion). The list below is
+> the raw source; ROADMAP Phase F/G is the actionable, sequenced version. Execute via `/expand-next`.
 - Wiring: EXP-201 phase write call-site; EXP-209 trigger_router + EXP-210 proactive_queue → scheduler/WS
   drain; EXP-219 trait emotion model + EXP-226 player-model + EXP-227 director → composition root/scheduler;
   EXP-228 eval `classify_deception_belief` into the live eval loop; EXP-229 detection (revive investigation).

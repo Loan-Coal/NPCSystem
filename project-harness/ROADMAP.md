@@ -1,8 +1,10 @@
 # NPCSystem — Engine Roadmap
 
-**Status:** Phases 0–26 complete + a prior /expand-parallel expansion backlog (legacy EXP-10..57)
-largely shipped. This file's "Next" section is the **forward** plan from the 2026-06-11 expansion
-analysis, reconciled against code (10 re-proposed items were already built and dropped).
+**Status:** Phases 0–26 complete; the 2026-06-11→12 expansion program (EXP-201..230) is **fully shipped**
+(slice-1 of each item — engines/models/graph/demo surfaces built + tested, `make check` 2062 / 86.18%).
+Many engines, however, are **built but dormant** (not wired into the tick loop / composition root, and
+not exposed via a REST/WS route the demo can reach). This file's **"Next"** section is the slice-2 plan:
+**Phase F activates + exposes the engines** so the demo can use them, then **Phase G expands the demo**.
 
 ## Archive (completed history)
 
@@ -16,7 +18,82 @@ analysis, reconciled against code (10 re-proposed items were already built and d
 
 ---
 
-## Next — Expansion program (2026-06-11 EXPANSION_ANALYSIS, reconciled)
+## Next — Slice-2: activate engines (Phase F) → expand demo (Phase G)
+
+> The Phase A–E program built each capability as a **slice 1** (engine logic + graph + tests, mostly
+> new-file-add) but deliberately deferred the **wiring** (scheduler tick / composition-root injection /
+> WS delivery) and the **API read routes**. The demo is a pure REST/WS client (zero `src/` imports), so a
+> built engine is only usable by the demo once it (a) **runs** in the live system and (b) is **reachable**
+> via a route. **Phase F closes both gaps; Phase G then builds the demo on top.** Deferred-item source:
+> `project-harness/expansion/OVERNIGHT_LOOP.md` §Deferred follow-ups. Driver for execution: `/expand-next`
+> (or `/expand-parallel` for the conflict-free wiring/route batches).
+> **Sequencing rule:** finish Phase F before Phase G — every G step depends on an F route/wiring it surfaces.
+
+### Phase F — Activate & expose (engine wiring + API routes)
+- **Goal:** every built-but-dormant Phase A–E engine **runs** in the tick loop / composition root **and**
+  is **reachable** by the demo via a REST/WS route. Exit-of-phase: the demo client can observe, for a live
+  NPC, its relationship phase, the NPC's model of the player, active schemes, director beats, and receive
+  proactive lines over WS.
+- **Effort:** ~3 sessions · **Leverages:** `api/dependencies_engines.py` (scheduler composition root — already
+  wires proactive + reputation engines), the tick scheduler, `dialogue_ws.push_proactive_line` (exists),
+  `engines/relationship/standing.py`.
+- **Constraints:** DIP — all wiring through `api/dependencies.py` / `dependencies_engines.py` (sole composition
+  roots); `scheduler→api` delivery uses the DEC-098 in-process queue (no upward import); a new graph node
+  (F3 SESSION_TURNS) needs a fresh `DECISIONS.md` entry before it lands; routes are additive (auth on all).
+
+#### F1 — Tick & composition-root wiring (make the engines actually run)
+- [ ] **F1.1 (EXP-201 s2)** — call `write_relationship_phase` after the relation delta in `dialogue_handler`. Exit: a phase transition is persisted during a live dialogue turn (integration test).
+- [ ] **F1.2 (EXP-209+210 s2)** — wire `trigger_router` into the tick scheduler (form proactive intents from memory/need/event) **and drain `ProactiveQueue` → `push_proactive_line`** over the dialogue WS. Exit: an idle connected player receives an NPC-initiated line end-to-end (WS integration test).
+- [ ] **F1.3 (EXP-219 s2)** — inject `TraitModulatedEmotionModel` into `EmotionUpdater` via the composition root (config-selectable vs `VadEmotionModel`). Exit: emotion deltas are trait-modulated in a live tick.
+- [ ] **F1.4 (EXP-226 s2)** — wire `PlayerModelEngine` into the scheduler (update each NPC's model of the player per tick window). Exit: `player_model` nodes update on tick (integration test).
+- [ ] **F1.5 (EXP-227 s2)** — wire the drama `director` into the scheduler (evaluate `decide()` on idle/plateau; emit the beat via the events engine). Exit: the director injects a beat during a live idle run.
+- [ ] **F1.6 (EXP-229 s2)** — wire `SchemingEngine` into the scheduler (advance active scheme steps per tick) + **detection** by reviving `engines/investigation` (discover schemes). Exit: a scheme advances a step across ticks and an investigating NPC can surface it.
+- [ ] **F1.7 (EXP-212 s2)** — add a forgetting-decay tick that prunes/decays `is_forgettable` non-pinned memories on a schedule. Exit: low-salience memories decay over ticks (integration test).
+
+#### F2 — API read surfaces (so the demo can SEE the new state)
+- [ ] **F2.1** — `GET` relationship **phase** for an NPC↔player (extend `routes/relationship.py`, which today returns only standing). Exit: route returns `relationship_phase` + `phase_started_at_tick`.
+- [ ] **F2.2 (EXP-226)** — `GET` player-model (the NPC's model of the player) via a new `routes/player_model.py`. Exit: route returns perceived_trust/intent for (npc, player).
+- [ ] **F2.3 (EXP-229)** — `GET` active schemes for an NPC (+ discovered flag) via a new `routes/schemes.py`. Exit: route returns the NPC's active schemes + steps.
+- [ ] **F2.4 (EXP-209/227)** — confirm/add the proactive **pending-intents** route (`GET /v1/dialogue/pending`) and a director-beat read. Exit: the demo client can poll pending NPC-initiated intents + recent director beats.
+- [ ] **F2.5 (EXP-228, optional)** — read surface that marks `is_deception=true` beliefs (for the buyer-facing "tell"). Exit: a route/flag distinguishes deception beliefs without leaking them as truth.
+
+#### F3 — Engine correctness & cleanup (so the activated engines behave well)
+- [ ] **F3.1 (EXP-202 s2)** — replace the random `SECRET_BASE_PROBABILITY` gossip secret-share gate with a `Standing` threshold (gate secret-sharing by standing). Exit: secret-share probability tracks standing band.
+- [ ] **F3.2 (EXP-204 s2)** — surface NPC **mood** (canonical `EmotionStore`, DEC-099) into the dialogue context (needs already surfaced). Exit: dialogue context carries a mood line.
+- [ ] **F3.3 (EXP-228 s2)** — wire `classify_deception_belief` into the **live** anti-hallucination eval loop (`_classify_case`). Exit: a planted `is_deception` belief is not scored as a hallucination failure, while ordinary unsupported claims still are.
+- [ ] **F3.4 (EXP-214 cleanup)** — DI-inject `MemoryEngine` into `quest_lifecycle_engine` via the composition root (remove the `__init__` instantiation). Exit: no module-level engine instantiation; `make check` green.
+- [ ] **F3.5 (EXP-230 s2)** — migrate session persistence to a dedicated `SESSION_TURNS` node (fixes the `player_id` property-key collision, OQ-9). **Needs a DECISIONS entry (new node type).** Exit: session turns persist on a `SESSION_TURNS` node; distinct player ids never collide.
+- [ ] **F3.6 (EXP-217 seed)** — seed player `KNOWS_ABOUT` edges so `GET /player/{id}/events` returns data for the demo player. Exit: the player-events endpoint returns seeded events on a fresh `make demo-seed`.
+
+### Phase G — Demo expansion (use the now-live engines)
+- **Goal:** surface the activated engines in the pygame demo — connect the built-but-static panels to live
+  data, add new panels/beats for the cognition layer, and add an "intrigue" scenario that exercises
+  deception + scheming + player-model. This is the recordable, sells-the-engine demo.
+- **Effort:** ~2.5 sessions · **Leverages:** the F2 routes, existing panels (`RetrievalPanel`, `FactionBoard`,
+  `RightPanel` tabs), `EngineClient`, the scripted runner + interactive window.
+- **Constraints:** pure demo-side (zero `src/` imports); each G step consumes an F2 route (do not start a G
+  step whose route isn't live); demo file-size waivers apply (DEC-029/032/034/036/049/074/075/105).
+
+#### G1 — Connect built-but-static surfaces to live data
+- [ ] **G1.1 (EXP-207 s2)** — live-wire the facial-expression glyph (window updates `left_panel` per dialogue turn). Exit: glyph updates live during play.
+- [ ] **G1.2 (EXP-208 s2)** — retrieval-explainer poller (auto-refresh the RETRIEVAL panel each turn via `get_retrieval_debug`). Exit: panel updates live.
+- [ ] **G1.3 (EXP-221 s2)** — render the PART_OF location breadcrumb in the live window draw loop. Exit: breadcrumb shows for nested locations live.
+- [ ] **G1.4 (EXP-201)** — show relationship **phase** (per NPC) in the relationship/left panel via F2.1. Exit: the NPC's phase is visible and updates.
+
+#### G2 — New demo surfaces for the cognition engines (need F2 routes)
+- [ ] **G2.1 (EXP-226)** — "What they think of YOU" player-model panel (via F2.2). Exit: panel shows the focused NPC's perceived_trust/intent.
+- [ ] **G2.2 (EXP-229)** — intrigue/scheme board: active NPC schemes + steps, hidden vs discovered (via F2.3). Exit: schemes render; discovery flips a step's state.
+- [ ] **G2.3 (EXP-227)** — surface director beats (a "something stirs" cue when the director injects) (via F2.4). Exit: an injected beat shows in the window.
+- [ ] **G2.4 (EXP-209/210)** — proactive dialogue in the **interactive** window end-to-end (NPC hails the player live over WS; highlight + prefill already built in EXP-225). Exit: an idle player is hailed live in the window.
+- [ ] **G2.5 (EXP-228)** — deception "tell" affordance: a subtle buyer-facing reveal when an NPC states a flagged false belief (via F2.5). Exit: the demo can reveal a deception without breaking the in-fiction illusion.
+
+#### G3 — Content & scenarios that exercise the new layer
+- [ ] **G3.1** — a scripted **"Intrigue"** scenario (new `demo_game/scenarios/`) that drives deception + scheming + player-model into one recordable arc (works under `--cinematic`). Exit: `make demo-run` plays the intrigue arc end-to-end.
+- [ ] **G3.2** — seed enrichment so the new panels have data on first run (scheme seeds, KNOWS_ABOUT from F3.6, a deception setup). Exit: panels are non-empty on a fresh `make demo-seed`.
+
+---
+
+## Completed ✅ — Expansion program (2026-06-11→12 · EXP-201..230, slice 1)
 
 > Source: `project-harness/expansion/EXPANSION_ROADMAP.md`; mini-specs in `ENGINE_GAPS.md` /
 > `NEW_ENGINES.md` / `DEMO_EXPANSIONS.md`; seams in `FEASIBILITY.md`; granted decisions DEC-097..104.
