@@ -194,6 +194,34 @@ async def test_builder_outputs_fixed_schema_with_emotion(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_builder_surfaces_canonical_emotion_store_mood(monkeypatch) -> None:
+    """F3.2/DEC-099: a canonical EmotionStore mood (emotion_state) wins over the stale
+    character.current_mood graph property and is carried as the dialogue-context mood line."""
+    _patch_graph_calls(
+        monkeypatch,
+        tier_a_items=[
+            ContextItem(key="character:npc_1", text='{"id":"npc_1","name":"Aldric"}',
+                        tier="tierA", priority=100),
+        ],
+    )
+    settings = Settings(
+        API_KEY_SECRET="npc_dev_secret_2026_alpha",
+        NEO4J_URI="bolt://localhost:7687", NEO4J_USER="neo4j", NEO4J_PASSWORD="password",
+        PROMPT_TOKEN_BUDGET=800,
+    )
+
+    serialized = await build_serialized_context(
+        session=None,  # type: ignore[arg-type]
+        settings=settings, llm_config=_llm_config(), embedding_index=FakeEmbeddingIndex(rows=[]),
+        npc_id="npc_1", player_message="hello", session_turns=["player: hi"],
+        emotion_state={"current_mood": "furious"},  # canonical EmotionStore snapshot
+    )
+    payload = json.loads(serialized)
+    # Canonical mood wins over the character bundle's stale "anxious".
+    assert payload["npc"]["emotion"]["current_mood"] == "furious"
+
+
+@pytest.mark.asyncio
 async def test_builder_enforces_final_serialized_budget(monkeypatch) -> None:
     _patch_graph_calls(
         monkeypatch,
