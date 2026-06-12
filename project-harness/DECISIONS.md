@@ -1339,3 +1339,13 @@ data module is ~465 lines of pure lists/dicts (no logic).
 set across more files for no logic reason would be artificial (and the module exists to keep `seed.py`
 under the limit in the first place).
 **Consequence:** demo content lives in one readable data module; `seed.py` stays the orchestration file.
+
+## DEC-110: `demo_game/ui/branch_panel.py` 300-line waiver (H2.1 modal branch widget)
+**Date:** 2026-06-12 · **Status:** ✅ ACCEPTED (demo UI file-size waiver, consistent with DEC-029/032/036/108/109)
+**Context:** H2.1's `BranchPanelWidget` is a single cohesive pygame modal (prompt + numbered options +
+keyboard selection + the draw constants/layout for the overlay), ~346 lines. It mirrors the existing
+panel widgets (`actions_panel.py`, `game_window.py` overlays).
+**Decision:** Waive the 300-line rule for `demo_game/ui/branch_panel.py`; re-baseline via
+`make check-rules-update`. Splitting the render into a sibling would scatter tightly-coupled draw
+state/constants for no cohesion gain. Functions stay ≤40 lines / ≤3 nesting.
+**Consequence:** the branch choice modal lives in one widget file, consistent with the other demo panels.
