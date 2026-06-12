@@ -94,15 +94,9 @@ automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** A
-- **Phase in progress:** E3 (FINAL; E1+E2 done; 28 of 30: EXP-201..228)
-- **Next batch (E3, FINAL):** orchestrator creates `base_nodes/scheme.yaml` (id, npc_id, goal, status,
-  created_at) + `base_edges/executes_scheme.yaml` (character→scheme) + `base_edges/scheme_step.yaml`
-  (single-string dst_type) + `MAX_ACTIVE_SCHEMES_PER_NPC` in config.py; validate via `pytest -k
-  'type_registry or contract or registry'`; commit; then dispatch EXP-229 (scheming engine, XL — first
-  reader/writer) + EXP-230 (session persistence, no schema: SessionStore save_to_graph/load_to_graph +
-  lifespan hooks). Gate once.
-- **On all EXP-201..230 [x]: STOP the loop with a final wrap-up (do NOT schedule another wake).**
-- **Last green commit:** d4d06fa (E2 EXP-228 integrated, gate green).
+- **Phase in progress:** ✅ COMPLETE — all 30 items (EXP-201..230) shipped. **LOOP STOPPED.**
+- **Last green commit:** 6777ccd (E3 EXP-229/230 integrated). Final gate: make check 2062 (86.18%), demo 723.
+- **No further wake scheduled.** Slice-2 follow-ups remain (see §Deferred follow-ups below / per-item notes).
 
 ## Progress Log
 
@@ -168,3 +162,16 @@ automatically; do not poll.
   validated 94 tests, committed 86f53f8), THEN EXP-228 (merge-first, clean cherry-pick). **✅** (3b42061).
   1 fix: R006 on plant_belief + write_belief (verbose Args docstrings → trimmed). Fix d4d06fa. Green: make
   check 2048 (86.09%). **28 of 30 done.** (`from src` grep hit was a docstring, not an import.)
+- **12 · 2026-06-12 cycle 12 (FINAL)** — Phase E3: created `scheme.yaml` + `executes_scheme.yaml` +
+  `scheme_step.yaml` (DEC-104, validated 63 tests, f44a181) + both config consts (9b28f05, pre-added so
+  EXP-229/230 wouldn't both edit config.py), THEN EXP-229/230 (merge-first, clean cherry-pick). **Both ✅**
+  (f985fbe/c30df84) — clean one-shot, NO integration fix. Gate green first try: make check 2062 (86.18%),
+  demo 723. **🎉 ALL 30 ITEMS DONE (EXP-201..230). PROGRAM COMPLETE. LOOP STOPPED — no further wake.**
+
+## Deferred follow-ups (slice-2, for a future session — not blocking)
+- Wiring: EXP-201 phase write call-site; EXP-209 trigger_router + EXP-210 proactive_queue → scheduler/WS
+  drain; EXP-219 trait emotion model + EXP-226 player-model + EXP-227 director → composition root/scheduler;
+  EXP-228 eval `classify_deception_belief` into the live eval loop; EXP-229 detection (revive investigation).
+- EXP-202 secret-share gossip gate (slice 2); EXP-204 mood (EmotionStore) into context; EXP-207/208/221
+  demo draw-loop/poller wiring; EXP-212 forgetting decay scheduling; EXP-214 DI-inject MemoryEngine.
+- EXP-230 dedicated SESSION_TURNS node (player_id key collision, OQ-9); EXP-217 seed player KNOWS_ABOUT edges.

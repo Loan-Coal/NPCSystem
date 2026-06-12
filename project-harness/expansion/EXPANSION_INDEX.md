@@ -166,15 +166,15 @@ Effort: S/M/L/XL · `🔶` = orchestrator applies pre-approved schema before thi
 - [x] **EXP-226** player-model / theory-of-mind engine · M · DONE 4148fef · DEC-102 node/edge + `engines/player_model/` + `graph/player_model_writer` (upsert/get); scheduler wiring = slice 2
 - [x] **EXP-227** player-aware drama director engine · M · DONE 7b0f1d9 · `engines/director/` pure `decide`; scheduler wiring = slice 2
 - [x] **EXP-228** NPC deception / false-belief engine · L · DONE 3b42061 · DEC-103 fields + `engines/deception/` plant_belief (is_deception=true) + eval `classify_deception_belief` carve-out (live-loop wiring = slice 2)
-- [ ] **EXP-229** long-horizon covert scheming engine 🔶DEC-104 · XL · deps: EXP-228 · new `scheme.yaml`+2 edges(orch) + engine + revive `investigation`
-- [ ] **EXP-230** session history persisted across restart · M · deps: none · edit `engines/dialogue/session_store.py` + lifespan hooks
+- [x] **EXP-229** long-horizon covert scheming engine (slice 1) · XL · DONE f985fbe · DEC-104 node/edges + `engines/scheming/` (form/cap/advance) + `graph/scheme_writer`; detection (investigation) + scheduler wiring = slice 2
+- [x] **EXP-230** session history persisted across restart · M · DONE c30df84 · `SessionStore.save/load_to_graph` (blob on Character) + lifespan hooks (best-effort). Follow-up: dedicated SESSION_TURNS node (player_id key collision, OQ-9)
 
 ## Next candidate batch (suggested)
 
-**LAST BATCH (cycle 11):** E2 EXP-228 ✅ — DEC-103 applied (86f53f8); integrated (3b42061 + fix d4d06fa).
-Gate green (make check 2048, 86.09%). 1 fix (R006 ×2 docstring trims). **28 of 30 done.**
-**NEXT (E3, FINAL):** scheme node + 2 edges + MAX_ACTIVE_SCHEMES_PER_NPC, then EXP-229 + EXP-230. On all [x] → STOP + wrap-up.
-**Apply each new node type WITH its first user; STOP+surface if type-registry gate resists in 2 tries.**
+**LAST BATCH (cycle 12, FINAL):** E3 EXP-229/230 ✅ — DEC-104 applied (f44a181), config consts (9b28f05);
+integrated (f985fbe/c30df84), clean one-shot (no fix). Gate green (make check 2062, 86.18%; demo 723).
+**🎉 ALL 30 ITEMS DONE — EXP-201..230. PROGRAM COMPLETE.**
+**LOOP STOPPED** (no further wake scheduled). Slice-2 follow-ups tracked per item (wiring/detection/etc).
 
 ---
 

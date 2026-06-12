@@ -79,8 +79,8 @@ analysis, reconciled against code (10 re-proposed items were already built and d
 - [x] **EXP-226** player-model / theory-of-mind engine (DEC-102; 4148fef). player_model node upsert/read via HAS_PLAYER_MODEL; wiring = slice 2.
 - [x] **EXP-227** player-aware drama director engine (7b0f1d9). `decide` injects a beat on idle/plateau/hostile; wiring = slice 2.
 - [x] **EXP-228** NPC deception / false-belief engine (DEC-103; 3b42061). NPC plants a flagged false belief; eval has a deception carve-out (live wiring = slice 2).
-- [ ] **EXP-229** long-horizon covert scheming engine (DEC-104 scheme node+edges). Exit: a 2-step scheme advances across ticks.
-- [ ] **EXP-230** session history persisted across restart (SESSION_TURNS). Exit: session survives a restart.
+- [x] **EXP-229** long-horizon covert scheming engine (DEC-104; f985fbe). Form/cap/advance a scheme via scheme node+edges; detection = slice 2.
+- [x] **EXP-230** session history persisted across restart (c30df84). save/load_to_graph + lifespan hooks (best-effort); dedicated node = follow-up.
 
 ### Already shipped — dropped from this program (verified in code 2026-06-11)
 EXP-14 (emotion persistence, write-through), EXP-20-equiv (world-state quest triggers wired),
