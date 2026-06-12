@@ -129,7 +129,7 @@ top of those APIs. Overnight execution driver: `project-harness/DEMO_BUILD_LOOP.
 - [x] **H1.6 (DEMO-D3-06)** — end-screen score/grade `compute_grade(...) → S/A/B/C` over the win axes. Exit: a graded end-card renders.
 
 #### H2 — Content & branching (Pillar 2 · type-A · rebaselined from 8 NPC / 4 loc)
-- [ ] **H2.1 (DEMO-D2-06)** — branch primitive: `branch_node.py` + `branch_state.py` + `branch_effects.py` (typed effects: belief/rep/world-state/quest, OCP one-file-per-effect) + `ui/branch_panel.py`, resolving choices over existing client methods + H0.5. Exit: a player choice forks outcomes in the running demo.
+- [x] **H2.1 (DEMO-D2-06)** — branch primitive: `branch_node.py` + `branch_state.py` + `branch_effects.py` (typed effects: belief/rep/world-state/quest, OCP one-file-per-effect) + `ui/branch_panel.py`, resolving choices over existing client methods + H0.5. Exit: a player choice forks outcomes in the running demo.
 - [x] **H2.2 (DEMO-D2-01)** — cast expansion 8→14 NPCs; split NPC data into `demo_game/seed_npc_data.py` (data-only) to respect the size rule. Exit: new NPCs seed idempotently (KE-6).
 - [x] **H2.3 (DEMO-D2-02)** — locations 4→7 + a district tier via `post_part_of` (`client.py:776`, already live). Exit: nested locations seed; breadcrumb shows them (EXP-221).
 - [x] **H2.4 (DEMO-D2-03)** — factions 3→5 alliable. Exit: two new factions seed with standings the economy can read.
