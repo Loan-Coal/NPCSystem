@@ -10,6 +10,7 @@ R001|demo_game/run_scenes.py
 R001|demo_game/scenarios/run_tavern_intrigue.py
 R001|demo_game/scenarios/run_village_crisis.py
 R001|demo_game/seed.py
+R001|demo_game/seed_npc_data.py
 R001|demo_game/ui/emotion_panel.py
 R001|demo_game/ui/game_window.py
 R001|demo_game/ui/knowledge_sidebar.py

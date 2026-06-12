@@ -1327,3 +1327,15 @@ extracted into named `check_win_multi`/`check_lose_*`/`check_overreach`/`compute
 helpers). Splitting the predicates into a sibling module would scatter one decision across files.
 **Consequence:** the demo's win/lose economy lives in one readable evaluator; the function-size and
 nesting rules remain enforced.
+
+## DEC-109: `demo_game/seed_npc_data.py` 300-line waiver (H2 content data module)
+**Date:** 2026-06-12 · **Status:** ✅ ACCEPTED (demo data-module file-size waiver, consistent with DEC-029/.../108)
+**Context:** H2.2–H2.5 expanded the demo world (8→14 NPCs, +4 venues + 2 districts, 3→5 factions,
+6→18 quests/6 chains). Per the H2.2 spec the new NPC/location/faction/quest payload data was split
+into a new DATA-ONLY module `demo_game/seed_npc_data.py` specifically to keep `seed.py` smaller. The
+data module is ~465 lines of pure lists/dicts (no logic).
+**Decision:** Waive the 300-line rule for `demo_game/seed_npc_data.py`; re-baseline via
+`make check-rules-update`. It is data with zero branching/functions; splitting one cohesive content
+set across more files for no logic reason would be artificial (and the module exists to keep `seed.py`
+under the limit in the first place).
+**Consequence:** demo content lives in one readable data module; `seed.py` stays the orchestration file.

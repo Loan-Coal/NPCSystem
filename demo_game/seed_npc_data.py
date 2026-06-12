@@ -7,6 +7,11 @@ Purpose: Data-only module containing NPC definitions for the expanded Munich dem
          vex_spymaster, tilda_herbalist, garrick_deserter) with their inner-life data.
 Dependencies: demo_game.constants (for stable ID constants only)
 Used by: demo_game.seed
+
+300-LINE WAIVER (DEC-109): this is a DATA-ONLY module (NPC/location/faction/quest payload
+lists for the H2 content expansion) with zero logic. It exists precisely to keep `seed.py`
+small; the seed data itself is inherently >300 lines and splitting one cohesive content set
+across more files would be artificial. See DECISIONS.md DEC-109.
 """
 
 from __future__ import annotations
