@@ -113,6 +113,7 @@ async def test_gossip_handler_calls_propagate_always():
             new_callable=AsyncMock,
         ),
         patch("npc_engine.engines.gossip.gossip_handler.propagate_secret", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.select_gossip_secret", new_callable=AsyncMock, return_value=None),
     ):
         await handler.run_tick(session=session, tick_id=1)
         mock_batch_write.assert_called_once()
@@ -169,6 +170,7 @@ async def test_gossip_creates_rumor_when_distortion_level_exceeds_threshold():
             new_callable=AsyncMock,
         ) as mock_believe,
         patch("npc_engine.engines.gossip.gossip_handler.random.random", return_value=1.0),
+        patch("npc_engine.engines.gossip.gossip_handler.select_gossip_secret", new_callable=AsyncMock, return_value=None),
     ):
         with patch("npc_engine.engines.gossip.gossip_handler.gossip_distort") as mock_distort:
             from npc_engine.engines.gossip.gossip_distort import GossipDistortion
@@ -234,6 +236,7 @@ async def test_gossip_no_rumor_when_distortion_below_threshold():
             new_callable=AsyncMock,
         ) as mock_believe,
         patch("npc_engine.engines.gossip.gossip_handler.random.random", return_value=1.0),
+        patch("npc_engine.engines.gossip.gossip_handler.select_gossip_secret", new_callable=AsyncMock, return_value=None),
     ):
         with patch("npc_engine.engines.gossip.gossip_handler.gossip_distort") as mock_distort:
             from npc_engine.engines.gossip.gossip_distort import GossipDistortion

@@ -34,9 +34,10 @@ from npc_engine.engines.gossip.gossip_distort import (
 )
 from npc_engine.engines.gossip.knowledge_propagator import (
     propagate_secret,
-    SECRET_BASE_PROBABILITY,
     SECRET_DISTORTION_CHANCE,
 )
+from npc_engine.engines.gossip.secret_share_policy import secret_share_probability
+from npc_engine.engines.relationship.standing import derive_standing
 from npc_engine.graph.gossip_batch_queries import (
     select_batch_event_trust,
     select_gossip_secret,
@@ -368,24 +369,37 @@ class GossipHandler:
             )
             propagated += 1
 
-            # Secret propagation: lower base probability, higher distortion chance.
-            secret_seed = _secret_rng_seed(sharer["id"], receiver["id"], tick_id)
-            LOGGER.debug(
-                "gossip_secret_rng seed=%d sharer=%s receiver=%s tick=%d",
-                secret_seed, sharer["id"], receiver["id"], tick_id,
+            await self._maybe_propagate_secret(
+                session=session, sharer_id=sharer["id"], receiver_id=receiver["id"],
+                trust=int(row["trust"]), tick_id=tick_id,
             )
-            rng = random.Random(secret_seed)
-            if rng.random() < SECRET_BASE_PROBABILITY:
-                secret_record = await select_gossip_secret(session, sharer_id=sharer["id"])
-                if secret_record is not None:
-                    distorted = rng.random() < SECRET_DISTORTION_CHANCE
-                    await propagate_secret(
-                        session=session,
-                        receiver_id=receiver["id"],
-                        secret_id=str(secret_record["secret_id"]),
-                        source_character_id=sharer["id"],
-                        tick_id=tick_id,
-                        distorted=distorted,
-                    )
 
         return propagated
+
+    async def _maybe_propagate_secret(
+        self, *, session: AsyncSession, sharer_id: str, receiver_id: str, trust: int, tick_id: int,
+    ) -> None:
+        """Share a secret from sharer to receiver with a Standing-gated probability (F3.1).
+
+        The share probability tracks the sharer's Standing band toward the receiver
+        (derived from the relationship trust scalar already in scope) — HOSTILE/WARY
+        never confide; ALLIED confide most. Distortion chance is unchanged.
+        """
+        standing = derive_standing(trust=trust, fear=0, affection=0)
+        secret_seed = _secret_rng_seed(sharer_id, receiver_id, tick_id)
+        LOGGER.debug(
+            "gossip_secret_rng seed=%d sharer=%s receiver=%s tick=%d standing=%s",
+            secret_seed, sharer_id, receiver_id, tick_id, standing.value,
+        )
+        rng = random.Random(secret_seed)
+        if rng.random() >= secret_share_probability(standing):
+            return
+        secret_record = await select_gossip_secret(session, sharer_id=sharer_id)
+        if secret_record is None:
+            return
+        distorted = rng.random() < SECRET_DISTORTION_CHANCE
+        await propagate_secret(
+            session=session, receiver_id=receiver_id,
+            secret_id=str(secret_record["secret_id"]), source_character_id=sharer_id,
+            tick_id=tick_id, distorted=distorted,
+        )
