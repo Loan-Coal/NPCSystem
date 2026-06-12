@@ -121,12 +121,12 @@ top of those APIs. Overnight execution driver: `project-harness/DEMO_BUILD_LOOP.
 - [x] **H0.5 (DEMO-D2-06 dep)** — `EngineClient.post_quest_choice` wrapper over EXP-218's existing `POST /quest/{id}/choose`. Exit: the demo can resolve a quest branch choice; unblocks the branch primitive (H2.1).
 
 #### H1 — Win/lose economy depth (Pillar 3 · mostly type-A · delta to `game_end_checker.py`)
-- [ ] **H1.1 (DEMO-D3-01)** — multi-objective win: faction-standing **OR** wealth **OR** quest-chain (**OR** brokered treaty via H0.2). Exit: any one path triggers a win; faction/wealth/quest paths need no enabler.
-- [ ] **H1.2 (DEMO-D3-02)** — currency win/lose axis (`WEALTH_WIN_THRESHOLD`; bankruptcy `BANKRUPTCY_LOSE_THRESHOLD` armed after gold was once positive) over `GoldPoller`. Exit: gold can win or lose the game.
-- [ ] **H1.3 (DEMO-D3-03)** — faction tension/overreach: gains with one faction cost a rival via `adjust_npc_reputation` (`client.py:1414`) as a branch/quest effect (type-A; server-side auto-decrement deferred type-C). Exit: a rival penalty fires on a friendly action.
-- [ ] **H1.4 (DEMO-D3-04)** — tick deadline pressure: relative `DEADLINE_TICKS` from a latched start tick via `get_clock_state().current_tick`. Exit: missing objectives by the deadline loses (needs auto-tick on).
-- [ ] **H1.5 (DEMO-D3-05)** — ≥2 distinct reachable failure states (bankruptcy H1.2 + deadline H1.4 + an authored `CONTROLS` legion trigger via `upsert_edge`), with a `failure_reason` → `LOSE_SUBTITLES` end-card. Exit: the inert single-lose is replaced by ≥2 player-caused losses.
-- [ ] **H1.6 (DEMO-D3-06)** — end-screen score/grade `compute_grade(...) → S/A/B/C` over the win axes. Exit: a graded end-card renders.
+- [x] **H1.1 (DEMO-D3-01)** — multi-objective win: faction-standing **OR** wealth **OR** quest-chain (**OR** brokered treaty via H0.2). Exit: any one path triggers a win; faction/wealth/quest paths need no enabler.
+- [x] **H1.2 (DEMO-D3-02)** — currency win/lose axis (`WEALTH_WIN_THRESHOLD`; bankruptcy `BANKRUPTCY_LOSE_THRESHOLD` armed after gold was once positive) over `GoldPoller`. Exit: gold can win or lose the game.
+- [x] **H1.3 (DEMO-D3-03)** — faction tension/overreach: gains with one faction cost a rival via `adjust_npc_reputation` (`client.py:1414`) as a branch/quest effect (type-A; server-side auto-decrement deferred type-C). Exit: a rival penalty fires on a friendly action.
+- [x] **H1.4 (DEMO-D3-04)** — tick deadline pressure: relative `DEADLINE_TICKS` from a latched start tick via `get_clock_state().current_tick`. Exit: missing objectives by the deadline loses (needs auto-tick on).
+- [x] **H1.5 (DEMO-D3-05)** — ≥2 distinct reachable failure states (bankruptcy H1.2 + deadline H1.4 + an authored `CONTROLS` legion trigger via `upsert_edge`), with a `failure_reason` → `LOSE_SUBTITLES` end-card. Exit: the inert single-lose is replaced by ≥2 player-caused losses.
+- [x] **H1.6 (DEMO-D3-06)** — end-screen score/grade `compute_grade(...) → S/A/B/C` over the win axes. Exit: a graded end-card renders.
 
 #### H2 — Content & branching (Pillar 2 · type-A · rebaselined from 8 NPC / 4 loc)
 - [ ] **H2.1 (DEMO-D2-06)** — branch primitive: `branch_node.py` + `branch_state.py` + `branch_effects.py` (typed effects: belief/rep/world-state/quest, OCP one-file-per-effect) + `ui/branch_panel.py`, resolving choices over existing client methods + H0.5. Exit: a player choice forks outcomes in the running demo.
