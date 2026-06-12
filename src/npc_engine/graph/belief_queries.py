@@ -44,11 +44,12 @@ RETURN b.id AS belief_id
 """
 
 CYPHER_GET_BELIEFS_FOR_CHARACTER = """
-MATCH (c:Character {id: $character_id})-[:BELIEVES]->(b:Belief)
+MATCH (c:Character {id: $character_id})-[r:BELIEVES]->(b:Belief)
 RETURN b.id AS id,
        b.content AS content,
        toInteger(b.confidence) AS confidence,
-       b.created_at_game_time AS created_at_game_time
+       b.created_at_game_time AS created_at_game_time,
+       coalesce(r.is_deception, false) AS is_deception
 ORDER BY b.confidence DESC
 LIMIT $k
 """
@@ -77,7 +78,9 @@ async def get_beliefs_for_character(
         k: Maximum number of beliefs to return.
 
     Returns:
-        List of dicts with id, content, confidence, and created_at_game_time fields.
+        List of dicts with id, content, confidence, created_at_game_time, and
+        is_deception (the BELIEVES-edge flag; False when unset) fields. The flag is a
+        buyer-facing "tell" marking deliberately false beliefs without altering content.
     """
     result = await session.run(
         CYPHER_GET_BELIEFS_FOR_CHARACTER,
