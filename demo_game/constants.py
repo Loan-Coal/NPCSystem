@@ -3,10 +3,12 @@ Module: constants
 Layer: demo_game
 Purpose: Fixed world-layout constants derived from the seeded demo world.
          NPC-to-location mapping, display names, faction assignments,
-         ordered location list, and the centralised UI colour palette.
+         ordered location list, the centralised UI colour palette, and
+         H1 economy win/lose thresholds.
 Dependencies: none
 Used by: demo_game.ui.game_window, demo_game.ui.widgets, demo_game.ui.left_panel,
-         demo_game.ui.quest_panel
+         demo_game.ui.quest_panel, demo_game.game_end_checker,
+         demo_game.game_end_poller
 
 FACTION_COLOURS and NPC_FACTIONS are hardcoded from the demo seed (DEC-028).
 Faction membership is stable for the 5-NPC Munich demo world; no API call needed.
@@ -14,6 +16,7 @@ PALETTE is the single source of truth for all UI colours (DEC-035).
 
 EXP-223: added 3 new NPCs (sera_barmaid, harwick_guard, nel_pickpocket) and
          1 new location (loc_chapel) within existing factions.
+H1: added economy win/lose threshold constants (DEMO-D3-01 through D3-06).
 """
 
 from __future__ import annotations
@@ -133,6 +136,69 @@ NPC_DIALOGUE_TIMEOUT_S: float = 120.0
 SPREAD_RUMOR_TEXT: str = "A hooded stranger was seen leaving the castle gates at midnight carrying stolen gold."
 SPREAD_RUMOR_SEVERITY: int = 70
 
+# ---------------------------------------------------------------------------
+# Faction win condition constants (originally in game_end_checker.py; moved
+# here so all threshold constants live in one place per H1 design).
+# ---------------------------------------------------------------------------
+
+# Minimum standing to count a faction as "allied" for win/arc tracking.
+WIN_STANDING_THRESHOLD: int = 50
+# Number of demo factions that must reach WIN_STANDING_THRESHOLD to win via faction path.
+WIN_MIN_FACTIONS: int = 2
+# The three factions the player can ally with.
+DEMO_FACTIONS: tuple[str, ...] = ("merchants_guild", "city_guard", "thieves_guild")
+
+# ---------------------------------------------------------------------------
+# H1 economy win/lose thresholds (DEMO-D3-01 through D3-06)
+# ---------------------------------------------------------------------------
+
+# --- Wealth axis (DEMO-D3-01 / DEMO-D3-02) ---
+# Gold needed to trigger the wealth win path.  Must be reachable by trade/bribe
+# surplus but not trivially so vs _PLAYER_STARTING_GOLD (seed.py:778 = 100).
+WEALTH_WIN_THRESHOLD: int = 500
+# Gold at or below this value triggers bankruptcy lose (armed only after gold > 0).
+BANKRUPTCY_LOSE_THRESHOLD: int = 0
+
+# --- Quest-chain axis (DEMO-D3-01) ---
+# Minimum number of quest IDs from WIN_QUEST_CHAIN_IDS that must be "completed"
+# to satisfy the quest-chain win path.
+QUEST_CHAIN_WIN_COUNT: int = 3
+# Quest IDs that count toward the quest-chain win.  Sourced from demo seed:
+# aldric_deliver_quest (seed.py:824), demo_patrol_duty, demo_missing_goods (seed.py:1085),
+# demo_captain_report, demo_fence_confrontation (seed.py:1063).
+WIN_QUEST_CHAIN_IDS: frozenset[str] = frozenset(
+    {
+        "aldric_deliver_quest",
+        "demo_patrol_duty",
+        "demo_missing_goods",
+        "demo_captain_report",
+        "demo_fence_confrontation",
+    }
+)
+
+# --- Tick-deadline axis (DEMO-D3-04) ---
+# Number of ticks from the *start tick* (latched on first poll) before deadline.
+# At 1 auto-tick per real-world second this gives ~40 s; adjust for balance.
+DEADLINE_TICKS: int = 40
+
+# --- Faction-tension axis (DEMO-D3-03) ---
+# Standing floor below which a rival faction is considered "floored" (overreach).
+RIVAL_FLOOR: int = -25
+# Rival pairs: winning with the key faction at the expense of the value faction.
+# Symmetric in spirit but stored directionally for the check_overreach predicate.
+FACTION_RIVALS: dict[str, str] = {
+    "merchants_guild": "thieves_guild",
+    "city_guard": "thieves_guild",
+}
+
+# --- Grade thresholds (DEMO-D3-06) ---
+# Scores are computed in compute_grade() from faction standings + gold + ticks.
+GRADE_S_MIN_SCORE: int = 90
+GRADE_A_MIN_SCORE: int = 70
+GRADE_B_MIN_SCORE: int = 50
+# Anything below GRADE_B_MIN_SCORE → "C".
+
+# ---------------------------------------------------------------------------
 # Faction membership for each demo NPC — derived from seed, stable for Munich demo.
 # See DEC-028 for why this is hardcoded rather than fetched from the graph.
 # EXP-223: three new NPCs added; all use existing factions (no new faction added).

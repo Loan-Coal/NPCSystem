@@ -31,7 +31,7 @@ import pygame
 from demo_game.client import EngineClient, EngineClientError
 from demo_game.config import DemoConfig, get_demo_config
 from demo_game.constants import LOCATION_DISPLAY_NAMES, LOCATION_NPC_MAP, LOCATIONS, NPC_DISPLAY_NAMES, NPC_LOCATION_MAP, PALETTE
-from demo_game.game_end_checker import ARC_WIN_SUBTITLES
+from demo_game.game_end_checker import ARC_WIN_SUBTITLES, LOSE_SUBTITLES, WIN_PATH_SUBTITLES
 from demo_game.game_controller import ControllerCallbacks, GameController
 from demo_game.game_end_poller import GameEndPoller
 from demo_game.gold_poller import GoldPoller
@@ -635,32 +635,71 @@ class GameWindow:
             self._screen.blit(txt, (btn_rect.centerx - txt.get_width() // 2, btn_rect.centery - txt.get_height() // 2))
 
     def _draw_game_over_overlay(self) -> None:
-        """Draw a semi-transparent win/lose overlay over the full game area."""
+        """Draw a semi-transparent win/lose overlay over the full game area.
+
+        H1: renders win_path, grade (on win), failure_reason (on lose),
+        total_gold, and ticks_remaining from ObjectiveState.
+        """
         is_win = self._game_over_outcome == "win"
         overlay_color = _CLR_OVERLAY_WIN_BG if is_win else _CLR_OVERLAY_LOSE_BG
         overlay = pygame.Surface((self._left_w, self._usable_h), pygame.SRCALPHA)
         overlay.fill(overlay_color)
         self._screen.blit(overlay, (0, 0))
 
-        font_big = FontLoader.get(36)
-        headline = "VICTORY!" if is_win else "DEFEATED"
-        text_color = _CLR_OVERLAY_WIN_TEXT if is_win else _CLR_OVERLAY_LOSE_TEXT
-        headline_surf = font_big.render(headline, True, text_color)
+        objective_state = self._game_end_poller.get_state()
         cx = self._left_w // 2
         cy = self._usable_h // 2
-        self._screen.blit(headline_surf, (cx - headline_surf.get_width() // 2, cy - 40))
 
+        self._draw_overlay_headline(is_win, objective_state, cx, cy)
+        self._draw_overlay_subtitle(is_win, objective_state, cx, cy)
+        self._draw_overlay_stats(objective_state, cx, cy)
+        font_sub = FontLoader.get(16)
+        hint_surf = font_sub.render("Press Q to quit", True, _CLR_OVERLAY_SUB)
+        self._screen.blit(hint_surf, (cx - hint_surf.get_width() // 2, cy + 80))
+
+    def _draw_overlay_headline(self, is_win: bool, state: object, cx: int, cy: int) -> None:
+        """Render the VICTORY/DEFEATED headline with optional grade letter."""
+        font_big = FontLoader.get(36)
+        text_color = _CLR_OVERLAY_WIN_TEXT if is_win else _CLR_OVERLAY_LOSE_TEXT
+        grade = getattr(state, "grade", None)
+        if is_win and grade:
+            headline = f"VICTORY!  [{grade}]"
+        else:
+            headline = "VICTORY!" if is_win else "DEFEATED"
+        headline_surf = font_big.render(headline, True, text_color)
+        self._screen.blit(headline_surf, (cx - headline_surf.get_width() // 2, cy - 60))
+
+    def _draw_overlay_subtitle(self, is_win: bool, state: object, cx: int, cy: int) -> None:
+        """Render the win-path or failure-reason subtitle line."""
         font_sub = FontLoader.get(16)
         if is_win:
-            arc_faction = self._game_end_poller.get_state().arc_faction
-            sub = ARC_WIN_SUBTITLES.get(arc_faction, ARC_WIN_SUBTITLES[None])
+            win_path = getattr(state, "win_path", None)
+            arc_faction = getattr(state, "arc_faction", None)
+            if win_path and win_path in WIN_PATH_SUBTITLES:
+                sub = WIN_PATH_SUBTITLES[win_path]
+            elif win_path == "faction":
+                sub = ARC_WIN_SUBTITLES.get(arc_faction, ARC_WIN_SUBTITLES[None])
+            else:
+                sub = ARC_WIN_SUBTITLES.get(arc_faction, ARC_WIN_SUBTITLES[None])
         else:
-            sub = "The Iron Legion has taken the market square. All is lost."
+            failure_reason = getattr(state, "failure_reason", None)
+            sub = LOSE_SUBTITLES.get(failure_reason or "legion", LOSE_SUBTITLES["legion"])
         sub_surf = font_sub.render(sub, True, _CLR_OVERLAY_SUB)
-        self._screen.blit(sub_surf, (cx - sub_surf.get_width() // 2, cy + 14))
+        self._screen.blit(sub_surf, (cx - sub_surf.get_width() // 2, cy - 20))
 
-        hint_surf = font_sub.render("Press Q to quit", True, _CLR_OVERLAY_SUB)
-        self._screen.blit(hint_surf, (cx - hint_surf.get_width() // 2, cy + 40))
+    def _draw_overlay_stats(self, state: object, cx: int, cy: int) -> None:
+        """Render gold and ticks-remaining stats below the subtitle."""
+        font_sub = FontLoader.get(14)
+        total_gold = getattr(state, "total_gold", None)
+        ticks_remaining = getattr(state, "ticks_remaining", None)
+        parts: list[str] = []
+        if total_gold is not None:
+            parts.append(f"Gold: {total_gold}")
+        if ticks_remaining is not None:
+            parts.append(f"Ticks left: {max(ticks_remaining, 0)}")
+        if parts:
+            stats_surf = font_sub.render("  |  ".join(parts), True, _CLR_OVERLAY_SUB)
+            self._screen.blit(stats_surf, (cx - stats_surf.get_width() // 2, cy + 10))
 
 
 def run(window_w: int = 1280, window_h: int = 720) -> None:
