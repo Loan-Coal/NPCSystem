@@ -143,10 +143,10 @@ as the continuation. The runtime re-invokes automatically; do not poll.
 
 ## State pointer
 
-- **Phase in progress:** F2 (API read surfaces).
-- **Current batch:** F1.1–F1.5, F1.7, F2.1, **F2.2** landed; F1.6 + F2.3 DEFERRED/BLOCKED. Next candidate: **F2.4** (proactive pending-intents + director-beat read), then **F2.5** (deception flag, optional).
-- **Last green commit:** `1e4f1b6` feat(api): F2.2 — player-model route.
-- **Next:** **F2.4** — `GET /v1/dialogue/pending` for proactive pending intents + a director-beat read. ⚠ INVESTIGATE data sources first: ProactiveQueue (F1.2) drains-on-read (not a "pending" peek); intent_formation_engine enqueues intents (where persisted?); director beats are NOT persisted (F1.5 emits Events, beat metadata only in tick response). May need a non-draining peek on ProactiveQueue and/or reading recent Events. If F2.4's sources are too thin, scope to what's readable + log the gap. Then F2.5 (mark `is_deception` beliefs — read-only flag). Route conventions: auth, OkEnvelope, route test.
+- **Phase in progress:** F2 (API read surfaces) — nearly done.
+- **Current batch:** F1.1–F1.5, F1.7, F2.1, F2.2, **F2.4** landed; F1.6 + F2.3 DEFERRED/BLOCKED. Next candidate: **F2.5** (optional deception-flag read), then **Phase F3** (correctness/cleanup: F3.1–F3.4, F3.6; F3.5 🔶 needs DEC-106 SESSION_TURNS schema).
+- **Last green commit:** `6ecb47f` feat(api): F2.4 — director-beat read surface.
+- **Next:** **F2.5** (optional) — a read surface that marks `is_deception=true` beliefs for the buyer-facing "tell" (distinguish deception beliefs without leaking them as truth). Check `base_edges/believes.yaml` for the `is_deception` field (DEC-103 shipped it) + a beliefs reader/route. If thin/awkward, skip F2.5 (it's optional) and advance to **F3** — F3.1/3.2/3.4/3.6 are independent correctness items; F3.5 🔶 is the DEC-106 dialogue_turn schema (orchestrator applies just-in-time). F3.3 wires deception into the eval loop.
 
 ## Progress Log
 
@@ -209,3 +209,9 @@ as the continuation. The runtime re-invokes automatically; do not poll.
   reads F1.4 `PlayerModel` nodes via `get_player_model`, returns perceived_trust/intent (404 when absent);
   registered under API_V1_PREFIX (auth applies). Inline; +2 route tests (TestClient + dep-override/
   monkeypatch, no Neo4j). Gate green (2094 passed, 26 skipped, 86.4% cov). Commit: `1e4f1b6`.
+- **9 · 2026-06-12 F2.4** — PASS. **Pending-intents route already existed** (`GET /v1/dialogue/pending`
+  reads graph-backed intents from the wired intent_formation engine) → confirmed, no work. Added the missing
+  **director-beat read**: F1.5 beats weren't persisted, so new in-memory `DirectorBeatLog` (bounded ring
+  buffer) + `DirectorTick` records each fired beat (optional injected log, backward-compat) + `get_director_
+  beat_log()` singleton + non-destructive `GET /v1/dialogue/director-beats` (newest-first, limit). Inline;
+  +7 tests. Gate green (2101 passed, 26 skipped, 86.5% cov). Commit: `6ecb47f`.
