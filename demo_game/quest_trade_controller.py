@@ -15,6 +15,7 @@ import logging
 from typing import TYPE_CHECKING, Any, Callable
 
 from demo_game.client import EngineClient, EngineClientError
+from demo_game.constants import RIVAL_QUEST_PAIRS
 
 if TYPE_CHECKING:
     from demo_game.ui.right_panel import RightPanelRenderer
@@ -48,19 +49,35 @@ class QuestTradeController:
         self._on_set_status = on_set_status
         self.quest_id: str | None = None
         self.active_npc_id_for_trade: str | None = None
+        # Quests the player has accepted this session — used by the rival accept-guard (H2.6).
+        self._accepted_quest_ids: set[str] = set()
 
     # ------------------------------------------------------------------
     # Quest handlers
     # ------------------------------------------------------------------
 
+    def _rival_already_accepted(self, quest_id: str) -> str | None:
+        """Return an already-accepted rival of quest_id, or None (H2.6 accept-guard)."""
+        for pair in RIVAL_QUEST_PAIRS:
+            if quest_id in pair:
+                for rival in pair - {quest_id}:
+                    if rival in self._accepted_quest_ids:
+                        return rival
+        return None
+
     def on_quest_accept(self, right: RightPanelRenderer) -> None:
-        """Accept the current active quest via the lifecycle engine."""
+        """Accept the current active quest, unless a rival faction's quest is already accepted (H2.6)."""
         if not self.quest_id:
+            return
+        rival = self._rival_already_accepted(self.quest_id)
+        if rival is not None:
+            self._status(f"Cannot accept — you committed to the rival quest {rival!r}.", 2.0)
             return
         try:
             self._client.post_quest_accept(self.quest_id, self._player_id)
         except EngineClientError:
             return
+        self._accepted_quest_ids.add(self.quest_id)
         right.set_quest(self._client.get_quest(self.quest_id))
 
     def on_quest_complete(self, npc_id: str, right: RightPanelRenderer) -> None:

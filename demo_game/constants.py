@@ -243,6 +243,13 @@ WIN_QUEST_CHAIN_IDS: frozenset[str] = frozenset(
     | H2_WIN_QUEST_IDS
 )
 
+# Rival (mutually-exclusive) quest pairs (H2.6 / DEMO-D2-05): accepting one opposing-faction
+# quest locks the other. Each frozenset is a pair the GameController's accept-guard enforces —
+# e.g. the city-guard ore run vs the thieves'-guild herb gather are opposed allegiances.
+RIVAL_QUEST_PAIRS: tuple[frozenset[str], ...] = (
+    frozenset({"bren_deliver_ore", "tilda_gather_herbs"}),
+)
+
 # --- Tick-deadline axis (DEMO-D3-04) ---
 # Number of ticks from the *start tick* (latched on first poll) before deadline.
 # At 1 auto-tick per real-world second this gives ~40 s; adjust for balance.

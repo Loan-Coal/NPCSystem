@@ -193,3 +193,36 @@ def test_trade_confirm_substitutes_empty_item_type() -> None:
 
     client.post_trade.assert_called_once()
     assert client.post_trade.call_args.kwargs["item_type"] == "spice"
+
+
+# ---------------------------------------------------------------------------
+# H2.6 — rival quest accept-guard
+# ---------------------------------------------------------------------------
+
+
+def test_rival_quest_accept_is_blocked_after_committing() -> None:
+    """Accepting a rival-faction quest after committing to its pair is blocked (H2.6)."""
+    ctrl, statuses = _make_controller()
+    right = _make_right()
+
+    # Accept the city-guard ore run.
+    ctrl.quest_id = "bren_deliver_ore"
+    ctrl.on_quest_accept(right)
+    assert ctrl._client.post_quest_accept.call_count == 1
+
+    # Now try the rival thieves'-guild herb gather — must be refused (no second accept call).
+    ctrl.quest_id = "tilda_gather_herbs"
+    ctrl.on_quest_accept(right)
+    assert ctrl._client.post_quest_accept.call_count == 1
+    assert any("rival" in s.lower() for s in statuses)
+
+
+def test_non_rival_quests_both_accept() -> None:
+    """Two non-rival quests can both be accepted."""
+    ctrl, _ = _make_controller()
+    right = _make_right()
+    ctrl.quest_id = "bren_deliver_ore"
+    ctrl.on_quest_accept(right)
+    ctrl.quest_id = "nessa_deliver_medicine"  # not in any rival pair
+    ctrl.on_quest_accept(right)
+    assert ctrl._client.post_quest_accept.call_count == 2
