@@ -14,8 +14,7 @@ from typing import TYPE_CHECKING
 
 import pygame
 
-from demo_game.constants import PALETTE
-from demo_game.game_end_checker import DEMO_FACTIONS, WIN_STANDING_THRESHOLD
+from demo_game.constants import DEMO_FACTIONS, PALETTE, WIN_STANDING_THRESHOLD
 
 if TYPE_CHECKING:
     from demo_game.game_end_checker import ObjectiveState

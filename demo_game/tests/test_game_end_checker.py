@@ -23,6 +23,7 @@ import pytest
 from demo_game.constants import (
     BANKRUPTCY_LOSE_THRESHOLD,
     DEADLINE_TICKS,
+    DEMO_FACTIONS,
     FACTION_RIVALS,
     QUEST_CHAIN_WIN_COUNT,
     RIVAL_FLOOR,
@@ -32,7 +33,6 @@ from demo_game.constants import (
     WIN_STANDING_THRESHOLD,
 )
 from demo_game.game_end_checker import (
-    DEMO_FACTIONS,
     ARC_WIN_SUBTITLES,
     LOSE_SUBTITLES,
     LOSE_FACTION_ID,
@@ -49,6 +49,7 @@ from demo_game.game_end_checker import (
     detect_first_allied_faction,
     evaluate_game_end,
 )
+from demo_game.world_objectives import TAVERN_OBJECTIVES, VILLAGE_OBJECTIVES
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -519,6 +520,102 @@ def test_failure_priority_bankruptcy_over_deadline():
         start_tick=0,
     )
     assert state.failure_reason == "bankruptcy"
+
+
+# ---------------------------------------------------------------------------
+# Per-world objectives (H2.7 / DEMO-D2-08) — village + tavern eval worlds
+# ---------------------------------------------------------------------------
+
+
+def test_check_win_uses_village_factions():
+    """Allying both village factions wins via the village objectives."""
+    standings = {
+        "vw_village_council": WIN_STANDING_THRESHOLD,
+        "vw_farmers": WIN_STANDING_THRESHOLD,
+    }
+    assert check_win(standings, VILLAGE_OBJECTIVES) is True
+
+
+def test_check_win_demo_factions_ignored_in_village_world():
+    """Demo factions do not count toward the village win."""
+    standings = {f: WIN_STANDING_THRESHOLD for f in DEMO_FACTIONS}
+    assert check_win(standings, VILLAGE_OBJECTIVES) is False
+
+
+def test_village_world_is_winnable_via_faction_path():
+    records = [
+        {"faction_id": "vw_village_council", "standing": 60},
+        {"faction_id": "vw_farmers", "standing": 55},
+    ]
+    state = evaluate_game_end(records, [], objectives=VILLAGE_OBJECTIVES)
+    assert state.outcome == "win"
+    assert state.win_path == "faction"
+
+
+def test_village_world_has_no_legion_lose():
+    """Village world has no antagonist — the demo lose location never loses it."""
+    state = evaluate_game_end(
+        [], [LOSE_LOCATION_ID], objectives=VILLAGE_OBJECTIVES
+    )
+    assert state.outcome is None
+
+
+def test_village_world_quest_chain_disabled():
+    """Empty win_quest_chain_ids means completed quests cannot win the village world."""
+    state = evaluate_game_end(
+        [],
+        [],
+        completed_quest_ids=WIN_QUEST_CHAIN_IDS,
+        objectives=VILLAGE_OBJECTIVES,
+    )
+    assert state.outcome is None
+
+
+def test_village_world_has_no_overreach():
+    """No faction_rivals → overreach never blocks a village win."""
+    standings = {
+        "vw_village_council": WIN_STANDING_THRESHOLD,
+        "vw_farmers": WIN_STANDING_THRESHOLD,
+    }
+    assert check_overreach(standings, VILLAGE_OBJECTIVES) is False
+
+
+def test_tavern_world_is_winnable_via_faction_path():
+    records = [
+        {"faction_id": "tw_merchants", "standing": 80},
+        {"faction_id": "tw_innkeepers", "standing": 80},
+    ]
+    state = evaluate_game_end(records, [], objectives=TAVERN_OBJECTIVES)
+    assert state.outcome == "win"
+    assert state.win_path == "faction"
+
+
+def test_tavern_world_wealth_path_still_works():
+    """Wealth is world-agnostic — the tavern world wins on gold too."""
+    state = evaluate_game_end(
+        [], [], total_gold=WEALTH_WIN_THRESHOLD, objectives=TAVERN_OBJECTIVES
+    )
+    assert state.outcome == "win"
+    assert state.win_path == "wealth"
+
+
+def test_detect_first_allied_faction_village_world():
+    standings = {"vw_village_council": 70, "vw_farmers": 50}
+    assert (
+        detect_first_allied_faction(standings, VILLAGE_OBJECTIVES)
+        == "vw_village_council"
+    )
+
+
+def test_demo_objectives_remain_default_for_evaluate():
+    """Omitting objectives still evaluates the demo world (no regression)."""
+    records = [
+        {"faction_id": "merchants_guild", "standing": 60},
+        {"faction_id": "city_guard", "standing": 70},
+    ]
+    state = evaluate_game_end(records, [])
+    assert state.outcome == "win"
+    assert state.win_path == "faction"
 
 
 def test_failure_priority_deadline_over_overreach():

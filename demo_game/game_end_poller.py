@@ -23,13 +23,12 @@ import logging
 import threading
 from typing import TYPE_CHECKING
 
-from demo_game.constants import WIN_QUEST_CHAIN_IDS
 from demo_game.game_end_checker import (
-    LOSE_FACTION_ID,
     ObjectiveState,
     detect_first_allied_faction,
     evaluate_game_end,
 )
+from demo_game.world_objectives import DEMO_OBJECTIVES, WorldObjectives
 
 if TYPE_CHECKING:
     from demo_game.client import EngineClient
@@ -67,6 +66,8 @@ class GameEndPoller:
         client: Initialised EngineClient.
         player_id: Player character ID to poll reputation for.
         interval_s: Poll interval in seconds. Defaults to 3.0.
+        objectives: Per-world win/lose tuning (defaults to the demo world).
+            Selects which antagonist faction, quest chain, and factions to poll.
     """
 
     def __init__(
@@ -74,10 +75,12 @@ class GameEndPoller:
         client: EngineClient,
         player_id: str,
         interval_s: float = 3.0,
+        objectives: WorldObjectives = DEMO_OBJECTIVES,
     ) -> None:
         self._client = client
         self._player_id = player_id
         self._interval = interval_s
+        self._objectives = objectives
 
         self._lock = threading.Lock()
         self._state: ObjectiveState = _INITIAL_STATE
@@ -131,14 +134,7 @@ class GameEndPoller:
         """
         try:
             reputation = self._client.get_npc_reputation(self._player_id)
-            controls_edges = self._client.get_graph_edges(
-                "CONTROLS", src_id=LOSE_FACTION_ID
-            )
-            controlled_locations = [
-                edge.get("dst_id", "")
-                for edge in controls_edges
-                if edge.get("dst_id")
-            ]
+            controlled_locations = self._fetch_controlled_locations()
 
             total_gold = self._fetch_gold()
             current_tick = self._fetch_current_tick()
@@ -157,10 +153,13 @@ class GameEndPoller:
                 completed_quest_ids=completed_quest_ids,
                 treaty_signed=treaty_signed,
                 bankruptcy_armed=self._seen_positive_gold,
+                objectives=self._objectives,
             )
 
             if self._first_allied_faction is None:
-                detected = detect_first_allied_faction(new_state.faction_standings)
+                detected = detect_first_allied_faction(
+                    new_state.faction_standings, self._objectives
+                )
                 if detected is not None:
                     self._first_allied_faction = detected
 
@@ -173,6 +172,26 @@ class GameEndPoller:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _fetch_controlled_locations(self) -> list[str]:
+        """Fetch locations controlled by the world's antagonist faction.
+
+        Worlds with no antagonist (empty lose_faction_id) return an empty list,
+        so the legion lose path never fires for them.
+
+        Returns:
+            Location IDs under antagonist CONTROLS.
+        """
+        if not self._objectives.lose_faction_id:
+            return []
+        controls_edges = self._client.get_graph_edges(
+            "CONTROLS", src_id=self._objectives.lose_faction_id
+        )
+        return [
+            edge.get("dst_id", "")
+            for edge in controls_edges
+            if edge.get("dst_id")
+        ]
 
     def _fetch_gold(self) -> int | None:
         """Fetch the player's current gold balance via the Character node.
@@ -201,13 +220,13 @@ class GameEndPoller:
             return None
 
     def _fetch_completed_quests(self) -> frozenset[str]:
-        """Poll WIN_QUEST_CHAIN_IDS quests and return the completed subset.
+        """Poll the world's win_quest_chain_ids and return the completed subset.
 
         Returns:
             Frozenset of quest IDs that have status "completed".
         """
         completed: set[str] = set()
-        for quest_id in WIN_QUEST_CHAIN_IDS:
+        for quest_id in self._objectives.win_quest_chain_ids:
             try:
                 quest = self._client.get_quest(quest_id)
                 if quest and quest.get("status") == "completed":

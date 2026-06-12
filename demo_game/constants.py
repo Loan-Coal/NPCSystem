@@ -271,6 +271,10 @@ GRADE_S_MIN_SCORE: int = 90
 GRADE_A_MIN_SCORE: int = 70
 GRADE_B_MIN_SCORE: int = 50
 # Anything below GRADE_B_MIN_SCORE → "C".
+#
+# Per-world win/lose objective bundles (WorldObjectives / WORLD_OBJECTIVES) live
+# in demo_game.world_objectives — they compose the thresholds above into a single
+# bundle per seeded world (demo / village / tavern). See world_objectives.py.
 
 # ---------------------------------------------------------------------------
 # Faction membership for each demo NPC — derived from seed, stable for Munich demo.

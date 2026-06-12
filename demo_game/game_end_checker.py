@@ -22,30 +22,22 @@ from dataclasses import dataclass
 from typing import Literal
 
 from demo_game.constants import (
-    BANKRUPTCY_LOSE_THRESHOLD,
     DEADLINE_TICKS,
-    DEMO_FACTIONS,
-    FACTION_RIVALS,
     GRADE_A_MIN_SCORE,
     GRADE_B_MIN_SCORE,
     GRADE_S_MIN_SCORE,
-    QUEST_CHAIN_WIN_COUNT,
-    RIVAL_FLOOR,
     WEALTH_WIN_THRESHOLD,
-    WIN_MIN_FACTIONS,
-    WIN_QUEST_CHAIN_IDS,
-    WIN_STANDING_THRESHOLD,
 )
+from demo_game.world_objectives import DEMO_OBJECTIVES, WorldObjectives
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-# Lose condition constants.
-# Iron Legion armies are seeded at loc_guard_barracks (see seed.py _ARMIES);
-# military_battle_service writes CONTROLS only at the battle location.
-LOSE_LOCATION_ID: str = "loc_guard_barracks"
-LOSE_FACTION_ID: str = "iron_legion"
+# Back-compat module aliases for the demo world's lose target (H2.7 moved the
+# canonical values into DEMO_OBJECTIVES; game_end_poller still imports these).
+LOSE_LOCATION_ID: str = DEMO_OBJECTIVES.lose_location_id
+LOSE_FACTION_ID: str = DEMO_OBJECTIVES.lose_faction_id
 
 # Arc-specific win ending subtitles keyed by first-allied faction (None = generic fallback).
 ARC_WIN_SUBTITLES: dict[str | None, str] = {
@@ -124,99 +116,135 @@ class ObjectiveState:
 # ---------------------------------------------------------------------------
 
 
-def detect_first_allied_faction(faction_standings: dict[str, int]) -> str | None:
-    """Return the demo faction with the highest standing at or above WIN_STANDING_THRESHOLD.
+def detect_first_allied_faction(
+    faction_standings: dict[str, int],
+    objectives: WorldObjectives = DEMO_OBJECTIVES,
+) -> str | None:
+    """Return the world faction with the highest standing at or above the threshold.
 
     Args:
         faction_standings: Map of faction_id → current standing value.
+        objectives: Per-world win/lose tuning (defaults to the demo world).
 
     Returns:
         Faction ID of the leading qualified faction, or None if none qualify.
     """
     qualified = [
         (faction_standings[f], f)
-        for f in DEMO_FACTIONS
-        if faction_standings.get(f, 0) >= WIN_STANDING_THRESHOLD
+        for f in objectives.factions
+        if faction_standings.get(f, 0) >= objectives.win_standing_threshold
     ]
     if not qualified:
         return None
     return max(qualified)[1]
 
 
-def check_win(faction_standings: dict[str, int]) -> bool:
-    """Return True if ≥ WIN_MIN_FACTIONS demo factions are at or above WIN_STANDING_THRESHOLD.
+def check_win(
+    faction_standings: dict[str, int],
+    objectives: WorldObjectives = DEMO_OBJECTIVES,
+) -> bool:
+    """Return True if ≥ win_min_factions world factions are at or above the threshold.
 
     Args:
         faction_standings: Map of faction_id → current standing value.
+        objectives: Per-world win/lose tuning (defaults to the demo world).
 
     Returns:
         True if the faction win condition is satisfied.
     """
     qualified = sum(
         1
-        for faction in DEMO_FACTIONS
-        if faction_standings.get(faction, 0) >= WIN_STANDING_THRESHOLD
+        for faction in objectives.factions
+        if faction_standings.get(faction, 0) >= objectives.win_standing_threshold
     )
-    return qualified >= WIN_MIN_FACTIONS
+    return qualified >= objectives.win_min_factions
 
 
-def check_lose(iron_legion_controls: list[str]) -> bool:
-    """Return True if the iron_legion has taken LOSE_LOCATION_ID.
+def check_lose(
+    iron_legion_controls: list[str],
+    objectives: WorldObjectives = DEMO_OBJECTIVES,
+) -> bool:
+    """Return True if the antagonist has taken the world's lose location.
+
+    A world with an empty lose_location_id (no military antagonist) never loses
+    this way.
 
     Args:
-        iron_legion_controls: Location IDs currently under iron_legion control.
+        iron_legion_controls: Location IDs currently under antagonist control.
+        objectives: Per-world win/lose tuning (defaults to the demo world).
 
     Returns:
         True if the legion lose condition is satisfied.
     """
-    return LOSE_LOCATION_ID in iron_legion_controls
+    if not objectives.lose_location_id:
+        return False
+    return objectives.lose_location_id in iron_legion_controls
 
 
-def check_lose_bankrupt(total_gold: int | None) -> bool:
-    """Return True if the player's gold has hit BANKRUPTCY_LOSE_THRESHOLD.
+def check_lose_bankrupt(
+    total_gold: int | None,
+    objectives: WorldObjectives = DEMO_OBJECTIVES,
+) -> bool:
+    """Return True if the player's gold has hit the bankruptcy threshold.
 
     Only ever fires when the caller has confirmed gold was once positive
     (the _seen_positive_gold latch in game_end_poller).
 
     Args:
         total_gold: Current gold balance; None means unavailable (not fired).
+        objectives: Per-world win/lose tuning (defaults to the demo world).
 
     Returns:
-        True if gold is available and ≤ BANKRUPTCY_LOSE_THRESHOLD.
+        True if gold is available and ≤ the bankruptcy threshold.
     """
-    return total_gold is not None and total_gold <= BANKRUPTCY_LOSE_THRESHOLD
+    return (
+        total_gold is not None
+        and total_gold <= objectives.bankruptcy_lose_threshold
+    )
 
 
-def check_lose_deadline(current_tick: int | None, won: bool) -> bool:
+def check_lose_deadline(
+    current_tick: int | None,
+    won: bool,
+    objectives: WorldObjectives = DEMO_OBJECTIVES,
+) -> bool:
     """Return True if the deadline has passed and the player has not yet won.
 
     Args:
         current_tick: Ticks elapsed from the game-start latch; None = not yet set.
         won: Whether a win condition has already been met (deadline skipped if so).
+        objectives: Per-world win/lose tuning (defaults to the demo world).
 
     Returns:
         True if the deadline is exceeded and no win path was satisfied.
     """
     if won or current_tick is None:
         return False
-    return current_tick >= DEADLINE_TICKS
+    return current_tick >= objectives.deadline_ticks
 
 
-def check_overreach(standings: dict[str, int]) -> bool:
-    """Return True if any qualified faction has a rival standing below RIVAL_FLOOR.
+def check_overreach(
+    standings: dict[str, int],
+    objectives: WorldObjectives = DEMO_OBJECTIVES,
+) -> bool:
+    """Return True if any qualified faction has a rival standing below the floor.
 
     Overreach fires when the player allies a faction but has alienated its rival
-    so severely that the victory is tainted.
+    so severely that the victory is tainted. A world with no faction_rivals never
+    triggers overreach.
 
     Args:
         standings: Map of faction_id → current standing value.
+        objectives: Per-world win/lose tuning (defaults to the demo world).
 
     Returns:
-        True if any FACTION_RIVALS pair is in overreach state.
+        True if any rival pair is in overreach state.
     """
-    for faction, rival in FACTION_RIVALS.items():
-        faction_qualified = standings.get(faction, 0) >= WIN_STANDING_THRESHOLD
-        rival_floored = standings.get(rival, 0) < RIVAL_FLOOR
+    for faction, rival in objectives.faction_rivals.items():
+        faction_qualified = (
+            standings.get(faction, 0) >= objectives.win_standing_threshold
+        )
+        rival_floored = standings.get(rival, 0) < objectives.rival_floor
         if faction_qualified and rival_floored:
             return True
     return False
@@ -227,6 +255,7 @@ def check_win_multi(
     total_gold: int | None,
     completed_quest_ids: frozenset[str],
     treaty_signed: bool,
+    objectives: WorldObjectives = DEMO_OBJECTIVES,
 ) -> Literal["faction", "wealth", "quests", "treaty"] | None:
     """Return the first win path that is satisfied, or None.
 
@@ -237,16 +266,20 @@ def check_win_multi(
         total_gold: Player gold balance, or None if unavailable.
         completed_quest_ids: Set of quest IDs with status "completed".
         treaty_signed: Whether at least one active treaty exists for the player.
+        objectives: Per-world win/lose tuning (defaults to the demo world).
 
     Returns:
         Win-path label if any path is satisfied, else None.
     """
-    if check_win(standings):
+    if check_win(standings, objectives):
         return "faction"
-    if total_gold is not None and total_gold >= WEALTH_WIN_THRESHOLD:
+    if total_gold is not None and total_gold >= objectives.wealth_win_threshold:
         return "wealth"
-    completed_chain = completed_quest_ids & WIN_QUEST_CHAIN_IDS
-    if len(completed_chain) >= QUEST_CHAIN_WIN_COUNT:
+    completed_chain = completed_quest_ids & objectives.win_quest_chain_ids
+    if (
+        objectives.win_quest_chain_ids
+        and len(completed_chain) >= objectives.quest_chain_win_count
+    ):
         return "quests"
     if treaty_signed:
         return "treaty"
@@ -259,6 +292,7 @@ def _select_failure(
     total_gold: int | None,
     ticks_from_start: int | None,
     won: bool,
+    objectives: WorldObjectives = DEMO_OBJECTIVES,
 ) -> Literal["legion", "bankruptcy", "deadline", "overreach"] | None:
     """Return the highest-priority failure reason, or None.
 
@@ -268,21 +302,22 @@ def _select_failure(
 
     Args:
         standings: Map of faction_id → current standing value.
-        iron_legion_controls: Location IDs under iron_legion control.
+        iron_legion_controls: Location IDs under antagonist control.
         total_gold: Player gold balance (bankruptcy-armed by caller).
         ticks_from_start: Ticks elapsed since game start latch; None = unchecked.
         won: Whether a win path was satisfied (deadline skipped if True).
+        objectives: Per-world win/lose tuning (defaults to the demo world).
 
     Returns:
         Failure reason string, or None if no failure condition fires.
     """
-    if check_lose(iron_legion_controls):
+    if check_lose(iron_legion_controls, objectives):
         return "legion"
-    if check_lose_bankrupt(total_gold):
+    if check_lose_bankrupt(total_gold, objectives):
         return "bankruptcy"
-    if check_lose_deadline(ticks_from_start, won):
+    if check_lose_deadline(ticks_from_start, won, objectives):
         return "deadline"
-    if check_overreach(standings):
+    if check_overreach(standings, objectives):
         return "overreach"
     return None
 
@@ -292,6 +327,7 @@ def compute_grade(
     total_gold: int | None,
     ticks_remaining: int | None,
     completed_quest_ids: frozenset[str],
+    objectives: WorldObjectives = DEMO_OBJECTIVES,
 ) -> Literal["S", "A", "B", "C"]:
     """Compute a grade S/A/B/C for a win outcome.
 
@@ -303,11 +339,12 @@ def compute_grade(
         total_gold: Final gold balance (None treated as 0).
         ticks_remaining: Ticks left before deadline (None treated as 0).
         completed_quest_ids: Set of completed quest IDs.
+        objectives: Per-world win/lose tuning (defaults to the demo world).
 
     Returns:
         Grade letter.
     """
-    faction_score = _faction_score(standings)
+    faction_score = _faction_score(standings, objectives)
     gold_score = _gold_score(total_gold)
     ticks_score = _ticks_score(ticks_remaining)
     total = faction_score + gold_score + ticks_score
@@ -320,10 +357,15 @@ def compute_grade(
     return "C"
 
 
-def _faction_score(standings: dict[str, int]) -> int:
+def _faction_score(
+    standings: dict[str, int],
+    objectives: WorldObjectives = DEMO_OBJECTIVES,
+) -> int:
     """Compute faction sub-score (0..60) from standings."""
     qualified = sum(
-        1 for f in DEMO_FACTIONS if standings.get(f, 0) >= WIN_STANDING_THRESHOLD
+        1
+        for f in objectives.factions
+        if standings.get(f, 0) >= objectives.win_standing_threshold
     )
     # 3 factions → 60, 2 → 40, 1 → 20, 0 → 0
     return min(qualified * 20, _GRADE_FACTION_MAX_SCORE)
@@ -359,6 +401,7 @@ def evaluate_game_end(
     completed_quest_ids: frozenset[str] = frozenset(),
     treaty_signed: bool = False,
     bankruptcy_armed: bool = False,
+    objectives: WorldObjectives = DEMO_OBJECTIVES,
 ) -> ObjectiveState:
     """Evaluate all win/lose conditions and return a complete ObjectiveState.
 
@@ -384,6 +427,7 @@ def evaluate_game_end(
         completed_quest_ids: Frozenset of quest IDs with status "completed".
         treaty_signed: Whether at least one active treaty exists for the player.
         bankruptcy_armed: Whether gold was once > 0 (latch from game_end_poller).
+        objectives: Per-world win/lose tuning (defaults to the demo world).
 
     Returns:
         ObjectiveState with all fields populated.
@@ -397,15 +441,22 @@ def evaluate_game_end(
     ticks_remaining = _compute_ticks_remaining(ticks_from_start)
     gold_for_bankruptcy = total_gold if bankruptcy_armed else None
 
-    win_path = check_win_multi(standings, total_gold, completed_quest_ids, treaty_signed)
+    win_path = check_win_multi(
+        standings, total_gold, completed_quest_ids, treaty_signed, objectives
+    )
     won = win_path is not None
     failure = _select_failure(
-        standings, iron_legion_controls, gold_for_bankruptcy, ticks_from_start, won
+        standings, iron_legion_controls, gold_for_bankruptcy, ticks_from_start, won,
+        objectives,
     )
     outcome: Literal["win", "lose"] | None = (
         "lose" if failure else ("win" if won else None)
     )
-    grade = compute_grade(standings, total_gold, ticks_remaining, completed_quest_ids) if outcome == "win" else None
+    grade = (
+        compute_grade(standings, total_gold, ticks_remaining, completed_quest_ids, objectives)
+        if outcome == "win"
+        else None
+    )
     actual_win_path = win_path if outcome == "win" else None
 
     return ObjectiveState(
