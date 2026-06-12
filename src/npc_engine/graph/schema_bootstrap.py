@@ -35,6 +35,16 @@ _CYPHER_CREATE_CONSTRAINT_TEMPLATE = (
     "FOR (n:{label}) REQUIRE n.id IS UNIQUE"
 )
 
+# Composite indexes — (name, label, comma-separated property list). DialogueTurn (DEC-106/F3.5)
+# is queried/ordered/pruned by (npc_id, player_id, tick) during session save/load.
+_COMPOSITE_INDEXES: tuple[tuple[str, str, str], ...] = (
+    ("dialogue_turn_pair_tick_index", "DialogueTurn", "n.npc_id, n.player_id, n.tick"),
+)
+
+_CYPHER_CREATE_INDEX_TEMPLATE = (
+    "CREATE INDEX {name} IF NOT EXISTS FOR (n:{label}) ON ({properties})"
+)
+
 
 async def ensure_core_constraints(session: AsyncSession) -> None:
     """Create uniqueness constraints for all core node labels if they do not exist.
@@ -58,6 +68,11 @@ async def ensure_core_constraints(session: AsyncSession) -> None:
             label,
         )
         await session.run(cypher)
+    for name, label, properties in _COMPOSITE_INDEXES:
+        cypher = _CYPHER_CREATE_INDEX_TEMPLATE.format(name=name, label=label, properties=properties)
+        _logger.info("schema_bootstrap: ensuring index name=%s label=%s", name, label)
+        await session.run(cypher)
     _logger.info(
-        "schema_bootstrap: all %d core constraints verified", len(_CORE_LABELS)
+        "schema_bootstrap: %d core constraints + %d indexes verified",
+        len(_CORE_LABELS), len(_COMPOSITE_INDEXES),
     )

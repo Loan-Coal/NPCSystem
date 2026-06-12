@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 
 from npc_engine.graph.schema_bootstrap import (
+    _COMPOSITE_INDEXES,
     _CORE_LABELS,
     _CYPHER_CREATE_CONSTRAINT_TEMPLATE,
     ensure_core_constraints,
@@ -24,14 +25,14 @@ from npc_engine.graph.schema_bootstrap import (
 
 @pytest.mark.asyncio
 async def test_ensure_core_constraints_issues_all_seven_statements() -> None:
-    """All 7 core-label constraint CREATE statements must be issued to the session."""
+    """All core-label constraint + composite-index CREATE statements must be issued."""
     session = AsyncMock()
 
     await ensure_core_constraints(session=session)
 
-    assert session.run.call_count == len(_CORE_LABELS), (
-        f"Expected {len(_CORE_LABELS)} session.run calls, "
-        f"got {session.run.call_count}"
+    expected = len(_CORE_LABELS) + len(_COMPOSITE_INDEXES)
+    assert session.run.call_count == expected, (
+        f"Expected {expected} session.run calls, got {session.run.call_count}"
     )
 
 

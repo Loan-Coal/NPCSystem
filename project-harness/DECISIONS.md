@@ -1291,3 +1291,24 @@ independent and schema-free: reuse the `status` field (e.g. `active`→`discover
 (avoids a schema change; DEC-104 already blessed reviving `investigation`).
 **Consequence:** until resolved, F1.6 stays `[ ]`; its only downstream dependents are F2.3 (GET schemes +
 discovered flag) and G2.2 (scheme board) — both deferred with it. F1.7+ and the rest of F/G/H proceed.
+
+## DEC-106: New node type — `dialogue_turn` (session persistence migration, F3.5/EXP-230 s2)
+**Date:** 2026-06-12 · **Status:** ✅ ACCEPTED (pre-approved in DEMO_BUILD_LOOP §Schema recipes; orchestrator-applied just-in-time)
+**Context:** Session turns were persisted as per-player JSON blobs on dynamic Character
+properties (`session_turns_<player>`), which (a) collides distinct player ids through key
+sanitisation (OQ-9), (b) sprawls per-player properties on the Character node, and (c) is not
+queryable / orderable / prunable.
+**Decision:** Add `base_nodes/dialogue_turn.yaml` (fields: `id`, `npc_id`, `player_id`,
+`turn_index`, `role`, `content`, `occurred_at_game_time?`, `tick?`) — one node per turn,
+**property-anchored** by `(npc_id, player_id)` (no new edge; matches the `player_model` node
+pattern, keeps the schema surface minimal and the §Schema recipe which lists only the node).
+Reuse the existing temporal convention (`occurred_at_game_time` + integer `tick`); `turn_index`
+is the canonical per-pair order. Migrate `graph/session_persistence` write/read to these nodes
+(replace-on-save: delete the pair's turns then re-create the capped list), add an index on
+`:DialogueTurn(npc_id, player_id, tick)` via `schema_bootstrap`. Landed WITH the engine change in
+one batch so the type is used immediately (no unused-type gate fail).
+**Explicitly NOT this task:** a unified reified `GameTime` node (time-as-a-node). That is a
+separate repo-wide decision, valuable only if cross-entity temporal correlation becomes a feature,
+and must be per-day bucketed to avoid supernodes.
+**Consequence:** distinct player ids never collide; turns are queryable/orderable/prunable;
+`SessionStore` round-trips via the nodes on restart.
