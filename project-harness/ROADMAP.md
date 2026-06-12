@@ -64,7 +64,7 @@ top of those APIs. Overnight execution driver: `project-harness/DEMO_BUILD_LOOP.
 - [x] **F2.5 (EXP-228, optional)** — read surface that marks `is_deception=true` beliefs (for the buyer-facing "tell"). Exit: a route/flag distinguishes deception beliefs without leaking them as truth. *(beliefs read now returns the `is_deception` edge flag; content unchanged.)*
 
 #### F3 — Engine correctness & cleanup (so the activated engines behave well)
-- [ ] **F3.1 (EXP-202 s2)** — replace the random `SECRET_BASE_PROBABILITY` gossip secret-share gate with a `Standing` threshold (gate secret-sharing by standing). Exit: secret-share probability tracks standing band.
+- [x] **F3.1 (EXP-202 s2)** — replace the random `SECRET_BASE_PROBABILITY` gossip secret-share gate with a `Standing` threshold (gate secret-sharing by standing). Exit: secret-share probability tracks standing band. *(`secret_share_policy`: per-band probs, HOSTILE/WARY=0 → ALLIED highest; band derived from per-pair trust, no new read.)*
 - [ ] **F3.2 (EXP-204 s2)** — surface NPC **mood** (canonical `EmotionStore`, DEC-099) into the dialogue context (needs already surfaced). Exit: dialogue context carries a mood line.
 - [ ] **F3.3 (EXP-228 s2)** — wire `classify_deception_belief` into the **live** anti-hallucination eval loop (`_classify_case`). Exit: a planted `is_deception` belief is not scored as a hallucination failure, while ordinary unsupported claims still are.
 - [x] **F3.4 (EXP-214 cleanup)** — DI-inject `MemoryEngine` into `quest_lifecycle_engine` via the composition root (remove the `__init__` instantiation). Exit: no module-level engine instantiation; `make check` green. *(injected via `get_memory_engine()` singleton; default-fallback keeps direct callers working.)*
