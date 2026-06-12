@@ -144,9 +144,9 @@ as the continuation. The runtime re-invokes automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** F3 (engine correctness & cleanup). F2 complete except blocked F2.3.
-- **Current batch:** F1.1–F1.5, F1.7, F2.1–F2.2, F2.4–F2.5, F3.4, F3.1, F3.2, **F3.6** landed; F1.6 + F2.3 DEFERRED/BLOCKED. Next candidate: **F3.3** (deception into eval loop), then F3.5 🔶 last.
-- **Last green commit:** `f1f53e0` feat(demo): F3.6 — seed player KNOWS_ABOUT edges.
-- **Next:** **F3.3 (EXP-228 s2)** — wire `classify_deception_belief` into the LIVE anti-hallucination eval loop (`_classify_case`). Eval-side change: a planted `is_deception` belief must NOT be scored as a hallucination failure, while ordinary unsupported claims still are. Find `classify_deception_belief` + the eval `_classify_case` (likely under `evals/` or `e2e/`/`src/.../eval`); check how cases are classified + thread the deception check. ⚠ may touch eval harness, not demo. **F3.5 🔶 LAST** — DEC-106 `dialogue_turn` node schema just-in-time (orchestrator-only): write the DECISIONS entry + `base_nodes/dialogue_turn.yaml` (fields per ROADMAP F3.5: player_id, npc_id, turn_index, role, content, occurred_at_game_time, tick), land it WITH the SessionStore→node migration in ONE batch (no unused-type gate fail); STOP+surface if the type-registry gate can't go green in 2 tries. **After F3.5 (or if blocked) → Phase F is done (modulo F1.6/F2.3) → advance to Phase G.**
+- **Current batch:** F1.1–F1.5, F1.7, F2.1–F2.2, F2.4–F2.5, F3.4, F3.1, F3.2, F3.6, **F3.3** landed; F1.6 + F2.3 DEFERRED/BLOCKED. Next candidate: **F3.5 🔶** (DEC-106 `dialogue_turn` schema — the LAST F3 item; closes Phase F).
+- **Last green commit:** `74535eb` feat(eval): F3.3 — deception into anti-hallucination loop.
+- **Next:** **F3.5 🔶 (EXP-230 s2) — SCHEMA, orchestrator-only.** Migrate session persistence from the JSON-blob-on-Character-property to first-class `dialogue_turn` **nodes**. Steps (ALL in one batch to avoid the unused-type gate): (1) write a `DECISIONS.md` DEC-106 entry proposing `base_nodes/dialogue_turn.yaml` (fields: player_id, npc_id, turn_index/`tick`, role, content, occurred_at_game_time) + the anchoring edge; reuse the existing temporal convention (`occurred_at_game_time` + int `tick`). (2) Create the YAML; validate via type_registry tests. (3) Migrate `SessionStore` (`engines/dialogue/session_store.py`) get/append turns to read/write `dialogue_turn` nodes (keep-last-N by deleting oldest `tick`), add an index on `(npc_id, player_id, tick)`. (4) Land the engine change WITH the schema in the same commit/batch. **STOP+surface if the type-registry gate can't go green in 2 tries.** NB: a unified reified `GameTime` node is explicitly NOT this task. **After F3.5 (or if it STOPs) → Phase F done (modulo F1.6/F2.3) → advance to Phase G** (G surfaces the F2 routes in the pygame demo; pure demo-side, run `make test-demo`).
 
 ## Progress Log
 
@@ -243,3 +243,9 @@ as the continuation. The runtime re-invokes automatically; do not poll.
   (edge source must exist first) so `GET /player/{id}/events` returns data on a fresh seed. Demo code →
   ran BOTH gates: `make test-demo` 724 passed + `make check` 2107 passed (86.5% cov). +1 demo seed test.
   Commit: `f1f53e0`.
+- **15 · 2026-06-12 F3.3** — PASS. Wired `classify_deception_belief` into the live anti-hallucination eval:
+  `_classify_case` now rescues a `refusal_fail` to `deception_intended` when the NPC voiced a planted
+  `is_deception` belief (new `_response_reflects_planted_deception` queries the beliefs read — is_deception
+  surfaced by F2.5 — and matches content against the response). `deception_intended` is not counted in
+  `hallucination_count`; ordinary unsupported claims still `refusal_fail`. Eval-side (not in `make check`
+  LLM path, but unit-tested). +2 unit tests. Gate green (2109 passed, 27 skipped, 86.5% cov). Commit: `74535eb`.
