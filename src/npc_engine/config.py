@@ -147,6 +147,9 @@ class Settings(BaseSettings):
     # baseline VAD model; "trait_modulated" scales deltas by personality traits.
     EMOTION_MODEL: Literal["vad", "trait_modulated"] = "vad"
 
+    # Run scheduled forgetting-decay (charge-weighted vividness decay) every N ticks (F1.7).
+    MEMORY_DECAY_TICK_INTERVAL: int = 10
+
     CONSOLIDATION_TURN_THRESHOLD: int = 10
     CONSOLIDATION_CLEAR_TURNS: bool = False
 

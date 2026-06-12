@@ -72,6 +72,7 @@ class TickScheduler:
         goal_formation_engine: BaseEngine | None = None,
         player_model_engine: BaseEngine | None = None,
         director_engine: BaseEngine | None = None,
+        memory_decay_engine: BaseEngine | None = None,
         consolidation_advance_interval: int = 1,
         chapter_interval: int = 1,
         distributed_lease_enabled: bool = False,
@@ -136,6 +137,9 @@ class TickScheduler:
             director_engine: Optional engine exposing ``run_tick(session, tick_id)``
                 called every tick; evaluates the drama director decide() on idle/plateau
                 signals and emits a beat via the events engine when a decision fires (F1.5).
+            memory_decay_engine: Optional engine exposing ``run_tick(session, tick_id)``
+                called every tick; self-gates on its interval to apply charge-weighted
+                vividness decay so low-salience memories fade over ticks (F1.7).
             consolidation_advance_interval: Run consolidation every N advances; clamped to 1.
             chapter_interval: Run chapter engine every N ticks; clamped to 1. Default 1 preserves
                 existing every-tick behavior; raise to reduce LLM call frequency.
@@ -177,6 +181,7 @@ class TickScheduler:
         self._goal_formation_engine = goal_formation_engine
         self._player_model_engine = player_model_engine
         self._director_engine = director_engine
+        self._memory_decay_engine = memory_decay_engine
         self._consolidation_advance_interval = max(1, consolidation_advance_interval)
         self._chapter_interval = max(1, chapter_interval)
         self._advance_count = 0
@@ -342,6 +347,7 @@ class TickScheduler:
                 "goal_formation": [],
                 "player_model": [],
                 "director": [],
+                "memory_decay": [],
             }
             world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
             for tick_id in range(start_tick + 1, end_tick + 1):
@@ -598,6 +604,14 @@ class TickScheduler:
                     )
                     if row is not None:
                         response["director"].append(row)
+
+                if self._memory_decay_engine is not None:
+                    row = await self._run_engine_safe(
+                        "memory_decay", tick_id,
+                        self._memory_decay_engine.run_tick(session=session, tick_id=tick_id),
+                    )
+                    if row is not None:
+                        response["memory_decay"].append(row)
 
                 if unresolved:
                     break

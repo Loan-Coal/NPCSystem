@@ -61,6 +61,8 @@ from npc_engine.engines.proactive_dialogue.proactive_tick_adapter import Proacti
 from npc_engine.engines.player_model.player_model_engine import PlayerModelEngine
 from npc_engine.engines.player_model.player_model_tick import PlayerModelTick
 from npc_engine.engines.director.director_tick import DirectorTick
+from npc_engine.engines.memory.memory_engine import MemoryEngine
+from npc_engine.engines.memory.memory_decay_tick import MemoryDecayTick
 from npc_engine.engines.agenda.intent_formation_engine import IntentFormationEngine
 from npc_engine.engines.planning.action_selector import ActionSelector
 from npc_engine.engines.planning.goal_former_adapter import GoalFormerAdapter
@@ -323,6 +325,19 @@ def get_director_tick() -> DirectorTick:
 
 
 @lru_cache
+def get_memory_decay_tick() -> MemoryDecayTick:
+    """Create singleton MemoryDecayTick adapter for scheduled forgetting-decay (F1.7).
+
+    Returns:
+        MemoryDecayTick wired to a MemoryEngine and the configured decay interval.
+    """
+    return MemoryDecayTick(
+        memory_engine=MemoryEngine(),
+        interval=get_settings().MEMORY_DECAY_TICK_INTERVAL,
+    )
+
+
+@lru_cache
 def get_goal_formation_engine() -> GoalFormerAdapter:
     """Create singleton GoalFormerAdapter for GOAP goal formation each tick.
 
@@ -434,6 +449,7 @@ def get_tick_scheduler() -> TickScheduler:
         goal_formation_engine=get_goal_formation_engine(),
         player_model_engine=get_player_model_tick(),
         director_engine=get_director_tick(),
+        memory_decay_engine=get_memory_decay_tick(),
         engine_status_store=get_engine_status_store(),
         gossip_interval=settings.GOSSIP_TICK_INTERVAL,
         event_interval=settings.EVENT_TICK_INTERVAL,
