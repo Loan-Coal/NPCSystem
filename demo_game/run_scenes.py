@@ -566,3 +566,53 @@ class AntiHallucinationBeat(Scene):
             f"Graph: {edge_count} KNOWS_ABOUT {_ANTI_HALLUCINATION_EVENT!r} "
             f"edges for {_ANTI_HALLUCINATION_NPC} (expected 0)"
         )
+
+
+# ---------------------------------------------------------------------------
+# Intrigue (G3.1) — deception "tell" + the NPC's model of the player
+# ---------------------------------------------------------------------------
+
+@dataclass
+class DeceptionRevealScene(Scene):
+    """Reveal a planted is_deception belief held by an NPC as a buyer-facing 'tell'.
+
+    Reads the NPC's beliefs (is_deception surfaced by F2.5, seeded by G3.2) and prints
+    the planted lie flagged as a deliberate deception — without presenting it as truth.
+    Degrades to an info line when the NPC holds no flagged belief.
+    """
+
+    npc_id: str = ""
+
+    def execute(self, runner: "DemoRunner") -> None:
+        """Inspect the NPC's beliefs and surface any planted deception."""
+        runner.print_step(f"[INTRIGUE] Inspecting {self.npc_id}'s beliefs for a planted deception")
+        if runner.dry_run:
+            return
+        beliefs = runner.client.get_beliefs(self.npc_id)
+        planted = [b for b in beliefs if b.get("is_deception")]
+        if not planted:
+            runner.print_ok(f"[info] {self.npc_id} holds no flagged deception")
+            return
+        content = str(planted[0].get("content", ""))
+        runner.print_ok(f"[deception ⚑] {self.npc_id} spreads a deliberate lie: \"{content}\"")
+
+
+@dataclass
+class PlayerModelDisplay(Scene):
+    """Print an NPC's theory-of-mind model of the player (perceived trust + intent)."""
+
+    npc_id: str = ""
+    player_id: str = "player_demo"
+
+    def execute(self, runner: "DemoRunner") -> None:
+        """Read GET /v1/npc/{npc}/player-model/{player} and print perceived trust/intent."""
+        runner.print_step(f"[INTRIGUE] Reading {self.npc_id}'s model of {self.player_id}")
+        if runner.dry_run:
+            return
+        model = runner.client.get_player_model(self.npc_id, self.player_id)
+        if not model:
+            runner.print_ok(f"[info] {self.npc_id} has no model of {self.player_id} yet")
+            return
+        trust = model.get("perceived_trust", "?")
+        intent = model.get("perceived_intent", "?")
+        runner.print_ok(f"[player-model] {self.npc_id} sees {self.player_id}: trust={trust} intent={intent}")

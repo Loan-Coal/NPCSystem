@@ -32,8 +32,10 @@ from demo_game.run_scenes import (
     BribeScene,
     ClockTick,
     CorrectRumorScene,
+    DeceptionRevealScene,
     DialogueBeat,
     EmotionDisplay,
+    PlayerModelDisplay,
     EventFire,
     MemoryConsolidate,
     NarratorCue,
@@ -460,14 +462,30 @@ SCENES: list[Scene] = [
     ),
     ProactiveDialogueBeat(name="act11_proactive"),
 
+    # -----------------------------------------------------------------------
+    # ACT 12 -- Intrigue (G3.1): deception "tell" + the NPC's model of you
+    # -----------------------------------------------------------------------
+    NarratorCue(
+        name="act12_intrigue_cue",
+        delay_before_ms=2000,
+        text=(
+            "[ACT 12] Intrigue. Lira spreads a planted lie; the engine flags it as a "
+            "deliberate deception, and each NPC quietly forms a model of you."
+        ),
+    ),
+    DeceptionRevealScene(name="act12_deception", npc_id="lira_fence"),
+    ClockTick(name="act12_tick", delay_before_ms=500, delta_ticks=1),
+    PlayerModelDisplay(name="act12_player_model", npc_id="mira_innkeeper"),
+
     NarratorCue(
         name="outro",
         delay_before_ms=1000,
         text=(
-            "=== Demo complete. 11 acts. "
+            "=== Demo complete. 12 acts. "
             "Phase 6 + Phase 8 networked reputation + Phase 10 rumor warfare "
             "+ EXP-85 anti-hallucination guard + EXP-92 determinism proof "
-            "+ EXP-81 cross-session memory + EXP-205 proactive NPC dialogue covered. ==="
+            "+ EXP-81 cross-session memory + EXP-205 proactive NPC dialogue "
+            "+ intrigue (deception tell + player-model) covered. ==="
         ),
     ),
 ]

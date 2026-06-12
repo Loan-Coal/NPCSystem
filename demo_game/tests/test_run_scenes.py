@@ -174,3 +174,62 @@ class TestCorrectRumorScene:
         scene.execute(runner)
         msg: str = runner.print_ok.call_args[0][0]
         assert "corrected=False" in msg
+
+
+# ---------------------------------------------------------------------------
+# Intrigue scenes (G3.1): DeceptionRevealScene + PlayerModelDisplay
+# ---------------------------------------------------------------------------
+
+from demo_game.run_scenes import DeceptionRevealScene, PlayerModelDisplay  # noqa: E402
+
+
+class TestDeceptionRevealScene:
+    def test_dry_run_skips_api_call(self) -> None:
+        runner = MagicMock()
+        runner.dry_run = True
+        DeceptionRevealScene(name="d", npc_id="lira_fence").execute(runner)
+        runner.client.get_beliefs.assert_not_called()
+
+    def test_surfaces_planted_deception(self) -> None:
+        runner = MagicMock()
+        runner.dry_run = False
+        runner.client.get_beliefs.return_value = [
+            {"content": "ordinary belief", "is_deception": False},
+            {"content": "the mill is unguarded", "is_deception": True},
+        ]
+        DeceptionRevealScene(name="d", npc_id="lira_fence").execute(runner)
+        printed = " ".join(str(c.args[0]) for c in runner.print_ok.call_args_list)
+        assert "the mill is unguarded" in printed
+        assert "deception" in printed.lower()
+
+    def test_no_deception_prints_info(self) -> None:
+        runner = MagicMock()
+        runner.dry_run = False
+        runner.client.get_beliefs.return_value = [{"content": "x", "is_deception": False}]
+        DeceptionRevealScene(name="d", npc_id="lira_fence").execute(runner)
+        printed = " ".join(str(c.args[0]) for c in runner.print_ok.call_args_list)
+        assert "no flagged deception" in printed
+
+
+class TestPlayerModelDisplay:
+    def test_dry_run_skips_api_call(self) -> None:
+        runner = MagicMock()
+        runner.dry_run = True
+        PlayerModelDisplay(name="pm", npc_id="mira_innkeeper").execute(runner)
+        runner.client.get_player_model.assert_not_called()
+
+    def test_prints_trust_and_intent(self) -> None:
+        runner = MagicMock()
+        runner.dry_run = False
+        runner.client.get_player_model.return_value = {"perceived_trust": 72, "perceived_intent": "friendly"}
+        PlayerModelDisplay(name="pm", npc_id="mira_innkeeper").execute(runner)
+        printed = " ".join(str(c.args[0]) for c in runner.print_ok.call_args_list)
+        assert "72" in printed and "friendly" in printed
+
+    def test_none_model_prints_info(self) -> None:
+        runner = MagicMock()
+        runner.dry_run = False
+        runner.client.get_player_model.return_value = None
+        PlayerModelDisplay(name="pm", npc_id="mira_innkeeper").execute(runner)
+        printed = " ".join(str(c.args[0]) for c in runner.print_ok.call_args_list)
+        assert "no model" in printed
