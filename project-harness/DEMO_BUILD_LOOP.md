@@ -143,13 +143,21 @@ as the continuation. The runtime re-invokes automatically; do not poll.
 
 ## State pointer
 
-- **Phase in progress:** F (not started)
-- **Current batch:** none dispatched yet — loop armed, awaiting first wake.
-- **Last green commit:** (record on first cycle)
-- **Next:** Phase F1.1 (`dialogue_handler` phase-write call-site) as the first isolated batch, then F1.2…
+- **Phase in progress:** F (F1 wiring underway)
+- **Current batch:** F1.1 landed. Next candidate: F1.2 (trigger_router → tick scheduler + ProactiveQueue drain over WS).
+- **Last green commit:** `6f513d3` feat(relationship): F1.1 — persist relationship phase transition.
+- **Next:** F1.2 (scheduler + `dialogue_ws`) — its own small batch (scheduler-touching, serialize per invariant 7/3).
 
 ## Progress Log
 
 - **0 · 2026-06-12 setup** — wrote this runbook; planned ROADMAP Phase H (demo-game expansion) from
   `demo-expansion/` + RECONCILIATION; rebaselined content counts (8 NPC / 4 loc); confirmed only 2 schema
   touches in the whole run (DEC-106 SESSION_TURNS). Loop armed; no cycle run yet.
+- **1 · 2026-06-12 F1.1** — PASS. Wired `apply_phase_transition` into `dialogue_handler` after the relation
+  delta. New: `graph/relation_phase_reader.py` (edge scalars + stored phase), `engines/relationship/
+  phase_transition_applier.py` (read→derive→conditional-write). Tests: +2 unit files (7 cases) + 1 Neo4j
+  integration test (skips w/o DB). Gate: `make check` green (2069 passed, 23 skipped, 86.2% cov). Single
+  isolated item → implemented inline by orchestrator (cheaper than a cold worktree worker for a 1-file wire).
+  Fixes carried-lesson hazard: mocked the new call site in **3** handler-driving test files
+  (fallback, knowledge_extraction, routine_disruption) — caught 6 reds on first gate, fixed, re-green.
+  Commits: `f20f340` (arm runbook) → `6f513d3` (F1.1).
