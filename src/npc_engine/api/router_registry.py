@@ -40,6 +40,7 @@ from npc_engine.api.routes.causality import router as causality_router
 from npc_engine.api.routes.witnessed import router as witnessed_router
 from npc_engine.api.routes.groups import router as groups_router
 from npc_engine.api.routes.relationship import router as relationship_router
+from npc_engine.api.routes.player_model import router as player_model_router
 from npc_engine.api.routes.rumors import router as rumors_router
 from npc_engine.api.routes.gossip_spread import router as gossip_spread_router
 from npc_engine.api.routes.rumor_trace import router as rumor_trace_router
@@ -76,6 +77,7 @@ def _register_public_routers(app: FastAPI, settings: Settings) -> None:
     app.include_router(graph_router, prefix=settings.API_V1_PREFIX)
     app.include_router(reputation_graph_router, prefix=settings.API_V1_PREFIX)
     app.include_router(relationship_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(player_model_router, prefix=settings.API_V1_PREFIX)
     app.include_router(locations_read_router, prefix=settings.API_V1_PREFIX)
     app.include_router(player_events_router, prefix=settings.API_V1_PREFIX)
 
