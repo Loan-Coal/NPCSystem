@@ -95,7 +95,7 @@ top of those APIs. Overnight execution driver: `project-harness/DEMO_BUILD_LOOP.
 
 #### G3 — Content & scenarios that exercise the new layer
 - [ ] **G3.1** — a scripted **"Intrigue"** scenario (new `demo_game/scenarios/`) that drives deception + scheming + player-model into one recordable arc (works under `--cinematic`). Exit: `make demo-run` plays the intrigue arc end-to-end.
-- [ ] **G3.2** — seed enrichment so the new panels have data on first run (scheme seeds, KNOWS_ABOUT from F3.6, a deception setup). Exit: panels are non-empty on a fresh `make demo-seed`.
+- [x] **G3.2** — seed enrichment so the new panels have data on first run (scheme seeds, KNOWS_ABOUT from F3.6, a deception setup). Exit: panels are non-empty on a fresh `make demo-seed`. *(deception belief seeded — `lira_fence` is_deception; KNOWS_ABOUT from F3.6; player-model data comes from the scheduler tick; scheme seeds await F1.6.)*
 
 ### Phase H — Demo-game expansion (consume the APIs; make the demo a *game*)
 - **Goal:** turn the demo from a tech-demo into a game — a multi-objective win/lose **economy**, more **content**
