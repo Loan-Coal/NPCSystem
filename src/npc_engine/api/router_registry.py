@@ -52,6 +52,8 @@ from npc_engine.api.routes.debug_retrieval import router as debug_retrieval_rout
 from npc_engine.api.routes.locations import admin_router as locations_admin_router
 from npc_engine.api.routes.locations import read_router as locations_read_router
 from npc_engine.api.routes.player_events import router as player_events_router
+from npc_engine.api.routes.investigations import router as investigations_router
+from npc_engine.api.routes.chapters import router as chapters_router
 from npc_engine.api.routes.system import admin_router as system_admin_router
 from npc_engine.api.routes.system import router as system_router
 from npc_engine.api.routes.system import v1_router as system_v1_router
@@ -80,6 +82,8 @@ def _register_public_routers(app: FastAPI, settings: Settings) -> None:
     app.include_router(player_model_router, prefix=settings.API_V1_PREFIX)
     app.include_router(locations_read_router, prefix=settings.API_V1_PREFIX)
     app.include_router(player_events_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(investigations_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(chapters_router, prefix=settings.API_V1_PREFIX)
 
 
 def _register_admin_routers(app: FastAPI, settings: Settings) -> None:

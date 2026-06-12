@@ -1374,6 +1374,197 @@ class EngineClient:
         self._raise_for_status(resp, f"GET /v1/admin/pledges/characters/{npc_id}")
         return resp.json().get("data", {}).get("pledges", [])
 
+    def break_pledge(
+        self,
+        character_id: str,
+        pledgee_id: str,
+        pledge_type: str,
+        tick: int,
+    ) -> dict:
+        """Break an active pledge from character_id to pledgee_id.
+
+        Args:
+            character_id: ID of the pledger breaking the pledge.
+            pledgee_id: ID of the pledge recipient.
+            pledge_type: One of protect/serve/kill/marry/mentor/fealty/vendetta.
+            tick: Current game tick.
+
+        Returns:
+            API response dict confirming the pledge was broken.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        resp = self._client.post(
+            f"/v1/admin/pledges/characters/{character_id}/break",
+            json={"pledgee_id": pledgee_id, "pledge_type": pledge_type, "tick": tick},
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, f"POST /v1/admin/pledges/characters/{character_id}/break")
+        return resp.json()
+
+    # ------------------------------------------------------------------
+    # Treaties
+    # ------------------------------------------------------------------
+
+    def create_treaty(
+        self,
+        parties: list[str],
+        terms_narrative: str,
+        signed_at_tick: int,
+        expires_at_tick: int | None = None,
+    ) -> dict:
+        """Create a treaty between two or more factions.
+
+        Args:
+            parties: List of faction IDs that are signatories (min 2).
+            terms_narrative: Human-readable treaty terms.
+            signed_at_tick: Game tick when the treaty was signed.
+            expires_at_tick: Optional tick at which the treaty expires.
+
+        Returns:
+            API response dict with the new treaty_id.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        payload: dict = {
+            "parties": parties,
+            "terms_narrative": terms_narrative,
+            "signed_at_tick": signed_at_tick,
+        }
+        if expires_at_tick is not None:
+            payload["expires_at_tick"] = expires_at_tick
+        resp = self._client.post(
+            "/v1/admin/treaties/",
+            json=payload,
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, "POST /v1/admin/treaties/")
+        return resp.json()
+
+    def get_faction_treaties(self, faction_id: str) -> list[dict]:
+        """Return active treaties for a faction.
+
+        Args:
+            faction_id: Faction node ID.
+
+        Returns:
+            List of treaty dicts. Empty list on ≥400 or absent data.
+        """
+        resp = self._client.get(
+            f"/v1/admin/treaties/factions/{faction_id}",
+            timeout=self._graph_timeout,
+        )
+        if resp.status_code >= 400:
+            return []
+        return resp.json().get("data", {}).get("treaties", [])
+
+    def break_treaty(
+        self,
+        treaty_id: str,
+        breaking_faction_id: str,
+        tick: int,
+    ) -> dict:
+        """Break an existing treaty.
+
+        Args:
+            treaty_id: ID of the Treaty node.
+            breaking_faction_id: Faction ID of the party breaking the treaty.
+            tick: Current game tick.
+
+        Returns:
+            API response dict confirming the treaty was broken.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        resp = self._client.post(
+            f"/v1/admin/treaties/{treaty_id}/break",
+            json={"breaking_faction_id": breaking_faction_id, "tick": tick},
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, f"POST /v1/admin/treaties/{treaty_id}/break")
+        return resp.json()
+
+    # ------------------------------------------------------------------
+    # Investigations
+    # ------------------------------------------------------------------
+
+    def get_investigation(
+        self,
+        investigator_id: str,
+        event_id: str,
+    ) -> dict | None:
+        """Return the investigation context for an investigator and a crime event.
+
+        Args:
+            investigator_id: ID of the Character conducting the investigation.
+            event_id: ID of the Event (crime) being investigated.
+
+        Returns:
+            Dict with evidence, witnesses, suspects, deductions,
+            alibi_contradictions, and rumor_contradictions keys.
+            Returns None on ≥400 or absent data.
+        """
+        resp = self._client.get(
+            f"/v1/investigations/{investigator_id}/{event_id}",
+            timeout=self._graph_timeout,
+        )
+        if resp.status_code >= 400:
+            return None
+        return resp.json().get("data")
+
+    # ------------------------------------------------------------------
+    # Chapters
+    # ------------------------------------------------------------------
+
+    def get_current_chapter(self) -> dict | None:
+        """Return the currently open chapter node.
+
+        Returns:
+            Dict with id, name, started_at_tick, theme, and status keys.
+            Returns None when no chapter is open or on ≥400.
+        """
+        resp = self._client.get(
+            "/v1/chapters/current",
+            timeout=self._graph_timeout,
+        )
+        if resp.status_code >= 400:
+            return None
+        return resp.json().get("data")
+
+    # ------------------------------------------------------------------
+    # Quest branch choice
+    # ------------------------------------------------------------------
+
+    def post_quest_choice(
+        self,
+        quest_id: str,
+        choice_id: str,
+        player_id: str,
+    ) -> dict:
+        """Resolve the player's choice for a branching quest.
+
+        Args:
+            quest_id: Source quest node ID.
+            choice_id: Identifier of the player's chosen branch option.
+            player_id: Player character ID.
+
+        Returns:
+            API response dict with quest_id, player_id, and next_quest_id.
+
+        Raises:
+            EngineClientError: On any 4xx or 5xx response.
+        """
+        resp = self._client.post(
+            f"/v1/quest/{quest_id}/choose",
+            json={"player_id": player_id, "choice_id": choice_id},
+            timeout=self._graph_timeout,
+        )
+        self._raise_for_status(resp, f"POST /v1/quest/{quest_id}/choose")
+        return resp.json()
+
     def get_leverage_for_npc(self, npc_id: str) -> list[dict]:
         """Return Leverage nodes held by npc_id via HAS_LEVERAGE edges.
 
