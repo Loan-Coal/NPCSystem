@@ -2,14 +2,15 @@
 Module: seed
 Layer: demo_game (external client)
 Purpose: Seed the demo world via the NPC Engine HTTP API. Idempotent on re-run.
-Dependencies: demo_game.client, demo_game.config, demo_game.constants
+Dependencies: demo_game.client, demo_game.config, demo_game.constants,
+              demo_game.seed_npc_data
 Used by: make demo-seed, demo_game/tests/test_seed.py
 
 See project-harness/DECISIONS.md DEC-020, DEC-021, DEC-022 for seeder conventions.
 
-300-line exception: inline NPC data (beliefs/goals/memories/secrets) cannot be
-split without an artificial data-only module that exists solely to be imported
-back here.
+H2.2-H2.5: NPC payload data for the 6 new H2 NPCs split into seed_npc_data.py
+(DATA-ONLY module) to keep this file under the 300-line limit per the coding rules.
+Location, faction, and quest data for H2 expansion also live in seed_npc_data.py.
 """
 
 from __future__ import annotations
@@ -29,6 +30,23 @@ from demo_game.constants import (
     NPC_ID_HARWICK_GUARD,
     NPC_ID_NEL_PICKPOCKET,
     NPC_ID_SERA_BARMAID,
+)
+from demo_game.seed_npc_data import (
+    FACTION_ID_CROWN_LOYALISTS,
+    FACTION_ID_DOCKSIDE_SMUGGLERS,
+    H2_CHAIN_QUESTS,
+    H2_DISTRICTS,
+    H2_FACTION_STANDS_WITH,
+    H2_FACTIONS,
+    H2_LOCATIONS,
+    H2_NPC_INNER_LIFE,
+    H2_NPC_LOCATED_AT,
+    H2_NPC_MEMBER_OF,
+    H2_NPC_NEEDS,
+    H2_NPCS,
+    H2_PART_OF_EDGES,
+    H2_QUEST_UNLOCKS_CHAINS,
+    H2_SOURCE_CHAIN_QUESTS,
 )
 
 if TYPE_CHECKING:
@@ -431,9 +449,10 @@ def _seed_npc_inner_life(
 def _seed_location_hierarchy(client: EngineClient) -> int:
     """Seed the city-level location hierarchy for the demo world (EXP-87).
 
-    Creates a ``loc_city`` Location node and wires the three existing demo
-    locations into it via PART_OF edges. All calls use MERGE semantics so
-    this function is idempotent on repeated runs.
+    Creates a ``loc_city`` Location node and wires the existing demo
+    locations into it via PART_OF edges. H2.3: also seeds district nodes
+    and wires new venues into their districts. All calls use MERGE semantics
+    so this function is idempotent on repeated runs.
 
     Args:
         client: Authenticated EngineClient.
@@ -441,6 +460,7 @@ def _seed_location_hierarchy(client: EngineClient) -> int:
     Returns:
         Number of items created or upserted.
     """
+    created = 0
     _seed_node(
         client,
         "Location",
@@ -451,14 +471,176 @@ def _seed_location_hierarchy(client: EngineClient) -> int:
             descriptor="The city that contains the tavern, market, and barracks.",
         ),
     )
+    created += 1
 
-    # EXP-223: loc_chapel added to the city hierarchy.
-    _child_locations = ["loc_tavern", "loc_market_square", "loc_guard_barracks", LOC_ID_CHAPEL]
-    for child_id in _child_locations:
+    # Original venues directly under loc_city (EXP-87, EXP-223)
+    _direct_venues = ["loc_tavern", "loc_market_square", "loc_guard_barracks", LOC_ID_CHAPEL]
+    for child_id in _direct_venues:
         client.post_part_of(child_id, "loc_city", hierarchy_level=0)
         logger.info("  upserted PART_OF %s → loc_city", child_id)
+    created += len(_direct_venues)
 
-    return len(_child_locations) + 1  # +1 for loc_city node
+    # H2.3: district nodes (hierarchy_level=1 between venues and city)
+    for dist_id, dist_name, dist_tag, dist_desc in H2_DISTRICTS:
+        _seed_node(client, "Location", build_location_payload(dist_id, dist_name, dist_tag, dist_desc))
+        created += 1
+
+    # H2.3: venue → district → city PART_OF edges
+    for child_id, parent_id, level in H2_PART_OF_EDGES:
+        client.post_part_of(child_id, parent_id, hierarchy_level=level)
+        logger.info("  upserted PART_OF %s → %s (level=%d)", child_id, parent_id, level)
+    created += len(H2_PART_OF_EDGES)
+
+    return created
+
+
+def _seed_h2_npcs(client: EngineClient) -> int:
+    """Seed the 6 H2.2 new NPCs with their inner-life data.
+
+    Idempotent: skips NPCs whose Character node already exists.
+    Non-fatal: logs a warning and continues on any single NPC error.
+
+    Args:
+        client: Authenticated EngineClient.
+
+    Returns:
+        Number of items created.
+    """
+    created = 0
+    for npc_tuple in H2_NPCS:
+        npc_id = npc_tuple[0]
+        try:
+            payload = build_npc_payload(*npc_tuple)
+            result = _seed_node(client, "Character", payload)
+            if result == "created":
+                created += 1
+        except Exception as exc:
+            logger.warning("[seed] H2 NPC %s skipped: %s", npc_id, exc)
+
+    # MEMBER_OF edges for new NPCs
+    for npc_id, faction_id, role in H2_NPC_MEMBER_OF:
+        result = _seed_edge(client, "MEMBER_OF", npc_id, faction_id, {
+            "role": role,
+            "status": "active",
+            "joined_at": _now(),
+        })
+        if result == "created":
+            created += 1
+
+    # LOCATED_AT edges for new NPCs
+    for npc_id, loc_id in H2_NPC_LOCATED_AT:
+        result = _seed_edge(client, "LOCATED_AT", npc_id, loc_id, {
+            "is_permanent_resident": True,
+            "arrived_at": _now(),
+        })
+        if result == "created":
+            created += 1
+
+    # Inner life
+    for npc_id, life in H2_NPC_INNER_LIFE.items():
+        n = _seed_npc_inner_life(
+            client,
+            npc_id,
+            beliefs=life["beliefs"],
+            goals=life["goals"],
+            memories=life["memories"],
+            secret=life["secret"],
+        )
+        created += n
+
+    # Needs
+    for npc_id, kind, level, decay_rate in H2_NPC_NEEDS:
+        node_id = f"{npc_id}_need_{kind}"
+        result = _seed_node(client, "Need", {
+            "id": node_id,
+            "kind": kind,
+            "level": level,
+            "decay_rate": decay_rate,
+            "character_id": npc_id,
+        })
+        if result == "created":
+            created += 1
+
+    return created
+
+
+def _seed_h2_factions(client: EngineClient) -> int:
+    """Seed the 2 H2.4 new factions (crown_loyalists, dockside_smugglers).
+
+    Idempotent: skips Faction nodes that already exist.
+
+    Args:
+        client: Authenticated EngineClient.
+
+    Returns:
+        Number of items created.
+    """
+    created = 0
+    for faction_id, name, archetype, description in H2_FACTIONS:
+        result = _seed_node(
+            client, "Faction",
+            build_faction_payload(faction_id, name, archetype, description),
+        )
+        if result == "created":
+            created += 1
+
+    for src_faction, dst_faction, standing in H2_FACTION_STANDS_WITH:
+        result = _seed_edge(client, "STANDS_WITH", src_faction, dst_faction, {
+            "standing": standing,
+            "last_changed_at": "tick_0",
+        })
+        if result == "created":
+            created += 1
+
+    return created
+
+
+def _seed_h2_quests(client: EngineClient) -> int:
+    """Seed the 12 H2.5 new quest nodes and 6 UNLOCKS chain edges.
+
+    Creates source quests, chain quests, and UNLOCKS edges.
+    Idempotent: skips Quest nodes and edges that already exist.
+    Non-fatal: logs a warning and continues on any single quest error.
+
+    Args:
+        client: Authenticated EngineClient.
+
+    Returns:
+        Number of items created.
+    """
+    created = 0
+
+    for quest in H2_SOURCE_CHAIN_QUESTS:
+        quest_id = quest["id"]
+        try:
+            result = _seed_node(client, "Quest", {**quest, "created_at": _now()})
+            if result == "created":
+                created += 1
+                _seed_edge(client, "HAS_QUEST", quest["quest_giver_id"], quest_id, {})
+                logger.info("[seed] H2 source quest seeded: %s", quest_id)
+        except Exception as exc:
+            logger.warning("[seed] H2 source quest %s skipped: %s", quest_id, exc)
+
+    for quest in H2_CHAIN_QUESTS:
+        quest_id = quest["id"]
+        try:
+            result = _seed_node(client, "Quest", {**quest, "created_at": _now()})
+            if result == "created":
+                created += 1
+                _seed_edge(client, "HAS_QUEST", quest["quest_giver_id"], quest_id, {})
+                logger.info("[seed] H2 chain quest seeded: %s", quest_id)
+        except Exception as exc:
+            logger.warning("[seed] H2 chain quest %s skipped: %s", quest_id, exc)
+
+    for src_id, dst_id, on_outcome in H2_QUEST_UNLOCKS_CHAINS:
+        result = _seed_edge(
+            client, "UNLOCKS", src_id, dst_id,
+            {"on_outcome": on_outcome},
+        )
+        if result == "created":
+            created += 1
+
+    return created
 
 
 # ---------------------------------------------------------------------------
@@ -471,7 +653,11 @@ _LOCATIONS = [
     ("loc_guard_barracks", "Guard Barracks", "barracks", "The disciplined quarters of the city guard, smelling of iron and duty."),
     # EXP-223: new chapel location — quiet neutral ground between factions.
     (LOC_ID_CHAPEL, "The Chapel", "chapel", "A soot-stained stone chapel; the one place all factions leave alone."),
+    # H2.3: four new venue locations (data from seed_npc_data.H2_LOCATIONS)
 ]
+
+# H2.3 venue locations (imported from seed_npc_data, combined with _LOCATIONS in seed_all)
+# _LOCATIONS above covers original venues; H2_LOCATIONS from seed_npc_data covers H2 venues.
 
 _FACTIONS = [
     ("merchants_guild", "Merchants Guild", "mercantile", "Controls the flow of trade through the city."),
@@ -1233,23 +1419,29 @@ def seed_all(client: EngineClient) -> dict:
         else:
             skipped += 1
 
-    # 1. Locations
+    # 1. Locations (original + H2.3 new venues)
     logger.info("[seed] Locations")
     for loc_id, name, tag, descriptor in _LOCATIONS:
         _tally(_seed_node(client, "Location", build_location_payload(loc_id, name, tag, descriptor)))
+    for loc_id, name, tag, descriptor in H2_LOCATIONS:
+        _tally(_seed_node(client, "Location", build_location_payload(loc_id, name, tag, descriptor)))
 
-    # 2. Factions
+    # 2. Factions (original + H2.4 new factions)
     logger.info("[seed] Factions")
     for faction_id, name, archetype, description in _FACTIONS:
         _tally(_seed_node(client, "Faction", build_faction_payload(faction_id, name, archetype, description)))
+    created += _seed_h2_factions(client)
 
-    # 3. Characters
+    # 3. Characters (original 8 + H2.2 6 new)
     logger.info("[seed] Characters")
     for npc_id, name, archetype, faction_id, location_id, biography, gossipy, credulity, honesty, voice_descriptor in _NPCS:
         payload = build_npc_payload(npc_id, name, archetype, faction_id, location_id, biography, gossipy, credulity, honesty, voice_descriptor)
         if npc_id == "aldric_merchant":
             payload["currency_balance"] = 200
         _tally(_seed_node(client, "Character", payload))
+    # H2.2 new NPCs (seeded via dedicated helper to keep seed_all manageable)
+    logger.info("[seed] H2 Characters + inner life + MEMBER_OF + LOCATED_AT + Needs")
+    created += _seed_h2_npcs(client)
 
     # 4. MEMBER_OF edges
     logger.info("[seed] MEMBER_OF edges")
@@ -1428,9 +1620,13 @@ def seed_all(client: EngineClient) -> dict:
     hierarchy_created = _seed_location_hierarchy(client)
     created += hierarchy_created
 
-    # 13. Quest UNLOCKS chains (EXP-19)
+    # 13. Quest UNLOCKS chains (EXP-19, original 2 chains)
     logger.info("[seed] Quest UNLOCKS chains")
     created += _seed_quest_unlocks_chains(client)
+
+    # 18. H2.5: 12 new quests across 6 new chains
+    logger.info("[seed] H2 quests + chains")
+    created += _seed_h2_quests(client)
 
     logger.info("[seed] Done — created=%d skipped=%d", created, skipped)
     return {"created": created, "skipped": skipped}

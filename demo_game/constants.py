@@ -11,15 +11,35 @@ Used by: demo_game.ui.game_window, demo_game.ui.widgets, demo_game.ui.left_panel
          demo_game.game_end_poller
 
 FACTION_COLOURS and NPC_FACTIONS are hardcoded from the demo seed (DEC-028).
-Faction membership is stable for the 5-NPC Munich demo world; no API call needed.
+Faction membership is stable for the Munich demo world; no API call needed.
 PALETTE is the single source of truth for all UI colours (DEC-035).
 
 EXP-223: added 3 new NPCs (sera_barmaid, harwick_guard, nel_pickpocket) and
          1 new location (loc_chapel) within existing factions.
 H1: added economy win/lose threshold constants (DEMO-D3-01 through D3-06).
+H2.2-H2.5: added 6 new NPCs, 4 new locations + 2 districts, 2 new factions,
+            12 new quests across 6 chains; WIN_QUEST_CHAIN_IDS extended.
 """
 
 from __future__ import annotations
+
+from demo_game.seed_npc_data import (
+    FACTION_ID_CROWN_LOYALISTS,
+    FACTION_ID_DOCKSIDE_SMUGGLERS,
+    LOC_ID_DOCKS,
+    LOC_ID_FORGE,
+    LOC_ID_HARBOR_DISTRICT,
+    LOC_ID_NORTH_GATE,
+    LOC_ID_OLD_QUARTER,
+    LOC_ID_TEMPLE,
+    NPC_ID_BREN_SMITH,
+    NPC_ID_DORN_DOCKMASTER,
+    NPC_ID_GARRICK_DESERTER,
+    NPC_ID_NESSA_PRIESTESS,
+    NPC_ID_TILDA_HERBALIST,
+    NPC_ID_VEX_SPYMASTER,
+    H2_WIN_QUEST_IDS,
+)
 
 # ---------------------------------------------------------------------------
 # EXP-223: stable NPC and location ID constants for the expanded world
@@ -31,15 +51,38 @@ NPC_ID_NEL_PICKPOCKET: str = "nel_pickpocket"
 
 LOC_ID_CHAPEL: str = "loc_chapel"
 
+# Re-export H2 location IDs for consumers that import from constants
+LOC_ID_FORGE = LOC_ID_FORGE
+LOC_ID_TEMPLE = LOC_ID_TEMPLE
+LOC_ID_DOCKS = LOC_ID_DOCKS
+LOC_ID_NORTH_GATE = LOC_ID_NORTH_GATE
+LOC_ID_OLD_QUARTER = LOC_ID_OLD_QUARTER
+LOC_ID_HARBOR_DISTRICT = LOC_ID_HARBOR_DISTRICT
+
+# Re-export H2 faction IDs for consumers that import from constants
+FACTION_ID_CROWN_LOYALISTS = FACTION_ID_CROWN_LOYALISTS
+FACTION_ID_DOCKSIDE_SMUGGLERS = FACTION_ID_DOCKSIDE_SMUGGLERS
+
 # Mapping from location_id to the NPC IDs present there (seeded in P2.2).
 # EXP-223: sera_barmaid and nel_pickpocket added to loc_tavern;
 #          harwick_guard added to loc_guard_barracks;
 #          loc_chapel added as a quiet neutral zone.
+# H2.2: bren_smith at loc_forge; nessa_priestess at loc_temple;
+#       dorn_dockmaster at loc_docks; vex_spymaster at loc_guard_barracks;
+#       tilda_herbalist at loc_market_square; garrick_deserter at loc_tavern.
 LOCATION_NPC_MAP: dict[str, list[str]] = {
-    "loc_tavern": ["mira_innkeeper", "lira_fence", NPC_ID_SERA_BARMAID, NPC_ID_NEL_PICKPOCKET],
-    "loc_market_square": ["aldric_merchant", "old_henryk"],
-    "loc_guard_barracks": ["captain_sorn", NPC_ID_HARWICK_GUARD],
+    "loc_tavern": [
+        "mira_innkeeper", "lira_fence",
+        NPC_ID_SERA_BARMAID, NPC_ID_NEL_PICKPOCKET,
+        NPC_ID_GARRICK_DESERTER,
+    ],
+    "loc_market_square": ["aldric_merchant", "old_henryk", NPC_ID_TILDA_HERBALIST],
+    "loc_guard_barracks": ["captain_sorn", NPC_ID_HARWICK_GUARD, NPC_ID_VEX_SPYMASTER],
     LOC_ID_CHAPEL: [],
+    LOC_ID_FORGE: [NPC_ID_BREN_SMITH],
+    LOC_ID_TEMPLE: [NPC_ID_NESSA_PRIESTESS],
+    LOC_ID_DOCKS: [NPC_ID_DORN_DOCKMASTER],
+    LOC_ID_NORTH_GATE: [],
 }
 
 # Human-readable names for each location button.
@@ -48,6 +91,12 @@ LOCATION_DISPLAY_NAMES: dict[str, str] = {
     "loc_market_square": "Market Square",
     "loc_guard_barracks": "Guard Barracks",
     LOC_ID_CHAPEL: "The Chapel",
+    LOC_ID_FORGE: "The Forge",
+    LOC_ID_TEMPLE: "Temple",
+    LOC_ID_DOCKS: "The Docks",
+    LOC_ID_NORTH_GATE: "North Gate",
+    LOC_ID_OLD_QUARTER: "Old Quarter",
+    LOC_ID_HARBOR_DISTRICT: "Harbor District",
 }
 
 # Human-readable NPC display names shown in the NPC list and response log.
@@ -60,6 +109,12 @@ NPC_DISPLAY_NAMES: dict[str, str] = {
     NPC_ID_SERA_BARMAID: "Sera (Barmaid)",
     NPC_ID_HARWICK_GUARD: "Harwick (Guard)",
     NPC_ID_NEL_PICKPOCKET: "Nel (Pickpocket)",
+    NPC_ID_BREN_SMITH: "Bren (Blacksmith)",
+    NPC_ID_NESSA_PRIESTESS: "Nessa (Priestess)",
+    NPC_ID_DORN_DOCKMASTER: "Dorn (Dockmaster)",
+    NPC_ID_VEX_SPYMASTER: "Vex (Spymaster)",
+    NPC_ID_TILDA_HERBALIST: "Tilda (Herbalist)",
+    NPC_ID_GARRICK_DESERTER: "Garrick (Deserter)",
 }
 
 # Ordered list of location IDs; determines button order in the nav bar.
@@ -74,10 +129,16 @@ NPC_LOCATION_MAP: dict[str, str] = {
 
 # Background tint colours per location (RGB), used for the location bar.
 LOCATION_TINTS: dict[str, tuple[int, int, int]] = {
-    "loc_tavern": (60, 35, 20),          # warm brown
-    "loc_market_square": (30, 55, 30),   # muted green
-    "loc_guard_barracks": (30, 30, 60),  # dark blue
-    LOC_ID_CHAPEL: (50, 45, 30),         # muted gold — quiet stone
+    "loc_tavern":         (60, 35, 20),   # warm brown
+    "loc_market_square":  (30, 55, 30),   # muted green
+    "loc_guard_barracks": (30, 30, 60),   # dark blue
+    LOC_ID_CHAPEL:        (50, 45, 30),   # muted gold — quiet stone
+    LOC_ID_FORGE:         (55, 30, 20),   # dark orange — fire and iron
+    LOC_ID_TEMPLE:        (45, 40, 55),   # muted violet — sacred stone
+    LOC_ID_DOCKS:         (20, 40, 55),   # steel blue — harbour water
+    LOC_ID_NORTH_GATE:    (35, 35, 45),   # grey-blue — fortified stone
+    LOC_ID_OLD_QUARTER:   (40, 35, 30),   # dusty amber — old stones
+    LOC_ID_HARBOR_DISTRICT: (25, 40, 50), # deep teal — harbour fog
 }
 
 # Centralised UI colour palette — single source of truth for all demo_game UI colours.
@@ -95,10 +156,12 @@ PALETTE: dict[str, tuple[int, int, int]] = {
 
 # Faction dot colours (RGB) used in NpcListWidget rows.
 FACTION_COLOURS: dict[str, tuple[int, int, int]] = {
-    "merchants_guild": (200, 160, 80),   # gold
-    "city_guard":      (80, 120, 200),   # blue
-    "thieves_guild":   (128, 80, 200),   # purple
-    "neutral":         (96, 96, 96),     # grey
+    "merchants_guild":           (200, 160, 80),   # gold
+    "city_guard":                (80, 120, 200),   # blue
+    "thieves_guild":             (128, 80, 200),   # purple
+    "neutral":                   (96, 96, 96),     # grey
+    FACTION_ID_CROWN_LOYALISTS:  (220, 200, 100),  # bright gold — crown heraldry
+    FACTION_ID_DOCKSIDE_SMUGGLERS: (60, 140, 140), # teal — harbour water
 }
 
 # Gold cost per bribe and standing gain applied to player's STANDS_WITH edge.
@@ -145,7 +208,10 @@ SPREAD_RUMOR_SEVERITY: int = 70
 WIN_STANDING_THRESHOLD: int = 50
 # Number of demo factions that must reach WIN_STANDING_THRESHOLD to win via faction path.
 WIN_MIN_FACTIONS: int = 2
-# The three factions the player can ally with.
+# The five factions the player can ally with (win-eligible via faction standing path).
+# crown_loyalists and dockside_smugglers are alliable but NOT win-eligible in H1's
+# multi-faction win — DEMO_FACTIONS remains the three original factions so existing
+# game_end_checker.py logic is unchanged (D3/H2.7 will parameterize per-world).
 DEMO_FACTIONS: tuple[str, ...] = ("merchants_guild", "city_guard", "thieves_guild")
 
 # ---------------------------------------------------------------------------
@@ -163,9 +229,9 @@ BANKRUPTCY_LOSE_THRESHOLD: int = 0
 # Minimum number of quest IDs from WIN_QUEST_CHAIN_IDS that must be "completed"
 # to satisfy the quest-chain win path.
 QUEST_CHAIN_WIN_COUNT: int = 3
-# Quest IDs that count toward the quest-chain win.  Sourced from demo seed:
-# aldric_deliver_quest (seed.py:824), demo_patrol_duty, demo_missing_goods (seed.py:1085),
-# demo_captain_report, demo_fence_confrontation (seed.py:1063).
+# Quest IDs that count toward the quest-chain win.  Sourced from demo seed.
+# H2.5: extended with the 6 new chain-successor quests from seed_npc_data.py.
+# QUEST_CHAIN_WIN_COUNT (=3) means the player needs 3 of these 11 to win the chain path.
 WIN_QUEST_CHAIN_IDS: frozenset[str] = frozenset(
     {
         "aldric_deliver_quest",
@@ -174,6 +240,7 @@ WIN_QUEST_CHAIN_IDS: frozenset[str] = frozenset(
         "demo_captain_report",
         "demo_fence_confrontation",
     }
+    | H2_WIN_QUEST_IDS
 )
 
 # --- Tick-deadline axis (DEMO-D3-04) ---
@@ -202,13 +269,20 @@ GRADE_B_MIN_SCORE: int = 50
 # Faction membership for each demo NPC — derived from seed, stable for Munich demo.
 # See DEC-028 for why this is hardcoded rather than fetched from the graph.
 # EXP-223: three new NPCs added; all use existing factions (no new faction added).
+# H2.2: six new NPCs added with new and existing faction assignments.
 NPC_FACTIONS: dict[str, str] = {
-    "mira_innkeeper":       "neutral",
-    "aldric_merchant":      "merchants_guild",
-    "captain_sorn":         "city_guard",
-    "lira_fence":           "thieves_guild",
-    "old_henryk":           "neutral",
-    NPC_ID_SERA_BARMAID:    "neutral",
-    NPC_ID_HARWICK_GUARD:   "city_guard",
-    NPC_ID_NEL_PICKPOCKET:  "thieves_guild",
+    "mira_innkeeper":        "neutral",
+    "aldric_merchant":       "merchants_guild",
+    "captain_sorn":          "city_guard",
+    "lira_fence":            "thieves_guild",
+    "old_henryk":            "neutral",
+    NPC_ID_SERA_BARMAID:     "neutral",
+    NPC_ID_HARWICK_GUARD:    "city_guard",
+    NPC_ID_NEL_PICKPOCKET:   "thieves_guild",
+    NPC_ID_BREN_SMITH:       "city_guard",
+    NPC_ID_NESSA_PRIESTESS:  "neutral",
+    NPC_ID_DORN_DOCKMASTER:  "merchants_guild",
+    NPC_ID_VEX_SPYMASTER:    FACTION_ID_CROWN_LOYALISTS,
+    NPC_ID_TILDA_HERBALIST:  "thieves_guild",
+    NPC_ID_GARRICK_DESERTER: "neutral",
 }

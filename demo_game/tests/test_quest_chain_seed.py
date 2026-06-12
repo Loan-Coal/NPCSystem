@@ -96,8 +96,8 @@ def test_seed_all_creates_missing_goods_unlocks_fence_confrontation_edge() -> No
     )
 
 
-def test_seed_all_creates_exactly_two_unlocks_edges() -> None:
-    """seed_all creates exactly 2 UNLOCKS edges (no extra chains seeded by accident)."""
+def test_seed_all_creates_eight_unlocks_edges() -> None:
+    """seed_all creates exactly 8 UNLOCKS edges: 2 original (EXP-19) + 6 new H2.5 chains."""
     client = _mock_client()
     seed_all(client)
 
@@ -105,8 +105,9 @@ def test_seed_all_creates_exactly_two_unlocks_edges() -> None:
         c for c in client.upsert_edge.call_args_list
         if len(c.args) >= 1 and c.args[0] == "UNLOCKS"
     ]
-    assert len(unlocks_calls) == 2, (
-        f"Expected exactly 2 UNLOCKS upsert_edge calls, got {len(unlocks_calls)}: {unlocks_calls}"
+    assert len(unlocks_calls) == 8, (
+        f"Expected exactly 8 UNLOCKS upsert_edge calls (2 original + 6 H2.5), "
+        f"got {len(unlocks_calls)}: {unlocks_calls}"
     )
 
 
