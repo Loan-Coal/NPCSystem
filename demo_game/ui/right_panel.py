@@ -3,7 +3,8 @@ Module: right_panel
 Layer: demo_game.ui
 Purpose: Right panel renderer — cycles GRAPH → KNOWLEDGE → PLAYER STATUS → CHAIN →
          TRADE → INVENTORY → ACTIONS → INSPECT → WORLD → EMOTION → NEEDS → GOALS
-         → POLITICS → MEMORY → RETRIEVAL → FACTION → PLAYER MODEL via Tab.
+         → POLITICS → MEMORY → RETRIEVAL → FACTION → PLAYER MODEL → OATH →
+         TREATY → INVESTIGATE via Tab.
          Owns all panel widgets; reads the pre-rendered graph surface from GraphPoller.
 Does NOT: make HTTP calls or hold business logic.
 Dependencies injected: None (pure rendering + callback registration).
@@ -14,12 +15,14 @@ Dependencies: pygame, demo_game.graph_panel.poller, demo_game.ui.knowledge_sideb
               demo_game.ui.needs_panel, demo_game.ui.goals_panel,
               demo_game.ui.politics_panel, demo_game.ui.memory_panel,
               demo_game.ui.retrieval_panel, demo_game.ui.faction_board,
-              demo_game.ui.player_model_panel, demo_game.game_end_checker
+              demo_game.ui.player_model_panel, demo_game.ui.oath_panel,
+              demo_game.ui.treaty_panel, demo_game.ui.investigation_panel,
+              demo_game.game_end_checker
 Used by: demo_game.ui.game_window
 
-NOTE: ~480 lines — accepted over the 300-line limit (see DEC-047). Single cohesive
-class; overage grows with each new panel tab. Split trigger: second overlay
-workflow of this kind or total > 550 lines.
+NOTE: ~560 lines — accepted over the 300-line limit (see DEC-047). Single cohesive
+class; overage grows with each new panel tab. Split trigger reached; next tab
+addition should extract a TabRegistry helper (see ISSUES.md).
 """
 
 from __future__ import annotations
@@ -35,6 +38,9 @@ if TYPE_CHECKING:
     from demo_game.game_end_checker import ObjectiveState
 from demo_game.ui.actions_panel import ActionsPanelWidget
 from demo_game.ui.emotion_panel import EmotionPanelWidget
+from demo_game.ui.investigation_panel import InvestigationPanelWidget
+from demo_game.ui.oath_panel import OathPanelWidget
+from demo_game.ui.treaty_panel import TreatyPanelWidget
 from demo_game.ui.goals_panel import GoalsPanelWidget
 from demo_game.ui.gossip_chain import GossipChainWidget
 from demo_game.ui.memory_panel import MemoryPanelWidget
@@ -79,6 +85,9 @@ class RightPanel(enum.Enum):
     RETRIEVAL = "RETRIEVAL"
     FACTION = "FACTION"
     PLAYER_MODEL = "PLAYER MODEL"
+    OATH = "OATH"
+    TREATY = "TREATY"
+    INVESTIGATE = "INVESTIGATE"
 
 
 class RightPanelRenderer:
@@ -120,6 +129,9 @@ class RightPanelRenderer:
         self._retrieval_panel = RetrievalPanelWidget(font_body, font_label)
         self._faction_board = FactionBoardWidget(font_body, font_label)
         self._player_model_panel = PlayerModelPanelWidget(font_body, font_label)
+        self._oath_panel = OathPanelWidget(font_body, font_label)
+        self._treaty_panel = TreatyPanelWidget(font_body, font_label)
+        self._investigation_panel = InvestigationPanelWidget(font_body, font_label)
         self._active: RightPanel = RightPanel.GRAPH
 
     # ------------------------------------------------------------------
@@ -370,6 +382,85 @@ class RightPanelRenderer:
         """True when the PLAYER MODEL tab is active."""
         return self._active == RightPanel.PLAYER_MODEL
 
+    # ------------------------------------------------------------------
+    # H3.1 — Oath panel
+    # ------------------------------------------------------------------
+
+    def set_oath_pledges(self, pledges: list[dict]) -> None:
+        """Push a fresh pledge list into the OATH panel widget."""
+        self._oath_panel.set_pledges(pledges)
+
+    def set_oath_active_npc(self, npc_id: str | None) -> None:
+        """Push the active NPC id into the OATH panel for context."""
+        self._oath_panel.set_active_npc(npc_id)
+
+    def set_oath_swear_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when [SWEAR] is clicked."""
+        self._oath_panel.set_swear_callback(cb)
+
+    def set_oath_break_callback(self, cb: Callable[[dict], None]) -> None:
+        """Register the callback fired when [BREAK] is clicked on a pledge."""
+        self._oath_panel.set_break_callback(cb)
+
+    @property
+    def show_oath_panel(self) -> bool:
+        """True when the OATH tab is active."""
+        return self._active == RightPanel.OATH
+
+    def handle_oath_event(self, event: pygame.event.Event) -> None:
+        """Forward an event to the oath panel (button click detection)."""
+        self._oath_panel.handle_event(event)
+
+    # ------------------------------------------------------------------
+    # H3.2 — Treaty panel
+    # ------------------------------------------------------------------
+
+    def set_treaties(self, treaties: list[dict]) -> None:
+        """Push a fresh treaty list into the TREATY panel widget."""
+        self._treaty_panel.set_treaties(treaties)
+
+    def set_treaty_broker_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when [BROKER] is clicked."""
+        self._treaty_panel.set_broker_callback(cb)
+
+    def set_treaty_break_callback(self, cb: Callable[[dict], None]) -> None:
+        """Register the callback fired when [BREAK] is clicked on a treaty."""
+        self._treaty_panel.set_break_callback(cb)
+
+    @property
+    def show_treaty_panel(self) -> bool:
+        """True when the TREATY tab is active."""
+        return self._active == RightPanel.TREATY
+
+    def handle_treaty_event(self, event: pygame.event.Event) -> None:
+        """Forward an event to the treaty panel (button click detection)."""
+        self._treaty_panel.handle_event(event)
+
+    # ------------------------------------------------------------------
+    # H3.3 — Investigation panel
+    # ------------------------------------------------------------------
+
+    def set_investigation(self, data: dict | None) -> None:
+        """Push investigation payload into the INVESTIGATE panel widget."""
+        self._investigation_panel.set_investigation(data)
+
+    def set_investigation_event_id(self, event_id: str | None) -> None:
+        """Set the crime event id for the investigation panel."""
+        self._investigation_panel.set_event_id(event_id)
+
+    def set_investigate_callback(self, cb: Callable[[], None]) -> None:
+        """Register the callback fired when [INVESTIGATE] is clicked."""
+        self._investigation_panel.set_investigate_callback(cb)
+
+    @property
+    def show_investigation_panel(self) -> bool:
+        """True when the INVESTIGATE tab is active."""
+        return self._active == RightPanel.INVESTIGATE
+
+    def handle_investigation_event(self, event: pygame.event.Event) -> None:
+        """Forward an event to the investigation panel."""
+        self._investigation_panel.handle_event(event)
+
     def set_consolidate_memory_callback(self, cb: Callable[[], None]) -> None:
         """Register the callback fired when [Consolidate Memory] is clicked."""
         self._actions_panel.set_consolidate_memory_callback(cb)
@@ -417,6 +508,8 @@ class RightPanelRenderer:
             self._inspect_panel.handle_event(event)
         elif self._active == RightPanel.WORLD:
             self._world_panel.handle_event(event)
+        elif self._active == RightPanel.INVESTIGATE:
+            self._investigation_panel.handle_event(event)
 
     def handle_quest_click(self, event: pygame.event.Event) -> None:
         """Forward an event to the quest panel (for accept-button detection)."""
@@ -475,6 +568,12 @@ class RightPanelRenderer:
             self._faction_board.draw(screen, content_rect)
         elif self._active == RightPanel.PLAYER_MODEL:
             self._player_model_panel.draw(screen, content_rect)
+        elif self._active == RightPanel.OATH:
+            self._oath_panel.draw(screen, content_rect)
+        elif self._active == RightPanel.TREATY:
+            self._treaty_panel.draw(screen, content_rect)
+        elif self._active == RightPanel.INVESTIGATE:
+            self._investigation_panel.draw(screen, content_rect)
         else:
             self._draw_graph(screen, rect)
 

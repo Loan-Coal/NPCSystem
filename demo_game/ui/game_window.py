@@ -10,6 +10,8 @@ Dependencies: pygame, demo_game.client, demo_game.config, demo_game.constants,
               demo_game.graph_panel.poller, demo_game.world_state_poller,
               demo_game.npc_politics_poller, demo_game.npc_initiative_poller,
               demo_game.npc_player_model_poller, demo_game.director_beat_poller,
+              demo_game.pledge_poller, demo_game.treaty_poller,
+              demo_game.chapter_poller, demo_game.tension_poller,
               demo_game.intent_ui, demo_game.sandbox_loop,
               demo_game.ui.left_panel, demo_game.ui.right_panel,
               demo_game.ui.relation_ticker
@@ -43,8 +45,12 @@ from demo_game.npc_needs_poller import NpcNeedsPoller
 from demo_game.npc_goals_poller import NpcGoalsPoller
 from demo_game.npc_memory_poller import NpcMemoryPoller
 from demo_game.npc_player_model_poller import NpcPlayerModelPoller
+from demo_game.chapter_poller import ChapterPoller
 from demo_game.director_beat_poller import DirectorBeatPoller
 from demo_game.npc_politics_poller import NpcPoliticsPoller
+from demo_game.pledge_poller import PledgePoller
+from demo_game.tension_poller import TensionPoller
+from demo_game.treaty_poller import TreatyPoller
 from demo_game.world_poller import WorldPoller
 from demo_game.world_state_poller import WorldStatePoller
 from demo_game.ui.font_loader import FontLoader
@@ -68,6 +74,17 @@ _CLR_NAV_TEXT = (200, 200, 210)
 # G2.3 — director-beat cue
 _CLR_DIRECTOR_BEAT = (180, 220, 255)  # Subtle blue-white for "something stirs…" cue.
 _DIRECTOR_BEAT_CUE_SECONDS = 5.0  # How long the cue stays visible.
+
+# H3.4 — chapter/act banner colour
+_CLR_CHAPTER_BANNER = (200, 180, 100)
+# H3.5 — tension HUD colours
+_CLR_TENSION_LOW = (80, 180, 80)
+_CLR_TENSION_MID = (200, 160, 40)
+_CLR_TENSION_HIGH = (200, 60, 40)
+# Severity threshold: >= this value renders in high-tension colour.
+_TENSION_HIGH_THRESHOLD = 7
+# Severity threshold: >= this value renders in mid-tension colour.
+_TENSION_MID_THRESHOLD = 4
 
 # Game-end overlay colours.
 _CLR_OVERLAY_WIN_BG = (10, 50, 20, 210)
@@ -182,6 +199,20 @@ class GameWindow:
         self._player_model_poller.set_active_npc(self._active_npc_id)
         self._player_model_poller.start()
 
+        self._pledge_poller = PledgePoller(client, interval_s=5.0)
+        self._pledge_poller.set_active_npc(self._active_npc_id)
+        self._pledge_poller.start()
+        self._right.set_oath_active_npc(self._active_npc_id)
+
+        self._treaty_poller = TreatyPoller(client, interval_s=8.0)
+        self._treaty_poller.start()
+
+        self._chapter_poller = ChapterPoller(client, interval_s=10.0)
+        self._chapter_poller.start()
+
+        self._tension_poller = TensionPoller(client, interval_s=4.0)
+        self._tension_poller.start()
+
         self._director_beat_poller = DirectorBeatPoller(client, interval_s=4.0)
         self._director_beat_poller.start()
 
@@ -249,6 +280,17 @@ class GameWindow:
         self._right.set_correct_rumor_callback(
             lambda: self._ctrl.spawn_correct_rumor(self._active_npc_id)
         )
+
+        # H3.1 — oath panel callbacks
+        self._right.set_oath_swear_callback(self._on_oath_swear)
+        self._right.set_oath_break_callback(self._on_oath_break)
+
+        # H3.2 — treaty panel callbacks
+        self._right.set_treaty_broker_callback(self._on_treaty_broker)
+        self._right.set_treaty_break_callback(self._on_treaty_break)
+
+        # H3.3 — investigation panel callback
+        self._right.set_investigate_callback(self._on_investigate)
 
         self._right.set_trade_offer_callback(
             lambda: self._ctrl.on_trade_offer(self._ctrl.active_npc_id_for_trade or self._active_npc_id, self._right)
@@ -402,6 +444,12 @@ class GameWindow:
             self._right.handle_scroll(event)
         elif self._right.show_world_panel:
             self._right.handle_scroll(event)
+        elif self._right.show_oath_panel:
+            self._right.handle_oath_event(event)
+        elif self._right.show_treaty_panel:
+            self._right.handle_treaty_event(event)
+        elif self._right.show_investigation_panel:
+            self._right.handle_investigation_event(event)
         elif self._active_npc_id:
             self._left.handle_scroll(event)
 
@@ -417,6 +465,8 @@ class GameWindow:
             self._politics_poller.set_active_npc(clicked_npc)
             self._memory_poller.set_active_npc(clicked_npc)
             self._player_model_poller.set_active_npc(clicked_npc)
+            self._pledge_poller.set_active_npc(clicked_npc)
+            self._right.set_oath_active_npc(clicked_npc)
             self._right.set_npc_selected(True)
             self._refresh_relationship_phase(clicked_npc)  # G1.4 — update phase on NPC switch
 
@@ -484,6 +534,8 @@ class GameWindow:
         self._politics_poller.set_active_npc(npcs[0])
         self._memory_poller.set_active_npc(npcs[0])
         self._player_model_poller.set_active_npc(npcs[0])
+        self._pledge_poller.set_active_npc(npcs[0])
+        self._right.set_oath_active_npc(npcs[0])
         self._right.set_npc_selected(True)
         self._ctrl.spawn_travel(loc_id)
         self._refresh_relationship_phase(npcs[0])  # G1.4 — update phase on location change
@@ -522,6 +574,10 @@ class GameWindow:
         objective_state = self._game_end_poller.get_state()
         self._right.set_objective_state(objective_state)
         self._right.set_player_model(self._player_model_poller.get_model())
+        # H3.1 — oath panel data push
+        self._right.set_oath_pledges(self._pledge_poller.get_pledges())
+        # H3.2 — treaty panel data push
+        self._right.set_treaties(self._treaty_poller.get_treaties())
         self._poll_director_beat_cue()
         if not self._game_over and objective_state.outcome is not None:
             self._game_over = True
@@ -531,6 +587,8 @@ class GameWindow:
         self._draw_status_overlay()
         self._draw_intent_bubble()
         self._draw_director_beat_cue()
+        self._draw_chapter_banner()
+        self._draw_tension_hud()
         if self._game_over:
             self._draw_game_over_overlay()
         self._draw_nav_bar(pygame.Rect(0, self._usable_h, self._window_w, _NAV_BAR_H))
@@ -622,6 +680,150 @@ class GameWindow:
         font = FontLoader.get(12)
         surf = font.render(self._director_beat_cue_text, True, _CLR_DIRECTOR_BEAT)
         self._screen.blit(surf, (self._right_x + 8, 4))
+
+    # ------------------------------------------------------------------
+    # H3.1 — Oath action handlers
+    # ------------------------------------------------------------------
+
+    def _on_oath_swear(self) -> None:
+        """Handle [SWEAR] button: post a default protect pledge for the active NPC."""
+        npc_id = self._active_npc_id
+        if not npc_id:
+            return
+        try:
+            self._client.post_pledge(
+                pledger_id=npc_id,
+                pledgee_id=self._cfg.DEMO_PLAYER_ID,
+                pledge_type="protect",
+                tick=0,
+                severity=50,
+            )
+            self._set_status(f"Oath sworn: {npc_id} → protect player")
+            self._pledge_poller.refresh()
+        except Exception as exc:
+            _logger.warning("oath swear error npc=%s: %s", npc_id, exc)
+            self._set_status("Oath swear failed")
+
+    def _on_oath_break(self, pledge: dict) -> None:
+        """Handle [BREAK] button: break the selected pledge.
+
+        Args:
+            pledge: Pledge dict with pledgee_id and pledge_type keys.
+        """
+        npc_id = self._active_npc_id
+        if not npc_id:
+            return
+        pledgee_id = str(pledge.get("pledgee_id", ""))
+        pledge_type = str(pledge.get("pledge_type", ""))
+        if not pledgee_id or not pledge_type:
+            return
+        try:
+            self._client.break_pledge(
+                character_id=npc_id,
+                pledgee_id=pledgee_id,
+                pledge_type=pledge_type,
+                tick=0,
+            )
+            self._set_status(f"Oath broken: {pledge_type} → {pledgee_id}")
+            self._pledge_poller.refresh()
+        except Exception as exc:
+            _logger.warning("oath break error npc=%s: %s", npc_id, exc)
+            self._set_status("Oath break failed")
+
+    # ------------------------------------------------------------------
+    # H3.2 — Treaty action handlers
+    # ------------------------------------------------------------------
+
+    def _on_treaty_broker(self) -> None:
+        """Handle [BROKER] button: create a sample non-aggression treaty."""
+        try:
+            self._client.create_treaty(
+                parties=["merchants_guild", "city_guard"],
+                terms_narrative="Demo non-aggression pact.",
+                signed_at_tick=0,
+            )
+            self._set_status("Treaty brokered: Merchants ↔ City Guard")
+            self._treaty_poller.refresh()
+        except Exception as exc:
+            _logger.warning("treaty broker error: %s", exc)
+            self._set_status("Treaty broker failed")
+
+    def _on_treaty_break(self, treaty: dict) -> None:
+        """Handle [BREAK] button: break the selected treaty.
+
+        Args:
+            treaty: Treaty dict with id/treaty_id and parties keys.
+        """
+        treaty_id = str(treaty.get("id") or treaty.get("treaty_id", ""))
+        if not treaty_id:
+            return
+        breaking_faction = (treaty.get("parties") or ["merchants_guild"])[0]
+        try:
+            self._client.break_treaty(
+                treaty_id=treaty_id,
+                breaking_faction_id=str(breaking_faction),
+                tick=0,
+            )
+            self._set_status(f"Treaty broken: {treaty_id[:16]}")
+            self._treaty_poller.refresh()
+        except Exception as exc:
+            _logger.warning("treaty break error: %s", exc)
+            self._set_status("Treaty break failed")
+
+    # ------------------------------------------------------------------
+    # H3.3 — Investigation handler
+    # ------------------------------------------------------------------
+
+    def _on_investigate(self) -> None:
+        """Fetch investigation data for the default crime event and push to panel."""
+        npc_id = self._active_npc_id
+        if not npc_id:
+            return
+        event_id = "northern_war_begins"  # Default demo crime event
+        try:
+            data = self._client.get_investigation(npc_id, event_id)
+            self._right.set_investigation(data)
+            self._right.set_investigation_event_id(event_id)
+            self._set_status("Investigation loaded")
+        except Exception as exc:
+            _logger.warning("investigation fetch error: %s", exc)
+            self._set_status("Investigation failed")
+
+    # ------------------------------------------------------------------
+    # H3.4 — Chapter act banner (HUD overlay)
+    # ------------------------------------------------------------------
+
+    def _draw_chapter_banner(self) -> None:
+        """Render the current chapter/act as a HUD line below the director beat."""
+        chapter = self._chapter_poller.get_chapter()
+        if chapter is not None:
+            name = str(chapter.get("name") or chapter.get("theme") or "")
+            label = f"ACT: {name}"
+        else:
+            label = ""
+        if not label:
+            return
+        font = FontLoader.get(12)
+        surf = font.render(label, True, _CLR_CHAPTER_BANNER)
+        self._screen.blit(surf, (self._right_x + 8, 18))
+
+    # ------------------------------------------------------------------
+    # H3.5 — Story-pacing tension HUD
+    # ------------------------------------------------------------------
+
+    def _draw_tension_hud(self) -> None:
+        """Render live max_event_severity and quest_generation_rate as a tension bar."""
+        severity, rate = self._tension_poller.get_tension()
+        if severity >= _TENSION_HIGH_THRESHOLD:
+            clr = _CLR_TENSION_HIGH
+        elif severity >= _TENSION_MID_THRESHOLD:
+            clr = _CLR_TENSION_MID
+        else:
+            clr = _CLR_TENSION_LOW
+        font = FontLoader.get(12)
+        label = f"TENSION  sev:{severity}  rate:{rate:.2f}"
+        surf = font.render(label, True, clr)
+        self._screen.blit(surf, (self._right_x + 8, 32))
 
     def _draw_nav_bar(self, rect: pygame.Rect) -> None:
         pygame.draw.rect(self._screen, _CLR_NAV_BG, rect)
