@@ -144,9 +144,9 @@ as the continuation. The runtime re-invokes automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** F (F1 wiring underway)
-- **Current batch:** F1.1 landed. Next candidate: F1.2 (trigger_router → tick scheduler + ProactiveQueue drain over WS).
-- **Last green commit:** `6f513d3` feat(relationship): F1.1 — persist relationship phase transition.
-- **Next:** F1.2 (scheduler + `dialogue_ws`) — its own small batch (scheduler-touching, serialize per invariant 7/3).
+- **Current batch:** F1.1 + F1.2 landed. Next candidate: F1.3 (inject `TraitModulatedEmotionModel` into `EmotionUpdater` via composition root, config-selectable).
+- **Last green commit:** `b40d674` fix(proactive): F1.2 integration (type + baseline ratchet).
+- **Next:** F1.3 (composition-root DI of emotion model) — isolated to `dependencies*`/`EmotionUpdater` wiring; its own small batch.
 
 ## Progress Log
 
@@ -161,3 +161,12 @@ as the continuation. The runtime re-invokes automatically; do not poll.
   Fixes carried-lesson hazard: mocked the new call site in **3** handler-driving test files
   (fallback, knowledge_extraction, routine_disruption) — caught 6 reds on first gate, fixed, re-green.
   Commits: `f20f340` (arm runbook) → `6f513d3` (F1.1).
+- **2 · 2026-06-12 F1.2** — PASS. Wired the full proactive delivery path (was entirely unwired): shared
+  `get_proactive_queue()` singleton; `ProactiveDialogueTick` collects per-pair `TriggerCandidate`s, routes
+  via `select_trigger` to one winner/tick (anti-spam), enqueues keyed by player_id; `dialogue_ws` idle-drains
+  the queue → `push_proactive_line` after the first turn until disconnect (first-turn + conn-cap untouched).
+  Dispatched **1 worktree worker** (runbook step-4 pattern; F1.2 is a real multi-file batch) → cherry-picked
+  `91fa694` clean (merge-first held). Integration fix: typed `_MEMORY_SOURCE` as `TriggerSource` (mypy
+  Literal) + ratcheted rules baseline 141→140. Gate: `make check` green (2076 passed, +7 tests, 86.2% cov).
+  Adjacent issues logged: ISSUE-094 (no need/event producers — router seam), ISSUE-095 (lazy import).
+  Commits: `375ae14` (worker) → `b40d674` (integration fix).

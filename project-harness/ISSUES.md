@@ -11,6 +11,28 @@ Rules:
 
 ---
 
+## ISSUE-094: proactive trigger_router has no `need`/`event` candidate producers
+**Found:** 2026-06-12, during F1.2 (proactive WS delivery wiring)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/engines/proactive_dialogue/proactive_tick_adapter.py` (`_collect_candidates`)
+**Description:** `trigger_router.select_trigger` is now wired, but only the `memory` source emits
+`TriggerCandidate`s. `TriggerSource` also defines `need` and `event` — those producers don't exist,
+so routing is effectively single-source today.
+**Why deferred:** Out of F1.2 scope; building need/event producers is its own slice and the router is a
+clean seam for them. Deferring avoided scope creep in the overnight loop.
+**To fix:** Add need-based (IntentFormationEngine) and event-based candidate producers that append
+`TriggerCandidate(source="need"|"event", ...)` in `_collect_candidates`; the router already ranks them.
+
+## ISSUE-095: dialogue_ws lazily imports get_proactive_queue inside the handler
+**Found:** 2026-06-12, during F1.2
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/api/routes/dialogue_ws.py` (`dialogue_ws` body)
+**Description:** `get_proactive_queue` is imported inside the WS handler function to avoid a potential
+import cycle at module load.
+**Why deferred:** Works correctly; promoting to a top-level import is cosmetic and needs the
+api/dependencies_engines import graph confirmed acyclic first.
+**To fix:** Verify no circular import, then hoist the import to module top-level.
+
 ## [FIXED] ISSUE-093: NPCs conflate past memories with current events (systemic — knowledge has no temporal frame)
 **Fixed:** 2026-06-11, Phase 26 (S26.1–S26.4). All three layers addressed: (A) `_flatten_event_row` keeps
 `knowledge_state` and `_extract_personal_accounts` routes rumour distorted summaries to a HEARSAY channel
