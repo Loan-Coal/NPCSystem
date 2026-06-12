@@ -15,6 +15,7 @@ from functools import lru_cache
 from npc_engine.api.dependencies_infra import get_graph_db
 from npc_engine.config import get_settings
 from npc_engine.engines.dialogue.session_store import SessionStore
+from npc_engine.engines.emotion.emotion_model_factory import build_emotion_model
 from npc_engine.engines.emotion.emotion_store import EmotionStore
 from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
 from npc_engine.graph.emotion_writer import EmotionGraphWriter
@@ -53,10 +54,17 @@ def get_emotion_store() -> EmotionStore:
 def get_emotion_updater() -> EmotionUpdater:
     """Create singleton emotion updater bound to the shared emotion store.
 
+    The emotion model is selected from settings (F1.3): VAD baseline or
+    trait-modulated, via ``build_emotion_model``.
+
     Returns:
-        EmotionUpdater wired to the singleton EmotionStore.
+        EmotionUpdater wired to the singleton EmotionStore and configured model.
     """
-    return EmotionUpdater(emotion_store=get_emotion_store(), writer=EmotionGraphWriter())
+    return EmotionUpdater(
+        emotion_store=get_emotion_store(),
+        model=build_emotion_model(get_settings()),
+        writer=EmotionGraphWriter(),
+    )
 
 
 @lru_cache

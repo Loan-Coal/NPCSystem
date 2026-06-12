@@ -143,6 +143,10 @@ class Settings(BaseSettings):
 
     CLOCK_MODE: Literal["realtime", "game_driven"] = "realtime"
 
+    # Emotion model backend injected into EmotionUpdater (F1.3). "vad" is the
+    # baseline VAD model; "trait_modulated" scales deltas by personality traits.
+    EMOTION_MODEL: Literal["vad", "trait_modulated"] = "vad"
+
     CONSOLIDATION_TURN_THRESHOLD: int = 10
     CONSOLIDATION_CLEAR_TURNS: bool = False
 
