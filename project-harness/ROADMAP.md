@@ -4,7 +4,9 @@
 (slice-1 of each item — engines/models/graph/demo surfaces built + tested, `make check` 2062 / 86.18%).
 Many engines, however, are **built but dormant** (not wired into the tick loop / composition root, and
 not exposed via a REST/WS route the demo can reach). This file's **"Next"** section is the slice-2 plan:
-**Phase F activates + exposes the engines** so the demo can use them, then **Phase G expands the demo**.
+**Phase F activates + exposes the engines** so the demo can use them, **Phase G surfaces them** in the demo,
+and **Phase H expands the demo into a game** (economy depth, content/branching, legacy gameplay engines) on
+top of those APIs. Overnight execution driver: `project-harness/DEMO_BUILD_LOOP.md` (looped `/expand-parallel`).
 
 ## Archive (completed history)
 
@@ -18,7 +20,7 @@ not exposed via a REST/WS route the demo can reach). This file's **"Next"** sect
 
 ---
 
-## Next — Slice-2: activate engines (Phase F) → expand demo (Phase G)
+## Next — Slice-2: activate engines (Phase F) → surface them (Phase G) → make it a game (Phase H)
 
 > The Phase A–E program built each capability as a **slice 1** (engine logic + graph + tests, mostly
 > new-file-add) but deliberately deferred the **wiring** (scheduler tick / composition-root injection /
@@ -27,7 +29,11 @@ not exposed via a REST/WS route the demo can reach). This file's **"Next"** sect
 > via a route. **Phase F closes both gaps; Phase G then builds the demo on top.** Deferred-item source:
 > `project-harness/expansion/OVERNIGHT_LOOP.md` §Deferred follow-ups. Driver for execution: `/expand-next`
 > (or `/expand-parallel` for the conflict-free wiring/route batches).
-> **Sequencing rule:** finish Phase F before Phase G — every G step depends on an F route/wiring it surfaces.
+> **Sequencing rule:** F → G → H. Every G step depends on an F route/wiring it surfaces; Phase H consumes the
+> F routes (plus four small H0 legacy enablers) and is otherwise pure demo-side. The demo-expansion analysis
+> behind Phase H lives in `project-harness/demo-expansion/` (see its `RECONCILIATION.md` for what the
+> EXP-201..230 program changed under it). H1 (economy) and H2 (content) are mostly type-A and can start
+> before H0/H3; H3 (legacy-engine panels) waits on its H0 enabler.
 
 ### Phase F — Activate & expose (engine wiring + API routes)
 - **Goal:** every built-but-dormant Phase A–E engine **runs** in the tick loop / composition root **and**
@@ -90,6 +96,58 @@ not exposed via a REST/WS route the demo can reach). This file's **"Next"** sect
 #### G3 — Content & scenarios that exercise the new layer
 - [ ] **G3.1** — a scripted **"Intrigue"** scenario (new `demo_game/scenarios/`) that drives deception + scheming + player-model into one recordable arc (works under `--cinematic`). Exit: `make demo-run` plays the intrigue arc end-to-end.
 - [ ] **G3.2** — seed enrichment so the new panels have data on first run (scheme seeds, KNOWS_ABOUT from F3.6, a deception setup). Exit: panels are non-empty on a fresh `make demo-seed`.
+
+### Phase H — Demo-game expansion (consume the APIs; make the demo a *game*)
+- **Goal:** turn the demo from a tech-demo into a game — a multi-objective win/lose **economy**, more **content**
+  with real **branching**, and the **legacy gameplay engines** (treaty/oath/investigation/chapter/story-pacing)
+  that Phase G does not cover. Phase G surfaces the *cognition* layer; Phase H adds *economy + content + legacy*.
+- **Effort:** ~3–4 sessions · **Leverages:** existing `EngineClient` (gold/quest/reputation/pledge methods),
+  `game_end_checker.py`, the 14-tab `RightPanel` + poller framework, `seed.py` (KE-6 idempotent), EXP-218's
+  `POST /quest/{id}/choose` route, EXP-223's 8-NPC/4-location world.
+- **Source analysis:** `project-harness/demo-expansion/` (DEMO_INTENT/DORMANT_ENGINES/CONTENT_PLAN/ECONOMY_DEPTH/
+  FEASIBILITY/DEMO_EXPANSION_ROADMAP/OPEN_QUESTIONS) + `RECONCILIATION.md`. Each H item cites its `DEMO-Dx` mini-spec.
+- **Constraints:** pure demo-side (zero `src/` imports) **except** the named **H0** enablers; each demo item
+  consumes an existing/F/H0 route; demo file-size waivers apply (DEC-029/032/034/036/049/074/075/105); the
+  D3 `evaluate_game_end` rewrite must stay ≤40 lines / ≤3 nesting (extract `check_win_multi`/`compute_grade`).
+- **Baseline (verified 2026-06-12):** `game_end_checker.py` still single-win (2/3 factions ≥ 50) + inert single-lose
+  (`iron_legion`→`loc_guard_barracks`); world is 8 NPCs / 4 locations / 3 alliable factions.
+
+#### H0 — Small legacy-engine enablers (engine-side; routes/client the demo needs that Phase F does not add)
+> Engine work, tracked separately; orchestrator lands each before its H3 consumer. None need schema (DEC-free).
+- [ ] **H0.1 (E-1, DEMO-D1-01)** — `EngineClient.break_pledge` wrapper over the existing `pledges.py:114` break endpoint. Exit: client can break a pledge; unblocks oath-break (H3.1).
+- [ ] **H0.2 (E-2, DEMO-D1-02)** — `EngineClient.create_treaty`/`get_faction_treaties`/`break_treaty` over the existing `treaties.py` route (no route change). Exit: client can broker/list/break treaties; unblocks H3.2 + the treaty win path (H1.1).
+- [ ] **H0.3 (E-3, DEMO-D1-03)** — new read-only `api/routes/investigations.py` (`GET`) over `investigation_engine.get_investigation_context` + `EngineClient.get_investigation`. Exit: client reads investigation context (alibi/contradiction half not covered by EXP-229 schemes). Reuse F2.3 `schemes.py` for the discovery half.
+- [ ] **H0.4 (E-4, DEMO-D1-04)** — new read-only `api/routes/chapters.py` (`GET /chapters/current`) over `chapter_engine.get_current_chapter` + `EngineClient.get_current_chapter`. Exit: client reads the current chapter/act; unblocks H3.4.
+- [ ] **H0.5 (DEMO-D2-06 dep)** — `EngineClient.post_quest_choice` wrapper over EXP-218's existing `POST /quest/{id}/choose`. Exit: the demo can resolve a quest branch choice; unblocks the branch primitive (H2.1).
+
+#### H1 — Win/lose economy depth (Pillar 3 · mostly type-A · delta to `game_end_checker.py`)
+- [ ] **H1.1 (DEMO-D3-01)** — multi-objective win: faction-standing **OR** wealth **OR** quest-chain (**OR** brokered treaty via H0.2). Exit: any one path triggers a win; faction/wealth/quest paths need no enabler.
+- [ ] **H1.2 (DEMO-D3-02)** — currency win/lose axis (`WEALTH_WIN_THRESHOLD`; bankruptcy `BANKRUPTCY_LOSE_THRESHOLD` armed after gold was once positive) over `GoldPoller`. Exit: gold can win or lose the game.
+- [ ] **H1.3 (DEMO-D3-03)** — faction tension/overreach: gains with one faction cost a rival via `adjust_npc_reputation` (`client.py:1414`) as a branch/quest effect (type-A; server-side auto-decrement deferred type-C). Exit: a rival penalty fires on a friendly action.
+- [ ] **H1.4 (DEMO-D3-04)** — tick deadline pressure: relative `DEADLINE_TICKS` from a latched start tick via `get_clock_state().current_tick`. Exit: missing objectives by the deadline loses (needs auto-tick on).
+- [ ] **H1.5 (DEMO-D3-05)** — ≥2 distinct reachable failure states (bankruptcy H1.2 + deadline H1.4 + an authored `CONTROLS` legion trigger via `upsert_edge`), with a `failure_reason` → `LOSE_SUBTITLES` end-card. Exit: the inert single-lose is replaced by ≥2 player-caused losses.
+- [ ] **H1.6 (DEMO-D3-06)** — end-screen score/grade `compute_grade(...) → S/A/B/C` over the win axes. Exit: a graded end-card renders.
+
+#### H2 — Content & branching (Pillar 2 · type-A · rebaselined from 8 NPC / 4 loc)
+- [ ] **H2.1 (DEMO-D2-06)** — branch primitive: `branch_node.py` + `branch_state.py` + `branch_effects.py` (typed effects: belief/rep/world-state/quest, OCP one-file-per-effect) + `ui/branch_panel.py`, resolving choices over existing client methods + H0.5. Exit: a player choice forks outcomes in the running demo.
+- [ ] **H2.2 (DEMO-D2-01)** — cast expansion 8→14 NPCs; split NPC data into `demo_game/seed_npc_data.py` (data-only) to respect the size rule. Exit: new NPCs seed idempotently (KE-6).
+- [ ] **H2.3 (DEMO-D2-02)** — locations 4→7 + a district tier via `post_part_of` (`client.py:776`, already live). Exit: nested locations seed; breadcrumb shows them (EXP-221).
+- [ ] **H2.4 (DEMO-D2-03)** — factions 3→5 alliable. Exit: two new factions seed with standings the economy can read.
+- [ ] **H2.5 (DEMO-D2-04)** — quests ~6→18 across 6 chains over the full quest lifecycle (`post_quest_*`). Exit: chains are acceptable/completable and feed H1.1's quest-chain win path.
+- [ ] **H2.6 (DEMO-D2-05)** — rival quest variants + a `GameController` accept-guard (can't accept opposing-faction quests simultaneously). Exit: accepting one rival quest locks the other.
+- [ ] **H2.7 (DEMO-D2-08)** — promote Village/Tavern eval worlds to playable Free-Play: de-hardcode `game_end_checker` win/lose constants to be per-world. Exit: all three worlds are pickable + winnable.
+- [ ] **H2.8 (DEMO-D2-07)** — replayable scenario forks: `BranchBeat` in scripted scenes (`scenarios/`) over H2.1, with a persisted `BranchState`. Exit: a scripted scenario replays to a different outcome.
+
+#### H3 — Legacy gameplay-engine surfaces (Pillar 1 · consume H0 enablers)
+- [ ] **H3.1 (DEMO-D1-01/D2-11)** — oath panel + `pledge_poller`: swear/list (type-A over `post_pledge`/`get_pledges_for_npc`) + break (H0.1) + an oath-driven betrayal arc (H2.1). Exit: the player swears, breaks, and the relationship turns.
+- [ ] **H3.2 (DEMO-D1-02/D2-09)** — treaty board (H0.2): broker/break treaties between factions + a treaty-broker quest chain. Exit: a brokered treaty is a visible objective (feeds H1.1).
+- [ ] **H3.3 (DEMO-D1-03)** — investigation "solve-the-crime" panel (H0.3 + F2.3 schemes): surface alibi/rumor contradictions + discovered schemes, each clue linking to its graph provenance. Exit: a crime is solvable from graph contradictions.
+- [ ] **H3.4 (DEMO-D1-04/D2-10)** — chapter act/season banner (H0.4) + chapter-paced campaign (A-fallback: quest-count-driven banner if H0.4 slips). Exit: the current act renders and advances.
+- [ ] **H3.5 (DEMO-D1-05)** — story-pacing tension HUD: render `max_event_severity`/`quest_generation_rate` (already persisted + returned by `get_world_state`, verified) as a pressure gauge. Exit: a live tension meter updates. (type-A, no enabler.)
+
+#### Deferred (type-C — needs a `DECISIONS.md` call; not in the overnight set)
+- [ ] **H-D1 (DEMO-D1-06b)** — engine military battle sim with a balanced player military verb (army strength + verb). See OPEN_QUESTIONS OQ-5.
+- [ ] **H-D2 (DEMO-D3-03s)** — server-side automatic cross-faction standing decrement (emergent rival tension). See OPEN_QUESTIONS OQ-6.
 
 ---
 
