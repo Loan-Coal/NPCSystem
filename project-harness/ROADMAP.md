@@ -38,8 +38,8 @@ not exposed via a REST/WS route the demo can reach). This file's **"Next"** sect
   wires proactive + reputation engines), the tick scheduler, `dialogue_ws.push_proactive_line` (exists),
   `engines/relationship/standing.py`.
 - **Constraints:** DIP — all wiring through `api/dependencies.py` / `dependencies_engines.py` (sole composition
-  roots); `scheduler→api` delivery uses the DEC-098 in-process queue (no upward import); a new graph node
-  (F3 SESSION_TURNS) needs a fresh `DECISIONS.md` entry before it lands; routes are additive (auth on all).
+  roots); `scheduler→api` delivery uses the DEC-098 in-process queue (no upward import); the new
+  F3.5 `dialogue_turn` node + edge needs a fresh `DECISIONS.md` entry before it lands; routes are additive (auth on all).
 
 #### F1 — Tick & composition-root wiring (make the engines actually run)
 - [ ] **F1.1 (EXP-201 s2)** — call `write_relationship_phase` after the relation delta in `dialogue_handler`. Exit: a phase transition is persisted during a live dialogue turn (integration test).
@@ -62,7 +62,7 @@ not exposed via a REST/WS route the demo can reach). This file's **"Next"** sect
 - [ ] **F3.2 (EXP-204 s2)** — surface NPC **mood** (canonical `EmotionStore`, DEC-099) into the dialogue context (needs already surfaced). Exit: dialogue context carries a mood line.
 - [ ] **F3.3 (EXP-228 s2)** — wire `classify_deception_belief` into the **live** anti-hallucination eval loop (`_classify_case`). Exit: a planted `is_deception` belief is not scored as a hallucination failure, while ordinary unsupported claims still are.
 - [ ] **F3.4 (EXP-214 cleanup)** — DI-inject `MemoryEngine` into `quest_lifecycle_engine` via the composition root (remove the `__init__` instantiation). Exit: no module-level engine instantiation; `make check` green.
-- [ ] **F3.5 (EXP-230 s2)** — migrate session persistence to a dedicated `SESSION_TURNS` node (fixes the `player_id` property-key collision, OQ-9). **Needs a DECISIONS entry (new node type).** Exit: session turns persist on a `SESSION_TURNS` node; distinct player ids never collide.
+- [ ] **F3.5 (EXP-230 s2)** — migrate session persistence from the current JSON-blob-on-Character-property to a **first-class `dialogue_turn` node** carrying the *existing* temporal convention (`occurred_at_game_time` + integer `tick`, same fields events/memories use), anchored to the NPC and player. Fixes the `player_id` property-key collision (OQ-9), removes per-player property sprawl, and makes turns queryable/orderable/prunable (keep-last-N by deleting oldest `tick`). Add an index on `(npc_id, player_id, tick)`. **Needs a DECISIONS entry (new node type + edge).** Exit: turns persist as `dialogue_turn` nodes ordered by `tick`; distinct player ids never collide; `SessionStore` round-trips via the nodes on restart. *(NB: a unified reified `GameTime` node — time-as-a-node that events/memories/turns all link to — is intentionally NOT this task; it is a separate, repo-wide architecture decision, valuable only if cross-entity temporal correlation becomes a feature, and must be bucketed (per-day) to avoid supernodes. Do not couple it to session persistence.)*
 - [ ] **F3.6 (EXP-217 seed)** — seed player `KNOWS_ABOUT` edges so `GET /player/{id}/events` returns data for the demo player. Exit: the player-events endpoint returns seeded events on a fresh `make demo-seed`.
 
 ### Phase G — Demo expansion (use the now-live engines)
