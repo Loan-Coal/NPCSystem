@@ -144,9 +144,9 @@ as the continuation. The runtime re-invokes automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** F2 (API read surfaces).
-- **Current batch:** F1.1–F1.5, F1.7, **F2.1** landed; F1.6 + F2.3 DEFERRED/BLOCKED (DEC-107/ISSUE-099). Next candidate: **F2.2 + F2.4 (+ F2.5)** — all NEW route files, parallel-safe → a multi-worker batch.
-- **Last green commit:** `1dc504c` feat(api): F2.1 — relationship phase route.
-- **Next:** Dispatch F2.2 (`routes/player_model.py` — GET NPC's model of player, reads `PlayerModel` nodes from F1.4 via `graph/player_model_writer.get_player_model`), F2.4 (`GET /v1/dialogue/pending` proactive intents + recent director beats — reads ProactiveQueue/intent store + director output), and optionally F2.5 (deception-flag read). These are disjoint new files → parallel workers (or inline F2.2 solo if simpler). **F2.3 `schemes.py` stays BLOCKED on F1.6.** Each route: auth on all, OkEnvelope response, contract test.
+- **Current batch:** F1.1–F1.5, F1.7, F2.1, **F2.2** landed; F1.6 + F2.3 DEFERRED/BLOCKED. Next candidate: **F2.4** (proactive pending-intents + director-beat read), then **F2.5** (deception flag, optional).
+- **Last green commit:** `1e4f1b6` feat(api): F2.2 — player-model route.
+- **Next:** **F2.4** — `GET /v1/dialogue/pending` for proactive pending intents + a director-beat read. ⚠ INVESTIGATE data sources first: ProactiveQueue (F1.2) drains-on-read (not a "pending" peek); intent_formation_engine enqueues intents (where persisted?); director beats are NOT persisted (F1.5 emits Events, beat metadata only in tick response). May need a non-draining peek on ProactiveQueue and/or reading recent Events. If F2.4's sources are too thin, scope to what's readable + log the gap. Then F2.5 (mark `is_deception` beliefs — read-only flag). Route conventions: auth, OkEnvelope, route test.
 
 ## Progress Log
 
@@ -205,3 +205,7 @@ as the continuation. The runtime re-invokes automatically; do not poll.
   Caught + fixed a latent route bug: `response_model=RelationshipResponse` vs an `ok_response` envelope
   (would 500 on real calls) → `OkEnvelope[dict]` per codebase convention. Inline; +3 route tests (TestClient
   + dep-override, no Neo4j). Gate green (2092 passed, 26 skipped, 86.4% cov). Commit: `1dc504c`.
+- **8 · 2026-06-12 F2.2** — PASS. New `routes/player_model.py` — `GET /npc/{npc_id}/player-model/{player_id}`
+  reads F1.4 `PlayerModel` nodes via `get_player_model`, returns perceived_trust/intent (404 when absent);
+  registered under API_V1_PREFIX (auth applies). Inline; +2 route tests (TestClient + dep-override/
+  monkeypatch, no Neo4j). Gate green (2094 passed, 26 skipped, 86.4% cov). Commit: `1e4f1b6`.
