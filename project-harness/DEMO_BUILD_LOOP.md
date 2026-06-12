@@ -144,9 +144,9 @@ as the continuation. The runtime re-invokes automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** ✅ **PHASE F COMPLETE** (modulo deferred F1.6 + F2.3, both gated on DEC-107). Now **Phase G** (surface the cognition engines in the pygame demo).
-- **Current batch:** All of F1 (–F1.6), F2 (–F2.3), F3 landed. **F3.5** schema migration green first try. Next candidate: **G1** (connect built-but-static demo surfaces to live data).
-- **Last green commit:** `d219c42` feat(schema): F3.5/DEC-106 — dialogue_turn nodes.
-- **Next:** **Phase G — pure demo-side (zero `src/` imports); run `make test-demo` (+ `make check` if any src touched).** Order per §Ordered build plan: **G1** — G1.1 + G1.4 both edit `demo_game/ui/left_panel.py` → ONE worker/batch (facial-expression glyph live-update + relationship **phase** via F2.1); G1.2 (`RetrievalPanel` auto-refresh poller via `get_retrieval_debug`) + G1.3 (PART_OF breadcrumb draw) separate. Then **G2** new panels (each consumes its F2 route): G2.1 player-model (F2.2), **G2.2 scheme board — BLOCKED on F1.6/F2.3, SKIP**, G2.3 director beat (F2.4 `/dialogue/director-beats`), G2.4 proactive WS, G2.5 deception tell (F2.5 is_deception). Then **G3** — G3.1 intrigue scenario, G3.2 seed enrichment (⚠ `seed.py`). Start with **G1.2** (isolated `RetrievalPanel` poller) or the G1.1+G1.4 `left_panel` pair. Inspect `demo_game/ui/` + `demo_game/client.py` (`EngineClient`) for the F2 route methods first; add client methods for any missing F2 route. **Deferred when reached:** G2.2 (needs F1.6).
+- **Current batch:** Phase F done (modulo F1.6/F2.3); **G1 landed** (G1.1–G1.4). Next candidate: **G2** (new cognition-engine panels, each consumes its F2 route).
+- **Last green commit:** `f9cc210` feat(demo): G1 — live-wire glyph/retrieval/breadcrumb/relationship phase.
+- **Next:** **Phase G2 — new cognition-engine panels (pure demo-side; run `make test-demo`).** Each consumes its F2 route + needs a `demo_game/client.py` method (add if missing) + a new panel widget + `game_window`/`right_panel` wiring. Items: **G2.1** player-model "What they think of YOU" panel (F2.2 `GET /npc/{npc}/player-model/{player}` — add `client.get_player_model`); **G2.2 scheme board — BLOCKED on F1.6/F2.3 → SKIP** (note dep); **G2.3** director-beat "something stirs" cue (F2.4 `GET /v1/dialogue/director-beats` — add `client.get_director_beats`; DirectorBeatLog is in-memory so beats appear once the scheduler/autopilot ticks); **G2.4** proactive dialogue in the interactive window over WS (F1.2 delivery + `dialogue_ws` idle drain already land lines; surface the hail live — highlight/prefill from EXP-225); **G2.5** deception "tell" affordance (F2.5 `is_deception` on the beliefs read — subtle buyer-facing reveal). ⚠ G2.x panels each touch `game_window.py`/`right_panel.py` (shared) → if dispatching parallel workers, the shared-file wiring conflicts; prefer ONE worker for the G2 batch (or serialize). Then **G3** (G3.1 intrigue scenario new file; G3.2 seed enrichment ⚠ `seed.py`). Start: dispatch a G2 worker for G2.1 + G2.3 + G2.5 (+ G2.4) as one batch (shared `game_window`), SKIP G2.2.
 
 ## Progress Log
 
@@ -258,3 +258,12 @@ as the continuation. The runtime re-invokes automatically; do not poll.
   distinct-player no-collision test; fixed the bootstrap call-count test for the new index. Type-registry gate
   GREEN first try (bare node YAML, per carried lesson). `make check` 2110 passed, 27 skipped, 86.5% cov.
   Commit: `d219c42`. **→ PHASE F COMPLETE (modulo deferred F1.6/F2.3) → advancing to Phase G.**
+- **17 · 2026-06-12 G1** — PASS. Phase G demo surfacing, all 4 G1 items (one worker; all wire into
+  `game_window`). G1.1 facial-glyph live-update (new `on_facial_expression` controller callback, fired from
+  both WS-done + REST paths). G1.2 retrieval panel on-turn refresh (keyed to the player's submitted message —
+  worker chose on-turn over a poller since retrieval needs the query; sound call). G1.3 PART_OF breadcrumb
+  rendered in the draw loop. G1.4 relationship phase: new `client.get_relationship` + `LeftPanelRenderer.
+  set_relationship_phase` + window wiring (NPC switch / location / post-turn). Dispatched 1 worktree worker
+  → cherry-picked `4184ccd` clean. Pure demo-side (verified zero `src/` imports). +18 demo tests. Gates:
+  `make test-demo` 742 passed + `make check` 2110 (unaffected). Commits: `f9cc210`. Adjacent note: DialogueTurn
+  doesn't carry facial_expression (controller reads raw metadata) — minor future unify, not logged.
