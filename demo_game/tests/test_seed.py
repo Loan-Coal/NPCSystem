@@ -250,6 +250,16 @@ def test_seed_all_creates_lira_knows_about_market_fire_edge() -> None:
     assert ("KNOWS_ABOUT", "lira_fence", "market_fire") in args_list
 
 
+def test_seed_all_creates_player_knows_about_edges() -> None:
+    """F3.6: the player has KNOWS_ABOUT edges so GET /player/{id}/events returns data."""
+    client = _mock_client()
+    seed_all(client)
+    upsert_edge_calls = client.upsert_edge.call_args_list
+    args_list = [(c.args[0], c.args[1], c.args[2]) for c in upsert_edge_calls]
+    assert ("KNOWS_ABOUT", "player_demo", "northern_war_begins") in args_list
+    assert ("KNOWS_ABOUT", "player_demo", "market_fire") in args_list
+
+
 def test_seed_all_creates_captain_sorn_opposes_lira_edge() -> None:
     client = _mock_client()
     seed_all(client)

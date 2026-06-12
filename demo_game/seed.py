@@ -826,6 +826,28 @@ _ALDRIC_REWARD_AMOUNT = 50
 _SPICE_ID = "northern_spice_bundle"
 _SPICE_VALUE = 120
 
+# Player KNOWS_ABOUT edges (F3.6 / EXP-217) so GET /player/{id}/events returns data on
+# a fresh seed. The player has firsthand, undistorted knowledge of two seeded public events.
+# Applied AFTER the player Character is seeded (the edge source must exist first).
+_PLAYER_KNOWS_ABOUT: list[tuple[str, dict]] = [
+    ("northern_war_begins", {
+        "knowledge_state": "knows",
+        "distortion_type": None,
+        "distortion_level": 0,
+        "distorted_summary": "War has broken out in the north — the border has fallen.",
+        "learned_at_tick": 0,
+        "source_character_id": None,
+    }),
+    ("market_fire", {
+        "knowledge_state": "knows",
+        "distortion_type": None,
+        "distortion_level": 0,
+        "distorted_summary": "A fire tore through the market square.",
+        "learned_at_tick": 0,
+        "source_character_id": None,
+    }),
+]
+
 
 # ---------------------------------------------------------------------------
 # Quest seeding (non-fatal — requires quest engine to be running)
@@ -1269,6 +1291,11 @@ def seed_all(client: EngineClient) -> dict:
     # 11. Player character + items (ancient_amulet + HAS_ITEM edge)
     logger.info("[seed] Player + items")
     created += _seed_player_and_items(client)
+
+    # 11b. Player KNOWS_ABOUT edges (F3.6) — after the player exists, so /player/{id}/events returns data
+    logger.info("[seed] Player KNOWS_ABOUT edges")
+    for event_id, props in _PLAYER_KNOWS_ABOUT:
+        _tally(_seed_edge(client, "KNOWS_ABOUT", _PLAYER_ID, event_id, props))
 
     # 12. Aldric inventory (northern_spice_bundle + OWNS edge)
     logger.info("[seed] Aldric inventory")
