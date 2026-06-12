@@ -143,10 +143,10 @@ as the continuation. The runtime re-invokes automatically; do not poll.
 
 ## State pointer
 
-- **Phase in progress:** F (F1 wiring underway)
-- **Current batch:** F1.1–F1.5 landed. Next candidate: F1.6 (wire `SchemingEngine` into the scheduler — advance active scheme steps per tick + detection by reviving `engines/investigation`).
-- **Last green commit:** `b20c65a` fix(director): F1.5 integration (docstring conformance).
-- **Next:** F1.6 (scheduler-touching → its own small batch). NOTE: F1.6 has TWO halves — (a) advance scheme steps per tick (reuse F1.4/F1.5 slot pattern), (b) **revive `engines/investigation`** for detection. Check whether investigation is dormant/partial first; the detection half may be large → consider a worker. EXP-229 already shipped scheme form+persist+advance-one-step (see git log b2731de).
+- **Phase in progress:** F (F1 done except deferred F1.6; F2 next).
+- **Current batch:** F1.1–F1.5 + F1.7 landed; **F1.6 DEFERRED** (DEC-107/ISSUE-099 — design call needed). F1 is otherwise complete. Next candidate: **F2.1** (extend `routes/relationship.py` to return relationship phase + phase_started_at_tick).
+- **Last green commit:** `28036e2` feat(memory): F1.7 — scheduled forgetting-decay tick.
+- **Next:** Advance to **Phase F2 (API read surfaces)**. F2 items are mostly new route files (parallel-safe) — F2.1 extends `relationship.py` (solo), F2.2 `player_model.py` (new), F2.3 `schemes.py` (**BLOCKED on F1.6 — skip with noted dep**), F2.4 pending/director read, F2.5 optional deception flag. Good candidate for an `/expand-parallel`-style multi-worker batch once F2.1's solo edit is clear. Start with F2.1 (solo, extends existing route).
 
 ## Progress Log
 
@@ -192,3 +192,10 @@ as the continuation. The runtime re-invokes automatically; do not poll.
   fix: restored `Does NOT:` line in director `__init__.py` (conformance gate caught it). Gate green
   (2086 passed, 25 skipped, 86.3% cov). Deferred: plateau tracker (ISSUE-097), shared location reader
   (ISSUE-098). Commits: `e236af4` (worker) → `b20c65a` (fix).
+- **6 · 2026-06-12 F1.6 DEFER + F1.7** — F1.6 **DEFERRED** for a human design call: `add_scheme_step`
+  MERGEs a bare `Event` (no `event_type`) so per-tick advance smuggles invalid nodes; recorded options in
+  DEC-107, logged ISSUE-099 (blocks only F2.3 + G2.2). Then implemented **F1.7** (forgetting-decay):
+  `MemoryDecayTick` self-gates on `MEMORY_DECAY_TICK_INTERVAL` and runs charge-weighted vividness decay;
+  new scheduler slot + `get_memory_decay_tick()` wiring. Implemented inline (mechanical, F1.4 pattern).
+  +3 unit + 1 Neo4j integration test (vividness drops over ticks). Gate green (2089 passed, 26 skipped,
+  86.3% cov). F1 now complete except deferred F1.6 → advancing to Phase F2. Commit: `28036e2`.

@@ -1271,3 +1271,23 @@ rationale as the `left_panel.py` waiver (DEC-036).
 **Decision:** Waive the 300-line rule for `demo_game/ui/emotion_panel.py`; re-baseline via
 `make check-rules-update`. Each function remains ≤40 lines / ≤3 nesting; only the file-size rule is waived.
 **Consequence:** demo emotion panel can render a contagion pair without an artificial split.
+
+## DEC-107: F1.6 scheme auto-advance — what Event does a per-tick SCHEME_STEP reference? (OPEN)
+**Date:** 2026-06-12 · **Status:** ⏸ OPEN — needs human design call; F1.6 advance-half DEFERRED until resolved.
+**Context:** F1.6 wants the scheduler to "advance active scheme steps per tick." But `SCHEME_STEP` is an
+edge `(:Scheme)-[:SCHEME_STEP]->(:Event)`, and `graph/scheme_writer.add_scheme_step` does
+`MERGE (ev:Event {id})` — so calling it per tick with a fresh `event_id` **creates a bare Event node with
+no `event_type`**, silently violating the registry `event` contract (`event_type` required). There is no
+defined source for a scheme step's Event, so naive per-tick advancement is unsafe.
+**Options:** (A) each advance creates a real, registry-valid covert Event (`event_type="discovery"`, a
+valid base type) via the EventHandler/validate_node_write path, then links it as the next SCHEME_STEP —
+schemes manifest as a sequence of in-world events; richer but couples the scheme tick to event creation.
+(B) advancement is status/step-counter progression only (reuse the free-string `status` field +
+step_order on steps that point to *existing* scheme-related events), creating no new Events — simpler, no
+registry coupling, but "steps" become metadata not world events. (C) defer auto-advance entirely; schemes
+advance only via explicit engine calls (current EXP-229 behaviour).
+**Recommendation:** (A) for fidelity, but it is L-sized and event-coupled. **Detection half** is
+independent and schema-free: reuse the `status` field (e.g. `active`→`discovered`) — no new node/edge field
+(avoids a schema change; DEC-104 already blessed reviving `investigation`).
+**Consequence:** until resolved, F1.6 stays `[ ]`; its only downstream dependents are F2.3 (GET schemes +
+discovered flag) and G2.2 (scheme board) — both deferred with it. F1.7+ and the rest of F/G/H proceed.

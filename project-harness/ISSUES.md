@@ -67,6 +67,19 @@ more consistent with the rest of the composition root.
 **Why deferred:** Cosmetic; not blocking. Surfaced by the F1.5 worker.
 **To fix:** Add `@lru_cache get_player_location_reader()` and reuse it across the four factories.
 
+## ISSUE-099: F1.6 (scheming + investigation detection) DEFERRED — needs design call (DEC-107)
+**Found:** 2026-06-12, during the F→G→H build loop (cycle 6)
+**Severity:** P2 (blocks F2.3 + G2.2, not the rest)
+**Where:** `engines/scheming/` tick wiring + `graph/scheme_writer.add_scheme_step`
+**Description:** F1.6's advance-half is under-specified and unsafe to guess: `add_scheme_step` MERGEs a
+bare `Event` with no `event_type`, so naive per-tick advancement smuggles invalid Event nodes into the
+graph (registry `event` contract requires `event_type`). See DEC-107 for the design options.
+**Why deferred:** Choosing how schemes manifest per tick (real covert events vs status-only progression)
+is a product/design decision better made by a human than guessed autonomously overnight; invariant 6
+(don't thrash) + the schema/data-model caution apply. Detection-half is fine via `status` reuse.
+**To fix:** Resolve DEC-107 (pick option A/B/C), then implement the advance tick + investigation-based
+detection (status `active`→`discovered`) + scheduler slot, and unblock F2.3 / G2.2.
+
 ## [FIXED] ISSUE-093: NPCs conflate past memories with current events (systemic — knowledge has no temporal frame)
 **Fixed:** 2026-06-11, Phase 26 (S26.1–S26.4). All three layers addressed: (A) `_flatten_event_row` keeps
 `knowledge_state` and `_extract_personal_accounts` routes rumour distorted summaries to a HEARSAY channel
