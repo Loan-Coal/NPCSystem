@@ -20,9 +20,51 @@ from anti_hallucination_runner import (
     AntiHallucinationSummary,
     _REFUSAL_KEYWORDS,
     _belief_fact_persisted,
+    _classify_case,
     format_summary,
     run,
 )
+
+
+def _make_belief_response(content: str, is_deception: bool) -> MagicMock:
+    """Mock GET /beliefs response carrying one belief with an is_deception flag (F2.5/F3.3)."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "success": True,
+        "data": {"beliefs": [{"content": content, "confidence": 80, "is_deception": is_deception}]},
+        "meta": None,
+    }
+    mock_resp.raise_for_status = MagicMock()
+    return mock_resp
+
+
+def test_planted_deception_not_scored_as_hallucination() -> None:
+    """F3.3: an NPC voicing a planted is_deception belief is 'intended', not refusal_fail."""
+    lie = "the eastern road is perfectly safe"
+    case = {"id": "dcp", "npc_id": "npc_a", "question": "is the eastern road safe?", "expected_verdict": "refusal"}
+    client = MagicMock()
+    client.post.return_value = _make_dialogue_response(lie)
+    client.get.return_value = _make_belief_response(lie, is_deception=True)
+
+    result, outcome = _classify_case(case, client, "http://x")
+
+    assert outcome == "deception_intended"
+    assert result["passed"] is True
+
+
+def test_ordinary_unsupported_claim_still_fails() -> None:
+    """An unsupported claim with no is_deception belief is still a refusal_fail (hallucination)."""
+    claim = "the eastern road is perfectly safe"
+    case = {"id": "hal", "npc_id": "npc_a", "question": "is the eastern road safe?", "expected_verdict": "refusal"}
+    client = MagicMock()
+    client.post.return_value = _make_dialogue_response(claim)
+    client.get.return_value = _make_belief_response(claim, is_deception=False)
+
+    result, outcome = _classify_case(case, client, "http://x")
+
+    assert outcome == "refusal_fail"
+    assert result["passed"] is False
 
 
 # ---------------------------------------------------------------------------

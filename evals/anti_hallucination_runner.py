@@ -138,6 +138,39 @@ def _content_matches(belief: dict[str, Any], lowered_substrings: list[str]) -> b
     return any(sub in content for sub in lowered_substrings)
 
 
+def _response_reflects_planted_deception(
+    npc_id: str,
+    client: httpx.Client,
+    base_url: str,
+    response_text: str,
+) -> bool:
+    """Return True if the NPC voiced a deliberately-planted (is_deception) belief (F3.3).
+
+    Queries the NPC's beliefs (GET /beliefs/{npc_id}; is_deception surfaced by F2.5),
+    keeps only those ``classify_deception_belief`` marks 'intended', and checks whether
+    the response echoes one — so a planted lie is not scored as a hallucination, while
+    ordinary unsupported claims (no is_deception belief) still fail. A query error or no
+    match returns False (the case is scored normally).
+    """
+    lowered = response_text.lower()
+    if not lowered:
+        return False
+    url = f"{base_url}{_BELIEFS_PATH_TEMPLATE.format(npc_id=npc_id)}"
+    try:
+        resp = client.get(url, params={"k": _BELIEF_PREFLIGHT_K}, timeout=_BELIEF_PREFLIGHT_TIMEOUT_S)
+        resp.raise_for_status()
+        beliefs: list[dict[str, Any]] = resp.json().get("data", {}).get("beliefs", [])
+    except Exception:
+        return False
+    for belief in beliefs:
+        if classify_deception_belief(belief) != "intended":
+            continue
+        content = str(belief.get("content", "")).lower()
+        if content and content in lowered:
+            return True
+    return False
+
+
 def _load_fixture(fixture_path: Path) -> list[dict[str, Any]]:
     """Load and return a list of case objects from the JSON fixture, skipping comment objects."""
     raw: list[dict[str, Any]] = json.loads(fixture_path.read_text(encoding="utf-8"))
@@ -153,7 +186,7 @@ def _classify_case(
     Call POST /v1/dialogue for one case and return (result_dict, verdict_outcome).
 
     verdict_outcome is one of: "grounded_pass", "grounded_fail", "refusal_pass",
-    "refusal_fail", "skipped", or "error".
+    "refusal_fail", "deception_intended", "skipped", or "error".
 
     Returns:
         (result dict for write_report, verdict_outcome string)
@@ -228,9 +261,13 @@ def _classify_case(
     if expected_verdict == "grounded":
         passed = _is_grounded(response_text, expected_substrings)
         outcome = "grounded_pass" if passed else "grounded_fail"
+    elif _is_refusal(response_text):
+        passed, outcome = True, "refusal_pass"
+    elif _response_reflects_planted_deception(npc_id, client, base_url, response_text):
+        # NPC voiced a deliberately-planted lie — intended, not a hallucination (F3.3).
+        passed, outcome = True, "deception_intended"
     else:
-        passed = _is_refusal(response_text)
-        outcome = "refusal_pass" if passed else "refusal_fail"
+        passed, outcome = False, "refusal_fail"
 
     result = _build_result(
         case_id=case_id,
