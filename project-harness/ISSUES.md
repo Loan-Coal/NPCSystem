@@ -80,6 +80,19 @@ is a product/design decision better made by a human than guessed autonomously ov
 **To fix:** Resolve DEC-107 (pick option A/B/C), then implement the advance tick + investigation-based
 detection (status `active`→`discovered`) + scheduler slot, and unblock F2.3 / G2.2.
 
+## ISSUE-100: `make demo-run ARGS=--dry-run` fails partway (pre-existing, ~ACT 8)
+**Found:** 2026-06-12, during G3.1 (verifying the intrigue arc in the demo sequence)
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/run.py` SCENES / `make demo-run` dry-run path
+**Description:** `make demo-run ARGS=--dry-run` (meant to print the scene sequence only) exits with error
+partway through (around the ACT 8/determinism region) — confirmed PRE-EXISTING (reproduces with G3.1
+changes stashed). Individual scenes respect `runner.dry_run`; the failure is elsewhere in the dry-run
+harness/sequence, not the new intrigue scenes.
+**Why deferred:** Out of G3.1 scope (G3.1 adds the intrigue scenes, which are unit-tested and respect
+dry_run); the dry-run harness bug predates this work.
+**To fix:** Bisect which scene/step errors under `--dry-run` and make the dry-run path fully non-networked
+end-to-end.
+
 ## [FIXED] ISSUE-093: NPCs conflate past memories with current events (systemic — knowledge has no temporal frame)
 **Fixed:** 2026-06-11, Phase 26 (S26.1–S26.4). All three layers addressed: (A) `_flatten_event_row` keeps
 `knowledge_state` and `_extract_personal_accounts` routes rumour distorted summaries to a HEARSAY channel

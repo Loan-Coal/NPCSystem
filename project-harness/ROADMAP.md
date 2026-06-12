@@ -94,7 +94,7 @@ top of those APIs. Overnight execution driver: `project-harness/DEMO_BUILD_LOOP.
 - [x] **G2.5 (EXP-228)** — deception "tell" affordance: a subtle buyer-facing reveal when an NPC states a flagged false belief (via F2.5). Exit: the demo can reveal a deception without breaking the in-fiction illusion.
 
 #### G3 — Content & scenarios that exercise the new layer
-- [ ] **G3.1** — a scripted **"Intrigue"** scenario (new `demo_game/scenarios/`) that drives deception + scheming + player-model into one recordable arc (works under `--cinematic`). Exit: `make demo-run` plays the intrigue arc end-to-end.
+- [x] **G3.1** — a scripted **"Intrigue"** scenario (new `demo_game/scenarios/`) that drives deception + scheming + player-model into one recordable arc (works under `--cinematic`). Exit: `make demo-run` plays the intrigue arc end-to-end. *(ACT 12: `DeceptionRevealScene` + `PlayerModelDisplay` in the demo SCENES; both respect dry_run/cinematic. Scheme beat deferred — F1.6.)*
 - [x] **G3.2** — seed enrichment so the new panels have data on first run (scheme seeds, KNOWS_ABOUT from F3.6, a deception setup). Exit: panels are non-empty on a fresh `make demo-seed`. *(deception belief seeded — `lira_fence` is_deception; KNOWS_ABOUT from F3.6; player-model data comes from the scheduler tick; scheme seeds await F1.6.)*
 
 ### Phase H — Demo-game expansion (consume the APIs; make the demo a *game*)
