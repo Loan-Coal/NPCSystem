@@ -144,9 +144,9 @@ as the continuation. The runtime re-invokes automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** F (F1 wiring underway)
-- **Current batch:** F1.1 + F1.2 landed. Next candidate: F1.3 (inject `TraitModulatedEmotionModel` into `EmotionUpdater` via composition root, config-selectable).
-- **Last green commit:** `b40d674` fix(proactive): F1.2 integration (type + baseline ratchet).
-- **Next:** F1.3 (composition-root DI of emotion model) — isolated to `dependencies*`/`EmotionUpdater` wiring; its own small batch.
+- **Current batch:** F1.1–F1.3 landed. Next candidate: F1.4 (wire `PlayerModelEngine` into the scheduler — update each NPC's model of the player per tick window).
+- **Last green commit:** `eed1700` feat(emotion): F1.3 — config-selectable emotion model.
+- **Next:** F1.4 (scheduler-touching → its own small batch; the scheduler already has a `player_model`-style slot pattern — check `dependencies_engines` + `tick_scheduler`).
 
 ## Progress Log
 
@@ -170,3 +170,9 @@ as the continuation. The runtime re-invokes automatically; do not poll.
   Literal) + ratcheted rules baseline 141→140. Gate: `make check` green (2076 passed, +7 tests, 86.2% cov).
   Adjacent issues logged: ISSUE-094 (no need/event producers — router seam), ISSUE-095 (lazy import).
   Commits: `375ae14` (worker) → `b40d674` (integration fix).
+- **3 · 2026-06-12 F1.3** — PASS. Config-selectable emotion model: added `EMOTION_MODEL` setting
+  (`vad`|`trait_modulated`) + `engines/emotion/emotion_model_factory.build_emotion_model`; wired
+  `get_emotion_updater` to inject the selected `EmotionModelProtocol` (EmotionUpdater already accepted
+  `model=`). `trait_modulated` seeds demo-default traits (fear=1.5) so shocks are visibly modulated.
+  Implemented inline (small composition-root + config slice, no interface break). +4 unit tests. Gate:
+  `make check` green (2080 passed, 86.2% cov). Deferred per-NPC trait fetch → ISSUE-096. Commit: `eed1700`.

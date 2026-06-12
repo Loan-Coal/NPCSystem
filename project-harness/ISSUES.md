@@ -33,6 +33,18 @@ import cycle at module load.
 api/dependencies_engines import graph confirmed acyclic first.
 **To fix:** Verify no circular import, then hoist the import to module top-level.
 
+## ISSUE-096: trait-modulated emotion uses global demo-default traits, not per-NPC traits
+**Found:** 2026-06-12, during F1.3 (config-selectable emotion model)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/engines/emotion/emotion_model_factory.py` (`_DEMO_DEFAULT_TRAITS`)
+**Description:** When `EMOTION_MODEL="trait_modulated"`, `EmotionUpdater` holds ONE model seeded with
+global demo-default trait multipliers, so every NPC is modulated identically. `TraitModulatedEmotionModel`
+is designed for per-NPC traits (its docstring: "caller responsible for fetching traits from the graph").
+**Why deferred:** F1.3 scope is the config selector + composition-root injection; per-NPC trait fetch is
+its own slice (needs a graph traits reader + an EmotionUpdater call-signature change to thread npc traits).
+**To fix:** Add a per-NPC traits reader; have `EmotionUpdater` build/parameterize the model per `npc_id`
+(or pass traits into `apply_shock`/`apply_mood_hint`), removing the global default.
+
 ## [FIXED] ISSUE-093: NPCs conflate past memories with current events (systemic — knowledge has no temporal frame)
 **Fixed:** 2026-06-11, Phase 26 (S26.1–S26.4). All three layers addressed: (A) `_flatten_event_row` keeps
 `knowledge_state` and `_extract_personal_accounts` routes rumour distorted summaries to a HEARSAY channel
