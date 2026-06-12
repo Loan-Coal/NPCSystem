@@ -233,3 +233,58 @@ class TestPlayerModelDisplay:
         PlayerModelDisplay(name="pm", npc_id="mira_innkeeper").execute(runner)
         printed = " ".join(str(c.args[0]) for c in runner.print_ok.call_args_list)
         assert "no model" in printed
+
+
+# ---------------------------------------------------------------------------
+# BranchBeat (H2.8): scripted fork over the H2.1 branch primitive
+# ---------------------------------------------------------------------------
+
+from demo_game.run_scenes import BranchBeat  # noqa: E402
+import demo_game.run_scenes as _rs  # noqa: E402
+from demo_game.branch_state import BranchState  # noqa: E402
+from demo_game.branch_node import BRANCH_ID_GARRICK  # noqa: E402
+
+
+class TestBranchBeat:
+    def _patch_state(self, monkeypatch):
+        saved: dict = {}
+        monkeypatch.setattr(_rs, "load_branch_state", lambda: BranchState())
+        monkeypatch.setattr(_rs, "save_branch_state", lambda s: saved.update(state=s))
+        return saved
+
+    def test_dry_run_applies_no_effects(self, monkeypatch) -> None:
+        self._patch_state(monkeypatch)
+        runner = MagicMock()
+        runner.dry_run = True
+        BranchBeat(name="b", option_index=0).execute(runner)
+        runner.client.adjust_npc_reputation.assert_not_called()
+
+    def test_spare_option_applies_rep_effect_and_persists(self, monkeypatch) -> None:
+        saved = self._patch_state(monkeypatch)
+        runner = MagicMock()
+        runner.dry_run = False
+        BranchBeat(name="b", option_index=0).execute(runner)
+        runner.client.adjust_npc_reputation.assert_called_once()
+        assert saved["state"].has_chosen(BRANCH_ID_GARRICK)
+        assert saved["state"].choice_for(BRANCH_ID_GARRICK).option_index == 0
+
+    def test_turn_in_option_forks_to_other_outcome(self, monkeypatch) -> None:
+        saved = self._patch_state(monkeypatch)
+        runner = MagicMock()
+        runner.dry_run = False
+        BranchBeat(name="b", option_index=1).execute(runner)
+        # option 1 = turn-in → city_guard faction in the rep call
+        args = runner.client.adjust_npc_reputation.call_args.args
+        assert "city_guard" in args
+        assert saved["state"].choice_for(BRANCH_ID_GARRICK).option_index == 1
+
+    def test_prior_choice_in_state_wins_for_replay(self, monkeypatch) -> None:
+        # A prior turn-in choice in BranchState reproduces on replay regardless of option_index.
+        monkeypatch.setattr(_rs, "load_branch_state",
+                            lambda: BranchState().with_choice(BRANCH_ID_GARRICK, 1, "Turn him in"))
+        monkeypatch.setattr(_rs, "save_branch_state", lambda s: None)
+        runner = MagicMock()
+        runner.dry_run = False
+        BranchBeat(name="b", option_index=0).execute(runner)  # option_index ignored
+        args = runner.client.adjust_npc_reputation.call_args.args
+        assert "city_guard" in args

@@ -24,6 +24,8 @@ from demo_game.constants import (
     PROPAGATED_REP_LOCATION,
 )
 from demo_game.dialogue_ws import dialogue_ws_worker
+from demo_game.branch_node import build_garrick_branch
+from demo_game.branch_state import load_branch_state, save_branch_state
 
 if TYPE_CHECKING:
     from demo_game.run import DemoRunner
@@ -616,3 +618,37 @@ class PlayerModelDisplay(Scene):
         trust = model.get("perceived_trust", "?")
         intent = model.get("perceived_intent", "?")
         runner.print_ok(f"[player-model] {self.npc_id} sees {self.player_id}: trust={trust} intent={intent}")
+
+
+# ---------------------------------------------------------------------------
+# Branching (H2.8) — present a BranchNode, apply the chosen option, persist it
+# ---------------------------------------------------------------------------
+
+@dataclass
+class BranchBeat(Scene):
+    """Present a BranchNode in the scripted runner and fork the world on a choice.
+
+    The choice is deterministic for reproducible playback: a prior choice stored in
+    BranchState wins (so ``--cached`` replays identically); otherwise ``option_index``
+    is used and persisted. The chosen option's effects mutate the live graph via the
+    EngineClient. Set ``option_index=1`` in a scenario variant to replay to the other
+    outcome (H2.8 exit).
+    """
+
+    option_index: int = 0
+
+    def execute(self, runner: "DemoRunner") -> None:
+        """Render the branch, resolve the choice, apply effects, and persist it."""
+        node = build_garrick_branch()
+        runner.print_step(f"[BRANCH] {node.prompt_text}")
+        for index, option in enumerate(node.options):
+            runner.print_ok(f"  [{index}] {option.label}")
+        if runner.dry_run:
+            return
+        state = load_branch_state()
+        prior = state.choice_for(node.branch_id)
+        chosen_index = prior.option_index if prior is not None else self.option_index
+        chosen = node.options[chosen_index]
+        chosen.apply_all(runner.client)
+        save_branch_state(state.with_choice(node.branch_id, chosen_index, chosen.label))
+        runner.print_ok(f"[branch] chose: {chosen.label}")

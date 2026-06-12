@@ -29,6 +29,7 @@ from demo_game.client import EngineClient
 from demo_game.config import DemoConfig
 from demo_game.run_scenes import (
     AntiHallucinationBeat,
+    BranchBeat,
     BribeScene,
     ClockTick,
     CorrectRumorScene,
@@ -476,6 +477,12 @@ SCENES: list[Scene] = [
     DeceptionRevealScene(name="act12_deception", npc_id="lira_fence"),
     ClockTick(name="act12_tick", delay_before_ms=500, delta_ticks=1),
     PlayerModelDisplay(name="act12_player_model", npc_id="mira_innkeeper"),
+    NarratorCue(
+        name="act12_branch_cue",
+        delay_before_ms=500,
+        text="[ACT 12] A player choice forks the world — spare Garrick, or turn him in.",
+    ),
+    BranchBeat(name="act12_branch", option_index=0),
 
     NarratorCue(
         name="outro",

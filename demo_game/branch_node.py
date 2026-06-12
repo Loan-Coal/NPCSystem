@@ -14,10 +14,20 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from demo_game.branch_effects import BranchEffect
+from demo_game.branch_effects import BranchEffect, RepDeltaEffect
 
 if TYPE_CHECKING:
     from demo_game.client import EngineClient
+
+# Player whose standing the garrick branch effects mutate.
+_BRANCH_PLAYER_ID: str = "player_demo"
+# Factions rewarded by each garrick option.
+_GARRICK_SPARE_FACTION: str = "thieves_guild"
+_GARRICK_TURN_IN_FACTION: str = "city_guard"
+_GARRICK_PROMPT: str = (
+    "Garrick, a deserter, begs for mercy in the tavern. The City Guard wants him "
+    "for the noose. Do you spare him, or turn him in?"
+)
 
 
 @dataclass(frozen=True)
@@ -92,3 +102,32 @@ _GARRICK_REP_DELTA_TURN_IN: int = 20
 # Location and tick used for garrick reputation events.
 _GARRICK_LOCATION_ID: str = "loc_tavern"
 _GARRICK_TICK_ID: int = 1
+
+
+def _garrick_rep_option(label: str, faction_id: str, delta: int) -> BranchOption:
+    """Build a garrick BranchOption carrying a single player→faction RepDeltaEffect."""
+    effect = RepDeltaEffect(
+        character_id=_BRANCH_PLAYER_ID, faction_id=faction_id, delta=delta,
+        location_id=_GARRICK_LOCATION_ID, tick_id=_GARRICK_TICK_ID,
+    )
+    return BranchOption(label=label, effects=(effect,))
+
+
+def build_garrick_branch() -> BranchNode:
+    """Return the authored garrick_deserter spare/turn-in branch (first slice).
+
+    Option 0 (spare) rewards the player's standing with the thieves' guild;
+    option 1 (turn-in) rewards standing with the city guard — opposite outcomes
+    the player (or a scripted BranchBeat) forks between.
+
+    Returns:
+        The garrick BranchNode with two RepDeltaEffect-bearing options.
+    """
+    return BranchNode(
+        branch_id=BRANCH_ID_GARRICK,
+        prompt_text=_GARRICK_PROMPT,
+        options=(
+            _garrick_rep_option(OPTION_LABEL_SPARE, _GARRICK_SPARE_FACTION, _GARRICK_REP_DELTA_SPARE),
+            _garrick_rep_option(OPTION_LABEL_TURN_IN, _GARRICK_TURN_IN_FACTION, _GARRICK_REP_DELTA_TURN_IN),
+        ),
+    )

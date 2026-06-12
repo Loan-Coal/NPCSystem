@@ -184,3 +184,19 @@ def test_garrick_turn_in_applies_city_guard_faction() -> None:
     client.adjust_npc_reputation.assert_called_once_with(
         "garrick_deserter", "city_guard", 20, "loc_tavern", 1
     )
+
+
+def test_build_garrick_branch_has_two_opposite_options() -> None:
+    """build_garrick_branch returns the authored 2-option garrick fork (spare/turn-in)."""
+    from demo_game.branch_node import (
+        build_garrick_branch, BRANCH_ID_GARRICK, OPTION_LABEL_SPARE, OPTION_LABEL_TURN_IN,
+    )
+
+    node = build_garrick_branch()
+    assert node.branch_id == BRANCH_ID_GARRICK
+    assert len(node.options) == 2
+    assert node.options[0].label == OPTION_LABEL_SPARE
+    assert node.options[1].label == OPTION_LABEL_TURN_IN
+    # each option carries exactly one effect
+    assert len(node.options[0].effects) == 1
+    assert len(node.options[1].effects) == 1
