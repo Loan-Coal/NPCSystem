@@ -20,7 +20,8 @@ MATCH (a:Character {id: $src_id})-[r:RELATES_TO]->(b:Character {id: $dst_id})
 RETURN coalesce(r.trust, 0) AS trust,
        coalesce(r.fear, 0) AS fear,
        coalesce(r.affection, 0) AS affection,
-       r.relationship_phase AS relationship_phase
+       r.relationship_phase AS relationship_phase,
+       r.phase_started_at_tick AS phase_started_at_tick
 """
 
 
@@ -32,12 +33,14 @@ class RelationPhaseRow(BaseModel):
         fear: Current fear scalar (0 when unset).
         affection: Current affection scalar (0 when unset).
         relationship_phase: Persisted phase string, or None if never transitioned.
+        phase_started_at_tick: Tick the current phase began, or None if never transitioned.
     """
 
     trust: int
     fear: int
     affection: int
     relationship_phase: str | None
+    phase_started_at_tick: int | None = None
 
     model_config = {"frozen": True}
 
@@ -72,4 +75,5 @@ async def get_relation_phase_state(
             fear=record["fear"],
             affection=record["affection"],
             relationship_phase=record["relationship_phase"],
+            phase_started_at_tick=record["phase_started_at_tick"],
         )

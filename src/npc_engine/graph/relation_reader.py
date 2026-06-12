@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from neo4j import AsyncSession
 
+from npc_engine.graph.relation_phase_reader import RelationPhaseRow, get_relation_phase_state
 from npc_engine.graph.relation_writer import get_relation_values
 
 
@@ -46,3 +47,15 @@ class RelationReader:
         tx = await self._session.begin_transaction()
         async with tx:
             return await get_relation_values(tx=tx, src_id=src_id, dst_id=dst_id)
+
+    async def get_relation_phase_row(self, *, src_id: str, dst_id: str) -> RelationPhaseRow | None:
+        """Return the edge's scalars plus persisted phase and phase-start tick.
+
+        Args:
+            src_id: ID of the source character node.
+            dst_id: ID of the destination character node.
+
+        Returns:
+            RelationPhaseRow when the RELATES_TO edge exists, else None.
+        """
+        return await get_relation_phase_state(session=self._session, src_id=src_id, dst_id=dst_id)

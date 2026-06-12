@@ -14,11 +14,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from neo4j import AsyncSession
 from pydantic import BaseModel, ConfigDict
 
+from typing import Any
+
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.engines.relationship.standing import Standing, derive_standing
 from npc_engine.graph.relation_reader import RelationReader
-from npc_engine.utils.errors import RelationEdgeNotFoundError
 
 
 class RelationshipResponse(BaseModel):
@@ -28,6 +29,8 @@ class RelationshipResponse(BaseModel):
     trust: int
     fear: int
     affection: int
+    relationship_phase: str | None = None
+    phase_started_at_tick: int | None = None
 
     model_config = ConfigDict(frozen=True)
 
@@ -47,7 +50,7 @@ def _get_relation_reader(session: AsyncSession = Depends(get_db_session)) -> Rel
     return RelationReader(session=session)
 
 
-@router.get("/{npc_id}/relationship/{other_id}", response_model=RelationshipResponse)
+@router.get("/{npc_id}/relationship/{other_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_relationship_standing(
     npc_id: str,
     other_id: str,
@@ -61,25 +64,24 @@ async def get_relationship_standing(
         reader: Graph-layer reader injected by FastAPI.
 
     Returns:
-        JSON envelope with standing (Standing enum value), trust, fear, affection.
+        JSON envelope with standing (Standing enum value), trust, fear, affection,
+        relationship_phase, and phase_started_at_tick (the latter two null until a
+        phase transition has been persisted; see F1.1).
 
     Raises:
         HTTPException 404: If no RELATES_TO edge exists between the two NPCs.
     """
-    try:
-        scalars = await reader.get_relation_scalars(src_id=npc_id, dst_id=other_id)
-    except RelationEdgeNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    row = await reader.get_relation_phase_row(src_id=npc_id, dst_id=other_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"no relation edge {npc_id} -> {other_id}")
 
-    standing = derive_standing(
-        trust=scalars["trust"],
-        fear=scalars["fear"],
-        affection=scalars["affection"],
-    )
+    standing = derive_standing(trust=row.trust, fear=row.fear, affection=row.affection)
     payload = RelationshipResponse(
         standing=standing,
-        trust=scalars["trust"],
-        fear=scalars["fear"],
-        affection=scalars["affection"],
+        trust=row.trust,
+        fear=row.fear,
+        affection=row.affection,
+        relationship_phase=row.relationship_phase,
+        phase_started_at_tick=row.phase_started_at_tick,
     )
     return ok_response(payload.model_dump())

@@ -68,7 +68,7 @@ async def test_returns_scalars_and_phase() -> None:
     """get_relation_phase_state maps the record into a RelationPhaseRow."""
     from npc_engine.graph.relation_phase_reader import get_relation_phase_state
 
-    record = _FakeRecord({"trust": 30, "fear": 5, "affection": 40, "relationship_phase": "ACQUAINTANCE"})
+    record = _FakeRecord({"trust": 30, "fear": 5, "affection": 40, "relationship_phase": "ACQUAINTANCE", "phase_started_at_tick": 7})
     session = _FakeSession(record)
 
     row = await get_relation_phase_state(session=session, src_id="npc_a", dst_id="player_1")
@@ -78,6 +78,7 @@ async def test_returns_scalars_and_phase() -> None:
     assert row.fear == 5
     assert row.affection == 40
     assert row.relationship_phase == "ACQUAINTANCE"
+    assert row.phase_started_at_tick == 7
     assert session.tx.last_params == {"src_id": "npc_a", "dst_id": "player_1"}
     assert "RELATES_TO" in session.tx.last_query
 
@@ -99,7 +100,7 @@ async def test_phase_defaults_to_none_when_unset() -> None:
     """A null relationship_phase property is surfaced as None (never-transitioned edge)."""
     from npc_engine.graph.relation_phase_reader import get_relation_phase_state
 
-    record = _FakeRecord({"trust": 0, "fear": 0, "affection": 0, "relationship_phase": None})
+    record = _FakeRecord({"trust": 0, "fear": 0, "affection": 0, "relationship_phase": None, "phase_started_at_tick": None})
     session = _FakeSession(record)
 
     row = await get_relation_phase_state(session=session, src_id="npc_a", dst_id="player_1")
