@@ -28,6 +28,7 @@ from npc_engine.engines.proactive_dialogue.proactive_engine import ProactiveDial
 from npc_engine.engines.proactive_dialogue.proactive_queue import ProactiveQueue
 from npc_engine.engines.proactive_dialogue.trigger_router import (
     TriggerCandidate,
+    TriggerSource,
     select_trigger,
 )
 from npc_engine.graph.player_location_reader import PlayerLocationReader
@@ -36,7 +37,7 @@ from npc_engine.graph.player_location_reader import PlayerLocationReader
 MAX_PROACTIVE_CHECKS_PER_TICK: int = 20
 
 # TriggerSource value for proactive-memory triggers (only live source today).
-_MEMORY_SOURCE: str = "memory"
+_MEMORY_SOURCE: TriggerSource = "memory"
 
 _logger = logging.getLogger(__name__)
 

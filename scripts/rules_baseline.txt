@@ -34,7 +34,6 @@ R006|src/npc_engine/api/quest_helpers.py::build_transition_meta
 R006|src/npc_engine/api/routes/action.py::report_action
 R006|src/npc_engine/api/routes/clock.py::advance_clock
 R006|src/npc_engine/api/routes/debug_retrieval.py::get_debug_retrieval
-R006|src/npc_engine/api/routes/dialogue_ws.py::dialogue_ws
 R006|src/npc_engine/api/routes/economy.py::evaluate_trade
 R006|src/npc_engine/api/routes/interaction.py::post_interaction
 R006|src/npc_engine/api/routes/location_graph.py::connect_locations
