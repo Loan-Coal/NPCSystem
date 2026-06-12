@@ -536,6 +536,30 @@ class EngineClient:
             return None
         return resp.json()
 
+    def get_relationship(self, npc_id: str, other_id: str) -> dict | None:
+        """Return the relationship standing and phase between npc_id and other_id.
+
+        Calls GET /v1/npc/{npc_id}/relationship/{other_id}. Returns the ``data``
+        sub-dict on 2xx, None on any non-2xx response so callers degrade gracefully.
+
+        Args:
+            npc_id: The NPC whose perspective to read (source of the relation).
+            other_id: The other character (e.g. player_demo).
+
+        Returns:
+            Dict from the ``data`` key of the response envelope (contains
+            ``standing``, ``trust``, ``fear``, ``affection``,
+            ``relationship_phase``, ``phase_started_at_tick``), or None when
+            the endpoint returns a non-2xx status.
+        """
+        resp = self._client.get(
+            f"/v1/npc/{npc_id}/relationship/{other_id}",
+            timeout=self._graph_timeout,
+        )
+        if resp.status_code >= 400:
+            return None
+        return resp.json().get("data")
+
     def get_beliefs(self, character_id: str) -> list[dict]:
         """Return all beliefs for a character via the typed beliefs endpoint.
 

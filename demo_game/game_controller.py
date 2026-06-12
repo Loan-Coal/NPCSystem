@@ -70,6 +70,8 @@ class ControllerCallbacks:
     on_stream_begin: Callable | None = None      # (npc_id: str) -> None
     on_npc_token: Callable | None = None         # (npc_id: str, chunk: str) -> None
     on_stream_done: Callable | None = None       # (npc_id: str, turn, color) -> None
+    # G1.1 — facial expression from the WS done metadata.
+    on_facial_expression: Callable | None = None  # (npc_id: str, expr_type: str | None) -> None
 
 
 class GameController:
@@ -320,6 +322,10 @@ class GameController:
                 play_audio_bytes(audio_bytes)
             turn: DialogueTurn = parse_dialogue_response(fake_raw)
             color = degradation_color(turn.degradation_level)
+            if self._cb.on_facial_expression:
+                expr_dict = metadata.get("facial_expression") or {}
+                expr_type: str | None = expr_dict.get("type") if isinstance(expr_dict, dict) else None
+                self._cb.on_facial_expression(npc_id, expr_type)
             if self._cb.on_stream_done:
                 self._cb.on_stream_done(npc_id, turn, color)
             self._apply_relation_band(turn)
@@ -473,6 +479,10 @@ class GameController:
 
         turn: DialogueTurn = parse_dialogue_response(item)
         color = degradation_color(turn.degradation_level)
+        if self._cb.on_facial_expression:
+            raw_expr = item.get("facial_expression") or {}
+            rest_expr_type: str | None = raw_expr.get("type") if isinstance(raw_expr, dict) else None
+            self._cb.on_facial_expression(npc_id, rest_expr_type)
         if self._cb.on_npc_response:
             self._cb.on_npc_response(npc_id, turn, color)
 

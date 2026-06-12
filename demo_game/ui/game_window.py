@@ -111,6 +111,8 @@ class GameWindow:
         self._intent_bubble_text: str = ""
         self._intent_bubble_npc: str = ""
         self._intent_bubble_until: float = 0.0
+        # Last player message submitted — used for on-turn retrieval refresh (G1.2).
+        self._last_player_message: str = ""
 
         pygame.init()
         self._screen = pygame.display.set_mode((window_w, window_h))
@@ -124,6 +126,8 @@ class GameWindow:
 
         self._left = LeftPanelRenderer(font_body, font_label, font_nav, font_loc)
         self._left.setup(self._active_location_id, self._active_npc_id)
+        # G1.3 — wire PART_OF edge fetcher so left panel can render breadcrumbs.
+        self._left.set_graph_edges_fn(client.get_graph_edges)
 
         self._graph_poller = GraphPoller(client, cfg, self._right_w, self._right_h)
         self._right = RightPanelRenderer(self._graph_poller, font_nav, font_body, font_label)
@@ -172,18 +176,15 @@ class GameWindow:
             client,
             cfg.DEMO_PLAYER_ID,
             ControllerCallbacks(
-                on_npc_response=lambda npc, turn, color: self._left.add_npc_response(
-                    npc, turn.npc_text, turn.degradation_level, turn.emotion, color
-                ),
+                on_npc_response=lambda npc, turn, color: self._on_npc_response(npc, turn, color),
                 on_error=lambda npc, msg: self._left.add_error(npc, msg),
                 on_sidebar_data=lambda name, data: self._right.set_sidebar_data(name, data),
                 on_clear_sidebar=self._right.clear_sidebar,
                 on_set_status=self._set_status,
                 on_stream_begin=lambda npc: self._left.begin_streaming_npc_response(npc),
                 on_npc_token=lambda npc, chunk: self._left.append_npc_token(npc, chunk),
-                on_stream_done=lambda npc, turn, color: self._left.update_badge(
-                    turn.degradation_level, turn.emotion, color
-                ),
+                on_stream_done=lambda npc, turn, color: self._on_stream_done(npc, turn, color),
+                on_facial_expression=lambda npc, expr: self._left.set_facial_expression(expr),
             ),
             ws_url=client.ws_url,
             ws_api_key=client.api_key,
@@ -278,6 +279,78 @@ class GameWindow:
         pygame.quit()
 
     # ------------------------------------------------------------------
+    # Dialogue turn callbacks (G1.1 / G1.2 / G1.4)
+    # ------------------------------------------------------------------
+
+    def _on_npc_response(self, npc_id: str, turn: object, color: tuple) -> None:
+        """Handle a completed REST-path dialogue turn.
+
+        Forwards the NPC response to the left panel, then triggers
+        on-turn retrieval and relationship-phase refreshes.
+
+        Args:
+            npc_id: Responding NPC identifier.
+            turn: Parsed DialogueTurn from the REST response.
+            color: Degradation badge colour tuple.
+        """
+        self._left.add_npc_response(
+            npc_id, turn.npc_text, turn.degradation_level, turn.emotion, color  # type: ignore[attr-defined]
+        )
+        self._refresh_retrieval(npc_id)
+        self._refresh_relationship_phase(npc_id)
+
+    def _on_stream_done(self, npc_id: str, turn: object, color: tuple) -> None:
+        """Handle a completed WS-streaming dialogue turn.
+
+        Updates the degradation badge then triggers retrieval and
+        relationship-phase refreshes.
+
+        Args:
+            npc_id: Responding NPC identifier.
+            turn: Parsed DialogueTurn from WS streaming metadata.
+            color: Degradation badge colour tuple.
+        """
+        self._left.update_badge(
+            turn.degradation_level, turn.emotion, color  # type: ignore[attr-defined]
+        )
+        self._refresh_retrieval(npc_id)
+        self._refresh_relationship_phase(npc_id)
+
+    def _refresh_retrieval(self, npc_id: str) -> None:
+        """Fetch and push updated retrieval context for npc_id + last player query.
+
+        Called on-turn (after each dialogue done event). Failures are swallowed
+        and logged — retrieval is cosmetic, never crash the render loop.
+
+        Args:
+            npc_id: Active NPC whose retrieval context to fetch.
+        """
+        query = self._last_player_message
+        if not query:
+            return
+        try:
+            payload = self._client.get_retrieval_debug(npc_id, query)
+            self._right.set_retrieval_payload(payload)
+        except Exception as exc:
+            _logger.warning("retrieval refresh failed npc=%s: %s", npc_id, exc)
+
+    def _refresh_relationship_phase(self, npc_id: str) -> None:
+        """Fetch and set the relationship phase for npc_id ↔ player.
+
+        Failures are swallowed and logged so a missing relationship node
+        never crashes the render loop.
+
+        Args:
+            npc_id: NPC whose relationship with the player to fetch.
+        """
+        try:
+            data = self._client.get_relationship(npc_id, self._cfg.DEMO_PLAYER_ID)
+            phase = data.get("relationship_phase") if data else None
+            self._left.set_relationship_phase(phase)
+        except Exception as exc:
+            _logger.warning("relationship phase fetch failed npc=%s: %s", npc_id, exc)
+
+    # ------------------------------------------------------------------
     # Event handling
     # ------------------------------------------------------------------
 
@@ -289,6 +362,7 @@ class GameWindow:
         submitted = self._left.input.handle_event(event)
         if submitted and not self._game_over:
             npc_id = self._left.npc_list.active_id or self._active_npc_id
+            self._last_player_message = submitted  # G1.2 — track for retrieval refresh
             self._left.add_player_message(npc_id, submitted)
             self._ctrl.submit_dialogue(submitted, npc_id, self._active_location_id)
 
@@ -321,6 +395,7 @@ class GameWindow:
             self._politics_poller.set_active_npc(clicked_npc)
             self._memory_poller.set_active_npc(clicked_npc)
             self._right.set_npc_selected(True)
+            self._refresh_relationship_phase(clicked_npc)  # G1.4 — update phase on NPC switch
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             self._handle_nav_click(event.pos)
@@ -387,6 +462,7 @@ class GameWindow:
         self._memory_poller.set_active_npc(npcs[0])
         self._right.set_npc_selected(True)
         self._ctrl.spawn_travel(loc_id)
+        self._refresh_relationship_phase(npcs[0])  # G1.4 — update phase on location change
 
     def _on_travel_clicked(self) -> None:
         """Travel button handler: move player to the selected NPC's home location."""

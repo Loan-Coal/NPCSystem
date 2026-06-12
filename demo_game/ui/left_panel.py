@@ -143,9 +143,13 @@ class LeftPanelRenderer:
         self._active_location_id: str = ""
         self._player_gold: int | None = None
         self._facial_expression: str | None = None
+        self._relationship_phase: str | None = None
         self._gradient_cache: dict[str, pygame.Surface] = {}
         # None sentinel means "tried loading PNG, failed — use geometric fallback".
         self._portrait_cache: dict[str, pygame.Surface | None] = {}
+        # Optional callable matching client.get_graph_edges(edge_type, src_id=…).
+        # Set by game_window once so the location bar can render breadcrumbs.
+        self._get_graph_edges: object | None = None
 
     # ------------------------------------------------------------------
     # State setters — called by GameWindow each frame or on events
@@ -183,6 +187,24 @@ class LeftPanelRenderer:
                 or None. Unknown/None values fall back to the neutral glyph — no crash.
         """
         self._facial_expression = expression
+
+    def set_relationship_phase(self, phase: str | None) -> None:
+        """Store the NPC's current relationship phase for rendering in the portrait zone.
+
+        Args:
+            phase: Phase string (e.g. ``"acquaintance"``, ``"ally"``), or None.
+                When None or absent the phase line is simply not drawn — no crash.
+        """
+        self._relationship_phase = phase
+
+    def set_graph_edges_fn(self, fn: object) -> None:
+        """Store the callable used to fetch PART_OF edges for breadcrumb rendering.
+
+        Args:
+            fn: Callable matching ``client.get_graph_edges(edge_type, src_id=…)``.
+                Stored as-is; called lazily inside ``_draw_location_bar``.
+        """
+        self._get_graph_edges = fn
 
     def set_waiting(self, waiting: bool) -> None:
         """Disable the input box while a dialogue reply is in-flight."""
@@ -342,6 +364,14 @@ class LeftPanelRenderer:
         name = LOCATION_DISPLAY_NAMES.get(self._active_location_id, self._active_location_id)
         txt = self._font_loc.render(name, True, PALETTE["white"])
         screen.blit(txt, (rect.x + 12, rect.centery - txt.get_height() // 2))
+        if self._get_graph_edges is not None:
+            try:
+                breadcrumb = build_location_breadcrumb(
+                    self._active_location_id, self._get_graph_edges  # type: ignore[arg-type]
+                )
+                self._draw_location_breadcrumb(screen, rect, breadcrumb)
+            except Exception:
+                pass  # breadcrumb is cosmetic — never crash the render loop
 
     def _draw_location_breadcrumb(
         self,
@@ -382,6 +412,23 @@ class LeftPanelRenderer:
             b = int(tint[2] * (1 - t) + bg[2] * t)
             pygame.draw.line(surf, (r, g, b), (0, y), (width, y))
         return surf
+
+    def _draw_relationship_phase(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        """Render the relationship phase label in the lower-left of the portrait zone.
+
+        Shows nothing (no crash) when ``_relationship_phase`` is None.
+
+        Args:
+            surface: Target surface (the portrait zone's parent surface).
+            rect: Bounding rect of the portrait zone.
+        """
+        if not self._relationship_phase:
+            return
+        label = f"Phase: {self._relationship_phase}"
+        txt = self._font_label.render(label, True, PALETTE.get("grey", (150, 150, 150)))
+        screen_x = rect.x + 4
+        screen_y = rect.bottom - txt.get_height() - 4
+        surface.blit(txt, (screen_x, screen_y))
 
     def _draw_world_state_bar(
         self,
@@ -435,6 +482,7 @@ class LeftPanelRenderer:
         else:
             self._draw_portrait_geometric(surface, rect, npc_id)
         self._draw_expression_glyph(surface, rect)
+        self._draw_relationship_phase(surface, rect)
 
     def _draw_portrait_geometric(
         self, surface: pygame.Surface, rect: pygame.Rect, npc_id: str
