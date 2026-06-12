@@ -38,6 +38,7 @@ from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.engines.llm_config_models import EngineModelConfig
 from npc_engine.engines.memory.memory_engine import MemoryEngine
+from npc_engine.engines.relationship.phase_transition_applier import apply_phase_transition
 from npc_engine.engines.routine.routine_queries import set_routine_override
 from npc_engine.engines.tts.protocols import TTSClientProtocol
 from npc_engine.engines.tts.voice_modulator import modulate as modulate_voice
@@ -199,6 +200,10 @@ class DialogueHandler:
                 session=self._session, settings=self._settings, npc_id=request.npc_id,
                 player_id=request.player_id, relation_deltas=response.relation_deltas,
                 cause_id=f"dialogue:{request.player_id}:{request.npc_id}", tick_id=tick_id,
+            )
+            await apply_phase_transition(
+                session=self._session, src_id=request.npc_id,
+                dst_id=request.player_id, tick=tick_id,
             )
         return await self._emotion_updater.apply_dialogue_mood(
             npc_id=request.npc_id,

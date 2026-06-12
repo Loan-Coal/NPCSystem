@@ -213,6 +213,7 @@ async def test_emotion_valence_below_threshold_triggers_override() -> None:
          patch("npc_engine.engines.dialogue.dialogue_handler.execute_with_degradation", new=AsyncMock(return_value=(final_response, "full"))), \
          patch("npc_engine.engines.dialogue.dialogue_handler.resolve_action", return_value=final_response.action), \
          patch("npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas", new=AsyncMock()), \
+         patch("npc_engine.engines.dialogue.dialogue_handler.apply_phase_transition", new=AsyncMock()), \
          patch("npc_engine.engines.dialogue.dialogue_handler.set_routine_override", new=AsyncMock()) as mock_override:
         await handler.handle(request)
 
@@ -248,6 +249,7 @@ async def test_emotion_valence_at_threshold_does_not_trigger_override() -> None:
     with patch("npc_engine.engines.dialogue.dialogue_handler.execute_with_degradation", new=AsyncMock(return_value=(final_response, "full"))), \
          patch("npc_engine.engines.dialogue.dialogue_handler.resolve_action", return_value=final_response.action), \
          patch("npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas", new=AsyncMock()), \
+         patch("npc_engine.engines.dialogue.dialogue_handler.apply_phase_transition", new=AsyncMock()), \
          patch("npc_engine.engines.dialogue.dialogue_handler.set_routine_override", new=AsyncMock()) as mock_override:
         await handler.handle(request)
 
@@ -317,6 +319,7 @@ async def test_emotion_valence_positive_does_not_trigger_override() -> None:
     with patch("npc_engine.engines.dialogue.dialogue_handler.execute_with_degradation", new=AsyncMock(return_value=(final_response, "full"))), \
          patch("npc_engine.engines.dialogue.dialogue_handler.resolve_action", return_value=final_response.action), \
          patch("npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas", new=AsyncMock()), \
+         patch("npc_engine.engines.dialogue.dialogue_handler.apply_phase_transition", new=AsyncMock()), \
          patch("npc_engine.engines.dialogue.dialogue_handler.set_routine_override", new=AsyncMock()) as mock_override:
         await handler.handle(request)
 

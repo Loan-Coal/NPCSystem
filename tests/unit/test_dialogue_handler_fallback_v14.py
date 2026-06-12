@@ -41,6 +41,12 @@ def _default_archetype(monkeypatch):
         "npc_engine.engines.dialogue.dialogue_handler.get_npc_archetype",
         AsyncMock(return_value=None),
     )
+    # F1.1 wired a phase-transition write after the relation delta; these no-graph
+    # tests use session=None, so stub the new call site to a no-op.
+    monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.apply_phase_transition",
+        AsyncMock(return_value=None),
+    )
 
 
 def _make_engine_model_config() -> EngineModelConfig:

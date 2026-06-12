@@ -349,6 +349,10 @@ async def test_handler_calls_engine_when_enabled(monkeypatch):
         AsyncMock(),
     )
     monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.apply_phase_transition",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
         "npc_engine.engines.dialogue.dialogue_handler.get_world_state",
         AsyncMock(
             return_value=SimpleNamespace(
@@ -401,6 +405,10 @@ async def test_handler_skips_engine_when_disabled(monkeypatch):
         "npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas",
         AsyncMock(),
     )
+    monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.apply_phase_transition",
+        AsyncMock(return_value=None),
+    )
 
     handler = _make_handler(
         knowledge_engine=mock_knowledge_engine, knowledge_learning_enabled=False
@@ -442,6 +450,10 @@ async def test_handler_skips_when_engine_none(monkeypatch):
     monkeypatch.setattr(
         "npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas",
         AsyncMock(),
+    )
+    monkeypatch.setattr(
+        "npc_engine.engines.dialogue.dialogue_handler.apply_phase_transition",
+        AsyncMock(return_value=None),
     )
 
     handler = _make_handler(knowledge_engine=None, knowledge_learning_enabled=True)
