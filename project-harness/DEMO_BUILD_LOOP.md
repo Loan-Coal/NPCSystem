@@ -144,9 +144,9 @@ as the continuation. The runtime re-invokes automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** F (F1 wiring underway)
-- **Current batch:** F1.1–F1.4 landed. Next candidate: F1.5 (wire drama `director` into the scheduler — evaluate `decide()` on idle/plateau; emit beat via events engine).
-- **Last green commit:** `d1a0a97` feat(player-model): F1.4 — wire PlayerModelEngine into the scheduler.
-- **Next:** F1.5 (scheduler-touching → its own small batch). Reuse the F1.4 slot pattern (constructor param + advance() block + response key + `dependencies_engines` singleton). Locate the director engine + its `decide()` + the events-engine emit path first.
+- **Current batch:** F1.1–F1.5 landed. Next candidate: F1.6 (wire `SchemingEngine` into the scheduler — advance active scheme steps per tick + detection by reviving `engines/investigation`).
+- **Last green commit:** `b20c65a` fix(director): F1.5 integration (docstring conformance).
+- **Next:** F1.6 (scheduler-touching → its own small batch). NOTE: F1.6 has TWO halves — (a) advance scheme steps per tick (reuse F1.4/F1.5 slot pattern), (b) **revive `engines/investigation`** for detection. Check whether investigation is dormant/partial first; the detection half may be large → consider a worker. EXP-229 already shipped scheme form+persist+advance-one-step (see git log b2731de).
 
 ## Progress Log
 
@@ -182,3 +182,13 @@ as the continuation. The runtime re-invokes automatically; do not poll.
   + response key) and `get_player_model_tick()` singleton in the composition root. Implemented inline
   (mechanical, mirrors proactive-slot pattern). +2 unit tests + 1 Neo4j integration test (skips w/o DB).
   Gate: `make check` green (2082 passed, 24 skipped, 86.3% cov). Commit: `d1a0a97`.
+- **5 · 2026-06-12 F1.5** — PASS. Director → scheduler. **Avoided a schema trap:** emitting a beat as
+  `Event.event_type=<beat_kind>` would need an enum extension (BASE_EVENT_TYPES={crime,battle,trade,
+  discovery}) — forbidden. Correct design: `DirectorTick.decide()` (signals: idle ticks via location
+  reader, Standing via `derive_standing`) GATES `EventHandler.run_tick` to inject a valid-type event;
+  beat_kind/reason are metadata only. New `engines/director/director_tick.py` + `director_engine`
+  scheduler slot + `get_director_tick()` composition wiring. Dispatched 1 worktree worker (brief
+  pre-resolved the schema-safe emission so it wouldn't thrash) → cherry-picked `4b1c06a`. Integration
+  fix: restored `Does NOT:` line in director `__init__.py` (conformance gate caught it). Gate green
+  (2086 passed, 25 skipped, 86.3% cov). Deferred: plateau tracker (ISSUE-097), shared location reader
+  (ISSUE-098). Commits: `e236af4` (worker) → `b20c65a` (fix).

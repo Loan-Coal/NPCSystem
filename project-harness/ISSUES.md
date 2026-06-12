@@ -45,6 +45,28 @@ its own slice (needs a graph traits reader + an EmotionUpdater call-signature ch
 **To fix:** Add a per-NPC traits reader; have `EmotionUpdater` build/parameterize the model per `npc_id`
 (or pass traits into `apply_shock`/`apply_mood_hint`), removing the global default.
 
+## ISSUE-097: director plateau-tick signal is always 0 (no relationship-plateau tracker)
+**Found:** 2026-06-12, during F1.5 (director → scheduler)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/engines/director/director_tick.py` (`_decide_for_pair`)
+**Description:** `DirectorTick` always passes `relationship_plateau_ticks=0` to `decide()`, so the
+`relationship_catalyst` plateau beat can never fire. Only the idle (`re_engage_idle`) and HOSTILE
+(`tension_escalation`) paths are live.
+**Why deferred:** F1.5 scope is the decide→emit wiring; tracking ticks-since-Standing-band-changed
+needs a small per-pair tracker/store, its own slice.
+**To fix:** Track consecutive ticks since the pair's Standing band last changed (a per-pair counter,
+e.g. on the RELATES_TO edge or an in-memory store) and feed it into `decide()`.
+
+## ISSUE-098: composition root builds a fresh PlayerLocationReader per factory
+**Found:** 2026-06-12, during F1.5
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/api/dependencies_engines.py` (proactive/intent/player_model/director factories)
+**Description:** Four `@lru_cache` factories each construct their own `PlayerLocationReader()`. It is
+stateless so this is functionally fine, but a shared `get_player_location_reader()` singleton would be
+more consistent with the rest of the composition root.
+**Why deferred:** Cosmetic; not blocking. Surfaced by the F1.5 worker.
+**To fix:** Add `@lru_cache get_player_location_reader()` and reuse it across the four factories.
+
 ## [FIXED] ISSUE-093: NPCs conflate past memories with current events (systemic — knowledge has no temporal frame)
 **Fixed:** 2026-06-11, Phase 26 (S26.1–S26.4). All three layers addressed: (A) `_flatten_event_row` keeps
 `knowledge_state` and `_extract_personal_accounts` routes rumour distorted summaries to a HEARSAY channel
