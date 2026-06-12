@@ -143,10 +143,10 @@ as the continuation. The runtime re-invokes automatically; do not poll.
 
 ## State pointer
 
-- **Phase in progress:** F3 (engine correctness & cleanup). F2 complete except blocked F2.3.
-- **Current batch:** F1.1–F1.5, F1.7, F2.1–F2.2, F2.4–F2.5, F3.4, F3.1, F3.2, F3.6, **F3.3** landed; F1.6 + F2.3 DEFERRED/BLOCKED. Next candidate: **F3.5 🔶** (DEC-106 `dialogue_turn` schema — the LAST F3 item; closes Phase F).
-- **Last green commit:** `74535eb` feat(eval): F3.3 — deception into anti-hallucination loop.
-- **Next:** **F3.5 🔶 (EXP-230 s2) — SCHEMA, orchestrator-only.** Migrate session persistence from the JSON-blob-on-Character-property to first-class `dialogue_turn` **nodes**. Steps (ALL in one batch to avoid the unused-type gate): (1) write a `DECISIONS.md` DEC-106 entry proposing `base_nodes/dialogue_turn.yaml` (fields: player_id, npc_id, turn_index/`tick`, role, content, occurred_at_game_time) + the anchoring edge; reuse the existing temporal convention (`occurred_at_game_time` + int `tick`). (2) Create the YAML; validate via type_registry tests. (3) Migrate `SessionStore` (`engines/dialogue/session_store.py`) get/append turns to read/write `dialogue_turn` nodes (keep-last-N by deleting oldest `tick`), add an index on `(npc_id, player_id, tick)`. (4) Land the engine change WITH the schema in the same commit/batch. **STOP+surface if the type-registry gate can't go green in 2 tries.** NB: a unified reified `GameTime` node is explicitly NOT this task. **After F3.5 (or if it STOPs) → Phase F done (modulo F1.6/F2.3) → advance to Phase G** (G surfaces the F2 routes in the pygame demo; pure demo-side, run `make test-demo`).
+- **Phase in progress:** ✅ **PHASE F COMPLETE** (modulo deferred F1.6 + F2.3, both gated on DEC-107). Now **Phase G** (surface the cognition engines in the pygame demo).
+- **Current batch:** All of F1 (–F1.6), F2 (–F2.3), F3 landed. **F3.5** schema migration green first try. Next candidate: **G1** (connect built-but-static demo surfaces to live data).
+- **Last green commit:** `d219c42` feat(schema): F3.5/DEC-106 — dialogue_turn nodes.
+- **Next:** **Phase G — pure demo-side (zero `src/` imports); run `make test-demo` (+ `make check` if any src touched).** Order per §Ordered build plan: **G1** — G1.1 + G1.4 both edit `demo_game/ui/left_panel.py` → ONE worker/batch (facial-expression glyph live-update + relationship **phase** via F2.1); G1.2 (`RetrievalPanel` auto-refresh poller via `get_retrieval_debug`) + G1.3 (PART_OF breadcrumb draw) separate. Then **G2** new panels (each consumes its F2 route): G2.1 player-model (F2.2), **G2.2 scheme board — BLOCKED on F1.6/F2.3, SKIP**, G2.3 director beat (F2.4 `/dialogue/director-beats`), G2.4 proactive WS, G2.5 deception tell (F2.5 is_deception). Then **G3** — G3.1 intrigue scenario, G3.2 seed enrichment (⚠ `seed.py`). Start with **G1.2** (isolated `RetrievalPanel` poller) or the G1.1+G1.4 `left_panel` pair. Inspect `demo_game/ui/` + `demo_game/client.py` (`EngineClient`) for the F2 route methods first; add client methods for any missing F2 route. **Deferred when reached:** G2.2 (needs F1.6).
 
 ## Progress Log
 
@@ -249,3 +249,12 @@ as the continuation. The runtime re-invokes automatically; do not poll.
   surfaced by F2.5 — and matches content against the response). `deception_intended` is not counted in
   `hallucination_count`; ordinary unsupported claims still `refusal_fail`. Eval-side (not in `make check`
   LLM path, but unit-tested). +2 unit tests. Gate green (2109 passed, 27 skipped, 86.5% cov). Commit: `74535eb`.
+- **16 · 2026-06-12 F3.5 🔶 SCHEMA** — PASS (first gate try). Migrated session persistence to first-class
+  `dialogue_turn` nodes (DEC-106): new `base_nodes/dialogue_turn.yaml` (property-anchored by npc_id+player_id,
+  no edge — matches player_model pattern); rewrote `graph/session_persistence` (replace-on-save delete+create,
+  round-trip-safe role/content split+join, read grouped/ordered by turn_index); added
+  `:DialogueTurn(npc_id,player_id,tick)` index in `schema_bootstrap`. Fixes OQ-9 player-id collision (each
+  turn a node, no dynamic property keys). Rewrote persistence tests as genuine in-memory round-trip + added
+  distinct-player no-collision test; fixed the bootstrap call-count test for the new index. Type-registry gate
+  GREEN first try (bare node YAML, per carried lesson). `make check` 2110 passed, 27 skipped, 86.5% cov.
+  Commit: `d219c42`. **→ PHASE F COMPLETE (modulo deferred F1.6/F2.3) → advancing to Phase G.**
