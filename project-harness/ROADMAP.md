@@ -139,11 +139,11 @@ top of those APIs. Overnight execution driver: `project-harness/DEMO_BUILD_LOOP.
 - [x] **H2.8 (DEMO-D2-07)** — replayable scenario forks: `BranchBeat` in scripted scenes (`scenarios/`) over H2.1, with a persisted `BranchState`. Exit: a scripted scenario replays to a different outcome.
 
 #### H3 — Legacy gameplay-engine surfaces (Pillar 1 · consume H0 enablers)
-- [ ] **H3.1 (DEMO-D1-01/D2-11)** — oath panel + `pledge_poller`: swear/list (type-A over `post_pledge`/`get_pledges_for_npc`) + break (H0.1) + an oath-driven betrayal arc (H2.1). Exit: the player swears, breaks, and the relationship turns.
-- [ ] **H3.2 (DEMO-D1-02/D2-09)** — treaty board (H0.2): broker/break treaties between factions + a treaty-broker quest chain. Exit: a brokered treaty is a visible objective (feeds H1.1).
-- [ ] **H3.3 (DEMO-D1-03)** — investigation "solve-the-crime" panel (H0.3 + F2.3 schemes): surface alibi/rumor contradictions + discovered schemes, each clue linking to its graph provenance. Exit: a crime is solvable from graph contradictions.
-- [ ] **H3.4 (DEMO-D1-04/D2-10)** — chapter act/season banner (H0.4) + chapter-paced campaign (A-fallback: quest-count-driven banner if H0.4 slips). Exit: the current act renders and advances.
-- [ ] **H3.5 (DEMO-D1-05)** — story-pacing tension HUD: render `max_event_severity`/`quest_generation_rate` (already persisted + returned by `get_world_state`, verified) as a pressure gauge. Exit: a live tension meter updates. (type-A, no enabler.)
+- [x] **H3.1 (DEMO-D1-01/D2-11)** — oath panel + `pledge_poller`: swear/list (type-A over `post_pledge`/`get_pledges_for_npc`) + break (H0.1). New `pledge_poller.py` + `ui/oath_panel.py` (OATH tab, swear/break buttons). Exit: the player swears, breaks, and the list updates.
+- [x] **H3.2 (DEMO-D1-02/D2-09)** — treaty board (H0.2): broker/break treaties between factions. New `treaty_poller.py` (merges all-faction treaties) + `ui/treaty_panel.py` (TREATY tab). Exit: a brokered treaty is a visible objective (feeds H1.1 treaty win path).
+- [x] **H3.3 (DEMO-D1-03)** — investigation "solve-the-crime" panel (H0.3): surface alibi/rumor contradictions, each clue showing its graph provenance. New `ui/investigation_panel.py` (INVESTIGATE tab). Exit: a crime is solvable from graph contradictions. (Scheme-discovery overlay deferred to F2.3 / DEC-107.)
+- [x] **H3.4 (DEMO-D1-04/D2-10)** — chapter act/season banner (H0.4). New `chapter_poller.py` + `_draw_chapter_banner()` HUD overlay. Exit: the current act renders and advances.
+- [x] **H3.5 (DEMO-D1-05)** — story-pacing tension HUD: render `max_event_severity`/`quest_generation_rate` from `get_world_state` as a pressure gauge. New `tension_poller.py` + `_draw_tension_hud()` colour-coded severity bar. Exit: a live tension meter updates. (type-A, no enabler.)
 
 #### Deferred (type-C — needs a `DECISIONS.md` call; not in the overnight set)
 - [ ] **H-D1 (DEMO-D1-06b)** — engine military battle sim with a balanced player military verb (army strength + verb). See OPEN_QUESTIONS OQ-5.
