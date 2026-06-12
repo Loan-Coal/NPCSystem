@@ -848,6 +848,46 @@ _PLAYER_KNOWS_ABOUT: list[tuple[str, dict]] = [
     }),
 ]
 
+# Planted deception belief (F2.5/G2.5/G3): lira_fence holds a deliberately-false belief she
+# spreads to cover a heist. is_deception=true surfaces the buyer-facing "tell" (G2.5) and
+# keeps the anti-hallucination eval from flagging the intended lie (F3.3) — content unchanged.
+_DECEPTION_BELIEF_NPC = "lira_fence"
+_DECEPTION_BELIEF_ID = "lira_planted_lie_mill"
+_DECEPTION_BELIEF_CONTENT = "The city guard never patrols the old mill after dark."
+_DECEPTION_GOAL_ID = "lira_heist_cover"
+
+
+def _seed_deception_belief(client: EngineClient) -> int:
+    """Seed a planted is_deception belief held by an NPC (G3.2).
+
+    Creates a Belief node and a BELIEVES edge flagged is_deception=true so the
+    deception "tell" (G2.5) and the anti-hallucination eval (F3.3) have data, and the
+    intrigue arc (G3.1) has a lie to reveal. Idempotent via _seed_node/_seed_edge.
+
+    Args:
+        client: Authenticated EngineClient.
+
+    Returns:
+        Number of nodes/edges created.
+    """
+    created = 0
+    belief_node = {
+        "id": _DECEPTION_BELIEF_ID,
+        "content": _DECEPTION_BELIEF_CONTENT,
+        "confidence": 80,
+    }
+    if _seed_node(client, "Belief", belief_node) == "created":
+        created += 1
+    edge_props = {
+        "is_deception": True,
+        "deception_goal_id": _DECEPTION_GOAL_ID,
+        "confidence": 80,
+        "learned_at_tick": 0,
+    }
+    if _seed_edge(client, "BELIEVES", _DECEPTION_BELIEF_NPC, _DECEPTION_BELIEF_ID, edge_props) == "created":
+        created += 1
+    return created
+
 
 # ---------------------------------------------------------------------------
 # Quest seeding (non-fatal — requires quest engine to be running)
@@ -1296,6 +1336,10 @@ def seed_all(client: EngineClient) -> dict:
     logger.info("[seed] Player KNOWS_ABOUT edges")
     for event_id, props in _PLAYER_KNOWS_ABOUT:
         _tally(_seed_edge(client, "KNOWS_ABOUT", _PLAYER_ID, event_id, props))
+
+    # 11c. Planted deception belief (G3.2) — gives the deception "tell" + intrigue arc data
+    logger.info("[seed] Deception belief")
+    created += _seed_deception_belief(client)
 
     # 12. Aldric inventory (northern_spice_bundle + OWNS edge)
     logger.info("[seed] Aldric inventory")

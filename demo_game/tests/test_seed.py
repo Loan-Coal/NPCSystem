@@ -260,6 +260,21 @@ def test_seed_all_creates_player_knows_about_edges() -> None:
     assert ("KNOWS_ABOUT", "player_demo", "market_fire") in args_list
 
 
+def test_seed_all_creates_deception_belief() -> None:
+    """G3.2: a planted is_deception belief is seeded (Belief node + flagged BELIEVES edge)."""
+    client = _mock_client()
+    seed_all(client)
+
+    node_types = [c.args[0] for c in client.upsert_node.call_args_list]
+    assert "Belief" in node_types
+
+    edge_calls = client.upsert_edge.call_args_list
+    believes = [c for c in edge_calls if c.args[0] == "BELIEVES" and c.args[1] == "lira_fence"]
+    assert believes, "expected a BELIEVES edge from lira_fence"
+    props = believes[0].args[3] if len(believes[0].args) > 3 else believes[0].kwargs.get("properties", {})
+    assert props.get("is_deception") is True
+
+
 def test_seed_all_creates_captain_sorn_opposes_lira_edge() -> None:
     client = _mock_client()
     seed_all(client)
