@@ -38,6 +38,25 @@ def _settings() -> Settings:
     return Settings(API_KEY_SECRET="local_dev_secret_change_this_2026")
 
 
+def test_memory_engine_is_injected_when_provided() -> None:
+    """F3.4: an injected MemoryEngine is used instead of a fresh in-__init__ instance."""
+    from npc_engine.engines.memory.memory_engine import MemoryEngine
+
+    sentinel = MemoryEngine()
+    engine = QuestLifecycleEngine(
+        settings=_settings(), registry=_fake_registry(), memory_engine=sentinel,
+    )
+    assert engine._memory_engine is sentinel
+
+
+def test_memory_engine_falls_back_when_omitted() -> None:
+    """Omitting memory_engine still yields a usable MemoryEngine (backward-compatible)."""
+    from npc_engine.engines.memory.memory_engine import MemoryEngine
+
+    engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
+    assert isinstance(engine._memory_engine, MemoryEngine)
+
+
 def _meta() -> QuestTransitionMeta:
     return QuestTransitionMeta(
         request_id="req-quest-1",

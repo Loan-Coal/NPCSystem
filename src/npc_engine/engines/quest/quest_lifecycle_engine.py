@@ -55,6 +55,7 @@ class QuestLifecycleEngine:
         settings: Settings,
         registry: TypeRegistry | None = None,
         chain_resolver: QuestChainResolver | None = None,
+        memory_engine: MemoryEngine | None = None,
     ) -> None:
         """Initialise the quest lifecycle engine.
 
@@ -65,6 +66,9 @@ class QuestLifecycleEngine:
             chain_resolver: Optional injected QuestChainResolver. When set, called
                 after a COMPLETED transition to offer unlocked successor quests.
                 Existing callers that omit this parameter are unaffected.
+            memory_engine: Injected MemoryEngine (DIP — F3.4); the composition root
+                supplies the shared instance. Falls back to a fresh MemoryEngine() when
+                omitted so existing direct callers/tests are unaffected.
         Raises:
             ValueError: If registry is None (must be injected via __init__).
         """
@@ -73,7 +77,7 @@ class QuestLifecycleEngine:
             raise ValueError("QuestLifecycleEngine requires a TypeRegistry injected via __init__")
         self._registry = registry
         self._chain_resolver = chain_resolver
-        self._memory_engine = MemoryEngine()
+        self._memory_engine = memory_engine if memory_engine is not None else MemoryEngine()
 
     async def _form_commitment_memory(
         self,

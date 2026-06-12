@@ -114,17 +114,29 @@ def get_quest_chain_resolver() -> QuestChainResolver:
 
 
 @lru_cache
+def get_memory_engine() -> MemoryEngine:
+    """Return the shared stateless MemoryEngine singleton (DIP composition root).
+
+    Returns:
+        MemoryEngine instance injected into engines that form memories.
+    """
+    return MemoryEngine()
+
+
+@lru_cache
 def get_quest_lifecycle_engine() -> QuestLifecycleEngine:
     """Create singleton quest lifecycle engine with shared type registry and chain resolver.
 
     Returns:
-        QuestLifecycleEngine wired to the singleton TypeRegistry and QuestChainResolver.
+        QuestLifecycleEngine wired to the singleton TypeRegistry, QuestChainResolver,
+        and the shared MemoryEngine (F3.4 — no in-__init__ instantiation).
     """
     settings = get_settings()
     return QuestLifecycleEngine(
         settings=settings,
         registry=get_type_registry(),
         chain_resolver=get_quest_chain_resolver(),
+        memory_engine=get_memory_engine(),
     )
 
 
