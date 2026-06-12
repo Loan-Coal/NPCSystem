@@ -130,10 +130,10 @@ top of those APIs. Overnight execution driver: `project-harness/DEMO_BUILD_LOOP.
 
 #### H2 — Content & branching (Pillar 2 · type-A · rebaselined from 8 NPC / 4 loc)
 - [ ] **H2.1 (DEMO-D2-06)** — branch primitive: `branch_node.py` + `branch_state.py` + `branch_effects.py` (typed effects: belief/rep/world-state/quest, OCP one-file-per-effect) + `ui/branch_panel.py`, resolving choices over existing client methods + H0.5. Exit: a player choice forks outcomes in the running demo.
-- [ ] **H2.2 (DEMO-D2-01)** — cast expansion 8→14 NPCs; split NPC data into `demo_game/seed_npc_data.py` (data-only) to respect the size rule. Exit: new NPCs seed idempotently (KE-6).
-- [ ] **H2.3 (DEMO-D2-02)** — locations 4→7 + a district tier via `post_part_of` (`client.py:776`, already live). Exit: nested locations seed; breadcrumb shows them (EXP-221).
-- [ ] **H2.4 (DEMO-D2-03)** — factions 3→5 alliable. Exit: two new factions seed with standings the economy can read.
-- [ ] **H2.5 (DEMO-D2-04)** — quests ~6→18 across 6 chains over the full quest lifecycle (`post_quest_*`). Exit: chains are acceptable/completable and feed H1.1's quest-chain win path.
+- [x] **H2.2 (DEMO-D2-01)** — cast expansion 8→14 NPCs; split NPC data into `demo_game/seed_npc_data.py` (data-only) to respect the size rule. Exit: new NPCs seed idempotently (KE-6).
+- [x] **H2.3 (DEMO-D2-02)** — locations 4→7 + a district tier via `post_part_of` (`client.py:776`, already live). Exit: nested locations seed; breadcrumb shows them (EXP-221).
+- [x] **H2.4 (DEMO-D2-03)** — factions 3→5 alliable. Exit: two new factions seed with standings the economy can read.
+- [x] **H2.5 (DEMO-D2-04)** — quests ~6→18 across 6 chains over the full quest lifecycle (`post_quest_*`). Exit: chains are acceptable/completable and feed H1.1's quest-chain win path.
 - [ ] **H2.6 (DEMO-D2-05)** — rival quest variants + a `GameController` accept-guard (can't accept opposing-faction quests simultaneously). Exit: accepting one rival quest locks the other.
 - [ ] **H2.7 (DEMO-D2-08)** — promote Village/Tavern eval worlds to playable Free-Play: de-hardcode `game_end_checker` win/lose constants to be per-world. Exit: all three worlds are pickable + winnable.
 - [ ] **H2.8 (DEMO-D2-07)** — replayable scenario forks: `BranchBeat` in scripted scenes (`scenarios/`) over H2.1, with a persisted `BranchState`. Exit: a scripted scenario replays to a different outcome.
