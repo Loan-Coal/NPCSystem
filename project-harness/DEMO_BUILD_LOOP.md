@@ -144,9 +144,9 @@ as the continuation. The runtime re-invokes automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** F3 (engine correctness & cleanup). F2 complete except blocked F2.3.
-- **Current batch:** F1.1–F1.5, F1.7, F2.1–F2.2, F2.4–F2.5, F3.4, **F3.1** landed; F1.6 + F2.3 DEFERRED/BLOCKED. Next candidate: **F3.2** (surface NPC mood into dialogue context), then F3.6/F3.3, F3.5 🔶 last.
-- **Last green commit:** `b4f559e` feat(gossip): F3.1 — Standing-gated secret share.
-- **Next:** **F3.2 (EXP-204 s2)** — surface NPC **mood** (canonical `EmotionStore`, DEC-099) into the dialogue context (the need is already surfaced; add a mood line). Check `retrieval/context_builder.py` + how `EmotionStore`/`EmotionUpdater.get_state` mood is/ isn't threaded into the serialized dialogue context; `dialogue_handler` already passes `emotion_state={"current_mood": current_emotion.label}` to `build_serialized_context` — verify it renders a mood line in the prompt context, extend if missing. Then: **F3.6** (seed player `KNOWS_ABOUT` edges → `/player/{id}/events` returns data; ⚠ `seed.py` → run `make test-demo` too), **F3.3** (wire `classify_deception_belief` into the live anti-hallucination eval `_classify_case`). **F3.5 🔶 LAST** — DEC-106 `dialogue_turn` node schema just-in-time (orchestrator-only), land WITH the engine change in one batch; STOP+surface if the type-registry gate can't go green in 2 tries.
+- **Current batch:** F1.1–F1.5, F1.7, F2.1–F2.2, F2.4–F2.5, F3.4, F3.1, **F3.2** landed; F1.6 + F2.3 DEFERRED/BLOCKED. Next candidate: **F3.6** (seed player `KNOWS_ABOUT` edges), then F3.3, F3.5 🔶 last.
+- **Last green commit:** `c818233` test(context): F3.2 — lock canonical mood.
+- **Next:** **F3.6 (EXP-217 seed)** — seed player `KNOWS_ABOUT` edges so `GET /player/{id}/events` returns data for the demo player. ⚠ touches `demo_game/seed.py` (or `seeds/`) → run `make test-demo` too if demo code changes; find the demo player id + the player-events route + how KNOWS_ABOUT edges are seeded. Then **F3.3** (wire `classify_deception_belief` into the live anti-hallucination eval `_classify_case` — eval-side; planted is_deception beliefs not scored as hallucination failures). **F3.5 🔶 LAST** — DEC-106 `dialogue_turn` node schema just-in-time (orchestrator-only): write the DECISIONS entry + `base_nodes/dialogue_turn.yaml` (fields per ROADMAP F3.5: player_id, npc_id, turn_index, role, content, occurred_at_game_time, tick), land it WITH the SessionStore→node migration in ONE batch (no unused-type gate fail); STOP+surface if the type-registry gate can't go green in 2 tries.
 
 ## Progress Log
 
@@ -233,3 +233,8 @@ as the continuation. The runtime re-invokes automatically; do not poll.
   that mock (initial scope error: assumed `trust` in scope at the secret block; it was in a different method —
   fixed to `int(row["trust"])`). Inline; +3 policy tests. Gate green (2106 passed, 27 skipped, 86.5% cov).
   Commit: `b4f559e`.
+- **13 · 2026-06-12 F3.2** — PASS (confirm + lock). The canonical mood line is ALREADY wired end-to-end:
+  `EmotionStore`→`EmotionUpdater.get_state`→`dialogue_handler` `emotion_state`→`context_builder` tier0
+  emotion item→`payload.npc.emotion.current_mood`. Existing test only covered the stale-property fallback;
+  added a test locking that the canonical `emotion_state` mood WINS over `character.current_mood` (DEC-099
+  guarantee). No src change needed. Gate green (2107 passed, 27 skipped, 86.5% cov). Commit: `c818233`.
