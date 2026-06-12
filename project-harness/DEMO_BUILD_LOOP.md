@@ -143,10 +143,10 @@ as the continuation. The runtime re-invokes automatically; do not poll.
 
 ## State pointer
 
-- **Phase in progress:** F (F1 done except deferred F1.6; F2 next).
-- **Current batch:** F1.1–F1.5 + F1.7 landed; **F1.6 DEFERRED** (DEC-107/ISSUE-099 — design call needed). F1 is otherwise complete. Next candidate: **F2.1** (extend `routes/relationship.py` to return relationship phase + phase_started_at_tick).
-- **Last green commit:** `28036e2` feat(memory): F1.7 — scheduled forgetting-decay tick.
-- **Next:** Advance to **Phase F2 (API read surfaces)**. F2 items are mostly new route files (parallel-safe) — F2.1 extends `relationship.py` (solo), F2.2 `player_model.py` (new), F2.3 `schemes.py` (**BLOCKED on F1.6 — skip with noted dep**), F2.4 pending/director read, F2.5 optional deception flag. Good candidate for an `/expand-parallel`-style multi-worker batch once F2.1's solo edit is clear. Start with F2.1 (solo, extends existing route).
+- **Phase in progress:** F2 (API read surfaces).
+- **Current batch:** F1.1–F1.5, F1.7, **F2.1** landed; F1.6 + F2.3 DEFERRED/BLOCKED (DEC-107/ISSUE-099). Next candidate: **F2.2 + F2.4 (+ F2.5)** — all NEW route files, parallel-safe → a multi-worker batch.
+- **Last green commit:** `1dc504c` feat(api): F2.1 — relationship phase route.
+- **Next:** Dispatch F2.2 (`routes/player_model.py` — GET NPC's model of player, reads `PlayerModel` nodes from F1.4 via `graph/player_model_writer.get_player_model`), F2.4 (`GET /v1/dialogue/pending` proactive intents + recent director beats — reads ProactiveQueue/intent store + director output), and optionally F2.5 (deception-flag read). These are disjoint new files → parallel workers (or inline F2.2 solo if simpler). **F2.3 `schemes.py` stays BLOCKED on F1.6.** Each route: auth on all, OkEnvelope response, contract test.
 
 ## Progress Log
 
@@ -199,3 +199,9 @@ as the continuation. The runtime re-invokes automatically; do not poll.
   new scheduler slot + `get_memory_decay_tick()` wiring. Implemented inline (mechanical, F1.4 pattern).
   +3 unit + 1 Neo4j integration test (vividness drops over ticks). Gate green (2089 passed, 26 skipped,
   86.3% cov). F1 now complete except deferred F1.6 → advancing to Phase F2. Commit: `28036e2`.
+- **7 · 2026-06-12 F2.1** — PASS. `routes/relationship.py` now returns `relationship_phase` +
+  `phase_started_at_tick` (the edge props F1.1 writes). Extended `get_relation_phase_state`/`RelationPhaseRow`
+  with `phase_started_at_tick`; added `RelationReader.get_relation_phase_row` (keeps route DI testable).
+  Caught + fixed a latent route bug: `response_model=RelationshipResponse` vs an `ok_response` envelope
+  (would 500 on real calls) → `OkEnvelope[dict]` per codebase convention. Inline; +3 route tests (TestClient
+  + dep-override, no Neo4j). Gate green (2092 passed, 26 skipped, 86.4% cov). Commit: `1dc504c`.
