@@ -114,11 +114,11 @@ top of those APIs. Overnight execution driver: `project-harness/DEMO_BUILD_LOOP.
 
 #### H0 — Small legacy-engine enablers (engine-side; routes/client the demo needs that Phase F does not add)
 > Engine work, tracked separately; orchestrator lands each before its H3 consumer. None need schema (DEC-free).
-- [ ] **H0.1 (E-1, DEMO-D1-01)** — `EngineClient.break_pledge` wrapper over the existing `pledges.py:114` break endpoint. Exit: client can break a pledge; unblocks oath-break (H3.1).
-- [ ] **H0.2 (E-2, DEMO-D1-02)** — `EngineClient.create_treaty`/`get_faction_treaties`/`break_treaty` over the existing `treaties.py` route (no route change). Exit: client can broker/list/break treaties; unblocks H3.2 + the treaty win path (H1.1).
-- [ ] **H0.3 (E-3, DEMO-D1-03)** — new read-only `api/routes/investigations.py` (`GET`) over `investigation_engine.get_investigation_context` + `EngineClient.get_investigation`. Exit: client reads investigation context (alibi/contradiction half not covered by EXP-229 schemes). Reuse F2.3 `schemes.py` for the discovery half.
-- [ ] **H0.4 (E-4, DEMO-D1-04)** — new read-only `api/routes/chapters.py` (`GET /chapters/current`) over `chapter_engine.get_current_chapter` + `EngineClient.get_current_chapter`. Exit: client reads the current chapter/act; unblocks H3.4.
-- [ ] **H0.5 (DEMO-D2-06 dep)** — `EngineClient.post_quest_choice` wrapper over EXP-218's existing `POST /quest/{id}/choose`. Exit: the demo can resolve a quest branch choice; unblocks the branch primitive (H2.1).
+- [x] **H0.1 (E-1, DEMO-D1-01)** — `EngineClient.break_pledge` wrapper over the existing `pledges.py:114` break endpoint. Exit: client can break a pledge; unblocks oath-break (H3.1).
+- [x] **H0.2 (E-2, DEMO-D1-02)** — `EngineClient.create_treaty`/`get_faction_treaties`/`break_treaty` over the existing `treaties.py` route (no route change). Exit: client can broker/list/break treaties; unblocks H3.2 + the treaty win path (H1.1).
+- [x] **H0.3 (E-3, DEMO-D1-03)** — new read-only `api/routes/investigations.py` (`GET`) over `investigation_engine.get_investigation_context` + `EngineClient.get_investigation`. Exit: client reads investigation context (alibi/contradiction half not covered by EXP-229 schemes). Reuse F2.3 `schemes.py` for the discovery half.
+- [x] **H0.4 (E-4, DEMO-D1-04)** — new read-only `api/routes/chapters.py` (`GET /chapters/current`) over `chapter_engine.get_current_chapter` + `EngineClient.get_current_chapter`. Exit: client reads the current chapter/act; unblocks H3.4.
+- [x] **H0.5 (DEMO-D2-06 dep)** — `EngineClient.post_quest_choice` wrapper over EXP-218's existing `POST /quest/{id}/choose`. Exit: the demo can resolve a quest branch choice; unblocks the branch primitive (H2.1).
 
 #### H1 — Win/lose economy depth (Pillar 3 · mostly type-A · delta to `game_end_checker.py`)
 - [ ] **H1.1 (DEMO-D3-01)** — multi-objective win: faction-standing **OR** wealth **OR** quest-chain (**OR** brokered treaty via H0.2). Exit: any one path triggers a win; faction/wealth/quest paths need no enabler.
