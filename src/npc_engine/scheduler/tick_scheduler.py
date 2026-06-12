@@ -71,6 +71,7 @@ class TickScheduler:
         intent_formation_engine: BaseEngine | None = None,
         goal_formation_engine: BaseEngine | None = None,
         player_model_engine: BaseEngine | None = None,
+        director_engine: BaseEngine | None = None,
         consolidation_advance_interval: int = 1,
         chapter_interval: int = 1,
         distributed_lease_enabled: bool = False,
@@ -132,6 +133,9 @@ class TickScheduler:
                 called every tick; scores and enqueues proactive dialogue intents (Phase 14).
             player_model_engine: Optional engine exposing ``run_tick(session, tick_id)``
                 called every tick; updates each co-located NPC's model of the player (F1.4).
+            director_engine: Optional engine exposing ``run_tick(session, tick_id)``
+                called every tick; evaluates the drama director decide() on idle/plateau
+                signals and emits a beat via the events engine when a decision fires (F1.5).
             consolidation_advance_interval: Run consolidation every N advances; clamped to 1.
             chapter_interval: Run chapter engine every N ticks; clamped to 1. Default 1 preserves
                 existing every-tick behavior; raise to reduce LLM call frequency.
@@ -172,6 +176,7 @@ class TickScheduler:
         self._intent_formation_engine = intent_formation_engine
         self._goal_formation_engine = goal_formation_engine
         self._player_model_engine = player_model_engine
+        self._director_engine = director_engine
         self._consolidation_advance_interval = max(1, consolidation_advance_interval)
         self._chapter_interval = max(1, chapter_interval)
         self._advance_count = 0
@@ -336,6 +341,7 @@ class TickScheduler:
                 "intent_formation": [],
                 "goal_formation": [],
                 "player_model": [],
+                "director": [],
             }
             world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
             for tick_id in range(start_tick + 1, end_tick + 1):
@@ -584,6 +590,14 @@ class TickScheduler:
                     )
                     if row is not None:
                         response["player_model"].append(row)
+
+                if self._director_engine is not None:
+                    row = await self._run_engine_safe(
+                        "director", tick_id,
+                        self._director_engine.run_tick(session=session, tick_id=tick_id),
+                    )
+                    if row is not None:
+                        response["director"].append(row)
 
                 if unresolved:
                     break

@@ -60,6 +60,7 @@ from npc_engine.engines.proactive_dialogue.proactive_queue import ProactiveQueue
 from npc_engine.engines.proactive_dialogue.proactive_tick_adapter import ProactiveDialogueTick
 from npc_engine.engines.player_model.player_model_engine import PlayerModelEngine
 from npc_engine.engines.player_model.player_model_tick import PlayerModelTick
+from npc_engine.engines.director.director_tick import DirectorTick
 from npc_engine.engines.agenda.intent_formation_engine import IntentFormationEngine
 from npc_engine.engines.planning.action_selector import ActionSelector
 from npc_engine.engines.planning.goal_former_adapter import GoalFormerAdapter
@@ -309,6 +310,19 @@ def get_player_model_tick() -> PlayerModelTick:
 
 
 @lru_cache
+def get_director_tick() -> DirectorTick:
+    """Create singleton DirectorTick adapter for the tick scheduler (F1.5).
+
+    Returns:
+        DirectorTick wired to a shared PlayerLocationReader and the singleton EventHandler.
+    """
+    return DirectorTick(
+        location_reader=PlayerLocationReader(),
+        event_handler=get_event_handler(),
+    )
+
+
+@lru_cache
 def get_goal_formation_engine() -> GoalFormerAdapter:
     """Create singleton GoalFormerAdapter for GOAP goal formation each tick.
 
@@ -419,6 +433,7 @@ def get_tick_scheduler() -> TickScheduler:
         intent_formation_engine=get_intent_formation_engine(),
         goal_formation_engine=get_goal_formation_engine(),
         player_model_engine=get_player_model_tick(),
+        director_engine=get_director_tick(),
         engine_status_store=get_engine_status_store(),
         gossip_interval=settings.GOSSIP_TICK_INTERVAL,
         event_interval=settings.EVENT_TICK_INTERVAL,
