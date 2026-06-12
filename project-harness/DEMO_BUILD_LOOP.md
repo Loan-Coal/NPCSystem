@@ -144,9 +144,9 @@ as the continuation. The runtime re-invokes automatically; do not poll.
 ## State pointer
 
 - **Phase in progress:** F (F1 wiring underway)
-- **Current batch:** F1.1–F1.3 landed. Next candidate: F1.4 (wire `PlayerModelEngine` into the scheduler — update each NPC's model of the player per tick window).
-- **Last green commit:** `eed1700` feat(emotion): F1.3 — config-selectable emotion model.
-- **Next:** F1.4 (scheduler-touching → its own small batch; the scheduler already has a `player_model`-style slot pattern — check `dependencies_engines` + `tick_scheduler`).
+- **Current batch:** F1.1–F1.4 landed. Next candidate: F1.5 (wire drama `director` into the scheduler — evaluate `decide()` on idle/plateau; emit beat via events engine).
+- **Last green commit:** `d1a0a97` feat(player-model): F1.4 — wire PlayerModelEngine into the scheduler.
+- **Next:** F1.5 (scheduler-touching → its own small batch). Reuse the F1.4 slot pattern (constructor param + advance() block + response key + `dependencies_engines` singleton). Locate the director engine + its `decide()` + the events-engine emit path first.
 
 ## Progress Log
 
@@ -176,3 +176,9 @@ as the continuation. The runtime re-invokes automatically; do not poll.
   `model=`). `trait_modulated` seeds demo-default traits (fear=1.5) so shocks are visibly modulated.
   Implemented inline (small composition-root + config slice, no interface break). +4 unit tests. Gate:
   `make check` green (2080 passed, 86.2% cov). Deferred per-NPC trait fetch → ISSUE-096. Commit: `eed1700`.
+- **4 · 2026-06-12 F1.4** — PASS. Wired `PlayerModelEngine` (pure derive) + `player_model_writer` (upsert)
+  via a new `PlayerModelTick` adapter (co-located pairs → read RELATES_TO scalars → derive → upsert;
+  skips no-edge pairs). Added `player_model_engine` slot to `TickScheduler` (constructor + advance() block
+  + response key) and `get_player_model_tick()` singleton in the composition root. Implemented inline
+  (mechanical, mirrors proactive-slot pattern). +2 unit tests + 1 Neo4j integration test (skips w/o DB).
+  Gate: `make check` green (2082 passed, 24 skipped, 86.3% cov). Commit: `d1a0a97`.
