@@ -143,10 +143,10 @@ as the continuation. The runtime re-invokes automatically; do not poll.
 
 ## State pointer
 
-- **Phase in progress:** F2 (API read surfaces) — nearly done.
-- **Current batch:** F1.1–F1.5, F1.7, F2.1, F2.2, **F2.4** landed; F1.6 + F2.3 DEFERRED/BLOCKED. Next candidate: **F2.5** (optional deception-flag read), then **Phase F3** (correctness/cleanup: F3.1–F3.4, F3.6; F3.5 🔶 needs DEC-106 SESSION_TURNS schema).
-- **Last green commit:** `6ecb47f` feat(api): F2.4 — director-beat read surface.
-- **Next:** **F2.5** (optional) — a read surface that marks `is_deception=true` beliefs for the buyer-facing "tell" (distinguish deception beliefs without leaking them as truth). Check `base_edges/believes.yaml` for the `is_deception` field (DEC-103 shipped it) + a beliefs reader/route. If thin/awkward, skip F2.5 (it's optional) and advance to **F3** — F3.1/3.2/3.4/3.6 are independent correctness items; F3.5 🔶 is the DEC-106 dialogue_turn schema (orchestrator applies just-in-time). F3.3 wires deception into the eval loop.
+- **Phase in progress:** F3 (engine correctness & cleanup). F2 complete except blocked F2.3.
+- **Current batch:** F1.1–F1.5, F1.7, F2.1, F2.2, F2.4, **F2.5** landed; F1.6 + F2.3 DEFERRED/BLOCKED. Next candidate: **F3.4** (DI-inject `MemoryEngine` into `quest_lifecycle_engine`), then F3.1/3.2/3.6, F3.3, and F3.5 🔶 (DEC-106 schema) last.
+- **Last green commit:** `24938e5` feat(api): F2.5 — beliefs is_deception flag.
+- **Next:** **F3.4 (EXP-214 cleanup)** — remove the module-level `MemoryEngine()` instantiation in `engines/quest/quest_lifecycle_engine.py`; inject it via the composition root (`dependencies_engines.get_quest_lifecycle_engine`). Small DI cleanup. Then the independent items: **F3.1** (gossip secret-share gate by Standing, not random prob), **F3.2** (surface canonical NPC mood into dialogue context), **F3.6** (seed player `KNOWS_ABOUT` edges so `/player/{id}/events` returns data), **F3.3** (wire `classify_deception_belief` into the live anti-hallucination eval). **F3.5 🔶 last** — apply the DEC-106 `dialogue_turn` node schema just-in-time (orchestrator-only), land it WITH the engine change in one batch (no unused-type gate fail); STOP+surface if the type-registry gate can't go green in 2 tries.
 
 ## Progress Log
 
@@ -215,3 +215,8 @@ as the continuation. The runtime re-invokes automatically; do not poll.
   buffer) + `DirectorTick` records each fired beat (optional injected log, backward-compat) + `get_director_
   beat_log()` singleton + non-destructive `GET /v1/dialogue/director-beats` (newest-first, limit). Inline;
   +7 tests. Gate green (2101 passed, 26 skipped, 86.5% cov). Commit: `6ecb47f`.
+- **10 · 2026-06-12 F2.5** — PASS (optional). Beliefs read now surfaces the BELIEVES-edge `is_deception`
+  flag: extended `CYPHER_GET_BELIEFS_FOR_CHARACTER` with `coalesce(r.is_deception, false)`; flows through
+  `belief_service` + `GET /beliefs/{character_id}` untyped passthrough (content unchanged — buyer-facing
+  tell). Inline; +1 Neo4j integration test (skips w/o DB). Gate green (2101 passed, 27 skipped, 86.5% cov).
+  **Phase F2 complete except blocked F2.3** → advancing to Phase F3. Commit: `24938e5`.

@@ -61,7 +61,7 @@ top of those APIs. Overnight execution driver: `project-harness/DEMO_BUILD_LOOP.
 - [x] **F2.2 (EXP-226)** — `GET` player-model (the NPC's model of the player) via a new `routes/player_model.py`. Exit: route returns perceived_trust/intent for (npc, player). *(`GET /npc/{npc_id}/player-model/{player_id}`, reads F1.4 PlayerModel nodes.)*
 - [ ] **F2.3 (EXP-229)** — `GET` active schemes for an NPC (+ discovered flag) via a new `routes/schemes.py`. Exit: route returns the NPC's active schemes + steps.
 - [x] **F2.4 (EXP-209/227)** — confirm/add the proactive **pending-intents** route (`GET /v1/dialogue/pending`) and a director-beat read. Exit: the demo client can poll pending NPC-initiated intents + recent director beats. *(pending route already existed — confirmed; added `DirectorBeatLog` + non-destructive `GET /v1/dialogue/director-beats`.)*
-- [ ] **F2.5 (EXP-228, optional)** — read surface that marks `is_deception=true` beliefs (for the buyer-facing "tell"). Exit: a route/flag distinguishes deception beliefs without leaking them as truth.
+- [x] **F2.5 (EXP-228, optional)** — read surface that marks `is_deception=true` beliefs (for the buyer-facing "tell"). Exit: a route/flag distinguishes deception beliefs without leaking them as truth. *(beliefs read now returns the `is_deception` edge flag; content unchanged.)*
 
 #### F3 — Engine correctness & cleanup (so the activated engines behave well)
 - [ ] **F3.1 (EXP-202 s2)** — replace the random `SECRET_BASE_PROBABILITY` gossip secret-share gate with a `Standing` threshold (gate secret-sharing by standing). Exit: secret-share probability tracks standing band.
