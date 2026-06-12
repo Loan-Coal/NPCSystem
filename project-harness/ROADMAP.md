@@ -135,7 +135,7 @@ top of those APIs. Overnight execution driver: `project-harness/DEMO_BUILD_LOOP.
 - [x] **H2.4 (DEMO-D2-03)** — factions 3→5 alliable. Exit: two new factions seed with standings the economy can read.
 - [x] **H2.5 (DEMO-D2-04)** — quests ~6→18 across 6 chains over the full quest lifecycle (`post_quest_*`). Exit: chains are acceptable/completable and feed H1.1's quest-chain win path.
 - [x] **H2.6 (DEMO-D2-05)** — rival quest variants + a `GameController` accept-guard (can't accept opposing-faction quests simultaneously). Exit: accepting one rival quest locks the other.
-- [ ] **H2.7 (DEMO-D2-08)** — promote Village/Tavern eval worlds to playable Free-Play: de-hardcode `game_end_checker` win/lose constants to be per-world. Exit: all three worlds are pickable + winnable.
+- [x] **H2.7 (DEMO-D2-08)** — promote Village/Tavern eval worlds to playable Free-Play: de-hardcode `game_end_checker` win/lose constants to be per-world (new `world_objectives.py` `WorldObjectives` bundle + `WORLD_OBJECTIVES` registry; checker predicates + `GameEndPoller` take an `objectives` param defaulting to `DEMO_OBJECTIVES`). Exit: all three worlds are pickable + winnable.
 - [x] **H2.8 (DEMO-D2-07)** — replayable scenario forks: `BranchBeat` in scripted scenes (`scenarios/`) over H2.1, with a persisted `BranchState`. Exit: a scripted scenario replays to a different outcome.
 
 #### H3 — Legacy gameplay-engine surfaces (Pillar 1 · consume H0 enablers)
