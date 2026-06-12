@@ -87,11 +87,11 @@ top of those APIs. Overnight execution driver: `project-harness/DEMO_BUILD_LOOP.
 - [x] **G1.4 (EXP-201)** — show relationship **phase** (per NPC) in the relationship/left panel via F2.1. Exit: the NPC's phase is visible and updates.
 
 #### G2 — New demo surfaces for the cognition engines (need F2 routes)
-- [ ] **G2.1 (EXP-226)** — "What they think of YOU" player-model panel (via F2.2). Exit: panel shows the focused NPC's perceived_trust/intent.
+- [x] **G2.1 (EXP-226)** — "What they think of YOU" player-model panel (via F2.2). Exit: panel shows the focused NPC's perceived_trust/intent.
 - [ ] **G2.2 (EXP-229)** — intrigue/scheme board: active NPC schemes + steps, hidden vs discovered (via F2.3). Exit: schemes render; discovery flips a step's state.
-- [ ] **G2.3 (EXP-227)** — surface director beats (a "something stirs" cue when the director injects) (via F2.4). Exit: an injected beat shows in the window.
+- [x] **G2.3 (EXP-227)** — surface director beats (a "something stirs" cue when the director injects) (via F2.4). Exit: an injected beat shows in the window.
 - [ ] **G2.4 (EXP-209/210)** — proactive dialogue in the **interactive** window end-to-end (NPC hails the player live over WS; highlight + prefill already built in EXP-225). Exit: an idle player is hailed live in the window.
-- [ ] **G2.5 (EXP-228)** — deception "tell" affordance: a subtle buyer-facing reveal when an NPC states a flagged false belief (via F2.5). Exit: the demo can reveal a deception without breaking the in-fiction illusion.
+- [x] **G2.5 (EXP-228)** — deception "tell" affordance: a subtle buyer-facing reveal when an NPC states a flagged false belief (via F2.5). Exit: the demo can reveal a deception without breaking the in-fiction illusion.
 
 #### G3 — Content & scenarios that exercise the new layer
 - [ ] **G3.1** — a scripted **"Intrigue"** scenario (new `demo_game/scenarios/`) that drives deception + scheming + player-model into one recordable arc (works under `--cinematic`). Exit: `make demo-run` plays the intrigue arc end-to-end.
