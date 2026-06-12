@@ -112,6 +112,29 @@ async def test_decision_fires_event_and_returns_beat(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_fired_beat_recorded_in_beat_log(monkeypatch) -> None:
+    """When a beat fires and a beat log is injected, the beat is recorded (F2.4)."""
+    from npc_engine.engines.director.director_beat_log import DirectorBeatLog
+
+    location_reader = _FakeLocationReader([("npc_a", "player_1")], idle=15)
+    monkeypatch.setattr(mod, "RelationReader", _FakeRelationReader)
+    beat_log = DirectorBeatLog()
+
+    adapter = mod.DirectorTick(
+        location_reader=location_reader,
+        event_handler=_SpyEventHandler(),
+        beat_log=beat_log,
+    )
+    await adapter.run_tick(session=object(), tick_id=5)
+
+    recent = beat_log.recent(limit=5)
+    assert len(recent) == 1
+    assert recent[0].beat_kind == "re_engage_idle"
+    assert recent[0].npc_id == "npc_a"
+    assert recent[0].tick == 5
+
+
+@pytest.mark.asyncio
 async def test_no_decision_below_threshold_no_event(monkeypatch) -> None:
     """Low idle + NEUTRAL standing → decide() returns None → no event, empty beats."""
     # idle=3 < threshold=10 → no decision from re_engage_idle; NEUTRAL → no tension_escalation

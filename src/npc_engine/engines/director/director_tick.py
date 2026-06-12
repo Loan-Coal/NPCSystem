@@ -23,6 +23,7 @@ from npc_engine.engines.director.director_engine import (
     DirectorDecision,
     decide,
 )
+from npc_engine.engines.director.director_beat_log import DirectorBeatLog, DirectorBeatRecord
 from npc_engine.engines.relationship.standing import Standing, derive_standing
 from npc_engine.graph.player_location_reader import PlayerLocationReader
 from npc_engine.graph.relation_reader import RelationReader
@@ -49,15 +50,20 @@ class DirectorTick:
         self,
         location_reader: PlayerLocationReader,
         event_handler: Any,
+        beat_log: DirectorBeatLog | None = None,
     ) -> None:
         """Initialise with injected dependencies.
 
         Args:
             location_reader: PlayerLocationReader for co-location and idle-tick queries.
             event_handler: EventHandler (any object with async run_tick(session, tick_id)).
+            beat_log: Optional DirectorBeatLog; when supplied, each fired beat is recorded
+                for the API director-beat read surface (F2.4). Default None preserves
+                backward-compatible behaviour for existing callers/tests.
         """
         self._location_reader = location_reader
         self._event_handler = event_handler
+        self._beat_log = beat_log
 
     async def run_tick(self, session: AsyncSession, tick_id: int) -> dict[str, Any]:
         """Evaluate director decide() for co-located pairs; emit a beat if one fires.
@@ -86,12 +92,24 @@ class DirectorTick:
                     tick_id=tick_id, npc_id=npc_id, player_id=player_id, decision=beat,
                 )
                 beats.append(record)
+                await self._record_beat(decision=beat, npc_id=npc_id, player_id=player_id, tick_id=tick_id)
                 break  # one beat per tick — stop after first match
 
         _logger.info("director_tick_done", extra={
             "tick_id": tick_id, "pairs_checked": len(capped), "beats_fired": len(beats),
         })
         return {"director_beats": beats}
+
+    async def _record_beat(
+        self, *, decision: DirectorDecision, npc_id: str, player_id: str, tick_id: int
+    ) -> None:
+        """Record a fired beat into the shared beat log when one is injected (F2.4)."""
+        if self._beat_log is None:
+            return
+        await self._beat_log.record(DirectorBeatRecord(
+            beat_kind=decision.beat_kind, reason=decision.reason,
+            npc_id=npc_id, player_id=player_id, tick=tick_id,
+        ))
 
 
 # ---------------------------------------------------------------------------

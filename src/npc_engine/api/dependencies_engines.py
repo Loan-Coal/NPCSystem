@@ -61,6 +61,7 @@ from npc_engine.engines.proactive_dialogue.proactive_tick_adapter import Proacti
 from npc_engine.engines.player_model.player_model_engine import PlayerModelEngine
 from npc_engine.engines.player_model.player_model_tick import PlayerModelTick
 from npc_engine.engines.director.director_tick import DirectorTick
+from npc_engine.engines.director.director_beat_log import DirectorBeatLog
 from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.engines.memory.memory_decay_tick import MemoryDecayTick
 from npc_engine.engines.agenda.intent_formation_engine import IntentFormationEngine
@@ -321,7 +322,20 @@ def get_director_tick() -> DirectorTick:
     return DirectorTick(
         location_reader=PlayerLocationReader(),
         event_handler=get_event_handler(),
+        beat_log=get_director_beat_log(),
     )
+
+
+@lru_cache
+def get_director_beat_log() -> DirectorBeatLog:
+    """Return the shared DirectorBeatLog singleton (F2.4).
+
+    The director tick records fired beats here; the dialogue route reads recent beats.
+
+    Returns:
+        DirectorBeatLog shared across the director tick and the API read route.
+    """
+    return DirectorBeatLog()
 
 
 @lru_cache
