@@ -26,6 +26,11 @@ from npc_engine.engines.investigation.investigation_engine import InvestigationE
 router = APIRouter(prefix="/investigations", tags=["investigations"])
 
 
+def _has_investigation_data(context: dict[str, Any]) -> bool:
+    """True when the context holds any evidence, witnesses, or suspects (else → 404)."""
+    return bool(context.get("evidence") or context.get("witnesses") or context.get("suspects"))
+
+
 @router.get(
     "/{investigator_id}/{event_id}",
     response_model=OkEnvelope[dict[str, Any]],
@@ -57,18 +62,8 @@ async def get_investigation_context(
             set (i.e. the event does not exist or has no associated data).
     """
     context = await engine.get_investigation_context(
-        session,
-        investigator_id=investigator_id,
-        event_id=event_id,
+        session, investigator_id=investigator_id, event_id=event_id,
     )
-    has_data = bool(
-        context.get("evidence")
-        or context.get("witnesses")
-        or context.get("suspects")
-    )
-    if not has_data:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No investigation data found for event {event_id!r}",
-        )
+    if not _has_investigation_data(context):
+        raise HTTPException(status_code=404, detail=f"No investigation data found for event {event_id!r}")
     return ok_response(context)
