@@ -56,6 +56,7 @@ from npc_engine.engines.routine.routine_engine import RoutineEngine
 from npc_engine.engines.story_pacing.pacing_rules_loader import load_pacing_rules
 from npc_engine.engines.story_pacing.story_pacing_engine import StoryPacingEngine
 from npc_engine.engines.proactive_dialogue.proactive_engine import ProactiveDialogueEngine
+from npc_engine.engines.proactive_dialogue.proactive_queue import ProactiveQueue
 from npc_engine.engines.proactive_dialogue.proactive_tick_adapter import ProactiveDialogueTick
 from npc_engine.engines.agenda.intent_formation_engine import IntentFormationEngine
 from npc_engine.engines.planning.action_selector import ActionSelector
@@ -250,6 +251,19 @@ def get_routine_engine() -> RoutineEngine:
 
 
 @lru_cache
+def get_proactive_queue() -> ProactiveQueue:
+    """Return the shared ProactiveQueue singleton (DEC-098 / F1.2).
+
+    The tick adapter enqueues routed proactive lines here; the WS drain loop
+    reads from it.  A single lru_cache instance ensures both sides share state.
+
+    Returns:
+        ProactiveQueue singleton used across the full proactive-dialogue path.
+    """
+    return ProactiveQueue()
+
+
+@lru_cache
 def get_proactive_dialogue_engine() -> ProactiveDialogueTick:
     """Create singleton ProactiveDialogueTick wired to the shared LLM client and graph readers.
 
@@ -265,7 +279,11 @@ def get_proactive_dialogue_engine() -> ProactiveDialogueTick:
         memory_service=memory_reader,
         location_service=location_reader,
     )
-    return ProactiveDialogueTick(engine=engine, location_reader=location_reader)
+    return ProactiveDialogueTick(
+        engine=engine,
+        location_reader=location_reader,
+        proactive_queue=get_proactive_queue(),
+    )
 
 
 @lru_cache

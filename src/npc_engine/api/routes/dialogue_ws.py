@@ -3,8 +3,10 @@ dialogue_ws.py - WebSocket endpoint for streamed dialogue token events.
 Layer: api
 Purpose: Stream dialogue token chunks over a WebSocket, capping concurrent
          connections per API key to prevent unmetered LLM amplification.
+         After the first-turn done message, enters an idle drain loop that
+         pushes proactive NPC lines from the shared ProactiveQueue (F1.2).
 Does NOT: mutate relation or emotion state directly.
-Dependencies injected: DialogueHandler.
+Dependencies injected: DialogueHandler, ProactiveQueue (via get_proactive_queue singleton).
 """
 
 from __future__ import annotations
@@ -30,12 +32,17 @@ from npc_engine.auth.api_key import resolve_scope_from_authorization
 from npc_engine.config import get_settings
 from npc_engine.engines.dialogue.dialogue_models import DialogueResponse
 from npc_engine.engines.proactive_dialogue.models import ProactiveLine
+from npc_engine.engines.proactive_dialogue.proactive_queue import ProactiveQueue
 from npc_engine.utils.errors import AuthError
 from npc_engine.utils.logging import get_logger
 
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+# Seconds to sleep between consecutive drain-queue polls in the idle loop.
+# Short enough to feel responsive; long enough not to busy-spin the event loop.
+PROACTIVE_DRAIN_POLL_SECONDS: float = 0.5
 
 # Maximum number of concurrent WebSocket connections allowed per API key.
 # Requests that would exceed this cap are rejected before accepting the socket,
@@ -126,9 +133,9 @@ def _iter_token_chunks(text: str) -> Iterator[str]:
 async def push_proactive_line(ws: WebSocket, line: ProactiveLine) -> None:
     """Send a proactive_line push message over an open WebSocket connection.
 
-    This is a standalone helper used by (slice 2) scheduler wiring and any
-    future caller that holds an open WebSocket and a ProactiveLine. It does
-    NOT modify the existing dialogue WS handler loop.
+    This is a standalone helper used by the idle drain loop and any future
+    caller that holds an open WebSocket and a ProactiveLine.  It does NOT
+    modify the existing dialogue WS handler first-turn flow.
 
     Args:
         ws: The already-accepted WebSocket connection to push to.
@@ -137,9 +144,77 @@ async def push_proactive_line(ws: WebSocket, line: ProactiveLine) -> None:
     await ws.send_json(line.to_ws_message())
 
 
+async def drain_proactive_lines(
+    ws: WebSocket,
+    queue: ProactiveQueue,
+    recipient_id: str,
+) -> int:
+    """Drain all queued proactive lines for *recipient_id* and push them to *ws*.
+
+    Pops lines atomically from the queue and calls ``push_proactive_line`` for
+    each one.  Safe to call repeatedly (returns 0 when nothing is buffered).
+    Extracted as a standalone helper so tests can drive it without a live WS.
+
+    Args:
+        ws: Open WebSocket connection to the target player.
+        queue: Shared ProactiveQueue holding buffered lines.
+        recipient_id: Player ID to drain (matches the key used by ``enqueue``).
+
+    Returns:
+        Number of lines pushed in this call (0 when the queue was empty).
+    """
+    lines = queue.drain(recipient_id)
+    for line in lines:
+        await push_proactive_line(ws, line)
+    return len(lines)
+
+
+async def _run_first_turn(websocket: WebSocket, settings: Any) -> str:
+    """Execute the first-turn dialogue exchange and return the player_id.
+
+    Receives one JSON payload, builds and runs the dialogue handler, streams
+    token chunks, and sends the ``done`` message.
+
+    Args:
+        websocket: Accepted WebSocket connection.
+        settings: Application settings (already resolved by the caller).
+
+    Returns:
+        player_id extracted from the validated DialogueRequest.
+
+    Raises:
+        WebSocketDisconnect: If the client disconnects during the turn.
+        Exception: Any other error from the handler (re-raised to the caller).
+    """
+    graph_db = get_graph_db()
+    await graph_db.connect()
+    async with graph_db.get_session() as session:
+        payload = await websocket.receive_json()
+        request = DialogueRequest.model_validate(payload)
+        engine_model_config = get_dialogue_engine_model_config()
+        handler = build_dialogue_handler(
+            session=session,
+            settings=settings,
+            llm_client=get_llm_client(settings=settings, engine_model_config=engine_model_config),
+            llm_config=get_llm_config(),
+            engine_model_config=engine_model_config,
+        )
+        final_response = await handler.handle(request=request)
+        for chunk in _iter_token_chunks(final_response.npc_response):
+            await websocket.send_json({"type": "token", "data": chunk})
+        await websocket.send_json({"type": "done", "data": _build_done_data(final_response)})
+    return request.player_id
+
+
 @router.websocket("/ws/dialogue")
 async def dialogue_ws(websocket: WebSocket) -> None:
-    """Stream token chunks for a dialogue request payload."""
+    """Stream token chunks for a dialogue request payload.
+
+    Phase 1: receive JSON payload, stream token chunks, send done.
+    Phase 2 (idle drain): poll the ProactiveQueue and push NPC-initiated lines
+    until the client disconnects.  Auth check and connection cap are unchanged.
+    """
+    from npc_engine.api.dependencies_engines import get_proactive_queue
 
     settings = get_settings()
     authorization = websocket.headers.get("Authorization", "")
@@ -156,30 +231,12 @@ async def dialogue_ws(websocket: WebSocket) -> None:
         return
 
     await websocket.accept()
-    graph_db = get_graph_db()
-    await graph_db.connect()
     try:
-        async with graph_db.get_session() as session:
-            payload = await websocket.receive_json()
-            request = DialogueRequest.model_validate(payload)
-            engine_model_config = get_dialogue_engine_model_config()
-            handler = build_dialogue_handler(
-                session=session,
-                settings=settings,
-                llm_client=get_llm_client(
-                    settings=settings,
-                    engine_model_config=engine_model_config,
-                ),
-                llm_config=get_llm_config(),
-                engine_model_config=engine_model_config,
-            )
-            final_response = await handler.handle(request=request)
-            for chunk in _iter_token_chunks(final_response.npc_response):
-                await websocket.send_json({"type": "token", "data": chunk})
-            await websocket.send_json({
-                "type": "done",
-                "data": _build_done_data(final_response),
-            })
+        player_id = await _run_first_turn(websocket, settings)
+        proactive_queue = get_proactive_queue()
+        while True:
+            await drain_proactive_lines(websocket, proactive_queue, player_id)
+            await asyncio.sleep(PROACTIVE_DRAIN_POLL_SECONDS)
     except WebSocketDisconnect:
         return
     except Exception as error:
