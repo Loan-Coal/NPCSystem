@@ -3,6 +3,7 @@
 # (run `make check-rules-update`). Never add a line by hand to dodge the gate.
 R001|demo_game/client.py
 R001|demo_game/game_controller.py
+R001|demo_game/game_end_checker.py
 R001|demo_game/quest_trade_controller.py
 R001|demo_game/run.py
 R001|demo_game/run_scenes.py

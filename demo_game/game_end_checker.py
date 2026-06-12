@@ -7,6 +7,13 @@ Purpose: Pure win/lose condition evaluator for H1 multi-objective economy.
          No I/O: accepts pre-fetched data and returns an ObjectiveState.
 Dependencies: demo_game.constants
 Used by: demo_game.game_end_poller, demo_game.ui.game_window
+
+300-LINE WAIVER (DEC-108): this is one cohesive pure win/lose evaluator — the four win
+predicates, four failure predicates, grade scoring, the priority `_select_failure` chain,
+and the ObjectiveState/subtitle maps all share one concern (deciding the game outcome) and
+move together. Splitting the predicates into a sibling module would scatter a single
+decision across files for no cohesion gain. `evaluate_game_end` stays ≤40 lines (logic
+extracted into the named predicate/helpers). See DECISIONS.md DEC-108.
 """
 
 from __future__ import annotations

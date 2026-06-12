@@ -1312,3 +1312,18 @@ separate repo-wide decision, valuable only if cross-entity temporal correlation 
 and must be per-day bucketed to avoid supernodes.
 **Consequence:** distinct player ids never collide; turns are queryable/orderable/prunable;
 `SessionStore` round-trips via the nodes on restart.
+
+## DEC-108: `demo_game/game_end_checker.py` 300-line waiver (H1 multi-objective economy)
+**Date:** 2026-06-12 · **Status:** ✅ ACCEPTED (demo UI/logic file-size waiver, consistent with DEC-029/032/034/036/049/074/075/105)
+**Context:** H1 rewrote `game_end_checker.py` from a single-win/single-lose evaluator into the
+multi-objective economy (faction/wealth/quest-chain/treaty win paths; legion/bankruptcy/deadline/
+overreach failures; grade scoring; priority failure-selection). The file is one cohesive PURE
+evaluator (no I/O) — every predicate + the `_select_failure` priority chain + `compute_grade` +
+`ObjectiveState`/subtitle maps share the single concern of deciding the game outcome and change
+together. It is ~343 non-blank lines.
+**Decision:** Waive the 300-line rule for `demo_game/game_end_checker.py`; re-baseline via
+`make check-rules-update`. `evaluate_game_end` itself stays ≤40 lines / ≤3 nesting (all logic
+extracted into named `check_win_multi`/`check_lose_*`/`check_overreach`/`compute_grade`/`_select_failure`
+helpers). Splitting the predicates into a sibling module would scatter one decision across files.
+**Consequence:** the demo's win/lose economy lives in one readable evaluator; the function-size and
+nesting rules remain enforced.
