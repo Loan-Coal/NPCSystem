@@ -189,7 +189,9 @@ class InspectPanelWidget:
             for b in beliefs:
                 content = _truncate(b.get("content") or "", 60)
                 conf = b.get("confidence")
-                rows.append(("item", "", f"[c={conf}] {content}"))
+                # G2.5 — deception tell: metadata-only flag; does not alter content.
+                deception_tag = " ⚑ planted" if b.get("is_deception") else ""
+                rows.append(("item", "", f"[c={conf}]{deception_tag} {content}"))
 
         relations = self._data.get("relations") or []
         if relations:

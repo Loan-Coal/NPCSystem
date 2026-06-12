@@ -9,6 +9,7 @@ Dependencies: pygame, demo_game.client, demo_game.config, demo_game.constants,
               demo_game.game_controller, demo_game.emotion_poller,
               demo_game.graph_panel.poller, demo_game.world_state_poller,
               demo_game.npc_politics_poller, demo_game.npc_initiative_poller,
+              demo_game.npc_player_model_poller, demo_game.director_beat_poller,
               demo_game.intent_ui, demo_game.sandbox_loop,
               demo_game.ui.left_panel, demo_game.ui.right_panel,
               demo_game.ui.relation_ticker
@@ -21,6 +22,8 @@ import json
 import logging
 import time
 from pathlib import Path
+
+_now = time.monotonic
 from typing import TYPE_CHECKING
 
 import pygame
@@ -39,6 +42,8 @@ from demo_game.npc_initiative_poller import NpcInitiativePoller
 from demo_game.npc_needs_poller import NpcNeedsPoller
 from demo_game.npc_goals_poller import NpcGoalsPoller
 from demo_game.npc_memory_poller import NpcMemoryPoller
+from demo_game.npc_player_model_poller import NpcPlayerModelPoller
+from demo_game.director_beat_poller import DirectorBeatPoller
 from demo_game.npc_politics_poller import NpcPoliticsPoller
 from demo_game.world_poller import WorldPoller
 from demo_game.world_state_poller import WorldStatePoller
@@ -59,6 +64,10 @@ _CLR_NAV_BG = (14, 14, 20)
 _CLR_NAV_BTN = (38, 38, 52)
 _CLR_NAV_BTN_ACTIVE = (70, 90, 155)
 _CLR_NAV_TEXT = (200, 200, 210)
+
+# G2.3 — director-beat cue
+_CLR_DIRECTOR_BEAT = (180, 220, 255)  # Subtle blue-white for "something stirs…" cue.
+_DIRECTOR_BEAT_CUE_SECONDS = 5.0  # How long the cue stays visible.
 
 # Game-end overlay colours.
 _CLR_OVERLAY_WIN_BG = (10, 50, 20, 210)
@@ -166,6 +175,19 @@ class GameWindow:
         self._memory_poller = NpcMemoryPoller(client, interval_s=5.0)
         self._memory_poller.set_active_npc(self._active_npc_id)
         self._memory_poller.start()
+
+        self._player_model_poller = NpcPlayerModelPoller(
+            client, cfg.DEMO_PLAYER_ID, interval_s=5.0
+        )
+        self._player_model_poller.set_active_npc(self._active_npc_id)
+        self._player_model_poller.start()
+
+        self._director_beat_poller = DirectorBeatPoller(client, interval_s=4.0)
+        self._director_beat_poller.start()
+
+        # G2.3 — director-beat cue state
+        self._director_beat_cue_text: str = ""
+        self._director_beat_cue_until: float = 0.0
 
         self._initiative_poller = NpcInitiativePoller(
             client, cfg.DEMO_PLAYER_ID, interval_s=INTENT_POLL_INTERVAL_SECONDS
@@ -394,6 +416,7 @@ class GameWindow:
             self._goals_poller.set_active_npc(clicked_npc)
             self._politics_poller.set_active_npc(clicked_npc)
             self._memory_poller.set_active_npc(clicked_npc)
+            self._player_model_poller.set_active_npc(clicked_npc)
             self._right.set_npc_selected(True)
             self._refresh_relationship_phase(clicked_npc)  # G1.4 — update phase on NPC switch
 
@@ -460,6 +483,7 @@ class GameWindow:
         self._goals_poller.set_active_npc(npcs[0])
         self._politics_poller.set_active_npc(npcs[0])
         self._memory_poller.set_active_npc(npcs[0])
+        self._player_model_poller.set_active_npc(npcs[0])
         self._right.set_npc_selected(True)
         self._ctrl.spawn_travel(loc_id)
         self._refresh_relationship_phase(npcs[0])  # G1.4 — update phase on location change
@@ -497,6 +521,8 @@ class GameWindow:
         self._right.set_player_gold(gold)
         objective_state = self._game_end_poller.get_state()
         self._right.set_objective_state(objective_state)
+        self._right.set_player_model(self._player_model_poller.get_model())
+        self._poll_director_beat_cue()
         if not self._game_over and objective_state.outcome is not None:
             self._game_over = True
             self._game_over_outcome = objective_state.outcome
@@ -504,6 +530,7 @@ class GameWindow:
         self._right.draw(self._screen, pygame.Rect(self._right_x, 0, self._right_w, self._usable_h))
         self._draw_status_overlay()
         self._draw_intent_bubble()
+        self._draw_director_beat_cue()
         if self._game_over:
             self._draw_game_over_overlay()
         self._draw_nav_bar(pygame.Rect(0, self._usable_h, self._window_w, _NAV_BAR_H))
@@ -576,6 +603,25 @@ class GameWindow:
             return
         surf = self._font_nav.render(self._status_text, True, (240, 230, 80))
         self._screen.blit(surf, (8, self._window_h - _NAV_BAR_H - 20))
+
+    def _poll_director_beat_cue(self) -> None:
+        """Consume a new director beat and set the transient HUD cue if present."""
+        beat = self._director_beat_poller.pop_new_beat()
+        if beat is None:
+            return
+        kind = beat.get("beat_kind", "")
+        npc_id = beat.get("npc_id", "")
+        msg = f"something stirs… [{kind}] {npc_id}"
+        self._director_beat_cue_text = msg
+        self._director_beat_cue_until = _now() + _DIRECTOR_BEAT_CUE_SECONDS
+
+    def _draw_director_beat_cue(self) -> None:
+        """Render the director-beat HUD cue if one is active."""
+        if not self._director_beat_cue_text or _now() > self._director_beat_cue_until:
+            return
+        font = FontLoader.get(12)
+        surf = font.render(self._director_beat_cue_text, True, _CLR_DIRECTOR_BEAT)
+        self._screen.blit(surf, (self._right_x + 8, 4))
 
     def _draw_nav_bar(self, rect: pygame.Rect) -> None:
         pygame.draw.rect(self._screen, _CLR_NAV_BG, rect)

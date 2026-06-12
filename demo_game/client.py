@@ -599,6 +599,54 @@ class EngineClient:
         self._raise_for_status(resp, f"GET /v1/admin/goals/{character_id}")
         return resp.json().get("data", {}).get("goals", [])
 
+    def get_player_model(self, npc_id: str, player_id: str) -> dict | None:
+        """Return the player model an NPC holds about a specific player.
+
+        Calls GET /v1/npc/{npc_id}/player-model/{player_id}. Returns the
+        ``data`` sub-dict on 2xx, None on any non-2xx response (including 404
+        when the NPC has no model yet) so callers degrade gracefully.
+
+        Args:
+            npc_id: The NPC whose perspective to read.
+            player_id: The player whose model to fetch (e.g. player_demo).
+
+        Returns:
+            Dict from the ``data`` key of the response envelope (contains
+            ``npc_id``, ``player_id``, ``perceived_trust``,
+            ``perceived_intent``, ``last_updated_at``), or None when the
+            endpoint returns a non-2xx status.
+        """
+        resp = self._client.get(
+            f"/v1/npc/{npc_id}/player-model/{player_id}",
+            timeout=self._graph_timeout,
+        )
+        if resp.status_code >= 400:
+            return None
+        return resp.json().get("data")
+
+    def get_director_beats(self, limit: int = 10) -> list[dict]:
+        """Return the most recent director beats from the engine.
+
+        Calls GET /v1/dialogue/director-beats?limit=N. Returns the JSON list
+        on 2xx, or an empty list on any error so callers degrade gracefully.
+
+        Args:
+            limit: Maximum number of beats to return (newest first).
+
+        Returns:
+            List of beat dicts (each with beat_kind, reason, npc_id,
+            player_id, tick). May be empty before the scheduler has ticked.
+        """
+        resp = self._client.get(
+            "/v1/dialogue/director-beats",
+            params={"limit": limit},
+            timeout=self._graph_timeout,
+        )
+        if resp.status_code >= 400:
+            return []
+        payload = resp.json()
+        return payload if isinstance(payload, list) else []
+
     def post_belief(
         self,
         character_id: str,
