@@ -1,15 +1,18 @@
 # Review-Fix Backlog — 2026-06-13 (munich-demo @ 327180a)
 
 ## Carry-forward notes
-<!-- ≤10 lines. /fix-next and /fix-parallel append running context here. Starts empty. -->
-- Tree is GREEN at review time (make check passes, 2141 tests, coverage 86.6%). Keep it green per fix.
-- Decide items (DEC-111…121) are BLOCKED pending human approval — do not start them via /fix-next.
+<!-- ≤10 lines. /fix-next and /fix-parallel append running context here. -->
+- 2026-06-14 /fix-parallel batch 1: SEV-01,03,05,08 INTEGRATED on munich-demo (make check GREEN, 2180 passed, cov 86.74%). Commits 2adcaff, 34ae70f, f09c9d6, 312ba48.
+- HARNESS BUG: `isolation:worktree` branched workers off `main` (ea16f74), 454 commits behind munich-demo. Source-editing workers on the stale base conflicted; only good-base (W1=327180a) + new-file (W5) salvaged. **Run the remaining SEVs via /fix-next (no worktree) — it operates on munich-demo directly.**
+- REDO next (stale-base/incomplete): SEV-02 (route leak), SEV-04 (KnowledgeState — real tree has MORE sites: gossip_handler.py, subgraph_retriever.py beyond knowledge_propagator.py; reuse common/knowledge_types.py design), SEV-09, SEV-12 (config conflicts).
+- NOT STARTED: SEV-06 (repo-wide future-annotations sweep — keep solo/serial), SEV-07, SEV-10, SEV-11.
+- Decide items (DEC-111…121) BLOCKED pending human approval — do not start via /fix-next.
 
 ## Fix-now backlog (ordered, dependency-blocked)
 
 ### Block A — Scheme feature debt (new-code, highest value; independent files, parallelizable within block)
-- [ ] SEV-01 — Scheme writer transaction safety + test  (deps: none · files: `graph/scheme_writer.py`, `engines/scheming/scheme_advance_tick.py`, `tests/unit/`)
-- [ ] SEV-03 — Scheme typing: `SchemeStatus` Literal + typed route payload + covert-props model  (deps: none · files: `graph/scheme_reader.py`, `engines/scheming/covert_event_factory.py`, `api/routes/schemes.py`, models)
+- [x] SEV-01 — Scheme writer transaction safety + test  (deps: none · files: `graph/scheme_writer.py`, `engines/scheming/scheme_advance_tick.py`, `tests/unit/`)
+- [x] SEV-03 — Scheme typing: `SchemeStatus` Literal + typed route payload + covert-props model  (deps: none · files: `graph/scheme_reader.py`, `engines/scheming/covert_event_factory.py`, `api/routes/schemes.py`, models)
 
 ### Block B — Security / error-leakage (independent)
 - [ ] SEV-02 — Residual error-message leakage in 3 route sites + extend redaction guard test  (deps: none · files: `api/route_helpers.py`, `api/routes/locations.py`, `api/routes/economy.py`, `tests/.../test_route_error_redaction.py`)
@@ -20,9 +23,9 @@
 - [ ] SEV-06 — `base_engine.run_tick` return type-arg + ruff `from __future__` autofix (138 files)  (deps: none · files: `engines/base_engine.py`, repo-wide ruff `I/F` autofix)
 
 ### Block D — Test efficacy (independent)
-- [ ] SEV-05 — `investigation_service.py` tests (6 writers, happy+failure)  (deps: none · files: `tests/integration/`, `tests/unit/` — NOTE MERGE-vs-CREATE is DEC-118, test current CREATE behavior)
+- [x] SEV-05 — `investigation_service.py` tests (6 writers, happy+failure)  (deps: none · files: `tests/integration/`, `tests/unit/` — NOTE MERGE-vs-CREATE is DEC-118, test current CREATE behavior)
 - [ ] SEV-07 — Eval test hygiene: drop `sys.path`, strengthen seed-log guard, add runner to cov gate  (deps: none · files: 5 eval test files, `test_sev22_rng_determinism.py`, `Makefile` test-cov)
-- [ ] SEV-08 — `location_graph` route 422 guard tests  (deps: none · files: `tests/.../test_location_graph_route.py`)
+- [x] SEV-08 — `location_graph` route 422 guard tests  (deps: none · files: `tests/.../test_location_graph_route.py`)
 
 ### Block E — Tooling / architecture hygiene (independent)
 - [ ] SEV-10 — `check_layers.py`: add `observability` rank + unknown-package test  (deps: none · files: `scripts/check_layers.py`, `tests/.../test_check_layers.py`)

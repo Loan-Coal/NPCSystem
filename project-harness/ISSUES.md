@@ -1328,3 +1328,26 @@ the pieces; the headline capability has no end-to-end proof.
 **Why deferred:** Needs a human decision on WHICH dialogue-response field to assert on for "NPC recalls the
 consolidated memory" (see review §4 / L6 evidence).
 **To fix:** Pick the assertion field; write a two-session e2e scenario; wire into the e2e battery.
+
+## ISSUE-108: `scheming_engine.advance_step` creates a SCHEME_STEP edge with no paired Event
+**Found:** 2026-06-14, during /fix-parallel SEV-01 (W1 adjacent finding)
+**Severity:** P2 (annoying)
+**Where:** `src/npc_engine/engines/scheming/scheming_engine.py` (`advance_step` call to `add_scheme_step(session=...)`)
+**Description:** SEV-01 made the AUTO-advance path (`scheme_advance_tick`) mint the Event and link the
+SCHEME_STEP atomically in one transaction. The manual `advance_step` path still calls
+`add_scheme_step(session=...)` standalone, creating a SCHEME_STEP edge with no paired Event node — a
+possible orphan-edge / inconsistent-scheme concern on that separate call site.
+**Why deferred:** Different call site and semantics from SEV-01's auto-advance fix (out of that task's scope).
+**To fix:** Decide whether the manual step path must also mint/refer to an Event; if so, route it through an
+atomic `run_in_tx` like the auto-advance path (pass `tx=`).
+
+## ISSUE-109: `'knows'` knowledge-state string literals remain in seeder/Cypher sites after SEV-04
+**Found:** 2026-06-14, during /fix-parallel SEV-04 (W4 adjacent finding)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/engines/events/awareness_seeder.py:17` (inside a Cypher string), `src/npc_engine/data/api_seeder.py:332`
+**Description:** The SEV-04 `KnowledgeState` Literal centralizes `"knows"`/`"rumor"`, but two sites can't
+use the Python constant directly: `awareness_seeder` embeds `'knows'` inside a Cypher string literal, and
+`api_seeder` is explicitly forbidden (per its module docstring) from importing application code.
+**Why deferred:** Both are constrained contexts; lower severity than the live engine paths SEV-04 targets.
+**To fix:** For `awareness_seeder`, build the Cypher with the constant via parameterization or an f-string
+referencing `KNOWLEDGE_STATE_KNOWS`; for `api_seeder`, decide whether a local seeder-side constant is acceptable.
