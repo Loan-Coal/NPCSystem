@@ -67,7 +67,10 @@ more consistent with the rest of the composition root.
 **Why deferred:** Cosmetic; not blocking. Surfaced by the F1.5 worker.
 **To fix:** Add `@lru_cache get_player_location_reader()` and reuse it across the four factories.
 
-## ISSUE-099: F1.6 (scheming + investigation detection) DEFERRED — needs design call (DEC-107)
+## [FIXED] ISSUE-099: F1.6 (scheming + investigation detection) DEFERRED — needs design call (DEC-107)
+**Fixed:** 2026-06-13, DEC-107 resolved → Option A. F1.6 advance-half (`SchemeAdvanceTick` mints a
+registry-valid covert Event per step) + detection-half (`SchemeDetectionTick` flips active→discovered)
+implemented + wired; F2.3 route + G2.2 board landed. Commits `0624761`, `95cdb06`, `154b9cd`, `e975215`.
 **Found:** 2026-06-12, during the F→G→H build loop (cycle 6)
 **Severity:** P2 (blocks F2.3 + G2.2, not the rest)
 **Where:** `engines/scheming/` tick wiring + `graph/scheme_writer.add_scheme_step`
