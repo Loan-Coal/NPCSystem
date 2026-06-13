@@ -45,6 +45,7 @@ from demo_game.npc_needs_poller import NpcNeedsPoller
 from demo_game.npc_goals_poller import NpcGoalsPoller
 from demo_game.npc_memory_poller import NpcMemoryPoller
 from demo_game.npc_player_model_poller import NpcPlayerModelPoller
+from demo_game.npc_schemes_poller import NpcSchemesPoller
 from demo_game.chapter_poller import ChapterPoller
 from demo_game.director_beat_poller import DirectorBeatPoller
 from demo_game.npc_politics_poller import NpcPoliticsPoller
@@ -198,6 +199,10 @@ class GameWindow:
         )
         self._player_model_poller.set_active_npc(self._active_npc_id)
         self._player_model_poller.start()
+
+        self._schemes_poller = NpcSchemesPoller(client, interval_s=5.0)
+        self._schemes_poller.set_active_npc(self._active_npc_id)
+        self._schemes_poller.start()
 
         self._pledge_poller = PledgePoller(client, interval_s=5.0)
         self._pledge_poller.set_active_npc(self._active_npc_id)
@@ -465,6 +470,7 @@ class GameWindow:
             self._politics_poller.set_active_npc(clicked_npc)
             self._memory_poller.set_active_npc(clicked_npc)
             self._player_model_poller.set_active_npc(clicked_npc)
+            self._schemes_poller.set_active_npc(clicked_npc)
             self._pledge_poller.set_active_npc(clicked_npc)
             self._right.set_oath_active_npc(clicked_npc)
             self._right.set_npc_selected(True)
@@ -534,6 +540,7 @@ class GameWindow:
         self._politics_poller.set_active_npc(npcs[0])
         self._memory_poller.set_active_npc(npcs[0])
         self._player_model_poller.set_active_npc(npcs[0])
+        self._schemes_poller.set_active_npc(npcs[0])
         self._pledge_poller.set_active_npc(npcs[0])
         self._right.set_oath_active_npc(npcs[0])
         self._right.set_npc_selected(True)
@@ -574,6 +581,8 @@ class GameWindow:
         objective_state = self._game_end_poller.get_state()
         self._right.set_objective_state(objective_state)
         self._right.set_player_model(self._player_model_poller.get_model())
+        # G2.2 — intrigue board data push
+        self._right.set_schemes(self._schemes_poller.get_schemes())
         # H3.1 — oath panel data push
         self._right.set_oath_pledges(self._pledge_poller.get_pledges())
         # H3.2 — treaty panel data push

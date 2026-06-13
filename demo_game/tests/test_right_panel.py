@@ -53,7 +53,7 @@ def test_right_panel_enum_has_twenty_values() -> None:
     from demo_game.ui.right_panel import RightPanel
 
     panels = list(RightPanel)
-    assert len(panels) == 20  # H3 added OATH, TREATY, INVESTIGATE tabs
+    assert len(panels) == 21  # G2.2 added INTRIGUE (after H3's OATH/TREATY/INVESTIGATE)
 
 
 def test_right_panel_enum_values() -> None:

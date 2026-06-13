@@ -1535,6 +1535,31 @@ class EngineClient:
         return resp.json().get("data")
 
     # ------------------------------------------------------------------
+    # Schemes (intrigue board — F2.3 / G2.2)
+    # ------------------------------------------------------------------
+
+    def get_schemes(self, npc_id: str) -> list[dict]:
+        """Return the NPC's schemes (active + discovered) with their covert steps.
+
+        Calls GET /v1/npc/{npc_id}/schemes. Each scheme dict carries scheme_id,
+        goal, status, discovered (bool), and steps (ordered list).
+
+        Args:
+            npc_id: The scheming NPC whose board to read.
+
+        Returns:
+            List of scheme dicts; empty list on ≥400 or when the NPC has none.
+        """
+        resp = self._client.get(
+            f"/v1/npc/{npc_id}/schemes",
+            timeout=self._graph_timeout,
+        )
+        if resp.status_code >= 400:
+            return []
+        data = resp.json().get("data") or {}
+        return data.get("schemes", [])
+
+    # ------------------------------------------------------------------
     # Quest branch choice
     # ------------------------------------------------------------------
 

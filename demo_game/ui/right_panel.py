@@ -48,6 +48,7 @@ from demo_game.ui.faction_board import FactionBoardWidget
 from demo_game.ui.retrieval_panel import RetrievalPanelWidget
 from demo_game.ui.politics_panel import PoliticsPanelWidget
 from demo_game.ui.player_model_panel import PlayerModelPanelWidget
+from demo_game.ui.scheme_board_panel import SchemeBoardPanelWidget
 from demo_game.ui.inspect_panel import InspectPanelWidget
 from demo_game.ui.knowledge_sidebar import KnowledgeSidebarWidget
 from demo_game.ui.inventory_panel import InventoryPanelWidget
@@ -88,6 +89,7 @@ class RightPanel(enum.Enum):
     OATH = "OATH"
     TREATY = "TREATY"
     INVESTIGATE = "INVESTIGATE"
+    INTRIGUE = "INTRIGUE"
 
 
 class RightPanelRenderer:
@@ -129,6 +131,7 @@ class RightPanelRenderer:
         self._retrieval_panel = RetrievalPanelWidget(font_body, font_label)
         self._faction_board = FactionBoardWidget(font_body, font_label)
         self._player_model_panel = PlayerModelPanelWidget(font_body, font_label)
+        self._scheme_board_panel = SchemeBoardPanelWidget(font_body, font_label)
         self._oath_panel = OathPanelWidget(font_body, font_label)
         self._treaty_panel = TreatyPanelWidget(font_body, font_label)
         self._investigation_panel = InvestigationPanelWidget(font_body, font_label)
@@ -377,6 +380,14 @@ class RightPanelRenderer:
         """
         self._player_model_panel.set_model(model)
 
+    def set_schemes(self, schemes: list[dict] | None) -> None:
+        """Push a fresh scheme list into the INTRIGUE panel widget.
+
+        Args:
+            schemes: List of scheme dicts (goal/status/discovered/steps), or None.
+        """
+        self._scheme_board_panel.set_schemes(schemes)
+
     @property
     def show_player_model_panel(self) -> bool:
         """True when the PLAYER MODEL tab is active."""
@@ -574,6 +585,8 @@ class RightPanelRenderer:
             self._treaty_panel.draw(screen, content_rect)
         elif self._active == RightPanel.INVESTIGATE:
             self._investigation_panel.draw(screen, content_rect)
+        elif self._active == RightPanel.INTRIGUE:
+            self._scheme_board_panel.draw(screen, content_rect)
         else:
             self._draw_graph(screen, rect)
 

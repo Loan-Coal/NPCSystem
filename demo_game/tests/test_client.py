@@ -754,3 +754,23 @@ def test_get_pledges_for_npc_uses_admin_path(mock_http: MagicMock, make_response
     mock_http.get.return_value = make_response(200, {"data": {"pledges": []}})
     _client(mock_http).get_pledges_for_npc("lira_fence")
     assert mock_http.get.call_args.args[0] == "/v1/admin/pledges/characters/lira_fence"
+
+
+# ---------------------------------------------------------------------------
+# get_schemes (F2.3 / G2.2)
+# ---------------------------------------------------------------------------
+
+
+def test_get_schemes_returns_scheme_list(mock_http: MagicMock, make_response) -> None:
+    """get_schemes returns the 'schemes' sub-list from the envelope data."""
+    schemes = [{"scheme_id": "s1", "goal": "rob", "discovered": True, "steps": []}]
+    mock_http.get.return_value = make_response(200, {"data": {"npc_id": "lira", "schemes": schemes}})
+    result = _client(mock_http).get_schemes("lira")
+    assert result == schemes
+    assert mock_http.get.call_args.args[0] == "/v1/npc/lira/schemes"
+
+
+def test_get_schemes_returns_empty_on_error(mock_http: MagicMock, make_response) -> None:
+    """get_schemes degrades to [] on a >=400 response."""
+    mock_http.get.return_value = make_response(404, {"detail": "nope"})
+    assert _client(mock_http).get_schemes("lira") == []
