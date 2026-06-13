@@ -1259,3 +1259,72 @@ Blocked until the Unity/Unreal SDK integration phase, which already introduces i
 changes and is a natural inflection point.
 **To fix:** Add Redis adapter behind EmotionStore and SessionStore interfaces; register as a
 new DI option in `api/dependency_singletons.py`; add Docker Compose Redis service.
+
+## ISSUE-101: `schedule_queries.py` scheduler reads 24% covered
+**Found:** 2026-06-13, during /full-review (L4)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/graph/schedule_queries.py`
+**Description:** Scheduler read queries are 24% covered; most read paths untested.
+**Why deferred:** Below the HIGH/scheme-feature priority of this review's Fix-now backlog.
+**To fix:** Add unit/integration tests for the scheduler read queries; bring coverage toward module norm.
+
+## ISSUE-102: Intrigue board panel (G2.2) tests are crash-safety only
+**Found:** 2026-06-13, during /full-review (L4)
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/ui/` intrigue/scheme board panel tests
+**Description:** The G2.2 scheme board panel tests assert the widget does not crash on render but make no
+behavioral assertions (does it show the right schemes/steps for the active NPC?).
+**Why deferred:** Demo panel; poller is behaviorally tested (6 tests). Cosmetic risk only.
+**To fix:** Add assertions on panel content given a known schemes payload.
+
+## ISSUE-103: 135 module docstrings carry stale `Purpose: (auto-detected — review)` placeholder
+**Found:** 2026-06-13, during /full-review (L5)
+**Severity:** P3 (nice-to-fix)
+**Where:** 135 `.py` files across `src/`
+**Description:** Module docstrings still carry the auto-generated `Purpose: (auto-detected — review)`
+placeholder. ISSUE-072/076 each tracked a single file; the real population is 135. `check-docstrings`
+passes because a docstring is present — the placeholder text is not validated.
+**Why deferred:** Large mechanical sweep; no runtime impact; out of scope of the Fix-now feature debt.
+**To fix:** Replace placeholders with real one-line Purpose statements (consider a lint that rejects the placeholder text).
+
+## ISSUE-104: OCP residuals — emotion/TTS factory, mood-label table, llm `__init__` registration, scheme step kind
+**Found:** 2026-06-13, during /full-review (L7)
+**Severity:** P3 (nice-to-fix)
+**Where:** `engines/.../emotion_model_factory.py`, `dependencies.py` (TTS), `engines/.../mood_contagion_engine.py`, `engines/llm/__init__.py`, `engines/scheming/covert_event_factory.py`
+**Description:** Several extension axes remain closed: emotion-model factory is a 2-branch if + Literal;
+TTS backend selection is an if/elif in the composition root with no registry; mood label→VAD table is a
+hardcoded dict duplicated across two modules; new LLM backends require editing `llm/__init__.py`; scheme
+step kind is a free string with no enum/registry. The big OCP seams (distortion registry, location_writer,
+LLM backend validator, EmotionModelProtocol) DID land — these are the residuals.
+**Why deferred:** Roadmap pre-work, not blocking; each is added when its expansion axis is actually exercised.
+**To fix:** Mirror the LLM `register_backend()` registry pattern for emotion + TTS; extract the mood table
+to one module; introduce a `SchemeStepKind`.
+
+## ISSUE-105: `dependencies_engines.py` exceeds its DEC-076 400-line growth cap
+**Found:** 2026-06-13, during /full-review (L2)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/api/dependencies_engines.py` (~513 lines)
+**Description:** DEC-076 (2026-06-09) capped the file at 400 lines pending a per-engine submodule pattern;
+scheme + director + memory + goal factories pushed it past without a new DECISIONS entry.
+**Why deferred:** Composition-root refactor; not blocking. Relates to DEC-115 (second composition root).
+**To fix:** Extract advanced engine factories into a submodule, or add a DECISIONS entry re-baselining the cap.
+
+## ISSUE-106: `asyncio.iscoroutinefunction` DeprecationWarnings under Python 3.14
+**Found:** 2026-06-13, during /full-review (L4/L9)
+**Severity:** P3 (nice-to-fix)
+**Where:** sev05 store tests + vendored neo4j/fastapi
+**Description:** ~1.8k `asyncio.iscoroutinefunction` DeprecationWarnings per run, mostly from vendored
+deps under Python 3.14; 4/run originate in the sev05 store tests. Harmless today; noise in CI logs.
+**Why deferred:** Third-party-dominated; cosmetic.
+**To fix:** Replace the first-party uses with `inspect.iscoroutinefunction`; track upstream dep updates.
+
+## ISSUE-107: No cross-session e2e test for persistent memory recall
+**Found:** 2026-06-13, during /full-review (L6)
+**Severity:** P2 (annoying)
+**Where:** `e2e/` / demo scenarios
+**Description:** The persistent-memory pitch has no e2e scenario spanning two dialogue sessions across a
+memory consolidation (teach an NPC something in session 1, confirm recall in session 2). Unit tests cover
+the pieces; the headline capability has no end-to-end proof.
+**Why deferred:** Needs a human decision on WHICH dialogue-response field to assert on for "NPC recalls the
+consolidated memory" (see review §4 / L6 evidence).
+**To fix:** Pick the assertion field; write a two-session e2e scenario; wire into the e2e battery.

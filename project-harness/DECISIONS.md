@@ -1363,3 +1363,96 @@ panel widgets (`actions_panel.py`, `game_window.py` overlays).
 `make check-rules-update`. Splitting the render into a sibling would scatter tightly-coupled draw
 state/constants for no cohesion gain. Functions stay ≤40 lines / ≤3 nesting.
 **Consequence:** the branch choice modal lives in one widget file, consistent with the other demo panels.
+
+## DEC-111: `IDEMPOTENCY_ENFORCE_HEADER=false` — advisory warn vs hard-raise in staging/prod?
+**Date:** 2026-06-13 · **Status:** ❓ OPEN (raised by /full-review L1-06/L1-10)
+**Context:** With `IDEMPOTENCY_ENFORCE_HEADER=false` (the shipped default), all mutating endpoints are
+replay-able. `config.py:258-263` emits a WARNING in staging/prod but does not raise — chosen "warn, not
+raise, for back-compat." A studio that copies the dev `.env` runs replay-able mutations in prod.
+**Question:** Keep advisory (warn) or hard-raise in staging/prod like the API-key check? Hard-raise is a
+breaking operational change for any existing staging deploy that copies dev `.env`.
+**Owner decision needed before** wiring any enforcement.
+
+## DEC-112: Move `system_v1_router` under `admin_prefix`?
+**Date:** 2026-06-13 · **Status:** ❓ OPEN (raised by /full-review L1-13)
+**Context:** `system_v1_router` is mounted at `/v1/system/*`; the other admin surfaces sit under
+`/v1/admin/*`. Relocating it improves consistency but changes the public URL (`/v1/system/events` →
+`/v1/admin/system/events`), breaking existing clients.
+**Question:** Relocate (interface change) or leave as-is? Needs sign-off because it is a public API change.
+
+## DEC-113: Adopt `mypy --strict`?
+**Date:** 2026-06-13 · **Status:** ❓ OPEN (raised by /full-review L3-14)
+**Context:** The current `make type` gate runs non-strict and reports 0 errors. `mypy --strict` surfaces
+274 errors across 87 files (bare `dict` returns, missing annotations, an `attr-defined` in `batch.py:17`).
+**Question:** (a) targeted intermediate (`disallow_untyped_defs` + `warn_return_any`), (b) full `--strict`
+with per-file `# type: ignore` debt, or (c) keep non-strict + add an advisory `make type-strict`? Choice
+sets the scope of any typing fix work (affects SEV-06's `run_tick` change).
+
+## DEC-114: Type the API response envelope across all 130 `OkEnvelope[dict[str,Any]]` routes?
+**Date:** 2026-06-13 · **Status:** ❓ OPEN (raised by /full-review L3-09)
+**Context:** `response_model=` is now 147/147, but 130 routes wrap `OkEnvelope[dict[str,Any]]` — the `data`
+payload is opaque to every OpenAPI/SDK client. SEV-03 fixes the scheme route specifically; the other ~129
+remain. L effort.
+**Question:** Do all routes, a subset (public/SDK-facing only), or log-and-defer until the SDK contract
+freeze? Relevant before any Unity/Unreal SDK is generated from the OpenAPI schema.
+
+## DEC-115: `dependencies_advanced.py` as a second composition root — bless or fold?
+**Date:** 2026-06-13 · **Status:** ❓ OPEN (raised by /full-review L2-06)
+**Context:** CLAUDE.md: "`api/dependencies.py` is the sole composition root." `dependencies_advanced.py`
+defines `@lru_cache` singletons for 11 advanced engines and is imported by `get_tick_scheduler()` in
+`dependencies_engines.py`. DEC-042/076 bless `dependencies_engines.py` but not this further split.
+**Question:** Formally bless `dependencies_advanced.py` as a named second root (with a boundary rule) or
+fold it back? Relates to ISSUE-105 (line-cap breach).
+
+## DEC-116: Is `covert_event_factory`'s summary template "prompt content"?
+**Date:** 2026-06-13 · **Status:** ❓ OPEN (raised by /full-review L2-10)
+**Context:** `covert_event_factory.py:33` `_COVERT_SUMMARY_TEMPLATE` builds the Event `summary` data field.
+If `event.summary` is later included in LLM context assembly (as other event summaries are), this template
+effectively shapes LLM input and should be YAML in `prompts/` per the no-prompt-strings-outside-prompts rule.
+**Question:** Confirm whether `event.summary` reaches LLM context. If yes → move to `prompts/scheming/`. If
+no → document the determination in-file. Needs a data-flow trace decision.
+
+## DEC-117: Enforce the 40-line function / 3-nesting rule, or formally waive the violators?
+**Date:** 2026-06-13 · **Status:** ❓ OPEN (raised by /full-review L5-01/L5-02)
+**Context:** The strict 40-line function rule is ungated and widely violated: `advance()`
+(`tick_scheduler.py:303`) is 373 lines at nesting depth 7; 14 more functions exceed 40 lines (`dispatch()`
+201, `seed()` 202, `assemble_tier_a_context()` 186). Only file-size waivers exist (DEC-042 etc.), none for
+function length.
+**Question:** Add an enforcing gate + refactor/​waive the ~15 functions, or formally re-classify the
+40-line limit as a guideline for orchestration loops with per-function DEC waivers? Either way the rule
+should stop being silently violated.
+
+## DEC-118: `investigation_service.py` — raw `CREATE` vs `MERGE` (dedup semantics)?
+**Date:** 2026-06-13 · **Status:** ❓ OPEN (raised by /full-review L4-09)
+**Context:** The six `investigation_service.py` writers use raw `CREATE`; duplicate calls silently create
+duplicate nodes. SEV-05 adds tests for the CURRENT behavior; whether to switch to `MERGE` (idempotent) is a
+graph-write-semantics change that affects dedup and must be decided deliberately.
+**Question:** Keep `CREATE` (and rely on callers for uniqueness) or switch to `MERGE`? A schema/behavior call.
+
+## DEC-119: Session-ownership — migrate 14+ graph sub-writers to `AsyncTransaction`, or bless the distributed-tx pattern?
+**Date:** 2026-06-13 · **Status:** ❓ OPEN (raised by /full-review L2-01/L2-03)
+**Context:** CLAUDE.md: "graph sub-writers receive `AsyncSession` as a parameter; `graph_writer.py` is the
+only file that opens and commits transactions." This is systemically violated — 14+ `graph/` files open
+their own transactions (`belief_service`, `goal_service`, `memory_service`, `currency_writer`,
+`scheme_writer`, …). SEV-01 fixes only the new scheme files; fixing only those creates an inconsistent
+standard.
+**Question:** Commit to migrating all `graph/` sub-writers to accept `AsyncTransaction` (large refactor), or
+amend the rule to bless the distributed begin_transaction pattern with a DECISIONS entry? Decide the
+standard before more graph writers are added.
+
+## DEC-120: `DistortionType` — `Literal` vs `str`/extensible enum?
+**Date:** 2026-06-13 · **Status:** ❓ OPEN (raised by /full-review L7-01-R)
+**Context:** Gossip distortion strategies are now an open `STRATEGY_REGISTRY`, but `DistortionType` is still
+a closed `Literal` and `REGISTRY_KEYS` is frozen at import — a 5th strategy is unreachable at runtime and
+rejected by the Literal/`GossipDistortion` model. Loosening to `str` loses IDE/Pydantic enum checking and
+affects the `mutation_type` string serialized on BELIEVES_RUMOR edges.
+**Question:** `str` + runtime validator against the registry, or an extensible enum class? A serialization/
+type-safety trade-off.
+
+## DEC-121: Split the fat `LLMClientProtocol` (ISP) before the SDK contract freeze?
+**Date:** 2026-06-13 · **Status:** ❓ OPEN (raised by /full-review L7-08)
+**Context:** `protocols.py` bundles `generate` + `generate_structured` + `stream` + `health_check` +
+`model_name`. A streaming-only or structured-only backend must stub the rest, risking LSP drift. Splitting
+into `LLMGenerateProtocol` / `LLMStructuredProtocol` / `LLMStreamProtocol` is the ISP-correct shape.
+**Question:** Split now (before any SDK client is built against the protocol shape — a breaking change
+afterward) or defer? Decide before the OpenAPI/SDK contract freeze.
