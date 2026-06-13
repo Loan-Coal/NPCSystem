@@ -18,7 +18,7 @@ from npc_engine.engines.scheming.scheming_engine import (
     SchemeStepInput,
     SchemingEngine,
 )
-from npc_engine.graph.scheme_writer import SchemeRecord
+from npc_engine.graph.scheme_reader import SchemeRecord
 
 
 # ---------------------------------------------------------------------------

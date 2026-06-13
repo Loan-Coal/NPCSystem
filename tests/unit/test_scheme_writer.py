@@ -8,16 +8,11 @@ Dependencies: pytest, unittest.mock, npc_engine.graph.scheme_writer
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
-from npc_engine.graph.scheme_writer import (
-    SchemeRecord,
-    add_scheme_step,
-    get_active_schemes,
-    upsert_scheme,
-)
+from npc_engine.graph.scheme_writer import add_scheme_step, upsert_scheme
 
 
 # ---------------------------------------------------------------------------
@@ -125,73 +120,3 @@ async def test_add_scheme_step_passes_correct_params() -> None:
     assert params["event_id"] == "evt_002"
     assert params["step_order"] == 2
     assert params["completed"] is True
-
-
-# ---------------------------------------------------------------------------
-# get_active_schemes — reader for cap enforcement
-# ---------------------------------------------------------------------------
-
-
-class _AsyncIter:
-    """Minimal async iterator wrapper for a plain list — used in mocks."""
-
-    def __init__(self, items: list) -> None:
-        self._iter = iter(items)
-
-    def __aiter__(self) -> _AsyncIter:
-        return self
-
-    async def __anext__(self):
-        try:
-            return next(self._iter)
-        except StopIteration:
-            raise StopAsyncIteration
-
-
-@pytest.mark.asyncio
-async def test_get_active_schemes_returns_empty_list_when_no_rows() -> None:
-    """get_active_schemes returns [] when NPC has no active schemes."""
-    session = AsyncMock()
-    result = _AsyncIter([])
-    session.run = AsyncMock(return_value=result)
-
-    records = await get_active_schemes(session=session, npc_id="lira")
-
-    assert records == []
-
-
-@pytest.mark.asyncio
-async def test_get_active_schemes_returns_scheme_records() -> None:
-    """get_active_schemes returns SchemeRecord list from graph rows."""
-    session = AsyncMock()
-
-    row1 = MagicMock()
-    row1.data = MagicMock(
-        return_value={
-            "s.id": "s1",
-            "s.npc_id": "captain_sorn",
-            "s.goal": "seize_bridge",
-            "s.status": "active",
-            "s.created_at_game_time": "tick_1",
-        }
-    )
-    row2 = MagicMock()
-    row2.data = MagicMock(
-        return_value={
-            "s.id": "s2",
-            "s.npc_id": "captain_sorn",
-            "s.goal": "bribe_council",
-            "s.status": "active",
-            "s.created_at_game_time": "tick_2",
-        }
-    )
-
-    result = _AsyncIter([row1, row2])
-    session.run = AsyncMock(return_value=result)
-
-    records = await get_active_schemes(session=session, npc_id="captain_sorn")
-
-    assert len(records) == 2
-    assert all(isinstance(r, SchemeRecord) for r in records)
-    assert records[0].id == "s1"
-    assert records[1].goal == "bribe_council"

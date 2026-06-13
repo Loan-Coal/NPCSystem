@@ -63,6 +63,7 @@ from npc_engine.engines.player_model.player_model_tick import PlayerModelTick
 from npc_engine.engines.director.director_tick import DirectorTick
 from npc_engine.engines.director.director_beat_log import DirectorBeatLog
 from npc_engine.engines.scheming.scheme_advance_tick import SchemeAdvanceTick
+from npc_engine.engines.investigation.scheme_detection_tick import SchemeDetectionTick
 from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.engines.memory.memory_decay_tick import MemoryDecayTick
 from npc_engine.engines.agenda.intent_formation_engine import IntentFormationEngine
@@ -351,6 +352,16 @@ def get_scheme_advance_tick() -> SchemeAdvanceTick:
 
 
 @lru_cache
+def get_scheme_detection_tick() -> SchemeDetectionTick:
+    """Create singleton SchemeDetectionTick adapter for the tick scheduler (F1.6).
+
+    Returns:
+        SchemeDetectionTick wired to settings (schema-free status flip on discovery).
+    """
+    return SchemeDetectionTick(settings=get_settings())
+
+
+@lru_cache
 def get_director_beat_log() -> DirectorBeatLog:
     """Return the shared DirectorBeatLog singleton (F2.4).
 
@@ -489,6 +500,7 @@ def get_tick_scheduler() -> TickScheduler:
         director_engine=get_director_tick(),
         memory_decay_engine=get_memory_decay_tick(),
         scheme_advance_engine=get_scheme_advance_tick(),
+        scheme_detection_engine=get_scheme_detection_tick(),
         engine_status_store=get_engine_status_store(),
         gossip_interval=settings.GOSSIP_TICK_INTERVAL,
         event_interval=settings.EVENT_TICK_INTERVAL,

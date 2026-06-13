@@ -198,6 +198,11 @@ class Settings(BaseSettings):
     # Cap on how many schemes advance in a single tick (bounds covert-event creation).
     SCHEME_ADVANCE_MAX_PER_TICK: int = Field(default=10, ge=1, le=100)
 
+    # F1.6 detection-half: run scheme discovery once every N ticks (self-gated).
+    SCHEME_DETECTION_TICK_INTERVAL: int = Field(default=7, ge=1, le=1000)
+    # Minimum covert steps before a scheme can be discovered by a co-located witness.
+    SCHEME_DISCOVERY_MIN_STEPS: int = Field(default=2, ge=1, le=100)
+
     # EXP-230: max dialogue turns persisted per (npc, player) session across restarts.
     MAX_PERSISTED_SESSION_TURNS: int = Field(default=20, ge=1, le=500)
 

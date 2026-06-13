@@ -74,6 +74,7 @@ class TickScheduler:
         director_engine: BaseEngine | None = None,
         memory_decay_engine: BaseEngine | None = None,
         scheme_advance_engine: BaseEngine | None = None,
+        scheme_detection_engine: BaseEngine | None = None,
         consolidation_advance_interval: int = 1,
         chapter_interval: int = 1,
         distributed_lease_enabled: bool = False,
@@ -144,6 +145,9 @@ class TickScheduler:
             scheme_advance_engine: Optional engine exposing ``run_tick(session, tick_id)``
                 called every tick; self-gates on its interval to advance active schemes
                 by minting a covert Event per step (F1.6 / DEC-107 Option A).
+            scheme_detection_engine: Optional engine exposing ``run_tick(session, tick_id)``
+                called every tick; self-gates on its interval to discover witnessed,
+                sufficiently-advanced schemes (status active→discovered) (F1.6).
             consolidation_advance_interval: Run consolidation every N advances; clamped to 1.
             chapter_interval: Run chapter engine every N ticks; clamped to 1. Default 1 preserves
                 existing every-tick behavior; raise to reduce LLM call frequency.
@@ -187,6 +191,7 @@ class TickScheduler:
         self._director_engine = director_engine
         self._memory_decay_engine = memory_decay_engine
         self._scheme_advance_engine = scheme_advance_engine
+        self._scheme_detection_engine = scheme_detection_engine
         self._consolidation_advance_interval = max(1, consolidation_advance_interval)
         self._chapter_interval = max(1, chapter_interval)
         self._advance_count = 0
@@ -354,6 +359,7 @@ class TickScheduler:
                 "director": [],
                 "memory_decay": [],
                 "scheme_advance": [],
+                "scheme_detection": [],
             }
             world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
             for tick_id in range(start_tick + 1, end_tick + 1):
@@ -626,6 +632,14 @@ class TickScheduler:
                     )
                     if row is not None:
                         response["scheme_advance"].append(row)
+
+                if self._scheme_detection_engine is not None:
+                    row = await self._run_engine_safe(
+                        "scheme_detection", tick_id,
+                        self._scheme_detection_engine.run_tick(session=session, tick_id=tick_id),
+                    )
+                    if row is not None:
+                        response["scheme_detection"].append(row)
 
                 if unresolved:
                     break

@@ -1,0 +1,137 @@
+"""
+Module: test_scheme_reader
+Layer: tests/unit
+Purpose: Unit tests for graph/scheme_reader.py — active-scheme reads for the cap
+         check, advance tick, and detection tick. All Neo4j I/O is mocked.
+Dependencies: pytest, unittest.mock, npc_engine.graph.scheme_reader
+"""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from npc_engine.graph.scheme_reader import (
+    ActiveSchemeProgress,
+    SchemeRecord,
+    get_active_schemes,
+    get_all_active_schemes_with_steps,
+    get_discoverable_scheme_ids,
+)
+
+
+class _AsyncIter:
+    """Minimal async iterator wrapper for a plain list — used in mocks."""
+
+    def __init__(self, items: list) -> None:
+        self._iter = iter(items)
+
+    def __aiter__(self) -> _AsyncIter:
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self._iter)
+        except StopIteration:
+            raise StopAsyncIteration
+
+
+def _row(data: dict) -> MagicMock:
+    row = MagicMock()
+    row.data = MagicMock(return_value=data)
+    return row
+
+
+# ---------------------------------------------------------------------------
+# get_active_schemes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_active_schemes_returns_empty_list_when_no_rows() -> None:
+    session = AsyncMock()
+    session.run = AsyncMock(return_value=_AsyncIter([]))
+
+    records = await get_active_schemes(session=session, npc_id="lira")
+
+    assert records == []
+
+
+@pytest.mark.asyncio
+async def test_get_active_schemes_returns_scheme_records() -> None:
+    session = AsyncMock()
+    rows = [
+        _row({
+            "s.id": "s1", "s.npc_id": "captain_sorn", "s.goal": "seize_bridge",
+            "s.status": "active", "s.created_at_game_time": "tick_1",
+        }),
+        _row({
+            "s.id": "s2", "s.npc_id": "captain_sorn", "s.goal": "bribe_council",
+            "s.status": "active", "s.created_at_game_time": "tick_2",
+        }),
+    ]
+    session.run = AsyncMock(return_value=_AsyncIter(rows))
+
+    records = await get_active_schemes(session=session, npc_id="captain_sorn")
+
+    assert len(records) == 2
+    assert all(isinstance(r, SchemeRecord) for r in records)
+    assert records[0].id == "s1"
+    assert records[1].goal == "bribe_council"
+
+
+# ---------------------------------------------------------------------------
+# get_all_active_schemes_with_steps
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_all_active_schemes_with_steps_maps_rows() -> None:
+    session = AsyncMock()
+    rows = [
+        _row({"scheme_id": "s1", "npc_id": "lira", "goal": "rob", "step_count": 3}),
+        _row({"scheme_id": "s2", "npc_id": "vex", "goal": "spy", "step_count": 0}),
+    ]
+    session.run = AsyncMock(return_value=_AsyncIter(rows))
+
+    records = await get_all_active_schemes_with_steps(session=session)
+
+    assert len(records) == 2
+    assert all(isinstance(r, ActiveSchemeProgress) for r in records)
+    assert records[0].step_count == 3
+    assert records[1].scheme_id == "s2"
+
+
+@pytest.mark.asyncio
+async def test_get_all_active_schemes_with_steps_empty() -> None:
+    session = AsyncMock()
+    session.run = AsyncMock(return_value=_AsyncIter([]))
+
+    assert await get_all_active_schemes_with_steps(session=session) == []
+
+
+# ---------------------------------------------------------------------------
+# get_discoverable_scheme_ids
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_discoverable_scheme_ids_returns_ids() -> None:
+    session = AsyncMock()
+    rows = [_row({"scheme_id": "s1"}), _row({"scheme_id": "s2"})]
+    session.run = AsyncMock(return_value=_AsyncIter(rows))
+
+    ids = await get_discoverable_scheme_ids(session=session, min_steps=2)
+
+    assert ids == ["s1", "s2"]
+    # min_steps forwarded to the query.
+    assert session.run.call_args.kwargs["min_steps"] == 2
+
+
+@pytest.mark.asyncio
+async def test_get_discoverable_scheme_ids_empty() -> None:
+    session = AsyncMock()
+    session.run = AsyncMock(return_value=_AsyncIter([]))
+
+    assert await get_discoverable_scheme_ids(session=session, min_steps=5) == []

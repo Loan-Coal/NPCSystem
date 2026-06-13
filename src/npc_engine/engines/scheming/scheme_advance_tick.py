@@ -25,11 +25,11 @@ from npc_engine.config import Settings
 from npc_engine.engines.scheming.covert_event_factory import build_covert_event_props
 from npc_engine.graph.event_writer import upsert_event
 from npc_engine.graph.graph_reader import get_npc_location_id
-from npc_engine.graph.scheme_writer import (
+from npc_engine.graph.scheme_reader import (
     ActiveSchemeProgress,
-    add_scheme_step,
     get_all_active_schemes_with_steps,
 )
+from npc_engine.graph.scheme_writer import add_scheme_step
 from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.type_registry.node_validator import validate_node_write

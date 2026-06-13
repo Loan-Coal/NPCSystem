@@ -2,17 +2,18 @@
 Module: scheme_writer
 Layer: graph
 Purpose: Upserts Scheme nodes, EXECUTES_SCHEME edges from Character to Scheme,
-         and SCHEME_STEP edges from Scheme to Event in Neo4j.
-Does NOT: call LLMs, import from engines layer, derive scheme content, or manage
-          transaction lifecycle beyond what callers provide.
+         SCHEME_STEP edges from Scheme to Event, and the active→discovered status
+         transition. Read queries live in graph/scheme_reader.py.
+Does NOT: call LLMs, import from engines layer, derive scheme content, run read
+          queries, or manage transaction lifecycle beyond what callers provide.
 Dependencies injected: AsyncSession (per call — stateless, no constructor state).
-Used by: engines/scheming/scheming_engine.py (cap reader + write path).
+Used by: engines/scheming/scheming_engine.py, engines/scheming/scheme_advance_tick.py,
+         engines/investigation/scheme_detection_tick.py.
 """
 
 from __future__ import annotations
 
 from neo4j import AsyncSession
-from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
 # Cypher constants — use labels/edge names from type_registry YAML contracts
@@ -40,63 +41,14 @@ SET st.step_order = $step_order,
     st.completed = $completed
 """
 
-_CYPHER_GET_ACTIVE_SCHEMES = """
-MATCH (c:Character {id: $npc_id})-[:EXECUTES_SCHEME]->(s:Scheme)
+_CYPHER_MARK_SCHEME_DISCOVERED = """
+MATCH (s:Scheme {id: $scheme_id})
 WHERE s.status = 'active'
-RETURN s.id, s.npc_id, s.goal, s.status, s.created_at_game_time
-"""
-
-_CYPHER_GET_ALL_ACTIVE_SCHEMES_WITH_STEPS = """
-MATCH (c:Character)-[:EXECUTES_SCHEME]->(s:Scheme)
-WHERE s.status = 'active'
-OPTIONAL MATCH (s)-[st:SCHEME_STEP]->(:Event)
-RETURN s.id AS scheme_id, s.npc_id AS npc_id, s.goal AS goal,
-       count(st) AS step_count
+SET s.status = 'discovered'
+RETURN s.id AS scheme_id
 """
 
 _DEFAULT_STATUS: str = "active"
-
-
-# ---------------------------------------------------------------------------
-# Read model
-# ---------------------------------------------------------------------------
-
-
-class SchemeRecord(BaseModel):
-    """Graph record representing a Scheme node.
-
-    Attributes:
-        id: Stable scheme node ID.
-        npc_id: NPC that owns (EXECUTES_SCHEME) this scheme.
-        goal: Free-text description of the scheme's covert goal.
-        status: Current lifecycle status (e.g. 'active', 'completed', 'failed').
-        created_at_game_time: Game-tick string when the scheme was created, if set.
-    """
-
-    id: str
-    npc_id: str
-    goal: str
-    status: str | None = None
-    created_at_game_time: str | None = None
-
-
-class ActiveSchemeProgress(BaseModel):
-    """Active scheme plus its current step count, across all NPCs.
-
-    Used by the F1.6 scheme-advance tick to decide which schemes are below the
-    step cap and what the next step_order should be.
-
-    Attributes:
-        scheme_id: Stable scheme node ID.
-        npc_id: NPC that owns the scheme (the covert event's actor/location source).
-        goal: Free-text covert goal (used to template the covert event summary).
-        step_count: Number of existing SCHEME_STEP edges on the scheme.
-    """
-
-    scheme_id: str
-    npc_id: str
-    goal: str
-    step_count: int
 
 
 # ---------------------------------------------------------------------------
@@ -175,72 +127,26 @@ async def add_scheme_step(
         await tx.commit()
 
 
-# ---------------------------------------------------------------------------
-# Read function — used by the cap check in scheming_engine
-# ---------------------------------------------------------------------------
-
-
-async def get_active_schemes(
+async def mark_scheme_discovered(
     session: AsyncSession,
-    npc_id: str,
-) -> list[SchemeRecord]:
-    """Fetch all active Scheme nodes for a given NPC.
+    scheme_id: str,
+) -> bool:
+    """Flip an active scheme's status to 'discovered' (idempotent, schema-free).
 
-    Returns an empty list when the NPC has no EXECUTES_SCHEME edges to Scheme
-    nodes with status='active'.
+    Only an 'active' scheme transitions; calling on an already-discovered or
+    missing scheme is a no-op.
 
     Args:
         session: Active Neo4j async session.
-        npc_id: Character node ID to query.
+        scheme_id: Scheme node ID to mark discovered.
 
     Returns:
-        List of SchemeRecord instances (may be empty).
+        True if the scheme transitioned active→discovered, else False.
 
     Raises:
         neo4j.exceptions.Neo4jError: On graph connectivity or query failure.
     """
-    result = await session.run(_CYPHER_GET_ACTIVE_SCHEMES, npc_id=npc_id)
-    records: list[SchemeRecord] = []
-    async for row in result:
-        data = row.data()
-        records.append(
-            SchemeRecord(
-                id=data["s.id"],
-                npc_id=data["s.npc_id"],
-                goal=data["s.goal"],
-                status=data.get("s.status"),
-                created_at_game_time=data.get("s.created_at_game_time"),
-            )
-        )
-    return records
-
-
-async def get_all_active_schemes_with_steps(
-    session: AsyncSession,
-) -> list[ActiveSchemeProgress]:
-    """Fetch every active Scheme (across all NPCs) with its current step count.
-
-    Returns an empty list when no active schemes exist.
-
-    Args:
-        session: Active Neo4j async session.
-
-    Returns:
-        List of ActiveSchemeProgress (may be empty).
-
-    Raises:
-        neo4j.exceptions.Neo4jError: On graph connectivity or query failure.
-    """
-    result = await session.run(_CYPHER_GET_ALL_ACTIVE_SCHEMES_WITH_STEPS)
-    records: list[ActiveSchemeProgress] = []
-    async for row in result:
-        data = row.data()
-        records.append(
-            ActiveSchemeProgress(
-                scheme_id=data["scheme_id"],
-                npc_id=data["npc_id"],
-                goal=data["goal"],
-                step_count=int(data["step_count"]),
-            )
-        )
-    return records
+    result = await session.run(_CYPHER_MARK_SCHEME_DISCOVERED, scheme_id=scheme_id)
+    record = await result.single()
+    await result.consume()
+    return record is not None

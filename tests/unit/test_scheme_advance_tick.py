@@ -14,7 +14,7 @@ import pytest
 
 from npc_engine.engines.scheming import scheme_advance_tick as mod
 from npc_engine.engines.scheming.scheme_advance_tick import SchemeAdvanceTick
-from npc_engine.graph.scheme_writer import ActiveSchemeProgress
+from npc_engine.graph.scheme_reader import ActiveSchemeProgress
 
 
 def _settings(interval: int = 5, max_steps: int = 5, max_per_tick: int = 10) -> Any:

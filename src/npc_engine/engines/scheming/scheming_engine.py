@@ -17,12 +17,8 @@ from neo4j import AsyncSession
 from pydantic import BaseModel
 
 from npc_engine.config import Settings
-from npc_engine.graph.scheme_writer import (
-    SchemeRecord,
-    add_scheme_step,
-    get_active_schemes,
-    upsert_scheme,
-)
+from npc_engine.graph.scheme_reader import SchemeRecord, get_active_schemes
+from npc_engine.graph.scheme_writer import add_scheme_step, upsert_scheme
 
 # ---------------------------------------------------------------------------
 # Pydantic input/output models

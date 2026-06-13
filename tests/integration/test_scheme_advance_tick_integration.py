@@ -19,10 +19,8 @@ from neo4j import AsyncGraphDatabase
 from npc_engine.api.dependencies_infra import get_type_registry
 from npc_engine.config import get_settings
 from npc_engine.engines.scheming.scheme_advance_tick import SchemeAdvanceTick
-from npc_engine.graph.scheme_writer import (
-    get_all_active_schemes_with_steps,
-    upsert_scheme,
-)
+from npc_engine.graph.scheme_reader import get_all_active_schemes_with_steps
+from npc_engine.graph.scheme_writer import upsert_scheme
 
 
 def _uid(prefix: str) -> str:
