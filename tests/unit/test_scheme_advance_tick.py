@@ -49,8 +49,9 @@ def _patch(monkeypatch, recorder: _Recorder, schemes: list[ActiveSchemeProgress]
         # that records the upsert. We instead capture via validate_node_write below.
         await fn(_FakeTx(recorder))
 
-    async def _add_step(*, session: Any, scheme_id: str, event_id: str,
-                        step_order: int, completed: bool) -> None:
+    async def _add_step(*, scheme_id: str, event_id: str,
+                        step_order: int, completed: bool,
+                        session: Any = None, tx: Any = None) -> None:
         recorder.steps.append({
             "scheme_id": scheme_id, "event_id": event_id,
             "step_order": step_order, "completed": completed,
@@ -162,3 +163,67 @@ async def test_per_tick_cap_limits_advances(monkeypatch) -> None:
 
     assert result["advanced"] == 2
     assert len(rec.steps) == 2
+
+
+# ---------------------------------------------------------------------------
+# SEV-01 atomicity regression: Event mint + SCHEME_STEP must share one tx
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_event_and_step_share_single_run_in_tx_call(monkeypatch) -> None:
+    """SEV-01: upsert_event AND add_scheme_step must be called inside the SAME
+    run_in_tx invocation. If add_scheme_step is called outside the tx closure,
+    a partial failure leaves an orphan Event with no SCHEME_STEP link.
+
+    This test verifies atomicity by counting run_in_tx invocations: there must
+    be exactly ONE call per scheme advance, and both upsert_event and
+    add_scheme_step must be called within that single closure.
+    """
+    tx_call_count: list[int] = [0]
+    upsert_calls: list[Any] = []
+    step_calls: list[Any] = []
+
+    async def _get_all(session: Any) -> list[ActiveSchemeProgress]:
+        return [_scheme("s1", "lira", 0)]
+
+    async def _get_loc(session: Any, npc_id: str) -> str | None:
+        return "tavern"
+
+    async def _run_in_tx(session: Any, fn: Any) -> None:
+        tx_call_count[0] += 1
+        class _Tx:
+            pass
+        await fn(_Tx())
+
+    async def _upsert_event(*, tx: Any, event: Any) -> None:
+        upsert_calls.append(event)
+
+    async def _add_step(*, scheme_id: str, event_id: str,
+                        step_order: int, completed: bool,
+                        session: Any = None, tx: Any = None) -> None:
+        step_calls.append({"scheme_id": scheme_id, "event_id": event_id,
+                           "step_order": step_order, "completed": completed})
+
+    def _validate(registry: Any, node_type: str, props: dict[str, Any]) -> dict[str, Any]:
+        return props
+
+    monkeypatch.setattr(mod, "get_all_active_schemes_with_steps", _get_all)
+    monkeypatch.setattr(mod, "get_npc_location_id", _get_loc)
+    monkeypatch.setattr(mod, "run_in_tx", _run_in_tx)
+    monkeypatch.setattr(mod, "upsert_event", _upsert_event)
+    monkeypatch.setattr(mod, "add_scheme_step", _add_step)
+    monkeypatch.setattr(mod, "validate_node_write", _validate)
+
+    adapter = SchemeAdvanceTick(settings=_settings(interval=1), registry=_registry())
+    result = await adapter.run_tick(session=object(), tick_id=1)
+
+    assert result["advanced"] == 1
+    # Exactly one tx per advance — no second tx for the step link.
+    assert tx_call_count[0] == 1, (
+        f"Expected 1 run_in_tx call (atomic), got {tx_call_count[0]}. "
+        "add_scheme_step must be inside the same tx closure as upsert_event."
+    )
+    # Both operations must have fired.
+    assert len(upsert_calls) == 1, "upsert_event must have been called"
+    assert len(step_calls) == 1, "add_scheme_step must have been called"

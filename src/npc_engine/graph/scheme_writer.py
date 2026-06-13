@@ -7,13 +7,17 @@ Purpose: Upserts Scheme nodes, EXECUTES_SCHEME edges from Character to Scheme,
 Does NOT: call LLMs, import from engines layer, derive scheme content, run read
           queries, or manage transaction lifecycle beyond what callers provide.
 Dependencies injected: AsyncSession (per call — stateless, no constructor state).
+         ``add_scheme_step`` also accepts ``AsyncTransaction`` directly so callers
+         that need atomic Event+Step writes (scheme_advance_tick) can share one tx.
 Used by: engines/scheming/scheming_engine.py, engines/scheming/scheme_advance_tick.py,
          engines/investigation/scheme_detection_tick.py.
 """
 
 from __future__ import annotations
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
+
+from npc_engine.graph.transaction_coordinator import run_in_tx
 
 # ---------------------------------------------------------------------------
 # Cypher constants — use labels/edge names from type_registry YAML contracts
@@ -67,6 +71,8 @@ async def upsert_scheme(
     """Upsert a Scheme node and attach the EXECUTES_SCHEME edge from the Character.
 
     Uses MERGE keyed on scheme_id so the operation is idempotent.
+    The write runs inside a single explicit transaction via run_in_tx so it is
+    durably committed (SEV-01 L2-08 fix).
 
     Args:
         session: Active Neo4j async session.
@@ -79,8 +85,7 @@ async def upsert_scheme(
     Raises:
         neo4j.exceptions.Neo4jError: On graph connectivity or query failure.
     """
-    tx = await session.begin_transaction()
-    async with tx:
+    async def _work(tx: AsyncTransaction) -> None:
         await tx.run(
             _CYPHER_UPSERT_SCHEME,
             scheme_id=scheme_id,
@@ -90,33 +95,47 @@ async def upsert_scheme(
             created_at_game_time=str(tick),
             started_at_tick=tick,
         )
-        await tx.commit()
+
+    await run_in_tx(session, _work)
 
 
 async def add_scheme_step(
-    session: AsyncSession,
+    *,
     scheme_id: str,
     event_id: str,
     step_order: int,
     completed: bool,
+    session: AsyncSession | None = None,
+    tx: AsyncTransaction | None = None,
 ) -> None:
     """Add or update a SCHEME_STEP edge from a Scheme node to an Event node.
 
     Uses MERGE so repeated calls with the same (scheme_id, event_id) are idempotent;
     step_order and completed are always SET to the provided values.
 
+    Callers must supply exactly one of ``tx`` or ``session``:
+    - ``tx``: write runs inside the caller's existing transaction (atomic with other
+      writes, e.g. the paired upsert_event call in scheme_advance_tick — SEV-01 L2-07).
+    - ``session``: a new transaction is opened and committed by this function.
+
     Args:
-        session: Active Neo4j async session.
         scheme_id: Scheme node ID (source of the SCHEME_STEP edge).
         event_id: Event node ID (destination of the SCHEME_STEP edge).
         step_order: Ordinal position of this step in the scheme sequence.
         completed: Whether this step has been completed.
+        session: Active Neo4j async session (standalone callers).
+        tx: Caller-owned open transaction (atomic callers).
 
     Raises:
+        ValueError: If neither or both of ``tx`` and ``session`` are provided.
         neo4j.exceptions.Neo4jError: On graph connectivity or query failure.
     """
-    tx = await session.begin_transaction()
-    async with tx:
+    if tx is not None and session is not None:
+        raise ValueError("Provide tx OR session, not both.")
+    if tx is None and session is None:
+        raise ValueError("One of tx or session must be provided.")
+
+    if tx is not None:
         await tx.run(
             _CYPHER_ADD_SCHEME_STEP,
             scheme_id=scheme_id,
@@ -124,7 +143,18 @@ async def add_scheme_step(
             step_order=step_order,
             completed=completed,
         )
-        await tx.commit()
+        return
+
+    async def _work(inner_tx: AsyncTransaction) -> None:
+        await inner_tx.run(
+            _CYPHER_ADD_SCHEME_STEP,
+            scheme_id=scheme_id,
+            event_id=event_id,
+            step_order=step_order,
+            completed=completed,
+        )
+
+    await run_in_tx(session, _work)  # type: ignore[arg-type]
 
 
 async def mark_scheme_discovered(
@@ -134,7 +164,8 @@ async def mark_scheme_discovered(
     """Flip an active scheme's status to 'discovered' (idempotent, schema-free).
 
     Only an 'active' scheme transitions; calling on an already-discovered or
-    missing scheme is a no-op.
+    missing scheme is a no-op. The write runs inside an explicit transaction via
+    run_in_tx (SEV-01 L2-05 fix — previously used bare session.run auto-commit).
 
     Args:
         session: Active Neo4j async session.
@@ -146,7 +177,13 @@ async def mark_scheme_discovered(
     Raises:
         neo4j.exceptions.Neo4jError: On graph connectivity or query failure.
     """
-    result = await session.run(_CYPHER_MARK_SCHEME_DISCOVERED, scheme_id=scheme_id)
-    record = await result.single()
-    await result.consume()
-    return record is not None
+    found: list[bool] = [False]
+
+    async def _work(tx: AsyncTransaction) -> None:
+        result = await tx.run(_CYPHER_MARK_SCHEME_DISCOVERED, scheme_id=scheme_id)
+        record = await result.single()
+        await result.consume()
+        found[0] = record is not None
+
+    await run_in_tx(session, _work)
+    return found[0]

@@ -102,17 +102,19 @@ class SchemeAdvanceTick:
         event_id = uuid4().hex
         event = self._build_event(scheme, event_id, next_order, location_id, tick_id)
 
+        # SEV-01 L2-07: mint Event AND link SCHEME_STEP atomically in one tx so a
+        # failure between the two cannot leave an orphan Event with no step link.
         async def _emit(tx: AsyncTransaction) -> None:
             await upsert_event(tx=tx, event=event)
+            await add_scheme_step(
+                tx=tx,
+                scheme_id=scheme.scheme_id,
+                event_id=event_id,
+                step_order=next_order,
+                completed=True,
+            )
 
         await run_in_tx(session, _emit)
-        await add_scheme_step(
-            session=session,
-            scheme_id=scheme.scheme_id,
-            event_id=event_id,
-            step_order=next_order,
-            completed=True,
-        )
         return True
 
     def _build_event(
@@ -133,5 +135,7 @@ class SchemeAdvanceTick:
             tick_id=tick_id,
             now_iso=datetime.now(timezone.utc).isoformat(),
         )
-        validated = validate_node_write(self._registry, _EVENT_NODE_TYPE, props)
+        # .model_dump() is the only place CovertEventProps crosses into graph/ —
+        # validate_node_write accepts dict[str, Any] (SEV-03 L3-13).
+        validated = validate_node_write(self._registry, _EVENT_NODE_TYPE, props.model_dump())
         return self._registry.node_models[_EVENT_NODE_TYPE](**validated)
