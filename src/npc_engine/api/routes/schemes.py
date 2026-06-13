@@ -10,19 +10,30 @@ Used by: npc_engine.api.router_registry (registered at API_V1_PREFIX).
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, Depends
 from neo4j import AsyncSession
+from pydantic import BaseModel
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.route_helpers import OkEnvelope, ok_response
-from npc_engine.graph.scheme_reader import get_schemes_with_steps_for_npc
+from npc_engine.graph.scheme_reader import SchemeWithSteps, get_schemes_with_steps_for_npc
 
 router = APIRouter(prefix="/npc", tags=["schemes"])
 
 
-@router.get("/{npc_id}/schemes", response_model=OkEnvelope[dict[str, Any]])
+class SchemesPayload(BaseModel):
+    """Typed response payload for GET /npc/{id}/schemes (SEV-03 L3-15).
+
+    Attributes:
+        npc_id: The queried NPC's ID.
+        schemes: All schemes (any status) with their ordered covert steps.
+    """
+
+    npc_id: str
+    schemes: list[SchemeWithSteps]
+
+
+@router.get("/{npc_id}/schemes", response_model=OkEnvelope[SchemesPayload])
 async def get_npc_schemes(
     npc_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -34,12 +45,11 @@ async def get_npc_schemes(
         session: Scoped Neo4j session injected by FastAPI.
 
     Returns:
-        JSON envelope with ``npc_id`` and ``schemes`` — a list of objects each
-        carrying scheme_id, goal, status, discovered, and an ordered steps list.
+        JSON envelope wrapping SchemesPayload with ``npc_id`` and ``schemes`` —
+        a list of objects each carrying scheme_id, goal, status, discovered, and
+        an ordered steps list. Typed as OkEnvelope[SchemesPayload] so OpenAPI
+        clients receive a real schema (SEV-03 L3-15).
     """
     schemes = await get_schemes_with_steps_for_npc(session, npc_id=npc_id)
-    payload = {
-        "npc_id": npc_id,
-        "schemes": [scheme.model_dump() for scheme in schemes],
-    }
-    return ok_response(payload)
+    payload = SchemesPayload(npc_id=npc_id, schemes=schemes)
+    return ok_response(payload.model_dump())

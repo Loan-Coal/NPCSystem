@@ -13,22 +13,33 @@ Used by: engines/scheming/scheming_engine.py, engines/scheming/scheme_advance_ti
 
 from __future__ import annotations
 
+from typing import Literal
+
 from neo4j import AsyncSession
 from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
-# Cypher constants
+# Status type — enforces the fixed lifecycle set (SEV-03 L3-08)
 # ---------------------------------------------------------------------------
+
+SchemeStatus = Literal["active", "discovered", "completed"]
+
+# ---------------------------------------------------------------------------
+# Cypher constants — use named status constants, never raw string literals
+# ---------------------------------------------------------------------------
+
+_ACTIVE_STATUS: str = "active"
+_DISCOVERED_STATUS: str = "discovered"
 
 _CYPHER_GET_ACTIVE_SCHEMES = """
 MATCH (c:Character {id: $npc_id})-[:EXECUTES_SCHEME]->(s:Scheme)
-WHERE s.status = 'active'
+WHERE s.status = $status
 RETURN s.id, s.npc_id, s.goal, s.status, s.created_at_game_time
 """
 
 _CYPHER_GET_ALL_ACTIVE_SCHEMES_WITH_STEPS = """
 MATCH (c:Character)-[:EXECUTES_SCHEME]->(s:Scheme)
-WHERE s.status = 'active'
+WHERE s.status = $status
 OPTIONAL MATCH (s)-[st:SCHEME_STEP]->(:Event)
 RETURN s.id AS scheme_id, s.npc_id AS npc_id, s.goal AS goal,
        count(st) AS step_count
@@ -38,7 +49,7 @@ RETURN s.id AS scheme_id, s.npc_id AS npc_id, s.goal AS goal,
 # a location with another character (a potential witness to the covert activity).
 _CYPHER_GET_DISCOVERABLE_SCHEME_IDS = """
 MATCH (c:Character)-[:EXECUTES_SCHEME]->(s:Scheme)
-WHERE s.status = 'active'
+WHERE s.status = $status
 OPTIONAL MATCH (s)-[st:SCHEME_STEP]->(:Event)
 WITH s, c, count(st) AS step_count
 WHERE step_count >= $min_steps
@@ -56,8 +67,6 @@ RETURN s.id AS scheme_id, s.goal AS goal, s.status AS status,
        collect({step_order: st.step_order, completed: st.completed, summary: e.summary}) AS steps
 """
 
-_DISCOVERED_STATUS: str = "discovered"
-
 
 # ---------------------------------------------------------------------------
 # Read models
@@ -71,14 +80,14 @@ class SchemeRecord(BaseModel):
         id: Stable scheme node ID.
         npc_id: NPC that owns (EXECUTES_SCHEME) this scheme.
         goal: Free-text description of the scheme's covert goal.
-        status: Current lifecycle status (e.g. 'active', 'discovered', 'completed').
+        status: Current lifecycle status ('active', 'discovered', or 'completed').
         created_at_game_time: Game-tick string when the scheme was created, if set.
     """
 
     id: str
     npc_id: str
     goal: str
-    status: str | None = None
+    status: SchemeStatus | None = None
     created_at_game_time: str | None = None
 
 
@@ -121,14 +130,14 @@ class SchemeWithSteps(BaseModel):
     Attributes:
         scheme_id: Stable scheme node ID.
         goal: Free-text covert goal.
-        status: Lifecycle status ('active', 'discovered', ...).
+        status: Lifecycle status ('active', 'discovered', or 'completed').
         discovered: True when status == 'discovered' (surfaced to the player).
         steps: Ordered covert steps that have manifested so far.
     """
 
     scheme_id: str
     goal: str
-    status: str | None = None
+    status: SchemeStatus | None = None
     discovered: bool = False
     steps: list[SchemeStepView] = []
 
@@ -157,7 +166,7 @@ async def get_active_schemes(
     Raises:
         neo4j.exceptions.Neo4jError: On graph connectivity or query failure.
     """
-    result = await session.run(_CYPHER_GET_ACTIVE_SCHEMES, npc_id=npc_id)
+    result = await session.run(_CYPHER_GET_ACTIVE_SCHEMES, npc_id=npc_id, status=_ACTIVE_STATUS)
     records: list[SchemeRecord] = []
     async for row in result:
         data = row.data()
@@ -189,7 +198,7 @@ async def get_all_active_schemes_with_steps(
     Raises:
         neo4j.exceptions.Neo4jError: On graph connectivity or query failure.
     """
-    result = await session.run(_CYPHER_GET_ALL_ACTIVE_SCHEMES_WITH_STEPS)
+    result = await session.run(_CYPHER_GET_ALL_ACTIVE_SCHEMES_WITH_STEPS, status=_ACTIVE_STATUS)
     records: list[ActiveSchemeProgress] = []
     async for row in result:
         data = row.data()
@@ -223,7 +232,9 @@ async def get_discoverable_scheme_ids(
     Raises:
         neo4j.exceptions.Neo4jError: On graph connectivity or query failure.
     """
-    result = await session.run(_CYPHER_GET_DISCOVERABLE_SCHEME_IDS, min_steps=min_steps)
+    result = await session.run(
+        _CYPHER_GET_DISCOVERABLE_SCHEME_IDS, min_steps=min_steps, status=_ACTIVE_STATUS
+    )
     return [row.data()["scheme_id"] async for row in result]
 
 

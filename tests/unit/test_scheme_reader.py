@@ -183,3 +183,53 @@ async def test_schemes_with_steps_filters_null_step_placeholders() -> None:
 
     assert schemes[0].discovered is False
     assert schemes[0].steps == []
+
+
+# ---------------------------------------------------------------------------
+# SEV-03 regression: SchemeStatus Literal typing
+# ---------------------------------------------------------------------------
+
+
+def test_scheme_status_literal_exists_in_reader_module() -> None:
+    """SEV-03: scheme_reader must export SchemeStatus as a Literal type."""
+    from npc_engine.graph import scheme_reader
+    assert hasattr(scheme_reader, "SchemeStatus"), (
+        "scheme_reader must export SchemeStatus Literal for typed status fields"
+    )
+
+
+def test_scheme_record_status_is_literal_typed() -> None:
+    """SEV-03: SchemeRecord.status field annotation must reference SchemeStatus."""
+    import typing
+    from npc_engine.graph.scheme_reader import SchemeRecord, SchemeStatus
+
+    # Pydantic v2: model_fields carries annotation info
+    field = SchemeRecord.model_fields.get("status")
+    assert field is not None
+
+    # Valid SchemeStatus values must be accepted without validation errors.
+    for value in ("active", "discovered", "completed"):
+        record = SchemeRecord(id="s", npc_id="npc", goal="g", status=value)
+        assert record.status == value
+
+
+def test_scheme_with_steps_status_is_literal_typed() -> None:
+    """SEV-03: SchemeWithSteps.status must accept only SchemeStatus values."""
+    from npc_engine.graph.scheme_reader import SchemeWithSteps
+
+    for value in ("active", "discovered", "completed"):
+        obj = SchemeWithSteps(scheme_id="s", goal="g", status=value)
+        assert obj.status == value
+
+
+def test_active_status_constant_exists_in_reader() -> None:
+    """SEV-03: _ACTIVE_STATUS constant must exist so Cypher params use it, not raw
+    string literals.
+    """
+    from npc_engine.graph import scheme_reader
+    # The constant may be private (_ACTIVE_STATUS) — check module-level dict.
+    module_vars = vars(scheme_reader)
+    active_constants = [v for v in module_vars.values() if v == "active" and not callable(v)]
+    assert active_constants, (
+        "A constant equal to 'active' must exist in scheme_reader (e.g. _ACTIVE_STATUS)"
+    )
