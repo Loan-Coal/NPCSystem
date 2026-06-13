@@ -99,6 +99,23 @@ async def upsert_scheme(
     await run_in_tx(session, _work)
 
 
+async def _run_add_scheme_step(
+    runner: AsyncSession | AsyncTransaction,
+    scheme_id: str,
+    event_id: str,
+    step_order: int,
+    completed: bool,
+) -> None:
+    """Run the SCHEME_STEP MERGE on a session or transaction runner."""
+    await runner.run(
+        _CYPHER_ADD_SCHEME_STEP,
+        scheme_id=scheme_id,
+        event_id=event_id,
+        step_order=step_order,
+        completed=completed,
+    )
+
+
 async def add_scheme_step(
     *,
     scheme_id: str,
@@ -108,27 +125,21 @@ async def add_scheme_step(
     session: AsyncSession | None = None,
     tx: AsyncTransaction | None = None,
 ) -> None:
-    """Add or update a SCHEME_STEP edge from a Scheme node to an Event node.
+    """Add or update an idempotent SCHEME_STEP edge (Scheme -> Event).
 
-    Uses MERGE so repeated calls with the same (scheme_id, event_id) are idempotent;
-    step_order and completed are always SET to the provided values.
-
-    Callers must supply exactly one of ``tx`` or ``session``:
-    - ``tx``: write runs inside the caller's existing transaction (atomic with other
-      writes, e.g. the paired upsert_event call in scheme_advance_tick — SEV-01 L2-07).
-    - ``session``: a new transaction is opened and committed by this function.
+    Supply exactly one of ``tx`` (the write joins the caller's transaction — atomic with
+    the paired upsert_event in scheme_advance_tick) or ``session`` (opens+commits its own).
 
     Args:
-        scheme_id: Scheme node ID (source of the SCHEME_STEP edge).
-        event_id: Event node ID (destination of the SCHEME_STEP edge).
+        scheme_id: Scheme node ID (edge source).
+        event_id: Event node ID (edge destination).
         step_order: Ordinal position of this step in the scheme sequence.
         completed: Whether this step has been completed.
         session: Active Neo4j async session (standalone callers).
         tx: Caller-owned open transaction (atomic callers).
 
     Raises:
-        ValueError: If neither or both of ``tx`` and ``session`` are provided.
-        neo4j.exceptions.Neo4jError: On graph connectivity or query failure.
+        ValueError: If neither or both of ``tx``/``session`` are provided.
     """
     if tx is not None and session is not None:
         raise ValueError("Provide tx OR session, not both.")
@@ -136,23 +147,11 @@ async def add_scheme_step(
         raise ValueError("One of tx or session must be provided.")
 
     if tx is not None:
-        await tx.run(
-            _CYPHER_ADD_SCHEME_STEP,
-            scheme_id=scheme_id,
-            event_id=event_id,
-            step_order=step_order,
-            completed=completed,
-        )
+        await _run_add_scheme_step(tx, scheme_id, event_id, step_order, completed)
         return
 
     async def _work(inner_tx: AsyncTransaction) -> None:
-        await inner_tx.run(
-            _CYPHER_ADD_SCHEME_STEP,
-            scheme_id=scheme_id,
-            event_id=event_id,
-            step_order=step_order,
-            completed=completed,
-        )
+        await _run_add_scheme_step(inner_tx, scheme_id, event_id, step_order, completed)
 
     await run_in_tx(session, _work)  # type: ignore[arg-type]
 
