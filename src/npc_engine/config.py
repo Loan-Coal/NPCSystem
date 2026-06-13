@@ -190,6 +190,14 @@ class Settings(BaseSettings):
     # EXP-229: max concurrent active schemes a single NPC may run (covert-goal cap, DEC-104).
     MAX_ACTIVE_SCHEMES_PER_NPC: int = Field(default=2, ge=1, le=20)
 
+    # F1.6 / DEC-107 (Option A): scheme auto-advance cadence + caps.
+    # Advance active schemes once every N ticks (self-gated in SchemeAdvanceTick).
+    SCHEME_ADVANCE_TICK_INTERVAL: int = Field(default=5, ge=1, le=1000)
+    # Maximum SCHEME_STEP events a single scheme may accrue before it stops advancing.
+    MAX_SCHEME_STEPS: int = Field(default=5, ge=1, le=100)
+    # Cap on how many schemes advance in a single tick (bounds covert-event creation).
+    SCHEME_ADVANCE_MAX_PER_TICK: int = Field(default=10, ge=1, le=100)
+
     # EXP-230: max dialogue turns persisted per (npc, player) session across restarts.
     MAX_PERSISTED_SESSION_TURNS: int = Field(default=20, ge=1, le=500)
 

@@ -46,6 +46,14 @@ WHERE s.status = 'active'
 RETURN s.id, s.npc_id, s.goal, s.status, s.created_at_game_time
 """
 
+_CYPHER_GET_ALL_ACTIVE_SCHEMES_WITH_STEPS = """
+MATCH (c:Character)-[:EXECUTES_SCHEME]->(s:Scheme)
+WHERE s.status = 'active'
+OPTIONAL MATCH (s)-[st:SCHEME_STEP]->(:Event)
+RETURN s.id AS scheme_id, s.npc_id AS npc_id, s.goal AS goal,
+       count(st) AS step_count
+"""
+
 _DEFAULT_STATUS: str = "active"
 
 
@@ -70,6 +78,25 @@ class SchemeRecord(BaseModel):
     goal: str
     status: str | None = None
     created_at_game_time: str | None = None
+
+
+class ActiveSchemeProgress(BaseModel):
+    """Active scheme plus its current step count, across all NPCs.
+
+    Used by the F1.6 scheme-advance tick to decide which schemes are below the
+    step cap and what the next step_order should be.
+
+    Attributes:
+        scheme_id: Stable scheme node ID.
+        npc_id: NPC that owns the scheme (the covert event's actor/location source).
+        goal: Free-text covert goal (used to template the covert event summary).
+        step_count: Number of existing SCHEME_STEP edges on the scheme.
+    """
+
+    scheme_id: str
+    npc_id: str
+    goal: str
+    step_count: int
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +210,37 @@ async def get_active_schemes(
                 goal=data["s.goal"],
                 status=data.get("s.status"),
                 created_at_game_time=data.get("s.created_at_game_time"),
+            )
+        )
+    return records
+
+
+async def get_all_active_schemes_with_steps(
+    session: AsyncSession,
+) -> list[ActiveSchemeProgress]:
+    """Fetch every active Scheme (across all NPCs) with its current step count.
+
+    Returns an empty list when no active schemes exist.
+
+    Args:
+        session: Active Neo4j async session.
+
+    Returns:
+        List of ActiveSchemeProgress (may be empty).
+
+    Raises:
+        neo4j.exceptions.Neo4jError: On graph connectivity or query failure.
+    """
+    result = await session.run(_CYPHER_GET_ALL_ACTIVE_SCHEMES_WITH_STEPS)
+    records: list[ActiveSchemeProgress] = []
+    async for row in result:
+        data = row.data()
+        records.append(
+            ActiveSchemeProgress(
+                scheme_id=data["scheme_id"],
+                npc_id=data["npc_id"],
+                goal=data["goal"],
+                step_count=int(data["step_count"]),
             )
         )
     return records

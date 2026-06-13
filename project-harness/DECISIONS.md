@@ -1272,7 +1272,21 @@ rationale as the `left_panel.py` waiver (DEC-036).
 `make check-rules-update`. Each function remains ≤40 lines / ≤3 nesting; only the file-size rule is waived.
 **Consequence:** demo emotion panel can render a contagion pair without an artificial split.
 
-## DEC-107: F1.6 scheme auto-advance — what Event does a per-tick SCHEME_STEP reference? (OPEN)
+## DEC-107: F1.6 scheme auto-advance — what Event does a per-tick SCHEME_STEP reference? (RESOLVED → A)
+**Date:** 2026-06-12 · **Resolved:** 2026-06-13 · **Status:** ✅ ACCEPTED — **Option A** (human call, 2026-06-13).
+**Resolution (A):** Each scheme advance mints a **registry-valid covert Event** and links it as the next
+`SCHEME_STEP`. Sub-decisions made on implementation: (1) `event_type = "scheme_advance"` — a dedicated free
+string (the `event` contract's `event_type` is required but unconstrained), chosen over the originally-floated
+`"discovery"` so covert steps do NOT collide with public disruption/witness rules that key on real event
+types. (2) `is_public = False`, low `severity` (`COVERT_SCHEME_EVENT_SEVERITY`, below the 80 witness/disruption
+thresholds) — covert by construction. (3) Events are created via the validated path
+(`validate_node_write` → `node_models["event"]` → `upsert_event`) **directly**, NOT via `EventHandler.run_tick`,
+so none of run_tick's public side effects (awareness seeding, reputation, world-state conditions, witnessing)
+fire for a covert step. (4) Location = the schemer's current location via `get_npc_location_id`; schemes with
+no locatable owner are skipped that tick. (5) Cadence/caps: `SCHEME_ADVANCE_TICK_INTERVAL` +
+`MAX_SCHEME_STEPS` per scheme + a per-tick advance cap. (6) **Detection-half** stays schema-free: investigation
+flips `Scheme.status` `active`→`discovered` (no new node/edge field). Unblocks F2.3 + G2.2.
+**Original (OPEN) analysis retained below for context.**
 **Date:** 2026-06-12 · **Status:** ⏸ OPEN — needs human design call; F1.6 advance-half DEFERRED until resolved.
 **Context:** F1.6 wants the scheduler to "advance active scheme steps per tick." But `SCHEME_STEP` is an
 edge `(:Scheme)-[:SCHEME_STEP]->(:Event)`, and `graph/scheme_writer.add_scheme_step` does
