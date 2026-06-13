@@ -15,9 +15,11 @@ import pytest
 from npc_engine.graph.scheme_reader import (
     ActiveSchemeProgress,
     SchemeRecord,
+    SchemeWithSteps,
     get_active_schemes,
     get_all_active_schemes_with_steps,
     get_discoverable_scheme_ids,
+    get_schemes_with_steps_for_npc,
 )
 
 
@@ -135,3 +137,49 @@ async def test_get_discoverable_scheme_ids_empty() -> None:
     session.run = AsyncMock(return_value=_AsyncIter([]))
 
     assert await get_discoverable_scheme_ids(session=session, min_steps=5) == []
+
+
+# ---------------------------------------------------------------------------
+# get_schemes_with_steps_for_npc
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_schemes_with_steps_sets_discovered_and_orders_steps() -> None:
+    session = AsyncMock()
+    rows = [
+        _row({
+            "scheme_id": "s1", "goal": "rob", "status": "discovered",
+            "steps": [
+                {"step_order": 2, "completed": True, "summary": "bribed guard"},
+                {"step_order": 1, "completed": True, "summary": "cased vault"},
+            ],
+        }),
+    ]
+    session.run = AsyncMock(return_value=_AsyncIter(rows))
+
+    schemes = await get_schemes_with_steps_for_npc(session=session, npc_id="lira")
+
+    assert len(schemes) == 1
+    assert isinstance(schemes[0], SchemeWithSteps)
+    assert schemes[0].discovered is True
+    # Steps are ordered by step_order regardless of row order.
+    assert [s.step_order for s in schemes[0].steps] == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_schemes_with_steps_filters_null_step_placeholders() -> None:
+    # A scheme with no steps yields one map with a null step_order (OPTIONAL MATCH).
+    session = AsyncMock()
+    rows = [
+        _row({
+            "scheme_id": "s2", "goal": "spy", "status": "active",
+            "steps": [{"step_order": None, "completed": None, "summary": None}],
+        }),
+    ]
+    session.run = AsyncMock(return_value=_AsyncIter(rows))
+
+    schemes = await get_schemes_with_steps_for_npc(session=session, npc_id="vex")
+
+    assert schemes[0].discovered is False
+    assert schemes[0].steps == []

@@ -47,6 +47,17 @@ WHERE other.id <> c.id
 RETURN DISTINCT s.id AS scheme_id
 """
 
+# All schemes for an NPC (any status) with their ordered steps — feeds the F2.3 route.
+_CYPHER_GET_SCHEMES_WITH_STEPS_FOR_NPC = """
+MATCH (c:Character {id: $npc_id})-[:EXECUTES_SCHEME]->(s:Scheme)
+OPTIONAL MATCH (s)-[st:SCHEME_STEP]->(e:Event)
+WITH s, st, e ORDER BY st.step_order
+RETURN s.id AS scheme_id, s.goal AS goal, s.status AS status,
+       collect({step_order: st.step_order, completed: st.completed, summary: e.summary}) AS steps
+"""
+
+_DISCOVERED_STATUS: str = "discovered"
+
 
 # ---------------------------------------------------------------------------
 # Read models
@@ -88,6 +99,38 @@ class ActiveSchemeProgress(BaseModel):
     npc_id: str
     goal: str
     step_count: int
+
+
+class SchemeStepView(BaseModel):
+    """One covert step of a scheme, ordered by step_order.
+
+    Attributes:
+        step_order: 1-based ordinal of the step.
+        completed: Whether the step is marked completed.
+        summary: The covert Event's summary (the in-world deed), if present.
+    """
+
+    step_order: int
+    completed: bool
+    summary: str | None = None
+
+
+class SchemeWithSteps(BaseModel):
+    """A scheme (any status) with its ordered steps and a discovered flag.
+
+    Attributes:
+        scheme_id: Stable scheme node ID.
+        goal: Free-text covert goal.
+        status: Lifecycle status ('active', 'discovered', ...).
+        discovered: True when status == 'discovered' (surfaced to the player).
+        steps: Ordered covert steps that have manifested so far.
+    """
+
+    scheme_id: str
+    goal: str
+    status: str | None = None
+    discovered: bool = False
+    steps: list[SchemeStepView] = []
 
 
 # ---------------------------------------------------------------------------
@@ -182,3 +225,60 @@ async def get_discoverable_scheme_ids(
     """
     result = await session.run(_CYPHER_GET_DISCOVERABLE_SCHEME_IDS, min_steps=min_steps)
     return [row.data()["scheme_id"] async for row in result]
+
+
+def _to_step_views(raw_steps: list[dict]) -> list[SchemeStepView]:
+    """Convert raw step maps to SchemeStepView, dropping null placeholders.
+
+    A scheme with no steps yields a single map whose step_order is None (from the
+    OPTIONAL MATCH); such rows are filtered out.
+
+    Args:
+        raw_steps: List of {step_order, completed, summary} maps from the query.
+
+    Returns:
+        Ordered list of SchemeStepView (may be empty).
+    """
+    views = [
+        SchemeStepView(
+            step_order=int(step["step_order"]),
+            completed=bool(step.get("completed")),
+            summary=step.get("summary"),
+        )
+        for step in raw_steps
+        if step.get("step_order") is not None
+    ]
+    return sorted(views, key=lambda v: v.step_order)
+
+
+async def get_schemes_with_steps_for_npc(
+    session: AsyncSession,
+    npc_id: str,
+) -> list[SchemeWithSteps]:
+    """Fetch all schemes (any status) for an NPC with their ordered steps.
+
+    Args:
+        session: Active Neo4j async session.
+        npc_id: Character node ID whose schemes are requested.
+
+    Returns:
+        List of SchemeWithSteps (may be empty). ``discovered`` is True when the
+        scheme's status is 'discovered'.
+
+    Raises:
+        neo4j.exceptions.Neo4jError: On graph connectivity or query failure.
+    """
+    result = await session.run(_CYPHER_GET_SCHEMES_WITH_STEPS_FOR_NPC, npc_id=npc_id)
+    schemes: list[SchemeWithSteps] = []
+    async for row in result:
+        data = row.data()
+        schemes.append(
+            SchemeWithSteps(
+                scheme_id=data["scheme_id"],
+                goal=data["goal"],
+                status=data.get("status"),
+                discovered=data.get("status") == _DISCOVERED_STATUS,
+                steps=_to_step_views(data.get("steps", [])),
+            )
+        )
+    return schemes
