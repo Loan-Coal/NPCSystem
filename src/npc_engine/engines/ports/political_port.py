@@ -32,3 +32,15 @@ class PoliticalGraphPort(Protocol):
     async def grant_title(self, *, character_id: str, title_id: str, tick: int) -> None:
         """Grant a title to a character via a HOLDS_TITLE edge at the given tick."""
         ...
+
+    async def get_expired_open_agendas(self, *, current_tick: int) -> list[dict[str, Any]]:
+        """Return open agendas whose deadline_tick is at or before the current tick."""
+        ...
+
+    async def get_agenda_votes(self, *, agenda_id: str) -> dict[str, Any]:
+        """Return {"supports": [...], "opposes": [...]} vote rows for an agenda."""
+        ...
+
+    async def set_agenda_status(self, *, agenda_id: str, status: str) -> None:
+        """Set an agenda's resolution status (e.g. 'passed' / 'failed')."""
+        ...

@@ -59,12 +59,17 @@ def get_succession_engine():
 def get_agenda_engine():
     """Create singleton agenda engine for political vote resolution.
 
+    Shares the Neo4j political adapter (Neo4jPoliticalRepository) as the engine's
+    injected PoliticalGraphPort (DEC-122 / SEV-24) so the engine holds no session.
+
     Returns:
         AgendaEngine instance.
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
     from npc_engine.engines.agenda.agenda_engine import AgendaEngine
+    from npc_engine.graph.repositories.political_repository import Neo4jPoliticalRepository
 
-    return AgendaEngine()
+    return AgendaEngine(political_repo=Neo4jPoliticalRepository(get_graph_db()))
 
 
 @lru_cache

@@ -15,7 +15,10 @@ from __future__ import annotations
 from typing import Any
 
 from npc_engine.graph.db import GraphDB
+from npc_engine.graph.political_agenda_writer import set_agenda_status
 from npc_engine.graph.political_queries import (
+    get_agenda_votes,
+    get_expired_open_agendas,
     get_heirs_for_character,
     get_vacant_inheritable_titles,
 )
@@ -50,3 +53,21 @@ class Neo4jPoliticalRepository:
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
             await grant_title(session, character_id=character_id, title_id=title_id, tick=tick)
+
+    async def get_expired_open_agendas(self, *, current_tick: int) -> list[dict[str, Any]]:
+        """Open a session and return open agendas at/after their deadline."""
+        await self._graph_db.connect()
+        async with self._graph_db.get_session() as session:
+            return await get_expired_open_agendas(session, current_tick=current_tick)
+
+    async def get_agenda_votes(self, *, agenda_id: str) -> dict[str, Any]:
+        """Open a session and return an agenda's support/oppose vote rows."""
+        await self._graph_db.connect()
+        async with self._graph_db.get_session() as session:
+            return await get_agenda_votes(session, agenda_id=agenda_id)
+
+    async def set_agenda_status(self, *, agenda_id: str, status: str) -> None:
+        """Open a session and set an agenda's resolution status."""
+        await self._graph_db.connect()
+        async with self._graph_db.get_session() as session:
+            await set_agenda_status(session, agenda_id=agenda_id, status=status)
