@@ -39,16 +39,22 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   (added the first behavioral unit test — was construction-only).
 - **routine** (DONE, `46b7e58`): `RoutineGraphPort` + `Neo4jRoutineRepository`; `RoutineEngine` migrated
   (folds `record_departure` from the location-history domain).
+- **succession** (DONE, `81b0feb`): `PoliticalGraphPort` + `Neo4jPoliticalRepository`; `SuccessionEngine`
+  migrated (extracted `_grant_to_successor` to stay under R006; ratcheted baseline 143->142).
+- **agenda** (DONE, `df6dd0e`): **reuses** the political port/adapter (extended with 3 agenda methods);
+  `AgendaEngine` migrated — the per-graph-domain payoff (one repository, two engines).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.
 
 ## Sequencing note (by actual complexity, not file count)
 The "simple singletons" framing was optimistic: several Wave-1 engines (memory, reputation, player_model) are
 actually *entangled* (inline `MemoryEngine()` construction across routes/handlers; reputation's session-coupled
 `RelationReader` factory + private `_reader` mutation). Process **clean singletons first** (done: need, mood,
-clique, skill, routine; remaining: story_pacing, director, chapter, succession, agenda, emotion,
-knowledge_learning), then build the **shared read-ports** (RelationReadPort, WorldStateReadPort,
-PlayerLocationReadPort, CharacterReadPort) which simplify the entangled engines, then do the entangled ones,
-then Wave 3 (`run_in_tx` coordinators).
+clique, skill, routine, succession, agenda; remaining: story_pacing [needs shared WorldState port],
+emotion, knowledge_learning, memory_consolidation, chapter), then build the **shared read-ports**
+(RelationReadPort, WorldStateReadPort, PlayerLocationReadPort, CharacterReadPort) which simplify the entangled
+engines (director, reputation, player_model), then do the entangled ones (incl. memory), then Wave 3
+(`run_in_tx` coordinators). The political port shows the shared-domain pattern: build it once, extend per
+engine (succession then agenda).
 
 ## Wave order (simple → hard)
 Wave 1: need ✓, mood ✓, clique, memory(+decay_tick), reputation(+tick; builds RelationReadPort),
