@@ -42,12 +42,17 @@ def get_oath_engine():
 def get_succession_engine():
     """Create singleton succession engine for political title inheritance.
 
+    Wires the Neo4j graph adapter (Neo4jPoliticalRepository) as the engine's injected
+    PoliticalGraphPort (DEC-122 / SEV-24) so the engine holds no Neo4j session.
+
     Returns:
         SuccessionEngine instance.
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
     from npc_engine.engines.succession.succession_engine import SuccessionEngine
+    from npc_engine.graph.repositories.political_repository import Neo4jPoliticalRepository
 
-    return SuccessionEngine()
+    return SuccessionEngine(political_repo=Neo4jPoliticalRepository(get_graph_db()))
 
 
 @lru_cache

@@ -79,7 +79,6 @@ R006|src/npc_engine/engines/llm_runtime_config.py::get_config
 R006|src/npc_engine/engines/memory_consolidation/memory_consolidation_engine.py::MemoryConsolidationEngine.consolidate
 R006|src/npc_engine/engines/military/military_battle_service.py::_resolve_one_battle
 R006|src/npc_engine/engines/military/military_resource_service.py::process_resource_yield
-R006|src/npc_engine/engines/mood/mood_contagion_engine.py::MoodContagionEngine.run_tick
 R006|src/npc_engine/engines/need/need_decay_engine.py::NeedDecayEngine.run_tick
 R006|src/npc_engine/engines/planning/goal_former.py::GoalFormer.form_goal
 R006|src/npc_engine/engines/proactive_dialogue/proactive_engine.py::ProactiveDialogueEngine.check_trigger
