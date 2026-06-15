@@ -12,8 +12,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.graph.quest_node_queries import (
     CYPHER_CREATE_QUEST,
     CYPHER_GET_DRAFT_QUESTS,
@@ -37,8 +38,7 @@ async def create_quest(
     Returns:
         The payload dict echoed back with the confirmed quest_id.
     """
-    tx = await session.begin_transaction()
-    async with tx:
+    async def _work(tx: AsyncTransaction) -> None:
         result = await tx.run(
             CYPHER_CREATE_QUEST,
             quest_id=payload["quest_id"],
@@ -55,6 +55,8 @@ async def create_quest(
             source=payload.get("source"),
         )
         await result.consume()
+
+    await run_in_tx(session, _work)
     return payload
 
 

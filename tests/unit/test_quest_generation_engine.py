@@ -103,6 +103,9 @@ class _FakeTx:
         self._session.write_calls.append((query, kwargs))
         return _FakeResult([])
 
+    async def commit(self) -> None:
+        return None
+
 
 # ---------------------------------------------------------------------------
 # Test 1: template_loader loads real YAML files

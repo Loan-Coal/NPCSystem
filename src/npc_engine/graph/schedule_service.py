@@ -13,7 +13,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.graph.schedule_queries import (
     get_character_location_at,
@@ -26,6 +26,7 @@ from npc_engine.graph.schedule_writer import (
     unassign_schedule,
     upsert_schedule,
 )
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.utils.errors import ScheduleNotFoundError
 
 _VALID_TIMES = frozenset({"morning", "midday", "afternoon", "evening", "night"})
@@ -89,9 +90,10 @@ class ScheduleService:
             "created_at": now,
             "last_graph_updated_at": now,
         }
-        tx = await self._session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> None:
             await upsert_schedule(tx, schedule_id=schedule_id, properties=properties)
+
+        await run_in_tx(self._session, _work)
         return properties
 
     async def assign_schedule(self, *, character_id: str, schedule_id: str) -> None:
@@ -104,9 +106,10 @@ class ScheduleService:
         Raises:
             ScheduleAssignmentError: If either node does not exist.
         """
-        tx = await self._session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> None:
             await assign_schedule(tx, character_id=character_id, schedule_id=schedule_id)
+
+        await run_in_tx(self._session, _work)
 
     async def unassign_schedule(self, *, character_id: str) -> None:
         """Remove a Character's FOLLOWS_SCHEDULE edge, if any.
@@ -114,9 +117,10 @@ class ScheduleService:
         Args:
             character_id: ID of the character node.
         """
-        tx = await self._session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> None:
             await unassign_schedule(tx, character_id=character_id)
+
+        await run_in_tx(self._session, _work)
 
     # ------------------------------------------------------------------
     # Queries
