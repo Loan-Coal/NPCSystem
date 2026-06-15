@@ -45,6 +45,25 @@ def check_api_key_secret(value: str, env: str = "dev") -> str:
     return stripped
 
 
+def check_idempotency_enforced(enabled: bool, env: str) -> bool:
+    """Require IDEMPOTENCY_ENFORCE_HEADER outside dev (DEC-111); off = replay-able mutations.
+
+    Args:
+        enabled: Raw IDEMPOTENCY_ENFORCE_HEADER value.
+        env: Current ENV value ("dev", "staging", or "prod").
+    Returns:
+        The flag unchanged when valid.
+    Raises:
+        ValueError: when enabled is False and env is not "dev".
+    """
+    if not enabled and env != "dev":
+        raise ValueError(
+            "IDEMPOTENCY_ENFORCE_HEADER must be true in staging/prod; mutating "
+            "endpoints are replay-able otherwise. Set IDEMPOTENCY_ENFORCE_HEADER=true."
+        )
+    return enabled
+
+
 def check_api_v1_prefix(value: str) -> str:
     """Ensure the API prefix is a stable, non-root absolute path segment.
 

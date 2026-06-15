@@ -16,6 +16,7 @@ from npc_engine.config_validators import (
     check_currency_transfer_limit,
     check_embedding_reconcile_interval,
     check_game_schema_path,
+    check_idempotency_enforced,
     check_idempotency_header_name,
     check_llm_config_path,
     check_positive_idempotency_value,
@@ -312,3 +313,32 @@ def test_check_log_llm_prompts_rejects_true_in_staging() -> None:
 
     with pytest.raises(ValueError, match="LOG_LLM_PROMPTS"):
         check_log_llm_prompts(True, "staging")
+
+
+# ── check_idempotency_enforced (DEC-111) ──────────────────────────────────────
+
+
+def test_check_idempotency_enforced_allows_disabled_in_dev() -> None:
+    """Replay-able mutations are allowed in dev for local convenience."""
+
+    assert check_idempotency_enforced(False, "dev") is False
+
+
+def test_check_idempotency_enforced_allows_enabled_in_prod() -> None:
+    """Enabled passes everywhere."""
+
+    assert check_idempotency_enforced(True, "prod") is True
+
+
+def test_check_idempotency_enforced_rejects_disabled_in_staging() -> None:
+    """Disabled idempotency must hard-fail in staging."""
+
+    with pytest.raises(ValueError, match="IDEMPOTENCY_ENFORCE_HEADER"):
+        check_idempotency_enforced(False, "staging")
+
+
+def test_check_idempotency_enforced_rejects_disabled_in_prod() -> None:
+    """Disabled idempotency must hard-fail in prod."""
+
+    with pytest.raises(ValueError, match="IDEMPOTENCY_ENFORCE_HEADER"):
+        check_idempotency_enforced(False, "prod")

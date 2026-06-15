@@ -10,7 +10,6 @@ Dependencies injected: None.
 from __future__ import annotations
 
 from functools import lru_cache
-import logging
 import os
 from pathlib import Path
 import socket
@@ -25,6 +24,7 @@ from npc_engine.config_validators import (
     check_currency_transfer_limit,
     check_embedding_reconcile_interval,
     check_game_schema_path,
+    check_idempotency_enforced,
     check_idempotency_header_name,
     check_llm_config_path,
     check_neo4j_password,
@@ -268,16 +268,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_production_safety(self) -> "Settings":
-        """Reject the shipped dev API_KEY_SECRET outside dev (L1-04); warn (not
-        error, for back-compat) when idempotency is disabled outside dev (L1-06).
+        """Reject the shipped dev API_KEY_SECRET (L1-04) and disabled idempotency
+        enforcement (DEC-111) outside dev — both are replay/compromise risks in prod.
         """
         check_api_key_secret(self.API_KEY_SECRET, env=self.ENV)
-        if not self.IDEMPOTENCY_ENFORCE_HEADER and self.ENV != "dev":
-            logging.getLogger(__name__).warning(
-                "idempotency_enforcement_disabled env=%s — mutating endpoints are "
-                "replay-able; set IDEMPOTENCY_ENFORCE_HEADER=true in staging/prod",
-                self.ENV,
-            )
+        check_idempotency_enforced(self.IDEMPOTENCY_ENFORCE_HEADER, env=self.ENV)
         return self
 
     @field_validator("API_KEY_SECRET")

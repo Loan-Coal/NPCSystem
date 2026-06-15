@@ -41,7 +41,7 @@
 
 Briefs NOT yet written — generate `FIX-SEV-NN.md` before running `/fix-next` on each (or via `/fix-parallel`
 step 3). Ordered roughly small→large; SEV-15/19/21 are the heavy refactors. Decisions recorded in `DECISIONS.md`.
-- [ ] SEV-13 — Hard-raise idempotency in staging/prod (DEC-111)  (deps: none · files: `config_logging_validators.py`-style sibling or `config_validators.py`, `config.py`, tests)
+- [x] SEV-13 — Hard-raise idempotency in staging/prod (DEC-111)  (deps: none · files: `config_logging_validators.py`-style sibling or `config_validators.py`, `config.py`, tests)
 - [ ] SEV-14 — Move `system_v1_router` under `admin_prefix` `/v1/admin/system/*` (DEC-112)  (deps: none · files: `main.py`/router registry, route tests · INTERFACE change)
 - [ ] SEV-16 — Type `OkEnvelope[T]` payloads for public/SDK routes (DEC-114)  (deps: none · files: `api/routes/*` public set, payload models)
 - [ ] SEV-18 — Trace `event.summary`→LLM; move covert template to `prompts/scheming/` if LLM-bound (DEC-116)  (deps: none · files: `covert_event_factory.py`, maybe `prompts/scheming/`)
