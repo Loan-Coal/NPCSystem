@@ -8,7 +8,8 @@ Purpose: Neo4j-backed repository adapters that implement the engine-layer graph
          backends (DEC-122 / SEV-24).
 Does NOT: contain business/decay logic, call LLMs, or import the engines layer.
 Dependencies injected: GraphDB (per adapter, at the api composition root).
-Public surface: Neo4jNeedRepository, Neo4jMoodRepository, Neo4jGroupRepository.
+Public surface: Neo4jNeedRepository, Neo4jMoodRepository, Neo4jGroupRepository,
+                Neo4jSkillRepository.
 """
 
 from __future__ import annotations
@@ -16,5 +17,11 @@ from __future__ import annotations
 from npc_engine.graph.repositories.group_repository import Neo4jGroupRepository
 from npc_engine.graph.repositories.mood_repository import Neo4jMoodRepository
 from npc_engine.graph.repositories.need_repository import Neo4jNeedRepository
+from npc_engine.graph.repositories.skill_repository import Neo4jSkillRepository
 
-__all__ = ["Neo4jGroupRepository", "Neo4jMoodRepository", "Neo4jNeedRepository"]
+__all__ = [
+    "Neo4jGroupRepository",
+    "Neo4jMoodRepository",
+    "Neo4jNeedRepository",
+    "Neo4jSkillRepository",
+]

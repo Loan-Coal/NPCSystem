@@ -26,12 +26,16 @@ from npc_engine.engines.llm_runtime_config import get_config as get_engine_model
 def get_skill_progression_engine():
     """Create singleton skill progression engine for XP awards on quest completion.
 
+    Wires the Neo4j graph adapter (Neo4jSkillRepository) as the engine's injected
+    SkillGraphPort (DEC-122 / SEV-24) so the engine holds no Neo4j session.
+
     Returns:
         SkillProgressionEngine instance.
     """
     from npc_engine.engines.skill.skill_progression_engine import SkillProgressionEngine
+    from npc_engine.graph.repositories.skill_repository import Neo4jSkillRepository
 
-    return SkillProgressionEngine()
+    return SkillProgressionEngine(skill_repo=Neo4jSkillRepository(get_graph_db()))
 
 
 @lru_cache
