@@ -6,8 +6,9 @@ Purpose: Per-tick need decay for Phase 7.3 Social Simulation.
          If the character is at a location with a SATISFIES_NEED edge,
          the magnitude is added back (net change may be positive or negative).
          Level is clamped to [0, 100] before writing.
-Does NOT: call LLMs, create events, or modify faction/relationship state.
-Dependencies injected: None (stateless, no constructor args).
+Does NOT: call LLMs, create events, modify faction/relationship state, open
+          sessions, or import the graph layer.
+Dependencies injected: NeedGraphPort (graph access) via __init__.
 Used by: npc_engine.scheduler.tick_scheduler
 """
 
@@ -16,10 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from neo4j import AsyncSession
-
-from npc_engine.graph.need_queries import get_all_needs_with_location
-from npc_engine.graph.need_writer import set_need_level
+from npc_engine.engines.need.need_graph_port import NeedGraphPort
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,24 +33,37 @@ class NeedDecayEngine:
     where satisfaction_magnitude comes from the SATISFIES_NEED.magnitude on the
     edge between the character's current LOCATED_AT location and the Need node.
     If the character has no location or no satisfier, satisfaction_magnitude = 0.
+
+    Graph access is injected as a NeedGraphPort (DEC-122 / SEV-24), so the engine
+    holds no Neo4j session; the tick scheduler's ``session`` kwarg is accepted and
+    ignored until the BaseEngine protocol drops it.
     """
+
+    def __init__(self, need_repo: NeedGraphPort) -> None:
+        """Initialise with the injected graph port.
+
+        Args:
+            need_repo: Graph access port (read needs, write levels).
+        """
+        self._need_repo = need_repo
 
     async def run_tick(
         self,
-        session: AsyncSession,
+        *,
         tick_id: int = 0,
+        **_: Any,
     ) -> dict[str, Any]:
         """Decay all needs and apply location-based restoration.
 
         Args:
-            session: Active Neo4j async session.
             tick_id: Current game tick ID.
+            **_: Absorbs the scheduler's ``session`` kwarg (unused; see class docstring).
 
         Returns:
             Dict with keys ``needs_updated`` (total updated) and
             ``needs_critical`` (count that hit level 0 this tick).
         """
-        rows = await get_all_needs_with_location(session)
+        rows = await self._need_repo.get_all_needs_with_location()
 
         needs_updated = 0
         needs_critical = 0
@@ -69,7 +80,7 @@ class NeedDecayEngine:
             if new_level == level:
                 continue
 
-            await set_need_level(session, need_id=need_id, level=new_level)
+            await self._need_repo.set_need_level(need_id=need_id, level=new_level)
             needs_updated += 1
 
             if new_level == _CRITICAL_THRESHOLD:

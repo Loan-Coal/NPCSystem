@@ -75,6 +75,11 @@ Each brief says to sub-phase; `/fix-next` does one item→one commit, so these w
   `(session, …)` signatures preserved (engine call-sites untouched; full session removal is the Track-D facade).
 - [ ] SEV-15 — Adopt full `mypy --strict`; fix all 274 errors / 87 files; flip `make type` (DEC-113).
   Sub-phase by package.
+- [~] SEV-24 — GraphRepository facade: engines depend on per-domain Port Protocols; Neo4j adapters in
+  `graph/repositories/` own the session (DEC-122, follow-on to SEV-21). One engine-domain per commit.
+  **Reference slice DONE** (`need`: NeedGraphPort + Neo4jNeedRepository + NeedDecayEngine migrated).
+  Remaining ~67 engine files migrate per domain; final step removes `session` from `BaseEngine.run_tick` +
+  `tick_scheduler.advance()`.
 
 ## Log-only (ISSUES.md, no brief)
 ISSUE-101 schedule_queries cov · ISSUE-102 intrigue panel behavioral tests · ISSUE-103 135 stale docstrings ·

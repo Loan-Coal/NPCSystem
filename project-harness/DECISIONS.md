@@ -1521,3 +1521,26 @@ Trace result: covert scheme-advance events are linked to a Scheme via `SCHEME_ST
 steps reaches the intrigue-board UI (`/npc/{id}/schemes`) but never the LLM → the no-prompt-strings rule
 does not apply. Documented inline in `covert_event_factory.py`. Re-open if covert events ever get a
 `KNOWS_ABOUT` edge.
+
+## DEC-122: GraphRepository facade — how should engines depend on the graph layer?
+**Date:** 2026-06-15 · **Status:** ✅ ACCEPTED (Track D, started; reference slice landed) · **Brief:** SEV-24
+**Context:** SEV-21 made the graph layer the single transaction owner, but engines still import concrete
+graph functions and receive an `AsyncSession` per `run_tick` (68 files reference `neo4j`). The goal is to
+make the graph layer a swappable boundary (interpose a cache, swap the DB, or split into a graph
+microservice). That requires engines to depend on an abstraction, not on `neo4j` + graph functions.
+**Decision:** Per engine domain, define a small structural **Port Protocol** in the *engines* layer (engines
+own the abstraction — DIP) with domain-typed methods and **no Neo4j types in signatures**. Implement a
+**Neo4j adapter in `graph/repositories/`** that holds the `GraphDB` driver holder, opens a session per
+operation, and delegates to the existing query/writer functions. The adapter conforms to the Port
+**structurally** (no import — avoids the forbidden graph→engines dependency); mypy verifies conformance at the
+api composition root, where the concrete adapter is injected into the (singleton) engine via `__init__`.
+During migration the engine's `run_tick` keeps accepting and ignoring the scheduler's `session=` kwarg
+(via `**_`); the `session` param is removed from the BaseEngine protocol + `advance()` only once every engine
+is migrated (final Track-D step).
+**Why structural-port-in-engines (not a protocol in graph/):** so a future HTTP/microservice or caching
+adapter — living outside `graph/` — can satisfy the same Port without the engine depending on `graph/` at all.
+**Reference slice (DONE 2026-06-15):** `need` domain — `engines/need/need_graph_port.NeedGraphPort` +
+`graph/repositories/need_repository.Neo4jNeedRepository`; `NeedDecayEngine` now injects the port and imports
+no `neo4j`/graph symbol. Remaining ~67 engine files migrate per domain across later sessions.
+**Deferred:** row payloads stay `dict[str, Any]` (behavior-preserving); converting to Pydantic row models is
+folded into the strict-typing pass (SEV-15).
