@@ -13,7 +13,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.common.json_utils import dump_json
 from npc_engine.graph.belief_queries import (
@@ -21,6 +21,7 @@ from npc_engine.graph.belief_queries import (
     CYPHER_UPDATE_CONFIDENCE,
     get_beliefs_for_character,
 )
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.world.time_utils import TimePoint
 
 
@@ -59,8 +60,8 @@ async def create_belief(
         The node ID used (either supplied or generated).
     """
     belief_id = node_id if node_id is not None else str(uuid.uuid4())
-    tx = await session.begin_transaction()
-    async with tx:
+
+    async def _work(tx: AsyncTransaction) -> None:
         await tx.run(
             CYPHER_CREATE_BELIEF,
             belief_id=belief_id,
@@ -69,6 +70,8 @@ async def create_belief(
             created_at_game_time=_game_time_json(game_time),
             character_id=character_id,
         )
+
+    await run_in_tx(session, _work)
     return belief_id
 
 
@@ -104,13 +107,14 @@ async def update_confidence(
         belief_id: ID of the Belief node to update.
         new_confidence: Replacement confidence value (0–100).
     """
-    tx = await session.begin_transaction()
-    async with tx:
+    async def _work(tx: AsyncTransaction) -> None:
         await tx.run(
             CYPHER_UPDATE_CONFIDENCE,
             belief_id=belief_id,
             confidence=new_confidence,
         )
+
+    await run_in_tx(session, _work)
 
 
 async def delete_belief(

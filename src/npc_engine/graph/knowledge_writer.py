@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import hashlib
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
+
+from npc_engine.graph.transaction_coordinator import run_in_tx
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -66,8 +68,8 @@ async def write_belief(
     written on the edge. Returns the stable belief id (truncated SHA-256 of npc_id:content).
     """
     belief_id = hashlib.sha256(f"{npc_id}:{content}".encode()).hexdigest()[:_BELIEF_ID_HASH_LENGTH]
-    tx = await session.begin_transaction()
-    async with tx:  # noqa: SIM117
+
+    async def _work(tx: AsyncTransaction) -> None:
         await tx.run(
             _CYPHER_WRITE_BELIEF_WITH_PROVENANCE,
             belief_id=belief_id,
@@ -80,4 +82,6 @@ async def write_belief(
             is_deception=is_deception,
             deception_goal_id=deception_goal_id,
         )
+
+    await run_in_tx(session, _work)
     return belief_id

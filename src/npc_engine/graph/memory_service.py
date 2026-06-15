@@ -12,7 +12,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.common.json_utils import dump_json
 from npc_engine.graph.memory_queries import (
@@ -21,6 +21,7 @@ from npc_engine.graph.memory_queries import (
     CYPHER_DECAY_VIVIDNESS_WEIGHTED,
     get_memories_for_character,
 )
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.world.time_utils import TimePoint
 
 
@@ -69,8 +70,8 @@ async def create_memory(
     memory_id = node_id if node_id is not None else str(uuid.uuid4())
     game_time_json = _dump_game_time(game_time)
     occurred_json = _dump_game_time(occurred_at_game_time) if occurred_at_game_time is not None else game_time_json
-    tx = await session.begin_transaction()
-    async with tx:
+
+    async def _work(tx: AsyncTransaction) -> None:
         await tx.run(
             CYPHER_CREATE_MEMORY,
             memory_id=memory_id,
@@ -86,6 +87,8 @@ async def create_memory(
             subject_player_id=subject_player_id,
             kind=kind,
         )
+
+    await run_in_tx(session, _work)
     return memory_id
 
 
@@ -134,12 +137,13 @@ async def decay_all_vividness(
     Returns:
         Number of Memory nodes whose vividness was reduced.
     """
-    tx = await session.begin_transaction()
-    async with tx:
+    async def _work(tx: AsyncTransaction) -> int:
         result = await tx.run(CYPHER_DECAY_VIVIDNESS, decay=decay_per_day)
         record = await result.single()
         await result.consume()
         return int(record["affected"]) if record else 0
+
+    return await run_in_tx(session, _work)
 
 
 async def decay_all_vividness_weighted(
@@ -162,8 +166,7 @@ async def decay_all_vividness_weighted(
     Returns:
         Number of Memory nodes whose vividness was reduced.
     """
-    tx = await session.begin_transaction()
-    async with tx:
+    async def _work(tx: AsyncTransaction) -> int:
         result = await tx.run(
             CYPHER_DECAY_VIVIDNESS_WEIGHTED,
             base_decay=base_decay,
@@ -172,6 +175,8 @@ async def decay_all_vividness_weighted(
         record = await result.single()
         await result.consume()
         return int(record["affected"]) if record else 0
+
+    return await run_in_tx(session, _work)
 
 
 async def delete_memory(

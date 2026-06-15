@@ -25,6 +25,9 @@ class _FakeTx:
         self.run_calls.append(params)
         return None
 
+    async def commit(self):
+        return None
+
     async def __aenter__(self):
         return self
 

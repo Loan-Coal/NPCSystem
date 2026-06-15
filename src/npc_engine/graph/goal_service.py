@@ -14,7 +14,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.common.json_utils import dump_json
 from npc_engine.graph.goal_queries import (
@@ -22,6 +22,7 @@ from npc_engine.graph.goal_queries import (
     CYPHER_UPDATE_GOAL_STATUS,
     get_goals_for_character,
 )
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.world.time_utils import TimePoint
 
 
@@ -63,8 +64,7 @@ async def create_goal(
             "time_of_day": game_time.time_of_day,
         }
     )
-    tx = await session.begin_transaction()
-    async with tx:
+    async def _work(tx: AsyncTransaction) -> None:
         await tx.run(
             CYPHER_CREATE_GOAL,
             goal_id=goal_id,
@@ -75,6 +75,8 @@ async def create_goal(
             target_id=target_id or "",
             character_id=character_id,
         )
+
+    await run_in_tx(session, _work)
     return goal_id
 
 
@@ -114,13 +116,14 @@ async def update_goal_status(
         goal_id: ID of the Goal node to update.
         new_status: Replacement status value (active, achieved, or abandoned).
     """
-    tx = await session.begin_transaction()
-    async with tx:
+    async def _work(tx: AsyncTransaction) -> None:
         await tx.run(
             CYPHER_UPDATE_GOAL_STATUS,
             goal_id=goal_id,
             status=new_status,
         )
+
+    await run_in_tx(session, _work)
 
 
 async def delete_goal(
