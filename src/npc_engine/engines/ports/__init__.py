@@ -8,7 +8,8 @@ Purpose: Structural graph-access Protocols organized by graph domain (the engine
          composition root (DEC-122 / SEV-24).
 Does NOT: open sessions, run Cypher, hold state, or import the graph layer.
 Dependencies injected: none (pure interfaces).
-Public surface: NeedGraphPort, MoodGraphPort, GroupGraphPort, SkillGraphPort.
+Public surface: NeedGraphPort, MoodGraphPort, GroupGraphPort, SkillGraphPort,
+                RoutineGraphPort.
 """
 
 from __future__ import annotations
@@ -16,6 +17,13 @@ from __future__ import annotations
 from npc_engine.engines.ports.group_port import GroupGraphPort
 from npc_engine.engines.ports.mood_port import MoodGraphPort
 from npc_engine.engines.ports.need_port import NeedGraphPort
+from npc_engine.engines.ports.routine_port import RoutineGraphPort
 from npc_engine.engines.ports.skill_port import SkillGraphPort
 
-__all__ = ["GroupGraphPort", "MoodGraphPort", "NeedGraphPort", "SkillGraphPort"]
+__all__ = [
+    "GroupGraphPort",
+    "MoodGraphPort",
+    "NeedGraphPort",
+    "RoutineGraphPort",
+    "SkillGraphPort",
+]

@@ -264,10 +264,16 @@ def get_story_pacing_engine() -> StoryPacingEngine:
 def get_routine_engine() -> RoutineEngine:
     """Create singleton routine engine for tick-driven NPC location updates.
 
+    Wires the Neo4j graph adapter (Neo4jRoutineRepository) as the engine's injected
+    RoutineGraphPort (DEC-122 / SEV-24) so the engine holds no Neo4j session.
+
     Returns:
         RoutineEngine instance used by the tick scheduler.
     """
-    return RoutineEngine()
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.routine_repository import Neo4jRoutineRepository
+
+    return RoutineEngine(routine_repo=Neo4jRoutineRepository(get_graph_db()))
 
 
 @lru_cache
