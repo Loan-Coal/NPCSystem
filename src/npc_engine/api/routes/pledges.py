@@ -57,6 +57,23 @@ class BreakPledgeRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class PledgesPayload(BaseModel):
+    """Typed payload for GET /pledges/characters/{character_id} (SEV-16).
+
+    The ``pledges`` group is fixed; individual rows are heterogeneous graph
+    records, so each stays ``dict[str, Any]``.
+    """
+
+    pledges: list[dict[str, Any]]
+
+    model_config = ConfigDict(frozen=True)
+
+
+# ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
 
@@ -92,7 +109,7 @@ async def create_character_pledge(
     return ok_response({"pledger_id": character_id, "pledgee_id": body.pledgee_id, "pledge_type": body.pledge_type})
 
 
-@router.get("/characters/{character_id}", response_model=OkEnvelope[dict[str, Any]])
+@router.get("/characters/{character_id}", response_model=OkEnvelope[PledgesPayload])
 async def list_character_pledges(
     character_id: str,
     active_only: bool = True,
@@ -108,7 +125,7 @@ async def list_character_pledges(
         Envelope with list of pledge dicts.
     """
     pledges = await get_pledges_for_character_svc(session, character_id, active_only=active_only)
-    return ok_response({"pledges": pledges})
+    return ok_response(PledgesPayload(pledges=pledges).model_dump())
 
 
 @router.post("/characters/{character_id}/break", response_model=OkEnvelope[dict[str, Any]])

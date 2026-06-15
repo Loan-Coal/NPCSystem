@@ -20,6 +20,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from neo4j import AsyncSession
+from pydantic import BaseModel, ConfigDict
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.route_helpers import OkEnvelope, ok_response
@@ -28,7 +29,22 @@ from npc_engine.graph.chapter_queries import get_current_chapter
 router = APIRouter(prefix="/chapters", tags=["chapters"])
 
 
-@router.get("/current", response_model=OkEnvelope[dict[str, Any]])
+class ChapterPayload(BaseModel):
+    """Typed response payload for GET /chapters/current (SEV-16).
+
+    Mirrors the fields returned by graph.chapter_queries.get_current_chapter.
+    """
+
+    id: str
+    name: str
+    started_at_tick: int
+    theme: str | None = None
+    status: str
+
+    model_config = ConfigDict(frozen=True)
+
+
+@router.get("/current", response_model=OkEnvelope[ChapterPayload])
 async def get_current_chapter_route(
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
@@ -50,4 +66,4 @@ async def get_current_chapter_route(
     chapter = await get_current_chapter(session)
     if chapter is None:
         raise HTTPException(status_code=404, detail="No open chapter found")
-    return ok_response(chapter)
+    return ok_response(ChapterPayload(**chapter).model_dump())

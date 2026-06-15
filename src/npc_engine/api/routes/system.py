@@ -14,6 +14,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from neo4j import AsyncSession
+from pydantic import BaseModel, ConfigDict
 
 from npc_engine.api.dashboard_models import DashboardConfigView
 from npc_engine.api.dependencies import get_db_session, get_game_schema, get_tick_scheduler, get_type_registry
@@ -21,6 +22,7 @@ from npc_engine.api.dependency_singletons import _llm_adapters_to_close
 from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.config import Settings, get_settings
 from npc_engine.graph.event_feed_queries import get_recent_event_feed
+from npc_engine.scheduler.engine_status_store import EngineStatusRecord
 from npc_engine.scheduler.tick_scheduler import TickScheduler
 from npc_engine.schema.schema_models import SchemaConfig
 from npc_engine.type_registry.contracts import TypeRegistry
@@ -28,6 +30,20 @@ from npc_engine.type_registry.serializer import serialize_registry_snapshot
 from npc_engine.utils.metrics import get_metrics_registry
 
 _DEFAULT_EVENT_LIMIT = 20
+
+
+class EventFeedRow(BaseModel):
+    """Typed row for GET /system/events (SEV-16) — one recent Event node."""
+
+    event_id: str
+    event_type: str
+    label: str
+    severity: int | None
+    tick_id: int
+    location_id: str
+    src_character_id: str
+
+    model_config = ConfigDict(frozen=True)
 
 
 router = APIRouter()
@@ -78,7 +94,7 @@ async def registry_schema_snapshot(registry: TypeRegistry = Depends(get_type_reg
     return ok_response(serialize_registry_snapshot(registry=registry))
 
 
-@v1_router.get("/engines", response_model=OkEnvelope[list[dict[str, Any]]])
+@v1_router.get("/engines", response_model=OkEnvelope[list[EngineStatusRecord]])
 async def engine_status(scheduler: TickScheduler = Depends(get_tick_scheduler)) -> dict[str, Any]:
     """Return per-engine last-run tick, last error, and error count.
 
@@ -94,6 +110,7 @@ async def engine_status(scheduler: TickScheduler = Depends(get_tick_scheduler)) 
     return ok_response(records)
 
 
+# SEV-16: kept as dict[str, Any] by decision (DEC-114) — dynamic config snapshot.
 @v1_router.get("/config", response_model=OkEnvelope[dict[str, Any]])
 async def runtime_config(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
     """Return a curated, read-only view of cadence and cost settings.
@@ -107,6 +124,7 @@ async def runtime_config(settings: Settings = Depends(get_settings)) -> dict[str
     return ok_response(DashboardConfigView.from_settings(settings).model_dump())
 
 
+# SEV-16: kept as dict[str, Any] by decision (DEC-114) — dynamic metrics snapshot.
 @v1_router.get("/metrics", response_model=OkEnvelope[dict[str, Any]])
 async def metrics_snapshot() -> dict[str, Any]:
     """Return an immutable snapshot of in-process request and engine metrics.
@@ -121,7 +139,7 @@ async def metrics_snapshot() -> dict[str, Any]:
     return ok_response(get_metrics_registry().snapshot())
 
 
-@v1_router.get("/events", response_model=OkEnvelope[list[dict[str, Any]]])
+@v1_router.get("/events", response_model=OkEnvelope[list[EventFeedRow]])
 async def recent_events(
     limit: int = Query(default=_DEFAULT_EVENT_LIMIT, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),

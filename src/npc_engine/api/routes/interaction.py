@@ -104,6 +104,8 @@ async def _compute_center_price(
     )
 
 
+# SEV-16: kept as dict[str, Any] by decision (DEC-114). Returns negotiation state +
+# UI directives that vary by interaction status — a heterogeneous composite aggregate.
 @router.post("", response_model=OkEnvelope[dict[str, Any]])
 async def post_interaction(
     body: InteractionRequest,
@@ -244,6 +246,7 @@ async def post_interaction(
     })
 
 
+# SEV-16: kept as dict[str, Any] by decision (DEC-114) — dynamic band-update aggregate.
 @router.post("/band", response_model=OkEnvelope[dict[str, Any]])
 async def update_band(
     body: BandUpdateRequest,

@@ -1395,12 +1395,27 @@ with per-file `# type: ignore` debt, or (c) keep non-strict + add an advisory `m
 sets the scope of any typing fix work (affects SEV-06's `run_tick` change).
 
 ## DEC-114: Type the API response envelope across all 130 `OkEnvelope[dict[str,Any]]` routes?
-**Date:** 2026-06-13 · **Status:** ❓ OPEN (raised by /full-review L3-09)
+**Date:** 2026-06-13 · **Status:** ✅ RESOLVED via SEV-16 (2026-06-15) — typed all client/SDK-consumed routes
 **Context:** `response_model=` is now 147/147, but 130 routes wrap `OkEnvelope[dict[str,Any]]` — the `data`
 payload is opaque to every OpenAPI/SDK client. SEV-03 fixes the scheme route specifically; the other ~129
 remain. L effort.
 **Question:** Do all routes, a subset (public/SDK-facing only), or log-and-defer until the SDK contract
 freeze? Relevant before any Unity/Unreal SDK is generated from the OpenAPI schema.
+**Resolution (SEV-16):** Typed the payloads of every route the demo client + dashboard consume (the public
+mounts AND the demo-hit `/v1/admin/*` reads/writes), so each now exposes a named OpenAPI component for `data`.
+Approach mirrors SEV-03's `SchemesPayload`: a `<Route>Payload(BaseModel)` set as `response_model=OkEnvelope[…]`;
+wire shape unchanged. Bare-list reads of dynamic graph property-bags (factions, reputation, system engines)
+use a row model with `model_config = ConfigDict(extra="allow")` — named component in OpenAPI, every graph
+field still preserved verbatim. Regression-locked by `tests/unit/test_typed_payload_contract.py` (asserts each
+targeted route's `data` resolves to a `$ref`, not an opaque dict).
+**Kept as `OkEnvelope[dict[str,Any]]` by decision** (inline-commented, dynamic engine-aggregates / snapshots):
+`clock` advance+state, `batch` gossip/event ticks, `interaction` + `/band`, `quest.py` lifecycle POSTs +
+GET quest, `graph.py` generic node/edge CRUD, `system` config/metrics/schema, `memories` decay/from-arousal.
+A fixed model for these would 500 on shape drift. **Out of scope (no client consumer, left `dict`):**
+`graph_admin`, `locations`/`location_graph`/`location_history`, `causality`, `debts`, `groups`, `secrets`,
+`traits`, `rumors`, `schedules`, `skills`, plus incidental id-ack admin writes (belief/goal/item/memory
+seed+patch+delete) whose response is fire-and-forget, not a consumed contract. Re-open per-route if an SDK
+consumer for any of these appears.
 
 ## DEC-115: `dependencies_advanced.py` as a second composition root — bless or fold?
 **Date:** 2026-06-13 · **Status:** ✅ RESOLVED via SEV-17 (`dependencies_advanced/` package: politics/social/progression submodules, ≤91 lines each; `__init__` re-exports keep import paths stable)
@@ -1486,6 +1501,13 @@ item (SEV-13…SEV-23) in `review-fixes/INDEX.md`.
   `MERGE` on stable identity keys (idempotent on retry; matches sibling writers). Builds on SEV-05 tests.
 - **DEC-119 → SEV-21 (session ownership):** MIGRATE all 14+ graph sub-writers to accept an `AsyncTransaction`
   param; `graph_writer` coordinates. Large graph-layer refactor — true single-owner transactions.
+  **DONE 2026-06-15 (munich-demo, 6 family commits `8841abc`→player-model).** Implemented via
+  `transaction_coordinator.run_in_tx`: each sub-writer now runs an inner `_work(tx)` closure instead of
+  calling `session.begin_transaction()`. `begin_transaction(` is now confined to `transaction_coordinator.py`;
+  no engine opens a transaction. The CLAUDE.md "Session ownership" rule wording (`graph_writer.py` is the only
+  file that opens/commits) is updated to name `transaction_coordinator.py` as the single owner that
+  `graph_writer` and all sub-writers delegate to. Engine call-sites still pass an `AsyncSession` (preserved
+  signatures); removing the session from engines is the follow-on **Track D / GraphRepository facade**.
 - **DEC-120 → SEV-22 (distortion type):** Type `DistortionType` as `str` validated against the live
   `STRATEGY_REGISTRY`; make `REGISTRY_KEYS` reflect live state (true add-by-new-file OCP).
 - **DEC-121 → SEV-23 (LLM protocol):** Split `LLMClientProtocol` into `LLMGenerateProtocol` /

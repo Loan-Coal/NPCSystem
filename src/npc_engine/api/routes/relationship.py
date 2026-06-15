@@ -14,8 +14,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from neo4j import AsyncSession
 from pydantic import BaseModel, ConfigDict
 
-from typing import Any
-
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.engines.relationship.standing import Standing, derive_standing
@@ -50,7 +48,7 @@ def _get_relation_reader(session: AsyncSession = Depends(get_db_session)) -> Rel
     return RelationReader(session=session)
 
 
-@router.get("/{npc_id}/relationship/{other_id}", response_model=OkEnvelope[dict[str, Any]])
+@router.get("/{npc_id}/relationship/{other_id}", response_model=OkEnvelope[RelationshipResponse])
 async def get_relationship_standing(
     npc_id: str,
     other_id: str,

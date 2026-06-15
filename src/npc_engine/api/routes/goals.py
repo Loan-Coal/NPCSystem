@@ -60,6 +60,23 @@ class UpdateGoalStatusRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class GoalsPayload(BaseModel):
+    """Typed payload for GET /goals/{character_id} (SEV-16).
+
+    The ``goals`` group is fixed; individual rows are heterogeneous graph
+    records, so each stays ``dict[str, Any]``.
+    """
+
+    goals: list[dict[str, Any]]
+
+    model_config = ConfigDict(frozen=True)
+
+
+# ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
 
@@ -100,7 +117,7 @@ async def seed_goal(
     return ok_response({"goal_id": goal_id})
 
 
-@router.get("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
+@router.get("/{character_id}", response_model=OkEnvelope[GoalsPayload])
 async def list_goals(
     character_id: str,
     k: int = 10,
@@ -120,7 +137,7 @@ async def list_goals(
     goals = await get_goals_for_character_svc(
         session, character_id=character_id, k=k, status_filter=status
     )
-    return ok_response({"goals": goals})
+    return ok_response(GoalsPayload(goals=goals).model_dump())
 
 
 @router.patch("/{goal_id}/status", response_model=OkEnvelope[dict[str, Any]])

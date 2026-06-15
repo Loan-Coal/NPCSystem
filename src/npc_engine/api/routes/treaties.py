@@ -62,6 +62,23 @@ class BreakTreatyRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class TreatiesPayload(BaseModel):
+    """Typed payload for GET /treaties/factions/{faction_id} (SEV-16).
+
+    The ``treaties`` group is fixed; individual rows are heterogeneous graph
+    records, so each stays ``dict[str, Any]``.
+    """
+
+    treaties: list[dict[str, Any]]
+
+    model_config = ConfigDict(frozen=True)
+
+
+# ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
 
@@ -93,7 +110,7 @@ async def create_treaty_route(
     return ok_response({"treaty_id": treaty_id})
 
 
-@router.get("/factions/{faction_id}", response_model=OkEnvelope[dict[str, Any]])
+@router.get("/factions/{faction_id}", response_model=OkEnvelope[TreatiesPayload])
 async def list_faction_treaties(
     faction_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -107,7 +124,7 @@ async def list_faction_treaties(
         Envelope with list of treaty dicts.
     """
     treaties = await get_active_treaties_svc(session, faction_id)
-    return ok_response({"treaties": treaties})
+    return ok_response(TreatiesPayload(treaties=treaties).model_dump())
 
 
 @router.post("/{treaty_id}/expire", response_model=OkEnvelope[dict[str, Any]])

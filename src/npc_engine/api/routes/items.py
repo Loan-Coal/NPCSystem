@@ -60,6 +60,23 @@ class TransferOwnerRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class ItemsPayload(BaseModel):
+    """Typed payload for GET /items/{character_id} (SEV-16).
+
+    The ``items`` group is fixed; individual rows are heterogeneous graph
+    records, so each stays ``dict[str, Any]``.
+    """
+
+    items: list[dict[str, Any]]
+
+    model_config = ConfigDict(frozen=True)
+
+
+# ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
 
@@ -103,7 +120,7 @@ async def create_item_for_character(
     return ok_response({"item_id": item_id})
 
 
-@router.get("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
+@router.get("/{character_id}", response_model=OkEnvelope[ItemsPayload])
 async def list_items_for_character(
     character_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -117,7 +134,7 @@ async def list_items_for_character(
         Envelope with list of item dicts.
     """
     items = await get_items_for_character_svc(session, character_id=character_id)
-    return ok_response({"items": items})
+    return ok_response(ItemsPayload(items=items).model_dump())
 
 
 @router.patch("/{item_id}/owner", response_model=OkEnvelope[dict[str, Any]])

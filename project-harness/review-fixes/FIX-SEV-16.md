@@ -1,5 +1,9 @@
 # FIX-SEV-16 — Type the `OkEnvelope` payload for public/SDK routes
 
+**Status:** ✅ RESOLVED (2026-06-15). Typed all client/SDK-consumed routes across 5 tiers; dynamic
+engine-aggregates + internal-admin routes kept `dict[str,Any]` by decision (see DEC-114 resolution).
+Regression lock: `tests/unit/test_typed_payload_contract.py`.
+
 **Severity:** MEDIUM · **Decision:** DEC-114 (public/SDK routes first)
 
 ## Problem

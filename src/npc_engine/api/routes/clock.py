@@ -44,6 +44,9 @@ class ClockAdvanceRequest(BaseModel):
 router = APIRouter()
 
 
+# SEV-16: kept as dict[str, Any] by decision (DEC-114). The advance result merges
+# the scheduler's dynamic tick-result dict with an optional world_state — a
+# heterogeneous engine aggregate; a fixed model would 500 on shape drift.
 @router.post("/clock/advance", response_model=OkEnvelope[dict[str, Any]])
 async def advance_clock(
     request: ClockAdvanceRequest,
@@ -113,6 +116,8 @@ async def advance_clock(
         ) from exc
 
 
+# SEV-16: kept as dict[str, Any] by decision (DEC-114). State merges the scheduler
+# state dump + runtime keys + a per-engine engine_status dict — heterogeneous aggregate.
 @router.get("/clock/state", response_model=OkEnvelope[dict[str, Any]])
 async def clock_state(scheduler: TickScheduler = Depends(get_tick_scheduler)) -> dict[str, Any]:
     """Return current clock snapshot with per-engine status.

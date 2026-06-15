@@ -57,14 +57,22 @@ does not stop on them — promote one into the checklist when you're ready to dr
 - [x] SEV-23 — Split `LLMClientProtocol` into generate/structured/stream (DEC-121)  (`eab1726`)
 - [x] SEV-14 — Move `system_v1_router` → `/v1/admin/system/*` (DEC-112). Resolved (Option A, admin scope):
   demo + dashboard keys were already admin-scoped, so URL-repoint only — no key/scope change needed.
+- [x] SEV-16 — Type `OkEnvelope[T]` payloads for all client/SDK-consumed routes (DEC-114). 5 tiers: rewires
+  (relationship/player_model), fixed-shape reads (chapters/investigations), politics/social lists
+  (beliefs/goals/items/memories/pledges/treaties/factions/reputation), gossip/economy/quest-gen, system
+  engines/events. Dynamic engine-aggregates (clock/batch/interaction/quest-lifecycle/graph-generic/config/
+  metrics) stay `dict[str,Any]` by decision (inline-commented). Regression lock:
+  `tests/unit/test_typed_payload_contract.py`.
 
 ### Multi-phase — NOT a single `/fix-next` pass (drive incrementally / its own session)
 Each brief says to sub-phase; `/fix-next` does one item→one commit, so these would over-reach in one go.
-- [ ] SEV-16 — Type `OkEnvelope[T]` payloads, route-by-route (DEC-114). ~32 routes still untyped; many payloads
-  are dynamic engine-aggregate dicts (clock/batch) that stay `dict[str,Any]`. Do fixed-shape demo reads first.
 - [ ] SEV-19 — R006 40-line gate + refactor `advance`(373)/`dispatch`/`seed`; waive cohesive rest (DEC-117).
   One function per commit.
-- [ ] SEV-21 — Migrate 14+ graph sub-writers to `AsyncTransaction` params (DEC-119). One writer-family per commit.
+- [x] SEV-21 — Migrate 14+ graph sub-writers to caller-owned transactions (DEC-119). 6 writer-family commits
+  (relation, currency/item, character-knowledge, faction/reputation, quest/schedule, player-model): each
+  sub-writer now runs its writes via `transaction_coordinator.run_in_tx` instead of `session.begin_transaction()`.
+  `begin_transaction(` now appears only in `transaction_coordinator.py`; no engine opens a transaction. Public
+  `(session, …)` signatures preserved (engine call-sites untouched; full session removal is the Track-D facade).
 - [ ] SEV-15 — Adopt full `mypy --strict`; fix all 274 errors / 87 files; flip `make type` (DEC-113).
   Sub-phase by package.
 

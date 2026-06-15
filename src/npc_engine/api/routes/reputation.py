@@ -48,13 +48,41 @@ class AdjustReputationRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Response models (SEV-16)
+# ---------------------------------------------------------------------------
+
+
+class ReputationRow(BaseModel):
+    """A HAS_REPUTATION_WITH edge row from GET /graph/characters/{id}/reputation.
+
+    Extra graph props are preserved verbatim (extra='allow') so the wire shape is
+    unchanged while OpenAPI gets a named component.
+    """
+
+    faction_id: str
+    standing: int
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ReputationStandingPayload(BaseModel):
+    """Typed payload for the reputation set/adjust writes — the resulting standing."""
+
+    character_id: str
+    faction_id: str
+    standing: int
+
+    model_config = ConfigDict(frozen=True)
+
+
+# ---------------------------------------------------------------------------
 # Read router  (registered at API_V1_PREFIX â†’ /v1/graph/characters/...)
 # ---------------------------------------------------------------------------
 
 graph_router = APIRouter(prefix="/graph/characters", tags=["reputation"])
 
 
-@graph_router.get("/{character_id}/reputation", response_model=OkEnvelope[list[dict[str, Any]]])
+@graph_router.get("/{character_id}/reputation", response_model=OkEnvelope[list[ReputationRow]])
 async def list_reputations(
     character_id: str,
     service: ReputationService = Depends(get_reputation_service),
@@ -82,7 +110,7 @@ async def get_reputation(
 admin_router = APIRouter(prefix="/characters", tags=["reputation"])
 
 
-@admin_router.put("/{character_id}/reputation/{faction_id}", status_code=200, response_model=OkEnvelope[dict[str, Any]])
+@admin_router.put("/{character_id}/reputation/{faction_id}", status_code=200, response_model=OkEnvelope[ReputationStandingPayload])
 async def set_reputation(
     character_id: str,
     faction_id: str,
@@ -98,10 +126,14 @@ async def set_reputation(
         )
     except ReputationNotFoundError as error:
         raise graph_error_to_http(error) from error
-    return ok_response({"character_id": character_id, "faction_id": faction_id, "standing": request.standing})
+    return ok_response(
+        ReputationStandingPayload(
+            character_id=character_id, faction_id=faction_id, standing=request.standing
+        ).model_dump()
+    )
 
 
-@admin_router.post("/{character_id}/reputation/{faction_id}/adjust", status_code=200, response_model=OkEnvelope[dict[str, Any]])
+@admin_router.post("/{character_id}/reputation/{faction_id}/adjust", status_code=200, response_model=OkEnvelope[ReputationStandingPayload])
 async def adjust_reputation(
     character_id: str,
     faction_id: str,
@@ -130,4 +162,8 @@ async def adjust_reputation(
             )
     except ReputationNotFoundError as error:
         raise graph_error_to_http(error) from error
-    return ok_response({"character_id": character_id, "faction_id": faction_id, "standing": new_standing})
+    return ok_response(
+        ReputationStandingPayload(
+            character_id=character_id, faction_id=faction_id, standing=new_standing
+        ).model_dump()
+    )

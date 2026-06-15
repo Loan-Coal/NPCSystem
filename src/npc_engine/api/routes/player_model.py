@@ -10,8 +10,6 @@ Used by: npc_engine.api.router_registry (registered at API_V1_PREFIX).
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException
 from neo4j import AsyncSession
 from pydantic import BaseModel, ConfigDict
@@ -36,7 +34,7 @@ class PlayerModelResponse(BaseModel):
 router = APIRouter(prefix="/npc", tags=["player_model"])
 
 
-@router.get("/{npc_id}/player-model/{player_id}", response_model=OkEnvelope[dict[str, Any]])
+@router.get("/{npc_id}/player-model/{player_id}", response_model=OkEnvelope[PlayerModelResponse])
 async def get_npc_player_model(
     npc_id: str,
     player_id: str,

@@ -43,6 +43,8 @@ class EventTickRequest(BaseModel):
 router = APIRouter()
 
 
+# SEV-16: kept as dict[str, Any] by decision (DEC-114). Returns the handler's
+# run_tick() result — a dynamic engine-aggregate dict, not a fixed shape.
 @router.post("/batch/gossip_tick", response_model=OkEnvelope[dict[str, Any]])
 async def run_gossip_tick(
     request: GossipTickRequest,
@@ -61,6 +63,7 @@ async def run_gossip_tick(
     return ok_response(result)
 
 
+# SEV-16: kept as dict[str, Any] by decision (DEC-114) — dynamic run_tick() aggregate.
 @router.post("/batch/event_tick", response_model=OkEnvelope[dict[str, Any]])
 async def run_event_tick(
     request: EventTickRequest,

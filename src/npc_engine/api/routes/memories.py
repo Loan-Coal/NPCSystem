@@ -97,6 +97,34 @@ class ConsolidateRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class MemoriesPayload(BaseModel):
+    """Typed payload for GET /memories/{character_id} (SEV-16).
+
+    The ``memories`` group is fixed; individual rows are heterogeneous graph
+    records, so each stays ``dict[str, Any]``.
+    """
+
+    memories: list[dict[str, Any]]
+
+    model_config = ConfigDict(frozen=True)
+
+
+class ConsolidatePayload(BaseModel):
+    """Typed payload for POST /memories/consolidate/{npc_id} (SEV-16).
+
+    ``memory_id`` is null when the turn threshold was not met.
+    """
+
+    memory_id: str | None = None
+
+    model_config = ConfigDict(frozen=True)
+
+
+# ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
 
@@ -195,7 +223,7 @@ def _time_point_from_dict(gt: dict) -> TimePoint:
     )
 
 
-@router.get("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
+@router.get("/{character_id}", response_model=OkEnvelope[MemoriesPayload])
 async def list_memories(
     character_id: str,
     k: int = 5,
@@ -211,7 +239,7 @@ async def list_memories(
         Envelope with list of memory dicts.
     """
     memories = await get_memories_for_character_svc(session, character_id=character_id, k=k)
-    return ok_response({"memories": memories})
+    return ok_response(MemoriesPayload(memories=memories).model_dump())
 
 
 @router.delete("/{memory_id}", response_model=OkEnvelope[dict[str, Any]])
@@ -231,7 +259,7 @@ async def remove_memory(
     return ok_response({"memory_id": memory_id})
 
 
-@router.post("/consolidate/{npc_id}", response_model=OkEnvelope[dict[str, Any]])
+@router.post("/consolidate/{npc_id}", response_model=OkEnvelope[ConsolidatePayload])
 async def consolidate_memories(
     npc_id: str,
     body: ConsolidateRequest,
@@ -262,4 +290,4 @@ async def consolidate_memories(
         npc_id=npc_id,
         game_time=game_time,
     )
-    return ok_response({"memory_id": memory_id})
+    return ok_response(ConsolidatePayload(memory_id=memory_id).model_dump())

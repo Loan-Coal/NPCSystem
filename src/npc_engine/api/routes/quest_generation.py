@@ -37,7 +37,49 @@ class GenerateQuestRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
-@router.post("/generate", response_model=OkEnvelope[dict[str, Any]])
+class GenerateQuestPayload(BaseModel):
+    """Typed payload for POST /quests/generate (SEV-16)."""
+
+    quest_id: str
+    description: str
+
+    model_config = ConfigDict(frozen=True)
+
+
+class DraftQuestsPayload(BaseModel):
+    """Typed payload for GET /quests/drafts (SEV-16).
+
+    ``drafts`` rows are heterogeneous quest node records, so each stays
+    ``dict[str, Any]``.
+    """
+
+    drafts: list[dict[str, Any]]
+    count: int
+
+    model_config = ConfigDict(frozen=True)
+
+
+class OfferedQuestPayload(BaseModel):
+    """Typed payload for POST /quests/{quest_id}/offer (SEV-16)."""
+
+    quest_id: str
+    status: str
+
+    model_config = ConfigDict(frozen=True)
+
+
+class QuestNodePayload(BaseModel):
+    """Typed payload for GET /quests/{quest_id} (SEV-16).
+
+    ``quest`` is a heterogeneous quest node property bag, kept as ``dict[str, Any]``.
+    """
+
+    quest: dict[str, Any]
+
+    model_config = ConfigDict(frozen=True)
+
+
+@router.post("/generate", response_model=OkEnvelope[GenerateQuestPayload])
 async def generate_quest(
     body: GenerateQuestRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -64,10 +106,12 @@ async def generate_quest(
                 message="Quest could not be generated for the given quest giver.",
             ),
         ) from exc
-    return ok_response({"quest_id": result.quest_id, "description": result.description})
+    return ok_response(
+        GenerateQuestPayload(quest_id=result.quest_id, description=result.description).model_dump()
+    )
 
 
-@router.get("/drafts", response_model=OkEnvelope[dict[str, Any]])
+@router.get("/drafts", response_model=OkEnvelope[DraftQuestsPayload])
 async def list_draft_quests(
     quest_giver_id: str | None = None,
     session: AsyncSession = Depends(get_db_session),
@@ -82,10 +126,10 @@ async def list_draft_quests(
         Envelope with ``drafts`` list and ``count``.
     """
     drafts = await get_draft_quests(session=session, quest_giver_id=quest_giver_id)
-    return ok_response({"drafts": drafts, "count": len(drafts)})
+    return ok_response(DraftQuestsPayload(drafts=drafts, count=len(drafts)).model_dump())
 
 
-@router.post("/{quest_id}/offer", response_model=OkEnvelope[dict[str, Any]])
+@router.post("/{quest_id}/offer", response_model=OkEnvelope[OfferedQuestPayload])
 async def offer_draft_quest_simple(
     quest_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -111,10 +155,12 @@ async def offer_draft_quest_simple(
             status_code=404,
             detail=f"Draft quest '{quest_id}' not found (may not exist or already offered)",
         )
-    return ok_response({"quest_id": result["quest_id"], "status": result["status"]})
+    return ok_response(
+        OfferedQuestPayload(quest_id=result["quest_id"], status=result["status"]).model_dump()
+    )
 
 
-@router.get("/{quest_id}", response_model=OkEnvelope[dict[str, Any]])
+@router.get("/{quest_id}", response_model=OkEnvelope[QuestNodePayload])
 async def get_quest_by_id(
     quest_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -131,4 +177,4 @@ async def get_quest_by_id(
     quest = await get_quest(session=session, quest_id=quest_id)
     if quest is None:
         raise HTTPException(status_code=404, detail=f"Quest '{quest_id}' not found")
-    return ok_response({"quest": quest})
+    return ok_response(QuestNodePayload(quest=quest).model_dump())

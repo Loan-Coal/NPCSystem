@@ -17,6 +17,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from neo4j import AsyncSession
+from pydantic import BaseModel, ConfigDict
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.dependencies_advanced import get_investigation_engine
@@ -26,6 +27,23 @@ from npc_engine.engines.investigation.investigation_engine import InvestigationE
 router = APIRouter(prefix="/investigations", tags=["investigations"])
 
 
+class InvestigationPayload(BaseModel):
+    """Typed response payload for GET /investigations/{investigator}/{event} (SEV-16).
+
+    The six top-level groups are fixed; individual rows remain heterogeneous graph
+    query results, so each list stays ``dict[str, Any]``.
+    """
+
+    evidence: list[dict[str, Any]]
+    witnesses: list[dict[str, Any]]
+    suspects: list[dict[str, Any]]
+    deductions: list[dict[str, Any]]
+    alibi_contradictions: list[dict[str, Any]]
+    rumor_contradictions: list[dict[str, Any]]
+
+    model_config = ConfigDict(frozen=True)
+
+
 def _has_investigation_data(context: dict[str, Any]) -> bool:
     """True when the context holds any evidence, witnesses, or suspects (else → 404)."""
     return bool(context.get("evidence") or context.get("witnesses") or context.get("suspects"))
@@ -33,7 +51,7 @@ def _has_investigation_data(context: dict[str, Any]) -> bool:
 
 @router.get(
     "/{investigator_id}/{event_id}",
-    response_model=OkEnvelope[dict[str, Any]],
+    response_model=OkEnvelope[InvestigationPayload],
 )
 async def get_investigation_context(
     investigator_id: str,
@@ -66,4 +84,4 @@ async def get_investigation_context(
     )
     if not _has_investigation_data(context):
         raise HTTPException(status_code=404, detail=f"No investigation data found for event {event_id!r}")
-    return ok_response(context)
+    return ok_response(InvestigationPayload(**context).model_dump())

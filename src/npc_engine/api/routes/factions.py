@@ -78,6 +78,33 @@ class _FactionNode(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Response row models (SEV-16)
+#
+# Bare-list reads return Faction graph property bags; declare the stable fields
+# clients read and keep extra='allow' so every other graph property is preserved
+# verbatim on the wire (no shape change) while OpenAPI gets a named component.
+# ---------------------------------------------------------------------------
+
+
+class FactionRow(BaseModel):
+    """A faction node row from GET /factions/ (extra graph props preserved)."""
+
+    id: str
+    name: str
+
+    model_config = ConfigDict(extra="allow")
+
+
+class FactionStandingRow(BaseModel):
+    """A directed standing row from GET /factions/{id}/standings."""
+
+    target: str
+    standing: int
+
+    model_config = ConfigDict(extra="allow")
+
+
+# ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
 
@@ -104,7 +131,7 @@ async def create_faction(
     return ok_response({"id": request.id})
 
 
-@router.get("/", response_model=OkEnvelope[list[dict[str, Any]]])
+@router.get("/", response_model=OkEnvelope[list[FactionRow]])
 async def list_factions(
     is_active: bool | None = None,
     service: FactionService = Depends(get_faction_service),
@@ -182,7 +209,7 @@ async def set_standing(
     return ok_response({"src_id": faction_id, "dst_id": target_id, "standing": request.standing})
 
 
-@router.get("/{faction_id}/standings", response_model=OkEnvelope[list[dict[str, Any]]])
+@router.get("/{faction_id}/standings", response_model=OkEnvelope[list[FactionStandingRow]])
 async def list_standings(
     faction_id: str,
     service: FactionService = Depends(get_faction_service),

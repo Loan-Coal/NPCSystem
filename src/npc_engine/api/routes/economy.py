@@ -52,7 +52,26 @@ class TradeOfferRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
-@router.get("/price", response_model=OkEnvelope[dict[str, Any]])
+class PricePayload(BaseModel):
+    """Typed payload for GET /economy/price (SEV-16)."""
+
+    price: int
+
+    model_config = ConfigDict(frozen=True)
+
+
+class TradeResultPayload(BaseModel):
+    """Typed payload for POST /economy/trade — the TradeResult fields (SEV-16)."""
+
+    accepted: bool
+    fair_price: int
+    final_price: int | None = None
+    rejection_reason: str | None = None
+
+    model_config = ConfigDict(frozen=True)
+
+
+@router.get("/price", response_model=OkEnvelope[PricePayload])
 async def get_item_price(
     item_type: str = Query(..., min_length=1),
     character_id: str = Query(..., min_length=1),
@@ -85,10 +104,10 @@ async def get_item_price(
         active_event_types=active_event_types,
         is_faction_member=False,
     )
-    return ok_response({"price": price})
+    return ok_response(PricePayload(price=price).model_dump())
 
 
-@router.post("/trade", response_model=OkEnvelope[dict[str, Any]])
+@router.post("/trade", response_model=OkEnvelope[TradeResultPayload])
 async def evaluate_trade(
     body: TradeOfferRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -136,9 +155,11 @@ async def evaluate_trade(
             status_code=422,
             detail={"code": exc.code, "message": "The seller does not own this item."},
         ) from exc
-    return ok_response({
-        "accepted": result.accepted,
-        "fair_price": result.fair_price,
-        "final_price": result.final_price,
-        "rejection_reason": result.rejection_reason,
-    })
+    return ok_response(
+        TradeResultPayload(
+            accepted=result.accepted,
+            fair_price=result.fair_price,
+            final_price=result.final_price,
+            rejection_reason=result.rejection_reason,
+        ).model_dump()
+    )

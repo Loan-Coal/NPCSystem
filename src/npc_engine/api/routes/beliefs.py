@@ -59,6 +59,23 @@ class UpdateConfidenceRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class BeliefsPayload(BaseModel):
+    """Typed payload for GET /beliefs/{character_id} (SEV-16).
+
+    The ``beliefs`` group is fixed; individual rows are heterogeneous graph
+    records, so each stays ``dict[str, Any]``.
+    """
+
+    beliefs: list[dict[str, Any]]
+
+    model_config = ConfigDict(frozen=True)
+
+
+# ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
 
@@ -98,7 +115,7 @@ async def seed_belief(
     return ok_response({"belief_id": belief_id})
 
 
-@router.get("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
+@router.get("/{character_id}", response_model=OkEnvelope[BeliefsPayload])
 async def list_beliefs(
     character_id: str,
     k: int = 10,
@@ -114,7 +131,7 @@ async def list_beliefs(
         Envelope with list of belief dicts.
     """
     beliefs = await get_beliefs_for_character_svc(session, character_id=character_id, k=k)
-    return ok_response({"beliefs": beliefs})
+    return ok_response(BeliefsPayload(beliefs=beliefs).model_dump())
 
 
 @router.patch("/{belief_id}/confidence", response_model=OkEnvelope[dict[str, Any]])

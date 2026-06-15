@@ -40,7 +40,16 @@ class SpreadRumorRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
-@router.post("/spread", response_model=OkEnvelope[dict[str, Any]])
+class SpreadRumorPayload(BaseModel):
+    """Typed payload for POST /gossip/spread (SEV-16)."""
+
+    event_id: str
+    npc_id: str
+
+    model_config = ConfigDict(frozen=True)
+
+
+@router.post("/spread", response_model=OkEnvelope[SpreadRumorPayload])
 async def spread_rumor_route(
     body: SpreadRumorRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -65,4 +74,6 @@ async def spread_rumor_route(
         severity=body.severity,
         tick_id=body.tick_id,
     )
-    return ok_response({"event_id": event_id, "npc_id": body.target_npc_id})
+    return ok_response(
+        SpreadRumorPayload(event_id=event_id, npc_id=body.target_npc_id).model_dump()
+    )

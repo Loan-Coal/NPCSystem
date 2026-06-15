@@ -37,7 +37,29 @@ class CorrectRumorRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
-@router.get("/trace/{event_id}", response_model=OkEnvelope[dict[str, Any]])
+class RumorTracePayload(BaseModel):
+    """Typed payload for GET /gossip/trace/{event_id} (SEV-16).
+
+    ``chain`` rows are heterogeneous graph records, so each stays ``dict[str, Any]``.
+    """
+
+    event_id: str
+    chain: list[dict[str, Any]]
+
+    model_config = ConfigDict(frozen=True)
+
+
+class CorrectRumorPayload(BaseModel):
+    """Typed payload for POST /gossip/correct (SEV-16)."""
+
+    npc_id: str
+    event_id: str
+    corrected: bool
+
+    model_config = ConfigDict(frozen=True)
+
+
+@router.get("/trace/{event_id}", response_model=OkEnvelope[RumorTracePayload])
 async def trace_rumor_route(
     event_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -54,10 +76,10 @@ async def trace_rumor_route(
         Envelope with ``chain`` (list of NPC entries) and ``event_id``.
     """
     chain = await trace_rumor_chain(session, event_id)
-    return ok_response({"event_id": event_id, "chain": chain})
+    return ok_response(RumorTracePayload(event_id=event_id, chain=chain).model_dump())
 
 
-@router.post("/correct", response_model=OkEnvelope[dict[str, Any]])
+@router.post("/correct", response_model=OkEnvelope[CorrectRumorPayload])
 async def correct_rumor_route(
     body: CorrectRumorRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -83,4 +105,6 @@ async def correct_rumor_route(
             status_code=404,
             detail=f"No KNOWS_ABOUT edge from '{body.npc_id}' to event '{body.event_id}'",
         )
-    return ok_response({"npc_id": body.npc_id, "event_id": body.event_id, "corrected": True})
+    return ok_response(
+        CorrectRumorPayload(npc_id=body.npc_id, event_id=body.event_id, corrected=True).model_dump()
+    )
