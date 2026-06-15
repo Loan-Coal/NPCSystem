@@ -12,6 +12,11 @@ from __future__ import annotations
 
 from neo4j import AsyncSession
 
+from npc_engine.common.knowledge_types import (
+    KNOWLEDGE_STATE_KNOWS,
+    KNOWLEDGE_STATE_RUMOR,
+    KnowledgeState,
+)
 from npc_engine.engines.gossip.gossip_distort import GossipDistortion
 from npc_engine.graph.gossip_write_queries import (
     write_knowledge_propagation,
@@ -45,7 +50,9 @@ async def propagate(
         tick_id: Current game tick recorded on the edge.
         distortion: Distortion payload determining knowledge state and summary.
     """
-    knowledge_state = "knows" if distortion.distortion_type is None else "rumor"
+    knowledge_state: KnowledgeState = (
+        KNOWLEDGE_STATE_KNOWS if distortion.distortion_type is None else KNOWLEDGE_STATE_RUMOR
+    )
     await write_knowledge_propagation(
         session=session,
         receiver_id=receiver_id,
@@ -81,7 +88,7 @@ async def propagate_secret(
         tick_id: Current game tick recorded on the edge.
         distorted: When True the edge is marked as a rumor rather than direct knowledge.
     """
-    knowledge_state = "rumor" if distorted else "knows"
+    knowledge_state: KnowledgeState = KNOWLEDGE_STATE_RUMOR if distorted else KNOWLEDGE_STATE_KNOWS
     await write_secret_propagation(
         session=session,
         receiver_id=receiver_id,

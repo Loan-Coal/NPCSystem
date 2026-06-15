@@ -12,8 +12,10 @@ from __future__ import annotations
 
 from neo4j import AsyncSession
 
+from npc_engine.common.knowledge_types import KNOWLEDGE_STATE_RUMOR
+
 _ORIGIN_PLAYER_RUMOR = "player_rumor"
-_KNOWLEDGE_STATE_RUMOR = "rumor"
+_KNOWLEDGE_STATE_RUMOR = KNOWLEDGE_STATE_RUMOR
 _SOURCE_PLAYER = "player"
 
 CYPHER_INJECT_RUMOR = """

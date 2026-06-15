@@ -20,6 +20,7 @@ import logging
 from pathlib import Path
 from typing import cast
 
+from npc_engine.common.knowledge_types import KNOWLEDGE_STATE_RUMOR
 from npc_engine.common.yaml_utils import load_yaml_mapping
 from npc_engine.config import ContentRating
 from npc_engine.engines.dialogue.dialogue_models import DialogueRequest
@@ -109,7 +110,7 @@ def build_system_prompt(content_rating: ContentRating = "mature") -> str:
     return base_prompt + "\n" + rule if rule else base_prompt
 
 
-_RUMOR_KNOWLEDGE_STATE = "rumor"
+_RUMOR_KNOWLEDGE_STATE = KNOWLEDGE_STATE_RUMOR
 
 
 def _extract_personal_accounts(serialized_context: str) -> tuple[list[str], list[str]]:

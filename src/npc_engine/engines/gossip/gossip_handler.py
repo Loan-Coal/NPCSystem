@@ -22,6 +22,11 @@ import random
 
 from neo4j import AsyncSession
 
+from npc_engine.common.knowledge_types import (
+    KNOWLEDGE_STATE_KNOWS,
+    KNOWLEDGE_STATE_RUMOR,
+    KnowledgeState,
+)
 from npc_engine.config import Settings
 from npc_engine.engines.embedding_invalidation import invalidate_embedding_safely
 from npc_engine.engines.gossip.edge_updater import log_gossip
@@ -269,7 +274,9 @@ class GossipHandler:
                 confidence_high_threshold=self._weight_config.confidence_high_threshold,
                 confidence_low_threshold=self._weight_config.confidence_low_threshold,
             )
-            knowledge_state = "knows" if distortion.distortion_type is None else "rumor"
+            knowledge_state: KnowledgeState = (
+                KNOWLEDGE_STATE_KNOWS if distortion.distortion_type is None else KNOWLEDGE_STATE_RUMOR
+            )
             write_entry: dict = {
                 "receiver_id": receiver["id"],
                 "event_id": str(row["event_id"]),
