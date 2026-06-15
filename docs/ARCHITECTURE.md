@@ -759,7 +759,7 @@ Prompt templates live in `prompts/`. Two sub-directories:
 | Directory | Contents |
 |---|---|
 | `prompts/canned/` | Per-archetype canned response YAML files (`default.yaml`, `guard.yaml`, etc.) Used by degradation tier 3. |
-| `prompts/<engine>/` | Versioned LLM prompt templates (not yet extracted — see `proposals/prompt_inventory.md`) |
+| `src/npc_engine/prompts/<engine>/` | Versioned runtime LLM prompt YAML (eval-judge prompts under `src/npc_engine/prompts/eval/`). The root `prompts/` holds canned YAML only. |
 
 **Editing a canned response:** edit the relevant `prompts/canned/<archetype>.yaml` and restart (no code change needed).
 

@@ -7,7 +7,7 @@
 - HARNESS BUG: `isolation:worktree` branched workers off `main` (ea16f74), 454 commits behind munich-demo. **Run remaining SEVs via /fix-next (no worktree) — it operates on munich-demo directly.**
 - `common/knowledge_types.py` now holds `KnowledgeState` Literal + `KNOWLEDGE_STATE_KNOWS/RUMOR` — reuse for any new knowledge_state value (do NOT redefine "knows"/"rumor"). Cypher-template literals (event_queries/secret_queries) intentionally stay (data, not Python).
 - New module docstrings need `Does NOT:` + `Dependencies injected:` lines (test_architecture_conformance). New files near 300-line config limit → sibling module (see `config_logging_validators.py`).
-- REMAINING: SEV-11 (docs), SEV-12 (clique magic numbers).
+- REMAINING: SEV-12 (clique magic numbers).
 - caplog gotcha: `utils/logging.py` sets propagate=False, so pytest `caplog` (root) misses engine logs once logging is configured — capture on the engine logger directly (see test_sev22 secret-seed test).
 - Decide items (DEC-111…121) BLOCKED pending human approval — do not start via /fix-next.
 
@@ -35,7 +35,7 @@
 - [ ] SEV-12 — Clique engine magic numbers → `config.py` keys  (deps: none · files: `engines/.../clique_formation_engine.py`, `config/config.py`)
 
 ### Block F — Docs (independent, trivial)
-- [ ] SEV-11 — Doc/docstring drift: ARCHITECTURE prompt path, right_panel INTRIGUE, game_controller dep  (deps: none · files: `docs/ARCHITECTURE.md`, `demo_game/ui/right_panel.py`, `demo_game/game_controller.py`)
+- [x] SEV-11 — Doc/docstring drift: ARCHITECTURE prompt path → `src/npc_engine/prompts/`, right_panel +INTRIGUE, game_controller dropped bogus `npc_engine.engines.interaction`  (files: `docs/ARCHITECTURE.md`, `demo_game/ui/right_panel.py`, `demo_game/game_controller.py`)
 
 ## Blocked — pending human approval (Decide)
 These are **not** in the checklist above. See `DECISIONS.md` DEC-111…121 stubs. Do not start until resolved:

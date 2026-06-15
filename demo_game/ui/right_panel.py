@@ -4,7 +4,7 @@ Layer: demo_game.ui
 Purpose: Right panel renderer — cycles GRAPH → KNOWLEDGE → PLAYER STATUS → CHAIN →
          TRADE → INVENTORY → ACTIONS → INSPECT → WORLD → EMOTION → NEEDS → GOALS
          → POLITICS → MEMORY → RETRIEVAL → FACTION → PLAYER MODEL → OATH →
-         TREATY → INVESTIGATE via Tab.
+         TREATY → INVESTIGATE → INTRIGUE via Tab.
          Owns all panel widgets; reads the pre-rendered graph surface from GraphPoller.
 Does NOT: make HTTP calls or hold business logic.
 Dependencies injected: None (pure rendering + callback registration).
