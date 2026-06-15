@@ -26,6 +26,17 @@ first; defer internal/admin routes.
   route's OpenAPI `responses` schema is non-empty. `pytest tests/ -k "<route>" -q`.
 - `make check` (mypy 0).
 
+## ⚠️ Scoping finding (2026-06-14)
+This is genuinely L-effort: **35 route files** use `OkEnvelope[dict[str,Any]]`, and `npc_state`/`emotion`/
+`schemes` are ALREADY typed. Crucially, **many payloads are dynamic engine-aggregate dicts**, not fixed
+shapes — e.g. `clock.clock_state` returns `scheduler.state.model_dump()` + 3 runtime keys + `engine_status`
+(dict per engine); `clock.advance_clock` returns the scheduler's `advance()` result dict merged with an
+optional `world_state`. A precise model requires real per-route modeling, and a wrong model breaks
+`response_model` validation at runtime. **Do route-by-route, fixed-shape routes first** (mirror SEV-03's
+`SchemesPayload`); leave genuinely-heterogeneous aggregates (clock, batch) as `dict[str,Any]` with a comment.
+Pick the demo-consumed reads with a stable shape (e.g. `player_model`, `chapters/current`, `investigations`)
+as batch 1. Not a single-commit job — sub-phase it.
+
 ## Blast radius
-The public `api/routes/*` set + payload models + their tests + possibly `demo_game/client.py` (key shapes
-must stay). No admin routes.
+The public `api/routes/*` set (~32 still untyped) + payload models + their tests + possibly
+`demo_game/client.py` (key shapes must stay). No admin routes. Multi-commit.

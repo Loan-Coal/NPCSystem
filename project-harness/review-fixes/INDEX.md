@@ -7,9 +7,10 @@
 - HARNESS BUG: `isolation:worktree` branched workers off `main` (ea16f74), 454 commits behind munich-demo. **Run remaining SEVs via /fix-next (no worktree) — it operates on munich-demo directly.**
 - `common/knowledge_types.py` now holds `KnowledgeState` Literal + `KNOWLEDGE_STATE_KNOWS/RUMOR` — reuse for any new knowledge_state value (do NOT redefine "knows"/"rumor"). Cypher-template literals (event_queries/secret_queries) intentionally stay (data, not Python).
 - New module docstrings need `Does NOT:` + `Dependencies injected:` lines (test_architecture_conformance). New files near 300-line config limit → sibling module (see `config_logging_validators.py`).
-- ALL 12 original Fix-now SEVs COMPLETE. Block G briefs written; quick wins SEV-13/22/18 DONE (2026-06-14). make check GREEN, 2205 passed, cov 86.38%.
-- SEV-14 is NOT a quick win: moving `/v1/system`→`/v1/admin/system` ESCALATES auth to admin scope (prefix-scoped middleware) AND breaks the demo's live `/v1/system/*` polling (world_poller/client/run_scenes + e2e + tests). See its brief's gotcha; do in a dedicated session.
-- Remaining Block G: SEV-14, SEV-16, SEV-20, SEV-23 (medium); SEV-15/17/19/21 (heavy refactors).
+- 2026-06-14 DONE: all 12 original SEVs + Block G quick wins (SEV-13/22/18) + mediums SEV-20 (investigation MERGE) + SEV-23 (LLM protocol ISP split). make check GREEN, 2211 passed, cov 86.38%.
+- SEV-14 NOT a quick win: moving `/v1/system`→`/v1/admin/system` escalates auth to admin scope (prefix-scoped) AND breaks the demo's live `/v1/system/*` polling. See its brief's gotcha; dedicated session.
+- SEV-16 is L-effort/route-by-route: 35 files; npc_state/emotion/schemes already typed; many payloads are DYNAMIC engine-aggregate dicts (clock/batch) that should stay `dict[str,Any]`. Do fixed-shape demo-read routes first (player_model/chapters/investigations) à la SEV-03. See brief's scoping finding.
+- Remaining Block G: SEV-14 (auth), SEV-16 (route typing, multi-commit); SEV-15/17/19/21 (heavy refactors).
 - caplog gotcha: `utils/logging.py` sets propagate=False, so pytest `caplog` (root) misses engine logs once logging is configured — capture on the engine logger directly (see test_sev22 secret-seed test).
 
 ## Fix-now backlog (ordered, dependency-blocked)
