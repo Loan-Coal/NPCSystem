@@ -7,9 +7,10 @@
 - HARNESS BUG: `isolation:worktree` branched workers off `main` (ea16f74), 454 commits behind munich-demo. **Run remaining SEVs via /fix-next (no worktree) — it operates on munich-demo directly.**
 - `common/knowledge_types.py` now holds `KnowledgeState` Literal + `KNOWLEDGE_STATE_KNOWS/RUMOR` — reuse for any new knowledge_state value (do NOT redefine "knows"/"rumor"). Cypher-template literals (event_queries/secret_queries) intentionally stay (data, not Python).
 - New module docstrings need `Does NOT:` + `Dependencies injected:` lines (test_architecture_conformance). New files near 300-line config limit → sibling module (see `config_logging_validators.py`).
-- ALL 12 original Fix-now SEVs COMPLETE (2026-06-14). DEC-111…121 now RESOLVED → new backlog SEV-13…23 (Block G); briefs not yet written. SEV-15/19/21 are the heavy refactors.
+- ALL 12 original Fix-now SEVs COMPLETE. Block G briefs written; quick wins SEV-13/22/18 DONE (2026-06-14). make check GREEN, 2205 passed, cov 86.38%.
+- SEV-14 is NOT a quick win: moving `/v1/system`→`/v1/admin/system` ESCALATES auth to admin scope (prefix-scoped middleware) AND breaks the demo's live `/v1/system/*` polling (world_poller/client/run_scenes + e2e + tests). See its brief's gotcha; do in a dedicated session.
+- Remaining Block G: SEV-14, SEV-16, SEV-20, SEV-23 (medium); SEV-15/17/19/21 (heavy refactors).
 - caplog gotcha: `utils/logging.py` sets propagate=False, so pytest `caplog` (root) misses engine logs once logging is configured — capture on the engine logger directly (see test_sev22 secret-seed test).
-- Decide items (DEC-111…121) BLOCKED pending human approval — do not start via /fix-next.
 
 ## Fix-now backlog (ordered, dependency-blocked)
 

@@ -25,6 +25,19 @@ before any SDK consumer exists. This is a **public URL change**.
   `/v1/admin/system/...` path responds and the old `/v1/system/...` path is 404.
 - `pytest tests/ -k system -q` then `make check`.
 
+## ⚠️ Gotcha discovered (2026-06-14 — NOT a quick win)
+Auth is **path-prefix scoped**: `auth/middleware_helpers._required_scope_for_path` requires **admin scope**
+for anything under `{API_V1_PREFIX}/admin`. So moving `/v1/system/*` → `/v1/admin/system/*` does not just
+change the URL — it **escalates the required auth scope to admin**. And the DEMO consumes `/v1/system/*`
+live: `demo_game/world_poller.py`, `demo_game/client.py`, `demo_game/run_scenes.py`, plus
+`e2e/scenarios/scenario_active_conditions.py` and unit tests. Moving it would 403 the demo unless the demo
+is given an admin key. `v1_router` exposes `/system/engines|config|metrics|events` (system.py).
+
+Before implementing, DECIDE: (a) is admin-scoping these system-info endpoints intended (likely yes — they
+expose engine/config/metrics/events), and (b) what key/scope does the demo poller use? Then update the
+demo client + poller + run_scenes + the e2e scenario + tests together. Handle in a dedicated session.
+
 ## Blast radius
-`router_registry.py` + system route tests + possibly `demo_game/client.py`. **Interface change** — any
-external client calling `/v1/system/*` must update.
+`router_registry.py`, **auth scope change**, `demo_game/{client,world_poller,run_scenes}.py`,
+`e2e/scenarios/scenario_active_conditions.py`, system route tests. **Interface + auth change** — larger
+than first scoped.
