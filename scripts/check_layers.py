@@ -42,7 +42,12 @@ LAYER_RANK: dict[str, int] = {
     "type_registry": 1,
     "schema": 1,
     "utils": 1,
+    "observability": 1,
 }
+
+# First-level dirs that hold no layer code (dev tooling / prompt data): exempt from
+# the unranked-package guard. prompts/ is YAML only; scripts/ is dev tooling.
+_EXEMPT_PACKAGES: frozenset[str] = frozenset({"scripts", "prompts"})
 
 # Packages whose rank is unknown are skipped (not violations).
 _UNKNOWN_RANK = -1
@@ -135,6 +140,33 @@ def find_violations(src_root: Path) -> List[Tuple[str, int, str]]:
     return all_violations
 
 
+def find_unranked_packages(src_root: Path) -> List[Tuple[str, int, str]]:
+    """Flag first-level package dirs that hold Python but have no LAYER_RANK entry.
+
+    An unranked code package is silently skipped by the import checker, so a new
+    layer could bypass enforcement entirely (L2-09). Hidden dirs, `__pycache__`,
+    exempt tooling, and top-level modules (files, not dirs) are not flagged.
+
+    Args:
+        src_root: Path to the npc_engine package root.
+    Returns:
+        List of (dir, 0, message) tuples for each unranked code package.
+    """
+    violations: List[Tuple[str, int, str]] = []
+    for child in sorted(src_root.iterdir()):
+        if not child.is_dir() or child.name.startswith((".", "_")):
+            continue
+        if child.name in LAYER_RANK or child.name in _EXEMPT_PACKAGES:
+            continue
+        if any(child.rglob("*.py")):
+            msg = (
+                f"unranked package '{child.name}' contains Python but has no LAYER_RANK "
+                f"entry — add it to LAYER_RANK or _EXEMPT_PACKAGES"
+            )
+            violations.append((str(child), 0, msg))
+    return violations
+
+
 def main() -> int:
     """Entry point for `make check-layers`.
 
@@ -142,7 +174,7 @@ def main() -> int:
         0 if no violations, 1 if any violations found.
     """
     src_root = REPO_ROOT / "src" / "npc_engine"
-    violations = find_violations(src_root)
+    violations = find_violations(src_root) + find_unranked_packages(src_root)
     if not violations:
         print("check-layers: OK — no layer violations found.")
         return 0

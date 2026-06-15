@@ -7,7 +7,7 @@
 - HARNESS BUG: `isolation:worktree` branched workers off `main` (ea16f74), 454 commits behind munich-demo. **Run remaining SEVs via /fix-next (no worktree) — it operates on munich-demo directly.**
 - `common/knowledge_types.py` now holds `KnowledgeState` Literal + `KNOWLEDGE_STATE_KNOWS/RUMOR` — reuse for any new knowledge_state value (do NOT redefine "knows"/"rumor"). Cypher-template literals (event_queries/secret_queries) intentionally stay (data, not Python).
 - New module docstrings need `Does NOT:` + `Dependencies injected:` lines (test_architecture_conformance). New files near 300-line config limit → sibling module (see `config_logging_validators.py`).
-- REMAINING: SEV-10 (check_layers), SEV-11 (docs), SEV-12 (clique magic numbers).
+- REMAINING: SEV-11 (docs), SEV-12 (clique magic numbers).
 - caplog gotcha: `utils/logging.py` sets propagate=False, so pytest `caplog` (root) misses engine logs once logging is configured — capture on the engine logger directly (see test_sev22 secret-seed test).
 - Decide items (DEC-111…121) BLOCKED pending human approval — do not start via /fix-next.
 
@@ -31,7 +31,7 @@
 - [x] SEV-08 — `location_graph` route 422 guard tests  (deps: none · files: `tests/.../test_location_graph_route.py`)
 
 ### Block E — Tooling / architecture hygiene (independent)
-- [ ] SEV-10 — `check_layers.py`: add `observability` rank + unknown-package test  (deps: none · files: `scripts/check_layers.py`, `tests/.../test_check_layers.py`)
+- [x] SEV-10 — `check_layers.py`: ranked `observability`=1 + `find_unranked_packages` guard (unranked code package now fails, not silent-skip; scripts/prompts exempt)  (files: `scripts/check_layers.py`, `tests/unit/test_check_layers.py`)
 - [ ] SEV-12 — Clique engine magic numbers → `config.py` keys  (deps: none · files: `engines/.../clique_formation_engine.py`, `config/config.py`)
 
 ### Block F — Docs (independent, trivial)
