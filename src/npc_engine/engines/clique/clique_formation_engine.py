@@ -31,10 +31,6 @@ from npc_engine.graph.group_service import (
 
 _LOGGER = logging.getLogger(__name__)
 
-_AFFECTION_THRESHOLD = 70
-_INITIAL_COHESION = 10
-_STALE_CLIQUE_AGE_TICKS = 50
-
 
 class CliqueFormationEngine:
     """Detects high-affection co-located character pairs and auto-forms clique Groups.
@@ -49,9 +45,13 @@ class CliqueFormationEngine:
         """Initialise the clique formation engine.
 
         Args:
-            settings: Application settings providing CLIQUE_FORMATION_TICK_INTERVAL.
+            settings: Application settings providing the clique tick interval and
+                affection/cohesion/stale-age thresholds.
         """
         self._interval = settings.CLIQUE_FORMATION_TICK_INTERVAL
+        self._affection_threshold = settings.CLIQUE_AFFECTION_THRESHOLD
+        self._initial_cohesion = settings.CLIQUE_INITIAL_COHESION
+        self._stale_age_ticks = settings.CLIQUE_STALE_AGE_TICKS
         self._lock = asyncio.Lock()
 
     async def run_tick(self, session: AsyncSession, tick_id: int) -> dict[str, Any]:
@@ -87,7 +87,7 @@ class CliqueFormationEngine:
         dissolved = 0
 
         pairs: list[dict[str, Any]] = await get_high_affection_pairs(
-            session, threshold=_AFFECTION_THRESHOLD
+            session, threshold=self._affection_threshold
         )
 
         for pair in pairs:
@@ -109,7 +109,7 @@ class CliqueFormationEngine:
                 session,
                 name=f"Clique ({char_a[:8]}, {char_b[:8]})",
                 kind="clique",
-                cohesion=_INITIAL_COHESION,
+                cohesion=self._initial_cohesion,
                 is_secret=False,
                 formed_at_tick=tick_id,
             )
@@ -132,7 +132,7 @@ class CliqueFormationEngine:
             _LOGGER.info("clique: formed group %s for %s and %s", group_id, char_a, char_b)
             formed += 1
 
-        stale_before = max(0, tick_id - _STALE_CLIQUE_AGE_TICKS)
+        stale_before = max(0, tick_id - self._stale_age_ticks)
         stale_groups: list[str] = await get_stale_cliques(session, stale_before_tick=stale_before)
         for group_id in stale_groups:
             await dissolve_group(session, group_id=group_id, tick=tick_id)

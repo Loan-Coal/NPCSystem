@@ -51,10 +51,32 @@ class _FakeCursor:
         return None
 
 
-def _make_settings(interval: int = 5):
+def _make_settings(interval: int = 5, affection: int = 70, cohesion: int = 10, stale: int = 50):
     s = MagicMock()
     s.CLIQUE_FORMATION_TICK_INTERVAL = interval
+    s.CLIQUE_AFFECTION_THRESHOLD = affection
+    s.CLIQUE_INITIAL_COHESION = cohesion
+    s.CLIQUE_STALE_AGE_TICKS = stale
     return s
+
+
+async def test_clique_engine_forwards_settings_thresholds() -> None:
+    """SEV-12: affection/cohesion/stale come from settings, not module constants."""
+    mod = "npc_engine.engines.clique.clique_formation_engine"
+    settings = _make_settings(interval=1, affection=88, cohesion=3, stale=7)
+    engine = CliqueFormationEngine(settings)
+    pair = {"char_a_id": "a", "char_b_id": "b", "loc_a": "L", "loc_b": "L"}
+    with patch(f"{mod}.get_high_affection_pairs", new=AsyncMock(return_value=[pair])) as m_pairs, \
+            patch(f"{mod}.get_existing_shared_group", new=AsyncMock(return_value=None)), \
+            patch(f"{mod}.create_group", new=AsyncMock(return_value="g1")) as m_create, \
+            patch(f"{mod}.add_member", new=AsyncMock()), \
+            patch(f"{mod}.get_stale_cliques", new=AsyncMock(return_value=[])) as m_stale, \
+            patch(f"{mod}.dissolve_group", new=AsyncMock()):
+        await engine.run_tick(MagicMock(), tick_id=10)
+
+    assert m_pairs.await_args.kwargs["threshold"] == 88
+    assert m_create.await_args.kwargs["cohesion"] == 3
+    assert m_stale.await_args.kwargs["stale_before_tick"] == 3  # max(0, 10 - 7)
 
 
 def _make_session(pairs=None, existing_group=None, stale=None):

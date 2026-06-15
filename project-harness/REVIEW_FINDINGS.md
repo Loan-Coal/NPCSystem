@@ -130,5 +130,7 @@ See `review-fixes/INDEX.md` for the ordered backlog and `review-fixes/FIX-SEV-*.
   runner HTTP-loop coverage → ISSUE-110; make check GREEN, 2193 passed, cov 86.36%).
   SEV-10 (`check_layers.py` ranks observability + `find_unranked_packages` guard against silent-skip).
   SEV-11 (doc/docstring drift: ARCHITECTURE prompt path, right_panel INTRIGUE tab, game_controller dep).
-- **Remaining via /fix-next:** SEV-12.
+  SEV-12 (clique affection/cohesion/stale-age thresholds → `config.py` keys, read from settings).
+- **ALL 12 Fix-now SEVs COMPLETE** (make check GREEN, 2198 passed, cov 86.36%). Remaining backlog is
+  DEC-111…121 (blocked, need human decisions) + Log issues (ISSUE-101…110).
 - **Not started:** SEV-06 (keep solo/serial), SEV-07, SEV-10, SEV-11. **Blocked:** DEC-111…121.

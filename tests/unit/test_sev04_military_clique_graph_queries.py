@@ -76,6 +76,9 @@ async def test_clique_engine_calls_graph_get_high_affection_pairs():
     """CliqueFormationEngine must delegate pair lookup to graph layer."""
     settings = MagicMock()
     settings.CLIQUE_FORMATION_TICK_INTERVAL = 5
+    settings.CLIQUE_AFFECTION_THRESHOLD = 70
+    settings.CLIQUE_INITIAL_COHESION = 10
+    settings.CLIQUE_STALE_AGE_TICKS = 50
 
     from npc_engine.engines.clique.clique_formation_engine import CliqueFormationEngine
 

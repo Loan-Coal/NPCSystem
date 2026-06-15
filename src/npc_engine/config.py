@@ -179,6 +179,11 @@ class Settings(BaseSettings):
 
     WITNESSED_MAX_PER_EVENT: int = 10
     CLIQUE_FORMATION_TICK_INTERVAL: int = 10
+    # Clique formation thresholds (SEV-12): min bidirectional affection to form a
+    # clique, initial group cohesion, and the age (ticks) past which a clique decays.
+    CLIQUE_AFFECTION_THRESHOLD: int = 70
+    CLIQUE_INITIAL_COHESION: int = 10
+    CLIQUE_STALE_AGE_TICKS: int = 50
     TREATY_LLM_EVAL_ENABLED: bool = False
     CROSS_ENCODER_ENABLED: bool = False
     GRAPH_RAG_ENABLED: bool = False
