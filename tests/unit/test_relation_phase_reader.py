@@ -46,6 +46,9 @@ class _FakeTx:
         self.last_params = params
         return _FakeResult(self._record)
 
+    async def commit(self) -> None:
+        pass
+
     async def __aenter__(self) -> "_FakeTx":
         return self
 

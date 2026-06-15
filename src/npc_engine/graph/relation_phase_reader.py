@@ -11,8 +11,10 @@ Used by: engines/relationship/phase_transition_applier.
 
 from __future__ import annotations
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 from pydantic import BaseModel
+
+from npc_engine.graph.transaction_coordinator import run_in_tx
 
 
 _CYPHER_GET_RELATION_PHASE_STATE = """
@@ -50,11 +52,11 @@ async def get_relation_phase_state(
 ) -> RelationPhaseRow | None:
     """Read the directed RELATES_TO edge's scalars and persisted phase.
 
-    Opens and commits its own read transaction; callers must not pass an active
-    transaction.
+    The read runs inside a single transaction owned by the graph transaction
+    coordinator (``run_in_tx``); callers pass a session, never a transaction.
 
     Args:
-        session: Active Neo4j async session used to begin the transaction.
+        session: Active Neo4j async session the coordinator opens a transaction on.
         src_id: ID of the source character node.
         dst_id: ID of the destination character node.
 
@@ -64,8 +66,7 @@ async def get_relation_phase_state(
     Raises:
         neo4j.exceptions.Neo4jError: On graph connectivity or query failure.
     """
-    tx = await session.begin_transaction()
-    async with tx:
+    async def _work(tx: AsyncTransaction) -> RelationPhaseRow | None:
         result = await tx.run(_CYPHER_GET_RELATION_PHASE_STATE, src_id=src_id, dst_id=dst_id)
         record = await result.single()
         if record is None:
@@ -77,3 +78,5 @@ async def get_relation_phase_state(
             relationship_phase=record["relationship_phase"],
             phase_started_at_tick=record["phase_started_at_tick"],
         )
+
+    return await run_in_tx(session, _work)

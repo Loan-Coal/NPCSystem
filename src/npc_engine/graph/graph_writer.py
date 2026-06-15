@@ -16,12 +16,13 @@ from datetime import datetime, timezone
 from time import perf_counter
 from typing import Literal
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.config import Settings
 from npc_engine.graph.currency_writer import get_outbound_session_total, transfer_currency_atomic
 from npc_engine.graph.item_writer import transfer_item_atomic
 from npc_engine.graph.relation_delta_writer import apply_relation_delta as apply_relation_delta
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.graph.transfer_validators import build_currency_transfer_command, build_item_transfer_command
 from npc_engine.graph.write_metrics import CURRENCY_TRANSFERS_METRIC, record_graph_write_metrics
 from npc_engine.utils.metrics import increment_metric
@@ -60,14 +61,16 @@ async def ensure_relation_edge(
     defaults (trust/fear/affection/interaction_count = 0, relevance_score = 0.0).
 
     Args:
-        session: Active Neo4j async session; opens and commits its own transaction.
+        session: Active Neo4j async session the coordinator opens a transaction on.
         src_id: ID of the source Character node.
         dst_id: ID of the destination Character node.
     """
     now = datetime.now(timezone.utc).isoformat()
-    async with await session.begin_transaction() as tx:
+
+    async def _work(tx: AsyncTransaction) -> None:
         await tx.run(_CYPHER_ENSURE_RELATES_TO, src_id=src_id, dst_id=dst_id, now=now)
-        await tx.commit()
+
+    await run_in_tx(session, _work)
 
 
 async def apply_buy_sell_currency_transfer(

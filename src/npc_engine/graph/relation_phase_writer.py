@@ -9,7 +9,9 @@ Used by: engines/relationship/affinity_engine (slice 2 call-site wiring).
 
 from __future__ import annotations
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
+
+from npc_engine.graph.transaction_coordinator import run_in_tx
 
 
 _CYPHER_SET_RELATIONSHIP_PHASE = """
@@ -28,10 +30,11 @@ async def write_relationship_phase(
 ) -> None:
     """Persist relationship_phase and phase_started_at_tick on the RELATES_TO edge.
 
-    Opens and commits its own transaction; callers must not pass an active transaction.
+    The write runs inside a single transaction owned by the graph transaction
+    coordinator (``run_in_tx``); callers pass a session, never a transaction.
 
     Args:
-        session: Active Neo4j async session used to begin the transaction.
+        session: Active Neo4j async session the coordinator opens a transaction on.
         src_id: ID of the source character node.
         dst_id: ID of the destination character node.
         phase: The new relationship phase string (RelationshipPhase value) to persist.
@@ -40,8 +43,7 @@ async def write_relationship_phase(
     Raises:
         neo4j.exceptions.Neo4jError: On graph connectivity or query execution failure.
     """
-    tx = await session.begin_transaction()
-    async with tx:
+    async def _work(tx: AsyncTransaction) -> None:
         await tx.run(
             _CYPHER_SET_RELATIONSHIP_PHASE,
             src_id=src_id,
@@ -49,4 +51,5 @@ async def write_relationship_phase(
             relationship_phase=phase,
             phase_started_at_tick=tick,
         )
-        await tx.commit()
+
+    await run_in_tx(session, _work)

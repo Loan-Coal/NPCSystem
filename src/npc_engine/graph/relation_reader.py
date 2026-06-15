@@ -11,10 +11,11 @@ Used by: npc_engine.api.routes.relationship
 
 from __future__ import annotations
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.graph.relation_phase_reader import RelationPhaseRow, get_relation_phase_state
 from npc_engine.graph.relation_writer import get_relation_values
+from npc_engine.graph.transaction_coordinator import run_in_tx
 
 
 class RelationReader:
@@ -34,6 +35,9 @@ class RelationReader:
     async def get_relation_scalars(self, *, src_id: str, dst_id: str) -> dict[str, int]:
         """Return the raw trust, fear, and affection scalars for a directed relation edge.
 
+        The read runs inside a transaction owned by the graph transaction
+        coordinator (``run_in_tx``).
+
         Args:
             src_id: ID of the source character node.
             dst_id: ID of the destination character node.
@@ -44,9 +48,10 @@ class RelationReader:
         Raises:
             RelationEdgeNotFoundError: If no RELATES_TO edge exists between src and dst.
         """
-        tx = await self._session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> dict[str, int]:
             return await get_relation_values(tx=tx, src_id=src_id, dst_id=dst_id)
+
+        return await run_in_tx(self._session, _work)
 
     async def get_relation_phase_row(self, *, src_id: str, dst_id: str) -> RelationPhaseRow | None:
         """Return the edge's scalars plus persisted phase and phase-start tick.
