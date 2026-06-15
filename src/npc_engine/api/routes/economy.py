@@ -124,9 +124,12 @@ async def evaluate_trade(
             detail={"code": "INSUFFICIENT_FUNDS", "message": "The buyer does not have enough gold."},
         ) from exc
     except NodeNotFoundError as exc:
+        # Redacted (L8-02): never echo exc.node_id (internal graph node id) to the
+        # client; the real id is logged server-side only.
+        _logger.info("trade_character_not_found: node_id=%s", exc.node_id)
         raise HTTPException(
             status_code=422,
-            detail={"code": "CHARACTER_NOT_FOUND", "message": f"Character not found: {exc.node_id}"},
+            detail={"code": "CHARACTER_NOT_FOUND", "message": "Character not found."},
         ) from exc
     except ItemTransferValidationError as exc:
         raise HTTPException(

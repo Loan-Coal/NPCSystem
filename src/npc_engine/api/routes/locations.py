@@ -23,6 +23,13 @@ from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.location_graph_queries import get_ancestors, get_descendants
 from npc_engine.graph.location_writer import delete_part_of, write_part_of
+from npc_engine.utils.logging import get_logger
+
+logger = get_logger(__name__)
+
+# Redacted, stable client detail (L8-02): never echo str(exc), which carries the
+# caller-supplied ids/internal context. The real message is logged server-side.
+_INVALID_PART_OF_DETAIL = "A location cannot be PART_OF itself"
 
 # ---------------------------------------------------------------------------
 # Request models
@@ -85,7 +92,8 @@ async def create_part_of(
             hierarchy_level=body.hierarchy_level,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.info("location_part_of_invalid", extra={"error": str(exc)})
+        raise HTTPException(status_code=400, detail=_INVALID_PART_OF_DETAIL) from exc
     return ok_response({"child_id": child_id, "parent_id": body.parent_id})
 
 

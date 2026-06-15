@@ -120,7 +120,9 @@ See `review-fixes/INDEX.md` for the ordered backlog and `review-fixes/FIX-SEV-*.
 - **2026-06-14 /fix-parallel batch 1 — INTEGRATED (munich-demo, make check GREEN, 2180 passed, cov 86.74%):**
   SEV-01 (scheme tx safety, `f09c9d6`+`312ba48`), SEV-03 (scheme typing, `34ae70f`), SEV-05 + SEV-08
   (investigation_service + location_graph tests, `2adcaff`).
+- **2026-06-14 /fix-next — INTEGRATED:** SEV-02 (error-leak redaction in require_node + locations + economy,
+  3 new redaction tests; make check GREEN, 2183 passed, cov 86.83%).
 - **Pending redo via /fix-next** (parallel workers branched off stale `main`; source edits conflicted):
-  SEV-02, SEV-04 (note: real tree has more sites than the stale worker saw — `gossip_handler.py`,
+  SEV-04 (note: real tree has more sites than the stale worker saw — `gossip_handler.py`,
   `subgraph_retriever.py`), SEV-09, SEV-12.
 - **Not started:** SEV-06 (keep solo/serial), SEV-07, SEV-10, SEV-11. **Blocked:** DEC-111…121.

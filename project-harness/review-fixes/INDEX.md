@@ -2,9 +2,10 @@
 
 ## Carry-forward notes
 <!-- ≤10 lines. /fix-next and /fix-parallel append running context here. -->
-- 2026-06-14 /fix-parallel batch 1: SEV-01,03,05,08 INTEGRATED on munich-demo (make check GREEN, 2180 passed, cov 86.74%). Commits 2adcaff, 34ae70f, f09c9d6, 312ba48.
-- HARNESS BUG: `isolation:worktree` branched workers off `main` (ea16f74), 454 commits behind munich-demo. Source-editing workers on the stale base conflicted; only good-base (W1=327180a) + new-file (W5) salvaged. **Run the remaining SEVs via /fix-next (no worktree) — it operates on munich-demo directly.**
-- REDO next (stale-base/incomplete): SEV-02 (route leak), SEV-04 (KnowledgeState — real tree has MORE sites: gossip_handler.py, subgraph_retriever.py beyond knowledge_propagator.py; reuse common/knowledge_types.py design), SEV-09, SEV-12 (config conflicts).
+- 2026-06-14 INTEGRATED: SEV-01,03,05,08 (/fix-parallel batch 1) + SEV-02 (/fix-next, error-leak redaction). make check GREEN, 2183 passed, cov 86.83%.
+- HARNESS BUG: `isolation:worktree` branched workers off `main` (ea16f74), 454 commits behind munich-demo. **Run remaining SEVs via /fix-next (no worktree) — it operates on munich-demo directly.**
+- REDO next: SEV-04 (KnowledgeState — real tree has MORE sites: gossip_handler.py, subgraph_retriever.py beyond knowledge_propagator.py; reuse common/knowledge_types.py design — already created), SEV-09, SEV-12 (config conflicts).
+- Redaction pattern (reuse for any new route leak): fixed client detail constant + `logger.info(..., extra={...})` server-side; assert sentinel absent from body. See `route_helpers._NOT_FOUND_DETAIL`, `test_route_error_redaction.py`.
 - NOT STARTED: SEV-06 (repo-wide future-annotations sweep — keep solo/serial), SEV-07, SEV-10, SEV-11.
 - Decide items (DEC-111…121) BLOCKED pending human approval — do not start via /fix-next.
 
@@ -15,7 +16,7 @@
 - [x] SEV-03 — Scheme typing: `SchemeStatus` Literal + typed route payload + covert-props model  (deps: none · files: `graph/scheme_reader.py`, `engines/scheming/covert_event_factory.py`, `api/routes/schemes.py`, models)
 
 ### Block B — Security / error-leakage (independent)
-- [ ] SEV-02 — Residual error-message leakage in 3 route sites + extend redaction guard test  (deps: none · files: `api/route_helpers.py`, `api/routes/locations.py`, `api/routes/economy.py`, `tests/.../test_route_error_redaction.py`)
+- [x] SEV-02 — Residual error-message leakage in 3 route sites + extend redaction guard test  (deps: none · files: `api/route_helpers.py`, `api/routes/locations.py`, `api/routes/economy.py`, `tests/.../test_route_error_redaction.py`)
 - [ ] SEV-09 — Staging/prod gate for `LOG_LEVEL` (mirror L1-04 validator)  (deps: none · files: `config/config_validators.py`, `config/config.py`, tests)
 
 ### Block C — Typing / fixed-sets (independent)

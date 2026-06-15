@@ -131,6 +131,63 @@ def test_graph_error_to_http_redacts_schema_path_but_keeps_validation_feedback()
     assert "/srv/npc_engine" not in str(sch.detail)
 
 
+def test_require_node_does_not_echo_node_type() -> None:
+    """L1-08: require_node 404 must not echo the (URL-controlled) node_type label."""
+    from fastapi import HTTPException
+
+    from npc_engine.api.route_helpers import require_node
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_node(None, node_type="SecretTypeLabel")
+
+    assert exc_info.value.status_code == 404
+    assert "SecretTypeLabel" not in str(exc_info.value.detail)
+
+
+def test_locations_self_loop_does_not_leak_child_id() -> None:
+    """L8-02: locations part_of self-loop 400 must not echo str(exc) (the child_id)."""
+    from npc_engine.api.routes import locations
+
+    app = FastAPI()
+    app.include_router(locations.admin_router)
+    app.dependency_overrides[get_db_session] = _db_session_stub
+
+    response = TestClient(app).post(
+        "/locations/leak_loc_77/part_of",
+        json={"parent_id": "leak_loc_77", "hierarchy_level": 2},
+    )
+
+    assert response.status_code == 400
+    assert "leak_loc_77" not in json.dumps(response.json())
+
+
+def test_economy_trade_not_found_does_not_leak_node_id() -> None:
+    """L8-02: economy trade NodeNotFoundError 422 must not echo exc.node_id."""
+    from npc_engine.api.dependency_singletons import get_trade_engine
+    from npc_engine.api.routes import economy
+    from npc_engine.utils.errors import NodeNotFoundError
+
+    class _BoomTrade:
+        async def evaluate_offer(self, **kwargs):
+            raise NodeNotFoundError(node_type="Character", node_id="secret_char_99")
+
+    app = FastAPI()
+    app.include_router(economy.router)
+    app.dependency_overrides[get_db_session] = _db_session_stub
+    app.dependency_overrides[get_trade_engine] = lambda: _BoomTrade()
+
+    response = TestClient(app).post(
+        "/economy/trade",
+        json={
+            "buyer_id": "b1", "seller_id": "s1", "item_id": "i1",
+            "item_type": "sword", "offered_price": 10, "current_tick": 0,
+        },
+    )
+
+    assert response.status_code == 422
+    assert "secret_char_99" not in json.dumps(response.json())
+
+
 def test_quest_generation_value_error_does_not_leak_path(monkeypatch: pytest.MonkeyPatch) -> None:
     class _BoomEngine:
         async def generate(self, **kwargs):

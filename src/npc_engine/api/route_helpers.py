@@ -117,7 +117,10 @@ def require_node(node: T | None, *, node_type: str) -> T:
         HTTPException: 404 when node is None.
     """
     if node is None:
-        raise HTTPException(status_code=404, detail=f"{node_type} not found")
+        # Redacted, stable detail (L1-08): node_type is URL-controlled at some call
+        # sites; never echo it. Real label is logged server-side only.
+        logger.info("require_node_not_found", extra={"node_type": node_type})
+        raise HTTPException(status_code=404, detail=_NOT_FOUND_DETAIL)
     return node
 
 
