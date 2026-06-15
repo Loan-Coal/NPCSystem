@@ -41,19 +41,35 @@
 
 ## Block G — Resolved-decision backlog (DEC-111…121 → SEV-13…23, decided 2026-06-14)
 
-Briefs NOT yet written — generate `FIX-SEV-NN.md` before running `/fix-next` on each (or via `/fix-parallel`
-step 3). Ordered roughly small→large; SEV-15/19/21 are the heavy refactors. Decisions recorded in `DECISIONS.md`.
-- [x] SEV-13 — Hard-raise idempotency in staging/prod (DEC-111)  (deps: none · files: `config_logging_validators.py`-style sibling or `config_validators.py`, `config.py`, tests)
-- [ ] SEV-14 — Move `system_v1_router` under `admin_prefix` `/v1/admin/system/*` (DEC-112)  (deps: none · files: `main.py`/router registry, route tests · INTERFACE change)
-- [ ] SEV-16 — Type `OkEnvelope[T]` payloads for public/SDK routes (DEC-114)  (deps: none · files: `api/routes/*` public set, payload models)
-- [x] SEV-18 — Trace `event.summary`→LLM; move covert template to `prompts/scheming/` if LLM-bound (DEC-116)  (deps: none · files: `covert_event_factory.py`, maybe `prompts/scheming/`)
-- [x] SEV-20 — `investigation_service` writers `CREATE`→`MERGE` on stable keys (DEC-118)  (deps: SEV-05 tests · files: `graph/investigation_service.py`, tests)
-- [x] SEV-22 — `DistortionType` → `str` + live registry validator; unfreeze `REGISTRY_KEYS` (DEC-120)  (deps: none · files: `gossip_distort.py`, `distortion_strategy.py`, tests)
-- [x] SEV-23 — Split `LLMClientProtocol` into generate/structured/stream protocols (DEC-121)  (deps: none · files: `engines/llm/protocols.py`, adapters, dialogue client)
+All 11 briefs written (`FIX-SEV-13…23.md`, format-verified). Decisions recorded in `DECISIONS.md`.
+**`/fix-next` ordering:** the live checklist below holds only items a single `/fix-next` pass can finish.
+Items needing a decision or multiple commits are parked in the two subsections AFTER it so `/fix-next`
+does not stop on them — promote one into the checklist when you're ready to drive it.
+
+### Ready for `/fix-next` (single-pass, in order)
 - [ ] SEV-17 — Split `dependencies_advanced.py` into per-engine submodules (DEC-115)  (deps: none · files: `api/dependencies_advanced.py` → submodules; resolves ISSUE-105)
-- [ ] SEV-19 — Add R006 40-line gate; refactor `advance`/`dispatch`/`seed`; waive cohesive rest (DEC-117)  (deps: none · files: `scripts/check_rules.py`, `tick_scheduler.py`, `auth/middleware.py`, `data/api_seeder.py`, DECISIONS waivers)
-- [ ] SEV-21 — Migrate 14+ graph sub-writers to `AsyncTransaction` params; `graph_writer` coordinates (DEC-119)  (deps: none · files: most of `graph/`, large refactor)
-- [ ] SEV-15 — Adopt full `mypy --strict`; fix all 274 errors / 87 files; flip `make type` gate (DEC-113)  (deps: none · files: repo-wide; largest — sub-phase it)
+
+### Done (DEC-111…121 quick wins + mediums)
+- [x] SEV-13 — Hard-raise idempotency in staging/prod (DEC-111)  (`ec2bf6a`)
+- [x] SEV-18 — Covert summary traced as NOT LLM-bound; documented (DEC-116)  (`7185425`)
+- [x] SEV-20 — `investigation_service` writers `CREATE`→`MERGE` on stable id (DEC-118)  (`5717449`)
+- [x] SEV-22 — `DistortionType` → `str` + live registry validator (DEC-120)  (`2cd8c8b`)
+- [x] SEV-23 — Split `LLMClientProtocol` into generate/structured/stream (DEC-121)  (`eab1726`)
+
+### Blocked — needs a human decision (do NOT run `/fix-next`; resolve first)
+- [ ] SEV-14 — Move `system_v1_router` → `/v1/admin/system/*` (DEC-112). **BLOCKED:** prefix-scoped auth means
+  this escalates the endpoints to admin scope AND breaks the demo's live `/v1/system/*` polling. Decide the
+  demo's auth key/scope first. (files: `router_registry.py`, demo client/poller/run_scenes, e2e, tests)
+
+### Multi-phase — NOT a single `/fix-next` pass (drive incrementally / its own session)
+Each brief says to sub-phase; `/fix-next` does one item→one commit, so these would over-reach in one go.
+- [ ] SEV-16 — Type `OkEnvelope[T]` payloads, route-by-route (DEC-114). ~32 routes still untyped; many payloads
+  are dynamic engine-aggregate dicts (clock/batch) that stay `dict[str,Any]`. Do fixed-shape demo reads first.
+- [ ] SEV-19 — R006 40-line gate + refactor `advance`(373)/`dispatch`/`seed`; waive cohesive rest (DEC-117).
+  One function per commit.
+- [ ] SEV-21 — Migrate 14+ graph sub-writers to `AsyncTransaction` params (DEC-119). One writer-family per commit.
+- [ ] SEV-15 — Adopt full `mypy --strict`; fix all 274 errors / 87 files; flip `make type` (DEC-113).
+  Sub-phase by package.
 
 ## Log-only (ISSUES.md, no brief)
 ISSUE-101 schedule_queries cov · ISSUE-102 intrigue panel behavioral tests · ISSUE-103 135 stale docstrings ·
