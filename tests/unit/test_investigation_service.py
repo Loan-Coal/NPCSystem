@@ -1,7 +1,8 @@
 """
 test_investigation_service.py — Unit tests for graph/investigation_service.py writers.
 
-Tests the current CREATE-based contract. Does NOT test MERGE semantics (deferred to DEC-118).
+Tests the MERGE-based idempotent contract (SEV-20 / DEC-118): node writers MERGE on a
+stable id (caller-suppliable for retry idempotency); edges already MERGE.
 All Neo4j I/O is replaced by a fake AsyncSession whose .run() is an AsyncMock.
 """
 
@@ -46,6 +47,42 @@ def _make_failing_session(exc: Exception) -> AsyncMock:
     session = AsyncMock()
     session.run = AsyncMock(side_effect=exc)
     return session
+
+
+# ---------------------------------------------------------------------------
+# SEV-20 — MERGE idempotency
+# ---------------------------------------------------------------------------
+
+
+async def test_evidence_and_deduction_cypher_use_merge_not_create() -> None:
+    """Node writes must MERGE on id (idempotent) rather than CREATE (duplicates on retry)."""
+    assert "MERGE" in _CYPHER_CREATE_EVIDENCE and "CREATE (" not in _CYPHER_CREATE_EVIDENCE
+    assert "MERGE" in _CYPHER_CREATE_DEDUCTION and "CREATE (" not in _CYPHER_CREATE_DEDUCTION
+
+
+async def test_create_evidence_honors_supplied_id_for_idempotency() -> None:
+    """A caller-supplied evidence_id is used as the MERGE key, so a retry hits one node."""
+    session = _make_session()
+    id1 = await create_evidence(
+        session, kind="physical", description="d", discovered_at_tick=1,
+        discovered_by_character_id="c", evidence_id="ev-fixed",
+    )
+    id2 = await create_evidence(
+        session, kind="physical", description="d", discovered_at_tick=1,
+        discovered_by_character_id="c", evidence_id="ev-fixed",
+    )
+    assert id1 == id2 == "ev-fixed"
+    assert all(c[1]["id"] == "ev-fixed" for c in session.run.call_args_list)
+
+
+async def test_create_deduction_honors_supplied_id_for_idempotency() -> None:
+    """A caller-supplied deduction_id is used as the MERGE key."""
+    session = _make_session()
+    did = await create_deduction(
+        session, held_by_character_id="c", claim="x", confidence=50, deduction_id="ded-fixed",
+    )
+    assert did == "ded-fixed"
+    assert session.run.call_args_list[0][1]["id"] == "ded-fixed"
 
 
 # ---------------------------------------------------------------------------
