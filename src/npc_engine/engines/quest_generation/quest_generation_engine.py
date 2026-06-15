@@ -8,7 +8,7 @@ Dependencies: engines.quest_generation.slot_models, engines.quest_generation.slo
               engines.quest_generation.template_loader, engines.llm.protocols,
               graph.quest_node_service, graph.need_queries, graph.item_queries,
               graph.graph_reader, graph.group_service, common.yaml_utils
-Dependencies injected: LLMClientProtocol, SlotValidator factory, list[QuestTemplateRecord].
+Dependencies injected: LLMStructuredProtocol, SlotValidator factory, list[QuestTemplateRecord].
 Used by: npc_engine.api.routes.quest_generation
 
 NOTE: This file exceeds the 300-line hard limit (~400 lines after S3.1). The additional
@@ -36,7 +36,7 @@ from npc_engine.graph.world_state_reader import get_world_state
 from pydantic import ValidationError
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
-from npc_engine.engines.llm.protocols import LLMClientProtocol
+from npc_engine.engines.llm.protocols import LLMStructuredProtocol
 from npc_engine.utils.errors import LLMRequestError, LLMTimeoutError
 from npc_engine.engines.quest_generation.slot_models import (
     GeneratedQuest,
@@ -93,7 +93,7 @@ class QuestGenerationEngine:
 
     def __init__(
         self,
-        llm_client: LLMClientProtocol,
+        llm_client: LLMStructuredProtocol,
         templates: list[QuestTemplateRecord],
         prompts_dir: Path,
         max_tokens: int = 256,

@@ -5,7 +5,7 @@ Purpose: Consolidates recent session turns into a Memory node via a single LLM s
 Does NOT: query Neo4j directly — delegates to graph.memory_service.create_memory.
 Dependencies: engines.llm.protocols, engines.dialogue.session_store, graph.memory_service,
               graph.db, config, world.time_utils, common.yaml_utils
-Dependencies injected: SessionStore, LLMClientProtocol, GraphDB, Settings, AsyncSession (per consolidate call).
+Dependencies injected: SessionStore, LLMGenerateProtocol, GraphDB, Settings, AsyncSession (per consolidate call).
 Used by: scheduler.tick_scheduler
 """
 
@@ -21,7 +21,7 @@ from neo4j import AsyncSession
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
 from npc_engine.config import Settings
-from npc_engine.engines.llm.protocols import LLMClientProtocol
+from npc_engine.engines.llm.protocols import LLMGenerateProtocol
 from npc_engine.graph.belief_queries import get_beliefs_for_character
 from npc_engine.graph.db import GraphDB
 from npc_engine.graph.memory_queries import get_memories_for_character
@@ -61,7 +61,7 @@ class MemoryConsolidationEngine:
     def __init__(
         self,
         session_store: SessionStore,
-        llm_client: LLMClientProtocol,
+        llm_client: LLMGenerateProtocol,
         graph_db: GraphDB,
         settings: Settings,
         turn_threshold: int,

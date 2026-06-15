@@ -4,7 +4,7 @@ Layer: engines
 Purpose: NPC-initiated proactive dialogue: detects high-vividness unshared memories
          co-located with idle players and generates one in-character line via LLM.
 Does NOT: wire into the scheduler (slice 2), send WS messages, or persist state.
-Dependencies injected: LLMClientProtocol, MemoryServiceProtocol, LocationServiceProtocol.
+Dependencies injected: LLMGenerateProtocol, MemoryServiceProtocol, LocationServiceProtocol.
 Public surface: ProactiveDialogueEngine, ProactiveTrigger, ProactiveLine,
                 HIGH_VIVIDNESS_THRESHOLD, MIN_IDLE_TICKS
 """

@@ -5,7 +5,7 @@ Purpose: Detects chapter transitions via quest density and creates LLM-labeled C
 Does NOT: perform graph writes directly — delegates to graph.chapter_writer.
 Dependencies: graph.chapter_queries, graph.chapter_writer, engines.llm.protocols,
               common.yaml_utils, engines.chapter.chapter_labeler
-Dependencies injected: LLMClientProtocol, AsyncSession (per call).
+Dependencies injected: LLMGenerateProtocol, AsyncSession (per call).
 Used by: scheduler.tick_scheduler, api.dependency_singletons
 
 NOTE: ~320 lines after extracting label_chapter_by_rules to chapter_labeler.py.
@@ -43,7 +43,7 @@ from npc_engine.graph.world_state_reader import get_world_state
 from npc_engine.engines.chapter.chapter_labeler import label_chapter_by_rules
 
 if TYPE_CHECKING:
-    from npc_engine.engines.llm.protocols import LLMClientProtocol
+    from npc_engine.engines.llm.protocols import LLMGenerateProtocol
 
 
 LOGGER = logging.getLogger(__name__)
@@ -79,7 +79,7 @@ class ChapterEngine:
 
     def __init__(
         self,
-        llm_client: LLMClientProtocol,
+        llm_client: LLMGenerateProtocol,
         *,
         quest_threshold: int = _DEFAULT_QUEST_THRESHOLD,
         beat_intensity_threshold: int = _DEFAULT_BEAT_INTENSITY_THRESHOLD,

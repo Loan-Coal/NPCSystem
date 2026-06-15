@@ -1,10 +1,9 @@
 """
-protocols.py - Shared protocol for LLM backend adapters.
+Module: protocols
 Layer: engines
-Purpose: (auto-detected — review)
-
+Purpose: ISP-split Protocols for LLM backend adapters (SEV-23 / DEC-121) — generate,
+         structured, and stream surfaces so a backend implements only what it supports.
 Does NOT: implement network requests.
-
 Dependencies injected: None.
 """
 from __future__ import annotations
@@ -13,8 +12,12 @@ from typing import Any, AsyncIterator, Protocol, runtime_checkable
 
 
 @runtime_checkable
-class LLMClientProtocol(Protocol):
-    """Contract for all LLM adapter implementations."""
+class LLMGenerateProtocol(Protocol):
+    """Minimal LLM contract: plain-text generation plus introspection.
+
+    The smallest surface most engines need (chapter, memory-consolidation,
+    proactive, …). A backend that only does text generation implements just this.
+    """
 
     async def generate(
         self,
@@ -42,6 +45,25 @@ class LLMClientProtocol(Protocol):
             LLMTimeoutError: If the request exceeds the configured timeout.
             LLMRequestError: If the backend returns an error or invalid response.
         """
+
+    async def health_check(self) -> bool:
+        """Return True if the backend is reachable and ready. Non-raising.
+
+        Returns:
+            True if the backend responded successfully, False on any error.
+        """
+
+    def model_name(self) -> str:
+        """Return backend model identifier.
+
+        Returns:
+            String key identifying the model (e.g. "mistral7b", "ollama").
+        """
+
+
+@runtime_checkable
+class LLMStructuredProtocol(LLMGenerateProtocol, Protocol):
+    """Adds schema-constrained JSON generation (e.g. quest generation, dialogue)."""
 
     async def generate_structured(
         self,
@@ -75,6 +97,11 @@ class LLMClientProtocol(Protocol):
             an ERROR is logged when the canned fallback is ultimately served.
         """
 
+
+@runtime_checkable
+class LLMStreamProtocol(LLMGenerateProtocol, Protocol):
+    """Adds token streaming for low-latency UX (e.g. dialogue)."""
+
     def stream(
         self,
         prompt: str,
@@ -102,16 +129,11 @@ class LLMClientProtocol(Protocol):
             LLMRequestError: If the backend returns a stream error.
         """
 
-    async def health_check(self) -> bool:
-        """Return True if the backend is reachable and ready. Non-raising.
 
-        Returns:
-            True if the backend responded successfully, False on any error.
-        """
+@runtime_checkable
+class LLMClientProtocol(LLMStructuredProtocol, LLMStreamProtocol, Protocol):
+    """Full LLM adapter contract: generate + structured + stream + health + name.
 
-    def model_name(self) -> str:
-        """Return backend model identifier.
-
-        Returns:
-            String key identifying the model (e.g. "mistral7b", "ollama").
-        """
+    Composes every sub-protocol. Concrete adapters (ollama, mock) implement this;
+    consumers should depend on the narrowest sub-protocol they actually use.
+    """

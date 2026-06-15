@@ -7,7 +7,7 @@ Does NOT: wire into the tick scheduler, send WS messages, or persist state.
          Scheduler wiring is slice 2 (EXP-10 S2).
 Dependencies: engines.llm.protocols, engines.proactive_dialogue.models,
               common.yaml_utils
-Dependencies injected: LLMClientProtocol, memory_service, location_service.
+Dependencies injected: LLMGenerateProtocol, memory_service, location_service.
 Used by: (slice 2) scheduler.tick_scheduler
 """
 
@@ -20,7 +20,7 @@ from typing import Any, Protocol, runtime_checkable
 from neo4j import AsyncSession
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
-from npc_engine.engines.llm.protocols import LLMClientProtocol
+from npc_engine.engines.llm.protocols import LLMGenerateProtocol
 from npc_engine.engines.proactive_dialogue.models import ProactiveLine, ProactiveTrigger
 
 _logger = logging.getLogger(__name__)
@@ -137,7 +137,7 @@ class ProactiveDialogueEngine:
 
     def __init__(
         self,
-        llm_client: LLMClientProtocol,
+        llm_client: LLMGenerateProtocol,
         memory_service: MemoryServiceProtocol,
         location_service: LocationServiceProtocol,
         prompts_dir: Path = _PROMPTS_DIR,
@@ -145,7 +145,7 @@ class ProactiveDialogueEngine:
         """Initialise the engine with injected dependencies.
 
         Args:
-            llm_client: LLM adapter implementing LLMClientProtocol.
+            llm_client: LLM adapter implementing LLMGenerateProtocol.
             memory_service: Service returning unshared memories for an NPC.
             location_service: Service returning player idle-tick counts.
             prompts_dir: Override path to the proactive prompt directory
