@@ -33,9 +33,22 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
 - **need** (DONE, `c96476e`): `engines/ports/need_port.NeedGraphPort` +
   `graph/repositories/need_repository.Neo4jNeedRepository`; `NeedDecayEngine` migrated. (Port relocated from
   `engines/need/need_graph_port.py` → `engines/ports/` when the shared package was established.)
-- **mood** (DONE): `engines/ports/mood_port.MoodGraphPort` + `graph/repositories/mood_repository.Neo4jMoodRepository`;
-  `MoodContagionEngine` migrated (`run_tick`/`initialize` drop `session`), wired in `dependencies_advanced/social.py`.
+- **mood** (DONE, `55f0b83`): `MoodGraphPort` + `Neo4jMoodRepository`; `MoodContagionEngine` migrated.
+- **clique** (DONE, `3539faa`): `GroupGraphPort` + `Neo4jGroupRepository`; `CliqueFormationEngine` migrated.
+- **skill** (DONE, `6fa83e3`): `SkillGraphPort` + `Neo4jSkillRepository`; `SkillProgressionEngine` migrated
+  (added the first behavioral unit test — was construction-only).
+- **routine** (DONE, `46b7e58`): `RoutineGraphPort` + `Neo4jRoutineRepository`; `RoutineEngine` migrated
+  (folds `record_departure` from the location-history domain).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.
+
+## Sequencing note (by actual complexity, not file count)
+The "simple singletons" framing was optimistic: several Wave-1 engines (memory, reputation, player_model) are
+actually *entangled* (inline `MemoryEngine()` construction across routes/handlers; reputation's session-coupled
+`RelationReader` factory + private `_reader` mutation). Process **clean singletons first** (done: need, mood,
+clique, skill, routine; remaining: story_pacing, director, chapter, succession, agenda, emotion,
+knowledge_learning), then build the **shared read-ports** (RelationReadPort, WorldStateReadPort,
+PlayerLocationReadPort, CharacterReadPort) which simplify the entangled engines, then do the entangled ones,
+then Wave 3 (`run_in_tx` coordinators).
 
 ## Wave order (simple → hard)
 Wave 1: need ✓, mood ✓, clique, memory(+decay_tick), reputation(+tick; builds RelationReadPort),
