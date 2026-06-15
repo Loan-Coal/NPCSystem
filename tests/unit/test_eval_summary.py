@@ -2,20 +2,14 @@
 test_eval_summary.py - Unit tests for the eval-run headline metric + summary.
 
 Exercises evals/summary.py, which is part of the standalone eval harness
-(not under src/npc_engine). The evals directory is inserted onto sys.path
-so the bare-name import convention used by the harness works under pytest.
+(not under src/npc_engine). The evals/ directory is on pytest's pythonpath
+(pyproject) so the harness's bare-name imports resolve.
 """
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-_EVALS_DIR = Path(__file__).resolve().parents[2] / "evals"
-if str(_EVALS_DIR) not in sys.path:
-    sys.path.insert(0, str(_EVALS_DIR))
-
-import summary  # noqa: E402  (path inserted above)
+# evals/ is on pytest's pythonpath via pyproject.
+import summary
 
 
 def _case(case_id: str, expectations: list[dict]) -> dict:

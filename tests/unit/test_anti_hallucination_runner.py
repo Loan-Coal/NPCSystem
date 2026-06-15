@@ -7,14 +7,12 @@ All tests use mock httpx — no live HTTP calls.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Add evals/ to path so the runner module is importable without installing it
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "evals"))
+# evals/ is on pytest's pythonpath via pyproject so bare-name imports resolve.
 
 from anti_hallucination_runner import (
     AntiHallucinationSummary,

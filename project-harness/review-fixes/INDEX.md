@@ -7,7 +7,8 @@
 - HARNESS BUG: `isolation:worktree` branched workers off `main` (ea16f74), 454 commits behind munich-demo. **Run remaining SEVs via /fix-next (no worktree) — it operates on munich-demo directly.**
 - `common/knowledge_types.py` now holds `KnowledgeState` Literal + `KNOWLEDGE_STATE_KNOWS/RUMOR` — reuse for any new knowledge_state value (do NOT redefine "knows"/"rumor"). Cypher-template literals (event_queries/secret_queries) intentionally stay (data, not Python).
 - New module docstrings need `Does NOT:` + `Dependencies injected:` lines (test_architecture_conformance). New files near 300-line config limit → sibling module (see `config_logging_validators.py`).
-- REMAINING: SEV-07 (eval test hygiene), SEV-10 (check_layers), SEV-11 (docs), SEV-12 (clique magic numbers).
+- REMAINING: SEV-10 (check_layers), SEV-11 (docs), SEV-12 (clique magic numbers).
+- caplog gotcha: `utils/logging.py` sets propagate=False, so pytest `caplog` (root) misses engine logs once logging is configured — capture on the engine logger directly (see test_sev22 secret-seed test).
 - Decide items (DEC-111…121) BLOCKED pending human approval — do not start via /fix-next.
 
 ## Fix-now backlog (ordered, dependency-blocked)
@@ -26,7 +27,7 @@
 
 ### Block D — Test efficacy (independent)
 - [x] SEV-05 — `investigation_service.py` tests (6 writers, happy+failure)  (deps: none · files: `tests/integration/`, `tests/unit/` — NOTE MERGE-vs-CREATE is DEC-118, test current CREATE behavior)
-- [ ] SEV-07 — Eval test hygiene: drop `sys.path`, strengthen seed-log guard, add runner to cov gate  (deps: none · files: 5 eval test files, `test_sev22_rng_determinism.py`, `Makefile` test-cov)
+- [x] SEV-07 — Eval test hygiene: dropped 5 `sys.path.insert` blocks (pythonpath already covers evals), made seed-log guard real (captures on engine logger; propagate=False), added `--cov=runner` to gate. runner HTTP loop coverage → ISSUE-110  (files: 5 eval test files, `test_sev22_rng_determinism.py`, `Makefile`)
 - [x] SEV-08 — `location_graph` route 422 guard tests  (deps: none · files: `tests/.../test_location_graph_route.py`)
 
 ### Block E — Tooling / architecture hygiene (independent)

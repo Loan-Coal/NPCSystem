@@ -10,24 +10,13 @@ Covers:
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Make the evals/ directory importable in the test context
-# ---------------------------------------------------------------------------
-_EVALS_DIR = Path(__file__).resolve().parents[2] / "evals"
-if str(_EVALS_DIR) not in sys.path:
-    sys.path.insert(0, str(_EVALS_DIR))
-
-# ---------------------------------------------------------------------------
-# Imports under test
-# ---------------------------------------------------------------------------
-import matchers  # noqa: E402  (evals/matchers.py)
-from matchers import EvalConfigError, JudgeResult, evaluate  # noqa: E402
+# Imports under test (evals/ is on pytest's pythonpath via pyproject).
+import matchers
+from matchers import EvalConfigError, JudgeResult, evaluate
 
 
 # ---------------------------------------------------------------------------

@@ -2,8 +2,8 @@
 test_eval_matchers.py - Unit tests for the eval-case expectation matchers.
 
 Exercises evals/matchers.py, the standalone eval harness (not under
-src/npc_engine). The evals directory is inserted onto sys.path so the
-bare-name import convention used by the harness works under pytest.
+src/npc_engine). The evals/ directory is on pytest's pythonpath (pyproject)
+so the harness's bare-name imports resolve.
 
 Covers every matcher kind: happy path, failure, and edge cases (empty text,
 missing field, non-numeric, unicode keyword, fallback line, judge timeout/
@@ -12,17 +12,10 @@ unreachable via a monkeypatched httpx.post).
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import httpx
 import pytest
 
-_EVALS_DIR = Path(__file__).resolve().parents[2] / "evals"
-if str(_EVALS_DIR) not in sys.path:
-    sys.path.insert(0, str(_EVALS_DIR))
-
-import matchers  # noqa: E402  (path inserted above)
+import matchers
 
 
 def _resp(text: str) -> dict:

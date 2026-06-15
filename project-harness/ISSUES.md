@@ -1351,3 +1351,15 @@ use the Python constant directly: `awareness_seeder` embeds `'knows'` inside a C
 **Why deferred:** Both are constrained contexts; lower severity than the live engine paths SEV-04 targets.
 **To fix:** For `awareness_seeder`, build the Cypher with the constant via parameterization or an f-string
 referencing `KNOWLEDGE_STATE_KNOWS`; for `api_seeder`, decide whether a local seeder-side constant is acceptable.
+
+## ISSUE-110: `evals/runner.py` HTTP loop (`_run_case`/`main`) has no unit coverage
+**Found:** 2026-06-14, during /fix-next SEV-07
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/runner.py` (`_run_case`, `_setup_reputation`, `main`)
+**Description:** SEV-07 added `--cov=runner` to the gate; runner sits at 24%. Its guard/guarantee
+LOGIC is unit-tested (`test_eval_runner_guards.py`), but the HTTP eval loop, reputation setup, and the
+`main()` `guarantee_demonstrated` gate are exercised only by the live `make eval-llm-demo`, not unit tests.
+**Why deferred:** Unit-testing the loop needs httpx-client mocking + case fixtures (sizeable); out of SEV-07's
+hygiene scope, and total coverage stays ≥80%.
+**To fix:** Add unit tests mocking `httpx.Client` for `_run_case` happy/error paths and a `main()` test
+asserting exit code flips on `guarantee_demonstrated=False`.

@@ -8,14 +8,8 @@ ordinary cases are left untouched. Pure-function tests — no server or LLM.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-_EVALS_DIR = Path(__file__).resolve().parents[2] / "evals"
-if str(_EVALS_DIR) not in sys.path:
-    sys.path.insert(0, str(_EVALS_DIR))
-
-import runner  # noqa: E402  (path inserted above)
+# evals/ is on pytest's pythonpath via pyproject.
+import runner
 
 
 def test_is_guard_case() -> None:

@@ -72,12 +72,43 @@ def test_quest_rng_seed_returns_int() -> None:
 # ── Seed logged in gossip _run_side_effects ───────────────────────────────────
 
 
-def test_secret_propagation_logs_seed(caplog: pytest.LogCaptureFixture) -> None:
-    """The gossip secret RNG seed is logged at DEBUG level per pair."""
-    import logging
-    from npc_engine.engines.gossip.gossip_handler import _secret_rng_seed
+async def test_secret_propagation_logs_seed() -> None:
+    """Driving the real secret-share path emits the per-pair RNG seed at DEBUG.
 
-    seed = _secret_rng_seed("sharer_x", "receiver_y", 99)
-    # The log message format: "gossip_secret_rng seed=%d sharer=%s receiver=%s tick=%d"
-    assert isinstance(seed, int)
-    assert seed >= 0
+    Uses trust=0 (HOSTILE → share probability 0.0) so the rng check returns before any
+    graph I/O — session is never touched. Captures on the engine logger directly (not
+    caplog) because utils.logging sets propagate=False, so root-based capture sees
+    nothing. Deleting the LOGGER.debug call breaks this test (closes the SEV-22/L4-02
+    asserted-not-measured gap).
+    """
+    import logging
+
+    from npc_engine.engines.gossip import gossip_handler as gh
+
+    captured: list[str] = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            captured.append(record.getMessage())
+
+    handler = gh.GossipHandler.__new__(gh.GossipHandler)
+    expected_seed = gh._secret_rng_seed("sharer_x", "receiver_y", 99)
+    cap = _Capture(level=logging.DEBUG)
+    previous_level = gh.LOGGER.level
+    gh.LOGGER.addHandler(cap)
+    gh.LOGGER.setLevel(logging.DEBUG)
+    try:
+        await handler._maybe_propagate_secret(
+            session=None,  # unused: HOSTILE early-returns before any graph call
+            sharer_id="sharer_x",
+            receiver_id="receiver_y",
+            trust=0,
+            tick_id=99,
+        )
+    finally:
+        gh.LOGGER.removeHandler(cap)
+        gh.LOGGER.setLevel(previous_level)
+
+    seed_logs = [m for m in captured if "gossip_secret_rng" in m]
+    assert seed_logs, "expected a gossip_secret_rng debug log line"
+    assert f"seed={expected_seed}" in seed_logs[0]
