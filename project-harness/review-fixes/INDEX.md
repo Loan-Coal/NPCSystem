@@ -2,12 +2,12 @@
 
 ## Carry-forward notes
 <!-- ≤10 lines. /fix-next and /fix-parallel append running context here. -->
-- 2026-06-14 INTEGRATED: SEV-01,03,05,08 (parallel batch 1) + SEV-02, SEV-09, SEV-04, SEV-06 (/fix-next). make check GREEN, 2193 passed, cov 87.05%.
 - ENFORCEMENT: ruff `I002` (pyproject `[tool.ruff.lint] extend-select=["I002"]` + isort required-imports) now blocks any non-`__init__.py` src module missing `from __future__ import annotations`. NOTE: ruff EXEMPTS `__init__.py` — those were added manually and are NOT auto-enforced (a new `__init__.py` won't be flagged).
 - HARNESS BUG: `isolation:worktree` branched workers off `main` (ea16f74), 454 commits behind munich-demo. **Run remaining SEVs via /fix-next (no worktree) — it operates on munich-demo directly.**
 - `common/knowledge_types.py` now holds `KnowledgeState` Literal + `KNOWLEDGE_STATE_KNOWS/RUMOR` — reuse for any new knowledge_state value (do NOT redefine "knows"/"rumor"). Cypher-template literals (event_queries/secret_queries) intentionally stay (data, not Python).
 - New module docstrings need `Does NOT:` + `Dependencies injected:` lines (test_architecture_conformance). New files near 300-line config limit → sibling module (see `config_logging_validators.py`).
-- 2026-06-14 DONE: all 12 original SEVs + Block G quick wins (SEV-13/22/18) + mediums SEV-20 (investigation MERGE) + SEV-23 (LLM protocol ISP split). make check GREEN, 2211 passed, cov 86.38%.
+- 2026-06-14/15 DONE: all 12 original SEVs + Block G quick wins (SEV-13/22/18) + mediums SEV-20/23/17. make check GREEN, 2216 passed, cov 86.39%.
+- SEV-17: `dependencies_advanced` is now a PACKAGE (`politics.py`/`social.py`/`progression.py` + re-exporting `__init__`). Add a NEW advanced-engine factory to the matching submodule and to `__init__.__all__` — do NOT recreate a flat file. ISSUE-105's `dependencies_engines.py` (512 lines) is UNTOUCHED — apply the same split if a SEV reopens it.
 - SEV-14 NOT a quick win: moving `/v1/system`→`/v1/admin/system` escalates auth to admin scope (prefix-scoped) AND breaks the demo's live `/v1/system/*` polling. See its brief's gotcha; dedicated session.
 - SEV-16 is L-effort/route-by-route: 35 files; npc_state/emotion/schemes already typed; many payloads are DYNAMIC engine-aggregate dicts (clock/batch) that should stay `dict[str,Any]`. Do fixed-shape demo-read routes first (player_model/chapters/investigations) à la SEV-03. See brief's scoping finding.
 - Remaining Block G: SEV-14 (auth), SEV-16 (route typing, multi-commit); SEV-15/17/19/21 (heavy refactors).
@@ -47,7 +47,7 @@ Items needing a decision or multiple commits are parked in the two subsections A
 does not stop on them — promote one into the checklist when you're ready to drive it.
 
 ### Ready for `/fix-next` (single-pass, in order)
-- [ ] SEV-17 — Split `dependencies_advanced.py` into per-engine submodules (DEC-115)  (deps: none · files: `api/dependencies_advanced.py` → submodules; resolves ISSUE-105)
+- [x] SEV-17 — Split `dependencies_advanced.py` into per-engine submodules (DEC-115)  (deps: none · files: `api/dependencies_advanced/` package: politics/social/progression; ISSUE-105 only PARTLY addressed — `dependencies_engines.py` still 512 lines)
 
 ### Done (DEC-111…121 quick wins + mediums)
 - [x] SEV-13 — Hard-raise idempotency in staging/prod (DEC-111)  (`ec2bf6a`)

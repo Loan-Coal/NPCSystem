@@ -1397,7 +1397,7 @@ remain. L effort.
 freeze? Relevant before any Unity/Unreal SDK is generated from the OpenAPI schema.
 
 ## DEC-115: `dependencies_advanced.py` as a second composition root — bless or fold?
-**Date:** 2026-06-13 · **Status:** ❓ OPEN (raised by /full-review L2-06)
+**Date:** 2026-06-13 · **Status:** ✅ RESOLVED via SEV-17 (`dependencies_advanced/` package: politics/social/progression submodules, ≤91 lines each; `__init__` re-exports keep import paths stable)
 **Context:** CLAUDE.md: "`api/dependencies.py` is the sole composition root." `dependencies_advanced.py`
 defines `@lru_cache` singletons for 11 advanced engines and is imported by `get_tick_scheduler()` in
 `dependencies_engines.py`. DEC-042/076 bless `dependencies_engines.py` but not this further split.
@@ -1470,8 +1470,8 @@ item (SEV-13…SEV-23) in `review-fixes/INDEX.md`.
   then flip the `make type` gate to strict. Largest item — expect sub-phases.
 - **DEC-114 → SEV-16 (envelope typing):** Type `OkEnvelope[T]` payloads for PUBLIC/SDK-facing routes first
   (npc_state, dialogue, schemes, …); defer internal/admin routes.
-- **DEC-115 → SEV-17 (composition root):** Split `dependencies_advanced.py` into PER-ENGINE submodules
-  (one per engine family); keeps the single-root spirit and the 300-line cap.
+- **DEC-115 → SEV-17 (composition root):** ✅ DONE — `dependencies_advanced/` package with politics/social/
+  progression submodules; `__init__` re-exports the 13 `get_*` names so callers are unchanged.
 - **DEC-116 → SEV-18 (covert template):** TRACE whether `event.summary` reaches LLM context; move the
   template to `prompts/scheming/` only if it does, else document it as data-only in-file.
 - **DEC-117 → SEV-19 (fn-length):** Add an R006-style 40-line gate; REFACTOR the worst (`advance` 373/depth7,

@@ -1308,6 +1308,9 @@ to one module; introduce a `SchemeStepKind`.
 scheme + director + memory + goal factories pushed it past without a new DECISIONS entry.
 **Why deferred:** Composition-root refactor; not blocking. Relates to DEC-115 (second composition root).
 **To fix:** Extract advanced engine factories into a submodule, or add a DECISIONS entry re-baselining the cap.
+**Progress:** 2026-06-15 (SEV-17) — per-engine submodule pattern established by splitting the *sibling* root
+`dependencies_advanced.py` into `dependencies_advanced/{politics,social,progression}.py`. `dependencies_engines.py`
+itself is still 512 lines (DEC-076-grandfathered); apply the same split or re-baseline to close this. STILL OPEN.
 
 ## ISSUE-106: `asyncio.iscoroutinefunction` DeprecationWarnings under Python 3.14
 **Found:** 2026-06-13, during /full-review (L4/L9)
