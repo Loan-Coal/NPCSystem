@@ -22,13 +22,18 @@ from npc_engine.config import get_settings
 def get_clique_formation_engine():
     """Create singleton clique formation engine for auto-detecting high-affection character pairs.
 
+    Wires the Neo4j graph adapter (Neo4jGroupRepository) as the engine's injected
+    GroupGraphPort (DEC-122 / SEV-24) so the engine holds no Neo4j session.
+
     Returns:
         CliqueFormationEngine configured with CLIQUE_FORMATION_TICK_INTERVAL from settings.
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
     from npc_engine.engines.clique.clique_formation_engine import CliqueFormationEngine
+    from npc_engine.graph.repositories.group_repository import Neo4jGroupRepository
 
     settings = get_settings()
-    return CliqueFormationEngine(settings=settings)
+    return CliqueFormationEngine(settings=settings, group_repo=Neo4jGroupRepository(get_graph_db()))
 
 
 @lru_cache

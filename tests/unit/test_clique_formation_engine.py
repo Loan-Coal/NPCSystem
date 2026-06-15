@@ -1,54 +1,16 @@
 """
-Unit tests for engines.clique.clique_formation_engine.
+Unit tests for engines.clique.clique_formation_engine — graph access via a mocked
+GroupGraphPort (DEC-122 / SEV-24).
 """
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from npc_engine.engines.clique.clique_formation_engine import CliqueFormationEngine
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-class _FakeRecord:
-    """Minimal record that supports dict(record) via keys()/getitem()."""
-
-    def __init__(self, data: dict):
-        self._data = data
-
-    def keys(self):
-        return list(self._data.keys())
-
-    def __getitem__(self, key):
-        return self._data[key]
-
-    def __iter__(self):
-        return iter(self._data.items())
-
-
-class _FakeCursor:
-    """Async-iterable that yields FakeRecord instances."""
-
-    def __init__(self, rows: list[dict]):
-        self._rows = rows
-
-    def __aiter__(self):
-        return self._gen()
-
-    async def _gen(self):
-        for row in self._rows:
-            yield _FakeRecord(row)
-
-    async def single(self):
-        if self._rows:
-            return _FakeRecord(self._rows[0])
-        return None
 
 
 def _make_settings(interval: int = 5, affection: int = 70, cohesion: int = 10, stale: int = 50):
@@ -60,44 +22,25 @@ def _make_settings(interval: int = 5, affection: int = 70, cohesion: int = 10, s
     return s
 
 
-async def test_clique_engine_forwards_settings_thresholds() -> None:
-    """SEV-12: affection/cohesion/stale come from settings, not module constants."""
-    mod = "npc_engine.engines.clique.clique_formation_engine"
-    settings = _make_settings(interval=1, affection=88, cohesion=3, stale=7)
-    engine = CliqueFormationEngine(settings)
-    pair = {"char_a_id": "a", "char_b_id": "b", "loc_a": "L", "loc_b": "L"}
-    with patch(f"{mod}.get_high_affection_pairs", new=AsyncMock(return_value=[pair])) as m_pairs, \
-            patch(f"{mod}.get_existing_shared_group", new=AsyncMock(return_value=None)), \
-            patch(f"{mod}.create_group", new=AsyncMock(return_value="g1")) as m_create, \
-            patch(f"{mod}.add_member", new=AsyncMock()), \
-            patch(f"{mod}.get_stale_cliques", new=AsyncMock(return_value=[])) as m_stale, \
-            patch(f"{mod}.dissolve_group", new=AsyncMock()):
-        await engine.run_tick(MagicMock(), tick_id=10)
-
-    assert m_pairs.await_args.kwargs["threshold"] == 88
-    assert m_create.await_args.kwargs["cohesion"] == 3
-    assert m_stale.await_args.kwargs["stale_before_tick"] == 3  # max(0, 10 - 7)
+def _make_repo(
+    pairs: list[dict[str, Any]] | None = None,
+    existing_group: dict[str, Any] | None = None,
+    stale: list[str] | None = None,
+    new_group_id: str = "g1",
+) -> AsyncMock:
+    """Build a mock GroupGraphPort."""
+    repo = AsyncMock()
+    repo.get_high_affection_pairs = AsyncMock(return_value=pairs or [])
+    repo.get_existing_shared_group = AsyncMock(return_value=existing_group)
+    repo.get_stale_cliques = AsyncMock(return_value=stale or [])
+    repo.create_group = AsyncMock(return_value=new_group_id)
+    repo.add_member = AsyncMock()
+    repo.dissolve_group = AsyncMock()
+    return repo
 
 
-def _make_session(pairs=None, existing_group=None, stale=None):
-    """Build a mock AsyncSession that routes queries by their Cypher content."""
-    pairs = pairs or []
-    stale = stale or []
-
-    async def _run(query, **kwargs):
-        # Route by distinct keywords present in each Cypher constant
-        if "affection" in query.lower() or "HIGH_AFFECTION" in query:
-            return _FakeCursor(pairs)
-        elif "BELONGS_TO_GROUP" in query and "kind:" in query:
-            return _FakeCursor([existing_group] if existing_group is not None else [])
-        elif "stale_before_tick" in query or "STALE" in query:
-            return _FakeCursor(stale)
-        else:
-            return _FakeCursor([])
-
-    session = MagicMock()
-    session.run = AsyncMock(side_effect=_run)
-    return session
+def _engine(settings, repo) -> CliqueFormationEngine:
+    return CliqueFormationEngine(settings=settings, group_repo=repo)
 
 
 # ---------------------------------------------------------------------------
@@ -106,91 +49,98 @@ def _make_session(pairs=None, existing_group=None, stale=None):
 
 
 @pytest.mark.asyncio
+async def test_clique_engine_forwards_settings_thresholds() -> None:
+    """SEV-12: affection/cohesion/stale come from settings, not module constants."""
+    settings = _make_settings(interval=1, affection=88, cohesion=3, stale=7)
+    pair = {"char_a_id": "a", "char_b_id": "b", "loc_a": "L", "loc_b": "L"}
+    repo = _make_repo(pairs=[pair], existing_group=None)
+    engine = _engine(settings, repo)
+
+    await engine.run_tick(tick_id=10)
+
+    assert repo.get_high_affection_pairs.await_args.kwargs["threshold"] == 88
+    assert repo.create_group.await_args.kwargs["cohesion"] == 3
+    assert repo.get_stale_cliques.await_args.kwargs["stale_before_tick"] == 3  # max(0, 10 - 7)
+
+
+@pytest.mark.asyncio
 async def test_skip_when_interval_not_met():
-    engine = CliqueFormationEngine(settings=_make_settings(interval=5))
-    session = _make_session()
-    result = await engine.run_tick(session=session, tick_id=3)
+    repo = _make_repo()
+    engine = _engine(_make_settings(interval=5), repo)
+    result = await engine.run_tick(tick_id=3)
     assert result == {"skipped": True}
-    session.run.assert_not_called()
+    repo.get_high_affection_pairs.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_runs_when_interval_met_returns_keys():
-    engine = CliqueFormationEngine(settings=_make_settings(interval=5))
-    session = _make_session()
-    result = await engine.run_tick(session=session, tick_id=5)
+    engine = _engine(_make_settings(interval=5), _make_repo())
+    result = await engine.run_tick(tick_id=5)
     assert "formed" in result
     assert "dissolved" in result
 
 
 @pytest.mark.asyncio
+async def test_scheduler_session_kwarg_is_ignored():
+    """The scheduler still passes session=...; the engine accepts and ignores it."""
+    engine = _engine(_make_settings(interval=5), _make_repo())
+    result = await engine.run_tick(session=object(), tick_id=5)
+    assert "formed" in result
+
+
+@pytest.mark.asyncio
 async def test_skips_pair_different_locations():
     pairs = [{"char_a_id": "a", "char_b_id": "b", "loc_a": "loc1", "loc_b": "loc2"}]
-    session = _make_session(pairs=pairs)
-    engine = CliqueFormationEngine(settings=_make_settings(interval=5))
-    result = await engine.run_tick(session=session, tick_id=5)
+    engine = _engine(_make_settings(interval=5), _make_repo(pairs=pairs))
+    result = await engine.run_tick(tick_id=5)
     assert result["formed"] == 0
 
 
 @pytest.mark.asyncio
 async def test_skips_pair_none_location():
     pairs = [{"char_a_id": "a", "char_b_id": "b", "loc_a": None, "loc_b": None}]
-    session = _make_session(pairs=pairs)
-    engine = CliqueFormationEngine(settings=_make_settings(interval=5))
-    result = await engine.run_tick(session=session, tick_id=5)
+    engine = _engine(_make_settings(interval=5), _make_repo(pairs=pairs))
+    result = await engine.run_tick(tick_id=5)
     assert result["formed"] == 0
 
 
 @pytest.mark.asyncio
 async def test_forms_clique_for_co_located_pair():
     pairs = [{"char_a_id": "a", "char_b_id": "b", "loc_a": "loc1", "loc_b": "loc1"}]
-    # existing=None means no shared group → should create one
-    session = _make_session(pairs=pairs, existing_group=None)
+    repo = _make_repo(pairs=pairs, existing_group=None, new_group_id="group-uuid")
+    engine = _engine(_make_settings(interval=5), repo)
 
-    with patch(
-        "npc_engine.engines.clique.clique_formation_engine.create_group",
-        new_callable=AsyncMock,
-        return_value="group-uuid",
-    ), patch(
-        "npc_engine.engines.clique.clique_formation_engine.add_member",
-        new_callable=AsyncMock,
-    ):
-        engine = CliqueFormationEngine(settings=_make_settings(interval=5))
-        result = await engine.run_tick(session=session, tick_id=5)
+    result = await engine.run_tick(tick_id=5)
 
     assert result["formed"] == 1
+    repo.create_group.assert_awaited_once()
+    assert repo.add_member.await_count == 2
 
 
 @pytest.mark.asyncio
 async def test_skips_pair_with_existing_clique():
     pairs = [{"char_a_id": "a", "char_b_id": "b", "loc_a": "loc1", "loc_b": "loc1"}]
-    existing = {"group_id": "existing-group"}
-    session = _make_session(pairs=pairs, existing_group=existing)
-    engine = CliqueFormationEngine(settings=_make_settings(interval=5))
-    result = await engine.run_tick(session=session, tick_id=5)
+    repo = _make_repo(pairs=pairs, existing_group={"group_id": "existing-group"})
+    engine = _engine(_make_settings(interval=5), repo)
+    result = await engine.run_tick(tick_id=5)
     assert result["formed"] == 0
+    repo.create_group.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_dissolves_stale_cliques():
-    stale = [{"group_id": "old-group"}]
-    session = _make_session(stale=stale)
-
-    with patch(
-        "npc_engine.engines.clique.clique_formation_engine.dissolve_group",
-        new_callable=AsyncMock,
-    ):
-        engine = CliqueFormationEngine(settings=_make_settings(interval=5))
-        result = await engine.run_tick(session=session, tick_id=5)
-
+    repo = _make_repo(stale=["old-group"])
+    engine = _engine(_make_settings(interval=5), repo)
+    result = await engine.run_tick(tick_id=5)
     assert result["dissolved"] == 1
+    repo.dissolve_group.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_no_double_run_across_ticks():
     """Separate tick invocations each complete independently."""
-    engine = CliqueFormationEngine(settings=_make_settings(interval=5))
-    r1 = await engine.run_tick(session=_make_session(), tick_id=5)
-    r2 = await engine.run_tick(session=_make_session(), tick_id=10)
+    engine = _engine(_make_settings(interval=5), _make_repo())
+    r1 = await engine.run_tick(tick_id=5)
+    r2 = await engine.run_tick(tick_id=10)
     assert "formed" in r1
     assert "formed" in r2

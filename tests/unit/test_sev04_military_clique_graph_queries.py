@@ -73,7 +73,12 @@ def test_clique_graph_wrappers_importable():
 
 @pytest.mark.asyncio
 async def test_clique_engine_calls_graph_get_high_affection_pairs():
-    """CliqueFormationEngine must delegate pair lookup to graph layer."""
+    """CliqueFormationEngine must delegate pair lookup to the graph layer via its port.
+
+    Post-SEV-24 the engine imports no graph symbol at all — it depends on the injected
+    GroupGraphPort (whose Neo4j adapter lives in graph/), so the delegation guarantee is
+    even stronger.
+    """
     settings = MagicMock()
     settings.CLIQUE_FORMATION_TICK_INTERVAL = 5
     settings.CLIQUE_AFFECTION_THRESHOLD = 70
@@ -82,22 +87,11 @@ async def test_clique_engine_calls_graph_get_high_affection_pairs():
 
     from npc_engine.engines.clique.clique_formation_engine import CliqueFormationEngine
 
-    engine = CliqueFormationEngine(settings=settings)
-    mock_session = AsyncMock()
+    repo = AsyncMock()
+    repo.get_high_affection_pairs = AsyncMock(return_value=[])
+    repo.get_stale_cliques = AsyncMock(return_value=[])
 
-    with (
-        patch(
-            "npc_engine.engines.clique.clique_formation_engine.get_high_affection_pairs",
-            new_callable=AsyncMock,
-            return_value=[],
-        ) as mock_pairs,
-        patch(
-            "npc_engine.engines.clique.clique_formation_engine.get_stale_cliques",
-            new_callable=AsyncMock,
-            return_value=[],
-        ),
-    ):
-        await engine.run_tick(session=mock_session, tick_id=5)
+    engine = CliqueFormationEngine(settings=settings, group_repo=repo)
+    await engine.run_tick(tick_id=5)
 
-    mock_pairs.assert_awaited_once()
-    mock_session.run.assert_not_called()
+    repo.get_high_affection_pairs.assert_awaited_once()
