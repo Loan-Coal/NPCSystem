@@ -423,7 +423,11 @@ These rules supplement the layer model and code-style sections above. Rules mark
   of stateful objects inside engines or handlers.
   Exception: `config.py` `Settings` may be a module-level singleton via `get_config()`.
 - **Session ownership** (strict): graph sub-writers receive `AsyncSession` as a
-  parameter. `graph_writer.py` is the only file that opens and commits transactions.
+  parameter and run their writes through `transaction_coordinator.run_in_tx`
+  (an inner `_work(tx)` closure). `transaction_coordinator.py` is the only file
+  that calls `begin_transaction()` / `commit()`; `graph_writer.py` and every
+  sub-writer delegate to it (DEC-119/SEV-21). No file outside the coordinator
+  opens a transaction; no engine holds an `AsyncTransaction`.
 
 ### Async
 

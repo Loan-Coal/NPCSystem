@@ -11,8 +11,10 @@ Used by: (slice 2) engines/player_model tick handler.
 
 from __future__ import annotations
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 from pydantic import BaseModel
+
+from npc_engine.graph.transaction_coordinator import run_in_tx
 
 # ---------------------------------------------------------------------------
 # Cypher constants
@@ -79,10 +81,11 @@ async def upsert_player_model(
     """Upsert a PlayerModel node and attach the HAS_PLAYER_MODEL edge.
 
     Uses MERGE keyed on (npc_id, player_id) so the operation is idempotent.
-    Owns its own transaction; callers must NOT pass an active transaction.
+    The write runs inside a single transaction owned by the graph transaction
+    coordinator (``run_in_tx``); callers pass a session, never a transaction.
 
     Args:
-        session: Active Neo4j async session.
+        session: Active Neo4j async session the coordinator opens a transaction on.
         npc_id: NPC that owns this player model.
         player_id: Player being modelled.
         perceived_trust: Derived trust score in range [0, 100].
@@ -93,8 +96,8 @@ async def upsert_player_model(
         neo4j.exceptions.Neo4jError: On graph connectivity or query execution failure.
     """
     pm_id = f"{npc_id}__{player_id}"
-    tx = await session.begin_transaction()
-    async with tx:
+
+    async def _work(tx: AsyncTransaction) -> None:
         await tx.run(
             _CYPHER_UPSERT_PLAYER_MODEL,
             pm_id=pm_id,
@@ -104,7 +107,8 @@ async def upsert_player_model(
             perceived_intent=perceived_intent,
             last_updated_at=str(tick),
         )
-        await tx.commit()
+
+    await run_in_tx(session, _work)
 
 
 # ---------------------------------------------------------------------------
