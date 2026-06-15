@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import logging
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.graph.relation_writer import get_relation_values, set_relation_values
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.utils.errors import RelationEdgeNotFoundError
 from npc_engine.utils.logging import get_logger
 
@@ -70,8 +71,7 @@ async def _read_modify_write(
     delta_affection: int,
 ) -> tuple[int, int] | None:
     """Read-modify-write RELATES_TO scalars in one transaction; returns None if edge missing."""
-    tx = await session.begin_transaction()
-    async with tx:
+    async def _work(tx: AsyncTransaction) -> tuple[int, int] | None:
         try:
             current = await get_relation_values(tx=tx, src_id=src_id, dst_id=dst_id)
         except RelationEdgeNotFoundError:
@@ -84,7 +84,9 @@ async def _read_modify_write(
             dst_id=dst_id,
             new_values={"trust": new_trust, "fear": current["fear"], "affection": new_affection},
         )
-    return new_trust, new_affection
+        return new_trust, new_affection
+
+    return await run_in_tx(session, _work)
 
 
 def _clamp(value: int) -> int:

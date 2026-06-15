@@ -11,8 +11,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.graph.reputation_queries import (
     get_reputation,
     get_reputation_context_for_npc,
@@ -59,9 +60,10 @@ class ReputationService:
         Raises:
             ReputationNotFoundError: If the character or faction node does not exist.
         """
-        tx = await self._session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> None:
             await set_reputation(tx, character_id=character_id, faction_id=faction_id, standing=standing)
+
+        await run_in_tx(self._session, _work)
 
     async def adjust_reputation(self, *, character_id: str, faction_id: str, delta: int) -> int:
         """Apply a delta to a character's standing with a faction, clamped to [-100, 100].
@@ -77,9 +79,10 @@ class ReputationService:
         Raises:
             ReputationNotFoundError: If the character or faction node does not exist.
         """
-        tx = await self._session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> int:
             return await adjust_reputation(tx, character_id=character_id, faction_id=faction_id, delta=delta)
+
+        return await run_in_tx(self._session, _work)
 
     async def adjust_reputation_with_event(
         self,
@@ -112,8 +115,7 @@ class ReputationService:
         Raises:
             ReputationNotFoundError: If character or faction node is absent.
         """
-        tx = await self._session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> int:
             new_standing = await adjust_reputation(
                 tx, character_id=character_id, faction_id=faction_id, delta=delta
             )
@@ -131,7 +133,9 @@ class ReputationService:
                 location_id=location_id,
                 tick_id=tick_id,
             )
-        return new_standing
+            return new_standing
+
+        return await run_in_tx(self._session, _work)
 
     async def adjust_reputation_for_event(
         self, *, character_id: str, faction_id: str, delta: int
@@ -146,11 +150,12 @@ class ReputationService:
         Raises:
             ReputationNotFoundError: If the character or faction node does not exist.
         """
-        tx = await self._session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> None:
             await adjust_reputation_for_event(
                 tx, character_id=character_id, faction_id=faction_id, delta=delta
             )
+
+        await run_in_tx(self._session, _work)
 
     # ------------------------------------------------------------------
     # Queries
