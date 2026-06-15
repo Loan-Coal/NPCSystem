@@ -1456,3 +1456,31 @@ type-safety trade-off.
 into `LLMGenerateProtocol` / `LLMStructuredProtocol` / `LLMStreamProtocol` is the ISP-correct shape.
 **Question:** Split now (before any SDK client is built against the protocol shape — a breaking change
 afterward) or defer? Decide before the OpenAPI/SDK contract freeze.
+
+## Review decisions DEC-111…121 — RESOLVED 2026-06-14 (owner, via /fix-next write-up)
+
+The DEC-111…121 stubs above are resolved as follows. Each becomes a Fix-now backlog
+item (SEV-13…SEV-23) in `review-fixes/INDEX.md`.
+
+- **DEC-111 → SEV-13 (idempotency):** HARD-RAISE in staging/prod when `IDEMPOTENCY_ENFORCE_HEADER=false`
+  (mirror the API-key/Neo4j-password gates). Breaking for deploys copying dev `.env` — intended.
+- **DEC-112 → SEV-14 (system router):** MOVE `system_v1_router` under `admin_prefix` (`/v1/admin/system/*`).
+  Public URL change; do before any SDK consumer exists.
+- **DEC-113 → SEV-15 (mypy):** Adopt full `mypy --strict`; dedicated phase fixes ALL 274 errors (87 files),
+  then flip the `make type` gate to strict. Largest item — expect sub-phases.
+- **DEC-114 → SEV-16 (envelope typing):** Type `OkEnvelope[T]` payloads for PUBLIC/SDK-facing routes first
+  (npc_state, dialogue, schemes, …); defer internal/admin routes.
+- **DEC-115 → SEV-17 (composition root):** Split `dependencies_advanced.py` into PER-ENGINE submodules
+  (one per engine family); keeps the single-root spirit and the 300-line cap.
+- **DEC-116 → SEV-18 (covert template):** TRACE whether `event.summary` reaches LLM context; move the
+  template to `prompts/scheming/` only if it does, else document it as data-only in-file.
+- **DEC-117 → SEV-19 (fn-length):** Add an R006-style 40-line gate; REFACTOR the worst (`advance` 373/depth7,
+  `dispatch` 201, `seed` 202); log per-function DEC waivers for the genuinely-cohesive remainder.
+- **DEC-118 → SEV-20 (investigation writes):** Switch `investigation_service.py` writers from `CREATE` to
+  `MERGE` on stable identity keys (idempotent on retry; matches sibling writers). Builds on SEV-05 tests.
+- **DEC-119 → SEV-21 (session ownership):** MIGRATE all 14+ graph sub-writers to accept an `AsyncTransaction`
+  param; `graph_writer` coordinates. Large graph-layer refactor — true single-owner transactions.
+- **DEC-120 → SEV-22 (distortion type):** Type `DistortionType` as `str` validated against the live
+  `STRATEGY_REGISTRY`; make `REGISTRY_KEYS` reflect live state (true add-by-new-file OCP).
+- **DEC-121 → SEV-23 (LLM protocol):** Split `LLMClientProtocol` into `LLMGenerateProtocol` /
+  `LLMStructuredProtocol` / `LLMStreamProtocol`; engines depend on the narrow one they use. Do pre-SDK-freeze.

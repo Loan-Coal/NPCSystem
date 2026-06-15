@@ -7,7 +7,7 @@
 - HARNESS BUG: `isolation:worktree` branched workers off `main` (ea16f74), 454 commits behind munich-demo. **Run remaining SEVs via /fix-next (no worktree) — it operates on munich-demo directly.**
 - `common/knowledge_types.py` now holds `KnowledgeState` Literal + `KNOWLEDGE_STATE_KNOWS/RUMOR` — reuse for any new knowledge_state value (do NOT redefine "knows"/"rumor"). Cypher-template literals (event_queries/secret_queries) intentionally stay (data, not Python).
 - New module docstrings need `Does NOT:` + `Dependencies injected:` lines (test_architecture_conformance). New files near 300-line config limit → sibling module (see `config_logging_validators.py`).
-- ALL 12 Fix-now SEVs COMPLETE (2026-06-14). Only DEC-111…121 (need human decisions) + Log issues remain.
+- ALL 12 original Fix-now SEVs COMPLETE (2026-06-14). DEC-111…121 now RESOLVED → new backlog SEV-13…23 (Block G); briefs not yet written. SEV-15/19/21 are the heavy refactors.
 - caplog gotcha: `utils/logging.py` sets propagate=False, so pytest `caplog` (root) misses engine logs once logging is configured — capture on the engine logger directly (see test_sev22 secret-seed test).
 - Decide items (DEC-111…121) BLOCKED pending human approval — do not start via /fix-next.
 
@@ -37,12 +37,21 @@
 ### Block F — Docs (independent, trivial)
 - [x] SEV-11 — Doc/docstring drift: ARCHITECTURE prompt path → `src/npc_engine/prompts/`, right_panel +INTRIGUE, game_controller dropped bogus `npc_engine.engines.interaction`  (files: `docs/ARCHITECTURE.md`, `demo_game/ui/right_panel.py`, `demo_game/game_controller.py`)
 
-## Blocked — pending human approval (Decide)
-These are **not** in the checklist above. See `DECISIONS.md` DEC-111…121 stubs. Do not start until resolved:
-- DEC-111 idempotency advisory-vs-raise · DEC-112 system router prefix (interface) · DEC-113 mypy --strict
-  adoption · DEC-114 full envelope typing (130 routes) · DEC-115 second composition root · DEC-116 covert
-  template prompt-boundary · DEC-117 40-line function gate vs waive · DEC-118 investigation MERGE-vs-CREATE
-  · DEC-119 session-ownership broad refactor · DEC-120 DistortionType Literal-vs-str · DEC-121 LLM protocol ISP split.
+## Block G — Resolved-decision backlog (DEC-111…121 → SEV-13…23, decided 2026-06-14)
+
+Briefs NOT yet written — generate `FIX-SEV-NN.md` before running `/fix-next` on each (or via `/fix-parallel`
+step 3). Ordered roughly small→large; SEV-15/19/21 are the heavy refactors. Decisions recorded in `DECISIONS.md`.
+- [ ] SEV-13 — Hard-raise idempotency in staging/prod (DEC-111)  (deps: none · files: `config_logging_validators.py`-style sibling or `config_validators.py`, `config.py`, tests)
+- [ ] SEV-14 — Move `system_v1_router` under `admin_prefix` `/v1/admin/system/*` (DEC-112)  (deps: none · files: `main.py`/router registry, route tests · INTERFACE change)
+- [ ] SEV-16 — Type `OkEnvelope[T]` payloads for public/SDK routes (DEC-114)  (deps: none · files: `api/routes/*` public set, payload models)
+- [ ] SEV-18 — Trace `event.summary`→LLM; move covert template to `prompts/scheming/` if LLM-bound (DEC-116)  (deps: none · files: `covert_event_factory.py`, maybe `prompts/scheming/`)
+- [ ] SEV-20 — `investigation_service` writers `CREATE`→`MERGE` on stable keys (DEC-118)  (deps: SEV-05 tests · files: `graph/investigation_service.py`, tests)
+- [ ] SEV-22 — `DistortionType` → `str` + live registry validator; unfreeze `REGISTRY_KEYS` (DEC-120)  (deps: none · files: `gossip_distort.py`, `distortion_strategy.py`, tests)
+- [ ] SEV-23 — Split `LLMClientProtocol` into generate/structured/stream protocols (DEC-121)  (deps: none · files: `engines/llm/protocols.py`, adapters, dialogue client)
+- [ ] SEV-17 — Split `dependencies_advanced.py` into per-engine submodules (DEC-115)  (deps: none · files: `api/dependencies_advanced.py` → submodules; resolves ISSUE-105)
+- [ ] SEV-19 — Add R006 40-line gate; refactor `advance`/`dispatch`/`seed`; waive cohesive rest (DEC-117)  (deps: none · files: `scripts/check_rules.py`, `tick_scheduler.py`, `auth/middleware.py`, `data/api_seeder.py`, DECISIONS waivers)
+- [ ] SEV-21 — Migrate 14+ graph sub-writers to `AsyncTransaction` params; `graph_writer` coordinates (DEC-119)  (deps: none · files: most of `graph/`, large refactor)
+- [ ] SEV-15 — Adopt full `mypy --strict`; fix all 274 errors / 87 files; flip `make type` gate (DEC-113)  (deps: none · files: repo-wide; largest — sub-phase it)
 
 ## Log-only (ISSUES.md, no brief)
 ISSUE-101 schedule_queries cov · ISSUE-102 intrigue panel behavioral tests · ISSUE-103 135 stale docstrings ·
