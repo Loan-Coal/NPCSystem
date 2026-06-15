@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.graph.item_queries import CYPHER_APPLY_ITEM_TRANSFER, CYPHER_GRANT_SYSTEM_ITEM, CYPHER_REPLAY_ITEM_TRANSFER
 from npc_engine.graph.replay_helpers import load_idempotent_replay_record
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.utils.errors import ItemTransferValidationError, NodeNotFoundError
 
 
@@ -132,9 +133,8 @@ async def transfer_item_atomic(
         NodeNotFoundError: If source or destination character nodes are missing.
         ItemTransferValidationError: If the item transfer fails write-guard conditions.
     """
-    tx = await session.begin_transaction()
-    async with tx:
-        result = await execute_item_transfer_in_tx(
+    async def _work(tx: AsyncTransaction) -> ItemTransferWriteResult:
+        return await execute_item_transfer_in_tx(
             tx,
             source_id=source_id,
             destination_id=destination_id,
@@ -145,8 +145,8 @@ async def transfer_item_atomic(
             idempotency_key=idempotency_key,
             transfer_kind=transfer_kind,
         )
-        await tx.commit()
-        return result
+
+    return await run_in_tx(session, _work)
 
 
 async def _raise_item_transfer_failure(*, tx: AsyncTransaction, source_id: str, destination_id: str) -> None:

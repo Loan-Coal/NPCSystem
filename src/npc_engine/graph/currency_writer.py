@@ -24,6 +24,7 @@ from npc_engine.graph.currency_queries import (
     CYPHER_GET_OUTBOUND_SESSION_TOTAL,
     CYPHER_REPLAY_BY_IDEMPOTENCY,
 )
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.graph.transfer_validators import build_currency_transfer_command
 from npc_engine.graph.replay_helpers import load_idempotent_replay_record
 from npc_engine.utils.errors import CurrencyInsufficientFundsError, CurrencyValidationError, NodeNotFoundError
@@ -132,24 +133,23 @@ async def transfer_currency_atomic(
     Raises:
         NodeNotFoundError, CurrencyInsufficientFundsError, CurrencyValidationError.
     """
-    tx = await session.begin_transaction()
-    async with tx:
+    async def _work(tx: AsyncTransaction) -> CurrencyTransferWriteResult:
         replay = await _try_replay(tx=tx, source_id=source_id, destination_id=destination_id,
                                    idempotency_key=idempotency_key, session_scope=session_scope, transfer_kind=transfer_kind)
         if replay is not None:
-            await tx.commit()
             return replay
         record = await _apply_transfer_in_tx(
             tx, source_id=source_id, destination_id=destination_id, amount=amount, reason=reason,
             request_id=request_id, idempotency_key=idempotency_key, session_scope=session_scope,
             transfer_kind=transfer_kind,
         )
-        await tx.commit()
         return CurrencyTransferWriteResult(
             request_id=request_id, amount=amount,
             source_balance=int(record["source_balance"]), destination_balance=int(record["destination_balance"]),
             replayed=False,
         )
+
+    return await run_in_tx(session, _work)
 
 
 async def _get_session_total_in_tx(
