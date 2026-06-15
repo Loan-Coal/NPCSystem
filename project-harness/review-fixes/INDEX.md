@@ -44,7 +44,7 @@ step 3). Ordered roughly small→large; SEV-15/19/21 are the heavy refactors. De
 - [x] SEV-13 — Hard-raise idempotency in staging/prod (DEC-111)  (deps: none · files: `config_logging_validators.py`-style sibling or `config_validators.py`, `config.py`, tests)
 - [ ] SEV-14 — Move `system_v1_router` under `admin_prefix` `/v1/admin/system/*` (DEC-112)  (deps: none · files: `main.py`/router registry, route tests · INTERFACE change)
 - [ ] SEV-16 — Type `OkEnvelope[T]` payloads for public/SDK routes (DEC-114)  (deps: none · files: `api/routes/*` public set, payload models)
-- [ ] SEV-18 — Trace `event.summary`→LLM; move covert template to `prompts/scheming/` if LLM-bound (DEC-116)  (deps: none · files: `covert_event_factory.py`, maybe `prompts/scheming/`)
+- [x] SEV-18 — Trace `event.summary`→LLM; move covert template to `prompts/scheming/` if LLM-bound (DEC-116)  (deps: none · files: `covert_event_factory.py`, maybe `prompts/scheming/`)
 - [ ] SEV-20 — `investigation_service` writers `CREATE`→`MERGE` on stable keys (DEC-118)  (deps: SEV-05 tests · files: `graph/investigation_service.py`, tests)
 - [x] SEV-22 — `DistortionType` → `str` + live registry validator; unfreeze `REGISTRY_KEYS` (DEC-120)  (deps: none · files: `gossip_distort.py`, `distortion_strategy.py`, tests)
 - [ ] SEV-23 — Split `LLMClientProtocol` into generate/structured/stream protocols (DEC-121)  (deps: none · files: `engines/llm/protocols.py`, adapters, dialogue client)

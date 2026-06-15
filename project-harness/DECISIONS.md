@@ -1484,3 +1484,12 @@ item (SEV-13…SEV-23) in `review-fixes/INDEX.md`.
   `STRATEGY_REGISTRY`; make `REGISTRY_KEYS` reflect live state (true add-by-new-file OCP).
 - **DEC-121 → SEV-23 (LLM protocol):** Split `LLMClientProtocol` into `LLMGenerateProtocol` /
   `LLMStructuredProtocol` / `LLMStreamProtocol`; engines depend on the narrow one they use. Do pre-SDK-freeze.
+
+## DEC-116 outcome (2026-06-14): covert summary is NOT LLM-bound — kept in Python
+Trace result: covert scheme-advance events are linked to a Scheme via `SCHEME_STEP` only; no code creates a
+`KNOWS_ABOUT`/`WITNESSED` edge to them (is_public=False, severity 15 < witness threshold), and
+`mark_scheme_discovered` only flips `scheme.status`. LLM dialogue context pulls events exclusively via
+`KNOWS_ABOUT` (`graph/event_queries.py`, `retrieval/subgraph_retriever.py`). So `event.summary` for covert
+steps reaches the intrigue-board UI (`/npc/{id}/schemes`) but never the LLM → the no-prompt-strings rule
+does not apply. Documented inline in `covert_event_factory.py`. Re-open if covert events ever get a
+`KNOWS_ABOUT` edge.

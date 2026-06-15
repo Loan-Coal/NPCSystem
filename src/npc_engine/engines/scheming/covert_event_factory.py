@@ -29,7 +29,14 @@ COVERT_SCHEME_EVENT_SEVERITY: int = 15
 # Covert steps are never public.
 COVERT_SCHEME_EVENT_IS_PUBLIC: bool = False
 
-# Summary template — content data, not an LLM prompt (no prompts/ rule applies).
+# Summary template — graph DATA, not an LLM prompt, so the no-prompt-strings-outside-
+# prompts/ rule does not apply (DEC-116, verified 2026-06-14). Trace: covert events are
+# linked to a Scheme via SCHEME_STEP only; nothing creates a KNOWS_ABOUT/WITNESSED edge
+# to them (is_public=False, severity 15 < witness threshold), and mark_scheme_discovered
+# only flips scheme.status. LLM dialogue context pulls events exclusively via KNOWS_ABOUT
+# (graph/event_queries.py, retrieval/subgraph_retriever.py), so this summary reaches the
+# intrigue-board UI (/npc/{id}/schemes) but never the LLM. If a future change links covert
+# events via KNOWS_ABOUT, move this template to prompts/scheming/ (re-open DEC-116).
 _COVERT_SUMMARY_TEMPLATE: str = (
     "{npc_id} quietly advances a covert scheme (step {step_order}): {goal}"
 )
