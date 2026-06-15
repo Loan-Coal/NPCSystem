@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from npc_engine.engines.need.need_graph_port import NeedGraphPort
+from npc_engine.engines.ports.need_port import NeedGraphPort
 
 _LOGGER = logging.getLogger(__name__)
 

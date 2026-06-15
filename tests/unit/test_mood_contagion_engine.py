@@ -1,7 +1,8 @@
-"""Unit tests for MoodContagionEngine — all Neo4j calls mocked."""
+"""Unit tests for MoodContagionEngine — graph access via a mocked MoodGraphPort."""
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
@@ -9,6 +10,18 @@ import pytest_asyncio
 from npc_engine.engines.emotion.emotion_state import EmotionState
 from npc_engine.engines.emotion.emotion_store import EmotionStore
 from npc_engine.engines.mood.mood_contagion_engine import MoodContagionEngine, _blend
+
+
+def _make_repo(
+    pairs: list[tuple[str, str]] | None = None,
+    moods: list[dict[str, Any]] | None = None,
+) -> AsyncMock:
+    """Build a mock MoodGraphPort returning the given pairs/moods."""
+    repo = AsyncMock()
+    repo.get_co_located_affectionate_pairs = AsyncMock(return_value=pairs or [])
+    repo.get_all_character_moods = AsyncMock(return_value=moods or [])
+    repo.set_character_mood = AsyncMock()
+    return repo
 
 
 # ---------------------------------------------------------------------------
@@ -60,83 +73,57 @@ async def emotion_store():
     return store
 
 
-@pytest.fixture
-def engine(emotion_store):
-    return MoodContagionEngine(emotion_store=emotion_store, affection_threshold=50)
-
-
 @pytest.mark.asyncio
-async def test_mood_blends_correctly(engine, emotion_store):
-    session = AsyncMock()
-    with (
-        patch(
-            "npc_engine.engines.mood.mood_contagion_engine.get_co_located_affectionate_pairs",
-            new=AsyncMock(return_value=[("npc_a", "npc_b")]),
-        ),
-        patch(
-            "npc_engine.engines.mood.mood_contagion_engine.set_character_mood",
-            new=AsyncMock(),
-        ),
-    ):
-        await engine.run_tick(session=session, tick_id=1)
+async def test_mood_blends_correctly(emotion_store):
+    repo = _make_repo(pairs=[("npc_a", "npc_b")])
+    engine = MoodContagionEngine(emotion_store=emotion_store, mood_repo=repo, affection_threshold=50)
+
+    await engine.run_tick(tick_id=1)
 
     state_a = await emotion_store.get("npc_a")
     assert state_a.valence < 80, "happy NPC should drift toward sad partner"
 
 
 @pytest.mark.asyncio
-async def test_no_contagion_when_no_pairs(engine, emotion_store):
-    session = AsyncMock()
-    with (
-        patch(
-            "npc_engine.engines.mood.mood_contagion_engine.get_co_located_affectionate_pairs",
-            new=AsyncMock(return_value=[]),
-        ),
-        patch(
-            "npc_engine.engines.mood.mood_contagion_engine.set_character_mood",
-            new=AsyncMock(),
-        ) as mock_set,
-    ):
-        result = await engine.run_tick(session=session, tick_id=1)
+async def test_no_contagion_when_no_pairs(emotion_store):
+    repo = _make_repo(pairs=[])
+    engine = MoodContagionEngine(emotion_store=emotion_store, mood_repo=repo, affection_threshold=50)
+
+    result = await engine.run_tick(tick_id=1)
 
     assert result["affected"] == 0
-    mock_set.assert_not_called()
+    repo.set_character_mood.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_mood_persisted_to_neo4j(engine, emotion_store):
-    session = AsyncMock()
-    with (
-        patch(
-            "npc_engine.engines.mood.mood_contagion_engine.get_co_located_affectionate_pairs",
-            new=AsyncMock(return_value=[("npc_a", "npc_b")]),
-        ),
-        patch(
-            "npc_engine.engines.mood.mood_contagion_engine.set_character_mood",
-            new=AsyncMock(),
-        ) as mock_set,
-    ):
-        await engine.run_tick(session=session, tick_id=1)
+async def test_mood_persisted_to_neo4j(emotion_store):
+    repo = _make_repo(pairs=[("npc_a", "npc_b")])
+    engine = MoodContagionEngine(emotion_store=emotion_store, mood_repo=repo, affection_threshold=50)
 
-    assert mock_set.call_count == 2, "should persist both NPCs"
-    call_ids = {c.kwargs["character_id"] for c in mock_set.call_args_list}
+    await engine.run_tick(tick_id=1)
+
+    assert repo.set_character_mood.call_count == 2, "should persist both NPCs"
+    call_ids = {c.kwargs["character_id"] for c in repo.set_character_mood.call_args_list}
     assert call_ids == {"npc_a", "npc_b"}
 
 
 @pytest.mark.asyncio
-async def test_run_tick_returns_affected_count(engine):
-    session = AsyncMock()
-    with (
-        patch(
-            "npc_engine.engines.mood.mood_contagion_engine.get_co_located_affectionate_pairs",
-            new=AsyncMock(return_value=[("npc_a", "npc_b"), ("npc_c", "npc_d")]),
-        ),
-        patch(
-            "npc_engine.engines.mood.mood_contagion_engine.set_character_mood",
-            new=AsyncMock(),
-        ),
-    ):
-        result = await engine.run_tick(session=session, tick_id=5)
+async def test_scheduler_session_kwarg_is_ignored(emotion_store):
+    """The scheduler still passes session=...; the engine accepts and ignores it."""
+    repo = _make_repo(pairs=[("npc_a", "npc_b")])
+    engine = MoodContagionEngine(emotion_store=emotion_store, mood_repo=repo, affection_threshold=50)
+
+    result = await engine.run_tick(session=object(), tick_id=1)
+
+    assert result["affected"] == 1
+
+
+@pytest.mark.asyncio
+async def test_run_tick_returns_affected_count(emotion_store):
+    repo = _make_repo(pairs=[("npc_a", "npc_b"), ("npc_c", "npc_d")])
+    engine = MoodContagionEngine(emotion_store=emotion_store, mood_repo=repo, affection_threshold=50)
+
+    result = await engine.run_tick(tick_id=5)
 
     assert result["tick_id"] == 5
     assert result["affected"] == 2
@@ -150,18 +137,13 @@ async def test_run_tick_returns_affected_count(engine):
 @pytest.mark.asyncio
 async def test_initialize_loads_moods_into_store():
     store = EmotionStore()
-    engine = MoodContagionEngine(emotion_store=store)
-    session = AsyncMock()
-
     stored_moods = [
         {"character_id": "npc_x", "mood": "warm", "intensity": 0.4},
         {"character_id": "npc_y", "mood": "melancholic", "intensity": 0.3},
     ]
-    with patch(
-        "npc_engine.engines.mood.mood_contagion_engine.get_all_character_moods",
-        new=AsyncMock(return_value=stored_moods),
-    ):
-        count = await engine.initialize(session=session)
+    engine = MoodContagionEngine(emotion_store=store, mood_repo=_make_repo(moods=stored_moods))
+
+    count = await engine.initialize()
 
     assert count == 2
     assert (await store.get("npc_x")).label == "warm"
@@ -171,13 +153,8 @@ async def test_initialize_loads_moods_into_store():
 @pytest.mark.asyncio
 async def test_initialize_empty_db_returns_zero():
     store = EmotionStore()
-    engine = MoodContagionEngine(emotion_store=store)
-    session = AsyncMock()
+    engine = MoodContagionEngine(emotion_store=store, mood_repo=_make_repo(moods=[]))
 
-    with patch(
-        "npc_engine.engines.mood.mood_contagion_engine.get_all_character_moods",
-        new=AsyncMock(return_value=[]),
-    ):
-        count = await engine.initialize(session=session)
+    count = await engine.initialize()
 
     assert count == 0

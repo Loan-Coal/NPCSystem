@@ -1,5 +1,5 @@
 """
-Module: need_graph_port
+Module: need_port
 Layer: engines
 Purpose: Structural Protocol describing the graph operations NeedDecayEngine requires,
          so the engine depends on an abstraction (DIP) instead of importing concrete

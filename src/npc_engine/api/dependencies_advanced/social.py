@@ -35,12 +35,20 @@ def get_clique_formation_engine():
 def get_mood_contagion_engine():
     """Create singleton mood contagion engine bound to the shared emotion store.
 
-    Returns:
-        MoodContagionEngine wired to the singleton EmotionStore.
-    """
-    from npc_engine.engines.mood.mood_contagion_engine import MoodContagionEngine
+    Wires the Neo4j graph adapter (Neo4jMoodRepository) as the engine's injected
+    MoodGraphPort (DEC-122 / SEV-24) so the engine holds no Neo4j session.
 
-    return MoodContagionEngine(emotion_store=get_emotion_store())
+    Returns:
+        MoodContagionEngine wired to the singleton EmotionStore + mood repository.
+    """
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.engines.mood.mood_contagion_engine import MoodContagionEngine
+    from npc_engine.graph.repositories.mood_repository import Neo4jMoodRepository
+
+    return MoodContagionEngine(
+        emotion_store=get_emotion_store(),
+        mood_repo=Neo4jMoodRepository(get_graph_db()),
+    )
 
 
 @lru_cache
