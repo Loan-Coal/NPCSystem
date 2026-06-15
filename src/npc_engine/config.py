@@ -33,6 +33,10 @@ from npc_engine.config_validators import (
     check_redis_url,
     normalize_extension_sources,
 )
+from npc_engine.config_logging_validators import (
+    check_log_level,
+    check_log_llm_prompts,
+)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent
 
@@ -247,6 +251,13 @@ class Settings(BaseSettings):
     def _validate_neo4j_password(self) -> "Settings":
         """Reject the default NEO4J_PASSWORD in staging/prod (SEV-21)."""
         check_neo4j_password(self.NEO4J_PASSWORD, env=self.ENV)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_production_logging(self) -> "Settings":
+        """Reject DEBUG verbosity and LLM-prompt logging outside dev (L1-12)."""
+        check_log_level(self.LOG_LEVEL, env=self.ENV)
+        check_log_llm_prompts(self.LOG_LLM_PROMPTS, env=self.ENV)
         return self
 
     @model_validator(mode="after")
