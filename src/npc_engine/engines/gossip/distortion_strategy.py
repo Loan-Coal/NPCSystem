@@ -51,4 +51,14 @@ STRATEGY_REGISTRY: dict[str, DistortionStrategy] = {
     "timeline_shift": timeline_shift,
 }
 
-REGISTRY_KEYS: tuple[str, ...] = tuple(STRATEGY_REGISTRY)
+def registry_keys() -> tuple[str, ...]:
+    """Live, insertion-ordered tuple of registered strategy keys (SEV-22).
+
+    Reflects strategies registered after import so a new strategy file is reachable
+    without editing this module. Order is deterministic (dict insertion order), so the
+    seed-to-strategy mapping stays stable for the existing built-ins.
+
+    Returns:
+        Tuple of strategy key strings in registration order.
+    """
+    return tuple(STRATEGY_REGISTRY)

@@ -13,11 +13,10 @@ Dependencies injected: None.
 from __future__ import annotations
 
 from hashlib import sha256
-from typing import cast, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from npc_engine.engines.gossip.distortion_strategy import STRATEGY_REGISTRY, REGISTRY_KEYS
+from npc_engine.engines.gossip.distortion_strategy import STRATEGY_REGISTRY, registry_keys
 
 # Default confidence band thresholds — kept in sync with config.yaml.
 # These names must match the YAML keys so no magic numbers exist in Python code.
@@ -32,7 +31,9 @@ _BAND_OFFSET_MEDIUM: int = 1
 _BAND_OFFSET_LOW: int = 2
 
 
-DistortionType = Literal["omission", "exaggeration", "role_swap", "timeline_shift"]
+# SEV-22: distortion_type is an open str validated against the live STRATEGY_REGISTRY
+# (not a closed Literal), so a strategy added by a new file is accepted and reachable.
+DistortionType = str
 
 
 class GossipDistortion(BaseModel):
@@ -43,6 +44,14 @@ class GossipDistortion(BaseModel):
     distortion_level: int = Field(ge=0, le=100)
 
     model_config = ConfigDict(frozen=True)
+
+    @field_validator("distortion_type")
+    @classmethod
+    def _known_distortion_type(cls, value: str | None) -> str | None:
+        """Reject a distortion_type that is not a registered strategy (fail-fast)."""
+        if value is not None and value not in STRATEGY_REGISTRY:
+            raise ValueError(f"unknown distortion_type: {value!r}")
+        return value
 
 
 def compute_distortion_probability(honesty: int, trust: int, severity: int, base: float) -> float:
@@ -212,7 +221,8 @@ def gossip_distort(
     if gate > probability:
         return GossipDistortion(summary=event_summary, distortion_type=None, distortion_level=0)
 
-    base_index = seed % len(REGISTRY_KEYS)
+    keys = registry_keys()
+    base_index = seed % len(keys)
     if (
         isinstance(receiver_confidence, int)
         and isinstance(confidence_high_threshold, int)
@@ -223,11 +233,11 @@ def gossip_distort(
             high_threshold=confidence_high_threshold,
             low_threshold=confidence_low_threshold,
         )
-        type_index = (base_index + offset) % len(REGISTRY_KEYS)
+        type_index = (base_index + offset) % len(keys)
     else:
         type_index = base_index
 
-    distortion_type = cast(DistortionType, REGISTRY_KEYS[type_index])
+    distortion_type = keys[type_index]
     level = int(min(100, max(1, int(probability * 100))))
     distorted = STRATEGY_REGISTRY[distortion_type](event_summary)
     return GossipDistortion(summary=distorted, distortion_type=distortion_type, distortion_level=level)

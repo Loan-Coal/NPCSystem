@@ -46,7 +46,7 @@ step 3). Ordered roughly small→large; SEV-15/19/21 are the heavy refactors. De
 - [ ] SEV-16 — Type `OkEnvelope[T]` payloads for public/SDK routes (DEC-114)  (deps: none · files: `api/routes/*` public set, payload models)
 - [ ] SEV-18 — Trace `event.summary`→LLM; move covert template to `prompts/scheming/` if LLM-bound (DEC-116)  (deps: none · files: `covert_event_factory.py`, maybe `prompts/scheming/`)
 - [ ] SEV-20 — `investigation_service` writers `CREATE`→`MERGE` on stable keys (DEC-118)  (deps: SEV-05 tests · files: `graph/investigation_service.py`, tests)
-- [ ] SEV-22 — `DistortionType` → `str` + live registry validator; unfreeze `REGISTRY_KEYS` (DEC-120)  (deps: none · files: `gossip_distort.py`, `distortion_strategy.py`, tests)
+- [x] SEV-22 — `DistortionType` → `str` + live registry validator; unfreeze `REGISTRY_KEYS` (DEC-120)  (deps: none · files: `gossip_distort.py`, `distortion_strategy.py`, tests)
 - [ ] SEV-23 — Split `LLMClientProtocol` into generate/structured/stream protocols (DEC-121)  (deps: none · files: `engines/llm/protocols.py`, adapters, dialogue client)
 - [ ] SEV-17 — Split `dependencies_advanced.py` into per-engine submodules (DEC-115)  (deps: none · files: `api/dependencies_advanced.py` → submodules; resolves ISSUE-105)
 - [ ] SEV-19 — Add R006 40-line gate; refactor `advance`/`dispatch`/`seed`; waive cohesive rest (DEC-117)  (deps: none · files: `scripts/check_rules.py`, `tick_scheduler.py`, `auth/middleware.py`, `data/api_seeder.py`, DECISIONS waivers)

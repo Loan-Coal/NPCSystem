@@ -13,9 +13,9 @@ import pytest
 from npc_engine.engines.gossip.distortion_strategy import (
     DistortionStrategy,
     STRATEGY_REGISTRY,
-    REGISTRY_KEYS,
+    registry_keys,
 )
-from npc_engine.engines.gossip.gossip_distort import gossip_distort
+from npc_engine.engines.gossip.gossip_distort import GossipDistortion, gossip_distort
 
 
 # ---------------------------------------------------------------------------
@@ -23,8 +23,33 @@ from npc_engine.engines.gossip.gossip_distort import gossip_distort
 # ---------------------------------------------------------------------------
 
 def test_registry_keys_stable_order() -> None:
-    """REGISTRY_KEYS must exactly match the legacy list order for determinism."""
-    assert REGISTRY_KEYS == ("omission", "exaggeration", "role_swap", "timeline_shift")
+    """registry_keys() must keep the legacy built-in order for determinism."""
+    assert registry_keys() == ("omission", "exaggeration", "role_swap", "timeline_shift")
+
+
+def test_registry_keys_reflects_late_registration() -> None:
+    """SEV-22: a strategy registered after import is visible (open registry)."""
+    STRATEGY_REGISTRY["__tmp_test_strategy__"] = lambda s: s
+    try:
+        assert "__tmp_test_strategy__" in registry_keys()
+    finally:
+        del STRATEGY_REGISTRY["__tmp_test_strategy__"]
+
+
+def test_gossip_distortion_rejects_unknown_type() -> None:
+    """SEV-22: distortion_type outside the registry is rejected at the boundary."""
+    with pytest.raises(ValueError):
+        GossipDistortion(summary="x", distortion_type="not_a_strategy", distortion_level=0)
+
+
+def test_gossip_distortion_accepts_registered_type() -> None:
+    """SEV-22: a registered (incl. late-added) strategy key is accepted."""
+    STRATEGY_REGISTRY["__tmp_test_strategy__"] = lambda s: s
+    try:
+        d = GossipDistortion(summary="x", distortion_type="__tmp_test_strategy__", distortion_level=0)
+        assert d.distortion_type == "__tmp_test_strategy__"
+    finally:
+        del STRATEGY_REGISTRY["__tmp_test_strategy__"]
 
 
 # ---------------------------------------------------------------------------
