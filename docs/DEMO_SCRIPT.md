@@ -238,7 +238,7 @@ POST /v1/admin/memories/consolidate/mira_innkeeper
 POST /v1/clock/advance  { "delta_ticks": 1 }
 
 # 13. WORLD feed
-GET /v1/system/events?limit=8
+GET /v1/admin/system/events?limit=8
 ```
 
 ---

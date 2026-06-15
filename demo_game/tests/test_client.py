@@ -757,6 +757,25 @@ def test_get_pledges_for_npc_uses_admin_path(mock_http: MagicMock, make_response
 
 
 # ---------------------------------------------------------------------------
+# system observability (SEV-14 path-drift regression — moved under /v1/admin)
+# ---------------------------------------------------------------------------
+
+
+def test_get_engine_status_uses_admin_system_path(mock_http: MagicMock, make_response) -> None:
+    """get_engine_status targets /v1/admin/system/engines (SEV-14, DEC-112)."""
+    mock_http.get.return_value = make_response(200, {"data": []})
+    _client(mock_http).get_engine_status()
+    assert mock_http.get.call_args.args[0] == "/v1/admin/system/engines"
+
+
+def test_get_recent_events_uses_admin_system_path(mock_http: MagicMock, make_response) -> None:
+    """get_recent_events targets /v1/admin/system/events (SEV-14, DEC-112)."""
+    mock_http.get.return_value = make_response(200, {"data": []})
+    _client(mock_http).get_recent_events(limit=5)
+    assert mock_http.get.call_args.args[0] == "/v1/admin/system/events"
+
+
+# ---------------------------------------------------------------------------
 # get_schemes (F2.3 / G2.2)
 # ---------------------------------------------------------------------------
 

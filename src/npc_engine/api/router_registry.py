@@ -76,7 +76,6 @@ def _register_public_routers(app: FastAPI, settings: Settings) -> None:
     app.include_router(interaction_router, prefix=settings.API_V1_PREFIX)
     app.include_router(quest_router, prefix=settings.API_V1_PREFIX)
     app.include_router(clock_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(system_v1_router, prefix=settings.API_V1_PREFIX)
     app.include_router(graph_router, prefix=settings.API_V1_PREFIX)
     app.include_router(reputation_graph_router, prefix=settings.API_V1_PREFIX)
     app.include_router(relationship_router, prefix=settings.API_V1_PREFIX)
@@ -97,6 +96,9 @@ def _register_admin_routers(app: FastAPI, settings: Settings) -> None:
     """
     admin_prefix = f"{settings.API_V1_PREFIX}/admin"
     app.include_router(system_admin_router, prefix=admin_prefix)
+    # SEV-14 (DEC-112): system observability moved here from the bare /v1 prefix
+    # → /v1/admin/system/* (now admin-scoped). v1_router carries its own /system prefix.
+    app.include_router(system_v1_router, prefix=admin_prefix)
     app.include_router(batch_router, prefix=admin_prefix)
     app.include_router(graph_admin_router, prefix=admin_prefix)
     app.include_router(beliefs_router, prefix=admin_prefix)

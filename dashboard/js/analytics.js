@@ -1,5 +1,5 @@
-// analytics.js — S12.5 designer analytics over /v1/system/metrics (request +
-// degradation counters) and /v1/system/events (recent world activity).
+// analytics.js — S12.5 designer analytics over /v1/admin/system/metrics (request +
+// degradation counters) and /v1/admin/system/events (recent world activity).
 "use strict";
 
 const NpcAnalytics = (() => {

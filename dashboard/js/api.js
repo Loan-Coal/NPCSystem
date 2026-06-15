@@ -73,10 +73,11 @@ const NpcApi = (() => {
   const listDrafts = () => get(`${ADMIN}/quests/drafts`);
   const offerDraft = (questId) => post(`${ADMIN}/quests/${encodeURIComponent(questId)}/offer`, {});
 
-  const engineStatus = () => get(`${V1}/system/engines`);
-  const runtimeConfig = () => get(`${V1}/system/config`);
-  const metrics = () => get(`${V1}/system/metrics`);
-  const recentEvents = (limit = 25) => get(`${V1}/system/events?limit=${limit}`);
+  // SEV-14 (DEC-112): system observability moved under /v1/admin (admin-scoped).
+  const engineStatus = () => get(`${ADMIN}/system/engines`);
+  const runtimeConfig = () => get(`${ADMIN}/system/config`);
+  const metrics = () => get(`${ADMIN}/system/metrics`);
+  const recentEvents = (limit = 25) => get(`${ADMIN}/system/events?limit=${limit}`);
 
   async function ping() {
     // Cheap authenticated probe used by the Connect button.

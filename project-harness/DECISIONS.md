@@ -1374,11 +1374,17 @@ breaking operational change for any existing staging deploy that copies dev `.en
 **Owner decision needed before** wiring any enforcement.
 
 ## DEC-112: Move `system_v1_router` under `admin_prefix`?
-**Date:** 2026-06-13 · **Status:** ❓ OPEN (raised by /full-review L1-13)
+**Date:** 2026-06-13 · **Status:** ✅ DECIDED+EXECUTED 2026-06-15 (Option A, SEV-14)
 **Context:** `system_v1_router` is mounted at `/v1/system/*`; the other admin surfaces sit under
 `/v1/admin/*`. Relocating it improves consistency but changes the public URL (`/v1/system/events` →
 `/v1/admin/system/events`), breaking existing clients.
-**Question:** Relocate (interface change) or leave as-is? Needs sign-off because it is a public API change.
+**Decision (Option A — chosen with the user):** Relocate to `/v1/admin/system/*`, accepting the
+auth-scope escalation to `graph_admin` (engines/config/metrics/events are designer/admin
+introspection). `/health`+`/readiness` stay public (separate `system_router`).
+**Key finding (so it isn't re-litigated):** the demo's `NPC_API_KEY` and the dashboard's localStorage
+key were ALREADY admin-scoped — both already call other `/v1/admin/*` endpoints. So the move required
+**no key/scope change**, only URL repointing (demo `client.py`, dashboard `js/api.js`). Pre-SDK timing
+means no external consumer was broken. Mount-path regression: `test_v1_route_versioning.py`.
 
 ## DEC-113: Adopt `mypy --strict`?
 **Date:** 2026-06-13 · **Status:** ❓ OPEN (raised by /full-review L3-14)

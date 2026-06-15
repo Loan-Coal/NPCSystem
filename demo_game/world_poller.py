@@ -1,8 +1,8 @@
 """
 Module: world_poller
 Layer: demo_game (external client — zero npc_engine imports)
-Purpose: Background daemon thread that polls GET /v1/system/engines and
-         GET /v1/system/events on a fixed interval, exposing the latest
+Purpose: Background daemon thread that polls GET /v1/admin/system/engines and
+         GET /v1/admin/system/events on a fixed interval, exposing the latest
          snapshots thread-safely for the WORLD panel to render.
          Mirrors the WorldStatePoller pattern.
 Dependencies: threading, sys, demo_game.client

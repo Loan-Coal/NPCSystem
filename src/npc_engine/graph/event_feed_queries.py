@@ -6,7 +6,7 @@ Purpose: Read-only Cypher query for the WORLD panel event feed — returns recen
 Does NOT: write to Neo4j, mutate state, or call the LLM.
 Dependencies: neo4j (AsyncSession)
 Dependencies injected: AsyncSession (per call).
-Used by: npc_engine.api.routes.system (GET /v1/system/events)
+Used by: npc_engine.api.routes.system (GET /v1/admin/system/events)
 """
 
 from __future__ import annotations

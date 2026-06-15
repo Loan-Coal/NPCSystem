@@ -8,9 +8,9 @@
 - New module docstrings need `Does NOT:` + `Dependencies injected:` lines (test_architecture_conformance). New files near 300-line config limit → sibling module (see `config_logging_validators.py`).
 - 2026-06-14/15 DONE: all 12 original SEVs + Block G quick wins (SEV-13/22/18) + mediums SEV-20/23/17. make check GREEN, 2216 passed, cov 86.39%.
 - SEV-17: `dependencies_advanced` is now a PACKAGE (`politics.py`/`social.py`/`progression.py` + re-exporting `__init__`). Add a NEW advanced-engine factory to the matching submodule and to `__init__.__all__` — do NOT recreate a flat file. ISSUE-105's `dependencies_engines.py` (512 lines) is UNTOUCHED — apply the same split if a SEV reopens it.
-- SEV-14 NOT a quick win: moving `/v1/system`→`/v1/admin/system` escalates auth to admin scope (prefix-scoped) AND breaks the demo's live `/v1/system/*` polling. See its brief's gotcha; dedicated session.
+- SEV-14 DONE: system observability now `/v1/admin/system/{engines,config,metrics,events}` (admin-scoped). The demo AND dashboard keys were ALREADY admin-scoped (both call other `/v1/admin/*`), so no key change — only URL repointing (demo client, dashboard `js/api.js`, world_poller/run_scenes docstrings). `/health`+`/readiness` stay public (separate `system_router`). Mount-path regression lives in `test_v1_route_versioning.py`.
 - SEV-16 is L-effort/route-by-route: 35 files; npc_state/emotion/schemes already typed; many payloads are DYNAMIC engine-aggregate dicts (clock/batch) that should stay `dict[str,Any]`. Do fixed-shape demo-read routes first (player_model/chapters/investigations) à la SEV-03. See brief's scoping finding.
-- Remaining Block G: SEV-14 (auth), SEV-16 (route typing, multi-commit); SEV-15/17/19/21 (heavy refactors).
+- Remaining Block G: SEV-16 (route typing, multi-commit); SEV-15/19/21 (heavy refactors). SEV-14/17 done.
 - caplog gotcha: `utils/logging.py` sets propagate=False, so pytest `caplog` (root) misses engine logs once logging is configured — capture on the engine logger directly (see test_sev22 secret-seed test).
 
 ## Fix-now backlog (ordered, dependency-blocked)
@@ -55,11 +55,8 @@ does not stop on them — promote one into the checklist when you're ready to dr
 - [x] SEV-20 — `investigation_service` writers `CREATE`→`MERGE` on stable id (DEC-118)  (`5717449`)
 - [x] SEV-22 — `DistortionType` → `str` + live registry validator (DEC-120)  (`2cd8c8b`)
 - [x] SEV-23 — Split `LLMClientProtocol` into generate/structured/stream (DEC-121)  (`eab1726`)
-
-### Blocked — needs a human decision (do NOT run `/fix-next`; resolve first)
-- [ ] SEV-14 — Move `system_v1_router` → `/v1/admin/system/*` (DEC-112). **BLOCKED:** prefix-scoped auth means
-  this escalates the endpoints to admin scope AND breaks the demo's live `/v1/system/*` polling. Decide the
-  demo's auth key/scope first. (files: `router_registry.py`, demo client/poller/run_scenes, e2e, tests)
+- [x] SEV-14 — Move `system_v1_router` → `/v1/admin/system/*` (DEC-112). Resolved (Option A, admin scope):
+  demo + dashboard keys were already admin-scoped, so URL-repoint only — no key/scope change needed.
 
 ### Multi-phase — NOT a single `/fix-next` pass (drive incrementally / its own session)
 Each brief says to sub-phase; `/fix-next` does one item→one commit, so these would over-reach in one go.

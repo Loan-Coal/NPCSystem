@@ -330,8 +330,8 @@ class EngineClient:
         Raises:
             EngineClientError: On any 4xx or 5xx response.
         """
-        resp = self._client.get("/v1/system/engines", timeout=self._graph_timeout)
-        self._raise_for_status(resp, "GET /v1/system/engines")
+        resp = self._client.get("/v1/admin/system/engines", timeout=self._graph_timeout)
+        self._raise_for_status(resp, "GET /v1/admin/system/engines")
         return resp.json().get("data", [])
 
     def get_recent_events(self, limit: int = 20) -> list[dict]:
@@ -347,11 +347,11 @@ class EngineClient:
             EngineClientError: On any 4xx or 5xx response.
         """
         resp = self._client.get(
-            "/v1/system/events",
+            "/v1/admin/system/events",
             params={"limit": limit},
             timeout=self._graph_timeout,
         )
-        self._raise_for_status(resp, "GET /v1/system/events")
+        self._raise_for_status(resp, "GET /v1/admin/system/events")
         return resp.json().get("data", [])
 
     # ------------------------------------------------------------------

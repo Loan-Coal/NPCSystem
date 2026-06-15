@@ -363,7 +363,7 @@ class WorldFeed(Scene):
     event_type_filter: str | None = None
 
     def execute(self, runner: DemoRunner) -> None:
-        """Call GET /v1/system/events and print each event."""
+        """Call GET /v1/admin/system/events and print each event."""
         runner.print_step(f"WORLD feed -- last {self.limit} events")
         if runner.dry_run:
             return

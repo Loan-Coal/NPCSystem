@@ -86,6 +86,31 @@ def test_create_app_registers_admin_routes_under_v1_admin(monkeypatch, tmp_path:
     assert "/v1/admin/protected" in paths
 
 
+def test_create_app_registers_system_routes_under_admin(monkeypatch, tmp_path: Path) -> None:
+    """System observability routes move under /v1/admin/system/ (SEV-14, DEC-112)."""
+
+    schema_path = tmp_path / "game_schema.yaml"
+    _write_schema(path=schema_path)
+
+    monkeypatch.setenv("API_KEY_SECRET", "local_dev_secret_change_this_2026")
+    monkeypatch.setenv("GAME_SCHEMA_PATH", str(schema_path))
+
+    from npc_engine.config import get_settings
+    get_settings.cache_clear()
+    app = create_app()
+
+    paths = {
+        route.path
+        for route in app.routes
+        if isinstance(route, (APIRoute, APIWebSocketRoute))
+    }
+
+    assert "/v1/admin/system/engines" in paths
+    assert "/v1/admin/system/config" in paths
+    assert "/v1/admin/system/metrics" in paths
+    assert "/v1/admin/system/events" in paths
+
+
 def test_admin_routes_are_not_on_public_prefix(monkeypatch, tmp_path: Path) -> None:
     """Batch and graph-admin routes must not appear under the bare /v1/ prefix."""
 
@@ -110,3 +135,8 @@ def test_admin_routes_are_not_on_public_prefix(monkeypatch, tmp_path: Path) -> N
     assert "/v1/graph/admin/reindex" not in paths
     assert "/v1/schema" not in paths
     assert "/v1/schema/registry" not in paths
+    # SEV-14: system observability routes left the bare /v1/ prefix.
+    assert "/v1/system/engines" not in paths
+    assert "/v1/system/config" not in paths
+    assert "/v1/system/metrics" not in paths
+    assert "/v1/system/events" not in paths

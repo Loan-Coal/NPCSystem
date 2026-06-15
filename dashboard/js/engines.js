@@ -1,5 +1,5 @@
-// engines.js — S12.4 engine cadence + cost inspector over /v1/system/config and
-// /v1/system/engines. Read-only: live mutation of cadence/budget is deferred
+// engines.js — S12.4 engine cadence + cost inspector over /v1/admin/system/config and
+// /v1/admin/system/engines. Read-only: live mutation of cadence/budget is deferred
 // (see ISSUES.md) because it requires runtime settings mutation.
 "use strict";
 

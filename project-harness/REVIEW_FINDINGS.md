@@ -100,7 +100,7 @@ Severity uses CRITICAL/HIGH/MEDIUM/LOW (L2/L7 SEV-n mapped 2→HIGH,3→MED,4→
 | L6-01 | MED | no cross-session e2e test for persistent memory | L6 | Log | ISSUE-107 |
 | L6-03/L9-10 | LOW | demo-run `--dry-run` Windows U+2192 crash | L6/L9 | Log (exists) | ISSUE-100 |
 | L1-10/L1-06 | MED | `IDEMPOTENCY_ENFORCE_HEADER=false` advisory-only in staging/prod | L1 | Decide | DEC-111 |
-| L1-13 | LOW | move `system_v1_router` under `admin_prefix` (interface change) | L1 | Decide | DEC-112 |
+| L1-13 | LOW | move `system_v1_router` under `admin_prefix` (interface change) | L1 | Done (SEV-14) | DEC-112 |
 | L3-14 | MED | `mypy --strict` = 274 errors; current gate non-strict | L3 | Decide | DEC-113 |
 | L3-09 | HIGH | 130/147 routes `OkEnvelope[dict[str,Any]]` opaque (full scope) | L3 | Decide | DEC-114 |
 | L2-06 | MED | `dependencies_advanced.py` second composition root | L2 | FIXED (SEV-17, 2026-06-15: split into politics/social/progression submodules) | DEC-115 |
