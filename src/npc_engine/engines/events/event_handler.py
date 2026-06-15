@@ -7,6 +7,7 @@ Does NOT: run periodic scheduler loops.
 
 Dependencies injected: Settings, EmbeddingIndex.
 """
+from __future__ import annotations
 
 from datetime import datetime, timezone
 import random

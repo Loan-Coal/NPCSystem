@@ -8,3 +8,5 @@ Does NOT: mutate game graph state directly; seeds exclusively through the HTTP A
 
 Dependencies injected: None.
 """
+
+from __future__ import annotations

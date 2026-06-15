@@ -7,6 +7,7 @@ Does NOT: load or merge registry contracts.
 
 Dependencies injected: TypeRegistry.
 """
+from __future__ import annotations
 
 from typing import Any, Mapping
 

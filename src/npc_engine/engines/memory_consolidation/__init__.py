@@ -8,6 +8,8 @@ Dependencies injected: None (re-export package).
 Public surface: MemoryConsolidationEngine
 """
 
+from __future__ import annotations
+
 from npc_engine.engines.memory_consolidation.memory_consolidation_engine import (
     MemoryConsolidationEngine,
 )

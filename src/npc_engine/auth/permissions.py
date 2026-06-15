@@ -7,6 +7,7 @@ Does NOT: validate bearer secrets.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 SCOPE_GRAPH_WRITE = "graph_write"
 SCOPE_GRAPH_ADMIN = "graph_admin"

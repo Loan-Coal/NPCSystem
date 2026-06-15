@@ -8,6 +8,8 @@ Dependencies injected: None (engines are constructed in dependency_singletons).
 Public surface: AgendaEngine, ConversationIntent, IntentFormationEngine
 """
 
+from __future__ import annotations
+
 from npc_engine.common.intent_models import ConversationIntent
 from npc_engine.engines.agenda.agenda_engine import AgendaEngine
 from npc_engine.engines.agenda.intent_formation_engine import IntentFormationEngine

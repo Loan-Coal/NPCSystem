@@ -7,6 +7,7 @@ Does NOT: read or write world state from Neo4j.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from datetime import datetime, timezone
 

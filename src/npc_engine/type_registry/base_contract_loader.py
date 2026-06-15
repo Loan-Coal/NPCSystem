@@ -7,6 +7,7 @@ Does NOT: load external extension contracts.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from pathlib import Path
 from types import MappingProxyType

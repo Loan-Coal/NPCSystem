@@ -7,6 +7,7 @@ Does NOT: validate relation bounds.
 
 Dependencies injected: AsyncManagedTransaction.
 """
+from __future__ import annotations
 
 import json
 

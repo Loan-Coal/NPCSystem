@@ -7,6 +7,7 @@ Does NOT: execute world tick logic.
 
 Dependencies injected: AsyncSession, Settings.
 """
+from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Literal, cast, Any

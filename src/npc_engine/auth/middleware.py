@@ -7,6 +7,7 @@ Does NOT: execute route business logic.
 
 Dependencies injected: Settings.
 """
+from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from time import perf_counter

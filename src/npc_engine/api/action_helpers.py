@@ -7,6 +7,7 @@ Does NOT: execute graph writes.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from datetime import datetime, timezone
 

@@ -7,6 +7,8 @@ Dependencies injected: None.
 Public surface: derive_standing, Standing
 """
 
+from __future__ import annotations
+
 from npc_engine.engines.relationship.standing import Standing, derive_standing
 
 __all__ = ["Standing", "derive_standing"]

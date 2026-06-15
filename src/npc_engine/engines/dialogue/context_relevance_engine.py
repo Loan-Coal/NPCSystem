@@ -7,6 +7,7 @@ Does NOT: define any logic.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from npc_engine.retrieval.context_relevance_engine import (
     ContextRelevanceCandidate,

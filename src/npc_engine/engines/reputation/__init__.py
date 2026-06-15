@@ -7,3 +7,5 @@ Does NOT: perform direct I/O, open sessions, or call LLMs.
 Dependencies injected: None (consumers inject into ReputationEngine directly).
 Public surface: ReputationEngine, PropagationConfig, load_propagation_config
 """
+
+from __future__ import annotations

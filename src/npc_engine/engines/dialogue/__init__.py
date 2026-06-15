@@ -8,3 +8,5 @@ Does NOT: expose HTTP route handlers directly.
 
 Dependencies injected: None.
 """
+
+from __future__ import annotations

@@ -7,6 +7,7 @@ Does NOT: enforce auth scopes or execute node mutations.
 
 Dependencies injected: AsyncSession, TypeRegistry (via _GenericGraphServiceBase).
 """
+from __future__ import annotations
 
 from typing import Any
 

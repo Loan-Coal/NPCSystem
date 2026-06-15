@@ -8,3 +8,5 @@ Does NOT: execute graph persistence directly.
 
 Dependencies injected: None.
 """
+
+from __future__ import annotations

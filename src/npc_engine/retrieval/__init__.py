@@ -8,3 +8,5 @@ Does NOT: run dialogue orchestration.
 
 Dependencies injected: None.
 """
+
+from __future__ import annotations

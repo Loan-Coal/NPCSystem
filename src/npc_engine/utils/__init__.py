@@ -8,3 +8,5 @@ Does NOT: implement domain engines.
 
 Dependencies injected: None.
 """
+
+from __future__ import annotations

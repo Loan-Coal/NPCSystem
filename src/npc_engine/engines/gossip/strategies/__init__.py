@@ -6,3 +6,5 @@ Does NOT: perform I/O, access the graph, or call LLMs.
 Dependencies injected: None.
 Public surface: omission, exaggeration, role_swap, timeline_shift (each a callable module).
 """
+
+from __future__ import annotations

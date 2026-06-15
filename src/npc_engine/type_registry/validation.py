@@ -7,6 +7,7 @@ Does NOT: execute graph writes or perform field-level type coercion.
 
 Dependencies injected: TypeRegistry.
 """
+from __future__ import annotations
 
 from enum import Enum
 from typing import Any, Mapping

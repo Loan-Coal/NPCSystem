@@ -7,6 +7,7 @@ Does NOT: orchestrate payload-level validation or resolve edge/node definitions.
 
 Dependencies injected: RuntimeFieldDefinition contracts.
 """
+from __future__ import annotations
 
 import json
 from typing import Any

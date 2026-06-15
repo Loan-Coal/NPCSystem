@@ -7,6 +7,7 @@ Does NOT: load files from disk or execute runtime prompt logic.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 

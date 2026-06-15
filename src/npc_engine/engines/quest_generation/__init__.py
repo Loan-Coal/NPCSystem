@@ -6,3 +6,5 @@ Does NOT: expose HTTP routes or manage quest lifecycle state transitions.
 Dependencies injected: LLMClientProtocol, SlotValidator, list[QuestTemplateRecord].
 Public surface: QuestGenerationEngine, QuestTemplateRecord, GeneratedQuest, SlotDefinition, SlotFill
 """
+
+from __future__ import annotations

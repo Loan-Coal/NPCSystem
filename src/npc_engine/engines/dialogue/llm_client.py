@@ -7,6 +7,7 @@ Does NOT: build prompts or mutate graph state.
 
 Dependencies injected: LLMClientProtocol.
 """
+from __future__ import annotations
 
 import json
 import logging

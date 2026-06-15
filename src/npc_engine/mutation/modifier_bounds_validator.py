@@ -7,6 +7,7 @@ Does NOT: write relation changes to the graph.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from dataclasses import dataclass
 

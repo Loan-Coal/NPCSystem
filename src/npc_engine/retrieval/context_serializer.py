@@ -7,6 +7,7 @@ Does NOT: enforce token budget or merge tiers.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 import json
 from typing import Any

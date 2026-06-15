@@ -10,6 +10,8 @@ Public surface: DirectorDecision, decide, IDLE_INJECT_THRESHOLD_TICKS, BEAT_KIND
                 DirectorTick
 """
 
+from __future__ import annotations
+
 from npc_engine.engines.director.director_engine import (
     DirectorDecision,
     decide,

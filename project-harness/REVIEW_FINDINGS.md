@@ -123,7 +123,8 @@ See `review-fixes/INDEX.md` for the ordered backlog and `review-fixes/FIX-SEV-*.
 - **2026-06-14 /fix-next — INTEGRATED:** SEV-02 (error-leak redaction in require_node + locations + economy).
   SEV-09 (staging/prod gate on LOG_LEVEL=DEBUG + LOG_LLM_PROMPTS via new `config_logging_validators.py`).
   SEV-04 (`KnowledgeState` Literal in new `common/knowledge_types.py`; replaced 3 raw sites + consolidated
-  2 named-constant dups; brief's `subgraph_retriever`/`npc_state` sites had no literal. make check GREEN,
-  2193 passed, cov 86.85%).
-- **Pending redo via /fix-next** (parallel workers branched off stale `main`; source edits conflicted): SEV-12.
+  2 named-constant dups; brief's `subgraph_retriever`/`npc_state` sites had no literal).
+  SEV-06 (`from __future__ import annotations` added to 138 src files + ruff I002 enforcement;
+  `base_engine.run_tick -> dict[str, Any]`; make check GREEN, 2193 passed, cov 87.05%).
+- **Remaining via /fix-next:** SEV-07, SEV-10, SEV-11, SEV-12.
 - **Not started:** SEV-06 (keep solo/serial), SEV-07, SEV-10, SEV-11. **Blocked:** DEC-111…121.

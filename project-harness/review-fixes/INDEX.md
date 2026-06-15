@@ -2,13 +2,12 @@
 
 ## Carry-forward notes
 <!-- ≤10 lines. /fix-next and /fix-parallel append running context here. -->
-- 2026-06-14 INTEGRATED: SEV-01,03,05,08 (parallel batch 1) + SEV-02, SEV-09, SEV-04 (/fix-next). make check GREEN, 2193 passed, cov 86.85%.
+- 2026-06-14 INTEGRATED: SEV-01,03,05,08 (parallel batch 1) + SEV-02, SEV-09, SEV-04, SEV-06 (/fix-next). make check GREEN, 2193 passed, cov 87.05%.
+- ENFORCEMENT: ruff `I002` (pyproject `[tool.ruff.lint] extend-select=["I002"]` + isort required-imports) now blocks any non-`__init__.py` src module missing `from __future__ import annotations`. NOTE: ruff EXEMPTS `__init__.py` — those were added manually and are NOT auto-enforced (a new `__init__.py` won't be flagged).
 - HARNESS BUG: `isolation:worktree` branched workers off `main` (ea16f74), 454 commits behind munich-demo. **Run remaining SEVs via /fix-next (no worktree) — it operates on munich-demo directly.**
 - `common/knowledge_types.py` now holds `KnowledgeState` Literal + `KNOWLEDGE_STATE_KNOWS/RUMOR` — reuse for any new knowledge_state value (do NOT redefine "knows"/"rumor"). Cypher-template literals (event_queries/secret_queries) intentionally stay (data, not Python).
-- NOTE: new files near 300-line config limit go in a sibling module (see `config_logging_validators.py`). New module docstrings need `Does NOT:` + `Dependencies injected:` lines (test_architecture_conformance).
-- REDO/remaining: SEV-06 (repo-wide future-annotations sweep — keep solo/serial), SEV-07, SEV-10, SEV-11, SEV-12.
-- Redaction pattern (reuse for any new route leak): fixed client detail constant + `logger.info(..., extra={...})` server-side; assert sentinel absent from body. See `route_helpers._NOT_FOUND_DETAIL`, `test_route_error_redaction.py`.
-- NOT STARTED: SEV-06 (repo-wide future-annotations sweep — keep solo/serial), SEV-07, SEV-10, SEV-11.
+- New module docstrings need `Does NOT:` + `Dependencies injected:` lines (test_architecture_conformance). New files near 300-line config limit → sibling module (see `config_logging_validators.py`).
+- REMAINING: SEV-07 (eval test hygiene), SEV-10 (check_layers), SEV-11 (docs), SEV-12 (clique magic numbers).
 - Decide items (DEC-111…121) BLOCKED pending human approval — do not start via /fix-next.
 
 ## Fix-now backlog (ordered, dependency-blocked)
@@ -23,7 +22,7 @@
 
 ### Block C — Typing / fixed-sets (independent)
 - [x] SEV-04 — `KnowledgeState` Literal (brief sites were off; real sites: knowledge_propagator x2, gossip_handler, + consolidated prompt_builder/gossip_spread_service named dups)  (files: `common/knowledge_types.py` NEW, `engines/gossip/knowledge_propagator.py`, `engines/gossip/gossip_handler.py`, `engines/dialogue/prompt_builder.py`, `graph/gossip_spread_service.py`)
-- [ ] SEV-06 — `base_engine.run_tick` return type-arg + ruff `from __future__` autofix (138 files)  (deps: none · files: `engines/base_engine.py`, repo-wide ruff `I/F` autofix)
+- [x] SEV-06 — `base_engine.run_tick` return type-arg + ruff `from __future__` autofix (138 files; ruff I002 now enforces)  (files: `pyproject.toml` ruff I002, `engines/base_engine.py`, 138 src files)
 
 ### Block D — Test efficacy (independent)
 - [x] SEV-05 — `investigation_service.py` tests (6 writers, happy+failure)  (deps: none · files: `tests/integration/`, `tests/unit/` — NOTE MERGE-vs-CREATE is DEC-118, test current CREATE behavior)

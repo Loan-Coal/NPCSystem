@@ -7,6 +7,7 @@ Does NOT: execute raw Cypher in route handlers.
 
 Dependencies injected: GenericGraphService.
 """
+from __future__ import annotations
 
 from typing import Any
 

@@ -7,6 +7,7 @@ Does NOT: provide concrete database implementation.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from typing import Protocol
 

@@ -7,6 +7,7 @@ Does NOT: validate bearer token scopes.
 
 Dependencies injected: AsyncSession.
 """
+from __future__ import annotations
 
 from neo4j import AsyncSession
 

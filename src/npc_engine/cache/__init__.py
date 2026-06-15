@@ -8,3 +8,5 @@ Does NOT: mutate game graph state.
 
 Dependencies injected: Settings.
 """
+
+from __future__ import annotations

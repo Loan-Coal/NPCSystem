@@ -7,6 +7,7 @@ Does NOT: manage transaction lifecycle.
 
 Dependencies injected: AsyncManagedTransaction.
 """
+from __future__ import annotations
 
 from typing import Any, Protocol
 

@@ -6,3 +6,5 @@ Does NOT: modify faction standings directly or implement gossip/event logic.
 Dependencies injected: AsyncSession (via run_tick).
 Public surface: TreatyEngine
 """
+
+from __future__ import annotations

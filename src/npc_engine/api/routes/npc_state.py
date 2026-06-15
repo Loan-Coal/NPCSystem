@@ -7,6 +7,7 @@ Does NOT: perform dialogue generation.
 
 Dependencies injected: AsyncSession, EmotionStore.
 """
+from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from neo4j import AsyncSession

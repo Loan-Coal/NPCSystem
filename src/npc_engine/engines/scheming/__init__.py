@@ -10,6 +10,8 @@ Dependencies injected: Settings (via SchemingEngine constructor).
 Public surface: SchemingEngine, SchemeInput, SchemeStepInput
 """
 
+from __future__ import annotations
+
 from npc_engine.engines.scheming.scheming_engine import (
     SchemeInput,
     SchemeStepInput,

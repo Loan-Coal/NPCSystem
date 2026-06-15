@@ -7,6 +7,7 @@ Does NOT: validate API requests directly.
 
 Dependencies injected: SchemaConfig.
 """
+from __future__ import annotations
 
 from dataclasses import dataclass
 

@@ -7,6 +7,7 @@ Does NOT: load schema files or resolve graph data.
 
 Dependencies injected: SchemaConfig.
 """
+from __future__ import annotations
 
 from npc_engine.schema.schema_models import SchemaConfig, SemanticTag
 

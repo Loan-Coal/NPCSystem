@@ -7,6 +7,7 @@ Does NOT: orchestrate registry merges or read files from disk.
 
 Dependencies injected: validated schema field configs and runtime field contracts.
 """
+from __future__ import annotations
 
 from typing import Mapping, Protocol
 

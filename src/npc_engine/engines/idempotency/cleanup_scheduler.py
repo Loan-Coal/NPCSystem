@@ -7,6 +7,7 @@ Does NOT: perform request preflight/replay logic.
 
 Dependencies injected: IdempotencyServiceProtocol.
 """
+from __future__ import annotations
 
 import asyncio
 

@@ -7,6 +7,7 @@ Does NOT: read extension files from disk or apply merge policies.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Literal, Mapping

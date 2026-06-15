@@ -7,6 +7,7 @@ Does NOT: perform request-time graph validation.
 
 Dependencies injected: base schema + configured extension paths.
 """
+from __future__ import annotations
 
 import dataclasses
 

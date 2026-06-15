@@ -7,6 +7,7 @@ Does NOT: enforce mutation bounds.
 
 Dependencies injected: AsyncSession.
 """
+from __future__ import annotations
 
 from datetime import datetime, timezone
 

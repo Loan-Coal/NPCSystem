@@ -7,6 +7,7 @@ Does NOT: handle currency or item transfers.
 
 Dependencies injected: AsyncSession, Settings.
 """
+from __future__ import annotations
 
 import json
 from datetime import datetime, timezone

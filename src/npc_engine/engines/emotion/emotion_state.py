@@ -7,6 +7,7 @@ Does NOT: persist emotion state by itself.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from datetime import datetime, timezone
 

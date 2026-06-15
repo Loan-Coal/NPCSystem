@@ -7,6 +7,7 @@ Does NOT: manage user sessions or token issuance.
 
 Dependencies injected: Settings.
 """
+from __future__ import annotations
 
 import secrets
 

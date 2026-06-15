@@ -8,3 +8,5 @@ Does NOT: control animation rendering.
 
 Dependencies injected: None.
 """
+
+from __future__ import annotations

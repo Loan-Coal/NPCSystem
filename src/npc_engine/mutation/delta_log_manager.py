@@ -7,6 +7,7 @@ Does NOT: persist logs or mutate graph edges in storage.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from datetime import datetime, timezone
 

@@ -7,6 +7,7 @@ Does NOT: mutate runtime graph state.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from pathlib import Path
 

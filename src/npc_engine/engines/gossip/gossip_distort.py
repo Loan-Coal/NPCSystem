@@ -10,6 +10,7 @@ Does NOT: access databases or external services.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from hashlib import sha256
 from typing import cast, Literal

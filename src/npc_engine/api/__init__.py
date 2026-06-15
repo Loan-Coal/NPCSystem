@@ -8,3 +8,5 @@ Does NOT: contain business engine logic.
 
 Dependencies injected: None.
 """
+
+from __future__ import annotations

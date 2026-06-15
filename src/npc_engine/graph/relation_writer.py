@@ -7,6 +7,7 @@ Does NOT: validate window constraints.
 
 Dependencies injected: AsyncManagedTransaction.
 """
+from __future__ import annotations
 
 from neo4j import AsyncTransaction
 

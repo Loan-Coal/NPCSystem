@@ -7,6 +7,7 @@ Does NOT: compute embeddings.
 
 Dependencies injected: Settings.
 """
+from __future__ import annotations
 
 from npc_engine.config import Settings
 from npc_engine.retrieval.vector_store_protocol import VectorSearchResult, VectorStoreProtocol

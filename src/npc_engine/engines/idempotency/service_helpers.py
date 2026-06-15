@@ -7,6 +7,7 @@ Does NOT: manage sessions or expose public service API.
 
 Dependencies injected: IdempotencyStoreProtocol, Settings.
 """
+from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timedelta, timezone

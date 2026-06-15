@@ -7,6 +7,7 @@ Does NOT: execute queries or validate business rules.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 CYPHER_GET_OUTBOUND_SESSION_TOTAL = """
 MATCH (:Character {id: $source_id})-[t:TRANSFERRED_TO {session_scope: $session_scope, transfer_kind: $transfer_kind}]->(:Character)

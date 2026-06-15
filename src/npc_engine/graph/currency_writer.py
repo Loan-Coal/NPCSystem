@@ -11,6 +11,7 @@ NOTE: This file is 327 lines — over the 300-line limit by a small margin (DEC-
 Splitting is artificial because execute_currency_transfer_in_tx shares private helpers
 (_try_replay, _raise_transfer_failure) with transfer_currency_atomic.
 """
+from __future__ import annotations
 
 from neo4j import AsyncSession, AsyncTransaction
 from pydantic import BaseModel, ConfigDict

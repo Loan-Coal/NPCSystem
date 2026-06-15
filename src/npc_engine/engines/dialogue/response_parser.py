@@ -7,6 +7,7 @@ Does NOT: call LLM services.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from npc_engine.engines.dialogue.dialogue_models import DialogueResponse
 

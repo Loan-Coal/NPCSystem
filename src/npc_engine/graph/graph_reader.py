@@ -7,6 +7,7 @@ Does NOT: apply mutations or open transactions.
 
 Dependencies injected: AsyncSession.
 """
+from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, cast

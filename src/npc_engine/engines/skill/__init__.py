@@ -6,3 +6,5 @@ Does NOT: call LLMs or modify skill definitions.
 Dependencies injected: AsyncSession (via run_tick).
 Public surface: SkillProgressionEngine
 """
+
+from __future__ import annotations

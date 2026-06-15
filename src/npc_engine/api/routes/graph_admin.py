@@ -7,6 +7,7 @@ Does NOT: perform authentication itself.
 
 Dependencies injected: GraphAdminService.
 """
+from __future__ import annotations
 
 from typing import Any
 

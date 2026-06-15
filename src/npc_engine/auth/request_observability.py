@@ -6,6 +6,7 @@ Does NOT: enforce auth, validate idempotency keys, or define the middleware clas
 Dependencies injected: Settings (none directly; operates on Request/Response).
 Used by: auth.middleware (ApiKeyMiddleware.dispatch).
 """
+from __future__ import annotations
 
 from time import perf_counter
 import time

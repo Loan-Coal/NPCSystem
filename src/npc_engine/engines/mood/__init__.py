@@ -8,6 +8,8 @@ Dependencies injected: None (engines are constructed in dependency_singletons).
 Public surface: MoodContagionEngine
 """
 
+from __future__ import annotations
+
 from npc_engine.engines.mood.mood_contagion_engine import MoodContagionEngine
 
 __all__ = ["MoodContagionEngine"]

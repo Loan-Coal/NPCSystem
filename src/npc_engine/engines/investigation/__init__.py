@@ -7,6 +7,8 @@ Dependencies injected: None (engines are constructed in dependency_singletons).
 Public surface: InvestigationEngine
 """
 
+from __future__ import annotations
+
 from npc_engine.engines.investigation.investigation_engine import InvestigationEngine
 
 __all__ = ["InvestigationEngine"]

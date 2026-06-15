@@ -7,6 +7,7 @@ Does NOT: initialize runtime services or perform network I/O.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from functools import lru_cache
 import logging

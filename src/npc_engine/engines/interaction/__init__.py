@@ -9,6 +9,8 @@ Public surface: InteractionProposal, InteractionState, NegotiationSession,
     NegotiationStore, dispatch_interaction
 """
 
+from __future__ import annotations
+
 from npc_engine.engines.interaction.models import InteractionProposal, InteractionState
 from npc_engine.engines.interaction.dispatch import dispatch_interaction
 from npc_engine.engines.interaction.negotiation_store import NegotiationSession, NegotiationStore

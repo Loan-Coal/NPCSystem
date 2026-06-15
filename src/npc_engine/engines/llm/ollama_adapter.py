@@ -7,6 +7,7 @@ Does NOT: choose backend implementations.
 
 Dependencies injected: base_url, model_name, timeout_seconds.
 """
+from __future__ import annotations
 
 from typing import Any, AsyncIterator
 import json

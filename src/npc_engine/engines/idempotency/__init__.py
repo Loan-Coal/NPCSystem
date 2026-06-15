@@ -8,3 +8,5 @@ Does NOT: define API routes.
 
 Dependencies injected: GraphDB, Settings.
 """
+
+from __future__ import annotations

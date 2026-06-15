@@ -7,6 +7,7 @@ Does NOT: define the main lifespan. Singleton lifecycle is managed in main.py.
 
 Dependencies injected: Settings, NegotiationStore, PricingEngine, NegotiationBackedSyncTradeHandler.
 """
+from __future__ import annotations
 
 from functools import lru_cache
 from typing import AsyncGenerator

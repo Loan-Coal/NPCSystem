@@ -7,6 +7,8 @@ Dependencies injected: none (re-export package).
 Public surface: KnowledgeExtractionEngine, KnowledgeExtractionResult, LearnedFact
 """
 
+from __future__ import annotations
+
 from npc_engine.engines.knowledge_learning.models import (
     KnowledgeExtractionResult,
     LearnedFact,

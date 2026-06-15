@@ -17,6 +17,7 @@ The dynamic tier (emotion snapshot, session turns, RAG results) is never cached.
 Does NOT: connect to Redis or any external cache backend.
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 import time
 from typing import Any

@@ -7,6 +7,7 @@ Does NOT: read files from disk or build field definitions.
 
 Dependencies injected: base schema model and validated extension documents.
 """
+from __future__ import annotations
 
 from types import MappingProxyType
 

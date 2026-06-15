@@ -8,3 +8,5 @@ Does NOT: expose runtime API behavior.
 
 Dependencies injected: None.
 """
+
+from __future__ import annotations

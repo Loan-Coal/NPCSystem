@@ -8,6 +8,8 @@ Dependencies injected: None (pure package; the engine is stateless).
 Public surface: PlayerModelEngine, PlayerModelInput, PlayerModelUpdate
 """
 
+from __future__ import annotations
+
 from npc_engine.engines.player_model.player_model_engine import (
     PlayerModelEngine,
     PlayerModelInput,

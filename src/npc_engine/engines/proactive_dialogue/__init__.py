@@ -9,6 +9,8 @@ Public surface: ProactiveDialogueEngine, ProactiveTrigger, ProactiveLine,
                 HIGH_VIVIDNESS_THRESHOLD, MIN_IDLE_TICKS
 """
 
+from __future__ import annotations
+
 from npc_engine.engines.proactive_dialogue.models import ProactiveLine, ProactiveTrigger
 from npc_engine.engines.proactive_dialogue.proactive_engine import (
     HIGH_VIVIDNESS_THRESHOLD,

@@ -6,3 +6,5 @@ Does NOT: call LLMs or modify pledge terms.
 Dependencies injected: AsyncSession (via run_tick).
 Public surface: OathEngine
 """
+
+from __future__ import annotations

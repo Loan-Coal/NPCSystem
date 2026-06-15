@@ -7,6 +7,7 @@ Does NOT: trigger engine ticks.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 import asyncio
 

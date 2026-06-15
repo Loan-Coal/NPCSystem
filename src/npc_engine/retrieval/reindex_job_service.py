@@ -7,6 +7,7 @@ Dependencies injected: EmbeddingIndex.
 Internal dependencies: retrieval.embedding_index
 Used by: api.dependency_singletons, api.routes.graph_admin
 """
+from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone

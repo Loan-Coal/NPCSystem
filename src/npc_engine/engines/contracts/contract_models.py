@@ -7,6 +7,7 @@ Does NOT: load contract files from disk.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 

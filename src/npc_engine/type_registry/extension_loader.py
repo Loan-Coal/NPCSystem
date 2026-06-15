@@ -7,6 +7,7 @@ Does NOT: apply merge policies or build runtime registry state.
 
 Dependencies injected: extension source paths.
 """
+from __future__ import annotations
 
 from dataclasses import dataclass
 import glob

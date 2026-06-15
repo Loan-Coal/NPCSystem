@@ -8,3 +8,5 @@ Does NOT: run scheduler loops directly.
 
 Dependencies injected: None.
 """
+
+from __future__ import annotations

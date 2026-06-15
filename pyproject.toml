@@ -64,6 +64,14 @@ python_files = ["test_*.py", "*_test.py", "scenario_*.py"]
 [tool.ruff]
 line-length = 120
 
+[tool.ruff.lint]
+# I002: enforce `from __future__ import annotations` in every module (L3-05 / SEV-06).
+# Kept minimal (not full isort) to avoid reordering existing imports.
+extend-select = ["I002"]
+
+[tool.ruff.lint.isort]
+required-imports = ["from __future__ import annotations"]
+
 [tool.mypy]
 mypy_path = "src"
 strict = false

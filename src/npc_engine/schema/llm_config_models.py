@@ -7,6 +7,7 @@ Does NOT: define any models; delegates entirely to context_config_models.
 
 Dependencies injected: none.
 """
+from __future__ import annotations
 
 from npc_engine.schema.context_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
 

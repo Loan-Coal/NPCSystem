@@ -8,3 +8,5 @@ Does NOT: define gossip or event business rules.
 
 Dependencies injected: None.
 """
+
+from __future__ import annotations

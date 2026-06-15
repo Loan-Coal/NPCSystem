@@ -8,6 +8,8 @@ Dependencies injected: None (engines are constructed in dependency_singletons).
 Public surface: MilitaryEngine
 """
 
+from __future__ import annotations
+
 from npc_engine.engines.military.military_engine import MilitaryEngine
 
 __all__ = ["MilitaryEngine"]

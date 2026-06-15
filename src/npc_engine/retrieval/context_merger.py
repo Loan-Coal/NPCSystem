@@ -7,6 +7,7 @@ Does NOT: enforce token budget or serialize prompt text.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from typing import Literal
 

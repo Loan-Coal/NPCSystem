@@ -6,3 +6,5 @@ Does NOT: call LLMs or expose HTTP routes directly.
 Dependencies injected: None at package level.
 Public surface: FactionPoliticsEngine, load_rules, FactionPoliticsRules
 """
+
+from __future__ import annotations

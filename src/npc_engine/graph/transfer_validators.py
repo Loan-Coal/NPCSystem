@@ -7,6 +7,7 @@ Does NOT: execute graph writes or open transactions.
 
 Dependencies injected: Settings (for currency limits).
 """
+from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 

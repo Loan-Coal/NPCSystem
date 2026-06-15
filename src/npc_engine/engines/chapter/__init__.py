@@ -8,6 +8,8 @@ Dependencies injected: None (engines are constructed in dependency_singletons).
 Public surface: ChapterEngine
 """
 
+from __future__ import annotations
+
 from npc_engine.engines.chapter.chapter_engine import ChapterEngine
 
 __all__ = ["ChapterEngine"]

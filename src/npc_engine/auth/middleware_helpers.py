@@ -7,6 +7,7 @@ Does NOT: define the middleware class itself.
 
 Dependencies injected: Settings.
 """
+from __future__ import annotations
 
 from uuid import UUID
 

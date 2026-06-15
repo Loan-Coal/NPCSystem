@@ -7,6 +7,7 @@ Does NOT: parse HTTP headers directly.
 
 Dependencies injected: Settings, GraphDB, IdempotencyStoreProtocol.
 """
+from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, AsyncContextManager, Protocol

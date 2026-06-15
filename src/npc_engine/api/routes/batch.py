@@ -7,6 +7,7 @@ Does NOT: advance game clock automatically.
 
 Dependencies injected: GossipHandler, EventHandler, AsyncSession.
 """
+from __future__ import annotations
 
 from typing import Any
 
