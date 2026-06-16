@@ -180,6 +180,8 @@ def _make_dialogue_handler(valence_after_mood: int):
     handler._settings = settings
     handler._engine_model_config = engine_model_config
     handler._knowledge_engine = None
+    handler._relation_reader = None
+    handler._relation_phase_writer = None
     handler._input_moderation = build_input_moderation_service("mature")
     from npc_engine.services.output_moderation import build_output_moderation_service
     handler._output_moderation = build_output_moderation_service("mature")

@@ -11,6 +11,7 @@ Used by: api.dependency_singletons (re-exporter), api.dependencies_engines
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Any
 
 from npc_engine.api.dependencies_infra import get_graph_db
 from npc_engine.config import get_settings
@@ -23,6 +24,12 @@ from npc_engine.engines.knowledge_learning.knowledge_extraction_engine import (
 )
 from npc_engine.graph.repositories.emotion_repository import Neo4jEmotionRepository
 from npc_engine.graph.repositories.knowledge_repository import Neo4jKnowledgeRepository
+from npc_engine.graph.repositories.relation_phase_write_repository import (
+    Neo4jRelationPhaseWriteRepository,
+)
+from npc_engine.graph.repositories.relation_read_repository import (
+    Neo4jRelationReadRepository,
+)
 from npc_engine.engines.idempotency.service import IdempotencyService
 from npc_engine.graph.idempotency_writer import Neo4jIdempotencyStore
 from npc_engine.retrieval.dialogue_context_cache import PartialDialogueContextCache
@@ -84,6 +91,25 @@ def get_knowledge_extraction_engine() -> KnowledgeExtractionEngine:
     return KnowledgeExtractionEngine(
         knowledge_repo=Neo4jKnowledgeRepository(get_graph_db()),
     )
+
+
+def get_dialogue_graph_ports() -> dict[str, Any]:
+    """Build the DialogueHandler graph-port kwargs (knowledge engine + relation phase ports).
+
+    Bundles the optional knowledge engine with the relation read/write ports the phase
+    applier depends on (DEC-122 / SEV-24), so the api composition root injects one set of
+    graph-backed kwargs and DialogueHandler holds no Neo4j session for phase transitions.
+
+    Returns:
+        A kwargs mapping with keys ``knowledge_engine``, ``relation_reader``, and
+        ``relation_phase_writer`` ready to splat into DialogueHandler.
+    """
+    graph_db = get_graph_db()
+    return {
+        "knowledge_engine": get_knowledge_extraction_engine(),
+        "relation_reader": Neo4jRelationReadRepository(graph_db),
+        "relation_phase_writer": Neo4jRelationPhaseWriteRepository(graph_db),
+    }
 
 
 @lru_cache

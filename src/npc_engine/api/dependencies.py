@@ -20,6 +20,7 @@ from npc_engine.engines.interaction.dispatch import set_trade_handler
 from npc_engine.api.dependency_singletons import (
     get_context_cache,
     get_dialogue_engine_model_config,
+    get_dialogue_graph_ports,
     get_embedding_index,
     get_emotion_store,  # noqa: F401  re-exported for api.routes.npc_state
     get_emotion_updater,
@@ -27,7 +28,6 @@ from npc_engine.api.dependency_singletons import (
     get_game_schema,  # noqa: F401  re-exported for api.routes.system
     get_gossip_handler,  # noqa: F401  re-exported for api.routes.batch
     get_graph_db,
-    get_knowledge_extraction_engine,
     get_llm_config,
     get_quest_lifecycle_engine,  # noqa: F401  re-exported for api.routes.quest
     get_reindex_job_service,  # noqa: F401  re-exported for api.routes.graph_admin
@@ -201,7 +201,7 @@ def build_dialogue_handler(
         context_cache=get_context_cache(),
         tts_client=tts_client,
         negotiation_store=get_negotiation_store(),
-        knowledge_engine=get_knowledge_extraction_engine(),
+        **get_dialogue_graph_ports(),
     )
 
 

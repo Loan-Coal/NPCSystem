@@ -62,6 +62,8 @@ from npc_engine.engines.dialogue.negotiation_context import inject_active_negoti
 
 if TYPE_CHECKING:
     from npc_engine.engines.interaction.negotiation_store import NegotiationStore
+    from npc_engine.engines.ports.relation_phase_write_port import RelationPhaseWritePort
+    from npc_engine.engines.ports.relation_read_port import RelationReadPort
 
 
 _logger = logging.getLogger(__name__)
@@ -100,6 +102,8 @@ class DialogueHandler:
         tts_client: TTSClientProtocol | None = None,
         knowledge_engine: KnowledgeExtractionEngine | None = None,
         negotiation_store: NegotiationStore | None = None,
+        relation_reader: RelationReadPort | None = None,
+        relation_phase_writer: RelationPhaseWritePort | None = None,
     ) -> None:
         """Initialise with all engine dependencies injected.
 
@@ -107,11 +111,8 @@ class DialogueHandler:
             input_moderation: Checks player input against the content ceiling (S16.2).
             output_moderation: Flags NPC responses that exceed the content ceiling (S16.3).
             effective_rating: The active content ceiling; informs the system prompt (S16.3).
-            knowledge_engine: Optional; persists player facts as BELIEVES nodes (EXP-53),
-                guarded by KNOWLEDGE_LEARNING_ENABLED.
-            negotiation_store: Optional; when supplied, an active barter session is
-                injected into the dialogue context so the NPC reflects live trade
-                reality (S22.4, ISSUE-071). The no-store path is unchanged.
+            knowledge_engine: Optional; persists player facts as BELIEVES nodes (EXP-53), guarded by KNOWLEDGE_LEARNING_ENABLED.
+            negotiation_store: Optional; injects an active barter session into the dialogue context so the NPC reflects live trade reality (S22.4, ISSUE-071).
         """
         self._session = session
         self._settings = settings
@@ -127,6 +128,7 @@ class DialogueHandler:
         self._output_moderation = output_moderation
         self._effective_rating = effective_rating
         self._negotiation_store = negotiation_store
+        self._relation_reader, self._relation_phase_writer = relation_reader, relation_phase_writer
         self._memory_engine = MemoryEngine()
         self._llm = self._build_llm_client(llm_client)
         self._system_prompt = build_system_prompt(content_rating=effective_rating)
@@ -201,10 +203,11 @@ class DialogueHandler:
                 player_id=request.player_id, relation_deltas=response.relation_deltas,
                 cause_id=f"dialogue:{request.player_id}:{request.npc_id}", tick_id=tick_id,
             )
-            await apply_phase_transition(
-                session=self._session, src_id=request.npc_id,
-                dst_id=request.player_id, tick=tick_id,
-            )
+            if self._relation_reader is not None and self._relation_phase_writer is not None:
+                await apply_phase_transition(
+                    self._relation_reader, self._relation_phase_writer,
+                    src_id=request.npc_id, dst_id=request.player_id, tick=tick_id,
+                )
         return await self._emotion_updater.apply_dialogue_mood(
             npc_id=request.npc_id,
             mood_update=response.mood_update,

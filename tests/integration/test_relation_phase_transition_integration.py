@@ -12,6 +12,7 @@ Dependencies injected: Neo4j test environment via env vars.
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -19,6 +20,13 @@ from neo4j import AsyncGraphDatabase
 
 from npc_engine.engines.relationship.affinity_engine import RelationshipPhase
 from npc_engine.engines.relationship.phase_transition_applier import apply_phase_transition
+from npc_engine.graph.db import GraphDB
+from npc_engine.graph.repositories.relation_phase_write_repository import (
+    Neo4jRelationPhaseWriteRepository,
+)
+from npc_engine.graph.repositories.relation_read_repository import (
+    Neo4jRelationReadRepository,
+)
 
 
 def _uid(prefix: str) -> str:
@@ -68,6 +76,10 @@ async def test_phase_transition_persisted_after_delta() -> None:
     npc_id = _uid("npc")
     player_id = _uid("plr")
 
+    graph_db = GraphDB(SimpleNamespace(NEO4J_URI=uri, NEO4J_USER=user, NEO4J_PASSWORD=password))  # type: ignore[arg-type]
+    read_repo = Neo4jRelationReadRepository(graph_db)
+    write_repo = Neo4jRelationPhaseWriteRepository(graph_db)
+
     driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
     try:
         async with driver.session() as session:
@@ -77,7 +89,7 @@ async def test_phase_transition_persisted_after_delta() -> None:
                 await tx.commit()
 
             transition = await apply_phase_transition(
-                session=session, src_id=npc_id, dst_id=player_id, tick=120,
+                read_repo, write_repo, src_id=npc_id, dst_id=player_id, tick=120,
             )
 
             async with await session.begin_transaction() as tx:
@@ -92,3 +104,4 @@ async def test_phase_transition_persisted_after_delta() -> None:
                 await _cleanup(tx, npc_id, player_id)
                 await tx.commit()
         await driver.close()
+        await graph_db.close()

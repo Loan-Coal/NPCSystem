@@ -27,6 +27,7 @@ from npc_engine.api.dependencies_infra import (
 )
 from npc_engine.api.dependencies_stores import (
     get_context_cache,
+    get_dialogue_graph_ports,
     get_embedding_index,
     get_emotion_store,
     get_emotion_updater,
@@ -78,6 +79,7 @@ __all__ = [
     "get_clique_formation_engine",
     "get_context_cache",
     "get_dialogue_engine_model_config",
+    "get_dialogue_graph_ports",
     "get_embedding_index",
     "get_emotion_store",
     "get_emotion_updater",
