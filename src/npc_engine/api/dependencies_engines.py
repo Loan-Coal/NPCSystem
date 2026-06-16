@@ -123,12 +123,19 @@ def get_quest_chain_resolver() -> QuestChainResolver:
 
 @lru_cache
 def get_memory_engine() -> MemoryEngine:
-    """Return the shared stateless MemoryEngine singleton (DIP composition root).
+    """Return the shared MemoryEngine singleton wired to the Neo4j memory adapter.
+
+    Single source for the MemoryEngine across the clock/memories routes, dialogue,
+    quest lifecycle, and decay tick — depends on the MemoryGraphPort abstraction so
+    the engine holds no Neo4j session (DEC-122 / SEV-24).
 
     Returns:
-        MemoryEngine instance injected into engines that form memories.
+        MemoryEngine injected with a Neo4jMemoryRepository over the singleton GraphDB.
     """
-    return MemoryEngine()
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.memory_repository import Neo4jMemoryRepository
+
+    return MemoryEngine(memory_repo=Neo4jMemoryRepository(get_graph_db()))
 
 
 @lru_cache
@@ -483,7 +490,7 @@ def get_memory_decay_tick() -> MemoryDecayTick:
         MemoryDecayTick wired to a MemoryEngine and the configured decay interval.
     """
     return MemoryDecayTick(
-        memory_engine=MemoryEngine(),
+        memory_engine=get_memory_engine(),
         interval=get_settings().MEMORY_DECAY_TICK_INTERVAL,
     )
 

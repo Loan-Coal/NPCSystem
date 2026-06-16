@@ -15,8 +15,11 @@ from uuid import uuid4
 import pytest
 from neo4j import AsyncGraphDatabase
 
+from npc_engine.config import Settings
 from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.engines.memory.memory_decay_tick import MemoryDecayTick
+from npc_engine.graph.db import GraphDB
+from npc_engine.graph.repositories.memory_repository import Neo4jMemoryRepository
 
 
 def _uid(prefix: str) -> str:
@@ -57,6 +60,15 @@ async def test_low_salience_memory_decays_over_ticks() -> None:
     mem_id = _uid("mem")
     start_vividness = 80
 
+    settings = Settings(  # type: ignore[call-arg]
+        API_KEY_SECRET="integration_test_secret_change_this_2026",
+        NEO4J_URI=uri,
+        NEO4J_USER=user,
+        NEO4J_PASSWORD=password,
+    )
+    graph_db = GraphDB(settings)
+    memory_engine = MemoryEngine(memory_repo=Neo4jMemoryRepository(graph_db))
+
     driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
     try:
         async with driver.session() as session:
@@ -64,17 +76,20 @@ async def test_low_salience_memory_decays_over_ticks() -> None:
                 await _create_memory(tx, mem_id, start_vividness)
                 await tx.commit()
 
-            adapter = MemoryDecayTick(memory_engine=MemoryEngine(), interval=1)
-            await adapter.run_tick(session=session, tick_id=1)
+        adapter = MemoryDecayTick(memory_engine=memory_engine, interval=1)
+        await adapter.run_tick(tick_id=1)
+        async with driver.session() as session:
             async with await session.begin_transaction() as tx:
                 after_one = await _read_vividness(tx, mem_id)
-            await adapter.run_tick(session=session, tick_id=2)
+        await adapter.run_tick(tick_id=2)
+        async with driver.session() as session:
             async with await session.begin_transaction() as tx:
                 after_two = await _read_vividness(tx, mem_id)
 
         assert after_one < start_vividness
         assert after_two < after_one
     finally:
+        await graph_db.close()
         async with driver.session() as session:
             async with await session.begin_transaction() as tx:
                 await _cleanup(tx, mem_id)

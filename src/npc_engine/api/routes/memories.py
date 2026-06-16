@@ -17,9 +17,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.dependency_singletons import get_memory_consolidation_engine
+from npc_engine.api.dependency_singletons import get_memory_consolidation_engine, get_memory_engine
 from npc_engine.api.route_helpers import OkEnvelope, ok_response
-from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.graph.memory_service import (
     create_memory,
     decay_all_vividness,
@@ -130,8 +129,6 @@ class ConsolidatePayload(BaseModel):
 
 router = APIRouter(prefix="/memories", tags=["memories"])
 
-_engine = MemoryEngine()
-
 
 @router.post("/decay", response_model=OkEnvelope[dict[str, Any]])
 async def run_decay(
@@ -154,7 +151,6 @@ async def run_decay(
 async def seed_memory_from_arousal(
     character_id: str,
     body: CreateMemoryFromArousalRequest,
-    session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Create a Memory node only if arousal exceeds the high-arousal threshold (>70).
 
@@ -172,8 +168,7 @@ async def seed_memory_from_arousal(
         day=int(gt.get("day", 1)),
         time_of_day=str(gt.get("time_of_day", "morning")),
     )
-    memory_id = await _engine.create_from_arousal(
-        session,
+    memory_id = await get_memory_engine().create_from_arousal(
         character_id=character_id,
         arousal=body.arousal,
         content=body.content,

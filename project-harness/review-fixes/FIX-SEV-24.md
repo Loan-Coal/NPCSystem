@@ -193,7 +193,19 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   `dependencies_engines.py`, re-exported via dependency_singletons), still passes `session` for the engine
   forward. Tests mock the port; `test_interaction_repository.py` covers the adapter. Wave 3.
 
-**26 domains migrated, 25 ports + 25 adapters** (+3 shared read ports/adapters; director/relationship reuse them). Shared ports built: political (succession+agenda),
+- **memory** (DONE, `<pending>`): NEW `MemoryGraphPort` (create_memory + decay_all_vividness +
+  decay_all_vividness_weighted) + `Neo4jMemoryRepository` (session-per-call, delegates to memory_service).
+  `MemoryEngine(memory_repo=)` is now constructor-injected and sessionless (all 5 methods dropped the
+  `session` arg). `get_memory_engine()` is the SINGLE source (wires the repo from `get_graph_db()`), replacing
+  every inline `MemoryEngine()`: clock route (`get_memory_engine().decay_vividness()`), memories route (dropped
+  module-level `_engine` + the route's unused `session` Depends), `get_memory_decay_tick` factory, and bundled
+  into `get_dialogue_graph_ports()` (`memory_engine` key). `MemoryDecayTick.run_tick(tick_id, **_)` swallows
+  `session=`. dialogue_handler + quest_lifecycle_engine inject `memory_engine: MemoryEngine | None` (guarded
+  call — None skips); both stay Wave-4 session-holders for their other writes. `engines/memory/` is neo4j-free.
+  Last Wave-3 box. Tests: `test_memory_repository.py` (adapter); rewrote test_memory_engine/_weighted_decay/
+  _service + quest_lifecycle commitment test to inject a fake port.
+
+**27 domains migrated, 26 ports + 26 adapters** (+3 shared read ports/adapters; director/relationship reuse them). Shared ports built: political (succession+agenda),
 WorldState (story_pacing + chapter — first cross-domain reuse). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.

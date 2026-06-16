@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from pydantic import BaseModel, ConfigDict
@@ -154,31 +153,31 @@ async def test_quest_accept_forms_commitment_memory(monkeypatch: Any) -> None:
 
     commitment_calls: list[dict[str, Any]] = []
 
-    async def fake_create_from_commitment(
-        self: Any,
-        session: Any,
-        *,
-        character_id: str,
-        content: str,
-        game_time: Any,
-        player_id: str | None = None,
-    ) -> str:
-        commitment_calls.append(
-            {"character_id": character_id, "content": content, "player_id": player_id}
-        )
-        return "mem-commitment-001"
+    class _FakeMemoryEngine:
+        async def create_from_commitment(
+            self,
+            *,
+            character_id: str,
+            content: str,
+            game_time: Any,
+            player_id: str | None = None,
+        ) -> str:
+            commitment_calls.append(
+                {"character_id": character_id, "content": content, "player_id": player_id}
+            )
+            return "mem-commitment-001"
 
-    with patch(
-        "npc_engine.engines.quest.quest_lifecycle_engine.MemoryEngine.create_from_commitment",
-        new=fake_create_from_commitment,
-    ):
-        engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
-        stored = await engine.accept_quest(
-            session=_fake_session(),  # type: ignore[arg-type]
-            quest_id="quest-214",
-            player_id="player_hero",
-            meta=_meta(),
-        )
+    engine = QuestLifecycleEngine(
+        settings=_settings(),
+        registry=_fake_registry(),
+        memory_engine=_FakeMemoryEngine(),  # type: ignore[arg-type]
+    )
+    stored = await engine.accept_quest(
+        session=_fake_session(),  # type: ignore[arg-type]
+        quest_id="quest-214",
+        player_id="player_hero",
+        meta=_meta(),
+    )
 
     assert stored["status"] == "accepted"
     assert len(commitment_calls) == 1, (

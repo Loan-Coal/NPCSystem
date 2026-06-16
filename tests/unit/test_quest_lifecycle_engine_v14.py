@@ -39,22 +39,20 @@ def _settings() -> Settings:
 
 
 def test_memory_engine_is_injected_when_provided() -> None:
-    """F3.4: an injected MemoryEngine is used instead of a fresh in-__init__ instance."""
+    """F3.4: the injected MemoryEngine is stored and used (DIP composition root)."""
     from npc_engine.engines.memory.memory_engine import MemoryEngine
 
-    sentinel = MemoryEngine()
+    sentinel = MemoryEngine(memory_repo=object())  # type: ignore[arg-type]
     engine = QuestLifecycleEngine(
         settings=_settings(), registry=_fake_registry(), memory_engine=sentinel,
     )
     assert engine._memory_engine is sentinel
 
 
-def test_memory_engine_falls_back_when_omitted() -> None:
-    """Omitting memory_engine still yields a usable MemoryEngine (backward-compatible)."""
-    from npc_engine.engines.memory.memory_engine import MemoryEngine
-
+def test_memory_engine_is_none_when_omitted() -> None:
+    """Omitting memory_engine leaves it None — commitment-memory formation is skipped (SEV-24)."""
     engine = QuestLifecycleEngine(settings=_settings(), registry=_fake_registry())
-    assert isinstance(engine._memory_engine, MemoryEngine)
+    assert engine._memory_engine is None
 
 
 def _meta() -> QuestTransitionMeta:

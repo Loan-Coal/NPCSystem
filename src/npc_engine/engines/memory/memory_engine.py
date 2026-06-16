@@ -4,23 +4,21 @@ Layer: engines
 Purpose: Rules-based engine for forming memories from high-arousal moments, commitment
     events, running daily vividness decay, computing memory salience, and deciding
     forgettability (EXP-212, EXP-214).
-Does NOT: query or persist state directly — all I/O is delegated to graph.memory_service.
-Dependencies: graph.memory_service, world.time_utils
-Dependencies injected: AsyncSession (per method call).
+Does NOT: query or persist state directly — all I/O is delegated to a MemoryGraphPort.
+Dependencies: engines.ports.memory_port, world.time_utils
+Dependencies injected: MemoryGraphPort (via __init__; DEC-122 / SEV-24 — no session).
 Used by: engines.dialogue.dialogue_handler, api.routes.clock,
          engines.quest.quest_lifecycle_engine
 """
 
 from __future__ import annotations
 
-from neo4j import AsyncSession
+from typing import TYPE_CHECKING
 
-from npc_engine.graph.memory_service import (
-    create_memory,
-    decay_all_vividness,
-    decay_all_vividness_weighted,
-)
 from npc_engine.world.time_utils import TimePoint
+
+if TYPE_CHECKING:
+    from npc_engine.engines.ports.memory_port import MemoryGraphPort
 
 # ---------------------------------------------------------------------------
 # Memory kind constants (DEC-100 — values must match memory.yaml schema).
@@ -122,11 +120,21 @@ class MemoryEngine:
     Memory formation triggers when NPC arousal exceeds the high-arousal
     threshold after a dialogue exchange. Vividness decay runs once per
     day advance, reducing all memory vividness by a fixed amount.
+
+    Persistence is delegated to an injected MemoryGraphPort; the engine holds
+    no Neo4j session (DEC-122 / SEV-24).
     """
+
+    def __init__(self, memory_repo: MemoryGraphPort) -> None:
+        """Initialise with the memory persistence port.
+
+        Args:
+            memory_repo: Graph adapter implementing create_memory + the two decays.
+        """
+        self._repo = memory_repo
 
     async def create_from_arousal(
         self,
-        session: AsyncSession,
         *,
         character_id: str,
         arousal: int,
@@ -141,7 +149,6 @@ class MemoryEngine:
         queries (EXP-211).
 
         Args:
-            session: Active Neo4j async session.
             character_id: ID of the NPC who formed the memory.
             arousal: Current arousal level (0–100).
             content: Description of the memorable moment.
@@ -154,8 +161,7 @@ class MemoryEngine:
         """
         if arousal <= _HIGH_AROUSAL_THRESHOLD:
             return None
-        return await create_memory(
-            session,
+        return await self._repo.create_memory(
             character_id=character_id,
             content=content,
             vividness=_HIGH_AROUSAL_VIVIDNESS,
@@ -166,7 +172,6 @@ class MemoryEngine:
 
     async def create_from_commitment(
         self,
-        session: AsyncSession,
         *,
         character_id: str,
         content: str,
@@ -181,7 +186,6 @@ class MemoryEngine:
         threshold — any quiet promise is remembered.
 
         Args:
-            session: Active Neo4j async session.
             character_id: ID of the NPC who witnessed / made the commitment.
             content: Description of the promise or agreement.
             game_time: Game-time snapshot at moment of formation.
@@ -192,8 +196,7 @@ class MemoryEngine:
         Returns:
             Memory ID string of the newly created node.
         """
-        return await create_memory(
-            session,
+        return await self._repo.create_memory(
             character_id=character_id,
             content=content,
             vividness=_COMMITMENT_VIVIDNESS,
@@ -205,7 +208,6 @@ class MemoryEngine:
 
     async def create_from_semantic_triggers(
         self,
-        session: AsyncSession,
         *,
         character_id: str,
         content: str,
@@ -220,7 +222,6 @@ class MemoryEngine:
         modify `create_from_arousal`.
 
         Args:
-            session: Active Neo4j async session.
             character_id: ID of the NPC who formed the memory.
             content: Description of the moment to test for significance.
             emotional_charge: Emotional intensity (-100–100) passed through to
@@ -235,8 +236,7 @@ class MemoryEngine:
         matched = any(keyword in lowered for keyword in _SEMANTIC_KEYWORDS)
         if not matched:
             return None
-        return await create_memory(
-            session,
+        return await self._repo.create_memory(
             character_id=character_id,
             content=content,
             vividness=_SEMANTIC_VIVIDNESS,
@@ -244,31 +244,24 @@ class MemoryEngine:
             game_time=game_time,
         )
 
-    async def decay_vividness(self, session: AsyncSession) -> int:
+    async def decay_vividness(self) -> int:
         """Reduce all memory vividness by the default daily decay amount.
-
-        Args:
-            session: Active Neo4j async session.
 
         Returns:
             Number of Memory nodes updated.
         """
-        return await decay_all_vividness(session)
+        return await self._repo.decay_all_vividness()
 
-    async def decay_vividness_weighted(self, session: AsyncSession) -> int:
+    async def decay_vividness_weighted(self) -> int:
         """Reduce memory vividness using a charge-weighted rate.
 
         High emotional_charge memories decay slower; trivial memories decay faster.
         Uses _DECAY_BASE_RATE and _DECAY_CHARGE_DIVISOR module constants.
 
-        Args:
-            session: Active Neo4j async session.
-
         Returns:
             Number of Memory nodes whose vividness was reduced.
         """
-        return await decay_all_vividness_weighted(
-            session,
+        return await self._repo.decay_all_vividness_weighted(
             base_decay=_DECAY_BASE_RATE,
             charge_divisor=_DECAY_CHARGE_DIVISOR,
         )

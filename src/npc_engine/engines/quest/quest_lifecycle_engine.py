@@ -67,8 +67,9 @@ class QuestLifecycleEngine:
                 after a COMPLETED transition to offer unlocked successor quests.
                 Existing callers that omit this parameter are unaffected.
             memory_engine: Injected MemoryEngine (DIP — F3.4); the composition root
-                supplies the shared instance. Falls back to a fresh MemoryEngine() when
-                omitted so existing direct callers/tests are unaffected.
+                supplies the shared instance. When omitted, commitment-memory formation
+                on quest accept is skipped (the engine holds no graph port itself —
+                DEC-122 / SEV-24).
         Raises:
             ValueError: If registry is None (must be injected via __init__).
         """
@@ -77,7 +78,7 @@ class QuestLifecycleEngine:
             raise ValueError("QuestLifecycleEngine requires a TypeRegistry injected via __init__")
         self._registry = registry
         self._chain_resolver = chain_resolver
-        self._memory_engine = memory_engine if memory_engine is not None else MemoryEngine()
+        self._memory_engine = memory_engine
 
     async def _form_commitment_memory(
         self,
@@ -88,6 +89,8 @@ class QuestLifecycleEngine:
         quest_title: str,
     ) -> None:
         """Form a commitment memory on quest accept (EXP-214). Best-effort — skips on error."""
+        if self._memory_engine is None:
+            return
         try:
             world_state = await get_world_state(session)
             game_time = TimePoint(
@@ -105,7 +108,6 @@ class QuestLifecycleEngine:
             return
         content = f"Player accepted quest '{quest_title}' (id={quest_id})"
         await self._memory_engine.create_from_commitment(
-            session,
             character_id=player_id,
             content=content,
             game_time=game_time,

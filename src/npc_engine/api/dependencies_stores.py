@@ -96,17 +96,22 @@ def get_knowledge_extraction_engine() -> KnowledgeExtractionEngine:
 def get_dialogue_graph_ports() -> dict[str, Any]:
     """Build the DialogueHandler graph-port kwargs (knowledge engine + relation phase ports).
 
-    Bundles the optional knowledge engine with the relation read/write ports the phase
-    applier depends on (DEC-122 / SEV-24), so the api composition root injects one set of
-    graph-backed kwargs and DialogueHandler holds no Neo4j session for phase transitions.
+    Bundles the optional knowledge engine, the shared MemoryEngine, and the relation
+    read/write ports the phase applier depends on (DEC-122 / SEV-24), so the api
+    composition root injects one set of graph-backed kwargs and DialogueHandler holds no
+    Neo4j session for memory writes or phase transitions.
 
     Returns:
-        A kwargs mapping with keys ``knowledge_engine``, ``relation_reader``, and
-        ``relation_phase_writer`` ready to splat into DialogueHandler.
+        A kwargs mapping with keys ``knowledge_engine``, ``memory_engine``,
+        ``relation_reader``, and ``relation_phase_writer`` ready to splat into
+        DialogueHandler.
     """
+    from npc_engine.api.dependencies_engines import get_memory_engine
+
     graph_db = get_graph_db()
     return {
         "knowledge_engine": get_knowledge_extraction_engine(),
+        "memory_engine": get_memory_engine(),
         "relation_reader": Neo4jRelationReadRepository(graph_db),
         "relation_phase_writer": Neo4jRelationPhaseWriteRepository(graph_db),
     }

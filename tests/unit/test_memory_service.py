@@ -38,6 +38,24 @@ def _make_game_time(**kwargs) -> TimePoint:
     return TimePoint(**defaults)
 
 
+class _FakeMemoryRepo:
+    """Recording MemoryGraphPort fake for MemoryEngine tests (no Neo4j)."""
+
+    def __init__(self, memory_id: str = "mem-fake") -> None:
+        self._memory_id = memory_id
+        self.create_calls: list[dict] = []
+
+    async def create_memory(self, **kwargs) -> str:
+        self.create_calls.append(kwargs)
+        return self._memory_id
+
+    async def decay_all_vividness(self) -> int:
+        return 0
+
+    async def decay_all_vividness_weighted(self, *, base_decay: int, charge_divisor: int) -> int:
+        return 0
+
+
 # ---------------------------------------------------------------------------
 # create_memory — happy path
 # ---------------------------------------------------------------------------
@@ -174,53 +192,41 @@ async def test_decay_all_vividness_returns_zero_when_no_memories():
 
 @pytest.mark.asyncio
 async def test_memory_engine_creates_memory_when_arousal_above_70():
-    engine = MemoryEngine()
-    session = _make_session()
+    repo = _FakeMemoryRepo(memory_id="new-mem-id")
+    engine = MemoryEngine(memory_repo=repo)
 
-    with patch(
-        "npc_engine.engines.memory.memory_engine.create_memory",
-        new_callable=AsyncMock,
-        return_value="new-mem-id",
-    ) as mock_create:
-        result = await engine.create_from_arousal(
-            session,
-            character_id="char_1",
-            arousal=85,
-            content="A dramatic scene.",
-            game_time=_make_game_time(),
-        )
+    result = await engine.create_from_arousal(
+        character_id="char_1",
+        arousal=85,
+        content="A dramatic scene.",
+        game_time=_make_game_time(),
+    )
 
     assert result == "new-mem-id"
-    mock_create.assert_awaited_once()
+    assert len(repo.create_calls) == 1
 
 
 @pytest.mark.asyncio
 async def test_memory_engine_skips_when_arousal_at_or_below_70():
-    engine = MemoryEngine()
-    session = _make_session()
+    repo = _FakeMemoryRepo()
+    engine = MemoryEngine(memory_repo=repo)
 
-    with patch(
-        "npc_engine.engines.memory.memory_engine.create_memory",
-        new_callable=AsyncMock,
-    ) as mock_create:
-        result_at = await engine.create_from_arousal(
-            session,
-            character_id="char_1",
-            arousal=70,
-            content="Mild discomfort.",
-            game_time=_make_game_time(),
-        )
-        result_below = await engine.create_from_arousal(
-            session,
-            character_id="char_1",
-            arousal=40,
-            content="Indifferent.",
-            game_time=_make_game_time(),
-        )
+    result_at = await engine.create_from_arousal(
+        character_id="char_1",
+        arousal=70,
+        content="Mild discomfort.",
+        game_time=_make_game_time(),
+    )
+    result_below = await engine.create_from_arousal(
+        character_id="char_1",
+        arousal=40,
+        content="Indifferent.",
+        game_time=_make_game_time(),
+    )
 
     assert result_at is None
     assert result_below is None
-    mock_create.assert_not_awaited()
+    assert repo.create_calls == []
 
 
 # ---------------------------------------------------------------------------
@@ -231,69 +237,51 @@ async def test_memory_engine_skips_when_arousal_at_or_below_70():
 @pytest.mark.asyncio
 async def test_memory_engine_creates_memory_at_arousal_71():
     """arousal=71 is strictly above the threshold (>70) and must create a memory."""
-    engine = MemoryEngine()
-    session = _make_session()
+    repo = _FakeMemoryRepo(memory_id="threshold-mem-id")
+    engine = MemoryEngine(memory_repo=repo)
 
-    with patch(
-        "npc_engine.engines.memory.memory_engine.create_memory",
-        new_callable=AsyncMock,
-        return_value="threshold-mem-id",
-    ) as mock_create:
-        result = await engine.create_from_arousal(
-            session,
-            character_id="char_threshold",
-            arousal=71,
-            content="Threshold moment.",
-            game_time=_make_game_time(),
-        )
+    result = await engine.create_from_arousal(
+        character_id="char_threshold",
+        arousal=71,
+        content="Threshold moment.",
+        game_time=_make_game_time(),
+    )
 
     assert result == "threshold-mem-id"
-    mock_create.assert_awaited_once()
+    assert len(repo.create_calls) == 1
 
 
 @pytest.mark.asyncio
 async def test_memory_engine_does_not_create_at_arousal_70():
     """arousal=70 is at the threshold (not strictly above) — must NOT create a memory."""
-    engine = MemoryEngine()
-    session = _make_session()
+    repo = _FakeMemoryRepo()
+    engine = MemoryEngine(memory_repo=repo)
 
-    with patch(
-        "npc_engine.engines.memory.memory_engine.create_memory",
-        new_callable=AsyncMock,
-    ) as mock_create:
-        result = await engine.create_from_arousal(
-            session,
-            character_id="char_threshold",
-            arousal=70,
-            content="Just below threshold.",
-            game_time=_make_game_time(),
-        )
+    result = await engine.create_from_arousal(
+        character_id="char_threshold",
+        arousal=70,
+        content="Just below threshold.",
+        game_time=_make_game_time(),
+    )
 
     assert result is None
-    mock_create.assert_not_awaited()
+    assert repo.create_calls == []
 
 
 @pytest.mark.asyncio
 async def test_memory_engine_emotional_charge_formula_at_threshold():
     """At arousal=71, emotional_charge should be min(100, 71-50) = 21."""
-    engine = MemoryEngine()
-    session = _make_session()
-    captured: list[dict] = []
+    repo = _FakeMemoryRepo(memory_id="ec-check-id")
+    engine = MemoryEngine(memory_repo=repo)
 
-    async def _capture(sess, *, character_id, content, vividness, emotional_charge, game_time, subject_player_id=None, **_kwargs):
-        captured.append({"emotional_charge": emotional_charge})
-        return "ec-check-id"
+    await engine.create_from_arousal(
+        character_id="char_1",
+        arousal=71,
+        content="Minimal arousal.",
+        game_time=_make_game_time(),
+    )
 
-    with patch("npc_engine.engines.memory.memory_engine.create_memory", side_effect=_capture):
-        await engine.create_from_arousal(
-            session,
-            character_id="char_1",
-            arousal=71,
-            content="Minimal arousal.",
-            game_time=_make_game_time(),
-        )
-
-    assert captured[0]["emotional_charge"] == 21
+    assert repo.create_calls[0]["emotional_charge"] == 21
 
 
 # ---------------------------------------------------------------------------
@@ -332,24 +320,14 @@ async def test_get_memories_svc_passes_k_to_query():
 
 @pytest.mark.asyncio
 async def test_memory_engine_clamps_emotional_charge_to_100():
-    engine = MemoryEngine()
-    session = _make_session()
-    captured_kwargs: list[dict] = []
+    repo = _FakeMemoryRepo()
+    engine = MemoryEngine(memory_repo=repo)
 
-    async def _capture_create(sess, *, character_id, content, vividness, emotional_charge, game_time, subject_player_id=None, **_kwargs):
-        captured_kwargs.append({"emotional_charge": emotional_charge})
-        return "some-id"
+    await engine.create_from_arousal(
+        character_id="char_1",
+        arousal=100,
+        content="Peak moment.",
+        game_time=_make_game_time(),
+    )
 
-    with patch(
-        "npc_engine.engines.memory.memory_engine.create_memory",
-        side_effect=_capture_create,
-    ):
-        await engine.create_from_arousal(
-            session,
-            character_id="char_1",
-            arousal=100,
-            content="Peak moment.",
-            game_time=_make_game_time(),
-        )
-
-    assert captured_kwargs[0]["emotional_charge"] <= 100
+    assert repo.create_calls[0]["emotional_charge"] <= 100

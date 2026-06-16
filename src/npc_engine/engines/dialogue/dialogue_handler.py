@@ -37,7 +37,6 @@ from npc_engine.engines.dialogue.session_store import SessionStore
 from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.engines.llm_config_models import EngineModelConfig
-from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.engines.relationship.phase_transition_applier import apply_phase_transition
 from npc_engine.engines.routine.routine_queries import set_routine_override
 from npc_engine.engines.tts.protocols import TTSClientProtocol
@@ -62,6 +61,7 @@ from npc_engine.engines.dialogue.negotiation_context import inject_active_negoti
 
 if TYPE_CHECKING:
     from npc_engine.engines.interaction.negotiation_store import NegotiationStore
+    from npc_engine.engines.memory.memory_engine import MemoryEngine
     from npc_engine.engines.ports.relation_phase_write_port import RelationPhaseWritePort
     from npc_engine.engines.ports.relation_read_port import RelationReadPort
 
@@ -104,6 +104,7 @@ class DialogueHandler:
         negotiation_store: NegotiationStore | None = None,
         relation_reader: RelationReadPort | None = None,
         relation_phase_writer: RelationPhaseWritePort | None = None,
+        memory_engine: MemoryEngine | None = None,
     ) -> None:
         """Initialise with all engine dependencies injected.
 
@@ -128,8 +129,7 @@ class DialogueHandler:
         self._output_moderation = output_moderation
         self._effective_rating = effective_rating
         self._negotiation_store = negotiation_store
-        self._relation_reader, self._relation_phase_writer = relation_reader, relation_phase_writer
-        self._memory_engine = MemoryEngine()
+        self._relation_reader, self._relation_phase_writer, self._memory_engine = relation_reader, relation_phase_writer, memory_engine
         self._llm = self._build_llm_client(llm_client)
         self._system_prompt = build_system_prompt(content_rating=effective_rating)
 
@@ -232,11 +232,11 @@ class DialogueHandler:
 
     async def _apply_arousal_memory(self, *, request: DialogueRequest, response: DialogueResponse, new_emotion, world_state: WorldState | None) -> None:
         """Create an episodic memory when NPC arousal exceeds the high-arousal threshold."""
-        if world_state is None or getattr(new_emotion, "arousal", 0) <= HIGH_AROUSAL_THRESHOLD:
+        if self._memory_engine is None or world_state is None or getattr(new_emotion, "arousal", 0) <= HIGH_AROUSAL_THRESHOLD:
             return
         game_time = TimePoint(year=world_state.year, season=world_state.season, day=world_state.day, time_of_day=world_state.time_of_day)
         await self._memory_engine.create_from_arousal(
-            self._session, character_id=request.npc_id, arousal=new_emotion.arousal,
+            character_id=request.npc_id, arousal=new_emotion.arousal,
             content=f"{request.player_message} — {response.npc_response}", game_time=game_time,
         )
 

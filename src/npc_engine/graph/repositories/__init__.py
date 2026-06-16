@@ -12,7 +12,8 @@ Public surface: Neo4jNeedRepository, Neo4jMoodRepository, Neo4jGroupRepository,
                 Neo4jSkillRepository, Neo4jChapterRepository, Neo4jMilitaryRepository,
                 Neo4jRelationReadRepository, Neo4jPlayerLocationReadRepository,
                 Neo4jCharacterReadRepository, Neo4jEmotionRepository,
-                Neo4jKnowledgeRepository, Neo4jReputationRepository,
+                Neo4jKnowledgeRepository, Neo4jMemoryRepository,
+                Neo4jReputationRepository,
                 Neo4jPlayerModelRepository, Neo4jPlanningRepository,
                 Neo4jEconomyRepository, Neo4jIntentRepository,
                 Neo4jInteractionRepository, Neo4jInvestigationRepository,
@@ -40,6 +41,7 @@ from npc_engine.graph.repositories.knowledge_repository import Neo4jKnowledgeRep
 from npc_engine.graph.repositories.memory_consolidation_repository import (
     Neo4jMemoryConsolidationRepository,
 )
+from npc_engine.graph.repositories.memory_repository import Neo4jMemoryRepository
 from npc_engine.graph.repositories.military_repository import Neo4jMilitaryRepository
 from npc_engine.graph.repositories.mood_repository import Neo4jMoodRepository
 from npc_engine.graph.repositories.need_repository import Neo4jNeedRepository
@@ -79,6 +81,7 @@ __all__ = [
     "Neo4jInvestigationRepository",
     "Neo4jKnowledgeRepository",
     "Neo4jMemoryConsolidationRepository",
+    "Neo4jMemoryRepository",
     "Neo4jMilitaryRepository",
     "Neo4jMoodRepository",
     "Neo4jNeedRepository",

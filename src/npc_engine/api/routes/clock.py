@@ -17,9 +17,9 @@ from neo4j import AsyncSession
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session, get_tick_scheduler
+from npc_engine.api.dependency_singletons import get_memory_engine
 from npc_engine.api.route_helpers import OkEnvelope, error_response, ok_response
 from npc_engine.config import MAX_DELTA_TICKS, Settings, get_settings
-from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.scheduler.tick_scheduler import TickScheduler
 from npc_engine.graph.world_state_reader import get_world_state
 from npc_engine.world.world_time_service import _VALID_FIELDS, advance_time
@@ -97,7 +97,7 @@ async def advance_clock(
             advanced = advance_time(request.advance_time_field, current_world)
             updated_world = await upsert_world_state(session, advanced)
             if request.advance_time_field == "day":
-                await MemoryEngine().decay_vividness(session)
+                await get_memory_engine().decay_vividness()
 
         payload: dict[str, Any] = result
         if updated_world is not None:
