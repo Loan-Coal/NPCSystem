@@ -3,25 +3,25 @@ Module: intent_formation_engine
 Layer: engines
 Purpose: Tick-scheduler adapter that scores proactive dialogue intents for all
          co-located NPC/player pairs and enqueues those above the threshold.
-Does NOT: run Cypher directly; scoring is delegated to conversation_intent_service;
-          queue writes are delegated to graph.intent_queue_writer.
+Does NOT: run Cypher directly or hold a Neo4j session; scoring is delegated to
+          conversation_intent_service; reads/queue writes go through injected ports.
 Dependencies: engines.agenda.conversation_intent_service,
-              graph.intent_queue_writer, graph.player_location_reader, config
-Dependencies injected: PlayerLocationReader (via __init__).
+              engines.ports.intent_port, engines.ports.player_location_read_port, config
+Dependencies injected: PlayerLocationReadPort + IntentGraphPort (via __init__).
 Used by: scheduler.tick_scheduler (wired via api.dependencies_engines)
 """
 from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
-
-from neo4j import AsyncSession
+from typing import TYPE_CHECKING, Any
 
 from npc_engine.config import get_settings
 from npc_engine.engines.agenda.conversation_intent_service import score_intents
-from npc_engine.graph.intent_queue_writer import enqueue_intent, expire_old_intents
-from npc_engine.graph.player_location_reader import PlayerLocationReader
+
+if TYPE_CHECKING:
+    from npc_engine.engines.ports.intent_port import IntentGraphPort
+    from npc_engine.engines.ports.player_location_read_port import PlayerLocationReadPort
 
 # Maximum (npc, player) pairs scored per tick — mirrors ProactiveDialogueTick cap.
 MAX_INTENT_CHECKS_PER_TICK: int = 20
@@ -43,39 +43,45 @@ class IntentFormationEngine:
     No mutable state beyond injected dependencies — safe for concurrent use.
     """
 
-    def __init__(self, location_reader: PlayerLocationReader) -> None:
-        """Initialise the engine with the injected location reader.
+    def __init__(
+        self,
+        location_reader: PlayerLocationReadPort,
+        intent_repo: IntentGraphPort,
+    ) -> None:
+        """Initialise the engine with the injected read/intent graph ports.
 
         Args:
-            location_reader: Provides get_collocated_pairs(session).
+            location_reader: Provides get_collocated_pairs() (sessionless).
+            intent_repo: Intent graph port for trigger reads + queue writes.
         """
         self._location_reader = location_reader
+        self._intent_repo = intent_repo
 
     async def run_tick(
         self,
-        session: AsyncSession,
         tick_id: int,
+        **_: Any,
     ) -> dict[str, Any]:
         """Score and enqueue intents for all co-located NPC/player pairs.
 
         Args:
-            session: Active Neo4j async session.
             tick_id: Current game tick.
+            **_: Swallows the scheduler's ``session=`` kwarg (DEC-122 / SEV-24).
 
         Returns:
             Dict with ``intents_formed`` (count above threshold) and
             ``expired`` (count of stale intents now marked expired).
         """
         settings = get_settings()
-        pairs = await self._location_reader.get_collocated_pairs(session)
+        pairs = await self._location_reader.get_collocated_pairs()
         capped = pairs[:MAX_INTENT_CHECKS_PER_TICK]
 
-        all_intents = await self._gather_intents(session, capped, tick_id, settings)
+        all_intents = await self._gather_intents(capped, tick_id, settings)
         for intent in all_intents:
-            await enqueue_intent(session, intent, settings=settings)
+            await self._intent_repo.enqueue_intent(intent, settings=settings)
 
         cutoff = max(0, tick_id - settings.INTENT_EXPIRY_TICKS)
-        expired = await expire_old_intents(session, cutoff_tick=cutoff)
+        expired = await self._intent_repo.expire_old_intents(cutoff_tick=cutoff)
         _logger.info(
             "intent_formation_tick",
             extra={"tick_id": tick_id, "pairs_checked": len(capped),
@@ -85,7 +91,6 @@ class IntentFormationEngine:
 
     async def _gather_intents(
         self,
-        session: AsyncSession,
         capped: list[tuple[str, str]],
         tick_id: int,
         settings: Any,
@@ -93,7 +98,6 @@ class IntentFormationEngine:
         """Score intents for all pairs concurrently under a semaphore.
 
         Args:
-            session: Active Neo4j async session.
             capped: NPC/player pairs to score (already bounded by caller).
             tick_id: Current game tick.
             settings: Application settings providing MAX_CONCURRENT_TICKS.
@@ -106,7 +110,7 @@ class IntentFormationEngine:
 
         async def _score_one(npc_id: str, player_id: str) -> None:
             async with sem:
-                results = await score_intents(session, npc_id, player_id, tick_id)
+                results = await score_intents(self._intent_repo, npc_id, player_id, tick_id)
                 all_intents.extend(results)
 
         if capped:

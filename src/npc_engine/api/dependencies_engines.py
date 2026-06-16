@@ -340,12 +340,26 @@ def get_proactive_dialogue_engine() -> ProactiveDialogueTick:
 
 @lru_cache
 def get_intent_formation_engine() -> IntentFormationEngine:
-    """Create singleton IntentFormationEngine wired to the shared location reader.
+    """Create singleton IntentFormationEngine wired to the shared graph ports.
+
+    Wires the shared Neo4jPlayerLocationReadRepository (co-located pairs) and the
+    Neo4jIntentRepository (trigger reads + queue writes) as engine-layer Ports
+    (DEC-122 / SEV-24) so the engine holds no Neo4j session.
 
     Returns:
         IntentFormationEngine ready for the tick scheduler.
     """
-    return IntentFormationEngine(location_reader=PlayerLocationReader())
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.intent_repository import Neo4jIntentRepository
+    from npc_engine.graph.repositories.player_location_read_repository import (
+        Neo4jPlayerLocationReadRepository,
+    )
+
+    graph_db = get_graph_db()
+    return IntentFormationEngine(
+        location_reader=Neo4jPlayerLocationReadRepository(graph_db),
+        intent_repo=Neo4jIntentRepository(graph_db),
+    )
 
 
 @lru_cache

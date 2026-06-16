@@ -3,26 +3,21 @@ Module: conversation_intent_service
 Layer: engines
 Purpose: Score whether an NPC wants to open dialogue with a co-located player.
          Returns ConversationIntent Pydantic models for need, event, and goal triggers.
-Does NOT: persist intents, call LLMs, or open transactions.
-Dependencies: graph.intent_queries, config
-Dependencies injected: AsyncSession (caller-managed; stateless module).
+Does NOT: persist intents, call LLMs, open transactions, or hold a Neo4j session.
+Dependencies: engines.ports.intent_port (injected), common.intent_models, config
+Dependencies injected: IntentGraphPort (first positional arg; trigger reads).
 Used by: engines.agenda.intent_formation_engine
 """
 from __future__ import annotations
 
 import logging
-
-from neo4j import AsyncSession
+from typing import TYPE_CHECKING
 
 from npc_engine.common.intent_models import ConversationIntent
 from npc_engine.config import get_settings
-from npc_engine.graph.intent_queries import (
-    get_npc_location,
-    get_player_location,
-    get_unmet_needs,
-    get_witnessed_events,
-    get_unresolved_goals,
-)
+
+if TYPE_CHECKING:
+    from npc_engine.engines.ports.intent_port import IntentGraphPort
 
 _logger = logging.getLogger(__name__)
 
@@ -31,7 +26,7 @@ _MAX_INTENTS_PER_CALL: int = 3
 
 
 async def score_intents(
-    session: AsyncSession,
+    intent_repo: IntentGraphPort,
     npc_id: str,
     player_id: str,
     tick: int,
@@ -43,7 +38,7 @@ async def score_intents(
     whose score >= config.MIN_INTENT_SCORE.
 
     Args:
-        session: Active Neo4j async session.
+        intent_repo: Intent graph port providing the trigger reads.
         npc_id: ID of the NPC being evaluated.
         player_id: ID of the potentially co-located player.
         tick: Current game tick.
@@ -51,8 +46,8 @@ async def score_intents(
     Returns:
         List of ConversationIntent (at most _MAX_INTENTS_PER_CALL = 3 entries).
     """
-    npc_loc = await get_npc_location(session, npc_id)
-    player_loc = await get_player_location(session, player_id)
+    npc_loc = await intent_repo.get_npc_location(npc_id=npc_id)
+    player_loc = await intent_repo.get_player_location(player_id=player_id)
     if npc_loc is None or player_loc is None or npc_loc != player_loc:
         return []
 
@@ -61,9 +56,9 @@ async def score_intents(
     expiry_ticks = settings.INTENT_EXPIRY_TICKS
     intents: list[ConversationIntent] = []
 
-    await _score_need(session, npc_id, player_id, tick, threshold, intents)
-    await _score_event(session, npc_id, player_id, tick, threshold, expiry_ticks, intents)
-    await _score_goal(session, npc_id, player_id, tick, threshold, intents)
+    await _score_need(intent_repo, npc_id, player_id, tick, threshold, intents)
+    await _score_event(intent_repo, npc_id, player_id, tick, threshold, expiry_ticks, intents)
+    await _score_goal(intent_repo, npc_id, player_id, tick, threshold, intents)
 
     _logger.debug(
         "intent_scoring_done",
@@ -73,14 +68,14 @@ async def score_intents(
 
 
 async def _score_need(
-    session: AsyncSession,
+    intent_repo: IntentGraphPort,
     npc_id: str,
     player_id: str,
     tick: int,
     threshold: float,
     intents: list[ConversationIntent],
 ) -> None:
-    needs = await get_unmet_needs(session, npc_id)
+    needs = await intent_repo.get_unmet_needs(npc_id=npc_id)
     if not needs:
         return
     best = max(needs, key=lambda n: (100 - int(n["level"])) / 100.0)
@@ -98,7 +93,7 @@ async def _score_need(
 
 
 async def _score_event(
-    session: AsyncSession,
+    intent_repo: IntentGraphPort,
     npc_id: str,
     player_id: str,
     tick: int,
@@ -107,7 +102,7 @@ async def _score_event(
     intents: list[ConversationIntent],
 ) -> None:
     since_tick = max(0, tick - expiry_ticks)
-    events = await get_witnessed_events(session, npc_id, since_tick)
+    events = await intent_repo.get_witnessed_events(npc_id=npc_id, since_tick=since_tick)
     if not events:
         return
     best = max(events, key=lambda e: int(e["learned_at_tick"]))
@@ -126,14 +121,14 @@ async def _score_event(
 
 
 async def _score_goal(
-    session: AsyncSession,
+    intent_repo: IntentGraphPort,
     npc_id: str,
     player_id: str,
     tick: int,
     threshold: float,
     intents: list[ConversationIntent],
 ) -> None:
-    goals = await get_unresolved_goals(session, npc_id)
+    goals = await intent_repo.get_unresolved_goals(npc_id=npc_id)
     if not goals:
         return
     best = max(goals, key=lambda g: int(g["urgency"]) / 100.0)

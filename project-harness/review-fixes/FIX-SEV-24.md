@@ -133,7 +133,19 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   `.cache_clear()` call + unused import from BOTH `tests/conftest.py` and `src/npc_engine/main.py`. Tests mock
   the port; `test_economy_repository.py` covers the adapter. Wave 3 fifth checkbox; `engines/economy/` is neo4j-free.
 
-**21 domains migrated, 20 ports + 20 adapters** (+3 shared read ports/adapters; director reuses them, no new port). Shared ports built: political (succession+agenda),
+- **agenda-others** (DONE, `<pending>`): NEW `IntentGraphPort` (trigger reads `get_npc_location`/
+  `get_player_location`/`get_unmet_needs`/`get_witnessed_events`/`get_unresolved_goals` + queue writes
+  `enqueue_intent(intent, *, settings)`/`expire_old_intents(*, cutoff_tick)`) + `Neo4jIntentRepository`
+  (session-per-call, delegates to intent_queries + intent_queue_writer). CLUSTER: `score_intents(...)` in
+  `conversation_intent_service` is a module-level free fn, so the port is injected as its FIRST positional arg
+  (+ its `_score_need`/`_score_event`/`_score_goal` helpers); now sessionless. `IntentFormationEngine` injects
+  the shared `PlayerLocationReadPort` (get_collocated_pairs) + `IntentGraphPort`; `run_tick(tick_id, **_)`
+  swallows `session=`. Factory `get_intent_formation_engine` wires both ports from `get_graph_db()` (reuses
+  `Neo4jPlayerLocationReadRepository`). Tests mock the ports; `test_intent_repository.py` covers the adapter,
+  `test_intent_formation_engine.py` adds the ignored-kwarg test. Wave 3 sixth checkbox; `engines/agenda/` is
+  neo4j-free.
+
+**22 domains migrated, 21 ports + 21 adapters** (+3 shared read ports/adapters; director reuses them, no new port). Shared ports built: political (succession+agenda),
 WorldState (story_pacing + chapter — first cross-domain reuse). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.
