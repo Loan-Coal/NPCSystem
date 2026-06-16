@@ -9,11 +9,12 @@ Purpose: Neo4j-backed repository adapters that implement the engine-layer graph
 Does NOT: contain business/decay logic, call LLMs, or import the engines layer.
 Dependencies injected: GraphDB (per adapter, at the api composition root).
 Public surface: Neo4jNeedRepository, Neo4jMoodRepository, Neo4jGroupRepository,
-                Neo4jSkillRepository.
+                Neo4jSkillRepository, Neo4jChapterRepository.
 """
 
 from __future__ import annotations
 
+from npc_engine.graph.repositories.chapter_repository import Neo4jChapterRepository
 from npc_engine.graph.repositories.group_repository import Neo4jGroupRepository
 from npc_engine.graph.repositories.memory_consolidation_repository import (
     Neo4jMemoryConsolidationRepository,
@@ -29,6 +30,7 @@ from npc_engine.graph.repositories.treaty_repository import Neo4jTreatyRepositor
 from npc_engine.graph.repositories.world_state_repository import Neo4jWorldStateRepository
 
 __all__ = [
+    "Neo4jChapterRepository",
     "Neo4jGroupRepository",
     "Neo4jMemoryConsolidationRepository",
     "Neo4jMoodRepository",

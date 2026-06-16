@@ -10,11 +10,12 @@ Does NOT: open sessions, run Cypher, hold state, or import the graph layer.
 Dependencies injected: none (pure interfaces).
 Public surface: NeedGraphPort, MoodGraphPort, GroupGraphPort, SkillGraphPort,
                 RoutineGraphPort, PoliticalGraphPort, StoryPacingGraphPort,
-                WorldStateGraphPort, MemoryConsolidationGraphPort.
+                WorldStateGraphPort, MemoryConsolidationGraphPort, ChapterGraphPort.
 """
 
 from __future__ import annotations
 
+from npc_engine.engines.ports.chapter_port import ChapterGraphPort
 from npc_engine.engines.ports.group_port import GroupGraphPort
 from npc_engine.engines.ports.memory_consolidation_port import MemoryConsolidationGraphPort
 from npc_engine.engines.ports.mood_port import MoodGraphPort
@@ -28,6 +29,7 @@ from npc_engine.engines.ports.treaty_port import TreatyGraphPort
 from npc_engine.engines.ports.world_state_port import WorldStateGraphPort
 
 __all__ = [
+    "ChapterGraphPort",
     "GroupGraphPort",
     "MemoryConsolidationGraphPort",
     "MoodGraphPort",

@@ -42,16 +42,25 @@ def get_skill_progression_engine():
 def get_chapter_engine():
     """Create singleton chapter engine with its own LLM client.
 
+    Wires the Neo4j graph adapters (Neo4jChapterRepository + Neo4jWorldStateRepository)
+    as the engine's injected ChapterGraphPort / WorldStateGraphPort (DEC-122 / SEV-24)
+    so the engine holds no Neo4j session.
+
     Returns:
         ChapterEngine configured from engines/chapter/llm_config.yaml.
     """
     from npc_engine.engines.chapter.chapter_engine import ChapterEngine
+    from npc_engine.graph.repositories.chapter_repository import Neo4jChapterRepository
+    from npc_engine.graph.repositories.world_state_repository import Neo4jWorldStateRepository
 
     engine_config = get_engine_model_config_for("chapter")
     settings = get_settings()
     llm_client = _register_adapter(create_llm_client_for_engine(engine_config, settings))
+    graph_db = get_graph_db()
     return ChapterEngine(
         llm_client=llm_client,
+        chapter_repo=Neo4jChapterRepository(graph_db),
+        world_state_repo=Neo4jWorldStateRepository(graph_db),
         max_tokens=engine_config.llm.max_tokens,
         temperature=engine_config.llm.temperature,
     )

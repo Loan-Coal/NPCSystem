@@ -44,7 +44,6 @@ R006|src/npc_engine/auth/middleware.py::ApiKeyMiddleware.dispatch
 R006|src/npc_engine/data/api_seeder.py::seed
 R006|src/npc_engine/engines/agenda/agenda_engine.py::AgendaEngine.run_tick
 R006|src/npc_engine/engines/chapter/chapter_engine.py::ChapterEngine._label_chapter
-R006|src/npc_engine/engines/chapter/chapter_engine.py::ChapterEngine.run_tick
 R006|src/npc_engine/engines/clique/clique_formation_engine.py::CliqueFormationEngine._run_formation
 R006|src/npc_engine/engines/dialogue/degradation.py::execute_with_degradation
 R006|src/npc_engine/engines/dialogue/llm_client.py::DialogueLLMClient._generate_with_retry

@@ -72,13 +72,14 @@ Convention per slice: `engines/ports/<domain>_port.py` (Protocol, no neo4j types
 injects the port via `__init__`, `run_tick(*, …, **_)` swallows the scheduler `session=`, wired in the engine's
 dep factory. Tests: engine mocks the Port, adapter gets a fake-`GraphDB` test. Watch R006 (extract a helper if
 `run_tick` crosses 40 lines); update any SEV-04 delegation guard to the port.
-**Done (13 slices):** need, mood, clique, skill, routine, succession, agenda, story_pacing, treaty, oath,
-memory_consolidation (`MemoryConsolidationGraphPort`, single-domain port spanning belief/memory/witness reads
-+ memory write) (+ shared `PoliticalGraphPort`, `WorldStateGraphPort`). `make check` green, 2264 tests.
+**Done (14 slices):** need, mood, clique, skill, routine, succession, agenda, story_pacing, treaty, oath,
+memory_consolidation, chapter (`ChapterGraphPort` = chapter reads/writes + faction standings; **reuses shared
+`WorldStateGraphPort`** for world_state; extracted `_transition_chapter` to keep run_tick under R006)
+(+ shared `PoliticalGraphPort`, `WorldStateGraphPort`). `make check` green, 2272 tests.
 
 Wave 1 — clean singletons (scheduler-only callers; smallest blast radius):
 - [x] SEV-24 · memory_consolidation — `memory_consolidation_engine` (belief/memory/witnessed reads + create_memory)
-- [ ] SEV-24 · chapter — `chapter_engine` (LLM tick; reuse `WorldStateGraphPort` for its world_state read)
+- [x] SEV-24 · chapter — `chapter_engine` (LLM tick; reuse `WorldStateGraphPort` for its world_state read)
 - [ ] SEV-24 · military — cluster: `military_engine` + `military_battle_service` + `military_resource_service`
 
 Wave 2 — shared read-ports + light consumers (build the readers once, reuse after):
