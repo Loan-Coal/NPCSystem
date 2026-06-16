@@ -70,7 +70,13 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   any engine yet; reputation/player_model/director/proactive_dialogue slices inject these to drop their
   per-tick reader construction. Tests: `tests/unit/test_shared_read_repositories.py`.
 
-**13 domains migrated, 14 ports + 14 adapters** (+3 shared read ports/adapters, no engine). Shared ports built: political (succession+agenda),
+- **emotion** (DONE, `<pending>`): `EmotionGraphPort` (write-through, no session) + `Neo4jEmotionRepository`
+  (holds its own stateless `EmotionGraphWriter`, session-per-call). `EmotionUpdater` now takes the port as
+  `writer=` and dropped `session` from `apply_dialogue_mood`/`apply_event_shock`/`_write_through`; the dialogue
+  call-site dropped `session=` (gossip already passed none). Not a tick engine, so no ignored-kwarg test —
+  added `test_emotion_repository.py` (adapter + session-free updater write-through). Wave 2 second checkbox.
+
+**14 domains migrated, 15 ports + 15 adapters** (+3 shared read ports/adapters, no engine). Shared ports built: political (succession+agenda),
 WorldState (story_pacing + chapter — first cross-domain reuse). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.

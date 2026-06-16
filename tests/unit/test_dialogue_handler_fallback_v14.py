@@ -88,14 +88,12 @@ class FakeEmotionUpdater:
     """Deterministic emotion updater for dialogue handler tests."""
 
     def __init__(self) -> None:
-        self.last_session = None
         self.last_tick: int = 0
 
     async def get_state(self, npc_id: str):
         return SimpleNamespace(label="neutral")
 
-    async def apply_dialogue_mood(self, npc_id: str, mood_update: str | None, session=None, tick: int = 0):
-        self.last_session = session
+    async def apply_dialogue_mood(self, npc_id: str, mood_update: str | None, tick: int = 0):
         self.last_tick = tick
         return SimpleNamespace(label=mood_update or "neutral", valence=0)
 
@@ -250,8 +248,8 @@ async def test_stream_passes_emotion_state_to_context_builder(monkeypatch) -> No
 
 
 @pytest.mark.asyncio
-async def test_apply_relation_and_emotion_passes_session_and_tick(monkeypatch) -> None:
-    """DialogueHandler must pass session and tick to apply_dialogue_mood (EXP-14 slice-4)."""
+async def test_apply_relation_and_emotion_passes_tick(monkeypatch) -> None:
+    """DialogueHandler must pass tick to apply_dialogue_mood (SEV-24: emotion port owns persistence)."""
     async def fake_build_serialized_context(**kwargs):
         return "{}"
 
@@ -298,9 +296,6 @@ async def test_apply_relation_and_emotion_passes_session_and_tick(monkeypatch) -
         )
     )
 
-    assert fake_updater.last_session is fake_session, (
-        "apply_dialogue_mood must receive the Neo4j session so writes can be persisted"
-    )
     assert fake_updater.last_tick != 0, (
         "apply_dialogue_mood must receive a non-zero tick_id"
     )

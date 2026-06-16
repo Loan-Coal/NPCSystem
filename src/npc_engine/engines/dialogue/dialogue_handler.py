@@ -208,7 +208,6 @@ class DialogueHandler:
         return await self._emotion_updater.apply_dialogue_mood(
             npc_id=request.npc_id,
             mood_update=response.mood_update,
-            session=self._session,
             tick=tick_id,
         )
 

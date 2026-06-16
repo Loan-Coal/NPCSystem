@@ -2,8 +2,8 @@
 Unit tests for EmotionUpdater write-through, label inertia, and EmotionBootstrapper.
 
 Covers:
-- get_emotion_updater singleton has writer injected (EXP-14 slice-3)
-- apply_dialogue_mood calls EmotionGraphWriter when injected (test 3)
+- get_emotion_updater singleton has the emotion port injected (EXP-14 slice-3 / SEV-24)
+- apply_dialogue_mood calls the injected EmotionGraphPort (test 3)
 - apply_dialogue_mood does not crash when no writer injected (test 4)
 - VadEmotionModel label inertia below _MIN_AROUSAL_TO_SHIFT_LABEL (test 5)
 - EmotionBootstrapper.load_from_graph seeds the store from graph data (test 6)
@@ -24,36 +24,33 @@ from npc_engine.engines.emotion.vad_emotion_model import (
     VadEmotionModel,
     _MIN_AROUSAL_TO_SHIFT_LABEL,
 )
-from npc_engine.graph.emotion_writer import EmotionGraphWriter
+from npc_engine.graph.repositories.emotion_repository import Neo4jEmotionRepository
 
 
 def test_get_emotion_updater_singleton_has_writer() -> None:
-    """get_emotion_updater() must wire EmotionGraphWriter so writes persist (EXP-14 slice-3)."""
+    """get_emotion_updater() must wire the emotion port so writes persist (SEV-24)."""
     get_emotion_updater.cache_clear()
     try:
         updater = get_emotion_updater()
         assert updater._writer is not None, (
             "EmotionUpdater._writer is None — emotion state will not be persisted at runtime"
         )
-        assert isinstance(updater._writer, EmotionGraphWriter)
+        assert isinstance(updater._writer, Neo4jEmotionRepository)
     finally:
         get_emotion_updater.cache_clear()
 
 
 @pytest.mark.asyncio
 async def test_apply_dialogue_mood_writes_through() -> None:
-    """apply_dialogue_mood must call writer.write_emotion when a writer is injected."""
+    """apply_dialogue_mood must call the port's write_emotion when one is injected."""
     store = EmotionStore()
-    mock_writer = MagicMock(spec=EmotionGraphWriter)
-    mock_writer.write_emotion = AsyncMock()
-    mock_session = MagicMock()
+    mock_writer = AsyncMock()
 
     updater = EmotionUpdater(emotion_store=store, writer=mock_writer)
 
     await updater.apply_dialogue_mood(
         npc_id="npc-1",
         mood_update="warm",
-        session=mock_session,
         tick=5,
     )
 
