@@ -133,7 +133,7 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   `.cache_clear()` call + unused import from BOTH `tests/conftest.py` and `src/npc_engine/main.py`. Tests mock
   the port; `test_economy_repository.py` covers the adapter. Wave 3 fifth checkbox; `engines/economy/` is neo4j-free.
 
-- **agenda-others** (DONE, `<pending>`): NEW `IntentGraphPort` (trigger reads `get_npc_location`/
+- **agenda-others** (DONE, `a56b719`): NEW `IntentGraphPort` (trigger reads `get_npc_location`/
   `get_player_location`/`get_unmet_needs`/`get_witnessed_events`/`get_unresolved_goals` + queue writes
   `enqueue_intent(intent, *, settings)`/`expire_old_intents(*, cutoff_tick)`) + `Neo4jIntentRepository`
   (session-per-call, delegates to intent_queries + intent_queue_writer). CLUSTER: `score_intents(...)` in
