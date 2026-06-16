@@ -54,27 +54,82 @@ WorldState (story_pacing + future). R006 watch: every tick engine's `run_tick` g
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.
 
-## Sequencing note (by actual complexity, not file count)
-The "simple singletons" framing was optimistic: several Wave-1 engines (memory, reputation, player_model) are
-actually *entangled* (inline `MemoryEngine()` construction across routes/handlers; reputation's session-coupled
-`RelationReader` factory + private `_reader` mutation). Process **clean singletons first** (done: need, mood,
-clique, skill, routine, succession, agenda; remaining: story_pacing [needs shared WorldState port],
-emotion, knowledge_learning, memory_consolidation, chapter), then build the **shared read-ports**
-(RelationReadPort, WorldStateReadPort, PlayerLocationReadPort, CharacterReadPort) which simplify the entangled
-engines (director, reputation, player_model), then do the entangled ones (incl. memory), then Wave 3
-(`run_in_tx` coordinators). The political port shows the shared-domain pattern: build it once, extend per
-engine (succession then agenda).
+## What ONE `/fix-next` pass does (one `SEV-24 ·` checkbox in INDEX.md)
+1. **Pick** the first unchecked `SEV-24 ·` line in `INDEX.md` (waves are ordered easy→hard; respect them).
+2. **Discover** that domain's specifics yourself (don't trust this brief blindly — code moves):
+   `grep -rn "from npc_engine.graph\|AsyncSession" src/npc_engine/engines/<domain>/` for the graph surface;
+   `grep -rn "<EngineClass>(" src/npc_engine/api/` for the construction factory;
+   `grep -rn "<engine>.run_tick\|<EngineClass>" tests/` for the test + scheduler call.
+3. **Implement** per the Pattern above (port → adapter → engine → wire → tests). Reuse an existing port if the
+   domain already has one (e.g. political, world_state). Keep `(session,…)` on any graph function untouched —
+   only the *engine* stops holding a session.
+4. **Verify** `make check` + the touched tests. Add a `run_tick(session=object(), …)` "ignored-kwarg" test.
+   If `run_tick` crossed 40 lines (R006), extract a named helper. If a `test_sev04_*` delegation guard patched
+   the old module-level graph fns, repoint it to the injected port.
+5. **Tick** the box `[ ]`→`[x]` in INDEX.md, append the commit hash to "Migrated slices" here, update the
+   INDEX carry-forward note if you introduced a reusable port. **Commit** `feat(SEV-24): <domain> via repository`.
 
-## Wave order (simple → hard)
-Wave 1: need ✓, mood ✓, clique, memory(+decay_tick), reputation(+tick; builds RelationReadPort),
-player_model(+tick). Wave 2: planning, economy/trade, emotion, agenda, routine, story_pacing, skill,
-deception, knowledge_learning, director, chapter, succession, proactive_dialogue, interaction, investigation.
-Wave 3 (defer — `run_in_tx` coordinators / large clusters): events, quest, quest_generation, gossip, dialogue,
-military, scheming, oath, treaty, faction_politics, idempotency.
+## Remaining slices — per-domain notes (confirm against code per step 2)
+**Wave 1 — clean singletons:**
+- `memory_consolidation` — `memory_consolidation_engine` (tick; already imports `GraphDB`). Graph: belief_queries
+  `get_beliefs_for_character`, memory_queries `get_memories_for_character`, memory_service `create_memory`,
+  witnessed_queries `get_undisclosed_witnesses`. Spans 3 read domains + memory write → one
+  `MemoryConsolidationGraphPort` covering exactly its calls. Factory: `dependencies_advanced/progression.py`.
+- `chapter` — `chapter_engine` (LLM tick, has `__init__(llm…)`). Graph: faction_queries
+  `get_faction_standings_summary`, chapter_queries, chapter_writer, **world_state_reader `get_world_state` →
+  reuse `WorldStateGraphPort`**. Factory: `progression.py get_chapter_engine`.
+- `military` — CLUSTER: `military_engine.run_tick` delegates to `engines/military/military_battle_service.resolve_battles`
+  + `military_resource_service.process_resource_yield`; those hold the graph calls (military_queries,
+  military_control_writer). Give a `MilitaryGraphPort`, inject into the two services, `military_engine` injects +
+  passes it (or the services take it directly). Factory: `politics.py get_military_engine`.
 
-## Final step (only after all domains migrated)
-Remove `session` from the `BaseEngine.run_tick` protocol and from `tick_scheduler.advance()` so the session
-no longer threads through the engine layer at all.
+**Wave 2 — shared read-ports + light consumers:**
+- `shared-read-ports` — build `RelationReadPort` (`relation_reader.RelationReader.get_relation_scalars`,
+  `get_relation_phase_row`), `PlayerLocationReadPort` (`player_location_reader.PlayerLocationReader.get_collocated_pairs`,
+  `get_player_idle_ticks`), `CharacterReadPort` (`character_reader.get_npc_ids`) + their `Neo4j*Repository`
+  adapters (session-per-call). These REPLACE the per-tick `RelationReader(session)` / reader-factory pattern in
+  reputation/player_model/director. Ship this checkbox as ports+adapters+tests only (no engine yet), OR fold into
+  the first consumer — your call; either way later slices just inject them.
+- `emotion` — `emotion_updater` (optional `EmotionGraphWriter` + `session` per method). `EmotionGraphPort.write_emotion`;
+  adapter wraps `graph/emotion_writer`. Drop `session` from `apply_dialogue_mood`/`apply_event_shock`/`_write_through`;
+  **update call-sites in `dialogue_handler` + `gossip_handler` to drop the `session=` arg** (small edits, those
+  engines keep their own session).
+- `knowledge_learning` — `knowledge_extraction_engine` (belief_queries `find_conflicting_belief` + knowledge_writer
+  `write_belief`). Caller(s) drop the session arg.
+- `deception` — `deception_engine` (`write_belief`; method takes session). Caller: dialogue. Smallest.
+
+**Wave 3 — entangled:**
+- `reputation` — `reputation_engine(config, relation_reader, apply_nudge_fn)` + `reputation_tick_adapter`
+  (passes a per-tick `relation_reader_factory(session)` and mutates `engine._reader`). Inject `RelationReadPort` +
+  `CharacterReadPort`; the nudge write (`reputation_nudge.apply_trust_nudge`) becomes a port method. Delete the
+  reader-factory + `_reader` mutation. Factory: `dependencies_engines.get_reputation_engine`.
+- `player_model` — `player_model_tick` (PlayerLocationReader + RelationReader + player_model_writer
+  `upsert_player_model`/`get_player_model`). Reuse RelationReadPort + PlayerLocationReadPort + a
+  `PlayerModelGraphPort`.
+- `director` — `director_tick` (read-ports as above) BUT it also calls `event_handler.run_tick(session=…)`.
+  Migrate its *reads* to the ports; **keep receiving `session` and pass it to event_handler** until the `events`
+  slice lands (so director is not fully session-free yet — note this in the commit; do not delete its session param).
+- `planning` — `goal_former` + `goal_former_adapter` + `action_selector`. Graph: need_queries
+  `get_needs_for_character`/`get_satisfying_location_for_need`, goal_service `create_goal`, goal_targets_writer,
+  character_reader, world_state_reader (reuse WorldStateGraphPort + CharacterReadPort). Multi-port slice.
+- `economy` — `trade_engine` (currency_writer/item_writer/pricing_queries). **Per-request route factory**, not a
+  singleton — build the adapter in the route's `Depends` factory.
+- `agenda-others` — `intent_formation_engine` + `conversation_intent_service` (the non-`agenda_engine` files).
+- `interaction`/`investigation`/`proactive_dialogue`/`relationship` — one slice each; standard pattern.
+- `memory` — `MemoryEngine` is constructed inline in 5+ places (clock route, memories route module-level `_engine`,
+  `dialogue_handler.__init__`, `quest_lifecycle_engine` fallback) + `get_memory_engine()` factory. Add
+  `MemoryGraphPort` (create_memory + the two decays), make `get_memory_engine()` the single source, replace every
+  inline `MemoryEngine()` with it; inject `memory_engine` into dialogue_handler/quest via their construction sites.
+
+**Wave 4 — `run_in_tx` coordinators / large clusters:** `events` (`event_handler` owns a `run_in_tx` unit-of-work
+→ the port exposes ONE atomic method whose adapter runs `run_in_tx` internally, no tx leaks out), then
+`faction_politics`, `scheming`, `idempotency`, and the big `gossip`/`dialogue`/`quest`/`quest_generation` clusters
+(each its own multi-slice effort — sub-split as needed; tick its INDEX box only when the whole domain is neo4j-free).
+
+## Final step (last checkbox, only after every domain is migrated)
+Remove `session` from the `BaseEngine.run_tick` protocol and `tick_scheduler.advance()`; drop the now-unused
+`**_`/`session=None` swallowers in migrated engines. Confirm
+`grep -rn "from neo4j\|AsyncSession\|AsyncTransaction" src/npc_engine/engines/` → empty. Close DEC-122.
 
 ## Verification
 - `grep -rn "AsyncSession\|AsyncTransaction\|from neo4j" src/npc_engine/engines/` shrinks toward empty.

@@ -10,7 +10,7 @@
 - SEV-17: `dependencies_advanced` is now a PACKAGE (`politics.py`/`social.py`/`progression.py` + re-exporting `__init__`). Add a NEW advanced-engine factory to the matching submodule and to `__init__.__all__` — do NOT recreate a flat file. ISSUE-105's `dependencies_engines.py` (512 lines) is UNTOUCHED — apply the same split if a SEV reopens it.
 - SEV-14 DONE: system observability now `/v1/admin/system/{engines,config,metrics,events}` (admin-scoped). The demo AND dashboard keys were ALREADY admin-scoped (both call other `/v1/admin/*`), so no key change — only URL repointing (demo client, dashboard `js/api.js`, world_poller/run_scenes docstrings). `/health`+`/readiness` stay public (separate `system_router`). Mount-path regression lives in `test_v1_route_versioning.py`.
 - SEV-16 is L-effort/route-by-route: 35 files; npc_state/emotion/schemes already typed; many payloads are DYNAMIC engine-aggregate dicts (clock/batch) that should stay `dict[str,Any]`. Do fixed-shape demo-read routes first (player_model/chapters/investigations) à la SEV-03. See brief's scoping finding.
-- Remaining Block G: SEV-16 (route typing, multi-commit); SEV-15/19/21 (heavy refactors). SEV-14/17 done.
+- **ACTIVE: SEV-24 (Track D facade)** — `/fix-next` = next unchecked `SEV-24 ·` checkbox; brief `FIX-SEV-24.md` is self-contained. Pattern: `engines/ports/<d>_port.py` Protocol + `graph/repositories/<d>_repository.py` (`GraphDB`, session-per-call) + engine injects port, `run_tick(*,…,**_)`, wired in its dep factory (`dependencies_advanced/{social,politics,progression}.py` or `dependencies_engines.py`). Reuse shared ports `PoliticalGraphPort`/`WorldStateGraphPort`. Add a `run_tick(session=object(),…)` "ignored kwarg" test. SEV-19/15 are BLOCKED until all SEV-24 boxes are checked. SEV-14/16/17/20/21/22/23 done.
 - caplog gotcha: `utils/logging.py` sets propagate=False, so pytest `caplog` (root) misses engine logs once logging is configured — capture on the engine logger directly (see test_sev22 secret-seed test).
 
 ## Fix-now backlog (ordered, dependency-blocked)
@@ -64,22 +64,54 @@ does not stop on them — promote one into the checklist when you're ready to dr
   metrics) stay `dict[str,Any]` by decision (inline-commented). Regression lock:
   `tests/unit/test_typed_payload_contract.py`.
 
-### Multi-phase — NOT a single `/fix-next` pass (drive incrementally / its own session)
-Each brief says to sub-phase; `/fix-next` does one item→one commit, so these would over-reach in one go.
+### ACTIVE TRACK — SEV-24 (Track D / GraphRepository facade). `/fix-next` does ONE checkbox below per pass.
+DEC-122, follow-on to SEV-21. **The brief `FIX-SEV-24.md` is self-contained** (recipe + per-domain notes +
+gotchas) — a fresh `/fix-next` reads only it + the cited engine files. **Clear context between waves.**
+Convention per slice: `engines/ports/<domain>_port.py` (Protocol, no neo4j types) +
+`graph/repositories/<domain>_repository.Neo4j<Domain>Repository` (holds `GraphDB`, session-per-call) + engine
+injects the port via `__init__`, `run_tick(*, …, **_)` swallows the scheduler `session=`, wired in the engine's
+dep factory. Tests: engine mocks the Port, adapter gets a fake-`GraphDB` test. Watch R006 (extract a helper if
+`run_tick` crosses 40 lines); update any SEV-04 delegation guard to the port.
+**Done (12 slices):** need, mood, clique, skill, routine, succession, agenda, story_pacing, treaty, oath
+(+ shared `PoliticalGraphPort`, `WorldStateGraphPort`). `make check` green, 2250 tests.
+
+Wave 1 — clean singletons (scheduler-only callers; smallest blast radius):
+- [ ] SEV-24 · memory_consolidation — `memory_consolidation_engine` (belief/memory/witnessed reads + create_memory)
+- [ ] SEV-24 · chapter — `chapter_engine` (LLM tick; reuse `WorldStateGraphPort` for its world_state read)
+- [ ] SEV-24 · military — cluster: `military_engine` + `military_battle_service` + `military_resource_service`
+
+Wave 2 — shared read-ports + light consumers (build the readers once, reuse after):
+- [ ] SEV-24 · shared-read-ports — `RelationReadPort` + `PlayerLocationReadPort` + `CharacterReadPort` (+ adapters)
+- [ ] SEV-24 · emotion — `emotion_updater` write-through; drop the `session` arg at its dialogue/gossip call-sites
+- [ ] SEV-24 · knowledge_learning — `knowledge_extraction_engine` (belief reads + write_belief; callers drop session)
+- [ ] SEV-24 · deception — `deception_engine` (write_belief; caller: dialogue drops session)
+
+Wave 3 — entangled (session-coupled readers / wide construction):
+- [ ] SEV-24 · reputation — `reputation_engine` + `reputation_tick_adapter` (reuse RelationReadPort; drop reader-factory)
+- [ ] SEV-24 · player_model — `player_model_tick` (reuse RelationReadPort + PlayerLocationReadPort)
+- [ ] SEV-24 · director — `director_tick` (reuse the read-ports; KEEP passing session to event_handler until events migrates)
+- [ ] SEV-24 · planning — `goal_former` + `goal_former_adapter` + `action_selector`
+- [ ] SEV-24 · economy — `trade_engine` (per-request route factory, not a singleton)
+- [ ] SEV-24 · agenda-others — `intent_formation_engine` + `conversation_intent_service`
+- [ ] SEV-24 · interaction · investigation · proactive_dialogue · relationship (one slice each — split as needed)
+- [ ] SEV-24 · memory — `MemoryEngine`: replace inline `MemoryEngine()` in clock/memories routes + dialogue + quest with `get_memory_engine()`
+
+Wave 4 — `run_in_tx` coordinators / large clusters (domain repo exposes a unit-of-work that runs run_in_tx internally):
+- [ ] SEV-24 · events — `event_handler` (run_in_tx coordinator)
+- [ ] SEV-24 · faction_politics (run_in_tx) · scheming · idempotency (one slice each)
+- [ ] SEV-24 · gossip cluster (8 files) · dialogue cluster (6) · quest cluster (12) · quest_generation cluster (10)
+
+Wave 5 — finalize:
+- [ ] SEV-24 · drop `session` from `BaseEngine.run_tick` + `tick_scheduler.advance()`; confirm
+  `grep -rn "from neo4j\|AsyncSession" src/npc_engine/engines/` → empty; close DEC-122 / FIX-SEV-24 / this INDEX.
+
+### After Track D (deps: all SEV-24 boxes checked) — drive incrementally, own session each
+- [x] SEV-21 — Graph sub-writers → caller-owned transactions via `transaction_coordinator.run_in_tx` (DEC-119, 6
+  family commits). `begin_transaction(` only in the coordinator; no engine opens a tx; `(session,…)` signatures kept.
 - [ ] SEV-19 — R006 40-line gate + refactor `advance`(373)/`dispatch`/`seed`; waive cohesive rest (DEC-117).
-  One function per commit.
-- [x] SEV-21 — Migrate 14+ graph sub-writers to caller-owned transactions (DEC-119). 6 writer-family commits
-  (relation, currency/item, character-knowledge, faction/reputation, quest/schedule, player-model): each
-  sub-writer now runs its writes via `transaction_coordinator.run_in_tx` instead of `session.begin_transaction()`.
-  `begin_transaction(` now appears only in `transaction_coordinator.py`; no engine opens a transaction. Public
-  `(session, …)` signatures preserved (engine call-sites untouched; full session removal is the Track-D facade).
+  One function per commit. **deps: SEV-24 complete** (advance/dispatch are reshaped by the facade first).
 - [ ] SEV-15 — Adopt full `mypy --strict`; fix all 274 errors / 87 files; flip `make type` (DEC-113).
-  Sub-phase by package.
-- [~] SEV-24 — GraphRepository facade: engines depend on per-domain Port Protocols; Neo4j adapters in
-  `graph/repositories/` own the session (DEC-122, follow-on to SEV-21). One engine-domain per commit.
-  **Reference slice DONE** (`need`: NeedGraphPort + Neo4jNeedRepository + NeedDecayEngine migrated).
-  Remaining ~67 engine files migrate per domain; final step removes `session` from `BaseEngine.run_tick` +
-  `tick_scheduler.advance()`.
+  Sub-phase by package. **deps: SEV-24 complete** (types land on the final repo-injected engine shape).
 
 ## Log-only (ISSUES.md, no brief)
 ISSUE-101 schedule_queries cov · ISSUE-102 intrigue panel behavioral tests · ISSUE-103 135 stale docstrings ·

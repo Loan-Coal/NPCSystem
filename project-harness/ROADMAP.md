@@ -8,6 +8,11 @@ not exposed via a REST/WS route the demo can reach). This file's **"Next"** sect
 and **Phase H expands the demo into a game** (economy depth, content/branching, legacy gameplay engines) on
 top of those APIs. Overnight execution driver: `project-harness/DEMO_BUILD_LOOP.md` (looped `/expand-parallel`).
 
+> **Architectural remediation (separate track):** the `/full-review` SEV backlog — incl. **Track D (SEV-24,
+> GraphRepository facade)** — is driven by **`/fix-next`** from `project-harness/review-fixes/INDEX.md` (NOT this
+> file / `/expand-next`). SEV-24 is laid out there as a wave checklist (one engine-domain per `/fix-next` pass,
+> brief in `review-fixes/FIX-SEV-24.md`); clear context between waves.
+
 ## Archive (completed history)
 
 | Range | Where |
