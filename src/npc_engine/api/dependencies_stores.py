@@ -18,7 +18,11 @@ from npc_engine.engines.dialogue.session_store import SessionStore
 from npc_engine.engines.emotion.emotion_model_factory import build_emotion_model
 from npc_engine.engines.emotion.emotion_store import EmotionStore
 from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
+from npc_engine.engines.knowledge_learning.knowledge_extraction_engine import (
+    KnowledgeExtractionEngine,
+)
 from npc_engine.graph.repositories.emotion_repository import Neo4jEmotionRepository
+from npc_engine.graph.repositories.knowledge_repository import Neo4jKnowledgeRepository
 from npc_engine.engines.idempotency.service import IdempotencyService
 from npc_engine.graph.idempotency_writer import Neo4jIdempotencyStore
 from npc_engine.retrieval.dialogue_context_cache import PartialDialogueContextCache
@@ -64,6 +68,21 @@ def get_emotion_updater() -> EmotionUpdater:
         emotion_store=get_emotion_store(),
         model=build_emotion_model(get_settings()),
         writer=Neo4jEmotionRepository(get_graph_db()),
+    )
+
+
+@lru_cache
+def get_knowledge_extraction_engine() -> KnowledgeExtractionEngine:
+    """Create the singleton KnowledgeExtractionEngine wired to the Neo4j belief adapter.
+
+    Gated at runtime by Settings.KNOWLEDGE_LEARNING_ENABLED inside DialogueHandler
+    (default False) — this wiring is inert until the feature flag is enabled.
+
+    Returns:
+        KnowledgeExtractionEngine depending on the KnowledgeGraphPort abstraction.
+    """
+    return KnowledgeExtractionEngine(
+        knowledge_repo=Neo4jKnowledgeRepository(get_graph_db()),
     )
 
 

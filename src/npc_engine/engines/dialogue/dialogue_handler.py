@@ -242,7 +242,7 @@ class DialogueHandler:
         if (self._knowledge_engine is not None and getattr(self._settings, "KNOWLEDGE_LEARNING_ENABLED", False) and response.learned_facts and world_state is not None):
             game_time_str = f"Year {world_state.year} {world_state.season} Day {world_state.day} {world_state.time_of_day}"
             await self._knowledge_engine.process(
-                self._session, npc_id=request.npc_id, player_id=request.player_id,
+                npc_id=request.npc_id, player_id=request.player_id,
                 tick=tick_id, learned_facts=list(response.learned_facts), game_time_str=game_time_str,
             )
         if new_emotion.valence < LOW_VALENCE_THRESHOLD:

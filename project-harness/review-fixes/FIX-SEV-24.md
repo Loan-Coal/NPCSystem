@@ -76,7 +76,16 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   call-site dropped `session=` (gossip already passed none). Not a tick engine, so no ignored-kwarg test —
   added `test_emotion_repository.py` (adapter + session-free updater write-through). Wave 2 second checkbox.
 
-**14 domains migrated, 15 ports + 15 adapters** (+3 shared read ports/adapters, no engine). Shared ports built: political (succession+agenda),
+- **knowledge_learning** (DONE, `<pending>`): `KnowledgeGraphPort` (find_conflicting_belief + write_belief,
+  incl. `is_deception`/`deception_goal_id` kwargs so the deception slice REUSES it) + `Neo4jKnowledgeRepository`
+  (session-per-call). `KnowledgeExtractionEngine` now constructor-injects the port and `process(*, npc_id,…)`
+  dropped the `session` param; dialogue call-site dropped it. Engine was previously UNWIRED (only built in tests),
+  so added `get_knowledge_extraction_engine()` in `dependencies_stores.py` (re-exported via dependency_singletons),
+  wired into `build_dialogue_handler` (gated by `KNOWLEDGE_LEARNING_ENABLED`, default False — inert). Factory placed
+  in dependencies_stores because dependencies.py is at the R001 300-line cap. Tests: `test_knowledge_repository.py`
+  (adapter) + rewrote `test_knowledge_extraction_engine.py` to mock the port.
+
+**15 domains migrated, 16 ports + 16 adapters** (+3 shared read ports/adapters, no engine). Shared ports built: political (succession+agenda),
 WorldState (story_pacing + chapter — first cross-domain reuse). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.

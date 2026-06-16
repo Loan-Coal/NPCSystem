@@ -5,20 +5,21 @@ Purpose: Extracts player-stated facts from dialogue and writes them as NPC belie
          skipping facts that duplicate an existing belief (EXP-215 slice 1).
 Does NOT: call LLMs or validate facts semantically — raw fact strings come pre-extracted
           from DialogueResponse. Does NOT perform semantic contradiction detection (slice 2).
-Dependencies: graph.knowledge_writer, graph.belief_queries, engines.knowledge_learning.models
-Dependencies injected: AsyncSession (per call), config via constructor.
+          Does NOT open Neo4j sessions — belief reads/writes go through the injected port.
+Dependencies: engines.knowledge_learning.models, engines.ports.knowledge_port
+Dependencies injected: KnowledgeGraphPort (via constructor).
 Used by: engines.dialogue.dialogue_handler
 """
 
 from __future__ import annotations
 
 import logging
-
-from neo4j import AsyncSession
+from typing import TYPE_CHECKING
 
 from npc_engine.engines.knowledge_learning.models import KnowledgeExtractionResult
-from npc_engine.graph.belief_queries import find_conflicting_belief
-from npc_engine.graph.knowledge_writer import write_belief
+
+if TYPE_CHECKING:
+    from npc_engine.engines.ports.knowledge_port import KnowledgeGraphPort
 
 _logger = logging.getLogger(__name__)
 
@@ -40,13 +41,20 @@ class KnowledgeExtractionEngine:
     (EXP-215 slice 1: case-insensitive exact-content match).
     Semantic contradiction detection is deferred to slice 2.
 
-    Injected dependencies: none (stateless; all I/O is delegated to
-    find_conflicting_belief and write_belief which receive the session per call).
+    Injected dependencies: KnowledgeGraphPort (all belief reads/writes are delegated to
+    it; the engine holds no Neo4j session — DEC-122 / SEV-24).
     """
+
+    def __init__(self, *, knowledge_repo: KnowledgeGraphPort) -> None:
+        """Store the injected belief-domain repository port.
+
+        Args:
+            knowledge_repo: Port for duplicate-belief lookup and belief write-through.
+        """
+        self._repo = knowledge_repo
 
     async def process(
         self,
-        session: AsyncSession,
         *,
         npc_id: str,
         player_id: str,
@@ -61,7 +69,6 @@ class KnowledgeExtractionEngine:
         and logged (EXP-215 slice 1).  Semantic contradiction detection is slice 2.
 
         Args:
-            session: Active Neo4j async session.
             npc_id: ID of the NPC who learned the facts.
             player_id: ID of the player who stated the facts.
             tick: Current game tick (stored as provenance on the BELIEVES edge).
@@ -77,23 +84,22 @@ class KnowledgeExtractionEngine:
             if not _is_valid_fact(fact_str):
                 skipped += 1
                 continue
-            if await self._is_duplicate(session, npc_id=npc_id, fact_str=fact_str):
+            if await self._is_duplicate(npc_id=npc_id, fact_str=fact_str):
                 skipped += 1
                 continue
-            await self._persist_fact(session, npc_id=npc_id, player_id=player_id,
+            await self._persist_fact(npc_id=npc_id, player_id=player_id,
                                      tick=tick, fact_str=fact_str, game_time_str=game_time_str)
             written += 1
         return KnowledgeExtractionResult(written=written, skipped=skipped)
 
     async def _is_duplicate(
         self,
-        session: AsyncSession,
         *,
         npc_id: str,
         fact_str: str,
     ) -> bool:
         """Return True when an identical belief already exists for the NPC."""
-        existing = await find_conflicting_belief(session, character_id=npc_id, content=fact_str)
+        existing = await self._repo.find_conflicting_belief(character_id=npc_id, content=fact_str)
         if existing is not None:
             _logger.info(
                 "belief_skipped_duplicate",
@@ -104,7 +110,6 @@ class KnowledgeExtractionEngine:
 
     async def _persist_fact(
         self,
-        session: AsyncSession,
         *,
         npc_id: str,
         player_id: str,
@@ -113,8 +118,7 @@ class KnowledgeExtractionEngine:
         game_time_str: str,
     ) -> None:
         """Write one validated fact as a belief node and log it."""
-        await write_belief(
-            session,
+        await self._repo.write_belief(
             npc_id=npc_id,
             content=fact_str,
             confidence=_DEFAULT_CONFIDENCE,

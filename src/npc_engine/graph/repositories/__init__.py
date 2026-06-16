@@ -11,7 +11,8 @@ Dependencies injected: GraphDB (per adapter, at the api composition root).
 Public surface: Neo4jNeedRepository, Neo4jMoodRepository, Neo4jGroupRepository,
                 Neo4jSkillRepository, Neo4jChapterRepository, Neo4jMilitaryRepository,
                 Neo4jRelationReadRepository, Neo4jPlayerLocationReadRepository,
-                Neo4jCharacterReadRepository, Neo4jEmotionRepository.
+                Neo4jCharacterReadRepository, Neo4jEmotionRepository,
+                Neo4jKnowledgeRepository.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from npc_engine.graph.repositories.character_read_repository import (
 )
 from npc_engine.graph.repositories.emotion_repository import Neo4jEmotionRepository
 from npc_engine.graph.repositories.group_repository import Neo4jGroupRepository
+from npc_engine.graph.repositories.knowledge_repository import Neo4jKnowledgeRepository
 from npc_engine.graph.repositories.memory_consolidation_repository import (
     Neo4jMemoryConsolidationRepository,
 )
@@ -47,6 +49,7 @@ __all__ = [
     "Neo4jCharacterReadRepository",
     "Neo4jEmotionRepository",
     "Neo4jGroupRepository",
+    "Neo4jKnowledgeRepository",
     "Neo4jMemoryConsolidationRepository",
     "Neo4jMilitaryRepository",
     "Neo4jMoodRepository",

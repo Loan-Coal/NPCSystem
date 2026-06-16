@@ -21,15 +21,11 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, AsyncIterator
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 pytest.importorskip("neo4j")
-
-_ENGINE_MODULE = "npc_engine.engines.knowledge_learning.knowledge_extraction_engine"
-_WRITER_MODULE = "npc_engine.graph.knowledge_writer"
-_BELIEF_QUERIES_MODULE = "npc_engine.graph.belief_queries"
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _FALLBACK_PATH = str(_REPO_ROOT / "src" / "npc_engine" / "data" / "fallback_responses.json")
@@ -50,20 +46,17 @@ def _default_archetype(monkeypatch):
     )
 
 
-def _make_mock_session() -> MagicMock:
-    """Return a MagicMock that behaves like an AsyncSession with a transaction."""
-    session = MagicMock()
-    tx = AsyncMock()
-    tx.__aenter__ = AsyncMock(return_value=tx)
-    tx.__aexit__ = AsyncMock(return_value=False)
-    session.begin_transaction = AsyncMock(return_value=tx)
-    session.run = AsyncMock()
-    return session
-
-
 # ---------------------------------------------------------------------------
 # KnowledgeExtractionEngine.process — core behaviour
 # ---------------------------------------------------------------------------
+
+
+def _make_repo(*, conflict: dict[str, Any] | None = None) -> AsyncMock:
+    """Return a mock KnowledgeGraphPort with find_conflicting_belief/write_belief."""
+    repo = AsyncMock()
+    repo.find_conflicting_belief = AsyncMock(return_value=conflict)
+    repo.write_belief = AsyncMock(return_value="belief-id")
+    return repo
 
 
 @pytest.mark.asyncio
@@ -73,20 +66,17 @@ async def test_writes_belief_for_each_fact():
         KnowledgeExtractionEngine,
     )
 
-    mock_session = _make_mock_session()
+    repo = _make_repo()
+    engine = KnowledgeExtractionEngine(knowledge_repo=repo)
+    await engine.process(
+        npc_id="mira_innkeeper",
+        player_id="player_1",
+        tick=42,
+        learned_facts=["I am the new captain", "the bandits moved to the old mill"],
+        game_time_str="Year 1 Spring Day 1 Morning",
+    )
 
-    with patch(f"{_ENGINE_MODULE}.write_belief", new_callable=AsyncMock) as mock_write:
-        engine = KnowledgeExtractionEngine()
-        await engine.process(
-            mock_session,
-            npc_id="mira_innkeeper",
-            player_id="player_1",
-            tick=42,
-            learned_facts=["I am the new captain", "the bandits moved to the old mill"],
-            game_time_str="Year 1 Spring Day 1 Morning",
-        )
-
-    assert mock_write.await_count == 2
+    assert repo.write_belief.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -96,20 +86,17 @@ async def test_skips_empty_or_too_short_facts():
         KnowledgeExtractionEngine,
     )
 
-    mock_session = _make_mock_session()
+    repo = _make_repo()
+    engine = KnowledgeExtractionEngine(knowledge_repo=repo)
+    result = await engine.process(
+        npc_id="mira_innkeeper",
+        player_id="player_1",
+        tick=1,
+        learned_facts=["", "ab", "xy"],
+        game_time_str="Year 1 Spring Day 1 Morning",
+    )
 
-    with patch(f"{_ENGINE_MODULE}.write_belief", new_callable=AsyncMock) as mock_write:
-        engine = KnowledgeExtractionEngine()
-        result = await engine.process(
-            mock_session,
-            npc_id="mira_innkeeper",
-            player_id="player_1",
-            tick=1,
-            learned_facts=["", "ab", "xy"],
-            game_time_str="Year 1 Spring Day 1 Morning",
-        )
-
-    mock_write.assert_not_awaited()
+    repo.write_belief.assert_not_awaited()
     assert result.written == 0
     assert result.skipped == 3
 
@@ -121,21 +108,18 @@ async def test_skips_too_long_facts():
         KnowledgeExtractionEngine,
     )
 
-    mock_session = _make_mock_session()
     too_long = "x" * 301
+    repo = _make_repo()
+    engine = KnowledgeExtractionEngine(knowledge_repo=repo)
+    result = await engine.process(
+        npc_id="mira_innkeeper",
+        player_id="player_1",
+        tick=1,
+        learned_facts=[too_long],
+        game_time_str="Year 1 Spring Day 1 Morning",
+    )
 
-    with patch(f"{_ENGINE_MODULE}.write_belief", new_callable=AsyncMock) as mock_write:
-        engine = KnowledgeExtractionEngine()
-        result = await engine.process(
-            mock_session,
-            npc_id="mira_innkeeper",
-            player_id="player_1",
-            tick=1,
-            learned_facts=[too_long],
-            game_time_str="Year 1 Spring Day 1 Morning",
-        )
-
-    mock_write.assert_not_awaited()
+    repo.write_belief.assert_not_awaited()
     assert result.written == 0
     assert result.skipped == 1
 
@@ -147,19 +131,16 @@ async def test_returns_correct_written_count():
         KnowledgeExtractionEngine,
     )
 
-    mock_session = _make_mock_session()
     facts = ["I hail from the north", "I carry a royal seal", "I seek the hidden vault"]
-
-    with patch(f"{_ENGINE_MODULE}.write_belief", new_callable=AsyncMock):
-        engine = KnowledgeExtractionEngine()
-        result = await engine.process(
-            mock_session,
-            npc_id="mira_innkeeper",
-            player_id="player_1",
-            tick=5,
-            learned_facts=facts,
-            game_time_str="Year 1 Spring Day 1 Morning",
-        )
+    repo = _make_repo()
+    engine = KnowledgeExtractionEngine(knowledge_repo=repo)
+    result = await engine.process(
+        npc_id="mira_innkeeper",
+        player_id="player_1",
+        tick=5,
+        learned_facts=facts,
+        game_time_str="Year 1 Spring Day 1 Morning",
+    )
 
     assert result.written == 3
     assert result.skipped == 0
@@ -172,21 +153,18 @@ async def test_mixed_valid_and_invalid_facts():
         KnowledgeExtractionEngine,
     )
 
-    mock_session = _make_mock_session()
     too_long = "y" * 301
+    repo = _make_repo()
+    engine = KnowledgeExtractionEngine(knowledge_repo=repo)
+    result = await engine.process(
+        npc_id="mira_innkeeper",
+        player_id="player_1",
+        tick=3,
+        learned_facts=["ok fact here", "", too_long, "another valid fact"],
+        game_time_str="Year 1 Spring Day 1 Morning",
+    )
 
-    with patch(f"{_ENGINE_MODULE}.write_belief", new_callable=AsyncMock) as mock_write:
-        engine = KnowledgeExtractionEngine()
-        result = await engine.process(
-            mock_session,
-            npc_id="mira_innkeeper",
-            player_id="player_1",
-            tick=3,
-            learned_facts=["ok fact here", "", too_long, "another valid fact"],
-            game_time_str="Year 1 Spring Day 1 Morning",
-        )
-
-    assert mock_write.await_count == 2
+    assert repo.write_belief.await_count == 2
     assert result.written == 2
     assert result.skipped == 2
 
@@ -489,25 +467,18 @@ async def test_duplicate_belief_is_not_rewritten():
         KnowledgeExtractionEngine,
     )
 
-    mock_session = _make_mock_session()
     existing_belief = {"id": "b_existing", "content": "the north road is blocked", "confidence": 70}
+    repo = _make_repo(conflict=existing_belief)
+    engine = KnowledgeExtractionEngine(knowledge_repo=repo)
+    result = await engine.process(
+        npc_id="mira_innkeeper",
+        player_id="player_1",
+        tick=10,
+        learned_facts=["the north road is blocked"],
+        game_time_str="Year 1 Spring Day 2 Evening",
+    )
 
-    with (
-        patch(f"{_ENGINE_MODULE}.find_conflicting_belief", new_callable=AsyncMock) as mock_find,
-        patch(f"{_ENGINE_MODULE}.write_belief", new_callable=AsyncMock) as mock_write,
-    ):
-        mock_find.return_value = existing_belief
-        engine = KnowledgeExtractionEngine()
-        result = await engine.process(
-            mock_session,
-            npc_id="mira_innkeeper",
-            player_id="player_1",
-            tick=10,
-            learned_facts=["the north road is blocked"],
-            game_time_str="Year 1 Spring Day 2 Evening",
-        )
-
-    mock_write.assert_not_awaited()
+    repo.write_belief.assert_not_awaited()
     assert result.written == 0
     assert result.skipped == 1
 
@@ -519,23 +490,16 @@ async def test_non_conflicting_belief_is_written():
         KnowledgeExtractionEngine,
     )
 
-    mock_session = _make_mock_session()
+    repo = _make_repo(conflict=None)
+    engine = KnowledgeExtractionEngine(knowledge_repo=repo)
+    result = await engine.process(
+        npc_id="mira_innkeeper",
+        player_id="player_1",
+        tick=10,
+        learned_facts=["the eastern gate is open"],
+        game_time_str="Year 1 Spring Day 2 Evening",
+    )
 
-    with (
-        patch(f"{_ENGINE_MODULE}.find_conflicting_belief", new_callable=AsyncMock) as mock_find,
-        patch(f"{_ENGINE_MODULE}.write_belief", new_callable=AsyncMock) as mock_write,
-    ):
-        mock_find.return_value = None
-        engine = KnowledgeExtractionEngine()
-        result = await engine.process(
-            mock_session,
-            npc_id="mira_innkeeper",
-            player_id="player_1",
-            tick=10,
-            learned_facts=["the eastern gate is open"],
-            game_time_str="Year 1 Spring Day 2 Evening",
-        )
-
-    mock_write.assert_awaited_once()
+    repo.write_belief.assert_awaited_once()
     assert result.written == 1
     assert result.skipped == 0

@@ -34,6 +34,7 @@ from npc_engine.api.dependencies_stores import (
     get_game_clock,
     get_idempotency_service,
     get_idempotency_store,
+    get_knowledge_extraction_engine,
     get_reindex_job_service,
     get_session_store,
 )
@@ -91,6 +92,7 @@ __all__ = [
     "get_idempotency_service",
     "get_idempotency_store",
     "get_investigation_engine",
+    "get_knowledge_extraction_engine",
     "get_llm_config",
     "get_memory_consolidation_engine",
     "get_military_engine",
