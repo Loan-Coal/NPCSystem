@@ -169,7 +169,19 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   Tests mock the ports; `test_proactive_memory_read_repository.py` covers the adapter, tick-adapter gets an
   ignored-kwarg test. `engines/proactive_dialogue/` is neo4j-free.
 
-**24 domains migrated, 23 ports + 23 adapters** (+3 shared read ports/adapters; director reuses them, no new port). Shared ports built: political (succession+agenda),
+- **relationship** (DONE, `ef9c55d`): NO new read port — `phase_transition_applier.apply_phase_transition`
+  REUSES the shared `RelationReadPort.get_relation_phase_row` for the read + NEW `RelationPhaseWritePort` +
+  `Neo4jRelationPhaseWriteRepository` (wraps relation_phase_writer.write_relationship_phase) for the write.
+  Free-fn cluster pattern: the two ports are leading positional args of `apply_phase_transition(...)`; it
+  dropped the `session` param and no longer imports neo4j (`engines/relationship/` is neo4j-free). Caller is the
+  UNMIGRATED Wave-4 `dialogue_handler`, which keeps its session for `apply_dialogue_relation_deltas` but now holds
+  the two ports as optional `relation_reader`/`relation_phase_writer` kwargs (guarded call). GOTCHA: `dependencies.py`
+  is AT the 300-line R001 cap, so wired NET-ZERO via NEW `get_dialogue_graph_ports()` (dependencies_stores, re-exported
+  via dependency_singletons) that bundles the two ports + the existing knowledge_engine; `build_dialogue_handler`
+  `**`-splats it (replaced the `knowledge_engine=` kwarg line + swapped the import name). Tests mock the ports;
+  `test_relation_phase_write_repository.py` covers the adapter. Wave 3.
+
+**25 domains migrated, 24 ports + 24 adapters** (+3 shared read ports/adapters; director/relationship reuse them). Shared ports built: political (succession+agenda),
 WorldState (story_pacing + chapter — first cross-domain reuse). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.
