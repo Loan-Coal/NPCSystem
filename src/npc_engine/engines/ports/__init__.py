@@ -11,19 +11,23 @@ Dependencies injected: none (pure interfaces).
 Public surface: NeedGraphPort, MoodGraphPort, GroupGraphPort, SkillGraphPort,
                 RoutineGraphPort, PoliticalGraphPort, StoryPacingGraphPort,
                 WorldStateGraphPort, MemoryConsolidationGraphPort, ChapterGraphPort,
-                MilitaryGraphPort.
+                MilitaryGraphPort, RelationReadPort, PlayerLocationReadPort,
+                CharacterReadPort.
 """
 
 from __future__ import annotations
 
 from npc_engine.engines.ports.chapter_port import ChapterGraphPort
+from npc_engine.engines.ports.character_read_port import CharacterReadPort
 from npc_engine.engines.ports.group_port import GroupGraphPort
 from npc_engine.engines.ports.memory_consolidation_port import MemoryConsolidationGraphPort
 from npc_engine.engines.ports.military_port import MilitaryGraphPort
 from npc_engine.engines.ports.mood_port import MoodGraphPort
 from npc_engine.engines.ports.need_port import NeedGraphPort
+from npc_engine.engines.ports.player_location_read_port import PlayerLocationReadPort
 from npc_engine.engines.ports.pledge_port import PledgeGraphPort
 from npc_engine.engines.ports.political_port import PoliticalGraphPort
+from npc_engine.engines.ports.relation_read_port import RelationReadPort
 from npc_engine.engines.ports.routine_port import RoutineGraphPort
 from npc_engine.engines.ports.skill_port import SkillGraphPort
 from npc_engine.engines.ports.story_pacing_port import StoryPacingGraphPort
@@ -32,13 +36,16 @@ from npc_engine.engines.ports.world_state_port import WorldStateGraphPort
 
 __all__ = [
     "ChapterGraphPort",
+    "CharacterReadPort",
     "GroupGraphPort",
     "MemoryConsolidationGraphPort",
     "MilitaryGraphPort",
     "MoodGraphPort",
     "NeedGraphPort",
+    "PlayerLocationReadPort",
     "PledgeGraphPort",
     "PoliticalGraphPort",
+    "RelationReadPort",
     "RoutineGraphPort",
     "SkillGraphPort",
     "StoryPacingGraphPort",
