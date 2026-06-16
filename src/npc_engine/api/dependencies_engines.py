@@ -371,11 +371,22 @@ def get_player_model_tick() -> PlayerModelTick:
 def get_director_tick() -> DirectorTick:
     """Create singleton DirectorTick adapter for the tick scheduler (F1.5).
 
+    Wires the shared Neo4j read adapters (Neo4jPlayerLocationReadRepository +
+    Neo4jRelationReadRepository) as the engine-layer read Ports (DEC-122 / SEV-24); the
+    director still forwards the scheduler session to the EventHandler until events migrates.
+
     Returns:
-        DirectorTick wired to a shared PlayerLocationReader and the singleton EventHandler.
+        DirectorTick wired to the injected read ports and the singleton EventHandler.
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.player_location_read_repository import (
+        Neo4jPlayerLocationReadRepository,
+    )
+
+    graph_db = get_graph_db()
     return DirectorTick(
-        location_reader=PlayerLocationReader(),
+        location_reader=Neo4jPlayerLocationReadRepository(graph_db),
+        relation_reader=Neo4jRelationReadRepository(graph_db),
         event_handler=get_event_handler(),
         beat_log=get_director_beat_log(),
     )

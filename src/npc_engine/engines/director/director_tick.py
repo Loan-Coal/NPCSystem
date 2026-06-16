@@ -8,7 +8,10 @@ Purpose: Tick-scheduler adapter that gates event-engine beat injection on the dr
          injected EventHandler. Returns metadata records for observability.
 Does NOT: call LLMs directly, write graph nodes, change event_type enums, or inject
           beat_kind into Event nodes. Beat metadata is purely in the returned dict + logs.
-Dependencies injected: PlayerLocationReader, EventHandler (via __init__).
+Dependencies injected: PlayerLocationReadPort, RelationReadPort, EventHandler (via __init__).
+Note: reads go through the injected ports (no session); director STILL receives the
+      scheduler session purely to forward to event_handler until the events slice migrates
+      (DEC-122 / SEV-24) — do not drop the session param yet.
 Used by: scheduler.tick_scheduler (wired via dependencies_engines.py).
 """
 
@@ -24,9 +27,9 @@ from npc_engine.engines.director.director_engine import (
     decide,
 )
 from npc_engine.engines.director.director_beat_log import DirectorBeatLog, DirectorBeatRecord
+from npc_engine.engines.ports.player_location_read_port import PlayerLocationReadPort
+from npc_engine.engines.ports.relation_read_port import RelationReadPort
 from npc_engine.engines.relationship.standing import Standing, derive_standing
-from npc_engine.graph.player_location_reader import PlayerLocationReader
-from npc_engine.graph.relation_reader import RelationReader
 from npc_engine.utils.errors import RelationEdgeNotFoundError
 
 # Maximum co-located (npc, player) pairs evaluated per scheduler tick.
@@ -48,20 +51,23 @@ class DirectorTick:
 
     def __init__(
         self,
-        location_reader: PlayerLocationReader,
+        location_reader: PlayerLocationReadPort,
+        relation_reader: RelationReadPort,
         event_handler: Any,
         beat_log: DirectorBeatLog | None = None,
     ) -> None:
         """Initialise with injected dependencies.
 
         Args:
-            location_reader: PlayerLocationReader for co-location and idle-tick queries.
+            location_reader: PlayerLocationReadPort for co-location and idle-tick queries.
+            relation_reader: RelationReadPort for RELATES_TO scalar reads.
             event_handler: EventHandler (any object with async run_tick(session, tick_id)).
             beat_log: Optional DirectorBeatLog; when supplied, each fired beat is recorded
                 for the API director-beat read surface (F2.4). Default None preserves
                 backward-compatible behaviour for existing callers/tests.
         """
         self._location_reader = location_reader
+        self._relation_reader = relation_reader
         self._event_handler = event_handler
         self._beat_log = beat_log
 
@@ -72,17 +78,16 @@ class DirectorTick:
         containing ``beat_kind``, ``reason``, ``npc_id``, ``player_id``, ``event``.
 
         Args:
-            session: Active Neo4j async session.
+            session: Active Neo4j async session (forwarded only to the event handler).
             tick_id: Current game tick.
         """
-        pairs = await self._location_reader.get_collocated_pairs(session)
+        pairs = await self._location_reader.get_collocated_pairs()
         capped = pairs[:MAX_DIRECTOR_CHECKS_PER_TICK]
-        reader = RelationReader(session)
         beats: list[dict[str, Any]] = []
 
         for npc_id, player_id in capped:
             beat = await _decide_for_pair(
-                session=session, reader=reader,
+                relation_reader=self._relation_reader,
                 location_reader=self._location_reader,
                 npc_id=npc_id, player_id=player_id, tick_id=tick_id,
             )
@@ -119,9 +124,8 @@ class DirectorTick:
 
 async def _decide_for_pair(
     *,
-    session: AsyncSession,
-    reader: RelationReader,
-    location_reader: PlayerLocationReader,
+    relation_reader: RelationReadPort,
+    location_reader: PlayerLocationReadPort,
     npc_id: str,
     player_id: str,
     tick_id: int,
@@ -131,9 +135,8 @@ async def _decide_for_pair(
     On RelationEdgeNotFoundError, defaults to Standing.NEUTRAL (no crash).
 
     Args:
-        session: Active Neo4j async session.
-        reader: RelationReader scoped to the current session.
-        location_reader: PlayerLocationReader for idle-tick queries.
+        relation_reader: RelationReadPort for RELATES_TO scalar reads.
+        location_reader: PlayerLocationReadPort for idle-tick queries.
         npc_id: NPC character ID.
         player_id: Player character ID.
         tick_id: Current game tick.
@@ -142,13 +145,13 @@ async def _decide_for_pair(
         DirectorDecision if the director wants to inject a beat, otherwise None.
     """
     try:
-        scalars = await reader.get_relation_scalars(src_id=npc_id, dst_id=player_id)
+        scalars = await relation_reader.get_relation_scalars(src_id=npc_id, dst_id=player_id)
         standing = derive_standing(**scalars)
     except RelationEdgeNotFoundError:
         standing = Standing.NEUTRAL
 
     idle = await location_reader.get_player_idle_ticks(
-        session, npc_id=npc_id, player_id=player_id, tick_id=tick_id
+        npc_id=npc_id, player_id=player_id, tick_id=tick_id
     )
     return decide(player_idle_ticks=idle, relationship_phase=standing)
 

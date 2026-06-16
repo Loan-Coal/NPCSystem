@@ -13,14 +13,18 @@ Dependencies: Neo4j test environment via NEO4J_URI/NEO4J_USER/NEO4J_PASSWORD env
 from __future__ import annotations
 
 import os
-from typing import Any
 from uuid import uuid4
 
 import pytest
 from neo4j import AsyncGraphDatabase
 
-from npc_engine.engines.director.director_tick import DirectorTick
 from npc_engine.api.dependencies_engines import get_event_handler
+from npc_engine.config import get_settings
+from npc_engine.engines.director.director_tick import DirectorTick
+from npc_engine.graph.db import GraphDB
+from npc_engine.graph.repositories.relation_read_repository import (
+    Neo4jRelationReadRepository,
+)
 
 
 def _uid(prefix: str) -> str:
@@ -43,16 +47,11 @@ class _FakeLocationReader:
         self._pairs = pairs
         self._idle = idle
 
-    async def get_collocated_pairs(self, session: Any) -> list[tuple[str, str]]:
+    async def get_collocated_pairs(self) -> list[tuple[str, str]]:
         return self._pairs
 
     async def get_player_idle_ticks(
-        self,
-        session: Any,
-        *,
-        npc_id: str,
-        player_id: str,
-        tick_id: int,
+        self, *, npc_id: str, player_id: str, tick_id: int
     ) -> int:
         return self._idle
 
@@ -80,6 +79,7 @@ async def test_director_tick_fires_beat_against_live_session() -> None:
     npc_id = _uid("dir-npc")
     player_id = _uid("dir-plr")
 
+    graph_db = GraphDB(get_settings())
     driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
     try:
         async with driver.session() as session:
@@ -90,6 +90,7 @@ async def test_director_tick_fires_beat_against_live_session() -> None:
             # idle=15 > IDLE_INJECT_THRESHOLD_TICKS (10) → re_engage_idle decision
             adapter = DirectorTick(
                 location_reader=_FakeLocationReader([(npc_id, player_id)], idle=15),
+                relation_reader=Neo4jRelationReadRepository(graph_db),
                 event_handler=get_event_handler(),
             )
             result = await adapter.run_tick(session=session, tick_id=99)
@@ -108,3 +109,4 @@ async def test_director_tick_fires_beat_against_live_session() -> None:
                 await _cleanup(tx, npc_id, player_id)
                 await tx.commit()
         await driver.close()
+        await graph_db.close()

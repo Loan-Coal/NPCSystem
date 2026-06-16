@@ -1,8 +1,9 @@
 """
 test_director_tick.py - Unit tests for the DirectorTick scheduler adapter (F1.5).
 
-Drives run_tick with a fake co-location reader, monkeypatched RelationReader and
-decide/derive_standing, and a spy EventHandler. No real Neo4j is touched.
+Drives run_tick with injected read ports (fake PlayerLocationReadPort + RelationReadPort)
+and a spy EventHandler. No real Neo4j is touched. The director keeps receiving a session
+only to forward to the event handler (events not yet migrated — DEC-122 / SEV-24).
 
 Verifies:
   1. When decide() returns a decision for a pair, event_handler.run_tick is called
@@ -19,9 +20,7 @@ from typing import Any
 
 import pytest
 
-from npc_engine.engines.director import director_tick as mod
-from npc_engine.engines.relationship.standing import Standing
-from npc_engine.engines.director.director_engine import DirectorDecision
+from npc_engine.engines.director.director_tick import DirectorTick
 from npc_engine.utils.errors import RelationEdgeNotFoundError
 
 
@@ -31,41 +30,30 @@ from npc_engine.utils.errors import RelationEdgeNotFoundError
 
 
 class _FakeLocationReader:
-    """Returns a fixed list of pairs and a configurable idle count."""
+    """PlayerLocationReadPort double: fixed pairs + a configurable idle count."""
 
     def __init__(self, pairs: list[tuple[str, str]], idle: int = 0) -> None:
         self._pairs = pairs
         self._idle = idle
 
-    async def get_collocated_pairs(self, session: Any) -> list[tuple[str, str]]:
+    async def get_collocated_pairs(self) -> list[tuple[str, str]]:
         return self._pairs
 
     async def get_player_idle_ticks(
-        self,
-        session: Any,
-        *,
-        npc_id: str,
-        player_id: str,
-        tick_id: int,
+        self, *, npc_id: str, player_id: str, tick_id: int
     ) -> int:
         return self._idle
 
 
 class _FakeRelationReader:
-    """Returns neutral-ish scalars for all pairs (no missing edges)."""
-
-    def __init__(self, session: Any) -> None:
-        pass
+    """RelationReadPort double: returns neutral-ish scalars for all pairs."""
 
     async def get_relation_scalars(self, *, src_id: str, dst_id: str) -> dict[str, int]:
         return {"trust": 5, "fear": 0, "affection": 5}
 
 
 class _MissingRelationReader:
-    """Always raises RelationEdgeNotFoundError — simulates absent RELATES_TO edge."""
-
-    def __init__(self, session: Any) -> None:
-        pass
+    """RelationReadPort double that always raises (absent RELATES_TO edge)."""
 
     async def get_relation_scalars(self, *, src_id: str, dst_id: str) -> dict[str, int]:
         raise RelationEdgeNotFoundError(src_id=src_id, dst_id=dst_id)
@@ -88,16 +76,14 @@ class _SpyEventHandler:
 
 
 @pytest.mark.asyncio
-async def test_decision_fires_event_and_returns_beat(monkeypatch) -> None:
+async def test_decision_fires_event_and_returns_beat() -> None:
     """High idle count triggers decide() → event_handler.run_tick called once; beat returned."""
     # idle=15 > IDLE_INJECT_THRESHOLD_TICKS (10) → re_engage_idle decision
-    location_reader = _FakeLocationReader([("npc_a", "player_1")], idle=15)
     spy_handler = _SpyEventHandler()
 
-    monkeypatch.setattr(mod, "RelationReader", _FakeRelationReader)
-
-    adapter = mod.DirectorTick(
-        location_reader=location_reader,
+    adapter = DirectorTick(
+        location_reader=_FakeLocationReader([("npc_a", "player_1")], idle=15),
+        relation_reader=_FakeRelationReader(),
         event_handler=spy_handler,
     )
     result = await adapter.run_tick(session=object(), tick_id=5)
@@ -112,16 +98,15 @@ async def test_decision_fires_event_and_returns_beat(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_fired_beat_recorded_in_beat_log(monkeypatch) -> None:
+async def test_fired_beat_recorded_in_beat_log() -> None:
     """When a beat fires and a beat log is injected, the beat is recorded (F2.4)."""
     from npc_engine.engines.director.director_beat_log import DirectorBeatLog
 
-    location_reader = _FakeLocationReader([("npc_a", "player_1")], idle=15)
-    monkeypatch.setattr(mod, "RelationReader", _FakeRelationReader)
     beat_log = DirectorBeatLog()
 
-    adapter = mod.DirectorTick(
-        location_reader=location_reader,
+    adapter = DirectorTick(
+        location_reader=_FakeLocationReader([("npc_a", "player_1")], idle=15),
+        relation_reader=_FakeRelationReader(),
         event_handler=_SpyEventHandler(),
         beat_log=beat_log,
     )
@@ -135,16 +120,14 @@ async def test_fired_beat_recorded_in_beat_log(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_no_decision_below_threshold_no_event(monkeypatch) -> None:
+async def test_no_decision_below_threshold_no_event() -> None:
     """Low idle + NEUTRAL standing → decide() returns None → no event, empty beats."""
     # idle=3 < threshold=10 → no decision from re_engage_idle; NEUTRAL → no tension_escalation
-    location_reader = _FakeLocationReader([("npc_a", "player_1")], idle=3)
     spy_handler = _SpyEventHandler()
 
-    monkeypatch.setattr(mod, "RelationReader", _FakeRelationReader)
-
-    adapter = mod.DirectorTick(
-        location_reader=location_reader,
+    adapter = DirectorTick(
+        location_reader=_FakeLocationReader([("npc_a", "player_1")], idle=3),
+        relation_reader=_FakeRelationReader(),
         event_handler=spy_handler,
     )
     result = await adapter.run_tick(session=object(), tick_id=5)
@@ -154,15 +137,13 @@ async def test_no_decision_below_threshold_no_event(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_missing_edge_defaults_neutral_no_crash(monkeypatch) -> None:
+async def test_missing_edge_defaults_neutral_no_crash() -> None:
     """RelationEdgeNotFoundError → Standing.NEUTRAL fallback; with low idle no decision, no crash."""
-    location_reader = _FakeLocationReader([("npc_b", "player_1")], idle=3)
     spy_handler = _SpyEventHandler()
 
-    monkeypatch.setattr(mod, "RelationReader", _MissingRelationReader)
-
-    adapter = mod.DirectorTick(
-        location_reader=location_reader,
+    adapter = DirectorTick(
+        location_reader=_FakeLocationReader([("npc_b", "player_1")], idle=3),
+        relation_reader=_MissingRelationReader(),
         event_handler=spy_handler,
     )
     result = await adapter.run_tick(session=object(), tick_id=7)
@@ -173,17 +154,15 @@ async def test_missing_edge_defaults_neutral_no_crash(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_missing_edge_hostile_still_fires_when_triggered(monkeypatch) -> None:
+async def test_missing_edge_hostile_still_fires_when_triggered() -> None:
     """If the engine would decide on HOSTILE, but edge is missing default NEUTRAL prevents it."""
     # With missing edge and idle=3: NEUTRAL derived, no HOSTILE trigger, no beat.
     # This verifies the default-NEUTRAL path doesn't accidentally trigger beats.
-    location_reader = _FakeLocationReader([("npc_c", "player_1")], idle=3)
     spy_handler = _SpyEventHandler()
 
-    monkeypatch.setattr(mod, "RelationReader", _MissingRelationReader)
-
-    adapter = mod.DirectorTick(
-        location_reader=location_reader,
+    adapter = DirectorTick(
+        location_reader=_FakeLocationReader([("npc_c", "player_1")], idle=3),
+        relation_reader=_MissingRelationReader(),
         event_handler=spy_handler,
     )
     result = await adapter.run_tick(session=object(), tick_id=2)
