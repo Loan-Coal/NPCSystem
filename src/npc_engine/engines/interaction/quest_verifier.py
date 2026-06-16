@@ -2,8 +2,8 @@
 Module: quest_verifier
 Layer: engines
 Purpose: Graph-based verification that a player has satisfied quest objectives.
-Does NOT: mutate quest state, call LLM, or issue HTTP requests.
-Dependencies injected: AsyncSession (caller-managed).
+Does NOT: mutate quest state, call LLM, issue HTTP requests, or hold a Neo4j session.
+Dependencies injected: InteractionGraphPort (read-only objective counters).
 Used by: engines.interaction.quest_handler, api.routes.interaction
 
 Verifier semantics
@@ -18,17 +18,12 @@ talk     — player and target NPC are both LOCATED_AT the same Location (co-loc
 from __future__ import annotations
 
 import logging
-
-from neo4j import AsyncSession
+from typing import TYPE_CHECKING
 
 from npc_engine.engines.quest.models import QuestObjectiveInput
-from npc_engine.graph.quest_verification_queries import (
-    count_player_co_located_with,
-    count_player_has_item,
-    count_player_located_at,
-    count_player_was_at,
-    count_target_inactive,
-)
+
+if TYPE_CHECKING:
+    from npc_engine.engines.ports.interaction_port import InteractionGraphPort
 
 _logger = logging.getLogger(__name__)
 
@@ -43,14 +38,14 @@ class DeliverVerifier:
 
     async def verify(
         self,
-        session: AsyncSession,
+        repo: InteractionGraphPort,
         player_id: str,
         objective: QuestObjectiveInput,
     ) -> bool:
         """Return True when the player owns at least target_count of the target item.
 
         Args:
-            session: Active Neo4j async session.
+            repo: Interaction graph read port.
             player_id: Character ID of the player.
             objective: Objective definition including target_id and target_count.
 
@@ -63,7 +58,7 @@ class DeliverVerifier:
                 objective.objective_id,
             )
             return False
-        cnt = await count_player_has_item(session, player_id=player_id, item_id=objective.target_id)
+        cnt = await repo.count_player_has_item(player_id=player_id, item_id=objective.target_id)
         return cnt >= objective.target_count
 
 
@@ -72,21 +67,18 @@ class VisitVerifier:
 
     Satisfied when the player is currently LOCATED_AT the target location,
     or has a historical WAS_AT edge to it.
-
-    Args:
-        session: Active Neo4j async session.
     """
 
     async def verify(
         self,
-        session: AsyncSession,
+        repo: InteractionGraphPort,
         player_id: str,
         objective: QuestObjectiveInput,
     ) -> bool:
         """Return True when the player has been at the target location.
 
         Args:
-            session: Active Neo4j async session.
+            repo: Interaction graph read port.
             player_id: Character ID of the player.
             objective: Objective definition; target_id must be a Location node ID.
 
@@ -99,10 +91,10 @@ class VisitVerifier:
                 objective.objective_id,
             )
             return False
-        current = await count_player_located_at(session, player_id=player_id, location_id=objective.target_id)
+        current = await repo.count_player_located_at(player_id=player_id, location_id=objective.target_id)
         if current >= 1:
             return True
-        historical = await count_player_was_at(session, player_id=player_id, location_id=objective.target_id)
+        historical = await repo.count_player_was_at(player_id=player_id, location_id=objective.target_id)
         return historical >= 1
 
 
@@ -111,21 +103,18 @@ class KillVerifier:
 
     Satisfied when the target Character node has ``is_active=False``.
     ``is_active`` is the graph's death proxy; no dedicated KILLED edge exists.
-
-    Args:
-        session: Active Neo4j async session.
     """
 
     async def verify(
         self,
-        session: AsyncSession,
+        repo: InteractionGraphPort,
         player_id: str,  # noqa: ARG002
         objective: QuestObjectiveInput,
     ) -> bool:
         """Return True when the target character is inactive (dead).
 
         Args:
-            session: Active Neo4j async session.
+            repo: Interaction graph read port.
             player_id: Unused — kill verification is target-state only.
             objective: Objective definition; target_id must be a Character node ID.
 
@@ -138,7 +127,7 @@ class KillVerifier:
                 objective.objective_id,
             )
             return False
-        cnt = await count_target_inactive(session, target_id=objective.target_id)
+        cnt = await repo.count_target_inactive(target_id=objective.target_id)
         return cnt >= 1
 
 
@@ -148,21 +137,18 @@ class TalkVerifier:
     Satisfied when the player and the target NPC are both LOCATED_AT the same
     Location node. This is a co-location proxy — no SPOKE_TO edge exists in the
     schema. See DECISIONS.md DEC-043 for the rationale and future upgrade path.
-
-    Args:
-        session: Active Neo4j async session.
     """
 
     async def verify(
         self,
-        session: AsyncSession,
+        repo: InteractionGraphPort,
         player_id: str,
         objective: QuestObjectiveInput,
     ) -> bool:
         """Return True when the player is co-located with the target NPC.
 
         Args:
-            session: Active Neo4j async session.
+            repo: Interaction graph read port.
             player_id: Character ID of the player.
             objective: Objective definition; target_id must be a Character node ID.
 
@@ -175,7 +161,7 @@ class TalkVerifier:
                 objective.objective_id,
             )
             return False
-        cnt = await count_player_co_located_with(session, player_id=player_id, target_id=objective.target_id)
+        cnt = await repo.count_player_co_located_with(player_id=player_id, target_id=objective.target_id)
         return cnt >= 1
 
 
@@ -197,7 +183,7 @@ _VERIFIERS: dict[str, DeliverVerifier | VisitVerifier | KillVerifier | TalkVerif
 
 
 async def verify_objectives(
-    session: AsyncSession,
+    repo: InteractionGraphPort,
     player_id: str,
     objectives: list[QuestObjectiveInput],
 ) -> bool:
@@ -206,7 +192,7 @@ async def verify_objectives(
     Iterates objectives in order; short-circuits on the first unsatisfied one.
 
     Args:
-        session: Active Neo4j async session.
+        repo: Interaction graph read port.
         player_id: Character ID of the player being evaluated.
         objectives: List of objective definitions to verify.
 
@@ -218,7 +204,7 @@ async def verify_objectives(
         if verifier is None:
             _logger.warning("no verifier registered for objective_type=%s", obj.objective_type)
             return False
-        ok = await verifier.verify(session, player_id, obj)
+        ok = await verifier.verify(repo, player_id, obj)
         if not ok:
             return False
     return True

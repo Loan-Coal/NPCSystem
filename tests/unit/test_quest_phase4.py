@@ -46,14 +46,11 @@ def _run(coro: Any) -> Any:
     return asyncio.run(coro)
 
 
-def _mock_session_with_item(has_item: bool) -> MagicMock:
-    """Return a mock Neo4j session whose run() result returns cnt=1 or cnt=0."""
-    record = {"cnt": 1 if has_item else 0}
-    result_mock = AsyncMock()
-    result_mock.single = AsyncMock(return_value=record)
-    session = MagicMock()
-    session.run = AsyncMock(return_value=result_mock)
-    return session
+def _mock_repo_with_item(has_item: bool) -> MagicMock:
+    """Return a mock InteractionGraphPort whose item count is 1 or 0."""
+    repo = MagicMock()
+    repo.count_player_has_item = AsyncMock(return_value=1 if has_item else 0)
+    return repo
 
 
 def _quest_state(status: str = "accepted", objectives: list | None = None, rewards_applied: bool = False) -> dict:
@@ -136,42 +133,40 @@ class TestIsTrustedRewardSource(unittest.TestCase):
 
 class TestDeliverVerifier(unittest.TestCase):
     def test_player_has_item(self) -> None:
-        session = _mock_session_with_item(has_item=True)
+        repo = _mock_repo_with_item(has_item=True)
         obj = QuestObjectiveInput(
             objective_id="o1",
             target_count=1,
             objective_type="deliver",
             target_id="ancient_amulet",
         )
-        result = _run(DeliverVerifier().verify(session, "player", obj))
+        result = _run(DeliverVerifier().verify(repo, "player", obj))
         assert result is True
 
     def test_player_missing_item(self) -> None:
-        session = _mock_session_with_item(has_item=False)
+        repo = _mock_repo_with_item(has_item=False)
         obj = QuestObjectiveInput(
             objective_id="o1",
             target_count=1,
             objective_type="deliver",
             target_id="ancient_amulet",
         )
-        result = _run(DeliverVerifier().verify(session, "player", obj))
+        result = _run(DeliverVerifier().verify(repo, "player", obj))
         assert result is False
 
     def test_no_target_id(self) -> None:
-        session = _mock_session_with_item(has_item=True)
+        repo = _mock_repo_with_item(has_item=True)
         obj = QuestObjectiveInput(objective_id="o1", target_count=1, objective_type="deliver")
-        result = _run(DeliverVerifier().verify(session, "player", obj))
+        result = _run(DeliverVerifier().verify(repo, "player", obj))
         assert result is False
+        repo.count_player_has_item.assert_not_awaited()
 
-    def test_session_returns_none(self) -> None:
-        result_mock = AsyncMock()
-        result_mock.single = AsyncMock(return_value=None)
-        session = MagicMock()
-        session.run = AsyncMock(return_value=result_mock)
+    def test_count_zero_returns_false(self) -> None:
+        repo = _mock_repo_with_item(has_item=False)
         obj = QuestObjectiveInput(
             objective_id="o1", target_count=1, objective_type="deliver", target_id="x"
         )
-        result = _run(DeliverVerifier().verify(session, "player", obj))
+        result = _run(DeliverVerifier().verify(repo, "player", obj))
         assert result is False
 
 
@@ -181,29 +176,31 @@ class TestDeliverVerifier(unittest.TestCase):
 
 class TestVerifyObjectives(unittest.TestCase):
     def test_empty_list_returns_true(self) -> None:
-        session = _mock_session_with_item(has_item=True)
-        result = _run(verify_objectives(session=session, player_id="p", objectives=[]))
+        repo = _mock_repo_with_item(has_item=True)
+        result = _run(verify_objectives(repo, "p", []))
         assert result is True
 
     def test_all_satisfied(self) -> None:
-        session = _mock_session_with_item(has_item=True)
+        repo = _mock_repo_with_item(has_item=True)
         objs = [
             QuestObjectiveInput(objective_id="o1", target_count=1, objective_type="deliver", target_id="item_a"),
         ]
-        assert _run(verify_objectives(session=session, player_id="p", objectives=objs)) is True
+        assert _run(verify_objectives(repo, "p", objs)) is True
 
     def test_short_circuits_on_first_failure(self) -> None:
-        session = _mock_session_with_item(has_item=False)
+        repo = _mock_repo_with_item(has_item=False)
         objs = [
             QuestObjectiveInput(objective_id="o1", target_count=1, objective_type="deliver", target_id="missing_item"),
             QuestObjectiveInput(objective_id="o2", target_count=1, objective_type="deliver", target_id="other_item"),
         ]
-        assert _run(verify_objectives(session=session, player_id="p", objectives=objs)) is False
+        assert _run(verify_objectives(repo, "p", objs)) is False
+        assert repo.count_player_has_item.await_count == 1
 
     def test_unknown_type_returns_false(self) -> None:
-        session = _mock_session_with_item(has_item=True)
+        repo = _mock_repo_with_item(has_item=True)
+        repo.count_target_inactive = AsyncMock(return_value=0)
         obj = QuestObjectiveInput(objective_id="o1", target_count=1, objective_type="kill")
-        assert _run(verify_objectives(session=session, player_id="p", objectives=[obj])) is False
+        assert _run(verify_objectives(repo, "p", [obj])) is False
 
 
 # ---------------------------------------------------------------------------
@@ -214,13 +211,17 @@ class TestHandleProposeQuest(unittest.TestCase):
     def _mock_engine(self) -> MagicMock:
         return MagicMock()
 
+    def _mock_repo(self, quest_state: dict | None = None) -> MagicMock:
+        repo = MagicMock()
+        repo.get_quest_state = AsyncMock(return_value=quest_state)
+        return repo
+
     def test_no_quest_id_returns_no_quest_hint(self) -> None:
         from npc_engine.engines.interaction.quest_handler import handle_propose_quest
 
-        session = MagicMock()
         proposal = InteractionProposal(kind="propose_quest", target_id=None, payload={})
         result = _run(handle_propose_quest(
-            session=session, proposal=proposal, player_id="p", npc_id="npc", engine=self._mock_engine()
+            repo=self._mock_repo(), proposal=proposal, player_id="p", npc_id="npc", engine=self._mock_engine()
         ))
         assert result.status == STATUS_OPEN
         assert result.ui_directive == UI_DIRECTIVE_NONE
@@ -229,12 +230,10 @@ class TestHandleProposeQuest(unittest.TestCase):
         from npc_engine.engines.interaction.quest_handler import handle_propose_quest
 
         state = _quest_state()
-        with patch("npc_engine.engines.interaction.quest_handler.get_quest_state", new=AsyncMock(return_value=state)):
-            session = MagicMock()
-            proposal = InteractionProposal(kind="propose_quest", target_id="test_quest", payload={})
-            result = _run(handle_propose_quest(
-                session=session, proposal=proposal, player_id="player", npc_id="aldric_merchant", engine=self._mock_engine()
-            ))
+        proposal = InteractionProposal(kind="propose_quest", target_id="test_quest", payload={})
+        result = _run(handle_propose_quest(
+            repo=self._mock_repo(state), proposal=proposal, player_id="player", npc_id="aldric_merchant", engine=self._mock_engine()
+        ))
         assert result.status == STATUS_OPEN
         assert result.ui_directive == UI_DIRECTIVE_QUEST
         assert result.data is not None
@@ -243,12 +242,10 @@ class TestHandleProposeQuest(unittest.TestCase):
     def test_missing_quest_state_returns_hint(self) -> None:
         from npc_engine.engines.interaction.quest_handler import handle_propose_quest
 
-        with patch("npc_engine.engines.interaction.quest_handler.get_quest_state", new=AsyncMock(return_value=None)):
-            session = MagicMock()
-            proposal = InteractionProposal(kind="propose_quest", target_id="ghost_quest", payload={})
-            result = _run(handle_propose_quest(
-                session=session, proposal=proposal, player_id="player", npc_id="npc", engine=self._mock_engine()
-            ))
+        proposal = InteractionProposal(kind="propose_quest", target_id="ghost_quest", payload={})
+        result = _run(handle_propose_quest(
+            repo=self._mock_repo(None), proposal=proposal, player_id="player", npc_id="npc", engine=self._mock_engine()
+        ))
         assert result.narration_hint == "npc_no_active_quest"
 
 
@@ -266,13 +263,18 @@ class TestHandleClaimCompletion(unittest.TestCase):
         engine.evaluate_completion = AsyncMock(return_value=_quest_state(status=eval_status))
         return engine
 
+    def _mock_repo(self, quest_state: dict | None = None) -> MagicMock:
+        repo = MagicMock()
+        repo.get_quest_state = AsyncMock(return_value=quest_state)
+        return repo
+
     def test_no_quest_id_returns_hint(self) -> None:
         from npc_engine.engines.interaction.quest_handler import handle_claim_completion
 
         session = MagicMock()
         proposal = InteractionProposal(kind="claim_completion", target_id=None, payload={})
         result = _run(handle_claim_completion(
-            session=session, proposal=proposal, player_id="p", npc_id="n", engine=self._mock_engine()
+            repo=self._mock_repo(), session=session, proposal=proposal, player_id="p", npc_id="n", engine=self._mock_engine()
         ))
         assert result.narration_hint == "npc_no_active_quest"
 
@@ -282,11 +284,10 @@ class TestHandleClaimCompletion(unittest.TestCase):
         state = _quest_state()
         proposal = InteractionProposal(kind="claim_completion", target_id="test_quest", payload={})
 
-        with patch("npc_engine.engines.interaction.quest_handler.get_quest_state", new=AsyncMock(return_value=state)), \
-             patch("npc_engine.engines.interaction.quest_handler.verify_objectives", new=AsyncMock(return_value=False)):
+        with patch("npc_engine.engines.interaction.quest_handler.verify_objectives", new=AsyncMock(return_value=False)):
             session = MagicMock()
             result = _run(handle_claim_completion(
-                session=session, proposal=proposal, player_id="player", npc_id="npc", engine=self._mock_engine()
+                repo=self._mock_repo(state), session=session, proposal=proposal, player_id="player", npc_id="npc", engine=self._mock_engine()
             ))
         assert result.status == STATUS_OPEN
         assert result.narration_hint == "npc_refuses_objective_not_met"
@@ -298,11 +299,10 @@ class TestHandleClaimCompletion(unittest.TestCase):
         proposal = InteractionProposal(kind="claim_completion", target_id="test_quest", payload={})
         engine = self._mock_engine(eval_status="completed")
 
-        with patch("npc_engine.engines.interaction.quest_handler.get_quest_state", new=AsyncMock(return_value=state)), \
-             patch("npc_engine.engines.interaction.quest_handler.verify_objectives", new=AsyncMock(return_value=True)):
+        with patch("npc_engine.engines.interaction.quest_handler.verify_objectives", new=AsyncMock(return_value=True)):
             session = MagicMock()
             result = _run(handle_claim_completion(
-                session=session, proposal=proposal, player_id="player", npc_id="npc", engine=engine
+                repo=self._mock_repo(state), session=session, proposal=proposal, player_id="player", npc_id="npc", engine=engine
             ))
         assert result.status == STATUS_PENDING_CONFIRM
         assert result.ui_directive == UI_DIRECTIVE_REWARD
@@ -312,11 +312,10 @@ class TestHandleClaimCompletion(unittest.TestCase):
 
         state = _quest_state(status="offered")
         proposal = InteractionProposal(kind="claim_completion", target_id="test_quest", payload={})
-        with patch("npc_engine.engines.interaction.quest_handler.get_quest_state", new=AsyncMock(return_value=state)):
-            session = MagicMock()
-            result = _run(handle_claim_completion(
-                session=session, proposal=proposal, player_id="player", npc_id="npc", engine=self._mock_engine()
-            ))
+        session = MagicMock()
+        result = _run(handle_claim_completion(
+            repo=self._mock_repo(state), session=session, proposal=proposal, player_id="player", npc_id="npc", engine=self._mock_engine()
+        ))
         assert result.narration_hint == "npc_no_active_quest"
 
 
@@ -325,15 +324,20 @@ class TestHandleClaimCompletion(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestHandleGiveItemAsQuestClaim(unittest.TestCase):
+    def _mock_repo(self, active_quest: dict | None = None, quest_state: dict | None = None) -> MagicMock:
+        repo = MagicMock()
+        repo.get_active_quest_for_player = AsyncMock(return_value=active_quest)
+        repo.get_quest_state = AsyncMock(return_value=quest_state)
+        return repo
+
     def test_no_active_quest_returns_none(self) -> None:
         from npc_engine.engines.interaction.quest_handler import handle_give_item_as_quest_claim
 
         proposal = InteractionProposal(kind="give_item", target_id="some_item", payload={})
-        with patch("npc_engine.graph.quest_queries.get_active_quest_for_player", new=AsyncMock(return_value=None)):
-            session = MagicMock()
-            result = _run(handle_give_item_as_quest_claim(
-                session=session, proposal=proposal, player_id="player", npc_id="npc", engine=MagicMock()
-            ))
+        session = MagicMock()
+        result = _run(handle_give_item_as_quest_claim(
+            repo=self._mock_repo(None), session=session, proposal=proposal, player_id="player", npc_id="npc", engine=MagicMock()
+        ))
         assert result is None
 
     def test_no_matching_deliver_objective_returns_none(self) -> None:
@@ -345,11 +349,10 @@ class TestHandleGiveItemAsQuestClaim(unittest.TestCase):
             "quest_giver_id": "npc",
         }
         proposal = InteractionProposal(kind="give_item", target_id="wrong_item", payload={})
-        with patch("npc_engine.graph.quest_queries.get_active_quest_for_player", new=AsyncMock(return_value=active)):
-            session = MagicMock()
-            result = _run(handle_give_item_as_quest_claim(
-                session=session, proposal=proposal, player_id="player", npc_id="npc", engine=MagicMock()
-            ))
+        session = MagicMock()
+        result = _run(handle_give_item_as_quest_claim(
+            repo=self._mock_repo(active), session=session, proposal=proposal, player_id="player", npc_id="npc", engine=MagicMock()
+        ))
         assert result is None
 
     def test_matching_item_triggers_claim(self) -> None:
@@ -366,12 +369,10 @@ class TestHandleGiveItemAsQuestClaim(unittest.TestCase):
         engine.update_objective = AsyncMock(return_value=quest_state)
         engine.evaluate_completion = AsyncMock(return_value=_quest_state(status="completed"))
 
-        with patch("npc_engine.graph.quest_queries.get_active_quest_for_player", new=AsyncMock(return_value=active)), \
-             patch("npc_engine.engines.interaction.quest_handler.get_quest_state", new=AsyncMock(return_value=quest_state)), \
-             patch("npc_engine.engines.interaction.quest_handler.verify_objectives", new=AsyncMock(return_value=True)):
+        with patch("npc_engine.engines.interaction.quest_handler.verify_objectives", new=AsyncMock(return_value=True)):
             session = MagicMock()
             result = _run(handle_give_item_as_quest_claim(
-                session=session, proposal=proposal, player_id="player", npc_id="aldric_merchant", engine=engine
+                repo=self._mock_repo(active, quest_state), session=session, proposal=proposal, player_id="player", npc_id="aldric_merchant", engine=engine
             ))
         assert result is not None
         assert result.status == STATUS_PENDING_CONFIRM
@@ -385,9 +386,8 @@ class TestHandleGiveItemAsQuestClaim(unittest.TestCase):
             "quest_giver_id": "original_giver",
         }
         proposal = InteractionProposal(kind="give_item", target_id="ancient_amulet", payload={})
-        with patch("npc_engine.graph.quest_queries.get_active_quest_for_player", new=AsyncMock(return_value=active)):
-            session = MagicMock()
-            result = _run(handle_give_item_as_quest_claim(
-                session=session, proposal=proposal, player_id="player", npc_id="different_npc", engine=MagicMock()
-            ))
+        session = MagicMock()
+        result = _run(handle_give_item_as_quest_claim(
+            repo=self._mock_repo(active), session=session, proposal=proposal, player_id="player", npc_id="different_npc", engine=MagicMock()
+        ))
         assert result is None

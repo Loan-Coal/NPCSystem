@@ -4,9 +4,10 @@ Layer: engines
 Purpose: Handles quest interaction proposals — propose_quest opens a session snapshot,
          claim_completion verifies objectives and triggers lifecycle transitions,
          give_item with a matching deliver target is intercepted as an implicit claim.
-Does NOT: write graph state directly; all lifecycle writes go through QuestLifecycleEngine.
-          Does not call LLM or issue HTTP requests.
-Dependencies injected: AsyncSession, QuestLifecycleEngine (caller-managed).
+Does NOT: read graph state directly (goes through InteractionGraphPort); all lifecycle
+          writes go through QuestLifecycleEngine. Does not call LLM or issue HTTP requests.
+Dependencies injected: InteractionGraphPort (reads) + AsyncSession + QuestLifecycleEngine
+          (the session is forwarded only to the still-session-based lifecycle engine).
 Used by: api.routes.interaction
 """
 
@@ -15,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
+from typing import TYPE_CHECKING
 
 from neo4j import AsyncSession
 
@@ -30,7 +32,9 @@ from npc_engine.engines.interaction.models import (
 from npc_engine.engines.interaction.quest_verifier import verify_objectives
 from npc_engine.engines.quest.models import QuestObjectiveInput, QuestTransitionMeta
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
-from npc_engine.graph.quest_writer import get_quest_state
+
+if TYPE_CHECKING:
+    from npc_engine.engines.ports.interaction_port import InteractionGraphPort
 
 _logger = logging.getLogger(__name__)
 
@@ -55,7 +59,7 @@ def _build_meta(*, player_id: str, quest_id: str, reason: str) -> QuestTransitio
 
 async def handle_propose_quest(
     *,
-    session: AsyncSession,
+    repo: InteractionGraphPort,
     proposal: InteractionProposal,
     player_id: str,
     npc_id: str,
@@ -68,11 +72,11 @@ async def handle_propose_quest(
     state exists, returns a no-op open state.
 
     Args:
-        session: Active Neo4j async session.
+        repo: Interaction graph read port.
         proposal: InteractionProposal with kind="propose_quest".
         player_id: Player character ID.
         npc_id: NPC character ID (quest giver).
-        engine: QuestLifecycleEngine for state reads.
+        engine: QuestLifecycleEngine (unused here; kept for dispatch symmetry).
 
     Returns:
         InteractionState with ui_directive=show_quest_panel and quest snapshot in data.
@@ -82,7 +86,7 @@ async def handle_propose_quest(
         _logger.warning("propose_quest has no target_id or quest_id in payload — npc_id=%s player=%s", npc_id, player_id)
         return InteractionState(status=STATUS_OPEN, ui_directive=UI_DIRECTIVE_NONE, narration_hint=_HINT_NO_QUEST)
 
-    state_payload = await get_quest_state(session=session, quest_id=quest_id, player_id=player_id)
+    state_payload = await repo.get_quest_state(quest_id=quest_id, player_id=player_id)
     if state_payload is None:
         _logger.info("propose_quest: no QuestState for quest_id=%s player=%s", quest_id, player_id)
         return InteractionState(status=STATUS_OPEN, ui_directive=UI_DIRECTIVE_NONE, narration_hint=_HINT_NO_QUEST)
@@ -96,6 +100,7 @@ async def handle_propose_quest(
 
 async def handle_claim_completion(
     *,
+    repo: InteractionGraphPort,
     session: AsyncSession,
     proposal: InteractionProposal,
     player_id: str,
@@ -110,7 +115,8 @@ async def handle_claim_completion(
     fail: returns open with a narration hint for the NPC to refuse.
 
     Args:
-        session: Active Neo4j async session.
+        repo: Interaction graph read port (quest-state read + objective verification).
+        session: Active Neo4j async session, forwarded to the lifecycle engine only.
         proposal: InteractionProposal with kind="claim_completion".
         player_id: Player character ID.
         npc_id: NPC character ID (quest giver).
@@ -125,7 +131,7 @@ async def handle_claim_completion(
         _logger.warning("claim_completion has no quest_id — player=%s npc=%s", player_id, npc_id)
         return InteractionState(status=STATUS_OPEN, ui_directive=UI_DIRECTIVE_NONE, narration_hint=_HINT_NO_QUEST)
 
-    state_payload = await get_quest_state(session=session, quest_id=quest_id, player_id=player_id)
+    state_payload = await repo.get_quest_state(quest_id=quest_id, player_id=player_id)
     if state_payload is None:
         return InteractionState(status=STATUS_OPEN, ui_directive=UI_DIRECTIVE_NONE, narration_hint=_HINT_NO_QUEST)
 
@@ -136,7 +142,7 @@ async def handle_claim_completion(
     raw_objectives = state_payload.get("objectives", [])
     objectives: list[QuestObjectiveInput] = [QuestObjectiveInput.model_validate(o) for o in raw_objectives]
 
-    satisfied = await verify_objectives(session=session, player_id=player_id, objectives=objectives)
+    satisfied = await verify_objectives(repo, player_id, objectives)
     if not satisfied:
         return InteractionState(status=STATUS_OPEN, ui_directive=UI_DIRECTIVE_QUEST, narration_hint=_HINT_NOT_MET)
 
@@ -177,6 +183,7 @@ async def handle_claim_completion(
 
 async def handle_give_item_as_quest_claim(
     *,
+    repo: InteractionGraphPort,
     session: AsyncSession,
     proposal: InteractionProposal,
     player_id: str,
@@ -191,7 +198,8 @@ async def handle_give_item_as_quest_claim(
     (caller should fall through to normal give_item processing).
 
     Args:
-        session: Active Neo4j async session.
+        repo: Interaction graph read port (active-quest lookup).
+        session: Active Neo4j async session, forwarded to the lifecycle engine only.
         proposal: InteractionProposal with kind="give_item".
         player_id: Player character ID.
         npc_id: NPC character ID.
@@ -205,9 +213,7 @@ async def handle_give_item_as_quest_claim(
     if not item_id:
         return None
 
-    from npc_engine.graph.quest_queries import get_active_quest_for_player
-
-    active_quest = await get_active_quest_for_player(session=session, player_id=player_id)
+    active_quest = await repo.get_active_quest_for_player(player_id=player_id)
     if active_quest is None:
         return None
 
@@ -229,6 +235,7 @@ async def handle_give_item_as_quest_claim(
                 return None
             claim_proposal = InteractionProposal(kind="claim_completion", target_id=quest_id, payload={})
             return await handle_claim_completion(
+                repo=repo,
                 session=session,
                 proposal=claim_proposal,
                 player_id=player_id,

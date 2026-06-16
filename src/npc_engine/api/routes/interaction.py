@@ -7,7 +7,7 @@ Purpose: Public HTTP route for interaction proposal dispatch â€” opens trad
 Does NOT: write currency transfers (those go through /admin/economy/trade),
           perform authentication key validation (handled by middleware).
 Dependencies injected: AsyncSession, PricingEngine, NegotiationStore,
-                       QuestLifecycleEngine (via FastAPI Depends).
+                       QuestLifecycleEngine, InteractionGraphPort (via FastAPI Depends).
 Used by: npc_engine.main (registered at API_V1_PREFIX)
 """
 
@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.dependency_singletons import (
+    get_interaction_graph_repo,
     get_negotiation_store,
     get_pricing_engine,
     get_quest_lifecycle_engine,
@@ -41,6 +42,7 @@ from npc_engine.engines.interaction.trade_handler import (
     handle_offer_at_asking_price,
     open_or_resume_trade,
 )
+from npc_engine.engines.ports.interaction_port import InteractionGraphPort
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
 from npc_engine.graph.interaction_queries import write_debt_edge
 from npc_engine.graph.pricing_queries import (
@@ -113,6 +115,7 @@ async def post_interaction(
     pricing_engine: PricingEngine = Depends(get_pricing_engine),
     negotiation_store: NegotiationStore = Depends(get_negotiation_store),
     quest_engine: QuestLifecycleEngine = Depends(get_quest_lifecycle_engine),
+    interaction_repo: InteractionGraphPort = Depends(get_interaction_graph_repo),
 ) -> dict[str, Any]:
     """Dispatch an interaction proposal and return the resulting state.
 
@@ -143,7 +146,7 @@ async def post_interaction(
 
     if proposal.kind == "propose_quest":
         state = await handle_propose_quest(
-            session=session,
+            repo=interaction_repo,
             proposal=proposal,
             player_id=body.player_id,
             npc_id=body.npc_id,
@@ -158,6 +161,7 @@ async def post_interaction(
 
     if proposal.kind == "claim_completion":
         state = await handle_claim_completion(
+            repo=interaction_repo,
             session=session,
             proposal=proposal,
             player_id=body.player_id,
@@ -173,6 +177,7 @@ async def post_interaction(
 
     if proposal.kind == "give_item":
         intercepted = await handle_give_item_as_quest_claim(
+            repo=interaction_repo,
             session=session,
             proposal=proposal,
             player_id=body.player_id,

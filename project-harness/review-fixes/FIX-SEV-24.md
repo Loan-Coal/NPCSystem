@@ -181,7 +181,19 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   `**`-splats it (replaced the `knowledge_engine=` kwarg line + swapped the import name). Tests mock the ports;
   `test_relation_phase_write_repository.py` covers the adapter. Wave 3.
 
-**25 domains migrated, 24 ports + 24 adapters** (+3 shared read ports/adapters; director/relationship reuse them). Shared ports built: political (succession+agenda),
+- **interaction** (DONE, `<pending>`): NEW `InteractionGraphPort` (quest reads `get_quest_state`/
+  `get_active_quest_for_player` + 5 objective-verification counts) + `Neo4jInteractionRepository`
+  (session-per-call, delegates to quest_writer/quest_queries/quest_verification_queries). SUB-SPLIT of the
+  Wave-4 quest cluster: `quest_verifier` is fully migrated (the 4 Verifier classes + `verify_objectives` take
+  the port as 1st positional arg, no session — `engines/interaction/quest_verifier` is neo4j-free); the
+  `quest_handler` free-fns migrate their OWN reads to the port but `handle_claim_completion`/
+  `handle_give_item_as_quest_claim` KEEP `session` (director-style) to forward to the still-session-based
+  `QuestLifecycleEngine.update_objective`/`evaluate_completion`. `handle_propose_quest(repo=…)` is session-free.
+  Route `/interaction` adds `Depends(get_interaction_graph_repo)` (new `@lru_cache` factory in
+  `dependencies_engines.py`, re-exported via dependency_singletons), still passes `session` for the engine
+  forward. Tests mock the port; `test_interaction_repository.py` covers the adapter. Wave 3.
+
+**26 domains migrated, 25 ports + 25 adapters** (+3 shared read ports/adapters; director/relationship reuse them). Shared ports built: political (succession+agenda),
 WorldState (story_pacing + chapter — first cross-domain reuse). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.

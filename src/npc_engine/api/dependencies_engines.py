@@ -73,6 +73,9 @@ from npc_engine.engines.planning.goal_former_adapter import GoalFormerAdapter
 from npc_engine.graph.repositories.character_read_repository import (
     Neo4jCharacterReadRepository,
 )
+from npc_engine.graph.repositories.interaction_repository import (
+    Neo4jInteractionRepository,
+)
 from npc_engine.graph.repositories.relation_read_repository import (
     Neo4jRelationReadRepository,
 )
@@ -143,6 +146,20 @@ def get_quest_lifecycle_engine() -> QuestLifecycleEngine:
         chain_resolver=get_quest_chain_resolver(),
         memory_engine=get_memory_engine(),
     )
+
+
+@lru_cache
+def get_interaction_graph_repo() -> Neo4jInteractionRepository:
+    """Create the interaction graph read adapter (InteractionGraphPort) (SEV-24).
+
+    Returns:
+        Neo4jInteractionRepository wrapping the singleton GraphDB; the interaction
+        quest handlers depend on the port for their reads while forwarding the
+        request session to the still-session-based QuestLifecycleEngine.
+    """
+    from npc_engine.api.dependencies_infra import get_graph_db
+
+    return Neo4jInteractionRepository(get_graph_db())
 
 
 @lru_cache
