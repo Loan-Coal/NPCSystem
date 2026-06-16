@@ -181,7 +181,7 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   `**`-splats it (replaced the `knowledge_engine=` kwarg line + swapped the import name). Tests mock the ports;
   `test_relation_phase_write_repository.py` covers the adapter. Wave 3.
 
-- **interaction** (DONE, `<pending>`): NEW `InteractionGraphPort` (quest reads `get_quest_state`/
+- **interaction** (DONE, `8ddaa9b`): NEW `InteractionGraphPort` (quest reads `get_quest_state`/
   `get_active_quest_for_player` + 5 objective-verification counts) + `Neo4jInteractionRepository`
   (session-per-call, delegates to quest_writer/quest_queries/quest_verification_queries). SUB-SPLIT of the
   Wave-4 quest cluster: `quest_verifier` is fully migrated (the 4 Verifier classes + `verify_objectives` take
