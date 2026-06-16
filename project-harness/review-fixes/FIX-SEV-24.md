@@ -63,7 +63,7 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   `run_tick(*, tick_id=0, **_)` swallows `session=`. Repointed the SEV-04 `_emit_battle_event` delegation
   guard to the port. Wave 1 complete.
 
-- **shared-read-ports** (DONE, Wave 2): `RelationReadPort` + `PlayerLocationReadPort` + `CharacterReadPort`
+- **shared-read-ports** (DONE, `ebdb72c`): `RelationReadPort` + `PlayerLocationReadPort` + `CharacterReadPort`
   (`engines/ports/`) and their `Neo4jRelationReadRepository`/`Neo4jPlayerLocationReadRepository`/
   `Neo4jCharacterReadRepository` adapters (`graph/repositories/`, session-per-call, delegate to
   RelationReader / PlayerLocationReader / character_reader.get_npc_ids). Adapters+tests only — NOT wired into
