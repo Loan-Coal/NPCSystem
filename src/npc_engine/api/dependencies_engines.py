@@ -252,12 +252,25 @@ def get_faction_politics_engine() -> FactionPoliticsEngine:
 def get_story_pacing_engine() -> StoryPacingEngine:
     """Create singleton story pacing engine loaded from pacing_rules.yaml.
 
+    Wires the Neo4j graph adapters (Neo4jStoryPacingRepository + the shared
+    Neo4jWorldStateRepository) as the engine's injected ports (DEC-122 / SEV-24) so the
+    engine holds no Neo4j session.
+
     Returns:
         StoryPacingEngine wired to the bundled pacing_rules.yaml.
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.story_pacing_repository import Neo4jStoryPacingRepository
+    from npc_engine.graph.repositories.world_state_repository import Neo4jWorldStateRepository
+
     rules_path = Path(__file__).resolve().parent.parent / "engines" / "story_pacing" / "pacing_rules.yaml"
     rules = load_pacing_rules(rules_path)
-    return StoryPacingEngine(rules=rules)
+    graph_db = get_graph_db()
+    return StoryPacingEngine(
+        rules=rules,
+        story_pacing_repo=Neo4jStoryPacingRepository(graph_db),
+        world_state_repo=Neo4jWorldStateRepository(graph_db),
+    )
 
 
 @lru_cache

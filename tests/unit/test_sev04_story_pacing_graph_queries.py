@@ -104,33 +104,28 @@ async def test_get_recent_major_events_returns_list() -> None:
 
 
 @pytest.mark.asyncio
-async def test_engine_delegates_to_graph_functions() -> None:
-    """StoryPacingEngine.run_tick calls graph functions, not session.run directly."""
-    session = AsyncMock()
-    world_state = WorldState()
-    engine = StoryPacingEngine(rules=_RULES)
+async def test_engine_delegates_to_graph_ports() -> None:
+    """StoryPacingEngine.run_tick delegates to its injected graph ports (no session).
 
-    with patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.get_active_high_severity_quests",
-        new_callable=AsyncMock,
-        return_value=[{"quest_id": "q1", "severity": 80}],
-    ) as mock_quests, patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.get_recent_major_events",
-        new_callable=AsyncMock,
-        return_value=[],
-    ) as mock_events, patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.get_world_state",
-        return_value=world_state,
-    ), patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.upsert_world_state",
-        new_callable=AsyncMock,
-    ):
-        result = await engine.run_tick(session=session, tick_id=5)
+    Post-SEV-24 the engine imports no graph symbol at all — it depends on the injected
+    StoryPacingGraphPort + WorldStateGraphPort (whose Neo4j adapters live in graph/).
+    """
+    story_repo = AsyncMock()
+    story_repo.get_active_high_severity_quests = AsyncMock(
+        return_value=[{"quest_id": "q1", "severity": 80}]
+    )
+    story_repo.get_recent_major_events = AsyncMock(return_value=[])
+    ws_repo = AsyncMock()
+    ws_repo.get_world_state = AsyncMock(return_value=WorldState())
+    ws_repo.upsert_world_state = AsyncMock(side_effect=lambda *, world_state: world_state)
 
-    # Graph functions were called
-    mock_quests.assert_called_once()
-    mock_events.assert_called_once()
-    # session.run was NOT called directly by the engine
-    session.run.assert_not_called()
+    engine = StoryPacingEngine(
+        rules=_RULES, story_pacing_repo=story_repo, world_state_repo=ws_repo
+    )
 
+    result = await engine.run_tick(tick_id=5)
+
+    story_repo.get_active_high_severity_quests.assert_awaited_once()
+    story_repo.get_recent_major_events.assert_awaited_once()
+    ws_repo.upsert_world_state.assert_awaited_once()
     assert result["suppressed"] is True

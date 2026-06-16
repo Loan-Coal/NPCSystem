@@ -1,14 +1,15 @@
 """
 Unit tests for the story pacing engine (Phase 4.3).
 
-After SEV-04: the engine delegates DB calls to graph.story_pacing_queries.
-Tests patch those graph functions directly.
+After SEV-24: the engine depends on injected StoryPacingGraphPort + WorldStateGraphPort.
+Tests inject mocked ports — no session, no patching of module-level graph functions.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -31,6 +32,26 @@ _DEFAULT_RULES = PacingRules(
 )
 
 
+def _make_engine(
+    quests: list[dict[str, Any]] | None = None,
+    events: list[dict[str, Any]] | None = None,
+    world_state: WorldState | None = None,
+) -> tuple[StoryPacingEngine, AsyncMock]:
+    """Build a StoryPacingEngine with mocked ports; return (engine, world_state_repo)."""
+    story_repo = AsyncMock()
+    story_repo.get_active_high_severity_quests = AsyncMock(return_value=quests or [])
+    story_repo.get_recent_major_events = AsyncMock(return_value=events or [])
+
+    ws_repo = AsyncMock()
+    ws_repo.get_world_state = AsyncMock(return_value=world_state or WorldState())
+    ws_repo.upsert_world_state = AsyncMock(side_effect=lambda *, world_state: world_state)
+
+    engine = StoryPacingEngine(
+        rules=_DEFAULT_RULES, story_pacing_repo=story_repo, world_state_repo=ws_repo
+    )
+    return engine, ws_repo
+
+
 def test_pacing_rules_loader_loads_yaml() -> None:
     """load_pacing_rules reads the real pacing_rules.yaml and populates all fields."""
     rules = load_pacing_rules(_RULES_PATH)
@@ -44,26 +65,9 @@ def test_pacing_rules_loader_loads_yaml() -> None:
 @pytest.mark.asyncio
 async def test_run_tick_suppresses_when_high_severity_quest_active() -> None:
     """When a high-severity quest is active, max_event_severity drops to suppression cap."""
-    session = AsyncMock()
-    engine = StoryPacingEngine(rules=_DEFAULT_RULES)
-    world_state = WorldState()
+    engine, _ = _make_engine(quests=[{"quest_id": "q1", "severity": 80}])
 
-    with patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.get_active_high_severity_quests",
-        new_callable=AsyncMock,
-        return_value=[{"quest_id": "q1", "severity": 80}],
-    ), patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.get_recent_major_events",
-        new_callable=AsyncMock,
-        return_value=[],
-    ), patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.get_world_state",
-        return_value=world_state,
-    ), patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.upsert_world_state",
-        new_callable=AsyncMock,
-    ):
-        result = await engine.run_tick(session=session, tick_id=5)
+    result = await engine.run_tick(tick_id=5)
 
     assert result["suppressed"] is True
     assert result["max_event_severity"] == _DEFAULT_RULES.suppression_event_severity_cap
@@ -73,26 +77,9 @@ async def test_run_tick_suppresses_when_high_severity_quest_active() -> None:
 @pytest.mark.asyncio
 async def test_run_tick_normal_when_no_high_severity_quest() -> None:
     """When no high-severity quests are active, max_event_severity stays at 100."""
-    session = AsyncMock()
-    engine = StoryPacingEngine(rules=_DEFAULT_RULES)
-    world_state = WorldState()
+    engine, _ = _make_engine(quests=[])
 
-    with patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.get_active_high_severity_quests",
-        new_callable=AsyncMock,
-        return_value=[],
-    ), patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.get_recent_major_events",
-        new_callable=AsyncMock,
-        return_value=[],
-    ), patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.get_world_state",
-        return_value=world_state,
-    ), patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.upsert_world_state",
-        new_callable=AsyncMock,
-    ):
-        result = await engine.run_tick(session=session, tick_id=5)
+    result = await engine.run_tick(tick_id=5)
 
     assert result["suppressed"] is False
     assert result["max_event_severity"] == 100
@@ -102,26 +89,9 @@ async def test_run_tick_normal_when_no_high_severity_quest() -> None:
 @pytest.mark.asyncio
 async def test_run_tick_relaxes_after_cooldown() -> None:
     """When no major events occurred in the cooldown window, quest rate stays normal."""
-    session = AsyncMock()
-    engine = StoryPacingEngine(rules=_DEFAULT_RULES)
-    world_state = WorldState()
+    engine, _ = _make_engine(quests=[], events=[])
 
-    with patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.get_active_high_severity_quests",
-        new_callable=AsyncMock,
-        return_value=[],
-    ), patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.get_recent_major_events",
-        new_callable=AsyncMock,
-        return_value=[],
-    ), patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.get_world_state",
-        return_value=world_state,
-    ), patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.upsert_world_state",
-        new_callable=AsyncMock,
-    ):
-        result = await engine.run_tick(session=session, tick_id=20)
+    result = await engine.run_tick(tick_id=20)
 
     assert result["relaxed_after_cooldown"] is True
     assert result["quest_generation_rate"] == 1.0
@@ -130,45 +100,29 @@ async def test_run_tick_relaxes_after_cooldown() -> None:
 @pytest.mark.asyncio
 async def test_run_tick_writes_updated_world_state() -> None:
     """run_tick calls upsert_world_state with the computed suppression values."""
-    from typing import Any
+    engine, ws_repo = _make_engine(quests=[{"quest_id": "q1", "severity": 75}])
 
-    session = AsyncMock()
-    engine = StoryPacingEngine(rules=_DEFAULT_RULES)
-    world_state = WorldState()
-    captured: list[WorldState] = []
+    await engine.run_tick(tick_id=3)
 
-    async def capture_upsert(session: Any, world_state: WorldState) -> WorldState:
-        captured.append(world_state)
-        return world_state
+    ws_repo.upsert_world_state.assert_awaited_once()
+    written = ws_repo.upsert_world_state.call_args.kwargs["world_state"]
+    assert written.max_event_severity == _DEFAULT_RULES.suppression_event_severity_cap
+    assert written.quest_generation_rate == _DEFAULT_RULES.suppression_quest_rate
 
-    with patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.get_active_high_severity_quests",
-        new_callable=AsyncMock,
-        return_value=[{"quest_id": "q1", "severity": 75}],
-    ), patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.get_recent_major_events",
-        new_callable=AsyncMock,
-        return_value=[],
-    ), patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.get_world_state",
-        return_value=world_state,
-    ), patch(
-        "npc_engine.engines.story_pacing.story_pacing_engine.upsert_world_state",
-        side_effect=capture_upsert,
-    ):
-        await engine.run_tick(session=session, tick_id=3)
 
-    assert len(captured) == 1
-    assert captured[0].max_event_severity == _DEFAULT_RULES.suppression_event_severity_cap
-    assert captured[0].quest_generation_rate == _DEFAULT_RULES.suppression_quest_rate
+@pytest.mark.asyncio
+async def test_scheduler_session_kwarg_is_ignored() -> None:
+    """The scheduler still passes session=...; the engine accepts and ignores it."""
+    engine, _ = _make_engine(quests=[])
+
+    result = await engine.run_tick(session=object(), tick_id=1)
+
+    assert result["max_event_severity"] == 100
 
 
 def test_event_handler_skips_suppressed_severity() -> None:
-    """EventHandler._select_template returns a template; caller should skip if above cap."""
-    from npc_engine.world.world_state import WorldState as WS
-    suppressed_state = WS(max_event_severity=30)
+    """A suppressed max_event_severity blocks higher-severity templates (caller-side)."""
+    suppressed_state = WorldState(max_event_severity=30)
     assert suppressed_state.max_event_severity == 30
-
-    # Simulate a high-severity event being blocked
     template_severity = 80
     assert template_severity > suppressed_state.max_event_severity

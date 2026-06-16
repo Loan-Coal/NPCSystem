@@ -9,7 +9,8 @@ Purpose: Structural graph-access Protocols organized by graph domain (the engine
 Does NOT: open sessions, run Cypher, hold state, or import the graph layer.
 Dependencies injected: none (pure interfaces).
 Public surface: NeedGraphPort, MoodGraphPort, GroupGraphPort, SkillGraphPort,
-                RoutineGraphPort, PoliticalGraphPort.
+                RoutineGraphPort, PoliticalGraphPort, StoryPacingGraphPort,
+                WorldStateGraphPort.
 """
 
 from __future__ import annotations
@@ -20,6 +21,8 @@ from npc_engine.engines.ports.need_port import NeedGraphPort
 from npc_engine.engines.ports.political_port import PoliticalGraphPort
 from npc_engine.engines.ports.routine_port import RoutineGraphPort
 from npc_engine.engines.ports.skill_port import SkillGraphPort
+from npc_engine.engines.ports.story_pacing_port import StoryPacingGraphPort
+from npc_engine.engines.ports.world_state_port import WorldStateGraphPort
 
 __all__ = [
     "GroupGraphPort",
@@ -28,4 +31,6 @@ __all__ = [
     "PoliticalGraphPort",
     "RoutineGraphPort",
     "SkillGraphPort",
+    "StoryPacingGraphPort",
+    "WorldStateGraphPort",
 ]
