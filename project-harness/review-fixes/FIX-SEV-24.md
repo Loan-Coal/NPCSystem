@@ -70,7 +70,7 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   any engine yet; reputation/player_model/director/proactive_dialogue slices inject these to drop their
   per-tick reader construction. Tests: `tests/unit/test_shared_read_repositories.py`.
 
-- **emotion** (DONE, `<pending>`): `EmotionGraphPort` (write-through, no session) + `Neo4jEmotionRepository`
+- **emotion** (DONE, `cdeffc1`): `EmotionGraphPort` (write-through, no session) + `Neo4jEmotionRepository`
   (holds its own stateless `EmotionGraphWriter`, session-per-call). `EmotionUpdater` now takes the port as
   `writer=` and dropped `session` from `apply_dialogue_mood`/`apply_event_shock`/`_write_through`; the dialogue
   call-site dropped `session=` (gossip already passed none). Not a tick engine, so no ignored-kwarg test —
