@@ -5,7 +5,7 @@ Purpose: Writes learned-fact belief nodes and provenance-annotated BELIEVES edge
 Does NOT: contain engine logic, call LLMs, or validate facts — validation is in KnowledgeExtractionEngine.
 Dependencies: neo4j.AsyncSession, stdlib hashlib.
 Dependencies injected: AsyncSession (per call).
-Used by: engines.knowledge_learning.knowledge_extraction_engine, engines.deception.deception_engine
+Used by: graph.repositories.knowledge_repository (Neo4jKnowledgeRepository, the KnowledgeGraphPort adapter)
 """
 
 from __future__ import annotations

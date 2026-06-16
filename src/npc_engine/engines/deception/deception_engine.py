@@ -3,19 +3,21 @@ Module: deception_engine
 Layer: engines
 Purpose: Plant a deliberate false belief on an NPC — records a BELIEVES edge with
          is_deception=True and deception_goal_id for intrigue and social-drama scenarios (EXP-228).
-Does NOT: call LLMs, validate world-state consistency, or open Neo4j transactions directly.
-          All Cypher is delegated to graph.knowledge_writer.write_belief.
-Dependencies: graph.knowledge_writer.write_belief, pydantic.BaseModel, neo4j.AsyncSession
-Dependencies injected: AsyncSession (per call); no stateful constructor deps.
+Does NOT: call LLMs, validate world-state consistency, or open Neo4j sessions — the belief
+          write is delegated to the injected KnowledgeGraphPort (reuses its write_belief).
+Dependencies: engines.ports.knowledge_port, pydantic.BaseModel
+Dependencies injected: KnowledgeGraphPort (via constructor); no per-call session.
 Used by: (future) engines.dialogue.dialogue_handler, engines.quest, scenario scripts
 """
 
 from __future__ import annotations
 
-from neo4j import AsyncSession
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel, Field
 
-from npc_engine.graph.knowledge_writer import write_belief
+if TYPE_CHECKING:
+    from npc_engine.engines.ports.knowledge_port import KnowledgeGraphPort
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -58,17 +60,24 @@ class DeceptionEngine:
     """Engine that persists a deliberate false belief on an NPC.
 
     No LLM call is made — the caller supplies the belief content and the goal
-    that motivates the deception.  The engine delegates the write to
-    graph.knowledge_writer.write_belief with is_deception=True and the given
+    that motivates the deception.  The engine delegates the write to the injected
+    KnowledgeGraphPort.write_belief with is_deception=True and the given
     deception_goal_id, then returns a typed DeceptionBelief result.
 
-    Injected dependencies: none (stateless; all I/O is delegated via write_belief
-    which receives the session per call).
+    Injected dependencies: KnowledgeGraphPort (all I/O is delegated to it; the engine
+    holds no Neo4j session — DEC-122 / SEV-24).
     """
+
+    def __init__(self, *, knowledge_repo: KnowledgeGraphPort) -> None:
+        """Store the injected belief-domain repository port.
+
+        Args:
+            knowledge_repo: Port whose write_belief persists the false belief.
+        """
+        self._repo = knowledge_repo
 
     async def plant_belief(
         self,
-        session: AsyncSession,
         *,
         npc_id: str,
         target_belief_content: str,
@@ -82,8 +91,7 @@ class DeceptionEngine:
         deception_goal_id) on the target NPC and return the DeceptionBelief. Existing
         write_belief callers are unaffected (back-compat defaults on the writer).
         """
-        belief_id = await write_belief(
-            session,
+        belief_id = await self._repo.write_belief(
             npc_id=npc_id,
             content=target_belief_content,
             confidence=confidence,

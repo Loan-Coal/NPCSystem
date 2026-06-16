@@ -15,30 +15,11 @@ Does NOT: connect to Neo4j, call an LLM, or read from disk.
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
 pytest.importorskip("neo4j")
-
-_DECEPTION_MODULE = "npc_engine.engines.deception.deception_engine"
-_WRITER_MODULE = "npc_engine.graph.knowledge_writer"
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_mock_session() -> MagicMock:
-    """Return a MagicMock behaving like an AsyncSession with a transaction."""
-    session = MagicMock()
-    tx = AsyncMock()
-    tx.__aenter__ = AsyncMock(return_value=tx)
-    tx.__aexit__ = AsyncMock(return_value=False)
-    session.begin_transaction = AsyncMock(return_value=tx)
-    session.run = AsyncMock()
-    return session
 
 
 # ---------------------------------------------------------------------------
@@ -49,33 +30,34 @@ def _make_mock_session() -> MagicMock:
 @pytest.mark.asyncio
 async def test_deception_belief_sets_flags():
     """plant_belief must return a DeceptionBelief with is_deception=True and the
-    correct deception_goal_id, and must call write_belief with those kwargs."""
+    correct deception_goal_id, and must call the injected port's write_belief with
+    those kwargs (no Neo4j session held by the engine — DEC-122 / SEV-24)."""
     from npc_engine.engines.deception.deception_engine import DeceptionEngine
 
-    mock_session = _make_mock_session()
+    mock_repo = AsyncMock()
+    mock_repo.write_belief.return_value = "fake_belief_id"
 
-    with patch(f"{_DECEPTION_MODULE}.write_belief", new_callable=AsyncMock) as mock_write:
-        mock_write.return_value = "fake_belief_id"
-        engine = DeceptionEngine()
-        result = await engine.plant_belief(
-            mock_session,
-            npc_id="lira_fence",
-            target_belief_content="The tavern vault is empty",
-            deception_goal_id="goal_distract_guards",
-            confidence=80,
-            source_character_id="lira_fence",
-            learned_at_tick=5,
-            game_time_str="Year 1 Spring Day 1 Dusk",
-        )
+    engine = DeceptionEngine(knowledge_repo=mock_repo)
+    result = await engine.plant_belief(
+        npc_id="lira_fence",
+        target_belief_content="The tavern vault is empty",
+        deception_goal_id="goal_distract_guards",
+        confidence=80,
+        source_character_id="lira_fence",
+        learned_at_tick=5,
+        game_time_str="Year 1 Spring Day 1 Dusk",
+    )
 
+    assert result.belief_id == "fake_belief_id"
     assert result.is_deception is True
     assert result.deception_goal_id == "goal_distract_guards"
     assert result.content == "The tavern vault is empty"
 
-    mock_write.assert_awaited_once()
-    call_kwargs = mock_write.call_args.kwargs
+    mock_repo.write_belief.assert_awaited_once()
+    call_kwargs = mock_repo.write_belief.call_args.kwargs
     assert call_kwargs.get("is_deception") is True
     assert call_kwargs.get("deception_goal_id") == "goal_distract_guards"
+    assert call_kwargs.get("content") == "The tavern vault is empty"
 
 
 # ---------------------------------------------------------------------------
