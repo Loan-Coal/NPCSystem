@@ -48,7 +48,7 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
 - **treaty** (DONE, `7ab17a8`): `TreatyGraphPort` + `Neo4jTreatyRepository` (extracted `_count_active_violations`
   for R006); added a behavioral test (was construction-only).
 - **oath** (DONE, `58c6fca`): `PledgeGraphPort` + `Neo4jPledgeRepository` (mirrors treaty; `_count_violations`).
-- **memory_consolidation** (DONE, `3738cdf`): `MemoryConsolidationGraphPort` + `Neo4jMemoryConsolidationRepository`
+- **memory_consolidation** (DONE, `c988521`): `MemoryConsolidationGraphPort` + `Neo4jMemoryConsolidationRepository`
   (single-domain port spanning belief/memory/witness reads + the Memory write; engine drops `graph_db`/session,
   fan-out helper renamed `_consolidate_bounded`). Wave 1 first checkbox.
 
