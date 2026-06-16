@@ -123,7 +123,7 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   the adapter from `get_graph_db()`. Tests mock the ports; `test_planning_repository.py` covers the adapter.
   Wave 3 fourth checkbox; `engines/planning/` is neo4j-free.
 
-- **economy** (DONE, `<pending>`): NEW `EconomyGraphPort` (pricing-context reads
+- **economy** (DONE, `25b50b7`): NEW `EconomyGraphPort` (pricing-context reads
   `get_character_location_type`/`get_character_location_id`/`get_active_event_types_at_location`/
   `check_faction_membership` + atomic `transfer_item_atomic`/`transfer_currency_atomic`) + `Neo4jEconomyRepository`
   (session-per-call). `TradeEngine(pricing_engine=, economy_repo=)`; `evaluate_offer(...)` dropped its `session`
