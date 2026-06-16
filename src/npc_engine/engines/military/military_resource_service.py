@@ -3,8 +3,8 @@ Module: military_resource_service
 Layer: engines
 Purpose: Resource yield — for each faction controlling a producing location, credit
          treasury per tick and decrement ResourceNode depletion until exhausted.
-Does NOT: call LLMs, resolve battles, or manage CONTROLS/OCCUPIES edges.
-Dependencies injected: AsyncSession (via process_resource_yield).
+Does NOT: call LLMs, resolve battles, manage CONTROLS/OCCUPIES edges, or hold a Neo4j session.
+Dependencies injected: MilitaryGraphPort (via process_resource_yield).
 Used by: npc_engine.engines.military.military_engine
 """
 
@@ -13,11 +13,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from neo4j import AsyncSession
 from pydantic import BaseModel
 
-from npc_engine.graph.military_queries import get_faction_resource_nodes
-from npc_engine.graph.military_control_writer import add_faction_treasury, set_resource_depletion
+from npc_engine.engines.ports.military_port import MilitaryGraphPort
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,7 +33,7 @@ class ResourceYieldResult(BaseModel):
 
 
 async def process_resource_yield(
-    session: AsyncSession,
+    military_repo: MilitaryGraphPort,
     *,
     tick_id: int,
 ) -> list[ResourceYieldResult]:
@@ -49,13 +47,13 @@ async def process_resource_yield(
     Fallback: Neo4j unavailable → raises GraphUnavailableError (propagated to engine).
 
     Args:
-        session: Active Neo4j async session.
+        military_repo: Military-domain graph port (owns its sessions).
         tick_id: Current game tick ID.
 
     Returns:
         List of ResourceYieldResult, one per faction that received resources.
     """
-    rows = await get_faction_resource_nodes(session)
+    rows = await military_repo.get_faction_resource_nodes()
     if not rows:
         return []
 
@@ -63,7 +61,7 @@ async def process_resource_yield(
 
     results: list[ResourceYieldResult] = []
     for faction_id, total_yield in faction_totals.items():
-        await add_faction_treasury(session, faction_id=faction_id, amount=total_yield)
+        await military_repo.add_faction_treasury(faction_id=faction_id, amount=total_yield)
         _LOGGER.info(
             "resource_yield",
             extra={"faction_id": faction_id, "amount": total_yield, "tick": tick_id},
@@ -79,7 +77,9 @@ async def process_resource_yield(
 
     for resource_node_id, old_depletion in resource_depletions.items():
         new_depletion = max(MIN_DEPLETION, old_depletion - DEPLETION_PER_TICK)
-        await set_resource_depletion(session, resource_node_id=resource_node_id, depletion=new_depletion)
+        await military_repo.set_resource_depletion(
+            resource_node_id=resource_node_id, depletion=new_depletion
+        )
 
     return results
 

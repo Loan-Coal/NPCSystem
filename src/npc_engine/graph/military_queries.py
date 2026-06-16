@@ -5,7 +5,7 @@ Purpose: Read-only Cypher queries for Army, ResourceNode, and territorial
          control (Phase 7.4 Strategy/4X).
 Does NOT: write to the graph, call LLMs, or import engine-layer code.
 Dependencies injected: None (pure Cypher, session passed per call).
-Used by: npc_engine.engines.military.military_engine
+Used by: npc_engine.graph.repositories.military_repository.Neo4jMilitaryRepository
 """
 
 from __future__ import annotations

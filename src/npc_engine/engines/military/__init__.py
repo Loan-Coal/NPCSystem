@@ -4,7 +4,7 @@ Layer: engines
 Purpose: Per-tick military simulation — battle resolution between opposing armies
          and resource yield for controlling factions (implemented S6.5, ISSUE-031).
 Does NOT: call LLMs or perform graph writes directly (delegated to military services).
-Dependencies injected: None (engines are constructed in dependency_singletons).
+Dependencies injected: MilitaryGraphPort (into MilitaryEngine, at the api composition root).
 Public surface: MilitaryEngine
 """
 

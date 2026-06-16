@@ -10,7 +10,7 @@
 - SEV-17: `dependencies_advanced` is now a PACKAGE (`politics.py`/`social.py`/`progression.py` + re-exporting `__init__`). Add a NEW advanced-engine factory to the matching submodule and to `__init__.__all__` — do NOT recreate a flat file. ISSUE-105's `dependencies_engines.py` (512 lines) is UNTOUCHED — apply the same split if a SEV reopens it.
 - SEV-14 DONE: system observability now `/v1/admin/system/{engines,config,metrics,events}` (admin-scoped). The demo AND dashboard keys were ALREADY admin-scoped (both call other `/v1/admin/*`), so no key change — only URL repointing (demo client, dashboard `js/api.js`, world_poller/run_scenes docstrings). `/health`+`/readiness` stay public (separate `system_router`). Mount-path regression lives in `test_v1_route_versioning.py`.
 - SEV-16 is L-effort/route-by-route: 35 files; npc_state/emotion/schemes already typed; many payloads are DYNAMIC engine-aggregate dicts (clock/batch) that should stay `dict[str,Any]`. Do fixed-shape demo-read routes first (player_model/chapters/investigations) à la SEV-03. See brief's scoping finding.
-- **ACTIVE: SEV-24 (Track D facade)** — `/fix-next` = next unchecked `SEV-24 ·` checkbox; brief `FIX-SEV-24.md` is self-contained. Pattern: `engines/ports/<d>_port.py` Protocol + `graph/repositories/<d>_repository.py` (`GraphDB`, session-per-call) + engine injects port, `run_tick(*,…,**_)`, wired in its dep factory (`dependencies_advanced/{social,politics,progression}.py` or `dependencies_engines.py`). Reuse shared ports `PoliticalGraphPort`/`WorldStateGraphPort`. Add a `run_tick(session=object(),…)` "ignored kwarg" test. SEV-19/15 are BLOCKED until all SEV-24 boxes are checked. SEV-14/16/17/20/21/22/23 done.
+- **ACTIVE: SEV-24 (Track D facade)** — `/fix-next` = next unchecked `SEV-24 ·` checkbox; brief `FIX-SEV-24.md` is self-contained. Pattern: `engines/ports/<d>_port.py` Protocol + `graph/repositories/<d>_repository.py` (`GraphDB`, session-per-call) + engine injects port, `run_tick(*,…,**_)`, wired in its dep factory (`dependencies_advanced/{social,politics,progression}.py` or `dependencies_engines.py`). Reuse shared ports `PoliticalGraphPort`/`WorldStateGraphPort`. Add a `run_tick(session=object(),…)` "ignored kwarg" test. SEV-19/15 are BLOCKED until all SEV-24 boxes are checked. SEV-14/16/17/20/21/22/23 done. Wave 1 DONE (memory_consolidation/chapter/military). Military gotcha: its graph calls live in two MODULE-LEVEL service fns (`resolve_battles`/`process_resource_yield`) not the engine — inject the port as their FIRST positional arg, engine just forwards `self._military_repo`. NEXT: Wave 2 `shared-read-ports` (RelationReadPort/PlayerLocationReadPort/CharacterReadPort) — ports+adapters+tests only, later slices inject them.
 - caplog gotcha: `utils/logging.py` sets propagate=False, so pytest `caplog` (root) misses engine logs once logging is configured — capture on the engine logger directly (see test_sev22 secret-seed test).
 
 ## Fix-now backlog (ordered, dependency-blocked)
@@ -72,15 +72,17 @@ Convention per slice: `engines/ports/<domain>_port.py` (Protocol, no neo4j types
 injects the port via `__init__`, `run_tick(*, …, **_)` swallows the scheduler `session=`, wired in the engine's
 dep factory. Tests: engine mocks the Port, adapter gets a fake-`GraphDB` test. Watch R006 (extract a helper if
 `run_tick` crosses 40 lines); update any SEV-04 delegation guard to the port.
-**Done (14 slices):** need, mood, clique, skill, routine, succession, agenda, story_pacing, treaty, oath,
+**Done (15 slices):** need, mood, clique, skill, routine, succession, agenda, story_pacing, treaty, oath,
 memory_consolidation, chapter (`ChapterGraphPort` = chapter reads/writes + faction standings; **reuses shared
-`WorldStateGraphPort`** for world_state; extracted `_transition_chapter` to keep run_tick under R006)
-(+ shared `PoliticalGraphPort`, `WorldStateGraphPort`). `make check` green, 2272 tests.
+`WorldStateGraphPort`** for world_state; extracted `_transition_chapter` to keep run_tick under R006),
+military (`MilitaryGraphPort` injected into the two SERVICES `resolve_battles`/`process_resource_yield`, which
+now take the port as first arg; engine holds the port + `run_tick(*, tick_id=0, **_)`)
+(+ shared `PoliticalGraphPort`, `WorldStateGraphPort`). `make check` green, 2282 tests.
 
 Wave 1 — clean singletons (scheduler-only callers; smallest blast radius):
 - [x] SEV-24 · memory_consolidation — `memory_consolidation_engine` (belief/memory/witnessed reads + create_memory)
 - [x] SEV-24 · chapter — `chapter_engine` (LLM tick; reuse `WorldStateGraphPort` for its world_state read)
-- [ ] SEV-24 · military — cluster: `military_engine` + `military_battle_service` + `military_resource_service`
+- [x] SEV-24 · military — cluster: `military_engine` + `military_battle_service` + `military_resource_service`
 
 Wave 2 — shared read-ports + light consumers (build the readers once, reuse after):
 - [ ] SEV-24 · shared-read-ports — `RelationReadPort` + `PlayerLocationReadPort` + `CharacterReadPort` (+ adapters)

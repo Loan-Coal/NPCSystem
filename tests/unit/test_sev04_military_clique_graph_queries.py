@@ -10,7 +10,7 @@ Verifies that:
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -29,27 +29,25 @@ def test_emit_battle_event_importable_from_graph():
 
 @pytest.mark.asyncio
 async def test_military_battle_service_delegates_to_graph_emit():
-    """_emit_battle_event must call graph.emit_battle_event, not session.run."""
-    mock_session = AsyncMock()
+    """_emit_battle_event must delegate to the injected MilitaryGraphPort.
 
-    with patch(
-        "npc_engine.engines.military.military_battle_service.emit_battle_event",
-        new_callable=AsyncMock,
-    ) as mock_emit:
-        from npc_engine.engines.military.military_battle_service import (
-            _emit_battle_event,
-        )
+    Post-SEV-24 the battle service imports no graph symbol — it depends on the injected
+    MilitaryGraphPort (whose Neo4j adapter lives in graph/), so the battle-event write
+    goes through the port and the engine layer never touches a session directly.
+    """
+    from npc_engine.engines.military.military_battle_service import _emit_battle_event
 
-        await _emit_battle_event(
-            mock_session,
-            location_id="loc-1",
-            winner_faction_id="faction-a",
-            loser_faction_id="faction-b",
-            tick_id=5,
-        )
+    repo = AsyncMock()
 
-    mock_emit.assert_awaited_once()
-    mock_session.run.assert_not_called()
+    await _emit_battle_event(
+        repo,
+        location_id="loc-1",
+        winner_faction_id="faction-a",
+        loser_faction_id="faction-b",
+        tick_id=5,
+    )
+
+    repo.emit_battle_event.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

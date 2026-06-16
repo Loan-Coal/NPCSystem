@@ -4,8 +4,8 @@ Layer: engines
 Purpose: Battle resolution — detect opposing armies at the same location, determine
          winner by strength, apply damage to both sides, update CONTROLS/OCCUPIES
          edges, and emit a battle Event.
-Does NOT: call LLMs, manage resource yield, or run tick scheduling.
-Dependencies injected: AsyncSession (via resolve_battles).
+Does NOT: call LLMs, manage resource yield, run tick scheduling, or hold a Neo4j session.
+Dependencies injected: MilitaryGraphPort (via resolve_battles).
 Used by: npc_engine.engines.military.military_engine
 """
 
@@ -16,18 +16,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from neo4j import AsyncSession
 from pydantic import BaseModel
 
-from npc_engine.graph.military_queries import (
-    get_armies_in_conflict,
-    get_army_at_location,
-)
-from npc_engine.graph.military_control_writer import (
-    remove_controls_location,
-    set_controls_location,
-)
-from npc_engine.graph.military_writer import emit_battle_event, set_army_strength
+from npc_engine.engines.ports.military_port import MilitaryGraphPort
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,7 +42,7 @@ class BattleResult(BaseModel):
 
 
 async def resolve_battles(
-    session: AsyncSession,
+    military_repo: MilitaryGraphPort,
     *,
     tick_id: int,
 ) -> list[BattleResult]:
@@ -68,18 +59,18 @@ async def resolve_battles(
     Fallback: Neo4j unavailable → raises GraphUnavailableError (propagated to engine).
 
     Args:
-        session: Active Neo4j async session.
+        military_repo: Military-domain graph port (owns its sessions).
         tick_id: Current game tick ID.
 
     Returns:
         List of BattleResult, one per resolved battle.
     """
-    conflicts = await get_armies_in_conflict(session)
+    conflicts = await military_repo.get_armies_in_conflict()
     results: list[BattleResult] = []
 
     for conflict in conflicts:
         location_id: str = conflict["location_id"]
-        battle = await _resolve_one_battle(session, location_id=location_id, tick_id=tick_id)
+        battle = await _resolve_one_battle(military_repo, location_id=location_id, tick_id=tick_id)
         if battle is not None:
             results.append(battle)
 
@@ -87,7 +78,7 @@ async def resolve_battles(
 
 
 async def _resolve_one_battle(
-    session: AsyncSession,
+    military_repo: MilitaryGraphPort,
     *,
     location_id: str,
     tick_id: int,
@@ -96,7 +87,7 @@ async def _resolve_one_battle(
 
     Returns None if the location no longer has opposing armies (race condition guard).
     """
-    armies = await get_army_at_location(session, location_id)
+    armies = await military_repo.get_army_at_location(location_id=location_id)
     faction_strengths = _sum_strength_by_faction(armies)
 
     if len(faction_strengths) < 2:
@@ -109,25 +100,23 @@ async def _resolve_one_battle(
     winner_damage = loser_str // BATTLE_WINNER_DAMAGE_DIVISOR
     loser_damage = winner_str // BATTLE_LOSER_DAMAGE_DIVISOR
 
-    await _apply_battle_damage(session, armies=armies, faction_strengths=faction_strengths,
+    await _apply_battle_damage(military_repo, armies=armies, faction_strengths=faction_strengths,
                                winner_id=winner_id, loser_id=loser_id,
                                winner_damage=winner_damage, loser_damage=loser_damage)
 
-    await set_controls_location(
-        session,
+    await military_repo.set_controls_location(
         faction_id=winner_id,
         location_id=location_id,
         control_strength=FULL_CONTROL_STRENGTH,
         contested_by=None,
     )
-    await remove_controls_location(
-        session,
+    await military_repo.remove_controls_location(
         faction_id=loser_id,
         location_id=location_id,
     )
 
     await _emit_battle_event(
-        session,
+        military_repo,
         location_id=location_id,
         winner_faction_id=winner_id,
         loser_faction_id=loser_id,
@@ -172,7 +161,7 @@ def _pick_winner_loser(faction_strengths: dict[str, int]) -> tuple[str, str]:
 
 
 async def _apply_battle_damage(
-    session: AsyncSession,
+    military_repo: MilitaryGraphPort,
     *,
     armies: list[dict[str, Any]],
     faction_strengths: dict[str, int],
@@ -193,23 +182,21 @@ async def _apply_battle_damage(
         else:
             continue
 
-        await set_army_strength(session, army_id=army["army_id"], strength=new_strength)
+        await military_repo.set_army_strength(army_id=army["army_id"], strength=new_strength)
 
 
 async def _emit_battle_event(
-    session: AsyncSession,
+    military_repo: MilitaryGraphPort,
     *,
     location_id: str,
     winner_faction_id: str,
     loser_faction_id: str,
     tick_id: int,
 ) -> None:
-    """Write a public battle Event node to the graph.
-
-    Delegates to graph.military_writer.emit_battle_event.
+    """Write a public battle Event node via the military graph port.
 
     Args:
-        session: Active Neo4j async session.
+        military_repo: Military-domain graph port.
         location_id: Location where the battle occurred.
         winner_faction_id: Faction that won.
         loser_faction_id: Faction that lost.
@@ -221,8 +208,7 @@ async def _emit_battle_event(
         f"Battle at {location_id}: {winner_faction_id} defeated {loser_faction_id} "
         f"at tick {tick_id}"
     )
-    await emit_battle_event(
-        session,
+    await military_repo.emit_battle_event(
         event_id=event_id,
         summary=summary,
         severity=BATTLE_EVENT_SEVERITY,

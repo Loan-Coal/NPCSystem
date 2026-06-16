@@ -1,7 +1,7 @@
-"""Tests for military_battle_service — S6.5 battle resolution."""
+"""Tests for military_battle_service — S6.5 battle resolution (port-injected)."""
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -17,8 +17,11 @@ from npc_engine.engines.military.military_battle_service import (
 
 
 @pytest.fixture
-def session() -> AsyncMock:
-    return AsyncMock()
+def military_repo() -> AsyncMock:
+    """A mock MilitaryGraphPort with no conflicts by default."""
+    repo = AsyncMock()
+    repo.get_armies_in_conflict.return_value = []
+    return repo
 
 
 # ---------------------------------------------------------------------------
@@ -27,14 +30,9 @@ def session() -> AsyncMock:
 
 
 @pytest.mark.asyncio
-async def test_resolve_battles_no_conflicts_returns_empty(session) -> None:
+async def test_resolve_battles_no_conflicts_returns_empty(military_repo) -> None:
     """When no location has multiple factions, no battles occur."""
-    with patch(
-        "npc_engine.engines.military.military_battle_service.get_armies_in_conflict",
-        new_callable=AsyncMock,
-        return_value=[],
-    ):
-        result = await resolve_battles(session, tick_id=1)
+    result = await resolve_battles(military_repo, tick_id=1)
 
     assert result == []
 
@@ -45,43 +43,17 @@ async def test_resolve_battles_no_conflicts_returns_empty(session) -> None:
 
 
 @pytest.mark.asyncio
-async def test_resolve_battles_winner_determined_by_strength(session) -> None:
+async def test_resolve_battles_winner_determined_by_strength(military_repo) -> None:
     """Faction with higher total strength wins the battle."""
     conflict = {"location_id": "loc-1", "faction_ids": ["faction-a", "faction-b"], "army_count": 2}
     armies = [
         {"army_id": "army-1", "faction_id": "faction-a", "strength": 100, "since_tick": 0},
         {"army_id": "army-2", "faction_id": "faction-b", "strength": 40, "since_tick": 0},
     ]
+    military_repo.get_armies_in_conflict.return_value = [conflict]
+    military_repo.get_army_at_location.return_value = armies
 
-    with (
-        patch(
-            "npc_engine.engines.military.military_battle_service.get_armies_in_conflict",
-            new_callable=AsyncMock,
-            return_value=[conflict],
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.get_army_at_location",
-            new_callable=AsyncMock,
-            return_value=armies,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.set_army_strength",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.set_controls_location",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.remove_controls_location",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service._emit_battle_event",
-            new_callable=AsyncMock,
-        ),
-    ):
-        result = await resolve_battles(session, tick_id=5)
+    result = await resolve_battles(military_repo, tick_id=5)
 
     assert len(result) == 1
     battle: BattleResult = result[0]
@@ -92,95 +64,43 @@ async def test_resolve_battles_winner_determined_by_strength(session) -> None:
 
 
 @pytest.mark.asyncio
-async def test_resolve_battles_winner_takes_control(session) -> None:
+async def test_resolve_battles_winner_takes_control(military_repo) -> None:
     """Winner faction gets CONTROLS edge set; loser CONTROLS edge removed."""
     conflict = {"location_id": "loc-1", "faction_ids": ["faction-a", "faction-b"], "army_count": 2}
     armies = [
         {"army_id": "army-1", "faction_id": "faction-a", "strength": 100, "since_tick": 0},
         {"army_id": "army-2", "faction_id": "faction-b", "strength": 40, "since_tick": 0},
     ]
+    military_repo.get_armies_in_conflict.return_value = [conflict]
+    military_repo.get_army_at_location.return_value = armies
 
-    with (
-        patch(
-            "npc_engine.engines.military.military_battle_service.get_armies_in_conflict",
-            new_callable=AsyncMock,
-            return_value=[conflict],
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.get_army_at_location",
-            new_callable=AsyncMock,
-            return_value=armies,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.set_army_strength",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.set_controls_location",
-            new_callable=AsyncMock,
-        ) as mock_set_ctrl,
-        patch(
-            "npc_engine.engines.military.military_battle_service.remove_controls_location",
-            new_callable=AsyncMock,
-        ) as mock_rm_ctrl,
-        patch(
-            "npc_engine.engines.military.military_battle_service._emit_battle_event",
-            new_callable=AsyncMock,
-        ),
-    ):
-        await resolve_battles(session, tick_id=5)
+    await resolve_battles(military_repo, tick_id=5)
 
-    mock_set_ctrl.assert_awaited_once()
-    call_kwargs = mock_set_ctrl.await_args.kwargs
+    military_repo.set_controls_location.assert_awaited_once()
+    call_kwargs = military_repo.set_controls_location.await_args.kwargs
     assert call_kwargs["faction_id"] == "faction-a"
     assert call_kwargs["location_id"] == "loc-1"
 
-    mock_rm_ctrl.assert_awaited_once()
-    rm_kwargs = mock_rm_ctrl.await_args.kwargs
+    military_repo.remove_controls_location.assert_awaited_once()
+    rm_kwargs = military_repo.remove_controls_location.await_args.kwargs
     assert rm_kwargs["faction_id"] == "faction-b"
 
 
 @pytest.mark.asyncio
-async def test_resolve_battles_army_strengths_updated(session) -> None:
+async def test_resolve_battles_army_strengths_updated(military_repo) -> None:
     """Both winner and loser army strengths are updated after battle."""
     conflict = {"location_id": "loc-1", "faction_ids": ["faction-a", "faction-b"], "army_count": 2}
     armies = [
         {"army_id": "army-1", "faction_id": "faction-a", "strength": 100, "since_tick": 0},
         {"army_id": "army-2", "faction_id": "faction-b", "strength": 40, "since_tick": 0},
     ]
+    military_repo.get_armies_in_conflict.return_value = [conflict]
+    military_repo.get_army_at_location.return_value = armies
 
-    with (
-        patch(
-            "npc_engine.engines.military.military_battle_service.get_armies_in_conflict",
-            new_callable=AsyncMock,
-            return_value=[conflict],
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.get_army_at_location",
-            new_callable=AsyncMock,
-            return_value=armies,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.set_army_strength",
-            new_callable=AsyncMock,
-        ) as mock_set_strength,
-        patch(
-            "npc_engine.engines.military.military_battle_service.set_controls_location",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.remove_controls_location",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service._emit_battle_event",
-            new_callable=AsyncMock,
-        ),
-    ):
-        result = await resolve_battles(session, tick_id=5)
+    result = await resolve_battles(military_repo, tick_id=5)
 
     # set_army_strength called for both armies
-    assert mock_set_strength.await_count == 2
+    assert military_repo.set_army_strength.await_count == 2
     battle = result[0]
     # winner damage = loser_strength // 4 = 10
     assert battle.winner_damage == 40 // 4
@@ -189,59 +109,34 @@ async def test_resolve_battles_army_strengths_updated(session) -> None:
 
 
 @pytest.mark.asyncio
-async def test_resolve_battles_event_emitted(session) -> None:
+async def test_resolve_battles_event_emitted(military_repo) -> None:
     """A battle event is emitted for each resolved battle."""
     conflict = {"location_id": "loc-1", "faction_ids": ["faction-a", "faction-b"], "army_count": 2}
     armies = [
         {"army_id": "army-1", "faction_id": "faction-a", "strength": 80, "since_tick": 0},
         {"army_id": "army-2", "faction_id": "faction-b", "strength": 30, "since_tick": 0},
     ]
+    military_repo.get_armies_in_conflict.return_value = [conflict]
+    military_repo.get_army_at_location.return_value = armies
 
-    with (
-        patch(
-            "npc_engine.engines.military.military_battle_service.get_armies_in_conflict",
-            new_callable=AsyncMock,
-            return_value=[conflict],
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.get_army_at_location",
-            new_callable=AsyncMock,
-            return_value=armies,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.set_army_strength",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.set_controls_location",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.remove_controls_location",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service._emit_battle_event",
-            new_callable=AsyncMock,
-        ) as mock_emit,
-    ):
-        await resolve_battles(session, tick_id=5)
+    await resolve_battles(military_repo, tick_id=5)
 
-    mock_emit.assert_awaited_once()
-    emit_kwargs = mock_emit.await_args.kwargs
+    military_repo.emit_battle_event.assert_awaited_once()
+    emit_kwargs = military_repo.emit_battle_event.await_args.kwargs
     assert emit_kwargs["location_id"] == "loc-1"
     assert emit_kwargs["tick_id"] == 5
+    assert emit_kwargs["winner_faction_id"] == "faction-a"
 
 
 @pytest.mark.asyncio
-async def test_resolve_battles_multiple_conflicts(session) -> None:
+async def test_resolve_battles_multiple_conflicts(military_repo) -> None:
     """Multiple conflict locations each produce a BattleResult."""
     conflicts = [
         {"location_id": "loc-1", "faction_ids": ["fa", "fb"], "army_count": 2},
         {"location_id": "loc-2", "faction_ids": ["fa", "fc"], "army_count": 2},
     ]
 
-    def armies_for_location(session, location_id):
+    def armies_for_location(*, location_id):
         if location_id == "loc-1":
             return [
                 {"army_id": "a1", "faction_id": "fa", "strength": 60, "since_tick": 0},
@@ -252,34 +147,10 @@ async def test_resolve_battles_multiple_conflicts(session) -> None:
             {"army_id": "a4", "faction_id": "fc", "strength": 10, "since_tick": 0},
         ]
 
-    with (
-        patch(
-            "npc_engine.engines.military.military_battle_service.get_armies_in_conflict",
-            new_callable=AsyncMock,
-            return_value=conflicts,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.get_army_at_location",
-            side_effect=armies_for_location,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.set_army_strength",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.set_controls_location",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service.remove_controls_location",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.military.military_battle_service._emit_battle_event",
-            new_callable=AsyncMock,
-        ),
-    ):
-        result = await resolve_battles(session, tick_id=10)
+    military_repo.get_armies_in_conflict.return_value = conflicts
+    military_repo.get_army_at_location.side_effect = armies_for_location
+
+    result = await resolve_battles(military_repo, tick_id=10)
 
     assert len(result) == 2
     location_ids = {r.location_id for r in result}

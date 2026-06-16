@@ -11,13 +11,13 @@ from npc_engine.graph.military_writer import _validate_composition
 
 
 @pytest.fixture
-def engine() -> MilitaryEngine:
-    return MilitaryEngine()
+def military_repo() -> AsyncMock:
+    return AsyncMock()
 
 
 @pytest.fixture
-def session() -> AsyncMock:
-    return AsyncMock()
+def engine(military_repo) -> MilitaryEngine:
+    return MilitaryEngine(military_repo=military_repo)
 
 
 # ---------------------------------------------------------------------------
@@ -26,7 +26,7 @@ def session() -> AsyncMock:
 
 
 @pytest.mark.asyncio
-async def test_run_tick_returns_battles_and_yields(engine, session) -> None:
+async def test_run_tick_returns_battles_and_yields(engine, military_repo) -> None:
     """run_tick returns battles_resolved and factions_yielded counts."""
     from npc_engine.engines.military.military_battle_service import BattleResult
     from npc_engine.engines.military.military_resource_service import ResourceYieldResult
@@ -57,14 +57,14 @@ async def test_run_tick_returns_battles_and_yields(engine, session) -> None:
             return_value=[yield_res],
         ),
     ):
-        result = await engine.run_tick(session, tick_id=5)
+        result = await engine.run_tick(tick_id=5)
 
     assert result["battles_resolved"] == 1
     assert result["factions_yielded"] == 1
 
 
 @pytest.mark.asyncio
-async def test_run_tick_no_battles_no_yields(engine, session) -> None:
+async def test_run_tick_no_battles_no_yields(engine, military_repo) -> None:
     """With no conflicts and no resources, returns zeros."""
     with (
         patch(
@@ -78,15 +78,15 @@ async def test_run_tick_no_battles_no_yields(engine, session) -> None:
             return_value=[],
         ),
     ):
-        result = await engine.run_tick(session, tick_id=0)
+        result = await engine.run_tick(tick_id=0)
 
     assert result["battles_resolved"] == 0
     assert result["factions_yielded"] == 0
 
 
 @pytest.mark.asyncio
-async def test_run_tick_calls_both_services(engine, session) -> None:
-    """run_tick calls resolve_battles and process_resource_yield with correct tick."""
+async def test_run_tick_calls_both_services(engine, military_repo) -> None:
+    """run_tick passes the injected port and tick to both services."""
     with (
         patch(
             "npc_engine.engines.military.military_engine.resolve_battles",
@@ -99,10 +99,30 @@ async def test_run_tick_calls_both_services(engine, session) -> None:
             return_value=[],
         ) as mock_yield,
     ):
-        await engine.run_tick(session, tick_id=42)
+        await engine.run_tick(tick_id=42)
 
-    mock_battles.assert_awaited_once_with(session, tick_id=42)
-    mock_yield.assert_awaited_once_with(session, tick_id=42)
+    mock_battles.assert_awaited_once_with(military_repo, tick_id=42)
+    mock_yield.assert_awaited_once_with(military_repo, tick_id=42)
+
+
+@pytest.mark.asyncio
+async def test_run_tick_ignores_scheduler_session_kwarg(engine, military_repo) -> None:
+    """run_tick accepts and ignores the scheduler's session= kwarg (SEV-24)."""
+    with (
+        patch(
+            "npc_engine.engines.military.military_engine.resolve_battles",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch(
+            "npc_engine.engines.military.military_engine.process_resource_yield",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+    ):
+        result = await engine.run_tick(session=object(), tick_id=7)
+
+    assert result == {"battles_resolved": 0, "factions_yielded": 0}
 
 
 # ---------------------------------------------------------------------------

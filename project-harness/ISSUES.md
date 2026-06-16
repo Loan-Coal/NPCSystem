@@ -1366,3 +1366,17 @@ LOGIC is unit-tested (`test_eval_runner_guards.py`), but the HTTP eval loop, rep
 hygiene scope, and total coverage stays ≥80%.
 **To fix:** Add unit tests mocking `httpx.Client` for `_run_case` happy/error paths and a `main()` test
 asserting exit code flips on `guarantee_demonstrated=False`.
+
+## ISSUE-111: `scenario_territorial_war.py::test_military_engine_tick_returns_skipped` is stale
+**Found:** 2026-06-16, during /fix-next SEV-24 (military slice)
+**Severity:** P3 (nice-to-fix)
+**Where:** `e2e/scenarios/scenario_territorial_war.py` (`test_military_engine_tick_returns_skipped`)
+**Description:** The test constructs `MilitaryEngine()` and asserts `run_tick` returns `skipped=True` — the
+pre-S6.5 no-op-stub contract. Since S6.5 the engine returns `battles_resolved`/`factions_yielded`, so the
+assertion was already wrong; after the SEV-24 migration the constructor also now requires a `military_repo`
+port, so the call fails at construction. Not collected by `make check` (it runs `tests/` only; scenarios
+need `--scenarios-only`), so it does not gate.
+**Why deferred:** Pre-existing stale test outside the SEV-24 slice's verification path; fixing it is e2e-test
+maintenance, not part of the repository-facade migration.
+**To fix:** Rewrite the test to inject a mock `MilitaryGraphPort` and assert the real
+`battles_resolved`/`factions_yielded` contract (mirror `tests/unit/test_military_engine.py`).

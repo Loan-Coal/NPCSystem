@@ -5,8 +5,7 @@ Purpose: Write operations for territorial control (CONTROLS edges), faction trea
          adjustments, and ResourceNode depletion updates (Phase 7.4 Strategy/4X).
 Does NOT: manage Army or ResourceNode creation, call LLMs, or import engine code.
 Dependencies injected: None (pure Cypher, session passed per call).
-Used by: npc_engine.engines.military.military_battle_service,
-         npc_engine.engines.military.military_resource_service
+Used by: npc_engine.graph.repositories.military_repository.Neo4jMilitaryRepository
 """
 
 from __future__ import annotations

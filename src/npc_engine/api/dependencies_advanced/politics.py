@@ -4,7 +4,7 @@ Layer: api
 Purpose: Singleton factory providers for political/faction engines —
          treaty, oath, succession, agenda, military.
 Does NOT: create session-scoped or per-request dependencies, or call LLM clients.
-Dependencies injected: none (engines below are stateless or stub).
+Dependencies injected: per-engine Neo4j graph repositories (political/treaty/pledge/military).
 Dependencies: engines.treaty, engines.oath, engines.succession, engines.agenda, engines.military.
 Used by: api.dependencies_advanced (package re-exporter).
 """
@@ -84,11 +84,16 @@ def get_agenda_engine():
 
 @lru_cache
 def get_military_engine():
-    """Create singleton military engine (stub) for Strategy/4X tick processing.
+    """Create singleton military engine for Strategy/4X tick processing.
+
+    Wires the Neo4j graph adapter (Neo4jMilitaryRepository) as the engine's injected
+    MilitaryGraphPort (DEC-122 / SEV-24) so the engine holds no Neo4j session.
 
     Returns:
-        MilitaryEngine instance (no-op stub — see ISSUES.md ISSUE-001).
+        MilitaryEngine instance.
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
     from npc_engine.engines.military.military_engine import MilitaryEngine
+    from npc_engine.graph.repositories.military_repository import Neo4jMilitaryRepository
 
-    return MilitaryEngine()
+    return MilitaryEngine(military_repo=Neo4jMilitaryRepository(get_graph_db()))

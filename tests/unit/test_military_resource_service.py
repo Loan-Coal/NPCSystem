@@ -1,7 +1,7 @@
-"""Tests for military_resource_service — S6.5 resource yield and depletion."""
+"""Tests for military_resource_service — S6.5 resource yield and depletion (port-injected)."""
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -12,8 +12,11 @@ from npc_engine.engines.military.military_resource_service import (
 
 
 @pytest.fixture
-def session() -> AsyncMock:
-    return AsyncMock()
+def military_repo() -> AsyncMock:
+    """A mock MilitaryGraphPort with no resource nodes by default."""
+    repo = AsyncMock()
+    repo.get_faction_resource_nodes.return_value = []
+    return repo
 
 
 # ---------------------------------------------------------------------------
@@ -22,14 +25,9 @@ def session() -> AsyncMock:
 
 
 @pytest.mark.asyncio
-async def test_process_resource_yield_no_resources_returns_empty(session) -> None:
+async def test_process_resource_yield_no_resources_returns_empty(military_repo) -> None:
     """When no faction controls resource-producing locations, returns empty list."""
-    with patch(
-        "npc_engine.engines.military.military_resource_service.get_faction_resource_nodes",
-        new_callable=AsyncMock,
-        return_value=[],
-    ):
-        result = await process_resource_yield(session, tick_id=1)
+    result = await process_resource_yield(military_repo, tick_id=1)
 
     assert result == []
 
@@ -40,9 +38,9 @@ async def test_process_resource_yield_no_resources_returns_empty(session) -> Non
 
 
 @pytest.mark.asyncio
-async def test_process_resource_yield_adds_to_treasury(session) -> None:
+async def test_process_resource_yield_adds_to_treasury(military_repo) -> None:
     """Faction treasury is credited with resource yield."""
-    rows = [
+    military_repo.get_faction_resource_nodes.return_value = [
         {
             "faction_id": "faction-a",
             "resource_node_id": "res-1",
@@ -51,35 +49,20 @@ async def test_process_resource_yield_adds_to_treasury(session) -> None:
         }
     ]
 
-    with (
-        patch(
-            "npc_engine.engines.military.military_resource_service.get_faction_resource_nodes",
-            new_callable=AsyncMock,
-            return_value=rows,
-        ),
-        patch(
-            "npc_engine.engines.military.military_resource_service.add_faction_treasury",
-            new_callable=AsyncMock,
-        ) as mock_treasury,
-        patch(
-            "npc_engine.engines.military.military_resource_service.set_resource_depletion",
-            new_callable=AsyncMock,
-        ),
-    ):
-        result = await process_resource_yield(session, tick_id=3)
+    result = await process_resource_yield(military_repo, tick_id=3)
 
     assert len(result) == 1
     assert result[0].faction_id == "faction-a"
     assert result[0].total_yield == 50
-    mock_treasury.assert_awaited_once_with(session, faction_id="faction-a", amount=50)
+    military_repo.add_faction_treasury.assert_awaited_once_with(faction_id="faction-a", amount=50)
 
 
 @pytest.mark.asyncio
-async def test_process_resource_yield_decrements_depletion(session) -> None:
+async def test_process_resource_yield_decrements_depletion(military_repo) -> None:
     """ResourceNode depletion is decremented by DEPLETION_PER_TICK."""
     from npc_engine.engines.military.military_resource_service import DEPLETION_PER_TICK
 
-    rows = [
+    military_repo.get_faction_resource_nodes.return_value = [
         {
             "faction_id": "faction-a",
             "resource_node_id": "res-1",
@@ -88,34 +71,18 @@ async def test_process_resource_yield_decrements_depletion(session) -> None:
         }
     ]
 
-    with (
-        patch(
-            "npc_engine.engines.military.military_resource_service.get_faction_resource_nodes",
-            new_callable=AsyncMock,
-            return_value=rows,
-        ),
-        patch(
-            "npc_engine.engines.military.military_resource_service.add_faction_treasury",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.military.military_resource_service.set_resource_depletion",
-            new_callable=AsyncMock,
-        ) as mock_deplete,
-    ):
-        await process_resource_yield(session, tick_id=3)
+    await process_resource_yield(military_repo, tick_id=3)
 
-    mock_deplete.assert_awaited_once_with(
-        session,
+    military_repo.set_resource_depletion.assert_awaited_once_with(
         resource_node_id="res-1",
         depletion=10 - DEPLETION_PER_TICK,
     )
 
 
 @pytest.mark.asyncio
-async def test_process_resource_yield_zero_depletion_skipped(session) -> None:
+async def test_process_resource_yield_zero_depletion_skipped(military_repo) -> None:
     """Resource nodes with depletion=0 are not yielded (fully depleted)."""
-    rows = [
+    military_repo.get_faction_resource_nodes.return_value = [
         {
             "faction_id": "faction-a",
             "resource_node_id": "res-1",
@@ -124,26 +91,11 @@ async def test_process_resource_yield_zero_depletion_skipped(session) -> None:
         }
     ]
 
-    with (
-        patch(
-            "npc_engine.engines.military.military_resource_service.get_faction_resource_nodes",
-            new_callable=AsyncMock,
-            return_value=rows,
-        ),
-        patch(
-            "npc_engine.engines.military.military_resource_service.add_faction_treasury",
-            new_callable=AsyncMock,
-        ) as mock_treasury,
-        patch(
-            "npc_engine.engines.military.military_resource_service.set_resource_depletion",
-            new_callable=AsyncMock,
-        ) as mock_deplete,
-    ):
-        result = await process_resource_yield(session, tick_id=3)
+    result = await process_resource_yield(military_repo, tick_id=3)
 
     assert result == []
-    mock_treasury.assert_not_awaited()
-    mock_deplete.assert_not_awaited()
+    military_repo.add_faction_treasury.assert_not_awaited()
+    military_repo.set_resource_depletion.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -152,64 +104,34 @@ async def test_process_resource_yield_zero_depletion_skipped(session) -> None:
 
 
 @pytest.mark.asyncio
-async def test_process_resource_yield_aggregates_per_faction(session) -> None:
+async def test_process_resource_yield_aggregates_per_faction(military_repo) -> None:
     """Multiple resources for the same faction are summed into one treasury call."""
-    rows = [
+    military_repo.get_faction_resource_nodes.return_value = [
         {"faction_id": "faction-a", "resource_node_id": "res-1", "yield_per_tick": 30, "depletion": 50},
         {"faction_id": "faction-a", "resource_node_id": "res-2", "yield_per_tick": 20, "depletion": 40},
     ]
 
-    with (
-        patch(
-            "npc_engine.engines.military.military_resource_service.get_faction_resource_nodes",
-            new_callable=AsyncMock,
-            return_value=rows,
-        ),
-        patch(
-            "npc_engine.engines.military.military_resource_service.add_faction_treasury",
-            new_callable=AsyncMock,
-        ) as mock_treasury,
-        patch(
-            "npc_engine.engines.military.military_resource_service.set_resource_depletion",
-            new_callable=AsyncMock,
-        ),
-    ):
-        result = await process_resource_yield(session, tick_id=5)
+    result = await process_resource_yield(military_repo, tick_id=5)
 
     assert len(result) == 1
     assert result[0].total_yield == 50
-    mock_treasury.assert_awaited_once_with(session, faction_id="faction-a", amount=50)
+    military_repo.add_faction_treasury.assert_awaited_once_with(faction_id="faction-a", amount=50)
 
 
 @pytest.mark.asyncio
-async def test_process_resource_yield_separate_factions(session) -> None:
+async def test_process_resource_yield_separate_factions(military_repo) -> None:
     """Different factions each get separate treasury credits."""
-    rows = [
+    military_repo.get_faction_resource_nodes.return_value = [
         {"faction_id": "faction-a", "resource_node_id": "res-1", "yield_per_tick": 40, "depletion": 60},
         {"faction_id": "faction-b", "resource_node_id": "res-2", "yield_per_tick": 25, "depletion": 30},
     ]
 
-    with (
-        patch(
-            "npc_engine.engines.military.military_resource_service.get_faction_resource_nodes",
-            new_callable=AsyncMock,
-            return_value=rows,
-        ),
-        patch(
-            "npc_engine.engines.military.military_resource_service.add_faction_treasury",
-            new_callable=AsyncMock,
-        ) as mock_treasury,
-        patch(
-            "npc_engine.engines.military.military_resource_service.set_resource_depletion",
-            new_callable=AsyncMock,
-        ),
-    ):
-        result = await process_resource_yield(session, tick_id=5)
+    result = await process_resource_yield(military_repo, tick_id=5)
 
     assert len(result) == 2
     faction_yields = {r.faction_id: r.total_yield for r in result}
     assert faction_yields == {"faction-a": 40, "faction-b": 25}
-    assert mock_treasury.await_count == 2
+    assert military_repo.add_faction_treasury.await_count == 2
 
 
 # ---------------------------------------------------------------------------
