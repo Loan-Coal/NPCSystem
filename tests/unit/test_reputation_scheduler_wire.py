@@ -162,7 +162,8 @@ async def test_adapter_fetches_npc_ids_from_character_reader() -> None:
     )
     await adapter.run_tick(session=mock_session, tick_id=10)
 
-    mock_character_reader.get_npc_ids.assert_awaited_once_with(mock_session)
+    # CharacterReadPort.get_npc_ids() is sessionless after SEV-24.
+    mock_character_reader.get_npc_ids.assert_awaited_once_with()
     call_kwargs = mock_reputation_engine.run_tick.call_args.kwargs
     assert call_kwargs["npc_ids"] == ["a", "b", "c"]
     assert call_kwargs["player_id"] == "player"

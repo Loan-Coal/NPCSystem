@@ -71,9 +71,13 @@ from npc_engine.engines.planning.action_selector import ActionSelector
 from npc_engine.engines.planning.goal_former_adapter import GoalFormerAdapter
 from npc_engine.graph.player_location_reader import PlayerLocationReader
 from npc_engine.graph.proactive_memory_reader import ProactiveMemoryReader
-from npc_engine.graph.character_reader import get_npc_ids as _graph_get_npc_ids
-from npc_engine.graph.reputation_nudge import apply_trust_nudge
-from npc_engine.graph.relation_reader import RelationReader
+from npc_engine.graph.repositories.character_read_repository import (
+    Neo4jCharacterReadRepository,
+)
+from npc_engine.graph.repositories.relation_read_repository import (
+    Neo4jRelationReadRepository,
+)
+from npc_engine.graph.repositories.reputation_repository import Neo4jReputationRepository
 from npc_engine.scheduler.tick_scheduler import TickScheduler
 
 
@@ -415,39 +419,20 @@ def get_goal_formation_engine() -> GoalFormerAdapter:
     return GoalFormerAdapter(action_selector=ActionSelector())
 
 
-class _CharacterReaderWrapper:
-    """Module-level adapter exposing get_npc_ids as a method for DI into ReputationTickAdapter.
-
-    Wraps the graph.character_reader.get_npc_ids module function behind the
-    _CharacterReaderProtocol interface expected by ReputationTickAdapter.
-    """
-
-    async def get_npc_ids(self, session) -> list[str]:
-        """Return IDs of all active non-player characters.
-
-        Args:
-            session: Active Neo4j async session.
-
-        Returns:
-            List of NPC ID strings.
-        """
-        return await _graph_get_npc_ids(session)
-
-
-_character_reader_singleton = _CharacterReaderWrapper()
-
-
 @lru_cache
 def get_reputation_engine() -> ReputationTickAdapter:
     """Create singleton ReputationTickAdapter loaded from reputation_rules.yaml.
 
-    Wires RelationReader factory and apply_trust_nudge (graph layer) into
-    ReputationEngine via ReputationTickAdapter.  RelationReader is constructed
-    fresh each tick via the relation_reader_factory to avoid session leakage.
+    Wires the Neo4j read/write adapters (Neo4jRelationReadRepository +
+    Neo4jReputationRepository into the engine, Neo4jCharacterReadRepository into the
+    tick adapter) as the engine-layer Ports (DEC-122 / SEV-24) so neither the engine
+    nor the adapter holds a Neo4j session.
 
     Returns:
         ReputationTickAdapter ready for the tick scheduler.
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
+
     rules_path = (
         Path(__file__).resolve().parent.parent
         / "engines"
@@ -455,18 +440,18 @@ def get_reputation_engine() -> ReputationTickAdapter:
         / "reputation_rules.yaml"
     )
     config = load_propagation_config(rules_path)
+    graph_db = get_graph_db()
     reputation_engine = ReputationEngine(
         config=config,
-        relation_reader=_character_reader_singleton,  # replaced per-tick by factory
-        apply_nudge_fn=apply_trust_nudge,
+        relation_reader=Neo4jRelationReadRepository(graph_db),
+        reputation_repo=Neo4jReputationRepository(graph_db),
     )
     settings = get_settings()
     return ReputationTickAdapter(
         engine=reputation_engine,
-        character_reader=_character_reader_singleton,
+        character_reader=Neo4jCharacterReadRepository(graph_db),
         player_id=settings.WORLD_ID,
         config=config,
-        relation_reader_factory=RelationReader,
     )
 
 

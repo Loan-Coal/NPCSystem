@@ -6,22 +6,24 @@ Purpose: 1-hop personal reputation propagation engine (EXP-52 slice-1).
          nudges trust on every bridge NPC B that has an existing edge toward the player,
          provided S's standing toward B meets the bridge threshold.
 Does NOT: open Neo4j sessions, run Cypher, call LLMs, or create new RELATES_TO edges.
-Dependencies injected: PropagationConfig, RelationReader, apply_nudge_fn callable.
-Used by: tick scheduler (future slice — not wired in this slice).
+          Reads/writes are delegated to the injected RelationReadPort + ReputationGraphPort.
+Dependencies injected: PropagationConfig, RelationReadPort (reads), ReputationGraphPort (nudge write).
+Used by: engines.reputation.reputation_tick_adapter (wired via dependencies_engines.py).
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
-from typing import Any
-
-from neo4j import AsyncSession
+from typing import TYPE_CHECKING
 
 from npc_engine.engines.relationship.standing import Standing, derive_standing
 from npc_engine.engines.reputation.propagation_config import PropagationConfig
 from npc_engine.utils.errors import RelationEdgeNotFoundError
 from npc_engine.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from npc_engine.engines.ports.relation_read_port import RelationReadPort
+    from npc_engine.engines.ports.reputation_port import ReputationGraphPort
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -38,9 +40,6 @@ _STANDING_ORDER: list[Standing] = [
 
 logger: logging.Logger = get_logger()
 
-# Type alias for the nudge callable injected by the caller.
-NudgeFn = Callable[..., Awaitable[None]]
-
 
 def _standing_gte(a: Standing, b: Standing) -> bool:
     """Return True if Standing a is greater than or equal to Standing b."""
@@ -55,41 +54,39 @@ class ReputationEngine:
 
     Attributes:
         _config: Tuning constants loaded from reputation_rules.yaml.
-        _reader: RelationReader used to fetch edge scalars.
-        _apply_nudge_fn: Async callable that writes the nudge to the graph layer.
+        _reader: RelationReadPort used to fetch edge scalars (session-per-call adapter).
+        _repo: ReputationGraphPort that writes the bounded nudge to the graph layer.
     """
 
     def __init__(
         self,
         config: PropagationConfig,
-        relation_reader: Any,
-        apply_nudge_fn: NudgeFn,
+        relation_reader: RelationReadPort,
+        reputation_repo: ReputationGraphPort,
     ) -> None:
-        """Initialise with injected dependencies.
+        """Initialise with injected dependencies (no Neo4j session — DEC-122 / SEV-24).
 
         Args:
             config: Validated PropagationConfig instance.
-            relation_reader: RelationReader providing get_relation_scalars(src_id, dst_id).
-            apply_nudge_fn: Async callable signature:
-                apply_nudge_fn(session, *, src_id, dst_id, delta_trust, delta_affection).
-                In production this is graph.reputation_nudge.apply_trust_nudge.
+            relation_reader: RelationReadPort providing get_relation_scalars(src_id, dst_id).
+            reputation_repo: ReputationGraphPort whose apply_trust_nudge writes the nudge.
         """
         self._config = config
         self._reader = relation_reader
-        self._apply_nudge_fn = apply_nudge_fn
+        self._repo = reputation_repo
 
     async def run_tick(
         self,
-        session: AsyncSession,
         player_id: str,
         npc_ids: list[str],
+        **_: object,
     ) -> None:
         """Run one propagation tick for all candidate source NPCs.
 
-        No-op when config.enabled is False.
+        No-op when config.enabled is False. The trailing ``**_`` swallows the
+        scheduler's legacy ``session=`` kwarg during the SEV-24 migration.
 
         Args:
-            session: Active Neo4j async session forwarded to the nudge writer.
             player_id: ID of the player character whose reputation propagates.
             npc_ids: List of NPC IDs to consider as sources and bridges.
         """
@@ -101,7 +98,6 @@ class ReputationEngine:
 
         for source_id in npc_ids:
             await self._propagate_from_source(
-                session=session,
                 source_id=source_id,
                 player_id=player_id,
                 npc_ids=npc_ids,
@@ -112,7 +108,6 @@ class ReputationEngine:
     async def _propagate_from_source(
         self,
         *,
-        session: AsyncSession,
         source_id: str,
         player_id: str,
         npc_ids: list[str],
@@ -137,7 +132,6 @@ class ReputationEngine:
             if bridge_id == source_id or bridge_id == player_id:
                 continue
             await self._maybe_nudge_bridge(
-                session=session,
                 source_id=source_id,
                 bridge_id=bridge_id,
                 player_id=player_id,
@@ -148,7 +142,6 @@ class ReputationEngine:
     async def _maybe_nudge_bridge(
         self,
         *,
-        session: AsyncSession,
         source_id: str,
         bridge_id: str,
         player_id: str,
@@ -173,7 +166,6 @@ class ReputationEngine:
             return  # first-slice: skip B if no existing edge to player
 
         await self._compute_and_apply_nudge(
-            session=session,
             source_id=source_id,
             bridge_id=bridge_id,
             player_id=player_id,
@@ -183,13 +175,12 @@ class ReputationEngine:
     async def _compute_and_apply_nudge(
         self,
         *,
-        session: AsyncSession,
         source_id: str,
         bridge_id: str,
         player_id: str,
         source_trust: int,
     ) -> None:
-        """Compute nudge magnitude, log it, and write it via the injected nudge function."""
+        """Compute nudge magnitude, log it, and write it via the injected port."""
         nudge = max(0, min(self._config.max_nudge_per_tick, source_trust // 10))
         logger.info(
             "reputation_nudge",
@@ -200,8 +191,7 @@ class ReputationEngine:
                 "delta_trust": nudge,
             },
         )
-        await self._apply_nudge_fn(
-            session,
+        await self._repo.apply_trust_nudge(
             src_id=bridge_id,
             dst_id=player_id,
             delta_trust=nudge,

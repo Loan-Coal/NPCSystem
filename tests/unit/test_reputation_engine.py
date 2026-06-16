@@ -1,7 +1,9 @@
 """
 Tests for the 1-hop reputation propagation engine (EXP-52 slice-1).
 
-All tests are fully mocked — no DB, no graph connections.
+All tests are fully mocked — no DB, no graph connections. Post SEV-24 the engine
+injects a RelationReadPort (reads) + a ReputationGraphPort (nudge write) and holds
+no Neo4j session (DEC-122).
 
 Covers:
   - nudge applied when source NPC is FRIENDLY toward player
@@ -15,10 +17,9 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -58,6 +59,20 @@ def _disabled_config() -> PropagationConfig:
     )
 
 
+def _make_reader(side_effect: Any) -> MagicMock:
+    """RelationReadPort mock whose get_relation_scalars uses ``side_effect``."""
+    reader = MagicMock()
+    reader.get_relation_scalars = AsyncMock(side_effect=side_effect)
+    return reader
+
+
+def _make_repo(apply: Any) -> MagicMock:
+    """ReputationGraphPort mock whose apply_trust_nudge is ``apply``."""
+    repo = MagicMock()
+    repo.apply_trust_nudge = apply
+    return repo
+
+
 # ---------------------------------------------------------------------------
 # test_nudge_applied_when_source_friendly
 # ---------------------------------------------------------------------------
@@ -66,7 +81,6 @@ def _disabled_config() -> PropagationConfig:
 async def test_nudge_applied_when_source_friendly() -> None:
     """Source→player FRIENDLY, source→B NEUTRAL, B→player edge exists → apply_trust_nudge called."""
     config = _friendly_config()
-    mock_session = MagicMock()
     mock_apply = AsyncMock()
 
     # S→player: trust=30 → FRIENDLY; S→B: trust=0 → NEUTRAL; B→player: edge exists
@@ -79,11 +93,12 @@ async def test_nudge_applied_when_source_friendly() -> None:
             return _make_scalars(trust=5)            # exists
         raise RelationEdgeNotFoundError(src_id=src_id, dst_id=dst_id)
 
-    mock_reader = MagicMock()
-    mock_reader.get_relation_scalars = AsyncMock(side_effect=_get_scalars)
-
-    engine = ReputationEngine(config=config, relation_reader=mock_reader, apply_nudge_fn=mock_apply)
-    await engine.run_tick(session=mock_session, player_id="player", npc_ids=["S", "B"])
+    engine = ReputationEngine(
+        config=config,
+        relation_reader=_make_reader(_get_scalars),
+        reputation_repo=_make_repo(mock_apply),
+    )
+    await engine.run_tick(player_id="player", npc_ids=["S", "B"])
 
     mock_apply.assert_awaited_once()
     call_kwargs = mock_apply.call_args.kwargs
@@ -100,7 +115,6 @@ async def test_nudge_applied_when_source_friendly() -> None:
 async def test_nudge_not_applied_when_source_wary() -> None:
     """Source→player WARY → apply_trust_nudge NOT called."""
     config = _friendly_config()
-    mock_session = MagicMock()
     mock_apply = AsyncMock()
 
     async def _get_scalars(*, src_id: str, dst_id: str) -> dict[str, int]:
@@ -108,11 +122,12 @@ async def test_nudge_not_applied_when_source_wary() -> None:
             return _make_scalars(fear=30)            # WARY (score=-30)
         raise RelationEdgeNotFoundError(src_id=src_id, dst_id=dst_id)
 
-    mock_reader = MagicMock()
-    mock_reader.get_relation_scalars = AsyncMock(side_effect=_get_scalars)
-
-    engine = ReputationEngine(config=config, relation_reader=mock_reader, apply_nudge_fn=mock_apply)
-    await engine.run_tick(session=mock_session, player_id="player", npc_ids=["S", "B"])
+    engine = ReputationEngine(
+        config=config,
+        relation_reader=_make_reader(_get_scalars),
+        reputation_repo=_make_repo(mock_apply),
+    )
+    await engine.run_tick(player_id="player", npc_ids=["S", "B"])
 
     mock_apply.assert_not_awaited()
 
@@ -125,7 +140,6 @@ async def test_nudge_not_applied_when_source_wary() -> None:
 async def test_nudge_not_applied_when_no_B_player_edge() -> None:
     """B→player edge missing → skipped silently, apply_trust_nudge NOT called."""
     config = _friendly_config()
-    mock_session = MagicMock()
     mock_apply = AsyncMock()
 
     async def _get_scalars(*, src_id: str, dst_id: str) -> dict[str, int]:
@@ -136,11 +150,12 @@ async def test_nudge_not_applied_when_no_B_player_edge() -> None:
         # B→player: raise (no edge)
         raise RelationEdgeNotFoundError(src_id=src_id, dst_id=dst_id)
 
-    mock_reader = MagicMock()
-    mock_reader.get_relation_scalars = AsyncMock(side_effect=_get_scalars)
-
-    engine = ReputationEngine(config=config, relation_reader=mock_reader, apply_nudge_fn=mock_apply)
-    await engine.run_tick(session=mock_session, player_id="player", npc_ids=["S", "B"])
+    engine = ReputationEngine(
+        config=config,
+        relation_reader=_make_reader(_get_scalars),
+        reputation_repo=_make_repo(mock_apply),
+    )
+    await engine.run_tick(player_id="player", npc_ids=["S", "B"])
 
     mock_apply.assert_not_awaited()
 
@@ -153,18 +168,38 @@ async def test_nudge_not_applied_when_no_B_player_edge() -> None:
 async def test_nudge_not_applied_when_disabled() -> None:
     """enabled=false in config → no nudges performed at all."""
     config = _disabled_config()
-    mock_session = MagicMock()
     mock_apply = AsyncMock()
 
     mock_reader = MagicMock()
     mock_reader.get_relation_scalars = AsyncMock(return_value=_make_scalars(trust=80))
 
-    engine = ReputationEngine(config=config, relation_reader=mock_reader, apply_nudge_fn=mock_apply)
-    await engine.run_tick(session=mock_session, player_id="player", npc_ids=["S", "B"])
+    engine = ReputationEngine(
+        config=config,
+        relation_reader=mock_reader,
+        reputation_repo=_make_repo(mock_apply),
+    )
+    await engine.run_tick(player_id="player", npc_ids=["S", "B"])
 
     mock_apply.assert_not_awaited()
     # Reader should not have been called either
     mock_reader.get_relation_scalars.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# test_run_tick_ignores_scheduler_session_kwarg
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_run_tick_ignores_scheduler_session_kwarg() -> None:
+    """run_tick accepts (and ignores) a stray session= kwarg during migration."""
+    config = _disabled_config()
+    engine = ReputationEngine(
+        config=config,
+        relation_reader=MagicMock(),
+        reputation_repo=_make_repo(AsyncMock()),
+    )
+    # Must not raise — session is swallowed by **_.
+    await engine.run_tick(player_id="player", npc_ids=["S"], session=object())
 
 
 # ---------------------------------------------------------------------------
@@ -180,10 +215,9 @@ async def test_nudge_bounded_by_max() -> None:
         min_bridge_standing="NEUTRAL",
         enabled=True,
     )
-    mock_session = MagicMock()
     captured: list[int] = []
 
-    async def _capture_nudge(session: Any, **kwargs: Any) -> None:
+    async def _capture_nudge(**kwargs: Any) -> None:
         captured.append(kwargs["delta_trust"])
 
     async def _get_scalars(*, src_id: str, dst_id: str) -> dict[str, int]:
@@ -195,11 +229,12 @@ async def test_nudge_bounded_by_max() -> None:
             return _make_scalars(trust=5)
         raise RelationEdgeNotFoundError(src_id=src_id, dst_id=dst_id)
 
-    mock_reader = MagicMock()
-    mock_reader.get_relation_scalars = AsyncMock(side_effect=_get_scalars)
-
-    engine = ReputationEngine(config=config, relation_reader=mock_reader, apply_nudge_fn=_capture_nudge)
-    await engine.run_tick(session=mock_session, player_id="player", npc_ids=["S", "B"])
+    engine = ReputationEngine(
+        config=config,
+        relation_reader=_make_reader(_get_scalars),
+        reputation_repo=_make_repo(_capture_nudge),
+    )
+    await engine.run_tick(player_id="player", npc_ids=["S", "B"])
 
     assert len(captured) == 1
     assert captured[0] <= config.max_nudge_per_tick
@@ -218,12 +253,11 @@ async def test_nudge_scales_with_trust() -> None:
         min_bridge_standing="NEUTRAL",
         enabled=True,
     )
-    mock_session = MagicMock()
 
     async def _run_with_trust(source_trust: int) -> int:
         captured: list[int] = []
 
-        async def _capture(session: Any, **kwargs: Any) -> None:
+        async def _capture(**kwargs: Any) -> None:
             captured.append(kwargs["delta_trust"])
 
         async def _get_scalars(*, src_id: str, dst_id: str) -> dict[str, int]:
@@ -235,10 +269,12 @@ async def test_nudge_scales_with_trust() -> None:
                 return _make_scalars(trust=5)
             raise RelationEdgeNotFoundError(src_id=src_id, dst_id=dst_id)
 
-        mock_reader = MagicMock()
-        mock_reader.get_relation_scalars = AsyncMock(side_effect=_get_scalars)
-        engine = ReputationEngine(config=config, relation_reader=mock_reader, apply_nudge_fn=_capture)
-        await engine.run_tick(session=mock_session, player_id="player", npc_ids=["S", "B"])
+        engine = ReputationEngine(
+            config=config,
+            relation_reader=_make_reader(_get_scalars),
+            reputation_repo=_make_repo(_capture),
+        )
+        await engine.run_tick(player_id="player", npc_ids=["S", "B"])
         return captured[0] if captured else 0
 
     # trust=20 → FRIENDLY (score=20); nudge = min(10, 20//10) = min(10,2) = 2
