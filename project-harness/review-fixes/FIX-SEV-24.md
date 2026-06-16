@@ -105,7 +105,7 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   integration test to build the real adapters from a `GraphDB`. Wave 3 second checkbox; `engines/player_model/`
   is neo4j-free.
 
-- **director** (DONE, `<pending>`): NO new port — `DirectorTick` injects the shared `RelationReadPort` +
+- **director** (DONE, `368ea27`): NO new port — `DirectorTick` injects the shared `RelationReadPort` +
   `PlayerLocationReadPort` (replacing per-tick `RelationReader(session)` + `location_reader(session)` calls);
   `_decide_for_pair` dropped its session/reader params. `run_tick(session, tick_id)` KEEPS the session and
   forwards it ONLY to `event_handler.run_tick(session=…)` — director is NOT yet session-free and intentionally
