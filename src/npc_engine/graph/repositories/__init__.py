@@ -12,6 +12,7 @@ Public surface: Neo4jNeedRepository, Neo4jMoodRepository, Neo4jGroupRepository,
                 Neo4jSkillRepository, Neo4jChapterRepository, Neo4jMilitaryRepository,
                 Neo4jRelationReadRepository, Neo4jPlayerLocationReadRepository,
                 Neo4jCharacterReadRepository, Neo4jEmotionRepository,
+                Neo4jEventRepository,
                 Neo4jKnowledgeRepository, Neo4jMemoryRepository,
                 Neo4jReputationRepository,
                 Neo4jPlayerModelRepository, Neo4jPlanningRepository,
@@ -29,6 +30,7 @@ from npc_engine.graph.repositories.character_read_repository import (
 )
 from npc_engine.graph.repositories.economy_repository import Neo4jEconomyRepository
 from npc_engine.graph.repositories.emotion_repository import Neo4jEmotionRepository
+from npc_engine.graph.repositories.event_repository import Neo4jEventRepository
 from npc_engine.graph.repositories.group_repository import Neo4jGroupRepository
 from npc_engine.graph.repositories.intent_repository import Neo4jIntentRepository
 from npc_engine.graph.repositories.interaction_repository import (
@@ -75,6 +77,7 @@ __all__ = [
     "Neo4jCharacterReadRepository",
     "Neo4jEconomyRepository",
     "Neo4jEmotionRepository",
+    "Neo4jEventRepository",
     "Neo4jGroupRepository",
     "Neo4jIntentRepository",
     "Neo4jInteractionRepository",

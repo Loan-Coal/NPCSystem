@@ -205,7 +205,26 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   Last Wave-3 box. Tests: `test_memory_repository.py` (adapter); rewrote test_memory_engine/_weighted_decay/
   _service + quest_lifecycle commitment test to inject a fake port.
 
-**27 domains migrated, 26 ports + 26 adapters** (+3 shared read ports/adapters; director/relationship reuse them). Shared ports built: political (succession+agenda),
+- **events** (DONE, Wave 4 first): NEW `EventGraphPort` + `Neo4jEventRepository`. The `run_in_tx` unit-of-work
+  was lifted OUT of `EventHandler` into a NEW graph orchestration fn
+  `graph/event_emission_service.emit_event_atomic(session, *, …)` (upsert_event + seed_awareness +
+  per-character reputation + routine overrides + the high-severity world-condition update, all in ONE
+  transaction); the adapter just opens a session and calls it, so no transaction leaks to the engine. The port
+  also exposes the non-atomic surrounding calls: `get_locations_by_tag`, `get_characters_at_location`,
+  `record_witnesses` (loops witnesses in one session), `record_causation`. `RoutineOverridePlan` (frozen
+  Pydantic model) lives in `event_emission_service` (graph layer) so disruption data crosses the engine→graph
+  boundary as plain models, not `DisruptionRule`/tuples. `EventHandler` injects `event_repo` + reuses the shared
+  `WorldStateGraphPort` for the severity-cap read; `run_tick(*, tick_id, location_ids=None, cause_event_id=None,
+  **_)` swallows `session=`; extracted `_scope_locations`/`_build_event`/`_build_routine_overrides`/
+  `_record_witnesses` for R006 and named the severity/causation/clarity magic numbers. `engines/events/
+  event_handler` is neo4j-free (awareness_seeder/location_scoper are graph-thin tx wrappers, untouched). Factory
+  `get_event_handler` wires both repos from `get_graph_db()`. Director/batch/scheduler still pass `session=`
+  (swallowed) — director can drop its forward in Wave-5 cleanup. ISSUE-112 logged: the high-severity witness
+  block is dead code (actor_id always None), preserved verbatim. Tests: `test_event_handler_port.py` (engine
+  mocks the port + ignored-kwarg), `test_event_repository.py` (adapter), rewrote `test_event_reputation_wiring.py`
+  to cover the graph-service reputation loop + handler forwarding.
+
+**28 domains migrated, 27 ports + 27 adapters** (+3 shared read ports/adapters; director/relationship reuse them). Shared ports built: political (succession+agenda),
 WorldState (story_pacing + chapter — first cross-domain reuse). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.

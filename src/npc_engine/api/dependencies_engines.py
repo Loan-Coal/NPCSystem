@@ -106,8 +106,19 @@ def get_event_handler() -> EventHandler:
     Returns:
         EventHandler wired to the singleton EmbeddingIndex and TypeRegistry.
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.event_repository import Neo4jEventRepository
+    from npc_engine.graph.repositories.world_state_repository import Neo4jWorldStateRepository
+
     settings = get_settings()
-    return EventHandler(settings=settings, embedding_index=get_embedding_index(), registry=get_type_registry())
+    graph_db = get_graph_db()
+    return EventHandler(
+        settings=settings,
+        embedding_index=get_embedding_index(),
+        event_repo=Neo4jEventRepository(graph_db),
+        world_state_repo=Neo4jWorldStateRepository(graph_db),
+        registry=get_type_registry(),
+    )
 
 
 @lru_cache

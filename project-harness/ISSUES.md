@@ -1380,3 +1380,16 @@ need `--scenarios-only`), so it does not gate.
 maintenance, not part of the repository-facade migration.
 **To fix:** Rewrite the test to inject a mock `MilitaryGraphPort` and assert the real
 `battles_resolved`/`factions_yielded` contract (mirror `tests/unit/test_military_engine.py`).
+
+## ISSUE-112: EventHandler high-severity witness recording is dead code
+**Found:** 2026-06-16, during /fix-next SEV-24 (events slice)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/engines/events/event_handler.py::_record_witnesses`
+**Description:** The post-emit witness block reads `actor_id = raw_props.get("src_character_id", "") or None`,
+but `_build_event` never sets `src_character_id`, so `actor_id` is always `None` and the WITNESSED edges are
+never recorded. Only the `get_characters_at_location` read still fires (a wasted DB round-trip on every
+severity ≥ HIGH_SEVERITY_THRESHOLD event). Behaviour was preserved verbatim through the SEV-24 migration.
+**Why deferred:** Wiring an actor source into event templates is a feature change outside the repository-facade
+slice; preserving exact behaviour was the migration's contract.
+**To fix:** Either add `src_character_id` to `EventTemplate`/`_build_event` so witnessing actually fires, or
+drop the dead block (and its read) if event-actor witnessing is not a desired feature.

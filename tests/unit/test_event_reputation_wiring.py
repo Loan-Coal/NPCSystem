@@ -1,9 +1,11 @@
-"""
-Unit tests for event-triggered reputation adjustment (ISSUE-005 fix).
+"""Unit tests for event-triggered reputation adjustment (ISSUE-005 / SEV-24).
 
-Verifies that EventHandler.run_tick calls adjust_reputation_for_event for each
-character at the event location when the template carries faction_id + reputation_delta.
-No live DB required — all Neo4j calls are mocked.
+After the SEV-24 events slice the per-character reputation loop lives in
+graph.event_emission_service.emit_event_atomic. These tests cover both halves:
+  - The graph-service loop calls adjust_reputation_for_event once per character and
+    swallows ReputationNotFoundError.
+  - EventHandler forwards (or omits) faction_id/reputation_delta to the port.
+No live DB required — all Neo4j calls / ports are mocked.
 """
 
 from __future__ import annotations
@@ -15,42 +17,27 @@ import pytest
 
 from npc_engine.engines.events.event_handler import EventHandler
 from npc_engine.engines.events.event_pool import EventTemplate
+from npc_engine.graph.event_emission_service import emit_event_atomic
 from npc_engine.utils.errors import ReputationNotFoundError
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+_SVC = "npc_engine.graph.event_emission_service"
 
 
-class _AsyncIterResult:
-    """Minimal async-iterable wrapping a list of dicts (simulates Neo4j result)."""
-
-    def __init__(self, rows: list[dict]) -> None:
-        self._rows = rows
-
-    def __aiter__(self):
-        return self._async_gen()
-
-    async def _async_gen(self):
-        for row in self._rows:
-            rec = MagicMock()
-            rec.__getitem__ = lambda s, k, _r=row: _r[k]
-            yield rec
-
-    async def single(self):
-        return self._rows[0] if self._rows else None
+async def _run_work(_session, work):
+    """Fake run_in_tx: invoke the unit-of-work closure with a dummy tx."""
+    await work(MagicMock())
 
 
-def _make_settings():
+def _make_settings() -> MagicMock:
     s = MagicMock()
     s.EVENT_POOL_PATH = "unused"
     s.EVENT_RNG_SEED = 42
     s.WITNESSED_MAX_PER_EVENT = 10
+    s.WORLD_ID = "world"
     return s
 
 
-def _make_handler(templates: list[EventTemplate]):
+def _make_handler(templates: list[EventTemplate]) -> EventHandler:
     handler = EventHandler.__new__(EventHandler)
     handler._settings = _make_settings()
     handler._embedding_index = MagicMock()
@@ -60,6 +47,16 @@ def _make_handler(templates: list[EventTemplate]):
     handler._rng = None
     handler._lock = asyncio.Lock()
     handler._disruption_rules = []
+    repo = MagicMock()
+    repo.get_locations_by_tag = AsyncMock(return_value=["loc-1"])
+    repo.emit_event_atomic = AsyncMock()
+    repo.get_characters_at_location = AsyncMock(return_value=[])
+    repo.record_witnesses = AsyncMock()
+    repo.record_causation = AsyncMock()
+    handler._event_repo = repo
+    ws = MagicMock()
+    ws.get_world_state = AsyncMock(return_value=MagicMock(max_event_severity=100))
+    handler._world_state_repo = ws
     return handler
 
 
@@ -77,116 +74,118 @@ def _faction_template(**kwargs) -> EventTemplate:
 
 
 # ---------------------------------------------------------------------------
-# Tests
+# graph.event_emission_service — per-character reputation loop
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_reputation_adjusted_for_characters_at_location():
-    """adjust_reputation_for_event is called once per character when template has faction_id."""
-    template = _faction_template(faction_id="city_guard", reputation_delta=-10)
-    handler = _make_handler([template])
+async def test_emit_adjusts_reputation_per_character() -> None:
+    """adjust_reputation_for_event is called once per character at the location."""
     session = AsyncMock()
-
-    tx = AsyncMock()
-    tx.__aenter__ = AsyncMock(return_value=tx)
-    tx.__aexit__ = AsyncMock(return_value=False)
-
-    async def _tx_run(query, **kwargs):
-        if "LOCATED_AT" in query:
-            return _AsyncIterResult([
-                {"character_id": "char-1"},
-                {"character_id": "char-2"},
-            ])
-        return _AsyncIterResult([])
-
-    tx.run = AsyncMock(side_effect=_tx_run)
-    session.begin_transaction = AsyncMock(return_value=tx)
-    session.run = AsyncMock(return_value=_AsyncIterResult([]))
-
-    with patch("npc_engine.engines.events.event_handler.get_world_state") as mock_ws, \
-         patch("npc_engine.engines.events.event_handler.resolve_locations", new_callable=AsyncMock, return_value=["loc-1"]), \
-         patch("npc_engine.engines.events.event_handler.validate_node_write", return_value={}), \
-         patch("npc_engine.engines.events.event_handler.upsert_event", new_callable=AsyncMock), \
-         patch("npc_engine.engines.events.event_handler.seed_awareness_tx", new_callable=AsyncMock), \
-         patch("npc_engine.engines.events.event_handler.adjust_reputation_for_event", new_callable=AsyncMock) as mock_rep, \
-         patch("npc_engine.engines.events.event_handler.invalidate_embedding_safely", new_callable=AsyncMock):
-
-        mock_ws.return_value = MagicMock(max_event_severity=100)
-        await handler.run_tick(session=session, tick_id=1)
+    with patch(f"{_SVC}.run_in_tx", new=AsyncMock(side_effect=_run_work)), \
+         patch(f"{_SVC}.upsert_event", new=AsyncMock()), \
+         patch(f"{_SVC}.seed_awareness_tx", new=AsyncMock()), \
+         patch(f"{_SVC}.get_characters_at_location", new=AsyncMock(return_value=["char-1", "char-2"])), \
+         patch(f"{_SVC}.adjust_reputation_for_event", new=AsyncMock()) as mock_rep:
+        await emit_event_atomic(
+            session,
+            event=MagicMock(),
+            event_id="evt-1",
+            location_id="loc-1",
+            tick_id=1,
+            faction_id="city_guard",
+            reputation_delta=-10,
+            routine_overrides=[],
+            world_condition_event_type=None,
+            world_id="world",
+        )
 
     assert mock_rep.call_count == 2
-    called_factions = {call.kwargs["faction_id"] for call in mock_rep.call_args_list}
-    assert called_factions == {"city_guard"}
-    called_deltas = {call.kwargs["delta"] for call in mock_rep.call_args_list}
-    assert called_deltas == {-10}
+    assert {call.kwargs["faction_id"] for call in mock_rep.call_args_list} == {"city_guard"}
+    assert {call.kwargs["delta"] for call in mock_rep.call_args_list} == {-10}
 
 
 @pytest.mark.asyncio
-async def test_reputation_skipped_when_no_faction_id():
-    """adjust_reputation_for_event is NOT called when template has no faction_id."""
-    template = _faction_template(faction_id=None, reputation_delta=None)
-    handler = _make_handler([template])
+async def test_emit_skips_reputation_when_no_faction() -> None:
+    """adjust_reputation_for_event is NOT called when faction_id is None."""
     session = AsyncMock()
-
-    tx = AsyncMock()
-    tx.__aenter__ = AsyncMock(return_value=tx)
-    tx.__aexit__ = AsyncMock(return_value=False)
-    tx.run = MagicMock(return_value=_AsyncIterResult([]))
-    session.begin_transaction = AsyncMock(return_value=tx)
-    session.run = MagicMock(return_value=_AsyncIterResult([]))
-
-    with patch("npc_engine.engines.events.event_handler.get_world_state") as mock_ws, \
-         patch("npc_engine.engines.events.event_handler.resolve_locations", new_callable=AsyncMock, return_value=["loc-1"]), \
-         patch("npc_engine.engines.events.event_handler.validate_node_write", return_value={}), \
-         patch("npc_engine.engines.events.event_handler.upsert_event", new_callable=AsyncMock), \
-         patch("npc_engine.engines.events.event_handler.seed_awareness_tx", new_callable=AsyncMock), \
-         patch("npc_engine.engines.events.event_handler.adjust_reputation_for_event", new_callable=AsyncMock) as mock_rep, \
-         patch("npc_engine.engines.events.event_handler.invalidate_embedding_safely", new_callable=AsyncMock):
-
-        mock_ws.return_value = MagicMock(max_event_severity=100)
-        await handler.run_tick(session=session, tick_id=1)
+    with patch(f"{_SVC}.run_in_tx", new=AsyncMock(side_effect=_run_work)), \
+         patch(f"{_SVC}.upsert_event", new=AsyncMock()), \
+         patch(f"{_SVC}.seed_awareness_tx", new=AsyncMock()), \
+         patch(f"{_SVC}.get_characters_at_location", new=AsyncMock(return_value=["char-1"])), \
+         patch(f"{_SVC}.adjust_reputation_for_event", new=AsyncMock()) as mock_rep:
+        await emit_event_atomic(
+            session,
+            event=MagicMock(),
+            event_id="evt-1",
+            location_id="loc-1",
+            tick_id=1,
+            faction_id=None,
+            reputation_delta=None,
+            routine_overrides=[],
+            world_condition_event_type=None,
+            world_id="world",
+        )
 
     mock_rep.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_reputation_not_found_is_swallowed():
-    """ReputationNotFoundError is caught and logged; run_tick returns created=1."""
-    template = _faction_template(faction_id="phantom_guild", reputation_delta=-5)
-    handler = _make_handler([template])
+async def test_emit_swallows_reputation_not_found() -> None:
+    """ReputationNotFoundError from a single character is caught and logged."""
     session = AsyncMock()
+    with patch(f"{_SVC}.run_in_tx", new=AsyncMock(side_effect=_run_work)), \
+         patch(f"{_SVC}.upsert_event", new=AsyncMock()), \
+         patch(f"{_SVC}.seed_awareness_tx", new=AsyncMock()), \
+         patch(f"{_SVC}.get_characters_at_location", new=AsyncMock(return_value=["char-1"])), \
+         patch(f"{_SVC}.adjust_reputation_for_event", new=AsyncMock(
+             side_effect=ReputationNotFoundError(character_id="char-1", faction_id="phantom"))):
+        await emit_event_atomic(
+            session,
+            event=MagicMock(),
+            event_id="evt-1",
+            location_id="loc-1",
+            tick_id=1,
+            faction_id="phantom",
+            reputation_delta=-5,
+            routine_overrides=[],
+            world_condition_event_type=None,
+            world_id="world",
+        )
+    # No exception escapes — swallowed inside the loop.
 
-    tx = AsyncMock()
-    tx.__aenter__ = AsyncMock(return_value=tx)
-    tx.__aexit__ = AsyncMock(return_value=False)
 
-    async def _tx_run(query, **kwargs):
-        if "LOCATED_AT" in query:
-            return _AsyncIterResult([{"character_id": "char-1"}])
-        return _AsyncIterResult([])
+# ---------------------------------------------------------------------------
+# EventHandler — forwards faction fields to the port
+# ---------------------------------------------------------------------------
 
-    tx.run = AsyncMock(side_effect=_tx_run)
-    session.begin_transaction = AsyncMock(return_value=tx)
-    session.run = AsyncMock(return_value=_AsyncIterResult([]))
 
-    with patch("npc_engine.engines.events.event_handler.get_world_state") as mock_ws, \
-         patch("npc_engine.engines.events.event_handler.resolve_locations", new_callable=AsyncMock, return_value=["loc-1"]), \
-         patch("npc_engine.engines.events.event_handler.validate_node_write", return_value={}), \
-         patch("npc_engine.engines.events.event_handler.upsert_event", new_callable=AsyncMock), \
-         patch("npc_engine.engines.events.event_handler.seed_awareness_tx", new_callable=AsyncMock), \
-         patch("npc_engine.engines.events.event_handler.adjust_reputation_for_event",
-               new_callable=AsyncMock,
-               side_effect=ReputationNotFoundError(character_id="char-1", faction_id="phantom_guild")), \
-         patch("npc_engine.engines.events.event_handler.invalidate_embedding_safely", new_callable=AsyncMock):
+@pytest.mark.asyncio
+async def test_handler_forwards_faction_fields() -> None:
+    template = _faction_template(faction_id="city_guard", reputation_delta=-10)
+    handler = _make_handler([template])
 
-        mock_ws.return_value = MagicMock(max_event_severity=100)
-        result = await handler.run_tick(session=session, tick_id=1)
+    result = await handler.run_tick(tick_id=1)
 
     assert result["created"] == 1
+    kwargs = handler._event_repo.emit_event_atomic.call_args.kwargs
+    assert kwargs["faction_id"] == "city_guard"
+    assert kwargs["reputation_delta"] == -10
 
 
-def test_event_template_loads_faction_fields():
+@pytest.mark.asyncio
+async def test_handler_omits_faction_when_absent() -> None:
+    template = _faction_template(faction_id=None, reputation_delta=None)
+    handler = _make_handler([template])
+
+    await handler.run_tick(tick_id=1)
+
+    kwargs = handler._event_repo.emit_event_atomic.call_args.kwargs
+    assert kwargs["faction_id"] is None
+    assert kwargs["reputation_delta"] is None
+
+
+def test_event_template_loads_faction_fields() -> None:
     """EventTemplate parses faction_id and reputation_delta from JSON."""
     t = EventTemplate.model_validate({
         "id": "evt_test",
@@ -202,7 +201,7 @@ def test_event_template_loads_faction_fields():
     assert t.reputation_delta == 5
 
 
-def test_event_template_faction_fields_default_none():
+def test_event_template_faction_fields_default_none() -> None:
     """EventTemplate faction fields default to None when absent."""
     t = EventTemplate.model_validate({
         "id": "evt_test",
