@@ -76,7 +76,7 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   call-site dropped `session=` (gossip already passed none). Not a tick engine, so no ignored-kwarg test —
   added `test_emotion_repository.py` (adapter + session-free updater write-through). Wave 2 second checkbox.
 
-- **knowledge_learning** (DONE, `<pending>`): `KnowledgeGraphPort` (find_conflicting_belief + write_belief,
+- **knowledge_learning** (DONE, `ecf9441`): `KnowledgeGraphPort` (find_conflicting_belief + write_belief,
   incl. `is_deception`/`deception_goal_id` kwargs so the deception slice REUSES it) + `Neo4jKnowledgeRepository`
   (session-per-call). `KnowledgeExtractionEngine` now constructor-injects the port and `process(*, npc_id,…)`
   dropped the `session` param; dialogue call-site dropped it. Engine was previously UNWIRED (only built in tests),
