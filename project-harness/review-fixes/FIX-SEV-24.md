@@ -85,7 +85,11 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   in dependencies_stores because dependencies.py is at the R001 300-line cap. Tests: `test_knowledge_repository.py`
   (adapter) + rewrote `test_knowledge_extraction_engine.py` to mock the port.
 
-**15 domains migrated, 16 ports + 16 adapters** (+3 shared read ports/adapters, no engine). Shared ports built: political (succession+agenda),
+- **deception** (DONE, `5e95d8c`): **reuses** `KnowledgeGraphPort.write_belief` (no new port/adapter);
+  `DeceptionEngine` constructor-injects `knowledge_repo` and `plant_belief(*, …)` dropped the `session` arg.
+  Engine is UNWIRED (future caller — no api factory added). Test mocks the port. Wave 2 complete.
+
+**16 domains migrated, 16 ports + 16 adapters** (+3 shared read ports/adapters, no engine). Shared ports built: political (succession+agenda),
 WorldState (story_pacing + chapter — first cross-domain reuse). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.
