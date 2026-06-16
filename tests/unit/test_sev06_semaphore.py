@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -30,17 +29,14 @@ _SERIAL_LOWER_BOUND_S = _NPC_COUNT * _TASK_DELAY_S * 0.5  # 200ms — serial wou
 _PARALLEL_UPPER_BOUND_S = (_NPC_COUNT / _MAX_CONCURRENT + 1) * _TASK_DELAY_S * 3  # ~270ms
 
 
-@asynccontextmanager
-async def _mock_session_ctx():
-    """Async context manager that yields a MagicMock session."""
-    yield MagicMock()
-
-
-def _make_graph_db() -> MagicMock:
-    """Return a MagicMock GraphDB whose get_session() yields a fresh mock session."""
-    graph_db = MagicMock()
-    graph_db.get_session = _mock_session_ctx
-    return graph_db
+def _make_repo() -> MagicMock:
+    """Return a MagicMock MemoryConsolidationGraphPort with empty-context reads stubbed."""
+    repo = MagicMock()
+    repo.get_beliefs = AsyncMock(return_value=[])
+    repo.get_recent_memories = AsyncMock(return_value=[])
+    repo.get_undisclosed_witnesses = AsyncMock(return_value=[])
+    repo.create_memory = AsyncMock(return_value="mem-x")
+    return repo
 
 
 def _make_settings(max_concurrent: int = _MAX_CONCURRENT) -> MagicMock:
@@ -57,7 +53,7 @@ async def _make_store_with_npcs(npc_ids: list[str], turns_per_npc: int = 10) -> 
     return store
 
 
-def _make_engine(store: SessionStore, graph_db: MagicMock, settings: MagicMock):
+def _make_engine(store: SessionStore, memory_repo: MagicMock, settings: MagicMock):
     """Build a MemoryConsolidationEngine with all file I/O mocked."""
     with patch(
         f"{_MCE_MODULE}.load_yaml_mapping",
@@ -75,7 +71,7 @@ def _make_engine(store: SessionStore, graph_db: MagicMock, settings: MagicMock):
         return MemoryConsolidationEngine(
             session_store=store,
             llm_client=llm,
-            graph_db=graph_db,
+            memory_repo=memory_repo,
             settings=settings,
             turn_threshold=5,
         )
@@ -86,24 +82,19 @@ async def test_run_tick_parallelises_up_to_max_concurrent_ticks():
     """Wall time must be << serial time, proving parallelism is capped by the semaphore."""
     npc_ids = [f"npc_{i:03d}" for i in range(_NPC_COUNT)]
     store = await _make_store_with_npcs(npc_ids)
-    graph_db = _make_graph_db()
+    repo = _make_repo()
     settings = _make_settings(_MAX_CONCURRENT)
-    engine = _make_engine(store, graph_db, settings)
+    engine = _make_engine(store, repo, settings)
     game_time = TimePoint(year=1, season="spring", day=1, time_of_day="morning")
 
-    async def _slow_create(session, *, character_id, **kwargs):
+    async def _slow_create(*, character_id, **kwargs):
         await asyncio.sleep(_TASK_DELAY_S)
         return f"mem-{character_id}"
 
-    with (
-        patch(f"{_MCE_MODULE}.get_beliefs_for_character", new_callable=AsyncMock, return_value=[]),
-        patch(f"{_MCE_MODULE}.get_memories_for_character", new_callable=AsyncMock, return_value=[]),
-        patch(f"{_MCE_MODULE}.get_undisclosed_witnesses", new_callable=AsyncMock, return_value=[]),
-        patch(f"{_MCE_MODULE}.create_memory", new=_slow_create),
-    ):
-        t0 = time.monotonic()
-        result = await engine.run_tick(game_time=game_time)
-        elapsed = time.monotonic() - t0
+    repo.create_memory = AsyncMock(side_effect=_slow_create)
+    t0 = time.monotonic()
+    result = await engine.run_tick(game_time=game_time)
+    elapsed = time.monotonic() - t0
 
     assert len(result["consolidated"]) == _NPC_COUNT, (
         f"Expected {_NPC_COUNT} consolidated, got {len(result['consolidated'])}"
@@ -128,20 +119,15 @@ async def test_run_tick_returns_only_successful_consolidations():
     for npc_id in all_npcs[5:]:
         await store.append_turns("player1", npc_id, ["only one turn"])
 
-    graph_db = _make_graph_db()
+    repo = _make_repo()
     settings = _make_settings()
-    engine = _make_engine(store, graph_db, settings)
+    engine = _make_engine(store, repo, settings)
     game_time = TimePoint(year=1, season="spring", day=1, time_of_day="morning")
 
-    async def _ok_create(session, *, character_id, **kwargs):
+    async def _ok_create(*, character_id, **kwargs):
         return f"mem-{character_id}"
 
-    with (
-        patch(f"{_MCE_MODULE}.get_beliefs_for_character", new_callable=AsyncMock, return_value=[]),
-        patch(f"{_MCE_MODULE}.get_memories_for_character", new_callable=AsyncMock, return_value=[]),
-        patch(f"{_MCE_MODULE}.get_undisclosed_witnesses", new_callable=AsyncMock, return_value=[]),
-        patch(f"{_MCE_MODULE}.create_memory", new=_ok_create),
-    ):
-        result = await engine.run_tick(game_time=game_time)
+    repo.create_memory = AsyncMock(side_effect=_ok_create)
+    result = await engine.run_tick(game_time=game_time)
 
     assert set(result["consolidated"]) == set(all_npcs[:5])

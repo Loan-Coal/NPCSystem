@@ -52,43 +52,31 @@ async def test_witnessed_query_failure_logs_warning():
         MemoryConsolidationEngine,
     )
 
-    session = AsyncMock()
     session_store = MagicMock()
     session_store.get_all_turns_for_npc = AsyncMock(return_value=["turn1", "turn2", "turn3"])
     llm_client = AsyncMock()
     llm_client.generate = AsyncMock(return_value="summary text")
 
+    # MemoryConsolidationGraphPort (SEV-24): witness read raises, memory write succeeds.
+    memory_repo = MagicMock()
+    memory_repo.get_beliefs = AsyncMock(return_value=[])
+    memory_repo.get_recent_memories = AsyncMock(return_value=[])
+    memory_repo.get_undisclosed_witnesses = AsyncMock(side_effect=RuntimeError("db error"))
+    memory_repo.create_memory = AsyncMock(return_value="mem-001")
+
     engine = MemoryConsolidationEngine(
         session_store=session_store,
         llm_client=llm_client,
-        graph_db=MagicMock(),  # SEV-08 made graph_db + settings required ctor params
+        memory_repo=memory_repo,
         settings=MagicMock(),
         turn_threshold=2,
         clear_turns_after=False,
     )
 
-    with (
-        patch(
-            "npc_engine.engines.memory_consolidation.memory_consolidation_engine.get_beliefs_for_character",
-            new=AsyncMock(return_value=[]),
-        ),
-        patch(
-            "npc_engine.engines.memory_consolidation.memory_consolidation_engine.get_memories_for_character",
-            new=AsyncMock(return_value=[]),
-        ),
-        patch(
-            "npc_engine.engines.memory_consolidation.memory_consolidation_engine.get_undisclosed_witnesses",
-            new=AsyncMock(side_effect=RuntimeError("db error")),
-        ),
-        patch(
-            "npc_engine.engines.memory_consolidation.memory_consolidation_engine.create_memory",
-            new=AsyncMock(return_value="mem-001"),
-        ),
-        patch(
-            "npc_engine.engines.memory_consolidation.memory_consolidation_engine._LOGGER"
-        ) as mock_logger,
-    ):
-        result = await engine.consolidate(session=session, npc_id="npc_001", game_time=MagicMock())
+    with patch(
+        "npc_engine.engines.memory_consolidation.memory_consolidation_engine._LOGGER"
+    ) as mock_logger:
+        result = await engine.consolidate(npc_id="npc_001", game_time=MagicMock())
 
     assert result == "mem-001"
     mock_logger.warning.assert_called_once()

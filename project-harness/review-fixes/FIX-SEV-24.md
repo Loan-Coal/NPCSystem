@@ -48,8 +48,11 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
 - **treaty** (DONE, `7ab17a8`): `TreatyGraphPort` + `Neo4jTreatyRepository` (extracted `_count_active_violations`
   for R006); added a behavioral test (was construction-only).
 - **oath** (DONE, `58c6fca`): `PledgeGraphPort` + `Neo4jPledgeRepository` (mirrors treaty; `_count_violations`).
+- **memory_consolidation** (DONE, `3738cdf`): `MemoryConsolidationGraphPort` + `Neo4jMemoryConsolidationRepository`
+  (single-domain port spanning belief/memory/witness reads + the Memory write; engine drops `graph_db`/session,
+  fan-out helper renamed `_consolidate_bounded`). Wave 1 first checkbox.
 
-**10 domains migrated, 11 ports + 11 adapters.** Shared ports built: political (succession+agenda),
+**11 domains migrated, 12 ports + 12 adapters.** Shared ports built: political (succession+agenda),
 WorldState (story_pacing + future). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.

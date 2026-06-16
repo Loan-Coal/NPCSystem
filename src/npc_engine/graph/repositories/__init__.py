@@ -15,6 +15,9 @@ Public surface: Neo4jNeedRepository, Neo4jMoodRepository, Neo4jGroupRepository,
 from __future__ import annotations
 
 from npc_engine.graph.repositories.group_repository import Neo4jGroupRepository
+from npc_engine.graph.repositories.memory_consolidation_repository import (
+    Neo4jMemoryConsolidationRepository,
+)
 from npc_engine.graph.repositories.mood_repository import Neo4jMoodRepository
 from npc_engine.graph.repositories.need_repository import Neo4jNeedRepository
 from npc_engine.graph.repositories.pledge_repository import Neo4jPledgeRepository
@@ -27,6 +30,7 @@ from npc_engine.graph.repositories.world_state_repository import Neo4jWorldState
 
 __all__ = [
     "Neo4jGroupRepository",
+    "Neo4jMemoryConsolidationRepository",
     "Neo4jMoodRepository",
     "Neo4jNeedRepository",
     "Neo4jPledgeRepository",

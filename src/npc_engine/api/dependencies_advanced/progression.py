@@ -73,11 +73,17 @@ def get_investigation_engine():
 def get_memory_consolidation_engine():
     """Create singleton for the memory consolidation engine using its own LLM config.
 
+    Wires the Neo4j graph adapter (Neo4jMemoryConsolidationRepository) as the engine's
+    injected MemoryConsolidationGraphPort (DEC-122 / SEV-24) so the engine holds no session.
+
     Returns:
         MemoryConsolidationEngine configured from engines/memory_consolidation/llm_config.yaml.
     """
     from npc_engine.engines.memory_consolidation.memory_consolidation_engine import (
         MemoryConsolidationEngine,
+    )
+    from npc_engine.graph.repositories.memory_consolidation_repository import (
+        Neo4jMemoryConsolidationRepository,
     )
 
     engine_config = get_engine_model_config_for("memory_consolidation")
@@ -86,7 +92,7 @@ def get_memory_consolidation_engine():
     return MemoryConsolidationEngine(
         session_store=get_session_store(),
         llm_client=llm_client,
-        graph_db=get_graph_db(),
+        memory_repo=Neo4jMemoryConsolidationRepository(get_graph_db()),
         settings=settings,
         turn_threshold=5,
         clear_turns_after=False,
