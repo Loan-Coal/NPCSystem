@@ -286,12 +286,20 @@ def get_trade_engine() -> TradeEngine:
 def get_faction_politics_engine() -> FactionPoliticsEngine:
     """Create singleton faction politics engine loaded from rules.yaml.
 
+    Depends on the FactionPoliticsGraphPort abstraction so the engine holds no Neo4j
+    session (DEC-122 / SEV-24).
+
     Returns:
-        FactionPoliticsEngine wired to the bundled rules.yaml.
+        FactionPoliticsEngine wired to the bundled rules.yaml and a Neo4j repository.
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.faction_politics_repository import (
+        Neo4jFactionPoliticsRepository,
+    )
+
     rules_path = Path(__file__).resolve().parent.parent / "engines" / "faction_politics" / "rules.yaml"
     rules = load_rules(rules_path)
-    return FactionPoliticsEngine(rules=rules)
+    return FactionPoliticsEngine(rules=rules, repo=Neo4jFactionPoliticsRepository(get_graph_db()))
 
 
 @lru_cache

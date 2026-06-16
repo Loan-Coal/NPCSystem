@@ -52,8 +52,6 @@ R006|src/npc_engine/engines/dialogue/prompt_builder.py::_build_knowledge_gaps
 R006|src/npc_engine/engines/economy/pricing_rules_loader.py::load_pricing_rules
 R006|src/npc_engine/engines/economy/trade_engine.py::TradeEngine.evaluate_offer
 R006|src/npc_engine/engines/events/event_handler.py::EventHandler.run_tick
-R006|src/npc_engine/engines/faction_politics/faction_politics_engine.py::FactionPoliticsEngine._apply_decay
-R006|src/npc_engine/engines/faction_politics/faction_politics_engine.py::FactionPoliticsEngine._apply_rules
 R006|src/npc_engine/engines/faction_politics/rules_loader.py::load_rules
 R006|src/npc_engine/engines/gossip/gossip_distort.py::gossip_distort
 R006|src/npc_engine/engines/gossip/gossip_handler.py::GossipHandler._build_write_params

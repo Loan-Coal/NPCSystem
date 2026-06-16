@@ -3,8 +3,8 @@ Module: faction_politics_engine
 Layer: engines
 Purpose: Deterministic engine that adjusts faction standings based on recent events and applies
          slow decay toward neutral. Runs once per tick advance.
-Does NOT: call LLMs or expose HTTP routes.
-Dependencies injected: FactionPoliticsRules (via constructor), AsyncSession (per tick call).
+Does NOT: call LLMs, open Neo4j sessions, run Cypher, or expose HTTP routes.
+Dependencies injected: FactionPoliticsRules + FactionPoliticsGraphPort (via constructor).
 Used by: npc_engine.scheduler.tick_scheduler
 """
 
@@ -12,21 +12,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
-
-from neo4j import AsyncSession, AsyncTransaction
+from typing import TYPE_CHECKING, Any
 
 from npc_engine.engines.faction_politics.rules_loader import FactionPoliticsRules
-from npc_engine.graph.faction_history_service import record_standing_change
-from npc_engine.graph.faction_politics_queries import (
-    get_all_standings,
-    get_character_factions,
-    get_recent_events,
-)
-from npc_engine.graph.faction_writer import set_standing
-from npc_engine.graph.transaction_coordinator import run_in_tx
+
+if TYPE_CHECKING:
+    from npc_engine.engines.ports.faction_politics_port import FactionPoliticsGraphPort
 
 _LOGGER = logging.getLogger(__name__)
+
+_STANDING_MIN = -100
+_STANDING_MAX = 100
+_DECAY_CAUSE_RULE_ID = "decay"
 
 
 class FactionPoliticsEngine:
@@ -40,29 +37,31 @@ class FactionPoliticsEngine:
        magnitude exceeds min_magnitude.
     """
 
-    def __init__(self, rules: FactionPoliticsRules) -> None:
-        """Initialise the engine with a loaded rule set.
+    def __init__(self, rules: FactionPoliticsRules, repo: FactionPoliticsGraphPort) -> None:
+        """Initialise the engine with a loaded rule set and graph repository.
 
         Args:
             rules: Validated FactionPoliticsRules loaded from rules.yaml.
+            repo: FactionPoliticsGraphPort adapter for reads + the atomic standing write.
         """
         self._rules = rules
+        self._repo = repo
         self._lock = asyncio.Lock()
         self._rule_index: dict[str, int] = {r.event_type: r.standing_delta for r in rules.rules}
 
-    async def run_tick(self, session: AsyncSession, tick_id: int = 0) -> dict[str, Any]:
+    async def run_tick(self, *, tick_id: int = 0, **_: Any) -> dict[str, Any]:
         """Execute one faction politics tick: apply event rules then decay.
 
         Args:
-            session: Active Neo4j async session.
             tick_id: Current game tick; written onto FactionStandingEvent nodes.
+            **_: Swallows the scheduler's ``session=`` kwarg during the SEV-24 migration.
 
         Returns:
             Dict with keys ``rule_applications`` (int) and ``decay_applications`` (int).
         """
         async with self._lock:
-            rule_apps, modified_pairs = await self._apply_rules(session, tick_id=tick_id)
-            decay_apps = await self._apply_decay(session, skip=modified_pairs, tick_id=tick_id)
+            rule_apps, modified_pairs = await self._apply_rules(tick_id=tick_id)
+            decay_apps = await self._apply_decay(skip=modified_pairs, tick_id=tick_id)
             _LOGGER.info(
                 "faction_politics tick: %d rule applications, %d decay applications",
                 rule_apps,
@@ -70,59 +69,100 @@ class FactionPoliticsEngine:
             )
             return {"rule_applications": rule_apps, "decay_applications": decay_apps}
 
-    async def _apply_rules(
-        self, session: AsyncSession, *, tick_id: int = 0
-    ) -> tuple[int, set[tuple[str, str]]]:
+    async def _apply_rules(self, *, tick_id: int = 0) -> tuple[int, set[tuple[str, str]]]:
         """Apply event-based standing rules and record each change as a FactionStandingEvent.
 
         Args:
-            session: Active Neo4j async session.
             tick_id: Current game tick for FactionStandingEvent nodes.
 
         Returns:
             Tuple of (number of standing updates applied, set of (src_id, dst_id) pairs modified).
         """
-        events: list[dict[str, str]] = await get_recent_events(session)
-
+        events: list[dict[str, str]] = await self._repo.get_recent_events()
         applied = 0
         modified_pairs: set[tuple[str, str]] = set()
         for event in events:
             delta = self._rule_index.get(event["event_type"])
             if delta is None:
                 continue
-            factions = await self._get_character_factions(session, event["src_character_id"])
+            factions = await self._repo.get_character_factions(character_id=event["src_character_id"])
             if not factions:
                 continue
-            standings = await self._get_all_standings(session)
-            for src_faction in factions:
-                partners = {s["dst_id"] for s in standings if s["src_id"] == src_faction}
-                for dst_faction in partners:
-                    current = next(
-                        (s["standing"] for s in standings if s["src_id"] == src_faction and s["dst_id"] == dst_faction),
-                        0,
-                    )
-                    new_standing = max(-100, min(100, current + delta))
-                    if new_standing != current:
-                        await self._commit_standing(
-                            session, src_id=src_faction, dst_id=dst_faction, standing=new_standing
-                        )
-                        await record_standing_change(
-                            session,
-                            src_faction_id=src_faction,
-                            dst_faction_id=dst_faction,
-                            delta=delta,
-                            new_standing=new_standing,
-                            tick=tick_id,
-                            cause_event_id=event.get("event_id"),
-                            cause_rule_id=event["event_type"],
-                        )
-                        applied += 1
-                        modified_pairs.add((src_faction, dst_faction))
+            standings = await self._repo.get_all_standings()
+            applied += await self._apply_event_to_factions(
+                event, delta=delta, factions=factions, standings=standings, modified=modified_pairs,
+                tick_id=tick_id,
+            )
         return applied, modified_pairs
+
+    async def _apply_event_to_factions(
+        self,
+        event: dict[str, str],
+        *,
+        delta: int,
+        factions: list[str],
+        standings: list[dict[str, Any]],
+        modified: set[tuple[str, str]],
+        tick_id: int,
+    ) -> int:
+        """Adjust standings of every partner of the source character's factions for one event.
+
+        Args:
+            event: Event dict with event_id and event_type.
+            delta: Signed standing change from the matched rule.
+            factions: Source character's faction ids.
+            standings: All current STANDS_WITH edges.
+            modified: Accumulator of (src, dst) pairs changed this tick (mutated).
+            tick_id: Current game tick.
+
+        Returns:
+            Number of standing updates applied for this event.
+        """
+        applied = 0
+        for src_faction in factions:
+            partners = {s["dst_id"] for s in standings if s["src_id"] == src_faction}
+            for dst_faction in partners:
+                changed = await self._adjust_pair(
+                    event, delta=delta, src_faction=src_faction, dst_faction=dst_faction,
+                    standings=standings, tick_id=tick_id,
+                )
+                if changed:
+                    applied += 1
+                    modified.add((src_faction, dst_faction))
+        return applied
+
+    async def _adjust_pair(
+        self,
+        event: dict[str, str],
+        *,
+        delta: int,
+        src_faction: str,
+        dst_faction: str,
+        standings: list[dict[str, Any]],
+        tick_id: int,
+    ) -> bool:
+        """Apply one rule delta to a single (src, dst) standing pair, clamped to bounds.
+
+        Returns:
+            True if the standing changed and was committed, False otherwise.
+        """
+        current = next(
+            (s["standing"] for s in standings
+             if s["src_id"] == src_faction and s["dst_id"] == dst_faction),
+            0,
+        )
+        new_standing = max(_STANDING_MIN, min(_STANDING_MAX, current + delta))
+        if new_standing == current:
+            return False
+        await self._repo.commit_standing_change(
+            src_id=src_faction, dst_id=dst_faction, new_standing=new_standing,
+            delta=delta, tick=tick_id,
+            cause_event_id=event.get("event_id"), cause_rule_id=event["event_type"],
+        )
+        return True
 
     async def _apply_decay(
         self,
-        session: AsyncSession,
         *,
         skip: set[tuple[str, str]] | None = None,
         tick_id: int = 0,
@@ -132,14 +172,13 @@ class FactionPoliticsEngine:
         Records each decay as a FactionStandingEvent with cause_rule_id="decay".
 
         Args:
-            session: Active Neo4j async session.
             skip: Pairs modified by rules this tick; these are excluded from decay.
             tick_id: Current game tick for FactionStandingEvent nodes.
 
         Returns:
             Number of standings updated by decay.
         """
-        standings = await self._get_all_standings(session)
+        standings = await self._repo.get_all_standings()
         rate = self._rules.decay.rate_per_tick
         min_mag = self._rules.decay.min_magnitude
         skip_set = skip or set()
@@ -151,57 +190,9 @@ class FactionPoliticsEngine:
             if abs(current) < min_mag:
                 continue
             new_standing = current - rate if current > 0 else current + rate
-            await self._commit_standing(
-                session, src_id=s["src_id"], dst_id=s["dst_id"], standing=new_standing
-            )
-            await record_standing_change(
-                session,
-                src_faction_id=s["src_id"],
-                dst_faction_id=s["dst_id"],
-                delta=new_standing - current,
-                new_standing=new_standing,
-                tick=tick_id,
-                cause_rule_id="decay",
+            await self._repo.commit_standing_change(
+                src_id=s["src_id"], dst_id=s["dst_id"], new_standing=new_standing,
+                delta=new_standing - current, tick=tick_id, cause_rule_id=_DECAY_CAUSE_RULE_ID,
             )
             applied += 1
         return applied
-
-    async def _commit_standing(
-        self, session: AsyncSession, *, src_id: str, dst_id: str, standing: int
-    ) -> None:
-        """Persist one STANDS_WITH standing update inside a single transaction.
-
-        Args:
-            session: Active Neo4j async session.
-            src_id: Source faction id.
-            dst_id: Destination faction id.
-            standing: New standing value to write.
-        """
-
-        async def _work(tx: AsyncTransaction) -> None:
-            await set_standing(tx, src_id=src_id, dst_id=dst_id, standing=standing)
-
-        await run_in_tx(session, _work)
-
-    async def _get_character_factions(self, session: AsyncSession, character_id: str) -> list[str]:
-        """Return faction IDs the character belongs to.
-
-        Args:
-            session: Active Neo4j async session.
-            character_id: ID of the character node.
-
-        Returns:
-            List of faction ID strings.
-        """
-        return await get_character_factions(session, character_id=character_id)
-
-    async def _get_all_standings(self, session: AsyncSession) -> list[dict[str, Any]]:
-        """Fetch all STANDS_WITH edges from the graph.
-
-        Args:
-            session: Active Neo4j async session.
-
-        Returns:
-            List of dicts with src_id, dst_id, standing keys.
-        """
-        return await get_all_standings(session)
