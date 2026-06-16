@@ -193,7 +193,7 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   `dependencies_engines.py`, re-exported via dependency_singletons), still passes `session` for the engine
   forward. Tests mock the port; `test_interaction_repository.py` covers the adapter. Wave 3.
 
-- **memory** (DONE, `<pending>`): NEW `MemoryGraphPort` (create_memory + decay_all_vividness +
+- **memory** (DONE, `a124c26`): NEW `MemoryGraphPort` (create_memory + decay_all_vividness +
   decay_all_vividness_weighted) + `Neo4jMemoryRepository` (session-per-call, delegates to memory_service).
   `MemoryEngine(memory_repo=)` is now constructor-injected and sessionless (all 5 methods dropped the
   `session` arg). `get_memory_engine()` is the SINGLE source (wires the repo from `get_graph_db()`), replacing
