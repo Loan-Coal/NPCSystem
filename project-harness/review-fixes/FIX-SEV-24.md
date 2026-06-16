@@ -205,7 +205,7 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   Last Wave-3 box. Tests: `test_memory_repository.py` (adapter); rewrote test_memory_engine/_weighted_decay/
   _service + quest_lifecycle commitment test to inject a fake port.
 
-- **events** (DONE, Wave 4 first): NEW `EventGraphPort` + `Neo4jEventRepository`. The `run_in_tx` unit-of-work
+- **events** (DONE, `f8c7e94`, Wave 4 first): NEW `EventGraphPort` + `Neo4jEventRepository`. The `run_in_tx` unit-of-work
   was lifted OUT of `EventHandler` into a NEW graph orchestration fn
   `graph/event_emission_service.emit_event_atomic(session, *, …)` (upsert_event + seed_awareness +
   per-character reputation + routine overrides + the high-severity world-condition update, all in ONE
