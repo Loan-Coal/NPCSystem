@@ -112,7 +112,7 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   retains the `neo4j.AsyncSession` import until the `events` slice lands. Factory `get_director_tick` wires the
   two read adapters from `get_graph_db()`. Wave 3 third checkbox.
 
-- **planning** (DONE, `<pending>`): NEW `PlanningGraphPort` (need reads `get_needs_for_character`/
+- **planning** (DONE, `6e81c07`): NEW `PlanningGraphPort` (need reads `get_needs_for_character`/
   `get_satisfying_location_for_need` + goal writes `create_goal`/`create_goal_targets_edge` + the planning
   `move_character` wrapping routine_queries `update_character_location`) + `Neo4jPlanningRepository`
   (session-per-call). Multi-port slice: `GoalFormer(planning_repo=)` and `ActionSelector(planning_repo=)` are
