@@ -97,7 +97,7 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   from `get_graph_db()` (repo imports moved to module top to keep `get_reputation_engine` under R006).
   Wave 3 first checkbox; `engines/reputation/` is neo4j-free.
 
-- **player_model** (DONE, `445fc30`): NEW `PlayerModelGraphPort` (`upsert_player_model`) +
+- **player_model** (DONE, `aa06a0b`): NEW `PlayerModelGraphPort` (`upsert_player_model`) +
   `Neo4jPlayerModelRepository`; `PlayerModelTick` injects the shared `RelationReadPort` +
   `PlayerLocationReadPort` (replacing per-tick `RelationReader(session)` + `location_reader(session)`) and the
   new write port; `run_tick(tick_id, **_)` (no session), `_update_pair` dropped its session/reader params.
