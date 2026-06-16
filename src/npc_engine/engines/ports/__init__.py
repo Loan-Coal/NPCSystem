@@ -22,6 +22,7 @@ from npc_engine.engines.ports.political_port import PoliticalGraphPort
 from npc_engine.engines.ports.routine_port import RoutineGraphPort
 from npc_engine.engines.ports.skill_port import SkillGraphPort
 from npc_engine.engines.ports.story_pacing_port import StoryPacingGraphPort
+from npc_engine.engines.ports.treaty_port import TreatyGraphPort
 from npc_engine.engines.ports.world_state_port import WorldStateGraphPort
 
 __all__ = [
@@ -32,5 +33,6 @@ __all__ = [
     "RoutineGraphPort",
     "SkillGraphPort",
     "StoryPacingGraphPort",
+    "TreatyGraphPort",
     "WorldStateGraphPort",
 ]

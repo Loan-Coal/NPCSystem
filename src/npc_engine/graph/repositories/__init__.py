@@ -21,6 +21,7 @@ from npc_engine.graph.repositories.political_repository import Neo4jPoliticalRep
 from npc_engine.graph.repositories.routine_repository import Neo4jRoutineRepository
 from npc_engine.graph.repositories.skill_repository import Neo4jSkillRepository
 from npc_engine.graph.repositories.story_pacing_repository import Neo4jStoryPacingRepository
+from npc_engine.graph.repositories.treaty_repository import Neo4jTreatyRepository
 from npc_engine.graph.repositories.world_state_repository import Neo4jWorldStateRepository
 
 __all__ = [
@@ -31,5 +32,6 @@ __all__ = [
     "Neo4jRoutineRepository",
     "Neo4jSkillRepository",
     "Neo4jStoryPacingRepository",
+    "Neo4jTreatyRepository",
     "Neo4jWorldStateRepository",
 ]

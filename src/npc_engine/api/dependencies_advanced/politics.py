@@ -18,12 +18,17 @@ from functools import lru_cache
 def get_treaty_engine():
     """Create singleton treaty engine for treaty lifecycle management.
 
+    Wires the Neo4j graph adapter (Neo4jTreatyRepository) as the engine's injected
+    TreatyGraphPort (DEC-122 / SEV-24) so the engine holds no Neo4j session.
+
     Returns:
         TreatyEngine instance.
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
     from npc_engine.engines.treaty.treaty_engine import TreatyEngine
+    from npc_engine.graph.repositories.treaty_repository import Neo4jTreatyRepository
 
-    return TreatyEngine()
+    return TreatyEngine(treaty_repo=Neo4jTreatyRepository(get_graph_db()))
 
 
 @lru_cache
