@@ -224,7 +224,19 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   mocks the port + ignored-kwarg), `test_event_repository.py` (adapter), rewrote `test_event_reputation_wiring.py`
   to cover the graph-service reputation loop + handler forwarding.
 
-**28 domains migrated, 27 ports + 27 adapters** (+3 shared read ports/adapters; director/relationship reuse them). Shared ports built: political (succession+agenda),
+- **faction_politics** (DONE, `15b80dc`, Wave 4): NEW `FactionPoliticsGraphPort` (3 reads
+  `get_recent_events`/`get_character_factions`/`get_all_standings` + ONE atomic `commit_standing_change`) +
+  `Neo4jFactionPoliticsRepository`. The `run_in_tx` unit-of-work stays small (single `set_standing` write), so the
+  adapter runs it inline then appends `record_standing_change` in the same session-per-call (preserves the engine's
+  prior two-write behavior; no graph orchestration module needed unlike events). `FactionPoliticsEngine(rules=, repo=)`
+  is sessionless; `run_tick(*, tick_id=0, **_)` swallows `session=`; extracted `_apply_event_to_factions`/`_adjust_pair`
+  for R006 and named `_STANDING_MIN/_STANDING_MAX/_DECAY_CAUSE_RULE_ID` (ratcheted rules baseline 141->139).
+  `engines/faction_politics/` is neo4j-free. Factory `get_faction_politics_engine` (dependencies_engines, local imports)
+  wires the repo from `get_graph_db()`; scheduler + SEV-04 file-existence guard unchanged. Tests:
+  `test_faction_politics_engine.py` rewritten to mock the port (+ ignored-kwarg), `test_faction_politics_repository.py`
+  covers the adapter.
+
+**29 domains migrated, 28 ports + 28 adapters** (+3 shared read ports/adapters; director/relationship reuse them). Shared ports built: political (succession+agenda),
 WorldState (story_pacing + chapter — first cross-domain reuse). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.
