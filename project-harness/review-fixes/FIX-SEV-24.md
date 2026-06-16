@@ -123,7 +123,17 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   the adapter from `get_graph_db()`. Tests mock the ports; `test_planning_repository.py` covers the adapter.
   Wave 3 fourth checkbox; `engines/planning/` is neo4j-free.
 
-**20 domains migrated, 19 ports + 19 adapters** (+3 shared read ports/adapters; director reuses them, no new port). Shared ports built: political (succession+agenda),
+- **economy** (DONE, `<pending>`): NEW `EconomyGraphPort` (pricing-context reads
+  `get_character_location_type`/`get_character_location_id`/`get_active_event_types_at_location`/
+  `check_faction_membership` + atomic `transfer_item_atomic`/`transfer_currency_atomic`) + `Neo4jEconomyRepository`
+  (session-per-call). `TradeEngine(pricing_engine=, economy_repo=)`; `evaluate_offer(...)` dropped its `session`
+  param and was split into `_compute_fair_price` + `_execute_transfers` to stay under R006. Route `/trade`
+  dropped its `session` Depends (the `/price` route keeps its own session — out of scope). PER-REQUEST factory:
+  `get_trade_engine` lost `@lru_cache` (builds a fresh `Neo4jEconomyRepository` per request), so removed its
+  `.cache_clear()` call + unused import from BOTH `tests/conftest.py` and `src/npc_engine/main.py`. Tests mock
+  the port; `test_economy_repository.py` covers the adapter. Wave 3 fifth checkbox; `engines/economy/` is neo4j-free.
+
+**21 domains migrated, 20 ports + 20 adapters** (+3 shared read ports/adapters; director reuses them, no new port). Shared ports built: political (succession+agenda),
 WorldState (story_pacing + chapter — first cross-domain reuse). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.

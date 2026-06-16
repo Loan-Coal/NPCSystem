@@ -43,7 +43,6 @@ from npc_engine.api.dependency_singletons import (
     get_routine_engine,
     get_story_pacing_engine,
     get_tick_scheduler,
-    get_trade_engine,
     get_type_registry,
 )
 from npc_engine.engines.emotion.emotion_bootstrap import EmotionBootstrapper
@@ -82,7 +81,7 @@ async def lifespan(_app: FastAPI):
         get_treaty_engine.cache_clear()
         get_story_pacing_engine.cache_clear()
         get_pricing_engine.cache_clear()
-        get_trade_engine.cache_clear()
+        # get_trade_engine is per-request (not lru_cache) since SEV-24 — no cache to clear.
         set_trade_handler(get_sync_trade_handler())
         get_quest_generation_engine.cache_clear()
         get_routine_engine.cache_clear()

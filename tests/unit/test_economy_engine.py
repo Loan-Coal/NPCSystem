@@ -6,10 +6,8 @@ Tests use fake async session stubs — no live DB required.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -160,67 +158,58 @@ def test_compute_price_stacked_modifiers() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _economy_port(location_type: str = "village", location_id: str | None = None,
+                  faction: bool = False) -> AsyncMock:
+    """EconomyGraphPort double with configurable read returns."""
+    port = AsyncMock()
+    port.get_character_location_type.return_value = location_type
+    port.get_character_location_id.return_value = location_id
+    port.get_active_event_types_at_location.return_value = []
+    port.check_faction_membership.return_value = faction
+    return port
+
+
 @pytest.mark.asyncio
 async def test_trade_engine_accepts_fair_offer() -> None:
-    """offered_price >= fair_price → accepted=True, transfers executed."""
-    rules = _make_rules(base_prices={"sword": 50})
-    pricing_engine = PricingEngine(rules=rules)
-    trade_engine = TradeEngine(pricing_engine=pricing_engine)
+    """offered_price >= fair_price → accepted=True, transfers executed via the port."""
+    pricing_engine = PricingEngine(rules=_make_rules(base_prices={"sword": 50}))
+    port = _economy_port()
+    trade_engine = TradeEngine(pricing_engine=pricing_engine, economy_repo=port)
 
-    mock_session = MagicMock()
-
-    with (
-        patch("npc_engine.engines.economy.trade_engine.get_character_location_type", new=AsyncMock(return_value="village")),
-        patch("npc_engine.engines.economy.trade_engine.get_character_location_id", new=AsyncMock(return_value=None)),
-        patch("npc_engine.engines.economy.trade_engine.check_faction_membership", new=AsyncMock(return_value=False)),
-        patch("npc_engine.engines.economy.trade_engine.transfer_item_atomic", new=AsyncMock()) as mock_item,
-        patch("npc_engine.engines.economy.trade_engine.transfer_currency_atomic", new=AsyncMock()) as mock_currency,
-    ):
-        result: TradeResult = await trade_engine.evaluate_offer(
-            session=mock_session,
-            buyer_id="buyer-1",
-            seller_id="seller-1",
-            item_id="item-sword-1",
-            item_type="sword",
-            offered_price=50,
-        )
+    result: TradeResult = await trade_engine.evaluate_offer(
+        buyer_id="buyer-1",
+        seller_id="seller-1",
+        item_id="item-sword-1",
+        item_type="sword",
+        offered_price=50,
+    )
 
     assert result.accepted is True
     assert result.fair_price == 50
     assert result.final_price == 50
     assert result.rejection_reason is None
-    mock_item.assert_called_once()
-    mock_currency.assert_called_once()
+    port.transfer_item_atomic.assert_awaited_once()
+    port.transfer_currency_atomic.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_trade_engine_rejects_low_offer() -> None:
     """offered_price < fair_price → accepted=False, no transfers executed."""
-    rules = _make_rules(base_prices={"sword": 50})
-    pricing_engine = PricingEngine(rules=rules)
-    trade_engine = TradeEngine(pricing_engine=pricing_engine)
+    pricing_engine = PricingEngine(rules=_make_rules(base_prices={"sword": 50}))
+    port = _economy_port()
+    trade_engine = TradeEngine(pricing_engine=pricing_engine, economy_repo=port)
 
-    mock_session = MagicMock()
-
-    with (
-        patch("npc_engine.engines.economy.trade_engine.get_character_location_type", new=AsyncMock(return_value="village")),
-        patch("npc_engine.engines.economy.trade_engine.get_character_location_id", new=AsyncMock(return_value=None)),
-        patch("npc_engine.engines.economy.trade_engine.check_faction_membership", new=AsyncMock(return_value=False)),
-        patch("npc_engine.engines.economy.trade_engine.transfer_item_atomic", new=AsyncMock()) as mock_item,
-        patch("npc_engine.engines.economy.trade_engine.transfer_currency_atomic", new=AsyncMock()) as mock_currency,
-    ):
-        result: TradeResult = await trade_engine.evaluate_offer(
-            session=mock_session,
-            buyer_id="buyer-1",
-            seller_id="seller-1",
-            item_id="item-sword-1",
-            item_type="sword",
-            offered_price=30,
-        )
+    result: TradeResult = await trade_engine.evaluate_offer(
+        buyer_id="buyer-1",
+        seller_id="seller-1",
+        item_id="item-sword-1",
+        item_type="sword",
+        offered_price=30,
+    )
 
     assert result.accepted is False
     assert result.fair_price == 50
     assert result.final_price is None
     assert result.rejection_reason is not None
-    mock_item.assert_not_called()
-    mock_currency.assert_not_called()
+    port.transfer_item_atomic.assert_not_awaited()
+    port.transfer_currency_atomic.assert_not_awaited()

@@ -110,15 +110,13 @@ async def get_item_price(
 @router.post("/trade", response_model=OkEnvelope[TradeResultPayload])
 async def evaluate_trade(
     body: TradeOfferRequest,
-    session: AsyncSession = Depends(get_db_session),
     trade_engine: TradeEngine = Depends(get_trade_engine),
 ) -> dict[str, Any]:
     """Evaluate a trade offer and execute transfers if accepted.
 
     Args:
         body: Buyer/seller/item/price details.
-        session: Active Neo4j async session.
-        trade_engine: Singleton trade engine.
+        trade_engine: Per-request trade engine (holds its own EconomyGraphPort; SEV-24).
 
     Returns:
         Envelope with TradeResult fields: accepted, fair_price, final_price, rejection_reason.
@@ -129,7 +127,6 @@ async def evaluate_trade(
     )
     try:
         result = await trade_engine.evaluate_offer(
-            session=session,
             buyer_id=body.buyer_id,
             seller_id=body.seller_id,
             item_id=body.item_id,

@@ -36,7 +36,6 @@ from npc_engine.api.dependency_singletons import (
     get_session_store,
     get_story_pacing_engine,
     get_tick_scheduler,
-    get_trade_engine,
     get_type_registry,
 )
 
@@ -88,6 +87,6 @@ def _clear_all() -> None:
     get_idempotency_service.cache_clear()
     get_reindex_job_service.cache_clear()
     get_pricing_engine.cache_clear()
-    get_trade_engine.cache_clear()
+    # get_trade_engine is per-request (not lru_cache) since SEV-24 — no cache to clear.
     get_context_cache.cache_clear()
     get_memory_consolidation_engine.cache_clear()

@@ -231,14 +231,22 @@ def get_pricing_engine() -> PricingEngine:
     return PricingEngine(rules=rules)
 
 
-@lru_cache
 def get_trade_engine() -> TradeEngine:
-    """Create singleton trade engine wired to the shared pricing engine.
+    """Create a per-request trade engine wired to the shared pricing engine + economy port.
+
+    Not a singleton: built fresh per request as the route's Depends factory, injecting the
+    Neo4jEconomyRepository (EconomyGraphPort) so the engine holds no session (DEC-122 / SEV-24).
 
     Returns:
-        TradeEngine wired to the singleton PricingEngine.
+        TradeEngine wired to the singleton PricingEngine and a Neo4jEconomyRepository.
     """
-    return TradeEngine(pricing_engine=get_pricing_engine())
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.economy_repository import Neo4jEconomyRepository
+
+    return TradeEngine(
+        pricing_engine=get_pricing_engine(),
+        economy_repo=Neo4jEconomyRepository(get_graph_db()),
+    )
 
 
 @lru_cache
