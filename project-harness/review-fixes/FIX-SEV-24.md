@@ -51,7 +51,7 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
 - **memory_consolidation** (DONE, `c988521`): `MemoryConsolidationGraphPort` + `Neo4jMemoryConsolidationRepository`
   (single-domain port spanning belief/memory/witness reads + the Memory write; engine drops `graph_db`/session,
   fan-out helper renamed `_consolidate_bounded`). Wave 1 first checkbox.
-- **chapter** (DONE, `<pending>`): `ChapterGraphPort` + `Neo4jChapterRepository` (chapter_queries x5 +
+- **chapter** (DONE, `e167a53`): `ChapterGraphPort` + `Neo4jChapterRepository` (chapter_queries x5 +
   chapter_writer x3 + faction_queries `get_faction_standings_summary`) **reusing the shared `WorldStateGraphPort`**
   for the world_state read; engine injects both ports, `run_tick(*, tick_id, **_)` swallows `session=`; extracted
   `_transition_chapter` for R006 (baseline 142->141) and named the link-severity magic number.
