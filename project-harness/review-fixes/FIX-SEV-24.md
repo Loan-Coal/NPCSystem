@@ -145,7 +145,19 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   `test_intent_formation_engine.py` adds the ignored-kwarg test. Wave 3 sixth checkbox; `engines/agenda/` is
   neo4j-free.
 
-**22 domains migrated, 21 ports + 21 adapters** (+3 shared read ports/adapters; director reuses them, no new port). Shared ports built: political (succession+agenda),
+- **investigation** (DONE, `<pending>`): NEW `InvestigationGraphPort` (6 read fns: `get_evidence_for_event`/
+  `get_witnesses_of_event`/`get_suspects_for_event`/`get_deductions_for_character`/`get_contradicting_rumors`/
+  `get_alibi_window`) + `Neo4jInvestigationRepository` (session-per-call, delegates to investigation_queries).
+  `InvestigationEngine(investigation_repo=)` is query-only and sessionless: `get_investigation_context(*,
+  investigator_id, event_id)` + `_detect_alibi_contradictions(*, witnesses, event_id)` dropped the session
+  param. Route `investigations.py` dropped its `session = Depends(get_db_session)` (engine holds the port).
+  Factory `get_investigation_engine` (in `dependencies_advanced/progression.py`) wires the repo from
+  `get_graph_db()`. Tests mock the port; `test_investigation_repository.py` covers the adapter. NOTE:
+  `scheme_detection_tick` (also under `engines/investigation/`) stays for the Wave-4 `scheming` domain port —
+  it uses scheme_reader/scheme_writer, not investigation_queries. `engines/investigation/investigation_engine`
+  is neo4j-free.
+
+**23 domains migrated, 22 ports + 22 adapters** (+3 shared read ports/adapters; director reuses them, no new port). Shared ports built: political (succession+agenda),
 WorldState (story_pacing + chapter — first cross-domain reuse). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.

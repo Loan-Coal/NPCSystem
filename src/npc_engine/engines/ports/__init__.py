@@ -14,7 +14,7 @@ Public surface: NeedGraphPort, MoodGraphPort, GroupGraphPort, SkillGraphPort,
                 MilitaryGraphPort, RelationReadPort, PlayerLocationReadPort,
                 CharacterReadPort, EmotionGraphPort, KnowledgeGraphPort,
                 ReputationGraphPort, PlayerModelGraphPort, PlanningGraphPort,
-                EconomyGraphPort, IntentGraphPort.
+                EconomyGraphPort, IntentGraphPort, InvestigationGraphPort.
 """
 
 from __future__ import annotations
@@ -25,6 +25,7 @@ from npc_engine.engines.ports.economy_port import EconomyGraphPort
 from npc_engine.engines.ports.emotion_port import EmotionGraphPort
 from npc_engine.engines.ports.group_port import GroupGraphPort
 from npc_engine.engines.ports.intent_port import IntentGraphPort
+from npc_engine.engines.ports.investigation_port import InvestigationGraphPort
 from npc_engine.engines.ports.knowledge_port import KnowledgeGraphPort
 from npc_engine.engines.ports.memory_consolidation_port import MemoryConsolidationGraphPort
 from npc_engine.engines.ports.military_port import MilitaryGraphPort
@@ -50,6 +51,7 @@ __all__ = [
     "EmotionGraphPort",
     "GroupGraphPort",
     "IntentGraphPort",
+    "InvestigationGraphPort",
     "KnowledgeGraphPort",
     "MemoryConsolidationGraphPort",
     "MilitaryGraphPort",

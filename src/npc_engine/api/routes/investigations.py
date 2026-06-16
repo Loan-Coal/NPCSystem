@@ -6,8 +6,8 @@ Purpose: Read-only HTTP route for surfacing investigation context (evidence, wit
          investigator and crime event (Phase H0.3).
 Does NOT: write to the graph or call LLMs.
 Dependencies: engines.investigation.investigation_engine (via dependencies_advanced),
-              api.dependencies.get_db_session, api.route_helpers.
-Dependencies injected: AsyncSession (via FastAPI Depends), InvestigationEngine (via Depends).
+              api.route_helpers.
+Dependencies injected: InvestigationEngine (via Depends; it holds its own graph port).
 Used by: npc_engine.api.router_registry (registered at API_V1_PREFIX).
 """
 
@@ -16,10 +16,8 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from neo4j import AsyncSession
 from pydantic import BaseModel, ConfigDict
 
-from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.dependencies_advanced import get_investigation_engine
 from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.engines.investigation.investigation_engine import InvestigationEngine
@@ -56,7 +54,6 @@ def _has_investigation_data(context: dict[str, Any]) -> bool:
 async def get_investigation_context(
     investigator_id: str,
     event_id: str,
-    session: AsyncSession = Depends(get_db_session),
     engine: InvestigationEngine = Depends(get_investigation_engine),
 ) -> dict[str, Any]:
     """Return aggregated investigation context for a crime event.
@@ -68,7 +65,6 @@ async def get_investigation_context(
     Args:
         investigator_id: ID of the Character conducting the investigation.
         event_id: ID of the Event (crime) being investigated.
-        session: Scoped Neo4j session injected by FastAPI.
         engine: Singleton InvestigationEngine injected by FastAPI.
 
     Returns:
@@ -80,7 +76,7 @@ async def get_investigation_context(
             set (i.e. the event does not exist or has no associated data).
     """
     context = await engine.get_investigation_context(
-        session, investigator_id=investigator_id, event_id=event_id,
+        investigator_id=investigator_id, event_id=event_id,
     )
     if not _has_investigation_data(context):
         raise HTTPException(status_code=404, detail=f"No investigation data found for event {event_id!r}")

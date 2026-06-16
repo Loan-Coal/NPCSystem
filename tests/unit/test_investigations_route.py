@@ -1,9 +1,10 @@
 """
 test_investigations_route.py - Unit tests for the investigations read route (H0.3).
 
-Uses FastAPI dependency_overrides for session and engine so no Neo4j is needed.
+Uses FastAPI dependency_overrides for the engine so no Neo4j is needed. The engine
+holds its own graph port now (SEV-24), so the route no longer injects a session.
 
-Dependencies injected: dummy session + overridden InvestigationEngine singleton.
+Dependencies injected: overridden InvestigationEngine singleton.
 """
 
 from __future__ import annotations
@@ -13,7 +14,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from npc_engine.api.routes import investigations as route_mod
-from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.dependencies_advanced import get_investigation_engine
 
 
@@ -23,7 +23,7 @@ class _FakeEngine:
     def __init__(self, context: dict | None = None) -> None:
         self._context = context or {}
 
-    async def get_investigation_context(self, session, *, investigator_id, event_id):
+    async def get_investigation_context(self, *, investigator_id, event_id):
         return self._context
 
 
@@ -32,7 +32,6 @@ def _client(context: dict | None, fake_engine: _FakeEngine | None = None) -> Tes
         fake_engine = _FakeEngine(context)
     app = FastAPI()
     app.include_router(route_mod.router)
-    app.dependency_overrides[get_db_session] = lambda: object()
     app.dependency_overrides[get_investigation_engine] = lambda: fake_engine
     return TestClient(app)
 
@@ -76,7 +75,7 @@ def test_investigator_id_and_event_id_are_passed() -> None:
     received: dict = {}
 
     class _CapturingEngine:
-        async def get_investigation_context(self, session, *, investigator_id, event_id):
+        async def get_investigation_context(self, *, investigator_id, event_id):
             received["investigator_id"] = investigator_id
             received["event_id"] = event_id
             return _FULL_CONTEXT

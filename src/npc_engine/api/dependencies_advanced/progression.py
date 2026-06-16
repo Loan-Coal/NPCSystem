@@ -70,12 +70,18 @@ def get_chapter_engine():
 def get_investigation_engine():
     """Create singleton investigation engine for Detective/Mystery queries.
 
+    Wires the Neo4jInvestigationRepository (read-only) as the engine-layer Port
+    (DEC-122 / SEV-24) so the engine holds no Neo4j session.
+
     Returns:
-        InvestigationEngine instance (stateless, no LLM).
+        InvestigationEngine instance (query-only, no LLM).
     """
     from npc_engine.engines.investigation.investigation_engine import InvestigationEngine
+    from npc_engine.graph.repositories.investigation_repository import (
+        Neo4jInvestigationRepository,
+    )
 
-    return InvestigationEngine()
+    return InvestigationEngine(investigation_repo=Neo4jInvestigationRepository(get_graph_db()))
 
 
 @lru_cache
