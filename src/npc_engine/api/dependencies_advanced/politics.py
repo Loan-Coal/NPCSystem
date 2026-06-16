@@ -35,12 +35,17 @@ def get_treaty_engine():
 def get_oath_engine():
     """Create singleton oath engine for pledge lifecycle management.
 
+    Wires the Neo4j graph adapter (Neo4jPledgeRepository) as the engine's injected
+    PledgeGraphPort (DEC-122 / SEV-24) so the engine holds no Neo4j session.
+
     Returns:
         OathEngine instance.
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
     from npc_engine.engines.oath.oath_engine import OathEngine
+    from npc_engine.graph.repositories.pledge_repository import Neo4jPledgeRepository
 
-    return OathEngine()
+    return OathEngine(pledge_repo=Neo4jPledgeRepository(get_graph_db()))
 
 
 @lru_cache

@@ -18,6 +18,7 @@ from __future__ import annotations
 from npc_engine.engines.ports.group_port import GroupGraphPort
 from npc_engine.engines.ports.mood_port import MoodGraphPort
 from npc_engine.engines.ports.need_port import NeedGraphPort
+from npc_engine.engines.ports.pledge_port import PledgeGraphPort
 from npc_engine.engines.ports.political_port import PoliticalGraphPort
 from npc_engine.engines.ports.routine_port import RoutineGraphPort
 from npc_engine.engines.ports.skill_port import SkillGraphPort
@@ -29,6 +30,7 @@ __all__ = [
     "GroupGraphPort",
     "MoodGraphPort",
     "NeedGraphPort",
+    "PledgeGraphPort",
     "PoliticalGraphPort",
     "RoutineGraphPort",
     "SkillGraphPort",

@@ -6,7 +6,7 @@ and the oath_engine.run_tick wiring (all active pledgers, not just expiring ones
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -288,36 +288,32 @@ async def test_get_all_active_pledgers_returns_distinct_ids() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _make_pledge_repo(
+    expiring: list[dict] | None = None,
+    pledgers: list[str] | None = None,
+    violations: list[dict] | None = None,
+) -> AsyncMock:
+    """Build a mock PledgeGraphPort for OathEngine."""
+    repo = AsyncMock()
+    repo.get_expiring_pledges = AsyncMock(return_value=expiring or [])
+    repo.break_pledge = AsyncMock()
+    repo.get_all_active_pledgers = AsyncMock(return_value=pledgers or [])
+    repo.check_pledge_violations = AsyncMock(return_value=violations or [])
+    return repo
+
+
 @pytest.mark.asyncio
 async def test_oath_engine_checks_all_active_pledgers() -> None:
     """run_tick calls check_pledge_violations for each active pledger, not just expiring ones."""
     from npc_engine.engines.oath.oath_engine import OathEngine
 
-    session = AsyncMock()
-    engine = OathEngine()
+    repo = _make_pledge_repo(expiring=[], pledgers=["char-1", "char-2"], violations=[])
+    engine = OathEngine(pledge_repo=repo)
 
-    with (
-        patch(
-            "npc_engine.engines.oath.oath_engine.get_expiring_pledges_svc",
-            new_callable=AsyncMock,
-            return_value=[],  # no expiring pledges
-        ),
-        patch(
-            "npc_engine.engines.oath.oath_engine.get_all_active_pledgers_svc",
-            new_callable=AsyncMock,
-            return_value=["char-1", "char-2"],
-        ),
-        patch(
-            "npc_engine.engines.oath.oath_engine.check_pledge_violations",
-            new_callable=AsyncMock,
-            return_value=[],
-        ) as mock_check,
-    ):
-        result = await engine.run_tick(session, tick_id=20)
+    result = await engine.run_tick(tick_id=20)
 
-    # Should have checked both pledgers
-    assert mock_check.await_count == 2
-    checked_ids = {c.kwargs["pledger_id"] for c in mock_check.await_args_list}
+    assert repo.check_pledge_violations.await_count == 2
+    checked_ids = {c.kwargs["pledger_id"] for c in repo.check_pledge_violations.await_args_list}
     assert checked_ids == {"char-1", "char-2"}
     assert result["expired_pledges"] == 0
 
@@ -327,27 +323,12 @@ async def test_oath_engine_includes_violation_count_in_result() -> None:
     """run_tick result dict includes violated_pledges count."""
     from npc_engine.engines.oath.oath_engine import OathEngine
 
-    session = AsyncMock()
-    engine = OathEngine()
+    repo = _make_pledge_repo(
+        expiring=[], pledgers=["char-1"], violations=[{"pledge_type": "fealty"}]
+    )
+    engine = OathEngine(pledge_repo=repo)
 
-    with (
-        patch(
-            "npc_engine.engines.oath.oath_engine.get_expiring_pledges_svc",
-            new_callable=AsyncMock,
-            return_value=[],
-        ),
-        patch(
-            "npc_engine.engines.oath.oath_engine.get_all_active_pledgers_svc",
-            new_callable=AsyncMock,
-            return_value=["char-1"],
-        ),
-        patch(
-            "npc_engine.engines.oath.oath_engine.check_pledge_violations",
-            new_callable=AsyncMock,
-            return_value=[{"pledge_type": "fealty"}],
-        ),
-    ):
-        result = await engine.run_tick(session, tick_id=20)
+    result = await engine.run_tick(tick_id=20)
 
     assert result["violated_pledges"] == 1
 
