@@ -343,10 +343,28 @@ def get_intent_formation_engine() -> IntentFormationEngine:
 def get_player_model_tick() -> PlayerModelTick:
     """Create singleton PlayerModelTick adapter for the tick scheduler (F1.4).
 
+    Wires the shared Neo4j read adapters (Neo4jPlayerLocationReadRepository +
+    Neo4jRelationReadRepository) and the Neo4jPlayerModelRepository write adapter as the
+    engine-layer Ports (DEC-122 / SEV-24) so the adapter holds no Neo4j session.
+
     Returns:
-        PlayerModelTick wired to a pure PlayerModelEngine and the shared location reader.
+        PlayerModelTick wired to a pure PlayerModelEngine and the injected graph ports.
     """
-    return PlayerModelTick(engine=PlayerModelEngine(), location_reader=PlayerLocationReader())
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.player_location_read_repository import (
+        Neo4jPlayerLocationReadRepository,
+    )
+    from npc_engine.graph.repositories.player_model_repository import (
+        Neo4jPlayerModelRepository,
+    )
+
+    graph_db = get_graph_db()
+    return PlayerModelTick(
+        engine=PlayerModelEngine(),
+        location_reader=Neo4jPlayerLocationReadRepository(graph_db),
+        relation_reader=Neo4jRelationReadRepository(graph_db),
+        model_repo=Neo4jPlayerModelRepository(graph_db),
+    )
 
 
 @lru_cache

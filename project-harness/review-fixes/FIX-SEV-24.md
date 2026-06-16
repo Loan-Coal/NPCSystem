@@ -97,7 +97,15 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   from `get_graph_db()` (repo imports moved to module top to keep `get_reputation_engine` under R006).
   Wave 3 first checkbox; `engines/reputation/` is neo4j-free.
 
-**17 domains migrated, 17 ports + 17 adapters** (+3 shared read ports/adapters, no engine). Shared ports built: political (succession+agenda),
+- **player_model** (DONE, `445fc30`): NEW `PlayerModelGraphPort` (`upsert_player_model`) +
+  `Neo4jPlayerModelRepository`; `PlayerModelTick` injects the shared `RelationReadPort` +
+  `PlayerLocationReadPort` (replacing per-tick `RelationReader(session)` + `location_reader(session)`) and the
+  new write port; `run_tick(tick_id, **_)` (no session), `_update_pair` dropped its session/reader params.
+  Factory `get_player_model_tick` wires all 3 repos from `get_graph_db()` (local imports). Updated the
+  integration test to build the real adapters from a `GraphDB`. Wave 3 second checkbox; `engines/player_model/`
+  is neo4j-free.
+
+**18 domains migrated, 18 ports + 18 adapters** (+3 shared read ports/adapters, no engine). Shared ports built: political (succession+agenda),
 WorldState (story_pacing + chapter — first cross-domain reuse). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.

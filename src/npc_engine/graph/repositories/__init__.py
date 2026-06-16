@@ -12,7 +12,8 @@ Public surface: Neo4jNeedRepository, Neo4jMoodRepository, Neo4jGroupRepository,
                 Neo4jSkillRepository, Neo4jChapterRepository, Neo4jMilitaryRepository,
                 Neo4jRelationReadRepository, Neo4jPlayerLocationReadRepository,
                 Neo4jCharacterReadRepository, Neo4jEmotionRepository,
-                Neo4jKnowledgeRepository, Neo4jReputationRepository.
+                Neo4jKnowledgeRepository, Neo4jReputationRepository,
+                Neo4jPlayerModelRepository.
 """
 
 from __future__ import annotations
@@ -32,6 +33,9 @@ from npc_engine.graph.repositories.mood_repository import Neo4jMoodRepository
 from npc_engine.graph.repositories.need_repository import Neo4jNeedRepository
 from npc_engine.graph.repositories.player_location_read_repository import (
     Neo4jPlayerLocationReadRepository,
+)
+from npc_engine.graph.repositories.player_model_repository import (
+    Neo4jPlayerModelRepository,
 )
 from npc_engine.graph.repositories.pledge_repository import Neo4jPledgeRepository
 from npc_engine.graph.repositories.political_repository import Neo4jPoliticalRepository
@@ -56,6 +60,7 @@ __all__ = [
     "Neo4jMoodRepository",
     "Neo4jNeedRepository",
     "Neo4jPlayerLocationReadRepository",
+    "Neo4jPlayerModelRepository",
     "Neo4jPledgeRepository",
     "Neo4jPoliticalRepository",
     "Neo4jRelationReadRepository",

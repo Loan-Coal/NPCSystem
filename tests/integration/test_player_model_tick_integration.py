@@ -11,15 +11,20 @@ Dependencies injected: Neo4j test environment via env vars.
 from __future__ import annotations
 
 import os
-from typing import Any
 from uuid import uuid4
 
 import pytest
 from neo4j import AsyncGraphDatabase
 
+from npc_engine.config import get_settings
 from npc_engine.engines.player_model.player_model_engine import PlayerModelEngine
 from npc_engine.engines.player_model.player_model_tick import PlayerModelTick
+from npc_engine.graph.db import GraphDB
 from npc_engine.graph.player_model_writer import get_player_model
+from npc_engine.graph.repositories.player_model_repository import Neo4jPlayerModelRepository
+from npc_engine.graph.repositories.relation_read_repository import (
+    Neo4jRelationReadRepository,
+)
 
 
 def _uid(prefix: str) -> str:
@@ -39,7 +44,7 @@ class _FakeLocationReader:
     def __init__(self, pairs: list[tuple[str, str]]) -> None:
         self._pairs = pairs
 
-    async def get_collocated_pairs(self, session: Any) -> list[tuple[str, str]]:
+    async def get_collocated_pairs(self) -> list[tuple[str, str]]:
         return self._pairs
 
 
@@ -65,6 +70,7 @@ async def test_player_model_node_updates_on_tick() -> None:
     npc_id = _uid("npc")
     player_id = _uid("plr")
 
+    graph_db = GraphDB(get_settings())
     driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
     try:
         async with driver.session() as session:
@@ -75,8 +81,10 @@ async def test_player_model_node_updates_on_tick() -> None:
             adapter = PlayerModelTick(
                 engine=PlayerModelEngine(),
                 location_reader=_FakeLocationReader([(npc_id, player_id)]),
+                relation_reader=Neo4jRelationReadRepository(graph_db),
+                model_repo=Neo4jPlayerModelRepository(graph_db),
             )
-            result = await adapter.run_tick(session=session, tick_id=42)
+            result = await adapter.run_tick(tick_id=42)
             record = await get_player_model(session, npc_id=npc_id, player_id=player_id)
 
         assert len(result["player_models"]) == 1
@@ -91,3 +99,4 @@ async def test_player_model_node_updates_on_tick() -> None:
                 await _cleanup(tx, npc_id, player_id)
                 await tx.commit()
         await driver.close()
+        await graph_db.close()
