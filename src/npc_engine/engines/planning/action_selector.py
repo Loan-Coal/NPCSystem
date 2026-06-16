@@ -6,21 +6,20 @@ Purpose: Given a character's active goals, selects the highest-urgency one and
          Goals at or below ROUTINE_PRIORITY are ignored — the routine engine
          has already placed the NPC.
 Dependencies: npc_engine.engines.planning.action_priority,
-              npc_engine.graph.routine_queries,
+              npc_engine.engines.ports.planning_port (PlanningGraphPort),
               npc_engine.utils.logging
 Used by: npc_engine.scheduler.tick_scheduler (slice-2 wiring)
-Does NOT: call LLMs, read from Neo4j directly, or import from api/ or services/.
-Dependencies injected: AsyncSession (passed per call), goal list (passed per call).
+Does NOT: call LLMs, read from Neo4j directly, hold a session, or import from api/,
+          services/, or the graph layer.
+Dependencies injected: PlanningGraphPort (via __init__), goal list (passed per call).
 """
 
 from __future__ import annotations
 
 import logging
 
-from neo4j import AsyncSession
-
 from npc_engine.engines.planning.action_priority import ROUTINE_PRIORITY
-from npc_engine.graph.routine_queries import update_character_location
+from npc_engine.engines.ports.planning_port import PlanningGraphPort
 from npc_engine.utils.logging import get_logger
 
 logger: logging.Logger = get_logger("npc_engine.engines.planning.action_selector")
@@ -33,12 +32,19 @@ class ActionSelector:
     - urgency > ROUTINE_PRIORITY  → call update_character_location (planning wins)
     - urgency <= ROUTINE_PRIORITY → no-op (routine engine keeps control)
 
-    No state is stored on the instance; all dependencies are injected per call.
+    The PlanningGraphPort is injected once; no session is held.
     """
+
+    def __init__(self, planning_repo: PlanningGraphPort) -> None:
+        """Initialise with the injected planning graph port.
+
+        Args:
+            planning_repo: PlanningGraphPort for the move-character write.
+        """
+        self._planning = planning_repo
 
     async def select_action(
         self,
-        session: AsyncSession,
         *,
         character_id: str,
         goals: list[dict],
@@ -46,7 +52,6 @@ class ActionSelector:
         """Evaluate goals and dispatch a move action if the top goal overrides routine.
 
         Args:
-            session: Active Neo4j async session.
             character_id: ID of the NPC being evaluated.
             goals: List of active goal dicts with keys: goal_id, urgency,
                    status, target_location_id.  Callers supply pre-fetched goals
@@ -72,11 +77,10 @@ class ActionSelector:
             logger.info("action_selector.deferred_to_routine", extra={"character_id": character_id, "urgency": urgency})
             return
 
-        await self._dispatch_move(session, character_id, top_goal)
+        await self._dispatch_move(character_id, top_goal)
 
     async def _dispatch_move(
         self,
-        session: AsyncSession,
         character_id: str,
         goal: dict,
     ) -> None:
@@ -87,7 +91,9 @@ class ActionSelector:
                 extra={"character_id": character_id, "goal_id": goal["goal_id"]},
             )
             return
-        await update_character_location(session, character_id=character_id, location_id=target_location_id)
+        await self._planning.move_character(
+            character_id=character_id, location_id=target_location_id
+        )
         logger.info(
             "action_selector.move_dispatched",
             extra={"character_id": character_id, "location_id": target_location_id, "urgency": goal["urgency"]},

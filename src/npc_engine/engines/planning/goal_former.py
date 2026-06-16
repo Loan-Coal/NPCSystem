@@ -4,24 +4,21 @@ Layer: engines
 Purpose: Reads NPC Need nodes, identifies the most-decayed need, and forms a Goal node
          with urgency = min(MAX_URGENCY, MAX_URGENCY - need.level). Writes a GOAL_TARGETS
          edge to the first satisfying location found for that need kind.
-Dependencies: npc_engine.graph.need_queries, npc_engine.graph.goal_service,
-              npc_engine.graph.goal_targets_writer, npc_engine.engines.planning.action_priority,
+Dependencies: npc_engine.engines.ports.planning_port (PlanningGraphPort),
+              npc_engine.engines.planning.action_priority,
               npc_engine.utils.logging, npc_engine.world.time_utils
 Used by: npc_engine.scheduler.tick_scheduler (slice-2 wiring)
-Does NOT: call LLMs, open transactions, run Cypher, or import from api/, services/, or retrieval/.
-Dependencies injected: AsyncSession (passed per call).
+Does NOT: call LLMs, open transactions, run Cypher, hold a session, or import from
+          api/, services/, retrieval/, or the graph layer.
+Dependencies injected: PlanningGraphPort (via __init__).
 """
 
 from __future__ import annotations
 
 import logging
 
-from neo4j import AsyncSession
-
 from npc_engine.engines.planning.action_priority import MAX_URGENCY
-from npc_engine.graph.goal_service import create_goal
-from npc_engine.graph.goal_targets_writer import create_goal_targets_edge
-from npc_engine.graph.need_queries import get_needs_for_character, get_satisfying_location_for_need
+from npc_engine.engines.ports.planning_port import PlanningGraphPort
 from npc_engine.utils.logging import get_logger
 from npc_engine.world.time_utils import TimePoint
 
@@ -38,12 +35,19 @@ class GoalFormer:
     4. Creates a Goal node via goal_service.create_goal (MERGE-safe).
     5. If a satisfying location exists, creates a GOAL_TARGETS edge to it.
 
-    No state is stored on the instance; all dependencies are injected per call.
+    The PlanningGraphPort is injected once; no session is held.
     """
+
+    def __init__(self, planning_repo: PlanningGraphPort) -> None:
+        """Initialise with the injected planning graph port.
+
+        Args:
+            planning_repo: PlanningGraphPort for need reads + goal/target writes.
+        """
+        self._planning = planning_repo
 
     async def form_goal(
         self,
-        session: AsyncSession,
         *,
         character_id: str,
         game_time: TimePoint,
@@ -51,7 +55,6 @@ class GoalFormer:
         """Form a goal for the character's most-decayed need.
 
         Args:
-            session: Active Neo4j async session.
             character_id: ID of the character to plan for.
             game_time: Current game time (stamped onto the goal node).
 
@@ -60,15 +63,14 @@ class GoalFormer:
             if the character has no needs.  target_location_id is None when no
             satisfying location is found for the need kind.
         """
-        needs = await get_needs_for_character(session, character_id)
+        needs = await self._planning.get_needs_for_character(character_id=character_id)
         if not needs:
             logger.info("goal_former.no_needs", extra={"character_id": character_id})
             return None
 
         worst_need = min(needs, key=lambda n: n["level"])
         urgency = self._compute_urgency(worst_need["level"])
-        goal_id = await create_goal(
-            session,
+        goal_id = await self._planning.create_goal(
             character_id=character_id,
             description=f"satisfy {worst_need['kind']} need",
             urgency=urgency,
@@ -84,20 +86,23 @@ class GoalFormer:
                 "goal_id": goal_id,
             },
         )
-        target_location_id = await self._maybe_write_goal_targets(session, goal_id, worst_need["kind"], urgency)
+        target_location_id = await self._maybe_write_goal_targets(goal_id, worst_need["kind"], urgency)
         return goal_id, urgency, target_location_id
 
     async def _maybe_write_goal_targets(
         self,
-        session: AsyncSession,
         goal_id: str,
         need_kind: str,
         urgency: int,
     ) -> str | None:
-        target_location_id = await get_satisfying_location_for_need(session, need_kind)
+        target_location_id = await self._planning.get_satisfying_location_for_need(
+            need_kind=need_kind
+        )
         if target_location_id is None:
             return None
-        await create_goal_targets_edge(session, goal_id, target_location_id, urgency)
+        await self._planning.create_goal_targets_edge(
+            goal_id=goal_id, target_id=target_location_id, priority=urgency
+        )
         logger.info(
             "goal_former.goal_targets_edge_written",
             extra={"goal_id": goal_id, "target_location_id": target_location_id, "priority": urgency},

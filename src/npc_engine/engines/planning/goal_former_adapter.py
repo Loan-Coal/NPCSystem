@@ -7,28 +7,28 @@ Purpose: Adapts GoalFormer to the BaseEngine protocol — on each tick fetches a
          ActionSelector to optionally dispatch a move.
 Dependencies: npc_engine.engines.planning.goal_former,
               npc_engine.engines.planning.action_selector,
-              npc_engine.graph.character_reader (get_npc_ids),
-              npc_engine.graph.world_state_reader (get_world_state),
+              npc_engine.engines.ports.character_read_port (CharacterReadPort),
+              npc_engine.engines.ports.world_state_port (WorldStateGraphPort),
               npc_engine.config (get_settings).
 Used by: npc_engine.scheduler.tick_scheduler (injected as goal_formation_engine),
          npc_engine.api.dependencies_engines.get_goal_formation_engine.
 
-Does NOT: call LLMs, open transactions, or import from api/ or services/.
-Dependencies injected: goal_former, action_selector (via __init__).
+Does NOT: call LLMs, open transactions, hold a session, or import from api/, services/,
+          or the graph layer.
+Dependencies injected: goal_former, action_selector, character_reader,
+                       world_state_repo (via __init__).
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from neo4j import AsyncSession
-
 from npc_engine.config import get_settings
 from npc_engine.engines.planning.action_selector import ActionSelector
 from npc_engine.engines.planning.goal_former import GoalFormer
-from npc_engine.graph.character_reader import get_npc_ids
+from npc_engine.engines.ports.character_read_port import CharacterReadPort
+from npc_engine.engines.ports.world_state_port import WorldStateGraphPort
 from npc_engine.world.time_utils import TimePoint
-from npc_engine.graph.world_state_reader import get_world_state
 
 
 class GoalFormerAdapter:
@@ -45,38 +45,46 @@ class GoalFormerAdapter:
     Attributes:
         _goal_former: Injected GoalFormer instance.
         _action_selector: Injected ActionSelector instance.
+        _character_reader: Injected CharacterReadPort (active NPC ids).
+        _world_state_repo: Injected WorldStateGraphPort (current game time).
     """
 
     def __init__(
         self,
-        goal_former: GoalFormer | None = None,
-        action_selector: ActionSelector | None = None,
+        goal_former: GoalFormer,
+        action_selector: ActionSelector,
+        character_reader: CharacterReadPort,
+        world_state_repo: WorldStateGraphPort,
     ) -> None:
-        """Initialise the adapter.
+        """Initialise the adapter with injected engines and read ports.
 
         Args:
-            goal_former: GoalFormer instance; constructed with defaults when None.
-            action_selector: ActionSelector instance; constructed with defaults when None.
+            goal_former: GoalFormer instance (injected PlanningGraphPort).
+            action_selector: ActionSelector instance (injected PlanningGraphPort).
+            character_reader: CharacterReadPort for active NPC ids.
+            world_state_repo: WorldStateGraphPort for the current game time.
         """
-        self._goal_former = goal_former if goal_former is not None else GoalFormer()
-        self._action_selector = action_selector if action_selector is not None else ActionSelector()
+        self._goal_former = goal_former
+        self._action_selector = action_selector
+        self._character_reader = character_reader
+        self._world_state_repo = world_state_repo
 
-    async def run_tick(self, *, session: AsyncSession, tick_id: int, **_: Any) -> dict:
+    async def run_tick(self, *, tick_id: int, **_: Any) -> dict:
         """Run goal formation and action selection for all active NPCs.
 
         Args:
-            session: Active Neo4j async session.
             tick_id: Current tick ID (passed through to logs; not used for logic).
+            **_: Swallows the scheduler's session= kwarg during the SEV-24 migration.
 
         Returns:
             Dict with ``goal_formations``: list of goal node IDs created this tick
             (NPCs with no needs produce None and are excluded from the list).
         """
-        npc_ids = await get_npc_ids(session)
+        npc_ids = await self._character_reader.get_npc_ids()
         if not npc_ids:
             return {"goal_formations": [], "tick_id": tick_id}
 
-        world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
+        world_state = await self._world_state_repo.get_world_state(world_id=get_settings().WORLD_ID)
         game_time = TimePoint(
             year=world_state.year,
             season=world_state.season,
@@ -86,15 +94,12 @@ class GoalFormerAdapter:
 
         goal_ids: list[str] = []
         for npc_id in npc_ids:
-            result = await self._goal_former.form_goal(
-                session, character_id=npc_id, game_time=game_time
-            )
+            result = await self._goal_former.form_goal(character_id=npc_id, game_time=game_time)
             if result is None:
                 continue
             goal_id, urgency, target_location_id = result
             goal_ids.append(goal_id)
             await self._action_selector.select_action(
-                session,
                 character_id=npc_id,
                 goals=[{"goal_id": goal_id, "urgency": urgency, "status": "active", "target_location_id": target_location_id}],
             )

@@ -112,7 +112,18 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   retains the `neo4j.AsyncSession` import until the `events` slice lands. Factory `get_director_tick` wires the
   two read adapters from `get_graph_db()`. Wave 3 third checkbox.
 
-**19 domains migrated, 18 ports + 18 adapters** (+3 shared read ports/adapters; director reuses them, no new port). Shared ports built: political (succession+agenda),
+- **planning** (DONE, `<pending>`): NEW `PlanningGraphPort` (need reads `get_needs_for_character`/
+  `get_satisfying_location_for_need` + goal writes `create_goal`/`create_goal_targets_edge` + the planning
+  `move_character` wrapping routine_queries `update_character_location`) + `Neo4jPlanningRepository`
+  (session-per-call). Multi-port slice: `GoalFormer(planning_repo=)` and `ActionSelector(planning_repo=)` are
+  now constructor-injected + sessionless (removed their `AsyncSession`-per-call params and the adapter's None
+  defaults); `GoalFormerAdapter` injects goal_former + action_selector + the shared `CharacterReadPort`
+  (`get_npc_ids`) + `WorldStateGraphPort` (`get_world_state`), `run_tick(*, tick_id, **_)` swallows `session=`.
+  Factory `get_goal_formation_engine` wires the planning repo into both engines and the two read adapters into
+  the adapter from `get_graph_db()`. Tests mock the ports; `test_planning_repository.py` covers the adapter.
+  Wave 3 fourth checkbox; `engines/planning/` is neo4j-free.
+
+**20 domains migrated, 19 ports + 19 adapters** (+3 shared read ports/adapters; director reuses them, no new port). Shared ports built: political (succession+agenda),
 WorldState (story_pacing + chapter — first cross-domain reuse). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.

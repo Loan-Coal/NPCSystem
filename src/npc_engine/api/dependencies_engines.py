@@ -68,6 +68,7 @@ from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.engines.memory.memory_decay_tick import MemoryDecayTick
 from npc_engine.engines.agenda.intent_formation_engine import IntentFormationEngine
 from npc_engine.engines.planning.action_selector import ActionSelector
+from npc_engine.engines.planning.goal_former import GoalFormer
 from npc_engine.engines.planning.goal_former_adapter import GoalFormerAdapter
 from npc_engine.graph.player_location_reader import PlayerLocationReader
 from npc_engine.graph.proactive_memory_reader import ProactiveMemoryReader
@@ -442,10 +443,25 @@ def get_memory_decay_tick() -> MemoryDecayTick:
 def get_goal_formation_engine() -> GoalFormerAdapter:
     """Create singleton GoalFormerAdapter for GOAP goal formation each tick.
 
+    Wires the new Neo4jPlanningRepository (PlanningGraphPort) into GoalFormer +
+    ActionSelector and the shared Neo4jCharacterReadRepository / Neo4jWorldStateRepository
+    read ports into the adapter (DEC-122 / SEV-24) so no planning engine holds a session.
+
     Returns:
-        GoalFormerAdapter backed by a default GoalFormer and ActionSelector instance.
+        GoalFormerAdapter backed by the injected planning + shared read ports.
     """
-    return GoalFormerAdapter(action_selector=ActionSelector())
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.planning_repository import Neo4jPlanningRepository
+    from npc_engine.graph.repositories.world_state_repository import Neo4jWorldStateRepository
+
+    graph_db = get_graph_db()
+    planning_repo = Neo4jPlanningRepository(graph_db)
+    return GoalFormerAdapter(
+        goal_former=GoalFormer(planning_repo=planning_repo),
+        action_selector=ActionSelector(planning_repo=planning_repo),
+        character_reader=Neo4jCharacterReadRepository(graph_db),
+        world_state_repo=Neo4jWorldStateRepository(graph_db),
+    )
 
 
 @lru_cache
