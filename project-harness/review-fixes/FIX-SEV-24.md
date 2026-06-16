@@ -157,7 +157,7 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   it uses scheme_reader/scheme_writer, not investigation_queries. `engines/investigation/investigation_engine`
   is neo4j-free.
 
-- **proactive_dialogue** (DONE, `<pending>`): NEW `ProactiveMemoryReadPort` (`get_unshared_memories`) +
+- **proactive_dialogue** (DONE, `5e9b75a`): NEW `ProactiveMemoryReadPort` (`get_unshared_memories`) +
   `Neo4jProactiveMemoryReadRepository` (session-per-call, wraps ProactiveMemoryReader). `ProactiveDialogueEngine`
   now injects the memory port + the SHARED `PlayerLocationReadPort` (`get_player_idle_ticks`) as
   `memory_service`/`location_service` — its old local `MemoryServiceProtocol`/`LocationServiceProtocol` were
