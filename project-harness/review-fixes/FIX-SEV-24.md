@@ -89,7 +89,15 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   `DeceptionEngine` constructor-injects `knowledge_repo` and `plant_belief(*, …)` dropped the `session` arg.
   Engine is UNWIRED (future caller — no api factory added). Test mocks the port. Wave 2 complete.
 
-**16 domains migrated, 16 ports + 16 adapters** (+3 shared read ports/adapters, no engine). Shared ports built: political (succession+agenda),
+- **reputation** (DONE, `644c183`): NEW `ReputationGraphPort` (write: `apply_trust_nudge`) +
+  `Neo4jReputationRepository`; `ReputationEngine` injects `RelationReadPort` (reads) + `ReputationGraphPort`
+  (replacing the `apply_nudge_fn` callable + per-tick `AsyncSession`); `run_tick(player_id, npc_ids, **_)`.
+  `ReputationTickAdapter` injects `CharacterReadPort` (sessionless `get_npc_ids()`), `run_tick(tick_id, **_)`,
+  and DROPPED `relation_reader_factory` + the `engine._reader` per-tick mutation. Factory wires all 3 repos
+  from `get_graph_db()` (repo imports moved to module top to keep `get_reputation_engine` under R006).
+  Wave 3 first checkbox; `engines/reputation/` is neo4j-free.
+
+**17 domains migrated, 17 ports + 17 adapters** (+3 shared read ports/adapters, no engine). Shared ports built: political (succession+agenda),
 WorldState (story_pacing + chapter — first cross-domain reuse). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.
