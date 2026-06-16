@@ -157,7 +157,19 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   it uses scheme_reader/scheme_writer, not investigation_queries. `engines/investigation/investigation_engine`
   is neo4j-free.
 
-**23 domains migrated, 22 ports + 22 adapters** (+3 shared read ports/adapters; director reuses them, no new port). Shared ports built: political (succession+agenda),
+- **proactive_dialogue** (DONE, `<pending>`): NEW `ProactiveMemoryReadPort` (`get_unshared_memories`) +
+  `Neo4jProactiveMemoryReadRepository` (session-per-call, wraps ProactiveMemoryReader). `ProactiveDialogueEngine`
+  now injects the memory port + the SHARED `PlayerLocationReadPort` (`get_player_idle_ticks`) as
+  `memory_service`/`location_service` — its old local `MemoryServiceProtocol`/`LocationServiceProtocol` were
+  DELETED; `check_trigger(npc_id, player_id, tick_id)` + `generate_line(trigger)` dropped the session param.
+  `ProactiveDialogueTick` injects `PlayerLocationReadPort` (`get_collocated_pairs`), `run_tick(tick_id, **_)`
+  swallows `session=`, and the `_collect_candidates`/`_generate_and_enqueue` helpers dropped session. Factory
+  `get_proactive_dialogue_engine` wires `Neo4jProactiveMemoryReadRepository` + `Neo4jPlayerLocationReadRepository`
+  from `get_graph_db()` (removed the now-unused PlayerLocationReader/ProactiveMemoryReader top-level imports).
+  Tests mock the ports; `test_proactive_memory_read_repository.py` covers the adapter, tick-adapter gets an
+  ignored-kwarg test. `engines/proactive_dialogue/` is neo4j-free.
+
+**24 domains migrated, 23 ports + 23 adapters** (+3 shared read ports/adapters; director reuses them, no new port). Shared ports built: political (succession+agenda),
 WorldState (story_pacing + chapter — first cross-domain reuse). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
 multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
 - Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.

@@ -70,8 +70,6 @@ from npc_engine.engines.agenda.intent_formation_engine import IntentFormationEng
 from npc_engine.engines.planning.action_selector import ActionSelector
 from npc_engine.engines.planning.goal_former import GoalFormer
 from npc_engine.engines.planning.goal_former_adapter import GoalFormerAdapter
-from npc_engine.graph.player_location_reader import PlayerLocationReader
-from npc_engine.graph.proactive_memory_reader import ProactiveMemoryReader
 from npc_engine.graph.repositories.character_read_repository import (
     Neo4jCharacterReadRepository,
 )
@@ -317,18 +315,30 @@ def get_proactive_queue() -> ProactiveQueue:
 
 @lru_cache
 def get_proactive_dialogue_engine() -> ProactiveDialogueTick:
-    """Create singleton ProactiveDialogueTick wired to the shared LLM client and graph readers.
+    """Create singleton ProactiveDialogueTick wired to the shared LLM client and graph ports.
+
+    Wires the Neo4jProactiveMemoryReadRepository (unshared-memory reads) and the shared
+    Neo4jPlayerLocationReadRepository (idle ticks + co-located pairs) as engine-layer Ports
+    (DEC-122 / SEV-24) so neither the engine nor the tick adapter holds a Neo4j session.
 
     Returns:
         ProactiveDialogueTick adapter ready for the tick scheduler.
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.player_location_read_repository import (
+        Neo4jPlayerLocationReadRepository,
+    )
+    from npc_engine.graph.repositories.proactive_memory_read_repository import (
+        Neo4jProactiveMemoryReadRepository,
+    )
+
     engine_config = get_engine_model_config_for("proactive_dialogue")
     llm_client = _register_adapter(create_llm_client_for_engine(engine_config, get_settings()))
-    memory_reader = ProactiveMemoryReader()
-    location_reader = PlayerLocationReader()
+    graph_db = get_graph_db()
+    location_reader = Neo4jPlayerLocationReadRepository(graph_db)
     engine = ProactiveDialogueEngine(
         llm_client=llm_client,
-        memory_service=memory_reader,
+        memory_service=Neo4jProactiveMemoryReadRepository(graph_db),
         location_service=location_reader,
     )
     return ProactiveDialogueTick(

@@ -180,7 +180,7 @@ async def test_tick_adapter_multiple_pairs_with_trigger() -> None:
     trigger_1 = _make_trigger(npc_id="npc_1", memory_vividness=80)
     line_1 = _make_line(npc_id="npc_1")
 
-    async def _check_trigger(session: Any, *, npc_id: str, player_id: str, tick_id: int) -> ProactiveTrigger | None:
+    async def _check_trigger(*, npc_id: str, player_id: str, tick_id: int) -> ProactiveTrigger | None:
         if npc_id == "npc_1":
             return trigger_1
         return None
@@ -216,7 +216,7 @@ async def test_tick_adapter_enqueues_winner_to_queue() -> None:
     trigger_high = _make_trigger(npc_id="npc_2", player_id="player", memory_vividness=95)
     line_high = _make_line(npc_id="npc_2")
 
-    async def _check_trigger(session: Any, *, npc_id: str, player_id: str, tick_id: int) -> ProactiveTrigger | None:
+    async def _check_trigger(*, npc_id: str, player_id: str, tick_id: int) -> ProactiveTrigger | None:
         if npc_id == "npc_1":
             return trigger_low
         if npc_id == "npc_2":
@@ -241,6 +241,21 @@ async def test_tick_adapter_enqueues_winner_to_queue() -> None:
     # Return value also reflects the single winner.
     assert len(result["proactive_lines"]) == 1
     assert result["proactive_lines"][0]["npc_id"] == "npc_2"
+
+
+@pytest.mark.asyncio
+async def test_tick_adapter_ignores_scheduler_session_kwarg() -> None:
+    """The scheduler passes ``session=``; run_tick must accept and ignore it (SEV-24)."""
+    from npc_engine.engines.proactive_dialogue.proactive_tick_adapter import ProactiveDialogueTick
+
+    engine = _make_engine(trigger=None)
+    location_reader = _make_location_reader([])
+
+    adapter = ProactiveDialogueTick(engine=engine, location_reader=location_reader)
+    result = await adapter.run_tick(session=object(), tick_id=7)
+
+    location_reader.get_collocated_pairs.assert_awaited_once_with()
+    assert result == {"proactive_lines": []}
 
 
 @pytest.mark.asyncio

@@ -3,25 +3,28 @@ Module: proactive_engine
 Layer: engines
 Purpose: Detects high-vividness unshared NPC memories co-located with an idle player
          and generates one in-character proactive dialogue line via the LLM.
-Does NOT: wire into the tick scheduler, send WS messages, or persist state.
-         Scheduler wiring is slice 2 (EXP-10 S2).
+Does NOT: wire into the tick scheduler, send WS messages, persist state, or hold a
+         Neo4j session. Graph reads go through injected ports (DEC-122 / SEV-24).
 Dependencies: engines.llm.protocols, engines.proactive_dialogue.models,
+              engines.ports.proactive_memory_read_port, engines.ports.player_location_read_port,
               common.yaml_utils
-Dependencies injected: LLMGenerateProtocol, memory_service, location_service.
-Used by: (slice 2) scheduler.tick_scheduler
+Dependencies injected: LLMGenerateProtocol, ProactiveMemoryReadPort, PlayerLocationReadPort.
+Used by: scheduler.tick_scheduler (via proactive_tick_adapter)
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
-
-from neo4j import AsyncSession
+from typing import TYPE_CHECKING, Any
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
 from npc_engine.engines.llm.protocols import LLMGenerateProtocol
 from npc_engine.engines.proactive_dialogue.models import ProactiveLine, ProactiveTrigger
+
+if TYPE_CHECKING:
+    from npc_engine.engines.ports.player_location_read_port import PlayerLocationReadPort
+    from npc_engine.engines.ports.proactive_memory_read_port import ProactiveMemoryReadPort
 
 _logger = logging.getLogger(__name__)
 
@@ -37,54 +40,6 @@ _TEMPERATURE: float = 0.8
 
 _PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts" / "proactive"
 _TRIGGER_PROMPT_PATH = _PROMPTS_DIR / "trigger_v1.yaml"
-
-
-@runtime_checkable
-class MemoryServiceProtocol(Protocol):
-    """Contract for fetching unshared memories for an NPC."""
-
-    async def get_unshared_memories(
-        self,
-        session: Any,
-        *,
-        npc_id: str,
-        k: int = _MAX_MEMORIES_PER_CHECK,
-    ) -> list[dict[str, Any]]:
-        """Return up to k unshared memory dicts for npc_id, sorted by vividness desc.
-
-        Args:
-            session: Active graph session (type erased to avoid circular import).
-            npc_id: Character ID to query.
-            k: Maximum memories to return.
-
-        Returns:
-            List of dicts with keys: memory_id, content, vividness, shared.
-        """
-
-
-@runtime_checkable
-class LocationServiceProtocol(Protocol):
-    """Contract for checking player idle ticks at an NPC's location."""
-
-    async def get_player_idle_ticks(
-        self,
-        session: Any,
-        *,
-        npc_id: str,
-        player_id: str,
-        tick_id: int,
-    ) -> int:
-        """Return ticks the player has been idle at the NPC's location.
-
-        Args:
-            session: Active graph session.
-            npc_id: NPC whose location is checked.
-            player_id: Player whose idle count is checked.
-            tick_id: Current game tick.
-
-        Returns:
-            Number of ticks the player has been idle (0 if not co-located).
-        """
 
 
 def _load_prompt(path: Path) -> dict[str, str]:
@@ -138,16 +93,16 @@ class ProactiveDialogueEngine:
     def __init__(
         self,
         llm_client: LLMGenerateProtocol,
-        memory_service: MemoryServiceProtocol,
-        location_service: LocationServiceProtocol,
+        memory_service: ProactiveMemoryReadPort,
+        location_service: PlayerLocationReadPort,
         prompts_dir: Path = _PROMPTS_DIR,
     ) -> None:
         """Initialise the engine with injected dependencies.
 
         Args:
             llm_client: LLM adapter implementing LLMGenerateProtocol.
-            memory_service: Service returning unshared memories for an NPC.
-            location_service: Service returning player idle-tick counts.
+            memory_service: ProactiveMemoryReadPort returning unshared memories (sessionless).
+            location_service: PlayerLocationReadPort returning player idle-tick counts.
             prompts_dir: Override path to the proactive prompt directory
                 (defaults to src/npc_engine/prompts/proactive/).
         """
@@ -158,19 +113,17 @@ class ProactiveDialogueEngine:
 
     async def check_trigger(
         self,
-        session: AsyncSession,
         npc_id: str,
         player_id: str,
         tick_id: int,
     ) -> ProactiveTrigger | None:
         """Check whether the NPC should proactively address the player this tick.
 
-        Reads unshared memories from the memory service, picks the highest-vividness
-        qualifying memory, then checks player idle ticks via the location service.
+        Reads unshared memories from the memory port, picks the highest-vividness
+        qualifying memory, then checks player idle ticks via the location port.
         Returns a ``ProactiveTrigger`` only when BOTH conditions are satisfied.
 
         Args:
-            session: Active Neo4j async session.
             npc_id: ID of the NPC being evaluated.
             player_id: ID of the potentially co-located player.
             tick_id: Current game tick.
@@ -179,14 +132,14 @@ class ProactiveDialogueEngine:
             ProactiveTrigger if conditions met, else None.
         """
         memories = await self._memory_service.get_unshared_memories(
-            session, npc_id=npc_id, k=_MAX_MEMORIES_PER_CHECK
+            npc_id=npc_id, k=_MAX_MEMORIES_PER_CHECK
         )
         best = _select_best_memory(memories)
         if best is None:
             return None
 
         idle_ticks = await self._location_service.get_player_idle_ticks(
-            session, npc_id=npc_id, player_id=player_id, tick_id=tick_id
+            npc_id=npc_id, player_id=player_id, tick_id=tick_id
         )
         if idle_ticks < MIN_IDLE_TICKS:
             _logger.debug(
@@ -217,7 +170,6 @@ class ProactiveDialogueEngine:
 
     async def generate_line(
         self,
-        session: AsyncSession,
         trigger: ProactiveTrigger,
     ) -> ProactiveLine:
         """Generate one in-character proactive line from the trigger.
@@ -226,7 +178,6 @@ class ProactiveDialogueEngine:
         ``llm_client.generate()``, and returns a ``ProactiveLine``.
 
         Args:
-            session: Active Neo4j async session (available for future context enrichment).
             trigger: Trigger produced by check_trigger.
 
         Returns:

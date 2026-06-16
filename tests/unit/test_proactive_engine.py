@@ -49,7 +49,7 @@ class _FakeMemoryService:
         self._memories = memories
 
     async def get_unshared_memories(
-        self, session: Any, *, npc_id: str, k: int = 5
+        self, *, npc_id: str, k: int = 5
     ) -> list[dict[str, Any]]:
         """Return memories as dicts matching the graph layer contract."""
         return [
@@ -71,14 +71,10 @@ class _FakeLocationService:
         self._idle_ticks = idle_ticks
 
     async def get_player_idle_ticks(
-        self, session: Any, *, npc_id: str, player_id: str, tick_id: int
+        self, *, npc_id: str, player_id: str, tick_id: int
     ) -> int:
         """Return how many ticks the player has been idle at the NPC's location."""
         return self._idle_ticks if self._co_located else 0
-
-
-class _FakeSession:
-    """Minimal fake Neo4j session (no real queries issued in unit tests)."""
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +116,6 @@ async def test_trigger_fires_on_high_vividness_unshared_memory() -> None:
     engine, _ = _make_engine(memories, co_located=True, idle_ticks=MIN_IDLE_TICKS)
 
     trigger = await engine.check_trigger(
-        session=_FakeSession(),
         npc_id="captain_sorn",
         player_id="player_1",
         tick_id=100,
@@ -143,7 +138,6 @@ async def test_trigger_does_not_fire_when_memory_below_threshold() -> None:
     engine, _ = _make_engine(memories, co_located=True, idle_ticks=MIN_IDLE_TICKS)
 
     trigger = await engine.check_trigger(
-        session=_FakeSession(),
         npc_id="mira_innkeeper",
         player_id="player_1",
         tick_id=101,
@@ -161,7 +155,6 @@ async def test_trigger_does_not_fire_when_player_not_co_located() -> None:
     engine, _ = _make_engine(memories, co_located=False, idle_ticks=0)
 
     trigger = await engine.check_trigger(
-        session=_FakeSession(),
         npc_id="captain_sorn",
         player_id="player_1",
         tick_id=102,
@@ -180,7 +173,6 @@ async def test_trigger_does_not_fire_when_player_idle_ticks_insufficient() -> No
     engine, _ = _make_engine(memories, co_located=True, idle_ticks=MIN_IDLE_TICKS - 1)
 
     trigger = await engine.check_trigger(
-        session=_FakeSession(),
         npc_id="captain_sorn",
         player_id="player_1",
         tick_id=103,
@@ -200,7 +192,6 @@ async def test_trigger_selects_highest_vividness_memory() -> None:
     engine, _ = _make_engine(memories, co_located=True, idle_ticks=MIN_IDLE_TICKS)
 
     trigger = await engine.check_trigger(
-        session=_FakeSession(),
         npc_id="aldric_merchant",
         player_id="player_1",
         tick_id=104,
@@ -216,7 +207,6 @@ async def test_trigger_does_not_fire_when_no_memories() -> None:
     engine, _ = _make_engine(memories=[], co_located=True, idle_ticks=MIN_IDLE_TICKS)
 
     trigger = await engine.check_trigger(
-        session=_FakeSession(),
         npc_id="old_henryk",
         player_id="player_1",
         tick_id=105,
@@ -248,7 +238,7 @@ async def test_generate_line_calls_llm_exactly_once() -> None:
         memory_vividness=HIGH_VIVIDNESS_THRESHOLD + 10,
     )
 
-    line = await engine.generate_line(session=_FakeSession(), trigger=trigger)
+    line = await engine.generate_line(trigger=trigger)
 
     llm_client.generate.assert_called_once()
     assert isinstance(line, ProactiveLine)
@@ -275,7 +265,7 @@ async def test_generate_line_prompt_includes_memory_content() -> None:
         memory_vividness=90,
     )
 
-    await engine.generate_line(session=_FakeSession(), trigger=trigger)
+    await engine.generate_line(trigger=trigger)
 
     call_kwargs = llm_client.generate.call_args
     # The prompt (positional or keyword) should contain the memory content
@@ -299,7 +289,7 @@ async def test_generate_line_returns_proactive_line_with_correct_shape() -> None
         memory_vividness=85,
     )
 
-    line = await engine.generate_line(session=_FakeSession(), trigger=trigger)
+    line = await engine.generate_line(trigger=trigger)
 
     # Validate WS message shape from DEC-073
     ws_payload = line.to_ws_message()
