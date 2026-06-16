@@ -145,7 +145,7 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   `test_intent_formation_engine.py` adds the ignored-kwarg test. Wave 3 sixth checkbox; `engines/agenda/` is
   neo4j-free.
 
-- **investigation** (DONE, `<pending>`): NEW `InvestigationGraphPort` (6 read fns: `get_evidence_for_event`/
+- **investigation** (DONE, `da86320`): NEW `InvestigationGraphPort` (6 read fns: `get_evidence_for_event`/
   `get_witnesses_of_event`/`get_suspects_for_event`/`get_deductions_for_character`/`get_contradicting_rumors`/
   `get_alibi_window`) + `Neo4jInvestigationRepository` (session-per-call, delegates to investigation_queries).
   `InvestigationEngine(investigation_repo=)` is query-only and sessionless: `get_investigation_context(*,
