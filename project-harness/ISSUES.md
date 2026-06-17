@@ -1381,6 +1381,19 @@ maintenance, not part of the repository-facade migration.
 **To fix:** Rewrite the test to inject a mock `MilitaryGraphPort` and assert the real
 `battles_resolved`/`factions_yielded` contract (mirror `tests/unit/test_military_engine.py`).
 
+## ISSUE-113: `edge_updater` and `knowledge_propagator` session-based functions are orphaned
+**Found:** 2026-06-17, during SEV-24 gossip cluster migration
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/graph/edge_updater.py`, `src/npc_engine/engines/gossip/knowledge_propagator.py`
+**Description:** `edge_updater.log_gossip()` and `knowledge_propagator.propagate_secret()` are no longer
+called by `gossip_handler.py` — those calls moved into `Neo4jGossipRepository`. The functions remain in
+their modules but have no callers. `knowledge_propagator.SECRET_DISTORTION_CHANCE` is still imported by
+`gossip_handler.py`, so `knowledge_propagator.py` cannot be deleted without moving that constant.
+**Why deferred:** Deleting files is out of scope for the repository-facade migration slice.
+**To fix:** Delete `log_gossip` from `edge_updater.py`; move `SECRET_DISTORTION_CHANCE` to
+`gossip_config.py` or `gossip_distort.py`, then delete `knowledge_propagator.py` (or keep it if it
+gains other callers during dialogue/quest migration).
+
 ## ISSUE-112: EventHandler high-severity witness recording is dead code
 **Found:** 2026-06-16, during /fix-next SEV-24 (events slice)
 **Severity:** P3 (nice-to-fix)

@@ -4,6 +4,8 @@ Unit tests for GossipHandler × EmotionUpdater wiring (S10.2).
 Verifies that GossipHandler calls emotion_updater.apply_event_shock when
 event severity >= RUMOR_EMOTION_SEVERITY_THRESHOLD, and does NOT call it
 for low-severity events or when no emotion_updater is wired.
+
+Updated for SEV-24: uses GossipGraphPort mock instead of patching module-level graph fns.
 """
 
 from __future__ import annotations
@@ -29,17 +31,27 @@ def _make_weight_config():
     return cfg
 
 
-def _make_handler(emotion_updater=None, emotion_threshold: int = 50):
+def _make_repo(batch_row: list[dict]) -> MagicMock:
+    """Return a mock GossipGraphPort pre-configured for one-pair tick tests."""
+    repo = MagicMock()
+    repo.select_batch_event_trust = AsyncMock(return_value=batch_row)
+    repo.write_batch_knowledge_propagation = AsyncMock()
+    repo.create_rumor = AsyncMock(return_value="r-1")
+    repo.believe_rumor = AsyncMock()
+    repo.select_gossip_secret = AsyncMock(return_value=None)
+    repo.log_gossip = AsyncMock()
+    repo.propagate_secret = AsyncMock()
+    return repo
+
+
+def _make_handler(emotion_updater=None, emotion_threshold: int = 50, repo=None):
     return GossipHandler(
         settings=_make_settings(emotion_threshold),
         embedding_index=MagicMock(),
         weight_config=_make_weight_config(),
         emotion_updater=emotion_updater,
+        gossip_repo=repo,
     )
-
-
-def _make_mock_session() -> AsyncMock:
-    return AsyncMock()
 
 
 def _batch_row(severity: int) -> list[dict]:
@@ -56,31 +68,22 @@ def _batch_row(severity: int) -> list[dict]:
     ]
 
 
+_PAIRS = [({"id": "sharer-1", "honesty": 50}, {"id": "receiver-1"}, "loc-1", {"best_standing": None})]
+
+
 @pytest.mark.asyncio
 async def test_emotion_shock_called_for_high_severity():
     """apply_event_shock must be called when severity >= threshold."""
     emotion_updater = MagicMock()
     emotion_updater.apply_event_shock = AsyncMock()
-    handler = _make_handler(emotion_updater=emotion_updater, emotion_threshold=50)
-
-    pairs = [
-        ({"id": "sharer-1", "honesty": 50}, {"id": "receiver-1"}, "loc-1", {"best_standing": None})
-    ]
-    session = _make_mock_session()
+    repo = _make_repo(_batch_row(75))
 
     with (
-        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new_callable=AsyncMock, return_value=pairs),
-        patch("npc_engine.engines.gossip.gossip_handler.select_batch_event_trust", new_callable=AsyncMock, return_value=_batch_row(75)),
-        patch("npc_engine.engines.gossip.gossip_handler.write_batch_knowledge_propagation", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.create_rumor", new_callable=AsyncMock, return_value="r-1"),
-        patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.select_gossip_secret", new_callable=AsyncMock, return_value=None),
-        patch("npc_engine.engines.gossip.gossip_handler.propagate_secret", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIRS)),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
-
-        await handler.run_tick(session=session, tick_id=10)
+        handler = _make_handler(emotion_updater=emotion_updater, emotion_threshold=50, repo=repo)
+        await handler.run_tick(tick_id=10)
 
     emotion_updater.apply_event_shock.assert_called_once_with(npc_id="receiver-1", severity=75)
 
@@ -90,26 +93,14 @@ async def test_emotion_shock_not_called_for_low_severity():
     """apply_event_shock must NOT be called when severity < threshold."""
     emotion_updater = MagicMock()
     emotion_updater.apply_event_shock = AsyncMock()
-    handler = _make_handler(emotion_updater=emotion_updater, emotion_threshold=50)
-
-    pairs = [
-        ({"id": "sharer-1", "honesty": 50}, {"id": "receiver-1"}, "loc-1", {"best_standing": None})
-    ]
-    session = _make_mock_session()
+    repo = _make_repo(_batch_row(30))
 
     with (
-        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new_callable=AsyncMock, return_value=pairs),
-        patch("npc_engine.engines.gossip.gossip_handler.select_batch_event_trust", new_callable=AsyncMock, return_value=_batch_row(30)),
-        patch("npc_engine.engines.gossip.gossip_handler.write_batch_knowledge_propagation", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.create_rumor", new_callable=AsyncMock, return_value="r-1"),
-        patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.select_gossip_secret", new_callable=AsyncMock, return_value=None),
-        patch("npc_engine.engines.gossip.gossip_handler.propagate_secret", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIRS)),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
-
-        await handler.run_tick(session=session, tick_id=10)
+        handler = _make_handler(emotion_updater=emotion_updater, emotion_threshold=50, repo=repo)
+        await handler.run_tick(tick_id=10)
 
     emotion_updater.apply_event_shock.assert_not_called()
 
@@ -117,26 +108,14 @@ async def test_emotion_shock_not_called_for_low_severity():
 @pytest.mark.asyncio
 async def test_emotion_shock_skipped_when_no_updater():
     """run_tick must not crash when emotion_updater=None for high-severity events."""
-    handler = _make_handler(emotion_updater=None, emotion_threshold=50)
-
-    pairs = [
-        ({"id": "sharer-1", "honesty": 50}, {"id": "receiver-1"}, "loc-1", {"best_standing": None})
-    ]
-    session = _make_mock_session()
+    repo = _make_repo(_batch_row(90))
 
     with (
-        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new_callable=AsyncMock, return_value=pairs),
-        patch("npc_engine.engines.gossip.gossip_handler.select_batch_event_trust", new_callable=AsyncMock, return_value=_batch_row(90)),
-        patch("npc_engine.engines.gossip.gossip_handler.write_batch_knowledge_propagation", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.create_rumor", new_callable=AsyncMock, return_value="r-1"),
-        patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.select_gossip_secret", new_callable=AsyncMock, return_value=None),
-        patch("npc_engine.engines.gossip.gossip_handler.propagate_secret", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIRS)),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
-
-        result = await handler.run_tick(session=session, tick_id=10)
+        handler = _make_handler(emotion_updater=None, emotion_threshold=50, repo=repo)
+        result = await handler.run_tick(tick_id=10)
 
     assert result["propagated"] == 1
 
@@ -146,25 +125,13 @@ async def test_emotion_shock_at_exact_threshold():
     """apply_event_shock must be called when severity == threshold (inclusive)."""
     emotion_updater = MagicMock()
     emotion_updater.apply_event_shock = AsyncMock()
-    handler = _make_handler(emotion_updater=emotion_updater, emotion_threshold=50)
-
-    pairs = [
-        ({"id": "sharer-1", "honesty": 50}, {"id": "receiver-1"}, "loc-1", {"best_standing": None})
-    ]
-    session = _make_mock_session()
+    repo = _make_repo(_batch_row(50))
 
     with (
-        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new_callable=AsyncMock, return_value=pairs),
-        patch("npc_engine.engines.gossip.gossip_handler.select_batch_event_trust", new_callable=AsyncMock, return_value=_batch_row(50)),
-        patch("npc_engine.engines.gossip.gossip_handler.write_batch_knowledge_propagation", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.create_rumor", new_callable=AsyncMock, return_value="r-1"),
-        patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.select_gossip_secret", new_callable=AsyncMock, return_value=None),
-        patch("npc_engine.engines.gossip.gossip_handler.propagate_secret", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIRS)),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
-
-        await handler.run_tick(session=session, tick_id=10)
+        handler = _make_handler(emotion_updater=emotion_updater, emotion_threshold=50, repo=repo)
+        await handler.run_tick(tick_id=10)
 
     emotion_updater.apply_event_shock.assert_called_once_with(npc_id="receiver-1", severity=50)

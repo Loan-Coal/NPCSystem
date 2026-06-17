@@ -1,14 +1,16 @@
 """
 gossip_handler.py - Orchestrates one gossip tick over selected NPC pairs.
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Executes one gossip tick: selects NPC pairs, batch-reads events+trust,
+         computes distortions, batch-writes knowledge, and runs per-pair side effects
+         (rumor creation, emotion shock, relation-log update, secret propagation).
 
-Does NOT: run global scheduling loops.
+Does NOT: run global scheduling loops, open Neo4j sessions.
 
-Dependencies injected: AsyncSession, Settings, GossipWeightConfig, EmbeddingIndex.
+Dependencies injected: GossipGraphPort, Settings, GossipWeightConfig, EmbeddingIndex.
 
-NOTE: This file is ~351 lines, over the 300-line soft limit. Splitting would
-be artificial because run_tick + _process_pairs + _build_write_params + _run_side_effects
+NOTE: This file is ~280 lines, near the 300-line soft limit. Splitting would be
+artificial because run_tick + _process_pairs + _build_write_params + _run_side_effects
 are all tightly coupled phases of a single orchestration class. Splitting would
 scatter the gossip tick logic across multiple files with no independent reuse value.
 See DEC-061 in project-harness/DECISIONS.md.
@@ -20,8 +22,6 @@ import asyncio
 import hashlib
 import random
 
-from neo4j import AsyncSession
-
 from npc_engine.common.knowledge_types import (
     KNOWLEDGE_STATE_KNOWS,
     KNOWLEDGE_STATE_RUMOR,
@@ -29,7 +29,6 @@ from npc_engine.common.knowledge_types import (
 )
 from npc_engine.config import Settings
 from npc_engine.engines.embedding_invalidation import invalidate_embedding_safely
-from npc_engine.engines.gossip.edge_updater import log_gossip
 from npc_engine.engines.gossip.gossip_config import GossipWeightConfig
 from npc_engine.engines.gossip.gossip_distort import (
     compute_confidence,
@@ -37,19 +36,11 @@ from npc_engine.engines.gossip.gossip_distort import (
     compute_seed_value,
     gossip_distort,
 )
-from npc_engine.engines.gossip.knowledge_propagator import (
-    propagate_secret,
-    SECRET_DISTORTION_CHANCE,
-)
-from npc_engine.engines.gossip.secret_share_policy import secret_share_probability
-from npc_engine.engines.relationship.standing import derive_standing
-from npc_engine.graph.gossip_batch_queries import (
-    select_batch_event_trust,
-    select_gossip_secret,
-    write_batch_knowledge_propagation,
-)
-from npc_engine.graph.rumor_service import believe_rumor, create_rumor
+from npc_engine.engines.gossip.knowledge_propagator import SECRET_DISTORTION_CHANCE
 from npc_engine.engines.gossip.pair_selector import select_pairs
+from npc_engine.engines.gossip.secret_share_policy import secret_share_probability
+from npc_engine.engines.ports.gossip_port import GossipGraphPort
+from npc_engine.engines.relationship.standing import derive_standing
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
 from npc_engine.utils.logging import get_logger
 
@@ -88,6 +79,7 @@ class GossipHandler:
         embedding_index: EmbeddingIndex,
         weight_config: GossipWeightConfig,
         emotion_updater: EmotionUpdater | None = None,
+        gossip_repo: GossipGraphPort = None,  # type: ignore[assignment]
     ) -> None:
         """Initialise the gossip handler.
 
@@ -97,20 +89,23 @@ class GossipHandler:
             weight_config: Faction weight multipliers for pair selection and distortion.
             emotion_updater: Optional emotion updater; when supplied, receivers of high-severity
                 events have their emotion state shocked toward agitated/melancholic.
+            gossip_repo: Gossip graph port; must be injected before calling run_tick.
         """
 
         self._settings = settings
         self._embedding_index = embedding_index
         self._weight_config = weight_config
         self._emotion_updater = emotion_updater
+        self._gossip_repo: GossipGraphPort = gossip_repo
         self._lock = asyncio.Lock()
 
     async def run_tick(
         self,
-        session: AsyncSession,
+        *,
         tick_id: int,
         max_pairs: int = 20,
         npc_ids: list[str] | None = None,
+        **_: object,
     ) -> dict:
         """Execute one gossip tick: select pairs, batch-read events+trust, distort, batch-write.
 
@@ -120,20 +115,21 @@ class GossipHandler:
         propagation) still run per-pair after the batch write.
 
         Args:
-            session: Active Neo4j async session.
             tick_id: Current game tick identifier.
             max_pairs: Maximum number of NPC pairs to process.
             npc_ids: Optional allowlist; only pairs containing at least one listed ID are processed.
+            **_: Swallows legacy ``session=`` kwarg from the tick scheduler during migration.
 
         Returns:
             Dict with keys ``tick_id``, ``pairs`` (pairs evaluated), ``propagated``
             (successful propagations), and ``seeds_used`` (mapping of
             ``"sharer_id→receiver_id"`` to the deterministic seed used for that pair).
         """
+        assert self._gossip_repo is not None, "gossip_repo must be injected before calling run_tick"
 
         async with self._lock:
             pairs = await select_pairs(
-                session=session,
+                repo=self._gossip_repo,
                 max_pairs=max_pairs,
                 weight_config=self._weight_config,
             )
@@ -141,25 +137,22 @@ class GossipHandler:
                 allowed = set(npc_ids)
                 pairs = [pair for pair in pairs if pair[0]["id"] in allowed or pair[1]["id"] in allowed]
 
-            return await self._process_pairs(session=session, pairs=pairs, tick_id=tick_id)
+            return await self._process_pairs(pairs=pairs, tick_id=tick_id)
 
     async def _process_pairs(
         self,
-        session: AsyncSession,
         pairs: list,
         tick_id: int,
     ) -> dict:
         """Batch-read event+trust, compute distortions, batch-write, then run per-pair side effects.
 
         Args:
-            session: Active Neo4j async session.
             pairs: List of (sharer, receiver, loc, faction_ctx) tuples from pair_selector.
             tick_id: Current game tick.
 
         Returns:
             Dict with keys ``tick_id``, ``pairs``, ``propagated``, and ``seeds_used``.
         """
-        # Build pair lookup and params for the batch read query.
         pair_lookup: dict[tuple[str, str], tuple[dict, dict, dict]] = {}
         pair_params: list[dict[str, str]] = []
         for sharer, receiver, _loc, faction_ctx in pairs:
@@ -167,26 +160,21 @@ class GossipHandler:
             pair_lookup[key] = (sharer, receiver, faction_ctx)
             pair_params.append({"sharer_id": sharer["id"], "receiver_id": receiver["id"]})
 
-        # 1 batched graph read (via select_batch_event_trust): event + trust for all pairs.
-        batch_rows = await select_batch_event_trust(session, pairs=pair_params)
+        batch_rows = await self._gossip_repo.select_batch_event_trust(pairs=pair_params)
         event_trust_map: dict[tuple[str, str], dict] = {
             (row["sharer_id"], row["receiver_id"]): row
             for row in batch_rows
         }
 
-        # Python-side: compute distortions for all pairs with a qualifying event.
         write_params, distortion_map, seeds_used = self._build_write_params(
             pair_lookup=pair_lookup,
             event_trust_map=event_trust_map,
             tick_id=tick_id,
         )
 
-        # 1 batched graph write (via write_batch_knowledge_propagation): one UNWIND MERGE.
-        await write_batch_knowledge_propagation(session, writes=write_params)
+        await self._gossip_repo.write_batch_knowledge_propagation(writes=write_params)
 
-        # Conditional per-pair side effects (rumor, emotion, log, embedding invalidation).
         propagated = await self._run_side_effects(
-            session=session,
             pair_lookup=pair_lookup,
             event_trust_map=event_trust_map,
             distortion_map=distortion_map,
@@ -255,8 +243,6 @@ class GossipHandler:
                 seed,
             )
 
-            # Compute belief_confidence before gossip_distort so it can bias
-            # distortion-type selection (EXP-213: receiver_confidence kwarg).
             belief_confidence = compute_confidence(
                 source_trust=trust, event_severity=severity_int
             )
@@ -295,7 +281,6 @@ class GossipHandler:
 
     async def _run_side_effects(
         self,
-        session: AsyncSession,
         pair_lookup: dict[tuple[str, str], tuple[dict, dict, dict]],
         event_trust_map: dict[tuple[str, str], dict],
         distortion_map: dict[tuple[str, str], dict],
@@ -307,7 +292,6 @@ class GossipHandler:
         embedding invalidation, and secret propagation.
 
         Args:
-            session: Active Neo4j async session.
             pair_lookup: Mapping of (sharer_id, receiver_id) → (sharer, receiver, faction_ctx).
             event_trust_map: Mapping of (sharer_id, receiver_id) → event+trust row.
             distortion_map: Mapping of (sharer_id, receiver_id) → write params dict.
@@ -325,16 +309,14 @@ class GossipHandler:
 
             if write["distortion_level"] >= self._settings.RUMOR_DISTORTION_THRESHOLD:
                 try:
-                    rumor_id = await create_rumor(
-                        session,
+                    rumor_id = await self._gossip_repo.create_rumor(
                         content=write["distorted_summary"],
                         origin_event_id=event_id,
                         created_at_tick=tick_id,
                         severity=severity_int,
                         is_fabricated=False,
                     )
-                    await believe_rumor(
-                        session,
+                    await self._gossip_repo.believe_rumor(
                         character_id=receiver["id"],
                         rumor_id=rumor_id,
                         confidence=write["belief_confidence"],
@@ -361,8 +343,7 @@ class GossipHandler:
                 )
 
             trust_delta = 1 if write["distortion_type"] is None else -1
-            await log_gossip(
-                session=session,
+            await self._gossip_repo.log_gossip(
                 src_id=sharer["id"],
                 dst_id=receiver["id"],
                 tick_id=tick_id,
@@ -377,14 +358,14 @@ class GossipHandler:
             propagated += 1
 
             await self._maybe_propagate_secret(
-                session=session, sharer_id=sharer["id"], receiver_id=receiver["id"],
+                sharer_id=sharer["id"], receiver_id=receiver["id"],
                 trust=int(row["trust"]), tick_id=tick_id,
             )
 
         return propagated
 
     async def _maybe_propagate_secret(
-        self, *, session: AsyncSession, sharer_id: str, receiver_id: str, trust: int, tick_id: int,
+        self, *, sharer_id: str, receiver_id: str, trust: int, tick_id: int,
     ) -> None:
         """Share a secret from sharer to receiver with a Standing-gated probability (F3.1).
 
@@ -401,12 +382,14 @@ class GossipHandler:
         rng = random.Random(secret_seed)
         if rng.random() >= secret_share_probability(standing):
             return
-        secret_record = await select_gossip_secret(session, sharer_id=sharer_id)
+        secret_record = await self._gossip_repo.select_gossip_secret(sharer_id=sharer_id)
         if secret_record is None:
             return
         distorted = rng.random() < SECRET_DISTORTION_CHANCE
-        await propagate_secret(
-            session=session, receiver_id=receiver_id,
-            secret_id=str(secret_record["secret_id"]), source_character_id=sharer_id,
-            tick_id=tick_id, distorted=distorted,
+        await self._gossip_repo.propagate_secret(
+            receiver_id=receiver_id,
+            secret_id=str(secret_record["secret_id"]),
+            source_character_id=sharer_id,
+            tick_id=tick_id,
+            distorted=distorted,
         )

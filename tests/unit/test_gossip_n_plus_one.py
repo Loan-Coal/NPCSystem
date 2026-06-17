@@ -1,10 +1,11 @@
 """
 Unit tests for SEV-29 gossip N+1 query fix.
 
-Verifies that for N gossip pairs the gossip handler issues at most 2 session.run
-calls for the read+propagate phase (not N×3). The extra conditional calls for
-log_gossip, create_rumor, and believe_rumor are excluded from the count by
-patching those helpers directly.
+Verifies that for N gossip pairs the gossip handler issues at most 1 batch read
+and 1 batch write via the port (not N×3 per-pair calls).
+
+Updated for SEV-24: uses GossipGraphPort mock instead of patching module-level
+graph functions or counting session.run calls.
 """
 
 from __future__ import annotations
@@ -35,11 +36,24 @@ def _make_weight_config():
     return cfg
 
 
-def _make_handler():
+def _make_repo(batch_rows: list[dict]) -> MagicMock:
+    repo = MagicMock()
+    repo.select_batch_event_trust = AsyncMock(return_value=batch_rows)
+    repo.write_batch_knowledge_propagation = AsyncMock()
+    repo.select_gossip_secret = AsyncMock(return_value=None)
+    repo.log_gossip = AsyncMock()
+    repo.propagate_secret = AsyncMock()
+    repo.create_rumor = AsyncMock(return_value="r-1")
+    repo.believe_rumor = AsyncMock()
+    return repo
+
+
+def _make_handler(repo: MagicMock) -> GossipHandler:
     return GossipHandler(
         settings=_make_settings(),
         embedding_index=MagicMock(),
         weight_config=_make_weight_config(),
+        gossip_repo=repo,
     )
 
 
@@ -56,7 +70,6 @@ def _make_pairs(n: int) -> list:
 
 
 def _make_batch_rows(n: int) -> list[dict]:
-    """Return batch read rows matching the expected select_batch_event_trust output."""
     return [
         {
             "sharer_id": f"sharer-{i}",
@@ -71,111 +84,44 @@ def _make_batch_rows(n: int) -> list[dict]:
     ]
 
 
-def _make_async_iter(records: list[dict]):
-    """Return an async iterator over the given records."""
-
-    async def _gen():
-        for r in records:
-            yield r
-
-    return _gen()
-
-
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_gossip_tick_at_most_2_session_run_calls_for_3_pairs():
-    """For 3 pairs the handler must issue at most 2 session.run calls total.
-
-    The old N+1 shape issued 2 reads (event + trust) + 1 write (propagate)
-    per pair = N×3 = 9 calls.  After the batch fix it should be at most 2 calls
-    regardless of N: one batched read query and one batched write query.
-    """
-    handler = _make_handler()
-    session = AsyncMock()
-
+async def test_gossip_tick_exactly_1_batch_read_for_3_pairs():
+    """For 3 pairs the handler must call select_batch_event_trust exactly once."""
     n_pairs = 3
     pairs = _make_pairs(n_pairs)
     batch_rows = _make_batch_rows(n_pairs)
-
-    read_result = AsyncMock()
-    read_result.__aiter__ = MagicMock(return_value=_make_async_iter(batch_rows))
-    read_result.consume = AsyncMock()
-
-    write_result = AsyncMock()
-    write_result.consume = AsyncMock()
-
-    # session.run: 1st call = batch read, 2nd call = batch write
-    session.run = AsyncMock(side_effect=[read_result, write_result])
+    repo = _make_repo(batch_rows)
+    handler = _make_handler(repo)
 
     with (
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.select_pairs",
-            new_callable=AsyncMock,
-            return_value=pairs,
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.log_gossip",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely",
-            new_callable=AsyncMock,
-        ),
-        patch("npc_engine.engines.gossip.gossip_handler.select_gossip_secret", new_callable=AsyncMock, return_value=None),
-        patch("npc_engine.engines.gossip.gossip_handler.propagate_secret", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=pairs)),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
+        await handler.run_tick(tick_id=1)
 
-        await handler.run_tick(session=session, tick_id=1)
-
-    # Core assertion: at most 2 session.run calls (1 batch read + 1 batch write)
-    assert session.run.call_count <= 2, (
-        f"Expected at most 2 session.run calls for {n_pairs} pairs "
-        f"but got {session.run.call_count}"
-    )
+    repo.select_batch_event_trust.assert_called_once()
+    repo.write_batch_knowledge_propagation.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_gossip_tick_result_counts_match_pairs():
     """run_tick must return propagated == number of pairs with valid events."""
-    handler = _make_handler()
-    session = AsyncMock()
-
     n_pairs = 4
     pairs = _make_pairs(n_pairs)
     batch_rows = _make_batch_rows(n_pairs)
-
-    read_result = AsyncMock()
-    read_result.__aiter__ = MagicMock(return_value=_make_async_iter(batch_rows))
-    read_result.consume = AsyncMock()
-
-    write_result = AsyncMock()
-    write_result.consume = AsyncMock()
-
-    session.run = AsyncMock(side_effect=[read_result, write_result])
+    repo = _make_repo(batch_rows)
+    handler = _make_handler(repo)
 
     with (
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.select_pairs",
-            new_callable=AsyncMock,
-            return_value=pairs,
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.log_gossip",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely",
-            new_callable=AsyncMock,
-        ),
-        patch("npc_engine.engines.gossip.gossip_handler.select_gossip_secret", new_callable=AsyncMock, return_value=None),
-        patch("npc_engine.engines.gossip.gossip_handler.propagate_secret", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=pairs)),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
-
-        result = await handler.run_tick(session=session, tick_id=5)
+        result = await handler.run_tick(tick_id=5)
 
     assert result["propagated"] == n_pairs
     assert result["pairs"] == n_pairs
@@ -185,11 +131,8 @@ async def test_gossip_tick_result_counts_match_pairs():
 @pytest.mark.asyncio
 async def test_gossip_tick_skips_pairs_with_no_event():
     """Pairs for which no event is returned must be skipped (propagated not incremented)."""
-    handler = _make_handler()
-    session = AsyncMock()
-
-    # 3 pairs but batch read only returns rows for 2 of them
     pairs = _make_pairs(3)
+    # Only 2 of the 3 pairs have events
     batch_rows = [
         {
             "sharer_id": "sharer-0",
@@ -210,35 +153,31 @@ async def test_gossip_tick_skips_pairs_with_no_event():
             "trust": 80,
         },
     ]
-
-    read_result = AsyncMock()
-    read_result.__aiter__ = MagicMock(return_value=_make_async_iter(batch_rows))
-    read_result.consume = AsyncMock()
-
-    write_result = AsyncMock()
-    write_result.consume = AsyncMock()
-
-    session.run = AsyncMock(side_effect=[read_result, write_result])
+    repo = _make_repo(batch_rows)
+    handler = _make_handler(repo)
 
     with (
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.select_pairs",
-            new_callable=AsyncMock,
-            return_value=pairs,
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.log_gossip",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely",
-            new_callable=AsyncMock,
-        ),
-        patch("npc_engine.engines.gossip.gossip_handler.select_gossip_secret", new_callable=AsyncMock, return_value=None),
-        patch("npc_engine.engines.gossip.gossip_handler.propagate_secret", new_callable=AsyncMock),
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=pairs)),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
-
-        result = await handler.run_tick(session=session, tick_id=1)
+        result = await handler.run_tick(tick_id=1)
 
     assert result["propagated"] == 2
     assert result["pairs"] == 3
+
+
+@pytest.mark.asyncio
+async def test_gossip_tick_swallows_session_kwarg():
+    """run_tick must accept and silently discard a session= kwarg (Wave-5 cleanup guard)."""
+    pairs = _make_pairs(1)
+    batch_rows = _make_batch_rows(1)
+    repo = _make_repo(batch_rows)
+    handler = _make_handler(repo)
+
+    with (
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=pairs)),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
+    ):
+        result = await handler.run_tick(session=object(), tick_id=7)
+
+    assert result["tick_id"] == 7

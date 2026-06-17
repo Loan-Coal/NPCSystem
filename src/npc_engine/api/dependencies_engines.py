@@ -86,17 +86,21 @@ from npc_engine.scheduler.tick_scheduler import TickScheduler
 
 @lru_cache
 def get_gossip_handler() -> GossipHandler:
-    """Create singleton gossip handler with shared embedding index.
+    """Create singleton gossip handler with shared embedding index and graph port.
 
     Returns:
-        GossipHandler wired to the singleton EmbeddingIndex.
+        GossipHandler wired to the singleton EmbeddingIndex and Neo4jGossipRepository.
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.gossip_repository import Neo4jGossipRepository
+
     settings = get_settings()
     return GossipHandler(
         settings=settings,
         embedding_index=get_embedding_index(),
         weight_config=load_gossip_config(),
         emotion_updater=get_emotion_updater(),
+        gossip_repo=Neo4jGossipRepository(get_graph_db()),
     )
 
 

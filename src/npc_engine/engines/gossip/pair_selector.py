@@ -3,17 +3,19 @@ Module: pair_selector
 Layer: engines/gossip
 Purpose: Selects gossip-eligible NPC pairs with faction-weighted deterministic ordering.
 Does NOT: mutate knowledge edges.
-Dependencies injected: AsyncSession, GossipWeightConfig.
+Dependencies injected: GossipGraphPort.
+Used by: npc_engine.engines.gossip.gossip_handler.GossipHandler.run_tick.
 """
 
 from __future__ import annotations
 
-from neo4j import AsyncSession
+from typing import TYPE_CHECKING
 
 from npc_engine.engines.gossip.gossip_config import GossipWeightConfig
 from npc_engine.engines.gossip.pair_weighting import compute_faction_weight
-from npc_engine.graph.goal_queries import get_goals_for_character
-from npc_engine.graph.gossip_queries import fetch_gossip_pairs, fetch_known_node_ids
+
+if TYPE_CHECKING:
+    from npc_engine.engines.ports.gossip_port import GossipGraphPort
 
 _GOAL_ALIGNMENT_BONUS = 10
 
@@ -22,29 +24,27 @@ def _pair_weight(character: dict) -> int:
     return int(character.get("gossipy", 50))
 
 
-async def _fetch_goal_target_ids(session: AsyncSession, character_id: str) -> set[str]:
+async def _fetch_goal_target_ids(repo: GossipGraphPort, character_id: str) -> set[str]:
     """Return the set of non-empty target_id values from this character's active goals.
 
     Args:
-        session: Active Neo4j async session.
+        repo: Gossip graph port providing goal queries.
         character_id: Character node ID to query goals for.
 
     Returns:
         Set of target_id strings (empty strings excluded).
     """
-    goals = await get_goals_for_character(
-        session, character_id=character_id, k=20, status_filter="active"
-    )
+    goals = await repo.get_goals_for_character(character_id, k=20, status_filter="active")
     return {g["target_id"] for g in goals if g.get("target_id")}
 
 
-async def _fetch_known_node_ids(session: AsyncSession, character_id: str) -> set[str]:
-    """Delegate to graph layer: returns node IDs known by character via KNOWS_ABOUT."""
-    return await fetch_known_node_ids(session, character_id=character_id)
+async def _fetch_known_node_ids(repo: GossipGraphPort, character_id: str) -> set[str]:
+    """Delegate to graph port: returns node IDs known by character via KNOWS_ABOUT."""
+    return await repo.fetch_known_node_ids(character_id)
 
 
 async def select_pairs(
-    session: AsyncSession,
+    repo: GossipGraphPort,
     max_pairs: int,
     weight_config: GossipWeightConfig,
 ) -> list[tuple[dict, dict, dict, dict]]:
@@ -57,7 +57,7 @@ async def select_pairs(
     the other NPC. Character IDs serve as tiebreakers.
 
     Args:
-        session: Active Neo4j async session.
+        repo: Gossip graph port providing pair and goal reads.
         max_pairs: Maximum number of pairs to return.
         weight_config: Faction weight multipliers for pair ranking.
 
@@ -65,7 +65,7 @@ async def select_pairs(
         List of (sharer, receiver, location, faction_ctx) tuples, limited to max_pairs.
         faction_ctx contains ``a_faction_ids``, ``b_faction_ids``, and ``best_standing``.
     """
-    rows = await fetch_gossip_pairs(session)
+    rows = await repo.fetch_gossip_pairs()
 
     # Build goal-alignment bonus map — skip entirely when no rows
     goal_alignment: dict[tuple[str, str], int] = {}
@@ -79,14 +79,14 @@ async def select_pairs(
         known_nodes: dict[str, set[str]] = {}
         any_goals = False
         for npc_id in unique_ids:
-            targets = await _fetch_goal_target_ids(session, npc_id)
+            targets = await _fetch_goal_target_ids(repo, npc_id)
             goal_targets[npc_id] = targets
             if targets:
                 any_goals = True
 
         if any_goals:
             for npc_id in unique_ids:
-                known_nodes[npc_id] = await _fetch_known_node_ids(session, npc_id)
+                known_nodes[npc_id] = await _fetch_known_node_ids(repo, npc_id)
 
             for row in rows:
                 a_id = row["a"]["id"]

@@ -2,12 +2,11 @@
 Unit tests for gossip → RUMOR integration in GossipHandler.
 
 Verifies that when distortion_level >= RUMOR_DISTORTION_THRESHOLD,
-create_rumor and believe_rumor are called, while KNOWS_ABOUT (propagate)
+create_rumor and believe_rumor are called, while KNOWS_ABOUT (batch write)
 is still written (backward compat). Also verifies non-distorted gossip
 does NOT create a Rumor node.
 
-Updated for SEV-29: uses batch interface (select_batch_event_trust +
-write_batch_knowledge_propagation instead of per-pair calls).
+Updated for SEV-24: uses GossipGraphPort mock instead of patching module-level graph fns.
 """
 
 from __future__ import annotations
@@ -38,32 +37,35 @@ def _make_weight_config():
     return cfg
 
 
-def _make_handler(rumor_threshold: int = 50):
+def _make_repo(batch_rows: list[dict]) -> MagicMock:
+    repo = MagicMock()
+    repo.select_batch_event_trust = AsyncMock(return_value=batch_rows)
+    repo.write_batch_knowledge_propagation = AsyncMock()
+    repo.create_rumor = AsyncMock(return_value="r-1")
+    repo.believe_rumor = AsyncMock()
+    repo.select_gossip_secret = AsyncMock(return_value=None)
+    repo.log_gossip = AsyncMock()
+    repo.propagate_secret = AsyncMock()
+    return repo
+
+
+def _make_handler(rumor_threshold: int = 50, repo: MagicMock | None = None):
     return GossipHandler(
         settings=_make_settings(rumor_threshold),
         embedding_index=MagicMock(),
         weight_config=_make_weight_config(),
+        gossip_repo=repo,
     )
 
 
-def _make_async_iter(records: list[dict]):
-    async def _gen():
-        for r in records:
-            yield r
-
-    return _gen()
-
-
-def _batch_session(batch_rows: list[dict]) -> AsyncMock:
-    """Return a session whose first run() call returns batch_rows via async iter."""
-    session = AsyncMock()
-    read_result = AsyncMock()
-    read_result.__aiter__ = MagicMock(return_value=_make_async_iter(batch_rows))
-    read_result.consume = AsyncMock()
-    write_result = AsyncMock()
-    write_result.consume = AsyncMock()
-    session.run = AsyncMock(side_effect=[read_result, write_result])
-    return session
+_PAIRS = [
+    (
+        {"id": "sharer-1", "honesty": 50},
+        {"id": "receiver-1"},
+        "loc-1",
+        {"best_standing": None},
+    )
+]
 
 
 # ---------------------------------------------------------------------------
@@ -74,16 +76,6 @@ def _batch_session(batch_rows: list[dict]) -> AsyncMock:
 @pytest.mark.asyncio
 async def test_gossip_handler_calls_propagate_always():
     """write_batch_knowledge_propagation must be called regardless of distortion level."""
-    handler = _make_handler()
-
-    pairs = [
-        (
-            {"id": "sharer-1", "honesty": 50},
-            {"id": "receiver-1"},
-            "loc-1",
-            {"best_standing": None},
-        )
-    ]
     batch_rows = [
         {
             "sharer_id": "sharer-1",
@@ -95,35 +87,21 @@ async def test_gossip_handler_calls_propagate_always():
             "trust": 60,
         }
     ]
-    session = _batch_session(batch_rows)
+    repo = _make_repo(batch_rows)
+    handler = _make_handler(repo=repo)
 
     with (
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.select_pairs",
-            new_callable=AsyncMock,
-            return_value=pairs,
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.write_batch_knowledge_propagation",
-            new_callable=AsyncMock,
-        ) as mock_batch_write,
-        patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely",
-            new_callable=AsyncMock,
-        ),
-        patch("npc_engine.engines.gossip.gossip_handler.propagate_secret", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.select_gossip_secret", new_callable=AsyncMock, return_value=None),
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIRS)),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
-        await handler.run_tick(session=session, tick_id=1)
-        mock_batch_write.assert_called_once()
+        await handler.run_tick(tick_id=1)
+
+    repo.write_batch_knowledge_propagation.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_gossip_creates_rumor_when_distortion_level_exceeds_threshold():
     """create_rumor and believe_rumor are called when distortion_level >= threshold."""
-    handler = _make_handler(rumor_threshold=1)
-
     pairs = [
         (
             {"id": "sharer-1", "honesty": 0},
@@ -143,62 +121,32 @@ async def test_gossip_creates_rumor_when_distortion_level_exceeds_threshold():
             "trust": 10,
         }
     ]
-    session = _batch_session(batch_rows)
+    repo = _make_repo(batch_rows)
+    handler = _make_handler(rumor_threshold=1, repo=repo)
+
+    from npc_engine.engines.gossip.gossip_distort import GossipDistortion
 
     with (
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=pairs)),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
         patch(
-            "npc_engine.engines.gossip.gossip_handler.select_pairs",
-            new_callable=AsyncMock,
-            return_value=pairs,
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.write_batch_knowledge_propagation",
-            new_callable=AsyncMock,
-        ),
-        patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.create_rumor",
-            new_callable=AsyncMock,
-            return_value="r-1",
-        ) as mock_create,
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.believe_rumor",
-            new_callable=AsyncMock,
-        ) as mock_believe,
-        patch("npc_engine.engines.gossip.gossip_handler.random.random", return_value=1.0),
-        patch("npc_engine.engines.gossip.gossip_handler.select_gossip_secret", new_callable=AsyncMock, return_value=None),
-    ):
-        with patch("npc_engine.engines.gossip.gossip_handler.gossip_distort") as mock_distort:
-            from npc_engine.engines.gossip.gossip_distort import GossipDistortion
-
-            mock_distort.return_value = GossipDistortion(
+            "npc_engine.engines.gossip.gossip_handler.gossip_distort",
+            return_value=GossipDistortion(
                 summary="distorted summary",
                 distortion_type="exaggeration",
                 distortion_level=80,
-            )
-            result = await handler.run_tick(session=session, tick_id=1)
+            ),
+        ),
+    ):
+        await handler.run_tick(tick_id=1)
 
-    mock_create.assert_called_once()
-    mock_believe.assert_called_once()
+    repo.create_rumor.assert_called_once()
+    repo.believe_rumor.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_gossip_no_rumor_when_distortion_below_threshold():
     """No Rumor created when distortion_level < threshold."""
-    handler = _make_handler(rumor_threshold=90)
-
-    pairs = [
-        (
-            {"id": "sharer-1", "honesty": 50},
-            {"id": "receiver-1"},
-            "loc-1",
-            {"best_standing": None},
-        )
-    ]
     batch_rows = [
         {
             "sharer_id": "sharer-1",
@@ -210,46 +158,27 @@ async def test_gossip_no_rumor_when_distortion_below_threshold():
             "trust": 80,
         }
     ]
-    session = _batch_session(batch_rows)
+    repo = _make_repo(batch_rows)
+    handler = _make_handler(rumor_threshold=90, repo=repo)
+
+    from npc_engine.engines.gossip.gossip_distort import GossipDistortion
 
     with (
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=_PAIRS)),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
         patch(
-            "npc_engine.engines.gossip.gossip_handler.select_pairs",
-            new_callable=AsyncMock,
-            return_value=pairs,
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.write_batch_knowledge_propagation",
-            new_callable=AsyncMock,
-        ),
-        patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.create_rumor",
-            new_callable=AsyncMock,
-        ) as mock_create,
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.believe_rumor",
-            new_callable=AsyncMock,
-        ) as mock_believe,
-        patch("npc_engine.engines.gossip.gossip_handler.random.random", return_value=1.0),
-        patch("npc_engine.engines.gossip.gossip_handler.select_gossip_secret", new_callable=AsyncMock, return_value=None),
-    ):
-        with patch("npc_engine.engines.gossip.gossip_handler.gossip_distort") as mock_distort:
-            from npc_engine.engines.gossip.gossip_distort import GossipDistortion
-
-            mock_distort.return_value = GossipDistortion(
+            "npc_engine.engines.gossip.gossip_handler.gossip_distort",
+            return_value=GossipDistortion(
                 summary="test",
                 distortion_type=None,
                 distortion_level=0,
-            )
-            await handler.run_tick(session=session, tick_id=1)
+            ),
+        ),
+    ):
+        await handler.run_tick(tick_id=1)
 
-    mock_create.assert_not_called()
-    mock_believe.assert_not_called()
+    repo.create_rumor.assert_not_called()
+    repo.believe_rumor.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -276,8 +205,6 @@ async def test_rumor_mutation_distance_chain():
 @pytest.mark.asyncio
 async def test_knows_about_still_created_alongside_rumor():
     """write_batch_knowledge_propagation must still be called — backward compat."""
-    handler = _make_handler(rumor_threshold=1)
-
     pairs = [
         (
             {"id": "sharer-1", "honesty": 0},
@@ -297,40 +224,24 @@ async def test_knows_about_still_created_alongside_rumor():
             "trust": 5,
         }
     ]
-    session = _batch_session(batch_rows)
+    repo = _make_repo(batch_rows)
+    handler = _make_handler(rumor_threshold=1, repo=repo)
+
+    from npc_engine.engines.gossip.gossip_distort import GossipDistortion
 
     with (
+        patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=pairs)),
+        patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
         patch(
-            "npc_engine.engines.gossip.gossip_handler.select_pairs",
-            new_callable=AsyncMock,
-            return_value=pairs,
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.write_batch_knowledge_propagation",
-            new_callable=AsyncMock,
-        ) as mock_batch_write,
-        patch("npc_engine.engines.gossip.gossip_handler.log_gossip", new_callable=AsyncMock),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.create_rumor",
-            new_callable=AsyncMock,
-            return_value="r-1",
-        ),
-        patch("npc_engine.engines.gossip.gossip_handler.believe_rumor", new_callable=AsyncMock),
-        patch("npc_engine.engines.gossip.gossip_handler.propagate_secret", new_callable=AsyncMock),
-    ):
-        with patch("npc_engine.engines.gossip.gossip_handler.gossip_distort") as mock_distort:
-            from npc_engine.engines.gossip.gossip_distort import GossipDistortion
-
-            mock_distort.return_value = GossipDistortion(
+            "npc_engine.engines.gossip.gossip_handler.gossip_distort",
+            return_value=GossipDistortion(
                 summary="extreme version",
                 distortion_type="exaggeration",
                 distortion_level=90,
-            )
-            await handler.run_tick(session=session, tick_id=1)
+            ),
+        ),
+    ):
+        await handler.run_tick(tick_id=1)
 
     # batch write (KNOWS_ABOUT) must still be called
-    mock_batch_write.assert_called_once()
+    repo.write_batch_knowledge_propagation.assert_called_once()

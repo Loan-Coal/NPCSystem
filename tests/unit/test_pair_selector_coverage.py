@@ -3,12 +3,12 @@ test_pair_selector_coverage.py - Unit tests for engines.gossip.pair_selector.
 
 Does NOT: execute graph I/O against a real database.
 
-Dependencies injected: mock AsyncSession.
+Dependencies injected: mock GossipGraphPort (SEV-24).
 """
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -30,30 +30,13 @@ def _make_row(a_id: str, b_id: str, gossipy_a: int = 50, gossipy_b: int = 50) ->
     }
 
 
-def _make_async_iter_result(rows: list[dict]) -> AsyncMock:
-    """Return a cursor mock whose async iteration yields row mocks with .data()."""
-    records = []
-    for row in rows:
-        r = MagicMock()
-        r.data = MagicMock(return_value=row)
-        records.append(r)
-
-    cursor = MagicMock()
-    cursor.__aiter__ = MagicMock(return_value=iter(records))
-
-    async def _aiter(self):
-        for r in records:
-            yield r
-
-    cursor.__aiter__ = lambda self: _aiter(cursor)
-    return cursor
-
-
-def _make_session(rows: list[dict]) -> AsyncMock:
-    """Return a mock session that returns rows on session.run()."""
-    session = AsyncMock()
-    session.run = AsyncMock(return_value=_make_async_iter_result(rows))
-    return session
+def _make_repo(rows: list[dict]) -> MagicMock:
+    """Return a mock GossipGraphPort pre-configured for pair selection tests."""
+    repo = MagicMock()
+    repo.fetch_gossip_pairs = AsyncMock(return_value=rows)
+    repo.get_goals_for_character = AsyncMock(return_value=[])
+    repo.fetch_known_node_ids = AsyncMock(return_value=set())
+    return repo
 
 
 # ---------------------------------------------------------------------------
@@ -64,16 +47,11 @@ def _make_session(rows: list[dict]) -> AsyncMock:
 async def test_select_pairs_deterministic_same_data() -> None:
     """Identical input data must produce identical pair ordering on every call."""
     rows = [_make_row("npc_a", "npc_b"), _make_row("npc_c", "npc_d", gossipy_a=80)]
+    repo1 = _make_repo(rows)
+    first = await select_pairs(repo=repo1, max_pairs=10, weight_config=_DEFAULT_CONFIG)
 
-    with patch(
-        "npc_engine.engines.gossip.pair_selector._fetch_goal_target_ids",
-        new=AsyncMock(return_value=set()),
-    ):
-        session1 = _make_session(rows)
-        first = await select_pairs(session=session1, max_pairs=10, weight_config=_DEFAULT_CONFIG)
-
-        session2 = _make_session(rows)
-        second = await select_pairs(session=session2, max_pairs=10, weight_config=_DEFAULT_CONFIG)
+    repo2 = _make_repo(rows)
+    second = await select_pairs(repo=repo2, max_pairs=10, weight_config=_DEFAULT_CONFIG)
 
     first_ids = [(p[0]["id"], p[1]["id"]) for p in first]
     second_ids = [(p[0]["id"], p[1]["id"]) for p in second]
@@ -90,13 +68,9 @@ async def test_select_pairs_higher_gossipy_ranks_first() -> None:
     high_pair = _make_row("high_a", "high_b", gossipy_a=90, gossipy_b=90)
     low_pair = _make_row("low_a", "low_b", gossipy_a=10, gossipy_b=10)
     rows = [low_pair, high_pair]  # deliberately unsorted
+    repo = _make_repo(rows)
 
-    with patch(
-        "npc_engine.engines.gossip.pair_selector._fetch_goal_target_ids",
-        new=AsyncMock(return_value=set()),
-    ):
-        session = _make_session(rows)
-        result = await select_pairs(session=session, max_pairs=10, weight_config=_DEFAULT_CONFIG)
+    result = await select_pairs(repo=repo, max_pairs=10, weight_config=_DEFAULT_CONFIG)
 
     assert result[0][0]["id"] == "high_a", "highest gossipy pair must be ranked first"
 
@@ -109,13 +83,9 @@ async def test_select_pairs_higher_gossipy_ranks_first() -> None:
 async def test_select_pairs_max_pairs_limit() -> None:
     """select_pairs must never return more than max_pairs pairs."""
     rows = [_make_row(f"a_{i}", f"b_{i}") for i in range(10)]
+    repo = _make_repo(rows)
 
-    with patch(
-        "npc_engine.engines.gossip.pair_selector._fetch_goal_target_ids",
-        new=AsyncMock(return_value=set()),
-    ):
-        session = _make_session(rows)
-        result = await select_pairs(session=session, max_pairs=3, weight_config=_DEFAULT_CONFIG)
+    result = await select_pairs(repo=repo, max_pairs=3, weight_config=_DEFAULT_CONFIG)
 
     assert len(result) <= 3
 
@@ -127,8 +97,8 @@ async def test_select_pairs_max_pairs_limit() -> None:
 @pytest.mark.asyncio
 async def test_select_pairs_empty_returns_empty() -> None:
     """When there are no co-located NPCs, result must be empty."""
-    session = _make_session([])
-    result = await select_pairs(session=session, max_pairs=10, weight_config=_DEFAULT_CONFIG)
+    repo = _make_repo([])
+    result = await select_pairs(repo=repo, max_pairs=10, weight_config=_DEFAULT_CONFIG)
     assert result == []
 
 
@@ -140,13 +110,9 @@ async def test_select_pairs_empty_returns_empty() -> None:
 async def test_select_pairs_returns_correct_tuple_shape() -> None:
     """Each result element must be a 4-tuple: (sharer, receiver, location, faction_ctx)."""
     rows = [_make_row("npc_a", "npc_b")]
+    repo = _make_repo(rows)
 
-    with patch(
-        "npc_engine.engines.gossip.pair_selector._fetch_goal_target_ids",
-        new=AsyncMock(return_value=set()),
-    ):
-        session = _make_session(rows)
-        result = await select_pairs(session=session, max_pairs=5, weight_config=_DEFAULT_CONFIG)
+    result = await select_pairs(repo=repo, max_pairs=5, weight_config=_DEFAULT_CONFIG)
 
     assert len(result) == 1
     sharer, receiver, location, faction_ctx = result[0]

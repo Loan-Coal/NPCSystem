@@ -99,7 +99,6 @@ async def test_secret_propagation_logs_seed() -> None:
     gh.LOGGER.setLevel(logging.DEBUG)
     try:
         await handler._maybe_propagate_secret(
-            session=None,  # unused: HOSTILE early-returns before any graph call
             sharer_id="sharer_x",
             receiver_id="receiver_y",
             trust=0,

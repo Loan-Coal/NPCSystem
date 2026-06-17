@@ -185,13 +185,6 @@ def _make_gossip_session(severity: int = 80):
 @pytest.mark.asyncio
 async def test_gossip_rumor_record_failure_reraises():
     """create_rumor failure must propagate — not be swallowed — out of run_tick."""
-    handler = GossipHandler(
-        settings=_make_gossip_settings(threshold=0),
-        embedding_index=MagicMock(),
-        weight_config=MagicMock(hostile_distortion_factor=1.0),
-    )
-    session = _make_gossip_session()
-
     sharer = {"id": "npc_a", "honesty": 10}
     receiver = {"id": "npc_b"}
     batch_row = [
@@ -210,22 +203,25 @@ async def test_gossip_rumor_record_failure_reraises():
         }
     ]
 
+    repo = MagicMock()
+    repo.select_batch_event_trust = AsyncMock(return_value=batch_row)
+    repo.write_batch_knowledge_propagation = AsyncMock()
+    repo.create_rumor = AsyncMock(side_effect=RuntimeError("rumor db down"))
+    repo.select_gossip_secret = AsyncMock(return_value=None)
+    repo.log_gossip = AsyncMock()
+    repo.propagate_secret = AsyncMock()
+
+    handler = GossipHandler(
+        settings=_make_gossip_settings(threshold=0),
+        embedding_index=MagicMock(),
+        weight_config=MagicMock(hostile_distortion_factor=1.0),
+        gossip_repo=repo,
+    )
+
     with (
         patch(
             "npc_engine.engines.gossip.gossip_handler.select_pairs",
             new=AsyncMock(return_value=[(sharer, receiver, MagicMock(), {"best_standing": None})]),
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.select_batch_event_trust",
-            new=AsyncMock(return_value=batch_row),
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.write_batch_knowledge_propagation",
-            new=AsyncMock(return_value=None),
-        ),
-        patch(
-            "npc_engine.engines.gossip.gossip_handler.create_rumor",
-            new=AsyncMock(side_effect=RuntimeError("rumor db down")),
         ),
         patch(
             "npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely",
@@ -233,4 +229,4 @@ async def test_gossip_rumor_record_failure_reraises():
         ),
     ):
         with pytest.raises(RuntimeError, match="rumor db down"):
-            await handler.run_tick(session=session, tick_id=1)
+            await handler.run_tick(tick_id=1)

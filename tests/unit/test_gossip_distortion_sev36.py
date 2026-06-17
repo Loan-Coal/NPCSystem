@@ -98,6 +98,7 @@ class TestGossipHandlerLogsDistortionProbability:
             settings=settings,
             embedding_index=embedding_index,
             weight_config=weight_config,
+            gossip_repo=MagicMock(),
         )
 
     def test_build_write_params_logs_distortion_probability_and_seed(self) -> None:

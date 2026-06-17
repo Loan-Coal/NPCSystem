@@ -9,6 +9,7 @@ Dependencies injected: Neo4j test environment via env vars.
 from __future__ import annotations
 
 import os
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
@@ -16,6 +17,8 @@ from neo4j import AsyncGraphDatabase
 
 from npc_engine.engines.gossip.gossip_config import GossipWeightConfig
 from npc_engine.engines.gossip.pair_selector import select_pairs
+from npc_engine.graph.db import GraphDB
+from npc_engine.graph.repositories.gossip_repository import Neo4jGossipRepository
 
 
 def _uid(prefix: str) -> str:
@@ -29,6 +32,16 @@ def _skip_if_no_neo4j() -> tuple[str, str, str]:
     if not uri or not user or not password:
         pytest.skip("NEO4J_URI/NEO4J_USER/NEO4J_PASSWORD required for integration tests")
     return uri, user, password
+
+
+def _make_repo(uri: str, user: str, password: str) -> Neo4jGossipRepository:
+    """Build a Neo4jGossipRepository from raw connection parameters."""
+    settings = MagicMock()
+    settings.NEO4J_URI = uri
+    settings.NEO4J_USER = user
+    settings.NEO4J_PASSWORD = password
+    graph_db = GraphDB(settings)
+    return Neo4jGossipRepository(graph_db)
 
 
 _WEIGHT_CONFIG = GossipWeightConfig()
@@ -116,7 +129,8 @@ async def test_same_faction_pairs_rank_higher_than_strangers() -> None:
                 await _add_member(tx, char_b, faction)
                 await tx.commit()
 
-            pairs = await select_pairs(session, max_pairs=20, weight_config=_WEIGHT_CONFIG)
+        repo = _make_repo(uri, user, password)
+        pairs = await select_pairs(repo=repo, max_pairs=20, weight_config=_WEIGHT_CONFIG)
 
         faction_pair_ids = {frozenset([char_a, char_b])}
         unfactioned_pair_ids = {
@@ -172,7 +186,8 @@ async def test_hostile_pairs_rank_lower_than_neutral_pairs() -> None:
                 await _set_standing(tx, fac_y, fac_x, -100)
                 await tx.commit()
 
-            pairs = await select_pairs(session, max_pairs=20, weight_config=_WEIGHT_CONFIG)
+        repo = _make_repo(uri, user, password)
+        pairs = await select_pairs(repo=repo, max_pairs=20, weight_config=_WEIGHT_CONFIG)
 
         hostile_pair_ids = {frozenset([char_a, char_b])}
         neutral_pair_ids = {frozenset([char_c, char_d])}
@@ -212,7 +227,8 @@ async def test_faction_context_included_in_pair_tuples() -> None:
                 await _create_character(tx, char_b, loc)
                 await tx.commit()
 
-            pairs = await select_pairs(session, max_pairs=10, weight_config=_WEIGHT_CONFIG)
+        repo = _make_repo(uri, user, password)
+        pairs = await select_pairs(repo=repo, max_pairs=10, weight_config=_WEIGHT_CONFIG)
 
         assert len(pairs) >= 2
         for tup in pairs:
