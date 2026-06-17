@@ -19,6 +19,8 @@ from neo4j import AsyncGraphDatabase
 from npc_engine.api.dependencies_infra import get_type_registry
 from npc_engine.config import get_settings
 from npc_engine.engines.scheming.scheme_advance_tick import SchemeAdvanceTick
+from npc_engine.graph.db import GraphDB
+from npc_engine.graph.repositories.scheming_repository import Neo4jSchemingRepository
 from npc_engine.graph.scheme_reader import get_all_active_schemes_with_steps
 from npc_engine.graph.scheme_writer import upsert_scheme
 
@@ -91,11 +93,15 @@ async def test_advance_creates_covert_event_and_step() -> None:
             scheme_id = mine[0].scheme_id
             assert mine[0].step_count == 0
 
+            graph_db = GraphDB(settings=get_settings())
+            repo = Neo4jSchemingRepository(graph_db=graph_db)
             adapter = SchemeAdvanceTick(
-                settings=get_settings(), registry=get_type_registry()
+                settings=get_settings(),
+                registry=get_type_registry(),
+                scheming_repo=repo,
             )
             # Interval default is 5; tick 10 is on-cadence.
-            result = await adapter.run_tick(session=session, tick_id=10)
+            result = await adapter.run_tick(tick_id=10)
             assert result["advanced"] == 1
 
             async with await session.begin_transaction() as tx:

@@ -1,30 +1,38 @@
 """
-Module: store_protocol
-Layer: engines
-Purpose: Sessionless storage protocol for idempotency persistence backends. The
-         concrete adapter (Neo4jIdempotencyRepository in graph/repositories/) holds
-         a GraphDB and opens its own sessions, so IdempotencyService needs no session
-         knowledge (DEC-122 / SEV-24).
-Does NOT: provide a concrete database implementation or open Neo4j sessions.
-Dependencies injected: none (pure interface).
-Used by: npc_engine.engines.idempotency.service.IdempotencyService;
-         implemented structurally by
-         npc_engine.graph.repositories.idempotency_repository.Neo4jIdempotencyRepository.
+Module: idempotency_repository
+Layer: graph
+Purpose: Neo4j adapter for the idempotency domain. Holds a GraphDB, opens a session
+         per operation, and delegates to Neo4jIdempotencyStore, so IdempotencyService
+         depends on IdempotencyStoreProtocol and holds no Neo4j session (DEC-122 / SEV-24).
+Does NOT: decide replay/conflict semantics or import the engines layer.
+Dependencies injected: GraphDB (Neo4j driver holder).
+Used by: api/dependencies_stores.get_idempotency_service.
 """
 
 from __future__ import annotations
 
-from typing import Protocol
-
+from npc_engine.graph.db import GraphDB
 from npc_engine.graph.idempotency_models import IdempotencyRecord
+from npc_engine.graph.idempotency_writer import Neo4jIdempotencyStore
 
 
-class IdempotencyStoreProtocol(Protocol):
-    """Sessionless protocol for loading and mutating idempotency records."""
+class Neo4jIdempotencyRepository:
+    """Session-per-call Neo4j adapter for idempotency records (IdempotencyStoreProtocol)."""
+
+    def __init__(self, graph_db: GraphDB) -> None:
+        """Store the injected driver holder.
+
+        Args:
+            graph_db: Neo4j driver holder providing connect() + get_session().
+        """
+        self._graph_db = graph_db
+        self._store = Neo4jIdempotencyStore()
 
     async def ensure_constraints(self) -> None:
-        """Create any required database constraints for idempotency records."""
-        ...
+        """Create the uniqueness constraint on idempotency records if absent."""
+        await self._graph_db.connect()
+        async with self._graph_db.get_session() as session:
+            await self._store.ensure_constraints(session=session)
 
     async def get_record(
         self,
@@ -41,7 +49,13 @@ class IdempotencyStoreProtocol(Protocol):
         Returns:
             Matching IdempotencyRecord, or None if absent.
         """
-        ...
+        await self._graph_db.connect()
+        async with self._graph_db.get_session() as session:
+            return await self._store.get_record(
+                session=session,
+                idempotency_key=idempotency_key,
+                resource_scope=resource_scope,
+            )
 
     async def create_pending_if_absent(
         self,
@@ -66,7 +80,17 @@ class IdempotencyStoreProtocol(Protocol):
         Returns:
             True if a new record was created, False if one already existed.
         """
-        ...
+        await self._graph_db.connect()
+        async with self._graph_db.get_session() as session:
+            return await self._store.create_pending_if_absent(
+                session=session,
+                idempotency_key=idempotency_key,
+                resource_scope=resource_scope,
+                request_hash=request_hash,
+                created_at=created_at,
+                expires_at=expires_at,
+                pending_timeout_seconds=pending_timeout_seconds,
+            )
 
     async def upsert_pending(
         self,
@@ -91,7 +115,17 @@ class IdempotencyStoreProtocol(Protocol):
         Returns:
             The upserted IdempotencyRecord.
         """
-        ...
+        await self._graph_db.connect()
+        async with self._graph_db.get_session() as session:
+            return await self._store.upsert_pending(
+                session=session,
+                idempotency_key=idempotency_key,
+                resource_scope=resource_scope,
+                request_hash=request_hash,
+                created_at=created_at,
+                expires_at=expires_at,
+                pending_timeout_seconds=pending_timeout_seconds,
+            )
 
     async def mark_completed(
         self,
@@ -115,7 +149,18 @@ class IdempotencyStoreProtocol(Protocol):
             response_hash: SHA-256 hex digest of the response.
             updated_at: ISO-8601 update timestamp.
         """
-        ...
+        await self._graph_db.connect()
+        async with self._graph_db.get_session() as session:
+            await self._store.mark_completed(
+                session=session,
+                idempotency_key=idempotency_key,
+                resource_scope=resource_scope,
+                request_hash=request_hash,
+                status_code=status_code,
+                response_body=response_body,
+                response_hash=response_hash,
+                updated_at=updated_at,
+            )
 
     async def mark_failed_terminal(
         self,
@@ -139,10 +184,21 @@ class IdempotencyStoreProtocol(Protocol):
             response_hash: SHA-256 hex digest of the response.
             updated_at: ISO-8601 update timestamp.
         """
-        ...
+        await self._graph_db.connect()
+        async with self._graph_db.get_session() as session:
+            await self._store.mark_failed_terminal(
+                session=session,
+                idempotency_key=idempotency_key,
+                resource_scope=resource_scope,
+                request_hash=request_hash,
+                status_code=status_code,
+                response_body=response_body,
+                response_hash=response_hash,
+                updated_at=updated_at,
+            )
 
     async def delete_expired(self, *, now_iso: str) -> int:
-        """Delete all records whose expiry timestamp is before now_iso.
+        """Delete all records whose expires_at is before now_iso.
 
         Args:
             now_iso: Current UTC time as ISO-8601 string used as the expiry cutoff.
@@ -150,4 +206,6 @@ class IdempotencyStoreProtocol(Protocol):
         Returns:
             Number of records deleted.
         """
-        ...
+        await self._graph_db.connect()
+        async with self._graph_db.get_session() as session:
+            return await self._store.delete_expired(session=session, now_iso=now_iso)

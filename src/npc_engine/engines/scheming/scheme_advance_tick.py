@@ -7,7 +7,7 @@ Purpose: Tick-scheduler adapter that auto-advances active schemes (F1.6 / DEC-10
 Does NOT: call LLMs, run the public EventHandler.run_tick side effects (awareness,
           reputation, witnessing, world-state), change type_registry YAML, or
           perform scheme detection (that is the investigation engine's job).
-Dependencies injected: Settings + TypeRegistry (constructor); AsyncSession (per call).
+Dependencies injected: Settings + TypeRegistry + SchemingGraphPort (constructor).
 Used by: scheduler/tick_scheduler.py (scheme_advance_engine slot); wired in
          api/dependencies_engines.get_scheme_advance_tick.
 """
@@ -19,18 +19,10 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from neo4j import AsyncSession, AsyncTransaction
-
 from npc_engine.config import Settings
+from npc_engine.engines.ports.scheming_port import SchemingGraphPort
 from npc_engine.engines.scheming.covert_event_factory import build_covert_event_props
-from npc_engine.graph.event_writer import upsert_event
-from npc_engine.graph.graph_reader import get_npc_location_id
-from npc_engine.graph.scheme_reader import (
-    ActiveSchemeProgress,
-    get_all_active_schemes_with_steps,
-)
-from npc_engine.graph.scheme_writer import add_scheme_step
-from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.scheme_reader import ActiveSchemeProgress
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.type_registry.node_validator import validate_node_write
 
@@ -46,26 +38,35 @@ class SchemeAdvanceTick:
     SCHEME_ADVANCE_MAX_PER_TICK schemes per tick, and stops a scheme once it has
     MAX_SCHEME_STEPS steps. Each advance creates a registry-valid, covert
     (is_public=False, low-severity) Event via the validated write path and links
-    it as the next SCHEME_STEP.
+    it as the next SCHEME_STEP atomically (SEV-01 / L2-07).
     """
 
-    def __init__(self, settings: Settings, registry: TypeRegistry) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        registry: TypeRegistry,
+        scheming_repo: SchemingGraphPort,
+    ) -> None:
         """Initialise the scheme-advance tick adapter.
 
         Args:
             settings: Application settings (cadence + step/per-tick caps).
             registry: Type registry providing the validated ``event`` node model.
+            scheming_repo: Graph port for scheme reads and atomic step emission.
         """
         self._interval = settings.SCHEME_ADVANCE_TICK_INTERVAL
         self._max_steps = settings.MAX_SCHEME_STEPS
         self._max_per_tick = settings.SCHEME_ADVANCE_MAX_PER_TICK
         self._registry = registry
+        self._repo = scheming_repo
 
-    async def run_tick(self, session: AsyncSession, tick_id: int) -> dict[str, Any]:
+    async def run_tick(self, *, tick_id: int, **_: Any) -> dict[str, Any]:
         """Advance eligible active schemes one covert step, on cadence.
 
+        The scheduler passes ``session=`` as a keyword arg; it is swallowed by
+        ``**_`` and ignored — the port manages its own sessions (DEC-122).
+
         Args:
-            session: Active Neo4j async session.
             tick_id: Current game tick.
 
         Returns:
@@ -74,17 +75,16 @@ class SchemeAdvanceTick:
         if tick_id % self._interval != 0:
             return {"tick_id": tick_id, "advanced": 0, "skipped": True}
 
-        schemes = await get_all_active_schemes_with_steps(session)
+        schemes = await self._repo.get_all_active_schemes_with_steps()
         eligible = [s for s in schemes if s.step_count < self._max_steps]
         advanced = 0
         for scheme in eligible[: self._max_per_tick]:
-            if await self._advance_one(session, scheme, tick_id):
+            if await self._advance_one(scheme, tick_id):
                 advanced += 1
         return {"tick_id": tick_id, "advanced": advanced, "skipped": False}
 
     async def _advance_one(
         self,
-        session: AsyncSession,
         scheme: ActiveSchemeProgress,
         tick_id: int,
     ) -> bool:
@@ -93,7 +93,7 @@ class SchemeAdvanceTick:
         Returns True if a step was added; False if the schemer has no resolvable
         location (the covert event cannot be placed this tick).
         """
-        location_id = await get_npc_location_id(session, scheme.npc_id)
+        location_id = await self._repo.get_npc_location_id(scheme.npc_id)
         if not location_id:
             _LOGGER.debug("scheme_advance: no location for npc=%s — skipped", scheme.npc_id)
             return False
@@ -101,20 +101,13 @@ class SchemeAdvanceTick:
         next_order = scheme.step_count + 1
         event_id = uuid4().hex
         event = self._build_event(scheme, event_id, next_order, location_id, tick_id)
-
-        # SEV-01 L2-07: mint Event AND link SCHEME_STEP atomically in one tx so a
-        # failure between the two cannot leave an orphan Event with no step link.
-        async def _emit(tx: AsyncTransaction) -> None:
-            await upsert_event(tx=tx, event=event)
-            await add_scheme_step(
-                tx=tx,
-                scheme_id=scheme.scheme_id,
-                event_id=event_id,
-                step_order=next_order,
-                completed=True,
-            )
-
-        await run_in_tx(session, _emit)
+        await self._repo.emit_scheme_step_atomic(
+            event=event,
+            scheme_id=scheme.scheme_id,
+            event_id=event_id,
+            step_order=next_order,
+            completed=True,
+        )
         return True
 
     def _build_event(

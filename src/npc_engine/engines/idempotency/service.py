@@ -1,16 +1,18 @@
 """
-service.py - Idempotency decision engine backed by persistent storage.
+Module: service
 Layer: engines
-Purpose: (auto-detected — review)
-
-Does NOT: parse HTTP headers directly.
-
-Dependencies injected: Settings, GraphDB, IdempotencyStoreProtocol.
+Purpose: Idempotency decision engine backed by a sessionless storage protocol.
+         IdempotencyService delegates all Neo4j I/O to IdempotencyStoreProtocol whose
+         concrete adapter (Neo4jIdempotencyRepository) owns its sessions (DEC-122 / SEV-24).
+Does NOT: open Neo4j sessions, parse HTTP headers directly, or hold a GraphDB.
+Dependencies injected: Settings + IdempotencyStoreProtocol (constructor).
+Used by: api/auth/idempotency_middleware.py.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, AsyncContextManager, Protocol
+from typing import Protocol
 
 from npc_engine.config import Settings
 from npc_engine.engines.idempotency.models import IdempotencyPreflightResult
@@ -25,12 +27,6 @@ from npc_engine.engines.idempotency.store_protocol import IdempotencyStoreProtoc
 
 
 STATUS_SERVER_ERROR = 500
-
-
-class GraphSessionProvider(Protocol):
-    """Protocol for objects that expose a Neo4j session context manager."""
-
-    def get_session(self) -> AsyncContextManager[Any]: ...
 
 
 class IdempotencyServiceProtocol(Protocol):
@@ -63,29 +59,29 @@ class IdempotencyServiceProtocol(Protocol):
 
 
 class IdempotencyService:
-    """Evaluates preflight and finalization behavior for idempotent requests."""
+    """Evaluates preflight and finalization behavior for idempotent requests.
+
+    All Neo4j I/O is delegated to the injected IdempotencyStoreProtocol whose
+    concrete implementation manages its own sessions (DEC-122).
+    """
 
     def __init__(
         self,
         settings: Settings,
-        graph_db: GraphSessionProvider,
         store: IdempotencyStoreProtocol,
     ) -> None:
-        """Initialise the service with configuration and persistence dependencies.
+        """Initialise the service with configuration and a sessionless store.
 
         Args:
             settings: Application settings providing idempotency timeout and retention config.
-            graph_db: Provider for Neo4j session context managers.
-            store: Persistence backend implementing IdempotencyStoreProtocol.
+            store: Sessionless persistence backend implementing IdempotencyStoreProtocol.
         """
         self._settings = settings
-        self._graph_db = graph_db
         self._store = store
 
     async def ensure_constraints(self) -> None:
         """Ensure the Neo4j uniqueness constraint on idempotency records exists."""
-        async with self._graph_db.get_session() as session:
-            await self._store.ensure_constraints(session=session)
+        await self._store.ensure_constraints()
 
     async def preflight(
         self,
@@ -112,42 +108,38 @@ class IdempotencyService:
         scope = _resource_scope(method=method, path=path)
         req_hash = _request_hash(method=method, path=path, query_string=query_string, body_bytes=body_bytes)
         now = datetime.now(timezone.utc)
-        async with self._graph_db.get_session() as session:
-            record = await self._store.get_record(
-                session=session,
-                idempotency_key=idempotency_key,
-                resource_scope=scope,
-            )
-            if record is None:
-                created = await create_pending_if_absent(
-                    store=self._store,
-                    session=session,
-                    idempotency_key=idempotency_key,
-                    resource_scope=scope,
-                    request_hash=req_hash,
-                    now=now,
-                    settings=self._settings,
-                )
-                if created:
-                    return IdempotencyPreflightResult(decision="proceed", request_hash=req_hash)
-                record = await self._store.get_record(
-                    session=session,
-                    idempotency_key=idempotency_key,
-                    resource_scope=scope,
-                )
-                if record is None:
-                    return IdempotencyPreflightResult(decision="proceed", request_hash=req_hash)
 
-            return await evaluate_existing_record(
+        record = await self._store.get_record(
+            idempotency_key=idempotency_key,
+            resource_scope=scope,
+        )
+        if record is None:
+            created = await create_pending_if_absent(
                 store=self._store,
-                session=session,
-                record=record,
                 idempotency_key=idempotency_key,
                 resource_scope=scope,
                 request_hash=req_hash,
                 now=now,
                 settings=self._settings,
             )
+            if created:
+                return IdempotencyPreflightResult(decision="proceed", request_hash=req_hash)
+            record = await self._store.get_record(
+                idempotency_key=idempotency_key,
+                resource_scope=scope,
+            )
+            if record is None:
+                return IdempotencyPreflightResult(decision="proceed", request_hash=req_hash)
+
+        return await evaluate_existing_record(
+            store=self._store,
+            record=record,
+            idempotency_key=idempotency_key,
+            resource_scope=scope,
+            request_hash=req_hash,
+            now=now,
+            settings=self._settings,
+        )
 
     async def finalize(
         self,
@@ -175,22 +167,8 @@ class IdempotencyService:
         resp_hash = _response_hash(status_code=status_code, response_body=response_body)
         scope = _resource_scope(method=method, path=path)
 
-        async with self._graph_db.get_session() as session:
-            if status_code >= STATUS_SERVER_ERROR:
-                await self._store.mark_failed_terminal(
-                    session=session,
-                    idempotency_key=idempotency_key,
-                    resource_scope=scope,
-                    request_hash=request_hash,
-                    status_code=status_code,
-                    response_body=response_body,
-                    response_hash=resp_hash,
-                    updated_at=now_iso,
-                )
-                return
-
-            await self._store.mark_completed(
-                session=session,
+        if status_code >= STATUS_SERVER_ERROR:
+            await self._store.mark_failed_terminal(
                 idempotency_key=idempotency_key,
                 resource_scope=scope,
                 request_hash=request_hash,
@@ -199,6 +177,17 @@ class IdempotencyService:
                 response_hash=resp_hash,
                 updated_at=now_iso,
             )
+            return
+
+        await self._store.mark_completed(
+            idempotency_key=idempotency_key,
+            resource_scope=scope,
+            request_hash=request_hash,
+            status_code=status_code,
+            response_body=response_body,
+            response_hash=resp_hash,
+            updated_at=now_iso,
+        )
 
     async def cleanup_expired(self) -> int:
         """Delete all expired idempotency records and return the count removed.
@@ -207,5 +196,4 @@ class IdempotencyService:
             Number of records deleted.
         """
         now_iso = datetime.now(timezone.utc).isoformat()
-        async with self._graph_db.get_session() as session:
-            return await self._store.delete_expired(session=session, now_iso=now_iso)
+        return await self._store.delete_expired(now_iso=now_iso)

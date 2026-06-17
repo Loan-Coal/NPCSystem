@@ -24,7 +24,6 @@ from npc_engine.api.dependency_singletons import (
     get_gossip_handler,
     get_graph_db,
     get_idempotency_service,
-    get_idempotency_store,
     get_llm_config,
     get_memory_consolidation_engine,
     get_pricing_engine,
@@ -83,7 +82,6 @@ def _clear_all() -> None:
     get_type_registry.cache_clear()
     get_llm_config.cache_clear()
     get_dialogue_engine_model_config.cache_clear()
-    get_idempotency_store.cache_clear()
     get_idempotency_service.cache_clear()
     get_reindex_job_service.cache_clear()
     get_pricing_engine.cache_clear()

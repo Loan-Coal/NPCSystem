@@ -1,14 +1,13 @@
 """
 test_idempotency_service_v14.py - Unit tests for v1.4 idempotency service semantics.
 
-Does NOT: use real Neo4j connections.
+Does NOT: use real Neo4j connections. The store stub is sessionless (DEC-122 / SEV-24).
 
-Dependencies injected: in-memory store and graph session stubs.
+Dependencies injected: in-memory sessionless store stub.
 """
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -18,25 +17,18 @@ from npc_engine.graph.idempotency_models import IdempotencyRecord
 from npc_engine.engines.idempotency.service import IdempotencyService
 
 
-class _GraphDbSessionStub:
-    @asynccontextmanager
-    async def get_session(self):
-        yield object()
-
-
 class _StoreStub:
     def __init__(self):
         self.records: dict[tuple[str, str], IdempotencyRecord] = {}
 
-    async def ensure_constraints(self, session) -> None:
+    async def ensure_constraints(self) -> None:
         return None
 
-    async def get_record(self, session, *, idempotency_key: str, resource_scope: str) -> IdempotencyRecord | None:
+    async def get_record(self, *, idempotency_key: str, resource_scope: str) -> IdempotencyRecord | None:
         return self.records.get((idempotency_key, resource_scope))
 
     async def create_pending_if_absent(
         self,
-        session,
         *,
         idempotency_key: str,
         resource_scope: str,
@@ -49,7 +41,6 @@ class _StoreStub:
         if key in self.records:
             return False
         await self.upsert_pending(
-            session,
             idempotency_key=idempotency_key,
             resource_scope=resource_scope,
             request_hash=request_hash,
@@ -61,7 +52,6 @@ class _StoreStub:
 
     async def upsert_pending(
         self,
-        session,
         *,
         idempotency_key: str,
         resource_scope: str,
@@ -85,7 +75,6 @@ class _StoreStub:
 
     async def mark_completed(
         self,
-        session,
         *,
         idempotency_key: str,
         resource_scope: str,
@@ -109,7 +98,6 @@ class _StoreStub:
 
     async def mark_failed_terminal(
         self,
-        session,
         *,
         idempotency_key: str,
         resource_scope: str,
@@ -131,7 +119,7 @@ class _StoreStub:
             }
         )
 
-    async def delete_expired(self, session, *, now_iso: str) -> int:
+    async def delete_expired(self, *, now_iso: str) -> int:
         now = datetime.fromisoformat(now_iso)
         original_size = len(self.records)
         self.records = {
@@ -150,7 +138,6 @@ def _build_service(store: _StoreStub) -> IdempotencyService:
             IDEMPOTENCY_PENDING_TIMEOUT_SECONDS=30,
             IDEMPOTENCY_RETENTION_HOURS=24,
         ),
-        graph_db=_GraphDbSessionStub(),
         store=store,
     )
 

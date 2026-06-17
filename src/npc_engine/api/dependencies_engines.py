@@ -63,6 +63,7 @@ from npc_engine.engines.player_model.player_model_tick import PlayerModelTick
 from npc_engine.engines.director.director_tick import DirectorTick
 from npc_engine.engines.director.director_beat_log import DirectorBeatLog
 from npc_engine.engines.scheming.scheme_advance_tick import SchemeAdvanceTick
+from npc_engine.graph.repositories.scheming_repository import Neo4jSchemingRepository
 from npc_engine.engines.investigation.scheme_detection_tick import SchemeDetectionTick
 from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.engines.memory.memory_decay_tick import MemoryDecayTick
@@ -476,7 +477,13 @@ def get_scheme_advance_tick() -> SchemeAdvanceTick:
         SchemeAdvanceTick wired to settings + the singleton TypeRegistry (validated
         covert-event creation).
     """
-    return SchemeAdvanceTick(settings=get_settings(), registry=get_type_registry())
+    from npc_engine.api.dependencies_infra import get_graph_db
+
+    return SchemeAdvanceTick(
+        settings=get_settings(),
+        registry=get_type_registry(),
+        scheming_repo=Neo4jSchemingRepository(graph_db=get_graph_db()),
+    )
 
 
 @lru_cache

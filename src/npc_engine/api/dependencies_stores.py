@@ -31,7 +31,7 @@ from npc_engine.graph.repositories.relation_read_repository import (
     Neo4jRelationReadRepository,
 )
 from npc_engine.engines.idempotency.service import IdempotencyService
-from npc_engine.graph.idempotency_writer import Neo4jIdempotencyStore
+from npc_engine.graph.repositories.idempotency_repository import Neo4jIdempotencyRepository
 from npc_engine.retrieval.dialogue_context_cache import PartialDialogueContextCache
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
 from npc_engine.retrieval.reindex_job_service import ReindexJobService
@@ -151,26 +151,15 @@ def get_game_clock() -> GameClock:
 
 
 @lru_cache
-def get_idempotency_store() -> Neo4jIdempotencyStore:
-    """Create singleton idempotency persistence backend.
-
-    Returns:
-        Neo4jIdempotencyStore instance.
-    """
-    return Neo4jIdempotencyStore()
-
-
-@lru_cache
 def get_idempotency_service() -> IdempotencyService:
     """Create singleton idempotency service for middleware preflight and finalization.
 
     Returns:
-        IdempotencyService wired to the singleton GraphDB and idempotency store.
+        IdempotencyService wired to the singleton Neo4jIdempotencyRepository.
     """
     return IdempotencyService(
         settings=get_settings(),
-        graph_db=get_graph_db(),
-        store=get_idempotency_store(),
+        store=Neo4jIdempotencyRepository(graph_db=get_graph_db()),
     )
 
 
