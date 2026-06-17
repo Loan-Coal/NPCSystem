@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import TypeVar
+from typing import TypeVar, Any
 
 from npc_engine.cache.redis_runtime import RedisRuntime
 from npc_engine.config import Settings, get_settings
@@ -31,7 +31,7 @@ from npc_engine.type_registry.registry import build_type_registry
 
 REGISTRY_SOURCES_SEPARATOR = ","
 
-_llm_adapters_to_close: list = []
+_llm_adapters_to_close: list[Any] = []
 
 _T = TypeVar("_T")
 

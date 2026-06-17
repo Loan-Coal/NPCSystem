@@ -21,6 +21,8 @@ Dependencies injected: goal_former, action_selector, character_reader,
 
 from __future__ import annotations
 
+from typing import Any
+
 
 from npc_engine.config import get_settings
 from npc_engine.engines.planning.action_selector import ActionSelector
@@ -39,7 +41,7 @@ class GoalFormerAdapter:
     3. Calls ``GoalFormer.form_goal`` for each NPC.
     4. For each formed goal calls ``ActionSelector.select_action`` which moves the NPC
        if the goal urgency exceeds ROUTINE_PRIORITY.
-    5. Returns a summary dict listing all goal node ids created (None omitted).
+    5. Returns a summary dict[str, Any] listing all goal node ids created (None omitted).
 
     Attributes:
         _goal_former: Injected GoalFormer instance.
@@ -68,7 +70,7 @@ class GoalFormerAdapter:
         self._character_reader = character_reader
         self._world_state_repo = world_state_repo
 
-    async def run_tick(self, *, tick_id: int) -> dict:
+    async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
         """Run goal formation and action selection for all active NPCs.
 
         Args:

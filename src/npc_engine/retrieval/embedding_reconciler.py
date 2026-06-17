@@ -23,7 +23,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class _SessionProtocol(Protocol):
-    async def run(self, query: str, **params) -> Any:
+    async def run(self, query: str, **params: Any) -> Any:
         """Execute an async Cypher query.
 
         Args:
@@ -41,7 +41,7 @@ class _GraphDbProtocol(Protocol):
 
 
 class _EmbeddingIndexProtocol(Protocol):
-    async def upsert(self, item_id: str, text: str, payload: dict) -> None:
+    async def upsert(self, item_id: str, text: str, payload: dict[str, Any]) -> None:
         """Upsert one embedding row.
 
         Args:

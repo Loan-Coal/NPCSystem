@@ -13,17 +13,17 @@ Used by: engines/interaction/quest_handler, engines/interaction/quest_verifier; 
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Protocol, Any
 
 
 class InteractionGraphPort(Protocol):
     """Read-only graph access for quest interaction proposals and objective verification."""
 
-    async def get_quest_state(self, *, quest_id: str, player_id: str) -> dict | None:
+    async def get_quest_state(self, *, quest_id: str, player_id: str) -> dict[str, Any] | None:
         """Return the QuestState snapshot for (quest_id, player_id), or None."""
         ...
 
-    async def get_active_quest_for_player(self, *, player_id: str) -> dict | None:
+    async def get_active_quest_for_player(self, *, player_id: str) -> dict[str, Any] | None:
         """Return the player's most recent accepted/in-progress quest state, or None."""
         ...
 

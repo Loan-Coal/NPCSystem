@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache
-from typing import cast
+from typing import Any, cast
 
 _logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
-def get_encoder(model_name: str):
+def get_encoder(model_name: str) -> Any:
     """Return a cached SentenceTransformer for model_name, auto-selecting device.
 
     First call loads the model (~80 MB for all-MiniLM-L6-v2) and caches it.

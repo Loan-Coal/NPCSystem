@@ -19,6 +19,7 @@ Splitting the advance() loop would create artificial coupling. See DEC-042.
 
 from __future__ import annotations
 
+from typing import Any
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
@@ -213,8 +214,8 @@ class TickScheduler:
         self,
         engine_name: str,
         tick_id: int,
-        coro: Awaitable[dict],
-    ) -> dict | None:
+        coro: Awaitable[dict[str, Any]],
+    ) -> dict[str, Any] | None:
         """Await a coroutine, recording success or failure in the status store.
 
         On exception: logs ``tick_engine_error``, records the error, and returns
@@ -225,7 +226,7 @@ class TickScheduler:
             tick_id: Current tick ID, attached to log and status records.
             coro: Awaitable produced by calling the engine's run_tick method.
         Returns:
-            Engine result dict, or None if the engine raised an exception.
+            Engine result dict[str, Any], or None if the engine raised an exception.
         """
         try:
             result = await coro
@@ -241,7 +242,7 @@ class TickScheduler:
                 self._engine_status_store.record_error(engine_name, tick_id, str(exc))
             return None
 
-    async def _run_with_lease_timeout(self, coro):
+    async def _run_with_lease_timeout(self, coro: Awaitable[dict[str, Any]]) -> dict[str, Any]:
         timeout_seconds = max(1.0, float(self._lease_ttl_seconds) - 1.0)
         return await asyncio.wait_for(coro, timeout=timeout_seconds)
 
@@ -274,8 +275,8 @@ class TickScheduler:
         session: AsyncSession,
         engine: str,
         tick_id: int,
-        runner: Callable[[], Awaitable[dict]],
-    ) -> tuple[bool, dict | None]:
+        runner: Callable[[], Awaitable[dict[str, Any]]],
+    ) -> tuple[bool, dict[str, Any] | None]:
         claimed = await self._lease_repo.try_claim(session=session, engine=engine, tick_id=tick_id)
         if claimed:
             try:
@@ -301,8 +302,8 @@ class TickScheduler:
         unresolved = not await self._lease_repo.is_done(session=session, engine=engine, tick_id=tick_id)
         return unresolved, None
 
-    def _build_empty_response(self) -> dict:
-        """Return initial per-engine result dict with empty lists for all engine keys."""
+    def _build_empty_response(self) -> dict[str, Any]:
+        """Return initial per-engine result dict[str, Any] with empty lists for all engine keys."""
         return {
             "clock": self._clock.state.model_dump(),
             "gossip": [],
@@ -369,7 +370,7 @@ class TickScheduler:
         name: str,
         tick_id: int,
         engine: BaseEngine,
-        response: dict,
+        response: dict[str, Any],
     ) -> bool:
         """Run one interval engine via distributed lease; return True if tick is unresolved."""
         try:
@@ -399,7 +400,7 @@ class TickScheduler:
         cypher_key: str,
         tick_id: int,
         engine: BaseEngine,
-        response: dict,
+        response: dict[str, Any],
     ) -> None:
         """Handle Cypher-state dedup for an interval engine; skips if already recorded done."""
         done = await self._is_tick_done(session=session, key=cypher_key, tick_id=tick_id)
@@ -418,7 +419,7 @@ class TickScheduler:
         tick_id: int,
         interval: int,
         engine: BaseEngine,
-        response: dict,
+        response: dict[str, Any],
     ) -> bool:
         """Run an interval engine (gossip/event) if tick is due; return True if unresolved."""
         if tick_id % interval != 0:
@@ -436,7 +437,7 @@ class TickScheduler:
 
     async def _run_tick_body(
         self, *, session: AsyncSession, tick_id: int,
-        skip_llm_engines: bool, response: dict, world_state: WorldState,
+        skip_llm_engines: bool, response: dict[str, Any], world_state: WorldState,
     ) -> bool:
         """Run all engines for one tick; return True if a distributed tick is unresolved."""
         if self._story_pacing_engine is not None:
@@ -476,7 +477,7 @@ class TickScheduler:
         start_tick: int,
         skip_llm_engines: bool,
         world_state: WorldState,
-        response: dict,
+        response: dict[str, Any],
         time_delta_seconds: int,
     ) -> None:
         """Advance clock state and conditionally run memory consolidation."""
@@ -501,7 +502,7 @@ class TickScheduler:
                 consolidation_row.get("consolidated", []) if consolidation_row is not None else []
             )
 
-    async def advance(self, session: AsyncSession, tick_delta: int, time_delta_seconds: int, skip_llm_engines: bool = False) -> dict:
+    async def advance(self, session: AsyncSession, tick_delta: int, time_delta_seconds: int, skip_llm_engines: bool = False) -> dict[str, Any]:
         """Advance the clock and run due handlers, returning per-engine result lists.
 
         Iterates [current+1, current+tick_delta]. Engines run at configured intervals;
@@ -572,7 +573,7 @@ class TickScheduler:
         return tick + (self._event_interval - (tick % self._event_interval))
 
     @property
-    def engine_status(self) -> dict:
+    def engine_status(self) -> dict[str, Any]:
         """Return a snapshot of per-engine status records as serialisable dicts.
 
         Returns:

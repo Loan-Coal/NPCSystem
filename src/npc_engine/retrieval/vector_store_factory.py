@@ -9,6 +9,7 @@ Dependencies injected: Settings.
 """
 from __future__ import annotations
 
+from typing import Any
 from npc_engine.config import Settings
 from npc_engine.retrieval.vector_store_protocol import VectorSearchResult, VectorStoreProtocol
 
@@ -29,9 +30,9 @@ class InMemoryVectorStore(VectorStoreProtocol):
     def __init__(self) -> None:
         """Initialise an empty in-memory vector store."""
 
-        self._entries: dict[str, dict] = {}
+        self._entries: dict[str, dict[str, Any]] = {}
 
-    async def upsert(self, item_id: str, vector: list[float], payload: dict) -> None:
+    async def upsert(self, item_id: str, vector: list[float], payload: dict[str, Any]) -> None:
         """Insert or replace one vector entry.
 
         Args:

@@ -9,6 +9,7 @@ Dependencies injected: LLMClientProtocol.
 """
 from __future__ import annotations
 
+from typing import Any
 import json
 import logging
 from pathlib import Path
@@ -62,7 +63,7 @@ class DialogueLLMClient:
         self._stop_sequences = stop_sequences
         self._log_prompts = log_prompts
 
-    async def generate_response(self, prompt: str, system: str | None = None, archetype: str = "default") -> dict:
+    async def generate_response(self, prompt: str, system: str | None = None, archetype: str = "default") -> dict[str, Any]:
         """Request a structured dialogue response, falling back on timeout or errors.
 
         Attempts structured generation twice before serving the canned fallback.
@@ -76,7 +77,7 @@ class DialogueLLMClient:
 
         Returns:
             Dict conforming to the DialogueResponse schema, validated by Pydantic.
-            Returns a deterministic fallback dict on LLMTimeoutError, LLMRequestError,
+            Returns a deterministic fallback dict[str, Any] on LLMTimeoutError, LLMRequestError,
             or when both validation attempts fail.
         """
 
@@ -103,16 +104,16 @@ class DialogueLLMClient:
     async def _generate_with_retry(
         self,
         prompt: str,
-        schema: dict,
+        schema: dict[str, Any],
         system: str | None,
         labels: dict[str, str],
         archetype: str = "default",
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Attempt structured generation up to two times before serving the canned fallback.
 
         Args:
             prompt: Full dialogue prompt string.
-            schema: JSON schema dict for the DialogueResponse model.
+            schema: JSON schema dict[str, Any] for the DialogueResponse model.
             system: Optional system prompt.
             labels: Metric labels for observability.
 
@@ -151,7 +152,7 @@ class DialogueLLMClient:
         )
         return self._fallback_with_metrics(labels=labels, fallback_reason="validation_error", archetype=archetype)
 
-    def fallback_response_payload(self, archetype: str = "default") -> dict:
+    def fallback_response_payload(self, archetype: str = "default") -> dict[str, Any]:
         """Return a deterministic fallback payload for callers that need safe recovery.
 
         Args:
@@ -163,7 +164,7 @@ class DialogueLLMClient:
 
         return self._load_fallback_dialogue(archetype=archetype)
 
-    def _load_fallback_dialogue(self, archetype: str = "default") -> dict:
+    def _load_fallback_dialogue(self, archetype: str = "default") -> dict[str, Any]:
         """Load the archetype-keyed fallback dialogue response (defaulting if absent)."""
 
         fallback_map = json.loads(Path(self._fallback_path).read_text(encoding="utf-8"))
@@ -176,7 +177,7 @@ class DialogueLLMClient:
             "facial_expression": {"type": "neutral", "intensity": 20},
         }
 
-    def _fallback_with_metrics(self, labels: dict[str, str], fallback_reason: str, archetype: str = "default") -> dict:
+    def _fallback_with_metrics(self, labels: dict[str, str], fallback_reason: str, archetype: str = "default") -> dict[str, Any]:
         """Emit fallback token metrics and return the archetype-keyed payload."""
 
         fallback = self._load_fallback_dialogue(archetype=archetype)

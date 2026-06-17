@@ -16,6 +16,8 @@ Dependencies injected: Settings, TypeRegistry, QuestOfferGraphPort (via __init__
 
 from __future__ import annotations
 
+from typing import Any
+
 import logging
 
 from npc_engine.config import Settings
@@ -77,7 +79,7 @@ class QuestOfferService:
         currency_reward: QuestRewardCurrency | None,
         meta: QuestTransitionMeta,
         reward_source_id: str = "system",
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Transition a generated draft quest to offered status for a specific player.
 
         Args:
@@ -91,7 +93,7 @@ class QuestOfferService:
             reward_source_id: Reward source identifier; must be trusted.
 
         Returns:
-            Persisted quest state payload dict with status ``"offered"``.
+            Persisted quest state payload dict[str, Any] with status ``"offered"``.
 
         Raises:
             QuestTransitionError: If Quest node not found, not in draft status,
@@ -131,7 +133,7 @@ class QuestOfferService:
         currency_reward: QuestRewardCurrency | None,
         meta: QuestTransitionMeta,
         reward_source_id: str = "system",
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Create or return offered quest state for a player.
 
         Args:
@@ -145,7 +147,7 @@ class QuestOfferService:
             reward_source_id: Reward source identifier; must be trusted.
 
         Returns:
-            Persisted quest state payload dict with status ``"offered"``.
+            Persisted quest state payload dict[str, Any] with status ``"offered"``.
 
         Raises:
             QuestTransitionError: If reward_source_id is not trusted.

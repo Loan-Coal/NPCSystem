@@ -11,7 +11,7 @@ Used by: npc_engine.engines.quest_generation.*, npc_engine.engines.quest_generat
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Protocol, Any
 
 
 class QuestGenerationGraphPort(Protocol):
@@ -25,7 +25,7 @@ class QuestGenerationGraphPort(Protocol):
 
     async def get_world_state_context(
         self, *, world_id: str = "world"
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Return {'epoch': str, 'active_conditions': list} for prompt context."""
         ...
 
@@ -33,15 +33,15 @@ class QuestGenerationGraphPort(Protocol):
         """Return (archetype, name) for a character node."""
         ...
 
-    async def get_giver_context(self, *, character_id: str) -> dict:
-        """Return assembled giver context dict (goals, beliefs, mood, needs, inventory, location, faction)."""
+    async def get_giver_context(self, *, character_id: str) -> dict[str, Any]:
+        """Return assembled giver context dict[str, Any] (goals, beliefs, mood, needs, inventory, location, faction)."""
         ...
 
     async def get_candidate_ids_by_label(self, *, label: str) -> list[str]:
         """Return all node IDs with the given graph label."""
         ...
 
-    async def create_quest(self, *, payload: dict) -> None:
+    async def create_quest(self, *, payload: dict[str, Any]) -> None:
         """Persist a Quest node from the payload dict."""
         ...
 
@@ -64,7 +64,7 @@ class QuestGenerationGraphPort(Protocol):
 
     async def get_template_skill_requirements(
         self, *, template_id: str
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Return REQUIRES_SKILL edge payloads for the given QuestTemplate node."""
         ...
 
@@ -80,7 +80,7 @@ class EventTriggerGraphPort(Protocol):
 
     async def get_unprocessed_trigger_events(
         self, trigger_types: frozenset[str], max_count: int
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Return Event nodes whose type matches trigger_types with no CAUSED_BY quest yet."""
         ...
 
@@ -102,7 +102,7 @@ class NeedTriggerGraphPort(Protocol):
 
     async def get_all_needs_below_threshold(
         self, *, threshold: int
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Return Need nodes with level at or below threshold."""
         ...
 

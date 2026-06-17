@@ -9,13 +9,14 @@ Used by: retrieval.context_builder
 
 from __future__ import annotations
 
+from typing import Any
 from neo4j import AsyncSession
 
 
 async def get_active_quest_for_player(
     session: AsyncSession,
     player_id: str,
-) -> dict | None:
+) -> dict[str, Any] | None:
     """Return the player's most recent accepted or in-progress quest state, or None.
 
     Queries QuestState nodes (the lifecycle state store) rather than Quest nodes,
@@ -46,7 +47,7 @@ async def get_active_quest_for_player(
 async def get_offered_quests_for_npc(
     session: AsyncSession,
     npc_id: str,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Return quests the NPC has generated that are still in offered or accepted state.
 
     Used by the context builder to inject the NPC's offerable quest list so the

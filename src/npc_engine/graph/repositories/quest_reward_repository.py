@@ -38,8 +38,8 @@ class Neo4jQuestRewardRepository:
         """
         self._graph_db = graph_db
 
-    async def get_quest_state(self, *, quest_id: str, player_id: str) -> dict | None:
-        """Return the persisted QuestState dict or None if absent."""
+    async def get_quest_state(self, *, quest_id: str, player_id: str) -> dict[str, Any] | None:
+        """Return the persisted QuestState dict[str, Any] or None if absent."""
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
             return await get_quest_state(session=session, quest_id=quest_id, player_id=player_id)
@@ -65,11 +65,11 @@ class Neo4jQuestRewardRepository:
         quest_id: str,
         player_id: str,
         request_id: str,
-        state_dict: dict,
-        next_state_payload: dict,
+        state_dict: dict[str, Any],
+        next_state_payload: dict[str, Any],
         event_node: Any,
         settings: Settings,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Atomically collect delivery items, grant rewards, persist state+event; return stored.
 
         Args:
@@ -117,7 +117,7 @@ class Neo4jQuestRewardRepository:
         quest_id: str,
         player_id: str,
         request_id: str,
-        state_dict: dict,
+        state_dict: dict[str, Any],
         settings: Settings,
     ) -> None:
         """Collect delivery items and grant rewards within an existing transaction."""
@@ -167,7 +167,7 @@ class Neo4jQuestRewardRepository:
         quest_id: str,
         player_id: str,
         reward_source_id: str,
-        objectives: list[dict],
+        objectives: list[dict[str, Any]],
         request_id: str,
     ) -> None:
         """Check possession and transfer delivery items within an existing transaction."""
@@ -206,7 +206,7 @@ class Neo4jQuestRewardRepository:
                 ) from exc
 
 
-def _normalize_item_rewards(item_rewards: list[dict]) -> list[dict]:
+def _normalize_item_rewards(item_rewards: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Deduplicate and merge item rewards by item_id, summing quantities."""
     merged: dict[str, int] = {}
     for reward in item_rewards:

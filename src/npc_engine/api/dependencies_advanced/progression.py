@@ -14,16 +14,24 @@ Used by: api.dependencies_advanced (package re-exporter).
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 from npc_engine.api.dependencies_infra import _register_adapter
-from npc_engine.api.dependencies_stores import get_graph_db, get_session_store
+from npc_engine.api.dependencies_infra import get_graph_db
+from npc_engine.api.dependencies_stores import get_session_store
 from npc_engine.config import get_settings
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm_runtime_config import get_config as get_engine_model_config_for
 
+if TYPE_CHECKING:
+    from npc_engine.engines.skill.skill_progression_engine import SkillProgressionEngine
+    from npc_engine.engines.chapter.chapter_engine import ChapterEngine
+    from npc_engine.engines.investigation.investigation_engine import InvestigationEngine
+    from npc_engine.engines.memory_consolidation.memory_consolidation_engine import MemoryConsolidationEngine
+
 
 @lru_cache
-def get_skill_progression_engine():
+def get_skill_progression_engine() -> SkillProgressionEngine:
     """Create singleton skill progression engine for XP awards on quest completion.
 
     Wires the Neo4j graph adapter (Neo4jSkillRepository) as the engine's injected
@@ -39,7 +47,7 @@ def get_skill_progression_engine():
 
 
 @lru_cache
-def get_chapter_engine():
+def get_chapter_engine() -> ChapterEngine:
     """Create singleton chapter engine with its own LLM client.
 
     Wires the Neo4j graph adapters (Neo4jChapterRepository + Neo4jWorldStateRepository)
@@ -67,7 +75,7 @@ def get_chapter_engine():
 
 
 @lru_cache
-def get_investigation_engine():
+def get_investigation_engine() -> InvestigationEngine:
     """Create singleton investigation engine for Detective/Mystery queries.
 
     Wires the Neo4jInvestigationRepository (read-only) as the engine-layer Port
@@ -85,7 +93,7 @@ def get_investigation_engine():
 
 
 @lru_cache
-def get_memory_consolidation_engine():
+def get_memory_consolidation_engine() -> MemoryConsolidationEngine:
     """Create singleton for the memory consolidation engine using its own LLM config.
 
     Wires the Neo4j graph adapter (Neo4jMemoryConsolidationRepository) as the engine's

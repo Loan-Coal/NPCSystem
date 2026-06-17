@@ -74,5 +74,5 @@ required-imports = ["from __future__ import annotations"]
 
 [tool.mypy]
 mypy_path = "src"
-strict = false
+strict = true
 ignore_missing_imports = true

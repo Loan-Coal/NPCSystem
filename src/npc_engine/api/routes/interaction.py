@@ -61,7 +61,7 @@ class ProposalBody(BaseModel):
 
     kind: str = Field(..., min_length=1)
     target_id: str | None = None
-    payload: dict = Field(default_factory=dict)
+    payload: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(frozen=True)
 

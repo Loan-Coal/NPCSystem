@@ -10,6 +10,7 @@ Used by: api/routes/location_graph, engines (future travel/supply-line queries)
 
 from __future__ import annotations
 
+from typing import Any
 import logging
 
 from neo4j import AsyncSession
@@ -95,7 +96,7 @@ async def create_connection(
 async def get_connections_for_location(
     session: AsyncSession,
     location_id: str,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Return all outbound CONNECTS_TO edges from a location, ordered by travel cost.
 
     Args:
@@ -123,7 +124,7 @@ async def get_shortest_path(
     session: AsyncSession,
     from_location_id: str,
     to_location_id: str,
-) -> dict | None:
+) -> dict[str, Any] | None:
     """Return the shortest path between two locations by hop count.
 
     Uses Cypher's built-in ``shortestPath()`` (fewest hops, not lowest cost).

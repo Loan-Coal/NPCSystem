@@ -13,6 +13,8 @@ Splitting is artificial because execute_currency_transfer_in_tx shares private h
 """
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession, AsyncTransaction
 from pydantic import BaseModel, ConfigDict
 
@@ -164,7 +166,7 @@ async def _get_session_total_in_tx(
 async def _apply_transfer_in_tx(
     tx: AsyncTransaction, *, source_id: str, destination_id: str, amount: int, reason: str,
     request_id: str, idempotency_key: str, session_scope: str, transfer_kind: str,
-) -> dict:
+) -> dict[str, Any]:
     """Select and run the correct transfer Cypher; raise on null result.
 
     Raises: NodeNotFoundError, CurrencyInsufficientFundsError, CurrencyValidationError.

@@ -35,7 +35,7 @@ class CreateSecretRequest(BaseModel):
 
     content: str = Field(..., min_length=1, max_length=512)
     severity: int = Field(..., ge=0, le=100)
-    game_time: dict = Field(
+    game_time: dict[str, Any] = Field(
         default_factory=lambda: {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
     )
     id: str | None = Field(

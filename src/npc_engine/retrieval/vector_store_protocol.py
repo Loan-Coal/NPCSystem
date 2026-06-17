@@ -9,7 +9,7 @@ Dependencies injected: None.
 """
 from __future__ import annotations
 
-from typing import Protocol, TypedDict
+from typing import Protocol, TypedDict, Any
 
 
 class VectorSearchResult(TypedDict):
@@ -17,13 +17,13 @@ class VectorSearchResult(TypedDict):
 
     id: str
     score: float
-    payload: dict
+    payload: dict[str, Any]
 
 
 class VectorStoreProtocol(Protocol):
     """Contract for vector storage implementations."""
 
-    async def upsert(self, item_id: str, vector: list[float], payload: dict) -> None:
+    async def upsert(self, item_id: str, vector: list[float], payload: dict[str, Any]) -> None:
         """Insert or update one vector item.
 
         Args:

@@ -9,6 +9,7 @@ Used by: retrieval.context_builder
 
 from __future__ import annotations
 
+from typing import Any
 from neo4j import AsyncSession
 
 
@@ -56,7 +57,7 @@ async def get_second_hop_events(
     npc_id: str,
     trust_threshold: int = 50,
     limit: int = 5,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Return events that trusted friends KNOW_ABOUT but the NPC does not.
 
     Traverses one hop via RELATES_TO edges with trust >= trust_threshold to find

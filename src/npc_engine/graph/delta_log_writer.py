@@ -9,6 +9,7 @@ Dependencies injected: AsyncManagedTransaction.
 """
 from __future__ import annotations
 
+from typing import Any
 import json
 
 from neo4j import AsyncTransaction
@@ -25,7 +26,7 @@ async def write_delta_log(
     tx: AsyncTransaction,
     src_id: str,
     dst_id: str,
-    delta_log_payload: list[dict],
+    delta_log_payload: list[dict[str, Any]],
 ) -> None:
     """Persist serialized delta log on relation edge.
 

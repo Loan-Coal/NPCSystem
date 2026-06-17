@@ -12,6 +12,7 @@ Used by: engines/dialogue/dialogue_handler, engines/memory_consolidation/memory_
 
 from __future__ import annotations
 
+from typing import Any
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
@@ -36,7 +37,7 @@ class SessionStore:
         """
         self._ttl_seconds = ttl_seconds
         self._max_turns = max_turns
-        self._sessions: dict[str, dict] = {}
+        self._sessions: dict[str, dict[str, Any]] = {}
         self._lock = asyncio.Lock()
 
     def key(self, player_id: str, npc_id: str) -> str:

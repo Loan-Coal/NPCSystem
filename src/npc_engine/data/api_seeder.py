@@ -27,6 +27,7 @@ Idempotency contract (get-then-skip):
 
 from __future__ import annotations
 
+from typing import Any
 import argparse
 import hashlib
 import os
@@ -161,7 +162,7 @@ def _seed_edges(base_url: str, api_key: str, now: str, c: Counter) -> None:
     c.abort_if_failed()
 
 
-def _seed_knows_about_edges(base_url: str, api_key: str, events: list, c: Counter) -> None:
+def _seed_knows_about_edges(base_url: str, api_key: str, events: list[Any], c: Counter) -> None:
     """Seed KNOWS_ABOUT edges between all NPCs and all known events."""
     _LOGGER.info("seeder_phase", extra={"phase": "KNOWS_ABOUT edges"})
     events_by_id = {e["id"]: e for e in events}
@@ -202,7 +203,7 @@ def _seed_events(base_url: str, api_key: str, now: str, c: Counter) -> None:
     _seed_knows_about_edges(base_url, api_key, events, c)
 
 
-def _seed_beliefs(base_url: str, api_key: str, game_time: dict, c: Counter) -> None:
+def _seed_beliefs(base_url: str, api_key: str, game_time: dict[str, Any], c: Counter) -> None:
     """Seed Belief nodes for all characters."""
     _LOGGER.info("seeder_phase", extra={"phase": "beliefs"})
     for char_id, content, confidence in get_phase3_beliefs():
@@ -211,7 +212,7 @@ def _seed_beliefs(base_url: str, api_key: str, game_time: dict, c: Counter) -> N
     c.abort_if_failed()
 
 
-def _seed_goals(base_url: str, api_key: str, game_time: dict, c: Counter) -> None:
+def _seed_goals(base_url: str, api_key: str, game_time: dict[str, Any], c: Counter) -> None:
     """Seed Goal nodes for all characters."""
     _LOGGER.info("seeder_phase", extra={"phase": "goals"})
     _goal_index: dict[str, int] = {}
@@ -223,7 +224,7 @@ def _seed_goals(base_url: str, api_key: str, game_time: dict, c: Counter) -> Non
     c.abort_if_failed()
 
 
-def _seed_items(base_url: str, api_key: str, game_time: dict, c: Counter) -> None:
+def _seed_items(base_url: str, api_key: str, game_time: dict[str, Any], c: Counter) -> None:
     """Seed Item nodes for all characters."""
     _LOGGER.info("seeder_phase", extra={"phase": "items"})
     for owner_id, name, description, value, rarity, item_type, is_unique in get_phase3_items():
@@ -232,7 +233,7 @@ def _seed_items(base_url: str, api_key: str, game_time: dict, c: Counter) -> Non
     c.abort_if_failed()
 
 
-def _seed_secrets(base_url: str, api_key: str, game_time: dict, c: Counter) -> None:
+def _seed_secrets(base_url: str, api_key: str, game_time: dict[str, Any], c: Counter) -> None:
     """Seed Secret nodes for all characters."""
     _LOGGER.info("seeder_phase", extra={"phase": "secrets"})
     for char_id, content, severity in get_phase3_secrets():
@@ -241,7 +242,7 @@ def _seed_secrets(base_url: str, api_key: str, game_time: dict, c: Counter) -> N
     c.abort_if_failed()
 
 
-def _seed_memories(base_url: str, api_key: str, game_time: dict, c: Counter) -> None:
+def _seed_memories(base_url: str, api_key: str, game_time: dict[str, Any], c: Counter) -> None:
     """Seed Memory nodes for all characters."""
     _LOGGER.info("seeder_phase", extra={"phase": "memories"})
     _memory_index: dict[str, int] = {}
@@ -253,7 +254,7 @@ def _seed_memories(base_url: str, api_key: str, game_time: dict, c: Counter) -> 
     c.abort_if_failed()
 
 
-def _seed_debts(base_url: str, api_key: str, game_time: dict, c: Counter) -> None:
+def _seed_debts(base_url: str, api_key: str, game_time: dict[str, Any], c: Counter) -> None:
     """Seed Debt nodes for all characters."""
     _LOGGER.info("seeder_phase", extra={"phase": "debts"})
     for debtor_id, creditor_id, kind, magnitude, due_by in get_phase3_debts():

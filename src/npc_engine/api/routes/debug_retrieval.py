@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict
 
 from npc_engine.api.dependencies import get_db_session, get_embedding_index
 from npc_engine.api.dependency_singletons import get_llm_config
+from npc_engine.retrieval.embedding_index import EmbeddingIndex
 from npc_engine.config import Settings, get_settings
 from npc_engine.retrieval.context_builder import build_serialized_context
 from npc_engine.retrieval.context_utils import estimate_tokens
@@ -118,7 +119,7 @@ async def get_debug_retrieval(
     npc_id: str = Query(..., description="NPC identifier to retrieve context for"),
     query: str = Query(..., description="Player query used as retrieval signal"),
     session: AsyncSession = Depends(get_db_session),
-    embedding_index=Depends(get_embedding_index),
+    embedding_index: EmbeddingIndex = Depends(get_embedding_index),
     settings: Settings = Depends(get_settings),
     llm_config: LLMConfig = Depends(get_llm_config),
 ) -> DebugRetrievalResponse:

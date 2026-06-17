@@ -16,6 +16,7 @@ from collections.abc import Awaitable, Callable
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp
 
 from npc_engine.config import Settings
 
@@ -68,7 +69,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     The /health path is always exempt.
     """
 
-    def __init__(self, app, settings: Settings) -> None:
+    def __init__(self, app: ASGIApp, settings: Settings) -> None:
         """Initialise with application settings.
 
         Args:

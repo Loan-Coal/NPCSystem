@@ -37,7 +37,7 @@ class CreateGoalRequest(BaseModel):
     description: str = Field(..., min_length=1, max_length=512)
     urgency: int = Field(..., ge=0, le=100)
     target_id: str | None = Field(default=None)
-    game_time: dict = Field(
+    game_time: dict[str, Any] = Field(
         default_factory=lambda: {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
     )
     id: str | None = Field(

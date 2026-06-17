@@ -58,7 +58,7 @@ class Counter:
         return 1 if self.failed else 0
 
 
-def call(method: str, url: str, api_key: str, body: dict | None = None) -> tuple[int, Any]:
+def call(method: str, url: str, api_key: str, body: dict[str, Any] | None = None) -> tuple[int, Any]:
     """Execute an HTTP request and return (status_code, parsed_body).
 
     Args:
@@ -88,13 +88,13 @@ def call(method: str, url: str, api_key: str, body: dict | None = None) -> tuple
             return exc.code, {}
 
 
-def post_node(base: str, api_key: str, node_type: str, props: dict) -> int:
+def post_node(base: str, api_key: str, node_type: str, props: dict[str, Any]) -> int:
     """POST a node upsert; returns HTTP status."""
     status, _ = call("POST", f"{base}/v1/graph/nodes/{node_type}", api_key, {"properties": props})
     return status
 
 
-def post_edge(base: str, api_key: str, edge_type: str, src: str, dst: str, props: dict | None = None) -> int:
+def post_edge(base: str, api_key: str, edge_type: str, src: str, dst: str, props: dict[str, Any] | None = None) -> int:
     """POST an edge upsert; returns HTTP status."""
     body: dict[str, Any] = {"src_id": src, "dst_id": dst, "properties": props or {}}
     status, _ = call("POST", f"{base}/v1/graph/edges/{edge_type}", api_key, body)

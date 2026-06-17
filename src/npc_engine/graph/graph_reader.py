@@ -108,7 +108,7 @@ async def get_events_for_npc(session: AsyncSession, npc_id: str, limit: int = 10
 
     result = await session.run(CYPHER_GET_EVENTS_FOR_NPC, npc_id=npc_id, limit=limit)
     try:
-        return cast(list[dict], [_to_native(record.data()) async for record in result])
+        return cast(list[dict[str, Any]], [_to_native(record.data()) async for record in result])
     finally:
         await result.consume()
 
@@ -193,7 +193,7 @@ async def get_npc_player_edge(session: AsyncSession, npc_id: str, player_id: str
     await result.consume()
     if record is None:
         return None
-    return cast(dict, _to_native(record["relation"]))
+    return cast(dict[str, Any], _to_native(record["relation"]))
 
 
 def _to_native(value: Any) -> Any:

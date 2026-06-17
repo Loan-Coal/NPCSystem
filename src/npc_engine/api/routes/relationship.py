@@ -10,6 +10,8 @@ Used by: npc_engine.main (registered at API_V1_PREFIX)
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 from neo4j import AsyncSession
 from pydantic import BaseModel, ConfigDict
@@ -53,7 +55,7 @@ async def get_relationship_standing(
     npc_id: str,
     other_id: str,
     reader: RelationReader = Depends(_get_relation_reader),
-) -> dict:
+) -> dict[str, Any]:
     """Return the derived standing and raw scalars for the directed relation npc_id → other_id.
 
     Args:

@@ -47,8 +47,8 @@ class Neo4jQuestLifecycleRepository:
         """
         self._graph_db = graph_db
 
-    async def get_quest_state(self, *, quest_id: str, player_id: str) -> dict | None:
-        """Return the persisted QuestState dict or None if absent."""
+    async def get_quest_state(self, *, quest_id: str, player_id: str) -> dict[str, Any] | None:
+        """Return the persisted QuestState dict[str, Any] or None if absent."""
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
             return await get_quest_state(session=session, quest_id=quest_id, player_id=player_id)
@@ -58,13 +58,13 @@ class Neo4jQuestLifecycleRepository:
         *,
         quest_id: str,
         player_id: str,
-        state_payload: dict,
+        state_payload: dict[str, Any],
         event_node: Any,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Atomically upsert quest state and emit a lifecycle event; return stored state."""
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
-            async def _work(tx: AsyncTransaction) -> dict:
+            async def _work(tx: AsyncTransaction) -> dict[str, Any]:
                 stored = await upsert_quest_state(
                     session=tx,
                     quest_id=quest_id,
@@ -110,7 +110,7 @@ class Neo4jQuestOfferRepository:
         self._graph_db = graph_db
 
     async def get_quest(self, *, quest_id: str) -> dict[str, Any] | None:
-        """Return the Quest node dict or None."""
+        """Return the Quest node dict[str, Any] or None."""
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
             return await get_quest(session, quest_id)
@@ -126,9 +126,9 @@ class Neo4jQuestOfferRepository:
         *,
         quest_id: str,
         player_id: str,
-        state_payload: dict,
+        state_payload: dict[str, Any],
         event_node: Any,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Atomically create-if-absent QuestState and emit offered event; return stored state.
 
         Validates that the created/retrieved state is in offered status and that the
@@ -137,7 +137,7 @@ class Neo4jQuestOfferRepository:
         """
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
-            async def _work(tx: AsyncTransaction) -> dict:
+            async def _work(tx: AsyncTransaction) -> dict[str, Any]:
                 stored = await create_quest_state_if_absent(
                     session=tx,
                     quest_id=quest_id,
@@ -167,7 +167,7 @@ class Neo4jQuestChainRepository:
         self._graph_db = graph_db
 
     async def get_quest(self, *, quest_id: str) -> dict[str, Any] | None:
-        """Return the Quest node dict or None."""
+        """Return the Quest node dict[str, Any] or None."""
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
             return await get_quest(session, quest_id)

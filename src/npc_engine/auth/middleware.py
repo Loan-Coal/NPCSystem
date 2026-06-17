@@ -15,6 +15,7 @@ from time import perf_counter
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp
 
 from npc_engine.auth.api_key import resolve_scope_from_authorization
 from npc_engine.api.error_envelope import ErrorBody, ErrorEnvelope
@@ -51,7 +52,7 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
 
     def __init__(
         self,
-        app,
+        app: ASGIApp,
         settings: Settings,
         idempotency_service: IdempotencyServiceProtocol | None = None,
     ) -> None:

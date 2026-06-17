@@ -16,6 +16,7 @@ Dependencies injected: PlanningGraphPort (via __init__), goal list (passed per c
 
 from __future__ import annotations
 
+from typing import Any
 import logging
 
 from npc_engine.engines.planning.action_priority import ROUTINE_PRIORITY
@@ -47,7 +48,7 @@ class ActionSelector:
         self,
         *,
         character_id: str,
-        goals: list[dict],
+        goals: list[dict[str, Any]],
     ) -> None:
         """Evaluate goals and dispatch a move action if the top goal overrides routine.
 
@@ -82,7 +83,7 @@ class ActionSelector:
     async def _dispatch_move(
         self,
         character_id: str,
-        goal: dict,
+        goal: dict[str, Any],
     ) -> None:
         target_location_id: str | None = goal.get("target_location_id")
         if target_location_id is None:

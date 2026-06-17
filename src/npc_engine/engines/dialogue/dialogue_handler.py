@@ -34,6 +34,7 @@ from npc_engine.engines.dialogue.prompt_builder import build_dialogue_prompt, bu
 from npc_engine.engines.dialogue.response_parser import parse_dialogue_response
 from npc_engine.engines.dialogue.session_store import SessionStore
 from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
+from npc_engine.engines.emotion.emotion_state import EmotionState
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.engines.llm_config_models import EngineModelConfig
 from npc_engine.engines.ports.dialogue_context_port import DialogueContextPort
@@ -201,7 +202,7 @@ class DialogueHandler:
             final_response = await self._synthesize_audio(response=final_response, npc_id=request.npc_id)
         return final_response
 
-    async def _apply_relation_and_emotion(self, *, request: DialogueRequest, response: DialogueResponse, level: str, tick_id: int):
+    async def _apply_relation_and_emotion(self, *, request: DialogueRequest, response: DialogueResponse, level: str, tick_id: int) -> EmotionState:
         """Apply relation deltas (if not canned) and update NPC emotion; return new emotion state."""
         if level != "canned":
             await self._dialogue_repo.apply_relation_deltas(
@@ -223,7 +224,7 @@ class DialogueHandler:
             tick=tick_id,
         )
 
-    def _needs_world_state(self, *, response: DialogueResponse, new_emotion) -> bool:
+    def _needs_world_state(self, *, response: DialogueResponse, new_emotion: EmotionState) -> bool:
         """True when either the arousal-memory or knowledge-learning branch will fire (ISSUE-087)."""
         arousal_branch = getattr(new_emotion, "arousal", 0) > HIGH_AROUSAL_THRESHOLD
         knowledge_branch = (
@@ -233,13 +234,13 @@ class DialogueHandler:
         )
         return arousal_branch or knowledge_branch
 
-    async def _maybe_load_world_state(self, *, response: DialogueResponse, new_emotion) -> WorldState | None:
+    async def _maybe_load_world_state(self, *, response: DialogueResponse, new_emotion: EmotionState) -> WorldState | None:
         """Fetch world state once iff a downstream branch needs it; avoids the double read (ISSUE-087)."""
         if not self._needs_world_state(response=response, new_emotion=new_emotion):
             return None
         return await self._dialogue_repo.get_world_state(self._settings.WORLD_ID)
 
-    async def _apply_arousal_memory(self, *, request: DialogueRequest, response: DialogueResponse, new_emotion, world_state: WorldState | None) -> None:
+    async def _apply_arousal_memory(self, *, request: DialogueRequest, response: DialogueResponse, new_emotion: EmotionState, world_state: WorldState | None) -> None:
         """Create an episodic memory when NPC arousal exceeds the high-arousal threshold."""
         if self._memory_engine is None or world_state is None or getattr(new_emotion, "arousal", 0) <= HIGH_AROUSAL_THRESHOLD:
             return
@@ -249,7 +250,7 @@ class DialogueHandler:
             content=f"{request.player_message} — {response.npc_response}", game_time=game_time,
         )
 
-    async def _apply_knowledge_and_routine(self, *, request: DialogueRequest, response: DialogueResponse, new_emotion, tick_id: int, world_state: WorldState | None) -> None:
+    async def _apply_knowledge_and_routine(self, *, request: DialogueRequest, response: DialogueResponse, new_emotion: EmotionState, tick_id: int, world_state: WorldState | None) -> None:
         """Process knowledge learning, routine override, and session-turn bookkeeping."""
         if (self._knowledge_engine is not None and getattr(self._settings, "KNOWLEDGE_LEARNING_ENABLED", False) and response.learned_facts and world_state is not None):
             game_time_str = f"Year {world_state.year} {world_state.season} Day {world_state.day} {world_state.time_of_day}"
@@ -326,7 +327,7 @@ class DialogueHandler:
         *,
         request: DialogueRequest,
         turns: list[str],
-        current_emotion,
+        current_emotion: EmotionState,
         skip_rag: bool,
         archetype: str = "default",
     ) -> DialogueResponse:
@@ -350,7 +351,7 @@ class DialogueHandler:
         self,
         request: DialogueRequest,
         turns: list[str],
-        current_emotion,
+        current_emotion: EmotionState,
         skip_rag: bool = False,
     ) -> str:
         """Build serialized context and prompt consistently across REST and stream paths."""

@@ -75,7 +75,7 @@ async def check_pledge_violations(
     *,
     pledger_id: str,
     tick: int,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Detect active pledges that have been broken since they were sworn.
 
     For each active pledge, queries WITNESSED edges (pledger as subject) and
@@ -94,7 +94,7 @@ async def check_pledge_violations(
         List of pledge dicts for pledges that were violated (and broken) this call.
     """
     pledges = await get_active_pledges_for_pledger(session, pledger_id=pledger_id)
-    violated: list[dict] = []
+    violated: list[dict[str, Any]] = []
 
     for pledge in pledges:
         pledge_type: str = pledge["pledge_type"]

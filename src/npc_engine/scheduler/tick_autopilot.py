@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from npc_engine.scheduler.tick_budget_guard import TickBudgetGuard
 
@@ -25,7 +25,7 @@ LOGGER = logging.getLogger(__name__)
 class _GraphDbProtocol(Protocol):
     """Structural protocol — any object with a get_session() context manager."""
 
-    def get_session(self):
+    def get_session(self) -> Any:
         """Return an async context manager yielding an AsyncSession."""
 
 
@@ -69,7 +69,7 @@ class TickAutopilot:
         self._game_seconds_per_tick = max(0, game_seconds_per_tick)
         self._budget_guard = budget_guard
 
-    async def advance_once(self) -> dict:
+    async def advance_once(self) -> dict[str, Any]:
         """Advance the world clock by one tick using a fresh session.
 
         When a budget_guard is configured and the LLM budget is exhausted,
@@ -77,7 +77,7 @@ class TickAutopilot:
         ``tick_budget_exceeded`` is logged.
 
         Returns:
-            The result dict from TickScheduler.advance().
+            The result dict[str, Any] from TickScheduler.advance().
         Raises:
             Any exception from the underlying scheduler or database.
         """

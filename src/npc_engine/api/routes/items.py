@@ -40,8 +40,8 @@ class CreateItemRequest(BaseModel):
     rarity: str = Field(..., min_length=1, max_length=64)
     type: str = Field(..., min_length=1, max_length=64)
     is_unique: bool = Field(default=False)
-    properties: dict | None = Field(default=None)
-    game_time: dict = Field(
+    properties: dict[str, Any] | None = Field(default=None)
+    game_time: dict[str, Any] = Field(
         default_factory=lambda: {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
     )
 
@@ -52,7 +52,7 @@ class TransferOwnerRequest(BaseModel):
     """Request body for transferring item ownership to another character."""
 
     to_character_id: str = Field(..., min_length=1)
-    game_time: dict = Field(
+    game_time: dict[str, Any] = Field(
         default_factory=lambda: {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
     )
 

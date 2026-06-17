@@ -9,7 +9,7 @@ Used by: npc_engine.engines.gossip.gossip_handler.GossipHandler.run_tick.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from npc_engine.engines.gossip.gossip_config import GossipWeightConfig
 from npc_engine.engines.gossip.pair_weighting import compute_faction_weight
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 _GOAL_ALIGNMENT_BONUS = 10
 
 
-def _pair_weight(character: dict) -> int:
+def _pair_weight(character: dict[str, Any]) -> int:
     return int(character.get("gossipy", 50))
 
 
@@ -47,7 +47,7 @@ async def select_pairs(
     repo: GossipGraphPort,
     max_pairs: int,
     weight_config: GossipWeightConfig,
-) -> list[tuple[dict, dict, dict, dict]]:
+) -> list[tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]]:
     """Return top-weighted directed gossip pairs sorted deterministically.
 
     Pairs are all co-located active non-player NPC combinations. Ranking uses
@@ -99,7 +99,7 @@ async def select_pairs(
                 if bonus:
                     goal_alignment[(a_id, b_id)] = bonus
 
-    def _sort_key(row: dict) -> tuple[float, str, str]:
+    def _sort_key(row: dict[str, Any]) -> tuple[float, str, str]:
         a_id = row["a"]["id"]
         b_id = row["b"]["id"]
         base = _pair_weight(row["a"]) + _pair_weight(row["b"])

@@ -17,7 +17,7 @@ Dependencies injected: offer_service (via __init__), chain_repo (via __init__).
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Protocol
+from typing import Any, TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from npc_engine.engines.ports.quest_port import QuestChainGraphPort
@@ -39,7 +39,7 @@ class QuestOfferServiceProtocol(Protocol):
         *,
         next_quest_id: str,
         player_id: str,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Offer a quest to a player identified only by IDs.
 
         Args:
@@ -47,7 +47,7 @@ class QuestOfferServiceProtocol(Protocol):
             player_id: Player character ID.
 
         Returns:
-            Persisted quest state payload dict with status ``"offered"``.
+            Persisted quest state payload dict[str, Any] with status ``"offered"``.
         """
         ...
 

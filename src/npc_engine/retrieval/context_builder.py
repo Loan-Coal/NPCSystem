@@ -15,7 +15,7 @@ flow. Each stage is extracted into a private helper. See DECISIONS.md entry
 from __future__ import annotations
 
 import asyncio
-from typing import Protocol
+from typing import Any, Protocol
 
 from neo4j import AsyncSession
 
@@ -160,7 +160,7 @@ async def _fetch_top_unmet_need(
 # Private pipeline-stage helpers
 # ---------------------------------------------------------------------------
 
-async def _fetch_base_graph_data(session: AsyncSession, npc_id: str) -> tuple:
+async def _fetch_base_graph_data(session: AsyncSession, npc_id: str) -> tuple[dict[str, Any], Any, Any]:
     """Fetch character bundle, world state, and known event IDs for one NPC."""
     character_bundle = await get_character_with_relations(session=session, npc_id=npc_id)
     world_state = await get_world_state(session=session)
@@ -168,7 +168,7 @@ async def _fetch_base_graph_data(session: AsyncSession, npc_id: str) -> tuple:
     return character_bundle, world_state, known_event_ids
 
 
-def _resolve_initial_state(character_bundle: dict, emotion_state: dict | None, world_state) -> tuple:
+def _resolve_initial_state(character_bundle: dict[str, Any], emotion_state: dict[str, Any] | None, world_state: Any) -> tuple[dict[str, Any], TimePoint, str, str]:
     """Derive emotion snapshot, game time, and cache-key timestamps from fetched data."""
     character_payload = character_bundle.get("character")
     emotion_snapshot = emotion_state or {"current_mood": "neutral"}
@@ -184,9 +184,9 @@ def _resolve_initial_state(character_bundle: dict, emotion_state: dict | None, w
 
 
 def _check_legacy_cache(
-    context_cache, session_id: str | None, npc_id: str, player_id: str | None,
-    emotion_snapshot: dict, npc_ts: str, world_ts: str,
-) -> tuple:
+    context_cache: Any, session_id: str | None, npc_id: str, player_id: str | None,
+    emotion_snapshot: dict[str, Any], npc_ts: str, world_ts: str,
+) -> tuple[str | None, Any, Any]:
     """Check the legacy monolithic cache; return (hit_string | None, legacy_cache, legacy_key)."""
     legacy_cache: DialogueContextCache | None = (
         context_cache if isinstance(context_cache, DialogueContextCache) else None
@@ -206,7 +206,7 @@ def _check_legacy_cache(
     return None, legacy_cache, legacy_key
 
 
-def _get_partial_cache_state(context_cache, npc_id: str, npc_ts: str) -> tuple:
+def _get_partial_cache_state(context_cache: Any, npc_id: str, npc_ts: str) -> tuple[Any, Any, Any, Any, Any]:
     """Extract partial cache and its keys; record hit/miss metrics when both slots are warm."""
     partial_cache: PartialDialogueContextCache | None = (
         context_cache if isinstance(context_cache, PartialDialogueContextCache) else None
@@ -228,7 +228,7 @@ async def _fetch_rag_results(
     session: AsyncSession, embedding_index: EmbeddingIndexProtocol, settings: Settings,
     player_message: str, session_turns: list[str], known_event_ids: set[str] | None,
     npc_id: str, game_time: TimePoint | None, skip_rag: bool,
-) -> list:
+) -> list[Any]:
     """Run vector-only or GraphRAG retrieval for Tier B/C items; return empty list when skip_rag."""
     if skip_rag:
         return []
@@ -245,7 +245,7 @@ async def _fetch_rag_results(
 async def _fetch_npc_profile_data(
     session: AsyncSession, npc_id: str, settings: Settings,
     player_id: str | None, location_id: str | None,
-) -> tuple:
+) -> tuple[Any, ...]:
     """Fetch NPC profile: location, events, reputation, memories, items, groups, rumors, traits, pledges."""
     location_context = await get_location_context(session=session, location_id=location_id or "")
     events = await get_events_for_npc(session=session, npc_id=npc_id, limit=settings.RAG_TOP_K)
@@ -261,7 +261,7 @@ async def _fetch_npc_profile_data(
     return (location_context, events, reputation_items, memories, owned_items, group_memberships, believed_rumors, traits, active_pledges)
 
 
-async def _fetch_beliefs_goals_data(session: AsyncSession, npc_id: str) -> tuple:
+async def _fetch_beliefs_goals_data(session: AsyncSession, npc_id: str) -> tuple[Any, ...]:
     """Fetch NPC beliefs, active goals, secrets, and obligations."""
     beliefs = await get_beliefs_for_character(session, character_id=npc_id, k=10)
     goals = await get_goals_for_character(session, character_id=npc_id, k=10, status_filter="active")
@@ -272,9 +272,10 @@ async def _fetch_beliefs_goals_data(session: AsyncSession, npc_id: str) -> tuple
 
 async def _resolve_npc_context_with_cache(
     session: AsyncSession, npc_id: str, settings: Settings, player_id: str | None,
-    location_id: str | None, partial_cache, profile_key, bg_key, cached_profile, cached_bg,
+    location_id: str | None, partial_cache: Any, profile_key: Any, bg_key: Any,
+    cached_profile: Any, cached_bg: Any,
     player_message: str,
-) -> tuple:
+) -> tuple[Any, Any, Any, Any, Any]:
     """Fetch or restore profile+beliefs/goals with partial cache; return (profile_data, beliefs, goals, secrets, obligations)."""
     profile_miss = cached_profile is None
     bg_miss = cached_bg is None
@@ -304,20 +305,20 @@ async def _resolve_npc_context_with_cache(
 
 
 async def _fetch_player_data(
-    session: AsyncSession, npc_id: str, player_id: str | None, events: list,
-) -> tuple:
+    session: AsyncSession, npc_id: str, player_id: str | None, events: list[Any],
+) -> tuple[Any, ...]:
     """Fetch trust scores, second-hop events, active quest, and player relation edge."""
     event_ids = [str(e["id"]) for e in events if e.get("id")]
     trust_scores = await get_trust_scores_for_events(session, npc_id=npc_id, event_ids=event_ids)
     second_hop_events = await get_second_hop_events(session, npc_id=npc_id)
     active_quest = await get_active_quest_for_player(session, player_id=player_id) if player_id else None
-    player_relation_edge: dict | None = None
+    player_relation_edge: dict[str, Any] | None = None
     if player_id:
         player_relation_edge = await get_npc_player_edge(session, npc_id=npc_id, player_id=player_id)
     return trust_scores, second_hop_events, active_quest, player_relation_edge
 
 
-async def _maybe_cross_encode(settings: Settings, player_message: str, tier_b_results: list) -> list:
+async def _maybe_cross_encode(settings: Settings, player_message: str, tier_b_results: list[Any]) -> list[Any]:
     """Apply cross-encoder reranking if CROSS_ENCODER_ENABLED and results are non-empty.
 
     The rerank does synchronous sentence-transformers inference, so it is offloaded
@@ -331,7 +332,7 @@ async def _maybe_cross_encode(settings: Settings, player_message: str, tier_b_re
     return list(reranked)
 
 
-def _build_tier0_items(world_state, emotion_snapshot: dict) -> list:
+def _build_tier0_items(world_state: Any, emotion_snapshot: dict[str, Any]) -> list[ContextItem]:
     """Build pinned Tier 0 context items: world state and current emotion."""
     return [
         ContextItem(key="world", text=world_state.model_dump_json(), tier="tier0", priority=100, pinned=True),
@@ -340,9 +341,10 @@ def _build_tier0_items(world_state, emotion_snapshot: dict) -> list:
 
 
 def _build_tier_a_base(
-    npc_id: str, character_bundle: dict, events: list, location_id: str | None, location_context,
-    group_memberships: list, believed_rumors: list, traits: list, active_pledges: list, session_turns: list[str],
-) -> list:
+    npc_id: str, character_bundle: dict[str, Any], events: list[Any], location_id: str | None,
+    location_context: Any, group_memberships: list[Any], believed_rumors: list[Any],
+    traits: list[Any], active_pledges: list[Any], session_turns: list[str],
+) -> list[ContextItem]:
     """Build base Tier A items: session turns followed by NPC character profile section."""
     items = [ContextItem(key="session", text=serialize_json(session_turns), tier="tierA", priority=99, pinned=True)]
     items.extend(assemble_tier_a_context(
@@ -354,12 +356,14 @@ def _build_tier_a_base(
 
 
 def _build_tier_a_extended(
-    player_id: str | None, reputation_items: list, active_quest, player_relation_edge: dict | None,
-    memories: list, beliefs: list, goals: list, owned_items: list, secrets: list, obligations: list,
-    second_hop_events: list, settings: Settings, npc_id: str, game_time: TimePoint | None = None,
-) -> list:
+    player_id: str | None, reputation_items: list[Any], active_quest: Any,
+    player_relation_edge: dict[str, Any] | None,
+    memories: list[Any], beliefs: list[Any], goals: list[Any], owned_items: list[Any],
+    secrets: list[Any], obligations: list[Any],
+    second_hop_events: list[Any], settings: Settings, npc_id: str, game_time: TimePoint | None = None,
+) -> list[ContextItem]:
     """Build extended Tier A items: reputation, quest, beliefs, memories, second-hop events, etc."""
-    items: list = []
+    items: list[Any] = []
     if player_id and reputation_items:
         items.append(ContextItem(key="reputation", text=serialize_json(reputation_items), tier="tierA", priority=85))
     if active_quest:
@@ -387,10 +391,10 @@ def _build_tier_a_extended(
     return items
 
 
-def _build_tier_b_c_items(tier_b_results: list) -> tuple:
+def _build_tier_b_c_items(tier_b_results: list[Any]) -> tuple[Any, ...]:
     """Split RAG results into Tier B/C ContextItems and build a vector score map."""
-    tier_b_raw: list = []
-    tier_c_raw: list = []
+    tier_b_raw: list[Any] = []
+    tier_c_raw: list[Any] = []
     vector_scores: dict[str, float] = {}
     if not tier_b_results:
         return tier_b_raw, tier_c_raw, vector_scores
@@ -407,7 +411,7 @@ def _build_tier_b_c_items(tier_b_results: list) -> tuple:
     return tier_b_raw, tier_c_raw, vector_scores
 
 
-def _build_event_trust_map(events: list, trust_scores: dict, npc_id: str) -> dict[str, float]:
+def _build_event_trust_map(events: list[Any], trust_scores: dict[str, Any], npc_id: str) -> dict[str, float]:
     """Map event ContextItem keys (positional index) to their trust scores."""
     event_key_trust: dict[str, float] = {}
     for idx, evt in enumerate(events):
@@ -418,10 +422,11 @@ def _build_event_trust_map(events: list, trust_scores: dict, npc_id: str) -> dic
 
 
 def _rank_and_serialize_tiers(
-    tier0: list, tier_a_raw: list, tier_b_raw: list, tier_c_raw: list,
-    vector_scores: dict[str, float], event_key_trust: dict[str, float], llm_config: LLMConfig, settings: Settings,
-    compression_cache, weight_profile: str, active_quest, game_time: TimePoint | None,
-    explicit_node_ids: frozenset[str],
+    tier0: list[ContextItem], tier_a_raw: list[ContextItem], tier_b_raw: list[ContextItem],
+    tier_c_raw: list[ContextItem],
+    vector_scores: dict[str, float], event_key_trust: dict[str, float], llm_config: LLMConfig,
+    settings: Settings, compression_cache: Any, weight_profile: str, active_quest: Any,
+    game_time: TimePoint | None, explicit_node_ids: frozenset[str],
 ) -> str:
     """Rank all tiers, merge, enforce budget, record metrics, and serialize to JSON string."""
     tier_a = rank_tier_items(items=tier_a_raw, llm_config=llm_config, vector_scores=vector_scores,
@@ -479,7 +484,7 @@ async def _fetch_player_memory_item(
     return ContextItem(key="player_memories", text=serialize_json(aged), tier="tierA", priority=91)
 
 
-async def _maybe_append_top_need(session: AsyncSession, npc_id: str, tier_b_raw: list) -> list:
+async def _maybe_append_top_need(session: AsyncSession, npc_id: str, tier_b_raw: list[Any]) -> list[Any]:
     """Return tier_b_raw with the NPC's top unmet need appended as an optional Tier-B item, if any."""
     top_need = await _fetch_top_unmet_need(session=session, npc_id=npc_id)
     if top_need is None:
@@ -490,7 +495,7 @@ async def _maybe_append_top_need(session: AsyncSession, npc_id: str, tier_b_raw:
     return [*tier_b_raw, need_item]
 
 
-async def _maybe_append_player_memory(session: AsyncSession, npc_id: str, player_id, game_time, tier_a_raw: list) -> None:
+async def _maybe_append_player_memory(session: AsyncSession, npc_id: str, player_id: str | None, game_time: TimePoint | None, tier_a_raw: list[ContextItem]) -> None:
     """Append the player-scoped memory item to tier_a_raw when the NPC holds such memories."""
     item = await _fetch_player_memory_item(session, npc_id, player_id, game_time)
     if item is not None:
@@ -499,7 +504,7 @@ async def _maybe_append_player_memory(session: AsyncSession, npc_id: str, player
 
 async def build_serialized_context(
     session: AsyncSession, settings: Settings, llm_config: LLMConfig, embedding_index: EmbeddingIndexProtocol,
-    npc_id: str, player_message: str, session_turns: list[str], emotion_state: dict | None = None,
+    npc_id: str, player_message: str, session_turns: list[str], emotion_state: dict[str, Any] | None = None,
     compression_cache: ContextCompressionCache | None = None,
     context_cache: PartialDialogueContextCache | DialogueContextCache | None = None,
     session_id: str | None = None, skip_rag: bool = False, player_id: str | None = None,
@@ -538,7 +543,7 @@ async def build_serialized_context(
     return serialized
 
 
-def _to_json_safe(value):
+def _to_json_safe(value: Any) -> Any:
     """Delegate to the helpers module for backward compatibility."""
     return to_json_safe(value)
 

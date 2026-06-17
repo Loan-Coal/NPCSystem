@@ -21,28 +21,29 @@ from npc_engine.api.dependency_singletons import (
     get_context_cache,
     get_dialogue_engine_model_config,
     get_dialogue_graph_ports,
-    get_embedding_index,  # noqa: F401  re-exported for api.routes.graph_admin + debug_retrieval
-    get_emotion_store,  # noqa: F401  re-exported for api.routes.npc_state
+    get_embedding_index as get_embedding_index,  # re-exported for api.routes.graph_admin + debug_retrieval
+    get_emotion_store as get_emotion_store,  # re-exported for api.routes.npc_state
     get_emotion_updater,
-    get_event_handler,  # noqa: F401  re-exported for api.routes.batch
-    get_game_schema,  # noqa: F401  re-exported for api.routes.system
-    get_gossip_handler,  # noqa: F401  re-exported for api.routes.batch
+    get_event_handler as get_event_handler,  # re-exported for api.routes.batch
+    get_game_schema as get_game_schema,  # re-exported for api.routes.system
+    get_gossip_handler as get_gossip_handler,  # re-exported for api.routes.batch
     get_graph_db,
-    get_llm_config,
-    get_quest_lifecycle_engine,  # noqa: F401  re-exported for api.routes.quest
-    get_reindex_job_service,  # noqa: F401  re-exported for api.routes.graph_admin
+    get_llm_config as get_llm_config,  # re-exported for api.routes.dialogue_ws
+    get_quest_lifecycle_engine as get_quest_lifecycle_engine,  # re-exported for api.routes.quest
+    get_reindex_job_service as get_reindex_job_service,  # re-exported for api.routes.graph_admin
     get_session_store,
-    get_tick_scheduler,  # noqa: F401  re-exported for api.routes.clock
-    get_type_registry,
+    get_tick_scheduler as get_tick_scheduler,  # re-exported for api.routes.clock + system
+    get_type_registry as get_type_registry,  # re-exported for api.routes.system
 )
 from npc_engine.engines.interaction.negotiation_store import NegotiationStore
 from npc_engine.engines.interaction.trade_handler_sync import NegotiationBackedSyncTradeHandler
-from npc_engine.config import Settings, get_settings
+from npc_engine.config import Settings, get_settings as get_settings
 from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
 from npc_engine.services.content_rating_resolver import ContentRatingResolver
 from npc_engine.services.input_moderation import InputModerationService, build_input_moderation_service
 from npc_engine.services.output_moderation import OutputModerationService, build_output_moderation_service
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
+from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.engines.llm_config_models import EngineModelConfig
 from npc_engine.engines.tts.mock_adapter import MockTTSAdapter
 from npc_engine.engines.tts.piper_adapter import PiperAdapter
@@ -151,7 +152,7 @@ def get_tts_client(
 def get_llm_client(
     settings: Settings = Depends(get_settings),
     engine_model_config: EngineModelConfig = Depends(get_dialogue_engine_model_config),
-):
+) -> LLMClientProtocol:
     """Create an LLM client from the dialogue engine's per-engine config.
 
     Args:
@@ -167,7 +168,7 @@ def get_llm_client(
 def build_dialogue_handler(
     *,
     settings: Settings,
-    llm_client,
+    llm_client: LLMClientProtocol,
     llm_config: LLMConfig,
     engine_model_config: EngineModelConfig,
     tts_client: TTSClientProtocol | None = None,
@@ -206,7 +207,7 @@ def build_dialogue_handler(
 
 def get_dialogue_handler(
     settings: Settings = Depends(get_settings),
-    llm_client=Depends(get_llm_client),
+    llm_client: LLMClientProtocol = Depends(get_llm_client),
     llm_config: LLMConfig = Depends(get_llm_config),
     engine_model_config: EngineModelConfig = Depends(get_dialogue_engine_model_config),
     tts_client: TTSClientProtocol | None = Depends(get_tts_client),

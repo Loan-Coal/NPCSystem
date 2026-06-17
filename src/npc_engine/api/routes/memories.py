@@ -38,7 +38,7 @@ class CreateMemoryRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=1024)
     vividness: int = Field(..., ge=0, le=100)
     emotional_charge: int = Field(..., ge=-100, le=100)
-    game_time: dict = Field(
+    game_time: dict[str, Any] = Field(
         default_factory=lambda: {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
     )
     id: str | None = Field(
@@ -48,7 +48,7 @@ class CreateMemoryRequest(BaseModel):
             "When omitted a UUID is auto-generated."
         ),
     )
-    occurred_at_game_time: dict | None = Field(
+    occurred_at_game_time: dict[str, Any] | None = Field(
         default=None,
         description=(
             "When the remembered event actually happened (distinct from game_time, the "
@@ -68,7 +68,7 @@ class CreateMemoryFromArousalRequest(BaseModel):
 
     content: str = Field(..., min_length=1, max_length=1024)
     arousal: int = Field(..., ge=0, le=100)
-    game_time: dict = Field(
+    game_time: dict[str, Any] = Field(
         default_factory=lambda: {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
     )
 
@@ -87,7 +87,7 @@ class ConsolidateRequest(BaseModel):
     """Request body for triggering memory consolidation from a dialogue session."""
 
     player_id: str = Field(..., min_length=1)
-    game_time: dict = Field(
+    game_time: dict[str, Any] = Field(
         default_factory=lambda: {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
     )
     turn_threshold: int = Field(default=5, ge=1)
@@ -208,7 +208,7 @@ async def seed_memory(
     return ok_response({"memory_id": memory_id})
 
 
-def _time_point_from_dict(gt: dict) -> TimePoint:
+def _time_point_from_dict(gt: dict[str, Any]) -> TimePoint:
     """Build a TimePoint from a partial game-time dict with safe defaults."""
     return TimePoint(
         year=int(gt.get("year", 1)),
@@ -281,7 +281,6 @@ async def consolidate_memories(
         time_of_day=str(gt.get("time_of_day", "morning")),
     )
     memory_id = await engine.consolidate(
-        session,
         npc_id=npc_id,
         game_time=game_time,
     )

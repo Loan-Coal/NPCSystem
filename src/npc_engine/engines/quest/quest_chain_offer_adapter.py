@@ -17,7 +17,7 @@ Dependencies injected: offer_service (via __init__), chain_repo (via __init__).
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from npc_engine.engines.quest.models import QuestTransitionMeta
 from npc_engine.engines.quest.quest_offer_service import QuestOfferService
@@ -77,7 +77,7 @@ class QuestChainOfferAdapter:
         *,
         next_quest_id: str,
         player_id: str,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Offer a chain-unlocked quest to a player.
 
         Args:
@@ -85,7 +85,7 @@ class QuestChainOfferAdapter:
             player_id: Player character ID.
 
         Returns:
-            Persisted quest state payload dict with status ``"offered"``.
+            Persisted quest state payload dict[str, Any] with status ``"offered"``.
 
         Raises:
             QuestTransitionError: If the Quest node does not exist.

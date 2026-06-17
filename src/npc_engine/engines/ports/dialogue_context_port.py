@@ -10,7 +10,7 @@ Dependencies injected: None (Protocol only — concrete adapters are injected by
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, Any
 
 if TYPE_CHECKING:
     from npc_engine.retrieval.dialogue_context_cache import (
@@ -33,7 +33,7 @@ class DialogueContextPort(Protocol):
         npc_id: str,
         player_message: str,
         session_turns: list[str],
-        emotion_state: dict | None,
+        emotion_state: dict[str, Any] | None,
         context_cache: PartialDialogueContextCache | DialogueContextCache | None,
         session_id: str | None,
         skip_rag: bool,

@@ -13,6 +13,7 @@ Used by: api composition root (dependencies_engines.get_interaction_graph_repo).
 
 from __future__ import annotations
 
+from typing import Any
 from npc_engine.graph.db import GraphDB
 from npc_engine.graph.quest_queries import get_active_quest_for_player
 from npc_engine.graph.quest_verification_queries import (
@@ -36,13 +37,13 @@ class Neo4jInteractionRepository:
         """
         self._graph_db = graph_db
 
-    async def get_quest_state(self, *, quest_id: str, player_id: str) -> dict | None:
+    async def get_quest_state(self, *, quest_id: str, player_id: str) -> dict[str, Any] | None:
         """Open a session and return the QuestState snapshot for (quest_id, player_id)."""
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
             return await get_quest_state(session=session, quest_id=quest_id, player_id=player_id)
 
-    async def get_active_quest_for_player(self, *, player_id: str) -> dict | None:
+    async def get_active_quest_for_player(self, *, player_id: str) -> dict[str, Any] | None:
         """Open a session and return the player's most recent active quest state."""
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:

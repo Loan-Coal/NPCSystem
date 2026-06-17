@@ -12,6 +12,7 @@ Used by: npc_engine.graph.repositories.military_repository.Neo4jMilitaryReposito
 
 from __future__ import annotations
 
+from typing import Any
 import json
 import uuid
 
@@ -36,7 +37,7 @@ SET e.event_type          = 'battle',
 _COMPOSITION_KEYS = frozenset({"infantry", "cavalry", "siege"})
 
 
-def _validate_composition(composition: dict) -> str:
+def _validate_composition(composition: dict[str, Any]) -> str:
     """Validate and serialise an army composition dict to JSON.
 
     Args:
@@ -66,7 +67,7 @@ async def create_army(
     faction_id: str,
     strength: int,
     location_id: str,
-    composition: dict,
+    composition: dict[str, Any],
 ) -> str:
     """Create an Army node and place it at a location via OCCUPIES.
 

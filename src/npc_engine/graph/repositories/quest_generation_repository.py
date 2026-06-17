@@ -60,7 +60,7 @@ class Neo4jQuestGenerationRepository:
             ws = await get_world_state(session=session, world_id=world_id)
             return ws.day, ws.quest_generation_rate
 
-    async def get_world_state_context(self, *, world_id: str = "world") -> dict:
+    async def get_world_state_context(self, *, world_id: str = "world") -> dict[str, Any]:
         """Return {'epoch': str, 'active_conditions': list} for prompt context."""
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
@@ -74,7 +74,7 @@ class Neo4jQuestGenerationRepository:
             return await get_character_info(session, character_id=character_id)
 
     async def get_giver_context(self, *, character_id: str) -> dict[str, Any]:
-        """Return assembled giver context dict (goals, beliefs, mood, needs, inventory, location, faction)."""
+        """Return assembled giver context dict[str, Any] (goals, beliefs, mood, needs, inventory, location, faction)."""
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
             goals = await get_goals_for_character(session, character_id=character_id, k=3, status_filter="active")
@@ -100,7 +100,7 @@ class Neo4jQuestGenerationRepository:
         async with self._graph_db.get_session() as session:
             return await get_candidate_ids_by_label(session, label=label)
 
-    async def create_quest(self, *, payload: dict) -> None:
+    async def create_quest(self, *, payload: dict[str, Any]) -> None:
         """Persist a Quest node from the payload dict."""
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
@@ -135,7 +135,7 @@ class Neo4jQuestGenerationRepository:
         async with self._graph_db.get_session() as session:
             return await check_node_labels(session, node_id=node_id)
 
-    async def get_template_skill_requirements(self, *, template_id: str) -> list[dict]:
+    async def get_template_skill_requirements(self, *, template_id: str) -> list[dict[str, Any]]:
         """Return REQUIRES_SKILL edge payloads for the given QuestTemplate node."""
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
@@ -165,7 +165,7 @@ class Neo4jEventTriggerRepository:
 
     async def get_unprocessed_trigger_events(
         self, trigger_types: frozenset[str], max_count: int
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Return Event nodes whose type matches trigger_types with no CAUSED_BY quest yet."""
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
@@ -197,7 +197,7 @@ class Neo4jNeedTriggerRepository:
         """
         self._graph_db = graph_db
 
-    async def get_all_needs_below_threshold(self, *, threshold: int) -> list[dict]:
+    async def get_all_needs_below_threshold(self, *, threshold: int) -> list[dict[str, Any]]:
         """Return Need nodes with level at or below threshold."""
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:

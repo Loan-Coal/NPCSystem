@@ -10,6 +10,7 @@ Used by: engines/gossip/gossip_handler, engines/gossip/pair_selector
 """
 from __future__ import annotations
 
+from typing import Any
 from neo4j import AsyncSession
 
 from npc_engine.graph.labels import CHARACTER, EVENT, FACTION, LOCATION, SECRET
@@ -86,7 +87,7 @@ RETURN n.id AS node_id
 # ---------------------------------------------------------------------------
 
 
-async def select_gossip_event(session: AsyncSession, sharer_id: str) -> dict | None:
+async def select_gossip_event(session: AsyncSession, sharer_id: str) -> dict[str, Any] | None:
     """Return the best event the sharer knows about, or None.
 
     Canonical events are ordered first; corrected edges are excluded (SEV-09).
@@ -123,7 +124,7 @@ async def select_relation_trust(
     return int(record["trust"]) if record is not None else 50
 
 
-async def select_gossip_secret(session: AsyncSession, sharer_id: str) -> dict | None:
+async def select_gossip_secret(session: AsyncSession, sharer_id: str) -> dict[str, Any] | None:
     """Return the most severe secret the sharer holds, or None.
 
     Args:
@@ -138,7 +139,7 @@ async def select_gossip_secret(session: AsyncSession, sharer_id: str) -> dict | 
     return record.data() if record is not None else None
 
 
-async def fetch_gossip_pairs(session: AsyncSession) -> list[dict]:
+async def fetch_gossip_pairs(session: AsyncSession) -> list[dict[str, Any]]:
     """Return all co-located active non-player NPC pairs as raw row dicts.
 
     Args:

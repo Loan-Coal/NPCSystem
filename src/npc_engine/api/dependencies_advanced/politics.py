@@ -12,10 +12,18 @@ Used by: api.dependencies_advanced (package re-exporter).
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from npc_engine.engines.treaty.treaty_engine import TreatyEngine
+    from npc_engine.engines.oath.oath_engine import OathEngine
+    from npc_engine.engines.succession.succession_engine import SuccessionEngine
+    from npc_engine.engines.agenda.agenda_engine import AgendaEngine
+    from npc_engine.engines.military.military_engine import MilitaryEngine
 
 
 @lru_cache
-def get_treaty_engine():
+def get_treaty_engine() -> TreatyEngine:
     """Create singleton treaty engine for treaty lifecycle management.
 
     Wires the Neo4j graph adapter (Neo4jTreatyRepository) as the engine's injected
@@ -32,7 +40,7 @@ def get_treaty_engine():
 
 
 @lru_cache
-def get_oath_engine():
+def get_oath_engine() -> OathEngine:
     """Create singleton oath engine for pledge lifecycle management.
 
     Wires the Neo4j graph adapter (Neo4jPledgeRepository) as the engine's injected
@@ -49,7 +57,7 @@ def get_oath_engine():
 
 
 @lru_cache
-def get_succession_engine():
+def get_succession_engine() -> SuccessionEngine:
     """Create singleton succession engine for political title inheritance.
 
     Wires the Neo4j graph adapter (Neo4jPoliticalRepository) as the engine's injected
@@ -66,7 +74,7 @@ def get_succession_engine():
 
 
 @lru_cache
-def get_agenda_engine():
+def get_agenda_engine() -> AgendaEngine:
     """Create singleton agenda engine for political vote resolution.
 
     Shares the Neo4j political adapter (Neo4jPoliticalRepository) as the engine's
@@ -83,7 +91,7 @@ def get_agenda_engine():
 
 
 @lru_cache
-def get_military_engine():
+def get_military_engine() -> MilitaryEngine:
     """Create singleton military engine for Strategy/4X tick processing.
 
     Wires the Neo4j graph adapter (Neo4jMilitaryRepository) as the engine's injected

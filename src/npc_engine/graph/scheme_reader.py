@@ -13,7 +13,7 @@ Used by: engines/scheming/scheming_engine.py, engines/scheming/scheme_advance_ti
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Any
 
 from neo4j import AsyncSession
 from pydantic import BaseModel
@@ -238,7 +238,7 @@ async def get_discoverable_scheme_ids(
     return [row.data()["scheme_id"] async for row in result]
 
 
-def _to_step_views(raw_steps: list[dict]) -> list[SchemeStepView]:
+def _to_step_views(raw_steps: list[dict[str, Any]]) -> list[SchemeStepView]:
     """Convert raw step maps to SchemeStepView, dropping null placeholders.
 
     A scheme with no steps yields a single map whose step_order is None (from the

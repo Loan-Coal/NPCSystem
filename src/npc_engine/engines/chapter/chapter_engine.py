@@ -20,7 +20,7 @@ import json
 import logging
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
 from npc_engine.config import get_settings
@@ -104,7 +104,7 @@ class ChapterEngine:
         self._system_prompt: str = prompt_data["system"]
         self._user_template: str = prompt_data["user_template"]
 
-    async def run_tick(self, *, tick_id: int) -> dict:
+    async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
         """Run chapter detection and optional transition logic for the current tick.
 
         Reads/writes flow through the injected ChapterGraphPort + WorldStateGraphPort,
@@ -142,7 +142,7 @@ class ChapterEngine:
             "chapter_name": current["name"],
         }
 
-    async def _transition_chapter(self, tick_id: int, current: dict) -> dict:
+    async def _transition_chapter(self, tick_id: int, current: dict[str, Any]) -> dict[str, Any]:
         """Close the current chapter, label it via LLM, and open the next one.
 
         Args:
@@ -150,7 +150,7 @@ class ChapterEngine:
             current: Current open chapter dict.
 
         Returns:
-            run_tick result dict for the newly opened chapter.
+            run_tick result dict[str, Any] for the newly opened chapter.
         """
         label = await self._label_chapter(tick_id, current)
         await self._chapter_repo.close_chapter(
@@ -173,7 +173,7 @@ class ChapterEngine:
     async def _should_transition(
         self,
         tick_id: int,
-        current: dict,
+        current: dict[str, Any],
     ) -> bool:
         """Return True if quest density or beat intensity warrant a chapter close.
 
@@ -212,11 +212,11 @@ class ChapterEngine:
     async def _label_chapter(
         self,
         tick_id: int,
-        current: dict,
-    ) -> dict:
+        current: dict[str, Any],
+    ) -> dict[str, Any]:
         """Call the LLM to generate a title, description, and theme for the closed chapter.
 
-        Returns a dict with keys ``title``, ``description``, and ``theme``.
+        Returns a dict[str, Any] with keys ``title``, ``description``, and ``theme``.
         Falls back to rule-based values if the LLM call fails or returns malformed JSON.
 
         Args:
@@ -263,7 +263,7 @@ class ChapterEngine:
             )
             label = json.loads(raw.strip())
             if not isinstance(label, dict):
-                raise ValueError("LLM returned non-dict JSON")
+                raise ValueError("LLM returned non-dict[str, Any] JSON")
             return {
                 "title": str(label.get("title", "Untitled Chapter")),
                 "description": str(label.get("description", "")),
@@ -278,13 +278,13 @@ class ChapterEngine:
     async def _open_new_chapter(
         self,
         tick_id: int,
-        prior_chapter: dict | None,
+        prior_chapter: dict[str, Any] | None,
     ) -> str:
         """Create a new open CHAPTER node.
 
         Args:
             tick_id: Starting tick for the new chapter.
-            prior_chapter: Label dict from the previous chapter (or None for prologue).
+            prior_chapter: Label dict[str, Any] from the previous chapter (or None for prologue).
 
         Returns:
             New chapter ID.

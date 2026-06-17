@@ -18,7 +18,7 @@ Dependencies injected: Settings, TypeRegistry, QuestLifecycleGraphPort (via __in
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from npc_engine.config import Settings
 from npc_engine.engines.memory.memory_engine import MemoryEngine
@@ -140,11 +140,11 @@ class QuestLifecycleEngine:
         *,
         quest_id: str,
         player_id: str,
-        state_payload: dict,
+        state_payload: dict[str, Any],
         event_type: str,
         summary: str,
         meta: QuestTransitionMeta,
-    ) -> dict:
+    ) -> dict[str, Any]:
         event = build_lifecycle_event(
             registry=self._registry,
             quest_id=quest_id,
@@ -166,7 +166,7 @@ class QuestLifecycleEngine:
         quest_id: str,
         player_id: str,
         meta: QuestTransitionMeta,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Accept a quest currently in offered state.
 
         Args:
@@ -175,7 +175,7 @@ class QuestLifecycleEngine:
             meta: Transition metadata for provenance and idempotency fields.
 
         Returns:
-            Persisted quest state payload dict with status ``"accepted"``.
+            Persisted quest state payload dict[str, Any] with status ``"accepted"``.
 
         Raises:
             QuestTransitionError: If quest is not in offered or accepted state.
@@ -221,7 +221,7 @@ class QuestLifecycleEngine:
         objective_id: str,
         progress_delta: int,
         meta: QuestTransitionMeta,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Apply objective progress delta and transition into in_progress when applicable.
 
         Args:
@@ -232,7 +232,7 @@ class QuestLifecycleEngine:
             meta: Transition metadata for provenance and idempotency fields.
 
         Returns:
-            Persisted quest state payload dict with updated objective progress.
+            Persisted quest state payload dict[str, Any] with updated objective progress.
 
         Raises:
             QuestTransitionError: If quest is not in accepted or in_progress state,
@@ -275,7 +275,7 @@ class QuestLifecycleEngine:
         quest_id: str,
         player_id: str,
         meta: QuestTransitionMeta,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Evaluate objective completion and set completed status when all targets are met.
 
         Args:
@@ -284,7 +284,7 @@ class QuestLifecycleEngine:
             meta: Transition metadata for provenance and idempotency fields.
 
         Returns:
-            Persisted quest state payload dict with status ``"completed"`` or ``"in_progress"``.
+            Persisted quest state payload dict[str, Any] with status ``"completed"`` or ``"in_progress"``.
 
         Raises:
             QuestTransitionError: If quest is not in accepted, in_progress, or completed state.
@@ -331,7 +331,7 @@ class QuestLifecycleEngine:
         quest_id: str,
         player_id: str,
         meta: QuestTransitionMeta,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Transition a quest to failed status and resolve any UNLOCKS(on_outcome:fail) chains.
 
         Args:
@@ -340,7 +340,7 @@ class QuestLifecycleEngine:
             meta: Transition metadata for provenance and idempotency fields.
 
         Returns:
-            Persisted quest state payload dict with status ``"failed"``.
+            Persisted quest state payload dict[str, Any] with status ``"failed"``.
 
         Raises:
             QuestTransitionError: If quest is already in a terminal state.

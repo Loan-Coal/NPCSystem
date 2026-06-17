@@ -12,6 +12,7 @@ Used by: npc_engine.engines.routine.routine_engine, npc_engine.engines.events.ev
 
 from __future__ import annotations
 
+from typing import Any
 import json
 
 from neo4j import AsyncSession
@@ -60,7 +61,7 @@ SET c.routine_override = $override_json
 # ---------------------------------------------------------------------------
 
 
-async def get_scheduled_characters(session: AsyncSession) -> list[dict]:
+async def get_scheduled_characters(session: AsyncSession) -> list[dict[str, Any]]:
     """Return all active characters that follow a schedule.
 
     Each row includes the character ID, schedule entries JSON, current location,

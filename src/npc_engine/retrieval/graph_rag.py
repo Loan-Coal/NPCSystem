@@ -63,16 +63,16 @@ class EmbeddingIndexProtocol(Protocol):
     ) -> list[VectorSearchResult]: ...
 
 
-def _update_best(best_scores: dict[str, tuple[float, dict]], node_id: str, score: float, props: dict) -> None:
+def _update_best(best_scores: dict[str, tuple[float, dict[str, Any]]], node_id: str, score: float, props: dict[str, Any]) -> None:
     existing = best_scores.get(node_id)
     if existing is None or score > existing[0]:
         best_scores[node_id] = (score, props)
 
 
 def _score_all_seeds(
-    best_scores: dict[str, tuple[float, dict]],
+    best_scores: dict[str, tuple[float, dict[str, Any]]],
     seed_scores: dict[str, float],
-    seed_payloads: dict[str, dict],
+    seed_payloads: dict[str, dict[str, Any]],
     game_time: TimePoint | None,
 ) -> None:
     """Score each seed node using vector similarity and recency; update best_scores in-place."""
@@ -83,7 +83,7 @@ def _score_all_seeds(
 
 
 def _score_expansion_records(
-    best_scores: dict[str, tuple[float, dict]],
+    best_scores: dict[str, tuple[float, dict[str, Any]]],
     expansion_records: list[Any],
     seed_scores: dict[str, float],
     game_time: TimePoint | None,
@@ -145,11 +145,11 @@ async def graph_rag_retrieve(
     if not seed_results:
         return []
     seed_scores: dict[str, float] = {r["id"]: float(r.get("score", 0.0)) for r in seed_results}
-    seed_payloads: dict[str, dict] = {r["id"]: r.get("payload", {}) for r in seed_results}
+    seed_payloads: dict[str, dict[str, Any]] = {r["id"]: r.get("payload", {}) for r in seed_results}
     expansion_records = await expand_seeds(
         session, seed_ids=list(seed_scores.keys()), edge_types=list(_EXPANSION_EDGE_TYPES),
     )
-    best_scores: dict[str, tuple[float, dict]] = {}
+    best_scores: dict[str, tuple[float, dict[str, Any]]] = {}
     _score_all_seeds(best_scores, seed_scores, seed_payloads, game_time)
     _score_expansion_records(best_scores, expansion_records, seed_scores, game_time)
     ranked = sorted(best_scores.items(), key=lambda kv: kv[1][0], reverse=True)

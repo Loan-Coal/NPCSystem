@@ -9,6 +9,7 @@ Used by: engines/story_pacing/story_pacing_engine
 """
 from __future__ import annotations
 
+from typing import Any
 from neo4j import AsyncSession
 
 from npc_engine.graph.labels import EVENT, QUEST
@@ -40,7 +41,7 @@ RETURN e.id AS event_id, e.severity AS severity, e.tick_id AS tick_id
 
 async def get_active_high_severity_quests(
     session: AsyncSession, threshold: int
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Return active quests with severity at or above the suppression threshold.
 
     Args:
@@ -61,7 +62,7 @@ async def get_active_high_severity_quests(
 
 async def get_recent_major_events(
     session: AsyncSession, min_tick_id: int, floor: int
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Return major events that occurred at or after min_tick_id.
 
     Args:

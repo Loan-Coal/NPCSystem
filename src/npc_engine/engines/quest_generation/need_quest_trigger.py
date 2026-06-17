@@ -14,7 +14,7 @@ Used by: npc_engine.scheduler.tick_scheduler
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from npc_engine.engines.ports.quest_generation_port import NeedTriggerGraphPort
 
@@ -60,7 +60,7 @@ class NeedQuestTrigger:
         self._need_trigger_repo = need_trigger_repo
         self._threshold = threshold
 
-    async def run_tick(self, *, tick_id: int) -> dict:
+    async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
         """Query for NPCs with critical needs and generate a draft quest for each.
 
         Caps at ``_MAX_NEEDS_PER_TICK`` needs per tick to bound LLM calls.
@@ -89,7 +89,7 @@ class NeedQuestTrigger:
 
     async def _process_need(
         self,
-        need: dict,
+        need: dict[str, Any],
         tick_id: int,
         seen_npcs: set[str],
     ) -> str | None:

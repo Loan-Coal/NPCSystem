@@ -10,6 +10,7 @@ Dependencies injected: Settings, EmbeddingIndex, TypeRegistry, EventGraphPort,
 """
 from __future__ import annotations
 
+from typing import Any
 from datetime import datetime, timezone
 import random
 from uuid import uuid4
@@ -119,7 +120,7 @@ class EventHandler:
         tick_id: int,
         location_ids: list[str] | None = None,
         cause_event_id: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Create one weighted event, seed NPC awareness, and optionally update world state.
 
         High-severity events (severity ≥ HIGH_SEVERITY_THRESHOLD) add the event type to the
@@ -203,7 +204,7 @@ class EventHandler:
 
     def _build_event(
         self, *, template: EventTemplate, location_id: str, tick_id: int
-    ) -> tuple[BaseModel, str, dict]:
+    ) -> tuple[BaseModel, str, dict[str, Any]]:
         """Build the validated Event node model, returning (event, event_id, raw_props)."""
         event_id = str(uuid4())
         now = datetime.now(timezone.utc).isoformat()
@@ -239,7 +240,7 @@ class EventHandler:
 
     async def _record_witnesses(
         self, *, template: EventTemplate, location_id: str, event_id: str,
-        tick_id: int, raw_props: dict,
+        tick_id: int, raw_props: dict[str, Any],
     ) -> None:
         """Seed WITNESSED edges for a high-severity event (skips when no actor present)."""
         witness_ids = await self._event_repo.get_characters_at_location(location_id=location_id)

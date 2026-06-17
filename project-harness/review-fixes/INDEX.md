@@ -12,6 +12,7 @@
 - SEV-16 is L-effort/route-by-route: 35 files; npc_state/emotion/schemes already typed; many payloads are DYNAMIC engine-aggregate dicts (clock/batch) that should stay `dict[str,Any]`. Do fixed-shape demo-read routes first (player_model/chapters/investigations) à la SEV-03. See brief's scoping finding.
 - **SEV-24 COMPLETE (DEC-122 CLOSED)** — All 5 waves done. Wave 5: dead files deleted (awareness_seeder, location_scoper, edge_updater, edge_updater.log_gossip), `**_` swallowers removed from all engines, `session=` dropped from tick_scheduler engine calls, `SchemeDetectionTick` + `EmotionBootstrapper` migrated to injected ports. `grep -rn "from neo4j|AsyncSession" src/npc_engine/engines/` → empty. 2373 tests, make check GREEN.
 - **SEV-19 COMPLETE** — R006 gate + 4 functions refactored (advance/dispatch/seed/assemble_tier_a_context). Baseline ratcheted to 141 grandfathered violations. DEC-117 waiver stands for remaining cohesive functions.
+- **SEV-15 COMPLETE** — `mypy --strict` adopted; 343 errors fixed across 79+ files (attr-defined/no-untyped-def/type-arg batches); `strict = true` in pyproject.toml; type-ratchet baseline set to 0. All 550 src files clean. make check GREEN, 2375 passed.
 - caplog gotcha: `utils/logging.py` sets propagate=False, so pytest `caplog` (root) misses engine logs once logging is configured — capture on the engine logger directly (see test_sev22 secret-seed test).
 
 ## Fix-now backlog (ordered, dependency-blocked)
@@ -120,7 +121,7 @@ Wave 5 — finalize:
   family commits). `begin_transaction(` only in the coordinator; no engine opens a tx; `(session,…)` signatures kept.
 - [x] SEV-19 — R006 40-line gate + refactor `advance`(373)/`dispatch`/`seed`; waive cohesive rest (DEC-117).
   One function per commit. **deps: SEV-24 complete** (advance/dispatch are reshaped by the facade first).
-- [ ] SEV-15 — Adopt full `mypy --strict`; fix all 274 errors / 87 files; flip `make type` (DEC-113).
+- [x] SEV-15 — Adopt full `mypy --strict`; fix all 274 errors / 87 files; flip `make type` (DEC-113).
   Sub-phase by package. **deps: SEV-24 complete** (types land on the final repo-injected engine shape).
 
 ## Log-only (ISSUES.md, no brief)

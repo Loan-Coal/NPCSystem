@@ -9,6 +9,7 @@ Used by: retrieval.context_builder, engines.gossip.gossip_handler, engines.event
 
 from __future__ import annotations
 
+from typing import Any
 import asyncio
 
 from npc_engine.retrieval.vector_store_protocol import VectorSearchResult, VectorStoreProtocol
@@ -43,7 +44,7 @@ class EmbeddingIndex:
         self._vector_store = vector_store
         self._model_name = model_name
 
-    async def upsert(self, item_id: str, text: str, payload: dict) -> None:
+    async def upsert(self, item_id: str, text: str, payload: dict[str, Any]) -> None:
         """Embed text and upsert into the vector store.
 
         Args:

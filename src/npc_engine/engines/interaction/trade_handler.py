@@ -11,6 +11,7 @@ Used by: api.routes.interaction
 
 from __future__ import annotations
 
+from typing import Any
 import logging
 
 from npc_engine.engines.interaction.models import (
@@ -143,7 +144,7 @@ def _process_move(
     session: NegotiationSession,
     player_id: str,
     move: str,
-    payload: dict,
+    payload: dict[str, Any],
     store: NegotiationStore,
 ) -> InteractionState:
     """Dispatch a named move to its handler and persist the result.
@@ -186,7 +187,7 @@ def _process_move(
 def _handle_currency_offer(
     session: NegotiationSession,
     player_id: str,
-    payload: dict,
+    payload: dict[str, Any],
     store: NegotiationStore,
 ) -> InteractionState:
     """Handle a currency_offer move: accept if amount >= threshold else refuse.

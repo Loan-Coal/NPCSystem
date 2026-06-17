@@ -9,10 +9,11 @@ Dependencies injected: None.
 """
 from __future__ import annotations
 
+from typing import Any
 from npc_engine.engines.dialogue.dialogue_models import DialogueResponse
 
 
-def parse_dialogue_response(payload: dict) -> DialogueResponse:
+def parse_dialogue_response(payload: dict[str, Any]) -> DialogueResponse:
     """Parse and validate a raw LLM output dict into a typed DialogueResponse.
 
     Args:

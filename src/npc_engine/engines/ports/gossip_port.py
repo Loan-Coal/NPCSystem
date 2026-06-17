@@ -16,19 +16,19 @@ Used by: npc_engine.engines.gossip.gossip_handler.GossipHandler;
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Protocol, Any
 
 
 class GossipGraphPort(Protocol):
     """Reads and writes for the gossip domain — pair selection through secret propagation."""
 
-    async def fetch_gossip_pairs(self) -> list[dict]:
+    async def fetch_gossip_pairs(self) -> list[dict[str, Any]]:
         """Return all co-located active NPC pairs eligible for gossip exchange."""
         ...
 
     async def get_goals_for_character(
         self, character_id: str, *, k: int, status_filter: str
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Return up to k goals for the character filtered by status."""
         ...
 
@@ -38,11 +38,11 @@ class GossipGraphPort(Protocol):
 
     async def select_batch_event_trust(
         self, pairs: list[dict[str, str]]
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Fetch event and trust data for all sharer/receiver pairs in one query."""
         ...
 
-    async def write_batch_knowledge_propagation(self, writes: list[dict]) -> None:
+    async def write_batch_knowledge_propagation(self, writes: list[dict[str, Any]]) -> None:
         """Merge KNOWS_ABOUT edges for all receiver/event pairs in one query."""
         ...
 
@@ -70,7 +70,7 @@ class GossipGraphPort(Protocol):
         """Create or update a BELIEVES_RUMOR edge from character to rumor."""
         ...
 
-    async def select_gossip_secret(self, sharer_id: str) -> dict | None:
+    async def select_gossip_secret(self, sharer_id: str) -> dict[str, Any] | None:
         """Return the most severe secret the sharer holds, or None."""
         ...
 

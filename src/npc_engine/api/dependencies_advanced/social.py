@@ -13,13 +13,20 @@ Used by: api.dependencies_advanced (package re-exporter).
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 from npc_engine.api.dependencies_stores import get_emotion_store
 from npc_engine.config import get_settings
 
+if TYPE_CHECKING:
+    from npc_engine.engines.clique.clique_formation_engine import CliqueFormationEngine
+    from npc_engine.engines.mood.mood_contagion_engine import MoodContagionEngine
+    from npc_engine.engines.need.need_decay_engine import NeedDecayEngine
+    from npc_engine.engines.interaction.negotiation_store import NegotiationStore
+
 
 @lru_cache
-def get_clique_formation_engine():
+def get_clique_formation_engine() -> CliqueFormationEngine:
     """Create singleton clique formation engine for auto-detecting high-affection character pairs.
 
     Wires the Neo4j graph adapter (Neo4jGroupRepository) as the engine's injected
@@ -37,7 +44,7 @@ def get_clique_formation_engine():
 
 
 @lru_cache
-def get_mood_contagion_engine():
+def get_mood_contagion_engine() -> MoodContagionEngine:
     """Create singleton mood contagion engine bound to the shared emotion store.
 
     Wires the Neo4j graph adapter (Neo4jMoodRepository) as the engine's injected
@@ -57,7 +64,7 @@ def get_mood_contagion_engine():
 
 
 @lru_cache
-def get_need_decay_engine():
+def get_need_decay_engine() -> NeedDecayEngine:
     """Create singleton need decay engine for per-tick social need updates.
 
     Wires the Neo4j graph adapter (Neo4jNeedRepository) as the engine's injected
@@ -74,7 +81,7 @@ def get_need_decay_engine():
 
 
 @lru_cache(maxsize=1)
-def get_negotiation_store():
+def get_negotiation_store() -> NegotiationStore:
     """Create the singleton in-memory NegotiationStore for trade sessions.
 
     Returns:

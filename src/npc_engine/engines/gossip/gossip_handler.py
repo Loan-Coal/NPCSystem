@@ -44,7 +44,7 @@ from npc_engine.engines.relationship.standing import derive_standing
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
 from npc_engine.utils.logging import get_logger
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
@@ -105,7 +105,7 @@ class GossipHandler:
         tick_id: int,
         max_pairs: int = 20,
         npc_ids: list[str] | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Execute one gossip tick: select pairs, batch-read events+trust, distort, batch-write.
 
         Replaces the previous N×3 sequential Neo4j round-trips with a single batch
@@ -140,9 +140,9 @@ class GossipHandler:
 
     async def _process_pairs(
         self,
-        pairs: list,
+        pairs: list[Any],
         tick_id: int,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Batch-read event+trust, compute distortions, batch-write, then run per-pair side effects.
 
         Args:
@@ -152,7 +152,7 @@ class GossipHandler:
         Returns:
             Dict with keys ``tick_id``, ``pairs``, ``propagated``, and ``seeds_used``.
         """
-        pair_lookup: dict[tuple[str, str], tuple[dict, dict, dict]] = {}
+        pair_lookup: dict[tuple[str, str], tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = {}
         pair_params: list[dict[str, str]] = []
         for sharer, receiver, _loc, faction_ctx in pairs:
             key = (sharer["id"], receiver["id"])
@@ -160,7 +160,7 @@ class GossipHandler:
             pair_params.append({"sharer_id": sharer["id"], "receiver_id": receiver["id"]})
 
         batch_rows = await self._gossip_repo.select_batch_event_trust(pairs=pair_params)
-        event_trust_map: dict[tuple[str, str], dict] = {
+        event_trust_map: dict[tuple[str, str], dict[str, Any]] = {
             (row["sharer_id"], row["receiver_id"]): row
             for row in batch_rows
         }
@@ -189,10 +189,10 @@ class GossipHandler:
 
     def _build_write_params(
         self,
-        pair_lookup: dict[tuple[str, str], tuple[dict, dict, dict]],
-        event_trust_map: dict[tuple[str, str], dict],
+        pair_lookup: dict[tuple[str, str], tuple[dict[str, Any], dict[str, Any], dict[str, Any]]],
+        event_trust_map: dict[tuple[str, str], dict[str, Any]],
         tick_id: int,
-    ) -> tuple[list[dict], dict[tuple[str, str], dict], dict[str, int]]:
+    ) -> tuple[list[dict[str, Any]], dict[tuple[str, str], dict[str, Any]], dict[str, int]]:
         """Compute per-pair distortions and assemble batch write parameters.
 
         Args:
@@ -201,11 +201,11 @@ class GossipHandler:
             tick_id: Current game tick.
 
         Returns:
-            Tuple of (write_params list, distortion_map dict keyed by (sharer_id, receiver_id),
-            seeds_used dict keyed by ``"sharer_id→receiver_id"``).
+            Tuple of (write_params list, distortion_map dict[str, Any] keyed by (sharer_id, receiver_id),
+            seeds_used dict[str, Any] keyed by ``"sharer_id→receiver_id"``).
         """
-        write_params: list[dict] = []
-        distortion_map: dict[tuple[str, str], dict] = {}
+        write_params: list[dict[str, Any]] = []
+        distortion_map: dict[tuple[str, str], dict[str, Any]] = {}
         seeds_used: dict[str, int] = {}
 
         for key, (sharer, receiver, faction_ctx) in pair_lookup.items():
@@ -262,7 +262,7 @@ class GossipHandler:
             knowledge_state: KnowledgeState = (
                 KNOWLEDGE_STATE_KNOWS if distortion.distortion_type is None else KNOWLEDGE_STATE_RUMOR
             )
-            write_entry: dict = {
+            write_entry: dict[str, Any] = {
                 "receiver_id": receiver["id"],
                 "event_id": str(row["event_id"]),
                 "knowledge_state": knowledge_state,
@@ -280,9 +280,9 @@ class GossipHandler:
 
     async def _run_side_effects(
         self,
-        pair_lookup: dict[tuple[str, str], tuple[dict, dict, dict]],
-        event_trust_map: dict[tuple[str, str], dict],
-        distortion_map: dict[tuple[str, str], dict],
+        pair_lookup: dict[tuple[str, str], tuple[dict[str, Any], dict[str, Any], dict[str, Any]]],
+        event_trust_map: dict[tuple[str, str], dict[str, Any]],
+        distortion_map: dict[tuple[str, str], dict[str, Any]],
         tick_id: int,
     ) -> int:
         """Run conditional per-pair side effects after the batch write.

@@ -14,6 +14,7 @@ Used by: engines/dialogue/session_store (SessionStore.save_to_graph / load_from_
 
 from __future__ import annotations
 
+from typing import Any
 import logging
 
 from neo4j import AsyncSession
@@ -97,7 +98,7 @@ async def write_session_turns(
         await result.consume()
 
 
-async def read_all_session_turns(session: AsyncSession) -> list[dict]:
+async def read_all_session_turns(session: AsyncSession) -> list[dict[str, Any]]:
     """Read all persisted dialogue_turn nodes, grouped per (npc_id, player_id), ordered by turn_index.
 
     Args:

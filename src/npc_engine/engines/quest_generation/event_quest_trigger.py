@@ -14,7 +14,7 @@ Used by: npc_engine.scheduler.tick_scheduler
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from npc_engine.engines.ports.quest_generation_port import EventTriggerGraphPort
 
@@ -67,7 +67,7 @@ class EventQuestTrigger:
         self._trigger_event_types = trigger_event_types
         self._military_archetypes = military_archetypes
 
-    async def run_tick(self, *, tick_id: int) -> dict:
+    async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
         """Query for unprocessed trigger events and generate a draft quest for each.
 
         Args:
@@ -90,7 +90,7 @@ class EventQuestTrigger:
         )
         return {"tick_id": tick_id, "quests_created": len(quest_ids), "quest_ids": quest_ids}
 
-    async def _process_event(self, event: dict, tick_id: int) -> str | None:
+    async def _process_event(self, event: dict[str, Any], tick_id: int) -> str | None:
         """Select a military NPC for the event and generate a draft quest.
 
         Tries the event's location first; falls back to any military NPC in the

@@ -75,7 +75,7 @@ LIMIT 1
 """
 
 
-async def select_gossip_secret(session: Any, sharer_id: str) -> dict | None:
+async def select_gossip_secret(session: Any, sharer_id: str) -> dict[str, Any] | None:
     """Return the most severe secret the sharer holds, or None.
 
     Args:
@@ -95,7 +95,7 @@ async def select_gossip_secret(session: Any, sharer_id: str) -> dict | None:
 async def select_batch_event_trust(
     session: Any,
     pairs: list[dict[str, str]],
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Fetch event and trust data for all pairs in a single query.
 
     For each pair that has at least one qualifying event, returns one row with
@@ -113,7 +113,7 @@ async def select_batch_event_trust(
     if not pairs:
         return []
     result = await session.run(CYPHER_BATCH_EVENT_TRUST, pairs=pairs)
-    rows: list[dict] = []
+    rows: list[dict[str, Any]] = []
     async for record in result:
         rows.append(dict(record))
     return rows
@@ -121,7 +121,7 @@ async def select_batch_event_trust(
 
 async def write_batch_knowledge_propagation(
     session: Any,
-    writes: list[dict],
+    writes: list[dict[str, Any]],
 ) -> None:
     """Merge KNOWS_ABOUT edges for multiple receiver/event pairs in one query.
 

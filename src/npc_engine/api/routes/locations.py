@@ -68,7 +68,7 @@ async def create_part_of(
     child_id: str,
     body: CreatePartOfRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create or update a PART_OF containment edge from child to parent.
 
     Uses MERGE — calling this endpoint multiple times with the same
@@ -102,7 +102,7 @@ async def remove_part_of(
     child_id: str,
     parent_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Remove a PART_OF containment edge between two Location nodes.
 
     Safe to call when the edge does not exist — returns 200 either way.
@@ -127,7 +127,7 @@ async def remove_part_of(
 async def list_ancestors(
     location_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Return an ordered list of ancestor location IDs from parent to root.
 
     Args:
@@ -144,7 +144,7 @@ async def list_ancestors(
 async def list_descendants(
     location_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Return a flat list of all descendant location IDs.
 
     Args:

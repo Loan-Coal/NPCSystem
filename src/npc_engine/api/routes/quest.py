@@ -232,7 +232,7 @@ async def choose_quest_branch(
     quest_id: str,
     body: QuestChooseRequest,
     resolver: QuestChainResolver = Depends(get_quest_chain_resolver),
-) -> dict:
+) -> dict[str, Any]:
     """Select the quest branch that matches the player's choice.
 
     Finds the UNLOCKS edge whose ``on_choice_id`` equals ``body.choice_id`` and

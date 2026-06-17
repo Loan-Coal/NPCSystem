@@ -11,6 +11,7 @@ Used by: engines.agenda.conversation_intent_service,
 """
 from __future__ import annotations
 
+from typing import Any
 from neo4j import AsyncSession
 
 # ---------------------------------------------------------------------------
@@ -146,7 +147,7 @@ async def get_player_location(session: AsyncSession, player_id: str) -> str | No
     return str(record["location_id"]) if record is not None else None
 
 
-async def get_unmet_needs(session: AsyncSession, npc_id: str) -> list[dict]:
+async def get_unmet_needs(session: AsyncSession, npc_id: str) -> list[dict[str, Any]]:
     """Return all Need nodes connected to the NPC via NEEDS edges.
 
     Args:
@@ -166,7 +167,7 @@ async def get_unmet_needs(session: AsyncSession, npc_id: str) -> list[dict]:
 
 async def get_witnessed_events(
     session: AsyncSession, npc_id: str, since_tick: int
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Return Event nodes the NPC KNOWS_ABOUT since since_tick.
 
     Args:
@@ -185,7 +186,7 @@ async def get_witnessed_events(
     return records
 
 
-async def get_unresolved_goals(session: AsyncSession, npc_id: str) -> list[dict]:
+async def get_unresolved_goals(session: AsyncSession, npc_id: str) -> list[dict[str, Any]]:
     """Return Goal nodes the NPC PURSUES where status != 'complete'.
 
     Args:
@@ -226,7 +227,7 @@ async def count_npc_pending_intents(session: AsyncSession, npc_id: str) -> int:
     return int(record["cnt"]) if record is not None else 0
 
 
-async def get_lowest_score_pending(session: AsyncSession, npc_id: str) -> dict | None:
+async def get_lowest_score_pending(session: AsyncSession, npc_id: str) -> dict[str, Any] | None:
     """Return the lowest-score pending intent for npc_id, or None.
 
     Args:
@@ -284,7 +285,7 @@ async def merge_pending_intent(session: AsyncSession, *, id: str, npc_id: str,
 
 async def get_pending_for_player(
     session: AsyncSession, player_id: str, limit: int
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Return pending intents for player ordered by score DESC.
 
     Args:

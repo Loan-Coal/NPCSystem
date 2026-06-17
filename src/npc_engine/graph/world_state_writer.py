@@ -60,7 +60,7 @@ def _world_state_write_params(world_state: WorldState) -> dict[str, Any]:
     }
 
 
-def _world_state_from_record(payload: dict, fallback: WorldState) -> WorldState:
+def _world_state_from_record(payload: dict[str, Any], fallback: WorldState) -> WorldState:
     """Reconstruct a WorldState from a returned node-properties payload.
 
     Args:

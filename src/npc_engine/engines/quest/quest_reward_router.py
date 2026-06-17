@@ -16,6 +16,8 @@ Dependencies injected: Settings, TypeRegistry, QuestRewardGraphPort (via __init_
 
 from __future__ import annotations
 
+from typing import Any
+
 import logging
 
 from npc_engine.config import Settings
@@ -78,7 +80,7 @@ class QuestRewardRouter:
         quest_id: str,
         player_id: str,
         meta: QuestTransitionMeta,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Apply quest rewards atomically: possession check → delivery → grants → state persist.
 
         Args:
@@ -87,7 +89,7 @@ class QuestRewardRouter:
             meta: Transition metadata for provenance and idempotency fields.
 
         Returns:
-            Persisted quest state payload dict with ``rewards_applied=True``.
+            Persisted quest state payload dict[str, Any] with ``rewards_applied=True``.
 
         Raises:
             QuestTransitionError: If quest not completed, reward source invalid,

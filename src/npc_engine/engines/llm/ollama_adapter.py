@@ -76,7 +76,7 @@ class OllamaAdapter(LLMClientProtocol):
             LLMTimeoutError: If the HTTP request times out.
             LLMRequestError: If the backend returns an HTTP error, invalid JSON, or a backend error field.
         """
-        options: dict = {
+        options: dict[str, Any] = {
             "num_predict": max_tokens,
             "temperature": temperature,
             "num_ctx": get_settings().OLLAMA_CONTEXT_LENGTH,
@@ -85,7 +85,7 @@ class OllamaAdapter(LLMClientProtocol):
             options["top_p"] = top_p
         if stop_sequences is not None:
             options["stop"] = stop_sequences
-        payload: dict = {
+        payload: dict[str, Any] = {
             "model": self._model_name,
             "prompt": prompt,
             "stream": False,
@@ -138,7 +138,7 @@ class OllamaAdapter(LLMClientProtocol):
             LLMRequestError: If the backend returns an HTTP error, backend error field, or non-dict JSON.
         """
         settings = get_settings()
-        options: dict = {
+        options: dict[str, Any] = {
             "num_predict": max_tokens,
             "temperature": settings.STRUCTURED_OUTPUT_TEMPERATURE,
             "num_ctx": settings.OLLAMA_CONTEXT_LENGTH,
@@ -147,7 +147,7 @@ class OllamaAdapter(LLMClientProtocol):
             options["top_p"] = top_p
         if stop_sequences is not None:
             options["stop"] = stop_sequences
-        payload: dict = {
+        payload: dict[str, Any] = {
             "model": self._model_name,
             "prompt": prompt,
             "stream": False,
@@ -203,7 +203,7 @@ class OllamaAdapter(LLMClientProtocol):
             LLMTimeoutError: If the stream connection times out.
             LLMRequestError: If the backend returns an HTTP stream error or a backend error field.
         """
-        options: dict = {
+        options: dict[str, Any] = {
             "num_predict": max_tokens,
             "temperature": temperature,
             "num_ctx": get_settings().OLLAMA_CONTEXT_LENGTH,
@@ -212,7 +212,7 @@ class OllamaAdapter(LLMClientProtocol):
             options["top_p"] = top_p
         if stop_sequences is not None:
             options["stop"] = stop_sequences
-        payload: dict = {
+        payload: dict[str, Any] = {
             "model": self._model_name,
             "prompt": prompt,
             "stream": True,

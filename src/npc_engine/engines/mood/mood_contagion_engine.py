@@ -11,6 +11,8 @@ Used by: scheduler/tick_scheduler, api/dependency_singletons
 
 from __future__ import annotations
 
+from typing import Any
+
 import logging
 
 from npc_engine.engines.emotion.emotion_state import EmotionState, derive_label
@@ -83,7 +85,7 @@ class MoodContagionEngine:
         LOGGER.info("MoodContagionEngine: loaded %d moods from Neo4j", len(rows))
         return len(rows)
 
-    async def run_tick(self, *, tick_id: int) -> dict:
+    async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
         """Blend moods for co-located affectionate pairs and persist results.
 
         Args:

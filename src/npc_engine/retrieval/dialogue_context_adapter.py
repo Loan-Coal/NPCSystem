@@ -12,7 +12,7 @@ Dependencies injected: GraphDB, Settings, LLMConfig, EmbeddingIndexProtocol
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from npc_engine.config import Settings
 from npc_engine.graph.db import GraphDB
@@ -62,7 +62,7 @@ class Neo4jDialogueContextAdapter:
         npc_id: str,
         player_message: str,
         session_turns: list[str],
-        emotion_state: dict | None,
+        emotion_state: dict[str, Any] | None,
         context_cache: PartialDialogueContextCache | DialogueContextCache | None,
         session_id: str | None,
         skip_rag: bool,

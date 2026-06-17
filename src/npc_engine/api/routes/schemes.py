@@ -10,6 +10,8 @@ Used by: npc_engine.api.router_registry (registered at API_V1_PREFIX).
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends
 from neo4j import AsyncSession
 from pydantic import BaseModel
@@ -37,7 +39,7 @@ class SchemesPayload(BaseModel):
 async def get_npc_schemes(
     npc_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Return the NPC's schemes (active + discovered) with their covert steps.
 
     Args:

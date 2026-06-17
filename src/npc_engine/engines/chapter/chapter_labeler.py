@@ -10,8 +10,9 @@ Used by: engines.chapter.chapter_engine
 
 from __future__ import annotations
 
+from typing import Any
 
-def label_chapter_by_rules(events: list[dict]) -> dict:
+def label_chapter_by_rules(events: list[dict[str, Any]]) -> dict[str, Any]:
     """Return a deterministic chapter label based on dominant event types.
 
     Args:
