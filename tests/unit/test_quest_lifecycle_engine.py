@@ -4,13 +4,13 @@ test_quest_lifecycle_engine.py - Unit tests for EXP-214 commitment memory format
 Covers:
 - accept_quest triggers create_from_commitment when quest transitions offered → accepted.
 
-Does NOT: connect to Neo4j. All graph calls and engine calls are mocked.
+Does NOT: connect to Neo4j. All graph calls go through a mock QuestLifecycleGraphPort.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import BaseModel, ConfigDict
@@ -19,13 +19,6 @@ from npc_engine.config import Settings
 from npc_engine.engines.quest.models import QuestTransitionMeta
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
 from npc_engine.type_registry.contracts import TypeRegistry
-
-_LIFECYCLE_MODULE = "npc_engine.engines.quest.quest_lifecycle_engine"
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 class _FakeEventModel(BaseModel):
@@ -58,54 +51,39 @@ def _meta() -> QuestTransitionMeta:
     )
 
 
-@dataclass
-class _FakeTx:
-    """Fake transaction that records commit calls."""
+def _make_lifecycle_repo(state_store: dict) -> Any:
+    """Return a mock QuestLifecycleGraphPort backed by an in-memory store."""
+    from npc_engine.world.world_state import WorldState
 
-    committed: bool = False
+    repo = MagicMock()
 
-    async def commit(self) -> None:
-        """Record commit."""
-        self.committed = True
+    async def _get_quest_state(*, quest_id: str, player_id: str) -> dict | None:
+        return state_store.get((quest_id, player_id))
 
-    async def __aenter__(self) -> "_FakeTx":
-        return self
+    async def _persist_state_and_event(
+        *, quest_id: str, player_id: str, state_payload: dict, event_node: Any
+    ) -> dict:
+        state_store[(quest_id, player_id)] = dict(state_payload)
+        return dict(state_payload)
 
-    async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
-        return False
-
-
-class _FakeSession:
-    """Fake session that returns a single _FakeTx."""
-
-    def __init__(self, tx: _FakeTx) -> None:
-        """Initialise with a transaction."""
-        self._tx = tx
-
-    async def begin_transaction(self) -> _FakeTx:
-        """Return the fake transaction."""
-        return self._tx
-
-
-def _fake_session() -> _FakeSession:
-    """Return a fresh _FakeSession."""
-    return _FakeSession(tx=_FakeTx())
-
-
-# ---------------------------------------------------------------------------
-# EXP-214: commitment memory formed on quest accept
-# ---------------------------------------------------------------------------
+    repo.get_quest_state = _get_quest_state
+    repo.persist_state_and_event = _persist_state_and_event
+    repo.emit_lifecycle_event = AsyncMock()
+    repo.update_quest_node_status = AsyncMock()
+    repo.get_world_state = AsyncMock(return_value=WorldState(
+        id="world", year=1, season="spring", day=1, time_of_day="morning",
+    ))
+    return repo
 
 
 @pytest.mark.asyncio
-async def test_quest_accept_forms_commitment_memory(monkeypatch: Any) -> None:
+async def test_quest_accept_forms_commitment_memory() -> None:
     """Accepting an offered quest must call MemoryEngine.create_from_commitment.
 
-    The memory engine call is patched at the class level so no DB writes occur.
-    The test verifies that the call is made with kind='commitment' semantics
-    by checking that create_from_commitment is invoked.
+    The memory engine is injected — no DB writes occur. The test verifies
+    create_from_commitment is invoked once with kind='commitment' semantics.
     """
-    state_store: dict[tuple[str, str], dict[str, Any]] = {
+    state_store: dict = {
         ("quest-214", "player_hero"): {
             "quest_id": "quest-214",
             "player_id": "player_hero",
@@ -120,38 +98,7 @@ async def test_quest_accept_forms_commitment_memory(monkeypatch: Any) -> None:
         }
     }
 
-    async def fake_get_quest_state(*, session: Any, quest_id: str, player_id: str) -> dict | None:
-        return state_store.get((quest_id, player_id))
-
-    async def fake_upsert_quest_state(
-        *, session: Any, quest_id: str, player_id: str, state_payload: dict
-    ) -> dict:
-        state_store[(quest_id, player_id)] = dict(state_payload)
-        return dict(state_payload)
-
-    async def fake_event_write(*, tx: Any, event: Any) -> None:
-        return None
-
-    async def fake_node_status_update(*, session: Any, quest_id: str, status: str) -> None:
-        return None
-
-    async def fake_get_world_state(session: Any, world_id: str = "world") -> Any:
-        from npc_engine.world.world_state import WorldState
-        return WorldState(
-            id="world",
-            year=1,
-            season="spring",
-            day=1,
-            time_of_day="morning",
-        )
-
-    monkeypatch.setattr(f"{_LIFECYCLE_MODULE}.get_quest_state", fake_get_quest_state)
-    monkeypatch.setattr(f"{_LIFECYCLE_MODULE}.upsert_quest_state", fake_upsert_quest_state)
-    monkeypatch.setattr(f"{_LIFECYCLE_MODULE}.upsert_quest_lifecycle_event", fake_event_write)
-    monkeypatch.setattr(f"{_LIFECYCLE_MODULE}.update_quest_node_status", fake_node_status_update)
-    monkeypatch.setattr(f"{_LIFECYCLE_MODULE}.get_world_state", fake_get_world_state)
-
-    commitment_calls: list[dict[str, Any]] = []
+    commitment_calls: list[dict] = []
 
     class _FakeMemoryEngine:
         async def create_from_commitment(
@@ -171,9 +118,9 @@ async def test_quest_accept_forms_commitment_memory(monkeypatch: Any) -> None:
         settings=_settings(),
         registry=_fake_registry(),
         memory_engine=_FakeMemoryEngine(),  # type: ignore[arg-type]
+        quest_repo=_make_lifecycle_repo(state_store),
     )
     stored = await engine.accept_quest(
-        session=_fake_session(),  # type: ignore[arg-type]
         quest_id="quest-214",
         player_id="player_hero",
         meta=_meta(),

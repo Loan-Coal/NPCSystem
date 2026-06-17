@@ -14,7 +14,6 @@ Does NOT: touch Neo4j, call the LLM, or exercise real graph queries.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -22,17 +21,10 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 
 from npc_engine.config import Settings
-from npc_engine.engines.quest.models import (
-    QuestTransitionMeta,
-)
+from npc_engine.engines.quest.models import QuestTransitionMeta
 from npc_engine.engines.quest.quest_chain_resolver import QuestChainResolver
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
 from npc_engine.type_registry.contracts import TypeRegistry
-
-
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
 
 
 class _FakeEventModel(BaseModel):
@@ -60,42 +52,40 @@ def _meta() -> QuestTransitionMeta:
     )
 
 
-class _FakeSession:
-    """Minimal async session stub."""
+def _make_chain_repo(
+    unlocked: list[str] | None = None,
+    choice_unlock: str | None = None,
+) -> Any:
+    """Return a mock QuestChainGraphPort with configurable return values."""
+    repo = MagicMock()
+    repo.get_unlocked_quests = AsyncMock(return_value=unlocked or [])
+    repo.get_choice_unlocked_quest = AsyncMock(return_value=choice_unlock)
+    return repo
 
 
-@dataclass
-class _FakeTx:
-    committed: bool = False
+def _make_lifecycle_repo(state_store: dict) -> Any:
+    """Return a mock QuestLifecycleGraphPort backed by an in-memory store."""
+    from npc_engine.world.world_state import WorldState
 
-    async def commit(self) -> None:
-        self.committed = True
+    repo = MagicMock()
 
-    async def run(self, query: str, **kwargs: Any) -> Any:
-        result = MagicMock()
-        result.single = AsyncMock(return_value=None)
-        result.consume = AsyncMock()
-        return result
+    async def _get_quest_state(*, quest_id: str, player_id: str) -> dict | None:
+        return state_store.get((quest_id, player_id))
 
-    async def __aenter__(self) -> "_FakeTx":
-        return self
+    async def _persist_state_and_event(
+        *, quest_id: str, player_id: str, state_payload: dict, event_node: Any
+    ) -> dict:
+        state_store[(quest_id, player_id)] = dict(state_payload)
+        return dict(state_payload)
 
-    async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
-        return False
-
-
-class _FakeSessionWithTx(_FakeSession):
-    def __init__(self) -> None:
-        self._tx = _FakeTx()
-
-    async def begin_transaction(self) -> _FakeTx:
-        return self._tx
-
-    async def run(self, query: str, **kwargs: Any) -> Any:
-        result = MagicMock()
-        result.single = AsyncMock(return_value=None)
-        result.consume = AsyncMock()
-        return result
+    repo.get_quest_state = _get_quest_state
+    repo.persist_state_and_event = _persist_state_and_event
+    repo.emit_lifecycle_event = AsyncMock()
+    repo.update_quest_node_status = AsyncMock()
+    repo.get_world_state = AsyncMock(return_value=WorldState(
+        id="world", year=1, season="spring", day=1, time_of_day="morning",
+    ))
+    return repo
 
 
 # ---------------------------------------------------------------------------
@@ -104,28 +94,17 @@ class _FakeSessionWithTx(_FakeSession):
 
 
 @pytest.mark.asyncio
-async def test_resolver_offers_next_quest_on_complete(monkeypatch: Any) -> None:
+async def test_resolver_offers_next_quest_on_complete() -> None:
     """When get_unlocked_quests returns one next quest, offer_quest is called for it."""
     offer_service = MagicMock()
     offer_service.offer_quest = AsyncMock(return_value={"status": "offered"})
 
-    resolver = QuestChainResolver(offer_service=offer_service)
-    session = _FakeSession()
+    chain_repo = _make_chain_repo(unlocked=["quest_b"])
+    resolver = QuestChainResolver(offer_service=offer_service, chain_repo=chain_repo)
 
-    monkeypatch.setattr(
-        "npc_engine.engines.quest.quest_chain_resolver.get_unlocked_quests",
-        AsyncMock(return_value=["quest_b"]),
-    )
-
-    await resolver.resolve(
-        session=session,  # type: ignore[arg-type]
-        quest_id="quest_a",
-        player_id="player_demo",
-        outcome="complete",
-    )
+    await resolver.resolve(quest_id="quest_a", player_id="player_demo", outcome="complete")
 
     offer_service.offer_quest.assert_awaited_once_with(
-        session=session,
         next_quest_id="quest_b",
         player_id="player_demo",
     )
@@ -137,25 +116,15 @@ async def test_resolver_offers_next_quest_on_complete(monkeypatch: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_resolver_no_op_when_no_chain(monkeypatch: Any) -> None:
+async def test_resolver_no_op_when_no_chain() -> None:
     """When get_unlocked_quests returns empty list, offer_quest is not called."""
     offer_service = MagicMock()
     offer_service.offer_quest = AsyncMock(return_value={"status": "offered"})
 
-    resolver = QuestChainResolver(offer_service=offer_service)
-    session = _FakeSession()
+    chain_repo = _make_chain_repo(unlocked=[])
+    resolver = QuestChainResolver(offer_service=offer_service, chain_repo=chain_repo)
 
-    monkeypatch.setattr(
-        "npc_engine.engines.quest.quest_chain_resolver.get_unlocked_quests",
-        AsyncMock(return_value=[]),
-    )
-
-    await resolver.resolve(
-        session=session,  # type: ignore[arg-type]
-        quest_id="quest_a",
-        player_id="player_demo",
-        outcome="complete",
-    )
+    await resolver.resolve(quest_id="quest_a", player_id="player_demo", outcome="complete")
 
     offer_service.offer_quest.assert_not_awaited()
 
@@ -166,29 +135,17 @@ async def test_resolver_no_op_when_no_chain(monkeypatch: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_resolver_passes_fail_outcome(monkeypatch: Any) -> None:
-    """resolver.resolve(..., outcome='fail') passes outcome='fail' to get_unlocked_quests."""
+async def test_resolver_passes_fail_outcome() -> None:
+    """resolver.resolve(..., outcome='fail') passes outcome='fail' to chain_repo."""
     offer_service = MagicMock()
     offer_service.offer_quest = AsyncMock(return_value={"status": "offered"})
 
-    resolver = QuestChainResolver(offer_service=offer_service)
-    session = _FakeSession()
+    chain_repo = _make_chain_repo(unlocked=["quest_c"])
+    resolver = QuestChainResolver(offer_service=offer_service, chain_repo=chain_repo)
 
-    mock_get = AsyncMock(return_value=["quest_c"])
-    monkeypatch.setattr(
-        "npc_engine.engines.quest.quest_chain_resolver.get_unlocked_quests",
-        mock_get,
-    )
+    await resolver.resolve(quest_id="quest_a", player_id="player_demo", outcome="fail")
 
-    await resolver.resolve(
-        session=session,  # type: ignore[arg-type]
-        quest_id="quest_a",
-        player_id="player_demo",
-        outcome="fail",
-    )
-
-    mock_get.assert_awaited_once_with(
-        session=session,
+    chain_repo.get_unlocked_quests.assert_awaited_once_with(
         quest_id="quest_a",
         outcome="fail",
     )
@@ -200,71 +157,48 @@ async def test_resolver_passes_fail_outcome(monkeypatch: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_lifecycle_engine_calls_resolver_on_completion(monkeypatch: Any) -> None:
+async def test_lifecycle_engine_calls_resolver_on_completion() -> None:
     """QuestLifecycleEngine with chain_resolver calls resolver.resolve after COMPLETED transition."""
-    completed_state = {
-        "quest_id": "quest_a",
-        "player_id": "player_demo",
-        "reward_source_id": "system",
-        "title": "Patrol Duty",
-        "status": "in_progress",
-        "objectives": [
-            {
-                "objective_id": "obj_1",
-                "target_count": 1,
-                "objective_type": "deliver",
-                "target_id": None,
-            }
-        ],
-        "objective_progress": {"obj_1": 1},
-        "item_rewards": [],
-        "currency_reward": None,
-        "rewards_applied": False,
+    state_store: dict = {
+        ("quest_a", "player_demo"): {
+            "quest_id": "quest_a",
+            "player_id": "player_demo",
+            "reward_source_id": "system",
+            "title": "Patrol Duty",
+            "status": "in_progress",
+            "objectives": [
+                {
+                    "objective_id": "obj_1",
+                    "target_count": 1,
+                    "objective_type": "deliver",
+                    "target_id": None,
+                }
+            ],
+            "objective_progress": {"obj_1": 1},
+            "item_rewards": [],
+            "currency_reward": None,
+            "rewards_applied": False,
+        }
     }
-
-    async def fake_get_quest_state(*, session: Any, quest_id: str, player_id: str) -> dict | None:
-        return dict(completed_state)
-
-    async def fake_upsert_quest_state(
-        *, session: Any, quest_id: str, player_id: str, state_payload: dict
-    ) -> dict:
-        return dict(state_payload)
-
-    async def fake_upsert_lifecycle_event(*, tx: Any, event: Any) -> None:
-        return None
-
-    monkeypatch.setattr(
-        "npc_engine.engines.quest.quest_lifecycle_engine.get_quest_state",
-        fake_get_quest_state,
-    )
-    monkeypatch.setattr(
-        "npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_state",
-        fake_upsert_quest_state,
-    )
-    monkeypatch.setattr(
-        "npc_engine.engines.quest.quest_lifecycle_engine.upsert_quest_lifecycle_event",
-        fake_upsert_lifecycle_event,
-    )
 
     mock_resolver = MagicMock()
     mock_resolver.resolve = AsyncMock(return_value=None)
 
+    lifecycle_repo = _make_lifecycle_repo(state_store)
     engine = QuestLifecycleEngine(
         settings=_settings(),
         registry=_fake_registry(),
         chain_resolver=mock_resolver,
+        quest_repo=lifecycle_repo,
     )
-    session = _FakeSessionWithTx()
 
     await engine.evaluate_completion(
-        session=session,  # type: ignore[arg-type]
         quest_id="quest_a",
         player_id="player_demo",
         meta=_meta(),
     )
 
     mock_resolver.resolve.assert_awaited_once_with(
-        session=session,
         quest_id="quest_a",
         player_id="player_demo",
         outcome="complete",
@@ -277,28 +211,21 @@ async def test_lifecycle_engine_calls_resolver_on_completion(monkeypatch: Any) -
 
 
 @pytest.mark.asyncio
-async def test_choose_selects_matching_successor(monkeypatch: Any) -> None:
+async def test_choose_selects_matching_successor() -> None:
     """choose() calls get_choice_unlocked_quest with choice_id and offers the match."""
     offer_service = MagicMock()
     offer_service.offer_quest = AsyncMock(return_value={"status": "offered"})
 
-    resolver = QuestChainResolver(offer_service=offer_service)
-    session = _FakeSession()
-
-    monkeypatch.setattr(
-        "npc_engine.engines.quest.quest_chain_resolver.get_choice_unlocked_quest",
-        AsyncMock(return_value="quest_branch_b"),
-    )
+    chain_repo = _make_chain_repo(choice_unlock="quest_branch_b")
+    resolver = QuestChainResolver(offer_service=offer_service, chain_repo=chain_repo)
 
     result = await resolver.choose(
-        session=session,  # type: ignore[arg-type]
         quest_id="quest_a",
         player_id="player_demo",
         choice_id="choice_help",
     )
 
     offer_service.offer_quest.assert_awaited_once_with(
-        session=session,
         next_quest_id="quest_branch_b",
         player_id="player_demo",
     )
@@ -311,21 +238,15 @@ async def test_choose_selects_matching_successor(monkeypatch: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_null_choice_auto_unlocks(monkeypatch: Any) -> None:
+async def test_null_choice_auto_unlocks() -> None:
     """choose() with no matching on_choice_id returns None without calling offer_quest."""
     offer_service = MagicMock()
     offer_service.offer_quest = AsyncMock(return_value={"status": "offered"})
 
-    resolver = QuestChainResolver(offer_service=offer_service)
-    session = _FakeSession()
-
-    monkeypatch.setattr(
-        "npc_engine.engines.quest.quest_chain_resolver.get_choice_unlocked_quest",
-        AsyncMock(return_value=None),
-    )
+    chain_repo = _make_chain_repo(choice_unlock=None)
+    resolver = QuestChainResolver(offer_service=offer_service, chain_repo=chain_repo)
 
     result = await resolver.choose(
-        session=session,  # type: ignore[arg-type]
         quest_id="quest_a",
         player_id="player_demo",
         choice_id="choice_unknown",

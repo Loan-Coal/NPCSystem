@@ -71,16 +71,21 @@ async def test_hard_delete_node_escapes_label() -> None:
 
 @pytest.mark.asyncio
 async def test_get_candidates_escapes_label() -> None:
-    """Quest-gen candidate query must backtick-escape the slot node_type label."""
+    """Quest-gen candidate query must backtick-escape the slot node_type label.
+
+    The injection guard lives in get_candidate_ids_by_label (quest_generation_queries.py),
+    which is called by Neo4jQuestGenerationRepository and is the authoritative sanitization
+    boundary — tested here directly.
+    """
+    from npc_engine.graph.quest_generation_queries import get_candidate_ids_by_label
+
+    node_type = "event`) DETACH DELETE n //"
+    resolved = resolve_node_label(node_type)
+    escaped = cypher_identifier(resolved)
 
     session = _RecordingSession(record=None)
-    engine = object.__new__(QuestGenerationEngine)
-    node_type = "event`) DETACH DELETE n //"
-    slots = (SlotDefinition(name="target", node_type=node_type, required=True),)
-
-    await engine._get_candidates(session, slots)  # type: ignore[arg-type]
+    await get_candidate_ids_by_label(session, label=resolved)  # type: ignore[arg-type]
 
     query = session.queries[0]
-    escaped = cypher_identifier(resolve_node_label(node_type))
     assert escaped in query
     assert ") DETACH DELETE n //" not in query.replace(escaped, "")

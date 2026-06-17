@@ -1,6 +1,5 @@
 """
-Tests for engines.quest_generation.event_quest_trigger and
-graph.event_trigger_queries.
+Tests for engines.quest_generation.event_quest_trigger.
 
 Covers:
 - No trigger events → 0 quests, no generate() calls
@@ -13,7 +12,7 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -24,9 +23,17 @@ from npc_engine.engines.quest_generation.event_quest_trigger import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+def _make_trigger_repo(
+    events: list | None = None,
+    npc_at_location: str | None = None,
+    any_military_npc: str | None = None,
+) -> MagicMock:
+    """Return a mock EventTriggerGraphPort."""
+    repo = MagicMock()
+    repo.get_unprocessed_trigger_events = AsyncMock(return_value=events or [])
+    repo.get_military_npc_at_location = AsyncMock(return_value=npc_at_location)
+    repo.get_any_military_npc = AsyncMock(return_value=any_military_npc)
+    return repo
 
 
 def _make_generated_quest(quest_id: str = "quest-001") -> MagicMock:
@@ -42,16 +49,11 @@ def _make_generated_quest(quest_id: str = "quest-001") -> MagicMock:
 
 @pytest.mark.asyncio
 async def test_run_tick_no_events_returns_zero_quests() -> None:
-    session = AsyncMock()
     engine = AsyncMock()
+    trigger_repo = _make_trigger_repo(events=[])
 
-    with patch(
-        "npc_engine.engines.quest_generation.event_quest_trigger.get_unprocessed_trigger_events",
-        new_callable=AsyncMock,
-        return_value=[],
-    ):
-        trigger = EventQuestTrigger(generation_engine=engine)
-        result = await trigger.run_tick(session=session, tick_id=1)
+    trigger = EventQuestTrigger(generation_engine=engine, trigger_repo=trigger_repo)
+    result = await trigger.run_tick(tick_id=1)
 
     assert result["quests_created"] == 0
     assert result["quest_ids"] == []
@@ -65,37 +67,23 @@ async def test_run_tick_no_events_returns_zero_quests() -> None:
 
 @pytest.mark.asyncio
 async def test_run_tick_npc_at_location_creates_quest() -> None:
-    session = AsyncMock()
     engine = AsyncMock()
     engine.generate.return_value = _make_generated_quest("q-1")
 
-    with (
-        patch(
-            "npc_engine.engines.quest_generation.event_quest_trigger.get_unprocessed_trigger_events",
-            new_callable=AsyncMock,
-            return_value=[{"event_id": "evt-1", "location_id": "loc-barracks"}],
-        ),
-        patch(
-            "npc_engine.engines.quest_generation.event_quest_trigger.get_military_npc_at_location",
-            new_callable=AsyncMock,
-            return_value="captain_sorn",
-        ),
-        patch(
-            "npc_engine.engines.quest_generation.event_quest_trigger.get_any_military_npc",
-            new_callable=AsyncMock,
-        ) as mock_fallback,
-    ):
-        trigger = EventQuestTrigger(generation_engine=engine)
-        result = await trigger.run_tick(session=session, tick_id=5)
+    trigger_repo = _make_trigger_repo(
+        events=[{"event_id": "evt-1", "location_id": "loc-barracks"}],
+        npc_at_location="captain_sorn",
+    )
+    trigger = EventQuestTrigger(generation_engine=engine, trigger_repo=trigger_repo)
+    result = await trigger.run_tick(tick_id=5)
 
     assert result["quests_created"] == 1
     assert result["quest_ids"] == ["q-1"]
     engine.generate.assert_awaited_once_with(
-        session,
         quest_giver_id="captain_sorn",
         cause_event_id="evt-1",
     )
-    mock_fallback.assert_not_called()
+    trigger_repo.get_any_military_npc.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -105,33 +93,19 @@ async def test_run_tick_npc_at_location_creates_quest() -> None:
 
 @pytest.mark.asyncio
 async def test_run_tick_fallback_to_any_military_npc() -> None:
-    session = AsyncMock()
     engine = AsyncMock()
     engine.generate.return_value = _make_generated_quest("q-2")
 
-    with (
-        patch(
-            "npc_engine.engines.quest_generation.event_quest_trigger.get_unprocessed_trigger_events",
-            new_callable=AsyncMock,
-            return_value=[{"event_id": "evt-2", "location_id": "loc-market"}],
-        ),
-        patch(
-            "npc_engine.engines.quest_generation.event_quest_trigger.get_military_npc_at_location",
-            new_callable=AsyncMock,
-            return_value=None,
-        ),
-        patch(
-            "npc_engine.engines.quest_generation.event_quest_trigger.get_any_military_npc",
-            new_callable=AsyncMock,
-            return_value="general_vorrath",
-        ),
-    ):
-        trigger = EventQuestTrigger(generation_engine=engine)
-        result = await trigger.run_tick(session=session, tick_id=5)
+    trigger_repo = _make_trigger_repo(
+        events=[{"event_id": "evt-2", "location_id": "loc-market"}],
+        npc_at_location=None,
+        any_military_npc="general_vorrath",
+    )
+    trigger = EventQuestTrigger(generation_engine=engine, trigger_repo=trigger_repo)
+    result = await trigger.run_tick(tick_id=5)
 
     assert result["quests_created"] == 1
     engine.generate.assert_awaited_once_with(
-        session,
         quest_giver_id="general_vorrath",
         cause_event_id="evt-2",
     )
@@ -144,28 +118,15 @@ async def test_run_tick_fallback_to_any_military_npc() -> None:
 
 @pytest.mark.asyncio
 async def test_run_tick_no_military_npc_skips_event() -> None:
-    session = AsyncMock()
     engine = AsyncMock()
 
-    with (
-        patch(
-            "npc_engine.engines.quest_generation.event_quest_trigger.get_unprocessed_trigger_events",
-            new_callable=AsyncMock,
-            return_value=[{"event_id": "evt-3", "location_id": "loc-tavern"}],
-        ),
-        patch(
-            "npc_engine.engines.quest_generation.event_quest_trigger.get_military_npc_at_location",
-            new_callable=AsyncMock,
-            return_value=None,
-        ),
-        patch(
-            "npc_engine.engines.quest_generation.event_quest_trigger.get_any_military_npc",
-            new_callable=AsyncMock,
-            return_value=None,
-        ),
-    ):
-        trigger = EventQuestTrigger(generation_engine=engine)
-        result = await trigger.run_tick(session=session, tick_id=7)
+    trigger_repo = _make_trigger_repo(
+        events=[{"event_id": "evt-3", "location_id": "loc-tavern"}],
+        npc_at_location=None,
+        any_military_npc=None,
+    )
+    trigger = EventQuestTrigger(generation_engine=engine, trigger_repo=trigger_repo)
+    result = await trigger.run_tick(tick_id=7)
 
     assert result["quests_created"] == 0
     engine.generate.assert_not_called()
@@ -178,24 +139,15 @@ async def test_run_tick_no_military_npc_skips_event() -> None:
 
 @pytest.mark.asyncio
 async def test_run_tick_generate_value_error_is_skipped() -> None:
-    session = AsyncMock()
     engine = AsyncMock()
     engine.generate.side_effect = ValueError("Quest generation suppressed by pacing engine")
 
-    with (
-        patch(
-            "npc_engine.engines.quest_generation.event_quest_trigger.get_unprocessed_trigger_events",
-            new_callable=AsyncMock,
-            return_value=[{"event_id": "evt-4", "location_id": "loc-barracks"}],
-        ),
-        patch(
-            "npc_engine.engines.quest_generation.event_quest_trigger.get_military_npc_at_location",
-            new_callable=AsyncMock,
-            return_value="captain_sorn",
-        ),
-    ):
-        trigger = EventQuestTrigger(generation_engine=engine)
-        result = await trigger.run_tick(session=session, tick_id=9)
+    trigger_repo = _make_trigger_repo(
+        events=[{"event_id": "evt-4", "location_id": "loc-barracks"}],
+        npc_at_location="captain_sorn",
+    )
+    trigger = EventQuestTrigger(generation_engine=engine, trigger_repo=trigger_repo)
+    result = await trigger.run_tick(tick_id=9)
 
     assert result["quests_created"] == 0
     assert result["quest_ids"] == []
@@ -208,32 +160,21 @@ async def test_run_tick_generate_value_error_is_skipped() -> None:
 
 @pytest.mark.asyncio
 async def test_run_tick_multiple_events_creates_multiple_quests() -> None:
-    session = AsyncMock()
     engine = AsyncMock()
     engine.generate.side_effect = [
         _make_generated_quest("q-10"),
         _make_generated_quest("q-11"),
     ]
 
-    events = [
-        {"event_id": "evt-10", "location_id": "loc-barracks"},
-        {"event_id": "evt-11", "location_id": "loc-barracks"},
-    ]
-
-    with (
-        patch(
-            "npc_engine.engines.quest_generation.event_quest_trigger.get_unprocessed_trigger_events",
-            new_callable=AsyncMock,
-            return_value=events,
-        ),
-        patch(
-            "npc_engine.engines.quest_generation.event_quest_trigger.get_military_npc_at_location",
-            new_callable=AsyncMock,
-            return_value="captain_sorn",
-        ),
-    ):
-        trigger = EventQuestTrigger(generation_engine=engine)
-        result = await trigger.run_tick(session=session, tick_id=10)
+    trigger_repo = _make_trigger_repo(
+        events=[
+            {"event_id": "evt-10", "location_id": "loc-barracks"},
+            {"event_id": "evt-11", "location_id": "loc-barracks"},
+        ],
+        npc_at_location="captain_sorn",
+    )
+    trigger = EventQuestTrigger(generation_engine=engine, trigger_repo=trigger_repo)
+    result = await trigger.run_tick(tick_id=10)
 
     assert result["quests_created"] == 2
     assert set(result["quest_ids"]) == {"q-10", "q-11"}
@@ -252,8 +193,10 @@ def test_default_constants_are_correct() -> None:
 
 def test_constructor_accepts_custom_trigger_types() -> None:
     engine = AsyncMock()
+    trigger_repo = _make_trigger_repo()
     trigger = EventQuestTrigger(
         generation_engine=engine,
+        trigger_repo=trigger_repo,
         trigger_event_types=frozenset({"disaster"}),
         military_archetypes=frozenset({"warden"}),
     )
@@ -268,28 +211,16 @@ def test_constructor_accepts_custom_trigger_types() -> None:
 
 @pytest.mark.asyncio
 async def test_run_tick_empty_location_skips_location_query() -> None:
-    session = AsyncMock()
     engine = AsyncMock()
     engine.generate.return_value = _make_generated_quest("q-20")
 
-    with (
-        patch(
-            "npc_engine.engines.quest_generation.event_quest_trigger.get_unprocessed_trigger_events",
-            new_callable=AsyncMock,
-            return_value=[{"event_id": "evt-20", "location_id": None}],
-        ),
-        patch(
-            "npc_engine.engines.quest_generation.event_quest_trigger.get_military_npc_at_location",
-            new_callable=AsyncMock,
-        ) as mock_loc,
-        patch(
-            "npc_engine.engines.quest_generation.event_quest_trigger.get_any_military_npc",
-            new_callable=AsyncMock,
-            return_value="captain_sorn",
-        ),
-    ):
-        trigger = EventQuestTrigger(generation_engine=engine)
-        result = await trigger.run_tick(session=session, tick_id=12)
+    trigger_repo = _make_trigger_repo(
+        events=[{"event_id": "evt-20", "location_id": None}],
+        npc_at_location=None,
+        any_military_npc="captain_sorn",
+    )
+    trigger = EventQuestTrigger(generation_engine=engine, trigger_repo=trigger_repo)
+    result = await trigger.run_tick(tick_id=12)
 
-    mock_loc.assert_not_called()
+    trigger_repo.get_military_npc_at_location.assert_not_called()
     assert result["quests_created"] == 1

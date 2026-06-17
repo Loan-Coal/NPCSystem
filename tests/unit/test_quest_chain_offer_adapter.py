@@ -16,8 +16,11 @@ import pytest
 from npc_engine.engines.quest.quest_chain_offer_adapter import QuestChainOfferAdapter
 
 
-def _make_session() -> MagicMock:
-    return MagicMock()
+def _make_chain_repo(quest_node: dict | None) -> MagicMock:
+    """Return a mock QuestChainGraphPort whose get_quest returns quest_node."""
+    repo = MagicMock()
+    repo.get_quest = AsyncMock(return_value=quest_node)
+    return repo
 
 
 @pytest.mark.asyncio
@@ -26,21 +29,10 @@ async def test_offer_quest_calls_offer_service_with_description_as_title() -> No
     mock_offer_service = MagicMock()
     mock_offer_service.offer_quest = AsyncMock(return_value={"status": "offered"})
 
-    mock_get_quest = AsyncMock(
-        return_value={"id": "q-1", "description": "Find the stolen goods"}
-    )
+    chain_repo = _make_chain_repo({"id": "q-1", "description": "Find the stolen goods"})
+    adapter = QuestChainOfferAdapter(offer_service=mock_offer_service, chain_repo=chain_repo)
 
-    adapter = QuestChainOfferAdapter(
-        offer_service=mock_offer_service,
-        get_quest_fn=mock_get_quest,
-    )
-
-    session = _make_session()
-    result = await adapter.offer_quest(
-        session=session,
-        next_quest_id="q-1",
-        player_id="player-1",
-    )
+    result = await adapter.offer_quest(next_quest_id="q-1", player_id="player-1")
 
     assert result["status"] == "offered"
     mock_offer_service.offer_quest.assert_awaited_once()
@@ -58,16 +50,12 @@ async def test_offer_quest_idempotency_key_is_deterministic() -> None:
     """Same quest_id + player_id must produce the same idempotency_key across calls."""
     mock_offer_service = MagicMock()
     mock_offer_service.offer_quest = AsyncMock(return_value={"status": "offered"})
-    mock_get_quest = AsyncMock(return_value={"id": "q-2", "description": "Patrol route"})
+    chain_repo = _make_chain_repo({"id": "q-2", "description": "Patrol route"})
 
-    adapter = QuestChainOfferAdapter(
-        offer_service=mock_offer_service,
-        get_quest_fn=mock_get_quest,
-    )
-    session = _make_session()
+    adapter = QuestChainOfferAdapter(offer_service=mock_offer_service, chain_repo=chain_repo)
 
-    await adapter.offer_quest(session=session, next_quest_id="q-2", player_id="p-1")
-    await adapter.offer_quest(session=session, next_quest_id="q-2", player_id="p-1")
+    await adapter.offer_quest(next_quest_id="q-2", player_id="p-1")
+    await adapter.offer_quest(next_quest_id="q-2", player_id="p-1")
 
     calls = mock_offer_service.offer_quest.call_args_list
     key_0 = calls[0].kwargs["meta"].idempotency_key
@@ -81,17 +69,9 @@ async def test_offer_quest_raises_when_quest_not_found() -> None:
     from npc_engine.utils.errors import QuestTransitionError
 
     mock_offer_service = MagicMock()
-    mock_get_quest = AsyncMock(return_value=None)
+    chain_repo = _make_chain_repo(None)
 
-    adapter = QuestChainOfferAdapter(
-        offer_service=mock_offer_service,
-        get_quest_fn=mock_get_quest,
-    )
-    session = _make_session()
+    adapter = QuestChainOfferAdapter(offer_service=mock_offer_service, chain_repo=chain_repo)
 
     with pytest.raises(QuestTransitionError):
-        await adapter.offer_quest(
-            session=session,
-            next_quest_id="ghost-quest",
-            player_id="player-1",
-        )
+        await adapter.offer_quest(next_quest_id="ghost-quest", player_id="player-1")
