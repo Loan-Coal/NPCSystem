@@ -142,7 +142,6 @@ R006|src/npc_engine/retrieval/dialogue_context_adapter.py::Neo4jDialogueContextA
 R006|src/npc_engine/retrieval/subgraph_retriever.py::assemble_tier_a_context
 R006|src/npc_engine/retrieval/subgraph_retriever.py::retrieve_tier_a_context
 R006|src/npc_engine/scheduler/tick_scheduler.py::TickScheduler.__init__
-R006|src/npc_engine/scheduler/tick_scheduler.py::TickScheduler.advance
 R006|src/npc_engine/schema/schema_loader.py::load_game_schema
 R006|src/npc_engine/scripts/guard_contract_test_sync.py::evaluate_contract_test_sync
 R006|src/npc_engine/type_registry/validation.py::validate_node_payload

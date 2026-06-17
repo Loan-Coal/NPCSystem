@@ -208,3 +208,41 @@ async def test_engine_status_property_returns_dict() -> None:
 async def test_engine_status_empty_when_no_store() -> None:
     scheduler = _make_scheduler(status_store=None)
     assert scheduler.engine_status == {}
+
+
+# ---------------------------------------------------------------------------
+# Interval cadence (characterization tests for advance() refactor)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_gossip_runs_only_on_interval_ticks() -> None:
+    gossip = _GoodEngine()
+    event = _GoodEngine()
+    clock = GameClock(mode="game_driven")
+    scheduler = TickScheduler(
+        clock=clock,
+        gossip_handler=gossip,
+        event_handler=event,
+        gossip_interval=3,
+        event_interval=1,
+    )
+    await scheduler.advance(session=_FakeSession(), tick_delta=6, time_delta_seconds=0)
+    assert gossip.tick_ids == [3, 6]
+    assert event.tick_ids == [1, 2, 3, 4, 5, 6]
+
+
+@pytest.mark.asyncio
+async def test_event_runs_only_on_interval_ticks() -> None:
+    gossip = _GoodEngine()
+    event = _GoodEngine()
+    clock = GameClock(mode="game_driven")
+    scheduler = TickScheduler(
+        clock=clock,
+        gossip_handler=gossip,
+        event_handler=event,
+        gossip_interval=1,
+        event_interval=4,
+    )
+    await scheduler.advance(session=_FakeSession(), tick_delta=8, time_delta_seconds=0)
+    assert event.tick_ids == [4, 8]
+    assert gossip.tick_ids == [1, 2, 3, 4, 5, 6, 7, 8]
