@@ -40,7 +40,6 @@ R006|src/npc_engine/api/routes/debug_retrieval.py::get_debug_retrieval
 R006|src/npc_engine/api/routes/economy.py::evaluate_trade
 R006|src/npc_engine/api/routes/interaction.py::post_interaction
 R006|src/npc_engine/api/routes/location_graph.py::connect_locations
-R006|src/npc_engine/auth/middleware.py::ApiKeyMiddleware.dispatch
 R006|src/npc_engine/data/api_seeder.py::seed
 R006|src/npc_engine/engines/agenda/agenda_engine.py::AgendaEngine.run_tick
 R006|src/npc_engine/engines/chapter/chapter_engine.py::ChapterEngine._label_chapter
