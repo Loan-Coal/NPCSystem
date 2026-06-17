@@ -21,7 +21,7 @@ from npc_engine.api.dependency_singletons import (
     get_context_cache,
     get_dialogue_engine_model_config,
     get_dialogue_graph_ports,
-    get_embedding_index,
+    get_embedding_index,  # noqa: F401  re-exported for api.routes.graph_admin + debug_retrieval
     get_emotion_store,  # noqa: F401  re-exported for api.routes.npc_state
     get_emotion_updater,
     get_event_handler,  # noqa: F401  re-exported for api.routes.batch
@@ -166,7 +166,6 @@ def get_llm_client(
 
 def build_dialogue_handler(
     *,
-    session: AsyncSession,
     settings: Settings,
     llm_client,
     llm_config: LLMConfig,
@@ -175,8 +174,10 @@ def build_dialogue_handler(
 ) -> DialogueHandler:
     """Construct DialogueHandler with shared dependency wiring.
 
+    DialogueHandler is session-free (SEV-24 dialogue migration) — graph and retrieval
+    I/O are delegated to the injected ports from get_dialogue_graph_ports().
+
     Args:
-        session: Active Neo4j session for graph access.
         settings: Application settings.
         llm_client: Instantiated LLM client.
         llm_config: Context pipeline config (tier budgets and relevance weights).
@@ -187,14 +188,12 @@ def build_dialogue_handler(
         Fully wired DialogueHandler instance.
     """
     return DialogueHandler(
-        session=session,
         settings=settings,
         llm_client=llm_client,
         llm_config=llm_config,
         engine_model_config=engine_model_config,
         session_store=get_session_store(),
         emotion_updater=get_emotion_updater(),
-        embedding_index=get_embedding_index(),
         input_moderation=get_input_moderation_service(),
         output_moderation=get_output_moderation_service(),
         effective_rating=get_settings().CONTENT_RATING,
@@ -206,7 +205,6 @@ def build_dialogue_handler(
 
 
 def get_dialogue_handler(
-    session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
     llm_client=Depends(get_llm_client),
     llm_config: LLMConfig = Depends(get_llm_config),
@@ -215,8 +213,9 @@ def get_dialogue_handler(
 ) -> DialogueHandler:
     """Build a per-request DialogueHandler via FastAPI dependency injection.
 
+    Session-free (SEV-24): no longer takes Depends(get_db_session).
+
     Args:
-        session: Scoped Neo4j session.
         settings: Application settings.
         llm_client: LLM client resolved per request.
         llm_config: Context pipeline config.
@@ -227,7 +226,6 @@ def get_dialogue_handler(
         Fully wired DialogueHandler.
     """
     return build_dialogue_handler(
-        session=session,
         settings=settings,
         llm_client=llm_client,
         llm_config=llm_config,

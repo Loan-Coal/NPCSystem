@@ -1,23 +1,23 @@
 """
 test_dialogue_handler_fallback_v14.py - Unit test for dialogue handler fallback recovery.
 
-Does NOT: call live LLM services.
+Does NOT: call live LLM services; open Neo4j sessions.
 
-Dependencies injected: fake LLM client and monkeypatched context/mutation helpers.
+Dependencies injected: fake LLM client, mock DialogueGraphPort, mock DialogueContextPort.
 """
+
+from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, AsyncIterator
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _FALLBACK_PATH = str(_REPO_ROOT / "src" / "npc_engine" / "data" / "fallback_responses.json")
 _CANNED_DIR = str(_REPO_ROOT / "prompts" / "canned")
-
-pytest.importorskip("neo4j")
 
 from npc_engine.api.schemas import DialogueRequest
 from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler, LLM_VALIDATION_FAILURES_METRIC
@@ -32,21 +32,6 @@ from npc_engine.engines.llm_config_models import (
     EngineTimeoutsMs,
 )
 from npc_engine.utils.metrics import get_counter_value, reset_metrics_registry
-
-
-@pytest.fixture(autouse=True)
-def _default_archetype(monkeypatch):
-    """Default the NPC archetype to None (→ 'default') so handler tests need no graph session."""
-    monkeypatch.setattr(
-        "npc_engine.engines.dialogue.dialogue_handler.get_npc_archetype",
-        AsyncMock(return_value=None),
-    )
-    # F1.1 wired a phase-transition write after the relation delta; these no-graph
-    # tests use session=None, so stub the new call site to a no-op.
-    monkeypatch.setattr(
-        "npc_engine.engines.dialogue.dialogue_handler.apply_phase_transition",
-        AsyncMock(return_value=None),
-    )
 
 
 def _make_engine_model_config() -> EngineModelConfig:
@@ -98,45 +83,72 @@ class FakeEmotionUpdater:
         return SimpleNamespace(label=mood_update or "neutral", valence=0)
 
 
+@pytest.fixture()
+def mock_dialogue_repo() -> MagicMock:
+    """Mock DialogueGraphPort — no session held."""
+    repo = AsyncMock()
+    repo.get_npc_archetype = AsyncMock(return_value=None)
+    repo.get_npc_voice_descriptor = AsyncMock(return_value=None)
+    repo.get_world_state = AsyncMock(return_value=None)
+    repo.apply_relation_deltas = AsyncMock(return_value=None)
+    repo.set_routine_override = AsyncMock(return_value=None)
+    return repo
+
+
+@pytest.fixture()
+def mock_dialogue_context() -> MagicMock:
+    """Mock DialogueContextPort returning empty context string."""
+    ctx = AsyncMock()
+    ctx.build_context = AsyncMock(return_value="{}")
+    return ctx
+
+
+def _make_handler(
+    emotion_updater=None,
+    mock_dialogue_repo=None,
+    mock_dialogue_context=None,
+    extra_settings=None,
+) -> DialogueHandler:
+    """Build a minimal DialogueHandler for tests."""
+    settings_ns = {
+        "LLM_FALLBACK_PATH": _FALLBACK_PATH,
+        "CANNED_RESPONSES_DIR": _CANNED_DIR,
+        "LOG_LLM_PROMPTS": False,
+    }
+    if extra_settings:
+        settings_ns.update(extra_settings)
+    return DialogueHandler(
+        settings=SimpleNamespace(**settings_ns),
+        llm_client=MinimalLLMClient(),
+        llm_config=SimpleNamespace(),
+        engine_model_config=_make_engine_model_config(),
+        session_store=SessionStore(ttl_seconds=300, max_turns=10),
+        emotion_updater=emotion_updater or FakeEmotionUpdater(),
+        input_moderation=build_input_moderation_service("mature"),
+        output_moderation=build_output_moderation_service("mature"),
+        dialogue_repo=mock_dialogue_repo or AsyncMock(),
+        dialogue_context=mock_dialogue_context or AsyncMock(build_context=AsyncMock(return_value="{}")),
+    )
+
+
 def setup_function() -> None:
     reset_metrics_registry()
 
 
 @pytest.mark.asyncio
-async def test_dialogue_handler_recovers_from_validation_failure(monkeypatch) -> None:
+async def test_dialogue_handler_recovers_from_validation_failure(
+    mock_dialogue_repo,
+    mock_dialogue_context,
+    monkeypatch,
+) -> None:
     """Dialogue handler should return fallback response when parser validation fails."""
-
-    async def fake_build_serialized_context(**kwargs):
-        return "{}"
-
-    async def fake_apply_dialogue_relation_deltas(**kwargs) -> None:
-        return None
-
-    monkeypatch.setattr("npc_engine.engines.dialogue.dialogue_handler.build_serialized_context", fake_build_serialized_context)
     monkeypatch.setattr(
         "npc_engine.engines.dialogue.dialogue_handler.build_dialogue_prompt",
         lambda request, serialized_context: "prompt",
     )
-    monkeypatch.setattr(
-        "npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas",
-        fake_apply_dialogue_relation_deltas,
-    )
-
-    handler = DialogueHandler(
-        session=None,
-        settings=SimpleNamespace(
-            LLM_FALLBACK_PATH=_FALLBACK_PATH,
-            CANNED_RESPONSES_DIR=_CANNED_DIR,
-            LOG_LLM_PROMPTS=False,
-        ),
-        llm_client=MinimalLLMClient(),
-        llm_config=SimpleNamespace(),
-        engine_model_config=_make_engine_model_config(),
-        session_store=SessionStore(ttl_seconds=300, max_turns=10),
-        emotion_updater=FakeEmotionUpdater(),
-        embedding_index=None,
-        input_moderation=build_input_moderation_service("mature"),
-        output_moderation=build_output_moderation_service("mature"),
+    handler = _make_handler(
+        mock_dialogue_repo=mock_dialogue_repo,
+        mock_dialogue_context=mock_dialogue_context,
     )
     handler._llm.generate_response = AsyncMock(return_value={"bad": "payload"})
 
@@ -156,40 +168,20 @@ async def test_dialogue_handler_recovers_from_validation_failure(monkeypatch) ->
 
 
 @pytest.mark.asyncio
-async def test_validation_fallback_uses_npc_archetype_line(monkeypatch) -> None:
-    """A non-default archetype NPC in the validation-fallback path returns its archetype line (ISSUE-081)."""
-
-    async def fake_build_serialized_context(**kwargs):
-        return "{}"
-
-    async def fake_apply_dialogue_relation_deltas(**kwargs) -> None:
-        return None
-
-    monkeypatch.setattr("npc_engine.engines.dialogue.dialogue_handler.build_serialized_context", fake_build_serialized_context)
+async def test_validation_fallback_uses_npc_archetype_line(
+    mock_dialogue_repo,
+    mock_dialogue_context,
+    monkeypatch,
+) -> None:
+    """A non-default archetype NPC in the validation-fallback path returns its archetype line."""
+    mock_dialogue_repo.get_npc_archetype = AsyncMock(return_value="guard")
     monkeypatch.setattr(
         "npc_engine.engines.dialogue.dialogue_handler.build_dialogue_prompt",
         lambda request, serialized_context: "prompt",
     )
-    monkeypatch.setattr(
-        "npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas",
-        fake_apply_dialogue_relation_deltas,
-    )
-    monkeypatch.setattr(
-        "npc_engine.engines.dialogue.dialogue_handler.get_npc_archetype",
-        AsyncMock(return_value="guard"),
-    )
-
-    handler = DialogueHandler(
-        session=None,
-        settings=SimpleNamespace(LLM_FALLBACK_PATH=_FALLBACK_PATH, CANNED_RESPONSES_DIR=_CANNED_DIR, LOG_LLM_PROMPTS=False),
-        llm_client=MinimalLLMClient(),
-        llm_config=SimpleNamespace(),
-        engine_model_config=_make_engine_model_config(),
-        session_store=SessionStore(ttl_seconds=300, max_turns=10),
-        emotion_updater=FakeEmotionUpdater(),
-        embedding_index=None,
-        input_moderation=build_input_moderation_service("mature"),
-        output_moderation=build_output_moderation_service("mature"),
+    handler = _make_handler(
+        mock_dialogue_repo=mock_dialogue_repo,
+        mock_dialogue_context=mock_dialogue_context,
     )
     handler._llm.generate_response = AsyncMock(return_value={"bad": "payload"})
 
@@ -204,32 +196,26 @@ async def test_validation_fallback_uses_npc_archetype_line(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_stream_passes_emotion_state_to_context_builder(monkeypatch) -> None:
+async def test_stream_passes_emotion_state_to_context_builder(
+    mock_dialogue_repo,
+    mock_dialogue_context,
+    monkeypatch,
+) -> None:
     """Stream flow should include emotion context when building serialized context."""
-
     captured_kwargs: dict[str, Any] = {}
 
-    async def fake_build_serialized_context(**kwargs):
+    async def fake_build_context(**kwargs):
         captured_kwargs.update(kwargs)
         return "{}"
 
-    monkeypatch.setattr("npc_engine.engines.dialogue.dialogue_handler.build_serialized_context", fake_build_serialized_context)
+    mock_dialogue_context.build_context = fake_build_context
     monkeypatch.setattr(
         "npc_engine.engines.dialogue.dialogue_handler.build_dialogue_prompt",
         lambda request, serialized_context: "prompt",
     )
-
-    handler = DialogueHandler(
-        session=None,
-        settings=SimpleNamespace(LLM_FALLBACK_PATH=_FALLBACK_PATH, LOG_LLM_PROMPTS=False),
-        llm_client=MinimalLLMClient(),
-        llm_config=SimpleNamespace(),
-        engine_model_config=_make_engine_model_config(),
-        session_store=SessionStore(ttl_seconds=300, max_turns=10),
-        emotion_updater=FakeEmotionUpdater(),
-        embedding_index=None,
-        input_moderation=build_input_moderation_service("mature"),
-        output_moderation=build_output_moderation_service("mature"),
+    handler = _make_handler(
+        mock_dialogue_repo=mock_dialogue_repo,
+        mock_dialogue_context=mock_dialogue_context,
     )
     handler._llm.stream_text = AsyncMock(return_value=["chunk"])
 
@@ -248,42 +234,21 @@ async def test_stream_passes_emotion_state_to_context_builder(monkeypatch) -> No
 
 
 @pytest.mark.asyncio
-async def test_apply_relation_and_emotion_passes_tick(monkeypatch) -> None:
-    """DialogueHandler must pass tick to apply_dialogue_mood (SEV-24: emotion port owns persistence)."""
-    async def fake_build_serialized_context(**kwargs):
-        return "{}"
-
-    async def fake_apply_dialogue_relation_deltas(**kwargs) -> None:
-        return None
-
-    monkeypatch.setattr("npc_engine.engines.dialogue.dialogue_handler.build_serialized_context", fake_build_serialized_context)
+async def test_apply_relation_and_emotion_passes_tick(
+    mock_dialogue_repo,
+    mock_dialogue_context,
+    monkeypatch,
+) -> None:
+    """DialogueHandler must pass tick to apply_dialogue_mood."""
     monkeypatch.setattr(
         "npc_engine.engines.dialogue.dialogue_handler.build_dialogue_prompt",
         lambda request, serialized_context: "prompt",
     )
-    monkeypatch.setattr(
-        "npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas",
-        fake_apply_dialogue_relation_deltas,
-    )
-
-    fake_session = object()
     fake_updater = FakeEmotionUpdater()
-
-    handler = DialogueHandler(
-        session=fake_session,
-        settings=SimpleNamespace(
-            LLM_FALLBACK_PATH=_FALLBACK_PATH,
-            CANNED_RESPONSES_DIR=_CANNED_DIR,
-            LOG_LLM_PROMPTS=False,
-        ),
-        llm_client=MinimalLLMClient(),
-        llm_config=SimpleNamespace(),
-        engine_model_config=_make_engine_model_config(),
-        session_store=SessionStore(ttl_seconds=300, max_turns=10),
+    handler = _make_handler(
         emotion_updater=fake_updater,
-        embedding_index=None,
-        input_moderation=build_input_moderation_service("mature"),
-        output_moderation=build_output_moderation_service("mature"),
+        mock_dialogue_repo=mock_dialogue_repo,
+        mock_dialogue_context=mock_dialogue_context,
     )
 
     await handler.handle(

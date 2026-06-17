@@ -37,13 +37,6 @@ _CANNED_DIR = str(_REPO_ROOT / "prompts" / "canned")
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(autouse=True)
-def _default_archetype(monkeypatch):
-    """Default the NPC archetype to None (→ 'default') so handler tests need no graph session."""
-    monkeypatch.setattr(
-        "npc_engine.engines.dialogue.dialogue_handler.get_npc_archetype",
-        AsyncMock(return_value=None),
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -287,17 +280,26 @@ def _make_handler(knowledge_engine=None, knowledge_learning_enabled: bool = Fals
         KNOWLEDGE_LEARNING_ENABLED=knowledge_learning_enabled,
     )
 
+    world_state = SimpleNamespace(year=1, season="spring", day=1, time_of_day="morning")
+    dialogue_repo = AsyncMock()
+    dialogue_repo.get_npc_archetype = AsyncMock(return_value=None)
+    dialogue_repo.get_npc_voice_descriptor = AsyncMock(return_value=None)
+    dialogue_repo.get_world_state = AsyncMock(return_value=world_state)
+    dialogue_repo.apply_relation_deltas = AsyncMock(return_value=None)
+    dialogue_repo.set_routine_override = AsyncMock(return_value=None)
+    dialogue_context = AsyncMock()
+    dialogue_context.build_context = AsyncMock(return_value="{}")
     return DialogueHandler(
-        session=None,
         settings=settings,
         llm_client=_MinimalLLMClient(),
         llm_config=SimpleNamespace(),
         engine_model_config=_make_engine_model_config(),
         session_store=SessionStore(ttl_seconds=300, max_turns=10),
         emotion_updater=_FakeEmotionUpdater(),
-        embedding_index=None,
         input_moderation=build_input_moderation_service("mature"),
         output_moderation=build_output_moderation_service("mature"),
+        dialogue_repo=dialogue_repo,
+        dialogue_context=dialogue_context,
         knowledge_engine=knowledge_engine,
     )
 
@@ -315,28 +317,12 @@ async def test_handler_calls_engine_when_enabled(monkeypatch):
     )
 
     monkeypatch.setattr(
-        "npc_engine.engines.dialogue.dialogue_handler.build_serialized_context",
-        AsyncMock(return_value="{}"),
-    )
-    monkeypatch.setattr(
         "npc_engine.engines.dialogue.dialogue_handler.build_dialogue_prompt",
         lambda request, serialized_context: "prompt",
     )
     monkeypatch.setattr(
-        "npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas",
-        AsyncMock(),
-    )
-    monkeypatch.setattr(
         "npc_engine.engines.dialogue.dialogue_handler.apply_phase_transition",
         AsyncMock(return_value=None),
-    )
-    monkeypatch.setattr(
-        "npc_engine.engines.dialogue.dialogue_handler.get_world_state",
-        AsyncMock(
-            return_value=SimpleNamespace(
-                year=1, season="spring", day=1, time_of_day="morning"
-            )
-        ),
     )
 
     handler = _make_handler(
@@ -372,16 +358,8 @@ async def test_handler_skips_engine_when_disabled(monkeypatch):
     mock_knowledge_engine.process = AsyncMock()
 
     monkeypatch.setattr(
-        "npc_engine.engines.dialogue.dialogue_handler.build_serialized_context",
-        AsyncMock(return_value="{}"),
-    )
-    monkeypatch.setattr(
         "npc_engine.engines.dialogue.dialogue_handler.build_dialogue_prompt",
         lambda request, serialized_context: "prompt",
-    )
-    monkeypatch.setattr(
-        "npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas",
-        AsyncMock(),
     )
     monkeypatch.setattr(
         "npc_engine.engines.dialogue.dialogue_handler.apply_phase_transition",
@@ -418,16 +396,8 @@ async def test_handler_skips_when_engine_none(monkeypatch):
     from npc_engine.api.schemas import DialogueRequest
 
     monkeypatch.setattr(
-        "npc_engine.engines.dialogue.dialogue_handler.build_serialized_context",
-        AsyncMock(return_value="{}"),
-    )
-    monkeypatch.setattr(
         "npc_engine.engines.dialogue.dialogue_handler.build_dialogue_prompt",
         lambda request, serialized_context: "prompt",
-    )
-    monkeypatch.setattr(
-        "npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas",
-        AsyncMock(),
     )
     monkeypatch.setattr(
         "npc_engine.engines.dialogue.dialogue_handler.apply_phase_transition",

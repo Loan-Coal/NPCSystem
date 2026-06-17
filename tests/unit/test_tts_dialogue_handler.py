@@ -30,13 +30,10 @@ async def test_synthesize_audio_attaches_bytes(minimal_handler_with_tts):
     handler, tts = minimal_handler_with_tts
     wav = b"RIFF" + b"\x00" * 36
     tts.synthesize = AsyncMock(return_value=wav)
+    handler._dialogue_repo.get_npc_voice_descriptor = AsyncMock(return_value="default")
 
-    with patch(
-        "npc_engine.engines.dialogue.dialogue_handler.get_npc_voice_descriptor",
-        new=AsyncMock(return_value="default"),
-    ):
-        response = _make_response()
-        result = await handler._synthesize_audio(response=response, npc_id="mira_innkeeper")
+    response = _make_response()
+    result = await handler._synthesize_audio(response=response, npc_id="mira_innkeeper")
 
     assert result.audio_bytes == wav
     assert result.npc_response == response.npc_response
@@ -47,14 +44,9 @@ async def test_synthesize_audio_uses_voice_descriptor_as_voice_id(minimal_handle
     """voice_params.voice_id is derived from the graph voice_descriptor."""
     handler, tts = minimal_handler_with_tts
     tts.synthesize = AsyncMock(return_value=b"")
+    handler._dialogue_repo.get_npc_voice_descriptor = AsyncMock(return_value="Warm, gravelly baritone")
 
-    with patch(
-        "npc_engine.engines.dialogue.dialogue_handler.get_npc_voice_descriptor",
-        new=AsyncMock(return_value="Warm, gravelly baritone"),
-    ):
-        await handler._synthesize_audio(
-            response=_make_response(), npc_id="mira_innkeeper"
-        )
+    await handler._synthesize_audio(response=_make_response(), npc_id="mira_innkeeper")
 
     call_kwargs = tts.synthesize.call_args
     voice_params: VoiceParams = call_kwargs[1]["voice_params"]
@@ -65,14 +57,9 @@ async def test_synthesize_audio_uses_voice_descriptor_as_voice_id(minimal_handle
 async def test_synthesize_audio_defaults_voice_id_when_descriptor_is_none(minimal_handler_with_tts):
     handler, tts = minimal_handler_with_tts
     tts.synthesize = AsyncMock(return_value=b"")
+    handler._dialogue_repo.get_npc_voice_descriptor = AsyncMock(return_value=None)
 
-    with patch(
-        "npc_engine.engines.dialogue.dialogue_handler.get_npc_voice_descriptor",
-        new=AsyncMock(return_value=None),
-    ):
-        await handler._synthesize_audio(
-            response=_make_response(), npc_id="unknown_npc"
-        )
+    await handler._synthesize_audio(response=_make_response(), npc_id="unknown_npc")
 
     voice_params: VoiceParams = tts.synthesize.call_args[1]["voice_params"]
     assert voice_params.voice_id == "default"
@@ -83,13 +70,10 @@ async def test_synthesize_audio_returns_original_on_tts_failure(minimal_handler_
     """TTS synthesis errors are silenced; original response returned without audio."""
     handler, tts = minimal_handler_with_tts
     tts.synthesize = AsyncMock(side_effect=TTSSynthesisError(backend="piper", detail="timeout"))
+    handler._dialogue_repo.get_npc_voice_descriptor = AsyncMock(return_value="default")
 
-    with patch(
-        "npc_engine.engines.dialogue.dialogue_handler.get_npc_voice_descriptor",
-        new=AsyncMock(return_value="default"),
-    ):
-        response = _make_response()
-        result = await handler._synthesize_audio(response=response, npc_id="mira_innkeeper")
+    response = _make_response()
+    result = await handler._synthesize_audio(response=response, npc_id="mira_innkeeper")
 
     assert result.audio_bytes is None
     assert result.npc_response == response.npc_response
@@ -120,22 +104,29 @@ def minimal_handler_with_tts():
     mock_engine_config.llm.top_p = None
     mock_engine_config.llm.stop_sequences = []
 
-    mock_session = MagicMock()
     mock_session_store = MagicMock(spec=SessionStore)
     mock_emotion_updater = MagicMock(spec=EmotionUpdater)
     mock_emotion_updater.get_state.return_value = EmotionState(valence=0, arousal=0)
 
     tts = MockTTSAdapter()
+    mock_dialogue_repo = AsyncMock()
+    mock_dialogue_repo.get_npc_archetype = AsyncMock(return_value=None)
+    mock_dialogue_repo.get_npc_voice_descriptor = AsyncMock(return_value=None)
+    mock_dialogue_repo.get_world_state = AsyncMock(return_value=None)
+    mock_dialogue_repo.apply_relation_deltas = AsyncMock(return_value=None)
+    mock_dialogue_repo.set_routine_override = AsyncMock(return_value=None)
+    mock_dialogue_context = AsyncMock()
+    mock_dialogue_context.build_context = AsyncMock(return_value="{}")
 
     handler = DialogueHandler(
-        session=mock_session,
         settings=mock_settings,
         llm_client=MagicMock(),
         llm_config=mock_llm_config,
         engine_model_config=mock_engine_config,
         session_store=mock_session_store,
         emotion_updater=mock_emotion_updater,
-        embedding_index=MagicMock(),
+        dialogue_repo=mock_dialogue_repo,
+        dialogue_context=mock_dialogue_context,
         input_moderation=build_input_moderation_service("mature"),
         output_moderation=build_output_moderation_service("mature"),
         tts_client=tts,

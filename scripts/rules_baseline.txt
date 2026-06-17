@@ -46,9 +46,12 @@ R006|src/npc_engine/engines/agenda/agenda_engine.py::AgendaEngine.run_tick
 R006|src/npc_engine/engines/chapter/chapter_engine.py::ChapterEngine._label_chapter
 R006|src/npc_engine/engines/clique/clique_formation_engine.py::CliqueFormationEngine._run_formation
 R006|src/npc_engine/engines/dialogue/degradation.py::execute_with_degradation
+R006|src/npc_engine/engines/dialogue/dialogue_handler.py::DialogueHandler.__init__
+R006|src/npc_engine/engines/dialogue/dialogue_handler.py::DialogueHandler.handle
 R006|src/npc_engine/engines/dialogue/llm_client.py::DialogueLLMClient._generate_with_retry
 R006|src/npc_engine/engines/dialogue/llm_client.py::DialogueLLMClient.stream_text
 R006|src/npc_engine/engines/dialogue/prompt_builder.py::_build_knowledge_gaps
+R006|src/npc_engine/engines/dialogue/relation_mutator.py::apply_dialogue_relation_deltas
 R006|src/npc_engine/engines/economy/pricing_rules_loader.py::load_pricing_rules
 R006|src/npc_engine/engines/economy/trade_engine.py::TradeEngine.evaluate_offer
 R006|src/npc_engine/engines/events/event_handler.py::EventHandler.run_tick
@@ -115,6 +118,7 @@ R006|src/npc_engine/graph/owes_queries.py::get_debts_for_character
 R006|src/npc_engine/graph/pledge_service.py::break_pledge
 R006|src/npc_engine/graph/pledge_violation_service.py::check_pledge_violations
 R006|src/npc_engine/graph/relation_delta_writer.py::apply_relation_delta
+R006|src/npc_engine/graph/repositories/dialogue_repository.py::Neo4jDialogueRepository.apply_relation_deltas
 R006|src/npc_engine/graph/reputation_event_seeder.py::create_reputation_event
 R006|src/npc_engine/graph/reputation_queries.py::get_reputation_context_for_npc
 R006|src/npc_engine/graph/reputation_service.py::ReputationService.adjust_reputation_with_event
@@ -133,6 +137,7 @@ R006|src/npc_engine/retrieval/context_builder_helpers.py::enforce_final_serializ
 R006|src/npc_engine/retrieval/context_relevance_engine.py::rank_context_candidates
 R006|src/npc_engine/retrieval/context_scoring.py::rank_tier_items
 R006|src/npc_engine/retrieval/context_serializer.py::serialize_context
+R006|src/npc_engine/retrieval/dialogue_context_adapter.py::Neo4jDialogueContextAdapter.build_context
 R006|src/npc_engine/retrieval/subgraph_retriever.py::assemble_tier_a_context
 R006|src/npc_engine/retrieval/subgraph_retriever.py::retrieve_tier_a_context
 R006|src/npc_engine/scheduler/tick_scheduler.py::TickScheduler.__init__

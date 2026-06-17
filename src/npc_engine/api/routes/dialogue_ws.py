@@ -22,7 +22,6 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from npc_engine.api.dependencies import (
     build_dialogue_handler,
-    get_graph_db,
     get_llm_client,
     get_llm_config,
 )
@@ -186,23 +185,19 @@ async def _run_first_turn(websocket: WebSocket, settings: Any) -> str:
         WebSocketDisconnect: If the client disconnects during the turn.
         Exception: Any other error from the handler (re-raised to the caller).
     """
-    graph_db = get_graph_db()
-    await graph_db.connect()
-    async with graph_db.get_session() as session:
-        payload = await websocket.receive_json()
-        request = DialogueRequest.model_validate(payload)
-        engine_model_config = get_dialogue_engine_model_config()
-        handler = build_dialogue_handler(
-            session=session,
-            settings=settings,
-            llm_client=get_llm_client(settings=settings, engine_model_config=engine_model_config),
-            llm_config=get_llm_config(),
-            engine_model_config=engine_model_config,
-        )
-        final_response = await handler.handle(request=request)
-        for chunk in _iter_token_chunks(final_response.npc_response):
-            await websocket.send_json({"type": "token", "data": chunk})
-        await websocket.send_json({"type": "done", "data": _build_done_data(final_response)})
+    payload = await websocket.receive_json()
+    request = DialogueRequest.model_validate(payload)
+    engine_model_config = get_dialogue_engine_model_config()
+    handler = build_dialogue_handler(
+        settings=settings,
+        llm_client=get_llm_client(settings=settings, engine_model_config=engine_model_config),
+        llm_config=get_llm_config(),
+        engine_model_config=engine_model_config,
+    )
+    final_response = await handler.handle(request=request)
+    for chunk in _iter_token_chunks(final_response.npc_response):
+        await websocket.send_json({"type": "token", "data": chunk})
+    await websocket.send_json({"type": "done", "data": _build_done_data(final_response)})
     return request.player_id
 
 

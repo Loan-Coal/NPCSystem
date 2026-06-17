@@ -13,7 +13,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any
 
-from npc_engine.api.dependencies_infra import get_graph_db
+from npc_engine.api.dependencies_infra import get_graph_db, get_llm_config
 from npc_engine.config import get_settings
 from npc_engine.engines.dialogue.session_store import SessionStore
 from npc_engine.engines.emotion.emotion_model_factory import build_emotion_model
@@ -24,12 +24,14 @@ from npc_engine.engines.knowledge_learning.knowledge_extraction_engine import (
 )
 from npc_engine.graph.repositories.emotion_repository import Neo4jEmotionRepository
 from npc_engine.graph.repositories.knowledge_repository import Neo4jKnowledgeRepository
+from npc_engine.graph.repositories.dialogue_repository import Neo4jDialogueRepository
 from npc_engine.graph.repositories.relation_phase_write_repository import (
     Neo4jRelationPhaseWriteRepository,
 )
 from npc_engine.graph.repositories.relation_read_repository import (
     Neo4jRelationReadRepository,
 )
+from npc_engine.retrieval.dialogue_context_adapter import Neo4jDialogueContextAdapter
 from npc_engine.engines.idempotency.service import IdempotencyService
 from npc_engine.graph.repositories.idempotency_repository import Neo4jIdempotencyRepository
 from npc_engine.retrieval.dialogue_context_cache import PartialDialogueContextCache
@@ -94,22 +96,29 @@ def get_knowledge_extraction_engine() -> KnowledgeExtractionEngine:
 
 
 def get_dialogue_graph_ports() -> dict[str, Any]:
-    """Build the DialogueHandler graph-port kwargs (knowledge engine + relation phase ports).
+    """Build the DialogueHandler port kwargs (graph + context ports + knowledge + memory).
 
-    Bundles the optional knowledge engine, the shared MemoryEngine, and the relation
-    read/write ports the phase applier depends on (DEC-122 / SEV-24), so the api
-    composition root injects one set of graph-backed kwargs and DialogueHandler holds no
-    Neo4j session for memory writes or phase transitions.
+    Bundles: dialogue_repo (DialogueGraphPort), dialogue_context (DialogueContextPort),
+    the optional knowledge engine, the shared MemoryEngine, and the relation read/write
+    ports the phase applier depends on (DEC-122 / SEV-24).  DialogueHandler holds no
+    AsyncSession after SEV-24 dialogue migration.
 
     Returns:
-        A kwargs mapping with keys ``knowledge_engine``, ``memory_engine``,
-        ``relation_reader``, and ``relation_phase_writer`` ready to splat into
-        DialogueHandler.
+        A kwargs mapping ready to splat into DialogueHandler.
     """
     from npc_engine.api.dependencies_engines import get_memory_engine
 
     graph_db = get_graph_db()
+    settings = get_settings()
+    dialogue_context = Neo4jDialogueContextAdapter(
+        graph_db=graph_db,
+        settings=settings,
+        llm_config=get_llm_config(),
+        embedding_index=get_embedding_index(),
+    )
     return {
+        "dialogue_repo": Neo4jDialogueRepository(graph_db),
+        "dialogue_context": dialogue_context,
         "knowledge_engine": get_knowledge_extraction_engine(),
         "memory_engine": get_memory_engine(),
         "relation_reader": Neo4jRelationReadRepository(graph_db),

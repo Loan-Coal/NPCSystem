@@ -100,18 +100,27 @@ class _FakeEmotionUpdater:
 
 
 def _build_handler(adapter: _CapturingLLMClient, config: EngineModelConfig) -> DialogueHandler:
+    from unittest.mock import AsyncMock
     from npc_engine.services.input_moderation import build_input_moderation_service
     from npc_engine.services.output_moderation import build_output_moderation_service
 
+    dialogue_repo = AsyncMock()
+    dialogue_repo.get_npc_archetype = AsyncMock(return_value=None)
+    dialogue_repo.get_npc_voice_descriptor = AsyncMock(return_value=None)
+    dialogue_repo.get_world_state = AsyncMock(return_value=None)
+    dialogue_repo.apply_relation_deltas = AsyncMock(return_value=None)
+    dialogue_repo.set_routine_override = AsyncMock(return_value=None)
+    dialogue_context = AsyncMock()
+    dialogue_context.build_context = AsyncMock(return_value="{}")
     return DialogueHandler(
-        session=None,
         settings=SimpleNamespace(LLM_FALLBACK_PATH=_FALLBACK_PATH, CANNED_RESPONSES_DIR=_CANNED_DIR, LOG_LLM_PROMPTS=False),
         llm_client=adapter,
         llm_config=SimpleNamespace(),
         engine_model_config=config,
         session_store=SessionStore(ttl_seconds=300, max_turns=10),
         emotion_updater=_FakeEmotionUpdater(),
-        embedding_index=None,
+        dialogue_repo=dialogue_repo,
+        dialogue_context=dialogue_context,
         input_moderation=build_input_moderation_service("mature"),
         output_moderation=build_output_moderation_service("mature"),
     )
@@ -139,20 +148,9 @@ def test_dialogue_engine_real_config_loads_correctly() -> None:
 def test_dialogue_handler_uses_max_tokens_from_engine_config(monkeypatch) -> None:
     """DialogueHandler must forward max_tokens from engine config to the LLM adapter."""
 
-    async def fake_build_context(**kwargs):
-        return "{}"
-
-    monkeypatch.setattr(
-        "npc_engine.engines.dialogue.dialogue_handler.build_serialized_context",
-        fake_build_context,
-    )
     monkeypatch.setattr(
         "npc_engine.engines.dialogue.dialogue_handler.build_dialogue_prompt",
         lambda request, serialized_context: "prompt",
-    )
-    monkeypatch.setattr(
-        "npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas",
-        lambda **_: None,
     )
 
     adapter_256 = _CapturingLLMClient()

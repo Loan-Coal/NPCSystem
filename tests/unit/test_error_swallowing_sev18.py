@@ -110,7 +110,8 @@ async def test_tts_failure_logs_warning_and_increments_metric():
     emotion_updater = MagicMock()
     emotion_updater.get_state = AsyncMock(return_value=MagicMock())
     handler._emotion_updater = emotion_updater
-    handler._session = AsyncMock()
+    handler._dialogue_repo = AsyncMock()
+    handler._dialogue_repo.get_npc_voice_descriptor = AsyncMock(return_value="narrator")
 
     response = DialogueResponse(
         npc_response="Hello",
@@ -121,10 +122,6 @@ async def test_tts_failure_logs_warning_and_increments_metric():
     )
 
     with (
-        patch(
-            "npc_engine.engines.dialogue.dialogue_handler.get_npc_voice_descriptor",
-            new=AsyncMock(return_value="narrator"),
-        ),
         patch(
             "npc_engine.engines.dialogue.dialogue_handler.modulate_voice",
             return_value=MagicMock(),

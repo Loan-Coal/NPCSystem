@@ -17,10 +17,13 @@ from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
 
 
 def _make_handler(*, knowledge_engine: object | None = None, knowledge_enabled: bool = False) -> DialogueHandler:
+    from unittest.mock import AsyncMock
+
     handler = DialogueHandler.__new__(DialogueHandler)
     handler._knowledge_engine = knowledge_engine  # type: ignore[attr-defined]
     handler._settings = SimpleNamespace(KNOWLEDGE_LEARNING_ENABLED=knowledge_enabled, WORLD_ID="world")  # type: ignore[attr-defined]
-    handler._session = object()  # type: ignore[attr-defined]
+    handler._dialogue_repo = AsyncMock()  # type: ignore[attr-defined]
+    handler._dialogue_repo.get_world_state = AsyncMock(return_value=SimpleNamespace())
     return handler
 
 
@@ -50,13 +53,9 @@ async def test_maybe_load_world_state_fetches_once_when_both_branches_fire():
     handler = _make_handler(knowledge_engine=object(), knowledge_enabled=True)
     response = SimpleNamespace(learned_facts=("a fact",))
     new_emotion = SimpleNamespace(arousal=85)
-    with patch(
-        "npc_engine.engines.dialogue.dialogue_handler.get_world_state",
-        new=AsyncMock(return_value=SimpleNamespace()),
-    ) as mock_get:
-        result = await handler._maybe_load_world_state(response=response, new_emotion=new_emotion)
+    result = await handler._maybe_load_world_state(response=response, new_emotion=new_emotion)
     assert result is not None
-    mock_get.assert_awaited_once()
+    handler._dialogue_repo.get_world_state.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -64,10 +63,6 @@ async def test_maybe_load_world_state_skips_fetch_when_no_branch_fires():
     handler = _make_handler()
     response = SimpleNamespace(learned_facts=())
     new_emotion = SimpleNamespace(arousal=10)
-    with patch(
-        "npc_engine.engines.dialogue.dialogue_handler.get_world_state",
-        new=AsyncMock(return_value=SimpleNamespace()),
-    ) as mock_get:
-        result = await handler._maybe_load_world_state(response=response, new_emotion=new_emotion)
+    result = await handler._maybe_load_world_state(response=response, new_emotion=new_emotion)
     assert result is None
-    mock_get.assert_not_awaited()
+    handler._dialogue_repo.get_world_state.assert_not_awaited()

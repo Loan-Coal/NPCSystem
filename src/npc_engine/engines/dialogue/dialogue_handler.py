@@ -1,12 +1,13 @@
 """
 dialogue_handler.py - Orchestrates context, prompting, parsing, mutation, and emotion update.
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Per-request dialogue orchestrator; delegates all graph I/O to injected ports.
 
-Does NOT: implement HTTP transport concerns.
+Does NOT: implement HTTP transport concerns; hold AsyncSession; open Neo4j sessions.
 
-Dependencies injected: AsyncSession, Settings, LLMClientProtocol, EngineModelConfig,
-                       SessionStore, EmotionUpdater, KnowledgeExtractionEngine (optional).
+Dependencies injected: DialogueGraphPort, DialogueContextPort, Settings, LLMClientProtocol,
+                       EngineModelConfig, SessionStore, EmotionUpdater,
+                       KnowledgeExtractionEngine (optional).
 
 300-LINE WAIVER: This file is the central orchestrator for the dialogue turn pipeline.
 A split would be artificial — all methods belong to a single handler class. The file
@@ -22,7 +23,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from neo4j import AsyncSession
 from pydantic import ValidationError
 
 from npc_engine.engines.dialogue.dialogue_models import DialogueRequest, DialogueResponse
@@ -31,20 +31,17 @@ from npc_engine.engines.dialogue.action_resolver import resolve_action
 from npc_engine.engines.dialogue.degradation import DegradationLevel, execute_with_degradation, get_canned_response
 from npc_engine.engines.dialogue.llm_client import DialogueLLMClient
 from npc_engine.engines.dialogue.prompt_builder import build_dialogue_prompt, build_system_prompt
-from npc_engine.engines.dialogue.relation_mutator import apply_dialogue_relation_deltas
 from npc_engine.engines.dialogue.response_parser import parse_dialogue_response
 from npc_engine.engines.dialogue.session_store import SessionStore
 from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.engines.llm_config_models import EngineModelConfig
+from npc_engine.engines.ports.dialogue_context_port import DialogueContextPort
+from npc_engine.engines.ports.dialogue_graph_port import DialogueGraphPort
 from npc_engine.engines.relationship.phase_transition_applier import apply_phase_transition
-from npc_engine.engines.routine.routine_queries import set_routine_override
 from npc_engine.engines.tts.protocols import TTSClientProtocol
 from npc_engine.engines.tts.voice_modulator import modulate as modulate_voice
 from npc_engine.engines.tts.voice_params import VoiceParams
-from npc_engine.graph.graph_reader import get_npc_archetype, get_npc_voice_descriptor
-from npc_engine.retrieval.context_builder import build_serialized_context
-from npc_engine.retrieval.context_protocols import EmbeddingIndexProtocol
 from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache, PartialDialogueContextCache
 from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.utils.metrics import increment_metric
@@ -56,7 +53,6 @@ from npc_engine.services.input_moderation import InputModerationService
 from npc_engine.services.output_moderation import OutputModerationService
 from npc_engine.world.time_utils import TimePoint
 from npc_engine.world.world_state import WorldState
-from npc_engine.graph.world_state_reader import get_world_state
 from npc_engine.engines.dialogue.negotiation_context import inject_active_negotiation
 
 if TYPE_CHECKING:
@@ -90,13 +86,19 @@ def resolve_log_prompts(settings: Settings) -> bool:
 
 
 class DialogueHandler:
-    """Dialogue engine orchestrator."""
+    """Dialogue engine orchestrator.
+
+    Holds no AsyncSession — all graph I/O is delegated to DialogueGraphPort
+    (for pure graph ops) and DialogueContextPort (for the retrieval pipeline).
+    """
 
     def __init__(
-        self, session: AsyncSession, settings: Settings, llm_client: LLMClientProtocol,
+        self, settings: Settings, llm_client: LLMClientProtocol,
         llm_config: LLMConfig, engine_model_config: EngineModelConfig, session_store: SessionStore,
-        emotion_updater: EmotionUpdater, embedding_index: EmbeddingIndexProtocol,
+        emotion_updater: EmotionUpdater,
         input_moderation: InputModerationService, output_moderation: OutputModerationService,
+        dialogue_repo: DialogueGraphPort,
+        dialogue_context: DialogueContextPort,
         effective_rating: ContentRating = "mature",
         context_cache: PartialDialogueContextCache | DialogueContextCache | None = None,
         tts_client: TTSClientProtocol | None = None,
@@ -109,19 +111,19 @@ class DialogueHandler:
         """Initialise with all engine dependencies injected.
 
         Args:
+            dialogue_repo: Port for pure graph operations (archetype, voice, relation deltas, etc.).
+            dialogue_context: Port for the serialized-context retrieval pipeline.
             input_moderation: Checks player input against the content ceiling (S16.2).
             output_moderation: Flags NPC responses that exceed the content ceiling (S16.3).
             effective_rating: The active content ceiling; informs the system prompt (S16.3).
             knowledge_engine: Optional; persists player facts as BELIEVES nodes (EXP-53), guarded by KNOWLEDGE_LEARNING_ENABLED.
             negotiation_store: Optional; injects an active barter session into the dialogue context so the NPC reflects live trade reality (S22.4, ISSUE-071).
         """
-        self._session = session
         self._settings = settings
         self._llm_config = llm_config
         self._engine_model_config = engine_model_config
         self._session_store = session_store
         self._emotion_updater = emotion_updater
-        self._embedding_index = embedding_index
         self._context_cache = context_cache
         self._tts_client = tts_client
         self._knowledge_engine = knowledge_engine
@@ -129,6 +131,8 @@ class DialogueHandler:
         self._output_moderation = output_moderation
         self._effective_rating = effective_rating
         self._negotiation_store = negotiation_store
+        self._dialogue_repo = dialogue_repo
+        self._dialogue_context = dialogue_context
         self._relation_reader, self._relation_phase_writer, self._memory_engine = relation_reader, relation_phase_writer, memory_engine
         self._llm = self._build_llm_client(llm_client)
         self._system_prompt = build_system_prompt(content_rating=effective_rating)
@@ -169,7 +173,7 @@ class DialogueHandler:
         )
         turns = await self._session_store.get_turns(player_id=request.player_id, npc_id=request.npc_id)
         current_emotion = await self._emotion_updater.get_state(npc_id=request.npc_id)
-        archetype = await get_npc_archetype(self._session, request.npc_id) or "default"
+        archetype = await self._dialogue_repo.get_npc_archetype(request.npc_id) or "default"
         canned_dir = Path(self._settings.CANNED_RESPONSES_DIR)
         parsed_response, level = await execute_with_degradation(
             full_factory=lambda: self._run_llm_pipeline(request=request, turns=turns, current_emotion=current_emotion, skip_rag=False, archetype=archetype),
@@ -187,7 +191,9 @@ class DialogueHandler:
             "cached": False, "degradation_level": level,
         })
         tick_id = int(datetime.now(timezone.utc).timestamp())
-        new_emotion = await self._apply_relation_and_emotion(request=request, response=final_response, level=level, tick_id=tick_id)
+        new_emotion = await self._apply_relation_and_emotion(
+            request=request, response=final_response, level=level, tick_id=tick_id,
+        )
         world_state = await self._maybe_load_world_state(response=final_response, new_emotion=new_emotion)
         await self._apply_arousal_memory(request=request, response=final_response, new_emotion=new_emotion, world_state=world_state)
         await self._apply_knowledge_and_routine(request=request, response=final_response, new_emotion=new_emotion, tick_id=tick_id, world_state=world_state)
@@ -198,10 +204,13 @@ class DialogueHandler:
     async def _apply_relation_and_emotion(self, *, request: DialogueRequest, response: DialogueResponse, level: str, tick_id: int):
         """Apply relation deltas (if not canned) and update NPC emotion; return new emotion state."""
         if level != "canned":
-            await apply_dialogue_relation_deltas(
-                session=self._session, settings=self._settings, npc_id=request.npc_id,
-                player_id=request.player_id, relation_deltas=response.relation_deltas,
-                cause_id=f"dialogue:{request.player_id}:{request.npc_id}", tick_id=tick_id,
+            await self._dialogue_repo.apply_relation_deltas(
+                npc_id=request.npc_id,
+                player_id=request.player_id,
+                relation_deltas=response.relation_deltas,
+                cause_id=f"dialogue:{request.player_id}:{request.npc_id}",
+                tick_id=tick_id,
+                settings=self._settings,
             )
             if self._relation_reader is not None and self._relation_phase_writer is not None:
                 await apply_phase_transition(
@@ -228,7 +237,7 @@ class DialogueHandler:
         """Fetch world state once iff a downstream branch needs it; avoids the double read (ISSUE-087)."""
         if not self._needs_world_state(response=response, new_emotion=new_emotion):
             return None
-        return await get_world_state(session=self._session, world_id=self._settings.WORLD_ID)
+        return await self._dialogue_repo.get_world_state(self._settings.WORLD_ID)
 
     async def _apply_arousal_memory(self, *, request: DialogueRequest, response: DialogueResponse, new_emotion, world_state: WorldState | None) -> None:
         """Create an episodic memory when NPC arousal exceeds the high-arousal threshold."""
@@ -249,7 +258,9 @@ class DialogueHandler:
                 tick=tick_id, learned_facts=list(response.learned_facts), game_time_str=game_time_str,
             )
         if new_emotion.valence < LOW_VALENCE_THRESHOLD:
-            await set_routine_override(session=self._session, character_id=request.npc_id, location_id="home", expires_at_tick=tick_id + 5)
+            await self._dialogue_repo.set_routine_override(
+                character_id=request.npc_id, location_id="home", expires_at_tick=tick_id + 5,
+            )
         await self._session_store.append_turns(
             player_id=request.player_id, npc_id=request.npc_id,
             new_turns=[f"player: {request.player_message}", f"npc: {response.npc_response}"],
@@ -271,9 +282,7 @@ class DialogueHandler:
         Returns:
             Response with audio_bytes populated, or original on synthesis error.
         """
-        voice_descriptor = await get_npc_voice_descriptor(
-            session=self._session, npc_id=npc_id
-        )
+        voice_descriptor = await self._dialogue_repo.get_npc_voice_descriptor(npc_id)
         base_params = VoiceParams(voice_id=voice_descriptor or "default")
         current_emotion = await self._emotion_updater.get_state(npc_id=npc_id)
         voice_params = modulate_voice(base_params=base_params, emotion_state=current_emotion)
@@ -304,7 +313,7 @@ class DialogueHandler:
 
         turns = await self._session_store.get_turns(player_id=request.player_id, npc_id=request.npc_id)
         current_emotion = await self._emotion_updater.get_state(npc_id=request.npc_id)
-        archetype = await get_npc_archetype(self._session, request.npc_id) or "default"
+        archetype = await self._dialogue_repo.get_npc_archetype(request.npc_id) or "default"
         prompt = await self._build_dialogue_prompt(
             request=request,
             turns=turns,
@@ -347,11 +356,7 @@ class DialogueHandler:
         """Build serialized context and prompt consistently across REST and stream paths."""
 
         session_id = request.session_id or f"{request.player_id}:{request.npc_id}"
-        serialized_context = await build_serialized_context(
-            session=self._session,
-            settings=self._settings,
-            llm_config=self._llm_config,
-            embedding_index=self._embedding_index,
+        serialized_context = await self._dialogue_context.build_context(
             npc_id=request.npc_id,
             player_message=request.player_message,
             session_turns=turns,

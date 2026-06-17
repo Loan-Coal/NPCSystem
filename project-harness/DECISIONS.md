@@ -3,6 +3,20 @@
 Non-obvious architectural choices. Each entry explains what was decided and why,
 so future maintainers can judge edge cases without re-deriving the rationale.
 
+## DEC-123: R006 baseline — five dialogue-cluster functions accepted over 40 lines
+**Date:** 2026-06-17
+**Context:** SEV-24 dialogue cluster migration introduced or touched five functions that
+exceed the 40-line R006 limit. All five cases are driven by mandatory multi-line docstrings
+(Args/Returns/Raises sections required per CLAUDE.md) rather than logic complexity.
+Splitting any of them would produce artificial helper functions with no independent utility.
+**Functions accepted:**
+- `DialogueHandler.__init__` (44 lines) — pure attribute assignment; no extractable logic.
+- `DialogueHandler.handle` (41 lines) — single-concern orchestrator; was pre-existing.
+- `apply_dialogue_relation_deltas` (42 lines) — 14-line Args section; body is 19 lines.
+- `Neo4jDialogueRepository.apply_relation_deltas` (52 lines) — 22-line docstring; retry already extracted to `_apply_first_contact_retry`.
+- `Neo4jDialogueContextAdapter.build_context` (47 lines) — 16-line docstring; body is a single session-scoped call.
+**Decision:** Re-baseline with `make check-rules-update`. Do not split.
+
 ## DEC-076: `dependencies_engines.py` accepted at 333 lines (300-line exception)
 **Date:** 2026-06-09
 **Context:** EXP-10 s2 and EXP-52 s2 added `get_proactive_dialogue_engine()`, `get_reputation_engine()`,
