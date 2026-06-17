@@ -1,11 +1,11 @@
 """
 quest_engine_helpers.py - Private helpers for QuestLifecycleEngine.
 Layer: engines
-Purpose: (auto-detected — review)
-
-Does NOT: expose public lifecycle API or touch HTTP concerns.
-
-Dependencies injected: TypeRegistry, AsyncSession.
+Purpose: Shared utility functions used by quest lifecycle, offer, and reward modules.
+Does NOT: expose public lifecycle API, touch HTTP concerns, or open Neo4j sessions.
+Dependencies: engines/quest/models, type_registry, utils/errors.
+Dependencies injected: None.
+Used by: engines/quest/quest_lifecycle_engine, quest_offer_service, quest_reward_router.
 """
 
 from __future__ import annotations
@@ -13,12 +13,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from neo4j import AsyncSession
-
 from npc_engine.engines.quest.models import QuestRewardItem, QuestTransitionMeta
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.type_registry.node_validator import validate_node_write
-from npc_engine.utils.errors import QuestTransitionError
 
 
 def is_trusted_reward_source(reward_source_id: str) -> bool:
@@ -54,23 +51,6 @@ def normalize_item_rewards(item_rewards: list[QuestRewardItem]) -> list[QuestRew
         QuestRewardItem(item_id=item_id, quantity=quantity)
         for item_id, quantity in sorted(quantity_by_item_id.items())
     ]
-
-
-def ensure_transaction_session(session: AsyncSession) -> None:
-    """Raise QuestTransitionError when the session does not support transactions.
-
-    Args:
-        session: Neo4j async session to validate.
-
-    Raises:
-        QuestTransitionError: If ``session`` lacks a ``begin_transaction`` attribute.
-    """
-
-    if not hasattr(session, "begin_transaction"):
-        raise QuestTransitionError(
-            code="QUEST_EVENT_SESSION_INVALID",
-            detail="Quest lifecycle event emission requires a transaction-capable session",
-        )
 
 
 def build_lifecycle_event(

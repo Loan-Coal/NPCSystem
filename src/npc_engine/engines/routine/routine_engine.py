@@ -48,7 +48,6 @@ class RoutineEngine:
         *,
         time_of_day: str,
         tick_id: int,
-        **_: Any,
     ) -> dict[str, int]:
         """Execute one routine tick: resolve locations and update LOCATED_AT edges.
 

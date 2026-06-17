@@ -64,7 +64,7 @@ async def test_run_tick_ignores_scheduler_session_kwarg():
     repo.expire_old_intents = AsyncMock(return_value=0)
 
     engine = IntentFormationEngine(location_reader=location_reader, intent_repo=repo)
-    result = await engine.run_tick(session=object(), tick_id=_TICK)
+    result = await engine.run_tick(tick_id=_TICK)
 
     assert result == {"intents_formed": 0, "expired": 0}
     location_reader.get_collocated_pairs.assert_awaited_once_with()

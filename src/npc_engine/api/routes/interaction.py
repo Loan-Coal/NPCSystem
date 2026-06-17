@@ -162,7 +162,6 @@ async def post_interaction(
     if proposal.kind == "claim_completion":
         state = await handle_claim_completion(
             repo=interaction_repo,
-            session=session,
             proposal=proposal,
             player_id=body.player_id,
             npc_id=body.npc_id,
@@ -178,7 +177,6 @@ async def post_interaction(
     if proposal.kind == "give_item":
         intercepted = await handle_give_item_as_quest_claim(
             repo=interaction_repo,
-            session=session,
             proposal=proposal,
             player_id=body.player_id,
             npc_id=body.npc_id,

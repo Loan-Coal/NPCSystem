@@ -368,7 +368,7 @@ class TickScheduler:
                 if self._story_pacing_engine is not None:
                     row = await self._run_engine_safe(
                         "story_pacing", tick_id,
-                        self._story_pacing_engine.run_tick(session=session, tick_id=tick_id),
+                        self._story_pacing_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["story_pacing"].append(row)
@@ -380,7 +380,7 @@ class TickScheduler:
                                 session=session,
                                 engine="gossip",
                                 tick_id=tick_id,
-                                runner=lambda: self._gossip_handler.run_tick(session=session, tick_id=tick_id),
+                                runner=lambda: self._gossip_handler.run_tick(tick_id=tick_id),
                             )
                         except Exception as exc:
                             LOGGER.error(
@@ -402,7 +402,7 @@ class TickScheduler:
                         if not gossip_done:
                             gossip_row = await self._run_engine_safe(
                                 "gossip", tick_id,
-                                self._gossip_handler.run_tick(session=session, tick_id=tick_id),
+                                self._gossip_handler.run_tick(tick_id=tick_id),
                             )
                             await self._mark_tick_done(session=session, key="gossip_ticks", tick_id=tick_id)
                             if gossip_row is not None:
@@ -415,7 +415,7 @@ class TickScheduler:
                                 session=session,
                                 engine="event",
                                 tick_id=tick_id,
-                                runner=lambda: self._event_handler.run_tick(session=session, tick_id=tick_id),
+                                runner=lambda: self._event_handler.run_tick(tick_id=tick_id),
                             )
                         except Exception as exc:
                             LOGGER.error(
@@ -437,7 +437,7 @@ class TickScheduler:
                         if not event_done:
                             event_row = await self._run_engine_safe(
                                 "event", tick_id,
-                                self._event_handler.run_tick(session=session, tick_id=tick_id),
+                                self._event_handler.run_tick(tick_id=tick_id),
                             )
                             await self._mark_tick_done(session=session, key="event_ticks", tick_id=tick_id)
                             if event_row is not None:
@@ -447,7 +447,7 @@ class TickScheduler:
                     row = await self._run_engine_safe(
                         "routine", tick_id,
                         self._routine_engine.run_tick(
-                            session=session, time_of_day=world_state.time_of_day, tick_id=tick_id,
+                            time_of_day=world_state.time_of_day, tick_id=tick_id,
                         ),
                     )
                     if row is not None:
@@ -456,7 +456,7 @@ class TickScheduler:
                 if self._faction_politics_engine is not None:
                     row = await self._run_engine_safe(
                         "faction_politics", tick_id,
-                        self._faction_politics_engine.run_tick(session=session, tick_id=tick_id),
+                        self._faction_politics_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["faction_politics"].append(row)
@@ -464,7 +464,7 @@ class TickScheduler:
                 if self._clique_formation_engine is not None:
                     row = await self._run_engine_safe(
                         "clique", tick_id,
-                        self._clique_formation_engine.run_tick(session=session, tick_id=tick_id),
+                        self._clique_formation_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["clique"].append(row)
@@ -472,7 +472,7 @@ class TickScheduler:
                 if self._skill_progression_engine is not None:
                     row = await self._run_engine_safe(
                         "skill_progression", tick_id,
-                        self._skill_progression_engine.run_tick(session=session, tick_id=tick_id),
+                        self._skill_progression_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["skill_progression"].append(row)
@@ -480,7 +480,7 @@ class TickScheduler:
                 if self._oath_engine is not None:
                     row = await self._run_engine_safe(
                         "oath", tick_id,
-                        self._oath_engine.run_tick(session=session, tick_id=tick_id),
+                        self._oath_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["oath"].append(row)
@@ -488,7 +488,7 @@ class TickScheduler:
                 if self._treaty_engine is not None:
                     row = await self._run_engine_safe(
                         "treaty", tick_id,
-                        self._treaty_engine.run_tick(session=session, tick_id=tick_id),
+                        self._treaty_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["treaty"].append(row)
@@ -496,7 +496,7 @@ class TickScheduler:
                 if self._mood_contagion_engine is not None:
                     row = await self._run_engine_safe(
                         "mood_contagion", tick_id,
-                        self._mood_contagion_engine.run_tick(session=session, tick_id=tick_id),
+                        self._mood_contagion_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["mood_contagion"].append(row)
@@ -508,7 +508,7 @@ class TickScheduler:
                 ):
                     row = await self._run_engine_safe(
                         "chapter", tick_id,
-                        self._chapter_engine.run_tick(session=session, tick_id=tick_id),
+                        self._chapter_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["chapter"].append(row)
@@ -516,7 +516,7 @@ class TickScheduler:
                 if self._succession_engine is not None:
                     row = await self._run_engine_safe(
                         "succession", tick_id,
-                        self._succession_engine.run_tick(session=session, tick_id=tick_id),
+                        self._succession_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["succession"].append(row)
@@ -524,7 +524,7 @@ class TickScheduler:
                 if self._agenda_engine is not None:
                     row = await self._run_engine_safe(
                         "agenda", tick_id,
-                        self._agenda_engine.run_tick(session=session, tick_id=tick_id),
+                        self._agenda_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["agenda"].append(row)
@@ -532,7 +532,7 @@ class TickScheduler:
                 if self._need_decay_engine is not None:
                     row = await self._run_engine_safe(
                         "need_decay", tick_id,
-                        self._need_decay_engine.run_tick(session=session, tick_id=tick_id),
+                        self._need_decay_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["need_decay"].append(row)
@@ -540,7 +540,7 @@ class TickScheduler:
                 if self._military_engine is not None:
                     row = await self._run_engine_safe(
                         "military", tick_id,
-                        self._military_engine.run_tick(session=session, tick_id=tick_id),
+                        self._military_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["military"].append(row)
@@ -548,7 +548,7 @@ class TickScheduler:
                 if self._event_quest_trigger is not None:
                     row = await self._run_engine_safe(
                         "event_quest", tick_id,
-                        self._event_quest_trigger.run_tick(session=session, tick_id=tick_id),
+                        self._event_quest_trigger.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["event_quest"].append(row)
@@ -556,7 +556,7 @@ class TickScheduler:
                 if self._need_quest_trigger is not None:
                     row = await self._run_engine_safe(
                         "need_quest", tick_id,
-                        self._need_quest_trigger.run_tick(session=session, tick_id=tick_id),
+                        self._need_quest_trigger.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["need_quest"].append(row)
@@ -564,7 +564,7 @@ class TickScheduler:
                 if self._world_state_quest_trigger is not None:
                     row = await self._run_engine_safe(
                         "world_state_quest", tick_id,
-                        self._world_state_quest_trigger.run_tick(session=session, tick_id=tick_id),
+                        self._world_state_quest_trigger.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["world_state_quest"].append(row)
@@ -572,7 +572,7 @@ class TickScheduler:
                 if self._proactive_dialogue_engine is not None:
                     row = await self._run_engine_safe(
                         "proactive_dialogue", tick_id,
-                        self._proactive_dialogue_engine.run_tick(session=session, tick_id=tick_id),
+                        self._proactive_dialogue_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["proactive_dialogue"].append(row)
@@ -580,7 +580,7 @@ class TickScheduler:
                 if self._reputation_engine is not None:
                     row = await self._run_engine_safe(
                         "reputation", tick_id,
-                        self._reputation_engine.run_tick(session=session, tick_id=tick_id),
+                        self._reputation_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["reputation"].append(row)
@@ -588,7 +588,7 @@ class TickScheduler:
                 if self._intent_formation_engine is not None:
                     row = await self._run_engine_safe(
                         "intent_formation", tick_id,
-                        self._intent_formation_engine.run_tick(session=session, tick_id=tick_id),
+                        self._intent_formation_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["intent_formation"].append(row)
@@ -596,7 +596,7 @@ class TickScheduler:
                 if self._goal_formation_engine is not None:
                     row = await self._run_engine_safe(
                         "goal_formation", tick_id,
-                        self._goal_formation_engine.run_tick(session=session, tick_id=tick_id),
+                        self._goal_formation_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["goal_formation"].append(row)
@@ -604,7 +604,7 @@ class TickScheduler:
                 if self._player_model_engine is not None:
                     row = await self._run_engine_safe(
                         "player_model", tick_id,
-                        self._player_model_engine.run_tick(session=session, tick_id=tick_id),
+                        self._player_model_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["player_model"].append(row)
@@ -612,7 +612,7 @@ class TickScheduler:
                 if self._director_engine is not None:
                     row = await self._run_engine_safe(
                         "director", tick_id,
-                        self._director_engine.run_tick(session=session, tick_id=tick_id),
+                        self._director_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["director"].append(row)
@@ -620,7 +620,7 @@ class TickScheduler:
                 if self._memory_decay_engine is not None:
                     row = await self._run_engine_safe(
                         "memory_decay", tick_id,
-                        self._memory_decay_engine.run_tick(session=session, tick_id=tick_id),
+                        self._memory_decay_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["memory_decay"].append(row)
@@ -628,7 +628,7 @@ class TickScheduler:
                 if self._scheme_advance_engine is not None:
                     row = await self._run_engine_safe(
                         "scheme_advance", tick_id,
-                        self._scheme_advance_engine.run_tick(session=session, tick_id=tick_id),
+                        self._scheme_advance_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["scheme_advance"].append(row)
@@ -636,7 +636,7 @@ class TickScheduler:
                 if self._scheme_detection_engine is not None:
                     row = await self._run_engine_safe(
                         "scheme_detection", tick_id,
-                        self._scheme_detection_engine.run_tick(session=session, tick_id=tick_id),
+                        self._scheme_detection_engine.run_tick(tick_id=tick_id),
                     )
                     if row is not None:
                         response["scheme_detection"].append(row)
@@ -667,7 +667,7 @@ class TickScheduler:
                 consolidation_tick = start_tick + advanced_ticks
                 consolidation_row = await self._run_engine_safe(
                     "memory_consolidation", consolidation_tick,
-                    self._memory_consolidation_engine.run_tick(session, game_time=game_time),
+                    self._memory_consolidation_engine.run_tick(game_time=game_time),
                 )
                 response["consolidation"] = (
                     consolidation_row.get("consolidated", []) if consolidation_row is not None else []

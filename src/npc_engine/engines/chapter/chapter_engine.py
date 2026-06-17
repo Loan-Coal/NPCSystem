@@ -20,7 +20,7 @@ import json
 import logging
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
 from npc_engine.config import get_settings
@@ -104,7 +104,7 @@ class ChapterEngine:
         self._system_prompt: str = prompt_data["system"]
         self._user_template: str = prompt_data["user_template"]
 
-    async def run_tick(self, *, tick_id: int, **_: Any) -> dict:
+    async def run_tick(self, *, tick_id: int) -> dict:
         """Run chapter detection and optional transition logic for the current tick.
 
         Reads/writes flow through the injected ChapterGraphPort + WorldStateGraphPort,

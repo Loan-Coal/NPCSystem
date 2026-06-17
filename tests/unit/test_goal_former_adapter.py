@@ -130,7 +130,7 @@ async def test_run_tick_ignores_scheduler_session_kwarg() -> None:
     mock_selector.select_action = AsyncMock()
 
     result = await _adapter(["npc-1"], mock_former, mock_selector).run_tick(
-        session=object(), tick_id=9
+        tick_id=9
     )
 
     assert result["goal_formations"] == ["goal-a"]

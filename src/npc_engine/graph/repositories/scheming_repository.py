@@ -4,11 +4,12 @@ Layer: graph
 Purpose: Neo4j adapter for the scheming graph domain. Opens a session per call from the
          injected GraphDB and delegates to scheme_reader (reads), scheme_writer (writes),
          graph_reader (NPC location), and event_writer (atomic step emit via run_in_tx),
-         so SchemingEngine and SchemeAdvanceTick depend on SchemingGraphPort and hold no
-         Neo4j session (DEC-122 / SEV-24).
+         so SchemingEngine, SchemeAdvanceTick, and SchemeDetectionTick depend on
+         SchemingGraphPort and hold no Neo4j session (DEC-122 / SEV-24).
 Does NOT: apply scheme logic, call LLMs, or import the engines layer.
 Dependencies injected: GraphDB (Neo4j driver holder).
-Used by: api composition root (dependencies_engines.get_scheme_advance_tick).
+Used by: api composition root (dependencies_engines.get_scheme_advance_tick,
+         get_scheme_detection_tick).
 """
 
 from __future__ import annotations
@@ -26,7 +27,8 @@ from npc_engine.graph.scheme_reader import (
     get_active_schemes,
     get_all_active_schemes_with_steps,
 )
-from npc_engine.graph.scheme_writer import add_scheme_step, upsert_scheme
+from npc_engine.graph.scheme_reader import get_discoverable_scheme_ids
+from npc_engine.graph.scheme_writer import add_scheme_step, mark_scheme_discovered, upsert_scheme
 from npc_engine.graph.transaction_coordinator import run_in_tx
 
 
@@ -132,3 +134,29 @@ class Neo4jSchemingRepository:
                 )
 
             await run_in_tx(session, _emit)
+
+    async def get_discoverable_scheme_ids(self, min_steps: int) -> list[str]:
+        """Return active scheme IDs that are witnessed and have enough steps.
+
+        Args:
+            min_steps: Minimum SCHEME_STEP count before a scheme is discoverable.
+
+        Returns:
+            List of discoverable scheme IDs (may be empty).
+        """
+        await self._graph_db.connect()
+        async with self._graph_db.get_session() as session:
+            return await get_discoverable_scheme_ids(session, min_steps)
+
+    async def mark_scheme_discovered(self, scheme_id: str) -> bool:
+        """Flip an active scheme's status to 'discovered' (idempotent).
+
+        Args:
+            scheme_id: Scheme node ID to mark discovered.
+
+        Returns:
+            True if the scheme transitioned active→discovered, else False.
+        """
+        await self._graph_db.connect()
+        async with self._graph_db.get_session() as session:
+            return await mark_scheme_discovered(session, scheme_id)

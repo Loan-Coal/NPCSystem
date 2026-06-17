@@ -58,10 +58,11 @@ async def test_no_treaties_is_noop():
 
 
 @pytest.mark.asyncio
-async def test_scheduler_session_kwarg_is_ignored():
+async def test_run_tick_no_session_required():
+    """run_tick accepts no session kwarg (SEV-24 Wave 5 — session coupling removed)."""
     repo = _make_repo(expiring=["t1"], active=[])
     engine = TreatyEngine(treaty_repo=repo)
 
-    result = await engine.run_tick(session=object(), tick_id=3)
+    result = await engine.run_tick(tick_id=3)
 
     assert result["expired_treaties"] == 1

@@ -3,9 +3,11 @@ Module: quest_generation
 Layer: api
 Purpose: Admin HTTP routes for generating quests and retrieving quest nodes.
 Does NOT: implement quest lifecycle state transitions or call LLMs directly.
+    Does NOT: pass a Neo4j session to the QuestGenerationEngine (DEC-122 / SEV-24).
 Dependencies: engines.quest_generation.quest_generation_engine, graph.quest_node_service,
               api.dependencies.get_db_session, api.dependency_singletons
-Dependencies injected: AsyncSession (via FastAPI Depends), QuestGenerationEngine (via Depends).
+Dependencies injected: QuestGenerationEngine (via Depends); AsyncSession for admin graph
+    routes only (list_drafts, mark_offered, get_quest_node).
 Used by: npc_engine.main (registered at admin_prefix)
 """
 
@@ -82,21 +84,19 @@ class QuestNodePayload(BaseModel):
 @router.post("/generate", response_model=OkEnvelope[GenerateQuestPayload])
 async def generate_quest(
     body: GenerateQuestRequest,
-    session: AsyncSession = Depends(get_db_session),
     engine: QuestGenerationEngine = Depends(get_quest_generation_engine),
 ) -> dict[str, Any]:
     """Generate a quest for a given NPC quest giver.
 
     Args:
         body: Request body containing the quest_giver_id.
-        session: Active Neo4j async session.
         engine: Quest generation engine singleton.
 
     Returns:
         Envelope with quest_id and description.
     """
     try:
-        result = await engine.generate(session=session, quest_giver_id=body.quest_giver_id)
+        result = await engine.generate(quest_giver_id=body.quest_giver_id)
     except ValueError as exc:
         logger.warning("quest_generation_failed", extra={"error": str(exc)})
         raise HTTPException(

@@ -39,7 +39,7 @@ class SkillProgressionEngine:
         self._skill_repo = skill_repo
         self._xp_per_completion = xp_per_completion
 
-    async def run_tick(self, *, tick_id: int, **_: Any) -> dict[str, Any]:
+    async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
         """Award XP for quest completions that occurred this tick.
 
         Args:

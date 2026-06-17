@@ -55,17 +55,17 @@ def test_event_handler_no_raw_cypher_constants() -> None:
 
 
 def test_awareness_seeder_no_inline_cypher_run() -> None:
-    """awareness_seeder.py must not inline session/tx.run calls."""
-    text = (_ENGINES / "events" / "awareness_seeder.py").read_text(encoding="utf-8")
-    assert "CYPHER_SEED_AWARENESS" not in text
-    assert "tx.run(" not in text
+    """awareness_seeder.py was deleted in SEV-24 Wave 5 (dead code); file must not exist."""
+    assert not (_ENGINES / "events" / "awareness_seeder.py").exists(), (
+        "awareness_seeder.py should have been deleted in SEV-24 Wave 5"
+    )
 
 
 def test_location_scoper_no_inline_cypher_run() -> None:
-    """location_scoper.py must not inline session.run calls."""
-    text = (_ENGINES / "events" / "location_scoper.py").read_text(encoding="utf-8")
-    assert "CYPHER_LOCATIONS_BY_TAG" not in text
-    assert "session.run(" not in text
+    """location_scoper.py was deleted in SEV-24 Wave 5 (dead code); file must not exist."""
+    assert not (_ENGINES / "events" / "location_scoper.py").exists(), (
+        "location_scoper.py should have been deleted in SEV-24 Wave 5"
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -9,9 +9,6 @@ Purpose: Tick-scheduler adapter that gates event-engine beat injection on the dr
 Does NOT: call LLMs directly, write graph nodes, change event_type enums, or inject
           beat_kind into Event nodes. Beat metadata is purely in the returned dict + logs.
 Dependencies injected: PlayerLocationReadPort, RelationReadPort, EventHandler (via __init__).
-Note: reads go through the injected ports (no session); director STILL receives the
-      scheduler session purely to forward to event_handler until the events slice migrates
-      (DEC-122 / SEV-24) — do not drop the session param yet.
 Used by: scheduler.tick_scheduler (wired via dependencies_engines.py).
 """
 
@@ -19,8 +16,6 @@ from __future__ import annotations
 
 import logging
 from typing import Any
-
-from neo4j import AsyncSession
 
 from npc_engine.engines.director.director_engine import (
     DirectorDecision,
@@ -61,7 +56,7 @@ class DirectorTick:
         Args:
             location_reader: PlayerLocationReadPort for co-location and idle-tick queries.
             relation_reader: RelationReadPort for RELATES_TO scalar reads.
-            event_handler: EventHandler (any object with async run_tick(session, tick_id)).
+            event_handler: EventHandler (any object with async run_tick(tick_id)).
             beat_log: Optional DirectorBeatLog; when supplied, each fired beat is recorded
                 for the API director-beat read surface (F2.4). Default None preserves
                 backward-compatible behaviour for existing callers/tests.
@@ -71,14 +66,13 @@ class DirectorTick:
         self._event_handler = event_handler
         self._beat_log = beat_log
 
-    async def run_tick(self, session: AsyncSession, tick_id: int) -> dict[str, Any]:
+    async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
         """Evaluate director decide() for co-located pairs; emit a beat if one fires.
 
         Returns dict with ``director_beats``: list of 0 or 1 beat records, each
         containing ``beat_kind``, ``reason``, ``npc_id``, ``player_id``, ``event``.
 
         Args:
-            session: Active Neo4j async session (forwarded only to the event handler).
             tick_id: Current game tick.
         """
         pairs = await self._location_reader.get_collocated_pairs()
@@ -93,7 +87,7 @@ class DirectorTick:
             )
             if beat is not None:
                 record = await _emit_beat(
-                    session=session, event_handler=self._event_handler,
+                    event_handler=self._event_handler,
                     tick_id=tick_id, npc_id=npc_id, player_id=player_id, decision=beat,
                 )
                 beats.append(record)
@@ -158,7 +152,6 @@ async def _decide_for_pair(
 
 async def _emit_beat(
     *,
-    session: AsyncSession,
     event_handler: Any,
     tick_id: int,
     npc_id: str,
@@ -171,14 +164,16 @@ async def _emit_beat(
     (enum-validated; no schema change needed here).
 
     Args:
-        session: Active Neo4j async session.
-        event_handler: EventHandler with async run_tick(session, tick_id).
+        event_handler: EventHandler with async run_tick(tick_id).
         tick_id: Current game tick.
         npc_id: NPC character ID that triggered the beat.
         player_id: Player character ID co-located with the NPC.
         decision: The DirectorDecision returned by decide().
+
+    Returns:
+        Dict with beat_kind, reason, npc_id, player_id, event keys.
     """
-    event_result = await event_handler.run_tick(session=session, tick_id=tick_id)
+    event_result = await event_handler.run_tick(tick_id=tick_id)
     _logger.info("director_beat_emitted", extra={
         "tick_id": tick_id, "npc_id": npc_id, "player_id": player_id,
         "beat_kind": decision.beat_kind, "reason": decision.reason,

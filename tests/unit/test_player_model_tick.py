@@ -92,7 +92,7 @@ async def test_run_tick_ignores_scheduler_session_kwarg() -> None:
     """The scheduler's session= kwarg is accepted and ignored during migration."""
     repo = _FakeModelRepo()
     result = await _adapter([("npc_a", "player_1")], repo).run_tick(
-        session=object(), tick_id=7
+        tick_id=7
     )
 
     assert len(result["player_models"]) == 1

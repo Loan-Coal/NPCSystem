@@ -1537,7 +1537,7 @@ does not apply. Documented inline in `covert_event_factory.py`. Re-open if cover
 `KNOWS_ABOUT` edge.
 
 ## DEC-122: GraphRepository facade — how should engines depend on the graph layer?
-**Date:** 2026-06-15 · **Status:** ✅ ACCEPTED (Track D in progress — 14 slices/13 ports migrated; chapter latest) · **Brief:** SEV-24
+**Date:** 2026-06-15 · **Status:** ✅ CLOSED — Wave 5 complete (2026-06-17); all 5 waves done, `engines/` free of neo4j imports · **Brief:** SEV-24
 **Context:** SEV-21 made the graph layer the single transaction owner, but engines still import concrete
 graph functions and receive an `AsyncSession` per `run_tick` (68 files reference `neo4j`). The goal is to
 make the graph layer a swappable boundary (interpose a cache, swap the DB, or split into a graph

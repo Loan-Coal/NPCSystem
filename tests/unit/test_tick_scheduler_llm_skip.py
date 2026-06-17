@@ -45,7 +45,7 @@ class _FakeEngine:
     def __init__(self) -> None:
         self.tick_ids: list[int] = []
 
-    async def run_tick(self, session, tick_id: int, **kwargs) -> dict:
+    async def run_tick(self, *, tick_id: int, **kwargs) -> dict:
         self.tick_ids.append(tick_id)
         return {"tick_id": tick_id}
 
@@ -56,7 +56,7 @@ class _FakeMemoryEngine:
     def __init__(self) -> None:
         self.calls: int = 0
 
-    async def run_tick(self, session, game_time, **kwargs) -> dict:
+    async def run_tick(self, *, game_time, **kwargs) -> dict:
         self.calls += 1
         return {"consolidated": []}
 

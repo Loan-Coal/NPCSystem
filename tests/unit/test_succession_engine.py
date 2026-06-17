@@ -84,6 +84,6 @@ async def test_scheduler_session_kwarg_is_ignored():
     repo = _make_repo(vacant=vacant, heirs=heirs)
     engine = SuccessionEngine(political_repo=repo)
 
-    result = await engine.run_tick(session=object(), tick_id=3)
+    result = await engine.run_tick(tick_id=3)
 
     assert result["successions"] == 1

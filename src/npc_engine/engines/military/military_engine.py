@@ -31,7 +31,7 @@ class MilitaryEngine:
         """
         self._military_repo = military_repo
 
-    async def run_tick(self, *, tick_id: int = 0, **_: Any) -> dict[str, Any]:
+    async def run_tick(self, *, tick_id: int = 0) -> dict[str, Any]:
         """Resolve all active battles and process resource yield.
 
         Steps:

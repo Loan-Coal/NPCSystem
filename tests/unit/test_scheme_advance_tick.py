@@ -88,7 +88,7 @@ def _make_adapter(
 async def test_skips_off_interval_tick() -> None:
     adapter, repo = _make_adapter(schemes=[_scheme("s1", "lira", 0)], interval=5)
 
-    result = await adapter.run_tick(session=object(), tick_id=7)
+    result = await adapter.run_tick(tick_id=7)
 
     assert result == {"tick_id": 7, "advanced": 0, "skipped": True}
     repo.get_all_active_schemes_with_steps.assert_not_called()
@@ -203,10 +203,10 @@ async def test_event_and_step_share_single_atomic_call() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_tick_swallows_session_kwarg() -> None:
-    """Scheduler passes session=; it must be accepted without error (DEC-122)."""
+async def test_run_tick_no_session_required() -> None:
+    """run_tick accepts no session kwarg (DEC-122 Wave 5 — session coupling removed)."""
     adapter, _ = _make_adapter(schemes=[], interval=5)
 
-    result = await adapter.run_tick(session=object(), tick_id=7)
+    result = await adapter.run_tick(tick_id=7)
 
     assert result["skipped"] is True

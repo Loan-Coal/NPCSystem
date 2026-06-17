@@ -37,7 +37,7 @@ class MemoryDecayTick:
         self._memory_engine = memory_engine
         self._interval = max(1, interval)
 
-    async def run_tick(self, tick_id: int, **_: Any) -> dict[str, Any]:
+    async def run_tick(self, tick_id: int) -> dict[str, Any]:
         """Apply charge-weighted vividness decay when the tick is on the interval.
 
         Args:

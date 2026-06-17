@@ -33,7 +33,7 @@ async def test_decays_on_interval_tick() -> None:
     engine = _FakeMemoryEngine(count=3)
     adapter = MemoryDecayTick(memory_engine=engine, interval=5)
 
-    result = await adapter.run_tick(session=object(), tick_id=10)
+    result = await adapter.run_tick(tick_id=10)
 
     assert result == {"memories_decayed": 3}
     assert engine.calls == 1
@@ -45,7 +45,7 @@ async def test_skips_off_interval_tick() -> None:
     engine = _FakeMemoryEngine(count=3)
     adapter = MemoryDecayTick(memory_engine=engine, interval=5)
 
-    result = await adapter.run_tick(session=object(), tick_id=7)
+    result = await adapter.run_tick(tick_id=7)
 
     assert result == {"memories_decayed": 0}
     assert engine.calls == 0
@@ -57,7 +57,7 @@ async def test_interval_clamped_to_minimum_one() -> None:
     engine = _FakeMemoryEngine(count=1)
     adapter = MemoryDecayTick(memory_engine=engine, interval=0)
 
-    result = await adapter.run_tick(session=object(), tick_id=3)
+    result = await adapter.run_tick(tick_id=3)
 
     assert result == {"memories_decayed": 1}
     assert engine.calls == 1

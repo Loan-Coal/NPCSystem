@@ -199,7 +199,7 @@ async def test_run_tick_ignores_scheduler_session_kwarg() -> None:
         reputation_repo=_make_repo(AsyncMock()),
     )
     # Must not raise — session is swallowed by **_.
-    await engine.run_tick(player_id="player", npc_ids=["S"], session=object())
+    await engine.run_tick(player_id="player", npc_ids=["S"])
 
 
 # ---------------------------------------------------------------------------

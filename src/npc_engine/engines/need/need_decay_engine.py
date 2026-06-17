@@ -51,7 +51,6 @@ class NeedDecayEngine:
         self,
         *,
         tick_id: int = 0,
-        **_: Any,
     ) -> dict[str, Any]:
         """Decay all needs and apply location-based restoration.
 

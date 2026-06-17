@@ -46,7 +46,7 @@ class _GoodEngine:
     def __init__(self) -> None:
         self.tick_ids: list[int] = []
 
-    async def run_tick(self, session: Any, tick_id: int, **kwargs: Any) -> dict:
+    async def run_tick(self, *, tick_id: int, **kwargs: Any) -> dict:
         self.tick_ids.append(tick_id)
         return {"tick_id": tick_id}
 
@@ -54,7 +54,7 @@ class _GoodEngine:
 class _ThrowingEngine:
     """Always raises on run_tick."""
 
-    async def run_tick(self, session: Any, tick_id: int, **kwargs: Any) -> dict:
+    async def run_tick(self, *, tick_id: int, **kwargs: Any) -> dict:
         raise ValueError("deliberate engine failure")
 
 

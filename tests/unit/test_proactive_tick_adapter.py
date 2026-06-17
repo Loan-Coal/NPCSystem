@@ -89,7 +89,7 @@ async def test_tick_adapter_fires_on_trigger() -> None:
     location_reader = _make_location_reader([("npc_1", "player")])
 
     adapter = ProactiveDialogueTick(engine=engine, location_reader=location_reader)
-    result = await adapter.run_tick(session=MagicMock(), tick_id=10)
+    result = await adapter.run_tick(tick_id=10)
 
     engine.check_trigger.assert_awaited_once()
     engine.generate_line.assert_awaited_once()
@@ -111,7 +111,7 @@ async def test_tick_adapter_skips_on_no_trigger() -> None:
     location_reader = _make_location_reader([("npc_1", "player")])
 
     adapter = ProactiveDialogueTick(engine=engine, location_reader=location_reader)
-    result = await adapter.run_tick(session=MagicMock(), tick_id=5)
+    result = await adapter.run_tick(tick_id=5)
 
     engine.check_trigger.assert_awaited_once()
     engine.generate_line.assert_not_awaited()
@@ -139,7 +139,7 @@ async def test_tick_adapter_caps_pairs() -> None:
     location_reader = _make_location_reader(pairs)
 
     adapter = ProactiveDialogueTick(engine=engine, location_reader=location_reader)
-    await adapter.run_tick(session=MagicMock(), tick_id=1)
+    await adapter.run_tick(tick_id=1)
 
     assert engine.check_trigger.await_count == MAX_PROACTIVE_CHECKS_PER_TICK, (
         f"Expected {MAX_PROACTIVE_CHECKS_PER_TICK} checks, "
@@ -161,7 +161,7 @@ async def test_tick_adapter_returns_empty_no_pairs() -> None:
     location_reader = _make_location_reader([])
 
     adapter = ProactiveDialogueTick(engine=engine, location_reader=location_reader)
-    result = await adapter.run_tick(session=MagicMock(), tick_id=3)
+    result = await adapter.run_tick(tick_id=3)
 
     engine.check_trigger.assert_not_awaited()
     assert result == {"proactive_lines": []}
@@ -192,7 +192,7 @@ async def test_tick_adapter_multiple_pairs_with_trigger() -> None:
     location_reader = _make_location_reader([("npc_1", "player"), ("npc_2", "player")])
 
     adapter = ProactiveDialogueTick(engine=engine, location_reader=location_reader)
-    result = await adapter.run_tick(session=MagicMock(), tick_id=10)
+    result = await adapter.run_tick(tick_id=10)
 
     assert engine.check_trigger.await_count == 2
     # Router picks the single winner — generate_line called exactly once.
@@ -231,7 +231,7 @@ async def test_tick_adapter_enqueues_winner_to_queue() -> None:
     queue = ProactiveQueue()
 
     adapter = ProactiveDialogueTick(engine=engine, location_reader=location_reader, proactive_queue=queue)
-    result = await adapter.run_tick(session=MagicMock(), tick_id=10)
+    result = await adapter.run_tick(tick_id=10)
 
     # Exactly one line enqueued (the winner).
     drained = queue.drain("player")
@@ -252,7 +252,7 @@ async def test_tick_adapter_ignores_scheduler_session_kwarg() -> None:
     location_reader = _make_location_reader([])
 
     adapter = ProactiveDialogueTick(engine=engine, location_reader=location_reader)
-    result = await adapter.run_tick(session=object(), tick_id=7)
+    result = await adapter.run_tick(tick_id=7)
 
     location_reader.get_collocated_pairs.assert_awaited_once_with()
     assert result == {"proactive_lines": []}
@@ -270,7 +270,7 @@ async def test_tick_adapter_no_queue_still_returns_line() -> None:
 
     # No queue injected (backward-compatible default).
     adapter = ProactiveDialogueTick(engine=engine, location_reader=location_reader)
-    result = await adapter.run_tick(session=MagicMock(), tick_id=10)
+    result = await adapter.run_tick(tick_id=10)
 
     assert len(result["proactive_lines"]) == 1
     assert result["proactive_lines"][0]["npc_id"] == "npc_1"

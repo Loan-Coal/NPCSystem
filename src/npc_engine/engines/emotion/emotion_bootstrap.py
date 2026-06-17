@@ -2,35 +2,31 @@
 Module: emotion_bootstrap
 Layer: engines
 Purpose: Seeds EmotionStore from persisted character-node emotion fields at boot.
-         Reads Neo4j character nodes and hydrates the in-memory store so emotion
-         state survives process restarts.
-Does NOT: write to the graph, compute emotion arithmetic, call LLMs, or run Cypher directly.
-Dependencies: neo4j.AsyncSession, engines/emotion/emotion_store,
-              engines/emotion/emotion_state, graph/emotion_reader
-Dependencies injected: AsyncSession (per call), EmotionStore (per call).
-Used by: main.py lifespan (slice-2 wiring — not yet connected).
+         Reads graph emotion data via the injected EmotionBootstrapGraphPort and
+         hydrates the in-memory store so emotion state survives process restarts.
+Does NOT: write to the graph, compute emotion arithmetic, call LLMs, or open sessions.
+Dependencies injected: EmotionBootstrapGraphPort (per call), EmotionStore (per call).
+Used by: main.py lifespan (wired via Neo4jEmotionBootstrapRepository).
 """
 
 from __future__ import annotations
 
-from neo4j import AsyncSession
-
 from npc_engine.engines.emotion.emotion_state import EmotionState
 from npc_engine.engines.emotion.emotion_store import EmotionStore
-from npc_engine.graph.emotion_reader import get_emotion_fields
+from npc_engine.engines.ports.emotion_bootstrap_port import EmotionBootstrapGraphPort
 
 _DEFAULT_LABEL = "neutral"
 
 
 class EmotionBootstrapper:
-    """Reads persisted emotion fields from Neo4j and seeds an EmotionStore.
+    """Reads persisted emotion fields from the graph port and seeds an EmotionStore.
 
     Stateless — safe to instantiate once and call multiple times.
     """
 
     async def load_from_graph(
         self,
-        session: AsyncSession,
+        port: EmotionBootstrapGraphPort,
         store: EmotionStore,
         npc_ids: list[str],
     ) -> None:
@@ -41,17 +37,17 @@ class EmotionBootstrapper:
         that NPC is left at the store's default neutral state.
 
         Args:
-            session: Active Neo4j async session.
+            port: EmotionBootstrapGraphPort for reading persisted emotion fields.
             store: In-memory emotion store to populate.
             npc_ids: List of NPC IDs to bootstrap.
         """
         for npc_id in npc_ids:
-            state = await self._read_one(session=session, npc_id=npc_id)
+            state = await self._read_one(port=port, npc_id=npc_id)
             if state is not None:
                 await store.set(npc_id=npc_id, state=state)
 
-    async def _read_one(self, session: AsyncSession, npc_id: str) -> EmotionState | None:
-        fields = await get_emotion_fields(session, npc_id)
+    async def _read_one(self, port: EmotionBootstrapGraphPort, npc_id: str) -> EmotionState | None:
+        fields = await port.get_emotion_fields(npc_id)
         if fields is None:
             return None
         valence = fields.get("emotion_valence")

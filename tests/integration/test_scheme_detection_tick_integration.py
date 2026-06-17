@@ -6,6 +6,7 @@ status 'discovered'.
 Does NOT: validate routes, LLMs, or advance (slice 1).
 
 Dependencies injected: Neo4j test environment via env vars.
+Uses Neo4jSchemingRepository (DEC-122 / SEV-24 Wave 5 — no session passed to tick).
 """
 
 from __future__ import annotations
@@ -18,6 +19,8 @@ from neo4j import AsyncGraphDatabase
 
 from npc_engine.config import get_settings
 from npc_engine.engines.investigation.scheme_detection_tick import SchemeDetectionTick
+from npc_engine.graph.db import GraphDB
+from npc_engine.graph.repositories.scheming_repository import Neo4jSchemingRepository
 from npc_engine.graph.scheme_writer import upsert_scheme
 
 
@@ -79,6 +82,7 @@ async def test_witnessed_scheme_is_discovered() -> None:
     loc_id = _uid("loc")
     scheme_id = _uid("scheme")
 
+    settings = get_settings()
     driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
     try:
         async with driver.session() as session:
@@ -90,11 +94,16 @@ async def test_witnessed_scheme_is_discovered() -> None:
                 await _setup(tx, schemer, witness, loc_id, scheme_id)
                 await tx.commit()
 
-            adapter = SchemeDetectionTick(settings=get_settings())
-            # Detection interval default is 7; tick 14 is on-cadence.
-            result = await adapter.run_tick(session=session, tick_id=14)
-            assert result["discovered"] == 1
+        graph_db = GraphDB(settings)
+        adapter = SchemeDetectionTick(
+            settings=settings,
+            scheming_repo=Neo4jSchemingRepository(graph_db=graph_db),
+        )
+        # Detection interval default is 7; tick 14 is on-cadence.
+        result = await adapter.run_tick(tick_id=14)
+        assert result["discovered"] == 1
 
+        async with driver.session() as session:
             async with await session.begin_transaction() as tx:
                 status = await _read_status(tx, scheme_id)
 

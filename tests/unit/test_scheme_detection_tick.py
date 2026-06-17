@@ -2,16 +2,18 @@
 
 Verifies the tick self-gates on its interval, marks each discoverable scheme, and
 counts only the schemes that actually transitioned active→discovered.
+
+Uses a mock SchemingGraphPort (DEC-122 / SEV-24 Wave 5) — no monkeypatching.
 """
 
 from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
-from npc_engine.engines.investigation import scheme_detection_tick as mod
 from npc_engine.engines.investigation.scheme_detection_tick import SchemeDetectionTick
 
 
@@ -22,61 +24,56 @@ def _settings(interval: int = 7, min_steps: int = 2) -> Any:
     )
 
 
-def _patch(monkeypatch, discoverable: list[str], mark_results: dict[str, bool]) -> list[str]:
-    marked: list[str] = []
-
-    async def _get_ids(session: Any, min_steps: int) -> list[str]:
-        return discoverable
-
-    async def _mark(session: Any, scheme_id: str) -> bool:
-        marked.append(scheme_id)
-        return mark_results.get(scheme_id, True)
-
-    monkeypatch.setattr(mod, "get_discoverable_scheme_ids", _get_ids)
-    monkeypatch.setattr(mod, "mark_scheme_discovered", _mark)
-    return marked
+def _mock_repo(discoverable: list[str], mark_results: dict[str, bool] | None = None) -> Any:
+    """Return a mock SchemingGraphPort with pre-configured responses."""
+    results = mark_results or {}
+    repo = SimpleNamespace(
+        get_discoverable_scheme_ids=AsyncMock(return_value=discoverable),
+        mark_scheme_discovered=AsyncMock(side_effect=lambda scheme_id: results.get(scheme_id, True)),
+    )
+    return repo
 
 
 @pytest.mark.asyncio
-async def test_skips_off_interval_tick(monkeypatch) -> None:
-    marked = _patch(monkeypatch, ["s1"], {})
-    adapter = SchemeDetectionTick(settings=_settings(interval=7))
+async def test_skips_off_interval_tick() -> None:
+    repo = _mock_repo(["s1"])
+    adapter = SchemeDetectionTick(settings=_settings(interval=7), scheming_repo=repo)
 
-    result = await adapter.run_tick(session=object(), tick_id=8)
+    result = await adapter.run_tick(tick_id=8)
 
     assert result == {"tick_id": 8, "discovered": 0, "skipped": True}
-    assert marked == []
+    repo.get_discoverable_scheme_ids.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_discovers_all_eligible_on_interval(monkeypatch) -> None:
-    marked = _patch(monkeypatch, ["s1", "s2"], {})
-    adapter = SchemeDetectionTick(settings=_settings(interval=7))
+async def test_discovers_all_eligible_on_interval() -> None:
+    repo = _mock_repo(["s1", "s2"])
+    adapter = SchemeDetectionTick(settings=_settings(interval=7), scheming_repo=repo)
 
-    result = await adapter.run_tick(session=object(), tick_id=14)
+    result = await adapter.run_tick(tick_id=14)
 
     assert result["discovered"] == 2
     assert result["skipped"] is False
-    assert marked == ["s1", "s2"]
+    repo.get_discoverable_scheme_ids.assert_awaited_once_with(2)
 
 
 @pytest.mark.asyncio
-async def test_counts_only_actual_transitions(monkeypatch) -> None:
+async def test_counts_only_actual_transitions() -> None:
     # s2 already discovered by a race → mark returns False; not counted.
-    _patch(monkeypatch, ["s1", "s2"], {"s2": False})
-    adapter = SchemeDetectionTick(settings=_settings(interval=1))
+    repo = _mock_repo(["s1", "s2"], {"s2": False})
+    adapter = SchemeDetectionTick(settings=_settings(interval=1), scheming_repo=repo)
 
-    result = await adapter.run_tick(session=object(), tick_id=1)
+    result = await adapter.run_tick(tick_id=1)
 
     assert result["discovered"] == 1
 
 
 @pytest.mark.asyncio
-async def test_no_discoverable_schemes_returns_zero(monkeypatch) -> None:
-    _patch(monkeypatch, [], {})
-    adapter = SchemeDetectionTick(settings=_settings(interval=1))
+async def test_no_discoverable_schemes_returns_zero() -> None:
+    repo = _mock_repo([])
+    adapter = SchemeDetectionTick(settings=_settings(interval=1), scheming_repo=repo)
 
-    result = await adapter.run_tick(session=object(), tick_id=1)
+    result = await adapter.run_tick(tick_id=1)
 
     assert result["discovered"] == 0
     assert result["skipped"] is False

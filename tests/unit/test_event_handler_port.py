@@ -114,7 +114,7 @@ async def test_run_tick_ignores_session_kwarg() -> None:
     repo = _event_repo()
     handler = _make_handler([template], event_repo=repo, world_state_repo=_world_state_repo())
 
-    result = await handler.run_tick(session=object(), tick_id=3)
+    result = await handler.run_tick(tick_id=3)
 
     assert result["created"] == 1
 

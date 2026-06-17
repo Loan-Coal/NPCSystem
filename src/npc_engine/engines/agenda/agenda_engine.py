@@ -47,7 +47,6 @@ class AgendaEngine:
         self,
         *,
         tick_id: int = 0,
-        **_: Any,
     ) -> dict[str, Any]:
         """Resolve all open agendas whose deadline_tick <= tick_id.
 

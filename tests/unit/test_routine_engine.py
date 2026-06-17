@@ -96,7 +96,7 @@ async def test_scheduler_session_kwarg_is_ignored():
     repo = _make_repo([_char_record("char_a", entries, current_loc="loc_barracks")])
     engine = RoutineEngine(routine_repo=repo)
 
-    result = await engine.run_tick(session=object(), time_of_day="morning", tick_id=10)
+    result = await engine.run_tick(time_of_day="morning", tick_id=10)
 
     assert result["moved"] == 1
 

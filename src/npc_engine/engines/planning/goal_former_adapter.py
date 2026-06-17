@@ -21,7 +21,6 @@ Dependencies injected: goal_former, action_selector, character_reader,
 
 from __future__ import annotations
 
-from typing import Any
 
 from npc_engine.config import get_settings
 from npc_engine.engines.planning.action_selector import ActionSelector
@@ -69,7 +68,7 @@ class GoalFormerAdapter:
         self._character_reader = character_reader
         self._world_state_repo = world_state_repo
 
-    async def run_tick(self, *, tick_id: int, **_: Any) -> dict:
+    async def run_tick(self, *, tick_id: int) -> dict:
         """Run goal formation and action selection for all active NPCs.
 
         Args:

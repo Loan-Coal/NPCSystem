@@ -36,7 +36,6 @@ class OathEngine:
         self,
         *,
         tick_id: int = 0,
-        **_: Any,
     ) -> dict[str, Any]:
         """Process pledge expiry and check all active pledges for violations.
 

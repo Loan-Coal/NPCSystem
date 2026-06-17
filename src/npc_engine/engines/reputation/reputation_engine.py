@@ -79,7 +79,6 @@ class ReputationEngine:
         self,
         player_id: str,
         npc_ids: list[str],
-        **_: object,
     ) -> None:
         """Run one propagation tick for all candidate source NPCs.
 

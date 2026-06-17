@@ -47,6 +47,7 @@ from npc_engine.api.dependency_singletons import (
 )
 from npc_engine.engines.emotion.emotion_bootstrap import EmotionBootstrapper
 from npc_engine.graph.character_reader import get_npc_ids
+from npc_engine.graph.repositories.emotion_bootstrap_repository import Neo4jEmotionBootstrapRepository
 from npc_engine.api.dependencies import get_sync_trade_handler
 from npc_engine.engines.interaction.dispatch import set_trade_handler
 from npc_engine.config import get_settings
@@ -123,7 +124,9 @@ async def lifespan(_app: FastAPI):
         async with graph_db.get_session() as session:
             npc_ids = await get_npc_ids(session)
             await EmotionBootstrapper().load_from_graph(
-                session=session, store=get_emotion_store(), npc_ids=npc_ids
+                port=Neo4jEmotionBootstrapRepository(graph_db=graph_db),
+                store=get_emotion_store(),
+                npc_ids=npc_ids,
             )
             await get_session_store().load_from_graph(session=session)
             _logger.info("session_store.loaded_from_graph")

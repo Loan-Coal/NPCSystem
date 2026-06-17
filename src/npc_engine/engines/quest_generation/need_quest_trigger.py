@@ -3,10 +3,11 @@ Module: need_quest_trigger
 Layer: engines
 Purpose: Watches for NPCs whose needs have decayed below a threshold and calls
          the quest generator to produce a need-satisfying draft quest for each.
-Does NOT: expose HTTP routes, manage quest lifecycle state, or query Neo4j directly.
+Does NOT: expose HTTP routes, manage quest lifecycle state, query Neo4j directly, or
+    hold a Neo4j session (DEC-122 / SEV-24).
 Dependencies: engines.quest_generation.quest_generation_engine,
-              graph.need_queries, graph.need_quest_queries
-Dependencies injected: QuestGenerationEngine (via __init__).
+              engines.ports.quest_generation_port (NeedTriggerGraphPort).
+Dependencies injected: QuestGenerationEngine, NeedTriggerGraphPort (via __init__).
 Used by: npc_engine.scheduler.tick_scheduler
 """
 
@@ -15,10 +16,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from neo4j import AsyncSession
-
-from npc_engine.graph.need_queries import get_all_needs_below_threshold
-from npc_engine.graph.need_quest_queries import has_draft_quest
+from npc_engine.engines.ports.quest_generation_port import NeedTriggerGraphPort
 
 if TYPE_CHECKING:
     from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
@@ -40,41 +38,46 @@ class NeedQuestTrigger:
     The ``has_draft_quest`` check is the idempotency guard: if an NPC already has
     an outstanding draft quest it will not receive a second one until the first is
     resolved (offered or removed).
+
+    Attributes:
+        _need_trigger_repo: NeedTriggerGraphPort (injected; provides need + draft-quest queries).
     """
 
     def __init__(
         self,
         generation_engine: QuestGenerationEngine,
+        need_trigger_repo: NeedTriggerGraphPort,
         threshold: int = DEFAULT_NEED_THRESHOLD,
     ) -> None:
         """Initialise the need quest trigger.
 
         Args:
             generation_engine: Quest generation engine used to create draft quests.
+            need_trigger_repo: Graph port for need and draft-quest queries.
             threshold: Need level at or below which quest generation is triggered.
         """
         self._generation_engine = generation_engine
+        self._need_trigger_repo = need_trigger_repo
         self._threshold = threshold
 
-    async def run_tick(self, session: AsyncSession, tick_id: int) -> dict:
+    async def run_tick(self, *, tick_id: int) -> dict:
         """Query for NPCs with critical needs and generate a draft quest for each.
 
         Caps at ``_MAX_NEEDS_PER_TICK`` needs per tick to bound LLM calls.
 
         Args:
-            session: Active Neo4j async session.
             tick_id: Current game tick identifier (included in the return payload).
 
         Returns:
             Dict with ``tick_id``, ``quests_created`` (int), and ``quest_ids`` (list[str]).
         """
-        needs = await get_all_needs_below_threshold(session, threshold=self._threshold)
+        needs = await self._need_trigger_repo.get_all_needs_below_threshold(threshold=self._threshold)
         capped_needs = needs[:_MAX_NEEDS_PER_TICK]
         seen_npcs: set[str] = set()
         quest_ids: list[str] = []
 
         for need in capped_needs:
-            quest_id = await self._process_need(session, need, tick_id, seen_npcs)
+            quest_id = await self._process_need(need, tick_id, seen_npcs)
             if quest_id is not None:
                 quest_ids.append(quest_id)
 
@@ -86,7 +89,6 @@ class NeedQuestTrigger:
 
     async def _process_need(
         self,
-        session: AsyncSession,
         need: dict,
         tick_id: int,
         seen_npcs: set[str],
@@ -97,7 +99,6 @@ class NeedQuestTrigger:
         the same NPC) or if it already has a draft quest in the graph.
 
         Args:
-            session: Active Neo4j async session.
             need: Row from get_all_needs_below_threshold (character_id, kind, level).
             tick_id: Current tick (attached to log entries).
             seen_npcs: Mutable set tracking NPCs already processed this tick.
@@ -113,7 +114,7 @@ class NeedQuestTrigger:
             return None
         seen_npcs.add(character_id)
 
-        already_has_draft = await has_draft_quest(session, character_id)
+        already_has_draft = await self._need_trigger_repo.has_draft_quest(character_id=character_id)
         if already_has_draft:
             _logger.info(
                 "need_quest_trigger: skipping NPC with existing draft quest",
@@ -123,7 +124,6 @@ class NeedQuestTrigger:
 
         try:
             generated = await self._generation_engine.generate(
-                session,
                 quest_giver_id=character_id,
             )
         except ValueError as exc:

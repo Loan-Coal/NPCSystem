@@ -128,13 +128,18 @@ def get_event_handler() -> EventHandler:
 
 @lru_cache
 def get_quest_chain_resolver() -> QuestChainResolver:
-    """Create singleton QuestChainResolver wired to the shared QuestOfferService.
+    """Create singleton QuestChainResolver wired to the shared QuestOfferService and chain repo.
 
     Returns:
-        QuestChainResolver with a QuestChainOfferAdapter backed by the singleton QuestOfferService.
+        QuestChainResolver with a QuestChainOfferAdapter backed by the singleton QuestOfferService
+        and a Neo4jQuestChainRepository for UNLOCKS graph reads.
     """
-    adapter = QuestChainOfferAdapter(offer_service=get_quest_offer_service())
-    return QuestChainResolver(offer_service=adapter)
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.quest_repository import Neo4jQuestChainRepository
+
+    chain_repo = Neo4jQuestChainRepository(get_graph_db())
+    adapter = QuestChainOfferAdapter(offer_service=get_quest_offer_service(), chain_repo=chain_repo)
+    return QuestChainResolver(offer_service=adapter, chain_repo=chain_repo)
 
 
 @lru_cache
@@ -160,14 +165,18 @@ def get_quest_lifecycle_engine() -> QuestLifecycleEngine:
 
     Returns:
         QuestLifecycleEngine wired to the singleton TypeRegistry, QuestChainResolver,
-        and the shared MemoryEngine (F3.4 — no in-__init__ instantiation).
+        the shared MemoryEngine, and a Neo4jQuestLifecycleRepository (DEC-122 / SEV-24).
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.quest_repository import Neo4jQuestLifecycleRepository
+
     settings = get_settings()
     return QuestLifecycleEngine(
         settings=settings,
         registry=get_type_registry(),
         chain_resolver=get_quest_chain_resolver(),
         memory_engine=get_memory_engine(),
+        quest_repo=Neo4jQuestLifecycleRepository(get_graph_db()),
     )
 
 
@@ -176,9 +185,8 @@ def get_interaction_graph_repo() -> Neo4jInteractionRepository:
     """Create the interaction graph read adapter (InteractionGraphPort) (SEV-24).
 
     Returns:
-        Neo4jInteractionRepository wrapping the singleton GraphDB; the interaction
-        quest handlers depend on the port for their reads while forwarding the
-        request session to the still-session-based QuestLifecycleEngine.
+        Neo4jInteractionRepository wrapping the singleton GraphDB; interaction
+        quest handlers use this port for reads while QuestLifecycleEngine is sessionless.
     """
     from npc_engine.api.dependencies_infra import get_graph_db
 
@@ -187,33 +195,53 @@ def get_interaction_graph_repo() -> Neo4jInteractionRepository:
 
 @lru_cache
 def get_quest_offer_service() -> QuestOfferService:
-    """Create singleton quest offer service with shared type registry.
+    """Create singleton quest offer service with shared type registry and offer repo.
 
     Returns:
-        QuestOfferService wired to the singleton TypeRegistry.
+        QuestOfferService wired to the singleton TypeRegistry and Neo4jQuestOfferRepository
+        (DEC-122 / SEV-24).
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.quest_repository import Neo4jQuestOfferRepository
+
     settings = get_settings()
-    return QuestOfferService(settings=settings, registry=get_type_registry())
+    return QuestOfferService(
+        settings=settings,
+        registry=get_type_registry(),
+        quest_offer_repo=Neo4jQuestOfferRepository(get_graph_db()),
+    )
 
 
 @lru_cache
 def get_quest_reward_router() -> QuestRewardRouter:
-    """Create singleton quest reward router with shared type registry.
+    """Create singleton quest reward router with shared type registry and reward repo.
 
     Returns:
-        QuestRewardRouter wired to the singleton TypeRegistry.
+        QuestRewardRouter wired to the singleton TypeRegistry and Neo4jQuestRewardRepository
+        (DEC-122 / SEV-24).
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.quest_reward_repository import Neo4jQuestRewardRepository
+
     settings = get_settings()
-    return QuestRewardRouter(settings=settings, registry=get_type_registry())
+    return QuestRewardRouter(
+        settings=settings,
+        registry=get_type_registry(),
+        quest_reward_repo=Neo4jQuestRewardRepository(get_graph_db()),
+    )
 
 
 @lru_cache
 def get_quest_generation_engine() -> QuestGenerationEngine:
-    """Create singleton quest generation engine with LLM client and loaded templates.
+    """Create singleton quest generation engine with LLM client, templates, and gen repo.
 
     Returns:
-        QuestGenerationEngine wired to the shared LLM client and bundled templates.
+        QuestGenerationEngine wired to the shared LLM client, bundled templates, and
+        Neo4jQuestGenerationRepository (DEC-122 / SEV-24).
     """
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.quest_generation_repository import Neo4jQuestGenerationRepository
+
     engine_config = get_engine_model_config_for("quest_generation")
     llm_client = _register_adapter(create_llm_client_for_engine(engine_config, get_settings()))
     prompts_dir = Path(__file__).resolve().parent.parent / "prompts" / "quest_generation"
@@ -224,37 +252,59 @@ def get_quest_generation_engine() -> QuestGenerationEngine:
         templates=templates,
         prompts_dir=prompts_dir,
         max_tokens=engine_config.llm.max_tokens,
+        quest_gen_repo=Neo4jQuestGenerationRepository(get_graph_db()),
     )
 
 
 @lru_cache
 def get_event_quest_trigger() -> EventQuestTrigger:
-    """Create singleton EventQuestTrigger wired to the shared quest generation engine.
+    """Create singleton EventQuestTrigger wired to the shared quest generation engine and trigger repo.
 
     Returns:
         EventQuestTrigger instance using default trigger event types and military archetypes.
     """
-    return EventQuestTrigger(generation_engine=get_quest_generation_engine())
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.quest_generation_repository import Neo4jEventTriggerRepository
+
+    return EventQuestTrigger(
+        generation_engine=get_quest_generation_engine(),
+        trigger_repo=Neo4jEventTriggerRepository(get_graph_db()),
+    )
 
 
 @lru_cache
 def get_need_quest_trigger() -> NeedQuestTrigger:
-    """Create singleton NeedQuestTrigger wired to the shared quest generation engine.
+    """Create singleton NeedQuestTrigger wired to the shared quest generation engine and need repo.
 
     Returns:
         NeedQuestTrigger instance using the default need threshold.
     """
-    return NeedQuestTrigger(generation_engine=get_quest_generation_engine())
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.quest_generation_repository import Neo4jNeedTriggerRepository
+
+    return NeedQuestTrigger(
+        generation_engine=get_quest_generation_engine(),
+        need_trigger_repo=Neo4jNeedTriggerRepository(get_graph_db()),
+    )
 
 
 @lru_cache
 def get_world_state_quest_trigger() -> WorldStateQuestTrigger:
-    """Create singleton WorldStateQuestTrigger wired to the shared quest generation engine.
+    """Create singleton WorldStateQuestTrigger wired to the shared quest generation engine and repos.
 
     Returns:
         WorldStateQuestTrigger instance using the default max-per-tick of 1.
     """
-    return WorldStateQuestTrigger(generation_engine=get_quest_generation_engine())
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.quest_generation_repository import Neo4jEventTriggerRepository
+    from npc_engine.graph.repositories.world_state_repository import Neo4jWorldStateRepository
+
+    graph_db = get_graph_db()
+    return WorldStateQuestTrigger(
+        generation_engine=get_quest_generation_engine(),
+        world_state_repo=Neo4jWorldStateRepository(graph_db),
+        trigger_repo=Neo4jEventTriggerRepository(graph_db),
+    )
 
 
 @lru_cache
@@ -495,9 +545,14 @@ def get_scheme_detection_tick() -> SchemeDetectionTick:
     """Create singleton SchemeDetectionTick adapter for the tick scheduler (F1.6).
 
     Returns:
-        SchemeDetectionTick wired to settings (schema-free status flip on discovery).
+        SchemeDetectionTick wired to settings + Neo4jSchemingRepository (DEC-122).
     """
-    return SchemeDetectionTick(settings=get_settings())
+    from npc_engine.api.dependencies_infra import get_graph_db
+
+    return SchemeDetectionTick(
+        settings=get_settings(),
+        scheming_repo=Neo4jSchemingRepository(graph_db=get_graph_db()),
+    )
 
 
 @lru_cache

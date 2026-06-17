@@ -10,7 +10,7 @@
 - SEV-17: `dependencies_advanced` is now a PACKAGE (`politics.py`/`social.py`/`progression.py` + re-exporting `__init__`). Add a NEW advanced-engine factory to the matching submodule and to `__init__.__all__` — do NOT recreate a flat file. ISSUE-105's `dependencies_engines.py` (512 lines) is UNTOUCHED — apply the same split if a SEV reopens it.
 - SEV-14 DONE: system observability now `/v1/admin/system/{engines,config,metrics,events}` (admin-scoped). The demo AND dashboard keys were ALREADY admin-scoped (both call other `/v1/admin/*`), so no key change — only URL repointing (demo client, dashboard `js/api.js`, world_poller/run_scenes docstrings). `/health`+`/readiness` stay public (separate `system_router`). Mount-path regression lives in `test_v1_route_versioning.py`.
 - SEV-16 is L-effort/route-by-route: 35 files; npc_state/emotion/schemes already typed; many payloads are DYNAMIC engine-aggregate dicts (clock/batch) that should stay `dict[str,Any]`. Do fixed-shape demo-read routes first (player_model/chapters/investigations) à la SEV-03. See brief's scoping finding.
-- **ACTIVE: SEV-24 (Track D facade)** — Wave 4 COMPLETE: quest cluster (12 files) + quest_generation cluster (10 files) fully migrated to injected GraphRepository ports (DEC-122). `QuestLifecycleGraphPort`, `QuestOfferGraphPort`, `QuestRewardGraphPort`, `QuestChainGraphPort`, `QuestGenerationGraphPort`, `EventTriggerGraphPort`, `NeedTriggerGraphPort`, `WorldStateGraphPort` all done. Repos: `Neo4jQuestLifecycleRepository`, `Neo4jQuestOfferRepository`, `Neo4jQuestRewardRepository`, `Neo4jQuestChainRepository`, `Neo4jQuestGenerationRepository`, `Neo4jEventTriggerRepository`, `Neo4jNeedTriggerRepository`, `Neo4jWorldStateRepository`. Tests all use injected mock ports. 2366 tests, make check GREEN. **NEXT: Wave 5 — drop `session` from `BaseEngine.run_tick` + `tick_scheduler.advance()`; confirm `grep -rn "from neo4j\|AsyncSession" src/npc_engine/engines/` → empty.**
+- **SEV-24 COMPLETE (DEC-122 CLOSED)** — All 5 waves done. Wave 5: dead files deleted (awareness_seeder, location_scoper, edge_updater, edge_updater.log_gossip), `**_` swallowers removed from all engines, `session=` dropped from tick_scheduler engine calls, `SchemeDetectionTick` + `EmotionBootstrapper` migrated to injected ports. `grep -rn "from neo4j|AsyncSession" src/npc_engine/engines/` → empty. 2373 tests, make check GREEN.
 - caplog gotcha: `utils/logging.py` sets propagate=False, so pytest `caplog` (root) misses engine logs once logging is configured — capture on the engine logger directly (see test_sev22 secret-seed test).
 
 ## Fix-now backlog (ordered, dependency-blocked)
@@ -111,7 +111,7 @@ Wave 4 — `run_in_tx` coordinators / large clusters (domain repo exposes a unit
 - [x] SEV-24 · quest cluster (12) · quest_generation cluster (10)
 
 Wave 5 — finalize:
-- [ ] SEV-24 · drop `session` from `BaseEngine.run_tick` + `tick_scheduler.advance()`; confirm
+- [x] SEV-24 · drop `session` from `BaseEngine.run_tick` + `tick_scheduler.advance()`; confirm
   `grep -rn "from neo4j\|AsyncSession" src/npc_engine/engines/` → empty; close DEC-122 / FIX-SEV-24 / this INDEX.
 
 ### After Track D (deps: all SEV-24 boxes checked) — drive incrementally, own session each

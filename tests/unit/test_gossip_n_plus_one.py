@@ -178,6 +178,6 @@ async def test_gossip_tick_swallows_session_kwarg():
         patch("npc_engine.engines.gossip.gossip_handler.select_pairs", new=AsyncMock(return_value=pairs)),
         patch("npc_engine.engines.gossip.gossip_handler.invalidate_embedding_safely", new=AsyncMock()),
     ):
-        result = await handler.run_tick(session=object(), tick_id=7)
+        result = await handler.run_tick(tick_id=7)
 
     assert result["tick_id"] == 7

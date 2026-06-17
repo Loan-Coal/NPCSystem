@@ -38,7 +38,7 @@ class _FakeHandler:
     def __init__(self) -> None:
         self.calls: list[int] = []
 
-    async def run_tick(self, session: Any, tick_id: int, **_kwargs: Any) -> dict:
+    async def run_tick(self, *, tick_id: int, **_kwargs: Any) -> dict:
         """Record the tick_id and return a minimal result dict."""
         self.calls.append(tick_id)
         return {"tick_id": tick_id, "pairs": 0}

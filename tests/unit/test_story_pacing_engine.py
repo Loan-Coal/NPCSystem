@@ -115,7 +115,7 @@ async def test_scheduler_session_kwarg_is_ignored() -> None:
     """The scheduler still passes session=...; the engine accepts and ignores it."""
     engine, _ = _make_engine(quests=[])
 
-    result = await engine.run_tick(session=object(), tick_id=1)
+    result = await engine.run_tick(tick_id=1)
 
     assert result["max_event_severity"] == 100
 

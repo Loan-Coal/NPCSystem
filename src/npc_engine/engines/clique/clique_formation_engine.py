@@ -50,7 +50,7 @@ class CliqueFormationEngine:
         self._group_repo = group_repo
         self._lock = asyncio.Lock()
 
-    async def run_tick(self, *, tick_id: int, **_: Any) -> dict[str, Any]:
+    async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
         """Execute one clique formation pass if the tick interval is met.
 
         Args:

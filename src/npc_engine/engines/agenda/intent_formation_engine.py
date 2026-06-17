@@ -60,7 +60,6 @@ class IntentFormationEngine:
     async def run_tick(
         self,
         tick_id: int,
-        **_: Any,
     ) -> dict[str, Any]:
         """Score and enqueue intents for all co-located NPC/player pairs.
 

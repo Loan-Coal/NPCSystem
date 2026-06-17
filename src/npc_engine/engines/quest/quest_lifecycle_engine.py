@@ -4,14 +4,15 @@ Layer: engines
 Purpose: Quest lifecycle state machine — orchestrates accept, objective-progress, and
     completion transitions for per-player quest state.
 Dependencies: npc_engine.config, npc_engine.engines.quest.models,
-    npc_engine.engines.quest.quest_engine_helpers, npc_engine.graph.*,
+    npc_engine.engines.quest.quest_engine_helpers, npc_engine.engines.ports.quest_port,
     npc_engine.type_registry, npc_engine.utils.errors.
 Used by: api.routes.quest (accept/update/evaluate routes), api.routes.interaction,
     engines.interaction.quest_handler.
 
 Does NOT: handle quest offer flow (see quest_offer_service.QuestOfferService).
           Does NOT: apply rewards (see quest_reward_router.QuestRewardRouter).
-Dependencies injected: Settings, TypeRegistry (via __init__); AsyncSession (per method).
+          Does NOT: hold a Neo4j session (DEC-122 / SEV-24).
+Dependencies injected: Settings, TypeRegistry, QuestLifecycleGraphPort (via __init__).
 """
 
 from __future__ import annotations
@@ -19,13 +20,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from neo4j import AsyncSession, AsyncTransaction
-
-if TYPE_CHECKING:
-    from npc_engine.engines.quest.quest_chain_resolver import QuestChainResolver
-
 from npc_engine.config import Settings
 from npc_engine.engines.memory.memory_engine import MemoryEngine
+from npc_engine.engines.ports.quest_port import QuestLifecycleGraphPort
 from npc_engine.engines.quest.models import (
     QuestStateRecord,
     QuestStatus,
@@ -33,16 +30,13 @@ from npc_engine.engines.quest.models import (
 )
 from npc_engine.engines.quest.quest_engine_helpers import (
     build_lifecycle_event,
-    ensure_transaction_session,
 )
-from npc_engine.graph.event_writer import upsert_quest_lifecycle_event
-from npc_engine.graph.quest_writer import get_quest_state, update_quest_node_status, upsert_quest_state
-from npc_engine.graph.transaction_coordinator import run_in_tx
-from npc_engine.graph.world_state_reader import get_world_state
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.utils.errors import QuestTransitionError
 from npc_engine.world.time_utils import TimePoint
 
+if TYPE_CHECKING:
+    from npc_engine.engines.quest.quest_chain_resolver import QuestChainResolver
 
 _logger = logging.getLogger(__name__)
 
@@ -56,34 +50,33 @@ class QuestLifecycleEngine:
         registry: TypeRegistry | None = None,
         chain_resolver: QuestChainResolver | None = None,
         memory_engine: MemoryEngine | None = None,
+        quest_repo: QuestLifecycleGraphPort | None = None,
     ) -> None:
         """Initialise the quest lifecycle engine.
 
         Args:
-            settings: Application settings (kept for interface symmetry with other engines).
-            registry: Type registry providing event node model; must be injected
-                by the composition root (``api/dependency_singletons.py``).
-            chain_resolver: Optional injected QuestChainResolver. When set, called
-                after a COMPLETED transition to offer unlocked successor quests.
-                Existing callers that omit this parameter are unaffected.
-            memory_engine: Injected MemoryEngine (DIP — F3.4); the composition root
-                supplies the shared instance. When omitted, commitment-memory formation
-                on quest accept is skipped (the engine holds no graph port itself —
-                DEC-122 / SEV-24).
+            settings: Application settings.
+            registry: Type registry providing event node model; required.
+            chain_resolver: Optional injected QuestChainResolver called after COMPLETED.
+            memory_engine: Optional injected MemoryEngine for commitment memory on accept.
+            quest_repo: Graph port for quest state reads/writes (DEC-122 / SEV-24); required.
+
         Raises:
-            ValueError: If registry is None (must be injected via __init__).
+            ValueError: If registry or quest_repo is None.
         """
         self._settings = settings
         if registry is None:
             raise ValueError("QuestLifecycleEngine requires a TypeRegistry injected via __init__")
+        if quest_repo is None:
+            raise ValueError("QuestLifecycleEngine requires a QuestLifecycleGraphPort injected via __init__")
         self._registry = registry
         self._chain_resolver = chain_resolver
         self._memory_engine = memory_engine
+        self._quest_repo = quest_repo
 
     async def _form_commitment_memory(
         self,
         *,
-        session: AsyncSession,
         quest_id: str,
         player_id: str,
         quest_title: str,
@@ -92,7 +85,7 @@ class QuestLifecycleEngine:
         if self._memory_engine is None:
             return
         try:
-            world_state = await get_world_state(session)
+            world_state = await self._quest_repo.get_world_state()
             game_time = TimePoint(
                 year=world_state.year,
                 season=world_state.season,
@@ -114,8 +107,8 @@ class QuestLifecycleEngine:
             player_id=player_id,
         )
 
-    async def _require_state(self, *, session: AsyncSession, quest_id: str, player_id: str) -> QuestStateRecord:
-        payload = await get_quest_state(session=session, quest_id=quest_id, player_id=player_id)
+    async def _require_state(self, *, quest_id: str, player_id: str) -> QuestStateRecord:
+        payload = await self._quest_repo.get_quest_state(quest_id=quest_id, player_id=player_id)
         if payload is None:
             raise QuestTransitionError(
                 code="QUEST_NOT_FOUND",
@@ -126,14 +119,12 @@ class QuestLifecycleEngine:
     async def _emit_lifecycle_event(
         self,
         *,
-        session: AsyncSession,
         quest_id: str,
         player_id: str,
         event_type: str,
         summary: str,
         meta: QuestTransitionMeta,
     ) -> None:
-        ensure_transaction_session(session=session)
         event = build_lifecycle_event(
             registry=self._registry,
             quest_id=quest_id,
@@ -142,15 +133,11 @@ class QuestLifecycleEngine:
             summary=summary,
             meta=meta,
         )
-        async def _work(tx: AsyncTransaction) -> None:
-            await upsert_quest_lifecycle_event(tx=tx, event=event)
-
-        await run_in_tx(session, _work)
+        await self._quest_repo.emit_lifecycle_event(event_node=event)
 
     async def _persist_state_and_event(
         self,
         *,
-        session: AsyncSession,
         quest_id: str,
         player_id: str,
         state_payload: dict,
@@ -158,7 +145,6 @@ class QuestLifecycleEngine:
         summary: str,
         meta: QuestTransitionMeta,
     ) -> dict:
-        ensure_transaction_session(session=session)
         event = build_lifecycle_event(
             registry=self._registry,
             quest_id=quest_id,
@@ -167,22 +153,16 @@ class QuestLifecycleEngine:
             summary=summary,
             meta=meta,
         )
-        async def _work(tx: AsyncTransaction) -> dict:
-            stored = await upsert_quest_state(
-                session=tx,
-                quest_id=quest_id,
-                player_id=player_id,
-                state_payload=state_payload,
-            )
-            await upsert_quest_lifecycle_event(tx=tx, event=event)
-            return stored
-
-        return await run_in_tx(session, _work)
+        return await self._quest_repo.persist_state_and_event(
+            quest_id=quest_id,
+            player_id=player_id,
+            state_payload=state_payload,
+            event_node=event,
+        )
 
     async def accept_quest(
         self,
         *,
-        session: AsyncSession,
         quest_id: str,
         player_id: str,
         meta: QuestTransitionMeta,
@@ -190,7 +170,6 @@ class QuestLifecycleEngine:
         """Accept a quest currently in offered state.
 
         Args:
-            session: Active Neo4j async session capable of starting transactions.
             quest_id: Quest identifier.
             player_id: Player identifier.
             meta: Transition metadata for provenance and idempotency fields.
@@ -201,10 +180,9 @@ class QuestLifecycleEngine:
         Raises:
             QuestTransitionError: If quest is not in offered or accepted state.
         """
-        state = await self._require_state(session=session, quest_id=quest_id, player_id=player_id)
+        state = await self._require_state(quest_id=quest_id, player_id=player_id)
         if state.status == QuestStatus.ACCEPTED:
             await self._emit_lifecycle_event(
-                session=session,
                 quest_id=quest_id,
                 player_id=player_id,
                 event_type="quest_accepted",
@@ -220,7 +198,6 @@ class QuestLifecycleEngine:
 
         next_state = state.model_copy(update={"status": QuestStatus.ACCEPTED})
         stored = await self._persist_state_and_event(
-            session=session,
             quest_id=quest_id,
             player_id=player_id,
             state_payload=next_state.model_dump(mode="python"),
@@ -228,9 +205,8 @@ class QuestLifecycleEngine:
             summary=f"Quest accepted: {state.title}",
             meta=meta,
         )
-        await update_quest_node_status(session=session, quest_id=quest_id, status=QuestStatus.ACCEPTED)
+        await self._quest_repo.update_quest_node_status(quest_id=quest_id, status=QuestStatus.ACCEPTED)
         await self._form_commitment_memory(
-            session=session,
             quest_id=quest_id,
             player_id=player_id,
             quest_title=state.title,
@@ -240,7 +216,6 @@ class QuestLifecycleEngine:
     async def update_objective(
         self,
         *,
-        session: AsyncSession,
         quest_id: str,
         player_id: str,
         objective_id: str,
@@ -250,7 +225,6 @@ class QuestLifecycleEngine:
         """Apply objective progress delta and transition into in_progress when applicable.
 
         Args:
-            session: Active Neo4j async session capable of starting transactions.
             quest_id: Quest identifier.
             player_id: Player identifier.
             objective_id: Objective to update.
@@ -264,7 +238,7 @@ class QuestLifecycleEngine:
             QuestTransitionError: If quest is not in accepted or in_progress state,
                 or if objective_id is not found.
         """
-        state = await self._require_state(session=session, quest_id=quest_id, player_id=player_id)
+        state = await self._require_state(quest_id=quest_id, player_id=player_id)
         if state.status not in {QuestStatus.ACCEPTED, QuestStatus.IN_PROGRESS}:
             raise QuestTransitionError(
                 code="QUEST_TRANSITION_INVALID",
@@ -287,7 +261,6 @@ class QuestLifecycleEngine:
             }
         )
         return await self._persist_state_and_event(
-            session=session,
             quest_id=quest_id,
             player_id=player_id,
             state_payload=next_state.model_dump(mode="python"),
@@ -299,7 +272,6 @@ class QuestLifecycleEngine:
     async def evaluate_completion(
         self,
         *,
-        session: AsyncSession,
         quest_id: str,
         player_id: str,
         meta: QuestTransitionMeta,
@@ -307,7 +279,6 @@ class QuestLifecycleEngine:
         """Evaluate objective completion and set completed status when all targets are met.
 
         Args:
-            session: Active Neo4j async session capable of starting transactions.
             quest_id: Quest identifier.
             player_id: Player identifier.
             meta: Transition metadata for provenance and idempotency fields.
@@ -318,7 +289,7 @@ class QuestLifecycleEngine:
         Raises:
             QuestTransitionError: If quest is not in accepted, in_progress, or completed state.
         """
-        state = await self._require_state(session=session, quest_id=quest_id, player_id=player_id)
+        state = await self._require_state(quest_id=quest_id, player_id=player_id)
         if state.status not in {QuestStatus.ACCEPTED, QuestStatus.IN_PROGRESS, QuestStatus.COMPLETED}:
             raise QuestTransitionError(
                 code="QUEST_TRANSITION_INVALID",
@@ -333,7 +304,6 @@ class QuestLifecycleEngine:
         next_state = state.model_copy(update={"status": next_status})
 
         stored = await self._persist_state_and_event(
-            session=session,
             quest_id=quest_id,
             player_id=player_id,
             state_payload=next_state.model_dump(mode="python"),
@@ -344,10 +314,9 @@ class QuestLifecycleEngine:
             meta=meta,
         )
         if is_completed:
-            await update_quest_node_status(session=session, quest_id=quest_id, status=QuestStatus.COMPLETED)
+            await self._quest_repo.update_quest_node_status(quest_id=quest_id, status=QuestStatus.COMPLETED)
             if self._chain_resolver is not None:
                 await self._chain_resolver.resolve(
-                    session=session,
                     quest_id=quest_id,
                     player_id=player_id,
                     outcome="complete",
@@ -359,7 +328,6 @@ class QuestLifecycleEngine:
     async def fail_quest(
         self,
         *,
-        session: AsyncSession,
         quest_id: str,
         player_id: str,
         meta: QuestTransitionMeta,
@@ -367,7 +335,6 @@ class QuestLifecycleEngine:
         """Transition a quest to failed status and resolve any UNLOCKS(on_outcome:fail) chains.
 
         Args:
-            session: Active Neo4j async session capable of starting transactions.
             quest_id: Quest identifier.
             player_id: Player identifier.
             meta: Transition metadata for provenance and idempotency fields.
@@ -378,7 +345,7 @@ class QuestLifecycleEngine:
         Raises:
             QuestTransitionError: If quest is already in a terminal state.
         """
-        state = await self._require_state(session=session, quest_id=quest_id, player_id=player_id)
+        state = await self._require_state(quest_id=quest_id, player_id=player_id)
         if state.status in self._TERMINAL_STATUSES:
             raise QuestTransitionError(
                 code="QUEST_TRANSITION_INVALID",
@@ -386,7 +353,6 @@ class QuestLifecycleEngine:
             )
         next_state = state.model_copy(update={"status": QuestStatus.FAILED})
         stored = await self._persist_state_and_event(
-            session=session,
             quest_id=quest_id,
             player_id=player_id,
             state_payload=next_state.model_dump(mode="python"),
@@ -394,14 +360,12 @@ class QuestLifecycleEngine:
             summary=f"Quest failed: {state.title}",
             meta=meta,
         )
-        await self._apply_fail_side_effects(session=session, quest_id=quest_id, player_id=player_id)
+        await self._apply_fail_side_effects(quest_id=quest_id, player_id=player_id)
         return stored
 
-    async def _apply_fail_side_effects(
-        self, *, session: AsyncSession, quest_id: str, player_id: str
-    ) -> None:
-        await update_quest_node_status(session=session, quest_id=quest_id, status=QuestStatus.FAILED)
+    async def _apply_fail_side_effects(self, *, quest_id: str, player_id: str) -> None:
+        await self._quest_repo.update_quest_node_status(quest_id=quest_id, status=QuestStatus.FAILED)
         if self._chain_resolver is not None:
             await self._chain_resolver.resolve(
-                session=session, quest_id=quest_id, player_id=player_id, outcome="fail"
+                quest_id=quest_id, player_id=player_id, outcome="fail"
             )

@@ -71,7 +71,7 @@ async def test_reputation_engine_called_when_set() -> None:
         player_id="player",
         config=config,
     )
-    result = await adapter.run_tick(session=mock_session, tick_id=5)
+    result = await adapter.run_tick(tick_id=5)
 
     mock_reputation_engine.run_tick.assert_awaited_once()
     assert "nudges" in result
@@ -101,7 +101,7 @@ async def test_reputation_engine_not_called_when_none() -> None:
         player_id="player",
         config=config,
     )
-    result = await adapter.run_tick(session=mock_session, tick_id=3)
+    result = await adapter.run_tick(tick_id=3)
 
     # Adapter still calls engine.run_tick (engine itself guards on enabled flag)
     # The important thing is the adapter returns a valid dict
@@ -132,7 +132,7 @@ async def test_adapter_returns_empty_when_disabled() -> None:
         player_id="player",
         config=config,
     )
-    result = await adapter.run_tick(session=mock_session, tick_id=1)
+    result = await adapter.run_tick(tick_id=1)
 
     assert result == {"nudges": 0}
 
@@ -160,7 +160,7 @@ async def test_adapter_fetches_npc_ids_from_character_reader() -> None:
         player_id="player",
         config=config,
     )
-    await adapter.run_tick(session=mock_session, tick_id=10)
+    await adapter.run_tick(tick_id=10)
 
     # CharacterReadPort.get_npc_ids() is sessionless after SEV-24.
     mock_character_reader.get_npc_ids.assert_awaited_once_with()

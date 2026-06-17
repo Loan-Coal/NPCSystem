@@ -1381,18 +1381,23 @@ maintenance, not part of the repository-facade migration.
 **To fix:** Rewrite the test to inject a mock `MilitaryGraphPort` and assert the real
 `battles_resolved`/`factions_yielded` contract (mirror `tests/unit/test_military_engine.py`).
 
-## ISSUE-113: `edge_updater` and `knowledge_propagator` session-based functions are orphaned
+## [FIXED] ISSUE-113: `edge_updater` and `knowledge_propagator` session-based functions are orphaned
 **Found:** 2026-06-17, during SEV-24 gossip cluster migration
+**Fixed:** 2026-06-17, in SEV-24 Wave 5 — `edge_updater.py` and the full `engines/gossip/knowledge_propagator.py`
+deleted; `SECRET_DISTORTION_CHANCE` moved to `gossip_config.py`.
 **Severity:** P3 (nice-to-fix)
 **Where:** `src/npc_engine/graph/edge_updater.py`, `src/npc_engine/engines/gossip/knowledge_propagator.py`
-**Description:** `edge_updater.log_gossip()` and `knowledge_propagator.propagate_secret()` are no longer
-called by `gossip_handler.py` — those calls moved into `Neo4jGossipRepository`. The functions remain in
-their modules but have no callers. `knowledge_propagator.SECRET_DISTORTION_CHANCE` is still imported by
-`gossip_handler.py`, so `knowledge_propagator.py` cannot be deleted without moving that constant.
-**Why deferred:** Deleting files is out of scope for the repository-facade migration slice.
-**To fix:** Delete `log_gossip` from `edge_updater.py`; move `SECRET_DISTORTION_CHANCE` to
-`gossip_config.py` or `gossip_distort.py`, then delete `knowledge_propagator.py` (or keep it if it
-gains other callers during dialogue/quest migration).
+
+## ISSUE-114: `quest_reward_repository.py` has 3 functions > 40 lines (R006 violations)
+**Found:** 2026-06-17, during SEV-24 Wave 5 check-rules run
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/graph/repositories/quest_reward_repository.py` — `apply_rewards_atomic`, `_apply_in_tx`, `_collect_delivery_in_tx`
+**Description:** Three transaction-helper methods exceed the 40-line hard limit (R006). They were introduced
+in the quest cluster wave without triggering the baseline, and Wave 5 now exposes them. Splitting is
+artificial: all three are tightly coupled phases of one Neo4j atomic transaction.
+**Why deferred:** Refactoring graph-layer transaction helpers is out of scope for Wave 5 (session cleanup).
+**To fix:** Extract `_grant_item_rewards_in_tx` and `_grant_currency_reward_in_tx` helpers from `_apply_in_tx`;
+split `_collect_delivery_in_tx` at the possession-check vs transfer boundary.
 
 ## ISSUE-112: EventHandler high-severity witness recording is dead code
 **Found:** 2026-06-16, during /fix-next SEV-24 (events slice)

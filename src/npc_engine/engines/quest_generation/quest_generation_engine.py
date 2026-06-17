@@ -4,17 +4,18 @@ Layer: engines
 Purpose: Orchestrates quest generation: template selection, LLM slot-filling with retry,
          graph validation, flavor text generation, and quest node persistence.
 Does NOT: expose HTTP routes or manage quest lifecycle state transitions.
+    Does NOT: hold a Neo4j session (DEC-122 / SEV-24).
 Dependencies: engines.quest_generation.slot_models, engines.quest_generation.slot_validator,
               engines.quest_generation.template_loader, engines.llm.protocols,
-              graph.quest_node_service, graph.need_queries, graph.item_queries,
-              graph.graph_reader, graph.group_service, common.yaml_utils
-Dependencies injected: LLMStructuredProtocol, SlotValidator factory, list[QuestTemplateRecord].
+              engines.ports.quest_generation_port, graph.generic_graph_utils (pure util).
+Dependencies injected: LLMStructuredProtocol, QuestGenerationGraphPort,
+    list[QuestTemplateRecord] (via __init__).
 Used by: npc_engine.api.routes.quest_generation
 
-NOTE: This file exceeds the 300-line hard limit (~400 lines after S3.1). The additional
-graph queries in _get_giver_context are part of one cohesive context-assembly pipeline.
-Splitting into a QuestContextAssembler would be natural in Phase 4 when more NPC context
-dimensions are added. See DECISIONS.md "quest_generation_engine.py line limit (S3.1)".
+NOTE: This file exceeds the 300-line hard limit (~390 lines). The additional
+context-assembly delegation is one cohesive pipeline. Splitting into a
+QuestContextAssembler would be natural in Phase 4 when more NPC context dimensions
+are added. See DECISIONS.md "quest_generation_engine.py line limit (S3.1)".
 """
 
 from __future__ import annotations
@@ -28,16 +29,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from neo4j import AsyncSession
-
-from npc_engine.config import get_settings
-from npc_engine.graph.world_state_reader import get_world_state
-
 from pydantic import ValidationError
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
 from npc_engine.engines.llm.protocols import LLMStructuredProtocol
-from npc_engine.utils.errors import LLMRequestError, LLMTimeoutError
+from npc_engine.engines.ports.quest_generation_port import QuestGenerationGraphPort
 from npc_engine.engines.quest_generation.slot_models import (
     GeneratedQuest,
     QuestTemplateRecord,
@@ -45,20 +41,8 @@ from npc_engine.engines.quest_generation.slot_models import (
     SlotFill,
 )
 from npc_engine.engines.quest_generation.slot_validator import SlotValidator
-from npc_engine.graph.belief_queries import get_beliefs_for_character
-from npc_engine.graph.causality_service import record_causation
 from npc_engine.graph.generic_graph_utils import resolve_node_label
-from npc_engine.graph.goal_queries import get_goals_for_character
-from npc_engine.graph.graph_reader import get_npc_location_id
-from npc_engine.graph.group_service import get_groups_for_character_svc
-from npc_engine.graph.item_queries import get_items_for_character
-from npc_engine.graph.mood_queries import get_character_mood
-from npc_engine.graph.need_queries import get_needs_for_character
-from npc_engine.graph.quest_generation_queries import (
-    get_candidate_ids_by_label,
-    get_character_info,
-)
-from npc_engine.graph.quest_node_service import create_quest
+from npc_engine.utils.errors import LLMRequestError, LLMTimeoutError
 
 _logger = logging.getLogger(__name__)
 
@@ -97,6 +81,7 @@ class QuestGenerationEngine:
         templates: list[QuestTemplateRecord],
         prompts_dir: Path,
         max_tokens: int = 256,
+        quest_gen_repo: QuestGenerationGraphPort | None = None,
     ) -> None:
         """Initialise the quest generation engine.
 
@@ -105,16 +90,22 @@ class QuestGenerationEngine:
             templates: Pre-loaded quest template records.
             prompts_dir: Path to the quest_generation prompts directory.
             max_tokens: Maximum tokens to generate in LLM calls (sourced from llm_config.yaml).
+            quest_gen_repo: Graph port for quest generation reads/writes (DEC-122 / SEV-24); required.
+
+        Raises:
+            ValueError: If quest_gen_repo is None.
         """
+        if quest_gen_repo is None:
+            raise ValueError("QuestGenerationEngine requires a QuestGenerationGraphPort injected via __init__")
         self._llm = llm_client
         self._templates = templates
         self._max_tokens = max_tokens
         self._slot_fill_prompt = _load_prompt(prompts_dir / "slot_fill_v2.yaml")
         self._flavor_prompt = _load_prompt(prompts_dir / "flavor_v2.yaml")
+        self._quest_gen_repo = quest_gen_repo
 
     async def generate(
         self,
-        session: AsyncSession,
         quest_giver_id: str,
         cause_event_id: str | None = None,
     ) -> GeneratedQuest:
@@ -125,7 +116,6 @@ class QuestGenerationEngine:
         flavor text. Writes the quest node and HAS_QUEST edge to the graph.
 
         Args:
-            session: Active Neo4j async session.
             quest_giver_id: ID of the Character node that will give the quest.
             cause_event_id: When provided, writes a CAUSED_BY edge from the new quest
                 to this event ID (narrative causation, strength=80).
@@ -137,28 +127,24 @@ class QuestGenerationEngine:
             ValueError: If no template exists for the giver's archetype or the
                 character node is not found.
         """
-        world_state = await get_world_state(session=session, world_id=get_settings().WORLD_ID)
-        world_day: int = world_state.day
+        world_day, quest_generation_rate = await self._quest_gen_repo.get_world_state_day_and_rate()
         quest_seed = _quest_rng_seed(quest_giver_id, world_day)
         rng = random.Random(quest_seed)
         _logger.debug("quest_rng seed=%d giver=%s world_day=%d", quest_seed, quest_giver_id, world_day)
-        if world_state.quest_generation_rate < 1.0 and rng.random() > world_state.quest_generation_rate:
+        if quest_generation_rate < 1.0 and rng.random() > quest_generation_rate:
             raise ValueError(
-                f"Quest generation suppressed by pacing engine "
-                f"(rate={world_state.quest_generation_rate:.2f})"
+                f"Quest generation suppressed by pacing engine (rate={quest_generation_rate:.2f})"
             )
-        archetype, giver_name = await self._get_character_info(session, quest_giver_id)
+        world_state_context = await self._quest_gen_repo.get_world_state_context()
+        archetype, giver_name = await self._quest_gen_repo.get_character_info(character_id=quest_giver_id)
         giver_context: dict[str, Any] = {
-            **await self._get_giver_context(session, quest_giver_id),
-            "world_state": {
-                "epoch": world_state.epoch,
-                "active_conditions": world_state.active_conditions,
-            },
+            **await self._quest_gen_repo.get_giver_context(character_id=quest_giver_id),
+            "world_state": world_state_context,
         }
         template = self._select_template(archetype, rng=rng)
-        validator = SlotValidator(session=session)
+        validator = SlotValidator(quest_gen_repo=self._quest_gen_repo)
 
-        fills_raw, fills = await self._fill_slots(session, template, validator, giver_name=giver_name, archetype=archetype, giver_context=giver_context, rng=rng)
+        fills_raw, fills = await self._fill_slots(template, validator, giver_name=giver_name, archetype=archetype, giver_context=giver_context, rng=rng)
         description = await self._generate_flavor(template, fills_raw, giver_name, template.description_template, giver_context)
 
         quest_id = str(uuid.uuid4())
@@ -176,10 +162,9 @@ class QuestGenerationEngine:
             "completed_at": None,
             "source": "generated",
         }
-        await create_quest(session, payload)
+        await self._quest_gen_repo.create_quest(payload=payload)
         if cause_event_id is not None:
-            await record_causation(
-                session,
+            await self._quest_gen_repo.record_causation(
                 effect_node_id=quest_id,
                 effect_node_type="quest",
                 cause_event_id=cause_event_id,
@@ -194,48 +179,6 @@ class QuestGenerationEngine:
             fills=fills,
             description=description,
         )
-
-    async def _get_character_info(
-        self,
-        session: AsyncSession,
-        character_id: str,
-    ) -> tuple[str, str]:
-        """Fetch archetype and name for a character node."""
-        return await get_character_info(session, character_id=character_id)
-
-    async def _get_giver_context(
-        self,
-        session: AsyncSession,
-        character_id: str,
-    ) -> dict[str, Any]:
-        """Fetch needs, goals, beliefs, mood, inventory, location, and faction for the quest giver.
-
-        All queries run sequentially on the same session (Neo4j async sessions are not safe
-        for concurrent use). Called from generate() which merges world_state on top.
-
-        Args:
-            session: Active Neo4j async session.
-            character_id: ID of the Character node.
-
-        Returns:
-            Dict with keys: goals, beliefs, mood, needs, inventory, location, faction.
-        """
-        goals = await get_goals_for_character(session, character_id=character_id, k=3, status_filter="active")
-        beliefs = await get_beliefs_for_character(session, character_id=character_id, k=3)
-        mood = await get_character_mood(session, character_id=character_id)
-        needs = await get_needs_for_character(session, character_id=character_id)
-        inventory = await get_items_for_character(session, character_id=character_id, k=5)
-        location_id = await get_npc_location_id(session, npc_id=character_id)
-        groups = await get_groups_for_character_svc(session, character_id=character_id)
-        return {
-            "goals": [g.get("objective", "") for g in (goals or [])],
-            "beliefs": [b.get("content", "") for b in (beliefs or [])],
-            "mood": mood[0] if mood else "neutral",
-            "needs": [{"kind": n.get("kind", ""), "level": n.get("level", 0)} for n in (needs or [])],
-            "inventory": [i.get("id", "") for i in (inventory or []) if i.get("id")],
-            "location": location_id or "unknown",
-            "faction": [g.get("name", g.get("group_id", "")) for g in (groups or [])],
-        }
 
     def _format_npc_context(self, giver_context: dict[str, Any]) -> str:
         """Serialize giver context to a structured text block for v2 prompts."""
@@ -261,7 +204,6 @@ class QuestGenerationEngine:
 
     async def _fill_slots(
         self,
-        session: AsyncSession,
         template: QuestTemplateRecord,
         validator: SlotValidator,
         *,
@@ -271,7 +213,7 @@ class QuestGenerationEngine:
         rng: random.Random | None = None,
     ) -> tuple[dict[str, str], tuple[SlotFill, ...]]:
         """Try LLM slot-filling up to _MAX_RETRIES times, then fall back deterministically."""
-        candidates = await self._get_candidates(session, template.slot_definitions)
+        candidates = await self._get_candidates(template.slot_definitions)
         violation_context = ""
 
         for attempt in range(_MAX_RETRIES):
@@ -291,9 +233,8 @@ class QuestGenerationEngine:
                 violations,
             )
 
-        # Deterministic fallback: pick random valid nodes from graph
         _logger.warning("quest_generation falling back to deterministic slot fill")
-        fills_raw = await self._deterministic_fill(session, template.slot_definitions, candidates, rng=rng)
+        fills_raw = self._deterministic_fill(template.slot_definitions, candidates, rng=rng)
         fills = validator.build_fills(fills_raw, template.slot_definitions)
         return fills_raw, fills
 
@@ -389,7 +330,6 @@ class QuestGenerationEngine:
 
     async def _get_candidates(
         self,
-        session: AsyncSession,
         slot_definitions: tuple[SlotDefinition, ...],
     ) -> dict[str, list[str]]:
         """Query the graph for candidate node IDs for each slot type."""
@@ -401,13 +341,12 @@ class QuestGenerationEngine:
                 continue
             seen_types.add(node_type)
             label = resolve_node_label(node_type)
-            ids = await get_candidate_ids_by_label(session, label=label)
+            ids = await self._quest_gen_repo.get_candidate_ids_by_label(label=label)
             candidates[node_type] = ids
         return candidates
 
-    async def _deterministic_fill(
+    def _deterministic_fill(
         self,
-        session: AsyncSession,
         slot_definitions: tuple[SlotDefinition, ...],
         candidates: dict[str, list[str]],
         rng: random.Random | None = None,

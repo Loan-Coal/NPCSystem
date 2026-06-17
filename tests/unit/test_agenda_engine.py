@@ -77,12 +77,13 @@ async def test_agendas_before_deadline_are_not_resolved():
 
 
 @pytest.mark.asyncio
-async def test_scheduler_session_kwarg_is_ignored():
+async def test_run_tick_no_session_required():
+    """run_tick accepts no session kwarg (SEV-24 Wave 5 — session coupling removed)."""
     agenda = {"id": "a", "description": "A"}
     repo = _make_repo(expired=[agenda], votes={"supports": [{"weight": 10}], "opposes": []})
     engine = AgendaEngine(political_repo=repo)
 
-    result = await engine.run_tick(session=object(), tick_id=2)
+    result = await engine.run_tick(tick_id=2)
 
     assert result["passed"] == 1
 

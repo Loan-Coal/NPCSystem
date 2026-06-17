@@ -6,8 +6,8 @@ Purpose: Handles quest interaction proposals — propose_quest opens a session s
          give_item with a matching deliver target is intercepted as an implicit claim.
 Does NOT: read graph state directly (goes through InteractionGraphPort); all lifecycle
           writes go through QuestLifecycleEngine. Does not call LLM or issue HTTP requests.
-Dependencies injected: InteractionGraphPort (reads) + AsyncSession + QuestLifecycleEngine
-          (the session is forwarded only to the still-session-based lifecycle engine).
+    Does NOT: hold a Neo4j session (DEC-122 / SEV-24) — QuestLifecycleEngine is sessionless.
+Dependencies injected: InteractionGraphPort (reads) + QuestLifecycleEngine (via caller).
 Used by: api.routes.interaction
 """
 
@@ -17,8 +17,6 @@ import hashlib
 import logging
 import uuid
 from typing import TYPE_CHECKING
-
-from neo4j import AsyncSession
 
 from npc_engine.engines.interaction.models import (
     STATUS_OPEN,
@@ -101,7 +99,6 @@ async def handle_propose_quest(
 async def handle_claim_completion(
     *,
     repo: InteractionGraphPort,
-    session: AsyncSession,
     proposal: InteractionProposal,
     player_id: str,
     npc_id: str,
@@ -116,7 +113,6 @@ async def handle_claim_completion(
 
     Args:
         repo: Interaction graph read port (quest-state read + objective verification).
-        session: Active Neo4j async session, forwarded to the lifecycle engine only.
         proposal: InteractionProposal with kind="claim_completion".
         player_id: Player character ID.
         npc_id: NPC character ID (quest giver).
@@ -153,7 +149,6 @@ async def handle_claim_completion(
         if delta > 0:
             try:
                 await engine.update_objective(
-                    session=session,
                     quest_id=quest_id,
                     player_id=player_id,
                     objective_id=obj.objective_id,
@@ -165,7 +160,6 @@ async def handle_claim_completion(
 
     eval_meta = _build_meta(player_id=player_id, quest_id=quest_id, reason="evaluate_completion")
     stored = await engine.evaluate_completion(
-        session=session,
         quest_id=quest_id,
         player_id=player_id,
         meta=eval_meta,
@@ -184,7 +178,6 @@ async def handle_claim_completion(
 async def handle_give_item_as_quest_claim(
     *,
     repo: InteractionGraphPort,
-    session: AsyncSession,
     proposal: InteractionProposal,
     player_id: str,
     npc_id: str,
@@ -199,7 +192,6 @@ async def handle_give_item_as_quest_claim(
 
     Args:
         repo: Interaction graph read port (active-quest lookup).
-        session: Active Neo4j async session, forwarded to the lifecycle engine only.
         proposal: InteractionProposal with kind="give_item".
         player_id: Player character ID.
         npc_id: NPC character ID.
@@ -236,7 +228,6 @@ async def handle_give_item_as_quest_claim(
             claim_proposal = InteractionProposal(kind="claim_completion", target_id=quest_id, payload={})
             return await handle_claim_completion(
                 repo=repo,
-                session=session,
                 proposal=claim_proposal,
                 player_id=player_id,
                 npc_id=npc_id,

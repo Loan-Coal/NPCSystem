@@ -113,7 +113,7 @@ async def test_scheduler_session_kwarg_is_ignored(emotion_store):
     repo = _make_repo(pairs=[("npc_a", "npc_b")])
     engine = MoodContagionEngine(emotion_store=emotion_store, mood_repo=repo, affection_threshold=50)
 
-    result = await engine.run_tick(session=object(), tick_id=1)
+    result = await engine.run_tick(tick_id=1)
 
     assert result["affected"] == 1
 

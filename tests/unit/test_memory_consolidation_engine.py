@@ -204,7 +204,8 @@ async def test_run_tick_consolidates_all_eligible_npcs():
 
 
 @pytest.mark.asyncio
-async def test_run_tick_ignores_scheduler_session_arg():
+async def test_run_tick_no_session_required():
+    """run_tick accepts no session kwarg (SEV-24 Wave 5 — session coupling removed)."""
     store = SessionStore(ttl_seconds=300, max_turns=100)
     await store.append_turns("player1", "npc_a", [f"Turn {i}" for i in range(10)])
 
@@ -212,6 +213,6 @@ async def test_run_tick_ignores_scheduler_session_arg():
     repo.create_memory = AsyncMock(side_effect=lambda *, character_id, **kwargs: f"mem-{character_id}")
     engine = _make_engine(store, _make_llm("Summary."), threshold=5, memory_repo=repo)
 
-    result = await engine.run_tick(object(), game_time=_make_game_time())
+    result = await engine.run_tick(game_time=_make_game_time())
 
     assert result["consolidated"] == ["npc_a"]

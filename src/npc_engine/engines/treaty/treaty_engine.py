@@ -37,7 +37,6 @@ class TreatyEngine:
         self,
         *,
         tick_id: int = 0,
-        **_: Any,
     ) -> dict[str, Any]:
         """Process treaty expiry and condition checks at the given tick.
 

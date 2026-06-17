@@ -96,43 +96,28 @@ async def test_label_not_replaced_below_arousal_threshold() -> None:
 
 @pytest.mark.asyncio
 async def test_emotion_bootstrapper_populates_store() -> None:
-    """EmotionBootstrapper.load_from_graph must seed the store from graph records."""
+    """EmotionBootstrapper.load_from_graph seeds the store via an EmotionBootstrapGraphPort."""
     bootstrapper = EmotionBootstrapper()
     store = EmotionStore()
 
-    mock_session = MagicMock()
-
-    # Simulate Neo4j result records as list of dicts
-    record_npc1 = {
+    # Emotion fields for npc-1; npc-2 returns None (missing data → skip).
+    npc1_fields = {
         "emotion_valence": 60,
         "emotion_arousal": 40,
         "emotion_mood_label": "warm",
         "emotion_updated_at_tick": 10,
     }
-    record_npc2 = {
-        "emotion_valence": None,
-        "emotion_arousal": None,
-        "emotion_mood_label": None,
-        "emotion_updated_at_tick": None,
-    }
 
-    async def mock_run(query: str, **kwargs: object):  # noqa: ANN001
-        npc_id = kwargs.get("npc_id")
+    async def _get_emotion_fields(npc_id: str) -> dict | None:
         if npc_id == "npc-1":
-            record = MagicMock()
-            record.__getitem__ = lambda self, key: record_npc1[key]
-            rows = [record]
-        else:
-            record = MagicMock()
-            record.__getitem__ = lambda self, key: record_npc2[key]
-            rows = [record]
-        result = _AsyncResult(rows)
-        return result
+            return npc1_fields
+        return None
 
-    mock_session.run = mock_run
+    mock_port = MagicMock()
+    mock_port.get_emotion_fields = _get_emotion_fields
 
     await bootstrapper.load_from_graph(
-        session=mock_session,
+        port=mock_port,
         store=store,
         npc_ids=["npc-1", "npc-2"],
     )

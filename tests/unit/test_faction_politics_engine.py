@@ -225,5 +225,5 @@ async def test_run_tick_ignores_scheduler_session_kwarg() -> None:
     port = _FakePort(events=[], standings=[])
     engine = FactionPoliticsEngine(rules=rules, repo=port)
 
-    result = await engine.run_tick(session=object(), tick_id=2)
+    result = await engine.run_tick(tick_id=2)
     assert result == {"rule_applications": 0, "decay_applications": 0}

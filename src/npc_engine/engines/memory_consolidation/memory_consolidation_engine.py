@@ -15,7 +15,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
 from npc_engine.config import Settings
@@ -193,7 +193,6 @@ class MemoryConsolidationEngine:
 
     async def run_tick(
         self,
-        _session: Any = None,
         *,
         game_time: TimePoint,
     ) -> dict:
@@ -205,12 +204,7 @@ class MemoryConsolidationEngine:
         injected MemoryConsolidationGraphPort, which manages its own session per
         operation (DEC-122 / SEV-24).
 
-        The ``_session`` positional argument is accepted for backward-compatibility
-        with callers that follow the ``run_tick(session, *, game_time)`` contract
-        defined on BaseEngine, but it is unused here — the port owns sessions.
-
         Args:
-            _session: Ignored. Kept for BaseEngine interface compatibility.
             game_time: Current game-time snapshot.
 
         Returns:

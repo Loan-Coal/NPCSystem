@@ -119,7 +119,6 @@ class EventHandler:
         tick_id: int,
         location_ids: list[str] | None = None,
         cause_event_id: str | None = None,
-        **_: object,
     ) -> dict:
         """Create one weighted event, seed NPC awareness, and optionally update world state.
 

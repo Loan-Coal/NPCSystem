@@ -62,6 +62,6 @@ async def test_scheduler_session_kwarg_is_ignored():
     repo = _make_repo([_row()])
     engine = SkillProgressionEngine(skill_repo=repo)
 
-    result = await engine.run_tick(session=object(), tick_id=4)
+    result = await engine.run_tick(tick_id=4)
 
     assert result == {"xp_awards": 1}

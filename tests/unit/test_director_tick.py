@@ -65,8 +65,8 @@ class _SpyEventHandler:
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []
 
-    async def run_tick(self, *, session: Any, tick_id: int, **kwargs: Any) -> dict[str, Any]:
-        self.calls.append({"session": session, "tick_id": tick_id})
+    async def run_tick(self, *, tick_id: int, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append({"tick_id": tick_id})
         return {"events": [{"id": "evt-1"}]}
 
 
@@ -86,7 +86,7 @@ async def test_decision_fires_event_and_returns_beat() -> None:
         relation_reader=_FakeRelationReader(),
         event_handler=spy_handler,
     )
-    result = await adapter.run_tick(session=object(), tick_id=5)
+    result = await adapter.run_tick(tick_id=5)
 
     assert len(result["director_beats"]) == 1
     beat = result["director_beats"][0]
@@ -110,7 +110,7 @@ async def test_fired_beat_recorded_in_beat_log() -> None:
         event_handler=_SpyEventHandler(),
         beat_log=beat_log,
     )
-    await adapter.run_tick(session=object(), tick_id=5)
+    await adapter.run_tick(tick_id=5)
 
     recent = beat_log.recent(limit=5)
     assert len(recent) == 1
@@ -130,7 +130,7 @@ async def test_no_decision_below_threshold_no_event() -> None:
         relation_reader=_FakeRelationReader(),
         event_handler=spy_handler,
     )
-    result = await adapter.run_tick(session=object(), tick_id=5)
+    result = await adapter.run_tick(tick_id=5)
 
     assert result["director_beats"] == []
     assert spy_handler.calls == []
@@ -146,7 +146,7 @@ async def test_missing_edge_defaults_neutral_no_crash() -> None:
         relation_reader=_MissingRelationReader(),
         event_handler=spy_handler,
     )
-    result = await adapter.run_tick(session=object(), tick_id=7)
+    result = await adapter.run_tick(tick_id=7)
 
     # NEUTRAL standing + idle=3 < threshold → no beat, no event, no crash
     assert result["director_beats"] == []
@@ -165,6 +165,6 @@ async def test_missing_edge_hostile_still_fires_when_triggered() -> None:
         relation_reader=_MissingRelationReader(),
         event_handler=spy_handler,
     )
-    result = await adapter.run_tick(session=object(), tick_id=2)
+    result = await adapter.run_tick(tick_id=2)
 
     assert result["director_beats"] == []

@@ -61,7 +61,7 @@ class PlayerModelTick:
         self._relation_reader = relation_reader
         self._model_repo = model_repo
 
-    async def run_tick(self, tick_id: int, **_: Any) -> dict[str, Any]:
+    async def run_tick(self, tick_id: int) -> dict[str, Any]:
         """Update each co-located NPC's model of the player.
 
         Args:

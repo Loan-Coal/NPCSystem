@@ -60,7 +60,7 @@ class SchemeAdvanceTick:
         self._registry = registry
         self._repo = scheming_repo
 
-    async def run_tick(self, *, tick_id: int, **_: Any) -> dict[str, Any]:
+    async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
         """Advance eligible active schemes one covert step, on cadence.
 
         The scheduler passes ``session=`` as a keyword arg; it is swallowed by

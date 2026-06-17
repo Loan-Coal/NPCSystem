@@ -33,6 +33,12 @@ class GossipWeightConfig:
     confidence_low_threshold: int = 30
 
 
+# Secrets propagate with lower base probability and higher distortion chance
+# than standard events (formerly in knowledge_propagator.py).
+SECRET_BASE_PROBABILITY: float = 0.2
+SECRET_DISTORTION_CHANCE: float = 0.5
+
+
 def load_gossip_config(path: Path = _DEFAULT_CONFIG_PATH) -> GossipWeightConfig:
     """Load GossipWeightConfig from a YAML file, falling back to defaults for missing keys.
 

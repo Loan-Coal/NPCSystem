@@ -49,7 +49,7 @@ class FactionPoliticsEngine:
         self._lock = asyncio.Lock()
         self._rule_index: dict[str, int] = {r.event_type: r.standing_delta for r in rules.rules}
 
-    async def run_tick(self, *, tick_id: int = 0, **_: Any) -> dict[str, Any]:
+    async def run_tick(self, *, tick_id: int = 0) -> dict[str, Any]:
         """Execute one faction politics tick: apply event rules then decay.
 
         Args:

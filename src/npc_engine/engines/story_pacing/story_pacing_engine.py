@@ -54,7 +54,7 @@ class StoryPacingEngine:
         self._world_state_repo = world_state_repo
         self._lock = asyncio.Lock()
 
-    async def run_tick(self, *, tick_id: int, **_: Any) -> dict[str, Any]:
+    async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
         """Execute one story pacing tick: evaluate suppression and update WorldState.
 
         Args:

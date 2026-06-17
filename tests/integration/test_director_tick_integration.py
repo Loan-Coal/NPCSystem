@@ -93,7 +93,7 @@ async def test_director_tick_fires_beat_against_live_session() -> None:
                 relation_reader=Neo4jRelationReadRepository(graph_db),
                 event_handler=get_event_handler(),
             )
-            result = await adapter.run_tick(session=session, tick_id=99)
+            result = await adapter.run_tick(tick_id=99)
 
         assert len(result["director_beats"]) == 1, (
             f"Expected one beat but got: {result['director_beats']}"

@@ -120,7 +120,7 @@ async def test_run_tick_ignores_scheduler_session_kwarg(engine, military_repo) -
             return_value=[],
         ),
     ):
-        result = await engine.run_tick(session=object(), tick_id=7)
+        result = await engine.run_tick(tick_id=7)
 
     assert result == {"battles_resolved": 0, "factions_yielded": 0}
 

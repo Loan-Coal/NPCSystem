@@ -19,7 +19,7 @@ class FakeHandler:
     def __init__(self):
         self.calls: list[int] = []
 
-    async def run_tick(self, session, tick_id: int, max_pairs: int = 20):
+    async def run_tick(self, *, tick_id: int, max_pairs: int = 20):
         self.calls.append(tick_id)
         return {"tick_id": tick_id}
 
@@ -30,11 +30,11 @@ class FailingHandler(FakeHandler):
         self._fail_on_tick = fail_on_tick
         self._failed = False
 
-    async def run_tick(self, session, tick_id: int, max_pairs: int = 20):
+    async def run_tick(self, *, tick_id: int, max_pairs: int = 20):
         if tick_id == self._fail_on_tick and not self._failed:
             self._failed = True
             raise RuntimeError("simulated failure")
-        return await super().run_tick(session=session, tick_id=tick_id, max_pairs=max_pairs)
+        return await super().run_tick(tick_id=tick_id, max_pairs=max_pairs)
 
 
 class _FakeResult:
@@ -101,11 +101,11 @@ class FirstTickFailingHandler(FakeHandler):
         super().__init__()
         self._failed_once = False
 
-    async def run_tick(self, session, tick_id: int, max_pairs: int = 20):
+    async def run_tick(self, *, tick_id: int, max_pairs: int = 20):
         if not self._failed_once:
             self._failed_once = True
             raise RuntimeError("transient tick failure")
-        return await super().run_tick(session=session, tick_id=tick_id, max_pairs=max_pairs)
+        return await super().run_tick(tick_id=tick_id, max_pairs=max_pairs)
 
 
 class BlockedLeaseRepo(FakeLeaseRepo):

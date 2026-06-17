@@ -160,11 +160,11 @@ async def test_no_chapter_opens_prologue(engine, chapter_repo):
 
 
 @pytest.mark.asyncio
-async def test_run_tick_ignores_session_kwarg(engine, chapter_repo):
-    """The scheduler passes session=...; run_tick must accept and ignore it (SEV-24)."""
+async def test_run_tick_no_session_required(engine, chapter_repo):
+    """run_tick accepts no session kwarg (SEV-24 Wave 5 — session coupling removed)."""
     chapter_repo.get_current_chapter = AsyncMock(return_value=None)
 
-    result = await engine.run_tick(session=object(), tick_id=1)
+    result = await engine.run_tick(tick_id=1)
 
     assert result["transition"] is True
 

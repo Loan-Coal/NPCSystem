@@ -69,7 +69,7 @@ class ProactiveDialogueTick:
         self._location_reader = location_reader
         self._queue = proactive_queue
 
-    async def run_tick(self, tick_id: int, **_: Any) -> dict[str, Any]:
+    async def run_tick(self, tick_id: int) -> dict[str, Any]:
         """Run proactive checks for all co-located pairs and return the winner.
 
         Args:

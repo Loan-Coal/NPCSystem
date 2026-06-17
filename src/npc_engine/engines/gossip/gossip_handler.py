@@ -36,7 +36,7 @@ from npc_engine.engines.gossip.gossip_distort import (
     compute_seed_value,
     gossip_distort,
 )
-from npc_engine.engines.gossip.knowledge_propagator import SECRET_DISTORTION_CHANCE
+from npc_engine.engines.gossip.gossip_config import SECRET_DISTORTION_CHANCE
 from npc_engine.engines.gossip.pair_selector import select_pairs
 from npc_engine.engines.gossip.secret_share_policy import secret_share_probability
 from npc_engine.engines.ports.gossip_port import GossipGraphPort
@@ -105,7 +105,6 @@ class GossipHandler:
         tick_id: int,
         max_pairs: int = 20,
         npc_ids: list[str] | None = None,
-        **_: object,
     ) -> dict:
         """Execute one gossip tick: select pairs, batch-read events+trust, distort, batch-write.
 

@@ -76,7 +76,6 @@ class ReputationTickAdapter:
     async def run_tick(
         self,
         tick_id: int,
-        **_: object,
     ) -> dict[str, Any]:
         """Run one reputation propagation tick.
 
