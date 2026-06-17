@@ -105,7 +105,7 @@ Severity uses CRITICAL/HIGH/MEDIUM/LOW (L2/L7 SEV-n mapped 2→HIGH,3→MED,4→
 | L3-09 | HIGH | 130/147 routes `OkEnvelope[dict[str,Any]]` opaque (full scope) | L3 | Decide | DEC-114 |
 | L2-06 | MED | `dependencies_advanced.py` second composition root | L2 | FIXED (SEV-17, 2026-06-15: split into politics/social/progression submodules) | DEC-115 |
 | L2-10 | LOW | covert summary template outside `prompts/` | L2 | Decide | DEC-116 |
-| L5-01/L5-02 | HIGH | 15 functions >40 lines (`advance()` 373, depth 7) ungated | L5 | Decide | DEC-117 |
+| L5-01/L5-02 | HIGH | 15 functions >40 lines (`advance()` 373, depth 7) ungated | L5 | FIXED (SEV-19, 2026-06-17: advance/dispatch/seed/assemble_tier_a_context refactored; baseline 141; cohesive rest waived per DEC-117) | DEC-117 |
 | L4-09b | HIGH | `investigation_service` raw `CREATE` vs `MERGE` dedup semantics | L4 | Decide | DEC-118 |
 | L2-01/L2-03 | HIGH | session-ownership systemic (14+ graph sub-writers own tx) | L2 | Decide | DEC-119 |
 | L7-01-R | MED | `DistortionType` Literal + frozen `REGISTRY_KEYS` | L7 | Decide | DEC-120 |
