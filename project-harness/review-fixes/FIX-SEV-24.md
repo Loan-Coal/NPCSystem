@@ -224,6 +224,10 @@ compose the domain Ports they need. Shared readers (`world_state_reader` x8, `re
   mocks the port + ignored-kwarg), `test_event_repository.py` (adapter), rewrote `test_event_reputation_wiring.py`
   to cover the graph-service reputation loop + handler forwarding.
 
+- **scheming** (DONE, `4daee07`, Wave 4): NEW `SchemingGraphPort` (get_active_schemes/upsert_scheme/add_scheme_step/get_all_active_schemes_with_steps/get_npc_location_id/`emit_scheme_step_atomic`) + `Neo4jSchemingRepository` (session-per-call, `run_in_tx` for atomic step). `SchemeAdvanceTick(settings,registry,scheming_repo=)` + `SchemingEngine(settings,scheming_repo=)` both sessionless; `run_tick(*, tick_id, **_)` swallows `session=`. Factory `get_scheme_advance_tick` (local import) wires from `get_graph_db()`. Tests rewritten to mock the port; `test_scheming_repository.py` covers the adapter. `engines/scheming/` neo4j-free.
+
+- **idempotency** (DONE, `4daee07`, Wave 4): `IdempotencyStoreProtocol` (`engines/idempotency/store_protocol.py`) now sessionless — removed `AsyncSession` from all 7 methods. NEW `Neo4jIdempotencyRepository` (`graph/repositories/`) holds `GraphDB`, opens session per call, wraps `Neo4jIdempotencyStore` (which retains its session-based API for the graph layer). `IdempotencyService` drops `graph_db` field + the `async with get_session()` wrapping; `service_helpers.py` drops `session` param from all async helpers. `get_idempotency_service` wires `Neo4jIdempotencyRepository`. Removed `get_idempotency_store` factory from `dependencies_stores`/`dependency_singletons`/`conftest.py` cache-clear list. `engines/idempotency/` neo4j-free.
+
 - **faction_politics** (DONE, `15b80dc`, Wave 4): NEW `FactionPoliticsGraphPort` (3 reads
   `get_recent_events`/`get_character_factions`/`get_all_standings` + ONE atomic `commit_standing_change`) +
   `Neo4jFactionPoliticsRepository`. The `run_in_tx` unit-of-work stays small (single `set_standing` write), so the
