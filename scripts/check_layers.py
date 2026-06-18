@@ -43,6 +43,9 @@ LAYER_RANK: dict[str, int] = {
     "schema": 1,
     "utils": 1,
     "observability": 1,
+    # SHIP-03 / DEC-127: first-run bootstrap utilities (VRAM detection, Ollama
+    # management). Peer to config — imports only stdlib and httpx, never engines.
+    "setup": 1,
 }
 
 # First-level dirs that hold no layer code (dev tooling / prompt data): exempt from

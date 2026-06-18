@@ -58,9 +58,12 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
   model is per-engine. No engine-file edits (pure OCP add). Structured output uses `json_object` mode
   (strict `json_schema` deferred — DEC-126). 18 unit tests green; `make check` green (2 pre-existing
   seed failures unrelated — ISSUE-116).
-- [ ] **SHIP-03 (path A — local inference)** — first-run flow that installs/launches Ollama and pulls a model
+- [x] **SHIP-03 (path A — local inference)** — first-run flow that installs/launches Ollama and pulls a model
   on demand (resumable), with a **size-tiered** model choice (e.g. 3B/7B/14B) defaulted by detected VRAM.
   Exit: a fresh machine reaches a working local dialogue without the user touching a terminal.
+  **✅ DEC-127:** `npc_engine.setup` package (rank-1 peer): `vram_detector` (nvidia-smi), `model_tiers`
+  (3B/7B/14B thresholds), `ollama_manager` (is_running/is_installed/launch/pull_model async), `first_run_flow`
+  async orchestrator → `FirstRunResult`. `scripts/setup_local.py` CLI entry point. 33 unit tests green.
 - [ ] **SHIP-04 (backend packaging)** — package the FastAPI engine as a launchable local server the game
   process starts/stops (e.g. PyInstaller), and define the Neo4j launch strategy for an end-user machine
   (Neo4j stays — DEC-124). Exit: double-clicking the game brings up engine + graph + model with no Docker.

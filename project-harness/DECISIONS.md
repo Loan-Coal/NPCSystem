@@ -3,6 +3,21 @@
 Non-obvious architectural choices. Each entry explains what was decided and why,
 so future maintainers can judge edge cases without re-deriving the rationale.
 
+## DEC-127: `src/npc_engine/setup/` added as a rank-1 package for SHIP-03 first-run bootstrap
+**Date:** 2026-06-18
+**Context:** SHIP-03 requires VRAM detection, Ollama process management, and model-tier selection logic
+that runs before the engine starts. These don't belong to any existing layer (api/engines/graph/config);
+they are pre-runtime utilities with no engine deps.
+**Decision:** Add `src/npc_engine/setup/` as a rank-1 package (peer to `config`/`utils`/`common`).
+It imports only stdlib and `httpx`; it never imports from `engines`, `services`, `graph`, `retrieval`,
+or `api`. `check_layers.py::LAYER_RANK["setup"] = 1` enforces this.
+**Modules:** `model_tiers.py` (tier constants + selector), `vram_detector.py` (nvidia-smi detection),
+`ollama_manager.py` (process + API lifecycle), `first_run_flow.py` (async orchestrator).
+**CLI entry point:** `scripts/setup_local.py` — called by the game launcher (SHIP-04) on first run.
+**Why not `scripts/`:** The modules have unit tests (import them as `npc_engine.setup.*`) and are
+structured enough to warrant a package. A standalone `scripts/` dir cannot be easily unit-tested
+under the existing pytest layout.
+
 ## DEC-126: SHIP-02 BYO-API path is one OpenAI-compatible adapter (not provider-specific)
 **Date:** 2026-06-18
 **Context:** SHIP-02 (DEC-124 path B — bring-your-own API key) needs a hosted-API LLM backend
