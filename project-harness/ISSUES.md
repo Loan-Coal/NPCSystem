@@ -11,6 +11,16 @@ Rules:
 
 ---
 
+## ISSUE-116: test_seed_chain_quests skip-existing tests assert _seed_edge never called
+**Found:** 2026-06-18, during SHIP-02 (OpenAI-compatible LLM adapter) — surfaced by `make check`
+**Severity:** P3 (nice-to-fix)
+**Where:** `tests/unit/test_seed_chain_quests.py` (`test_seed_chain_quests_skips_existing_nodes`, `test_seed_source_chain_quests_skips_existing_nodes`)
+**Description:** Both tests stub `_seed_node` to return `"skipped"` and then assert `mock_edge.assert_not_called()`, but `_seed_chain_quests` always calls `_seed_edge` (which upserts the latest props regardless of node existence). Same stale-expectation family as the FIXED ISSUE-040 (`test_seed.py`). Pre-existing: both fail on a clean tree (verified via `git stash`); unrelated to SHIP-02.
+**Why deferred:** Not the current task (SHIP-02 LLM adapter); demo-side seeding, no functional regression, does not gate the engine path.
+**To fix:** Update the two assertions to expect the actual `_seed_edge` upsert count (mirror ISSUE-040's resolution), or add skip-if-exists edge logic to `_seed_chain_quests` and keep the assertions.
+
+---
+
 ## ISSUE-094: proactive trigger_router has no `need`/`event` candidate producers
 **Found:** 2026-06-12, during F1.2 (proactive WS delivery wiring)
 **Severity:** P3 (nice-to-fix)

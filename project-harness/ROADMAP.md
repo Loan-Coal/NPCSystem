@@ -49,13 +49,15 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
   inference **or** an API key on first launch — no Docker, no manual Ollama/model pull, no GPU required for path B.
 - **Constraints:** DIP — new LLM backends register via the factory (OCP, no engine edits); auth on all routes;
   the bundled local backend reuses the existing FastAPI app unchanged (the game is still a pure REST/WS client).
-- [ ] **SHIP-01 (decision)** — pick the game-client platform. **Recommended: Unity** (it doubles as the studio
-  integration reference — a studio can copy the C# REST/WS client; ties into the deferred `Phase X — Unity SDK`).
-  Alternatives: a web/Ren'Py slice (faster to "players react," but does *not* serve as the engine integration
-  proof). **Needs a `DECISIONS.md` entry before P1 starts.**
-- [ ] **SHIP-02 (path B — BYO API key)** — add hosted-API LLM adapter(s) behind `LLMClientProtocol` + register
-  in the factory (e.g. an Anthropic / OpenAI-compatible backend), config/runtime-selectable per engine. Exit:
-  the dialogue engine runs against a hosted API with only a key + provider name, no engine-file edits.
+- [x] **SHIP-01 (decision)** — pick the game-client platform. **✅ Unity (DEC-125).** Doubles as the studio
+  integration reference (a studio can copy the C# REST/WS client; ties into the deferred `Phase X — Unity SDK`).
+  Alternatives (web/Ren'Py) rejected: faster to "players react" but not an engine integration proof.
+- [x] **SHIP-02 (path B — BYO API key)** — **✅ DEC-126:** `OpenAICompatibleAdapter` (backend `"openai"`)
+  behind `LLMClientProtocol`, registered in `engines/llm/factory.py`. One adapter serves OpenAI/OpenRouter/
+  Groq/Together/DeepSeek/LM Studio via configurable `OPENAI_API_URL` + player-supplied `OPENAI_API_KEY`;
+  model is per-engine. No engine-file edits (pure OCP add). Structured output uses `json_object` mode
+  (strict `json_schema` deferred — DEC-126). 18 unit tests green; `make check` green (2 pre-existing
+  seed failures unrelated — ISSUE-116).
 - [ ] **SHIP-03 (path A — local inference)** — first-run flow that installs/launches Ollama and pulls a model
   on demand (resumable), with a **size-tiered** model choice (e.g. 3B/7B/14B) defaulted by detected VRAM.
   Exit: a fresh machine reaches a working local dialogue without the user touching a terminal.
@@ -89,7 +91,7 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
   Exit: a shareable clip that makes the differentiator legible without narration.
 
 ### Open decisions for this program (need a `DECISIONS.md` call when reached)
-- [ ] **OD-Ship-platform** — SHIP-01 (Unity vs web/Ren'Py). Recommended Unity (integration-reference dual use).
+- [x] **OD-Ship-platform** — SHIP-01 resolved to **Unity** (DEC-125): integration-reference dual use.
 - [ ] **OD-Ship-graph** — Neo4j GPLv3 resolution for a distributed build: commercial/startup license **or**
   migrate the `graph/` layer to an embeddable Cypher store (Kùzu). **Deferred until a demo runs** (DEC-124).
 

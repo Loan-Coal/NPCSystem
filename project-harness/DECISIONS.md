@@ -3,6 +3,31 @@
 Non-obvious architectural choices. Each entry explains what was decided and why,
 so future maintainers can judge edge cases without re-deriving the rationale.
 
+## DEC-126: SHIP-02 BYO-API path is one OpenAI-compatible adapter (not provider-specific)
+**Date:** 2026-06-18
+**Context:** SHIP-02 (DEC-124 path B — bring-your-own API key) needs a hosted-API LLM backend
+behind `LLMClientProtocol`. The roadmap left the provider open ("an Anthropic / OpenAI-compatible backend").
+**Decision:** Ship a single `OpenAICompatibleAdapter` registered as backend `"openai"`, talking the
+OpenAI `/chat/completions` wire format against a **configurable `base_url`** (`OPENAI_API_URL`). One file
+covers OpenAI, OpenRouter, Groq, Together, DeepSeek, and local OpenAI-compatible servers (LM Studio,
+llama.cpp `--api`), so "provider choice" reduces to base-url + model selection with no engine edits — the
+broadest coverage per the OCP add-by-new-file seam (`engines/llm/factory.py:register_backend`).
+**Structured output:** first slice uses `response_format={"type":"json_object"}` (widely supported) and
+parses the message content as JSON, mirroring the Ollama adapter; strict `json_schema` response_format is
+a deferred enhancement (logged as an issue). A provider-native Anthropic adapter remains a future
+additive backend if a buyer requires the Messages API specifically.
+
+## DEC-125: SHIP-01 — demo-game client platform is Unity (resolves OD-Ship-platform)
+**Date:** 2026-06-18
+**Context:** SHIP-01 / OD-Ship-platform gates all of P1/P2 of the Shippable-demo-game program and shapes
+the SHIP-05 first-run wizard. Options were Unity, a web/browser client, or Ren'Py.
+**Decision:** **Unity.** It doubles as the studio integration reference — a studio can copy the C# REST/WS
+client directly — and ties into the deferred `Phase X — Unity SDK` (SX.2). Web would reach "players react"
+faster but does not serve as the B2B integration proof; Ren'Py is the weakest integration reference.
+**Consequence:** P1 client work (SHIP-06/07/08) and the SHIP-05 wizard UI target Unity/C#. The engine stays
+a pure REST/WS server (DEC-124); no engine code is Unity-aware. OD-Ship-graph (Neo4j copyleft) remains
+deferred until a demo actually runs.
+
 ## DEC-123: R006 baseline — five dialogue-cluster functions accepted over 40 lines
 **Date:** 2026-06-17
 **Context:** SEV-24 dialogue cluster migration introduced or touched five functions that
