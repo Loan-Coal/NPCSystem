@@ -1,17 +1,15 @@
 # NPCSystem — Engine Roadmap
 
-**Status:** Phases 0–26 complete; the 2026-06-11→12 expansion program (EXP-201..230) is **fully shipped**
-(slice-1 of each item — engines/models/graph/demo surfaces built + tested, `make check` 2062 / 86.18%).
-Many engines, however, are **built but dormant** (not wired into the tick loop / composition root, and
-not exposed via a REST/WS route the demo can reach). This file's **"Next"** section is the slice-2 plan:
-**Phase F activates + exposes the engines** so the demo can use them, **Phase G surfaces them** in the demo,
-and **Phase H expands the demo into a game** (economy depth, content/branching, legacy gameplay engines) on
-top of those APIs. Overnight execution driver: `project-harness/DEMO_BUILD_LOOP.md` (looped `/expand-parallel`).
+**Status:** Phases 0–26 complete; the EXP-201..230 expansion program **and** its slice-2 follow-up
+(**Phases F/G/H — activate, surface, make-it-a-game**) are **fully shipped** (every F/G/H item checked;
+only the two type-C deferrals H-D1/H-D2 + parked backlog remain). The architectural-remediation SEV backlog
+(SEV-01..24, incl. the GraphRepository facade) is **fully drained** (47/47). `make check` GREEN.
 
-> **Architectural remediation (separate track):** the `/full-review` SEV backlog — incl. **Track D (SEV-24,
-> GraphRepository facade)** — is driven by **`/fix-next`** from `project-harness/review-fixes/INDEX.md` (NOT this
-> file / `/expand-next`). SEV-24 is laid out there as a wave checklist (one engine-domain per `/fix-next` pass,
-> brief in `review-fixes/FIX-SEV-24.md`); clear context between waves.
+**Next:** the engine is feature-complete enough to prove. The active program is **shipping a downloadable
+demo game** as the **B2B proof-slice** — a ~10-minute experience that makes the (invisible) simulation
+*legible*, runs the LLM **locally OR via a player-supplied API key**, and doubles as the studio integration
+reference. See **"Next — Shippable demo game (B2B proof-slice)"** below. Engine choice for the LLM/graph
+runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyleft revisit deferred).
 
 ## Archive (completed history)
 
@@ -21,11 +19,83 @@ top of those APIs. Overnight execution driver: `project-harness/DEMO_BUILD_LOOP.
 | Phases 14–26 (proactive dialogue, retrieval evals, moderation, API exit contract, arch-debt drain, runtime correctness, P3 sweep, eval fixtures, temporal framing, voice polish) + full session log | `project-harness/archive/ROADMAP_phase14-26_2026-06-11.md` |
 | 2026-06-01 Munich hackathon roadmap | `project-harness/archive/ROADMAP_munich_demo_2026-06-06.md` |
 | 2026-06-03 codebase review (BLOCK, 43 findings) — remediation backlog, now drained across Phases 20–26 | `project-harness/archive/review-2026-06-03/` |
-| Legacy expansion backlog (EXP-10..57, KE-6) — prior `/expand-parallel` program | `project-harness/expansion/EXPANSION_INDEX.md` (history section) |
+| EXP-201..230 expansion program (analysis + briefs + overnight loop driver) | `project-harness/archive/2026-06-18-shipped-programs/expansion/` |
+| Phases F/G/H slice-2 (activate/surface/make-it-a-game) — driver + demo-expansion analysis | `project-harness/archive/2026-06-18-shipped-programs/DEMO_BUILD_LOOP.md`, `…/demo-expansion/`, `…/DEMO_GAME_EXPANSION_REVIEW.md` |
+| 2026-06-13 full review (9-lens) + SEV-01..24 fix backlog (47/47 drained) | `project-harness/archive/2026-06-18-shipped-programs/REVIEW_FINDINGS.md`, `…/review-fixes/` |
 
 ---
 
-## Next — Slice-2: activate engines (Phase F) → surface them (Phase G) → make it a game (Phase H)
+## Next — Shippable demo game (B2B proof-slice)
+
+> **End goal: license the engine to studios (B2B).** The thing that closes that sale is not a bigger engine
+> — it's proof that the (invisible) simulation *carries a real experience players react to*, plus a recognizable
+> integration path. So the near-term deliverable is a **small, downloadable, distributable demo game**: a
+> ~10-minute experience built on one **legible emergent hook**, with the engine's runtime made shippable to a
+> player's machine. **Do NOT grow this into a full game** — it is a proof artifact, instrumented for the pitch.
+>
+> **Decisions baked in (see DEC-124):**
+> - **Dual LLM path.** (A) run the model **locally** (bundle/first-run-install Ollama + a size-tiered model);
+>   (B) **bring-your-own API key** + provider choice (works on any machine, no GPU). (A) is the differentiator;
+>   (B) is the universal fallback and is nearly free given `LLMClientProtocol` + the factory registry.
+> - **Stay on Neo4j for now.** The Neo4j Community **GPLv3** copyleft question for a *bundled, distributed*
+>   build is **explicitly deferred** — revisit once a demo actually runs and the licensing question is concrete
+>   (commercial license vs. an embeddable Cypher store e.g. Kùzu). Logged as an open decision, not a blocker.
+>
+> **Sequencing rule:** P0 (deployment + LLM paths — *platform-agnostic*, actionable now) → P1 (the game slice —
+> *gated on SHIP-01 platform pick*) → P2 (B2B proof wrap). P0 wastes no work regardless of the P1 platform.
+
+### Phase P0 — Make the runtime shippable + dual LLM path (platform-agnostic)
+- **Goal:** a player can run the whole stack (engine + Neo4j + model) from a download, choosing local
+  inference **or** an API key on first launch — no Docker, no manual Ollama/model pull, no GPU required for path B.
+- **Constraints:** DIP — new LLM backends register via the factory (OCP, no engine edits); auth on all routes;
+  the bundled local backend reuses the existing FastAPI app unchanged (the game is still a pure REST/WS client).
+- [ ] **SHIP-01 (decision)** — pick the game-client platform. **Recommended: Unity** (it doubles as the studio
+  integration reference — a studio can copy the C# REST/WS client; ties into the deferred `Phase X — Unity SDK`).
+  Alternatives: a web/Ren'Py slice (faster to "players react," but does *not* serve as the engine integration
+  proof). **Needs a `DECISIONS.md` entry before P1 starts.**
+- [ ] **SHIP-02 (path B — BYO API key)** — add hosted-API LLM adapter(s) behind `LLMClientProtocol` + register
+  in the factory (e.g. an Anthropic / OpenAI-compatible backend), config/runtime-selectable per engine. Exit:
+  the dialogue engine runs against a hosted API with only a key + provider name, no engine-file edits.
+- [ ] **SHIP-03 (path A — local inference)** — first-run flow that installs/launches Ollama and pulls a model
+  on demand (resumable), with a **size-tiered** model choice (e.g. 3B/7B/14B) defaulted by detected VRAM.
+  Exit: a fresh machine reaches a working local dialogue without the user touching a terminal.
+- [ ] **SHIP-04 (backend packaging)** — package the FastAPI engine as a launchable local server the game
+  process starts/stops (e.g. PyInstaller), and define the Neo4j launch strategy for an end-user machine
+  (Neo4j stays — DEC-124). Exit: double-clicking the game brings up engine + graph + model with no Docker.
+- [ ] **SHIP-05 (first-run wizard UX)** — a setup screen that offers **(A) run locally** vs **(B) use an API
+  provider + key**, persists the choice, and validates it (key works / model present) before play. Exit: both
+  paths are reachable from one wizard; choice survives restart.
+
+### Phase P1 — The game slice (gated on SHIP-01)
+- **Goal:** a ~10-minute authored experience whose core loop makes one emergent behaviour *visible and
+  re-tellable in a 30-second clip*. Reuse the existing seed world (5–8 NPCs / existing locations/factions).
+- **Constraints:** keep scope brutally small — one town, one hook, one win/lose; the simulation must be the star.
+- [ ] **SHIP-06 (the legible hook)** — implement ONE emergent payoff the player can trigger and watch:
+  e.g. *tell NPC A a secret → advance a gossip tick → NPC C across town repeats it, distorted*; or *betray
+  someone, leave, return → they remember*. Exit: the hook is demonstrable end-to-end in the chosen client.
+- [ ] **SHIP-07 (client + live legibility panel)** — talk-to-NPC UI plus a live relationship/knowledge-graph
+  side panel (port the pygame graph-viz concept) so the invisible state is on screen. Exit: graph mutates
+  visibly as the player acts.
+- [ ] **SHIP-08 (10-minute arc)** — an authored short scenario over the seed world with a clear win/lose and
+  the hook on the critical path. Exit: a first-time player reaches an ending in ~10 min.
+- [ ] **SHIP-09 (distribution)** — a public build (itch.io and/or a Steam Next Fest demo) of the chosen path(s).
+  Exit: a stranger can download and play without a setup call.
+
+### Phase P2 — B2B proof wrap
+- **Goal:** convert player reactions into the evidence a studio's product/eng leads ask for.
+- [ ] **SHIP-10 (instrumentation + perf)** — capture engagement/retention signals and per-dialogue
+  **latency + cost** (both LLM paths). Exit: a one-pager of real numbers for the pitch.
+- [ ] **SHIP-11 (marketing clip)** — a ≤30-second screen capture of the SHIP-06 hook propagating across town.
+  Exit: a shareable clip that makes the differentiator legible without narration.
+
+### Open decisions for this program (need a `DECISIONS.md` call when reached)
+- [ ] **OD-Ship-platform** — SHIP-01 (Unity vs web/Ren'Py). Recommended Unity (integration-reference dual use).
+- [ ] **OD-Ship-graph** — Neo4j GPLv3 resolution for a distributed build: commercial/startup license **or**
+  migrate the `graph/` layer to an embeddable Cypher store (Kùzu). **Deferred until a demo runs** (DEC-124).
+
+---
+
+## Completed ✅ — Phases F/G/H (slice-2: activate → surface → make-it-a-game, 2026-06-11→12)
 
 > The Phase A–E program built each capability as a **slice 1** (engine logic + graph + tests, mostly
 > new-file-add) but deliberately deferred the **wiring** (scheduler tick / composition-root injection /

@@ -1558,3 +1558,31 @@ adapter — living outside `graph/` — can satisfy the same Port without the en
 no `neo4j`/graph symbol. Remaining ~67 engine files migrate per domain across later sessions.
 **Deferred:** row payloads stay `dict[str, Any]` (behavior-preserving); converting to Pydantic row models is
 folded into the strict-typing pass (SEV-15).
+
+## DEC-124: Shippable demo game — dual LLM path + stay on Neo4j (copyleft deferred)
+**Date:** 2026-06-18 · **Status:** 🟡 OPEN (direction set; two sub-decisions deferred) · **Drives:** ROADMAP "Next — Shippable demo game (B2B proof-slice)" (SHIP-01..11)
+**Context:** Engine + demo are feature-complete (Phases 0–26, EXP-201..230, F/G/H, SEV-01..24 all shipped).
+End goal is **B2B licensing to studios**. The proof a studio actually needs is not a bigger engine but
+evidence the simulation carries a real player experience + a recognizable integration path. So the next
+deliverable is a small **downloadable demo game** (proof-slice, not a full game). Two runtime questions had
+to be settled to plan it: how the LLM runs on a player's machine, and what to do about Neo4j's license in a
+*distributed* build.
+**Decision (LLM — dual path):** Support **both** at first-run: **(A) local inference** — bundle / first-run-install
+Ollama + a **size-tiered** model (≈3B/7B/14B, defaulted by detected VRAM) so the privacy/offline story holds;
+**(B) bring-your-own API key + provider** — works on any machine, no GPU. Both go through `LLMClientProtocol`
++ the factory registry (OCP): path B is a registered hosted-API adapter (no engine edits), path A reuses the
+Ollama adapter. Rationale: local is the differentiator we sell to studios; the API path is the universal
+fallback for players without a capable GPU and is nearly free to add.
+**Decision (graph — stay on Neo4j now):** Keep Neo4j for the engine and the bundled demo build. **Do not**
+re-platform the `graph/` layer pre-demo.
+**Deferred (revisit once a demo runs):**
+- **Neo4j Community is GPLv3** — bundling it inside a distributed commercial game has copyleft implications.
+  Resolution options: (a) Neo4j commercial/startup license, (b) require the player to supply Neo4j (bad UX),
+  (c) migrate `graph/` to an embeddable permissive Cypher store (e.g. **Kùzu**, MIT, embedded, no server).
+  Explicitly **not** decided now — revisit when the licensing question is concrete, not hypothetical.
+- **Game-client platform (SHIP-01)** — Unity (recommended: doubles as the studio integration reference, ties
+  into the deferred Phase X Unity SDK) vs a web/Ren'Py slice (faster to a "players react" signal, but not an
+  integration proof). Needs its own entry when chosen.
+**Why deferring copyleft is safe:** the backend-packaging + dual-LLM work (SHIP-02..05) is identical whether
+or not the graph store later changes; only SHIP-04's Neo4j-launch step is graph-specific and is swappable.
+The decision blocks nothing on the critical path to a running demo.
