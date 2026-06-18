@@ -1,5 +1,7 @@
 """
 topic_classifier.py - Keyword-based player message topic detection for dialogue weight profiles.
+Layer: retrieval
+Purpose: (auto-detected — review)
 
 Does NOT: call LLM adapters, access graph data, or perform any I/O.
 
@@ -9,6 +11,7 @@ Dependencies injected: None.
 # Keywords that indicate the player is engaging with a quest flow (task inquiry,
 # objective update, reward collection, delivery / kill / fetch). When matched,
 # the retrieval pipeline boosts quest context over social/relationship context.
+from __future__ import annotations
 _QUEST_KEYWORDS: frozenset[str] = frozenset({
     "quest", "mission", "task", "objective", "reward", "bounty",
     "deliver", "delivery", "fetch", "find", "kill", "slay", "defeat",

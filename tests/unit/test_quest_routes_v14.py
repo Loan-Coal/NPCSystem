@@ -14,14 +14,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from npc_engine.api.dependencies import get_db_session, get_quest_lifecycle_engine
+from npc_engine.api.dependencies_engines import get_quest_offer_service, get_quest_reward_router
 from npc_engine.api.routes import quest
 from npc_engine.config import Settings
 
 
 class _FakeQuestEngine:
-    async def offer_quest(self, **kwargs):
-        return {"quest_id": kwargs["quest_id"], "player_id": kwargs["player_id"], "status": "offered"}
-
     async def accept_quest(self, **kwargs):
         return {"quest_id": kwargs["quest_id"], "player_id": kwargs["player_id"], "status": "accepted"}
 
@@ -31,6 +29,16 @@ class _FakeQuestEngine:
     async def evaluate_completion(self, **kwargs):
         return {"quest_id": kwargs["quest_id"], "player_id": kwargs["player_id"], "status": "completed"}
 
+
+class _FakeOfferService:
+    async def offer_quest(self, **kwargs):
+        return {"quest_id": kwargs["quest_id"], "player_id": kwargs["player_id"], "status": "offered"}
+
+    async def offer_draft_quest(self, **kwargs):
+        return {"quest_id": kwargs["quest_id"], "player_id": kwargs["player_id"], "status": "offered"}
+
+
+class _FakeRewardRouter:
     async def apply_rewards(self, **kwargs):
         return {
             "quest_id": kwargs["quest_id"],
@@ -50,6 +58,8 @@ def _build_app() -> FastAPI:
     app.dependency_overrides[get_db_session] = _db_session_stub
     app.dependency_overrides[quest.get_settings] = lambda: Settings(API_KEY_SECRET="local_dev_secret_change_this_2026")
     app.dependency_overrides[get_quest_lifecycle_engine] = lambda: _FakeQuestEngine()
+    app.dependency_overrides[get_quest_offer_service] = lambda: _FakeOfferService()
+    app.dependency_overrides[get_quest_reward_router] = lambda: _FakeRewardRouter()
     return app
 
 

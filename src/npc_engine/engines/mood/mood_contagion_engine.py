@@ -2,29 +2,22 @@
 Module: mood_contagion_engine
 Layer: engines
 Purpose: Spreads emotional states between co-located, affectionate NPC pairs each tick.
-Does NOT: write emotion state to EmotionStore directly — delegates Neo4j writes to mood_queries.
-Dependencies: graph/mood_queries, engines/emotion/emotion_store, engines/emotion/emotion_state
-Dependencies injected: EmotionStore, AsyncSession (per call).
+Does NOT: write emotion state to EmotionStore directly, open sessions, or import the
+          graph layer — delegates graph access to the injected MoodGraphPort.
+Dependencies: engines/emotion/emotion_store, engines/emotion/emotion_state, engines/ports/mood_port
+Dependencies injected: EmotionStore, MoodGraphPort (via __init__).
 Used by: scheduler/tick_scheduler, api/dependency_singletons
 """
 
 from __future__ import annotations
 
-import logging
-from typing import TYPE_CHECKING
+from typing import Any
 
-from neo4j import AsyncSession
+import logging
 
 from npc_engine.engines.emotion.emotion_state import EmotionState, derive_label
 from npc_engine.engines.emotion.emotion_store import EmotionStore
-from npc_engine.graph.mood_queries import (
-    get_all_character_moods,
-    get_co_located_affectionate_pairs,
-    set_character_mood,
-)
-
-if TYPE_CHECKING:
-    pass
+from npc_engine.engines.ports.mood_port import MoodGraphPort
 
 LOGGER = logging.getLogger(__name__)
 
@@ -48,79 +41,81 @@ class MoodContagionEngine:
     2. For each pair, blend valence and arousal: new_a = 0.9 * a + 0.1 * b (immutable).
     3. Update EmotionStore and persist new mood label + intensity to the CHARACTER node.
 
-    On startup, call ``initialize(session)`` to load persisted moods from Neo4j into
+    On startup, call ``initialize()`` to load persisted moods from Neo4j into
     the EmotionStore so mood history survives server restarts.
+
+    Graph access is injected as a MoodGraphPort (DEC-122 / SEV-24); the engine holds
+    no Neo4j session. The tick scheduler's ``session`` kwarg is accepted and ignored
+    until the BaseEngine protocol drops it.
     """
 
     def __init__(
         self,
         emotion_store: EmotionStore,
+        mood_repo: MoodGraphPort,
         affection_threshold: int = _AFFECTION_THRESHOLD,
     ) -> None:
         """Initialise the engine.
 
         Args:
             emotion_store: Shared in-memory emotion state store.
+            mood_repo: Graph access port (read moods/pairs, write mood).
             affection_threshold: Minimum RELATES_TO.affection for contagion to apply.
         """
         self._store = emotion_store
+        self._mood_repo = mood_repo
         self._affection_threshold = affection_threshold
 
-    async def initialize(self, session: AsyncSession) -> int:
+    async def initialize(self) -> int:
         """Load persisted mood states from Neo4j into EmotionStore.
 
         Call once on server startup before the first tick.
 
-        Args:
-            session: Active Neo4j async session.
-
         Returns:
             Number of character moods loaded.
         """
-        rows = await get_all_character_moods(session)
+        rows = await self._mood_repo.get_all_character_moods()
         for row in rows:
             char_id = row["character_id"]
             label = row["mood"]
             intensity = row["intensity"]
             valence, arousal = _label_to_state(label, intensity)
             state = EmotionState(valence=valence, arousal=arousal, label=label)
-            self._store.set(npc_id=char_id, state=state)
+            await self._store.set(npc_id=char_id, state=state)
         LOGGER.info("MoodContagionEngine: loaded %d moods from Neo4j", len(rows))
         return len(rows)
 
-    async def run_tick(self, session: AsyncSession, tick_id: int) -> dict:
+    async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
         """Blend moods for co-located affectionate pairs and persist results.
 
         Args:
-            session: Active Neo4j async session.
             tick_id: Current game tick identifier.
+            **_: Absorbs the scheduler's ``session`` kwarg (unused; see class docstring).
 
         Returns:
             Dict with ``tick_id`` and ``affected`` (number of NPC pairs blended).
         """
-        pairs = await get_co_located_affectionate_pairs(
-            session, affection_threshold=self._affection_threshold
+        pairs = await self._mood_repo.get_co_located_affectionate_pairs(
+            affection_threshold=self._affection_threshold
         )
 
         affected = 0
         for npc_a, npc_b in pairs:
-            state_a = self._store.get(npc_a)
-            state_b = self._store.get(npc_b)
+            state_a = await self._store.get(npc_a)
+            state_b = await self._store.get(npc_b)
 
             new_a = _blend(state_a, state_b)
             new_b = _blend(state_b, state_a)
 
-            self._store.set(npc_id=npc_a, state=new_a)
-            self._store.set(npc_id=npc_b, state=new_b)
+            await self._store.set(npc_id=npc_a, state=new_a)
+            await self._store.set(npc_id=npc_b, state=new_b)
 
-            await set_character_mood(
-                session,
+            await self._mood_repo.set_character_mood(
                 character_id=npc_a,
                 mood=new_a.label,
                 intensity=new_a.arousal / 100.0,
             )
-            await set_character_mood(
-                session,
+            await self._mood_repo.set_character_mood(
                 character_id=npc_b,
                 mood=new_b.label,
                 intensity=new_b.arousal / 100.0,

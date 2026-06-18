@@ -7,6 +7,8 @@ Dependencies injected: None.
 Public surface: PricingEngine, PricingRules, TradeEngine, TradeResult
 """
 
+from __future__ import annotations
+
 from npc_engine.engines.economy.pricing_engine import PricingEngine
 from npc_engine.engines.economy.pricing_rules_loader import PricingRules, load_pricing_rules
 from npc_engine.engines.economy.trade_engine import TradeEngine

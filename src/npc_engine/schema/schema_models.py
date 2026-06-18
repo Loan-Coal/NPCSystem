@@ -1,10 +1,13 @@
 """
 schema_models.py - Pydantic models for game_schema.yaml meta-schema.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: load files from disk.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from typing import Literal
 

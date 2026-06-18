@@ -1,183 +1,107 @@
-"""Unit tests for AgendaEngine (Phase 7.2 Political Simulation)."""
+"""Unit tests for AgendaEngine — graph access via a mocked PoliticalGraphPort."""
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
 from npc_engine.engines.agenda.agenda_engine import AgendaEngine
 
 
-@pytest.fixture
-def engine() -> AgendaEngine:
-    return AgendaEngine()
-
-
-@pytest.fixture
-def session() -> AsyncMock:
-    return AsyncMock()
-
-
-# ---------------------------------------------------------------------------
-# Agenda resolution logic
-# ---------------------------------------------------------------------------
+def _make_repo(
+    expired: list[dict[str, Any]] | None = None,
+    votes: dict[str, Any] | None = None,
+) -> AsyncMock:
+    repo = AsyncMock()
+    repo.get_expired_open_agendas = AsyncMock(return_value=expired or [])
+    repo.get_agenda_votes = AsyncMock(return_value=votes or {"supports": [], "opposes": []})
+    repo.set_agenda_status = AsyncMock()
+    return repo
 
 
 @pytest.mark.asyncio
-async def test_agenda_passes_when_support_exceeds_opposition(engine, session):
-    """An agenda past its deadline is marked 'passed' when support weight > oppose weight."""
-    expired_agenda = {
-        "id": "agenda-trade-reform",
-        "description": "Open the northern trade routes",
-        "proposed_by_faction_id": "faction-merchants",
-        "status": "open",
-        "deadline_tick": 10,
-    }
+async def test_agenda_passes_when_support_exceeds_opposition():
+    agenda = {"id": "agenda-trade-reform", "description": "Open trade routes"}
     votes = {
         "supports": [{"character": {"id": "char-a"}, "weight": 80}],
         "opposes": [{"character": {"id": "char-b"}, "weight": 30}],
     }
+    repo = _make_repo(expired=[agenda], votes=votes)
+    engine = AgendaEngine(political_repo=repo)
 
-    with (
-        patch(
-            "npc_engine.engines.agenda.agenda_engine.get_expired_open_agendas",
-            new=AsyncMock(return_value=[expired_agenda]),
-        ),
-        patch(
-            "npc_engine.engines.agenda.agenda_engine.get_agenda_votes",
-            new=AsyncMock(return_value=votes),
-        ),
-        patch(
-            "npc_engine.engines.agenda.agenda_engine.set_agenda_status",
-            new=AsyncMock(),
-        ) as mock_set,
-    ):
-        result = await engine.run_tick(session, tick_id=10)
+    result = await engine.run_tick(tick_id=10)
 
-    assert result["resolved"] == 1
-    assert result["passed"] == 1
-    assert result["failed"] == 0
-    mock_set.assert_called_once_with(session, agenda_id="agenda-trade-reform", status="passed")
+    assert result == {"resolved": 1, "passed": 1, "failed": 0}
+    repo.set_agenda_status.assert_awaited_once_with(agenda_id="agenda-trade-reform", status="passed")
 
 
 @pytest.mark.asyncio
-async def test_agenda_fails_when_opposition_equals_support(engine, session):
-    """An agenda is marked 'failed' when oppose weight equals support weight (tie → fail)."""
-    expired_agenda = {
-        "id": "agenda-war",
-        "description": "Declare war on the southern kingdom",
-        "proposed_by_faction_id": "faction-hawks",
-        "status": "open",
-        "deadline_tick": 5,
-    }
+async def test_agenda_fails_when_opposition_equals_support():
+    agenda = {"id": "agenda-war", "description": "Declare war"}
     votes = {
         "supports": [{"character": {"id": "char-hawk"}, "weight": 50}],
         "opposes": [{"character": {"id": "char-dove"}, "weight": 50}],
     }
+    repo = _make_repo(expired=[agenda], votes=votes)
+    engine = AgendaEngine(political_repo=repo)
 
-    with (
-        patch(
-            "npc_engine.engines.agenda.agenda_engine.get_expired_open_agendas",
-            new=AsyncMock(return_value=[expired_agenda]),
-        ),
-        patch(
-            "npc_engine.engines.agenda.agenda_engine.get_agenda_votes",
-            new=AsyncMock(return_value=votes),
-        ),
-        patch(
-            "npc_engine.engines.agenda.agenda_engine.set_agenda_status",
-            new=AsyncMock(),
-        ) as mock_set,
-    ):
-        result = await engine.run_tick(session, tick_id=5)
+    result = await engine.run_tick(tick_id=5)
 
     assert result["failed"] == 1
-    mock_set.assert_called_once_with(session, agenda_id="agenda-war", status="failed")
+    repo.set_agenda_status.assert_awaited_once_with(agenda_id="agenda-war", status="failed")
 
 
 @pytest.mark.asyncio
-async def test_agenda_fails_when_no_votes(engine, session):
-    """An agenda with no votes at all is marked 'failed' (no consensus = failure)."""
-    expired_agenda = {
-        "id": "agenda-census",
-        "description": "Conduct a kingdom census",
-        "proposed_by_faction_id": "faction-scribes",
-        "status": "open",
-        "deadline_tick": 3,
-    }
-    votes = {"supports": [], "opposes": []}
+async def test_agenda_fails_when_no_votes():
+    agenda = {"id": "agenda-census", "description": "Census"}
+    repo = _make_repo(expired=[agenda], votes={"supports": [], "opposes": []})
+    engine = AgendaEngine(political_repo=repo)
 
-    with (
-        patch(
-            "npc_engine.engines.agenda.agenda_engine.get_expired_open_agendas",
-            new=AsyncMock(return_value=[expired_agenda]),
-        ),
-        patch(
-            "npc_engine.engines.agenda.agenda_engine.get_agenda_votes",
-            new=AsyncMock(return_value=votes),
-        ),
-        patch(
-            "npc_engine.engines.agenda.agenda_engine.set_agenda_status",
-            new=AsyncMock(),
-        ) as mock_set,
-    ):
-        result = await engine.run_tick(session, tick_id=3)
+    result = await engine.run_tick(tick_id=3)
 
     assert result["failed"] == 1
-    mock_set.assert_called_once_with(session, agenda_id="agenda-census", status="failed")
+    repo.set_agenda_status.assert_awaited_once_with(agenda_id="agenda-census", status="failed")
 
 
 @pytest.mark.asyncio
-async def test_agendas_before_deadline_are_not_resolved(engine, session):
-    """Agendas whose deadline has not passed are not touched."""
-    with (
-        patch(
-            "npc_engine.engines.agenda.agenda_engine.get_expired_open_agendas",
-            new=AsyncMock(return_value=[]),
-        ),
-        patch(
-            "npc_engine.engines.agenda.agenda_engine.set_agenda_status",
-            new=AsyncMock(),
-        ) as mock_set,
-    ):
-        result = await engine.run_tick(session, tick_id=1)
+async def test_agendas_before_deadline_are_not_resolved():
+    repo = _make_repo(expired=[])
+    engine = AgendaEngine(political_repo=repo)
+
+    result = await engine.run_tick(tick_id=1)
 
     assert result["resolved"] == 0
-    mock_set.assert_not_called()
+    repo.set_agenda_status.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_multiple_agendas_resolved_independently(engine, session):
-    """Two expired agendas are each resolved according to their own vote tally."""
+async def test_run_tick_no_session_required():
+    """run_tick accepts no session kwarg (SEV-24 Wave 5 — session coupling removed)."""
+    agenda = {"id": "a", "description": "A"}
+    repo = _make_repo(expired=[agenda], votes={"supports": [{"weight": 10}], "opposes": []})
+    engine = AgendaEngine(political_repo=repo)
+
+    result = await engine.run_tick(tick_id=2)
+
+    assert result["passed"] == 1
+
+
+@pytest.mark.asyncio
+async def test_multiple_agendas_resolved_independently():
     agendas = [
-        {"id": "a-1", "description": "Agenda 1", "proposed_by_faction_id": "f-1", "status": "open", "deadline_tick": 5},
-        {"id": "a-2", "description": "Agenda 2", "proposed_by_faction_id": "f-2", "status": "open", "deadline_tick": 5},
+        {"id": "a-1", "description": "Agenda 1"},
+        {"id": "a-2", "description": "Agenda 2"},
     ]
     votes_map = {
         "a-1": {"supports": [{"character": {"id": "c"}, "weight": 100}], "opposes": []},
         "a-2": {"supports": [], "opposes": [{"character": {"id": "d"}, "weight": 60}]},
     }
+    repo = _make_repo(expired=agendas)
+    repo.get_agenda_votes = AsyncMock(side_effect=lambda *, agenda_id: votes_map[agenda_id])
+    engine = AgendaEngine(political_repo=repo)
 
-    async def _get_votes(session, agenda_id):
-        return votes_map[agenda_id]
+    result = await engine.run_tick(tick_id=5)
 
-    with (
-        patch(
-            "npc_engine.engines.agenda.agenda_engine.get_expired_open_agendas",
-            new=AsyncMock(return_value=agendas),
-        ),
-        patch(
-            "npc_engine.engines.agenda.agenda_engine.get_agenda_votes",
-            new=_get_votes,
-        ),
-        patch(
-            "npc_engine.engines.agenda.agenda_engine.set_agenda_status",
-            new=AsyncMock(),
-        ) as mock_set,
-    ):
-        result = await engine.run_tick(session, tick_id=5)
-
-    assert result["resolved"] == 2
-    assert result["passed"] == 1
-    assert result["failed"] == 1
+    assert result == {"resolved": 2, "passed": 1, "failed": 1}

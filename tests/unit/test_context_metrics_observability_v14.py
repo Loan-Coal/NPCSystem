@@ -49,7 +49,7 @@ def setup_function() -> None:
 async def test_context_builder_emits_tier_item_and_token_metrics(monkeypatch) -> None:
     """Context build should emit selected-item and token counters for tiers."""
 
-    async def fake_world_reader(session):
+    async def fake_world_reader(session, world_id: str = "world"):
         return WorldState(epoch="age_of_peace")
 
     async def fake_character_reader(session, npc_id):
@@ -136,6 +136,16 @@ async def test_context_builder_emits_tier_item_and_token_metrics(monkeypatch) ->
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_trust_scores_for_events", fake_trust_scores)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_second_hop_events", fake_second_hop)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_active_quest_for_player", fake_active_quest)
+
+    async def fake_needs(session, character_id):
+        return []
+
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_needs_for_character", fake_needs)
+
+    async def fake_player_memories(session, *, npc_id, player_id, k=5):
+        return []
+
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_player_memories_for_npc", fake_player_memories)
 
     settings = Settings(API_KEY_SECRET="npc_dev_secret_2026_alpha")
 

@@ -1,34 +1,37 @@
 """
 quest_engine_helpers.py - Private helpers for QuestLifecycleEngine.
-
-Does NOT: expose public lifecycle API or touch HTTP concerns.
-
-Dependencies injected: TypeRegistry, AsyncSession.
+Layer: engines
+Purpose: Shared utility functions used by quest lifecycle, offer, and reward modules.
+Does NOT: expose public lifecycle API, touch HTTP concerns, or open Neo4j sessions.
+Dependencies: engines/quest/models, type_registry, utils/errors.
+Dependencies injected: None.
+Used by: engines/quest/quest_lifecycle_engine, quest_offer_service, quest_reward_router.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
-
-from neo4j import AsyncSession
+from typing import Any
 
 from npc_engine.engines.quest.models import QuestRewardItem, QuestTransitionMeta
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.type_registry.node_validator import validate_node_write
-from npc_engine.utils.errors import QuestTransitionError
 
 
 def is_trusted_reward_source(reward_source_id: str) -> bool:
-    """Return True if the reward source ID is a trusted system source.
+    """Return True when the reward source is trusted.
+
+    Trusted sources: the literal ``"system"`` sentinel, or any non-empty
+    character ID (NPC purse). Callers that use a character ID must separately
+    verify affordability via ``get_character_balance`` before applying rewards.
 
     Args:
         reward_source_id: Source identifier to validate.
 
     Returns:
-        True when ``reward_source_id`` equals ``"system"``.
+        True when ``reward_source_id`` is ``"system"`` or a non-empty character ID.
     """
-
-    return reward_source_id == "system"
+    return bool(reward_source_id) and reward_source_id != ""
 
 
 def normalize_item_rewards(item_rewards: list[QuestRewardItem]) -> list[QuestRewardItem]:
@@ -50,23 +53,6 @@ def normalize_item_rewards(item_rewards: list[QuestRewardItem]) -> list[QuestRew
     ]
 
 
-def ensure_transaction_session(session: AsyncSession) -> None:
-    """Raise QuestTransitionError when the session does not support transactions.
-
-    Args:
-        session: Neo4j async session to validate.
-
-    Raises:
-        QuestTransitionError: If ``session`` lacks a ``begin_transaction`` attribute.
-    """
-
-    if not hasattr(session, "begin_transaction"):
-        raise QuestTransitionError(
-            code="QUEST_EVENT_SESSION_INVALID",
-            detail="Quest lifecycle event emission requires a transaction-capable session",
-        )
-
-
 def build_lifecycle_event(
     *,
     registry: TypeRegistry,
@@ -75,7 +61,7 @@ def build_lifecycle_event(
     event_type: str,
     summary: str,
     meta: QuestTransitionMeta,
-) -> object:
+) -> Any:
     """Construct a typed lifecycle event node using the registry event model.
 
     Args:

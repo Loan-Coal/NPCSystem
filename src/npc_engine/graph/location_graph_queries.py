@@ -10,6 +10,7 @@ Used by: api/routes/location_graph, engines (future travel/supply-line queries)
 
 from __future__ import annotations
 
+from typing import Any
 import logging
 
 from neo4j import AsyncSession
@@ -95,7 +96,7 @@ async def create_connection(
 async def get_connections_for_location(
     session: AsyncSession,
     location_id: str,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Return all outbound CONNECTS_TO edges from a location, ordered by travel cost.
 
     Args:
@@ -123,7 +124,7 @@ async def get_shortest_path(
     session: AsyncSession,
     from_location_id: str,
     to_location_id: str,
-) -> dict | None:
+) -> dict[str, Any] | None:
     """Return the shortest path between two locations by hop count.
 
     Uses Cypher's built-in ``shortestPath()`` (fewest hops, not lowest cost).
@@ -172,3 +173,65 @@ async def delete_connection(
     """
     await session.run(CYPHER_DELETE_CONNECTION, from_id=from_id, to_id=to_id)
     LOGGER.debug("Deleted CONNECTS_TO %s <-> %s", from_id, to_id)
+
+
+# ---------------------------------------------------------------------------
+# PART_OF hierarchy queries (EXP-87)
+# ---------------------------------------------------------------------------
+
+CYPHER_GET_ANCESTORS = """
+MATCH (n:Location {id: $location_id})-[:PART_OF*]->(a:Location)
+RETURN a.id AS id
+ORDER BY size((n)-[:PART_OF*]->(a))
+"""
+
+CYPHER_GET_DESCENDANTS = """
+MATCH (d:Location)-[:PART_OF*]->(n:Location {id: $location_id})
+RETURN d.id AS id
+"""
+
+
+async def get_ancestors(
+    session: AsyncSession,
+    *,
+    location_id: str,
+) -> list[str]:
+    """Return an ordered list of ancestor location IDs from immediate parent to root.
+
+    Traverses PART_OF edges upward. The first element is the immediate parent;
+    the last element is the root node (a location with no PART_OF edge).
+
+    Args:
+        session: Active Neo4j async session.
+        location_id: ID of the location whose ancestors to retrieve.
+
+    Returns:
+        Ordered list of ancestor location IDs, empty if the node is a root.
+    """
+    result = await session.run(CYPHER_GET_ANCESTORS, location_id=location_id)
+    ids = [record["id"] async for record in result]
+    await result.consume()
+    return ids
+
+
+async def get_descendants(
+    session: AsyncSession,
+    *,
+    location_id: str,
+) -> list[str]:
+    """Return a flat list of all descendant location IDs.
+
+    Traverses PART_OF edges downward (in reverse — children that point to
+    this location as parent). All depths are included in a single flat list.
+
+    Args:
+        session: Active Neo4j async session.
+        location_id: ID of the location whose descendants to retrieve.
+
+    Returns:
+        Flat list of descendant location IDs, empty if the node is a leaf.
+    """
+    result = await session.run(CYPHER_GET_DESCENDANTS, location_id=location_id)
+    ids = [record["id"] async for record in result]
+    await result.consume()
+    return ids

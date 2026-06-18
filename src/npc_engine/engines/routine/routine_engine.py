@@ -2,8 +2,9 @@
 Module: routine_engine
 Layer: engines/routine
 Purpose: Moves active characters to their scheduled locations on each game tick.
-Does NOT: define scheduling intervals or read world state directly.
-Dependencies injected: AsyncSession.
+Does NOT: define scheduling intervals, read world state directly, open sessions,
+          or import the graph layer.
+Dependencies injected: RoutineGraphPort (via __init__).
 Used by: npc_engine.scheduler.tick_scheduler
 """
 
@@ -14,14 +15,7 @@ import json
 import logging
 from typing import Any
 
-from neo4j import AsyncSession
-
-from npc_engine.engines.routine.routine_queries import (
-    clear_routine_override,
-    get_scheduled_characters,
-    update_character_location,
-)
-from npc_engine.graph.location_history_service import record_departure
+from npc_engine.engines.ports.routine_port import RoutineGraphPort
 
 
 LOGGER = logging.getLogger(__name__)
@@ -34,15 +28,24 @@ class RoutineEngine:
     resolves the target location for the given time_of_day (respecting any
     active routine_override), and updates LOCATED_AT edges when the target
     differs from the current location.
+
+    Graph access is injected as a RoutineGraphPort (DEC-122 / SEV-24); the engine
+    holds no Neo4j session. The tick scheduler's ``session`` kwarg is accepted and
+    ignored until the BaseEngine protocol drops it.
     """
 
-    def __init__(self) -> None:
-        """Initialise the routine engine."""
+    def __init__(self, routine_repo: RoutineGraphPort) -> None:
+        """Initialise the routine engine.
+
+        Args:
+            routine_repo: Graph access port (schedule reads, location writes).
+        """
+        self._routine_repo = routine_repo
         self._lock = asyncio.Lock()
 
     async def run_tick(
         self,
-        session: AsyncSession,
+        *,
         time_of_day: str,
         tick_id: int,
     ) -> dict[str, int]:
@@ -55,22 +58,21 @@ class RoutineEngine:
         - Move the character only if the target differs from the current location.
 
         Args:
-            session: Active Neo4j async session.
             time_of_day: Current game time slot (morning/midday/afternoon/evening/night).
             tick_id: Current game tick, used to evaluate override expiry.
+            **_: Absorbs the scheduler's ``session`` kwarg (unused; see class docstring).
 
         Returns:
             Dict with keys ``moved`` (characters relocated) and ``skipped``
             (characters with no matching schedule entry).
         """
         async with self._lock:
-            rows = await get_scheduled_characters(session=session)
+            rows = await self._routine_repo.get_scheduled_characters()
             moved = 0
             skipped = 0
 
             for row in rows:
                 target = await self._resolve_target(
-                    session=session,
                     row=row,
                     time_of_day=time_of_day,
                     tick_id=tick_id,
@@ -83,16 +85,14 @@ class RoutineEngine:
                 if current != target:
                     if current is not None:
                         arrived_at_tick = int(row["current_arrived_at_tick"]) if row.get("current_arrived_at_tick") is not None else tick_id
-                        await record_departure(
-                            session,
+                        await self._routine_repo.record_departure(
                             character_id=row["character_id"],
                             location_id=current,
                             arrived_at_tick=arrived_at_tick,
                             departed_at_tick=tick_id,
                             reason="routine",
                         )
-                    await update_character_location(
-                        session=session,
+                    await self._routine_repo.update_character_location(
                         character_id=row["character_id"],
                         location_id=target,
                         arrived_at_tick=tick_id,
@@ -109,7 +109,6 @@ class RoutineEngine:
 
     async def _resolve_target(
         self,
-        session: AsyncSession,
         row: dict[str, Any],
         time_of_day: str,
         tick_id: int,
@@ -120,7 +119,6 @@ class RoutineEngine:
         its location; if expired, clear it first. Falls back to schedule entry.
 
         Args:
-            session: Active Neo4j async session.
             row: Character row from get_scheduled_characters.
             time_of_day: Current time slot.
             tick_id: Current tick for expiry comparison.
@@ -140,8 +138,8 @@ class RoutineEngine:
                 if expires_at is not None and tick_id < expires_at:
                     return str(override["location_id"])
                 # Expired — clear it
-                await clear_routine_override(
-                    session=session, character_id=row["character_id"]
+                await self._routine_repo.clear_routine_override(
+                    character_id=row["character_id"]
                 )
 
         return self._entry_location(row.get("entries_json"), time_of_day)

@@ -64,6 +64,23 @@ MATCH (f:Faction)-[:BOUND_BY]->(t:Treaty {id: $treaty_id})
 RETURN f.id AS faction_id
 """
 
+CYPHER_GET_ALL_ACTIVE_TREATY_IDS = """
+MATCH (t:Treaty {status: 'active'})
+RETURN t.id AS id
+"""
+
+CYPHER_GET_FACTION_TREASURY = """
+MATCH (f:Faction {id: $faction_id})
+RETURN coalesce(f.treasury, 0) AS treasury
+"""
+
+CYPHER_DEDUCT_FACTION_TREASURY = """
+MATCH (f:Faction {id: $faction_id})
+SET f.treasury = coalesce(f.treasury, 0) - $amount,
+    f.last_graph_updated_at = datetime()
+RETURN coalesce(f.treasury, 0) AS treasury
+"""
+
 
 async def get_active_treaties(
     session: AsyncSession,
@@ -138,3 +155,56 @@ async def get_treaty_parties(
     """
     result = await session.run(CYPHER_GET_TREATY_PARTIES, treaty_id=treaty_id)
     return [record["faction_id"] async for record in result]
+
+
+async def get_all_active_treaty_ids(session: AsyncSession) -> list[str]:
+    """Return IDs of all active treaties.
+
+    Args:
+        session: Active Neo4j async session.
+
+    Returns:
+        List of treaty ID strings.
+    """
+    result = await session.run(CYPHER_GET_ALL_ACTIVE_TREATY_IDS)
+    return [record["id"] async for record in result]
+
+
+async def get_faction_treasury(session: AsyncSession, *, faction_id: str) -> int:
+    """Return the treasury balance for a faction (0 if not set).
+
+    Args:
+        session: Active Neo4j async session.
+        faction_id: ID of the Faction node.
+
+    Returns:
+        Integer treasury balance.
+    """
+    result = await session.run(CYPHER_GET_FACTION_TREASURY, faction_id=faction_id)
+    record = await result.single()
+    if record is None:
+        return 0
+    return int(record["treasury"])
+
+
+async def deduct_faction_treasury(
+    session: AsyncSession,
+    *,
+    faction_id: str,
+    amount: int,
+) -> int:
+    """Deduct amount from a faction's treasury and return the new balance.
+
+    Args:
+        session: Active Neo4j async session.
+        faction_id: ID of the Faction node.
+        amount: Amount to deduct.
+
+    Returns:
+        New treasury balance after deduction.
+    """
+    result = await session.run(CYPHER_DEDUCT_FACTION_TREASURY, faction_id=faction_id, amount=amount)
+    record = await result.single()
+    if record is None:
+        return 0
+    return int(record["treasury"])

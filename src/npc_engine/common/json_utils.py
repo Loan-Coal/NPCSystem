@@ -1,5 +1,7 @@
 """
 json_utils.py - Shared JSON parse/serialize helpers with safe fallbacks.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: enforce domain schema constraints.
 

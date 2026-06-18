@@ -10,6 +10,7 @@ Used by: retrieval.context_builder (when CROSS_ENCODER_ENABLED=true)
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Any
 
 from npc_engine.retrieval.vector_store_protocol import VectorSearchResult
 
@@ -17,7 +18,7 @@ _MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 
 @lru_cache(maxsize=1)
-def _get_cross_encoder():
+def _get_cross_encoder() -> Any:
     """Load and cache the cross-encoder model on first call.
 
     Downloads ~80 MB on first use; subsequent calls return the cached instance.

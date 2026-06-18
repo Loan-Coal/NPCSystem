@@ -1,5 +1,7 @@
 """
 dialogue_context_cache.py - In-memory sub-decomposed dialogue context cache.
+Layer: retrieval
+Purpose: (auto-detected — review)
 
 Replaces the single monolithic 6-tuple key (which included current_mood and caused
 near-100% cache misses on every turn) with three independent sub-caches, each with
@@ -15,6 +17,7 @@ The dynamic tier (emotion snapshot, session turns, RAG results) is never cached.
 Does NOT: connect to Redis or any external cache backend.
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 import time
 from typing import Any

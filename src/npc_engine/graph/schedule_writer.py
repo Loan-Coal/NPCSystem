@@ -9,6 +9,7 @@ Used by: npc_engine.graph.schedule_service
 
 from __future__ import annotations
 
+from typing import Any
 from neo4j import AsyncTransaction
 
 from npc_engine.utils.errors import ScheduleAssignmentError, ScheduleNotFoundError
@@ -44,7 +45,7 @@ RETURN count(r) AS deleted
 # ---------------------------------------------------------------------------
 
 
-async def upsert_schedule(tx: AsyncTransaction, *, schedule_id: str, properties: dict) -> None:
+async def upsert_schedule(tx: AsyncTransaction, *, schedule_id: str, properties: dict[str, Any]) -> None:
     """Insert or update a Schedule node idempotently.
 
     Args:

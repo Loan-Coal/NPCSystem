@@ -1,17 +1,20 @@
 """
 generic_edge_service.py - Registry-driven generic edge CRUD operations.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: enforce auth scopes or execute node mutations.
 
 Dependencies injected: AsyncSession, TypeRegistry (via _GenericGraphServiceBase).
 """
+from __future__ import annotations
 
 from typing import Any
 
 from npc_engine.type_registry.contracts import RuntimeEdgeTypeDefinition
 from npc_engine.type_registry.validation import RegistryOperation, validate_edge_payload
 from npc_engine.graph.generic_graph_base import _GenericGraphServiceBase
-from npc_engine.graph.generic_graph_utils import cypher_identifier, decode_properties, encode_properties, resolve_node_label
+from npc_engine.graph.generic_graph_utils import cypher_identifier, decode_properties, encode_properties, resolve_node_label, resolve_src_label_expr
 from npc_engine.utils.errors import NodeNotFoundError, RegistryPayloadValidationError
 
 
@@ -30,10 +33,10 @@ class GenericEdgeService(_GenericGraphServiceBase):
             Dict with "src_id", "dst_id", and decoded edge properties, or None if not found.
         """
         edge_label, edge_def = self._resolve_edge_type(edge_type=edge_type)
-        src_label = resolve_node_label(edge_def.src_type)
+        src_expr = resolve_src_label_expr(edge_def.src_type)
         dst_label = resolve_node_label(edge_def.dst_type)
         result = await self._run(
-            f"MATCH (src:{cypher_identifier(src_label)} {{id: $src_id}})-"
+            f"MATCH (src:{src_expr} {{id: $src_id}})-"
             f"[e:{cypher_identifier(edge_label)}]->"
             f"(dst:{cypher_identifier(dst_label)} {{id: $dst_id}}) "
             "RETURN properties(e) AS edge, src.id AS src_id, dst.id AS dst_id",
@@ -70,7 +73,7 @@ class GenericEdgeService(_GenericGraphServiceBase):
             List of dicts each containing "src_id", "dst_id", and decoded edge properties.
         """
         edge_label, edge_def = self._resolve_edge_type(edge_type=edge_type)
-        src_label = resolve_node_label(edge_def.src_type)
+        src_expr = resolve_src_label_expr(edge_def.src_type)
         dst_label = resolve_node_label(edge_def.dst_type)
         where_parts: list[str] = []
         params: dict[str, Any] = {"limit": limit, "offset": offset}
@@ -82,7 +85,7 @@ class GenericEdgeService(_GenericGraphServiceBase):
             params["dst_id"] = dst_id
         where_clause = f"WHERE {' AND '.join(where_parts)} " if where_parts else ""
         result = await self._run(
-            f"MATCH (src:{cypher_identifier(src_label)})-[e:{cypher_identifier(edge_label)}]->"
+            f"MATCH (src:{src_expr})-[e:{cypher_identifier(edge_label)}]->"
             f"(dst:{cypher_identifier(dst_label)}) "
             f"{where_clause}"
             "RETURN properties(e) AS edge, src.id AS src_id, dst.id AS dst_id "
@@ -121,11 +124,11 @@ class GenericEdgeService(_GenericGraphServiceBase):
             operation=RegistryOperation.CREATE,
             payload=payload,
         )
-        src_label = resolve_node_label(edge_def.src_type)
+        src_expr = resolve_src_label_expr(edge_def.src_type)
         dst_label = resolve_node_label(edge_def.dst_type)
         encoded = encode_properties(validated, edge_def.fields)
         result = await self._run(
-            f"MATCH (src:{cypher_identifier(src_label)} {{id: $src_id}}) "
+            f"MATCH (src:{src_expr} {{id: $src_id}}) "
             f"MATCH (dst:{cypher_identifier(dst_label)} {{id: $dst_id}}) "
             f"MERGE (src)-[e:{cypher_identifier(edge_label)}]->(dst) "
             "SET e += $properties "
@@ -135,8 +138,9 @@ class GenericEdgeService(_GenericGraphServiceBase):
             properties=encoded,
         )
         record = await result.single()
+        src_type_str = "|".join(edge_def.src_type) if isinstance(edge_def.src_type, tuple) else edge_def.src_type
         if record is None:
-            raise NodeNotFoundError(node_type=f"{edge_def.src_type}|{edge_def.dst_type}", node_id=f"{src_id}:{dst_id}")
+            raise NodeNotFoundError(node_type=f"{src_type_str}|{edge_def.dst_type}", node_id=f"{src_id}:{dst_id}")
         return {
             "src_id": str(record["src_id"]),
             "dst_id": str(record["dst_id"]),
@@ -155,10 +159,10 @@ class GenericEdgeService(_GenericGraphServiceBase):
             True if the edge was found and deleted; False if it did not exist.
         """
         edge_label, edge_def = self._resolve_edge_type(edge_type=edge_type)
-        src_label = resolve_node_label(edge_def.src_type)
+        src_expr = resolve_src_label_expr(edge_def.src_type)
         dst_label = resolve_node_label(edge_def.dst_type)
         result = await self._run(
-            f"MATCH (src:{cypher_identifier(src_label)} {{id: $src_id}})-"
+            f"MATCH (src:{src_expr} {{id: $src_id}})-"
             f"[e:{cypher_identifier(edge_label)}]->"
             f"(dst:{cypher_identifier(dst_label)} {{id: $dst_id}}) "
             "DELETE e RETURN 1 AS deleted",

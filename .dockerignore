@@ -7,6 +7,7 @@
 .env.*
 .venv/
 venv/
+.cache/
 __pycache__/
 .pytest_cache/
 .mypy_cache/
@@ -26,3 +27,19 @@ verify-v13.out
 
 # Dev-only docs and tests
 tests/
+
+# Not needed by the runtime server (uvicorn npc_engine.main:app only imports the
+# installed src/ package). Excluding these shrinks the build context and image.
+transcripts/
+demo_game/
+e2e/
+evals/
+dashboard/
+docs/
+scripts/
+seeds/
+project-harness/
+.claude/
+.github/
+*.md
+Makefile

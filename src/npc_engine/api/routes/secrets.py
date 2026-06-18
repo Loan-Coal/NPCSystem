@@ -10,12 +10,14 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.secret_service import (
     create_secret,
     delete_secret,
@@ -33,8 +35,15 @@ class CreateSecretRequest(BaseModel):
 
     content: str = Field(..., min_length=1, max_length=512)
     severity: int = Field(..., ge=0, le=100)
-    game_time: dict = Field(
+    game_time: dict[str, Any] = Field(
         default_factory=lambda: {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
+    )
+    id: str | None = Field(
+        default=None,
+        description=(
+            "Caller-supplied stable ID. When provided the node is merged (idempotent). "
+            "When omitted a UUID is auto-generated."
+        ),
     )
 
     model_config = ConfigDict(frozen=True)
@@ -47,12 +56,12 @@ class CreateSecretRequest(BaseModel):
 router = APIRouter(prefix="/secrets", tags=["secrets"])
 
 
-@router.post("/{character_id}")
+@router.post("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def create_secret_for_character(
     character_id: str,
     body: CreateSecretRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create a secret and link it to a character.
 
     Args:
@@ -75,16 +84,17 @@ async def create_secret_for_character(
         content=body.content,
         severity=body.severity,
         game_time=game_time,
+        node_id=body.id,
     )
     return ok_response({"secret_id": secret_id})
 
 
-@router.get("/{character_id}")
+@router.get("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def list_secrets_for_character(
     character_id: str,
     k: int = 3,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List secrets known by a character, ordered by severity descending.
 
     Args:
@@ -98,11 +108,11 @@ async def list_secrets_for_character(
     return ok_response({"secrets": secrets})
 
 
-@router.delete("/{secret_id}")
+@router.delete("/{secret_id}", response_model=OkEnvelope[dict[str, Any]])
 async def remove_secret(
     secret_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Hard-delete a single Secret node.
 
     Args:

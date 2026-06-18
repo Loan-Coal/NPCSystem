@@ -10,6 +10,7 @@ Used by: engines/mood/mood_contagion_engine
 
 from __future__ import annotations
 
+from typing import Any
 import logging
 
 from neo4j import AsyncSession
@@ -110,7 +111,7 @@ async def set_character_mood(
 
 async def get_all_character_moods(
     session: AsyncSession,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Return all active characters with a stored mood.
 
     Args:

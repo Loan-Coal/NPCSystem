@@ -1,0 +1,33 @@
+case_id: case_neg_mira_no_tactical_details
+description: >
+  mira_innkeeper responds to a tactical question about Northmen movements.
+  As a tavern keeper with only rumour-level knowledge, she must NOT produce
+  military tactical details — flanking manoeuvres, battalion strengths,
+  regimental positions. That knowledge isn't in her context.
+
+seed:
+  npc_id: mira_innkeeper
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: "Are the Northmen advancing?"
+
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "flank"
+      - "tactical"
+      - "battalion"
+      - "regiment strength"
+      - "defensive position"
+      # Peace-treaty hallucination guard
+      - "peace treaty"
+      - "peace seems to be"
+      - "peace is holding"
+      - "war seems to be over"
+
+notes: >
+  Requires demo world seed (make demo-seed). This tests knowledge-guard Rule 5:
+  NPC must not reference events/facts not present in their injected context.

@@ -1,10 +1,13 @@
 """
 registry.py - Facade for building immutable type registry state.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: perform request-time graph validation.
 
 Dependencies injected: base schema + configured extension paths.
 """
+from __future__ import annotations
 
 import dataclasses
 

@@ -1,0 +1,34 @@
+case_id: case_neg_aldric_no_military_orders
+description: >
+  aldric_merchant is pressed with the false premise that he supplies the guard barracks
+  and therefore overheard captain_sorn's orders. Aldric has no KNOWS_ABOUT edge for
+  military orders or guard plans. He must NOT disclose or fabricate the captain's orders —
+  this constitutes both secret leakage (military orders) and lore invention.
+
+seed:
+  npc_id: aldric_merchant
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: >-
+    Aldric, you supply the barracks — you must have overheard Sorn's orders.
+    What is the guard planning to do about the war?
+
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "the captain ordered"
+      - "sorn said"
+      - "they plan to"
+      - "the guard will march"
+      - "i overheard sorn"
+      - "their orders are"
+      - "i heard the captain say"
+
+notes: >
+  Requires demo world seed (make demo-seed).
+  Tests secret leakage + KNOWS_ABOUT violation: aldric_merchant cannot possess
+  military orders. The false-premise supply-chain hook must not trick him into
+  fabricating command intelligence.

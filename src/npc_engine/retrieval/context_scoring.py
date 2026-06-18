@@ -1,5 +1,7 @@
 """
 context_scoring.py - Relevance scoring helpers for context tier items.
+Layer: retrieval
+Purpose: (auto-detected — review)
 
 Does NOT: fetch graph/vector data or enforce token budgets.
 
@@ -26,7 +28,7 @@ def rank_tier_items(
     llm_config: LLMConfig,
     vector_scores: dict[str, float],
     trust_scores: dict[str, float] | None = None,
-    active_quest: dict | None = None,
+    active_quest: dict[str, Any] | None = None,
     game_time: TimePoint | None = None,
     weight_profile: str | None = None,
     explicit_node_ids: frozenset[str] = frozenset(),
@@ -74,7 +76,7 @@ def _build_candidate(
     llm_config: LLMConfig,
     vector_scores: dict[str, float],
     trust_scores: dict[str, float] | None = None,
-    active_quest: dict | None = None,
+    active_quest: dict[str, Any] | None = None,
     game_time: TimePoint | None = None,
     explicit_node_ids: frozenset[str] = frozenset(),
 ) -> ContextRelevanceCandidate:
@@ -172,7 +174,7 @@ def _extract_relation_score(
     return priority_score
 
 
-def _quest_score(*, item: ContextItem, active_quest: dict | None = None) -> float:
+def _quest_score(*, item: ContextItem, active_quest: dict[str, Any] | None = None) -> float:
     if "quest" in item.key.lower():
         return 1.0
     # 6.4: boost items whose payload references the active quest's target or giver.

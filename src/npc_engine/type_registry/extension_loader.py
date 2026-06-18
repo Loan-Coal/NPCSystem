@@ -1,10 +1,13 @@
 """
 extension_loader.py - Resolves and validates registry extension YAML documents.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: apply merge policies or build runtime registry state.
 
 Dependencies injected: extension source paths.
 """
+from __future__ import annotations
 
 from dataclasses import dataclass
 import glob

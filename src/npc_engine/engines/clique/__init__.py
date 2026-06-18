@@ -6,3 +6,5 @@ Does NOT: call LLMs or modify character attributes directly.
 Dependencies injected: None (package init).
 Public surface: CliqueFormationEngine
 """
+
+from __future__ import annotations

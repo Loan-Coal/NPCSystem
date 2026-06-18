@@ -1,5 +1,7 @@
 """
 degradation.py - Tiered executor for graceful dialogue degradation.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: call LLM or graph services directly.
 
@@ -36,8 +38,11 @@ def _load_canned_text(archetype: str, canned_dir: Path) -> str:
                 responses: list[str] = data.get("responses", [])
                 if responses:
                     return random.choice(responses)
-            except Exception:
-                pass
+            except Exception as exc:
+                _logger.warning(
+                    "canned_response_load_failed",
+                    extra={"archetype": name, "path": str(candidate), "error": str(exc)},
+                )
     return "I need a moment to think."
 
 
@@ -50,6 +55,22 @@ def _canned_dialogue_response(archetype: str, canned_dir: Path) -> DialogueRespo
         facial_expression=FacialExpressionModel(),
         degradation_level="canned",
     )
+
+
+def get_canned_response(archetype: str, canned_dir: Path) -> DialogueResponse:
+    """Return a canned DialogueResponse for the given archetype.
+
+    Public helper so the dialogue handler can substitute a canned response
+    when output moderation flags an over-ceiling LLM reply.
+
+    Args:
+        archetype: NPC archetype key; falls back to "default" if not found.
+        canned_dir: Directory containing per-archetype YAML files.
+
+    Returns:
+        DialogueResponse with degradation_level="canned".
+    """
+    return _canned_dialogue_response(archetype=archetype, canned_dir=canned_dir)
 
 
 async def execute_with_degradation(

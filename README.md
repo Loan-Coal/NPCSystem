@@ -40,15 +40,11 @@ A game backend service that gives non-player characters persistent knowledge, re
 ## Quick start
 
 ```bash
-# Requirements: Python 3.14+, Neo4j 5, Ollama with mixtral:8x7b
+# Requirements: Python 3.14+, Neo4j 5, Ollama with qwen2.5:14b (or OpenAI GPT-4o)
 
-cp game_schema.example.yaml game_schema.yaml
-docker run -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password neo4j:5
-cd npc_engine
-python -m uvicorn main:app --reload
-
-# In another terminal:
-cd npc_engine && python data/seed.py
+docker-compose up -d   # start Neo4j + API server
+make demo-seed         # seed demo world (idempotent)
+make demo              # open interactive pygame window
 
 # Run unit tests:
 make test

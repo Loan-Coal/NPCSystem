@@ -1,10 +1,13 @@
 """
 schema_loader.py - Loads and validates game schema configuration from YAML.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: mutate runtime graph state.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from pathlib import Path
 

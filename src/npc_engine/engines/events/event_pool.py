@@ -1,10 +1,13 @@
 """
 event_pool.py - Loads weighted event templates from JSON file.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: persist generated events.
 
 Dependencies injected: event_pool_path.
 """
+from __future__ import annotations
 
 import json
 from pathlib import Path

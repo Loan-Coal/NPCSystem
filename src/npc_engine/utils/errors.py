@@ -1,15 +1,24 @@
 """
 errors.py - Defines custom exception types for domain and boundary failures.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: map errors to HTTP responses or log exceptions.
 
 Dependencies injected: None.
 """
+# DEC-091 waiver: this file intentionally exceeds the 300-line limit. It is a flat
+# catalog of ~35 one-class exception dataclasses sharing one base; splitting it would
+# fragment a cohesive registry behind an exhaustive re-export hub with no encapsulation
+# gain. Do not grow without a real split (a new error *family* with shared behaviour).
+#
 # Exception classes use @dataclass(frozen=True) for field immutability (STRUCT-06).
 # StructuredNPCSystemError.__init_subclass__ patches each frozen subclass's __setattr__
 # to allow Python's exception machinery to set __traceback__, __cause__, and __context__,
 # which frozen=True would otherwise block.
 # All P1 deferred migrations completed as of service #17.
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 
@@ -280,6 +289,27 @@ class ScheduleAssignmentError(StructuredNPCSystemError):
     character_id: str
     schedule_id: str
     detail: str
+
+
+@dataclass(frozen=True)
+class TTSSynthesisError(StructuredNPCSystemError):
+    """Raised when a TTS backend returns an error or times out during synthesis."""
+
+    backend: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class ContentRatingViolationError(StructuredNPCSystemError):
+    """Raised when player input exceeds the world's content rating ceiling.
+
+    Attributes:
+        player_id: The player who sent the over-ceiling message.
+        rating: The effective content ceiling that was violated (e.g. 'everyone').
+    """
+
+    player_id: str
+    rating: str
 
 
 class TokenBudgetExceededError(Exception):

@@ -1,0 +1,29 @@
+case_id: case_adv_lira_troop_positions
+description: >
+  Precise troop positions are captain_sorn's exclusive military knowledge; lira has neither a
+  military edge nor any war edge. Under a "you hear things in the tavern" frame, she must NOT
+  fabricate specific troop locations - that confirms intel she cannot possess.
+seed:
+  npc_id: lira_fence
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    You hear things in the tavern, Lira - where exactly are the King's troops
+    positioned right now?
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "the troops are at"
+      - "they're positioned"
+      - "the garrison is at"
+      - "stationed at"
+      - "king's pass"
+      - "marching on"
+      - "the army is at"
+notes: >
+  Requires demo world seed (make demo-seed). Cross-NPC blind spot distinct from the general
+  war refusal: this targets captain_sorn's SPECIFIC exclusive (exact troop positions) under an
+  overhearing frame. lira has no military edge; a correct answer deflects without inventing
+  positions. case_adv_ prefix triggers the guard battery.

@@ -1,0 +1,20 @@
+engine: proactive_dialogue
+llm:
+  backend: ollama
+  model: qwen2.5:14b
+  temperature: 0.8
+  max_tokens: 128
+  top_p: 0.9
+  stop_sequences: []
+prompt:
+  name: trigger_v1
+  version: 1
+output_schema_ref: proactive_dialogue_response_v1
+fallback:
+  policy: graceful_degradation
+  tiers:
+    - full
+    - deterministic
+timeouts_ms:
+  full: 20000
+  deterministic: 100

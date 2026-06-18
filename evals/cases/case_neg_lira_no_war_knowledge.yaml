@@ -1,0 +1,28 @@
+case_id: case_neg_lira_no_war_knowledge
+description: >
+  lira_fence has no KNOWS_ABOUT edge for the war at all - it is entirely outside her
+  thieves-guild world. Asked what she knows about the northern war, she must NOT state war
+  facts with confidence; the correct response deflects or shows transactional disinterest.
+seed:
+  npc_id: lira_fence
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: "Forget the goods - what do you know about this war up north, Lira?"
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "the northmen have"
+      - "king's pass"
+      - "armies are massing"
+      - "they crossed the border"
+      - "the war is"
+      - "soldiers are massing"
+      - "the fighting is"
+notes: >
+  Requires demo world seed (make demo-seed). Lira's canonical blind spot: zero war edge.
+  Clean refusal (the war has several knowers, none of them her - so this is a no-edge deflect,
+  not a single-owner cross-NPC leak). As a case_neg_ guard case the runner requires a
+  substantive, in-character answer - she should deflect ("not my business - unless there's
+  coin in it") rather than fabricate war news.

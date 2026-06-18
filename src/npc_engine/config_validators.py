@@ -1,5 +1,7 @@
 """
 config_validators.py — Pure validation functions for Settings field values.
+Layer: unknown
+Purpose: (auto-detected — review)
 
 Does NOT: read from environment, instantiate Settings, or perform I/O.
 
@@ -11,23 +13,55 @@ from __future__ import annotations
 from pathlib import Path
 
 
-def check_api_key_secret(value: str) -> str:
-    """Reject weak or placeholder API secrets.
+# The secret shipped in the example/dev .env. Allowed in dev so the local stack
+# and test suite work out of the box, but it is public (committed), so it must be
+# rejected outside dev (L1-04) the same way the weak Neo4j password is.
+_KNOWN_DEV_API_KEY_SECRET = "local_dev_secret_change_this_2026"
+
+
+def check_api_key_secret(value: str, env: str = "dev") -> str:
+    """Reject weak, placeholder, or shipped-dev API secrets.
 
     Args:
         value: str — raw API_KEY_SECRET value from the environment.
+        env: Current ENV value ("dev", "staging", or "prod").
 
     Returns:
         Stripped, validated secret string.
 
     Raises:
-        ValueError: if the value is shorter than 16 chars or matches a known placeholder.
+        ValueError: if the value is shorter than 16 chars, matches a known
+            placeholder, or is the shipped dev secret while env is not "dev".
     """
     stripped = value.strip()
     blocked = {"change-me", "replace_with_strong_secret", ""}
     if len(stripped) < 16 or stripped in blocked:
         raise ValueError("API_KEY_SECRET must be a non-placeholder secret with length >= 16")
+    if stripped == _KNOWN_DEV_API_KEY_SECRET and env != "dev":
+        raise ValueError(
+            "API_KEY_SECRET must not use the shipped dev secret in staging/prod. "
+            "Set a strong, unique secret via the API_KEY_SECRET environment variable."
+        )
     return stripped
+
+
+def check_idempotency_enforced(enabled: bool, env: str) -> bool:
+    """Require IDEMPOTENCY_ENFORCE_HEADER outside dev (DEC-111); off = replay-able mutations.
+
+    Args:
+        enabled: Raw IDEMPOTENCY_ENFORCE_HEADER value.
+        env: Current ENV value ("dev", "staging", or "prod").
+    Returns:
+        The flag unchanged when valid.
+    Raises:
+        ValueError: when enabled is False and env is not "dev".
+    """
+    if not enabled and env != "dev":
+        raise ValueError(
+            "IDEMPOTENCY_ENFORCE_HEADER must be true in staging/prod; mutating "
+            "endpoints are replay-able otherwise. Set IDEMPOTENCY_ENFORCE_HEADER=true."
+        )
+    return enabled
 
 
 def check_api_v1_prefix(value: str) -> str:
@@ -231,3 +265,31 @@ def check_package_data_path(value: str, project_root: Path) -> str:
     if candidate.is_absolute():
         return str(candidate)
     return str((project_root / candidate).resolve())
+
+
+_NEO4J_WEAK_PASSWORD = "password"
+
+
+def check_neo4j_password(value: str, env: str) -> str:
+    """Reject the default weak NEO4J_PASSWORD when running outside dev.
+
+    In dev the literal "password" is allowed so the shared suite and local
+    Docker Compose setup work without config changes. In staging/prod the
+    literal is rejected to prevent accidental DB compromise.
+
+    Args:
+        value: Raw NEO4J_PASSWORD value from the environment.
+        env: Current ENV value ("dev", "staging", or "prod").
+
+    Returns:
+        The password string unchanged when valid.
+
+    Raises:
+        ValueError: when value equals the weak literal and env is not "dev".
+    """
+    if value == _NEO4J_WEAK_PASSWORD and env != "dev":
+        raise ValueError(
+            "NEO4J_PASSWORD must not use the default 'password' value in staging/prod. "
+            "Set a strong, unique password via the NEO4J_PASSWORD environment variable."
+        )
+    return value

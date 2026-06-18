@@ -3,83 +3,51 @@ Module: pair_selector
 Layer: engines/gossip
 Purpose: Selects gossip-eligible NPC pairs with faction-weighted deterministic ordering.
 Does NOT: mutate knowledge edges.
-Dependencies injected: AsyncSession, GossipWeightConfig.
+Dependencies injected: GossipGraphPort.
+Used by: npc_engine.engines.gossip.gossip_handler.GossipHandler.run_tick.
 """
 
 from __future__ import annotations
 
-from neo4j import AsyncSession
+from typing import TYPE_CHECKING, Any
 
 from npc_engine.engines.gossip.gossip_config import GossipWeightConfig
 from npc_engine.engines.gossip.pair_weighting import compute_faction_weight
-from npc_engine.graph.goal_queries import get_goals_for_character
 
-
-CYPHER_GOSSIP_PAIRS = """
-MATCH (a:Character)-[:LOCATED_AT]->(loc:Location)<-[:LOCATED_AT]-(b:Character)
-WHERE a.id <> b.id
-    AND a.is_player = false AND b.is_player = false
-    AND a.is_active = true AND b.is_active = true
-OPTIONAL MATCH (a)-[:MEMBER_OF]->(fa:Faction)
-WHERE fa.is_active = true
-OPTIONAL MATCH (b)-[:MEMBER_OF]->(fb:Faction)
-WHERE fb.is_active = true
-OPTIONAL MATCH (fa)-[sw:STANDS_WITH]->(fb)
-WITH a, b, loc,
-     collect(DISTINCT fa.id) AS a_faction_ids,
-     collect(DISTINCT fb.id) AS b_faction_ids,
-     max(sw.standing) AS best_standing
-RETURN properties(a) AS a, properties(b) AS b, properties(loc) AS loc,
-       a_faction_ids, b_faction_ids, best_standing
-"""
-
-CYPHER_KNOWN_NODE_IDS = """
-MATCH (c:Character {id: $character_id})-[:KNOWS_ABOUT]->(n)
-RETURN n.id AS node_id
-"""
+if TYPE_CHECKING:
+    from npc_engine.engines.ports.gossip_port import GossipGraphPort
 
 _GOAL_ALIGNMENT_BONUS = 10
 
 
-def _pair_weight(character: dict) -> int:
+def _pair_weight(character: dict[str, Any]) -> int:
     return int(character.get("gossipy", 50))
 
 
-async def _fetch_goal_target_ids(session: AsyncSession, character_id: str) -> set[str]:
+async def _fetch_goal_target_ids(repo: GossipGraphPort, character_id: str) -> set[str]:
     """Return the set of non-empty target_id values from this character's active goals.
 
     Args:
-        session: Active Neo4j async session.
+        repo: Gossip graph port providing goal queries.
         character_id: Character node ID to query goals for.
 
     Returns:
         Set of target_id strings (empty strings excluded).
     """
-    goals = await get_goals_for_character(
-        session, character_id=character_id, k=20, status_filter="active"
-    )
+    goals = await repo.get_goals_for_character(character_id, k=20, status_filter="active")
     return {g["target_id"] for g in goals if g.get("target_id")}
 
 
-async def _fetch_known_node_ids(session: AsyncSession, character_id: str) -> set[str]:
-    """Return the set of node IDs this character knows about via KNOWS_ABOUT edges.
-
-    Args:
-        session: Active Neo4j async session.
-        character_id: Character node ID to query knowledge for.
-
-    Returns:
-        Set of known node ID strings.
-    """
-    result = await session.run(CYPHER_KNOWN_NODE_IDS, character_id=character_id)
-    return {record["node_id"] async for record in result if record["node_id"]}
+async def _fetch_known_node_ids(repo: GossipGraphPort, character_id: str) -> set[str]:
+    """Delegate to graph port: returns node IDs known by character via KNOWS_ABOUT."""
+    return await repo.fetch_known_node_ids(character_id)
 
 
 async def select_pairs(
-    session: AsyncSession,
+    repo: GossipGraphPort,
     max_pairs: int,
     weight_config: GossipWeightConfig,
-) -> list[tuple[dict, dict, dict, dict]]:
+) -> list[tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]]:
     """Return top-weighted directed gossip pairs sorted deterministically.
 
     Pairs are all co-located active non-player NPC combinations. Ranking uses
@@ -89,7 +57,7 @@ async def select_pairs(
     the other NPC. Character IDs serve as tiebreakers.
 
     Args:
-        session: Active Neo4j async session.
+        repo: Gossip graph port providing pair and goal reads.
         max_pairs: Maximum number of pairs to return.
         weight_config: Faction weight multipliers for pair ranking.
 
@@ -97,8 +65,7 @@ async def select_pairs(
         List of (sharer, receiver, location, faction_ctx) tuples, limited to max_pairs.
         faction_ctx contains ``a_faction_ids``, ``b_faction_ids``, and ``best_standing``.
     """
-    result = await session.run(CYPHER_GOSSIP_PAIRS)
-    rows = [record.data() async for record in result]
+    rows = await repo.fetch_gossip_pairs()
 
     # Build goal-alignment bonus map — skip entirely when no rows
     goal_alignment: dict[tuple[str, str], int] = {}
@@ -112,14 +79,14 @@ async def select_pairs(
         known_nodes: dict[str, set[str]] = {}
         any_goals = False
         for npc_id in unique_ids:
-            targets = await _fetch_goal_target_ids(session, npc_id)
+            targets = await _fetch_goal_target_ids(repo, npc_id)
             goal_targets[npc_id] = targets
             if targets:
                 any_goals = True
 
         if any_goals:
             for npc_id in unique_ids:
-                known_nodes[npc_id] = await _fetch_known_node_ids(session, npc_id)
+                known_nodes[npc_id] = await _fetch_known_node_ids(repo, npc_id)
 
             for row in rows:
                 a_id = row["a"]["id"]
@@ -132,7 +99,7 @@ async def select_pairs(
                 if bonus:
                     goal_alignment[(a_id, b_id)] = bonus
 
-    def _sort_key(row: dict) -> tuple[float, str, str]:
+    def _sort_key(row: dict[str, Any]) -> tuple[float, str, str]:
         a_id = row["a"]["id"]
         b_id = row["b"]["id"]
         base = _pair_weight(row["a"]) + _pair_weight(row["b"])

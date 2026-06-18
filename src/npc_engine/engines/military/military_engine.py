@@ -1,13 +1,10 @@
 """
 Module: military_engine
 Layer: engines
-Purpose: Stub military engine for Phase 7.4 Strategy/4X.
-         Per-tick battle resolution, resource yield, and depletion logic
-         are intentionally deferred — see ISSUES.md ISSUE-001.
-         The engine is wired into TickScheduler so that future logic can be
-         added without any scheduler-level changes.
-Does NOT: call LLMs, write to graph, or perform any combat resolution.
-Dependencies injected: None (stateless stub, no constructor args).
+Purpose: Per-tick military simulation — resolves battles between opposing armies and
+         processes resource yield for controlling factions.
+Does NOT: call LLMs or perform graph writes directly (delegated to services).
+Dependencies injected: MilitaryGraphPort (via __init__).
 Used by: npc_engine.scheduler.tick_scheduler
 """
 
@@ -16,32 +13,54 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from neo4j import AsyncSession
+from npc_engine.engines.military.military_battle_service import resolve_battles
+from npc_engine.engines.military.military_resource_service import process_resource_yield
+from npc_engine.engines.ports.military_port import MilitaryGraphPort
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class MilitaryEngine:
-    """Stub engine — run_tick is a no-op placeholder.
+    """Runs battle resolution and resource yield on every tick."""
 
-    Per DECISIONS.md DEC-002: tick logic deferred until military mechanics
-    are fully specced. The engine is wired and importable; expand run_tick
-    when ready without touching TickScheduler.
-    """
-
-    async def run_tick(
-        self,
-        session: AsyncSession,
-        tick_id: int = 0,
-    ) -> dict[str, Any]:
-        """No-op tick — military logic not yet implemented.
+    def __init__(self, military_repo: MilitaryGraphPort) -> None:
+        """Store the injected military graph port.
 
         Args:
-            session: Active Neo4j async session (unused by stub).
+            military_repo: Military-domain graph reads/writes (MilitaryGraphPort).
+        """
+        self._military_repo = military_repo
+
+    async def run_tick(self, *, tick_id: int = 0) -> dict[str, Any]:
+        """Resolve all active battles and process resource yield.
+
+        Steps:
+        1. Detect locations with opposing armies → resolve each battle (strength
+           comparison, damage, CONTROLS/OCCUPIES updates, battle Event node).
+        2. For each faction controlling a producing location with depletion > 0:
+           credit treasury and decrement ResourceNode.depletion.
+
+        Args:
             tick_id: Current game tick ID.
+            **_: Swallows the scheduler's ``session=`` kwarg during the SEV-24
+                migration (the repository owns sessions now).
 
         Returns:
-            Dict indicating the tick was skipped.
+            Dict with ``battles_resolved`` count and ``factions_yielded`` count.
         """
-        _LOGGER.debug("military_engine tick=%d skipped (stub)", tick_id)
-        return {"skipped": True, "reason": "military_logic_not_yet_implemented"}
+        battles = await resolve_battles(self._military_repo, tick_id=tick_id)
+        yields = await process_resource_yield(self._military_repo, tick_id=tick_id)
+
+        _LOGGER.info(
+            "military_tick_complete",
+            extra={
+                "tick": tick_id,
+                "battles_resolved": len(battles),
+                "factions_yielded": len(yields),
+            },
+        )
+
+        return {
+            "battles_resolved": len(battles),
+            "factions_yielded": len(yields),
+        }

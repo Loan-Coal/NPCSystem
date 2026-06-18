@@ -1,10 +1,13 @@
 """
 gossip_weight_resolver.py - Resolves schema-tagged gossip weight fields.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: execute gossip selection logic.
 
 Dependencies injected: SchemaConfig.
 """
+from __future__ import annotations
 
 from npc_engine.schema.schema_models import SchemaConfig
 from npc_engine.schema.semantic_field_resolver import resolve_fields_with_semantic

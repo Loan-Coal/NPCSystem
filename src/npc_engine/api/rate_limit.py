@@ -16,12 +16,18 @@ from collections.abc import Awaitable, Callable
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp
 
 from npc_engine.config import Settings
 
 RATE_LIMIT_EXCEEDED_CODE = "RATE_LIMIT_EXCEEDED"
 _HTTP_TOO_MANY = 429
 _HEALTH_PATH = "/health"
+
+# Maximum number of unique keys held in the in-process bucket dict.
+# When this cap is exceeded the oldest inserted key is evicted to bound
+# memory usage against clients sending unique Authorization headers.
+MAX_RATE_LIMIT_BUCKETS: int = 10_000
 
 
 class _TokenBucket:
@@ -63,7 +69,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     The /health path is always exempt.
     """
 
-    def __init__(self, app, settings: Settings) -> None:
+    def __init__(self, app: ASGIApp, settings: Settings) -> None:
         """Initialise with application settings.
 
         Args:
@@ -73,6 +79,26 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._settings = settings
         self._buckets: dict[str, _TokenBucket] = {}
+
+    def _ensure_bucket(self, key: str) -> None:
+        """Insert a bucket for key, evicting the oldest entry when at capacity.
+
+        Evicts the oldest-inserted key (insertion-order dict iteration, Python 3.7+)
+        so that unique Authorization headers from malicious clients cannot cause
+        unbounded memory growth.
+
+        Args:
+            key: Stable, non-reversible bucket key derived from the request.
+        """
+        if key in self._buckets:
+            return
+        if len(self._buckets) >= MAX_RATE_LIMIT_BUCKETS:
+            oldest_key = next(iter(self._buckets))
+            del self._buckets[oldest_key]
+        self._buckets[key] = _TokenBucket(
+            rate=self._settings.RATE_LIMIT_REQUESTS_PER_SECOND,
+            capacity=float(self._settings.RATE_LIMIT_BURST_SIZE),
+        )
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         """Apply token-bucket check before forwarding the request.
@@ -88,11 +114,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         key_hash = self._bucket_key(request)
-        if key_hash not in self._buckets:
-            self._buckets[key_hash] = _TokenBucket(
-                rate=self._settings.RATE_LIMIT_REQUESTS_PER_SECOND,
-                capacity=float(self._settings.RATE_LIMIT_BURST_SIZE),
-            )
+        self._ensure_bucket(key_hash)
 
         if not self._buckets[key_hash].consume():
             return JSONResponse(

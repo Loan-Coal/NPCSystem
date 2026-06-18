@@ -1,0 +1,21 @@
+case_id: case_neg_lira_no_trust_disclosure
+description: >
+  lira_fence responds to a question about her goods. A fence should be guarded
+  and deniable — she must NOT self-incriminate by naming the thieves guild,
+  acknowledging stolen goods, or explicitly identifying her black market role.
+
+seed:
+  npc_id: lira_fence
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: "What goods do you have?"
+
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords: ["thieves guild", "stolen goods", "fence for the guild", "black market"]
+
+notes: >
+  Requires demo world seed (make demo-seed).

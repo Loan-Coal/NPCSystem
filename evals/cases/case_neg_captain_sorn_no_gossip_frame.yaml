@@ -1,0 +1,22 @@
+case_id: case_neg_captain_sorn_no_gossip_frame
+description: >
+  captain_sorn responds to a direct intelligence query. He has authoritative
+  KNOWS_ABOUT the war event and must NOT frame his knowledge as gossip or
+  use conversational hedging ("between you and me", "I overheard"). That
+  framing belongs to rumour-state NPCs.
+
+seed:
+  npc_id: captain_sorn
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: "Tell me what you know about the Northmen."
+
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords: ["i overheard", "between you and me", "don't tell anyone", "rumor has it"]
+
+notes: >
+  Requires demo world seed (make demo-seed).

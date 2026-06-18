@@ -1,11 +1,15 @@
 """
 llm_client.py - Thin wrapper for dialogue structured generation with timeout fallback.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: build prompts or mutate graph state.
 
 Dependencies injected: LLMClientProtocol.
 """
+from __future__ import annotations
 
+from typing import Any
 import json
 import logging
 from pathlib import Path
@@ -59,8 +63,13 @@ class DialogueLLMClient:
         self._stop_sequences = stop_sequences
         self._log_prompts = log_prompts
 
-    async def generate_response(self, prompt: str, system: str | None = None) -> dict:
+    async def generate_response(self, prompt: str, system: str | None = None, archetype: str = "default") -> dict[str, Any]:
         """Request a structured dialogue response, falling back on timeout or errors.
+
+        Attempts structured generation twice before serving the canned fallback.
+        One repair retry is made when ValidationError is raised on the first attempt.
+        Logs WARNING per failed validation attempt and ERROR when the canned fallback
+        is ultimately served.
 
         Args:
             prompt: Full dialogue prompt string built by prompt_builder.
@@ -68,8 +77,8 @@ class DialogueLLMClient:
 
         Returns:
             Dict conforming to the DialogueResponse schema, validated by Pydantic.
-            Returns a deterministic fallback dict on LLMTimeoutError, LLMRequestError,
-            or ValidationError.
+            Returns a deterministic fallback dict[str, Any] on LLMTimeoutError, LLMRequestError,
+            or when both validation attempts fail.
         """
 
         schema = DialogueResponse.model_json_schema()
@@ -82,46 +91,84 @@ class DialogueLLMClient:
             logger.debug("llm_prompt", extra={"system": system, "prompt": prompt})
 
         try:
-            response = await self._llm_client.generate_structured(
-                prompt=prompt,
-                schema=schema,
-                max_tokens=self._max_tokens,
-                top_p=self._top_p,
-                stop_sequences=self._stop_sequences,
-                system=system,
+            return await self._generate_with_retry(
+                prompt=prompt, schema=schema, system=system, labels=labels, archetype=archetype
             )
-            normalized_response = DialogueResponse.model_validate(response).model_dump(mode="python")
-            increment_metric(
-                metric=LLM_TOKENS_OUT_METRIC,
-                amount=float(estimate_tokens(json.dumps(normalized_response, sort_keys=True, ensure_ascii=True))),
-                labels=labels,
-            )
+        except LLMTimeoutError as exc:
+            logger.warning("llm_timeout model=%s exc=%s", self._llm_client.model_name(), exc)
+            return self._fallback_with_metrics(labels=labels, fallback_reason="timeout", archetype=archetype)
+        except LLMRequestError as exc:
+            logger.warning("llm_request_error model=%s exc=%s", self._llm_client.model_name(), exc)
+            return self._fallback_with_metrics(labels=labels, fallback_reason="request_error", archetype=archetype)
 
-            if self._log_prompts:
-                logger.debug("llm_response", extra={"response": normalized_response})
+    async def _generate_with_retry(
+        self,
+        prompt: str,
+        schema: dict[str, Any],
+        system: str | None,
+        labels: dict[str, str],
+        archetype: str = "default",
+    ) -> dict[str, Any]:
+        """Attempt structured generation up to two times before serving the canned fallback.
 
-            return normalized_response
-        except LLMTimeoutError:
-            return self._fallback_with_metrics(labels=labels, fallback_reason="timeout")
-        except LLMRequestError:
-            return self._fallback_with_metrics(labels=labels, fallback_reason="request_error")
-        except ValidationError:
-            return self._fallback_with_metrics(labels=labels, fallback_reason="validation_error")
+        Args:
+            prompt: Full dialogue prompt string.
+            schema: JSON schema dict[str, Any] for the DialogueResponse model.
+            system: Optional system prompt.
+            labels: Metric labels for observability.
 
-    def fallback_response_payload(self) -> dict:
+        Returns:
+            Validated dialogue response dict.
+        """
+        for attempt in range(2):
+            try:
+                raw = await self._llm_client.generate_structured(
+                    prompt=prompt,
+                    schema=schema,
+                    max_tokens=self._max_tokens,
+                    top_p=self._top_p,
+                    stop_sequences=self._stop_sequences,
+                    system=system,
+                )
+                normalized_response = DialogueResponse.model_validate(raw).model_dump(mode="python")
+                increment_metric(
+                    metric=LLM_TOKENS_OUT_METRIC,
+                    amount=float(
+                        estimate_tokens(json.dumps(normalized_response, sort_keys=True, ensure_ascii=True))
+                    ),
+                    labels=labels,
+                )
+                if self._log_prompts:
+                    logger.debug("llm_response", extra={"response": normalized_response})
+                return normalized_response
+            except ValidationError as exc:
+                logger.warning(
+                    "structured_output_validation_failed",
+                    extra={"attempt": attempt, "model": self._llm_client.model_name(), "error": str(exc)},
+                )
+        logger.error(
+            "structured_output_fallback_served",
+            extra={"model": self._llm_client.model_name()},
+        )
+        return self._fallback_with_metrics(labels=labels, fallback_reason="validation_error", archetype=archetype)
+
+    def fallback_response_payload(self, archetype: str = "default") -> dict[str, Any]:
         """Return a deterministic fallback payload for callers that need safe recovery.
+
+        Args:
+            archetype: NPC archetype key; falls back to "default" if not present.
 
         Returns:
             Dict loaded from the configured fallback JSON file.
         """
 
-        return self._load_fallback_dialogue()
+        return self._load_fallback_dialogue(archetype=archetype)
 
-    def _load_fallback_dialogue(self) -> dict:
-        """Load default fallback dialogue response."""
+    def _load_fallback_dialogue(self, archetype: str = "default") -> dict[str, Any]:
+        """Load the archetype-keyed fallback dialogue response (defaulting if absent)."""
 
         fallback_map = json.loads(Path(self._fallback_path).read_text(encoding="utf-8"))
-        responses = fallback_map.get("default", ["I need a moment to think."])
+        responses = fallback_map.get(archetype) or fallback_map.get("default", ["I need a moment to think."])
         return {
             "npc_response": responses[0],
             "relation_deltas": {"trust": 0, "fear": 0, "affection": 0},
@@ -130,10 +177,10 @@ class DialogueLLMClient:
             "facial_expression": {"type": "neutral", "intensity": 20},
         }
 
-    def _fallback_with_metrics(self, labels: dict[str, str], fallback_reason: str) -> dict:
-        """Emit fallback token metrics and return default payload."""
+    def _fallback_with_metrics(self, labels: dict[str, str], fallback_reason: str, archetype: str = "default") -> dict[str, Any]:
+        """Emit fallback token metrics and return the archetype-keyed payload."""
 
-        fallback = self._load_fallback_dialogue()
+        fallback = self._load_fallback_dialogue(archetype=archetype)
         increment_metric(
             metric=LLM_TOKENS_OUT_METRIC,
             amount=float(estimate_tokens(json.dumps(fallback, sort_keys=True, ensure_ascii=True))),
@@ -141,7 +188,7 @@ class DialogueLLMClient:
         )
         return fallback
 
-    async def stream_text(self, prompt: str, system: str | None = None) -> list[str]:
+    async def stream_text(self, prompt: str, system: str | None = None, archetype: str = "default") -> list[str]:
         """Stream raw token chunks from the LLM backend.
 
         Args:
@@ -180,7 +227,7 @@ class DialogueLLMClient:
             )
             return chunks
         except (LLMTimeoutError, LLMRequestError):
-            fallback = self._load_fallback_dialogue()
+            fallback = self._load_fallback_dialogue(archetype=archetype)
             text = str(fallback["npc_response"])
             increment_metric(
                 metric=LLM_TOKENS_OUT_METRIC,

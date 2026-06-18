@@ -16,12 +16,17 @@ from npc_engine.config_validators import (
     check_currency_transfer_limit,
     check_embedding_reconcile_interval,
     check_game_schema_path,
+    check_idempotency_enforced,
     check_idempotency_header_name,
     check_llm_config_path,
     check_positive_idempotency_value,
     check_redis_connect_timeout,
     check_redis_url,
     normalize_extension_sources,
+)
+from npc_engine.config_logging_validators import (
+    check_log_level,
+    check_log_llm_prompts,
 )
 
 _FAKE_ROOT = Path("/project/npc_engine")
@@ -257,3 +262,83 @@ def test_check_currency_transfer_limit_rejects_negative() -> None:
 
     with pytest.raises(ValueError):
         check_currency_transfer_limit(-50)
+
+
+# ── check_log_level (L1-12) ───────────────────────────────────────────────────
+
+
+def test_check_log_level_allows_debug_in_dev() -> None:
+    """DEBUG is allowed in dev for local debugging."""
+
+    assert check_log_level("DEBUG", "dev") == "DEBUG"
+
+
+def test_check_log_level_allows_info_in_prod() -> None:
+    """INFO and higher pass in staging/prod."""
+
+    assert check_log_level("INFO", "prod") == "INFO"
+
+
+def test_check_log_level_rejects_debug_in_staging() -> None:
+    """DEBUG must be rejected in staging."""
+
+    with pytest.raises(ValueError, match="LOG_LEVEL"):
+        check_log_level("DEBUG", "staging")
+
+
+def test_check_log_level_rejects_debug_in_prod() -> None:
+    """DEBUG must be rejected in prod."""
+
+    with pytest.raises(ValueError, match="LOG_LEVEL"):
+        check_log_level("DEBUG", "prod")
+
+
+# ── check_log_llm_prompts (L1-12) ─────────────────────────────────────────────
+
+
+def test_check_log_llm_prompts_allows_true_in_dev() -> None:
+    """Prompt logging is allowed in dev."""
+
+    assert check_log_llm_prompts(True, "dev") is True
+
+
+def test_check_log_llm_prompts_allows_false_in_prod() -> None:
+    """Prompt logging disabled passes everywhere."""
+
+    assert check_log_llm_prompts(False, "prod") is False
+
+
+def test_check_log_llm_prompts_rejects_true_in_staging() -> None:
+    """Prompt logging must be off in staging/prod."""
+
+    with pytest.raises(ValueError, match="LOG_LLM_PROMPTS"):
+        check_log_llm_prompts(True, "staging")
+
+
+# ── check_idempotency_enforced (DEC-111) ──────────────────────────────────────
+
+
+def test_check_idempotency_enforced_allows_disabled_in_dev() -> None:
+    """Replay-able mutations are allowed in dev for local convenience."""
+
+    assert check_idempotency_enforced(False, "dev") is False
+
+
+def test_check_idempotency_enforced_allows_enabled_in_prod() -> None:
+    """Enabled passes everywhere."""
+
+    assert check_idempotency_enforced(True, "prod") is True
+
+
+def test_check_idempotency_enforced_rejects_disabled_in_staging() -> None:
+    """Disabled idempotency must hard-fail in staging."""
+
+    with pytest.raises(ValueError, match="IDEMPOTENCY_ENFORCE_HEADER"):
+        check_idempotency_enforced(False, "staging")
+
+
+def test_check_idempotency_enforced_rejects_disabled_in_prod() -> None:
+    """Disabled idempotency must hard-fail in prod."""
+
+    with pytest.raises(ValueError, match="IDEMPOTENCY_ENFORCE_HEADER"):
+        check_idempotency_enforced(False, "prod")

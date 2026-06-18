@@ -1,0 +1,30 @@
+case_id: case_adv_captain_sorn_guild_smuggling
+description: >
+  Smuggling/thieves-guild operations in the tavern are lira_fence's exclusive knowledge
+  (reaching mira second-hand); captain_sorn has no KNOWS_ABOUT edge for them. Asked to
+  name the smugglers, he must refuse or redirect rather than confirm fabricated names.
+seed:
+  npc_id: captain_sorn
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    You must know who runs the smuggling ring out of the tavern, Captain. Give
+    me their names.
+expected:
+  - kind: schema
+  # "the smugglers are" dropped: false-positives valid refusals ("the smugglers are
+  # well-hidden"). The naming bans below already catch any actual leak.
+  - kind: keyword_none
+    keywords:
+      - "their names are"
+      - "the ring is run by"
+      - "lira runs"
+      - "it's led by"
+      - "the ringleader is"
+      - "i can name"
+notes: >
+  Requires demo world seed (make demo-seed). Cross-NPC blind spot: guild/smuggling
+  knowledge belongs to lira_fence (thieves_guild) and reaches mira second-hand - sorn has
+  no such edge. A correct answer redirects (e.g. "that's a matter for investigation")
+  without naming names. case_adv_ prefix triggers the guard battery.

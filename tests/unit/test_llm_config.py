@@ -100,7 +100,7 @@ def test_llm_config_rejects_extra_fields() -> None:
 def test_load_llm_config_parses_valid_file(tmp_path: Path) -> None:
     """A valid llm_config YAML should be parsed into an LLMConfig instance."""
 
-    from npc_engine.schema.llm_config_loader import load_llm_config
+    from npc_engine.schema.llm_schema_loader import load_llm_config
 
     config_path = tmp_path / "llm_config.yaml"
     config_path.write_text(_VALID_YAML, encoding="utf-8")
@@ -115,7 +115,7 @@ def test_load_llm_config_parses_valid_file(tmp_path: Path) -> None:
 def test_load_llm_config_raises_when_file_missing(tmp_path: Path) -> None:
     """A missing config file should raise LLMConfigMisconfiguredError."""
 
-    from npc_engine.schema.llm_config_loader import load_llm_config
+    from npc_engine.schema.llm_schema_loader import load_llm_config
 
     with pytest.raises(LLMConfigMisconfiguredError):
         load_llm_config(config_path=str(tmp_path / "nonexistent.yaml"))
@@ -124,7 +124,7 @@ def test_load_llm_config_raises_when_file_missing(tmp_path: Path) -> None:
 def test_load_llm_config_raises_validation_error_for_list_root(tmp_path: Path) -> None:
     """A config YAML whose root is a list should raise LLMConfigValidationError."""
 
-    from npc_engine.schema.llm_config_loader import load_llm_config
+    from npc_engine.schema.llm_schema_loader import load_llm_config
 
     config_path = tmp_path / "bad.yaml"
     config_path.write_text("- item1\n", encoding="utf-8")
@@ -136,7 +136,7 @@ def test_load_llm_config_raises_validation_error_for_list_root(tmp_path: Path) -
 def test_load_llm_config_raises_validation_error_for_bad_weights(tmp_path: Path) -> None:
     """A config where weights do not sum to 1.0 should raise LLMConfigValidationError."""
 
-    from npc_engine.schema.llm_config_loader import load_llm_config
+    from npc_engine.schema.llm_schema_loader import load_llm_config
 
     bad_yaml = _VALID_YAML.replace("recency: 0.2", "recency: 0.9")
     config_path = tmp_path / "bad_weights.yaml"

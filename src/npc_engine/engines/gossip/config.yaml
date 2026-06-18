@@ -14,3 +14,15 @@ hostile_penalty: 0.1
 # Factor by which the distortion probability is multiplied when the sharer and receiver
 # belong to hostile factions (standing <= -50). Values above 1.0 increase distortion.
 hostile_distortion_factor: 1.5
+
+# Confidence bands used to bias distortion-type selection (EXP-213).
+# receiver_confidence (0–100) is bucketed into three bands, and the band index
+# is added to the seed-modulo index (mod len(REGISTRY_KEYS)) so different confidence
+# levels reliably route to different distortion types while preserving determinism
+# for the same (seed, confidence) pair.
+#
+#   confidence >= confidence_high_threshold  → band offset 0  (no shift from seed)
+#   confidence <= confidence_low_threshold   → band offset 2
+#   confidence in (low, high)               → band offset 1
+confidence_high_threshold: 70
+confidence_low_threshold: 30

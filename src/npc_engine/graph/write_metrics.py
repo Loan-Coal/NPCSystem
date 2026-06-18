@@ -1,10 +1,13 @@
 """
 write_metrics.py - Graph write operation metric helpers.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: execute graph queries or manage transactions.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from time import perf_counter
 

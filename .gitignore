@@ -22,6 +22,20 @@ e2e/transcripts/
 evals/reports/
 transcripts/
 
+# Codebase-review raw run-logs + agent transcripts (synthesis lives in
+# REVIEW_FINDINGS.md + review-fixes/, which ARE committed)
+project-harness/review-evidence/
+
+# Logs
+*.log
+
+# Generated reports
+/reports/
+
+# Local agent tooling + caches (not product code)
+.cache/
+.claude/
+
 # Docker / env files
 *.env
 .env.*
@@ -35,3 +49,6 @@ transcripts/
 # OS
 .DS_Store
 Thumbs.db
+
+# Archived review evidence (kept local-only, as the original review-evidence/ was)
+project-harness/archive/review-2026-06-03/review-evidence/

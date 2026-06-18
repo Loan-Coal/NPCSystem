@@ -1,10 +1,13 @@
 """
 cleanup_scheduler.py - Background scheduler for expired idempotency record cleanup.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: perform request preflight/replay logic.
 
 Dependencies injected: IdempotencyServiceProtocol.
 """
+from __future__ import annotations
 
 import asyncio
 

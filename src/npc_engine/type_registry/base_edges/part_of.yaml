@@ -1,0 +1,6 @@
+edge_type: PART_OF
+src_type: location
+dst_type: location
+fields:
+  hierarchy_level: { type: int, required: true, range: [0, 4] }
+  established_at: { type: str, required: false }

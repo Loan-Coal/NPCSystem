@@ -1,10 +1,13 @@
 """
 contract_loader.py - Loads and validates engine contract YAML files.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: enforce contracts at runtime.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Any

@@ -1,0 +1,26 @@
+case_id: case_pos_lira_fence_trade
+description: >
+  lira_fence's knowledge domain is fencing / moving stolen goods. Approached as a prospective
+  client, she should engage with her trade - transactionally and guardedly - rather than deny
+  it outright. A trade token must surface; her evasive/transactional framing is still a PASS.
+seed:
+  npc_id: lira_fence
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: "I've got merchandise I'd rather not take to an honest stall. You handle that?"
+expected:
+  - kind: schema
+  - kind: tone_judge
+    description: >-
+      YES if the NPC engages with, entertains, or agrees to handle the player's request
+      to move illicit or stolen goods — even guardedly, evasively, or for a price/cut.
+      NO only if the NPC refuses outright, denies doing that kind of work, or claims not
+      to understand the request.
+notes: >
+  Requires demo world seed (make demo-seed). Grounded positive on lira's fencing domain.
+  Her guarded/transactional voice ("depends what you're moving, and what it's worth...")
+  is the CORRECT framing. Replaced keyword_any (which false-failed correct paraphrases
+  like "I can help with that sort of thing, but it'll cost you" that used none of the ~28
+  listed surface tokens) with a semantic engagement judge. case_pos_ → a tone_judge fail
+  is not a lore hallucination, so the headline metric is unaffected.

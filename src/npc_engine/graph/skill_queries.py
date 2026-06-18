@@ -73,6 +73,17 @@ MATCH (c:Character {id: $character_id})-[e:HAS_SKILL]->(s:Skill {id: $skill_id})
 RETURN toInteger(e.level) >= $min_level AS meets_threshold
 """
 
+CYPHER_COMPLETED_QUESTS_WITH_SKILLS = """
+MATCH (q:Quest {status: 'completed'})
+WHERE q.completed_at_tick = $tick_id
+MATCH (q)-[:BASED_ON]->(qt:QuestTemplate)-[r:REQUIRES_SKILL]->(s:Skill)
+MATCH (c:Character)-[:PARTICIPATED_IN]->(q)
+RETURN q.id AS quest_id,
+       c.id AS character_id,
+       s.id AS skill_id,
+       toInteger(r.min_level) AS min_level
+"""
+
 
 async def get_skills(
     session: AsyncSession,
@@ -144,3 +155,23 @@ async def check_skill_threshold(
     if record is None:
         return False
     return bool(record["meets_threshold"])
+
+
+async def get_completed_quests_with_skills(
+    session: AsyncSession,
+    *,
+    tick_id: int,
+) -> list[dict[str, Any]]:
+    """Return (quest, character, skill) rows for quests completed this tick.
+
+    Used by SkillProgressionEngine to award XP after quest completion.
+
+    Args:
+        session: Active Neo4j async session.
+        tick_id: The game tick at which quests were completed.
+
+    Returns:
+        List of dicts with keys quest_id, character_id, skill_id, min_level.
+    """
+    result = await session.run(CYPHER_COMPLETED_QUESTS_WITH_SKILLS, tick_id=tick_id)
+    return cast(list[dict[str, Any]], [dict(record) async for record in result])

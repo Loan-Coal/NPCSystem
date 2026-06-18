@@ -107,6 +107,34 @@ async def get_all_needs_with_location(
     return [dict(r) async for r in result]
 
 
+async def get_satisfying_location_for_need(
+    session: AsyncSession,
+    need_kind: str,
+) -> str | None:
+    """Return the ID of the first location that satisfies a need of the given kind.
+
+    Args:
+        session: Active Neo4j async session.
+        need_kind: The need kind to satisfy (e.g. 'hunger', 'social').
+
+    Returns:
+        Location node ID string, or None if no satisfying location is found.
+    """
+    result = await session.run(
+        """
+        MATCH (loc:Location)-[:SATISFIES_NEED]->(n:Need)
+        WHERE n.kind = $need_kind
+        RETURN loc.id AS location_id
+        LIMIT 1
+        """,
+        need_kind=need_kind,
+    )
+    record = await result.single()
+    if record is None:
+        return None
+    return str(record["location_id"])
+
+
 async def get_satisfiers_at_location(
     session: AsyncSession,
     *,

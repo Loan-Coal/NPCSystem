@@ -1,0 +1,11 @@
+"""
+Package: npc_engine.engines.reputation
+Layer: engines
+Purpose: 1-hop personal reputation propagation engine (EXP-52).
+         Diffuses player reputation through NPC social relationships on each tick.
+Does NOT: perform direct I/O, open sessions, or call LLMs.
+Dependencies injected: None (consumers inject into ReputationEngine directly).
+Public surface: ReputationEngine, PropagationConfig, load_propagation_config
+"""
+
+from __future__ import annotations

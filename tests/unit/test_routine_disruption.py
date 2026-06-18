@@ -152,16 +152,14 @@ def _make_dialogue_handler(valence_after_mood: int):
     from npc_engine.engines.emotion.emotion_state import EmotionState
     from npc_engine.engines.dialogue.session_store import SessionStore
 
-    session = MagicMock()
-    session.run = AsyncMock()
-
     emotion_state = EmotionState(valence=valence_after_mood, arousal=50, label="test")
     emotion_updater = MagicMock()
-    emotion_updater.get_state.return_value = EmotionState(valence=0, arousal=0, label="neutral")
-    emotion_updater.apply_dialogue_mood.return_value = emotion_state
+    emotion_updater.get_state = AsyncMock(return_value=EmotionState(valence=0, arousal=0, label="neutral"))
+    emotion_updater.apply_dialogue_mood = AsyncMock(return_value=emotion_state)
 
     session_store = MagicMock(spec=SessionStore)
-    session_store.get_turns.return_value = []
+    session_store.get_turns = AsyncMock(return_value=[])
+    session_store.append_turns = AsyncMock()
 
     settings = MagicMock()
     settings.CANNED_RESPONSES_DIR = "/tmp/canned"
@@ -170,22 +168,38 @@ def _make_dialogue_handler(valence_after_mood: int):
     engine_model_config.timeouts_ms.full = 5000
     engine_model_config.timeouts_ms.graph_only = 3000
 
+    from npc_engine.services.input_moderation import build_input_moderation_service
+
+    dialogue_repo = AsyncMock()
+    dialogue_repo.get_npc_archetype = AsyncMock(return_value=None)
+    dialogue_repo.apply_relation_deltas = AsyncMock(return_value=None)
+    dialogue_repo.set_routine_override = AsyncMock(return_value=None)
+    dialogue_repo.get_world_state = AsyncMock(return_value=None)
+
+    dialogue_context = AsyncMock()
+    dialogue_context.build_context = AsyncMock(return_value="{}")
+
     handler = DialogueHandler.__new__(DialogueHandler)
-    handler._session = session
+    handler._dialogue_repo = dialogue_repo
+    handler._dialogue_context = dialogue_context
     handler._emotion_updater = emotion_updater
     handler._session_store = session_store
     handler._settings = settings
     handler._engine_model_config = engine_model_config
-    return handler, session
+    handler._knowledge_engine = None
+    handler._memory_engine = None
+    handler._relation_reader = None
+    handler._relation_phase_writer = None
+    handler._input_moderation = build_input_moderation_service("mature")
+    from npc_engine.services.output_moderation import build_output_moderation_service
+    handler._output_moderation = build_output_moderation_service("mature")
+    handler._effective_rating = "mature"
+    return handler
 
 
 @pytest.mark.asyncio
 async def test_emotion_valence_below_threshold_triggers_override() -> None:
-    from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
-    from npc_engine.engines.dialogue.dialogue_models import DialogueRequest, DialogueResponse
-    from npc_engine.engines.routine.routine_queries import set_routine_override
-
-    handler, session = _make_dialogue_handler(valence_after_mood=-61)
+    handler = _make_dialogue_handler(valence_after_mood=-61)
 
     request = MagicMock()
     request.npc_id = "npc_1"
@@ -201,15 +215,13 @@ async def test_emotion_valence_below_threshold_triggers_override() -> None:
     final_response.npc_response = "..."
     final_response.session_id = None
 
-    with patch.object(handler, "_run_llm_pipeline", new=AsyncMock(return_value=final_response)), \
-         patch("npc_engine.engines.dialogue.dialogue_handler.execute_with_degradation", new=AsyncMock(return_value=(final_response, "full"))), \
+    with patch("npc_engine.engines.dialogue.dialogue_handler.execute_with_degradation", new=AsyncMock(return_value=(final_response, "full"))), \
          patch("npc_engine.engines.dialogue.dialogue_handler.resolve_action", return_value=final_response.action), \
-         patch("npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas", new=AsyncMock()), \
-         patch("npc_engine.engines.dialogue.dialogue_handler.set_routine_override", new=AsyncMock()) as mock_override:
+         patch("npc_engine.engines.dialogue.dialogue_handler.apply_phase_transition", new=AsyncMock()):
         await handler.handle(request)
 
-    mock_override.assert_called_once()
-    call_kwargs = mock_override.call_args.kwargs
+    handler._dialogue_repo.set_routine_override.assert_awaited_once()
+    call_kwargs = handler._dialogue_repo.set_routine_override.call_args.kwargs
     assert call_kwargs["character_id"] == "npc_1"
     assert call_kwargs["location_id"] == "home"
 
@@ -217,11 +229,7 @@ async def test_emotion_valence_below_threshold_triggers_override() -> None:
 @pytest.mark.asyncio
 async def test_emotion_valence_at_threshold_does_not_trigger_override() -> None:
     """valence == -60 must NOT trigger — threshold is strictly less than."""
-    from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
-    from npc_engine.engines.dialogue.dialogue_models import DialogueRequest
-    from npc_engine.engines.routine.routine_queries import set_routine_override
-
-    handler, session = _make_dialogue_handler(valence_after_mood=-60)
+    handler = _make_dialogue_handler(valence_after_mood=-60)
 
     request = MagicMock()
     request.npc_id = "npc_2"
@@ -239,11 +247,10 @@ async def test_emotion_valence_at_threshold_does_not_trigger_override() -> None:
 
     with patch("npc_engine.engines.dialogue.dialogue_handler.execute_with_degradation", new=AsyncMock(return_value=(final_response, "full"))), \
          patch("npc_engine.engines.dialogue.dialogue_handler.resolve_action", return_value=final_response.action), \
-         patch("npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas", new=AsyncMock()), \
-         patch("npc_engine.engines.dialogue.dialogue_handler.set_routine_override", new=AsyncMock()) as mock_override:
+         patch("npc_engine.engines.dialogue.dialogue_handler.apply_phase_transition", new=AsyncMock()):
         await handler.handle(request)
 
-    mock_override.assert_not_called()
+    handler._dialogue_repo.set_routine_override.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -290,7 +297,7 @@ def test_apply_disruption_rules_partial_match_returns_only_matching() -> None:
 @pytest.mark.asyncio
 async def test_emotion_valence_positive_does_not_trigger_override() -> None:
     """Positive valence must not trigger a disruption override."""
-    handler, _ = _make_dialogue_handler(valence_after_mood=30)
+    handler = _make_dialogue_handler(valence_after_mood=30)
 
     request = MagicMock()
     request.npc_id = "npc_3"
@@ -308,11 +315,10 @@ async def test_emotion_valence_positive_does_not_trigger_override() -> None:
 
     with patch("npc_engine.engines.dialogue.dialogue_handler.execute_with_degradation", new=AsyncMock(return_value=(final_response, "full"))), \
          patch("npc_engine.engines.dialogue.dialogue_handler.resolve_action", return_value=final_response.action), \
-         patch("npc_engine.engines.dialogue.dialogue_handler.apply_dialogue_relation_deltas", new=AsyncMock()), \
-         patch("npc_engine.engines.dialogue.dialogue_handler.set_routine_override", new=AsyncMock()) as mock_override:
+         patch("npc_engine.engines.dialogue.dialogue_handler.apply_phase_transition", new=AsyncMock()):
         await handler.handle(request)
 
-    mock_override.assert_not_called()
+    handler._dialogue_repo.set_routine_override.assert_not_awaited()
 
 
 def test_load_disruption_rules_severity_only_rule(tmp_path: Path) -> None:

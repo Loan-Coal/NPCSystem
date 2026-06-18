@@ -1,10 +1,13 @@
 """
 contracts.py - Type-registry document contracts and immutable runtime models.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: read extension files from disk or apply merge policies.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Literal, Mapping
@@ -47,9 +50,14 @@ class RuntimeFieldDefinition:
 
 @dataclass(frozen=True)
 class RuntimeEdgeTypeDefinition:
-    """Immutable runtime edge contract including endpoint topology."""
+    """Immutable runtime edge contract including endpoint topology.
 
-    src_type: str
+    src_type may be a single type string or a tuple of type strings when the
+    edge accepts multiple source node types (e.g. ('location', 'item') for
+    SATISFIES_NEED).
+    """
+
+    src_type: str | tuple[str, ...]
     dst_type: str
     directional: bool
     cascade_on_delete: tuple[str, ...]

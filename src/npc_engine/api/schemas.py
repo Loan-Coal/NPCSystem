@@ -1,15 +1,23 @@
 """
 schemas.py - Shared API request and response models.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: execute graph or LLM logic.
 
 Dependencies injected: None.
 """
 
+from __future__ import annotations
+
 from typing import Literal
 
 from pydantic import Field
 
+from npc_engine.api.response_models.npc_state import CharacterNode, EventNode, RelationEdge
+from npc_engine.common.intent_models import TriggerType
+
+from npc_engine.config import MAX_CHOICE_ID_CHARS
 from npc_engine.engines.dialogue.dialogue_models import (
     ActionModel,
     ActionType,
@@ -23,7 +31,14 @@ from npc_engine.engines.dialogue.dialogue_models import (
 
 PlayerActionType = Literal["attack", "give_item", "steal", "help", "observe", "buy_item", "sell_item"]
 
-FrozenApiModel = FrozenDialogueModel
+
+class FrozenApiModel(FrozenDialogueModel):
+    """Frozen base class for all API schema models.
+
+    Inherits model_config from FrozenDialogueModel (frozen=True, extra='forbid').
+    Using a named class rather than a value alias allows mypy to treat it as a
+    valid base class and enables proper OpenAPI schema generation.
+    """
 
 __all__ = [
     "ActionModel",
@@ -47,15 +62,18 @@ __all__ = [
     "QuestObjectiveUpdateRequest",
     "QuestEvaluateRequest",
     "QuestRewardApplyRequest",
+    "QuestChooseRequest",
+    "QuestChooseResponse",
+    "ConversationIntentResponse",
 ]
 
 
 class NPCStateResponse(FrozenApiModel):
     """Compact NPC state response model."""
 
-    character: dict | None
-    relations: list[dict]
-    events: list[dict]
+    character: CharacterNode | None
+    relations: list[RelationEdge]
+    events: list[EventNode]
 
 
 class EmotionResponse(FrozenApiModel):
@@ -82,10 +100,19 @@ class ActionReportRequest(FrozenApiModel):
 
 
 class QuestObjectiveBody(FrozenApiModel):
-    """One quest objective definition in API payloads."""
+    """One quest objective definition in API payloads.
+
+    Attributes:
+        objective_id: Stable identifier for this objective.
+        target_count: How many times the objective must be satisfied.
+        objective_type: Verification strategy — ``"deliver"`` checks HAS_ITEM.
+        target_id: Graph node ID the verifier checks against.
+    """
 
     objective_id: str
     target_count: int = Field(ge=1)
+    objective_type: Literal["deliver", "kill", "visit", "talk"] = "deliver"
+    target_id: str | None = None
 
 
 class QuestRewardItemBody(FrozenApiModel):
@@ -110,6 +137,7 @@ class QuestOfferRequest(FrozenApiModel):
     objectives: list[QuestObjectiveBody] = Field(min_length=1)
     item_rewards: list[QuestRewardItemBody] = Field(default_factory=list)
     currency_reward: QuestRewardCurrencyBody | None = None
+    reward_source_id: str = "system"
 
 
 class QuestAcceptRequest(FrozenApiModel):
@@ -140,4 +168,47 @@ class QuestRewardApplyRequest(FrozenApiModel):
 
     quest_id: str
     player_id: str
+
+
+class QuestChooseRequest(FrozenApiModel):
+    """Request body for POST /quest/{id}/choose — player selects a choice branch.
+
+    Attributes:
+        player_id: Player character ID.
+        choice_id: Identifier of the player's chosen option; capped at MAX_CHOICE_ID_CHARS.
+    """
+
+    player_id: str
+    choice_id: str = Field(max_length=MAX_CHOICE_ID_CHARS)
+
+
+class QuestChooseResponse(FrozenApiModel):
+    """Response payload for a successful choose transition.
+
+    Attributes:
+        quest_id: The source quest the player chose from.
+        player_id: Player character ID.
+        next_quest_id: The successor quest that was offered, or None if no match.
+    """
+
+    quest_id: str
+    player_id: str
+    next_quest_id: str | None
+
+
+class ConversationIntentResponse(FrozenApiModel):
+    """Public API response schema for a pending NPC intent (Phase 14).
+
+    Converted from the internal ConversationIntent model by the route handler.
+    Never exposes internal node IDs or graph implementation details beyond
+    those needed by the client to open the dialogue panel.
+    """
+
+    intent_id: str = Field(..., description="Unique id for marking the intent delivered.")
+    npc_id: str = Field(..., description="ID of the NPC that wants to speak.")
+    tick: int = Field(..., description="Game tick at which the intent was formed.")
+    score: float = Field(..., description="Intent urgency score (0–1).")
+    reason: str = Field(..., description="Human-readable trigger phrase.")
+    trigger_type: TriggerType = Field(..., description="Trigger category: need, event, or goal.")
+    trigger_ref: str = Field(..., description="ID of the triggering Need, Event, or Goal node.")
 

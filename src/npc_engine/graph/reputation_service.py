@@ -9,14 +9,19 @@ Used by: npc_engine.api.routes.reputation
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.graph.reputation_queries import (
     get_reputation,
     get_reputation_context_for_npc,
     list_reputations,
+)
+from npc_engine.graph.reputation_event_seeder import (
+    create_reputation_event,
+    seed_reputation_awareness,
 )
 from npc_engine.graph.reputation_writer import (
     adjust_reputation,
@@ -55,9 +60,10 @@ class ReputationService:
         Raises:
             ReputationNotFoundError: If the character or faction node does not exist.
         """
-        tx = await self._session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> None:
             await set_reputation(tx, character_id=character_id, faction_id=faction_id, standing=standing)
+
+        await run_in_tx(self._session, _work)
 
     async def adjust_reputation(self, *, character_id: str, faction_id: str, delta: int) -> int:
         """Apply a delta to a character's standing with a faction, clamped to [-100, 100].
@@ -73,9 +79,63 @@ class ReputationService:
         Raises:
             ReputationNotFoundError: If the character or faction node does not exist.
         """
-        tx = await self._session.begin_transaction()
-        async with tx:
-            return cast(int, await adjust_reputation(tx, character_id=character_id, faction_id=faction_id, delta=delta))
+        async def _work(tx: AsyncTransaction) -> int:
+            return await adjust_reputation(tx, character_id=character_id, faction_id=faction_id, delta=delta)
+
+        return await run_in_tx(self._session, _work)
+
+    async def adjust_reputation_with_event(
+        self,
+        *,
+        character_id: str,
+        faction_id: str,
+        delta: int,
+        location_id: str,
+        tick_id: int,
+    ) -> int:
+        """Adjust a character's reputation and seed a gossip-propagatable Event.
+
+        Runs all three writes in a single transaction:
+        1. Adjust the HAS_REPUTATION_WITH standing.
+        2. Create a reputation_change Event node at location_id.
+        3. Seed KNOWS_ABOUT edges for active NPCs at location_id.
+
+        The gossip tick can then propagate the event to NPCs at other locations.
+
+        Args:
+            character_id: ID of the character node.
+            faction_id: ID of the faction node.
+            delta: Integer standing delta.
+            location_id: Location where the standing change occurred.
+            tick_id: Current game tick.
+
+        Returns:
+            The new clamped standing value.
+
+        Raises:
+            ReputationNotFoundError: If character or faction node is absent.
+        """
+        async def _work(tx: AsyncTransaction) -> int:
+            new_standing = await adjust_reputation(
+                tx, character_id=character_id, faction_id=faction_id, delta=delta
+            )
+            event_id = await create_reputation_event(
+                tx,
+                character_id=character_id,
+                faction_id=faction_id,
+                delta=delta,
+                location_id=location_id,
+                tick_id=tick_id,
+            )
+            await seed_reputation_awareness(
+                tx,
+                event_id=event_id,
+                location_id=location_id,
+                tick_id=tick_id,
+            )
+            return new_standing
+
+        return await run_in_tx(self._session, _work)
 
     async def adjust_reputation_for_event(
         self, *, character_id: str, faction_id: str, delta: int
@@ -90,11 +150,12 @@ class ReputationService:
         Raises:
             ReputationNotFoundError: If the character or faction node does not exist.
         """
-        tx = await self._session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> None:
             await adjust_reputation_for_event(
                 tx, character_id=character_id, faction_id=faction_id, delta=delta
             )
+
+        await run_in_tx(self._session, _work)
 
     # ------------------------------------------------------------------
     # Queries
@@ -110,10 +171,7 @@ class ReputationService:
         Returns:
             Dict with faction_id, faction_name, and standing, or None if absent.
         """
-        return cast(
-            dict[str, Any] | None,
-            await get_reputation(self._session, character_id=character_id, faction_id=faction_id),
-        )
+        return await get_reputation(self._session, character_id=character_id, faction_id=faction_id)
 
     async def list_reputations(self, *, character_id: str) -> list[dict[str, Any]]:
         """Fetch all HAS_REPUTATION_WITH edges for a character.
@@ -124,10 +182,7 @@ class ReputationService:
         Returns:
             List of dicts with faction_id, faction_name, and standing.
         """
-        return cast(
-            list[dict[str, Any]],
-            await list_reputations(self._session, character_id=character_id),
-        )
+        return await list_reputations(self._session, character_id=character_id)
 
     async def get_reputation_context_for_npc(
         self, *, npc_id: str, player_id: str, threshold: int
@@ -142,9 +197,6 @@ class ReputationService:
         Returns:
             List of dicts with faction_name, standing, and label.
         """
-        return cast(
-            list[dict[str, Any]],
-            await get_reputation_context_for_npc(
-                self._session, npc_id=npc_id, player_id=player_id, threshold=threshold
-            ),
+        return await get_reputation_context_for_npc(
+                self._session, npc_id=npc_id, player_id=player_id, threshold=threshold,
         )

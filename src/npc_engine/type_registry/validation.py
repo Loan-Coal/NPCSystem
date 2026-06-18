@@ -1,10 +1,13 @@
 """
 validation.py - Generic registry validation for node/edge payloads and topology.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: execute graph writes or perform field-level type coercion.
 
 Dependencies injected: TypeRegistry.
 """
+from __future__ import annotations
 
 from enum import Enum
 from typing import Any, Mapping
@@ -35,17 +38,22 @@ def validate_edge_endpoint_types(*, registry: TypeRegistry, edge_type: str, src_
         RegistryPayloadValidationError: If the edge type is unknown or endpoints do not match.
     """
     edge_definition = _resolve_edge_definition(registry=registry, edge_type=edge_type)
-    expected_src = edge_definition.src_type.strip().lower()
+    raw_src = edge_definition.src_type
+    allowed_src = (
+        {t.strip().lower() for t in raw_src}
+        if isinstance(raw_src, tuple)
+        else {raw_src.strip().lower()}
+    )
     expected_dst = edge_definition.dst_type.strip().lower()
     actual_src = src_type.strip().lower()
     actual_dst = dst_type.strip().lower()
-    if expected_src == actual_src and expected_dst == actual_dst:
+    if actual_src in allowed_src and expected_dst == actual_dst:
         return
     raise RegistryPayloadValidationError(
         code="EDGE_ENDPOINT_MISMATCH",
         detail=(
-            f"edge endpoint mismatch for {edge_type}: expected ({expected_src},{expected_dst}), "
-            f"got ({actual_src},{actual_dst})"
+            f"edge endpoint mismatch for {edge_type}: expected src in ({','.join(sorted(allowed_src))}), "
+            f"dst={expected_dst}, got ({actual_src},{actual_dst})"
         ),
     )
 

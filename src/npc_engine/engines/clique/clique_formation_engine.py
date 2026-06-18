@@ -3,9 +3,10 @@ Module: clique_formation_engine
 Layer: engines
 Purpose: Detects co-located character pairs with high mutual affection and forms clique groups.
          Runs every CLIQUE_FORMATION_TICK_INTERVAL ticks to avoid per-tick query overhead.
-Does NOT: call LLMs, manage quest state, or directly modify character attributes.
-Dependencies: graph.group_queries, graph.group_service, config.Settings
-Dependencies injected: AsyncSession (per tick call).
+Does NOT: call LLMs, manage quest state, directly modify character attributes,
+          open sessions, or import the graph layer.
+Dependencies: engines.ports.group_port, config.Settings
+Dependencies injected: Settings, GroupGraphPort (via __init__).
 Used by: npc_engine.scheduler.tick_scheduler
 """
 
@@ -15,25 +16,10 @@ import asyncio
 import logging
 from typing import Any
 
-from neo4j import AsyncSession
-
 from npc_engine.config import Settings
-from npc_engine.graph.group_queries import (
-    CYPHER_GET_EXISTING_SHARED_GROUPS,
-    CYPHER_GET_HIGH_AFFECTION_PAIRS,
-    CYPHER_GET_STALE_CLIQUES,
-)
-from npc_engine.graph.group_service import (
-    add_member,
-    create_group,
-    dissolve_group,
-)
+from npc_engine.engines.ports.group_port import GroupGraphPort
 
 _LOGGER = logging.getLogger(__name__)
-
-_AFFECTION_THRESHOLD = 70
-_INITIAL_COHESION = 10
-_STALE_CLIQUE_AGE_TICKS = 50
 
 
 class CliqueFormationEngine:
@@ -43,23 +29,33 @@ class CliqueFormationEngine:
     1. Queries pairs with bidirectional RELATES_TO.affection > 70 at the same location.
     2. Creates a clique Group for pairs not already sharing one.
     3. Dissolves cliques older than STALE_CLIQUE_AGE_TICKS.
+
+    Graph access is injected as a GroupGraphPort (DEC-122 / SEV-24); the engine
+    holds no Neo4j session. The tick scheduler's ``session`` kwarg is accepted and
+    ignored until the BaseEngine protocol drops it.
     """
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, group_repo: GroupGraphPort) -> None:
         """Initialise the clique formation engine.
 
         Args:
-            settings: Application settings providing CLIQUE_FORMATION_TICK_INTERVAL.
+            settings: Application settings providing the clique tick interval and
+                affection/cohesion/stale-age thresholds.
+            group_repo: Graph access port (group reads + writes).
         """
         self._interval = settings.CLIQUE_FORMATION_TICK_INTERVAL
+        self._affection_threshold = settings.CLIQUE_AFFECTION_THRESHOLD
+        self._initial_cohesion = settings.CLIQUE_INITIAL_COHESION
+        self._stale_age_ticks = settings.CLIQUE_STALE_AGE_TICKS
+        self._group_repo = group_repo
         self._lock = asyncio.Lock()
 
-    async def run_tick(self, session: AsyncSession, tick_id: int) -> dict[str, Any]:
+    async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
         """Execute one clique formation pass if the tick interval is met.
 
         Args:
-            session: Active Neo4j async session.
             tick_id: Current game tick identifier.
+            **_: Absorbs the scheduler's ``session`` kwarg (unused; see class docstring).
 
         Returns:
             Dict with keys ``formed`` (groups created), ``dissolved`` (groups dissolved),
@@ -69,15 +65,12 @@ class CliqueFormationEngine:
             return {"skipped": True}
 
         async with self._lock:
-            return await self._run_formation(session, tick_id)
+            return await self._run_formation(tick_id)
 
-    async def _run_formation(
-        self, session: AsyncSession, tick_id: int
-    ) -> dict[str, Any]:
+    async def _run_formation(self, tick_id: int) -> dict[str, Any]:
         """Inner formation pass — runs formation and decay logic.
 
         Args:
-            session: Active Neo4j async session.
             tick_id: Current game tick.
 
         Returns:
@@ -86,10 +79,9 @@ class CliqueFormationEngine:
         formed = 0
         dissolved = 0
 
-        pairs_result = await session.run(
-            CYPHER_GET_HIGH_AFFECTION_PAIRS, threshold=_AFFECTION_THRESHOLD
+        pairs: list[dict[str, Any]] = await self._group_repo.get_high_affection_pairs(
+            threshold=self._affection_threshold
         )
-        pairs: list[dict[str, Any]] = [dict(r) async for r in pairs_result]
 
         for pair in pairs:
             char_a = pair["char_a_id"]
@@ -100,33 +92,27 @@ class CliqueFormationEngine:
             if loc_a is None or loc_a != loc_b:
                 continue
 
-            existing_result = await session.run(
-                CYPHER_GET_EXISTING_SHARED_GROUPS,
-                char_a_id=char_a,
-                char_b_id=char_b,
+            existing = await self._group_repo.get_existing_shared_group(
+                char_a_id=char_a, char_b_id=char_b
             )
-            existing = await existing_result.single()
             if existing is not None:
                 continue
 
-            group_id = await create_group(
-                session,
+            group_id = await self._group_repo.create_group(
                 name=f"Clique ({char_a[:8]}, {char_b[:8]})",
                 kind="clique",
-                cohesion=_INITIAL_COHESION,
+                cohesion=self._initial_cohesion,
                 is_secret=False,
                 formed_at_tick=tick_id,
             )
-            await add_member(
-                session,
+            await self._group_repo.add_member(
                 group_id=group_id,
                 character_id=char_a,
                 role="member",
                 joined_at_tick=tick_id,
                 commitment=50,
             )
-            await add_member(
-                session,
+            await self._group_repo.add_member(
                 group_id=group_id,
                 character_id=char_b,
                 role="member",
@@ -136,13 +122,12 @@ class CliqueFormationEngine:
             _LOGGER.info("clique: formed group %s for %s and %s", group_id, char_a, char_b)
             formed += 1
 
-        stale_before = max(0, tick_id - _STALE_CLIQUE_AGE_TICKS)
-        stale_result = await session.run(
-            CYPHER_GET_STALE_CLIQUES, stale_before_tick=stale_before
+        stale_before = max(0, tick_id - self._stale_age_ticks)
+        stale_groups: list[str] = await self._group_repo.get_stale_cliques(
+            stale_before_tick=stale_before
         )
-        stale_groups: list[str] = [r["group_id"] async for r in stale_result]
         for group_id in stale_groups:
-            await dissolve_group(session, group_id=group_id, tick=tick_id)
+            await self._group_repo.dissolve_group(group_id=group_id, tick=tick_id)
             _LOGGER.info("clique: dissolved stale group %s", group_id)
             dissolved += 1
 

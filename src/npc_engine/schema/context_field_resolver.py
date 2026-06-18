@@ -1,10 +1,13 @@
 """
 context_field_resolver.py - Resolves schema-tagged fields for context tiers.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: query graph data.
 
 Dependencies injected: SchemaConfig.
 """
+from __future__ import annotations
 
 from npc_engine.schema.schema_models import SchemaConfig
 from npc_engine.schema.semantic_field_resolver import resolve_fields_with_semantic

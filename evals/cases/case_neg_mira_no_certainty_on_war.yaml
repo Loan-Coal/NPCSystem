@@ -1,0 +1,36 @@
+case_id: case_neg_mira_no_certainty_on_war
+description: >
+  mira_innkeeper answers a direct question about the war. Her knowledge_state
+  is rumour-level — she hears things from travellers. She must NOT assert the
+  war as confirmed fact with authoritative first-person statements.
+
+seed:
+  npc_id: mira_innkeeper
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: "Is there really a war?"
+
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "the war has"
+      - "the armies"
+      - "our forces"
+      - "we are at war"
+      - "i can confirm"
+      # Peace-treaty hallucination: model may invent a resolution to the ongoing war
+      - "peace treaty"
+      - "treaty was signed"
+      - "war ended"
+      - "has just ended"
+      - "ended recently"
+      - "war is over"
+      - "soldiers are coming home"
+
+notes: >
+  Requires demo world seed (make demo-seed). Mira's knowledge is rumour-level —
+  she must hedge, not assert. Extra keywords guard against unprompted peace-treaty
+  hallucination (a world-state change absent from her KNOWS_ABOUT).

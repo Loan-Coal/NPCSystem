@@ -4,15 +4,23 @@ Layer: engines
 Purpose: Orchestrates quest generation: template selection, LLM slot-filling with retry,
          graph validation, flavor text generation, and quest node persistence.
 Does NOT: expose HTTP routes or manage quest lifecycle state transitions.
+    Does NOT: hold a Neo4j session (DEC-122 / SEV-24).
 Dependencies: engines.quest_generation.slot_models, engines.quest_generation.slot_validator,
               engines.quest_generation.template_loader, engines.llm.protocols,
-              graph.quest_node_service, common.yaml_utils
-Dependencies injected: LLMClientProtocol, SlotValidator factory, list[QuestTemplateRecord].
+              engines.ports.quest_generation_port, graph.generic_graph_utils (pure util).
+Dependencies injected: LLMStructuredProtocol, QuestGenerationGraphPort,
+    list[QuestTemplateRecord] (via __init__).
 Used by: npc_engine.api.routes.quest_generation
+
+NOTE: This file exceeds the 300-line hard limit (~390 lines). The additional
+context-assembly delegation is one cohesive pipeline. Splitting into a
+QuestContextAssembler would be natural in Phase 4 when more NPC context dimensions
+are added. See DECISIONS.md "quest_generation_engine.py line limit (S3.1)".
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import random
@@ -21,15 +29,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from neo4j import AsyncSession
-
-from npc_engine.world.world_reader import get_world_state
-
 from pydantic import ValidationError
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
-from npc_engine.engines.llm.protocols import LLMClientProtocol
-from npc_engine.utils.errors import LLMRequestError, LLMTimeoutError
+from npc_engine.engines.llm.protocols import LLMStructuredProtocol
+from npc_engine.engines.ports.quest_generation_port import QuestGenerationGraphPort
 from npc_engine.engines.quest_generation.slot_models import (
     GeneratedQuest,
     QuestTemplateRecord,
@@ -37,17 +41,30 @@ from npc_engine.engines.quest_generation.slot_models import (
     SlotFill,
 )
 from npc_engine.engines.quest_generation.slot_validator import SlotValidator
-from npc_engine.graph.belief_queries import get_beliefs_for_character
-from npc_engine.graph.causality_service import record_causation
-from npc_engine.graph.goal_queries import get_goals_for_character
-from npc_engine.graph.mood_queries import get_character_mood
-from npc_engine.graph.quest_node_service import create_quest
+from npc_engine.graph.generic_graph_utils import resolve_node_label
+from npc_engine.utils.errors import LLMRequestError, LLMTimeoutError
 
 _logger = logging.getLogger(__name__)
 
+_QUEST_SEED_NAMESPACE = "quest_generation"
 _MAX_RETRIES = 3
-_CYPHER_GET_CHARACTER = "MATCH (c:Character {id: $character_id}) RETURN c.archetype AS archetype, c.name AS name"
-_CYPHER_GET_NODES_BY_TYPE = "MATCH (n:{label}) RETURN n.id AS id LIMIT 20"
+
+
+def _quest_rng_seed(quest_giver_id: str, world_day: int) -> int:
+    """Derive a deterministic integer seed for quest-generation RNG.
+
+    Reproducible for the same (giver, world_day) pair; different pairs or
+    days produce different seeds so quest content varies.
+
+    Args:
+        quest_giver_id: ID of the NPC initiating the quest.
+        world_day: Current world day (from WorldState.day).
+
+    Returns:
+        A 64-bit integer seed suitable for ``random.Random(seed)``.
+    """
+    raw = f"{_QUEST_SEED_NAMESPACE}|{quest_giver_id}|{world_day}"
+    return int.from_bytes(hashlib.sha256(raw.encode()).digest()[:8], byteorder="little")
 
 
 def _load_prompt(prompt_path: Path) -> dict[str, str]:
@@ -60,10 +77,11 @@ class QuestGenerationEngine:
 
     def __init__(
         self,
-        llm_client: LLMClientProtocol,
+        llm_client: LLMStructuredProtocol,
         templates: list[QuestTemplateRecord],
         prompts_dir: Path,
         max_tokens: int = 256,
+        quest_gen_repo: QuestGenerationGraphPort | None = None,
     ) -> None:
         """Initialise the quest generation engine.
 
@@ -72,16 +90,22 @@ class QuestGenerationEngine:
             templates: Pre-loaded quest template records.
             prompts_dir: Path to the quest_generation prompts directory.
             max_tokens: Maximum tokens to generate in LLM calls (sourced from llm_config.yaml).
+            quest_gen_repo: Graph port for quest generation reads/writes (DEC-122 / SEV-24); required.
+
+        Raises:
+            ValueError: If quest_gen_repo is None.
         """
+        if quest_gen_repo is None:
+            raise ValueError("QuestGenerationEngine requires a QuestGenerationGraphPort injected via __init__")
         self._llm = llm_client
         self._templates = templates
         self._max_tokens = max_tokens
-        self._slot_fill_prompt = _load_prompt(prompts_dir / "slot_fill_v1.yaml")
-        self._flavor_prompt = _load_prompt(prompts_dir / "flavor_v1.yaml")
+        self._slot_fill_prompt = _load_prompt(prompts_dir / "slot_fill_v2.yaml")
+        self._flavor_prompt = _load_prompt(prompts_dir / "flavor_v2.yaml")
+        self._quest_gen_repo = quest_gen_repo
 
     async def generate(
         self,
-        session: AsyncSession,
         quest_giver_id: str,
         cause_event_id: str | None = None,
     ) -> GeneratedQuest:
@@ -92,7 +116,6 @@ class QuestGenerationEngine:
         flavor text. Writes the quest node and HAS_QUEST edge to the graph.
 
         Args:
-            session: Active Neo4j async session.
             quest_giver_id: ID of the Character node that will give the quest.
             cause_event_id: When provided, writes a CAUSED_BY edge from the new quest
                 to this event ID (narrative causation, strength=80).
@@ -104,19 +127,25 @@ class QuestGenerationEngine:
             ValueError: If no template exists for the giver's archetype or the
                 character node is not found.
         """
-        world_state = await get_world_state(session=session)
-        if world_state.quest_generation_rate < 1.0 and random.random() > world_state.quest_generation_rate:
+        world_day, quest_generation_rate = await self._quest_gen_repo.get_world_state_day_and_rate()
+        quest_seed = _quest_rng_seed(quest_giver_id, world_day)
+        rng = random.Random(quest_seed)
+        _logger.debug("quest_rng seed=%d giver=%s world_day=%d", quest_seed, quest_giver_id, world_day)
+        if quest_generation_rate < 1.0 and rng.random() > quest_generation_rate:
             raise ValueError(
-                f"Quest generation suppressed by pacing engine "
-                f"(rate={world_state.quest_generation_rate:.2f})"
+                f"Quest generation suppressed by pacing engine (rate={quest_generation_rate:.2f})"
             )
-        archetype, giver_name = await self._get_character_info(session, quest_giver_id)
-        giver_context = await self._get_giver_context(session, quest_giver_id)
-        template = self._select_template(archetype)
-        validator = SlotValidator(session=session)
+        world_state_context = await self._quest_gen_repo.get_world_state_context()
+        archetype, giver_name = await self._quest_gen_repo.get_character_info(character_id=quest_giver_id)
+        giver_context: dict[str, Any] = {
+            **await self._quest_gen_repo.get_giver_context(character_id=quest_giver_id),
+            "world_state": world_state_context,
+        }
+        template = self._select_template(archetype, rng=rng)
+        validator = SlotValidator(quest_gen_repo=self._quest_gen_repo)
 
-        fills_raw, fills = await self._fill_slots(session, template, validator, giver_name=giver_name, archetype=archetype, giver_context=giver_context)
-        description = await self._generate_flavor(template, fills_raw, giver_name, template.description_template)
+        fills_raw, fills = await self._fill_slots(template, validator, giver_name=giver_name, archetype=archetype, giver_context=giver_context, rng=rng)
+        description = await self._generate_flavor(template, fills_raw, giver_name, template.description_template, giver_context)
 
         quest_id = str(uuid.uuid4())
         payload: dict[str, Any] = {
@@ -127,15 +156,15 @@ class QuestGenerationEngine:
             "reward_id": None,
             "success_condition": f"Complete the {template.name} quest",
             "failure_condition": None,
-            "status": "offered",
+            "status": "draft",
             "severity": template.severity,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "completed_at": None,
+            "source": "generated",
         }
-        await create_quest(session, payload)
+        await self._quest_gen_repo.create_quest(payload=payload)
         if cause_event_id is not None:
-            await record_causation(
-                session,
+            await self._quest_gen_repo.record_causation(
                 effect_node_id=quest_id,
                 effect_node_type="quest",
                 cause_event_id=cause_event_id,
@@ -151,54 +180,40 @@ class QuestGenerationEngine:
             description=description,
         )
 
-    async def _get_character_info(
-        self,
-        session: AsyncSession,
-        character_id: str,
-    ) -> tuple[str, str]:
-        """Fetch archetype and name for a character node."""
-        result = await session.run(_CYPHER_GET_CHARACTER, character_id=character_id)
-        records = [dict(r) async for r in result]
-        if not records:
-            raise ValueError(f"Character '{character_id}' not found in graph")
-        row = records[0]
-        return str(row.get("archetype") or "default"), str(row.get("name") or character_id)
+    def _format_npc_context(self, giver_context: dict[str, Any]) -> str:
+        """Serialize giver context to a structured text block for v2 prompts."""
+        return "\n".join([
+            f"GIVER_MOOD: {giver_context.get('mood', 'neutral')}",
+            f"GIVER_NEEDS: {json.dumps(giver_context.get('needs', []))}",
+            f"GIVER_GOALS: {json.dumps(giver_context.get('goals', []))}",
+            f"GIVER_BELIEFS: {json.dumps(giver_context.get('beliefs', []))}",
+            f"GIVER_INVENTORY: {json.dumps(giver_context.get('inventory', []))}",
+            f"GIVER_LOCATION: {giver_context.get('location', 'unknown')}",
+            f"GIVER_FACTION: {json.dumps(giver_context.get('faction', []))}",
+            f"WORLD_STATE: {json.dumps(giver_context.get('world_state', {}))}",
+        ])
 
-    async def _get_giver_context(
-        self,
-        session: AsyncSession,
-        character_id: str,
-    ) -> dict[str, Any]:
-        """Fetch goals, beliefs, and mood for the quest giver to enrich slot-fill context."""
-        goals = await get_goals_for_character(session, character_id=character_id, k=3, status_filter="active")
-        beliefs = await get_beliefs_for_character(session, character_id=character_id, k=3)
-        mood = await get_character_mood(session, character_id=character_id)
-        return {
-            "goals": [g.get("objective", "") for g in (goals or [])],
-            "beliefs": [b.get("content", "") for b in (beliefs or [])],
-            "mood": mood[0] if mood else "neutral",
-        }
-
-    def _select_template(self, archetype: str) -> QuestTemplateRecord:
+    def _select_template(self, archetype: str, rng: random.Random | None = None) -> QuestTemplateRecord:
         """Select a template matching the archetype, falling back to any available."""
         matches = [t for t in self._templates if t.archetype == archetype]
         pool = matches if matches else self._templates
         if not pool:
             raise ValueError("No quest templates available")
-        return random.choice(pool)
+        _rng = rng if rng is not None else random.Random()
+        return _rng.choice(pool)
 
     async def _fill_slots(
         self,
-        session: AsyncSession,
         template: QuestTemplateRecord,
         validator: SlotValidator,
         *,
         giver_name: str = "",
         archetype: str = "",
         giver_context: dict[str, Any] | None = None,
+        rng: random.Random | None = None,
     ) -> tuple[dict[str, str], tuple[SlotFill, ...]]:
         """Try LLM slot-filling up to _MAX_RETRIES times, then fall back deterministically."""
-        candidates = await self._get_candidates(session, template.slot_definitions)
+        candidates = await self._get_candidates(template.slot_definitions)
         violation_context = ""
 
         for attempt in range(_MAX_RETRIES):
@@ -218,9 +233,8 @@ class QuestGenerationEngine:
                 violations,
             )
 
-        # Deterministic fallback: pick random valid nodes from graph
         _logger.warning("quest_generation falling back to deterministic slot fill")
-        fills_raw = await self._deterministic_fill(session, template.slot_definitions, candidates)
+        fills_raw = self._deterministic_fill(template.slot_definitions, candidates, rng=rng)
         fills = validator.build_fills(fills_raw, template.slot_definitions)
         return fills_raw, fills
 
@@ -243,15 +257,16 @@ class QuestGenerationEngine:
         giver_ctx_text = ""
         if giver_context:
             giver_ctx_text = (
-                f"\nGIVER: {giver_name} (archetype: {archetype})"
-                f"\nGIVER_MOOD: {giver_context.get('mood', 'neutral')}"
-                f"\nGIVER_GOALS: {json.dumps(giver_context.get('goals', []))}"
-                f"\nGIVER_BELIEFS: {json.dumps(giver_context.get('beliefs', []))}"
+                f"GIVER: {giver_name} (archetype: {archetype})\n"
+                + self._format_npc_context(giver_context)
             )
+        violation_prefix = f"PREVIOUS_VIOLATIONS: {violation_context}\n" if violation_context else ""
         user_prompt = self._slot_fill_prompt["user_template"].format(
             template_name=template.name,
             slot_definitions=slot_defs_text,
-            candidates=candidates_text + (" " + violation_context if violation_context else "") + giver_ctx_text,
+            candidates=candidates_text,
+            giver_context=giver_ctx_text,
+            violation_context=violation_prefix,
         )
         system = self._slot_fill_prompt.get("system", "")
         try:
@@ -279,12 +294,15 @@ class QuestGenerationEngine:
         fills_raw: dict[str, str],
         giver_name: str,
         default_description: str,
+        giver_context: dict[str, Any] | None = None,
     ) -> str:
-        """Call LLM for flavor text; return template default on any error."""
+        """Call LLM for flavor text grounded in NPC context; return template default on any error."""
+        giver_ctx_text = self._format_npc_context(giver_context) if giver_context else ""
         user_prompt = self._flavor_prompt["user_template"].format(
             template_name=template.name,
             fills=json.dumps(fills_raw),
             giver_name=giver_name,
+            giver_context=giver_ctx_text,
         )
         system = self._flavor_prompt.get("system", "")
         try:
@@ -312,7 +330,6 @@ class QuestGenerationEngine:
 
     async def _get_candidates(
         self,
-        session: AsyncSession,
         slot_definitions: tuple[SlotDefinition, ...],
     ) -> dict[str, list[str]]:
         """Query the graph for candidate node IDs for each slot type."""
@@ -323,25 +340,24 @@ class QuestGenerationEngine:
             if node_type in seen_types:
                 continue
             seen_types.add(node_type)
-            label = node_type.capitalize()
-            cypher = f"MATCH (n:{label}) RETURN n.id AS id LIMIT 20"
-            result = await session.run(cypher)
-            ids = [str(r["id"]) async for r in result if r.get("id") is not None]
+            label = resolve_node_label(node_type)
+            ids = await self._quest_gen_repo.get_candidate_ids_by_label(label=label)
             candidates[node_type] = ids
         return candidates
 
-    async def _deterministic_fill(
+    def _deterministic_fill(
         self,
-        session: AsyncSession,
         slot_definitions: tuple[SlotDefinition, ...],
         candidates: dict[str, list[str]],
+        rng: random.Random | None = None,
     ) -> dict[str, str]:
         """Pick random valid nodes from candidates for each slot."""
+        _rng = rng if rng is not None else random.Random()
         fills: dict[str, str] = {}
         for slot_def in slot_definitions:
             pool = candidates.get(slot_def.node_type, [])
             if pool:
-                fills[slot_def.name] = random.choice(pool)
+                fills[slot_def.name] = _rng.choice(pool)
             elif slot_def.required:
                 _logger.warning(
                     "No candidates for required slot '%s' (type=%s); using placeholder",

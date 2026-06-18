@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NPC Engine — Designer Dashboard</title>
+  <link rel="stylesheet" href="css/app.css" />
+  <!-- Graph rendering: Cytoscape.js from CDN (no build toolchain). -->
+  <script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">NPC&nbsp;Engine <span>Designer Dashboard</span></div>
+    <div class="auth">
+      <input id="api-key" type="password" placeholder="API key (Bearer token)" autocomplete="off" />
+      <button id="api-key-save" type="button">Connect</button>
+      <span id="conn-status" class="conn-status conn-unknown">not connected</span>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab is-active" data-tab="graph">Graph</button>
+    <button class="tab" data-tab="npcs">NPCs</button>
+    <button class="tab" data-tab="drafts">Quest Drafts</button>
+    <button class="tab" data-tab="engines">Engines</button>
+    <button class="tab" data-tab="analytics">Analytics</button>
+  </nav>
+
+  <main id="panels">
+    <!-- S12.1 — Live graph viewer (read-only) -->
+    <section class="panel is-active" id="panel-graph">
+      <div class="panel-head">
+        <h2>World Graph</h2>
+        <div class="panel-actions">
+          <label><input type="checkbox" class="node-filter" value="Character" checked /> Characters</label>
+          <label><input type="checkbox" class="node-filter" value="Location" checked /> Locations</label>
+          <label><input type="checkbox" class="node-filter" value="Faction" checked /> Factions</label>
+          <label><input type="checkbox" class="node-filter" value="Event" checked /> Events</label>
+          <button id="graph-refresh" type="button">Refresh</button>
+        </div>
+      </div>
+      <div class="graph-wrap">
+        <div id="cy"></div>
+        <aside id="graph-inspector" class="inspector">
+          <p class="muted">Click a node or edge to inspect it.</p>
+        </aside>
+      </div>
+    </section>
+
+    <!-- S12.2 — NPC authoring -->
+    <section class="panel" id="panel-npcs">
+      <div class="panel-head"><h2>Author NPC</h2></div>
+      <form id="npc-form" class="form">
+        <div class="grid2">
+          <label>ID <input name="id" required placeholder="e.g. elena_smith" /></label>
+          <label>Name <input name="name" required placeholder="Elena Smith" /></label>
+          <label>Archetype <input name="archetype" required placeholder="blacksmith" /></label>
+          <label>Faction <input name="faction" placeholder="iron_guild (optional)" /></label>
+          <label>Voice descriptor <input name="voice_descriptor" placeholder="gruff, terse" /></label>
+          <label>Gossipy (0–100) <input name="gossipy" type="number" min="0" max="100" value="50" /></label>
+          <label>Credulity (0–100) <input name="credulity" type="number" min="0" max="100" value="50" /></label>
+          <label>Honesty (0–100) <input name="honesty" type="number" min="0" max="100" value="50" /></label>
+        </div>
+        <label>Biography <textarea name="biography" required rows="3" placeholder="Backstory and starting memories…"></textarea></label>
+        <div class="form-actions">
+          <button type="submit">Create NPC</button>
+          <span id="npc-form-status" class="muted"></span>
+        </div>
+      </form>
+      <div class="panel-head"><h2>Existing NPCs</h2><button id="npc-list-refresh" type="button">Refresh</button></div>
+      <div id="npc-list" class="cards"></div>
+    </section>
+
+    <!-- S12.3 — Quest draft approval queue -->
+    <section class="panel" id="panel-drafts">
+      <div class="panel-head">
+        <h2>Quest Draft Queue</h2>
+        <button id="drafts-refresh" type="button">Refresh</button>
+      </div>
+      <div id="drafts-list" class="cards"></div>
+    </section>
+
+    <!-- S12.4 — Engine cadence + cost (read-only inspector) -->
+    <section class="panel" id="panel-engines">
+      <div class="panel-head">
+        <h2>Engine Cadence &amp; Cost</h2>
+        <button id="engines-refresh" type="button">Refresh</button>
+      </div>
+      <div class="grid2">
+        <div><h3>Runtime config</h3><table id="config-table" class="kv"></table></div>
+        <div><h3>Per-engine status</h3><table id="engine-status-table" class="grid-table"></table></div>
+      </div>
+    </section>
+
+    <!-- S12.5 — Analytics -->
+    <section class="panel" id="panel-analytics">
+      <div class="panel-head">
+        <h2>Designer Analytics</h2>
+        <button id="analytics-refresh" type="button">Refresh</button>
+      </div>
+      <div class="grid2">
+        <div><h3>Request metrics</h3><table id="metrics-table" class="grid-table"></table></div>
+        <div><h3>Recent world events</h3><table id="events-table" class="grid-table"></table></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="js/api.js" defer></script>
+  <script src="js/util.js" defer></script>
+  <script src="js/graph.js" defer></script>
+  <script src="js/npcs.js" defer></script>
+  <script src="js/drafts.js" defer></script>
+  <script src="js/engines.js" defer></script>
+  <script src="js/analytics.js" defer></script>
+  <script src="js/app.js" defer></script>
+</body>
+</html>

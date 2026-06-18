@@ -6,3 +6,5 @@ Does NOT: define scheduling intervals or read world state directly.
 Dependencies injected: None (RoutineEngine is constructed without arguments).
 Public surface: RoutineEngine
 """
+
+from __future__ import annotations

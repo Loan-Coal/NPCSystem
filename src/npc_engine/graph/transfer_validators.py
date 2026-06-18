@@ -1,10 +1,13 @@
 """
 transfer_validators.py - Validates currency and item transfer requests, returning immutable commands.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: execute graph writes or open transactions.
 
 Dependencies injected: Settings (for currency limits).
 """
+from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 

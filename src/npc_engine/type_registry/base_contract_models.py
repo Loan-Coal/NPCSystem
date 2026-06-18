@@ -1,10 +1,13 @@
 """
 base_contract_models.py - Pydantic contracts for package-internal base type YAML files.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: load files from disk.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from typing import Literal
 
@@ -45,7 +48,7 @@ class BaseEdgeTypeDocument(BaseModel):
     """One package-internal base edge contract document."""
 
     edge_type: str
-    src_type: str
+    src_type: str | list[str]
     dst_type: str
     directional: bool = True
     cascade_on_delete: list[str] = Field(default_factory=list)

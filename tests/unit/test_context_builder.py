@@ -53,7 +53,7 @@ def _llm_config() -> LLMConfig:
 def _patch_graph_calls(monkeypatch, tier_a_items=None) -> None:
     """Patch all graph calls used by build_serialized_context."""
 
-    async def fake_world_reader(session):
+    async def fake_world_reader(session, world_id: str = "world"):
         return WorldState(epoch="age_of_peace")
 
     async def fake_character_reader(session, npc_id):
@@ -129,6 +129,11 @@ def _patch_graph_calls(monkeypatch, tier_a_items=None) -> None:
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_traits_svc", fake_traits)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_pledges_for_character_svc", fake_pledges)
 
+    async def fake_needs(session, character_id):
+        return []
+
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_needs_for_character", fake_needs)
+
     async def fake_trust_scores(session, *, npc_id, event_ids):
         return {}
 
@@ -138,9 +143,18 @@ def _patch_graph_calls(monkeypatch, tier_a_items=None) -> None:
     async def fake_active_quest(session, *, player_id):
         return None
 
+    async def fake_npc_player_edge(session, *, npc_id, player_id):
+        return None
+
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_trust_scores_for_events", fake_trust_scores)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_second_hop_events", fake_second_hop)
     monkeypatch.setattr("npc_engine.retrieval.context_builder.get_active_quest_for_player", fake_active_quest)
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_npc_player_edge", fake_npc_player_edge)
+
+    async def fake_player_memories(session, *, npc_id, player_id, k=5):
+        return []
+
+    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_player_memories_for_npc", fake_player_memories)
 
 
 @pytest.mark.asyncio
@@ -177,6 +191,34 @@ async def test_builder_outputs_fixed_schema_with_emotion(monkeypatch) -> None:
     payload = json.loads(serialized)
     assert payload["npc"]["emotion"]["current_mood"] == "anxious"
     assert "recent_session_turns" in payload
+
+
+@pytest.mark.asyncio
+async def test_builder_surfaces_canonical_emotion_store_mood(monkeypatch) -> None:
+    """F3.2/DEC-099: a canonical EmotionStore mood (emotion_state) wins over the stale
+    character.current_mood graph property and is carried as the dialogue-context mood line."""
+    _patch_graph_calls(
+        monkeypatch,
+        tier_a_items=[
+            ContextItem(key="character:npc_1", text='{"id":"npc_1","name":"Aldric"}',
+                        tier="tierA", priority=100),
+        ],
+    )
+    settings = Settings(
+        API_KEY_SECRET="npc_dev_secret_2026_alpha",
+        NEO4J_URI="bolt://localhost:7687", NEO4J_USER="neo4j", NEO4J_PASSWORD="password",
+        PROMPT_TOKEN_BUDGET=800,
+    )
+
+    serialized = await build_serialized_context(
+        session=None,  # type: ignore[arg-type]
+        settings=settings, llm_config=_llm_config(), embedding_index=FakeEmbeddingIndex(rows=[]),
+        npc_id="npc_1", player_message="hello", session_turns=["player: hi"],
+        emotion_state={"current_mood": "furious"},  # canonical EmotionStore snapshot
+    )
+    payload = json.loads(serialized)
+    # Canonical mood wins over the character bundle's stale "anxious".
+    assert payload["npc"]["emotion"]["current_mood"] == "furious"
 
 
 @pytest.mark.asyncio
@@ -306,3 +348,167 @@ def test_final_serialized_budget_drops_tier_c_before_tier_b_when_over_budget() -
 
     assert "BBBB" in serialized
     assert "CCCC" not in serialized
+
+
+# ---------------------------------------------------------------------------
+# EXP-204: top unmet need surfaces in dialogue context (Tier B, trim-first)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_top_unmet_need_appears_in_context(monkeypatch) -> None:
+    """An NPC with an urgent unmet need gets a 'top_need' key in the serialized context.
+
+    The need line is a Tier B optional item (trim-first). With a generous budget
+    it must survive into the final serialized output.
+    """
+    urgent_need = {
+        "need_id": "need_hunger_1",
+        "kind": "hunger",
+        "level": 15,
+        "decay_rate": 5,
+        "character_id": "npc_1",
+    }
+
+    async def fake_needs(session, character_id):
+        return [urgent_need]
+
+    _patch_graph_calls(monkeypatch)
+    monkeypatch.setattr(
+        "npc_engine.retrieval.context_builder.get_needs_for_character",
+        fake_needs,
+    )
+
+    settings = Settings(
+        API_KEY_SECRET="npc_dev_secret_2026_alpha",
+        NEO4J_URI="bolt://localhost:7687",
+        NEO4J_USER="neo4j",
+        NEO4J_PASSWORD="password",
+        PROMPT_TOKEN_BUDGET=2500,
+    )
+
+    serialized = await build_serialized_context(
+        session=None,  # type: ignore[arg-type]
+        settings=settings,
+        llm_config=_llm_config(),
+        embedding_index=FakeEmbeddingIndex(rows=[]),
+        npc_id="npc_1",
+        player_message="hello",
+        session_turns=[],
+    )
+
+    payload = json.loads(serialized)
+    assert "top_need" in payload.get("npc", {}), (
+        "Expected 'top_need' under npc key when NPC has an urgent unmet need"
+    )
+    assert payload["npc"]["top_need"]["kind"] == "hunger"
+    assert payload["npc"]["top_need"]["level"] == 15
+
+
+@pytest.mark.asyncio
+async def test_no_top_need_when_npc_has_no_needs(monkeypatch) -> None:
+    """When get_needs_for_character returns [], 'top_need' must be absent (or None)."""
+
+    async def fake_no_needs(session, character_id):
+        return []
+
+    _patch_graph_calls(monkeypatch)
+    monkeypatch.setattr(
+        "npc_engine.retrieval.context_builder.get_needs_for_character",
+        fake_no_needs,
+    )
+
+    settings = Settings(
+        API_KEY_SECRET="npc_dev_secret_2026_alpha",
+        NEO4J_URI="bolt://localhost:7687",
+        NEO4J_USER="neo4j",
+        NEO4J_PASSWORD="password",
+        PROMPT_TOKEN_BUDGET=2500,
+    )
+
+    serialized = await build_serialized_context(
+        session=None,  # type: ignore[arg-type]
+        settings=settings,
+        llm_config=_llm_config(),
+        embedding_index=FakeEmbeddingIndex(rows=[]),
+        npc_id="npc_1",
+        player_message="hello",
+        session_turns=[],
+    )
+
+    payload = json.loads(serialized)
+    # Either key absent or explicitly None — either is acceptable
+    assert payload.get("npc", {}).get("top_need") is None, (
+        "Expected no top_need when NPC has no needs"
+    )
+
+
+# ---------------------------------------------------------------------------
+# EXP-211: player-scoped memory surfaces in dialogue context
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_player_scoped_memory_in_context(monkeypatch) -> None:
+    """Memories tagged with the requesting player_id must appear under 'player_memories'
+    in the serialized context; memories for a different player must not appear there."""
+    player_memory = {
+        "id": "mem-001",
+        "content": "The hero saved the village",
+        "vividness": 80,
+        "emotional_charge": 60,
+        "subject_player_id": "player_hero",
+        "recall_count": 3,
+        "never_forget": False,
+        "created_at_game_time": '{"year":1,"season":"spring","day":1,"time_of_day":"morning"}',
+    }
+
+    async def fake_player_memories(session, *, npc_id, player_id, k=5):
+        if player_id == "player_hero":
+            return [player_memory]
+        return []
+
+    _patch_graph_calls(monkeypatch)
+    monkeypatch.setattr(
+        "npc_engine.retrieval.context_builder.get_player_memories_for_npc",
+        fake_player_memories,
+    )
+
+    settings = Settings(
+        API_KEY_SECRET="npc_dev_secret_2026_alpha",
+        NEO4J_URI="bolt://localhost:7687",
+        NEO4J_USER="neo4j",
+        NEO4J_PASSWORD="password",
+        PROMPT_TOKEN_BUDGET=2500,
+    )
+
+    # Request as the matching player — memory must surface
+    serialized = await build_serialized_context(
+        session=None,  # type: ignore[arg-type]
+        settings=settings,
+        llm_config=_llm_config(),
+        embedding_index=FakeEmbeddingIndex(rows=[]),
+        npc_id="npc_1",
+        player_message="do you remember what happened?",
+        session_turns=[],
+        player_id="player_hero",
+    )
+    payload = json.loads(serialized)
+    assert "player_memories" in payload.get("npc", {}), (
+        "Expected 'player_memories' in context when NPC has memories for the requesting player"
+    )
+
+    # Request as a different player — memory must be absent
+    serialized_other = await build_serialized_context(
+        session=None,  # type: ignore[arg-type]
+        settings=settings,
+        llm_config=_llm_config(),
+        embedding_index=FakeEmbeddingIndex(rows=[]),
+        npc_id="npc_1",
+        player_message="do you remember what happened?",
+        session_turns=[],
+        player_id="player_villain",
+    )
+    payload_other = json.loads(serialized_other)
+    assert payload_other.get("npc", {}).get("player_memories") is None, (
+        "Expected no 'player_memories' for a different player"
+    )

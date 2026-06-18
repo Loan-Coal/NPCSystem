@@ -1,0 +1,35 @@
+case_id: case_neg_captain_sorn_no_troop_specifics
+description: >
+  captain_sorn knows war is beginning, but his edge carries no exact troop counts and
+  no enemy warlord's name. Pressed for precise numbers and a name, he must NOT fabricate
+  them - inventing a count or a named warlord is lore invention beyond his graph.
+seed:
+  npc_id: captain_sorn
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    How many Northmen are massing at the pass, Captain - exact numbers - and
+    what is their warlord's name?
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "their warlord is"
+      - "the warlord's name"
+      - "warlord goes by"
+      - "his name is"
+      - "bjorn"
+      - "ironfist"
+      - "i counted"
+      - "there are exactly"
+      - "500 northmen"
+      - "500 men"
+      - "gathered at the pass"
+      - "thousand men"
+      - "precisely"
+notes: >
+  Requires demo world seed (make demo-seed). Tests the boundary of a REAL edge: sorn owns
+  the fact of the war but not fabricated specifics. As a case_neg_ guard case the runner
+  also auto-injects min_length + no-fallback-line + in-character checks, so a curt
+  "I cannot say" with no personality still fails - he should decline like a soldier.

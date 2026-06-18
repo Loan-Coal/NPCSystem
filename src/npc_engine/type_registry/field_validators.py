@@ -1,10 +1,13 @@
 """
 field_validators.py - Per-field type, range, and byte-limit validators for registry payloads.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: orchestrate payload-level validation or resolve edge/node definitions.
 
 Dependencies injected: RuntimeFieldDefinition contracts.
 """
+from __future__ import annotations
 
 import json
 from typing import Any
@@ -32,7 +35,7 @@ def validate_field_type(*, field_name: str, value: Any, definition: RuntimeField
         _validate_dict_shape(field_name=field_name, value=value, definition=definition)
         return
 
-    validators = {
+    validators: dict[str, Any] = {
         "str": lambda item: isinstance(item, str),
         "int": lambda item: isinstance(item, int) and not isinstance(item, bool),
         "float": lambda item: isinstance(item, (int, float)) and not isinstance(item, bool),

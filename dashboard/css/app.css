@@ -1,0 +1,92 @@
+/* NPC Engine designer dashboard — single stylesheet (no build step). */
+:root {
+  --bg: #0f1419;
+  --panel: #1a2029;
+  --panel-2: #222b36;
+  --line: #2e3a48;
+  --text: #e6edf3;
+  --muted: #8b97a6;
+  --accent: #4ea1ff;
+  --good: #43c59e;
+  --warn: #f0a35e;
+  --bad: #ef6f6c;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+h2 { font-size: 16px; margin: 0; }
+h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.muted { color: var(--muted); }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: 700; }
+.brand span { color: var(--muted); font-weight: 400; margin-left: 6px; }
+.auth { display: flex; align-items: center; gap: 8px; }
+.auth input { width: 260px; }
+.conn-status { font-size: 12px; padding: 2px 8px; border-radius: 10px; }
+.conn-unknown { background: #333; color: var(--muted); }
+.conn-ok { background: rgba(67,197,158,.15); color: var(--good); }
+.conn-bad { background: rgba(239,111,108,.15); color: var(--bad); }
+
+input, textarea, button, select {
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font: inherit;
+}
+button { cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary, .form-actions button[type="submit"] { background: var(--accent); color: #07121f; border-color: var(--accent); font-weight: 600; }
+
+.tabs { display: flex; gap: 4px; padding: 8px 16px 0; background: var(--panel); border-bottom: 1px solid var(--line); }
+.tab { background: transparent; border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; padding: 8px 14px; color: var(--muted); }
+.tab.is-active { background: var(--bg); color: var(--text); border-color: var(--line); }
+
+main { padding: 16px; }
+.panel { display: none; }
+.panel.is-active { display: block; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; margin: 16px 0 10px; }
+.panel-head:first-child { margin-top: 0; }
+.panel-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.panel-actions label { font-size: 12px; color: var(--muted); }
+
+.graph-wrap { display: grid; grid-template-columns: 1fr 280px; gap: 12px; }
+#cy { height: 70vh; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.inspector { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow: auto; height: 70vh; }
+.inspector h4 { margin: 0 0 8px; }
+.inspector dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; }
+.inspector dt { color: var(--muted); }
+.inspector dd { margin: 0; word-break: break-word; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form label { display: block; margin-bottom: 10px; font-size: 12px; color: var(--muted); }
+.form input, .form textarea { width: 100%; display: block; margin-top: 3px; color: var(--text); }
+.form-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.card h4 { margin: 0 0 6px; }
+.card .row { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.badge { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--panel-2); color: var(--muted); }
+.badge.draft { color: var(--warn); }
+
+table { width: 100%; border-collapse: collapse; }
+.kv td, .grid-table td, .grid-table th { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.grid-table th { color: var(--muted); font-weight: 600; font-size: 12px; }
+.kv td:first-child { color: var(--muted); width: 55%; }
+td.err { color: var(--bad); }
+td.ok { color: var(--good); }
+
+.toast {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 16px; opacity: 0; pointer-events: none; transition: opacity .2s; max-width: 70vw;
+}
+.toast.show { opacity: 1; }
+.toast.err { border-color: var(--bad); color: var(--bad); }
+.toast.ok { border-color: var(--good); color: var(--good); }

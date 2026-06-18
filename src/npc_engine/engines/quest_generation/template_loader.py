@@ -10,6 +10,7 @@ Used by: npc_engine.api.dependency_singletons (singleton construction)
 
 from __future__ import annotations
 
+from typing import Any
 from pathlib import Path
 
 from npc_engine.common.yaml_utils import load_yaml_mapping
@@ -53,14 +54,14 @@ def load_templates(dir_path: Path) -> list[QuestTemplateRecord]:
     return records
 
 
-def _validate_required_fields(raw: dict, filename: str) -> None:
+def _validate_required_fields(raw: dict[str, Any], filename: str) -> None:
     """Raise ValueError if any required field is absent."""
     for field in _REQUIRED_FIELDS:
         if field not in raw:
             raise ValueError(f"template {filename!r} missing required field '{field}'")
 
 
-def _parse_template(raw: dict) -> QuestTemplateRecord:
+def _parse_template(raw: dict[str, Any]) -> QuestTemplateRecord:
     """Convert a raw YAML dict into a QuestTemplateRecord."""
     slot_defs_raw = raw["slot_definitions"]
     if not isinstance(slot_defs_raw, list):

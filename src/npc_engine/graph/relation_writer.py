@@ -1,10 +1,13 @@
 """
 relation_writer.py - Applies RELATES_TO updates with bounded relation values.
+Layer: graph
+Purpose: Apply bounded RELATES_TO updates (trust/fear/affection) to a Character→Character edge within an injected transaction.
 
 Does NOT: validate window constraints.
 
 Dependencies injected: AsyncManagedTransaction.
 """
+from __future__ import annotations
 
 from neo4j import AsyncTransaction
 

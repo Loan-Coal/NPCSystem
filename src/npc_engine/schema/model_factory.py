@@ -1,10 +1,13 @@
 """
 model_factory.py - Produces runtime Pydantic models from npc_engine.schema extension fields.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: persist model instances.
 
 Dependencies injected: SchemaConfig.
 """
+from __future__ import annotations
 
 from typing import Any
 

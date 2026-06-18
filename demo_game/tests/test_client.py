@@ -433,9 +433,25 @@ def test_post_memory_success(mock_http: MagicMock, make_response) -> None:
     assert result == {"memory_id": "m_1"}
     mock_http.post.assert_called_once_with(
         "/v1/admin/memories/npc_1",
-        json={"content": "I saw the fire", "vividness": 85, "emotional_charge": 70, "game_time": _GAME_TIME},
+        json={
+            "content": "I saw the fire", "vividness": 85, "emotional_charge": 70,
+            "game_time": _GAME_TIME, "is_historical": False,
+        },
         timeout=15.0,
     )
+
+
+def test_post_memory_historical_includes_occurred_at(mock_http: MagicMock, make_response) -> None:
+    """A historical memory sends is_historical=True and an occurred_at_game_time (S26.3)."""
+    mock_http.post.return_value = make_response(201, {"memory_id": "m_2"})
+    occurred = {"year": 0, "season": "autumn", "day": 1, "time_of_day": "night"}
+    _client(mock_http).post_memory(
+        "npc_1", "the old war", 90, -50, _GAME_TIME,
+        occurred_at_game_time=occurred, is_historical=True,
+    )
+    body = mock_http.post.call_args.kwargs["json"]
+    assert body["is_historical"] is True
+    assert body["occurred_at_game_time"] == occurred
 
 
 def test_post_memory_raises_on_422(mock_http: MagicMock, make_response) -> None:
@@ -472,17 +488,22 @@ def test_post_secret_raises_on_422(mock_http: MagicMock, make_response) -> None:
 
 
 def test_put_world_state_success(mock_http: MagicMock, make_response) -> None:
-    mock_http.post.return_value = make_response(200, {"data": {"id": "ws_main", "epoch": "war"}})
+    # L9-02: put_world_state PATCHes the canonical 'world' node (partial update),
+    # it does not POST/upsert (which 422s on the existing node's required fields).
+    mock_http.patch.return_value = make_response(200, {"data": {"id": "world", "epoch": "war"}})
     result = _client(mock_http).put_world_state("war", ["northern_war"])
-    assert result["data"]["epoch"] == "war"
-    _, kwargs = mock_http.post.call_args
-    assert kwargs["json"]["properties"]["id"] == "ws_main"
-    assert kwargs["json"]["properties"]["epoch"] == "war"
-    assert kwargs["json"]["properties"]["active_conditions"] == ["northern_war"]
+    assert result["epoch"] == "war"
+    args, kwargs = mock_http.patch.call_args
+    assert args[0] == "/v1/graph/nodes/world_state/world"
+    props = kwargs["json"]["properties"]
+    assert "id" not in props, "id is the URL path segment, not a patched property"
+    assert props["epoch"] == "war"
+    assert props["active_conditions"] == ["northern_war"]
+    assert "faction_standings" not in props and "weather" not in props
 
 
 def test_put_world_state_raises_on_500(mock_http: MagicMock, make_response) -> None:
-    mock_http.post.return_value = make_response(500, {})
+    mock_http.patch.return_value = make_response(500, {})
     with pytest.raises(EngineClientError, match="HTTP 500"):
         _client(mock_http).put_world_state("war", [])
 
@@ -506,3 +527,269 @@ def test_put_npc_reputation_raises_on_500(mock_http: MagicMock, make_response) -
     mock_http.post.return_value = make_response(500, {})
     with pytest.raises(EngineClientError, match="HTTP 500"):
         _client(mock_http).put_npc_reputation("captain_sorn", "city_guard", 80.0)
+
+
+# ---------------------------------------------------------------------------
+# get_npc_emotion
+# ---------------------------------------------------------------------------
+
+
+def test_get_npc_emotion_success(mock_http: MagicMock, make_response) -> None:
+    payload = {"npc_id": "mira_innkeeper", "label": "happy", "valence": 0.6, "arousal": 0.4, "updated_at": "t0"}
+    mock_http.get.return_value = make_response(200, payload)
+    result = _client(mock_http).get_npc_emotion("mira_innkeeper")
+    assert result == payload
+    mock_http.get.assert_called_once_with("/v1/npc/mira_innkeeper/emotion", timeout=15.0)
+
+
+def test_get_npc_emotion_returns_none_on_404(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(404, {"error": "not found"})
+    assert _client(mock_http).get_npc_emotion("ghost_npc") is None
+
+
+def test_get_npc_emotion_raises_on_500(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(500, {})
+    with pytest.raises(EngineClientError, match="HTTP 500"):
+        _client(mock_http).get_npc_emotion("mira_innkeeper")
+
+
+# ---------------------------------------------------------------------------
+# post_quest_generate
+# ---------------------------------------------------------------------------
+
+
+def test_post_quest_generate_returns_data(mock_http: MagicMock, make_response) -> None:
+    payload = {"quest_id": "q_001", "description": "Retrieve the northern spices."}
+    mock_http.post.return_value = make_response(200, {"data": payload})
+    result = _client(mock_http).post_quest_generate("aldric_merchant")
+    assert result == payload
+    mock_http.post.assert_called_once_with(
+        "/v1/admin/quests/generate",
+        json={"quest_giver_id": "aldric_merchant"},
+        timeout=120.0,
+    )
+
+
+def test_post_quest_generate_raises_on_error(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(500, {"error": "LLM unavailable"})
+    with pytest.raises(EngineClientError, match="HTTP 500"):
+        _client(mock_http).post_quest_generate("aldric_merchant")
+
+
+# ---------------------------------------------------------------------------
+# get_quest
+# ---------------------------------------------------------------------------
+
+
+def test_get_quest_returns_data_on_200(mock_http: MagicMock, make_response) -> None:
+    quest = {"id": "q_001", "title": "Find the spices", "status": "available"}
+    mock_http.get.return_value = make_response(200, {"data": {"quest": quest}})
+    result = _client(mock_http).get_quest("q_001")
+    assert result == quest
+    mock_http.get.assert_called_once_with("/v1/admin/quests/q_001", timeout=15.0)
+
+
+def test_get_quest_returns_none_on_404(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(404, {"error": "not found"})
+    assert _client(mock_http).get_quest("missing_quest") is None
+
+
+def test_get_quest_raises_on_500(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(500, {})
+    with pytest.raises(EngineClientError, match="HTTP 500"):
+        _client(mock_http).get_quest("q_001")
+
+
+# ---------------------------------------------------------------------------
+# get_item_price
+# ---------------------------------------------------------------------------
+
+
+def test_get_item_price_returns_price_on_200(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(200, {"data": {"price": 120}})
+    result = _client(mock_http).get_item_price("spice", "aldric_merchant")
+    assert result == 120
+    mock_http.get.assert_called_once_with(
+        "/v1/admin/economy/price",
+        params={"item_type": "spice", "character_id": "aldric_merchant"},
+        timeout=15.0,
+    )
+
+
+def test_get_item_price_returns_none_on_404(mock_http: MagicMock, make_response) -> None:
+    mock_http.get.return_value = make_response(404, {})
+    assert _client(mock_http).get_item_price("spice", "aldric_merchant") is None
+
+
+# ---------------------------------------------------------------------------
+# post_trade
+# ---------------------------------------------------------------------------
+
+
+def test_post_trade_returns_result_on_200(mock_http: MagicMock, make_response) -> None:
+    payload = {"data": {"accepted": False, "rejection_reason": "price too low"}}
+    mock_http.post.return_value = make_response(200, payload)
+    result = _client(mock_http).post_trade(
+        buyer_id="player",
+        seller_id="aldric_merchant",
+        item_id="northern_spice_bundle",
+        item_type="spice",
+        offered_price=80,
+        tick=0,
+    )
+    assert result == payload
+    _, kwargs = mock_http.post.call_args
+    body = kwargs["json"]
+    assert body["offered_price"] == 80
+    assert body["seller_id"] == "aldric_merchant"
+
+
+def test_post_trade_raises_on_4xx(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(422, {"detail": "invalid"})
+    with pytest.raises(EngineClientError, match="HTTP 422"):
+        _client(mock_http).post_trade(
+            buyer_id="player",
+            seller_id="aldric_merchant",
+            item_id="northern_spice_bundle",
+            item_type="spice",
+            offered_price=80,
+            tick=0,
+        )
+
+
+# ---------------------------------------------------------------------------
+# _quest_headers
+# ---------------------------------------------------------------------------
+
+
+def test_quest_headers_hash_is_deterministic() -> None:
+    """Same method + path + payload always produces the same hash."""
+    c = _client(MagicMock())
+    h1 = c._quest_headers("POST", "/v1/quests/offer", {"quest_id": "q1"})
+    h2 = c._quest_headers("POST", "/v1/quests/offer", {"quest_id": "q1"})
+    assert h1["X-Idempotency-Request-Hash"] == h2["X-Idempotency-Request-Hash"]
+
+
+def test_quest_headers_request_id_differs_per_call() -> None:
+    """X-Request-ID must be a fresh uuid4 on every call."""
+    c = _client(MagicMock())
+    h1 = c._quest_headers("POST", "/v1/quests/offer", {})
+    h2 = c._quest_headers("POST", "/v1/quests/offer", {})
+    assert h1["X-Request-ID"] != h2["X-Request-ID"]
+
+
+def test_quest_headers_contains_all_required_keys() -> None:
+    """All three X- headers must be present."""
+    c = _client(MagicMock())
+    headers = c._quest_headers("POST", "/v1/quests/accept", {"quest_id": "q1"})
+    assert "X-Request-ID" in headers
+    assert "X-Idempotency-Key" in headers
+    assert "X-Idempotency-Request-Hash" in headers
+
+
+# ---------------------------------------------------------------------------
+# post_quest_offer
+# ---------------------------------------------------------------------------
+
+
+def test_post_quest_offer_success(mock_http: MagicMock, make_response) -> None:
+    payload = {"data": {"quest_id": "q_001", "status": "offered"}}
+    mock_http.post.return_value = make_response(200, payload)
+    result = _client(mock_http).post_quest_offer(
+        "q_001", "player", "Find the spices",
+        objectives=[{"objective_id": "obj_1", "target_count": 1, "objective_type": "deliver", "target_id": "spice"}],
+        item_rewards=[],
+        currency_reward={"amount": 50},
+    )
+    assert result == payload
+    _, kwargs = mock_http.post.call_args
+    assert kwargs["json"]["quest_id"] == "q_001"
+    assert "X-Idempotency-Request-Hash" in kwargs["headers"]
+
+
+def test_post_quest_offer_raises_on_4xx(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(404, {"detail": "quest not found"})
+    with pytest.raises(EngineClientError, match="HTTP 404"):
+        _client(mock_http).post_quest_offer(
+            "missing", "player", "title",
+            objectives=[], item_rewards=[], currency_reward=None,
+        )
+
+
+# ---------------------------------------------------------------------------
+# post_quest_accept
+# ---------------------------------------------------------------------------
+
+
+def test_post_quest_accept_success(mock_http: MagicMock, make_response) -> None:
+    payload = {"data": {"quest_id": "q_001", "status": "active"}}
+    mock_http.post.return_value = make_response(200, payload)
+    result = _client(mock_http).post_quest_accept("q_001", "player")
+    assert result == payload
+    _, kwargs = mock_http.post.call_args
+    assert kwargs["json"]["quest_id"] == "q_001"
+    assert "X-Idempotency-Request-Hash" in kwargs["headers"]
+
+
+def test_post_quest_accept_raises_on_4xx(mock_http: MagicMock, make_response) -> None:
+    mock_http.post.return_value = make_response(409, {"detail": "already accepted"})
+    with pytest.raises(EngineClientError, match="HTTP 409"):
+        _client(mock_http).post_quest_accept("q_001", "player")
+
+
+# ---------------------------------------------------------------------------
+# pledges (ISSUE-061 path-drift regression — route is mounted at /v1/admin)
+# ---------------------------------------------------------------------------
+
+
+def test_post_pledge_uses_admin_path(mock_http: MagicMock, make_response) -> None:
+    """post_pledge targets /v1/admin/pledges/... (pledges_router is under admin_prefix)."""
+    mock_http.post.return_value = make_response(200, {"data": {}})
+    _client(mock_http).post_pledge("lira_fence", "thieves_guild", "loyalty", 1)
+    assert mock_http.post.call_args.args[0] == "/v1/admin/pledges/characters/lira_fence"
+
+
+def test_get_pledges_for_npc_uses_admin_path(mock_http: MagicMock, make_response) -> None:
+    """get_pledges_for_npc targets /v1/admin/pledges/... (was /v1/pledges → 404)."""
+    mock_http.get.return_value = make_response(200, {"data": {"pledges": []}})
+    _client(mock_http).get_pledges_for_npc("lira_fence")
+    assert mock_http.get.call_args.args[0] == "/v1/admin/pledges/characters/lira_fence"
+
+
+# ---------------------------------------------------------------------------
+# system observability (SEV-14 path-drift regression — moved under /v1/admin)
+# ---------------------------------------------------------------------------
+
+
+def test_get_engine_status_uses_admin_system_path(mock_http: MagicMock, make_response) -> None:
+    """get_engine_status targets /v1/admin/system/engines (SEV-14, DEC-112)."""
+    mock_http.get.return_value = make_response(200, {"data": []})
+    _client(mock_http).get_engine_status()
+    assert mock_http.get.call_args.args[0] == "/v1/admin/system/engines"
+
+
+def test_get_recent_events_uses_admin_system_path(mock_http: MagicMock, make_response) -> None:
+    """get_recent_events targets /v1/admin/system/events (SEV-14, DEC-112)."""
+    mock_http.get.return_value = make_response(200, {"data": []})
+    _client(mock_http).get_recent_events(limit=5)
+    assert mock_http.get.call_args.args[0] == "/v1/admin/system/events"
+
+
+# ---------------------------------------------------------------------------
+# get_schemes (F2.3 / G2.2)
+# ---------------------------------------------------------------------------
+
+
+def test_get_schemes_returns_scheme_list(mock_http: MagicMock, make_response) -> None:
+    """get_schemes returns the 'schemes' sub-list from the envelope data."""
+    schemes = [{"scheme_id": "s1", "goal": "rob", "discovered": True, "steps": []}]
+    mock_http.get.return_value = make_response(200, {"data": {"npc_id": "lira", "schemes": schemes}})
+    result = _client(mock_http).get_schemes("lira")
+    assert result == schemes
+    assert mock_http.get.call_args.args[0] == "/v1/npc/lira/schemes"
+
+
+def test_get_schemes_returns_empty_on_error(mock_http: MagicMock, make_response) -> None:
+    """get_schemes degrades to [] on a >=400 response."""
+    mock_http.get.return_value = make_response(404, {"detail": "nope"})
+    assert _client(mock_http).get_schemes("lira") == []

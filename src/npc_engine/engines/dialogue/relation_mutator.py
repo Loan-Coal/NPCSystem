@@ -1,35 +1,48 @@
 """
-relation_mutator.py - Applies validated relation deltas through graph writer.
+relation_mutator.py - Applies validated relation deltas through the dialogue graph port.
+Layer: engines
+Purpose: Emit structured audit-log events and delegate relation-delta writes to the
+         injected DialogueGraphPort (which owns the first-contact retry logic).
 
-Does NOT: decide delta policy rules.
+Does NOT: import neo4j types; open sessions; implement graph write logic.
 
-Dependencies injected: AsyncSession, Settings.
+Dependencies injected: DialogueGraphPort, Settings.
+
+Structured audit log events emitted:
+- ``relation_delta_attempt``: before the graph write (INFO).
+- ``relation_delta_applied``: after a successful write (INFO).
+All events carry npc_id, player_id, tick_id, and cause_id as extra fields.
 """
 
-from neo4j import AsyncSession
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from npc_engine.engines.dialogue.dialogue_models import RelationDeltas
-from npc_engine.config import Settings
-from npc_engine.graph.graph_writer import apply_relation_delta
-from npc_engine.utils.errors import RelationEdgeNotFoundError
+from npc_engine.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from npc_engine.engines.ports.dialogue_graph_port import DialogueGraphPort
+
+_LOGGER = get_logger(__name__)
 
 
 async def apply_dialogue_relation_deltas(
-    session: AsyncSession,
-    settings: Settings,
+    repo: DialogueGraphPort,
+    settings: object,
     npc_id: str,
     player_id: str,
     relation_deltas: RelationDeltas,
     cause_id: str,
     tick_id: int,
 ) -> None:
-    """Apply validated relation deltas from a dialogue turn to the graph.
+    """Apply validated relation deltas from a dialogue turn to the graph via port.
 
-    Missing-edge errors are silently swallowed so the caller's response flow
-    is not interrupted when no relation edge yet exists.
+    Emits structured audit log events before and after the write.
+    First-contact edge creation is handled by the port adapter.
 
     Args:
-        session: Active Neo4j async session.
+        repo: DialogueGraphPort implementation managing the graph writes.
         settings: Application settings forwarded to the graph writer.
         npc_id: Source node identifier (NPC).
         player_id: Destination node identifier (player).
@@ -37,16 +50,22 @@ async def apply_dialogue_relation_deltas(
         cause_id: Opaque string identifying the cause for audit logging.
         tick_id: Game tick identifier for delta log attribution.
     """
-
-    try:
-        await apply_relation_delta(
-            session=session,
-            settings=settings,
-            src_id=npc_id,
-            dst_id=player_id,
-            deltas=relation_deltas.model_dump(),
-            cause_id=cause_id,
-            tick_id=tick_id,
-        )
-    except RelationEdgeNotFoundError:
-        return
+    log_extra: dict[str, object] = {
+        "npc_id": npc_id,
+        "player_id": player_id,
+        "tick_id": tick_id,
+        "cause_id": cause_id,
+    }
+    _LOGGER.info(
+        "relation_delta_attempt",
+        extra={**log_extra, "deltas": str(relation_deltas.model_dump())},
+    )
+    await repo.apply_relation_deltas(
+        npc_id=npc_id,
+        player_id=player_id,
+        relation_deltas=relation_deltas,
+        cause_id=cause_id,
+        tick_id=tick_id,
+        settings=settings,
+    )
+    _LOGGER.info("relation_delta_applied", extra=log_extra)

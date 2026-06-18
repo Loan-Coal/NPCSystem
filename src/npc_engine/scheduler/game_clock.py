@@ -1,10 +1,13 @@
 """
 game_clock.py - Thread-safe game clock state with manual advance.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: trigger engine ticks.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 import asyncio
 

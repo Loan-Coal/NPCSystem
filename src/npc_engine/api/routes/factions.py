@@ -10,13 +10,13 @@ Used by: npc_engine.main (registered at admin_prefix)
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_faction_service
-from npc_engine.api.route_helpers import graph_error_to_http, ok_response, require_node
+from npc_engine.api.route_helpers import OkEnvelope, graph_error_to_http, ok_response, require_node
 from npc_engine.graph.faction_service import FactionService
 from npc_engine.utils.errors import FactionMembershipError, FactionNotFoundError
 
@@ -78,17 +78,44 @@ class _FactionNode(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Response row models (SEV-16)
+#
+# Bare-list reads return Faction graph property bags; declare the stable fields
+# clients read and keep extra='allow' so every other graph property is preserved
+# verbatim on the wire (no shape change) while OpenAPI gets a named component.
+# ---------------------------------------------------------------------------
+
+
+class FactionRow(BaseModel):
+    """A faction node row from GET /factions/ (extra graph props preserved)."""
+
+    id: str
+    name: str
+
+    model_config = ConfigDict(extra="allow")
+
+
+class FactionStandingRow(BaseModel):
+    """A directed standing row from GET /factions/{id}/standings."""
+
+    target: str
+    standing: int
+
+    model_config = ConfigDict(extra="allow")
+
+
+# ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
 
 router = APIRouter(prefix="/factions", tags=["factions"])
 
 
-@router.post("/", status_code=201)
+@router.post("/", status_code=201, response_model=OkEnvelope[dict[str, Any]])
 async def create_faction(
     request: CreateFactionRequest,
     service: FactionService = Depends(get_faction_service),
-) -> dict:
+) -> dict[str, Any]:
     """Create or update a Faction node."""
     now = datetime.now(timezone.utc).isoformat()
     node = _FactionNode(
@@ -101,35 +128,35 @@ async def create_faction(
         last_graph_updated_at=now,
     )
     await service.upsert_faction(node)
-    return ok_response({"id": request.id})  # type: ignore[no-any-return]
+    return ok_response({"id": request.id})
 
 
-@router.get("/")
+@router.get("/", response_model=OkEnvelope[list[FactionRow]])
 async def list_factions(
     is_active: bool | None = None,
     service: FactionService = Depends(get_faction_service),
-) -> dict:
+) -> dict[str, Any]:
     """List all factions, optionally filtered by active status."""
     factions = await service.list_factions(is_active=is_active)
-    return ok_response(factions)  # type: ignore[no-any-return]
+    return ok_response(factions)
 
 
-@router.get("/{faction_id}")
+@router.get("/{faction_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_faction(
     faction_id: str,
     service: FactionService = Depends(get_faction_service),
-) -> dict:
+) -> dict[str, Any]:
     """Fetch a single Faction node by ID."""
     faction = await service.get_faction(faction_id)
-    return ok_response(require_node(faction, node_type="Faction"))  # type: ignore[no-any-return]
+    return ok_response(require_node(faction, node_type="Faction"))
 
 
-@router.post("/{faction_id}/members", status_code=201)
+@router.post("/{faction_id}/members", status_code=201, response_model=OkEnvelope[dict[str, Any]])
 async def add_member(
     faction_id: str,
     request: AddMemberRequest,
     service: FactionService = Depends(get_faction_service),
-) -> dict:
+) -> dict[str, Any]:
     """Add a character as a member of a faction."""
     try:
         await service.add_member(
@@ -140,81 +167,81 @@ async def add_member(
         )
     except FactionMembershipError as error:
         raise graph_error_to_http(error) from error
-    return ok_response({"character_id": request.character_id, "faction_id": faction_id})  # type: ignore[no-any-return]
+    return ok_response({"character_id": request.character_id, "faction_id": faction_id})
 
 
-@router.get("/{faction_id}/members")
+@router.get("/{faction_id}/members", response_model=OkEnvelope[list[dict[str, Any]]])
 async def list_members(
     faction_id: str,
     service: FactionService = Depends(get_faction_service),
-) -> dict:
+) -> dict[str, Any]:
     """List all active members of a faction."""
     members = await service.get_members_of_faction(faction_id)
-    return ok_response(members)  # type: ignore[no-any-return]
+    return ok_response(members)
 
 
-@router.delete("/{faction_id}/members/{character_id}")
+@router.delete("/{faction_id}/members/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def remove_member(
     faction_id: str,
     character_id: str,
     service: FactionService = Depends(get_faction_service),
-) -> dict:
+) -> dict[str, Any]:
     """Remove a character from a faction."""
     try:
         await service.remove_member(character_id=character_id, faction_id=faction_id)
     except FactionMembershipError as error:
         raise graph_error_to_http(error) from error
-    return ok_response({"character_id": character_id, "faction_id": faction_id})  # type: ignore[no-any-return]
+    return ok_response({"character_id": character_id, "faction_id": faction_id})
 
 
-@router.put("/{faction_id}/standings/{target_id}")
+@router.put("/{faction_id}/standings/{target_id}", response_model=OkEnvelope[dict[str, Any]])
 async def set_standing(
     faction_id: str,
     target_id: str,
     request: SetStandingRequest,
     service: FactionService = Depends(get_faction_service),
-) -> dict:
+) -> dict[str, Any]:
     """Set directed standing from one faction toward another."""
     try:
         await service.set_standing(src_id=faction_id, dst_id=target_id, standing=request.standing)
     except FactionNotFoundError as error:
         raise graph_error_to_http(error) from error
-    return ok_response({"src_id": faction_id, "dst_id": target_id, "standing": request.standing})  # type: ignore[no-any-return]
+    return ok_response({"src_id": faction_id, "dst_id": target_id, "standing": request.standing})
 
 
-@router.get("/{faction_id}/standings")
+@router.get("/{faction_id}/standings", response_model=OkEnvelope[list[FactionStandingRow]])
 async def list_standings(
     faction_id: str,
     service: FactionService = Depends(get_faction_service),
-) -> dict:
+) -> dict[str, Any]:
     """List all directed standings from a faction toward others."""
     standings = await service.list_standings(faction_id)
-    return ok_response(standings)  # type: ignore[no-any-return]
+    return ok_response(standings)
 
 
-@router.post("/{faction_id}/controls/{location_id}", status_code=201)
+@router.post("/{faction_id}/controls/{location_id}", status_code=201, response_model=OkEnvelope[dict[str, Any]])
 async def set_controls(
     faction_id: str,
     location_id: str,
     service: FactionService = Depends(get_faction_service),
-) -> dict:
+) -> dict[str, Any]:
     """Declare that a faction controls a location."""
     try:
         await service.set_controls(faction_id=faction_id, location_id=location_id)
     except FactionNotFoundError as error:
         raise graph_error_to_http(error) from error
-    return ok_response({"faction_id": faction_id, "location_id": location_id})  # type: ignore[no-any-return]
+    return ok_response({"faction_id": faction_id, "location_id": location_id})
 
 
-@router.delete("/{faction_id}/controls/{location_id}")
+@router.delete("/{faction_id}/controls/{location_id}", response_model=OkEnvelope[dict[str, Any]])
 async def remove_controls(
     faction_id: str,
     location_id: str,
     service: FactionService = Depends(get_faction_service),
-) -> dict:
+) -> dict[str, Any]:
     """Remove a faction's control over a location."""
     try:
         await service.remove_controls(faction_id=faction_id, location_id=location_id)
     except FactionNotFoundError as error:
         raise graph_error_to_http(error) from error
-    return ok_response({"faction_id": faction_id, "location_id": location_id})  # type: ignore[no-any-return]
+    return ok_response({"faction_id": faction_id, "location_id": location_id})

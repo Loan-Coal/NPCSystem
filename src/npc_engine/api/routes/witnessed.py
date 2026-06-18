@@ -10,11 +10,13 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends, Query
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.witnessed_service import (
     get_witnessed_by_svc,
     get_witnesses_of_event_svc,
@@ -24,11 +26,11 @@ from npc_engine.graph.witnessed_service import (
 router = APIRouter(prefix="/witnessed", tags=["witnessed"])
 
 
-@router.get("/event/{event_id}")
+@router.get("/event/{event_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_event_witnesses(
     event_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Return all characters who witnessed a given event.
 
     Args:
@@ -41,12 +43,12 @@ async def get_event_witnesses(
     return ok_response({"witnesses": witnesses})
 
 
-@router.get("/by/{subject_id}")
+@router.get("/by/{subject_id}", response_model=OkEnvelope[dict[str, Any]])
 async def get_observations_of_subject(
     subject_id: str,
     limit: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Return all WITNESSED edges pointing at a subject character.
 
     Args:
@@ -60,13 +62,13 @@ async def get_observations_of_subject(
     return ok_response({"observations": observations})
 
 
-@router.patch("/disclose")
+@router.patch("/disclose", response_model=OkEnvelope[dict[str, Any]])
 async def disclose_witness(
     witness_id: str = Query(...),
     subject_id: str = Query(...),
     event_id: str = Query(...),
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Mark a WITNESSED edge as disclosed (the witness has shared the information).
 
     Args:

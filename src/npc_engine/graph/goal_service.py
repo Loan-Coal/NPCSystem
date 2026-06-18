@@ -14,7 +14,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.common.json_utils import dump_json
 from npc_engine.graph.goal_queries import (
@@ -22,6 +22,7 @@ from npc_engine.graph.goal_queries import (
     CYPHER_UPDATE_GOAL_STATUS,
     get_goals_for_character,
 )
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.world.time_utils import TimePoint
 
 
@@ -33,8 +34,12 @@ async def create_goal(
     urgency: int,
     game_time: TimePoint,
     target_id: str | None = None,
+    node_id: str | None = None,
 ) -> str:
     """Create a Goal node and link it to a Character via a PURSUES edge.
+
+    Uses MERGE semantics — safe to call multiple times with the same node_id.
+    When node_id is None a UUID is auto-generated (legacy behaviour).
 
     Args:
         session: Active Neo4j async session.
@@ -43,11 +48,14 @@ async def create_goal(
         urgency: Urgency level (0–100).
         game_time: Game-time snapshot at which the goal was formed.
         target_id: Optional ID of another node this goal targets.
+        node_id: Optional caller-supplied stable ID. When provided the node is
+            merged on that ID so repeated calls are idempotent. When None a
+            UUID is generated.
 
     Returns:
-        Generated UUID string for the new goal node.
+        The node ID used (either supplied or generated).
     """
-    goal_id = str(uuid.uuid4())
+    goal_id = node_id if node_id is not None else str(uuid.uuid4())
     game_time_json = dump_json(
         {
             "year": game_time.year,
@@ -56,8 +64,7 @@ async def create_goal(
             "time_of_day": game_time.time_of_day,
         }
     )
-    tx = await session.begin_transaction()
-    async with tx:
+    async def _work(tx: AsyncTransaction) -> None:
         await tx.run(
             CYPHER_CREATE_GOAL,
             goal_id=goal_id,
@@ -68,6 +75,8 @@ async def create_goal(
             target_id=target_id or "",
             character_id=character_id,
         )
+
+    await run_in_tx(session, _work)
     return goal_id
 
 
@@ -107,13 +116,14 @@ async def update_goal_status(
         goal_id: ID of the Goal node to update.
         new_status: Replacement status value (active, achieved, or abandoned).
     """
-    tx = await session.begin_transaction()
-    async with tx:
+    async def _work(tx: AsyncTransaction) -> None:
         await tx.run(
             CYPHER_UPDATE_GOAL_STATUS,
             goal_id=goal_id,
             status=new_status,
         )
+
+    await run_in_tx(session, _work)
 
 
 async def delete_goal(

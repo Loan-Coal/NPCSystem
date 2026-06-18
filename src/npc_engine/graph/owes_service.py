@@ -12,13 +12,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.graph.owes_queries import (
     CYPHER_CREATE_DEBT,
     CYPHER_UPDATE_DEBT_STATUS,
     get_debts_for_character,
 )
+from npc_engine.graph.transaction_coordinator import run_in_tx
 
 _VALID_KINDS = frozenset({"money", "favor", "item", "service"})
 _VALID_STATUSES = frozenset({"pending", "fulfilled", "defaulted"})
@@ -51,8 +52,7 @@ async def create_debt(
     """
     if kind not in _VALID_KINDS:
         raise ValueError(f"kind must be one of {sorted(_VALID_KINDS)}, got {kind!r}")
-    tx = await session.begin_transaction()
-    async with tx:
+    async def _work(tx: AsyncTransaction) -> None:
         await tx.run(
             CYPHER_CREATE_DEBT,
             debtor_id=debtor_id,
@@ -62,6 +62,8 @@ async def create_debt(
             due_by=due_by,
             status="pending",
         )
+
+    await run_in_tx(session, _work)
 
 
 async def get_debts_for_character_svc(
@@ -103,11 +105,12 @@ async def update_debt_status(
     """
     if status not in _VALID_STATUSES:
         raise ValueError(f"status must be one of {sorted(_VALID_STATUSES)}, got {status!r}")
-    tx = await session.begin_transaction()
-    async with tx:
+    async def _work(tx: AsyncTransaction) -> None:
         await tx.run(
             CYPHER_UPDATE_DEBT_STATUS,
             debtor_id=debtor_id,
             creditor_id=creditor_id,
             status=status,
         )
+
+    await run_in_tx(session, _work)

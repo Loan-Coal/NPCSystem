@@ -1,10 +1,10 @@
 """
 Module: main
 Layer: api
-Purpose: FastAPI application entry point — lifespan management and route registration.
+Purpose: FastAPI application entry point — lifespan management and app assembly.
 Does NOT: implement business logic, call LLMs, or write to the graph directly.
-Dependencies injected: all api routes, auth.middleware, api.rate_limit, config, engines,
-                       retrieval, scheduler, utils
+Dependencies injected: api.router_registry, api.exception_handlers, auth.middleware,
+                       api.rate_limit, config, engines, retrieval, scheduler, utils
 Used by: uvicorn at process start.
 """
 
@@ -12,49 +12,21 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI
 
+from npc_engine.api.exception_handlers import register_exception_handlers
 from npc_engine.api.rate_limit import RateLimitMiddleware
-from npc_engine.api.routes.action import router as action_router
-from npc_engine.api.routes.batch import router as batch_router
-from npc_engine.api.routes.clock import router as clock_router
-from npc_engine.api.routes.dialogue import router as dialogue_router
-from npc_engine.api.routes.dialogue_ws import router as dialogue_ws_router
-from npc_engine.api.routes.graph import router as graph_router
-from npc_engine.api.routes.beliefs import router as beliefs_router
-from npc_engine.api.routes.goals import router as goals_router
-from npc_engine.api.routes.items import router as items_router
-from npc_engine.api.routes.memories import router as memories_router
-from npc_engine.api.routes.secrets import router as secrets_router
-from npc_engine.api.routes.debts import router as debts_router
-from npc_engine.api.routes.factions import router as factions_router
-from npc_engine.api.routes.schedules import router as schedules_router
-from npc_engine.api.routes.reputation import admin_router as reputation_admin_router
-from npc_engine.api.routes.reputation import graph_router as reputation_graph_router
-from npc_engine.api.routes.graph_admin import router as graph_admin_router
-from npc_engine.api.routes.npc_state import router as npc_state_router
-from npc_engine.api.routes.quest import router as quest_router
-from npc_engine.api.routes.quest_generation import router as quest_generation_router
-from npc_engine.api.routes.economy import router as economy_router
-from npc_engine.api.routes.location_history import router as location_history_router
-from npc_engine.api.routes.causality import router as causality_router
-from npc_engine.api.routes.witnessed import router as witnessed_router
-from npc_engine.api.routes.groups import router as groups_router
-from npc_engine.api.routes.rumors import router as rumors_router
-from npc_engine.api.routes.skills import router as skills_router
-from npc_engine.api.routes.traits import router as traits_router
-from npc_engine.api.routes.pledges import router as pledges_router
-from npc_engine.api.routes.treaties import router as treaties_router
-from npc_engine.api.routes.system import admin_router as system_admin_router
-from npc_engine.api.routes.system import router as system_router
+from npc_engine.api.router_registry import register_routers
 from npc_engine.auth.middleware import ApiKeyMiddleware
 from npc_engine.api.dependency_singletons import (
     close_registered_llm_adapters,
     get_dialogue_engine_model_config,
     get_embedding_index,
+    get_emotion_store,
     get_faction_politics_engine,
     get_game_schema,
     get_graph_db,
@@ -65,20 +37,29 @@ from npc_engine.api.dependency_singletons import (
     get_oath_engine,
     get_treaty_engine,
     get_pricing_engine,
+    get_session_store,
     get_skill_progression_engine,
     get_quest_generation_engine,
     get_redis_runtime,
     get_routine_engine,
     get_story_pacing_engine,
-    get_trade_engine,
+    get_tick_scheduler,
     get_type_registry,
 )
+from npc_engine.engines.emotion.emotion_bootstrap import EmotionBootstrapper
+from npc_engine.graph.character_reader import get_npc_ids
+from npc_engine.graph.repositories.emotion_bootstrap_repository import Neo4jEmotionBootstrapRepository
+from npc_engine.api.dependencies import get_sync_trade_handler
+from npc_engine.engines.interaction.dispatch import set_trade_handler
 from npc_engine.config import get_settings
 from npc_engine.engines.contracts.contract_loader import load_engine_contracts
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
-from npc_engine.engines.llm_config_loader import validate_all_engine_llm_configs
+from npc_engine.engines.llm_runtime_config import validate_all_engine_llm_configs
 from npc_engine.engines.idempotency.cleanup_scheduler import IdempotencyCleanupScheduler
 from npc_engine.retrieval.embedding_reconciler import EmbeddingReconciler
+from npc_engine.graph.schema_bootstrap import ensure_core_constraints
+from npc_engine.scheduler.tick_autopilot import TickAutopilot
+from npc_engine.scheduler.tick_budget_guard import TickBudgetGuard
 from npc_engine.scheduler.tick_lease import TickLeaseRepository
 from npc_engine.utils.logging import configure_logging
 
@@ -86,12 +67,13 @@ _logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     graph_db = get_graph_db()
     redis_runtime = get_redis_runtime()
     settings = get_settings()
     reconciler_task: asyncio.Task[None] | None = None
     idempotency_cleanup_task: asyncio.Task[None] | None = None
+    autopilot_task: asyncio.Task[None] | None = None
     connected = False
     try:
         get_faction_politics_engine.cache_clear()
@@ -101,7 +83,8 @@ async def lifespan(_app: FastAPI):
         get_treaty_engine.cache_clear()
         get_story_pacing_engine.cache_clear()
         get_pricing_engine.cache_clear()
-        get_trade_engine.cache_clear()
+        # get_trade_engine is per-request (not lru_cache) since SEV-24 — no cache to clear.
+        set_trade_handler(get_sync_trade_handler())
         get_quest_generation_engine.cache_clear()
         get_routine_engine.cache_clear()
         get_game_schema.cache_clear()
@@ -137,6 +120,17 @@ async def lifespan(_app: FastAPI):
         get_quest_generation_engine()
         await graph_db.connect()
         connected = True
+        async with graph_db.get_session() as session:
+            await ensure_core_constraints(session=session)
+        async with graph_db.get_session() as session:
+            npc_ids = await get_npc_ids(session)
+            await EmotionBootstrapper().load_from_graph(
+                port=Neo4jEmotionBootstrapRepository(graph_db=graph_db),
+                store=get_emotion_store(),
+                npc_ids=npc_ids,
+            )
+            await get_session_store().load_from_graph(session=session)
+            _logger.info("session_store.loaded_from_graph")
         await redis_runtime.connect()
         _dialogue_probe_adapter = create_llm_client_for_engine(
             engine_config=dialogue_engine_config, settings=settings
@@ -167,8 +161,21 @@ async def lifespan(_app: FastAPI):
             cleanup_scheduler.run_forever(),
             name="idempotency-cleanup",
         )
+        if settings.TICK_AUTOPILOT_ENABLED:
+            autopilot = TickAutopilot(
+                graph_db=graph_db,
+                tick_scheduler=get_tick_scheduler(),
+                interval_seconds=settings.TICK_INTERVAL_SECONDS,
+                game_seconds_per_tick=settings.TICK_GAME_SECONDS_PER_TICK,
+                budget_guard=TickBudgetGuard(max_per_minute=settings.TICK_LLM_CALLS_PER_MINUTE_MAX),
+            )
+            autopilot_task = asyncio.create_task(autopilot.run_forever(), name="tick-autopilot")
         yield
     finally:
+        if autopilot_task is not None:
+            autopilot_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await autopilot_task
         if idempotency_cleanup_task is not None:
             idempotency_cleanup_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -180,6 +187,16 @@ async def lifespan(_app: FastAPI):
         await close_registered_llm_adapters()
         await redis_runtime.close()
         if connected:
+            try:
+                settings = get_settings()
+                async with graph_db.get_session() as session:
+                    await get_session_store().save_to_graph(
+                        session=session,
+                        max_persisted_turns=settings.MAX_PERSISTED_SESSION_TURNS,
+                    )
+                _logger.info("session_store.saved_to_graph")
+            except Exception as exc:  # noqa: BLE001
+                _logger.warning("session_store.save_on_shutdown_failed", extra={"error": str(exc)})
             await graph_db.close()
 
 
@@ -194,6 +211,9 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="NPC Engine", version="0.1.0", lifespan=lifespan)
 
+    # Exception handlers — registered before middleware so they apply to all errors.
+    register_exception_handlers(app)
+
     # Middleware is applied in reverse registration order (last added = outermost).
     # RateLimitMiddleware is added first so it runs AFTER auth (inner layer).
     # ApiKeyMiddleware is added second so it runs FIRST (outer layer), rejecting
@@ -205,46 +225,7 @@ def create_app() -> FastAPI:
         idempotency_service=get_idempotency_service(),
     )
 
-    admin_prefix = f"{settings.API_V1_PREFIX}/admin"
-
-    # Public system routes (no auth)
-    app.include_router(system_router)
-
-    # Game-engine public surface under /v1/
-    app.include_router(dialogue_router, prefix=settings.API_V1_PREFIX)
-    if settings.DIALOGUE_STREAM_ENABLED:
-        app.include_router(dialogue_ws_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(npc_state_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(action_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(quest_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(clock_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(graph_router, prefix=settings.API_V1_PREFIX)
-    app.include_router(reputation_graph_router, prefix=settings.API_V1_PREFIX)
-
-    # Admin / designer-tooling surface under /v1/admin/
-    app.include_router(system_admin_router, prefix=admin_prefix)
-    app.include_router(batch_router, prefix=admin_prefix)
-    app.include_router(graph_admin_router, prefix=admin_prefix)
-    app.include_router(beliefs_router, prefix=admin_prefix)
-    app.include_router(goals_router, prefix=admin_prefix)
-    app.include_router(items_router, prefix=admin_prefix)
-    app.include_router(memories_router, prefix=admin_prefix)
-    app.include_router(secrets_router, prefix=admin_prefix)
-    app.include_router(debts_router, prefix=admin_prefix)
-    app.include_router(factions_router, prefix=admin_prefix)
-    app.include_router(schedules_router, prefix=admin_prefix)
-    app.include_router(reputation_admin_router, prefix=admin_prefix)
-    app.include_router(quest_generation_router, prefix=admin_prefix)
-    app.include_router(economy_router, prefix=admin_prefix)
-    app.include_router(location_history_router, prefix=admin_prefix)
-    app.include_router(causality_router, prefix=admin_prefix)
-    app.include_router(witnessed_router, prefix=admin_prefix)
-    app.include_router(groups_router, prefix=admin_prefix)
-    app.include_router(rumors_router, prefix=admin_prefix)
-    app.include_router(skills_router, prefix=admin_prefix)
-    app.include_router(traits_router, prefix=admin_prefix)
-    app.include_router(pledges_router, prefix=admin_prefix)
-    app.include_router(treaties_router, prefix=admin_prefix)
+    register_routers(app, settings)
 
     return app
 

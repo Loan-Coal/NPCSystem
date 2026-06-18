@@ -9,7 +9,25 @@ Used by: demo_game.ui.game_window
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
+
+_PROPOSAL_KINDS = frozenset({"propose_trade", "propose_quest", "claim_completion", "give_item"})
+
+
+@dataclass(frozen=True)
+class InteractionProposal:
+    """Interaction proposal extracted from a DialogueResponse action field.
+
+    Attributes:
+        kind: Action type — one of the proposal-class types.
+        target_id: Optional graph node ID the action targets.
+        payload: Raw parameters dict from ActionModel.parameters.
+    """
+
+    kind: str
+    target_id: str | None
+    payload: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -22,11 +40,15 @@ class DialogueTurn:
             or ``"canned"``.
         emotion: Mood string from ``mood_update``, falling back to
             ``facial_expression.type`` when ``mood_update`` is None.
+        relation_deltas: Trust/fear/affection deltas from this turn (or zeros).
+        interaction_proposal: Non-None when the NPC surfaced a proposal action.
     """
 
     npc_text: str
     degradation_level: str
     emotion: str | None
+    relation_deltas: dict[str, int] = field(default_factory=dict)
+    interaction_proposal: InteractionProposal | None = None
 
 
 # Colour constants for the degradation badge (RGB tuples).
@@ -79,7 +101,9 @@ def parse_dialogue_response(raw: dict) -> DialogueTurn:
     Field mapping from engine response:
     - ``npc_response`` → ``DialogueTurn.npc_text``
     - ``degradation_level`` → ``DialogueTurn.degradation_level``
-    - ``mood_update`` → ``DialogueTurn.emotion`` (fallback: ``facial_expression.type``)
+    - ``emotion`` → ``DialogueTurn.emotion`` (first-class field, derived from mood_update by engine)
+    - ``action`` → ``DialogueTurn.interaction_proposal`` (proposal-class actions only)
+    - ``relation_deltas`` → ``DialogueTurn.relation_deltas``
 
     Args:
         raw: Flat dict as returned by ``POST /v1/dialogue``.
@@ -87,15 +111,31 @@ def parse_dialogue_response(raw: dict) -> DialogueTurn:
     Returns:
         Immutable ``DialogueTurn`` with parsed fields.
     """
-    mood: str | None = raw.get("mood_update")
-    if mood is None:
-        expression = raw.get("facial_expression") or {}
-        mood = expression.get("type") or None
+    mood: str | None = raw.get("emotion")
+
+    action = raw.get("action") or {}
+    kind = action.get("type", "speak")
+    proposal: InteractionProposal | None = None
+    if kind in _PROPOSAL_KINDS:
+        proposal = InteractionProposal(
+            kind=kind,
+            target_id=action.get("target_id"),
+            payload=action.get("parameters") or {},
+        )
+
+    raw_deltas = raw.get("relation_deltas") or {}
+    deltas: dict[str, int] = {
+        "trust": int(raw_deltas.get("trust", 0)),
+        "fear": int(raw_deltas.get("fear", 0)),
+        "affection": int(raw_deltas.get("affection", 0)),
+    }
 
     return DialogueTurn(
         npc_text=raw["npc_response"],
         degradation_level=raw.get("degradation_level", "full"),
         emotion=mood,
+        relation_deltas=deltas,
+        interaction_proposal=proposal,
     )
 
 

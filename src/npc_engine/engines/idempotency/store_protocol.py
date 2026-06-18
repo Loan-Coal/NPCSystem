@@ -1,32 +1,33 @@
 """
-store_protocol.py - Storage protocol for idempotency persistence backends.
-
-Does NOT: provide concrete database implementation.
-
-Dependencies injected: None.
+Module: store_protocol
+Layer: engines
+Purpose: Sessionless storage protocol for idempotency persistence backends. The
+         concrete adapter (Neo4jIdempotencyRepository in graph/repositories/) holds
+         a GraphDB and opens its own sessions, so IdempotencyService needs no session
+         knowledge (DEC-122 / SEV-24).
+Does NOT: provide a concrete database implementation or open Neo4j sessions.
+Dependencies injected: none (pure interface).
+Used by: npc_engine.engines.idempotency.service.IdempotencyService;
+         implemented structurally by
+         npc_engine.graph.repositories.idempotency_repository.Neo4jIdempotencyRepository.
 """
+
+from __future__ import annotations
 
 from typing import Protocol
 
-from neo4j import AsyncSession
-
-from npc_engine.engines.idempotency.models import IdempotencyRecord
+from npc_engine.graph.idempotency_models import IdempotencyRecord
 
 
 class IdempotencyStoreProtocol(Protocol):
-    """Protocol for loading and mutating idempotency records."""
+    """Sessionless protocol for loading and mutating idempotency records."""
 
-    async def ensure_constraints(self, session: AsyncSession) -> None:
-        """Create any required database constraints for idempotency records.
-
-        Args:
-            session: Active Neo4j async session.
-        """
+    async def ensure_constraints(self) -> None:
+        """Create any required database constraints for idempotency records."""
         ...
 
     async def get_record(
         self,
-        session: AsyncSession,
         *,
         idempotency_key: str,
         resource_scope: str,
@@ -34,7 +35,6 @@ class IdempotencyStoreProtocol(Protocol):
         """Fetch an idempotency record by key and scope.
 
         Args:
-            session: Active Neo4j async session.
             idempotency_key: Client-supplied idempotency key.
             resource_scope: Method+path scope string.
 
@@ -45,7 +45,6 @@ class IdempotencyStoreProtocol(Protocol):
 
     async def create_pending_if_absent(
         self,
-        session: AsyncSession,
         *,
         idempotency_key: str,
         resource_scope: str,
@@ -57,7 +56,6 @@ class IdempotencyStoreProtocol(Protocol):
         """Create a pending record only if none exists for the key+scope pair.
 
         Args:
-            session: Active Neo4j async session.
             idempotency_key: Client-supplied idempotency key.
             resource_scope: Method+path scope string.
             request_hash: SHA-256 hex digest of the request.
@@ -72,7 +70,6 @@ class IdempotencyStoreProtocol(Protocol):
 
     async def upsert_pending(
         self,
-        session: AsyncSession,
         *,
         idempotency_key: str,
         resource_scope: str,
@@ -84,7 +81,6 @@ class IdempotencyStoreProtocol(Protocol):
         """Upsert a pending record, overwriting any prior state.
 
         Args:
-            session: Active Neo4j async session.
             idempotency_key: Client-supplied idempotency key.
             resource_scope: Method+path scope string.
             request_hash: SHA-256 hex digest of the request.
@@ -99,7 +95,6 @@ class IdempotencyStoreProtocol(Protocol):
 
     async def mark_completed(
         self,
-        session: AsyncSession,
         *,
         idempotency_key: str,
         resource_scope: str,
@@ -112,7 +107,6 @@ class IdempotencyStoreProtocol(Protocol):
         """Mark a record as successfully completed with a stored response.
 
         Args:
-            session: Active Neo4j async session.
             idempotency_key: Client-supplied idempotency key.
             resource_scope: Method+path scope string.
             request_hash: SHA-256 hex digest of the original request.
@@ -125,7 +119,6 @@ class IdempotencyStoreProtocol(Protocol):
 
     async def mark_failed_terminal(
         self,
-        session: AsyncSession,
         *,
         idempotency_key: str,
         resource_scope: str,
@@ -138,7 +131,6 @@ class IdempotencyStoreProtocol(Protocol):
         """Mark a record as permanently failed.
 
         Args:
-            session: Active Neo4j async session.
             idempotency_key: Client-supplied idempotency key.
             resource_scope: Method+path scope string.
             request_hash: SHA-256 hex digest of the original request.
@@ -149,11 +141,10 @@ class IdempotencyStoreProtocol(Protocol):
         """
         ...
 
-    async def delete_expired(self, session: AsyncSession, *, now_iso: str) -> int:
+    async def delete_expired(self, *, now_iso: str) -> int:
         """Delete all records whose expiry timestamp is before now_iso.
 
         Args:
-            session: Active Neo4j async session.
             now_iso: Current UTC time as ISO-8601 string used as the expiry cutoff.
 
         Returns:

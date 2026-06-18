@@ -1,12 +1,15 @@
 """
 world_state.py - Pydantic model for singleton world state node.
+Layer: services
+Purpose: Define the frozen, immutable WorldState model shared across all engines (epoch, weather, faction standings, time-of-day).
 
 Does NOT: read or write world state from Neo4j.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -25,7 +28,7 @@ class WorldState(BaseModel):
     day: int = 1
     max_event_severity: int = 100
     quest_generation_rate: float = 1.0
-    last_updated_at: datetime = Field(default_factory=datetime.utcnow)
-    last_graph_updated_at: datetime = Field(default_factory=datetime.utcnow)
+    last_updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_graph_updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     model_config = ConfigDict(frozen=True)

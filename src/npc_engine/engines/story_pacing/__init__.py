@@ -6,3 +6,5 @@ Does NOT: call LLMs, create graph nodes, or expose HTTP routes.
 Dependencies injected: none at package level; see submodules.
 Public surface: StoryPacingEngine, PacingRules, load_pacing_rules
 """
+
+from __future__ import annotations

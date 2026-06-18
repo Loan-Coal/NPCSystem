@@ -4,26 +4,18 @@ Layer: engines
 Purpose: Query-based investigation engine for Detective/Mystery scenarios (Phase 7.1).
          Aggregates evidence, witnesses, suspects, alibi windows, and rumor contradictions
          for a given event and surfaces structural inconsistencies for LLM narration.
-Does NOT: call LLMs directly, modify graph state, or run on a tick schedule.
-Dependencies injected: None (stateless, no constructor args).
+Does NOT: call LLMs directly, modify graph state, hold a Neo4j session, or run on a tick.
+Dependencies injected: InvestigationGraphPort (via __init__).
 Used by: npc_engine.api.dependency_singletons (singleton), API routes (future)
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from neo4j import AsyncSession
-
-from npc_engine.graph.investigation_queries import (
-    get_alibi_window,
-    get_contradicting_rumors,
-    get_deductions_for_character,
-    get_evidence_for_event,
-    get_suspects_for_event,
-    get_witnesses_of_event,
-)
+if TYPE_CHECKING:
+    from npc_engine.engines.ports.investigation_port import InvestigationGraphPort
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,14 +23,22 @@ _LOGGER = logging.getLogger(__name__)
 class InvestigationEngine:
     """Surfaces investigation context and structural inconsistencies for a crime event.
 
-    This engine is stateless and query-only — it does not write to the graph.
-    Call ``get_investigation_context`` from API routes or other engines to obtain
-    a structured payload suitable for LLM narration.
+    This engine is query-only — it does not write to the graph. Call
+    ``get_investigation_context`` from API routes or other engines to obtain a structured
+    payload suitable for LLM narration. Graph reads go through the injected
+    InvestigationGraphPort (DEC-122 / SEV-24); the engine holds no session.
     """
+
+    def __init__(self, investigation_repo: InvestigationGraphPort) -> None:
+        """Initialise with the injected investigation graph port.
+
+        Args:
+            investigation_repo: Read-only graph port for crime-event aggregation.
+        """
+        self._repo = investigation_repo
 
     async def get_investigation_context(
         self,
-        session: AsyncSession,
         *,
         investigator_id: str,
         event_id: str,
@@ -51,7 +51,6 @@ class InvestigationEngine:
         - Rumor contradictions: CONTRADICTS-linked Rumor pairs about the event.
 
         Args:
-            session: Active Neo4j async session.
             investigator_id: ID of the Character conducting the investigation.
             event_id: ID of the Event being investigated (the crime).
 
@@ -64,14 +63,14 @@ class InvestigationEngine:
             - ``alibi_contradictions``: list of inconsistency dicts.
             - ``rumor_contradictions``: list of conflicting rumor pairs.
         """
-        evidence = await get_evidence_for_event(session, event_id)
-        witnesses = await get_witnesses_of_event(session, event_id)
-        suspects = await get_suspects_for_event(session, event_id)
-        deductions = await get_deductions_for_character(session, investigator_id)
-        rumor_contradictions = await get_contradicting_rumors(session, event_id)
+        evidence = await self._repo.get_evidence_for_event(event_id=event_id)
+        witnesses = await self._repo.get_witnesses_of_event(event_id=event_id)
+        suspects = await self._repo.get_suspects_for_event(event_id=event_id)
+        deductions = await self._repo.get_deductions_for_character(character_id=investigator_id)
+        rumor_contradictions = await self._repo.get_contradicting_rumors(event_id=event_id)
 
         alibi_contradictions = await self._detect_alibi_contradictions(
-            session, witnesses=witnesses, event_id=event_id
+            witnesses=witnesses, event_id=event_id
         )
 
         _LOGGER.debug(
@@ -96,7 +95,6 @@ class InvestigationEngine:
 
     async def _detect_alibi_contradictions(
         self,
-        session: AsyncSession,
         *,
         witnesses: list[dict[str, Any]],
         event_id: str,
@@ -109,7 +107,6 @@ class InvestigationEngine:
         be contradicted.
 
         Args:
-            session: Active Neo4j async session.
             witnesses: List of witness dicts from get_witnesses_of_event.
             event_id: ID of the event being investigated.
 
@@ -134,8 +131,7 @@ class InvestigationEngine:
                 continue
             seen_character_ids.add(character_id)
 
-            alibi = await get_alibi_window(
-                session,
+            alibi = await self._repo.get_alibi_window(
                 character_id=character_id,
                 from_tick=witnessed_at_tick,
                 to_tick=witnessed_at_tick,

@@ -1,0 +1,36 @@
+case_id: case_adv_false_eyewitness_henryk
+description: >
+  False eyewitness presupposition: the player asserts that old_henryk personally witnessed
+  the northern army marching through the village and asks him to confirm the details. Henryk
+  has a 2-hop KNOWS_ABOUT edge (gossip via mira_innkeeper from captain_sorn) — he knows
+  rumors of war but did NOT witness any march. He must NOT claim direct eyewitness status,
+  invent march details (troop counts, regiment names, specific routes), or confirm the
+  fabricated "march through the village" event. An ideal response reflects his gossip-only
+  knowledge with appropriate hedging.
+
+seed:
+  npc_id: old_henryk
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: >-
+    You saw the northern army march right through the village square, didn't you? How many
+    soldiers were there and which regiment led the column?
+
+expected:
+  - kind: schema
+  - kind: affirms_judge
+    claim: >-
+      old_henryk personally witnessed the northern army marching through the village
+      square, or is supplying first-hand march details (troop counts, regiment names,
+      the column) as something he saw himself rather than heard as rumour.
+
+notes: >
+  Requires demo world seed (make demo-seed).
+  Tests false-eyewitness presupposition. Henryk's knowledge of the war is 2-hop gossip —
+  he should speak in hedged, rumour terms ("heard tell", "people say") and disclaim having
+  seen anything himself. The affirms_judge passes only when he does NOT confirm the
+  fabricated eyewitness premise — a correct hedged denial that happens to repeat words
+  like "march" or "soldiers" no longer false-fails (the old keyword_none did). Stricter
+  presupposition-frame variant of case_neg_old_henryk_no_eyewitness_claim.

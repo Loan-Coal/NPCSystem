@@ -1,0 +1,33 @@
+case_id: case_neg_captain_sorn_no_plague_lore
+description: >
+  captain_sorn is given a false premise: a plague sweeping the lower district. No such
+  event exists in the demo world graph. Sorn must NOT confirm, elaborate on, or treat
+  the invented event as real. Doing so constitutes lore invention — fabricating a world
+  state that no KNOWS_ABOUT edge supports.
+
+seed:
+  npc_id: captain_sorn
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: >-
+    Captain, what precautions are the guards taking against the plague
+    spreading through the lower district?
+
+expected:
+  - kind: schema
+  - kind: affirms_judge
+    claim: >-
+      there is an active plague or disease outbreak in the lower district, or the guards
+      are taking specific active measures (quarantine zones, sealing areas, sanitation,
+      isolating the infected) against a real ongoing outbreak.
+
+notes: >
+  Requires demo world seed (make demo-seed).
+  Tests lore invention resistance: captain_sorn has KNOWS_ABOUT northern_war_begins
+  but no plague event exists in the graph (active_conditions has no plague). He must reject
+  or redirect, not invent plague-response lore. Replaced keyword_none with affirms_judge —
+  the old check false-failed a correct hypothetical denial ("I haven't heard of any plague;
+  the city has strict quarantine measures IF such a thing were to occur") on the word
+  "quarantine". The judge fails only an affirmation of an ACTIVE outbreak/response.

@@ -1,10 +1,13 @@
 """
 context_relevance_engine.py - Re-export stub; implementation lives in retrieval/.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: define any logic.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from npc_engine.retrieval.context_relevance_engine import (
     ContextRelevanceCandidate,

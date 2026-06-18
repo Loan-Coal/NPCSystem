@@ -1,5 +1,7 @@
 """
 action_resolver.py - Validates and normalizes candidate dialogue actions.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: execute gameplay side effects.
 
@@ -13,7 +15,11 @@ from typing import Any
 from npc_engine.engines.dialogue.dialogue_models import ActionModel
 
 
-ALLOWED_ACTIONS = {"speak", "gesture", "move", "attack", "give_item", "buy_item", "sell_item", "none"}
+ALLOWED_ACTIONS = {
+    "speak", "gesture", "move", "attack",
+    "give_item", "buy_item", "sell_item", "none",
+    "propose_trade", "propose_quest", "claim_completion",
+}
 
 
 def resolve_action(action: ActionModel) -> ActionModel:

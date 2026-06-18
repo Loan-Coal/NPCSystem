@@ -1,0 +1,33 @@
+case_id: case_neg_old_henryk_no_direct_facts
+description: >
+  old_henryk responds to a question about the Northmen. He has a distorted
+  KNOWS_ABOUT edge — he should produce garbled, hedged accounts, NOT the
+  clean authoritative statements that captain_sorn uses. This verifies
+  distortion propagation suppresses exact factual phrases.
+
+seed:
+  npc_id: old_henryk
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: "What happened with the Northmen?"
+
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "the northern armies have crossed"
+      - "we are at war"
+      - "the border was crossed"
+      # Direct-eyewitness hallucination: model may have Henryk claim firsthand observation
+      - "came through here"
+      - "they came through"
+      - "heading south to reinforce"
+      - "border forts"
+
+notes: >
+  Requires demo world seed (make demo-seed). The forbidden phrases are the
+  exact authoritative statements captain_sorn would use. Henryk's distorted
+  account should use different framing (e.g. "thousands dead at king's pass",
+  "word was they came through the mountains").

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import cast
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -23,6 +23,7 @@ class _GraphDbStub:
     def __init__(self):
         self.connected = False
         self.closed = False
+        self._session = AsyncMock()
 
     async def connect(self) -> None:
         self.connected = True
@@ -32,7 +33,7 @@ class _GraphDbStub:
 
     @asynccontextmanager
     async def get_session(self):
-        yield cast(object, None)
+        yield self._session
 
 
 class _SchemaLoaderStub:
@@ -124,6 +125,7 @@ async def test_lifespan_starts_reconciler_task(monkeypatch) -> None:
     monkeypatch.setattr(main, "get_idempotency_service", lambda: idempotency_service)
     monkeypatch.setattr(main, "get_redis_runtime", lambda: redis_runtime)
     monkeypatch.setattr(main, "EmbeddingReconciler", lambda **_: reconciler_instance)
+    monkeypatch.setattr(main, "set_trade_handler", lambda _: None)
     monkeypatch.setattr(
         main,
         "get_settings",
@@ -174,6 +176,7 @@ async def test_lifespan_cancels_reconciler_task_on_shutdown(monkeypatch) -> None
     monkeypatch.setattr(main, "get_idempotency_service", lambda: idempotency_service)
     monkeypatch.setattr(main, "get_redis_runtime", lambda: redis_runtime)
     monkeypatch.setattr(main, "EmbeddingReconciler", lambda **_: reconciler_instance)
+    monkeypatch.setattr(main, "set_trade_handler", lambda _: None)
     monkeypatch.setattr(
         main,
         "get_settings",
@@ -210,6 +213,7 @@ async def test_lifespan_closes_graph_db_when_startup_fails_after_connect(monkeyp
     monkeypatch.setattr(main, "get_idempotency_service", lambda: idempotency_service)
     monkeypatch.setattr(main, "get_redis_runtime", lambda: redis_runtime)
     monkeypatch.setattr(main, "EmbeddingReconciler", _ReconcilerStub)
+    monkeypatch.setattr(main, "set_trade_handler", lambda _: None)
     monkeypatch.setattr(
         main,
         "get_settings",

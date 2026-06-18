@@ -1,0 +1,34 @@
+case_id: case_pos_mira_gossip_hedging
+description: >
+  mira_innkeeper answers a question about the north. Her distorted_summary
+  contains explicit attribution ("A soldier passing through told me") and
+  uncertainty ("Whether it is true I cannot say"). Rule 9 requires she
+  surface that epistemic framing in her response — at least one hedging
+  marker must appear.
+
+seed:
+  npc_id: mira_innkeeper
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: "What do you know about what's happening in the north?"
+
+expected:
+  - kind: schema
+  - kind: tone_judge
+    judge_prompt: >
+      Does this NPC response contain epistemic hedging — any expression of
+      uncertainty, rumour-framing, or attribution to a third party? Examples:
+      "I heard", "they say", "rumor", "murmurs", "whispers", "overheard",
+      "speculation", "unconfirmed", "can't say for certain", "I don't know",
+      "apparently", "supposedly", "word is", "told me". Answer YES if at least
+      one hedging marker is clearly present. NO only if the response states
+      facts directly with full confidence and no attribution.
+
+notes: >
+  This is the gossip hedging regex test (R2.1 exit criterion). Requires
+  demo world seed (make demo-seed). Complements case_neg_mira_no_certainty_on_war
+  (negative) and case_voice_mira_innkeeper (tone_judge). Together these
+  three form the full mira epistemic contract: positive hedging / no authority
+  claims / warm gossip tone.

@@ -1,10 +1,13 @@
 """
 graph_warning_helpers.py - Shared warning metadata and observability helpers for graph routes.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: execute graph operations.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from typing import Any
 

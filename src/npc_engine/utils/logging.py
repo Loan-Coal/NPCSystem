@@ -1,10 +1,13 @@
 """
 logging.py - Configures structured application logging with prompt redaction control.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: emit business events or persist logs externally.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 import json
 import logging

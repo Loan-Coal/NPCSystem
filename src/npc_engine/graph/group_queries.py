@@ -195,3 +195,64 @@ async def get_group_goals(
     """
     result = await session.run(CYPHER_GET_GROUP_GOALS, group_id=group_id)
     return cast(list[dict[str, Any]], [dict(record) async for record in result])
+
+
+async def get_high_affection_pairs(
+    session: AsyncSession,
+    *,
+    threshold: int,
+) -> list[dict[str, Any]]:
+    """Fetch co-located character pairs with bidirectional affection above threshold.
+
+    Args:
+        session: Active Neo4j async session.
+        threshold: Minimum affection value on both RELATES_TO edges.
+
+    Returns:
+        List of dicts: char_a_id, char_b_id, loc_a, loc_b.
+    """
+    result = await session.run(CYPHER_GET_HIGH_AFFECTION_PAIRS, threshold=threshold)
+    return cast(list[dict[str, Any]], [dict(record) async for record in result])
+
+
+async def get_existing_shared_group(
+    session: AsyncSession,
+    *,
+    char_a_id: str,
+    char_b_id: str,
+) -> dict[str, Any] | None:
+    """Check whether two characters already share an active clique Group.
+
+    Args:
+        session: Active Neo4j async session.
+        char_a_id: ID of the first character.
+        char_b_id: ID of the second character.
+
+    Returns:
+        Dict with group_id if a shared active clique exists; None otherwise.
+    """
+    result = await session.run(
+        CYPHER_GET_EXISTING_SHARED_GROUPS,
+        char_a_id=char_a_id,
+        char_b_id=char_b_id,
+    )
+    record = await result.single()
+    return dict(record) if record is not None else None
+
+
+async def get_stale_cliques(
+    session: AsyncSession,
+    *,
+    stale_before_tick: int,
+) -> list[str]:
+    """Fetch IDs of clique Groups formed before the staleness threshold.
+
+    Args:
+        session: Active Neo4j async session.
+        stale_before_tick: Tick cutoff; cliques formed before this are stale.
+
+    Returns:
+        List of group_id strings for stale, undissolved cliques.
+    """
+    result = await session.run(CYPHER_GET_STALE_CLIQUES, stale_before_tick=stale_before_tick)
+    return [r["group_id"] async for r in result]

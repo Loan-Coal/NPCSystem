@@ -1,10 +1,13 @@
 """
 context_serializer.py - Deterministically serializes merged context items.
+Layer: retrieval
+Purpose: (auto-detected — review)
 
 Does NOT: enforce token budget or merge tiers.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 import json
 from typing import Any
@@ -78,20 +81,31 @@ def serialize_context(context: MergedContext) -> str:
         }
 
     reputation_payload = _safe_parse(mapped.get("reputation", "[]"))
+    propagated_reputation_payload = _safe_parse(mapped.get("propagated_reputation", "[]"))
     goals_payload = _safe_parse(mapped.get("goals", "[]"))
     beliefs_payload = _safe_parse(mapped.get("beliefs", "[]"))
     memories_payload = _safe_parse(mapped.get("memories", "[]"))
+    raw_top_need = mapped.get("top_need")
+    top_need_payload = _safe_parse(raw_top_need) if raw_top_need is not None else None
+    raw_player_memories = mapped.get("player_memories")
+    player_memories_payload = _safe_parse(raw_player_memories) if raw_player_memories is not None else None
+
+    npc_block: dict[str, Any] = {
+        "profile": npc_profile,
+        "emotion": emotion_payload if isinstance(emotion_payload, dict) else {},
+        "goals": goals_payload if isinstance(goals_payload, list) else [],
+        "beliefs": beliefs_payload if isinstance(beliefs_payload, list) else [],
+        "memories": memories_payload if isinstance(memories_payload, list) else [],
+        "top_need": top_need_payload if isinstance(top_need_payload, dict) else None,
+    }
+    if isinstance(player_memories_payload, list):
+        npc_block["player_memories"] = player_memories_payload
 
     skeleton = {
         "world": world_payload if isinstance(world_payload, dict) else {},
-        "npc": {
-            "profile": npc_profile,
-            "emotion": emotion_payload if isinstance(emotion_payload, dict) else {},
-            "goals": goals_payload if isinstance(goals_payload, list) else [],
-            "beliefs": beliefs_payload if isinstance(beliefs_payload, list) else [],
-            "memories": memories_payload if isinstance(memories_payload, list) else [],
-        },
+        "npc": npc_block,
         "player_reputation": reputation_payload if isinstance(reputation_payload, list) else [],
+        "propagated_reputation": propagated_reputation_payload if isinstance(propagated_reputation_payload, list) else [],
         "player_relation": relation_payload if isinstance(relation_payload, dict) else {},
         "npc_known_events": [*known_events, *rag_events],
         "nearby_npcs": nearby_payload if isinstance(nearby_payload, list) else [],

@@ -1,0 +1,158 @@
+"""
+Unit tests for EmotionUpdater write-through, label inertia, and EmotionBootstrapper.
+
+Covers:
+- get_emotion_updater singleton has the emotion port injected (EXP-14 slice-3 / SEV-24)
+- apply_dialogue_mood calls the injected EmotionGraphPort (test 3)
+- apply_dialogue_mood does not crash when no writer injected (test 4)
+- VadEmotionModel label inertia below _MIN_AROUSAL_TO_SHIFT_LABEL (test 5)
+- EmotionBootstrapper.load_from_graph seeds the store from graph data (test 6)
+"""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from npc_engine.api.dependencies_stores import get_emotion_updater
+from npc_engine.engines.emotion.emotion_bootstrap import EmotionBootstrapper
+from npc_engine.engines.emotion.emotion_state import EmotionState
+from npc_engine.engines.emotion.emotion_store import EmotionStore
+from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
+from npc_engine.engines.emotion.vad_emotion_model import (
+    VadEmotionModel,
+    _MIN_AROUSAL_TO_SHIFT_LABEL,
+)
+from npc_engine.graph.repositories.emotion_repository import Neo4jEmotionRepository
+
+
+def test_get_emotion_updater_singleton_has_writer() -> None:
+    """get_emotion_updater() must wire the emotion port so writes persist (SEV-24)."""
+    get_emotion_updater.cache_clear()
+    try:
+        updater = get_emotion_updater()
+        assert updater._writer is not None, (
+            "EmotionUpdater._writer is None — emotion state will not be persisted at runtime"
+        )
+        assert isinstance(updater._writer, Neo4jEmotionRepository)
+    finally:
+        get_emotion_updater.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_apply_dialogue_mood_writes_through() -> None:
+    """apply_dialogue_mood must call the port's write_emotion when one is injected."""
+    store = EmotionStore()
+    mock_writer = AsyncMock()
+
+    updater = EmotionUpdater(emotion_store=store, writer=mock_writer)
+
+    await updater.apply_dialogue_mood(
+        npc_id="npc-1",
+        mood_update="warm",
+        tick=5,
+    )
+
+    mock_writer.write_emotion.assert_called_once()
+    call_kwargs = mock_writer.write_emotion.call_args[1]
+    assert call_kwargs["npc_id"] == "npc-1"
+    assert call_kwargs["tick"] == 5
+    assert isinstance(call_kwargs["valence"], int)
+    assert isinstance(call_kwargs["arousal"], int)
+    assert isinstance(call_kwargs["label"], str)
+
+
+@pytest.mark.asyncio
+async def test_apply_dialogue_mood_no_writer_no_crash() -> None:
+    """apply_dialogue_mood must not crash when no writer is injected (default None)."""
+    store = EmotionStore()
+    updater = EmotionUpdater(emotion_store=store)  # no writer
+
+    # Should complete without AttributeError or any exception
+    state = await updater.apply_dialogue_mood(npc_id="npc-1", mood_update="neutral")
+    assert isinstance(state, EmotionState)
+
+
+@pytest.mark.asyncio
+async def test_label_not_replaced_below_arousal_threshold() -> None:
+    """VadEmotionModel must keep previous label when new arousal < _MIN_AROUSAL_TO_SHIFT_LABEL."""
+    model = VadEmotionModel()
+
+    # Build a previous state with label "neutral" and arousal below threshold
+    previous = EmotionState(valence=50, arousal=5, label="neutral")
+
+    # apply_mood_hint would normally set label to "warm" but arousal after increment
+    # stays below _MIN_AROUSAL_TO_SHIFT_LABEL (20), so label must be preserved.
+    # Use arousal_increment=1 so resulting arousal = 5 + 1 = 6, still < 20.
+    result = model.apply_mood_hint(previous, mood_label="warm", arousal_increment=1)
+
+    assert result.arousal == 6
+    assert result.label == "neutral", (
+        f"Expected label='neutral' (preserved due to low arousal={result.arousal} "
+        f"< threshold={_MIN_AROUSAL_TO_SHIFT_LABEL}), got '{result.label}'"
+    )
+
+
+@pytest.mark.asyncio
+async def test_emotion_bootstrapper_populates_store() -> None:
+    """EmotionBootstrapper.load_from_graph seeds the store via an EmotionBootstrapGraphPort."""
+    bootstrapper = EmotionBootstrapper()
+    store = EmotionStore()
+
+    # Emotion fields for npc-1; npc-2 returns None (missing data → skip).
+    npc1_fields = {
+        "emotion_valence": 60,
+        "emotion_arousal": 40,
+        "emotion_mood_label": "warm",
+        "emotion_updated_at_tick": 10,
+    }
+
+    async def _get_emotion_fields(npc_id: str) -> dict | None:
+        if npc_id == "npc-1":
+            return npc1_fields
+        return None
+
+    mock_port = MagicMock()
+    mock_port.get_emotion_fields = _get_emotion_fields
+
+    await bootstrapper.load_from_graph(
+        port=mock_port,
+        store=store,
+        npc_ids=["npc-1", "npc-2"],
+    )
+
+    state_npc1 = await store.get("npc-1")
+    assert state_npc1.valence == 60, f"expected valence=60, got {state_npc1.valence}"
+    assert state_npc1.arousal == 40, f"expected arousal=40, got {state_npc1.arousal}"
+    assert state_npc1.label == "warm", f"expected label='warm', got '{state_npc1.label}'"
+
+    # npc-2 has no stored emotion — store should hold a neutral default
+    state_npc2 = await store.get("npc-2")
+    assert state_npc2.valence == 0, f"expected valence=0 (neutral), got {state_npc2.valence}"
+    assert state_npc2.arousal == 0, f"expected arousal=0 (neutral), got {state_npc2.arousal}"
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+class _AsyncResult:
+    """Minimal async-iterable mock for Neo4j query results."""
+
+    def __init__(self, items: list) -> None:
+        self._items = items
+
+    def __aiter__(self) -> _AsyncResult:
+        self._iter = iter(self._items)
+        return self
+
+    async def __anext__(self):  # noqa: ANN201
+        try:
+            return next(self._iter)
+        except StopIteration:
+            raise StopAsyncIteration
+
+    async def consume(self) -> None:
+        """No-op consume for test compatibility."""

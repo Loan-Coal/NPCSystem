@@ -12,9 +12,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
-from npc_engine.graph.quest_node_queries import CYPHER_CREATE_QUEST, CYPHER_GET_QUEST
+from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.quest_node_queries import (
+    CYPHER_CREATE_QUEST,
+    CYPHER_GET_DRAFT_QUESTS,
+    CYPHER_GET_QUEST,
+    CYPHER_OFFER_QUEST,
+)
 
 
 async def create_quest(
@@ -32,8 +38,7 @@ async def create_quest(
     Returns:
         The payload dict echoed back with the confirmed quest_id.
     """
-    tx = await session.begin_transaction()
-    async with tx:
+    async def _work(tx: AsyncTransaction) -> None:
         result = await tx.run(
             CYPHER_CREATE_QUEST,
             quest_id=payload["quest_id"],
@@ -47,9 +52,56 @@ async def create_quest(
             severity=int(payload["severity"]),
             created_at=payload["created_at"],
             completed_at=payload.get("completed_at"),
+            source=payload.get("source"),
         )
         await result.consume()
+
+    await run_in_tx(session, _work)
     return payload
+
+
+async def get_draft_quests(
+    session: AsyncSession,
+    quest_giver_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return all Quest nodes with status='draft', optionally filtered by giver.
+
+    Args:
+        session: Active Neo4j async session.
+        quest_giver_id: When provided, only return drafts for this character.
+
+    Returns:
+        List of quest property dicts ordered by created_at ascending.
+    """
+    result = await session.run(
+        CYPHER_GET_DRAFT_QUESTS,
+        quest_giver_id=quest_giver_id,
+    )
+    records = [dict(record) async for record in result]
+    await result.consume()
+    return records
+
+
+async def offer_quest(
+    session: AsyncSession,
+    quest_id: str,
+) -> dict[str, Any] | None:
+    """Transition a draft quest to offered status.
+
+    Only succeeds when the quest's current status is 'draft'. Returns None
+    when no matching draft quest is found (quest does not exist or is not a draft).
+
+    Args:
+        session: Active Neo4j async session.
+        quest_id: ID of the Quest node to offer.
+
+    Returns:
+        Dict with ``quest_id`` and ``status='offered'``, or None if not found/not a draft.
+    """
+    result = await session.run(CYPHER_OFFER_QUEST, quest_id=quest_id)
+    records = [dict(record) async for record in result]
+    await result.consume()
+    return records[0] if records else None
 
 
 async def get_quest(

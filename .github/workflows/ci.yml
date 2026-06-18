@@ -15,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.14"
 
       - name: Install dependencies
         run: |
@@ -24,6 +24,18 @@ jobs:
 
       - name: Lint
         run: make lint
+
+      - name: CLAUDE.md rule gate (ratcheted)
+        run: make check-rules
+
+      - name: Layer model enforcement (SEV-31)
+        run: make check-layers
+
+      - name: Type check (mypy at 0 — hard gate, SEV-14 complete)
+        run: make type
+
+      - name: Harness honesty (advisory)
+        run: make check-harness
 
   v13-tests:
     runs-on: ubuntu-latest
@@ -42,7 +54,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.14"
 
       - name: Install dependencies
         run: |
@@ -66,7 +78,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.14"
 
       - name: Install dependencies
         run: |
@@ -76,7 +88,10 @@ jobs:
       - name: Test with v1.3 coverage gate
         run: make test-cov-v13
 
-      - name: Full-suite coverage report (non-gating)
+      - name: Full unit suite with 80% coverage floor (gating)
+        run: make test-cov
+
+      - name: Full-suite coverage report incl. evals/ (non-gating)
         run: make test-cov-full-report
 
   v14-p4-gates:
@@ -92,7 +107,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.14"
 
       - name: Install dependencies
         run: |
@@ -102,10 +117,14 @@ jobs:
       - name: Validate contracts
         run: make check-contracts
 
-      - name: Guard contract YAML/test sync
+      - name: Guard contract YAML/test sync (PR — against base ref)
         if: github.event_name == 'pull_request'
         run: |
           python -m npc_engine.scripts.guard_contract_test_sync --base-ref origin/${{ github.base_ref }}
+
+      - name: Guard contract YAML/test sync (push)
+        if: github.event_name == 'push'
+        run: make check-contract-sync
 
       - name: Run v1.4 P4 test slice
         run: make test-v14-p4
@@ -121,7 +140,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.14"
 
       - name: Install dependencies
         run: |

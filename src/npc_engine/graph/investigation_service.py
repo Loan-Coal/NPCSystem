@@ -2,8 +2,8 @@
 Module: investigation_service
 Layer: graph
 Purpose: Write operations for the Detective/Mystery investigation module.
-         Creates Evidence, Deduction nodes and IMPLICATES, PRESENT_AT, SUPPORTED_BY,
-         SUSPECTS edges.
+         Idempotently MERGEs Evidence, Deduction nodes and IMPLICATES, PRESENT_AT,
+         SUPPORTED_BY, SUSPECTS edges (SEV-20: stable-id MERGE, retry-safe).
 Does NOT: read graph state beyond MERGE requirements, call LLMs, or import engine code.
 Dependencies injected: None (pure Cypher, session passed per call).
 Used by: npc_engine.engines.investigation.investigation_engine
@@ -20,16 +20,16 @@ from neo4j import AsyncSession
 # Evidence write operations
 # ---------------------------------------------------------------------------
 
+# MERGE on id so a retried write updates one node in place instead of duplicating
+# (SEV-20 / DEC-118). Pass a stable evidence_id to make a retry idempotent.
 _CYPHER_CREATE_EVIDENCE = """
-CREATE (e:Evidence {
-    id: $id,
-    kind: $kind,
-    description: $description,
-    discovered_at_tick: $discovered_at_tick,
-    discovered_by_character_id: $discovered_by_character_id,
-    links_to_event_id: $links_to_event_id,
-    confidence: $confidence
-})
+MERGE (e:Evidence {id: $id})
+SET e.kind = $kind,
+    e.description = $description,
+    e.discovered_at_tick = $discovered_at_tick,
+    e.discovered_by_character_id = $discovered_by_character_id,
+    e.links_to_event_id = $links_to_event_id,
+    e.confidence = $confidence
 """
 
 _CYPHER_CREATE_IMPLICATES = """
@@ -55,8 +55,9 @@ async def create_evidence(
     discovered_by_character_id: str,
     links_to_event_id: str | None = None,
     confidence: int = 100,
+    evidence_id: str | None = None,
 ) -> str:
-    """Create an Evidence node and return its ID.
+    """MERGE an Evidence node and return its ID.
 
     Args:
         session: Active Neo4j async session.
@@ -66,11 +67,13 @@ async def create_evidence(
         discovered_by_character_id: ID of the Character who found it.
         links_to_event_id: Optional ID of the Event this evidence relates to.
         confidence: Initial confidence level 0–100.
+        evidence_id: Stable id to MERGE on; omit to mint a fresh UUID. Pass a
+            deterministic id to make a retried write idempotent (one node).
 
     Returns:
-        ID of the newly created Evidence node.
+        ID of the merged Evidence node.
     """
-    evidence_id = str(uuid.uuid4())
+    evidence_id = evidence_id or str(uuid.uuid4())
     await session.run(
         _CYPHER_CREATE_EVIDENCE,
         id=evidence_id,
@@ -134,14 +137,13 @@ async def set_evidence_location(
 # Deduction write operations
 # ---------------------------------------------------------------------------
 
+# MERGE on id (SEV-20 / DEC-118) — pass a stable deduction_id for retry idempotency.
 _CYPHER_CREATE_DEDUCTION = """
-CREATE (d:Deduction {
-    id: $id,
-    held_by_character_id: $held_by_character_id,
-    claim: $claim,
-    confidence: $confidence,
-    status: $status
-})
+MERGE (d:Deduction {id: $id})
+SET d.held_by_character_id = $held_by_character_id,
+    d.claim = $claim,
+    d.confidence = $confidence,
+    d.status = $status
 """
 
 _CYPHER_CREATE_SUPPORTED_BY = """
@@ -163,8 +165,9 @@ async def create_deduction(
     claim: str,
     confidence: int,
     supporting_evidence_ids: list[str] | None = None,
+    deduction_id: str | None = None,
 ) -> str:
-    """Create a Deduction node and SUPPORTED_BY edges to its evidence.
+    """MERGE a Deduction node and MERGE SUPPORTED_BY edges to its evidence.
 
     Args:
         session: Active Neo4j async session.
@@ -172,11 +175,13 @@ async def create_deduction(
         claim: The deductive claim text.
         confidence: Confidence in the claim 0–100.
         supporting_evidence_ids: Optional list of Evidence IDs that support this claim.
+        deduction_id: Stable id to MERGE on; omit to mint a fresh UUID. Pass a
+            deterministic id to make a retried write idempotent.
 
     Returns:
-        ID of the newly created Deduction node.
+        ID of the merged Deduction node.
     """
-    deduction_id = str(uuid.uuid4())
+    deduction_id = deduction_id or str(uuid.uuid4())
     await session.run(
         _CYPHER_CREATE_DEDUCTION,
         id=deduction_id,

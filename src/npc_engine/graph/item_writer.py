@@ -1,5 +1,7 @@
 """
 item_writer.py - Atomic item transfer writes with idempotent replay support.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: enforce business policy bounds.
 
@@ -13,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.graph.item_queries import CYPHER_APPLY_ITEM_TRANSFER, CYPHER_GRANT_SYSTEM_ITEM, CYPHER_REPLAY_ITEM_TRANSFER
 from npc_engine.graph.replay_helpers import load_idempotent_replay_record
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.utils.errors import ItemTransferValidationError, NodeNotFoundError
 
 
@@ -25,6 +28,77 @@ class ItemTransferWriteResult(BaseModel):
     replayed: bool
 
     model_config = ConfigDict(frozen=True)
+
+
+async def execute_item_transfer_in_tx(
+    tx: AsyncTransaction,
+    *,
+    source_id: str,
+    destination_id: str,
+    item_id: str,
+    quantity: int,
+    reason: str,
+    request_id: str,
+    idempotency_key: str,
+    transfer_kind: str,
+) -> ItemTransferWriteResult:
+    """Execute item ownership transfer within an already-open transaction.
+
+    The caller owns the transaction lifecycle (commit/rollback). This function
+    does not open or commit a transaction.
+
+    Args:
+        tx: Active Neo4j transaction provided by the caller.
+        source_id: ID of the character giving the item; ``"system"`` triggers grant path.
+        destination_id: ID of the character receiving the item.
+        item_id: Identifier of the item being transferred.
+        quantity: Positive integer count of items.
+        reason: Human-readable description persisted on the audit edge.
+        request_id: Stable request identifier stored on the audit edge.
+        idempotency_key: Client-supplied key for replay detection.
+        transfer_kind: Transfer classification label persisted on the audit edge.
+
+    Returns:
+        ItemTransferWriteResult with confirmed item/quantity and replay flag.
+
+    Raises:
+        NodeNotFoundError: If source or destination character nodes are missing.
+        ItemTransferValidationError: If the item transfer fails write-guard conditions.
+    """
+    replay = await _try_replay(
+        tx=tx,
+        source_id=source_id,
+        destination_id=destination_id,
+        idempotency_key=idempotency_key,
+        transfer_kind=transfer_kind,
+        item_id=item_id,
+    )
+    if replay is not None:
+        return replay
+
+    result = await tx.run(
+        CYPHER_GRANT_SYSTEM_ITEM if source_id == "system" and transfer_kind == "quest_reward" else CYPHER_APPLY_ITEM_TRANSFER,
+        source_id=source_id,
+        destination_id=destination_id,
+        item_id=item_id,
+        item_instance_id=f"{item_id}:{idempotency_key}" if idempotency_key != "" else f"{item_id}:{request_id}",
+        quantity=quantity,
+        reason=reason,
+        request_id=request_id,
+        idempotency_key=idempotency_key,
+        transfer_kind=transfer_kind,
+    )
+    record = await result.single()
+    if record is None:
+        await _raise_item_transfer_failure(tx=tx, source_id=source_id, destination_id=destination_id)
+    assert record is not None
+
+    return ItemTransferWriteResult(
+        request_id=request_id,
+        item_id=str(record["item_id"]),
+        quantity=int(record["quantity"]),
+        replayed=False,
+    )
 
 
 async def transfer_item_atomic(
@@ -59,44 +133,20 @@ async def transfer_item_atomic(
         NodeNotFoundError: If source or destination character nodes are missing.
         ItemTransferValidationError: If the item transfer fails write-guard conditions.
     """
-    tx = await session.begin_transaction()
-    async with tx:
-        replay = await _try_replay(
-            tx=tx,
-            source_id=source_id,
-            destination_id=destination_id,
-            idempotency_key=idempotency_key,
-            transfer_kind=transfer_kind,
-            item_id=item_id,
-        )
-        if replay is not None:
-            await tx.commit()
-            return replay
-
-        result = await tx.run(
-            CYPHER_GRANT_SYSTEM_ITEM if source_id == "system" and transfer_kind == "quest_reward" else CYPHER_APPLY_ITEM_TRANSFER,
+    async def _work(tx: AsyncTransaction) -> ItemTransferWriteResult:
+        return await execute_item_transfer_in_tx(
+            tx,
             source_id=source_id,
             destination_id=destination_id,
             item_id=item_id,
-            item_instance_id=f"{item_id}:{idempotency_key}" if idempotency_key != "" else f"{item_id}:{request_id}",
             quantity=quantity,
             reason=reason,
             request_id=request_id,
             idempotency_key=idempotency_key,
             transfer_kind=transfer_kind,
         )
-        record = await result.single()
-        if record is None:
-            await _raise_item_transfer_failure(tx=tx, source_id=source_id, destination_id=destination_id)
-        assert record is not None
 
-        await tx.commit()
-        return ItemTransferWriteResult(
-            request_id=request_id,
-            item_id=str(record["item_id"]),
-            quantity=int(record["quantity"]),
-            replayed=False,
-        )
+    return await run_in_tx(session, _work)
 
 
 async def _raise_item_transfer_failure(*, tx: AsyncTransaction, source_id: str, destination_id: str) -> None:

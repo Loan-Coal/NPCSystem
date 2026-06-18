@@ -1,5 +1,7 @@
 """
 yaml_utils.py - Shared YAML loading helpers for mapping-root config files.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: validate domain-specific schema contracts.
 

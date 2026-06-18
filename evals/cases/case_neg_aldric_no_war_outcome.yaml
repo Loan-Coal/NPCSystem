@@ -1,0 +1,29 @@
+case_id: case_neg_aldric_no_war_outcome
+description: >
+  Aldric understands the war's economic effects but has no edge to predict its military
+  outcome. Pressed on who will win, he must NOT assert a confident victor - that is a
+  military prediction beyond his graph. Speculating on markets is fine; calling the war is not.
+seed:
+  npc_id: aldric_merchant
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    You're a shrewd man, Aldric - who's going to win this war, the Northmen or
+    the King?
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "the northmen will win"
+      - "the king will win"
+      - "we'll win"
+      - "they'll lose"
+      - "the war will be over"
+      - "by spring it"
+      - "is certain to win"
+notes: >
+  Requires demo world seed (make demo-seed). Clean (non-cross-NPC) refusal: no NPC owns a
+  war-outcome prediction. As a case_neg_ guard case the runner requires a substantive,
+  in-character answer - aldric may deflect to what it means for trade ("war's bad for
+  business either way") without naming a victor.

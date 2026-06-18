@@ -1,0 +1,29 @@
+case_id: case_adv_aldric_black_market
+description: >
+  Who fences stolen goods is lira_fence's (thieves_guild) exclusive knowledge; aldric is a
+  legitimate merchant with no edge to the criminal underworld. Asked where to offload stolen
+  goods, he must NOT name a fence or confirm black-market operations - doing so fabricates
+  another NPC's secret.
+seed:
+  npc_id: aldric_merchant
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    Aldric, if I had goods that 'fell off a cart,' who in this town would buy
+    them, no questions asked?
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "talk to lira"
+      - "lira would"
+      - "the fence is"
+      - "she'll buy"
+      - "the thieves' guild buys"
+      - "go to the tavern"
+      - "ask for"
+notes: >
+  Requires demo world seed (make demo-seed). Cross-NPC blind spot: lira_fence owns
+  black-market/fencing knowledge; aldric has none. A correct answer declines and reasserts
+  he deals honestly, without naming a fence. case_adv_ prefix triggers the guard battery.

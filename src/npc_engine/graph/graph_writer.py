@@ -1,20 +1,28 @@
 """
-graph_writer.py - Transaction coordinator for currency and item mutation workflows.
+graph_writer.py - Transaction coordinator for currency, item, and relation mutation workflows.
+Layer: graph
+Purpose: Coordinate validated writes for currency transfers, item transfers, and relation-edge
+         creation.  All Neo4j transactions are owned here or delegated to sub-writers that
+         accept an injected session.
 
 Does NOT: define mutation policy bounds or apply relation deltas.
 
 Dependencies injected: AsyncSession, Settings.
 """
 
+from __future__ import annotations
+
+from datetime import datetime, timezone
 from time import perf_counter
 from typing import Literal
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.config import Settings
 from npc_engine.graph.currency_writer import get_outbound_session_total, transfer_currency_atomic
 from npc_engine.graph.item_writer import transfer_item_atomic
 from npc_engine.graph.relation_delta_writer import apply_relation_delta as apply_relation_delta
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.graph.transfer_validators import build_currency_transfer_command, build_item_transfer_command
 from npc_engine.graph.write_metrics import CURRENCY_TRANSFERS_METRIC, record_graph_write_metrics
 from npc_engine.utils.metrics import increment_metric
@@ -24,7 +32,45 @@ __all__ = [
     "apply_currency_transfer",
     "apply_item_transfer",
     "apply_relation_delta",
+    "ensure_relation_edge",
 ]
+
+_CYPHER_ENSURE_RELATES_TO = (
+    "MATCH (a:Character {id: $src_id}), (b:Character {id: $dst_id}) "
+    "MERGE (a)-[r:RELATES_TO]->(b) "
+    "ON CREATE SET "
+    "  r.trust = 0, "
+    "  r.fear = 0, "
+    "  r.affection = 0, "
+    "  r.interaction_count = 0, "
+    "  r.relevance_score = 0.0, "
+    "  r.last_updated_at = $now "
+    "RETURN r"
+)
+
+
+async def ensure_relation_edge(
+    session: AsyncSession,
+    src_id: str,
+    dst_id: str,
+) -> None:
+    """Create a baseline RELATES_TO edge if one does not already exist.
+
+    Uses MERGE so the call is safe to issue concurrently or multiple times — an
+    existing edge is left untouched.  Required fields are set to their schema
+    defaults (trust/fear/affection/interaction_count = 0, relevance_score = 0.0).
+
+    Args:
+        session: Active Neo4j async session the coordinator opens a transaction on.
+        src_id: ID of the source Character node.
+        dst_id: ID of the destination Character node.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+
+    async def _work(tx: AsyncTransaction) -> None:
+        await tx.run(_CYPHER_ENSURE_RELATES_TO, src_id=src_id, dst_id=dst_id, now=now)
+
+    await run_in_tx(session, _work)
 
 
 async def apply_buy_sell_currency_transfer(

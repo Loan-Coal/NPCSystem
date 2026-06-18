@@ -1,10 +1,15 @@
 """
 type_registry - Immutable graph type registry contracts, loaders, and payload validators.
+Layer: config
+Purpose: (auto-detected — review)
+Public surface: (list re-exports here)
 
 Does NOT: perform graph writes or execute request-time business logic.
 
 Dependencies injected: None (package init re-exports public API).
 """
+
+from __future__ import annotations
 
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.type_registry.registry import build_type_registry

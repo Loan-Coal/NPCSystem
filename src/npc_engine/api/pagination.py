@@ -1,10 +1,13 @@
 """
 pagination.py - Isolated pagination strategy helpers for API routes.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: query storage layers directly.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum

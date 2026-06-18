@@ -11,13 +11,17 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
+import logging
+
 from neo4j import AsyncSession
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.dependency_singletons import get_pricing_engine, get_trade_engine
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.engines.economy.pricing_engine import PricingEngine
 from npc_engine.engines.economy.trade_engine import TradeEngine
 from npc_engine.graph.pricing_queries import (
@@ -25,8 +29,14 @@ from npc_engine.graph.pricing_queries import (
     get_character_location_id,
     get_character_location_type,
 )
+from npc_engine.utils.errors import (
+    CurrencyInsufficientFundsError,
+    ItemTransferValidationError,
+    NodeNotFoundError,
+)
 
 router = APIRouter(prefix="/economy", tags=["economy"])
+_logger = logging.getLogger(__name__)
 
 
 class TradeOfferRequest(BaseModel):
@@ -42,13 +52,32 @@ class TradeOfferRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
-@router.get("/price")
+class PricePayload(BaseModel):
+    """Typed payload for GET /economy/price (SEV-16)."""
+
+    price: int
+
+    model_config = ConfigDict(frozen=True)
+
+
+class TradeResultPayload(BaseModel):
+    """Typed payload for POST /economy/trade — the TradeResult fields (SEV-16)."""
+
+    accepted: bool
+    fair_price: int
+    final_price: int | None = None
+    rejection_reason: str | None = None
+
+    model_config = ConfigDict(frozen=True)
+
+
+@router.get("/price", response_model=OkEnvelope[PricePayload])
 async def get_item_price(
     item_type: str = Query(..., min_length=1),
     character_id: str = Query(..., min_length=1),
     session: AsyncSession = Depends(get_db_session),
     pricing_engine: PricingEngine = Depends(get_pricing_engine),
-) -> dict:
+) -> dict[str, Any]:
     """Compute the current fair price for an item at a character's location.
 
     Args:
@@ -75,37 +104,59 @@ async def get_item_price(
         active_event_types=active_event_types,
         is_faction_member=False,
     )
-    return ok_response({"price": price})
+    return ok_response(PricePayload(price=price).model_dump())
 
 
-@router.post("/trade")
+@router.post("/trade", response_model=OkEnvelope[TradeResultPayload])
 async def evaluate_trade(
     body: TradeOfferRequest,
-    session: AsyncSession = Depends(get_db_session),
     trade_engine: TradeEngine = Depends(get_trade_engine),
-) -> dict:
+) -> dict[str, Any]:
     """Evaluate a trade offer and execute transfers if accepted.
 
     Args:
         body: Buyer/seller/item/price details.
-        session: Active Neo4j async session.
-        trade_engine: Singleton trade engine.
+        trade_engine: Per-request trade engine (holds its own EconomyGraphPort; SEV-24).
 
     Returns:
         Envelope with TradeResult fields: accepted, fair_price, final_price, rejection_reason.
     """
-    result = await trade_engine.evaluate_offer(
-        session=session,
-        buyer_id=body.buyer_id,
-        seller_id=body.seller_id,
-        item_id=body.item_id,
-        item_type=body.item_type,
-        offered_price=body.offered_price,
-        current_tick=body.current_tick,
+    _logger.info(
+        "trade_request: buyer=%s seller=%s item=%s item_type=%s price=%d",
+        body.buyer_id, body.seller_id, body.item_id, body.item_type, body.offered_price,
     )
-    return ok_response({
-        "accepted": result.accepted,
-        "fair_price": result.fair_price,
-        "final_price": result.final_price,
-        "rejection_reason": result.rejection_reason,
-    })
+    try:
+        result = await trade_engine.evaluate_offer(
+            buyer_id=body.buyer_id,
+            seller_id=body.seller_id,
+            item_id=body.item_id,
+            item_type=body.item_type,
+            offered_price=body.offered_price,
+            current_tick=body.current_tick,
+        )
+    except CurrencyInsufficientFundsError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "INSUFFICIENT_FUNDS", "message": "The buyer does not have enough gold."},
+        ) from exc
+    except NodeNotFoundError as exc:
+        # Redacted (L8-02): never echo exc.node_id (internal graph node id) to the
+        # client; the real id is logged server-side only.
+        _logger.info("trade_character_not_found: node_id=%s", exc.node_id)
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "CHARACTER_NOT_FOUND", "message": "Character not found."},
+        ) from exc
+    except ItemTransferValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": exc.code, "message": "The seller does not own this item."},
+        ) from exc
+    return ok_response(
+        TradeResultPayload(
+            accepted=result.accepted,
+            fair_price=result.fair_price,
+            final_price=result.final_price,
+            rejection_reason=result.rejection_reason,
+        ).model_dump()
+    )

@@ -5,8 +5,6 @@ slot validator, and generation engine with LLM mocking.
 
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -17,7 +15,6 @@ from npc_engine.engines.quest_generation.slot_models import (
     GeneratedQuest,
     QuestTemplateRecord,
     SlotDefinition,
-    SlotFill,
 )
 from npc_engine.engines.quest_generation.slot_validator import SlotValidator
 from npc_engine.engines.quest_generation.template_loader import load_templates
@@ -26,82 +23,39 @@ from npc_engine.utils.errors import LLMRequestError
 
 
 # ---------------------------------------------------------------------------
-# Async session fakes
+# Mock quest gen repo factory
 # ---------------------------------------------------------------------------
 
 
-@dataclass
-class _AsyncIter:
-    _items: list[Any]
-    _idx: int = field(default=0, init=False)
+def _make_quest_gen_repo(
+    node_labels: dict[str, list[str] | None] | None = None,
+    archetype: str = "merchant",
+    name: str = "Bob",
+    giver_context: dict | None = None,
+    candidate_ids: list[str] | None = None,
+) -> Any:
+    """Return a mock QuestGenerationGraphPort with configurable returns."""
+    repo = MagicMock()
+    _labels = node_labels or {}
+    _giver_ctx: dict[str, Any] = giver_context or {
+        "goals": [], "beliefs": [], "mood": "neutral", "mood_intensity": 0,
+        "needs": [], "inventory": [], "location": "tavern", "faction": [],
+    }
 
-    def __aiter__(self) -> "_AsyncIter":
-        return self
+    async def _check_node_labels(*, node_id: str) -> list[str] | None:
+        return _labels.get(node_id)
 
-    async def __anext__(self) -> Any:
-        if self._idx >= len(self._items):
-            raise StopAsyncIteration
-        item = self._items[self._idx]
-        self._idx += 1
-        return item
-
-
-@dataclass
-class _FakeResult:
-    _records: list[dict]
-
-    def __aiter__(self) -> _AsyncIter:
-        return _AsyncIter(self._records)
-
-    async def single(self) -> dict | None:
-        return self._records[0] if self._records else None
-
-    async def consume(self) -> None:
-        pass
-
-
-class _FakeSessionWithNodes:
-    """Session stub that returns preconfigured node records by query content."""
-
-    def __init__(self, node_map: dict[str, dict | None]) -> None:
-        self._node_map = node_map
-        self.write_calls: list[tuple] = []
-
-    async def run(self, query: str, **kwargs: Any) -> _FakeResult:
-        # Mood query: return a neutral mood record (added in 8.5 context enrichment).
-        if "current_mood" in query and "mood_intensity" in query:
-            return _FakeResult([{"mood": "neutral", "intensity": 0}])
-        node_id = kwargs.get("node_id") or kwargs.get("character_id") or kwargs.get("quest_id")
-        if node_id in self._node_map:
-            val = self._node_map[node_id]
-            if val is None:
-                return _FakeResult([])
-            return _FakeResult([val])
-        if "Character" in query and "archetype" in query:
-            char_id = kwargs.get("character_id")
-            result = self._node_map.get(char_id)
-            if result is None:
-                return _FakeResult([])
-            return _FakeResult([result])
-        return _FakeResult([])
-
-    async def begin_transaction(self) -> "_FakeTx":
-        return _FakeTx(self)
-
-
-class _FakeTx:
-    def __init__(self, session: _FakeSessionWithNodes) -> None:
-        self._session = session
-
-    async def __aenter__(self) -> "_FakeTx":
-        return self
-
-    async def __aexit__(self, *args: Any) -> bool:
-        return False
-
-    async def run(self, query: str, **kwargs: Any) -> _FakeResult:
-        self._session.write_calls.append((query, kwargs))
-        return _FakeResult([])
+    repo.check_node_labels = _check_node_labels
+    repo.get_template_skill_requirements = AsyncMock(return_value=[])
+    repo.check_skill_threshold = AsyncMock(return_value=True)
+    repo.get_world_state_day_and_rate = AsyncMock(return_value=(1, 1.0))
+    repo.get_world_state_context = AsyncMock(return_value="Year 1, Season: spring")
+    repo.get_character_info = AsyncMock(return_value=(archetype, name))
+    repo.get_giver_context = AsyncMock(return_value=_giver_ctx)
+    repo.get_candidate_ids_by_label = AsyncMock(return_value=candidate_ids or [])
+    repo.create_quest = AsyncMock(return_value={})
+    repo.record_causation = AsyncMock()
+    return repo
 
 
 # ---------------------------------------------------------------------------
@@ -133,11 +87,8 @@ def test_template_loader_loads_yaml() -> None:
 
 @pytest.mark.asyncio
 async def test_slot_validator_accepts_valid_fills() -> None:
-    node_map = {
-        "item_001": {"labels": ["Item"]},
-    }
-    session = _FakeSessionWithNodes(node_map)
-    validator = SlotValidator(session=session)
+    repo = _make_quest_gen_repo(node_labels={"item_001": ["Item"]})
+    validator = SlotValidator(quest_gen_repo=repo)
     slot_defs = (SlotDefinition(name="item", node_type="item", required=True),)
     violations = await validator.validate({"item": "item_001"}, slot_defs)
     assert violations == []
@@ -150,11 +101,8 @@ async def test_slot_validator_accepts_valid_fills() -> None:
 
 @pytest.mark.asyncio
 async def test_slot_validator_rejects_wrong_type() -> None:
-    node_map = {
-        "char_001": {"labels": ["Character"]},
-    }
-    session = _FakeSessionWithNodes(node_map)
-    validator = SlotValidator(session=session)
+    repo = _make_quest_gen_repo(node_labels={"char_001": ["Character"]})
+    validator = SlotValidator(quest_gen_repo=repo)
     slot_defs = (SlotDefinition(name="item", node_type="item", required=True),)
     violations = await validator.validate({"item": "char_001"}, slot_defs)
     assert len(violations) == 1
@@ -184,6 +132,7 @@ def _make_engine(
     llm_client: Any,
     templates: list[QuestTemplateRecord] | None = None,
     prompts_dir: Path | None = None,
+    quest_gen_repo: Any = None,
 ) -> QuestGenerationEngine:
     if templates is None:
         templates = [_make_template()]
@@ -192,10 +141,16 @@ def _make_engine(
             Path(__file__).resolve().parent.parent.parent
             / "src" / "npc_engine" / "prompts" / "quest_generation"
         )
+    if quest_gen_repo is None:
+        quest_gen_repo = _make_quest_gen_repo(
+            node_labels={"item_001": ["Item"]},
+            candidate_ids=["item_001"],
+        )
     return QuestGenerationEngine(
         llm_client=llm_client,
         templates=templates,
         prompts_dir=prompts_dir,
+        quest_gen_repo=quest_gen_repo,
     )
 
 
@@ -206,11 +161,11 @@ def _make_engine(
 
 @pytest.mark.asyncio
 async def test_generate_succeeds_on_first_try() -> None:
-    session = _FakeSessionWithNodes(
-        node_map={
-            "giver_001": {"archetype": "merchant", "name": "Bob"},
-            "item_001": {"labels": ["Item"]},
-        }
+    quest_gen_repo = _make_quest_gen_repo(
+        node_labels={"item_001": ["Item"]},
+        archetype="merchant",
+        name="Bob",
+        candidate_ids=["item_001"],
     )
 
     llm_client = MagicMock()
@@ -221,8 +176,8 @@ async def test_generate_succeeds_on_first_try() -> None:
         ]
     )
 
-    engine = _make_engine(llm_client)
-    result = await engine.generate(session=session, quest_giver_id="giver_001")
+    engine = _make_engine(llm_client, quest_gen_repo=quest_gen_repo)
+    result = await engine.generate(quest_giver_id="giver_001")
 
     assert isinstance(result, GeneratedQuest)
     assert result.quest_id
@@ -238,12 +193,11 @@ async def test_generate_succeeds_on_first_try() -> None:
 
 @pytest.mark.asyncio
 async def test_generate_retries_on_violation() -> None:
-    session = _FakeSessionWithNodes(
-        node_map={
-            "giver_001": {"archetype": "merchant", "name": "Bob"},
-            "bad_node": {"labels": ["Character"]},
-            "item_001": {"labels": ["Item"]},
-        }
+    quest_gen_repo = _make_quest_gen_repo(
+        node_labels={"bad_node": ["Character"], "item_001": ["Item"]},
+        archetype="merchant",
+        name="Bob",
+        candidate_ids=["item_001"],
     )
 
     llm_client = MagicMock()
@@ -256,8 +210,8 @@ async def test_generate_retries_on_violation() -> None:
         ]
     )
 
-    engine = _make_engine(llm_client)
-    result = await engine.generate(session=session, quest_giver_id="giver_001")
+    engine = _make_engine(llm_client, quest_gen_repo=quest_gen_repo)
+    result = await engine.generate(quest_giver_id="giver_001")
 
     assert isinstance(result, GeneratedQuest)
     assert result.quest_id
@@ -271,24 +225,11 @@ async def test_generate_retries_on_violation() -> None:
 
 @pytest.mark.asyncio
 async def test_generate_falls_back_after_max_retries() -> None:
-    class _DeterministicSession(_FakeSessionWithNodes):
-        async def run(self, query: str, **kwargs: Any) -> _FakeResult:
-            if "archetype" in query or "name" in query:
-                char_id = kwargs.get("character_id")
-                val = self._node_map.get(char_id)
-                if val is None:
-                    return _FakeResult([])
-                return _FakeResult([val])
-            if "MATCH (n:Item)" in query:
-                return _FakeResult([{"id": "item_001"}])
-            node_id = kwargs.get("node_id")
-            val = self._node_map.get(node_id) if node_id else None
-            return _FakeResult([val] if val else [])
-
-    session = _DeterministicSession(
-        node_map={
-            "giver_001": {"archetype": "merchant", "name": "Bob"},
-        }
+    quest_gen_repo = _make_quest_gen_repo(
+        node_labels={},
+        archetype="merchant",
+        name="Bob",
+        candidate_ids=["item_001"],
     )
 
     llm_client = MagicMock()
@@ -301,8 +242,8 @@ async def test_generate_falls_back_after_max_retries() -> None:
         ]
     )
 
-    engine = _make_engine(llm_client)
-    result = await engine.generate(session=session, quest_giver_id="giver_001")
+    engine = _make_engine(llm_client, quest_gen_repo=quest_gen_repo)
+    result = await engine.generate(quest_giver_id="giver_001")
 
     assert isinstance(result, GeneratedQuest)
     assert result.quest_id
@@ -315,11 +256,11 @@ async def test_generate_falls_back_after_max_retries() -> None:
 
 @pytest.mark.asyncio
 async def test_generate_uses_template_defaults_on_flavor_error() -> None:
-    session = _FakeSessionWithNodes(
-        node_map={
-            "giver_001": {"archetype": "merchant", "name": "Bob"},
-            "item_001": {"labels": ["Item"]},
-        }
+    quest_gen_repo = _make_quest_gen_repo(
+        node_labels={"item_001": ["Item"]},
+        archetype="merchant",
+        name="Bob",
+        candidate_ids=["item_001"],
     )
 
     llm_client = MagicMock()
@@ -331,8 +272,159 @@ async def test_generate_uses_template_defaults_on_flavor_error() -> None:
     )
 
     template = _make_template()
-    engine = _make_engine(llm_client, templates=[template])
-    result = await engine.generate(session=session, quest_giver_id="giver_001")
+    engine = _make_engine(llm_client, templates=[template], quest_gen_repo=quest_gen_repo)
+    result = await engine.generate(quest_giver_id="giver_001")
 
     assert isinstance(result, GeneratedQuest)
     assert result.description == template.description_template
+
+
+# ---------------------------------------------------------------------------
+# Test 8: generate writes Quest node with status="draft" (not "offered")
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_generate_writes_draft_status() -> None:
+    quest_gen_repo = _make_quest_gen_repo(
+        node_labels={"item_001": ["Item"]},
+        archetype="merchant",
+        name="Bob",
+        candidate_ids=["item_001"],
+    )
+
+    llm_client = MagicMock()
+    llm_client.generate_structured = AsyncMock(
+        side_effect=[
+            {"item": "item_001"},
+            {"description": "Gather the herbs!", "npc_plea": "Please hurry!"},
+        ]
+    )
+    engine = _make_engine(llm_client, quest_gen_repo=quest_gen_repo)
+    await engine.generate(quest_giver_id="giver_001")
+
+    quest_gen_repo.create_quest.assert_awaited_once()
+    call_kwargs = quest_gen_repo.create_quest.call_args.kwargs
+    assert call_kwargs["payload"]["status"] == "draft"
+
+
+# ---------------------------------------------------------------------------
+# Test 9: slot-fill prompt includes GIVER_NEEDS when NPC has needs
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_generate_includes_needs_in_slot_fill_prompt() -> None:
+    giver_context = {
+        "goals": [], "beliefs": [], "mood": "neutral", "mood_intensity": 0,
+        "needs": [{"kind": "supply", "level": 15}],
+        "inventory": [], "location": "tavern", "faction": [],
+    }
+    quest_gen_repo = _make_quest_gen_repo(
+        node_labels={"item_001": ["Item"]},
+        archetype="merchant",
+        name="Bob",
+        giver_context=giver_context,
+        candidate_ids=["item_001"],
+    )
+
+    captured_prompts: list[str] = []
+
+    async def capture_llm(prompt: str, schema: Any, max_tokens: int, system: str = "") -> dict:
+        captured_prompts.append(prompt)
+        if len(captured_prompts) == 1:
+            return {"item": "item_001"}
+        return {"description": "Find supplies!", "npc_plea": "We need supplies!"}
+
+    llm_client = MagicMock()
+    llm_client.generate_structured = capture_llm
+
+    engine = _make_engine(llm_client, quest_gen_repo=quest_gen_repo)
+    result = await engine.generate(quest_giver_id="giver_001")
+
+    assert isinstance(result, GeneratedQuest)
+    assert len(captured_prompts) >= 1
+    slot_fill_prompt = captured_prompts[0]
+    assert "supply" in slot_fill_prompt, "Expected need kind 'supply' in slot-fill prompt"
+    assert "GIVER_NEEDS" in slot_fill_prompt, "Expected GIVER_NEEDS label in slot-fill prompt"
+
+
+# ---------------------------------------------------------------------------
+# Test 10: slot-fill prompt includes GIVER_LOCATION when NPC has a location
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_generate_includes_location_in_slot_fill_prompt() -> None:
+    giver_context = {
+        "goals": [], "beliefs": [], "mood": "neutral", "mood_intensity": 0,
+        "needs": [], "inventory": [], "location": "guard_barracks", "faction": [],
+    }
+    quest_gen_repo = _make_quest_gen_repo(
+        node_labels={"item_001": ["Item"]},
+        archetype="guard_captain",
+        name="Sorn",
+        giver_context=giver_context,
+        candidate_ids=["item_001"],
+    )
+
+    captured_prompts: list[str] = []
+
+    async def capture_llm(prompt: str, schema: Any, max_tokens: int, system: str = "") -> dict:
+        captured_prompts.append(prompt)
+        if len(captured_prompts) == 1:
+            return {"item": "item_001"}
+        return {"description": "Patrol the barracks!", "npc_plea": "We need help!"}
+
+    llm_client = MagicMock()
+    llm_client.generate_structured = capture_llm
+
+    template = _make_template(archetype="guard_captain")
+    engine = _make_engine(llm_client, templates=[template], quest_gen_repo=quest_gen_repo)
+    result = await engine.generate(quest_giver_id="giver_001")
+
+    assert isinstance(result, GeneratedQuest)
+    slot_fill_prompt = captured_prompts[0]
+    assert "guard_barracks" in slot_fill_prompt, "Expected location 'guard_barracks' in slot-fill prompt"
+    assert "GIVER_LOCATION" in slot_fill_prompt, "Expected GIVER_LOCATION label in slot-fill prompt"
+
+
+# ---------------------------------------------------------------------------
+# Test 11: flavor prompt includes NPC context (needs + location)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_generate_includes_npc_context_in_flavor_prompt() -> None:
+    giver_context = {
+        "goals": [], "beliefs": [], "mood": "neutral", "mood_intensity": 0,
+        "needs": [{"kind": "safety", "level": 10}],
+        "inventory": [], "location": "market_square", "faction": [],
+    }
+    quest_gen_repo = _make_quest_gen_repo(
+        node_labels={"item_001": ["Item"]},
+        archetype="merchant",
+        name="Alice",
+        giver_context=giver_context,
+        candidate_ids=["item_001"],
+    )
+
+    captured_prompts: list[str] = []
+
+    async def capture_llm(prompt: str, schema: Any, max_tokens: int, system: str = "") -> dict:
+        captured_prompts.append(prompt)
+        if len(captured_prompts) == 1:
+            return {"item": "item_001"}
+        return {"description": "Secure the market!", "npc_plea": "We are not safe!"}
+
+    llm_client = MagicMock()
+    llm_client.generate_structured = capture_llm
+
+    engine = _make_engine(llm_client, quest_gen_repo=quest_gen_repo)
+    result = await engine.generate(quest_giver_id="giver_001")
+
+    assert isinstance(result, GeneratedQuest)
+    assert len(captured_prompts) >= 2
+    flavor_prompt = captured_prompts[1]
+    assert "safety" in flavor_prompt, "Expected need kind 'safety' in flavor prompt"
+    assert "market_square" in flavor_prompt, "Expected location 'market_square' in flavor prompt"

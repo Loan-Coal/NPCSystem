@@ -18,12 +18,25 @@ _DEFAULT_CONFIG_PATH = Path(__file__).parent / "config.yaml"
 
 @dataclass(frozen=True)
 class GossipWeightConfig:
-    """Immutable faction-weight multipliers for gossip pair selection and distortion."""
+    """Immutable faction-weight multipliers for gossip pair selection and distortion.
+
+    Confidence band thresholds (EXP-213) are also stored here so that no magic
+    numbers appear in Python code.  See config.yaml for tuning guidance.
+    """
 
     same_faction_boost: float = 2.0
     allied_boost: float = 1.5
     hostile_penalty: float = 0.1
     hostile_distortion_factor: float = 1.5
+    # Confidence bands for distortion-type biasing (EXP-213).
+    confidence_high_threshold: int = 70
+    confidence_low_threshold: int = 30
+
+
+# Secrets propagate with lower base probability and higher distortion chance
+# than standard events (formerly in knowledge_propagator.py).
+SECRET_BASE_PROBABILITY: float = 0.2
+SECRET_DISTORTION_CHANCE: float = 0.5
 
 
 def load_gossip_config(path: Path = _DEFAULT_CONFIG_PATH) -> GossipWeightConfig:
@@ -45,5 +58,11 @@ def load_gossip_config(path: Path = _DEFAULT_CONFIG_PATH) -> GossipWeightConfig:
         hostile_penalty=float(raw.get("hostile_penalty", GossipWeightConfig.hostile_penalty)),
         hostile_distortion_factor=float(
             raw.get("hostile_distortion_factor", GossipWeightConfig.hostile_distortion_factor)
+        ),
+        confidence_high_threshold=int(
+            raw.get("confidence_high_threshold", GossipWeightConfig.confidence_high_threshold)
+        ),
+        confidence_low_threshold=int(
+            raw.get("confidence_low_threshold", GossipWeightConfig.confidence_low_threshold)
         ),
     )

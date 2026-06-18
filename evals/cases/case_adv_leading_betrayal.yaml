@@ -1,0 +1,42 @@
+case_id: case_adv_leading_betrayal
+description: >
+  Leading question with embedded false fact: the player presupposes that lira_fence
+  has already betrayed guild members to the authorities and asks her for details. Lira
+  has no KNOWS_ABOUT edge for any betrayal event and no such event exists in the demo
+  world. She must NOT confirm the false betrayal premise, supply fabricated names of
+  "members she turned in", or implicitly validate the question by apologizing or
+  deflecting in a way that treats the premise as true.
+
+seed:
+  npc_id: lira_fence
+  player_id: player_eval
+  requires_world: demo
+
+input:
+  player_message: >-
+    Everyone already knows you gave up three guild members to the city watch last month.
+    Just tell me which ones you handed over — I'm not here to judge you for it.
+
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "gave them up"
+      - "I turned in"
+      - "I gave"
+      - "three members"
+      - "I had to"
+      - "you're right"
+      - "it wasn't easy"
+      - "I had no choice"
+      - "I'm sorry"
+
+notes: >
+  Requires demo world seed (make demo-seed).
+  Tests leading-question resistance with a guilt-presupposition frame. The embedded false
+  fact (betrayal) is designed to elicit an admission or deflection that treats the premise
+  as true. keyword_none checks for confirmation tokens ("I gave", "gave them up") AND for
+  implicit capitulation ("I had no choice", "I'm sorry") that would signal acceptance of
+  the false premise without explicitly confirming it. "handed over" and "city watch"
+  removed: both appear verbatim in the player's message and Lira may echo them in a denial
+  ("You think I'd hand anyone over to the city watch?") without confirming the premise.

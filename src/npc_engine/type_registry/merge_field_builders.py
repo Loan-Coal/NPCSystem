@@ -1,14 +1,17 @@
 """
 merge_field_builders.py - Primitive field builders and merge enforcement helpers.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: orchestrate registry merges or read files from disk.
 
 Dependencies injected: validated schema field configs and runtime field contracts.
 """
+from __future__ import annotations
 
 from typing import Mapping, Protocol
 
-from npc_engine.schema.schema_models import CustomEdgeTypeConfig, CustomFieldConfig, ExtensionField
+from npc_engine.schema.schema_models import CustomEdgeTypeConfig, CustomFieldConfig, ExtensionField, FieldType
 from npc_engine.type_registry.contracts import RuntimeEdgeTypeDefinition, RuntimeFieldDefinition
 from npc_engine.utils.errors import RegistryValidationError
 
@@ -17,7 +20,7 @@ MAX_EXTENSION_FIELDS_PER_OBJECT = 16
 
 
 class _FieldWithSharedProperties(Protocol):
-    type: str
+    type: FieldType
     range: list[int | float] | None
     default: str | int | float | bool | None
     description: str

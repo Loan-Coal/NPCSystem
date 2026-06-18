@@ -1,34 +1,37 @@
 """
-service_helpers.py - Private helpers for idempotency preflight evaluation.
-
-Does NOT: manage sessions or expose public service API.
-
+Module: service_helpers
+Layer: engines
+Purpose: Private helpers for idempotency preflight evaluation. All store calls are
+         sessionless — the concrete adapter manages its own Neo4j sessions
+         (DEC-122 / SEV-24).
+Does NOT: manage sessions, expose public service API, or open database connections.
 Dependencies injected: IdempotencyStoreProtocol, Settings.
+Used by: npc_engine.engines.idempotency.service.IdempotencyService.
 """
+
+from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timedelta, timezone
 
-from neo4j import AsyncSession
-
 from npc_engine.config import Settings
-from npc_engine.engines.idempotency.models import IdempotencyPreflightResult, IdempotencyRecord
+from npc_engine.engines.idempotency.models import IdempotencyPreflightResult
 from npc_engine.engines.idempotency.store_protocol import IdempotencyStoreProtocol
+from npc_engine.graph.idempotency_models import IdempotencyRecord
 
 
 async def create_pending(
     *,
     store: IdempotencyStoreProtocol,
-    session: AsyncSession,
     idempotency_key: str,
     resource_scope: str,
     request_hash: str,
     now: datetime,
     settings: Settings,
 ) -> None:
+    """Upsert a pending record with an expiry derived from settings."""
     expires_at = now + timedelta(hours=settings.IDEMPOTENCY_RETENTION_HOURS)
     await store.upsert_pending(
-        session=session,
         idempotency_key=idempotency_key,
         resource_scope=resource_scope,
         request_hash=request_hash,
@@ -41,16 +44,15 @@ async def create_pending(
 async def create_pending_if_absent(
     *,
     store: IdempotencyStoreProtocol,
-    session: AsyncSession,
     idempotency_key: str,
     resource_scope: str,
     request_hash: str,
     now: datetime,
     settings: Settings,
 ) -> bool:
+    """Create a pending record only if none exists; return True when created."""
     expires_at = now + timedelta(hours=settings.IDEMPOTENCY_RETENTION_HOURS)
     return await store.create_pending_if_absent(
-        session=session,
         idempotency_key=idempotency_key,
         resource_scope=resource_scope,
         request_hash=request_hash,
@@ -63,7 +65,6 @@ async def create_pending_if_absent(
 async def evaluate_existing_record(
     *,
     store: IdempotencyStoreProtocol,
-    session: AsyncSession,
     record: IdempotencyRecord,
     idempotency_key: str,
     resource_scope: str,
@@ -71,6 +72,7 @@ async def evaluate_existing_record(
     now: datetime,
     settings: Settings,
 ) -> IdempotencyPreflightResult:
+    """Evaluate an existing record and return the appropriate preflight decision."""
     if record.request_hash != request_hash:
         return IdempotencyPreflightResult(decision="conflict", request_hash=request_hash)
 
@@ -94,7 +96,6 @@ async def evaluate_existing_record(
 
     await create_pending(
         store=store,
-        session=session,
         idempotency_key=idempotency_key,
         resource_scope=resource_scope,
         request_hash=request_hash,
@@ -105,12 +106,14 @@ async def evaluate_existing_record(
 
 
 def is_pending_in_flight(*, record_created_at: str, timeout_seconds: int, now: datetime) -> bool:
+    """Return True if the pending record is still within its in-flight window."""
     created_at = parse_datetime(record_created_at)
     cutoff = created_at + timedelta(seconds=timeout_seconds)
     return now <= cutoff
 
 
 def parse_datetime(value: str) -> datetime:
+    """Parse an ISO-8601 string and return a UTC-aware datetime."""
     normalized = value.replace("Z", "+00:00")
     parsed = datetime.fromisoformat(normalized)
     if parsed.tzinfo is None:
@@ -119,10 +122,12 @@ def parse_datetime(value: str) -> datetime:
 
 
 def resource_scope(*, method: str, path: str) -> str:
+    """Return the METHOD:path scope string for an idempotency key."""
     return f"{method.upper()}:{path}"
 
 
 def request_hash(*, method: str, path: str, query_string: str, body_bytes: bytes) -> str:
+    """Return the SHA-256 hex digest of the request parameters."""
     payload = b"|".join(
         [
             method.upper().encode("utf-8"),
@@ -135,5 +140,6 @@ def request_hash(*, method: str, path: str, query_string: str, body_bytes: bytes
 
 
 def response_hash(*, status_code: int, response_body: str) -> str:
+    """Return the SHA-256 hex digest of the response."""
     payload = f"{status_code}|{response_body}".encode("utf-8")
     return hashlib.sha256(payload).hexdigest()

@@ -10,12 +10,14 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, error_response, ok_response
 from npc_engine.graph.group_service import (
     add_member,
     create_group,
@@ -23,6 +25,9 @@ from npc_engine.graph.group_service import (
     get_groups_for_character_svc,
     get_members_svc,
 )
+from npc_engine.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Request models
@@ -60,11 +65,11 @@ class AddMemberRequest(BaseModel):
 router = APIRouter(prefix="/groups", tags=["groups"])
 
 
-@router.post("")
+@router.post("", response_model=OkEnvelope[dict[str, Any]])
 async def create_group_route(
     body: CreateGroupRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create a new Group node.
 
     Args:
@@ -85,12 +90,12 @@ async def create_group_route(
     return ok_response({"group_id": group_id})
 
 
-@router.get("/{character_id}")
+@router.get("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def list_groups_for_character(
     character_id: str,
     include_dissolved: bool = False,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List groups a character belongs to.
 
     Args:
@@ -106,11 +111,11 @@ async def list_groups_for_character(
     return ok_response({"groups": groups})
 
 
-@router.get("/members/{group_id}")
+@router.get("/members/{group_id}", response_model=OkEnvelope[dict[str, Any]])
 async def list_group_members(
     group_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List active members of a group.
 
     Args:
@@ -123,12 +128,12 @@ async def list_group_members(
     return ok_response({"members": members})
 
 
-@router.post("/{group_id}/members")
+@router.post("/{group_id}/members", response_model=OkEnvelope[dict[str, Any]])
 async def add_member_to_group(
     group_id: str,
     body: AddMemberRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Add a character to an existing group.
 
     Args:
@@ -148,16 +153,22 @@ async def add_member_to_group(
             commitment=body.commitment,
         )
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        logger.warning("group_add_member_failed", extra={"error": type(exc).__name__})
+        raise HTTPException(
+            status_code=422,
+            detail=error_response(
+                error_code="INVALID_REQUEST", message="Invalid request parameter."
+            ),
+        ) from exc
     return ok_response({"group_id": group_id, "character_id": body.character_id})
 
 
-@router.delete("/{group_id}")
+@router.delete("/{group_id}", response_model=OkEnvelope[dict[str, Any]])
 async def dissolve_group_route(
     group_id: str,
     tick: int,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Mark a group as dissolved at the given tick.
 
     Args:

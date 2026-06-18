@@ -3,10 +3,11 @@ Module: pledge_service
 Layer: graph
 Purpose: Create, read, and break PLEDGE edges between characters. On break, applies
          trust drop via RELATES_TO and faction standing swing via STANDS_WITH.
-Does NOT: call LLMs or implement oath engine logic.
+Does NOT: call LLMs, detect violations, or orchestrate oath engine scheduling.
 Dependencies injected: AsyncSession.
 Dependencies: graph.pledge_queries
-Used by: npc_engine.engines.oath.oath_engine, npc_engine.api.routes.pledges
+Used by: npc_engine.engines.oath.oath_engine, npc_engine.api.routes.pledges,
+         npc_engine.graph.pledge_violation_service
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from npc_engine.graph.pledge_queries import (
     CYPHER_DEACTIVATE_PLEDGE,
     CYPHER_GET_FACTION_FOR_CHARACTER,
     CYPHER_TRUST_DROP,
+    get_all_active_pledgers,
     get_expiring_pledges,
     get_pledges_for_character,
 )
@@ -130,23 +132,18 @@ async def break_pledge(
             )
 
 
-async def check_pledge_violations(
+async def get_all_active_pledgers_svc(
     session: AsyncSession,
-    *,
-    pledger_id: str,
-    tick: int,
-) -> list[dict]:
-    """Stub: returns empty list — no violation logic implemented yet.
+) -> list[str]:
+    """Return distinct IDs of all characters with at least one active pledge.
 
     Args:
         session: Active Neo4j async session.
-        pledger_id: ID of the character to check.
-        tick: Current game tick.
 
     Returns:
-        Empty list (stub).
+        List of pledger character IDs.
     """
-    return []
+    return await get_all_active_pledgers(session)
 
 
 async def get_expiring_pledges_svc(

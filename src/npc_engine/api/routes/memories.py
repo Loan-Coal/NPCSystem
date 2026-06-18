@@ -10,14 +10,15 @@ Used by: npc_engine.main (registered at admin_prefix)
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.dependency_singletons import get_memory_consolidation_engine
-from npc_engine.api.route_helpers import ok_response
-from npc_engine.engines.memory.memory_engine import MemoryEngine
+from npc_engine.api.dependency_singletons import get_memory_consolidation_engine, get_memory_engine
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.memory_service import (
     create_memory,
     decay_all_vividness,
@@ -37,8 +38,26 @@ class CreateMemoryRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=1024)
     vividness: int = Field(..., ge=0, le=100)
     emotional_charge: int = Field(..., ge=-100, le=100)
-    game_time: dict = Field(
+    game_time: dict[str, Any] = Field(
         default_factory=lambda: {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
+    )
+    id: str | None = Field(
+        default=None,
+        description=(
+            "Caller-supplied stable ID. When provided the node is merged (idempotent). "
+            "When omitted a UUID is auto-generated."
+        ),
+    )
+    occurred_at_game_time: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "When the remembered event actually happened (distinct from game_time, the "
+            "record time). When omitted it defaults to game_time (S26.3, DEC-094)."
+        ),
+    )
+    is_historical: bool = Field(
+        default=False,
+        description="True when the memory is of a prior era / long-past event.",
     )
 
     model_config = ConfigDict(frozen=True)
@@ -49,7 +68,7 @@ class CreateMemoryFromArousalRequest(BaseModel):
 
     content: str = Field(..., min_length=1, max_length=1024)
     arousal: int = Field(..., ge=0, le=100)
-    game_time: dict = Field(
+    game_time: dict[str, Any] = Field(
         default_factory=lambda: {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
     )
 
@@ -68,10 +87,38 @@ class ConsolidateRequest(BaseModel):
     """Request body for triggering memory consolidation from a dialogue session."""
 
     player_id: str = Field(..., min_length=1)
-    game_time: dict = Field(
+    game_time: dict[str, Any] = Field(
         default_factory=lambda: {"year": 1, "season": "spring", "day": 1, "time_of_day": "morning"}
     )
     turn_threshold: int = Field(default=5, ge=1)
+
+    model_config = ConfigDict(frozen=True)
+
+
+# ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class MemoriesPayload(BaseModel):
+    """Typed payload for GET /memories/{character_id} (SEV-16).
+
+    The ``memories`` group is fixed; individual rows are heterogeneous graph
+    records, so each stays ``dict[str, Any]``.
+    """
+
+    memories: list[dict[str, Any]]
+
+    model_config = ConfigDict(frozen=True)
+
+
+class ConsolidatePayload(BaseModel):
+    """Typed payload for POST /memories/consolidate/{npc_id} (SEV-16).
+
+    ``memory_id`` is null when the turn threshold was not met.
+    """
+
+    memory_id: str | None = None
 
     model_config = ConfigDict(frozen=True)
 
@@ -82,14 +129,12 @@ class ConsolidateRequest(BaseModel):
 
 router = APIRouter(prefix="/memories", tags=["memories"])
 
-_engine = MemoryEngine()
 
-
-@router.post("/decay")
+@router.post("/decay", response_model=OkEnvelope[dict[str, Any]])
 async def run_decay(
     body: DecayRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Reduce vividness of all Memory nodes by decay_per_day, clamped to 0.
 
     Args:
@@ -102,12 +147,11 @@ async def run_decay(
     return ok_response({"decayed_count": count})
 
 
-@router.post("/from-arousal/{character_id}")
+@router.post("/from-arousal/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def seed_memory_from_arousal(
     character_id: str,
     body: CreateMemoryFromArousalRequest,
-    session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create a Memory node only if arousal exceeds the high-arousal threshold (>70).
 
     Args:
@@ -124,8 +168,7 @@ async def seed_memory_from_arousal(
         day=int(gt.get("day", 1)),
         time_of_day=str(gt.get("time_of_day", "morning")),
     )
-    memory_id = await _engine.create_from_arousal(
-        session,
+    memory_id = await get_memory_engine().create_from_arousal(
         character_id=character_id,
         arousal=body.arousal,
         content=body.content,
@@ -134,12 +177,12 @@ async def seed_memory_from_arousal(
     return ok_response({"memory_id": memory_id})
 
 
-@router.post("/{character_id}")
+@router.post("/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def seed_memory(
     character_id: str,
     body: CreateMemoryRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create a Memory node and link it to a character.
 
     Args:
@@ -149,13 +192,8 @@ async def seed_memory(
     Returns:
         Envelope with the new memory_id.
     """
-    gt = body.game_time
-    game_time = TimePoint(
-        year=int(gt.get("year", 1)),
-        season=str(gt.get("season", "spring")),
-        day=int(gt.get("day", 1)),
-        time_of_day=str(gt.get("time_of_day", "morning")),
-    )
+    game_time = _time_point_from_dict(body.game_time)
+    occurred = _time_point_from_dict(body.occurred_at_game_time) if body.occurred_at_game_time else None
     memory_id = await create_memory(
         session,
         character_id=character_id,
@@ -163,16 +201,29 @@ async def seed_memory(
         vividness=body.vividness,
         emotional_charge=body.emotional_charge,
         game_time=game_time,
+        node_id=body.id,
+        occurred_at_game_time=occurred,
+        is_historical=body.is_historical,
     )
     return ok_response({"memory_id": memory_id})
 
 
-@router.get("/{character_id}")
+def _time_point_from_dict(gt: dict[str, Any]) -> TimePoint:
+    """Build a TimePoint from a partial game-time dict with safe defaults."""
+    return TimePoint(
+        year=int(gt.get("year", 1)),
+        season=str(gt.get("season", "spring")),
+        day=int(gt.get("day", 1)),
+        time_of_day=str(gt.get("time_of_day", "morning")),
+    )
+
+
+@router.get("/{character_id}", response_model=OkEnvelope[MemoriesPayload])
 async def list_memories(
     character_id: str,
     k: int = 5,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List memories for a character ordered by vividness descending.
 
     Args:
@@ -183,14 +234,14 @@ async def list_memories(
         Envelope with list of memory dicts.
     """
     memories = await get_memories_for_character_svc(session, character_id=character_id, k=k)
-    return ok_response({"memories": memories})
+    return ok_response(MemoriesPayload(memories=memories).model_dump())
 
 
-@router.delete("/{memory_id}")
+@router.delete("/{memory_id}", response_model=OkEnvelope[dict[str, Any]])
 async def remove_memory(
     memory_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Hard-delete a single Memory node.
 
     Args:
@@ -203,12 +254,12 @@ async def remove_memory(
     return ok_response({"memory_id": memory_id})
 
 
-@router.post("/consolidate/{npc_id}")
+@router.post("/consolidate/{npc_id}", response_model=OkEnvelope[ConsolidatePayload])
 async def consolidate_memories(
     npc_id: str,
     body: ConsolidateRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Consolidate recent dialogue turns into a memory via the MemoryConsolidationEngine.
 
     Reads recent turns from the shared session store for the given npc_id + player_id
@@ -230,8 +281,7 @@ async def consolidate_memories(
         time_of_day=str(gt.get("time_of_day", "morning")),
     )
     memory_id = await engine.consolidate(
-        session,
         npc_id=npc_id,
         game_time=game_time,
     )
-    return ok_response({"memory_id": memory_id})
+    return ok_response(ConsolidatePayload(memory_id=memory_id).model_dump())

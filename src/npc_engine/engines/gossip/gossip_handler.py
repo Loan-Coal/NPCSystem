@@ -1,55 +1,73 @@
 """
 gossip_handler.py - Orchestrates one gossip tick over selected NPC pairs.
+Layer: engines
+Purpose: Executes one gossip tick: selects NPC pairs, batch-reads events+trust,
+         computes distortions, batch-writes knowledge, and runs per-pair side effects
+         (rumor creation, emotion shock, relation-log update, secret propagation).
 
-Does NOT: run global scheduling loops.
+Does NOT: run global scheduling loops, open Neo4j sessions.
 
-Dependencies injected: AsyncSession, Settings, GossipWeightConfig, EmbeddingIndex.
+Dependencies injected: GossipGraphPort, Settings, GossipWeightConfig, EmbeddingIndex.
+
+NOTE: This file is ~280 lines, near the 300-line soft limit. Splitting would be
+artificial because run_tick + _process_pairs + _build_write_params + _run_side_effects
+are all tightly coupled phases of a single orchestration class. Splitting would
+scatter the gossip tick logic across multiple files with no independent reuse value.
+See DEC-061 in project-harness/DECISIONS.md.
 """
 
-from neo4j import AsyncSession
+from __future__ import annotations
+
 import asyncio
-import logging
+import hashlib
 import random
 
+from npc_engine.common.knowledge_types import (
+    KNOWLEDGE_STATE_KNOWS,
+    KNOWLEDGE_STATE_RUMOR,
+    KnowledgeState,
+)
 from npc_engine.config import Settings
 from npc_engine.engines.embedding_invalidation import invalidate_embedding_safely
-from npc_engine.engines.gossip.edge_updater import log_gossip
 from npc_engine.engines.gossip.gossip_config import GossipWeightConfig
-from npc_engine.engines.gossip.gossip_distort import gossip_distort
-from npc_engine.engines.gossip.knowledge_propagator import (
-    propagate,
-    propagate_secret,
-    SECRET_BASE_PROBABILITY,
-    SECRET_DISTORTION_CHANCE,
+from npc_engine.engines.gossip.gossip_distort import (
+    compute_confidence,
+    compute_distortion_probability,
+    compute_seed_value,
+    gossip_distort,
 )
+from npc_engine.engines.gossip.gossip_config import SECRET_DISTORTION_CHANCE
 from npc_engine.engines.gossip.pair_selector import select_pairs
-from npc_engine.graph.rumor_service import believe_rumor, create_rumor
+from npc_engine.engines.gossip.secret_share_policy import secret_share_probability
+from npc_engine.engines.ports.gossip_port import GossipGraphPort
+from npc_engine.engines.relationship.standing import derive_standing
 from npc_engine.retrieval.embedding_index import EmbeddingIndex
+from npc_engine.utils.logging import get_logger
+
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
 
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = get_logger(__name__)
+
+_SECRET_SEED_NAMESPACE = "gossip_secret"
 
 
-CYPHER_SELECT_EVENT = """
-MATCH (a:Character {id: $sharer_id})-[k:KNOWS_ABOUT]->(e:Event)
-RETURN e.id AS event_id,
-       e.summary AS summary,
-       e.severity AS severity
-ORDER BY e.occurred_at DESC
-LIMIT 1
-"""
+def _secret_rng_seed(sharer_id: str, receiver_id: str, tick_id: int) -> int:
+    """Derive a deterministic integer seed for secret-propagation RNG.
 
-CYPHER_RELATION_TRUST = """
-MATCH (a:Character {id: $sharer_id})-[r:RELATES_TO]->(b:Character {id: $receiver_id})
-RETURN r.trust AS trust
-"""
+    Args:
+        sharer_id: ID of the NPC sharing the secret.
+        receiver_id: ID of the NPC receiving the secret.
+        tick_id: Current game tick.
 
-CYPHER_SELECT_SECRET = """
-MATCH (a:Character {id: $sharer_id})-[:KNOWS_SECRET]->(s:Secret)
-RETURN s.id AS secret_id, s.severity AS severity
-ORDER BY s.severity DESC
-LIMIT 1
-"""
+    Returns:
+        A 64-bit integer seed suitable for ``random.Random(seed)``.
+    """
+    raw = f"{_SECRET_SEED_NAMESPACE}|{sharer_id}|{receiver_id}|{tick_id}"
+    return int.from_bytes(hashlib.sha256(raw.encode()).digest()[:8], byteorder="little")
 
 
 class GossipHandler:
@@ -60,133 +78,317 @@ class GossipHandler:
         settings: Settings,
         embedding_index: EmbeddingIndex,
         weight_config: GossipWeightConfig,
+        emotion_updater: EmotionUpdater | None = None,
+        gossip_repo: GossipGraphPort = None,  # type: ignore[assignment]
     ) -> None:
         """Initialise the gossip handler.
 
         Args:
-            settings: Application settings (GOSSIP_DISTORTION_BASE).
+            settings: Application settings (GOSSIP_DISTORTION_BASE, RUMOR_EMOTION_SEVERITY_THRESHOLD).
             embedding_index: Vector index used to invalidate receiver embeddings after gossip.
             weight_config: Faction weight multipliers for pair selection and distortion.
+            emotion_updater: Optional emotion updater; when supplied, receivers of high-severity
+                events have their emotion state shocked toward agitated/melancholic.
+            gossip_repo: Gossip graph port; must be injected before calling run_tick.
         """
 
         self._settings = settings
         self._embedding_index = embedding_index
         self._weight_config = weight_config
+        self._emotion_updater = emotion_updater
+        self._gossip_repo: GossipGraphPort = gossip_repo
         self._lock = asyncio.Lock()
 
     async def run_tick(
         self,
-        session: AsyncSession,
+        *,
         tick_id: int,
         max_pairs: int = 20,
         npc_ids: list[str] | None = None,
-    ) -> dict:
-        """Execute one gossip tick: select pairs, distort, propagate, log, invalidate.
+    ) -> dict[str, Any]:
+        """Execute one gossip tick: select pairs, batch-read events+trust, distort, batch-write.
+
+        Replaces the previous N×3 sequential Neo4j round-trips with a single batch
+        read (event + trust for all pairs) and a single batch write (all propagations).
+        Conditional operations (log_gossip, rumor creation, emotion shock, secret
+        propagation) still run per-pair after the batch write.
 
         Args:
-            session: Active Neo4j async session.
             tick_id: Current game tick identifier.
             max_pairs: Maximum number of NPC pairs to process.
             npc_ids: Optional allowlist; only pairs containing at least one listed ID are processed.
+            **_: Swallows legacy ``session=`` kwarg from the tick scheduler during migration.
 
         Returns:
-            Dict with keys ``tick_id``, ``pairs`` (pairs evaluated), and ``propagated`` (successful propagations).
+            Dict with keys ``tick_id``, ``pairs`` (pairs evaluated), ``propagated``
+            (successful propagations), and ``seeds_used`` (mapping of
+            ``"sharer_id→receiver_id"`` to the deterministic seed used for that pair).
         """
+        assert self._gossip_repo is not None, "gossip_repo must be injected before calling run_tick"
 
         async with self._lock:
             pairs = await select_pairs(
-                session=session,
+                repo=self._gossip_repo,
                 max_pairs=max_pairs,
                 weight_config=self._weight_config,
             )
             if npc_ids:
                 allowed = set(npc_ids)
                 pairs = [pair for pair in pairs if pair[0]["id"] in allowed or pair[1]["id"] in allowed]
-            propagated = 0
-            for sharer, receiver, _loc, faction_ctx in pairs:
-                event_result = await session.run(CYPHER_SELECT_EVENT, sharer_id=sharer["id"])
-                event_record = await event_result.single()
-                if event_record is None:
-                    continue
-                trust_result = await session.run(
-                    CYPHER_RELATION_TRUST,
-                    sharer_id=sharer["id"],
-                    receiver_id=receiver["id"],
-                )
-                trust_record = await trust_result.single()
-                trust = int(trust_record["trust"]) if trust_record is not None else 50
-                best_standing: int | None = faction_ctx.get("best_standing")
-                distortion = gossip_distort(
-                    event_summary=str(event_record["summary"]),
-                    sharer_honesty=int(sharer.get("honesty", 50)),
-                    sharer_receiver_trust=trust,
-                    event_severity=int(event_record["severity"]),
-                    tick_id=tick_id,
-                    distortion_base=self._settings.GOSSIP_DISTORTION_BASE,
-                    faction_standing=best_standing,
-                    hostile_distortion_factor=self._weight_config.hostile_distortion_factor,
-                    is_canonical=bool(event_record.get("is_canonical", False)),
-                )
-                event_id = str(event_record["event_id"])
-                await propagate(
-                    session=session,
-                    receiver_id=receiver["id"],
-                    source_character_id=sharer["id"],
-                    event_id=event_id,
-                    tick_id=tick_id,
-                    distortion=distortion,
-                )
-                if distortion.distortion_level >= self._settings.RUMOR_DISTORTION_THRESHOLD:
-                    try:
-                        rumor_id = await create_rumor(
-                            session,
-                            content=distortion.summary,
-                            origin_event_id=event_id,
-                            created_at_tick=tick_id,
-                            severity=int(event_record["severity"]),
-                            is_fabricated=False,
-                        )
-                        await believe_rumor(
-                            session,
-                            character_id=receiver["id"],
-                            rumor_id=rumor_id,
-                            confidence=distortion.distortion_level,
-                            tick=tick_id,
-                            from_character_id=sharer["id"],
-                        )
-                    except Exception:
-                        LOGGER.exception("Failed to record rumor for event %s", event_id)
-                trust_delta = 1 if distortion.distortion_type is None else -1
-                await log_gossip(
-                    session=session,
-                    src_id=sharer["id"],
-                    dst_id=receiver["id"],
-                    tick_id=tick_id,
-                    trust_delta=trust_delta,
-                )
-                await invalidate_embedding_safely(
-                    embedding_index=self._embedding_index,
-                    item_id=receiver["id"],
-                    logger=LOGGER,
-                    entity_label="receiver",
-                )
-                propagated += 1
 
-                # Secret propagation: lower base probability, higher distortion.
-                if random.random() < SECRET_BASE_PROBABILITY:
-                    secret_result = await session.run(
-                        CYPHER_SELECT_SECRET, sharer_id=sharer["id"]
+            return await self._process_pairs(pairs=pairs, tick_id=tick_id)
+
+    async def _process_pairs(
+        self,
+        pairs: list[Any],
+        tick_id: int,
+    ) -> dict[str, Any]:
+        """Batch-read event+trust, compute distortions, batch-write, then run per-pair side effects.
+
+        Args:
+            pairs: List of (sharer, receiver, loc, faction_ctx) tuples from pair_selector.
+            tick_id: Current game tick.
+
+        Returns:
+            Dict with keys ``tick_id``, ``pairs``, ``propagated``, and ``seeds_used``.
+        """
+        pair_lookup: dict[tuple[str, str], tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = {}
+        pair_params: list[dict[str, str]] = []
+        for sharer, receiver, _loc, faction_ctx in pairs:
+            key = (sharer["id"], receiver["id"])
+            pair_lookup[key] = (sharer, receiver, faction_ctx)
+            pair_params.append({"sharer_id": sharer["id"], "receiver_id": receiver["id"]})
+
+        batch_rows = await self._gossip_repo.select_batch_event_trust(pairs=pair_params)
+        event_trust_map: dict[tuple[str, str], dict[str, Any]] = {
+            (row["sharer_id"], row["receiver_id"]): row
+            for row in batch_rows
+        }
+
+        write_params, distortion_map, seeds_used = self._build_write_params(
+            pair_lookup=pair_lookup,
+            event_trust_map=event_trust_map,
+            tick_id=tick_id,
+        )
+
+        await self._gossip_repo.write_batch_knowledge_propagation(writes=write_params)
+
+        propagated = await self._run_side_effects(
+            pair_lookup=pair_lookup,
+            event_trust_map=event_trust_map,
+            distortion_map=distortion_map,
+            tick_id=tick_id,
+        )
+
+        return {
+            "tick_id": tick_id,
+            "pairs": len(pairs),
+            "propagated": propagated,
+            "seeds_used": seeds_used,
+        }
+
+    def _build_write_params(
+        self,
+        pair_lookup: dict[tuple[str, str], tuple[dict[str, Any], dict[str, Any], dict[str, Any]]],
+        event_trust_map: dict[tuple[str, str], dict[str, Any]],
+        tick_id: int,
+    ) -> tuple[list[dict[str, Any]], dict[tuple[str, str], dict[str, Any]], dict[str, int]]:
+        """Compute per-pair distortions and assemble batch write parameters.
+
+        Args:
+            pair_lookup: Mapping of (sharer_id, receiver_id) → (sharer, receiver, faction_ctx).
+            event_trust_map: Mapping of (sharer_id, receiver_id) → event+trust row.
+            tick_id: Current game tick.
+
+        Returns:
+            Tuple of (write_params list, distortion_map dict[str, Any] keyed by (sharer_id, receiver_id),
+            seeds_used dict[str, Any] keyed by ``"sharer_id→receiver_id"``).
+        """
+        write_params: list[dict[str, Any]] = []
+        distortion_map: dict[tuple[str, str], dict[str, Any]] = {}
+        seeds_used: dict[str, int] = {}
+
+        for key, (sharer, receiver, faction_ctx) in pair_lookup.items():
+            row = event_trust_map.get(key)
+            if row is None:
+                continue
+
+            trust = int(row["trust"])
+            best_standing: int | None = faction_ctx.get("best_standing")
+            severity_int = int(row["severity"])
+            honesty_int = int(sharer.get("honesty", 50))
+
+            distortion_probability = compute_distortion_probability(
+                honesty=honesty_int,
+                trust=trust,
+                severity=severity_int,
+                base=self._settings.GOSSIP_DISTORTION_BASE,
+            )
+            seed = compute_seed_value(
+                summary=str(row["summary"]),
+                honesty=honesty_int,
+                trust=trust,
+                tick_id=tick_id,
+            )
+            pair_key = f"{sharer['id']}→{receiver['id']}"
+            seeds_used[pair_key] = seed
+            LOGGER.debug(
+                "gossip_pair sharer=%s receiver=%s tick=%d "
+                "distortion_probability=%.3f seed=%d",
+                sharer["id"],
+                receiver["id"],
+                tick_id,
+                distortion_probability,
+                seed,
+            )
+
+            belief_confidence = compute_confidence(
+                source_trust=trust, event_severity=severity_int
+            )
+            distortion = gossip_distort(
+                event_summary=str(row["summary"]),
+                sharer_honesty=honesty_int,
+                sharer_receiver_trust=trust,
+                event_severity=severity_int,
+                tick_id=tick_id,
+                distortion_base=self._settings.GOSSIP_DISTORTION_BASE,
+                faction_standing=best_standing,
+                hostile_distortion_factor=self._weight_config.hostile_distortion_factor,
+                is_canonical=bool(row.get("is_canonical", False)),
+                receiver_confidence=belief_confidence,
+                confidence_high_threshold=self._weight_config.confidence_high_threshold,
+                confidence_low_threshold=self._weight_config.confidence_low_threshold,
+            )
+            knowledge_state: KnowledgeState = (
+                KNOWLEDGE_STATE_KNOWS if distortion.distortion_type is None else KNOWLEDGE_STATE_RUMOR
+            )
+            write_entry: dict[str, Any] = {
+                "receiver_id": receiver["id"],
+                "event_id": str(row["event_id"]),
+                "knowledge_state": knowledge_state,
+                "distortion_type": distortion.distortion_type,
+                "distortion_level": distortion.distortion_level,
+                "distorted_summary": distortion.summary,
+                "tick_id": tick_id,
+                "source_character_id": sharer["id"],
+                "belief_confidence": belief_confidence,
+            }
+            write_params.append(write_entry)
+            distortion_map[key] = write_entry
+
+        return write_params, distortion_map, seeds_used
+
+    async def _run_side_effects(
+        self,
+        pair_lookup: dict[tuple[str, str], tuple[dict[str, Any], dict[str, Any], dict[str, Any]]],
+        event_trust_map: dict[tuple[str, str], dict[str, Any]],
+        distortion_map: dict[tuple[str, str], dict[str, Any]],
+        tick_id: int,
+    ) -> int:
+        """Run conditional per-pair side effects after the batch write.
+
+        Side effects: rumor creation, emotion shock, relation-log update,
+        embedding invalidation, and secret propagation.
+
+        Args:
+            pair_lookup: Mapping of (sharer_id, receiver_id) → (sharer, receiver, faction_ctx).
+            event_trust_map: Mapping of (sharer_id, receiver_id) → event+trust row.
+            distortion_map: Mapping of (sharer_id, receiver_id) → write params dict.
+            tick_id: Current game tick.
+
+        Returns:
+            Number of pairs successfully propagated.
+        """
+        propagated = 0
+        for key, write in distortion_map.items():
+            sharer, receiver, _faction_ctx = pair_lookup[key]
+            row = event_trust_map[key]
+            severity_int = int(row["severity"])
+            event_id = write["event_id"]
+
+            if write["distortion_level"] >= self._settings.RUMOR_DISTORTION_THRESHOLD:
+                try:
+                    rumor_id = await self._gossip_repo.create_rumor(
+                        content=write["distorted_summary"],
+                        origin_event_id=event_id,
+                        created_at_tick=tick_id,
+                        severity=severity_int,
+                        is_fabricated=False,
                     )
-                    secret_record = await secret_result.single()
-                    if secret_record is not None:
-                        distorted = random.random() < SECRET_DISTORTION_CHANCE
-                        await propagate_secret(
-                            session=session,
-                            receiver_id=receiver["id"],
-                            secret_id=str(secret_record["secret_id"]),
-                            source_character_id=sharer["id"],
-                            tick_id=tick_id,
-                            distorted=distorted,
-                        )
+                    await self._gossip_repo.believe_rumor(
+                        character_id=receiver["id"],
+                        rumor_id=rumor_id,
+                        confidence=write["belief_confidence"],
+                        tick=tick_id,
+                        from_character_id=sharer["id"],
+                    )
+                except Exception:
+                    LOGGER.exception("Failed to record rumor for event %s", event_id)
+                    raise
 
-            return {"tick_id": tick_id, "pairs": len(pairs), "propagated": propagated}
+            if (
+                self._emotion_updater is not None
+                and severity_int >= self._settings.RUMOR_EMOTION_SEVERITY_THRESHOLD
+            ):
+                await self._emotion_updater.apply_event_shock(
+                    npc_id=receiver["id"],
+                    severity=severity_int,
+                )
+                LOGGER.info(
+                    "emotion_shock npc_id=%s severity=%d tick=%d",
+                    receiver["id"],
+                    severity_int,
+                    tick_id,
+                )
+
+            trust_delta = 1 if write["distortion_type"] is None else -1
+            await self._gossip_repo.log_gossip(
+                src_id=sharer["id"],
+                dst_id=receiver["id"],
+                tick_id=tick_id,
+                trust_delta=trust_delta,
+            )
+            await invalidate_embedding_safely(
+                embedding_index=self._embedding_index,
+                item_id=receiver["id"],
+                logger=LOGGER,
+                entity_label="receiver",
+            )
+            propagated += 1
+
+            await self._maybe_propagate_secret(
+                sharer_id=sharer["id"], receiver_id=receiver["id"],
+                trust=int(row["trust"]), tick_id=tick_id,
+            )
+
+        return propagated
+
+    async def _maybe_propagate_secret(
+        self, *, sharer_id: str, receiver_id: str, trust: int, tick_id: int,
+    ) -> None:
+        """Share a secret from sharer to receiver with a Standing-gated probability (F3.1).
+
+        The share probability tracks the sharer's Standing band toward the receiver
+        (derived from the relationship trust scalar already in scope) — HOSTILE/WARY
+        never confide; ALLIED confide most. Distortion chance is unchanged.
+        """
+        standing = derive_standing(trust=trust, fear=0, affection=0)
+        secret_seed = _secret_rng_seed(sharer_id, receiver_id, tick_id)
+        LOGGER.debug(
+            "gossip_secret_rng seed=%d sharer=%s receiver=%s tick=%d standing=%s",
+            secret_seed, sharer_id, receiver_id, tick_id, standing.value,
+        )
+        rng = random.Random(secret_seed)
+        if rng.random() >= secret_share_probability(standing):
+            return
+        secret_record = await self._gossip_repo.select_gossip_secret(sharer_id=sharer_id)
+        if secret_record is None:
+            return
+        distorted = rng.random() < SECRET_DISTORTION_CHANCE
+        await self._gossip_repo.propagate_secret(
+            receiver_id=receiver_id,
+            secret_id=str(secret_record["secret_id"]),
+            source_character_id=sharer_id,
+            tick_id=tick_id,
+            distorted=distorted,
+        )

@@ -5,7 +5,7 @@ Purpose: Read-only Cypher queries for Army, ResourceNode, and territorial
          control (Phase 7.4 Strategy/4X).
 Does NOT: write to the graph, call LLMs, or import engine-layer code.
 Dependencies injected: None (pure Cypher, session passed per call).
-Used by: npc_engine.engines.military.military_engine
+Used by: npc_engine.graph.repositories.military_repository.Neo4jMilitaryRepository
 """
 
 from __future__ import annotations
@@ -114,6 +114,33 @@ async def get_controlled_locations(
                ctrl.contested_by_faction_id AS contested_by_faction_id
         """,
         faction_id=faction_id,
+    )
+    return [dict(r) async for r in result]
+
+
+async def get_faction_resource_nodes(
+    session: AsyncSession,
+) -> list[dict[str, Any]]:
+    """Fetch all (faction, resource_node) pairs for non-depleted resources.
+
+    Returns one row per faction+resource combination where the faction controls
+    the producing location and the resource node is not fully depleted.
+
+    Args:
+        session: Active Neo4j async session.
+
+    Returns:
+        List of dicts: faction_id, resource_node_id, yield_per_tick, depletion.
+    """
+    result = await session.run(
+        """
+        MATCH (f:Faction)-[:CONTROLS]->(loc:Location)-[:PRODUCES]->(r:ResourceNode)
+        WHERE r.depletion > 0
+        RETURN f.id AS faction_id,
+               r.id AS resource_node_id,
+               r.yield_per_tick AS yield_per_tick,
+               r.depletion AS depletion
+        """
     )
     return [dict(r) async for r in result]
 

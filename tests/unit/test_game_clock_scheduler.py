@@ -19,7 +19,7 @@ class FakeHandler:
     def __init__(self):
         self.calls: list[int] = []
 
-    async def run_tick(self, session, tick_id: int, max_pairs: int = 20):
+    async def run_tick(self, *, tick_id: int, max_pairs: int = 20):
         self.calls.append(tick_id)
         return {"tick_id": tick_id}
 
@@ -30,11 +30,11 @@ class FailingHandler(FakeHandler):
         self._fail_on_tick = fail_on_tick
         self._failed = False
 
-    async def run_tick(self, session, tick_id: int, max_pairs: int = 20):
+    async def run_tick(self, *, tick_id: int, max_pairs: int = 20):
         if tick_id == self._fail_on_tick and not self._failed:
             self._failed = True
             raise RuntimeError("simulated failure")
-        return await super().run_tick(session=session, tick_id=tick_id, max_pairs=max_pairs)
+        return await super().run_tick(tick_id=tick_id, max_pairs=max_pairs)
 
 
 class _FakeResult:
@@ -101,11 +101,11 @@ class FirstTickFailingHandler(FakeHandler):
         super().__init__()
         self._failed_once = False
 
-    async def run_tick(self, session, tick_id: int, max_pairs: int = 20):
+    async def run_tick(self, *, tick_id: int, max_pairs: int = 20):
         if not self._failed_once:
             self._failed_once = True
             raise RuntimeError("transient tick failure")
-        return await super().run_tick(session=session, tick_id=tick_id, max_pairs=max_pairs)
+        return await super().run_tick(tick_id=tick_id, max_pairs=max_pairs)
 
 
 class BlockedLeaseRepo(FakeLeaseRepo):
@@ -152,7 +152,8 @@ async def test_scheduler_processes_crossed_intervals_when_jump_advancing() -> No
 
 
 @pytest.mark.asyncio
-async def test_scheduler_does_not_replay_completed_handler_after_retry() -> None:
+async def test_throwing_event_does_not_stop_loop_and_clock_advances() -> None:
+    # S1.3: a throwing engine must not kill the loop; clock advances normally.
     clock = GameClock(mode="game_driven")
     gossip = FakeHandler()
     event = FailingHandler(fail_on_tick=3)
@@ -160,16 +161,20 @@ async def test_scheduler_does_not_replay_completed_handler_after_retry() -> None
 
     fake_session = cast(Any, FakeSession())
 
-    with pytest.raises(RuntimeError):
-        await scheduler.advance(session=fake_session, tick_delta=3, time_delta_seconds=3)
+    # First advance: event throws on tick 3, but loop must not raise.
+    result = await scheduler.advance(session=fake_session, tick_delta=3, time_delta_seconds=3)
 
+    # Gossip ran on tick 2 (interval=2). Event failed but response entry is absent, not an error.
     assert gossip.calls == [2]
     assert event.calls == []
+    # Clock advanced past the failing tick — tick 3 done, not retried.
+    assert result["clock"]["tick_id"] == 3
 
-    await scheduler.advance(session=fake_session, tick_delta=3, time_delta_seconds=3)
-
-    assert gossip.calls == [2]
-    assert event.calls == [3]
+    # Second advance covers ticks 4–6; FailingHandler._failed=True so event runs on tick 6.
+    result2 = await scheduler.advance(session=fake_session, tick_delta=3, time_delta_seconds=3)
+    assert gossip.calls == [2, 4, 6]
+    assert event.calls == [6]
+    assert result2["clock"]["tick_id"] == 6
 
 
 @pytest.mark.asyncio
@@ -210,7 +215,8 @@ async def test_distributed_lease_allows_only_one_scheduler_to_run_tick() -> None
 
 
 @pytest.mark.asyncio
-async def test_distributed_lease_retries_tick_after_mark_failed() -> None:
+async def test_distributed_lease_engine_failure_is_isolated_and_lease_marked_failed() -> None:
+    # S1.3: distributed lease engine failure is caught; loop continues; lease marked failed.
     shared_lease = FakeLeaseRepo()
     gossip = FirstTickFailingHandler()
     event = FakeHandler()
@@ -225,14 +231,18 @@ async def test_distributed_lease_retries_tick_after_mark_failed() -> None:
     )
 
     fake_session = cast(Any, FakeSession())
-    with pytest.raises(RuntimeError):
-        await scheduler.advance(session=fake_session, tick_delta=1, time_delta_seconds=1)
+    # Must not raise — engine failure is isolated.
+    result = await scheduler.advance(session=fake_session, tick_delta=1, time_delta_seconds=1)
 
+    # Lease was marked failed and gossip did not produce a result.
     assert shared_lease.failed == [("gossip", 1)]
     assert gossip.calls == []
+    # Clock still advanced past the failing tick.
+    assert result["clock"]["tick_id"] == 1
 
+    # Second advance processes tick 2; gossip succeeds (FirstTickFailingHandler one-shot).
     await scheduler.advance(session=fake_session, tick_delta=1, time_delta_seconds=1)
-    assert gossip.calls == [1]
+    assert gossip.calls == [2]
 
 
 @pytest.mark.asyncio

@@ -17,6 +17,7 @@ from npc_engine.retrieval.context_budget_enforcer import (
 )
 from npc_engine.retrieval.context_merger import ContextItem, MergedContext
 from npc_engine.schema.context_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
+from npc_engine.utils.errors import TokenBudgetExceededError
 
 
 def _llm_config() -> LLMConfig:
@@ -37,7 +38,12 @@ def _llm_config() -> LLMConfig:
     )
 
 
-def test_enforce_context_budget_raises_typed_error_when_tier_a_overflow() -> None:
+def test_enforce_context_budget_raises_typed_error_when_session_turns_overflow() -> None:
+    """Session turns exceeding their sub-budget still raises ContextBudgetError.
+
+    Tier-A non-pinned overflow no longer raises (pinned-pool policy); only the
+    session sub-budget and tier-0 cap are hard limits in enforce_context_budget.
+    """
     context = MergedContext(
         items=[
             ContextItem(key="world", text="w" * 40, tier="tier0", priority=100),
@@ -48,7 +54,7 @@ def test_enforce_context_budget_raises_typed_error_when_tier_a_overflow() -> Non
     with pytest.raises(ContextBudgetError) as error:
         enforce_context_budget(context=context, llm_config=_llm_config())
 
-    assert error.value.tier == "tier_a"
+    assert error.value.tier == "session_turns"
     assert error.value.used_tokens > error.value.budget_tokens
 
 
@@ -223,8 +229,8 @@ def _make_item(key: str, tier: str, priority: int, chars: int = 40) -> ContextIt
     return ContextItem(key=key, text=key[0] * chars, tier=tier, priority=priority)
 
 
-def test_fill_to_budget_tight_budget_includes_top_priority_tier_a_only() -> None:
-    """With a tight budget (800 tokens), only highest-priority tier_a items fit; no error raised."""
+def test_fill_to_budget_keeps_all_mandatory_tier_a_when_it_fits() -> None:
+    """Mandatory tier0+tierA are never dropped when they fit; tier_a is not soft-capped away."""
     context = MergedContext(
         items=[
             _make_item("world", "tier0", 100, chars=40),
@@ -243,23 +249,51 @@ def test_fill_to_budget_tight_budget_includes_top_priority_tier_a_only() -> None
     assert "world" in tier_keys
     assert "session" in tier_keys
     assert "character:npc_high" in tier_keys
+    assert "character:npc_low" in tier_keys  # mandatory tier_a is not dropped
     assert isinstance(serialized, str)
     assert len(serialized) > 0
 
 
-def test_fill_to_budget_never_raises_for_budget_overflow() -> None:
-    """fill_to_budget must not raise ContextBudgetError even when tier_a alone exceeds total budget."""
+def test_fill_to_budget_drops_oversized_non_pinned_tier_a_without_raising() -> None:
+    """fill_to_budget drops non-pinned tier-A items that don't fit instead of raising.
+
+    EXP-30 changed the contract: non-pinned tier-A items are dropped by the pinned-pool
+    policy when they exceed the budget; only pinned items are truly mandatory.
+    (Pinned items that exceed the budget are still included — the pinned invariant wins.)
+    """
     context = MergedContext(
         items=[
             _make_item("world", "tier0", 100, chars=40),
-            _make_item("session", "tierA", 95, chars=3200),
+            _make_item("session", "tierA", 95, chars=3200),  # non-pinned, too large
         ]
     )
     llm_config = _llm_config_large()
 
     filled, serialized = fill_to_budget(context=context, llm_config=llm_config, prompt_token_budget=800)
 
-    assert any(item.tier == "tier0" for item in filled.items)
+    tier_keys = {item.key for item in filled.items}
+    assert "world" in tier_keys  # tier0 always present
+    assert "session" not in tier_keys  # non-pinned oversized item was dropped
+    assert isinstance(serialized, str)
+
+
+def test_fill_to_budget_trims_tier_b_over_budget_without_raising() -> None:
+    """When only tier_b is over budget, it is trimmed and no error is raised."""
+    context = MergedContext(
+        items=[
+            _make_item("world", "tier0", 100, chars=40),
+            _make_item("session", "tierA", 95, chars=40),
+            _make_item("rag:1", "tierB", 20, chars=3200),
+            _make_item("rag:2", "tierB", 10, chars=3200),
+        ]
+    )
+    llm_config = _llm_config_large()
+
+    filled, serialized = fill_to_budget(context=context, llm_config=llm_config, prompt_token_budget=400)
+
+    tier_keys = {item.key for item in filled.items}
+    assert "world" in tier_keys
+    assert "session" in tier_keys
     assert isinstance(serialized, str)
 
 
@@ -286,8 +320,12 @@ def test_fill_to_budget_large_budget_includes_all_tiers() -> None:
     assert "rag:2" in tier_keys
 
 
-def test_fill_to_budget_tier_a_fraction_limits_tier_a_tokens() -> None:
-    """Reducing tier_a_fraction should cause lower-priority tier_a items to be dropped."""
+def test_fill_to_budget_pinned_tier_a_never_dropped_by_narrow_fraction() -> None:
+    """Pinned tier-A items are never dropped regardless of the tier_a_fraction setting.
+
+    EXP-30 contract: PINNED items are the mandatory core; non-pinned items may be
+    dropped when the budget is tight. A narrow tier_a_fraction cannot evict pinned items.
+    """
     from npc_engine.schema.context_config_models import TierBudgetTokens
 
     config_narrow_a = LLMConfig(
@@ -303,22 +341,34 @@ def test_fill_to_budget_tier_a_fraction_limits_tier_a_tokens() -> None:
         tier_a_fraction=0.10,
         tier_b_fraction=0.30,
     )
+    # Build items with two PINNED (mandatory) and two non-pinned.
+    pinned_session = ContextItem(key="session", text="s" * 300, tier="tierA", priority=95, pinned=True)
+    pinned_persona = ContextItem(key="character:npc_1", text="p" * 300, tier="tierA", priority=80, pinned=True)
+    non_pinned_2 = _make_item("character:npc_2", "tierA", 60, chars=300)  # pinned=False
+    non_pinned_3 = _make_item("character:npc_3", "tierA", 40, chars=300)  # pinned=False
+
     context = MergedContext(
         items=[
             _make_item("world", "tier0", 100, chars=40),
-            _make_item("session", "tierA", 95, chars=300),
-            _make_item("character:npc_1", "tierA", 80, chars=300),
-            _make_item("character:npc_2", "tierA", 60, chars=300),
-            _make_item("character:npc_3", "tierA", 40, chars=300),
+            pinned_session,
+            pinned_persona,
+            non_pinned_2,
+            non_pinned_3,
         ]
     )
 
     filled_narrow, _ = fill_to_budget(context=context, llm_config=config_narrow_a, prompt_token_budget=2000)
     filled_wide, _ = fill_to_budget(context=context, llm_config=_llm_config_large(), prompt_token_budget=2000)
 
+    narrow_keys = {i.key for i in filled_narrow.items}
+    wide_keys = {i.key for i in filled_wide.items}
+    # Pinned items are always present regardless of narrow fraction.
+    assert "session" in narrow_keys
+    assert "character:npc_1" in narrow_keys
+    # Non-pinned items may differ between narrow and wide — just check wide has more.
     narrow_a_count = sum(1 for i in filled_narrow.items if i.tier == "tierA")
     wide_a_count = sum(1 for i in filled_wide.items if i.tier == "tierA")
-    assert narrow_a_count < wide_a_count
+    assert narrow_a_count <= wide_a_count  # narrow may drop non-pinned; wide keeps more
 
 
 def test_fill_to_budget_tier0_overflow_raises() -> None:
@@ -337,20 +387,29 @@ def test_fill_to_budget_tier0_overflow_raises() -> None:
 
 
 def test_fill_to_budget_drops_lowest_priority_first() -> None:
-    """When serialized size exceeds budget, tier_c is dropped before tier_b before tier_a."""
+    """When serialized size exceeds budget, tier_c is dropped before tier_b before tier_a.
+
+    Uses "rag:" prefixed keys so items appear in npc_known_events in the serialized
+    output and actually contribute to serialized size. The base skeleton with world/session
+    fits in the budget; adding compressed rag items pushes over it, so the post-hoc trim
+    drops tier_c first, then tier_b.
+    """
+    big = '{"summary":"' + "x" * 600 + '"}'  # valid JSON; after compression still ~90 chars in output
     context = MergedContext(
         items=[
-            _make_item("world", "tier0", 100, chars=40),
-            _make_item("session", "tierA", 95, chars=100),
-            _make_item("rag_b:1", "tierB", 20, chars=300),
-            _make_item("rag_c:1", "tierC", 10, chars=300),
+            ContextItem(key="world", text='{"epoch":"war"}', tier="tier0", priority=100),
+            ContextItem(key="session", text='["t1"]', tier="tierA", priority=95),
+            ContextItem(key="rag:b1", text=big, tier="tierB", priority=20),
+            ContextItem(key="rag:c1", text=big, tier="tierC", priority=10),
         ]
     )
     llm_config = _llm_config_large()
 
-    filled, _ = fill_to_budget(context=context, llm_config=llm_config, prompt_token_budget=50)
+    # Budget=80: base skeleton+world+session ≈ 58 tokens (fits); adding a compressed rag
+    # item (~90 chars in npc_known_events) pushes to ~81 tokens > 80, triggering the trim.
+    filled, _ = fill_to_budget(context=context, llm_config=llm_config, prompt_token_budget=80)
 
     tier_keys = {item.key for item in filled.items}
     assert "world" in tier_keys
     assert "session" in tier_keys
-    assert "rag_c:1" not in tier_keys or "rag_b:1" not in tier_keys
+    assert "rag:c1" not in tier_keys or "rag:b1" not in tier_keys

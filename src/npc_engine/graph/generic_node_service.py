@@ -1,10 +1,13 @@
 """
 generic_node_service.py - Registry-driven generic node CRUD operations.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: enforce auth scopes or execute edge mutations.
 
 Dependencies injected: AsyncSession, TypeRegistry (via _GenericGraphServiceBase).
 """
+from __future__ import annotations
 
 from typing import Any
 

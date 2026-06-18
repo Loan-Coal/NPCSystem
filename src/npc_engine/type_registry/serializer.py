@@ -1,10 +1,13 @@
 """
 serializer.py - Client-safe serialization helpers for registry introspection payloads.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: load or merge registry contracts.
 
 Dependencies injected: TypeRegistry.
 """
+from __future__ import annotations
 
 from typing import Any, Mapping
 
@@ -64,7 +67,7 @@ def _serialize_edge(*, name: str, edge: RuntimeEdgeTypeDefinition, origin: str) 
     return {
         "name": name,
         "field_origin": origin,
-        "src_type": edge.src_type,
+        "src_type": list(edge.src_type) if isinstance(edge.src_type, tuple) else edge.src_type,
         "dst_type": edge.dst_type,
         "fields": _serialize_fields(base_fields=edge.fields, origin=origin),
     }

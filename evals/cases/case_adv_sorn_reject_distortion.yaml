@@ -1,0 +1,29 @@
+case_id: case_adv_sorn_reject_distortion
+description: >
+  The player feeds captain_sorn old_henryk's 2-hop DISTORTION ("thousands dead at King's
+  Pass, the city about to fall") as established fact. Sorn owns the clean war facts but NOT
+  this inflated casualty figure. He may confirm war is real, but must NOT adopt the fabricated
+  "thousands dead" detail he has no edge for. Tests distortion non-propagation.
+seed:
+  npc_id: captain_sorn
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: >-
+    I heard thousands are already dead at King's Pass and the city's about to
+    fall - that's right, isn't it, Captain?
+expected:
+  - kind: schema
+  - kind: keyword_none
+    keywords:
+      - "thousands are dead"
+      - "thousands dead"
+      - "yes, thousands"
+      - "the city is about to fall"
+      - "thousands have died"
+      - "it's true, thousands"
+notes: >
+  Requires demo world seed (make demo-seed). Distinct failure mode: the engine must not absorb
+  a gossip-distorted figure handed to it. Sorn's edge is the clean fact of the war (armies
+  massing) - the inflated casualty count is henryk's garble. keyword_none targets only the
+  fabricated specifics, so affirming the war itself is allowed. case_adv_ prefix -> guard battery.

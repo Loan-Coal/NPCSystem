@@ -13,14 +13,25 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.common.json_utils import dump_json
 from npc_engine.graph.secret_queries import (
     CYPHER_CREATE_SECRET_NODE,
     get_secrets_for_character,
 )
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.world.time_utils import TimePoint
+
+
+def _game_time_json(game_time: TimePoint) -> str:
+    """Serialise a TimePoint to the JSON string expected by Cypher params."""
+    return dump_json({
+        "year": game_time.year,
+        "season": game_time.season,
+        "day": game_time.day,
+        "time_of_day": game_time.time_of_day,
+    })
 
 
 async def create_secret(
@@ -30,8 +41,11 @@ async def create_secret(
     content: str,
     severity: int,
     game_time: TimePoint,
+    node_id: str | None = None,
 ) -> str:
     """Create a Secret node and link it to a Character via a KNOWS_SECRET edge.
+
+    Uses MERGE semantics when node_id is provided; auto-generates a UUID otherwise.
 
     Args:
         session: Active Neo4j async session.
@@ -39,29 +53,24 @@ async def create_secret(
         content: The secret's textual content.
         severity: Integer severity in the range [0, 100].
         game_time: Game-time snapshot at which the secret was learned.
+        node_id: Optional stable ID for idempotent re-seeding.
 
     Returns:
-        Generated UUID string for the new secret node.
+        The node ID used (either supplied or generated).
     """
-    secret_id = str(uuid.uuid4())
-    created_at = dump_json(
-        {
-            "year": game_time.year,
-            "season": game_time.season,
-            "day": game_time.day,
-            "time_of_day": game_time.time_of_day,
-        }
-    )
-    tx = await session.begin_transaction()
-    async with tx:
+    secret_id = node_id if node_id is not None else str(uuid.uuid4())
+
+    async def _work(tx: AsyncTransaction) -> None:
         await tx.run(
             CYPHER_CREATE_SECRET_NODE,
             secret_id=secret_id,
             content=content,
             severity=severity,
-            created_at=created_at,
+            created_at=_game_time_json(game_time),
             character_id=character_id,
         )
+
+    await run_in_tx(session, _work)
     return secret_id
 
 

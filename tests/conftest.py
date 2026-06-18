@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from npc_engine.scheduler.game_clock import GameClock
 from npc_engine.api.dependency_singletons import (
     get_context_cache,
     get_dialogue_engine_model_config,
@@ -23,7 +24,6 @@ from npc_engine.api.dependency_singletons import (
     get_gossip_handler,
     get_graph_db,
     get_idempotency_service,
-    get_idempotency_store,
     get_llm_config,
     get_memory_consolidation_engine,
     get_pricing_engine,
@@ -35,9 +35,19 @@ from npc_engine.api.dependency_singletons import (
     get_session_store,
     get_story_pacing_engine,
     get_tick_scheduler,
-    get_trade_engine,
     get_type_registry,
 )
+
+
+@pytest.fixture
+def fake_clock() -> GameClock:
+    """Return a deterministic GameClock at tick 0 for tick-dependent tests.
+
+    Use this fixture instead of constructing GameClock inline so tests are
+    self-documenting about clock behaviour. The clock is purely counter-based
+    and never blocks on real time — safe to use without sleeps.
+    """
+    return GameClock(mode="manual")
 
 
 @pytest.fixture(autouse=True)
@@ -72,10 +82,9 @@ def _clear_all() -> None:
     get_type_registry.cache_clear()
     get_llm_config.cache_clear()
     get_dialogue_engine_model_config.cache_clear()
-    get_idempotency_store.cache_clear()
     get_idempotency_service.cache_clear()
     get_reindex_job_service.cache_clear()
     get_pricing_engine.cache_clear()
-    get_trade_engine.cache_clear()
+    # get_trade_engine is per-request (not lru_cache) since SEV-24 — no cache to clear.
     get_context_cache.cache_clear()
     get_memory_consolidation_engine.cache_clear()

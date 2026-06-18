@@ -1,5 +1,5 @@
 edge_type: SATISFIES_NEED
-src_type: location
+src_type: [location, item]
 dst_type: need
 fields:
   magnitude:

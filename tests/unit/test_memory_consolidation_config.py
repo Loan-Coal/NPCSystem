@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from npc_engine.engines.llm_config_loader import get_config
+from npc_engine.engines.llm_runtime_config import get_config
 from npc_engine.engines.llm_config_models import EngineModelConfig
 from npc_engine.utils.errors import EngineModelConfigMisconfiguredError
 

@@ -1,10 +1,13 @@
 """
 enum_validator.py - Builds merged enum value sets from base and schema extensions.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: validate API requests directly.
 
 Dependencies injected: SchemaConfig.
 """
+from __future__ import annotations
 
 from dataclasses import dataclass
 

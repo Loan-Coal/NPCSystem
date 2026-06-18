@@ -1,0 +1,332 @@
+# FIX-SEV-24 — GraphRepository facade (engines depend on graph by interface)
+
+**Severity:** LARGE (architecture) · **Decision:** DEC-122 · **Multi-phase** · **Follow-on to SEV-21**
+
+## Problem
+After SEV-21 the graph layer owns transactions, but engines still import concrete graph functions and
+receive an `AsyncSession` per `run_tick` — 68 engine files reference `neo4j`. The graph layer is therefore
+not a swappable boundary: you cannot interpose a cache, swap the DB, or split graph into a microservice
+without touching every engine. Goal: engines depend on a small abstraction; the Neo4j implementation owns
+the session.
+
+## Port granularity: per graph-DOMAIN repositories (DEC-122, decided 2026-06-15)
+Ports are organized by **graph domain** and live together in `engines/ports/<domain>_port.py`; engines
+compose the domain Ports they need. Shared readers (`world_state_reader` x8, `relation_reader`,
+`player_location_reader`, `character_reader`) become a single shared domain Port reused across engines.
+
+## Pattern (one engine/cluster per commit)
+1. **Port Protocol** in `engines/ports/<domain>_port.py`: small, domain-typed methods, **no Neo4j types**.
+   The engine imports the Port and depends on it.
+2. **Neo4j adapter** in `graph/repositories/<domain>_repository.py`: holds the injected `GraphDB`, opens a
+   session per operation (`await graph_db.connect(); async with graph_db.get_session() as session: …`),
+   delegates to existing query/writer functions, and (for multi-write atomic ops) uses
+   `transaction_coordinator.run_in_tx`. Conforms to the Port **structurally** (no import of the engine Port —
+   keeps graph from importing engines).
+3. **Engine**: take the Port via `__init__` (DIP); replace direct graph calls with `self._<repo>.method(...)`;
+   drop the `session` usage. Keep `run_tick(..., **_)` so the scheduler's `session=` kwarg is accepted and
+   ignored during migration.
+4. **Composition root** (`api/dependencies*.py`): construct the adapter from `get_graph_db()` and inject it;
+   mypy verifies structural conformance here.
+5. **Tests**: engine tests mock the Port (no session); add an adapter unit test with a fake `GraphDB`.
+
+## Migrated slices
+- **need** (DONE, `c96476e`): `engines/ports/need_port.NeedGraphPort` +
+  `graph/repositories/need_repository.Neo4jNeedRepository`; `NeedDecayEngine` migrated. (Port relocated from
+  `engines/need/need_graph_port.py` → `engines/ports/` when the shared package was established.)
+- **mood** (DONE, `55f0b83`): `MoodGraphPort` + `Neo4jMoodRepository`; `MoodContagionEngine` migrated.
+- **clique** (DONE, `3539faa`): `GroupGraphPort` + `Neo4jGroupRepository`; `CliqueFormationEngine` migrated.
+- **skill** (DONE, `6fa83e3`): `SkillGraphPort` + `Neo4jSkillRepository`; `SkillProgressionEngine` migrated
+  (added the first behavioral unit test — was construction-only).
+- **routine** (DONE, `46b7e58`): `RoutineGraphPort` + `Neo4jRoutineRepository`; `RoutineEngine` migrated
+  (folds `record_departure` from the location-history domain).
+- **succession** (DONE, `81b0feb`): `PoliticalGraphPort` + `Neo4jPoliticalRepository`; `SuccessionEngine`
+  migrated (extracted `_grant_to_successor` to stay under R006; ratcheted baseline 143->142).
+- **agenda** (DONE, `df6dd0e`): **reuses** the political port/adapter (extended with 3 agenda methods);
+  `AgendaEngine` migrated — the per-graph-domain payoff (one repository, two engines).
+- **story_pacing** (DONE, `5c2c9b9`): `StoryPacingGraphPort` + the **shared** `WorldStateGraphPort`
+  (`get_world_state`/`upsert_world_state`, reusable by the ~8 world-state consumers) + their adapters.
+- **treaty** (DONE, `7ab17a8`): `TreatyGraphPort` + `Neo4jTreatyRepository` (extracted `_count_active_violations`
+  for R006); added a behavioral test (was construction-only).
+- **oath** (DONE, `58c6fca`): `PledgeGraphPort` + `Neo4jPledgeRepository` (mirrors treaty; `_count_violations`).
+- **memory_consolidation** (DONE, `c988521`): `MemoryConsolidationGraphPort` + `Neo4jMemoryConsolidationRepository`
+  (single-domain port spanning belief/memory/witness reads + the Memory write; engine drops `graph_db`/session,
+  fan-out helper renamed `_consolidate_bounded`). Wave 1 first checkbox.
+- **chapter** (DONE, `e167a53`): `ChapterGraphPort` + `Neo4jChapterRepository` (chapter_queries x5 +
+  chapter_writer x3 + faction_queries `get_faction_standings_summary`) **reusing the shared `WorldStateGraphPort`**
+  for the world_state read; engine injects both ports, `run_tick(*, tick_id, **_)` swallows `session=`; extracted
+  `_transition_chapter` for R006 (baseline 142->141) and named the link-severity magic number.
+
+- **military** (DONE, `4fc8b08`): `MilitaryGraphPort` + `Neo4jMilitaryRepository` (military_queries x3 +
+  military_control_writer x4 + military_writer x2). CLUSTER: the graph calls live in the two module-level
+  service functions, so the port is injected as the FIRST positional arg of `resolve_battles` /
+  `process_resource_yield` (+ their private helpers); `MilitaryEngine` holds the port and forwards it,
+  `run_tick(*, tick_id=0, **_)` swallows `session=`. Repointed the SEV-04 `_emit_battle_event` delegation
+  guard to the port. Wave 1 complete.
+
+- **shared-read-ports** (DONE, `ebdb72c`): `RelationReadPort` + `PlayerLocationReadPort` + `CharacterReadPort`
+  (`engines/ports/`) and their `Neo4jRelationReadRepository`/`Neo4jPlayerLocationReadRepository`/
+  `Neo4jCharacterReadRepository` adapters (`graph/repositories/`, session-per-call, delegate to
+  RelationReader / PlayerLocationReader / character_reader.get_npc_ids). Adapters+tests only — NOT wired into
+  any engine yet; reputation/player_model/director/proactive_dialogue slices inject these to drop their
+  per-tick reader construction. Tests: `tests/unit/test_shared_read_repositories.py`.
+
+- **emotion** (DONE, `cdeffc1`): `EmotionGraphPort` (write-through, no session) + `Neo4jEmotionRepository`
+  (holds its own stateless `EmotionGraphWriter`, session-per-call). `EmotionUpdater` now takes the port as
+  `writer=` and dropped `session` from `apply_dialogue_mood`/`apply_event_shock`/`_write_through`; the dialogue
+  call-site dropped `session=` (gossip already passed none). Not a tick engine, so no ignored-kwarg test —
+  added `test_emotion_repository.py` (adapter + session-free updater write-through). Wave 2 second checkbox.
+
+- **knowledge_learning** (DONE, `ecf9441`): `KnowledgeGraphPort` (find_conflicting_belief + write_belief,
+  incl. `is_deception`/`deception_goal_id` kwargs so the deception slice REUSES it) + `Neo4jKnowledgeRepository`
+  (session-per-call). `KnowledgeExtractionEngine` now constructor-injects the port and `process(*, npc_id,…)`
+  dropped the `session` param; dialogue call-site dropped it. Engine was previously UNWIRED (only built in tests),
+  so added `get_knowledge_extraction_engine()` in `dependencies_stores.py` (re-exported via dependency_singletons),
+  wired into `build_dialogue_handler` (gated by `KNOWLEDGE_LEARNING_ENABLED`, default False — inert). Factory placed
+  in dependencies_stores because dependencies.py is at the R001 300-line cap. Tests: `test_knowledge_repository.py`
+  (adapter) + rewrote `test_knowledge_extraction_engine.py` to mock the port.
+
+- **deception** (DONE, `5e95d8c`): **reuses** `KnowledgeGraphPort.write_belief` (no new port/adapter);
+  `DeceptionEngine` constructor-injects `knowledge_repo` and `plant_belief(*, …)` dropped the `session` arg.
+  Engine is UNWIRED (future caller — no api factory added). Test mocks the port. Wave 2 complete.
+
+- **reputation** (DONE, `644c183`): NEW `ReputationGraphPort` (write: `apply_trust_nudge`) +
+  `Neo4jReputationRepository`; `ReputationEngine` injects `RelationReadPort` (reads) + `ReputationGraphPort`
+  (replacing the `apply_nudge_fn` callable + per-tick `AsyncSession`); `run_tick(player_id, npc_ids, **_)`.
+  `ReputationTickAdapter` injects `CharacterReadPort` (sessionless `get_npc_ids()`), `run_tick(tick_id, **_)`,
+  and DROPPED `relation_reader_factory` + the `engine._reader` per-tick mutation. Factory wires all 3 repos
+  from `get_graph_db()` (repo imports moved to module top to keep `get_reputation_engine` under R006).
+  Wave 3 first checkbox; `engines/reputation/` is neo4j-free.
+
+- **player_model** (DONE, `aa06a0b`): NEW `PlayerModelGraphPort` (`upsert_player_model`) +
+  `Neo4jPlayerModelRepository`; `PlayerModelTick` injects the shared `RelationReadPort` +
+  `PlayerLocationReadPort` (replacing per-tick `RelationReader(session)` + `location_reader(session)`) and the
+  new write port; `run_tick(tick_id, **_)` (no session), `_update_pair` dropped its session/reader params.
+  Factory `get_player_model_tick` wires all 3 repos from `get_graph_db()` (local imports). Updated the
+  integration test to build the real adapters from a `GraphDB`. Wave 3 second checkbox; `engines/player_model/`
+  is neo4j-free.
+
+- **director** (DONE, `368ea27`): NO new port — `DirectorTick` injects the shared `RelationReadPort` +
+  `PlayerLocationReadPort` (replacing per-tick `RelationReader(session)` + `location_reader(session)` calls);
+  `_decide_for_pair` dropped its session/reader params. `run_tick(session, tick_id)` KEEPS the session and
+  forwards it ONLY to `event_handler.run_tick(session=…)` — director is NOT yet session-free and intentionally
+  retains the `neo4j.AsyncSession` import until the `events` slice lands. Factory `get_director_tick` wires the
+  two read adapters from `get_graph_db()`. Wave 3 third checkbox.
+
+- **planning** (DONE, `6e81c07`): NEW `PlanningGraphPort` (need reads `get_needs_for_character`/
+  `get_satisfying_location_for_need` + goal writes `create_goal`/`create_goal_targets_edge` + the planning
+  `move_character` wrapping routine_queries `update_character_location`) + `Neo4jPlanningRepository`
+  (session-per-call). Multi-port slice: `GoalFormer(planning_repo=)` and `ActionSelector(planning_repo=)` are
+  now constructor-injected + sessionless (removed their `AsyncSession`-per-call params and the adapter's None
+  defaults); `GoalFormerAdapter` injects goal_former + action_selector + the shared `CharacterReadPort`
+  (`get_npc_ids`) + `WorldStateGraphPort` (`get_world_state`), `run_tick(*, tick_id, **_)` swallows `session=`.
+  Factory `get_goal_formation_engine` wires the planning repo into both engines and the two read adapters into
+  the adapter from `get_graph_db()`. Tests mock the ports; `test_planning_repository.py` covers the adapter.
+  Wave 3 fourth checkbox; `engines/planning/` is neo4j-free.
+
+- **economy** (DONE, `25b50b7`): NEW `EconomyGraphPort` (pricing-context reads
+  `get_character_location_type`/`get_character_location_id`/`get_active_event_types_at_location`/
+  `check_faction_membership` + atomic `transfer_item_atomic`/`transfer_currency_atomic`) + `Neo4jEconomyRepository`
+  (session-per-call). `TradeEngine(pricing_engine=, economy_repo=)`; `evaluate_offer(...)` dropped its `session`
+  param and was split into `_compute_fair_price` + `_execute_transfers` to stay under R006. Route `/trade`
+  dropped its `session` Depends (the `/price` route keeps its own session — out of scope). PER-REQUEST factory:
+  `get_trade_engine` lost `@lru_cache` (builds a fresh `Neo4jEconomyRepository` per request), so removed its
+  `.cache_clear()` call + unused import from BOTH `tests/conftest.py` and `src/npc_engine/main.py`. Tests mock
+  the port; `test_economy_repository.py` covers the adapter. Wave 3 fifth checkbox; `engines/economy/` is neo4j-free.
+
+- **agenda-others** (DONE, `a56b719`): NEW `IntentGraphPort` (trigger reads `get_npc_location`/
+  `get_player_location`/`get_unmet_needs`/`get_witnessed_events`/`get_unresolved_goals` + queue writes
+  `enqueue_intent(intent, *, settings)`/`expire_old_intents(*, cutoff_tick)`) + `Neo4jIntentRepository`
+  (session-per-call, delegates to intent_queries + intent_queue_writer). CLUSTER: `score_intents(...)` in
+  `conversation_intent_service` is a module-level free fn, so the port is injected as its FIRST positional arg
+  (+ its `_score_need`/`_score_event`/`_score_goal` helpers); now sessionless. `IntentFormationEngine` injects
+  the shared `PlayerLocationReadPort` (get_collocated_pairs) + `IntentGraphPort`; `run_tick(tick_id, **_)`
+  swallows `session=`. Factory `get_intent_formation_engine` wires both ports from `get_graph_db()` (reuses
+  `Neo4jPlayerLocationReadRepository`). Tests mock the ports; `test_intent_repository.py` covers the adapter,
+  `test_intent_formation_engine.py` adds the ignored-kwarg test. Wave 3 sixth checkbox; `engines/agenda/` is
+  neo4j-free.
+
+- **investigation** (DONE, `da86320`): NEW `InvestigationGraphPort` (6 read fns: `get_evidence_for_event`/
+  `get_witnesses_of_event`/`get_suspects_for_event`/`get_deductions_for_character`/`get_contradicting_rumors`/
+  `get_alibi_window`) + `Neo4jInvestigationRepository` (session-per-call, delegates to investigation_queries).
+  `InvestigationEngine(investigation_repo=)` is query-only and sessionless: `get_investigation_context(*,
+  investigator_id, event_id)` + `_detect_alibi_contradictions(*, witnesses, event_id)` dropped the session
+  param. Route `investigations.py` dropped its `session = Depends(get_db_session)` (engine holds the port).
+  Factory `get_investigation_engine` (in `dependencies_advanced/progression.py`) wires the repo from
+  `get_graph_db()`. Tests mock the port; `test_investigation_repository.py` covers the adapter. NOTE:
+  `scheme_detection_tick` (also under `engines/investigation/`) stays for the Wave-4 `scheming` domain port —
+  it uses scheme_reader/scheme_writer, not investigation_queries. `engines/investigation/investigation_engine`
+  is neo4j-free.
+
+- **proactive_dialogue** (DONE, `5e9b75a`): NEW `ProactiveMemoryReadPort` (`get_unshared_memories`) +
+  `Neo4jProactiveMemoryReadRepository` (session-per-call, wraps ProactiveMemoryReader). `ProactiveDialogueEngine`
+  now injects the memory port + the SHARED `PlayerLocationReadPort` (`get_player_idle_ticks`) as
+  `memory_service`/`location_service` — its old local `MemoryServiceProtocol`/`LocationServiceProtocol` were
+  DELETED; `check_trigger(npc_id, player_id, tick_id)` + `generate_line(trigger)` dropped the session param.
+  `ProactiveDialogueTick` injects `PlayerLocationReadPort` (`get_collocated_pairs`), `run_tick(tick_id, **_)`
+  swallows `session=`, and the `_collect_candidates`/`_generate_and_enqueue` helpers dropped session. Factory
+  `get_proactive_dialogue_engine` wires `Neo4jProactiveMemoryReadRepository` + `Neo4jPlayerLocationReadRepository`
+  from `get_graph_db()` (removed the now-unused PlayerLocationReader/ProactiveMemoryReader top-level imports).
+  Tests mock the ports; `test_proactive_memory_read_repository.py` covers the adapter, tick-adapter gets an
+  ignored-kwarg test. `engines/proactive_dialogue/` is neo4j-free.
+
+- **relationship** (DONE, `ef9c55d`): NO new read port — `phase_transition_applier.apply_phase_transition`
+  REUSES the shared `RelationReadPort.get_relation_phase_row` for the read + NEW `RelationPhaseWritePort` +
+  `Neo4jRelationPhaseWriteRepository` (wraps relation_phase_writer.write_relationship_phase) for the write.
+  Free-fn cluster pattern: the two ports are leading positional args of `apply_phase_transition(...)`; it
+  dropped the `session` param and no longer imports neo4j (`engines/relationship/` is neo4j-free). Caller is the
+  UNMIGRATED Wave-4 `dialogue_handler`, which keeps its session for `apply_dialogue_relation_deltas` but now holds
+  the two ports as optional `relation_reader`/`relation_phase_writer` kwargs (guarded call). GOTCHA: `dependencies.py`
+  is AT the 300-line R001 cap, so wired NET-ZERO via NEW `get_dialogue_graph_ports()` (dependencies_stores, re-exported
+  via dependency_singletons) that bundles the two ports + the existing knowledge_engine; `build_dialogue_handler`
+  `**`-splats it (replaced the `knowledge_engine=` kwarg line + swapped the import name). Tests mock the ports;
+  `test_relation_phase_write_repository.py` covers the adapter. Wave 3.
+
+- **interaction** (DONE, `8ddaa9b`): NEW `InteractionGraphPort` (quest reads `get_quest_state`/
+  `get_active_quest_for_player` + 5 objective-verification counts) + `Neo4jInteractionRepository`
+  (session-per-call, delegates to quest_writer/quest_queries/quest_verification_queries). SUB-SPLIT of the
+  Wave-4 quest cluster: `quest_verifier` is fully migrated (the 4 Verifier classes + `verify_objectives` take
+  the port as 1st positional arg, no session — `engines/interaction/quest_verifier` is neo4j-free); the
+  `quest_handler` free-fns migrate their OWN reads to the port but `handle_claim_completion`/
+  `handle_give_item_as_quest_claim` KEEP `session` (director-style) to forward to the still-session-based
+  `QuestLifecycleEngine.update_objective`/`evaluate_completion`. `handle_propose_quest(repo=…)` is session-free.
+  Route `/interaction` adds `Depends(get_interaction_graph_repo)` (new `@lru_cache` factory in
+  `dependencies_engines.py`, re-exported via dependency_singletons), still passes `session` for the engine
+  forward. Tests mock the port; `test_interaction_repository.py` covers the adapter. Wave 3.
+
+- **memory** (DONE, `a124c26`): NEW `MemoryGraphPort` (create_memory + decay_all_vividness +
+  decay_all_vividness_weighted) + `Neo4jMemoryRepository` (session-per-call, delegates to memory_service).
+  `MemoryEngine(memory_repo=)` is now constructor-injected and sessionless (all 5 methods dropped the
+  `session` arg). `get_memory_engine()` is the SINGLE source (wires the repo from `get_graph_db()`), replacing
+  every inline `MemoryEngine()`: clock route (`get_memory_engine().decay_vividness()`), memories route (dropped
+  module-level `_engine` + the route's unused `session` Depends), `get_memory_decay_tick` factory, and bundled
+  into `get_dialogue_graph_ports()` (`memory_engine` key). `MemoryDecayTick.run_tick(tick_id, **_)` swallows
+  `session=`. dialogue_handler + quest_lifecycle_engine inject `memory_engine: MemoryEngine | None` (guarded
+  call — None skips); both stay Wave-4 session-holders for their other writes. `engines/memory/` is neo4j-free.
+  Last Wave-3 box. Tests: `test_memory_repository.py` (adapter); rewrote test_memory_engine/_weighted_decay/
+  _service + quest_lifecycle commitment test to inject a fake port.
+
+- **events** (DONE, `f8c7e94`, Wave 4 first): NEW `EventGraphPort` + `Neo4jEventRepository`. The `run_in_tx` unit-of-work
+  was lifted OUT of `EventHandler` into a NEW graph orchestration fn
+  `graph/event_emission_service.emit_event_atomic(session, *, …)` (upsert_event + seed_awareness +
+  per-character reputation + routine overrides + the high-severity world-condition update, all in ONE
+  transaction); the adapter just opens a session and calls it, so no transaction leaks to the engine. The port
+  also exposes the non-atomic surrounding calls: `get_locations_by_tag`, `get_characters_at_location`,
+  `record_witnesses` (loops witnesses in one session), `record_causation`. `RoutineOverridePlan` (frozen
+  Pydantic model) lives in `event_emission_service` (graph layer) so disruption data crosses the engine→graph
+  boundary as plain models, not `DisruptionRule`/tuples. `EventHandler` injects `event_repo` + reuses the shared
+  `WorldStateGraphPort` for the severity-cap read; `run_tick(*, tick_id, location_ids=None, cause_event_id=None,
+  **_)` swallows `session=`; extracted `_scope_locations`/`_build_event`/`_build_routine_overrides`/
+  `_record_witnesses` for R006 and named the severity/causation/clarity magic numbers. `engines/events/
+  event_handler` is neo4j-free (awareness_seeder/location_scoper are graph-thin tx wrappers, untouched). Factory
+  `get_event_handler` wires both repos from `get_graph_db()`. Director/batch/scheduler still pass `session=`
+  (swallowed) — director can drop its forward in Wave-5 cleanup. ISSUE-112 logged: the high-severity witness
+  block is dead code (actor_id always None), preserved verbatim. Tests: `test_event_handler_port.py` (engine
+  mocks the port + ignored-kwarg), `test_event_repository.py` (adapter), rewrote `test_event_reputation_wiring.py`
+  to cover the graph-service reputation loop + handler forwarding.
+
+- **scheming** (DONE, `4daee07`, Wave 4): NEW `SchemingGraphPort` (get_active_schemes/upsert_scheme/add_scheme_step/get_all_active_schemes_with_steps/get_npc_location_id/`emit_scheme_step_atomic`) + `Neo4jSchemingRepository` (session-per-call, `run_in_tx` for atomic step). `SchemeAdvanceTick(settings,registry,scheming_repo=)` + `SchemingEngine(settings,scheming_repo=)` both sessionless; `run_tick(*, tick_id, **_)` swallows `session=`. Factory `get_scheme_advance_tick` (local import) wires from `get_graph_db()`. Tests rewritten to mock the port; `test_scheming_repository.py` covers the adapter. `engines/scheming/` neo4j-free.
+
+- **idempotency** (DONE, `4daee07`, Wave 4): `IdempotencyStoreProtocol` (`engines/idempotency/store_protocol.py`) now sessionless — removed `AsyncSession` from all 7 methods. NEW `Neo4jIdempotencyRepository` (`graph/repositories/`) holds `GraphDB`, opens session per call, wraps `Neo4jIdempotencyStore` (which retains its session-based API for the graph layer). `IdempotencyService` drops `graph_db` field + the `async with get_session()` wrapping; `service_helpers.py` drops `session` param from all async helpers. `get_idempotency_service` wires `Neo4jIdempotencyRepository`. Removed `get_idempotency_store` factory from `dependencies_stores`/`dependency_singletons`/`conftest.py` cache-clear list. `engines/idempotency/` neo4j-free.
+
+- **faction_politics** (DONE, `15b80dc`, Wave 4): NEW `FactionPoliticsGraphPort` (3 reads
+  `get_recent_events`/`get_character_factions`/`get_all_standings` + ONE atomic `commit_standing_change`) +
+  `Neo4jFactionPoliticsRepository`. The `run_in_tx` unit-of-work stays small (single `set_standing` write), so the
+  adapter runs it inline then appends `record_standing_change` in the same session-per-call (preserves the engine's
+  prior two-write behavior; no graph orchestration module needed unlike events). `FactionPoliticsEngine(rules=, repo=)`
+  is sessionless; `run_tick(*, tick_id=0, **_)` swallows `session=`; extracted `_apply_event_to_factions`/`_adjust_pair`
+  for R006 and named `_STANDING_MIN/_STANDING_MAX/_DECAY_CAUSE_RULE_ID` (ratcheted rules baseline 141->139).
+  `engines/faction_politics/` is neo4j-free. Factory `get_faction_politics_engine` (dependencies_engines, local imports)
+  wires the repo from `get_graph_db()`; scheduler + SEV-04 file-existence guard unchanged. Tests:
+  `test_faction_politics_engine.py` rewritten to mock the port (+ ignored-kwarg), `test_faction_politics_repository.py`
+  covers the adapter.
+
+**29 domains migrated, 28 ports + 28 adapters** (+3 shared read ports/adapters; director/relationship reuse them). Shared ports built: political (succession+agenda),
+WorldState (story_pacing + chapter — first cross-domain reuse). R006 watch: every tick engine's `run_tick` grew by the `**_` docstring +
+multi-line repo calls; extract a helper when it crosses 40 lines (succession, treaty, oath did).
+- Tests pattern: `test_<engine>.py` mocks the Port; `test_<domain>_repository.py` covers the adapter with a fake `GraphDB`.
+
+## What ONE `/fix-next` pass does (one `SEV-24 ·` checkbox in INDEX.md)
+1. **Pick** the first unchecked `SEV-24 ·` line in `INDEX.md` (waves are ordered easy→hard; respect them).
+2. **Discover** that domain's specifics yourself (don't trust this brief blindly — code moves):
+   `grep -rn "from npc_engine.graph\|AsyncSession" src/npc_engine/engines/<domain>/` for the graph surface;
+   `grep -rn "<EngineClass>(" src/npc_engine/api/` for the construction factory;
+   `grep -rn "<engine>.run_tick\|<EngineClass>" tests/` for the test + scheduler call.
+3. **Implement** per the Pattern above (port → adapter → engine → wire → tests). Reuse an existing port if the
+   domain already has one (e.g. political, world_state). Keep `(session,…)` on any graph function untouched —
+   only the *engine* stops holding a session.
+4. **Verify** `make check` + the touched tests. Add a `run_tick(session=object(), …)` "ignored-kwarg" test.
+   If `run_tick` crossed 40 lines (R006), extract a named helper. If a `test_sev04_*` delegation guard patched
+   the old module-level graph fns, repoint it to the injected port.
+5. **Tick** the box `[ ]`→`[x]` in INDEX.md, append the commit hash to "Migrated slices" here, update the
+   INDEX carry-forward note if you introduced a reusable port. **Commit** `feat(SEV-24): <domain> via repository`.
+
+## Remaining slices — per-domain notes (confirm against code per step 2)
+**Wave 1 — clean singletons:**
+- `memory_consolidation` — `memory_consolidation_engine` (tick; already imports `GraphDB`). Graph: belief_queries
+  `get_beliefs_for_character`, memory_queries `get_memories_for_character`, memory_service `create_memory`,
+  witnessed_queries `get_undisclosed_witnesses`. Spans 3 read domains + memory write → one
+  `MemoryConsolidationGraphPort` covering exactly its calls. Factory: `dependencies_advanced/progression.py`.
+- `chapter` — `chapter_engine` (LLM tick, has `__init__(llm…)`). Graph: faction_queries
+  `get_faction_standings_summary`, chapter_queries, chapter_writer, **world_state_reader `get_world_state` →
+  reuse `WorldStateGraphPort`**. Factory: `progression.py get_chapter_engine`.
+- `military` — CLUSTER: `military_engine.run_tick` delegates to `engines/military/military_battle_service.resolve_battles`
+  + `military_resource_service.process_resource_yield`; those hold the graph calls (military_queries,
+  military_control_writer). Give a `MilitaryGraphPort`, inject into the two services, `military_engine` injects +
+  passes it (or the services take it directly). Factory: `politics.py get_military_engine`.
+
+**Wave 2 — shared read-ports + light consumers:**
+- `shared-read-ports` — build `RelationReadPort` (`relation_reader.RelationReader.get_relation_scalars`,
+  `get_relation_phase_row`), `PlayerLocationReadPort` (`player_location_reader.PlayerLocationReader.get_collocated_pairs`,
+  `get_player_idle_ticks`), `CharacterReadPort` (`character_reader.get_npc_ids`) + their `Neo4j*Repository`
+  adapters (session-per-call). These REPLACE the per-tick `RelationReader(session)` / reader-factory pattern in
+  reputation/player_model/director. Ship this checkbox as ports+adapters+tests only (no engine yet), OR fold into
+  the first consumer — your call; either way later slices just inject them.
+- `emotion` — `emotion_updater` (optional `EmotionGraphWriter` + `session` per method). `EmotionGraphPort.write_emotion`;
+  adapter wraps `graph/emotion_writer`. Drop `session` from `apply_dialogue_mood`/`apply_event_shock`/`_write_through`;
+  **update call-sites in `dialogue_handler` + `gossip_handler` to drop the `session=` arg** (small edits, those
+  engines keep their own session).
+- `knowledge_learning` — `knowledge_extraction_engine` (belief_queries `find_conflicting_belief` + knowledge_writer
+  `write_belief`). Caller(s) drop the session arg.
+- `deception` — `deception_engine` (`write_belief`; method takes session). Caller: dialogue. Smallest.
+
+**Wave 3 — entangled:**
+- `reputation` — `reputation_engine(config, relation_reader, apply_nudge_fn)` + `reputation_tick_adapter`
+  (passes a per-tick `relation_reader_factory(session)` and mutates `engine._reader`). Inject `RelationReadPort` +
+  `CharacterReadPort`; the nudge write (`reputation_nudge.apply_trust_nudge`) becomes a port method. Delete the
+  reader-factory + `_reader` mutation. Factory: `dependencies_engines.get_reputation_engine`.
+- `player_model` — `player_model_tick` (PlayerLocationReader + RelationReader + player_model_writer
+  `upsert_player_model`/`get_player_model`). Reuse RelationReadPort + PlayerLocationReadPort + a
+  `PlayerModelGraphPort`.
+- `director` — `director_tick` (read-ports as above) BUT it also calls `event_handler.run_tick(session=…)`.
+  Migrate its *reads* to the ports; **keep receiving `session` and pass it to event_handler** until the `events`
+  slice lands (so director is not fully session-free yet — note this in the commit; do not delete its session param).
+- `planning` — `goal_former` + `goal_former_adapter` + `action_selector`. Graph: need_queries
+  `get_needs_for_character`/`get_satisfying_location_for_need`, goal_service `create_goal`, goal_targets_writer,
+  character_reader, world_state_reader (reuse WorldStateGraphPort + CharacterReadPort). Multi-port slice.
+- `economy` — `trade_engine` (currency_writer/item_writer/pricing_queries). **Per-request route factory**, not a
+  singleton — build the adapter in the route's `Depends` factory.
+- `agenda-others` — `intent_formation_engine` + `conversation_intent_service` (the non-`agenda_engine` files).
+- `interaction`/`investigation`/`proactive_dialogue`/`relationship` — one slice each; standard pattern.
+- `memory` — `MemoryEngine` is constructed inline in 5+ places (clock route, memories route module-level `_engine`,
+  `dialogue_handler.__init__`, `quest_lifecycle_engine` fallback) + `get_memory_engine()` factory. Add
+  `MemoryGraphPort` (create_memory + the two decays), make `get_memory_engine()` the single source, replace every
+  inline `MemoryEngine()` with it; inject `memory_engine` into dialogue_handler/quest via their construction sites.
+
+**Wave 4 — `run_in_tx` coordinators / large clusters:** `events` (`event_handler` owns a `run_in_tx` unit-of-work
+→ the port exposes ONE atomic method whose adapter runs `run_in_tx` internally, no tx leaks out), then
+`faction_politics`, `scheming`, `idempotency`, and the big `gossip`/`dialogue`/`quest`/`quest_generation` clusters
+(each its own multi-slice effort — sub-split as needed; tick its INDEX box only when the whole domain is neo4j-free).
+
+## Final step (last checkbox, only after every domain is migrated)
+Remove `session` from the `BaseEngine.run_tick` protocol and `tick_scheduler.advance()`; drop the now-unused
+`**_`/`session=None` swallowers in migrated engines. Confirm
+`grep -rn "from neo4j\|AsyncSession\|AsyncTransaction" src/npc_engine/engines/` → empty. Close DEC-122.
+
+## Verification
+- `grep -rn "AsyncSession\|AsyncTransaction\|from neo4j" src/npc_engine/engines/` shrinks toward empty.
+- Per slice: `make check` (lint/rules/layers/docstrings/type) + unit suite green.
+- `make demo-seed && make demo-run ARGS=--dry-run` smoke after larger batches.
+
+## Blast radius
+~68 engine files + their composition-root factories. **Large — phase by engine domain across many sessions.**
+Realizes DEC-122 and the engine/graph decoupling goal behind SEV-21.

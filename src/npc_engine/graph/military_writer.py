@@ -1,24 +1,43 @@
 """
 Module: military_writer
 Layer: graph
-Purpose: Write operations for Army, ResourceNode, and OCCUPIES/COMMANDS/PRODUCES
-         relationships (Phase 7.4 Strategy/4X).
+Purpose: Write operations for Army, ResourceNode, OCCUPIES/COMMANDS/PRODUCES relationships,
+         and battle Event emission (Phase 7.4 Strategy/4X).
 Does NOT: read graph state beyond what MERGE requires, call LLMs, or import engine code.
+         Territory/control writes are in military_control_writer.py.
 Dependencies injected: None (pure Cypher, session passed per call).
-Used by: npc_engine.engines.military.military_engine
+Used by: npc_engine.graph.repositories.military_repository.Neo4jMilitaryRepository,
+         npc_engine.graph.military_control_writer
 """
 
 from __future__ import annotations
 
+from typing import Any
 import json
 import uuid
 
 from neo4j import AsyncSession
 
+_CYPHER_EMIT_BATTLE_EVENT = """
+MERGE (e:Event {id: $event_id})
+SET e.event_type          = 'battle',
+    e.summary             = $summary,
+    e.severity            = $severity,
+    e.location_id         = $location_id,
+    e.occurred_at         = $occurred_at,
+    e.tick_id             = $tick_id,
+    e.is_public           = true,
+    e.producer            = 'military_engine',
+    e.origin_engine       = 'military_engine',
+    e.schema_version      = '1.0',
+    e.faction_id          = $winner_faction_id,
+    e.last_graph_updated_at = $occurred_at
+"""
+
 _COMPOSITION_KEYS = frozenset({"infantry", "cavalry", "siege"})
 
 
-def _validate_composition(composition: dict) -> str:
+def _validate_composition(composition: dict[str, Any]) -> str:
     """Validate and serialise an army composition dict to JSON.
 
     Args:
@@ -48,7 +67,7 @@ async def create_army(
     faction_id: str,
     strength: int,
     location_id: str,
-    composition: dict,
+    composition: dict[str, Any],
 ) -> str:
     """Create an Army node and place it at a location via OCCUPIES.
 
@@ -221,4 +240,39 @@ async def link_army_to_commander(
         """,
         character_id=character_id,
         army_id=army_id,
+    )
+
+
+async def emit_battle_event(
+    session: AsyncSession,
+    *,
+    event_id: str,
+    summary: str,
+    severity: int,
+    location_id: str,
+    occurred_at: str,
+    tick_id: int,
+    winner_faction_id: str,
+) -> None:
+    """Write a public battle Event node to the graph via MERGE.
+
+    Args:
+        session: Active Neo4j async session.
+        event_id: Unique event identifier.
+        summary: Human-readable battle summary string.
+        severity: Numeric severity level for the event.
+        location_id: Location where the battle occurred.
+        occurred_at: ISO-8601 timestamp.
+        tick_id: Game tick when the battle resolved.
+        winner_faction_id: ID of the winning faction.
+    """
+    await session.run(
+        _CYPHER_EMIT_BATTLE_EVENT,
+        event_id=event_id,
+        summary=summary,
+        severity=severity,
+        location_id=location_id,
+        occurred_at=occurred_at,
+        tick_id=tick_id,
+        winner_faction_id=winner_faction_id,
     )

@@ -1,5 +1,7 @@
 """
 quest_writer.py - Quest state persistence helpers for lifecycle engine.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: enforce quest transition policies.
 
@@ -8,12 +10,20 @@ Dependencies injected: AsyncSession or AsyncTransaction.
 
 from __future__ import annotations
 
+from typing import Any
 import json
 
-from neo4j import AsyncSession, AsyncTransaction
+from neo4j import AsyncSession, AsyncTransaction, Record
 
 
 QuestGraphRunner = AsyncSession | AsyncTransaction
+
+
+CYPHER_UPDATE_QUEST_NODE_STATUS = """
+MATCH (q:Quest {id: $quest_id})
+SET q.status = $status,
+    q.updated_at = datetime()
+"""
 
 
 CYPHER_GET_QUEST_STATE = """
@@ -76,7 +86,7 @@ RETURN q.quest_id AS quest_id,
 """
 
 
-def _record_to_state_payload(record: dict) -> dict:
+def _record_to_state_payload(record: Record) -> dict[str, Any]:
     currency_reward_json = record["currency_reward_json"]
     currency_reward = None
     if currency_reward_json is not None and str(currency_reward_json).strip() != "":
@@ -96,7 +106,7 @@ def _record_to_state_payload(record: dict) -> dict:
     }
 
 
-def _state_write_params(*, quest_id: str, player_id: str, state_payload: dict) -> dict:
+def _state_write_params(*, quest_id: str, player_id: str, state_payload: dict[str, Any]) -> dict[str, Any]:
     """Serialize quest payload into query parameters for persistence writes."""
 
     currency_reward = state_payload.get("currency_reward")
@@ -121,7 +131,7 @@ def _deep_copy_json(value: object) -> object:
     return json.loads(json.dumps(value))
 
 
-def _canonical_state_payload(state_payload: dict) -> dict:
+def _canonical_state_payload(state_payload: dict[str, Any]) -> dict[str, Any]:
     """Build detached canonical quest payload for callers."""
 
     currency_reward = state_payload.get("currency_reward")
@@ -139,7 +149,27 @@ def _canonical_state_payload(state_payload: dict) -> dict:
     }
 
 
-async def get_quest_state(*, session: QuestGraphRunner, quest_id: str, player_id: str) -> dict | None:
+async def update_quest_node_status(
+    *,
+    session: QuestGraphRunner,
+    quest_id: str,
+    status: str,
+) -> None:
+    """Write a lifecycle status back to the Quest node for context-builder queries.
+
+    This keeps the Quest node's ``status`` field in sync with QuestState so that
+    graph reads used for NPC context injection reflect the current lifecycle state.
+
+    Args:
+        session: Active Neo4j session or transaction.
+        quest_id: ID of the Quest node to update.
+        status: New lifecycle status string (e.g. ``"accepted"``, ``"completed"``).
+    """
+    result = await session.run(CYPHER_UPDATE_QUEST_NODE_STATUS, quest_id=quest_id, status=status)
+    await result.consume()
+
+
+async def get_quest_state(*, session: QuestGraphRunner, quest_id: str, player_id: str) -> dict[str, Any] | None:
     """Read one persisted quest state for a quest and player pair.
 
     Args:
@@ -164,15 +194,15 @@ async def create_quest_state_if_absent(
     session: QuestGraphRunner,
     quest_id: str,
     player_id: str,
-    state_payload: dict,
-) -> dict:
+    state_payload: dict[str, Any],
+) -> dict[str, Any]:
     """Create quest state once, then return the current stored payload without overwriting.
 
     Args:
         session: Active Neo4j session or transaction used to run the merge query.
         quest_id: Identifier of the quest definition.
         player_id: ID of the player character whose state is being initialized.
-        state_payload: Initial quest state dict to persist if no record exists yet.
+        state_payload: Initial quest state dict[str, Any] to persist if no record exists yet.
 
     Returns:
         Dict with the current stored quest state fields (may differ from state_payload if record existed).
@@ -193,18 +223,18 @@ async def upsert_quest_state(
     session: QuestGraphRunner,
     quest_id: str,
     player_id: str,
-    state_payload: dict,
-) -> dict:
+    state_payload: dict[str, Any],
+) -> dict[str, Any]:
     """Persist one quest state payload and return the same canonical payload.
 
     Args:
         session: Active Neo4j session or transaction used to run the merge query.
         quest_id: Identifier of the quest definition.
         player_id: ID of the player character whose state is being persisted.
-        state_payload: Full quest state dict to write; replaces any existing record.
+        state_payload: Full quest state dict[str, Any] to write; replaces any existing record.
 
     Returns:
-        Detached canonical dict with the same data that was written (deep-copied for immutability).
+        Detached canonical dict[str, Any] with the same data that was written (deep-copied for immutability).
     """
     write_params = _state_write_params(quest_id=quest_id, player_id=player_id, state_payload=state_payload)
 

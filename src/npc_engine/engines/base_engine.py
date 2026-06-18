@@ -1,10 +1,13 @@
 """
 base_engine.py - Defines a minimal asynchronous engine contract.
+Layer: engines
+Purpose: (auto-detected — review)
 
 Does NOT: implement domain-specific engine behavior.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from typing import Any, Protocol
 
@@ -18,4 +21,4 @@ class BaseEngine(Protocol):
     signature, since each engine's required parameters differ.
     """
 
-    async def run_tick(self, *args: Any, **kwargs: Any) -> dict: ...
+    async def run_tick(self, *args: Any, **kwargs: Any) -> dict[str, Any]: ...

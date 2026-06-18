@@ -9,11 +9,11 @@ import pytest
 
 from npc_engine.graph.pledge_service import (
     break_pledge,
-    check_pledge_violations,
     create_pledge,
     get_pledges_for_character_svc,
     get_expiring_pledges_svc,
 )
+from npc_engine.graph.pledge_violation_service import check_pledge_violations
 
 
 # ---------------------------------------------------------------------------
@@ -94,16 +94,23 @@ async def test_get_pledges_for_character_svc_passes_active_only_false() -> None:
 
 
 # ---------------------------------------------------------------------------
-# check_pledge_violations (stub)
+# check_pledge_violations
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_check_pledge_violations_returns_empty_list() -> None:
+async def test_check_pledge_violations_returns_empty_list_when_no_pledges() -> None:
+    """No active pledges → empty violations list."""
+    from unittest.mock import patch
+
     session = AsyncMock()
-    result = await check_pledge_violations(session, pledger_id="char-1", tick=5)
+    with patch(
+        "npc_engine.graph.pledge_violation_service.get_active_pledges_for_pledger",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
+        result = await check_pledge_violations(session, pledger_id="char-1", tick=5)
     assert result == []
-    session.run.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

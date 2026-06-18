@@ -1,10 +1,13 @@
 """
 merge_rules.py - Applies additive-only merge rules for registry documents.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: read files from disk or build field definitions.
 
 Dependencies injected: base schema model and validated extension documents.
 """
+from __future__ import annotations
 
 from types import MappingProxyType
 

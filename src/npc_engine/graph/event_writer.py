@@ -1,16 +1,32 @@
 """
 event_writer.py - Writes Event nodes and participation edges to Neo4j.
+Layer: graph
+Purpose: (auto-detected — review)
 
 Does NOT: orchestrate event generation logic.
 
 Dependencies injected: AsyncManagedTransaction.
 """
+from __future__ import annotations
+
+from typing import Any, Protocol
 
 from neo4j import AsyncTransaction
-from pydantic import BaseModel
 
 from npc_engine.graph.json_fields import serialize_provenance_field
 from npc_engine.utils.errors import QuestProvenanceError
+
+
+class _EventNode(Protocol):
+    """Structural protocol for any Pydantic event node written via this module."""
+
+    id: str
+    producer: str | None
+    origin_engine: str | None
+    schema_version: str | None
+    provenance: dict[str, Any] | None
+
+    def model_dump(self, *, mode: str = "python") -> dict[str, Any]: ...
 
 
 CYPHER_MERGE_EVENT = """
@@ -19,7 +35,7 @@ SET e += $properties
 """
 
 
-async def upsert_event(tx: AsyncTransaction, event: BaseModel) -> None:
+async def upsert_event(tx: AsyncTransaction, event: _EventNode) -> None:
     """Insert or update an event node idempotently.
 
     Args:
@@ -36,7 +52,7 @@ async def upsert_event(tx: AsyncTransaction, event: BaseModel) -> None:
     )
 
 
-def ensure_quest_event_provenance(*, event: BaseModel) -> None:
+def ensure_quest_event_provenance(*, event: _EventNode) -> None:
     """Ensure quest lifecycle events include required provenance metadata.
 
     Args:
@@ -75,7 +91,7 @@ def ensure_quest_event_provenance(*, event: BaseModel) -> None:
         raise QuestProvenanceError(detail=f"missing quest event provenance fields: {', '.join(missing)}")
 
 
-async def upsert_quest_lifecycle_event(*, tx: AsyncTransaction, event: BaseModel) -> None:
+async def upsert_quest_lifecycle_event(*, tx: AsyncTransaction, event: _EventNode) -> None:
     """Persist one quest lifecycle event after provenance validation.
 
     Args:

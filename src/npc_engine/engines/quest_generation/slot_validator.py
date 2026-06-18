@@ -4,40 +4,28 @@ Layer: engines
 Purpose: Validates proposed slot fills against the graph by checking node existence, type,
          and character skill thresholds for slots with REQUIRES_SKILL constraints.
 Does NOT: call LLMs or write to the graph.
-Dependencies: neo4j.AsyncSession, graph.skill_queries
-Dependencies injected: AsyncSession (graph reader).
+    Does NOT: hold a Neo4j session (DEC-122 / SEV-24).
+Dependencies: engines.ports.quest_generation_port (QuestGenerationGraphPort).
+Dependencies injected: QuestGenerationGraphPort (graph reader port).
 Used by: npc_engine.engines.quest_generation.quest_generation_engine
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from neo4j import AsyncSession
-
+from npc_engine.engines.ports.quest_generation_port import QuestGenerationGraphPort
 from npc_engine.engines.quest_generation.slot_models import SlotDefinition, SlotFill
-from npc_engine.graph.skill_queries import check_skill_threshold
-
-if TYPE_CHECKING:
-    pass
-
-_CYPHER_CHECK_NODE = "MATCH (n {id: $node_id}) RETURN labels(n) AS labels LIMIT 1"
-_CYPHER_TEMPLATE_SKILL_REQS = """
-MATCH (qt:QuestTemplate {id: $template_id})-[r:REQUIRES_SKILL]->(s:Skill)
-RETURN s.id AS skill_id, toInteger(r.min_level) AS min_level
-"""
 
 
 class SlotValidator:
     """Validates slot fills by querying the graph for node existence and type."""
 
-    def __init__(self, session: AsyncSession) -> None:
-        """Initialise the validator with a live graph session.
+    def __init__(self, quest_gen_repo: QuestGenerationGraphPort) -> None:
+        """Initialise the validator with an injected graph port.
 
         Args:
-            session: Active Neo4j async session used for node look-ups.
+            quest_gen_repo: Graph port that provides node-label and skill-threshold queries.
         """
-        self._session = session
+        self._quest_gen_repo = quest_gen_repo
 
     async def validate(
         self,
@@ -63,7 +51,7 @@ class SlotValidator:
                 if slot_def.required:
                     violations.append(f"required slot '{slot_def.name}' has no fill")
                 continue
-            node_labels = await self._get_labels(node_id)
+            node_labels = await self._quest_gen_repo.check_node_labels(node_id=node_id)
             if node_labels is None:
                 violations.append(
                     f"slot '{slot_def.name}' references non-existent node '{node_id}'"
@@ -96,8 +84,7 @@ class SlotValidator:
         Returns:
             List of violation strings; empty means all skill requirements are satisfied.
         """
-        result = await self._session.run(_CYPHER_TEMPLATE_SKILL_REQS, template_id=template_id)
-        requirements = [dict(r) async for r in result]
+        requirements = await self._quest_gen_repo.get_template_skill_requirements(template_id=template_id)
         if not requirements:
             return []
         violations: list[str] = []
@@ -105,8 +92,7 @@ class SlotValidator:
             skill_id = req["skill_id"]
             min_level = int(req["min_level"])
             for slot_name, character_id in character_fills.items():
-                meets = await check_skill_threshold(
-                    self._session,
+                meets = await self._quest_gen_repo.check_skill_threshold(
                     character_id=character_id,
                     skill_id=skill_id,
                     min_level=min_level,
@@ -117,14 +103,6 @@ class SlotValidator:
                         f"skill_threshold_not_met: skill='{skill_id}' min_level={min_level}"
                     )
         return violations
-
-    async def _get_labels(self, node_id: str) -> list[str] | None:
-        """Return labels for a node ID, or None if the node does not exist."""
-        result = await self._session.run(_CYPHER_CHECK_NODE, node_id=node_id)
-        records = [dict(r) async for r in result]
-        if not records:
-            return None
-        return list(records[0].get("labels", []))
 
     def build_fills(
         self,

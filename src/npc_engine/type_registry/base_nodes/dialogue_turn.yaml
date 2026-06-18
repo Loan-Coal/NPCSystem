@@ -1,0 +1,10 @@
+node_type: dialogue_turn
+fields:
+  id: { type: str, required: true }
+  npc_id: { type: str, required: true }
+  player_id: { type: str, required: true }
+  turn_index: { type: int, required: true }
+  role: { type: str, required: true }
+  content: { type: str, required: true }
+  occurred_at_game_time: { type: str, required: false }
+  tick: { type: int, required: false }

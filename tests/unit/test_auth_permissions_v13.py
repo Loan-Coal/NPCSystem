@@ -45,6 +45,9 @@ def test_required_scope_admin_routes_need_admin_scope() -> None:
     assert _required_scope_for_path(path="/v1/admin/batch/gossip_tick", api_v1_prefix=prefix) == SCOPE_GRAPH_ADMIN
     assert _required_scope_for_path(path="/v1/admin/schema", api_v1_prefix=prefix) == SCOPE_GRAPH_ADMIN
     assert _required_scope_for_path(path="/v1/admin/protected", api_v1_prefix=prefix) == SCOPE_GRAPH_ADMIN
+    # SEV-14: system observability now sits under /v1/admin → admin scope.
+    assert _required_scope_for_path(path="/v1/admin/system/engines", api_v1_prefix=prefix) == SCOPE_GRAPH_ADMIN
+    assert _required_scope_for_path(path="/v1/admin/system/events", api_v1_prefix=prefix) == SCOPE_GRAPH_ADMIN
 
 
 def test_required_scope_public_game_engine_routes_need_no_scope() -> None:

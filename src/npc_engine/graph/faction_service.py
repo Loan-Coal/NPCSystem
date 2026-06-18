@@ -9,11 +9,12 @@ Used by: npc_engine.api.routes.factions
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
-from neo4j import AsyncSession
+from neo4j import AsyncSession, AsyncTransaction
 from pydantic import BaseModel
 
+from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.graph.faction_queries import (
     get_controlled_locations,
     get_faction,
@@ -58,9 +59,10 @@ class FactionService:
         Args:
             faction: Pydantic model with an ``id`` field and serializable faction properties.
         """
-        tx = await self._session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> None:
             await upsert_faction(tx, faction)
+
+        await run_in_tx(self._session, _work)
 
     async def add_member(
         self,
@@ -81,9 +83,10 @@ class FactionService:
         Raises:
             FactionMembershipError: If either node is not found.
         """
-        tx = await self._session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> None:
             await add_member(tx, character_id=character_id, faction_id=faction_id, role=role, status=status)
+
+        await run_in_tx(self._session, _work)
 
     async def remove_member(self, *, character_id: str, faction_id: str) -> None:
         """Delete a MEMBER_OF edge between a Character and a Faction.
@@ -95,9 +98,10 @@ class FactionService:
         Raises:
             FactionMembershipError: If no MEMBER_OF edge exists.
         """
-        tx = await self._session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> None:
             await remove_member(tx, character_id=character_id, faction_id=faction_id)
+
+        await run_in_tx(self._session, _work)
 
     async def set_standing(self, *, src_id: str, dst_id: str, standing: int) -> None:
         """Create or update a directed STANDS_WITH edge between two factions.
@@ -110,9 +114,10 @@ class FactionService:
         Raises:
             FactionNotFoundError: If either faction node does not exist.
         """
-        tx = await self._session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> None:
             await set_standing(tx, src_id=src_id, dst_id=dst_id, standing=standing)
+
+        await run_in_tx(self._session, _work)
 
     async def set_controls(self, *, faction_id: str, location_id: str) -> None:
         """Create a CONTROLS edge from a Faction to a Location.
@@ -124,9 +129,10 @@ class FactionService:
         Raises:
             FactionNotFoundError: If the faction or location node does not exist.
         """
-        tx = await self._session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> None:
             await set_controls(tx, faction_id=faction_id, location_id=location_id)
+
+        await run_in_tx(self._session, _work)
 
     async def remove_controls(self, *, faction_id: str, location_id: str) -> None:
         """Delete a CONTROLS edge from a Faction to a Location.
@@ -138,9 +144,10 @@ class FactionService:
         Raises:
             FactionNotFoundError: If no CONTROLS edge exists.
         """
-        tx = await self._session.begin_transaction()
-        async with tx:
+        async def _work(tx: AsyncTransaction) -> None:
             await remove_controls(tx, faction_id=faction_id, location_id=location_id)
+
+        await run_in_tx(self._session, _work)
 
     # ------------------------------------------------------------------
     # Queries
@@ -155,7 +162,7 @@ class FactionService:
         Returns:
             Dict of faction properties, or None if not found.
         """
-        return cast(dict[str, Any] | None, await get_faction(self._session, faction_id))
+        return await get_faction(self._session, faction_id)
 
     async def list_factions(self, is_active: bool | None = None) -> list[dict[str, Any]]:
         """List all Faction nodes, optionally filtered by active status.
@@ -166,7 +173,7 @@ class FactionService:
         Returns:
             List of faction property dicts ordered by name.
         """
-        return cast(list[dict[str, Any]], await list_factions(self._session, is_active=is_active))
+        return await list_factions(self._session, is_active=is_active)
 
     async def get_factions_for_character(self, character_id: str) -> list[dict[str, Any]]:
         """Fetch all active factions a character belongs to, with membership details.
@@ -177,7 +184,7 @@ class FactionService:
         Returns:
             List of dicts with ``faction`` and ``membership`` keys.
         """
-        return cast(list[dict[str, Any]], await get_factions_for_character(self._session, character_id))
+        return await get_factions_for_character(self._session, character_id)
 
     async def get_members_of_faction(self, faction_id: str) -> list[dict[str, Any]]:
         """Fetch all active characters belonging to a faction, with membership details.
@@ -188,7 +195,7 @@ class FactionService:
         Returns:
             List of dicts with ``character`` and ``membership`` keys.
         """
-        return cast(list[dict[str, Any]], await get_members_of_faction(self._session, faction_id))
+        return await get_members_of_faction(self._session, faction_id)
 
     async def get_standing(self, src_id: str, dst_id: str) -> int | None:
         """Fetch the directed standing from one faction toward another.
@@ -200,7 +207,7 @@ class FactionService:
         Returns:
             Integer standing (-100 to 100), or None if no edge exists.
         """
-        return cast(int | None, await get_standing(self._session, src_id, dst_id))
+        return await get_standing(self._session, src_id, dst_id)
 
     async def list_standings(self, faction_id: str) -> list[dict[str, Any]]:
         """Fetch all directed STANDS_WITH edges from a faction.
@@ -211,7 +218,7 @@ class FactionService:
         Returns:
             List of dicts with ``target`` and ``standing`` keys, ordered by standing desc.
         """
-        return cast(list[dict[str, Any]], await list_standings(self._session, faction_id))
+        return await list_standings(self._session, faction_id)
 
     async def get_controlled_locations(self, faction_id: str) -> list[dict[str, Any]]:
         """Fetch all locations controlled by a faction.
@@ -222,4 +229,4 @@ class FactionService:
         Returns:
             List of location property dicts, ordered by name.
         """
-        return cast(list[dict[str, Any]], await get_controlled_locations(self._session, faction_id))
+        return await get_controlled_locations(self._session, faction_id)

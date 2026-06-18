@@ -1,10 +1,13 @@
 """
 config.py - Defines application settings loaded from environment variables.
+Layer: unknown
+Purpose: (auto-detected — review)
 
 Does NOT: initialize runtime services or perform network I/O.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from functools import lru_cache
 import os
@@ -12,7 +15,7 @@ from pathlib import Path
 import socket
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from npc_engine.config_validators import (
@@ -21,16 +24,41 @@ from npc_engine.config_validators import (
     check_currency_transfer_limit,
     check_embedding_reconcile_interval,
     check_game_schema_path,
+    check_idempotency_enforced,
     check_idempotency_header_name,
     check_llm_config_path,
+    check_neo4j_password,
     check_package_data_path,
     check_positive_idempotency_value,
     check_redis_connect_timeout,
     check_redis_url,
     normalize_extension_sources,
 )
+from npc_engine.config_logging_validators import (
+    check_log_level,
+    check_log_llm_prompts,
+)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent
+
+# Module-level constants so request models can import them at field-definition time
+# without calling get_settings() (which would trigger env loading during model definition).
+MAX_PLAYER_MESSAGE_CHARS: int = 1000
+MAX_DELTA_TICKS: int = 1000
+MAX_CHOICE_ID_CHARS: int = 200
+
+# GraphRAG composite-score weights (must sum to 1.0).
+# Extracted from graph_rag.py to allow test-time verification and future tuning.
+RAG_RELEVANCE_WEIGHT: float = 0.5   # vector-similarity component weight
+RAG_TRUST_WEIGHT: float = 0.3       # graph edge-weight (trust/confidence) component weight
+RAG_RECENCY_WEIGHT: float = 0.2     # temporal recency component weight
+
+# Recency decay thresholds.
+RAG_RECENCY_DAYS_SOFT: float = 365.0   # game-time: full decay over this many game-days
+RAG_RECENCY_DAYS_HARD: float = 72.0    # wall-clock: full decay over this many real hours
+
+# Content-rating ceiling type.  "mature" is fully permissive (no restrictions).
+ContentRating = Literal["everyone", "teen", "mature"]
 
 
 class Settings(BaseSettings):
@@ -44,6 +72,9 @@ class Settings(BaseSettings):
     API_KEY_GRAPH_WRITE: str | None = None
     API_KEY_GRAPH_ADMIN: str | None = None
     API_V1_PREFIX: str = "/v1"
+    # Build id surfaced on GET /health to detect stale images (L9-05); baked via
+    # the Dockerfile BUILD_SHA arg, "dev" for local runs.
+    BUILD_SHA: str = "dev"
     GAME_SCHEMA_PATH: str = "game_schema.yaml"
     TYPE_REGISTRY_EXTENSION_SOURCES: str = ""
     LLM_CONFIG_PATH: str = "config/llm_config.yaml"
@@ -65,14 +96,26 @@ class Settings(BaseSettings):
     MISTRAL_API_URL: str | None = None
     LLAMA_API_URL: str | None = None
     OLLAMA_API_URL: str = "http://localhost:11434"
+    # KV-cache window passed as num_ctx to Ollama on every request.
+    # system_v1.yaml is ~4200 tokens; dialogue prompt adds ~3200 tokens → total ~7400.
+    # Minimum recommended value: 8192. On RTX cards with ≥9GB VRAM this adds ~400 MB KV cache.
+    # On RTX 5070 Ti Laptop (9.5 GiB): 8192 fits with ~350 MB headroom.
+    # Set OLLAMA_CONTEXT_LENGTH=8192 (or higher) in .env; restart the engine to pick it up.
+    OLLAMA_CONTEXT_LENGTH: int = 4096
 
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
     VECTOR_STORE_BACKEND: Literal["memory", "qdrant"] = "memory"
     QDRANT_URL: str | None = None
     EMBEDDING_REFRESH_ON_WRITE: bool = True
     EMBEDDING_RECONCILE_INTERVAL_SECONDS: int = 300
-    PROMPT_TOKEN_BUDGET: int = 8000  # Mixtral 32K context; tier_a budget is 4000 so total must exceed it
+    # Maximum tokens the context_builder may fill. Derived from OLLAMA_CONTEXT_LENGTH.
+    # Overhead = system_v1.yaml (~4200 tokens) + output cap (512) + prompt headers (~500) ≈ 5200.
+    # At OLLAMA_CONTEXT_LENGTH=8192 → budget ≈ 2992. Override in .env if you resize the system prompt.
+    PROMPT_TOKEN_BUDGET: int = 0
     RAG_TOP_K: int = 5
+    # Cap on second-hop (friend-of-friend) events injected into dialogue context.
+    # Bounds an otherwise-unbounded accumulation for highly-connected NPCs (gossip hubs).
+    MAX_SECOND_HOP_EVENTS: int = 5
 
     DIALOGUE_SESSION_TURNS: int = 10
     DIALOGUE_SESSION_TTL: int = 300
@@ -94,17 +137,41 @@ class Settings(BaseSettings):
     CURRENCY_MAX_PER_TRANSACTION: int = 1000
     CURRENCY_MAX_PER_SESSION: int = 5000
 
+    # Canonical world-state node id (DEC-022); must match the seeders ("world").
+    # Prior "world_demo" default desynced the engine from seeded state (L1-07).
+    WORLD_ID: str = "world"
+
+    TTS_ENABLED: bool = False
+    TTS_BACKEND: Literal["piper", "mock"] = "piper"
+    PIPER_BASE_URL: str = "http://localhost:5000"
+    TTS_TIMEOUT_SECONDS: float = Field(default=10.0, gt=0)
+
     CLOCK_MODE: Literal["realtime", "game_driven"] = "realtime"
+
+    # Emotion model backend injected into EmotionUpdater (F1.3). "vad" is the
+    # baseline VAD model; "trait_modulated" scales deltas by personality traits.
+    EMOTION_MODEL: Literal["vad", "trait_modulated"] = "vad"
+
+    # Run scheduled forgetting-decay (charge-weighted vividness decay) every N ticks (F1.7).
+    MEMORY_DECAY_TICK_INTERVAL: int = 10
 
     CONSOLIDATION_TURN_THRESHOLD: int = 10
     CONSOLIDATION_CLEAR_TURNS: bool = False
 
+    STRUCTURED_OUTPUT_TEMPERATURE: float = 0.1
+
     MAX_CONCURRENT_TICKS: int = 20
+    MAX_DELTA_TICKS: int = MAX_DELTA_TICKS
 
     DISTRIBUTED_TICK_LEASE_ENABLED: bool = True
     TICK_SCHEDULER_ID: str = "main"
     TICK_LEASE_OWNER_ID: str = Field(default_factory=lambda: f"{socket.gethostname()}-{os.getpid()}")
     TICK_LEASE_TTL_SECONDS: int = 30
+    TICK_AUTOPILOT_ENABLED: bool = True
+    TICK_INTERVAL_SECONDS: int = 10
+    TICK_GAME_SECONDS_PER_TICK: int = 1
+    TICK_LLM_CALLS_PER_MINUTE_MAX: int = 6
+    CHAPTER_TICK_INTERVAL: int = 1
 
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_REQUESTS_PER_SECOND: float = Field(default=50.0, gt=0)
@@ -112,10 +179,48 @@ class Settings(BaseSettings):
 
     WITNESSED_MAX_PER_EVENT: int = 10
     CLIQUE_FORMATION_TICK_INTERVAL: int = 10
+    # Clique formation thresholds (SEV-12): min bidirectional affection to form a
+    # clique, initial group cohesion, and the age (ticks) past which a clique decays.
+    CLIQUE_AFFECTION_THRESHOLD: int = 70
+    CLIQUE_INITIAL_COHESION: int = 10
+    CLIQUE_STALE_AGE_TICKS: int = 50
     TREATY_LLM_EVAL_ENABLED: bool = False
     CROSS_ENCODER_ENABLED: bool = False
     GRAPH_RAG_ENABLED: bool = False
     RUMOR_DISTORTION_THRESHOLD: int = 50
+    RUMOR_EMOTION_SEVERITY_THRESHOLD: int = 50
+
+    KNOWLEDGE_LEARNING_ENABLED: bool = False
+
+    # EXP-212: salience threshold below which a memory is considered forgettable.
+    # Salience is computed from vividness (40 %), emotional_charge (40 %), and
+    # recall_count (20 %). A value of 20 means low-activity memories are prunable.
+    MEMORY_FORGET_THRESHOLD: float = Field(default=20.0, ge=0.0, le=100.0)
+
+    # EXP-229: max concurrent active schemes a single NPC may run (covert-goal cap, DEC-104).
+    MAX_ACTIVE_SCHEMES_PER_NPC: int = Field(default=2, ge=1, le=20)
+
+    # F1.6 / DEC-107 (Option A): scheme auto-advance cadence + caps.
+    # Advance active schemes once every N ticks (self-gated in SchemeAdvanceTick).
+    SCHEME_ADVANCE_TICK_INTERVAL: int = Field(default=5, ge=1, le=1000)
+    # Maximum SCHEME_STEP events a single scheme may accrue before it stops advancing.
+    MAX_SCHEME_STEPS: int = Field(default=5, ge=1, le=100)
+    # Cap on how many schemes advance in a single tick (bounds covert-event creation).
+    SCHEME_ADVANCE_MAX_PER_TICK: int = Field(default=10, ge=1, le=100)
+
+    # F1.6 detection-half: run scheme discovery once every N ticks (self-gated).
+    SCHEME_DETECTION_TICK_INTERVAL: int = Field(default=7, ge=1, le=1000)
+    # Minimum covert steps before a scheme can be discovered by a co-located witness.
+    SCHEME_DISCOVERY_MIN_STEPS: int = Field(default=2, ge=1, le=100)
+
+    # EXP-230: max dialogue turns persisted per (npc, player) session across restarts.
+    MAX_PERSISTED_SESSION_TURNS: int = Field(default=20, ge=1, le=500)
+
+    # Content-moderation ceiling (S16.1). "mature" = no restrictions (default).
+    CONTENT_RATING: ContentRating = Field(
+        default="mature",
+        description="Global content ceiling. 'mature' is the default (no restrictions).",
+    )
 
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     LOG_LLM_PROMPTS: bool = False
@@ -123,7 +228,52 @@ class Settings(BaseSettings):
     GOSSIP_RNG_SEED: int | None = None
     EVENT_RNG_SEED: int | None = None
 
+    # Intent formation engine config (Phase 14)
+    MIN_INTENT_SCORE: float = Field(default=0.3, ge=0.0, le=1.0)
+    MAX_PENDING_INTENTS_PER_NPC: int = Field(default=5, gt=0)
+    MAX_PENDING_INTENTS_PER_PLAYER: int = Field(default=10, gt=0)
+    INTENT_EXPIRY_TICKS: int = Field(default=20, gt=0)
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
+
+    @model_validator(mode="after")
+    def _derive_prompt_token_budget(self) -> "Settings":
+        """Derive PROMPT_TOKEN_BUDGET from OLLAMA_CONTEXT_LENGTH when not explicitly set.
+
+        Overhead breakdown: system_v1.yaml prompt (~4200 tokens) + output cap (512)
+        + dialogue headers / fences (~500) ≈ 5200 tokens reserved for the model.
+        The remaining tokens are available for the context_builder to fill.
+        Override PROMPT_TOKEN_BUDGET in .env only for non-standard system prompt sizes.
+        """
+        if self.PROMPT_TOKEN_BUDGET == 0:
+            object.__setattr__(
+                self,
+                "PROMPT_TOKEN_BUDGET",
+                max(512, self.OLLAMA_CONTEXT_LENGTH - 5200),
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_neo4j_password(self) -> "Settings":
+        """Reject the default NEO4J_PASSWORD in staging/prod (SEV-21)."""
+        check_neo4j_password(self.NEO4J_PASSWORD, env=self.ENV)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_production_logging(self) -> "Settings":
+        """Reject DEBUG verbosity and LLM-prompt logging outside dev (L1-12)."""
+        check_log_level(self.LOG_LEVEL, env=self.ENV)
+        check_log_llm_prompts(self.LOG_LLM_PROMPTS, env=self.ENV)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_production_safety(self) -> "Settings":
+        """Reject the shipped dev API_KEY_SECRET (L1-04) and disabled idempotency
+        enforcement (DEC-111) outside dev — both are replay/compromise risks in prod.
+        """
+        check_api_key_secret(self.API_KEY_SECRET, env=self.ENV)
+        check_idempotency_enforced(self.IDEMPOTENCY_ENFORCE_HEADER, env=self.ENV)
+        return self
 
     @field_validator("API_KEY_SECRET")
     @classmethod

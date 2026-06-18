@@ -1,0 +1,10 @@
+edge_type: UNLOCKS
+src_type: quest
+dst_type: quest
+fields:
+  on_outcome:
+    type: str
+    required: true
+  on_choice_id:
+    type: str
+    required: false

@@ -140,7 +140,7 @@ def keyword_overlap(text: str, query: str) -> float:
     return len(query_tokens & text_tokens) / len(query_tokens)
 
 
-def rerank_by_keyword(items: list[dict], field: str, query: str, top_k: int = 3) -> list[dict]:
+def rerank_by_keyword(items: list[dict[str, Any]], field: str, query: str, top_k: int = 3) -> list[dict[str, Any]]:
     """Re-rank item dicts by keyword overlap of a text field against query, keep top_k.
 
     Args:

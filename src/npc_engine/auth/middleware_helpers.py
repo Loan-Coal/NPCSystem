@@ -1,30 +1,30 @@
 """
 middleware_helpers.py - Standalone helper functions and shared constants for ApiKeyMiddleware.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: define the middleware class itself.
 
 Dependencies injected: Settings.
 """
+from __future__ import annotations
 
-from time import perf_counter
-import time
 from uuid import UUID
 
 from fastapi import Request
 from starlette.responses import JSONResponse, Response
 
+from npc_engine.api.error_envelope import ErrorBody, ErrorEnvelope
 from npc_engine.auth.permissions import SCOPE_GRAPH_ADMIN, SCOPE_GRAPH_WRITE
 from npc_engine.config import Settings
 from npc_engine.engines.idempotency.models import IdempotencyPreflightResult
 from npc_engine.utils.errors import IdempotencyKeyInvalidError, IdempotencyKeyRequiredError
-from npc_engine.utils.logging import get_logger
-from npc_engine.utils.metrics import increment_metric, observe_metric, result_label_from_status
 
 
 HEALTH_PATH = "/health"
 DOCS_PATHS = frozenset({"/docs", "/redoc", "/openapi.json"})
+DASHBOARD_PATH_PREFIX = "/dashboard"
 OPTIONS_METHOD = "OPTIONS"
-REQUEST_ID_HEADER = "X-Request-ID"
 UUID_VERSION_V4 = 4
 
 HTTP_STATUS_BAD_REQUEST = 400
@@ -40,13 +40,30 @@ IDEMPOTENCY_IN_FLIGHT_CODE = "IDEMPOTENCY_IN_FLIGHT"
 
 MUTATING_METHODS = frozenset({"POST", "PATCH", "PUT", "DELETE"})
 
-VALIDATION_FAILURES_METRIC = "validation_failures_total"
-HTTP_REQUESTS_METRIC = "http_requests_total"
-HTTP_REQUEST_LATENCY_METRIC = "http_request_latency_seconds"
-REQUEST_COMPLETED_EVENT = "request_completed"
-REQUEST_ID_FALLBACK_PREFIX = "req"
 
-LOGGER = get_logger(__name__)
+def is_public_path(path: str, *, env: str = "dev") -> bool:
+    """Return True when the path may be accessed without an API key.
+
+    Rules:
+    - /health is always public (liveness probe must work in all environments).
+    - /docs, /redoc, /openapi.json are public only when ENV == "dev" so that
+      the full API surface is not enumerable in staging/prod.
+    - /readiness is NOT public; only /health has that exemption.
+    - Dashboard assets are public in dev only (they supply their own Bearer tokens).
+
+    Args:
+        path: Incoming request URL path.
+        env: Current ENV value ("dev", "staging", or "prod"). Defaults to "dev"
+            for backward-compatibility with call sites that don't pass env yet.
+
+    Returns:
+        True when the path is exempt from authentication for the given env.
+    """
+    if path == HEALTH_PATH:
+        return True
+    if path in DOCS_PATHS or path.startswith(DASHBOARD_PATH_PREFIX):
+        return env == "dev"
+    return False
 
 
 def _required_scope_for_path(path: str, api_v1_prefix: str) -> str | None:
@@ -120,7 +137,7 @@ def _validate_idempotency_key(request: Request, settings: Settings) -> None:
 
 
 def _idempotency_error_response(request: Request, error_code: str, message: str, status_code: int) -> JSONResponse:
-    """Build a stable idempotency error response payload.
+    """Build a stable idempotency error response using the canonical ErrorEnvelope.
 
     Args:
         request: Incoming FastAPI request.
@@ -129,106 +146,14 @@ def _idempotency_error_response(request: Request, error_code: str, message: str,
         status_code: HTTP status code for the response.
 
     Returns:
-        JSONResponse with idempotency error envelope.
+        JSONResponse with ErrorEnvelope shape.
     """
-    request_id = request.headers.get(REQUEST_ID_HEADER, "")
-    payload = {
-        "success": False,
-        "error": error_code,
-        "message": message,
-        "request_id": request_id,
-    }
-    return JSONResponse(status_code=status_code, content=payload)
-
-
-def _resolve_request_id(request: Request) -> str:
-    """Resolve request correlation id from header or deterministic fallback.
-
-    Args:
-        request: Incoming FastAPI request.
-
-    Returns:
-        Correlation id string from X-Request-ID header or generated fallback.
-    """
-    header_value = request.headers.get(REQUEST_ID_HEADER, "").strip()
-    if header_value != "":
-        return header_value
-    return f"{REQUEST_ID_FALLBACK_PREFIX}:{request.method.lower()}:{time.time_ns()}"
-
-
-def _record_request_observability(
-    *,
-    request: Request,
-    request_id: str,
-    route_label: str,
-    status_code: int,
-    started_at: float,
-) -> None:
-    """Emit bounded-cardinality request logs and metrics.
-
-    Args:
-        request: Incoming FastAPI request.
-        request_id: Resolved request correlation id.
-        route_label: Normalized route label for metric cardinality control.
-        status_code: HTTP status code of the completed response.
-        started_at: perf_counter timestamp captured at request start.
-    """
-    result = result_label_from_status(status_code=status_code)
-    duration_seconds = perf_counter() - started_at
-    labels = {
-        "route": route_label,
-        "method": request.method.lower(),
-        "result": result,
-    }
-    increment_metric(metric=HTTP_REQUESTS_METRIC, labels=labels)
-    observe_metric(metric=HTTP_REQUEST_LATENCY_METRIC, value=duration_seconds, labels=labels)
-    LOGGER.info(
-        REQUEST_COMPLETED_EVENT,
-        extra={
-            "request_id": request_id,
-            "route": route_label,
-            "method": request.method,
-            "status_code": status_code,
-            "result": result,
-            "duration_ms": int(duration_seconds * 1000),
-        },
+    return JSONResponse(
+        status_code=status_code,
+        content=ErrorEnvelope(
+            error=ErrorBody(code=error_code, message=message)
+        ).model_dump(),
     )
-
-
-def _finalize_validation_failure_response(
-    *,
-    request: Request,
-    request_id: str,
-    route_label: str,
-    started_at: float,
-    response: Response,
-    reason: str,
-) -> Response:
-    """Attach validation-failure metrics and observability for one response.
-
-    Args:
-        request: Incoming FastAPI request.
-        request_id: Resolved request correlation id.
-        route_label: Normalized route label for metric cardinality control.
-        started_at: perf_counter timestamp captured at request start.
-        response: Completed response object.
-        reason: Machine-readable failure reason for metrics labeling.
-
-    Returns:
-        The same response with metrics and logs emitted.
-    """
-    increment_metric(
-        metric=VALIDATION_FAILURES_METRIC,
-        labels={"route": route_label, "reason": reason, "status": str(response.status_code)},
-    )
-    _record_request_observability(
-        request=request,
-        request_id=request_id,
-        route_label=route_label,
-        status_code=response.status_code,
-        started_at=started_at,
-    )
-    return response
 
 
 def _build_idempotency_decision_response(

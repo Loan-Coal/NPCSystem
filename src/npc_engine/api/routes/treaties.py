@@ -10,12 +10,14 @@ Used by: npc_engine.main
 
 from __future__ import annotations
 
+from typing import Any
+
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.treaty_service import (
     TreatyCondition,
     break_treaty,
@@ -60,17 +62,34 @@ class BreakTreatyRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class TreatiesPayload(BaseModel):
+    """Typed payload for GET /treaties/factions/{faction_id} (SEV-16).
+
+    The ``treaties`` group is fixed; individual rows are heterogeneous graph
+    records, so each stays ``dict[str, Any]``.
+    """
+
+    treaties: list[dict[str, Any]]
+
+    model_config = ConfigDict(frozen=True)
+
+
+# ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
 
 router = APIRouter(prefix="/treaties", tags=["treaties"])
 
 
-@router.post("/")
+@router.post("/", response_model=OkEnvelope[dict[str, Any]])
 async def create_treaty_route(
     body: CreateTreatyRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create a new Treaty and BOUND_BY edges for each signatory faction.
 
     Args:
@@ -91,11 +110,11 @@ async def create_treaty_route(
     return ok_response({"treaty_id": treaty_id})
 
 
-@router.get("/factions/{faction_id}")
+@router.get("/factions/{faction_id}", response_model=OkEnvelope[TreatiesPayload])
 async def list_faction_treaties(
     faction_id: str,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List active treaties for a faction.
 
     Args:
@@ -105,15 +124,15 @@ async def list_faction_treaties(
         Envelope with list of treaty dicts.
     """
     treaties = await get_active_treaties_svc(session, faction_id)
-    return ok_response({"treaties": treaties})
+    return ok_response(TreatiesPayload(treaties=treaties).model_dump())
 
 
-@router.post("/{treaty_id}/expire")
+@router.post("/{treaty_id}/expire", response_model=OkEnvelope[dict[str, Any]])
 async def expire_treaty_route(
     treaty_id: str,
     body: ExpireTreatyRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Manually expire a treaty.
 
     Args:
@@ -127,12 +146,12 @@ async def expire_treaty_route(
     return ok_response({"treaty_id": treaty_id, "status": "expired"})
 
 
-@router.post("/{treaty_id}/break")
+@router.post("/{treaty_id}/break", response_model=OkEnvelope[dict[str, Any]])
 async def break_treaty_route(
     treaty_id: str,
     body: BreakTreatyRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Break a treaty.
 
     Args:

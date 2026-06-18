@@ -1,10 +1,13 @@
 """
 action_helpers.py - Pure helpers for /action route branching and payload shaping.
+Layer: api
+Purpose: (auto-detected — review)
 
 Does NOT: execute graph writes.
 
 Dependencies injected: None.
 """
+from __future__ import annotations
 
 from datetime import datetime, timezone
 

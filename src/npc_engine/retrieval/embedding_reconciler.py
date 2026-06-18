@@ -1,9 +1,12 @@
 """
 embedding_reconciler.py - Background stale-embedding reconciliation worker.
+Layer: retrieval
+Purpose: Periodic worker that heals stale embeddings using graph timestamps.
 
 Does NOT: mutate core graph properties other than embedding index timestamps.
 
 Dependencies injected: GraphDB and EmbeddingIndex.
+Used by: api/dependencies.py (scheduler wiring).
 """
 
 from __future__ import annotations
@@ -13,59 +16,14 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
+from npc_engine.graph.embedding_sync_queries import batch_set_embeddings, select_stale_nodes
+
 
 LOGGER = logging.getLogger(__name__)
 
 
-CYPHER_SELECT_STALE_NODES = """
-MATCH (n:Character)
-WHERE n.is_active = true
-  AND n.id IS NOT NULL
-  AND n.last_graph_updated_at IS NOT NULL
-  AND (
-      n.last_embedding_indexed_at IS NULL
-      OR n.last_graph_updated_at > n.last_embedding_indexed_at
-  )
-RETURN n.id AS id,
-       'Character' AS kind,
-       trim(coalesce(n.name, '') + ' ' + coalesce(n.archetype, '') + ' ' + coalesce(n.biography, '') + ' ' + coalesce(n.current_mood, '')) AS text,
-       properties(n) AS payload
-UNION ALL
-MATCH (n:Event)
-WHERE n.id IS NOT NULL
-  AND n.last_graph_updated_at IS NOT NULL
-  AND (
-      n.last_embedding_indexed_at IS NULL
-      OR n.last_graph_updated_at > n.last_embedding_indexed_at
-  )
-RETURN n.id AS id,
-       'Event' AS kind,
-       trim(coalesce(n.summary, '') + ' ' + coalesce(n.event_type, '') + ' ' + coalesce(n.location_id, '')) AS text,
-       properties(n) AS payload
-UNION ALL
-MATCH (n:Location)
-WHERE n.id IS NOT NULL
-  AND n.last_graph_updated_at IS NOT NULL
-  AND (
-      n.last_embedding_indexed_at IS NULL
-      OR n.last_graph_updated_at > n.last_embedding_indexed_at
-  )
-RETURN n.id AS id,
-       'Location' AS kind,
-       trim(coalesce(n.name, '') + ' ' + coalesce(n.descriptor, '') + ' ' + coalesce(n.region, '') + ' ' + coalesce(n.location_tag, '')) AS text,
-       properties(n) AS payload
-"""
-
-
-_MARK_INDEXED_QUERIES: dict[str, str] = {
-    "Character": "MATCH (n:Character {id: $node_id}) SET n.last_embedding_indexed_at = datetime($indexed_at)",
-    "Event": "MATCH (n:Event {id: $node_id}) SET n.last_embedding_indexed_at = datetime($indexed_at)",
-    "Location": "MATCH (n:Location {id: $node_id}) SET n.last_embedding_indexed_at = datetime($indexed_at)",
-}
-
-
 class _SessionProtocol(Protocol):
-    async def run(self, query: str, **params) -> Any:
+    async def run(self, query: str, **params: Any) -> Any:
         """Execute an async Cypher query.
 
         Args:
@@ -83,13 +41,26 @@ class _GraphDbProtocol(Protocol):
 
 
 class _EmbeddingIndexProtocol(Protocol):
-    async def upsert(self, item_id: str, text: str, payload: dict) -> None:
+    async def upsert(self, item_id: str, text: str, payload: dict[str, Any]) -> None:
         """Upsert one embedding row.
 
         Args:
             item_id: Unique identifier for the item.
             text: Raw text to embed.
             payload: Metadata stored alongside the embedding.
+        """
+
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Encode a list of texts and return their embedding vectors.
+
+        Called once per reconciliation cycle instead of encoding inside
+        each individual upsert call. Reduces encoder invocations from N to 1.
+
+        Args:
+            texts: Raw text strings to encode; empty list returns empty list.
+
+        Returns:
+            List of float vectors, one per input text, in the same order.
         """
 
 
@@ -107,7 +78,7 @@ class EmbeddingReconciler:
 
         Args:
             graph_db: Graph database handle used to query stale nodes.
-            embedding_index: Embedding index to write repaired embeddings into.
+            embedding_index: Embedding index used to batch-encode node texts.
             interval_seconds: Seconds between reconciliation cycles; must be greater than 0.
             batch_size: Maximum nodes to process per cycle; must be greater than 0.
 
@@ -128,7 +99,7 @@ class EmbeddingReconciler:
         """Run one reconciliation cycle over all stale nodes.
 
         Returns:
-            Dict with keys ``processed`` (successful upserts) and ``failed`` (error count).
+            Dict with keys ``processed`` (successful writes) and ``failed`` (error count).
         """
 
         async with self._graph_db.get_session() as session:
@@ -162,67 +133,19 @@ class EmbeddingReconciler:
                 await asyncio.sleep(self._interval_seconds)
 
     async def _reconcile_in_session(self, session: _SessionProtocol) -> dict[str, int]:
-        # Phase 1: collect stale node records, fully consuming the result before
-        # running any write queries (session allows only one active result at a time).
-        result = await session.run(CYPHER_SELECT_STALE_NODES)
-        batch: list[dict] = []
-        try:
-            async for record in result:
-                if len(batch) >= self._batch_size:
-                    break
-                batch.append({
-                    "node_id": str(_record_value(record=record, key="id", default="")),
-                    "kind": str(_record_value(record=record, key="kind", default="")),
-                    "text": str(_record_value(record=record, key="text", default="")).strip(),
-                    "payload": _record_value(record=record, key="payload", default={}),
-                })
-        finally:
-            await result.consume()
+        batch = await select_stale_nodes(session, self._batch_size)  # type: ignore[arg-type]
 
-        # Phase 2: process collected nodes — no active read result on the session.
-        processed = 0
-        failed = 0
-        for item in batch:
-            node_id = item["node_id"]
-            kind = item["kind"]
-            text = item["text"] or node_id
-            payload_raw = item["payload"]
-            payload = payload_raw if isinstance(payload_raw, dict) else {}
-            indexed_at = datetime.now(timezone.utc).isoformat()
-            payload_with_meta = {
-                **payload,
-                "id": node_id,
-                "kind": kind,
-                "indexed_at": indexed_at,
-            }
+        if not batch:
+            return {"processed": 0, "failed": 0}
 
-            try:
-                await self._embedding_index.upsert(item_id=node_id, text=text, payload=payload_with_meta)
-                await self._mark_node_indexed(
-                    session=session,
-                    kind=kind,
-                    node_id=node_id,
-                    indexed_at=indexed_at,
-                )
-                processed += 1
-            except Exception:
-                failed += 1
-                LOGGER.exception("embedding reconcile failed for kind=%s id=%s", kind, node_id)
+        indexed_at = datetime.now(timezone.utc).isoformat()
+        texts = [item["text"] or item["node_id"] for item in batch]
+        vectors = await self._embedding_index.embed_batch(texts)
 
-        return {"processed": processed, "failed": failed}
+        write_nodes = [
+            {"id": item["node_id"], "embedding": vector, "indexed_at": indexed_at}
+            for item, vector in zip(batch, vectors)
+        ]
+        await batch_set_embeddings(session, write_nodes)  # type: ignore[arg-type]
+        return {"processed": len(batch), "failed": 0}
 
-    async def _mark_node_indexed(self, session: _SessionProtocol, kind: str, node_id: str, indexed_at: str) -> None:
-        query = _MARK_INDEXED_QUERIES.get(kind)
-        if query is None:
-            return
-        result = await session.run(query, node_id=node_id, indexed_at=indexed_at)
-        await result.consume()
-
-
-def _record_value(record: Any, key: str, default: Any) -> Any:
-    if isinstance(record, dict):
-        return record.get(key, default)
-    try:
-        return record[key]
-    except Exception:
-        return default

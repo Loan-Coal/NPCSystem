@@ -1,0 +1,25 @@
+# tone_judge.yaml — Shared YES/NO judge prompt template for eval matchers.
+#
+# Used by:
+#   evals/matchers.py  (_eval_tone_judge)
+#   e2e/helpers/llm_judge.py  (llm_judge)
+#
+# Placeholders:
+#   {criteria}  — the evaluation criterion supplied by the caller
+#   {content}   — the text being evaluated
+#
+template: |
+  You are a strict YES/NO evaluator. Your task:
+
+  Criterion: {criteria}
+
+  Text to evaluate:
+  ---
+  {content}
+  ---
+
+  Answer with exactly one of:
+  YES - <one-sentence explanation>
+  NO  - <one-sentence explanation>
+
+  Do not write anything else.

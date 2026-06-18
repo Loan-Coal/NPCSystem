@@ -10,14 +10,14 @@ Used by: npc_engine.main
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Any
 
 from neo4j import AsyncSession
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import ok_response
+from npc_engine.api.route_helpers import OkEnvelope, ok_response
 from npc_engine.graph.pledge_service import (
     break_pledge,
     create_pledge,
@@ -57,18 +57,35 @@ class BreakPledgeRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class PledgesPayload(BaseModel):
+    """Typed payload for GET /pledges/characters/{character_id} (SEV-16).
+
+    The ``pledges`` group is fixed; individual rows are heterogeneous graph
+    records, so each stays ``dict[str, Any]``.
+    """
+
+    pledges: list[dict[str, Any]]
+
+    model_config = ConfigDict(frozen=True)
+
+
+# ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
 
 router = APIRouter(prefix="/pledges", tags=["pledges"])
 
 
-@router.post("/characters/{character_id}")
+@router.post("/characters/{character_id}", response_model=OkEnvelope[dict[str, Any]])
 async def create_character_pledge(
     character_id: str,
     body: CreatePledgeRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Create a new PLEDGE edge from a character to another.
 
     Args:
@@ -92,12 +109,12 @@ async def create_character_pledge(
     return ok_response({"pledger_id": character_id, "pledgee_id": body.pledgee_id, "pledge_type": body.pledge_type})
 
 
-@router.get("/characters/{character_id}")
+@router.get("/characters/{character_id}", response_model=OkEnvelope[PledgesPayload])
 async def list_character_pledges(
     character_id: str,
     active_only: bool = True,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """List pledges where character is the pledger.
 
     Args:
@@ -108,15 +125,15 @@ async def list_character_pledges(
         Envelope with list of pledge dicts.
     """
     pledges = await get_pledges_for_character_svc(session, character_id, active_only=active_only)
-    return ok_response({"pledges": pledges})
+    return ok_response(PledgesPayload(pledges=pledges).model_dump())
 
 
-@router.post("/characters/{character_id}/break")
+@router.post("/characters/{character_id}/break", response_model=OkEnvelope[dict[str, Any]])
 async def break_character_pledge(
     character_id: str,
     body: BreakPledgeRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> dict:
+) -> dict[str, Any]:
     """Break an active pledge and apply relationship consequences.
 
     Args:

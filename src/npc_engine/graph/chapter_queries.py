@@ -10,6 +10,7 @@ Used by: engines/chapter/chapter_engine
 
 from __future__ import annotations
 
+from typing import Any
 import logging
 
 from neo4j import AsyncSession
@@ -63,7 +64,7 @@ RETURN coalesce(max(nb.intensity), 0) AS max_intensity
 """
 
 
-async def get_current_chapter(session: AsyncSession) -> dict | None:
+async def get_current_chapter(session: AsyncSession) -> dict[str, Any] | None:
     """Return the most recently opened chapter node, or None if none is open.
 
     Args:
@@ -88,7 +89,7 @@ async def get_current_chapter(session: AsyncSession) -> dict | None:
 async def get_chapter_events(
     session: AsyncSession,
     chapter_id: str,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Return all events linked to a chapter via PART_OF_CHAPTER.
 
     Args:
@@ -135,7 +136,7 @@ async def get_completed_quests_since_tick(
     session: AsyncSession,
     since_tick: int,
     limit: int = 20,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Return recently completed quests for LLM chapter labeling context.
 
     Args:
@@ -163,7 +164,7 @@ async def get_recent_events_for_chapter(
     session: AsyncSession,
     since_tick: int,
     limit: int = 10,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Return recent events for LLM chapter labeling context.
 
     Args:

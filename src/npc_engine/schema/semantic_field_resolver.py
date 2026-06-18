@@ -1,10 +1,13 @@
 """
 semantic_field_resolver.py - Shared field selection by semantic tags.
+Layer: config
+Purpose: (auto-detected — review)
 
 Does NOT: load schema files or resolve graph data.
 
 Dependencies injected: SchemaConfig.
 """
+from __future__ import annotations
 
 from npc_engine.schema.schema_models import SchemaConfig, SemanticTag
 
@@ -28,7 +31,7 @@ def resolve_fields_with_semantic(
     """
 
     if core_type is None:
-        type_configs = schema.core_types.values()
+        type_configs = list(schema.core_types.values())
     else:
         selected_type = schema.core_types.get(core_type)
         if selected_type is None:

@@ -1,0 +1,27 @@
+case_id: case_pos_captain_sorn_war_knowledge
+description: >
+  captain_sorn holds a direct (non-gossip) KNOWS_ABOUT edge for northern_war_begins.
+  Asked plainly about the northern situation, he should surface the war facts he owns
+  (Northmen across the border, armies massing at King's Pass). Grounded positive:
+  at least one war-fact token must appear.
+seed:
+  npc_id: captain_sorn
+  player_id: player_eval
+  requires_world: demo
+input:
+  player_message: "Captain, what's the situation in the north? Should the city be worried?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - north
+      - northmen
+      - war
+      - border
+      - king's pass
+      - army
+      - armies
+      - march
+notes: >
+  Requires demo world seed (make demo-seed). Direct edge -> a confident, specific answer
+  is correct; unlike mira/henryk he need NOT hedge. keyword_any needs only one war token.

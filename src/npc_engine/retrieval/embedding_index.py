@@ -9,6 +9,9 @@ Used by: retrieval.context_builder, engines.gossip.gossip_handler, engines.event
 
 from __future__ import annotations
 
+from typing import Any
+import asyncio
+
 from npc_engine.retrieval.vector_store_protocol import VectorSearchResult, VectorStoreProtocol
 
 EMBED_DIMENSION = 384  # all-MiniLM-L6-v2 output dimension
@@ -19,6 +22,12 @@ def _embed_text(text: str, model_name: str) -> list[float]:
         return [0.0] * EMBED_DIMENSION
     from npc_engine.retrieval.sentence_encoder import embed
     return embed(text, model_name=model_name)
+
+
+def _embed_texts_batch(texts: list[str], model_name: str) -> list[list[float]]:
+    if not texts:
+        return []
+    return [_embed_text(t, model_name) for t in texts]
 
 
 class EmbeddingIndex:
@@ -35,7 +44,7 @@ class EmbeddingIndex:
         self._vector_store = vector_store
         self._model_name = model_name
 
-    async def upsert(self, item_id: str, text: str, payload: dict) -> None:
+    async def upsert(self, item_id: str, text: str, payload: dict[str, Any]) -> None:
         """Embed text and upsert into the vector store.
 
         Args:
@@ -44,7 +53,9 @@ class EmbeddingIndex:
             payload: Arbitrary metadata stored alongside the embedding.
         """
 
-        vector = _embed_text(text, self._model_name)
+        # Offload the CPU-bound sentence-transformers encode to a worker thread so
+        # it never blocks the asyncio event loop (ISSUE-063).
+        vector = await asyncio.to_thread(_embed_text, text, self._model_name)
         await self._vector_store.upsert(item_id=item_id, vector=vector, payload=payload)
 
     async def search(
@@ -71,11 +82,27 @@ class EmbeddingIndex:
 
         if top_k <= 0:
             raise ValueError("top_k must be greater than 0")
-        query_vector = _embed_text(query, self._model_name)
+        query_vector = await asyncio.to_thread(_embed_text, query, self._model_name)
         results = await self._vector_store.search(query_vector=query_vector, top_k=top_k)
         if filter_ids is not None:
             results = [r for r in results if r["id"] in filter_ids]
         return results[:top_k]
+
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Encode a list of texts and return their embedding vectors.
+
+        Used by the embedding reconciler to batch-encode all stale nodes in one
+        call instead of N individual encodes inside upsert.
+
+        Args:
+            texts: Raw text strings to encode; empty list returns empty list.
+
+        Returns:
+            List of float vectors, one per input text, in the same order.
+            Empty texts produce a zero vector of length EMBED_DIMENSION.
+        """
+
+        return await asyncio.to_thread(_embed_texts_batch, texts, self._model_name)
 
     async def invalidate(self, item_id: str) -> None:
         """Remove one indexed entry from the vector store.
