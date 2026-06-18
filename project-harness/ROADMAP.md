@@ -72,14 +72,21 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
   uvicorn orchestrator), `scripts/launcher.py` (PyInstaller entry point, env-driven Ollama toggle),
   `packaging/npc_engine.spec` (PyInstaller build recipe). `make package` builds the standalone binary.
   19 unit tests green; all gate checks pass.
-- [ ] **SHIP-05 (first-run wizard UX)** — a setup screen that offers **(A) run locally** vs **(B) use an API
-  provider + key**, persists the choice, and validates it (key works / model present) before play. Exit: both
-  paths are reachable from one wizard; choice survives restart.
+- [x] **SHIP-05a (wizard backend — P0)** — platform-agnostic data layer for the first-run wizard (DEC-129):
+  `wizard_config.py` (`LLMPath` enum + `WizardConfig` Pydantic model + `load_wizard_config` /
+  `save_wizard_config` persisting to `~/.npc_engine/wizard_config.json`) and `path_validator.py`
+  (async `validate_path_a`: Ollama running + model present; async `validate_path_b`: HTTP probe of
+  the configured API endpoint + key). No UI. Exit: config round-trips through JSON; path-A and
+  path-B validators return typed results; `make check` green.
 
 ### Phase P1 — The game slice (gated on SHIP-01)
 - **Goal:** a ~10-minute authored experience whose core loop makes one emergent behaviour *visible and
   re-tellable in a 30-second clip*. Reuse the existing seed world (5–8 NPCs / existing locations/factions).
 - **Constraints:** keep scope brutally small — one town, one hook, one win/lose; the simulation must be the star.
+- [ ] **SHIP-05b (wizard Unity screen)** — Unity setup screen (C#) that presents the A/B choice,
+  collects the API key for path B, calls the validators (drives `wizard_config.py` / `path_validator.py`
+  from SHIP-05a), and writes `wizard_config.json`. Exit: both paths reachable from one Unity scene;
+  choice survives restart. (DEC-129)
 - [ ] **SHIP-06 (the legible hook)** — implement ONE emergent payoff the player can trigger and watch:
   e.g. *tell NPC A a secret → advance a gossip tick → NPC C across town repeats it, distorted*; or *betray
   someone, leave, return → they remember*. Exit: the hook is demonstrable end-to-end in the chosen client.
