@@ -150,6 +150,8 @@ class LeftPanelRenderer:
         # Optional callable matching client.get_graph_edges(edge_type, src_id=…).
         # Set by game_window once so the location bar can render breadcrumbs.
         self._get_graph_edges: object | None = None
+        # Breadcrumb is fetched once per location change, not every frame.
+        self._breadcrumb_cache: dict[str, str] = {}
 
     # ------------------------------------------------------------------
     # State setters — called by GameWindow each frame or on events
@@ -365,13 +367,15 @@ class LeftPanelRenderer:
         txt = self._font_loc.render(name, True, PALETTE["white"])
         screen.blit(txt, (rect.x + 12, rect.centery - txt.get_height() // 2))
         if self._get_graph_edges is not None:
-            try:
-                breadcrumb = build_location_breadcrumb(
-                    self._active_location_id, self._get_graph_edges  # type: ignore[arg-type]
-                )
-                self._draw_location_breadcrumb(screen, rect, breadcrumb)
-            except Exception:
-                pass  # breadcrumb is cosmetic — never crash the render loop
+            loc = self._active_location_id
+            if loc not in self._breadcrumb_cache:
+                try:
+                    self._breadcrumb_cache[loc] = build_location_breadcrumb(
+                        loc, self._get_graph_edges  # type: ignore[arg-type]
+                    )
+                except Exception:
+                    self._breadcrumb_cache[loc] = loc  # fallback: bare location name
+            self._draw_location_breadcrumb(screen, rect, self._breadcrumb_cache[loc])
 
     def _draw_location_breadcrumb(
         self,

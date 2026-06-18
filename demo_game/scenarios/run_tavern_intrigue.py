@@ -102,7 +102,7 @@ class SeedCheck(Scene):
         if runner.dry_run:
             return
         try:
-            resp = runner.client._http.get(
+            resp = runner.client._client.get(
                 f"/v1/graph/nodes/Character/{self.npc_id}", timeout=5.0
             )
             if resp.status_code == 404:

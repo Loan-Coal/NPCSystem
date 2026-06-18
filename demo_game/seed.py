@@ -616,8 +616,9 @@ def _seed_h2_quests(client: EngineClient) -> int:
             result = _seed_node(client, "Quest", {**quest, "created_at": _now()})
             if result == "created":
                 created += 1
-                _seed_edge(client, "HAS_QUEST", quest["quest_giver_id"], quest_id, {})
                 logger.info("[seed] H2 source quest seeded: %s", quest_id)
+            # Always seed edge: Quest may exist but edge may be missing from a partial prior run.
+            _seed_edge(client, "HAS_QUEST", quest["quest_giver_id"], quest_id, {})
         except Exception as exc:
             logger.warning("[seed] H2 source quest %s skipped: %s", quest_id, exc)
 
@@ -627,8 +628,9 @@ def _seed_h2_quests(client: EngineClient) -> int:
             result = _seed_node(client, "Quest", {**quest, "created_at": _now()})
             if result == "created":
                 created += 1
-                _seed_edge(client, "HAS_QUEST", quest["quest_giver_id"], quest_id, {})
                 logger.info("[seed] H2 chain quest seeded: %s", quest_id)
+            # Always seed edge: Quest may exist but edge may be missing from a partial prior run.
+            _seed_edge(client, "HAS_QUEST", quest["quest_giver_id"], quest_id, {})
         except Exception as exc:
             logger.warning("[seed] H2 chain quest %s skipped: %s", quest_id, exc)
 
@@ -1061,6 +1063,7 @@ def _seed_deception_belief(client: EngineClient) -> int:
         "id": _DECEPTION_BELIEF_ID,
         "content": _DECEPTION_BELIEF_CONTENT,
         "confidence": 80,
+        "created_at_game_time": json.dumps(_GAME_TIME),
     }
     if _seed_node(client, "Belief", belief_node) == "created":
         created += 1
@@ -1311,10 +1314,11 @@ def _seed_source_chain_quests(client: EngineClient) -> int:
             result = _seed_node(client, "Quest", {**quest, "created_at": _now()})
             if result == "created":
                 created += 1
-                _seed_edge(client, "HAS_QUEST", quest["quest_giver_id"], quest_id, {})
                 logger.info("[seed] Source chain quest seeded: %s", quest_id)
             else:
                 logger.info("[seed] Source chain quest %s already exists — skipped", quest_id)
+            # Always seed edge: Quest may exist but edge may be missing from a partial prior run.
+            _seed_edge(client, "HAS_QUEST", quest["quest_giver_id"], quest_id, {})
         except Exception as exc:
             logger.warning("[seed] Source chain quest %s skipped: %s", quest_id, exc)
     return created
@@ -1342,10 +1346,11 @@ def _seed_chain_quests(client: EngineClient) -> int:
             result = _seed_node(client, "Quest", {**quest, "created_at": _now()})
             if result == "created":
                 created += 1
-                _seed_edge(client, "HAS_QUEST", quest["quest_giver_id"], quest_id, {})
                 logger.info("[seed] Chain quest seeded: %s", quest_id)
             else:
                 logger.info("[seed] Chain quest %s already exists — skipped", quest_id)
+            # Always seed edge: Quest may exist but edge may be missing from a partial prior run.
+            _seed_edge(client, "HAS_QUEST", quest["quest_giver_id"], quest_id, {})
         except Exception as exc:
             logger.warning("[seed] Chain quest %s skipped: %s", quest_id, exc)
     return created
@@ -1387,16 +1392,30 @@ def seed_all(client: EngineClient) -> dict:
     """Seed the full demo world via the NPC Engine HTTP API.
 
     Dependency order:
-    1. Locations
-    2. Factions
-    3. Characters
-    4. MEMBER_OF edges (NPC ↔ Faction)
-    5. Faction-faction STANDS_WITH edges
-    6. NPC inner life (beliefs, goals, memories, secrets)
-    7. Events
-    8. world_state
-    9. NPC-NPC structural edges
-    10. LOCATED_AT edges
+    1.   Locations (original + H2.3 venues)
+    2.   Factions (original + iron_legion + H2.4); H2 STANDS_WITH edges
+    3.   Characters (original + H2.2 NPCs with MEMBER_OF/LOCATED_AT/inner-life/Needs)
+    4.   Orig NPC MEMBER_OF edges
+    5.   Orig faction STANDS_WITH edges
+    6.   Orig NPC inner life
+    7.   Events
+    8.   world_state
+    9.   NPC-NPC structural edges (RELATES_TO, OPPOSES, KNOWS_ABOUT)
+    10.  Orig NPC LOCATED_AT edges
+    11.  Player + items + OWNS edge
+    11b. Player KNOWS_ABOUT edges
+    11c. Deception belief
+    12.  Aldric inventory
+    13.  Aldric currency check
+    14.  Aldric quest (non-fatal)
+    14b. Source chain quests
+    14c. Chain-target quests
+    15.  NPC Needs (original NPCs)
+    16.  Leverage nodes + HAS_LEVERAGE edges + Pledges
+    17.  Armies + OCCUPIES edges
+    19.  Location hierarchy + PART_OF edges (EXP-87)
+    20.  Quest UNLOCKS chains (original 2 chains)
+    18.  H2.5 quests + UNLOCKS chains
 
     Idempotency:
     - Explicit-ID nodes: GET before POST; skip if exists.
@@ -1426,9 +1445,13 @@ def seed_all(client: EngineClient) -> dict:
     for loc_id, name, tag, descriptor in H2_LOCATIONS:
         _tally(_seed_node(client, "Location", build_location_payload(loc_id, name, tag, descriptor)))
 
-    # 2. Factions (original + H2.4 new factions)
+    # 2. Factions (original + military + H2.4 new factions)
+    # iron_legion must be created before _seed_h2_factions() which seeds a
+    # STANDS_WITH edge from crown_loyalists → iron_legion.
     logger.info("[seed] Factions")
     for faction_id, name, archetype, description in _FACTIONS:
+        _tally(_seed_node(client, "Faction", build_faction_payload(faction_id, name, archetype, description)))
+    for faction_id, name, archetype, description in _MILITARY_FACTIONS:
         _tally(_seed_node(client, "Faction", build_faction_payload(faction_id, name, archetype, description)))
     created += _seed_h2_factions(client)
 
@@ -1596,11 +1619,7 @@ def seed_all(client: EngineClient) -> dict:
             logger.warning("[seed] Pledge %s→%s skipped: %s", pledger_id, pledgee_id, exc)
             skipped += 1
 
-    # 17. Military layer — iron_legion faction + armies + OCCUPIES edges
-    logger.info("[seed] Military factions")
-    for faction_id, name, archetype, description in _MILITARY_FACTIONS:
-        _tally(_seed_node(client, "Faction", build_faction_payload(faction_id, name, archetype, description)))
-
+    # 17. Military layer — armies + OCCUPIES edges (iron_legion faction seeded at step 2)
     logger.info("[seed] Armies")
     for army_id, faction_id, strength, location_id, composition in _ARMIES:
         _tally(_seed_node(client, "Army", {
@@ -1615,12 +1634,12 @@ def seed_all(client: EngineClient) -> dict:
     for army_id, location_id, since_tick in _ARMY_OCCUPIES:
         _tally(_seed_edge(client, "OCCUPIES", army_id, location_id, {"since_tick": since_tick}))
 
-    # 12. Location hierarchy (EXP-87)
+    # 19. Location hierarchy (EXP-87)
     logger.info("[seed] Location hierarchy")
     hierarchy_created = _seed_location_hierarchy(client)
     created += hierarchy_created
 
-    # 13. Quest UNLOCKS chains (EXP-19, original 2 chains)
+    # 20. Quest UNLOCKS chains (EXP-19, original 2 chains)
     logger.info("[seed] Quest UNLOCKS chains")
     created += _seed_quest_unlocks_chains(client)
 
