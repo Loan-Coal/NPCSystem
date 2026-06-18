@@ -18,10 +18,16 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         eval eval-report eval-anti-hallucination eval-e2e scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
-        seed-tavern-world seed-village-world
+        seed-tavern-world seed-village-world package
 
 install:
 	pip install -e .[dev]
+
+# package: build the standalone npc_engine_server binary via PyInstaller (SHIP-04).
+# Requires: pip install pyinstaller  (not in dev dependencies — build-time only).
+# Output:   dist/npc_engine_server/npc_engine_server[.exe]
+package:
+	$(PYTHON) -m PyInstaller packaging/npc_engine.spec --distpath dist/npc_engine_server --workpath build/pyinstaller --noconfirm
 
 run:
 	uvicorn npc_engine.main:app --reload --reload-include="*.yaml" --reload-include="*.json"

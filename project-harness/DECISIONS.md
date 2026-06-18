@@ -3,6 +3,27 @@
 Non-obvious architectural choices. Each entry explains what was decided and why,
 so future maintainers can judge edge cases without re-deriving the rationale.
 
+## DEC-128: SHIP-04 Neo4j launch strategy — detect-and-launch with PATH-based install check
+**Date:** 2026-06-18
+**Context:** SHIP-04 requires a Neo4j launch strategy for end-user machines (Docker is excluded — the
+goal is "no Docker"). Neo4j Community GPLv3 bundling question is deferred to OD-Ship-graph (DEC-124).
+**Options considered:**
+- A. Detect-and-launch: check if Neo4j is already running (HTTP health on :7474); if not, check if
+  `neo4j` binary is on PATH and launch `neo4j console` as a child process. Raise
+  `Neo4jNotInstalledError` if not found — surface install instructions.
+- B. Bundled tarball: download and extract Neo4j Community alongside the game binary on first run.
+  Fully automated but adds ~250 MB download + JRE bundling complexity.
+- C. Require Neo4j Desktop as a prerequisite: narrower install path, no PATH guarantee.
+**Decision:** Option A for SHIP-04. Mirrors the Ollama pattern from SHIP-03
+(`neo4j_manager.py` → `is_running/is_installed/launch`). Option B deferred to SHIP-09 (full
+distribution); the `Neo4jManager` design is open/closed so a "download and unpack" code path
+can be added as a new method without editing existing callers.
+**Modules:** `neo4j_manager.py` (is_running/is_installed/launch/get_bolt_url),
+`stack_launcher.py` (Neo4j → Ollama → uvicorn orchestration), `scripts/launcher.py`
+(PyInstaller entry point), `packaging/npc_engine.spec` (PyInstaller build recipe).
+**Exit codes for launcher.py:** 0=clean, 1=unknown, 2=Neo4j not installed, 3=Neo4j startup failed,
+4=Ollama not installed.
+
 ## DEC-127: `src/npc_engine/setup/` added as a rank-1 package for SHIP-03 first-run bootstrap
 **Date:** 2026-06-18
 **Context:** SHIP-03 requires VRAM detection, Ollama process management, and model-tier selection logic

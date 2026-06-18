@@ -64,9 +64,14 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
   **✅ DEC-127:** `npc_engine.setup` package (rank-1 peer): `vram_detector` (nvidia-smi), `model_tiers`
   (3B/7B/14B thresholds), `ollama_manager` (is_running/is_installed/launch/pull_model async), `first_run_flow`
   async orchestrator → `FirstRunResult`. `scripts/setup_local.py` CLI entry point. 33 unit tests green.
-- [ ] **SHIP-04 (backend packaging)** — package the FastAPI engine as a launchable local server the game
+- [x] **SHIP-04 (backend packaging)** — package the FastAPI engine as a launchable local server the game
   process starts/stops (e.g. PyInstaller), and define the Neo4j launch strategy for an end-user machine
   (Neo4j stays — DEC-124). Exit: double-clicking the game brings up engine + graph + model with no Docker.
+  **✅ DEC-128:** detect-and-launch strategy (mirrors SHIP-03 Ollama pattern). `neo4j_manager.py`
+  (is_running/is_installed/launch via httpx + subprocess), `stack_launcher.py` (Neo4j → Ollama →
+  uvicorn orchestrator), `scripts/launcher.py` (PyInstaller entry point, env-driven Ollama toggle),
+  `packaging/npc_engine.spec` (PyInstaller build recipe). `make package` builds the standalone binary.
+  19 unit tests green; all gate checks pass.
 - [ ] **SHIP-05 (first-run wizard UX)** — a setup screen that offers **(A) run locally** vs **(B) use an API
   provider + key**, persists the choice, and validates it (key works / model present) before play. Exit: both
   paths are reachable from one wizard; choice survives restart.
