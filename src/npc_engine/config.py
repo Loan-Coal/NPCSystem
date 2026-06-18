@@ -96,6 +96,11 @@ class Settings(BaseSettings):
     MISTRAL_API_URL: str | None = None
     LLAMA_API_URL: str | None = None
     OLLAMA_API_URL: str = "http://localhost:11434"
+    # SHIP-02 / DEC-126: BYO-API-key path. OpenAI-compatible /chat/completions base URL
+    # (provider choice = base_url: OpenAI, OpenRouter, Groq, Together, LM Studio, …).
+    # Model comes per-engine from EngineModelParams.model; key is player-supplied at runtime.
+    OPENAI_API_URL: str = "https://api.openai.com/v1"
+    OPENAI_API_KEY: str | None = None
     # KV-cache window passed as num_ctx to Ollama on every request.
     # system_v1.yaml is ~4200 tokens; dialogue prompt adds ~3200 tokens → total ~7400.
     # Minimum recommended value: 8192. On RTX cards with ≥9GB VRAM this adds ~400 MB KV cache.

@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Callable
 from npc_engine.config import Settings
 from npc_engine.engines.llm.mock_adapter import MockLLMAdapter
 from npc_engine.engines.llm.ollama_adapter import OllamaAdapter
+from npc_engine.engines.llm.openai_adapter import OpenAICompatibleAdapter
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 
 if TYPE_CHECKING:
@@ -88,5 +89,19 @@ def _build_ollama(engine_config: EngineModelConfig, settings: Settings) -> LLMCl
     )
 
 
+def _build_openai(engine_config: EngineModelConfig, settings: Settings) -> LLMClientProtocol:
+    if settings.OPENAI_API_URL.strip() == "":
+        raise ValueError("OPENAI_API_URL is required for openai backend")
+    if settings.OPENAI_API_KEY is None or settings.OPENAI_API_KEY.strip() == "":
+        raise ValueError("OPENAI_API_KEY is required for openai backend")
+    return OpenAICompatibleAdapter(
+        base_url=settings.OPENAI_API_URL,
+        api_key=settings.OPENAI_API_KEY,
+        model_name=engine_config.llm.model,
+        timeout_seconds=settings.LLM_TIMEOUT_SECONDS,
+    )
+
+
 register_backend("mock", _build_mock)
 register_backend("ollama", _build_ollama)
+register_backend("openai", _build_openai)

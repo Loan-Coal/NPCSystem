@@ -10,6 +10,7 @@ from npc_engine.config import Settings
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm.mock_adapter import MockLLMAdapter
 from npc_engine.engines.llm.ollama_adapter import OllamaAdapter
+from npc_engine.engines.llm.openai_adapter import OpenAICompatibleAdapter
 from npc_engine.engines.llm_config_models import (
     EngineModelConfig,
     EngineFallbackPolicy,
@@ -76,6 +77,34 @@ def test_factory_uses_per_engine_model_name_for_ollama() -> None:
     client = create_llm_client_for_engine(engine_config=engine_config, settings=settings)
     assert isinstance(client, OllamaAdapter)
     assert client.model_name() == "llama3:70b"
+
+
+def test_factory_returns_openai_adapter_for_openai_backend() -> None:
+    settings = Settings(**{**_base_settings(), "OPENAI_API_KEY": "sk-test"})
+    engine_config = _make_engine_config(backend="openai", model="gpt-4o-mini")
+    client = create_llm_client_for_engine(engine_config=engine_config, settings=settings)
+    assert isinstance(client, OpenAICompatibleAdapter)
+    assert client.model_name() == "gpt-4o-mini"
+
+
+def test_factory_requires_openai_api_key() -> None:
+    settings = Settings(**{**_base_settings(), "OPENAI_API_KEY": None})
+    engine_config = _make_engine_config(backend="openai", model="gpt-4o-mini")
+    try:
+        create_llm_client_for_engine(engine_config=engine_config, settings=settings)
+        assert False, "Expected ValueError for missing OPENAI_API_KEY"
+    except ValueError as error:
+        assert "OPENAI_API_KEY" in str(error)
+
+
+def test_factory_requires_non_empty_openai_url() -> None:
+    settings = Settings(**{**_base_settings(), "OPENAI_API_KEY": "sk-test", "OPENAI_API_URL": ""})
+    engine_config = _make_engine_config(backend="openai", model="gpt-4o-mini")
+    try:
+        create_llm_client_for_engine(engine_config=engine_config, settings=settings)
+        assert False, "Expected ValueError for missing OPENAI_API_URL"
+    except ValueError as error:
+        assert "OPENAI_API_URL" in str(error)
 
 
 def test_factory_raises_for_unknown_backend() -> None:

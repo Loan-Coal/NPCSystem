@@ -6,8 +6,8 @@ Public surface: factory (register_backend, registered_backends,
     create_llm_client_for_engine).
 
 Importing this package imports the factory, which registers the built-in
-backends (mock, ollama). New backends should register themselves at import time
-and be imported here so the registry is populated on package import (L7-07).
+backends (mock, ollama, openai). New backends should register themselves at import
+time and be imported by the factory so the registry is populated on package import (L7-07).
 Does NOT: orchestrate dialogue pipeline logic.
 Dependencies injected: None.
 """
