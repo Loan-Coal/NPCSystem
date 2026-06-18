@@ -11,7 +11,6 @@ import subprocess
 import sys
 
 from demo_game.arc_choice import ArcChoice
-from demo_game.ui.start_menu import StartMenu
 
 # Subprocess module targets for scripted arcs.
 _MODULE_MUNICH = "demo_game.run"
@@ -36,6 +35,8 @@ def _dispatch(window_w: int, window_h: int) -> None:
         window_w: Width passed to the start menu and game window.
         window_h: Height passed to the start menu and game window.
     """
+    from demo_game.ui.start_menu import StartMenu  # lazy: keep pygame off headless import path (ISSUE-091)
+
     choice = StartMenu().show(window_w=window_w, window_h=window_h)
 
     if choice == ArcChoice.FREE_PLAY:
