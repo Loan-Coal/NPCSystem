@@ -1,7 +1,8 @@
 """
 gossip package - NPC-to-NPC gossip propagation modules.
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Deterministic NPC-to-NPC rumor propagation with personality/faction-weighted pair
+         selection and distortion (omission, exaggeration, role-swap, timeline-shift).
 Public surface: (list re-exports here)
 
 Does NOT: expose API routes.

@@ -41,6 +41,13 @@ depending on internal implementation details.
 
 ## Module Business Requirements
 
+> The ten modules below are the **foundational core** the product was originally
+> specified around. The engine surface has since grown to ~40 domain engines (social
+> simulation, politics, economy, narrative pacing, schemes, theory-of-mind, and more).
+> For the **complete, current capability catalog** — every engine, its business value,
+> execution model, and linked API routes — see **[ENGINES.md](ENGINES.md)**. The full
+> HTTP contract is in **[API.md](API.md)**.
+
 ### 1. Graph Layer (`graph/`)
 
 **Business Goal:** Provide a persistent, queryable knowledge graph that is the single

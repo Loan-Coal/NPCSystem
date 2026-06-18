@@ -113,11 +113,11 @@
 │  │  resolver      │   ┌─────────────────────────────────────┐  │
 │  │ enum_validator │   │            engines/llm/             │  │
 │  └────────────────┘   │  LLMClientProtocol                  │  │
-│                        │  ├── MistralAdapter                 │  │
-│  ┌────────────────┐   │  ├── LlamaAdapter                   │  │
-│  │  mutation/     │   │  ├── OllamaAdapter                  │  │
-│  │ delta_log_mgr  │   │  ├── MockAdapter                    │  │
-│  │ bounds_        │   │  └── factory.py                     │  │
+│                        │  ├── OllamaAdapter (default)        │  │
+│  ┌────────────────┐   │  ├── MockAdapter (tests)            │  │
+│  │  mutation/     │   │  └── factory.py + registry          │  │
+│  │ delta_log_mgr  │   │      register_backend(name,         │  │
+│  │ bounds_        │   │      ctor) -> no engine edit        │  │
 │  │  validator     │   └─────────────────────────────────────┘  │
 │  └────────────────┘                                             │
 │  ┌────────────────┐   ┌─────────────────────────────────────┐  │
@@ -129,6 +129,12 @@
 │  └────────────────┘                                             │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+> The diagram shows the original three engines (Dialogue, Gossip, Event) for clarity.
+> The engine layer has since grown to ~40 domain engines — social simulation, politics,
+> economy, narrative pacing, schemes, theory-of-mind, and more — most of them tick-driven
+> and orchestrated by `scheduler/tick_scheduler.py`. See **[ENGINES.md](ENGINES.md)** for
+> the full catalog and the per-tick execution order.
 
 ### Type Registry Layer (R2-R4)
 
@@ -616,9 +622,12 @@ environment variables.
 
 ### Adding a new LLM backend
 1. Create `engines/llm/openai_adapter.py` implementing `LLMClientProtocol`
-2. Add `"openai"` case to `engines/llm/factory.py`
+2. Call `register_backend("openai", ctor)` at import time and import the module from
+   `engines/llm/__init__.py` so registration runs on package import. The factory is a
+   name→constructor **registry** (no switch statement to edit); config validation accepts
+   any registered backend, so no `Literal` needs changing.
 3. Add `OPENAI_API_URL` to `config.py`
-4. **No other file changes**
+4. **No other file changes.** Shipping backends today are `ollama` (default) and `mock`.
 
 ### Adding a custom NPC personality field
 1. Add field to `game_schema.yaml` under `core_types.character.extension_fields`
@@ -714,8 +723,8 @@ REDIS_CONNECT_TIMEOUT_SECONDS=1.0
 | Decision | Choice | Rationale |
 |---|---|---|
 | Graph database | Neo4j | Native graph traversal for relationship queries; Cypher is expressive for NPC knowledge |
-| LLM interface | Protocol + factory | Swap Mistral for Llama (or cloud models) without touching engine code |
-| Local LLM backend | Mixtral 8x7B (quantized, llama.cpp/Ollama) | Solo deployment, privacy/offline goals; prompt iteration prioritized over latency at this stage |
+| LLM interface | Protocol + factory **registry** | Add a local or cloud backend by registering an adapter; engines depend only on `LLMClientProtocol`. Shipping backends: `ollama`, `mock`. |
+| Local LLM backend | Ollama (default `qwen2.5:14b`) | Self-hosted, privacy/offline goals; per-engine model selection via each engine's `llm_config.yaml`; prompt iteration prioritized over latency at this stage |
 | Retrieval strategy | Hybrid (graph Tier A + RAG Tier B) | Facts from graph are authoritative; RAG provides semantic similarity for open-ended context |
 | Gossip distortion | Deterministic pure function | Reproducible debugging; no LLM cost for NPC-to-NPC communication |
 | Emotion persistence | In-memory store + graph snapshot | Fast reads during dialogue; survives restarts via Neo4j flush |

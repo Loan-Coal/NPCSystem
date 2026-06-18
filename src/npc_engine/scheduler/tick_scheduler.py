@@ -1,7 +1,9 @@
 """
 tick_scheduler.py - Coordinates game clock and tick execution for engines.
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Coordinates the game clock and runs the registered tick-driven engines in a fixed
+         order on each clock advance, isolating per-engine failures so one error never
+         halts the tick.
 
 Does NOT: define gossip/event/routine engine internals.
 
