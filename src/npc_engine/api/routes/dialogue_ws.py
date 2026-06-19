@@ -25,6 +25,7 @@ from npc_engine.api.dependencies import (
     get_llm_client,
     get_llm_config,
 )
+from npc_engine.api.dependencies_engines import get_proactive_queue
 from npc_engine.api.dependency_singletons import get_dialogue_engine_model_config
 from npc_engine.api.schemas import DialogueRequest
 from npc_engine.auth.api_key import resolve_scope_from_authorization
@@ -209,8 +210,6 @@ async def dialogue_ws(websocket: WebSocket) -> None:
     Phase 2 (idle drain): poll the ProactiveQueue and push NPC-initiated lines
     until the client disconnects.  Auth check and connection cap are unchanged.
     """
-    from npc_engine.api.dependencies_engines import get_proactive_queue
-
     settings = get_settings()
     authorization = websocket.headers.get("Authorization", "")
     try:
