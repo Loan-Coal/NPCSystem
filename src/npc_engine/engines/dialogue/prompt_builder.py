@@ -32,6 +32,7 @@ PROMPT_VERSION = "stage_b_v2.13"
 
 _PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts" / "dialogue"
 _PROMPT_PATH = _PROMPTS_DIR / "system_v1.yaml"
+_SYSTEM_STATE_YAML: Path = _PROMPTS_DIR / "system_state_v1.yaml"
 _CONTENT_CEILING_YAML: Path = (
     Path(__file__).resolve().parents[2] / "prompts" / "moderation" / "content_ceiling_v1.yaml"
 )
@@ -101,6 +102,12 @@ def build_system_prompt(content_rating: ContentRating = "mature") -> str:
         _PROMPT_PATH, "prompts/dialogue/system_v1.yaml must be a mapping"
     )
     base_prompt = cast(str, prompt_data["system"])
+    state_data = load_yaml_mapping(
+        _SYSTEM_STATE_YAML, "prompts/dialogue/system_state_v1.yaml must be a mapping"
+    )
+    state_rule = cast(str, state_data.get("system_state_rule", ""))
+    if state_rule:
+        base_prompt = base_prompt + "\n" + state_rule
     if content_rating == "mature":
         return base_prompt
     ceiling_data = load_yaml_mapping(

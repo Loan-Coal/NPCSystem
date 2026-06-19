@@ -23,6 +23,7 @@ R001|src/npc_engine/config.py
 R001|src/npc_engine/data/api_seeder.py
 R001|src/npc_engine/engines/chapter/chapter_engine.py
 R001|src/npc_engine/engines/dialogue/dialogue_handler.py
+R001|src/npc_engine/engines/dialogue/prompt_builder.py
 R001|src/npc_engine/engines/gossip/gossip_handler.py
 R001|src/npc_engine/engines/quest/quest_lifecycle_engine.py
 R001|src/npc_engine/engines/quest_generation/quest_generation_engine.py

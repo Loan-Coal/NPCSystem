@@ -99,7 +99,7 @@ def mock_dialogue_repo() -> MagicMock:
 def mock_dialogue_context() -> MagicMock:
     """Mock DialogueContextPort returning empty context string."""
     ctx = AsyncMock()
-    ctx.build_context = AsyncMock(return_value="{}")
+    ctx.build_context = AsyncMock(return_value=("{}", []))
     return ctx
 
 
@@ -127,7 +127,7 @@ def _make_handler(
         input_moderation=build_input_moderation_service("mature"),
         output_moderation=build_output_moderation_service("mature"),
         dialogue_repo=mock_dialogue_repo or AsyncMock(),
-        dialogue_context=mock_dialogue_context or AsyncMock(build_context=AsyncMock(return_value="{}")),
+        dialogue_context=mock_dialogue_context or AsyncMock(build_context=AsyncMock(return_value=("{}", []))),
     )
 
 

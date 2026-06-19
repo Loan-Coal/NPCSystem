@@ -116,7 +116,7 @@ def minimal_handler_with_tts():
     mock_dialogue_repo.apply_relation_deltas = AsyncMock(return_value=None)
     mock_dialogue_repo.set_routine_override = AsyncMock(return_value=None)
     mock_dialogue_context = AsyncMock()
-    mock_dialogue_context.build_context = AsyncMock(return_value="{}")
+    mock_dialogue_context.build_context = AsyncMock(return_value=("{}", []))
 
     handler = DialogueHandler(
         settings=mock_settings,

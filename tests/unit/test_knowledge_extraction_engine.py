@@ -288,7 +288,7 @@ def _make_handler(knowledge_engine=None, knowledge_learning_enabled: bool = Fals
     dialogue_repo.apply_relation_deltas = AsyncMock(return_value=None)
     dialogue_repo.set_routine_override = AsyncMock(return_value=None)
     dialogue_context = AsyncMock()
-    dialogue_context.build_context = AsyncMock(return_value="{}")
+    dialogue_context.build_context = AsyncMock(return_value=("{}", []))
     return DialogueHandler(
         settings=settings,
         llm_client=_MinimalLLMClient(),

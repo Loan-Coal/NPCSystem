@@ -57,6 +57,7 @@ from npc_engine.world.world_state import WorldState
 from npc_engine.engines.dialogue.negotiation_context import inject_active_negotiation
 
 if TYPE_CHECKING:
+    from npc_engine.engines.dialogue.system_state_context import SystemStateContext
     from npc_engine.engines.interaction.negotiation_store import NegotiationStore
     from npc_engine.engines.memory.memory_engine import MemoryEngine
     from npc_engine.engines.ports.relation_phase_write_port import RelationPhaseWritePort
@@ -160,13 +161,22 @@ class DialogueHandler:
         _logger.warning("output_ceiling_violation", extra={"npc_id": npc_id, "rating": self._effective_rating})
         return get_canned_response(archetype=archetype, canned_dir=canned_dir), "canned"
 
-    async def handle(self, request: DialogueRequest) -> DialogueResponse:
+    async def handle(
+        self,
+        request: DialogueRequest,
+        system_state_context: SystemStateContext | None = None,
+    ) -> DialogueResponse:
         """Execute the full dialogue flow with tiered degradation and return the response.
 
         Raises ContentRatingViolationError (→ HTTP 422) when input exceeds the ceiling.
 
+        Args:
+            request: Incoming dialogue request from the player.
+            system_state_context: Optional engine-resolved live facts (ISSUE-071).
+
         Returns:
-            DialogueResponse with resolved action, updated session_id, and degradation level.
+            DialogueResponse with resolved action, updated session_id, degradation level,
+            and memories_recalled listing which Memory node IDs appeared in context (ISSUE-107).
         """
         self._input_moderation.check(
             player_message=request.player_message,
@@ -176,9 +186,27 @@ class DialogueHandler:
         current_emotion = await self._emotion_updater.get_state(npc_id=request.npc_id)
         archetype = await self._dialogue_repo.get_npc_archetype(request.npc_id) or "default"
         canned_dir = Path(self._settings.CANNED_RESPONSES_DIR)
+        memory_ids_captured: list[str] = []
+
+        async def _full() -> DialogueResponse:
+            return await self._run_llm_pipeline(
+                request=request, turns=turns, current_emotion=current_emotion,
+                skip_rag=False, archetype=archetype,
+                system_state_context=system_state_context,
+                memory_ids_out=memory_ids_captured,
+            )
+
+        async def _graph_only() -> DialogueResponse:
+            return await self._run_llm_pipeline(
+                request=request, turns=turns, current_emotion=current_emotion,
+                skip_rag=True, archetype=archetype,
+                system_state_context=system_state_context,
+                memory_ids_out=memory_ids_captured,
+            )
+
         parsed_response, level = await execute_with_degradation(
-            full_factory=lambda: self._run_llm_pipeline(request=request, turns=turns, current_emotion=current_emotion, skip_rag=False, archetype=archetype),
-            graph_only_factory=lambda: self._run_llm_pipeline(request=request, turns=turns, current_emotion=current_emotion, skip_rag=True, archetype=archetype),
+            full_factory=_full,
+            graph_only_factory=_graph_only,
             archetype=archetype,
             canned_dir=canned_dir,
             full_timeout=self._engine_model_config.timeouts_ms.full / 1000.0,
@@ -190,6 +218,7 @@ class DialogueHandler:
             "action": resolved_action,
             "session_id": request.session_id or f"{request.player_id}:{request.npc_id}",
             "cached": False, "degradation_level": level,
+            "memories_recalled": tuple(memory_ids_captured),
         })
         tick_id = int(datetime.now(timezone.utc).timestamp())
         new_emotion = await self._apply_relation_and_emotion(
@@ -315,7 +344,7 @@ class DialogueHandler:
         turns = await self._session_store.get_turns(player_id=request.player_id, npc_id=request.npc_id)
         current_emotion = await self._emotion_updater.get_state(npc_id=request.npc_id)
         archetype = await self._dialogue_repo.get_npc_archetype(request.npc_id) or "default"
-        prompt = await self._build_dialogue_prompt(
+        prompt, _memory_ids = await self._build_dialogue_prompt(
             request=request,
             turns=turns,
             current_emotion=current_emotion,
@@ -330,15 +359,24 @@ class DialogueHandler:
         current_emotion: EmotionState,
         skip_rag: bool,
         archetype: str = "default",
+        system_state_context: SystemStateContext | None = None,
+        memory_ids_out: list[str] | None = None,
     ) -> DialogueResponse:
-        """Build context, call LLM, and parse response for one degradation tier."""
+        """Build context, call LLM, and parse response for one degradation tier.
 
-        prompt = await self._build_dialogue_prompt(
+        Args:
+            memory_ids_out: When provided, populated in-place with the Memory node IDs
+                that made it into the final context (ISSUE-107).
+        """
+        prompt, memory_ids = await self._build_dialogue_prompt(
             request=request,
             turns=turns,
             current_emotion=current_emotion,
             skip_rag=skip_rag,
+            system_state_context=system_state_context,
         )
+        if memory_ids_out is not None:
+            memory_ids_out.extend(memory_ids)
         raw_response = await self._llm.generate_response(prompt=prompt, system=self._system_prompt, archetype=archetype)
         try:
             return parse_dialogue_response(payload=raw_response)
@@ -353,11 +391,16 @@ class DialogueHandler:
         turns: list[str],
         current_emotion: EmotionState,
         skip_rag: bool = False,
-    ) -> str:
-        """Build serialized context and prompt consistently across REST and stream paths."""
+        system_state_context: SystemStateContext | None = None,
+    ) -> tuple[str, list[str]]:
+        """Build serialized context and prompt; return (prompt_str, used_memory_ids).
 
+        Returns:
+            Tuple of (prompt_string, memory_ids) where memory_ids are Memory node IDs
+            that appeared in the final context (ISSUE-107).
+        """
         session_id = request.session_id or f"{request.player_id}:{request.npc_id}"
-        serialized_context = await self._dialogue_context.build_context(
+        serialized_context, memory_ids = await self._dialogue_context.build_context(
             npc_id=request.npc_id,
             player_message=request.player_message,
             session_turns=turns,
@@ -367,9 +410,10 @@ class DialogueHandler:
             skip_rag=skip_rag,
             player_id=request.player_id,
             explicit_node_ids=frozenset(request.explicit_node_ids),
+            system_state_context=system_state_context,
         )
         serialized_context = self._with_active_negotiation(serialized_context, request)
-        return build_dialogue_prompt(request=request, serialized_context=serialized_context)
+        return build_dialogue_prompt(request=request, serialized_context=serialized_context), memory_ids
 
     def _with_active_negotiation(self, serialized_context: str, request: DialogueRequest) -> str:
         """Merge any active barter session for this (npc, player) into the context (S22.4)."""

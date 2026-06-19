@@ -1507,3 +1507,28 @@ slice; preserving exact behaviour was the migration's contract.
 drop the dead block (and its read) if event-actor witnessing is not a desired feature.
 **Fixed:** 2026-06-19, REM-W5. Added optional `src_character_id: str | None` to `EventTemplate`; `_build_event`
 propagates to `raw_props` when non-None, activating `_record_witnesses` (DEC-133). 2 regression tests.
+
+---
+
+## [FIXED] ISSUE-071: Dialogue engine not grounded in live engine state — NPC contradicts trade/quest reality
+**Found:** 2026-06-05, during trade-engine bug fix (Mira hardcoded item)
+**Severity:** P2 (annoying — breaks immersion, confuses players)
+**Where:** `src/npc_engine/engines/dialogue/` + `src/npc_engine/retrieval/context_builder.py`
+**Fixed:** 2026-06-19, in REM-W6 (DEC-138)
+**Description:** The dialogue engine generates NPC responses from graph context alone; it has no awareness of live engine state from other engines (trade, quest, economy). Example: after the trade engine determines that Mira has no inventory and cannot trade, Mira's LLM-generated dialogue still says "I've got a couple of things that might interest you" — because the prompt context only includes graph facts, not the trade engine's real-time evaluation. The same class of bug can occur with quest state (NPC says "bring me the item" after quest is already complete) and emotion state.
+**Why deferred:** Requires a design decision on how to pass engine-resolved facts into the dialogue context assembly pipeline without creating layer violations (dialogue engine calling trade engine, or context_builder calling both). Involves a new "system state" tier in the prompt context.
+**To fix:** Introduce a `SystemStateContext` bag — a dict of engine-resolved facts assembled at the API route layer before the dialogue call — and inject it as a new Tier 0 block in `context_builder.py`. The route handler (`api/routes/dialogue.py`) would resolve trade/quest state for the current NPC and player, then pass it into the context builder. This keeps layer boundaries clean (engines do not call each other; the route layer orchestrates).
+
+---
+
+## [FIXED] ISSUE-107: No cross-session e2e test for persistent memory recall
+**Found:** 2026-06-13, during /full-review (L6)
+**Severity:** P2 (annoying)
+**Where:** `e2e/` / demo scenarios
+**Fixed:** 2026-06-19, in REM-W6 (DEC-139)
+**Description:** The persistent-memory pitch has no e2e scenario spanning two dialogue sessions across a
+memory consolidation (teach an NPC something in session 1, confirm recall in session 2). Unit tests cover
+the pieces; the headline capability has no end-to-end proof.
+**Why deferred:** Needs a human decision on WHICH dialogue-response field to assert on for "NPC recalls the
+consolidated memory" (see review §4 / L6 evidence).
+**To fix:** Pick the assertion field; write a two-session e2e scenario; wire into the e2e battery.

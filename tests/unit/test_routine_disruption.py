@@ -177,7 +177,7 @@ def _make_dialogue_handler(valence_after_mood: int):
     dialogue_repo.get_world_state = AsyncMock(return_value=None)
 
     dialogue_context = AsyncMock()
-    dialogue_context.build_context = AsyncMock(return_value="{}")
+    dialogue_context.build_context = AsyncMock(return_value=("{}", []))
 
     handler = DialogueHandler.__new__(DialogueHandler)
     handler._dialogue_repo = dialogue_repo

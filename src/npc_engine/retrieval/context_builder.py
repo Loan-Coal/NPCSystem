@@ -332,12 +332,33 @@ async def _maybe_cross_encode(settings: Settings, player_message: str, tier_b_re
     return list(reranked)
 
 
-def _build_tier0_items(world_state: Any, emotion_snapshot: dict[str, Any]) -> list[ContextItem]:
-    """Build pinned Tier 0 context items: world state and current emotion."""
-    return [
+def _build_tier0_items(
+    world_state: Any,
+    emotion_snapshot: dict[str, Any],
+    system_state_context: Any | None = None,
+) -> list[ContextItem]:
+    """Build pinned Tier 0 context items: world state, current emotion, and system state.
+
+    Args:
+        world_state: Authoritative world state from the graph.
+        emotion_snapshot: Current NPC emotion snapshot dict.
+        system_state_context: Optional engine-resolved SystemStateContext (ISSUE-071).
+    """
+    items = [
         ContextItem(key="world", text=world_state.model_dump_json(), tier="tier0", priority=100, pinned=True),
         ContextItem(key="emotion", text=serialize_json(emotion_snapshot), tier="tier0", priority=95, pinned=True),
     ]
+    if system_state_context is not None:
+        items.append(
+            ContextItem(
+                key="system_state",
+                text=system_state_context.model_dump_json(),
+                tier="tier0",
+                priority=97,
+                pinned=True,
+            )
+        )
+    return items
 
 
 def _build_tier_a_base(
@@ -509,6 +530,7 @@ async def build_serialized_context(
     context_cache: PartialDialogueContextCache | DialogueContextCache | None = None,
     session_id: str | None = None, skip_rag: bool = False, player_id: str | None = None,
     weight_profile: str | None = None, explicit_node_ids: frozenset[str] = frozenset(),
+    system_state_context: Any | None = None,
 ) -> str:
     """Build the final serialized prompt context string for one dialogue turn (raises ValueError if RAG_TOP_K <= 0)."""
     if settings.RAG_TOP_K <= 0:
@@ -525,7 +547,7 @@ async def build_serialized_context(
     location_context, events, reputation_items, memories, owned_items, group_memberships, believed_rumors, traits, active_pledges = profile_data
     trust_scores, second_hop_events, active_quest, player_relation_edge = await _fetch_player_data(session, npc_id, player_id, events)
     tier_b_results = await _maybe_cross_encode(settings, player_message, tier_b_results)
-    tier0 = _build_tier0_items(world_state, emotion_snapshot)
+    tier0 = _build_tier0_items(world_state, emotion_snapshot, system_state_context)
     tier_a_raw = _build_tier_a_base(npc_id, character_bundle, events, location_id, location_context, group_memberships, believed_rumors, traits, active_pledges, session_turns)
     tier_a_raw.extend(_build_tier_a_extended(player_id, reputation_items, active_quest, player_relation_edge, memories, beliefs, goals, owned_items, secrets, obligations, second_hop_events, settings, npc_id, current_game_time))
     await _maybe_append_player_memory(session, npc_id, player_id, current_game_time, tier_a_raw)

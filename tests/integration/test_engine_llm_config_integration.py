@@ -111,7 +111,7 @@ def _build_handler(adapter: _CapturingLLMClient, config: EngineModelConfig) -> D
     dialogue_repo.apply_relation_deltas = AsyncMock(return_value=None)
     dialogue_repo.set_routine_override = AsyncMock(return_value=None)
     dialogue_context = AsyncMock()
-    dialogue_context.build_context = AsyncMock(return_value="{}")
+    dialogue_context.build_context = AsyncMock(return_value=("{}", []))
     return DialogueHandler(
         settings=SimpleNamespace(LLM_FALLBACK_PATH=_FALLBACK_PATH, CANNED_RESPONSES_DIR=_CANNED_DIR, LOG_LLM_PROMPTS=False),
         llm_client=adapter,

@@ -75,9 +75,17 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
   ISSUE-094 — `_collect_need_candidates` / `_collect_event_candidates` via `IntentGraphPort` injection
   (DEC-136); ISSUE-096 — `TraitReadPort` + `_get_model_for(npc_id)` in `EmotionUpdater` (DEC-137).
   All 5 DECISIONS written; all tests green; `make check` 86.94% cov.
-- [ ] **REM-W6 — headline features (P2)** — ISSUE-071 (SystemStateContext Tier-0 block: route resolves
+- [x] **REM-W6 — headline features (P2)** — ISSUE-071 (SystemStateContext Tier-0 block: route resolves
   trade/quest facts → `context_builder` + new prompt YAML), ISSUE-107 (`memories_recalled` field +
   two-session memory-recall e2e scenario).
+  **✅ 2026-06-19:** ISSUE-071 — `SystemStateContext` Pydantic model + `resolve_system_state` in
+  `engines/dialogue/system_state_context.py`; wired through `DialogueContextPort.build_context`,
+  `Neo4jDialogueContextAdapter`, `context_builder._build_tier0_items` (priority=97, pinned), and
+  `api/routes/dialogue.py`; rule injected via `prompts/dialogue/system_state_v1.yaml` into
+  `build_system_prompt` (DEC-138). ISSUE-107 — `memories_recalled: tuple[str, ...]` added to
+  `DialogueResponse`; port return type changed to `tuple[str, list[str]]`; `_extract_used_memory_ids`
+  in adapter parses JSON; IDs threaded via closure in handler; 5 mock files updated; e2e scenario
+  `scenario_memory_recall_e2e.py` written (DEC-139). `make check` green: 2523 passed, 86.88% cov.
 - [ ] **REM-W7 — demo dry-run** — ISSUE-100: add the missing `if runner.dry_run` guard near the ACT-8
   determinism beat so `make demo-run ARGS=--dry-run` completes non-networked.
 - [ ] **REM-W8 — rules baseline backlog (P2)** — ISSUE-053: work the SEV remediation briefs, shrinking

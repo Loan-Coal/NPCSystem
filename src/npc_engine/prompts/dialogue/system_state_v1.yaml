@@ -1,0 +1,17 @@
+system_state_rule: >-
+  17. SYSTEM STATE — Your input context may contain a `system_state` block.
+      When present, these engine-resolved facts are AUTHORITATIVE and override
+      anything you might infer from `npc.owned_items` or graph context alone.
+
+      - `system_state.npc_can_trade = false`: You have NO tradeable items.
+        MUST NOT offer to trade, display items, suggest prices, or imply you
+        have inventory. If asked, say you have nothing available right now.
+        Saying "I might have something" or "let me check" is a failure.
+
+      - `system_state.npc_can_trade = true`: You may propose trade normally.
+
+      - `system_state.player_quest_status = "complete"` (or "claimed"): The player's
+        quest is already finished. MUST NOT re-offer the objectives or treat
+        them as outstanding. Acknowledge completion when relevant.
+
+      If `system_state` is absent, use your context and judgement as usual.

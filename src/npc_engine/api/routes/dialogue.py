@@ -3,8 +3,8 @@ Module: dialogue
 Layer: api
 Purpose: REST endpoints for dialogue — full-turn response and pending intent delivery.
 Does NOT: implement dialogue orchestration logic or intent scoring.
-Dependencies: engines.dialogue.dialogue_handler, graph.intent_queue_reader,
-              graph.intent_queue_writer, api.schemas
+Dependencies: engines.dialogue.dialogue_handler, engines.dialogue.system_state_context,
+              graph.intent_queue_reader, graph.intent_queue_writer, api.schemas
 Dependencies injected: DialogueHandler, AsyncSession, Settings.
 Used by: api.main (router registration)
 """
@@ -18,6 +18,7 @@ from npc_engine.api.dependencies_engines import get_director_beat_log
 from npc_engine.api.schemas import ConversationIntentResponse, DialogueRequest, DialogueResponse
 from npc_engine.config import Settings
 from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
+from npc_engine.engines.dialogue.system_state_context import resolve_system_state
 from npc_engine.engines.director.director_beat_log import DirectorBeatLog, DirectorBeatRecord
 from npc_engine.graph.intent_queue_reader import get_pending_intents as get_pending_intents_from_queue
 from npc_engine.graph.intent_queue_writer import mark_delivered as mark_intent_delivered
@@ -32,9 +33,21 @@ router = APIRouter()
 async def dialogue(
     request: DialogueRequest,
     handler: DialogueHandler = Depends(get_dialogue_handler),
+    session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
 ) -> DialogueResponse:
-    """Run one dialogue turn and return final structured response."""
-    return await handler.handle(request=request)
+    """Run one dialogue turn and return final structured response.
+
+    Resolves live system state (trade availability, quest status) before calling
+    the handler so the NPC's response is grounded in engine reality (ISSUE-071).
+    """
+    system_ctx = await resolve_system_state(
+        session=session,
+        npc_id=request.npc_id,
+        player_id=request.player_id,
+        settings=settings,
+    )
+    return await handler.handle(request=request, system_state_context=system_ctx)
 
 
 @router.get("/dialogue/pending", response_model=list[ConversationIntentResponse])

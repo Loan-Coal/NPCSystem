@@ -17,6 +17,7 @@ if TYPE_CHECKING:
         DialogueContextCache,
         PartialDialogueContextCache,
     )
+    from npc_engine.engines.dialogue.system_state_context import SystemStateContext
 
 
 class DialogueContextPort(Protocol):
@@ -39,8 +40,9 @@ class DialogueContextPort(Protocol):
         skip_rag: bool,
         player_id: str | None,
         explicit_node_ids: frozenset[str],
-    ) -> str:
-        """Build and return the serialized prompt context for one dialogue turn.
+        system_state_context: SystemStateContext | None = None,
+    ) -> tuple[str, list[str]]:
+        """Build and return the serialized prompt context and used memory IDs.
 
         Args:
             npc_id: NPC identifier for context assembly.
@@ -52,8 +54,11 @@ class DialogueContextPort(Protocol):
             skip_rag: When True, skip the RAG tier-B fetch (graph-only fallback tier).
             player_id: Player identifier for player-relation context.
             explicit_node_ids: Additional node IDs to force-include in context.
+            system_state_context: Optional engine-resolved live state (ISSUE-071).
         Returns:
-            Serialized context string ready for prompt assembly.
+            Tuple of (serialized_context_str, used_memory_ids) where
+            used_memory_ids is the list of Memory node IDs that made it into
+            the final context (ISSUE-107).
         Raises:
             ValueError: If RAG_TOP_K <= 0.
         """

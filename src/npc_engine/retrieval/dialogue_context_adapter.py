@@ -12,6 +12,7 @@ Dependencies injected: GraphDB, Settings, LLMConfig, EmbeddingIndexProtocol
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 
 from npc_engine.config import Settings
@@ -25,6 +26,34 @@ if TYPE_CHECKING:
         DialogueContextCache,
         PartialDialogueContextCache,
     )
+
+
+def _extract_used_memory_ids(context_str: str) -> list[str]:
+    """Parse the serialized context JSON and return memory node IDs present in it.
+
+    Both general NPC memories and player-scoped memories are included.
+    Returns an empty list when the context is missing or malformed.
+
+    Args:
+        context_str: Serialized JSON context string from build_serialized_context.
+
+    Returns:
+        List of memory node ID strings found under the "memories" and
+        "player_memories" keys of the top-level context object.
+    """
+    try:
+        ctx = json.loads(context_str)
+    except (json.JSONDecodeError, ValueError):
+        return []
+    ids: list[str] = []
+    for key in ("memories", "player_memories"):
+        block = ctx.get(key)
+        if not isinstance(block, list):
+            continue
+        for item in block:
+            if isinstance(item, dict) and item.get("id"):
+                ids.append(str(item["id"]))
+    return ids
 
 
 class Neo4jDialogueContextAdapter:
@@ -68,8 +97,9 @@ class Neo4jDialogueContextAdapter:
         skip_rag: bool,
         player_id: str | None,
         explicit_node_ids: frozenset[str],
-    ) -> str:
-        """Build the serialized prompt context, opening a session internally.
+        system_state_context: Any | None = None,
+    ) -> tuple[str, list[str]]:
+        """Build the serialized prompt context and used memory IDs, opening a session internally.
 
         Args:
             npc_id: NPC identifier for context assembly.
@@ -81,14 +111,16 @@ class Neo4jDialogueContextAdapter:
             skip_rag: Skip RAG tier-B fetch when True.
             player_id: Player identifier.
             explicit_node_ids: Additional node IDs to force-include.
+            system_state_context: Optional engine-resolved live state; typed Any to avoid
+                upward layer import (SystemStateContext lives in engines layer).
         Returns:
-            Serialized context string.
+            Tuple of (serialized_context_str, used_memory_ids).
         Raises:
             ValueError: If RAG_TOP_K <= 0.
         """
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
-            return await build_serialized_context(
+            context_str = await build_serialized_context(
                 session=session,
                 settings=self._settings,
                 llm_config=self._llm_config,
@@ -102,4 +134,7 @@ class Neo4jDialogueContextAdapter:
                 skip_rag=skip_rag,
                 player_id=player_id,
                 explicit_node_ids=explicit_node_ids,
+                system_state_context=system_state_context,
             )
+        memory_ids = _extract_used_memory_ids(context_str)
+        return context_str, memory_ids

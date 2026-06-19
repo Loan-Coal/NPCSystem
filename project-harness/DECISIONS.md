@@ -3,6 +3,37 @@
 Non-obvious architectural choices. Each entry explains what was decided and why,
 so future maintainers can judge edge cases without re-deriving the rationale.
 
+## DEC-139: ISSUE-107 — memories_recalled added to DialogueResponse; port return type changed
+**Date:** 2026-06-19
+**Context:** Callers of `POST /dialogue` had no visibility into which Memory node IDs
+the NPC's context actually retrieved. Without this, game clients cannot trigger UI
+effects (glowing portrait, "memory surfaced" animation) tied to recalled memories.
+**Decision:** Add `memories_recalled: tuple[str, ...]` to `DialogueResponse` (default `()`).
+Change `DialogueContextPort.build_context` return type from `str` to `tuple[str, list[str]]`.
+`Neo4jDialogueContextAdapter.build_context` parses the serialized context JSON and extracts
+IDs from the `"memories"` and `"player_memories"` keys. The IDs are threaded from adapter →
+handler via a closure (`memory_ids_captured: list[str]`) rather than changing
+`execute_with_degradation`'s factory signature.
+**Rationale:** Closure captures the IDs without changing the degradation helper's contract.
+Parsing JSON for IDs in the adapter avoids bloating `build_serialized_context`'s return type.
+`build_serialized_context` continues to return `str`; only the port-level return type changed.
+
+## DEC-138: ISSUE-071 — SystemStateContext Tier-0 block grounding dialogue in live engine state
+**Date:** 2026-06-19
+**Context:** NPCs could offer trades when their inventory was empty, or re-offer quests
+the player had already completed, because the context pipeline had no access to live
+engine state (item counts, quest status). These are facts that the LLM must not contradict.
+**Decision:** Add a new `SystemStateContext` Pydantic model (`engines/dialogue/system_state_context.py`)
+with `npc_can_trade`, `npc_item_count`, and `player_quest_status`. `resolve_system_state` is
+called in the route (`api/routes/dialogue.py`) and passed into `handler.handle()`.
+`context_builder._build_tier0_items` receives it as an optional parameter and, when present,
+appends a `ContextItem(key="system_state", tier="tier0", priority=97, pinned=True)`.
+A matching rule in `prompts/dialogue/system_state_v1.yaml` is appended to the system prompt.
+**Rationale:** Tier-0 is pinned and never evicted, guaranteeing these constraints survive
+token budget trimming. Lazy imports inside `resolve_system_state` prevent circular imports
+between the `engines` and `graph` layers. Route injection (not handler injection) keeps the
+session lifetime at the request boundary, consistent with the session-ownership rule.
+
 ## DEC-137: ISSUE-096 — per-NPC traits via TraitReadPort injection into EmotionUpdater
 **Date:** 2026-06-19
 **Context:** `EmotionUpdater` held a single shared `EmotionModelProtocol` instance. When

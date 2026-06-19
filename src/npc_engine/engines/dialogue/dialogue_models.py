@@ -103,6 +103,10 @@ class DialogueResponse(FrozenDialogueModel):
     action: ActionModel = Field(default_factory=ActionModel)
     facial_expression: FacialExpressionModel = Field(default_factory=FacialExpressionModel)
     learned_facts: tuple[str, ...] = Field(default=())
+    memories_recalled: tuple[str, ...] = Field(
+        default=(),
+        description="Memory node IDs that appeared in the final context (ISSUE-107).",
+    )
     session_id: str | None = None
     cached: bool = False
     degradation_level: str = "full"
