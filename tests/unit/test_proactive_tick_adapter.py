@@ -258,6 +258,94 @@ async def test_tick_adapter_ignores_scheduler_session_kwarg() -> None:
     assert result == {"proactive_lines": []}
 
 
+# ---------------------------------------------------------------------------
+# ISSUE-094: need/event proactive trigger producers
+# ---------------------------------------------------------------------------
+
+
+def _make_intent_repo(
+    unmet_needs: list[dict] | None = None,
+    witnessed_events: list[dict] | None = None,
+) -> MagicMock:
+    """Mock IntentGraphPort with configurable need/event returns."""
+    repo = MagicMock()
+    repo.get_unmet_needs = AsyncMock(return_value=unmet_needs or [])
+    repo.get_witnessed_events = AsyncMock(return_value=witnessed_events or [])
+    return repo
+
+
+@pytest.mark.asyncio
+async def test_need_candidate_fires_when_no_memory_trigger() -> None:
+    """ISSUE-094: unmet need produces a TriggerCandidate(source='need') that wins the router
+    when no memory candidate exists and generates a proactive line."""
+    from npc_engine.engines.proactive_dialogue.proactive_tick_adapter import ProactiveDialogueTick
+
+    engine = _make_engine(trigger=None)
+    line = _make_line()
+    engine.generate_line = AsyncMock(return_value=line)
+
+    location_reader = _make_location_reader([("npc_1", "player")])
+    intent_repo = _make_intent_repo(
+        unmet_needs=[{"id": "need_hunger", "intensity": 90, "label": "hunger"}]
+    )
+
+    adapter = ProactiveDialogueTick(
+        engine=engine, location_reader=location_reader, intent_repo=intent_repo
+    )
+    result = await adapter.run_tick(tick_id=10)
+
+    engine.generate_line.assert_awaited_once()
+    assert len(result["proactive_lines"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_event_candidate_fires_when_no_memory_trigger() -> None:
+    """ISSUE-094: witnessed event produces a TriggerCandidate(source='event') that wins
+    the router when no memory candidate exists and generates a proactive line."""
+    from npc_engine.engines.proactive_dialogue.proactive_tick_adapter import ProactiveDialogueTick
+
+    engine = _make_engine(trigger=None)
+    line = _make_line()
+    engine.generate_line = AsyncMock(return_value=line)
+
+    location_reader = _make_location_reader([("npc_1", "player")])
+    intent_repo = _make_intent_repo(
+        witnessed_events=[{"id": "evt_fire", "severity": 80, "summary": "The market is on fire!"}]
+    )
+
+    adapter = ProactiveDialogueTick(
+        engine=engine, location_reader=location_reader, intent_repo=intent_repo
+    )
+    result = await adapter.run_tick(tick_id=10)
+
+    engine.generate_line.assert_awaited_once()
+    assert len(result["proactive_lines"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_high_priority_need_beats_low_vividness_memory() -> None:
+    """ISSUE-094: a high-intensity need (priority=90) beats a low-vividness memory (priority=40)."""
+    from npc_engine.engines.proactive_dialogue.proactive_tick_adapter import ProactiveDialogueTick
+
+    low_vividness_trigger = _make_trigger(memory_vividness=40)
+    line = _make_line()
+    engine = _make_engine(trigger=low_vividness_trigger, line=line)
+
+    location_reader = _make_location_reader([("npc_1", "player")])
+    intent_repo = _make_intent_repo(
+        unmet_needs=[{"id": "need_hunger", "intensity": 90, "label": "hunger"}]
+    )
+
+    adapter = ProactiveDialogueTick(
+        engine=engine, location_reader=location_reader, intent_repo=intent_repo
+    )
+    result = await adapter.run_tick(tick_id=10)
+
+    # Exactly one line generated (router picks the winner — the need candidate wins here).
+    engine.generate_line.assert_awaited_once()
+    assert len(result["proactive_lines"]) == 1
+
+
 @pytest.mark.asyncio
 async def test_tick_adapter_no_queue_still_returns_line() -> None:
     """Without an injected queue, winner is returned but nothing is enqueued."""

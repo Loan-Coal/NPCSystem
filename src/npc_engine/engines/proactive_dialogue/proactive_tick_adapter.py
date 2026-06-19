@@ -2,18 +2,21 @@
 Module: proactive_tick_adapter
 Layer: engines
 Purpose: Tick-scheduler adapter for ProactiveDialogueEngine.
-         Calls get_collocated_pairs(), collects TriggerCandidates from all pairs,
-         routes to the single highest-priority winner via trigger_router, generates
-         a line for the winner, and enqueues it into the injected ProactiveQueue (F1.2).
+         Calls get_collocated_pairs(), collects TriggerCandidates from all pairs
+         (memory, need, and event sources), routes to the single highest-priority
+         winner via trigger_router, generates a line for the winner, and enqueues
+         it into the injected ProactiveQueue (F1.2/ISSUE-094).
          Returns {"proactive_lines": [<winner serialised>]} (or [] if nothing fired).
          Caps pair processing to MAX_PROACTIVE_CHECKS_PER_TICK per tick.
 Does NOT: run Cypher directly or hold a Neo4j session; co-location reads go through the
-          injected PlayerLocationReadPort.
+          injected PlayerLocationReadPort; need/event reads go through IntentGraphPort.
 Dependencies: engines.proactive_dialogue.proactive_engine.ProactiveDialogueEngine,
               engines.proactive_dialogue.trigger_router,
               engines.proactive_dialogue.proactive_queue (optional, injected),
-              engines.ports.player_location_read_port.PlayerLocationReadPort
-Dependencies injected: ProactiveDialogueEngine, PlayerLocationReadPort, ProactiveQueue (via __init__).
+              engines.ports.player_location_read_port.PlayerLocationReadPort,
+              engines.ports.intent_port.IntentGraphPort (optional, injected)
+Dependencies injected: ProactiveDialogueEngine, PlayerLocationReadPort,
+                       ProactiveQueue (optional), IntentGraphPort (optional) via __init__.
 Used by: scheduler.tick_scheduler (wired via dependencies_engines.py)
 """
 
@@ -32,13 +35,19 @@ from npc_engine.engines.proactive_dialogue.trigger_router import (
 )
 
 if TYPE_CHECKING:
+    from npc_engine.engines.ports.intent_port import IntentGraphPort
     from npc_engine.engines.ports.player_location_read_port import PlayerLocationReadPort
 
 # Maximum (npc, player) pairs evaluated per scheduler tick.
 MAX_PROACTIVE_CHECKS_PER_TICK: int = 20
 
-# TriggerSource value for proactive-memory triggers (only live source today).
+# How many ticks back to look when fetching witnessed events for a proactive candidate.
+RECENT_EVENT_LOOKBACK_TICKS: int = 5
+
+# TriggerSource constants — avoid raw string literals at call sites.
 _MEMORY_SOURCE: TriggerSource = "memory"
+_NEED_SOURCE: TriggerSource = "need"
+_EVENT_SOURCE: TriggerSource = "event"
 
 _logger = logging.getLogger(__name__)
 
@@ -55,6 +64,7 @@ class ProactiveDialogueTick:
         engine: ProactiveDialogueEngine,
         location_reader: PlayerLocationReadPort,
         proactive_queue: ProactiveQueue | None = None,
+        intent_repo: IntentGraphPort | None = None,
     ) -> None:
         """Initialise with injected dependencies.
 
@@ -64,10 +74,14 @@ class ProactiveDialogueTick:
             proactive_queue: Optional ProactiveQueue; when supplied the winning
                 line is enqueued for the target player (F1.2). Default None
                 preserves backward-compatible behaviour for existing callers.
+            intent_repo: Optional IntentGraphPort; when supplied, adds need and event
+                candidates to the router for each (npc, player) pair (ISSUE-094/DEC-136).
+                Default None — no need/event candidates are generated.
         """
         self._engine = engine
         self._location_reader = location_reader
         self._queue = proactive_queue
+        self._intent_repo = intent_repo
 
     async def run_tick(self, tick_id: int) -> dict[str, Any]:
         """Run proactive checks for all co-located pairs and return the winner.
@@ -85,7 +99,10 @@ class ProactiveDialogueTick:
             return {"proactive_lines": []}
 
         candidates, trigger_map = await _collect_candidates(
-            engine=self._engine, pairs=capped, tick_id=tick_id
+            engine=self._engine,
+            pairs=capped,
+            tick_id=tick_id,
+            intent_repo=self._intent_repo,
         )
         winner_candidate = select_trigger(candidates)
         if winner_candidate is None:
@@ -145,13 +162,18 @@ async def _collect_candidates(
     engine: ProactiveDialogueEngine,
     pairs: list[tuple[str, str]],
     tick_id: int,
+    intent_repo: IntentGraphPort | None = None,
 ) -> tuple[list[TriggerCandidate], dict[int, ProactiveTrigger]]:
     """Check each pair and return routing candidates + trigger map.
+
+    For each pair, collects memory candidates via engine.check_trigger, then
+    (if intent_repo is provided) need and event candidates via IntentGraphPort.
 
     Args:
         engine: ProactiveDialogueEngine for check_trigger calls.
         pairs: Capped list of (npc_id, player_id) pairs.
         tick_id: Current game tick.
+        intent_repo: Optional IntentGraphPort for need/event candidates (ISSUE-094).
 
     Returns:
         Tuple of (candidates list, {id(candidate): ProactiveTrigger}).
@@ -162,12 +184,114 @@ async def _collect_candidates(
         trigger = await engine.check_trigger(
             npc_id=npc_id, player_id=player_id, tick_id=tick_id
         )
-        if trigger is None:
-            continue
+        if trigger is not None:
+            candidate = TriggerCandidate(
+                source=_MEMORY_SOURCE,
+                priority=trigger.memory_vividness,
+                payload=trigger.memory_id,
+            )
+            candidates.append(candidate)
+            trigger_map[id(candidate)] = trigger
+        if intent_repo is not None:
+            need_cands, need_map = await _collect_need_candidates(
+                intent_repo=intent_repo,
+                npc_id=npc_id,
+                player_id=player_id,
+                tick_id=tick_id,
+            )
+            candidates.extend(need_cands)
+            trigger_map.update(need_map)
+            event_cands, event_map = await _collect_event_candidates(
+                intent_repo=intent_repo,
+                npc_id=npc_id,
+                player_id=player_id,
+                tick_id=tick_id,
+            )
+            candidates.extend(event_cands)
+            trigger_map.update(event_map)
+    return candidates, trigger_map
+
+
+async def _collect_need_candidates(
+    *,
+    intent_repo: IntentGraphPort,
+    npc_id: str,
+    player_id: str,
+    tick_id: int,
+) -> tuple[list[TriggerCandidate], dict[int, ProactiveTrigger]]:
+    """Build need-sourced trigger candidates from the NPC's unmet needs.
+
+    Constructs a synthetic ProactiveTrigger per need so the winner can be passed
+    to generate_line using the existing trigger → line pipeline.
+
+    Args:
+        intent_repo: IntentGraphPort providing get_unmet_needs.
+        npc_id: NPC whose unmet needs are fetched.
+        player_id: Player co-located with the NPC (for trigger identity).
+        tick_id: Current game tick.
+
+    Returns:
+        Tuple of (candidates, {id(candidate): synthetic ProactiveTrigger}).
+    """
+    needs = await intent_repo.get_unmet_needs(npc_id=npc_id)
+    candidates: list[TriggerCandidate] = []
+    trigger_map: dict[int, ProactiveTrigger] = {}
+    for need in needs:
+        intensity: int = need.get("intensity", 0)
+        trigger = ProactiveTrigger(
+            npc_id=npc_id,
+            player_id=player_id,
+            tick_id=tick_id,
+            reason="unmet_need",
+            memory_id=need["id"],
+            memory_content=need.get("label", ""),
+            memory_vividness=intensity,
+        )
         candidate = TriggerCandidate(
-            source=_MEMORY_SOURCE,
-            priority=trigger.memory_vividness,
-            payload=trigger.memory_id,
+            source=_NEED_SOURCE, priority=intensity, payload=need["id"]
+        )
+        candidates.append(candidate)
+        trigger_map[id(candidate)] = trigger
+    return candidates, trigger_map
+
+
+async def _collect_event_candidates(
+    *,
+    intent_repo: IntentGraphPort,
+    npc_id: str,
+    player_id: str,
+    tick_id: int,
+) -> tuple[list[TriggerCandidate], dict[int, ProactiveTrigger]]:
+    """Build event-sourced trigger candidates from events the NPC recently witnessed.
+
+    Looks back RECENT_EVENT_LOOKBACK_TICKS ticks from tick_id.
+
+    Args:
+        intent_repo: IntentGraphPort providing get_witnessed_events.
+        npc_id: NPC whose witnessed events are fetched.
+        player_id: Player co-located with the NPC.
+        tick_id: Current game tick.
+
+    Returns:
+        Tuple of (candidates, {id(candidate): synthetic ProactiveTrigger}).
+    """
+    since = max(0, tick_id - RECENT_EVENT_LOOKBACK_TICKS)
+    events = await intent_repo.get_witnessed_events(npc_id=npc_id, since_tick=since)
+    candidates: list[TriggerCandidate] = []
+    trigger_map: dict[int, ProactiveTrigger] = {}
+    for event in events:
+        severity: int = event.get("severity", 0)
+        trigger = ProactiveTrigger(
+            npc_id=npc_id,
+            player_id=player_id,
+            tick_id=tick_id,
+            reason="witnessed_event",
+            memory_id=event["id"],
+            memory_content=event.get("summary", ""),
+            memory_vividness=severity,
+        )
+        candidate = TriggerCandidate(
+            source=_EVENT_SOURCE, priority=severity, payload=event["id"]
         )
         candidates.append(candidate)
         trigger_map[id(candidate)] = trigger

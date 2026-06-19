@@ -16,7 +16,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
-ProactiveReason = Literal["unshared_memory", "unmet_need", "pending_rumor"]
+ProactiveReason = Literal["unshared_memory", "unmet_need", "pending_rumor", "witnessed_event"]
 
 
 class ProactiveTrigger(BaseModel):

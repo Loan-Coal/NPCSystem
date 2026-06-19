@@ -3,6 +3,25 @@
 Non-obvious architectural choices. Each entry explains what was decided and why,
 so future maintainers can judge edge cases without re-deriving the rationale.
 
+## DEC-136: ISSUE-094 — need/event trigger producers via IntentGraphPort injection
+**Date:** 2026-06-19
+**Context:** `ProactiveDialogueTick._collect_candidates` only collected memory candidates
+via `ProactiveDialogueEngine.check_trigger`. The router's `"need"` and `"event"` source
+values were declared but never produced (slice-2 placeholder).
+**Decision:** Add optional `intent_repo: IntentGraphPort | None = None` constructor
+parameter to `ProactiveDialogueTick`. When provided:
+- `_collect_need_candidates` calls `get_unmet_needs(npc_id)` per pair and produces
+  `TriggerCandidate(source="need", priority=need["intensity"])`.
+- `_collect_event_candidates` calls `get_witnessed_events(npc_id, since_tick=tick_id-RECENT_EVENT_LOOKBACK_TICKS)`
+  per pair and produces `TriggerCandidate(source="event", priority=event["severity"])`.
+Both helpers synthesise a `ProactiveTrigger` (reusing `memory_id`/`memory_content`/`memory_vividness`
+fields to carry the need/event data) so the existing `generate_line` pipeline is unchanged.
+Added `"witnessed_event"` to `ProactiveReason` Literal (additive, no existing callers broken).
+Default `intent_repo=None` preserves full backward compatibility for existing wired callers.
+**Rationale:** Pure injection at the constructor boundary — no scheduler change, no layer
+violation. The in-process router already handles multi-source priority; adding producers is
+the minimal change that makes the `"need"` and `"event"` router paths live.
+
 ## DEC-135: ISSUE-097 — in-memory plateau tracker on DirectorTick (not RELATES_TO edge)
 **Date:** 2026-06-19
 **Context:** `DirectorTick` always passed `relationship_plateau_ticks=0` to `decide()`, so the
