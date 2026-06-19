@@ -44,15 +44,46 @@ async def test_armies_in_conflict_detected():
 
 
 @pytest.mark.asyncio
-async def test_military_engine_tick_returns_skipped():
-    """MilitaryEngine.run_tick is a no-op stub and must return skipped=True."""
-    session = AsyncMock()
-    engine = MilitaryEngine()
+async def test_military_engine_tick_resolves_battles_and_yields():
+    """MilitaryEngine.run_tick returns battles_resolved and factions_yielded counts."""
+    from unittest.mock import patch
 
-    result = await engine.run_tick(session, tick_id=10)
+    from npc_engine.engines.military.military_battle_service import BattleResult
+    from npc_engine.engines.military.military_resource_service import ResourceYieldResult
 
-    assert result["skipped"] is True
-    assert "reason" in result
+    mock_repo = AsyncMock()
+    engine = MilitaryEngine(military_repo=mock_repo)
+
+    battle = BattleResult(
+        location_id="loc-border-pass",
+        winner_faction_id="faction-north",
+        loser_faction_id="faction-south",
+        winner_strength_before=100,
+        loser_strength_before=60,
+        winner_damage=15,
+        loser_damage=50,
+        tick_id=10,
+    )
+    yield_res = ResourceYieldResult(
+        faction_id="faction-north", total_yield=20, resources_depleted=0, tick_id=10
+    )
+
+    with (
+        patch(
+            "npc_engine.engines.military.military_engine.resolve_battles",
+            new_callable=AsyncMock,
+            return_value=[battle],
+        ),
+        patch(
+            "npc_engine.engines.military.military_engine.process_resource_yield",
+            new_callable=AsyncMock,
+            return_value=[yield_res],
+        ),
+    ):
+        result = await engine.run_tick(tick_id=10)
+
+    assert result["battles_resolved"] == 1
+    assert result["factions_yielded"] == 1
 
 
 @pytest.mark.asyncio
