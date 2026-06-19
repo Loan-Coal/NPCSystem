@@ -147,7 +147,7 @@ class Settings(BaseSettings):
     WORLD_ID: str = "world"
 
     TTS_ENABLED: bool = False
-    TTS_BACKEND: Literal["piper", "mock"] = "piper"
+    TTS_BACKEND: str = "piper"
     PIPER_BASE_URL: str = "http://localhost:5000"
     TTS_TIMEOUT_SECONDS: float = Field(default=10.0, gt=0)
 
@@ -155,7 +155,9 @@ class Settings(BaseSettings):
 
     # Emotion model backend injected into EmotionUpdater (F1.3). "vad" is the
     # baseline VAD model; "trait_modulated" scales deltas by personality traits.
-    EMOTION_MODEL: Literal["vad", "trait_modulated"] = "vad"
+    # Validated against the registry in emotion_model_factory (OCP — new models
+    # register themselves without editing this file).
+    EMOTION_MODEL: str = "vad"
 
     # Run scheduled forgetting-decay (charge-weighted vividness decay) every N ticks (F1.7).
     MEMORY_DECAY_TICK_INTERVAL: int = 10
@@ -361,6 +363,42 @@ class Settings(BaseSettings):
     def validate_event_pool_path(cls, value: str) -> str:
         """Delegate to check_package_data_path."""
         return check_package_data_path(value, _PROJECT_ROOT)
+
+    @field_validator("EMOTION_MODEL")
+    @classmethod
+    def _emotion_model_must_be_registered(cls, value: str) -> str:
+        """Reject EMOTION_MODEL values with no registered implementation (OCP).
+
+        Deferred import avoids an import cycle: config is imported very early;
+        emotion_model_factory is imported later as part of the engine layer.
+        """
+        from npc_engine.engines.emotion.emotion_model_factory import (
+            registered_emotion_models,
+        )
+
+        valid = registered_emotion_models()
+        if value not in valid:
+            raise ValueError(
+                f"Unknown emotion model {value!r}; registered: {sorted(valid)}"
+            )
+        return value
+
+    @field_validator("TTS_BACKEND")
+    @classmethod
+    def _tts_backend_must_be_registered(cls, value: str) -> str:
+        """Reject TTS_BACKEND values with no registered adapter (OCP).
+
+        Deferred import avoids an import cycle: config is imported very early;
+        tts.factory is imported later as part of the engine layer.
+        """
+        from npc_engine.engines.tts.factory import registered_tts_backends
+
+        valid = registered_tts_backends()
+        if value not in valid:
+            raise ValueError(
+                f"Unknown TTS backend {value!r}; registered: {sorted(valid)}"
+            )
+        return value
 
 
 @lru_cache

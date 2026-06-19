@@ -15,7 +15,7 @@ from typing import Any
 
 import logging
 
-from npc_engine.engines.emotion.emotion_state import EmotionState, derive_label
+from npc_engine.engines.emotion.emotion_state import MOOD_LABEL_TO_VAD, EmotionState, derive_label
 from npc_engine.engines.emotion.emotion_store import EmotionStore
 from npc_engine.engines.ports.mood_port import MoodGraphPort
 
@@ -23,14 +23,6 @@ LOGGER = logging.getLogger(__name__)
 
 _BLEND_WEIGHT = 0.1
 _AFFECTION_THRESHOLD = 50
-
-_LABEL_TO_VALENCE_AROUSAL: dict[str, tuple[int, int]] = {
-    "elated": (60, 80),
-    "warm": (50, 40),
-    "neutral": (0, 20),
-    "melancholic": (-50, 30),
-    "agitated": (-60, 80),
-}
 
 
 class MoodContagionEngine:
@@ -159,6 +151,6 @@ def _label_to_state(label: str, intensity: float) -> tuple[int, int]:
     Returns:
         Tuple of (valence, arousal) integers.
     """
-    base_valence, base_arousal = _LABEL_TO_VALENCE_AROUSAL.get(label, (0, 20))
+    base_valence, base_arousal = MOOD_LABEL_TO_VAD.get(label, (0, 20))
     arousal = int(round(intensity * 100))
     return base_valence, arousal

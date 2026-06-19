@@ -45,8 +45,7 @@ from npc_engine.services.output_moderation import OutputModerationService, build
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.engines.llm_config_models import EngineModelConfig
-from npc_engine.engines.tts.mock_adapter import MockTTSAdapter
-from npc_engine.engines.tts.piper_adapter import PiperAdapter
+from npc_engine.engines.tts.factory import build_tts_client
 from npc_engine.engines.tts.protocols import TTSClientProtocol
 from npc_engine.graph.faction_service import FactionService
 from npc_engine.graph.reputation_service import ReputationService
@@ -134,19 +133,15 @@ def get_tts_client(
     """Construct a TTS adapter when TTS_ENABLED is True, else return None.
 
     Args:
-        settings: Application settings providing TTS_BACKEND, PIPER_BASE_URL, etc.
+        settings: Application settings providing TTS_ENABLED, TTS_BACKEND, etc.
 
     Returns:
         Configured TTSClientProtocol adapter, or None if TTS_ENABLED is False.
+
+    Raises:
+        ValueError: If TTS_ENABLED is True but TTS_BACKEND is not registered.
     """
-    if not settings.TTS_ENABLED:
-        return None
-    if settings.TTS_BACKEND == "piper":
-        return PiperAdapter(
-            base_url=settings.PIPER_BASE_URL,
-            timeout_seconds=settings.TTS_TIMEOUT_SECONDS,
-        )
-    return MockTTSAdapter()
+    return build_tts_client(settings)
 
 
 def get_llm_client(

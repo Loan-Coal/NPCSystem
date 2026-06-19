@@ -14,6 +14,19 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, ConfigDict, Field
 
 
+# Canonical mapping from mood label → (valence, arousal) reference coordinates.
+# Single source of truth shared by mood_contagion_engine (label→VAD reconstruction)
+# and any future module needing the inverse of derive_label.
+# Values mirror the thresholds in derive_label: e.g. elated ≥ 70 arousal + ≥ 20 valence.
+MOOD_LABEL_TO_VAD: dict[str, tuple[int, int]] = {
+    "elated": (60, 80),
+    "warm": (50, 40),
+    "neutral": (0, 20),
+    "melancholic": (-50, 30),
+    "agitated": (-60, 80),
+}
+
+
 class EmotionState(BaseModel):
     """Persistent emotion state for an NPC."""
 

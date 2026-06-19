@@ -11,16 +11,29 @@ Used by: engines/scheming/scheme_advance_tick.py
 
 from __future__ import annotations
 
+from enum import Enum
+
 from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
 # Covert-event constants (DEC-107 Option A sub-decisions)
 # ---------------------------------------------------------------------------
 
+
+class SchemeStepKind(str, Enum):
+    """Registry of valid scheme-step event_type values (OCP extension axis).
+
+    Add new members here instead of scattering raw strings. Each member value
+    must be registry-valid (a lowercase event_type the graph accepts).
+    """
+
+    ADVANCE = "scheme_advance"
+
+
 # Dedicated event_type so covert scheme steps do NOT match public disruption /
 # witness rules that key on real event types (crime, battle, ...). The `event`
 # contract's event_type is a required free string, so this is registry-valid.
-COVERT_SCHEME_EVENT_TYPE: str = "scheme_advance"
+COVERT_SCHEME_EVENT_TYPE: str = SchemeStepKind.ADVANCE
 
 # Low severity keeps the step below the witness (>=80) and disruption thresholds;
 # combined with is_public=False this makes the step covert by construction.
