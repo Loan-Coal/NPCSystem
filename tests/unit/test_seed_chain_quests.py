@@ -44,7 +44,11 @@ def test_seed_chain_quests_creates_nodes_and_edges() -> None:
 
 
 def test_seed_chain_quests_skips_existing_nodes() -> None:
-    """_seed_chain_quests must not create HAS_QUEST edge when node already existed."""
+    """_seed_chain_quests always upserts the HAS_QUEST edge even when the node exists.
+
+    Nodes may already exist from a prior partial run while the edge is missing —
+    the implementation always calls _seed_edge to handle that case.
+    """
     client = _make_client()
 
     with (
@@ -56,7 +60,7 @@ def test_seed_chain_quests_skips_existing_nodes() -> None:
 
     assert count == 0
     assert mock_node.call_count == len(_CHAIN_QUESTS)
-    mock_edge.assert_not_called()
+    assert mock_edge.call_count == len(_CHAIN_QUESTS)
 
 
 def test_seed_chain_quests_non_fatal_on_exception() -> None:
@@ -99,7 +103,10 @@ def test_seed_source_chain_quests_creates_nodes_and_edges() -> None:
 
 
 def test_seed_source_chain_quests_skips_existing_nodes() -> None:
-    """_seed_source_chain_quests must not create HAS_QUEST edge when node already existed."""
+    """_seed_source_chain_quests always upserts the HAS_QUEST edge even when the node exists.
+
+    Same always-upsert contract as _seed_chain_quests (see its skip test).
+    """
     client = _make_client()
 
     with (
@@ -111,7 +118,7 @@ def test_seed_source_chain_quests_skips_existing_nodes() -> None:
 
     assert count == 0
     assert mock_node.call_count == len(_SOURCE_CHAIN_QUESTS)
-    mock_edge.assert_not_called()
+    assert mock_edge.call_count == len(_SOURCE_CHAIN_QUESTS)
 
 
 def test_seed_source_chain_quests_non_fatal_on_exception() -> None:
