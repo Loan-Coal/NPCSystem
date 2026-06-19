@@ -19,7 +19,6 @@ R001|demo_game/ui/left_panel.py
 R001|demo_game/ui/right_panel.py
 R001|demo_game/ui/widgets.py
 R001|demo_game/ui/world_panel.py
-R001|src/npc_engine/api/dependencies_engines.py
 R001|src/npc_engine/config.py
 R001|src/npc_engine/data/api_seeder.py
 R001|src/npc_engine/engines/chapter/chapter_engine.py
@@ -32,7 +31,6 @@ R001|src/npc_engine/retrieval/context_budget_enforcer.py
 R001|src/npc_engine/retrieval/context_builder.py
 R001|src/npc_engine/scheduler/tick_scheduler.py
 R001|src/npc_engine/utils/errors.py
-R006|src/npc_engine/api/dependencies_engines.py::get_tick_scheduler
 R006|src/npc_engine/api/quest_helpers.py::build_transition_meta
 R006|src/npc_engine/api/routes/action.py::report_action
 R006|src/npc_engine/api/routes/clock.py::advance_clock
