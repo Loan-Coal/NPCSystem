@@ -65,10 +65,16 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
   exported from `emotion_state` (removed local dup in `mood_contagion_engine`); `SchemeStepKind(str,Enum)` in
   `covert_event_factory`; `config.py` `Literal` → `str` + registry validators for both. 14 new unit tests.
   2505 passed, 86.87% cov. Closes ISSUE-104.
-- [ ] **REM-W5 — engine slices** — ISSUE-112 (event actor + WITNESSED; node-schema change),
+- [x] **REM-W5 — engine slices** — ISSUE-112 (event actor + WITNESSED; node-schema change),
   ISSUE-108 (atomic `advance_step` via `emit_scheme_step_atomic`), ISSUE-097 (in-memory plateau tracker),
   ISSUE-096 (per-NPC traits via existing `trait_service`/`trait_queries` into `EmotionUpdater`),
   ISSUE-094 (`need`/`event` proactive trigger producers). Each: regression test + DECISIONS note.
+  **✅ 2026-06-19:** ISSUE-112 — `EventTemplate.src_character_id` activates WITNESSED edges (DEC-133);
+  ISSUE-108 — `advance_step` routed through `emit_scheme_step_atomic` + `SchemeStepInput` gains event
+  fields (DEC-134); ISSUE-097 — in-memory `_plateau_tracker` on `DirectorTick`; no graph writes (DEC-135);
+  ISSUE-094 — `_collect_need_candidates` / `_collect_event_candidates` via `IntentGraphPort` injection
+  (DEC-136); ISSUE-096 — `TraitReadPort` + `_get_model_for(npc_id)` in `EmotionUpdater` (DEC-137).
+  All 5 DECISIONS written; all tests green; `make check` 86.94% cov.
 - [ ] **REM-W6 — headline features (P2)** — ISSUE-071 (SystemStateContext Tier-0 block: route resolves
   trade/quest facts → `context_builder` + new prompt YAML), ISSUE-107 (`memories_recalled` field +
   two-session memory-recall e2e scenario).

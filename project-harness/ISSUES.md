@@ -14,51 +14,6 @@ Rules:
 
 ---
 
-
-## ISSUE-094: proactive trigger_router has no `need`/`event` candidate producers
-**Found:** 2026-06-12, during F1.2 (proactive WS delivery wiring)
-**Severity:** P3 (nice-to-fix)
-**Where:** `src/npc_engine/engines/proactive_dialogue/proactive_tick_adapter.py` (`_collect_candidates`)
-**Description:** `trigger_router.select_trigger` is now wired, but only the `memory` source emits
-`TriggerCandidate`s. `TriggerSource` also defines `need` and `event` — those producers don't exist,
-so routing is effectively single-source today.
-**Why deferred:** Out of F1.2 scope; building need/event producers is its own slice and the router is a
-clean seam for them. Deferring avoided scope creep in the overnight loop.
-**To fix:** Add need-based (IntentFormationEngine) and event-based candidate producers that append
-`TriggerCandidate(source="need"|"event", ...)` in `_collect_candidates`; the router already ranks them.
-
----
-
----
-
-## ISSUE-096: trait-modulated emotion uses global demo-default traits, not per-NPC traits
-**Found:** 2026-06-12, during F1.3 (config-selectable emotion model)
-**Severity:** P3 (nice-to-fix)
-**Where:** `src/npc_engine/engines/emotion/emotion_model_factory.py` (`_DEMO_DEFAULT_TRAITS`)
-**Description:** When `EMOTION_MODEL="trait_modulated"`, `EmotionUpdater` holds ONE model seeded with
-global demo-default trait multipliers, so every NPC is modulated identically. `TraitModulatedEmotionModel`
-is designed for per-NPC traits (its docstring: "caller responsible for fetching traits from the graph").
-**Why deferred:** F1.3 scope is the config selector + composition-root injection; per-NPC trait fetch is
-its own slice (needs a graph traits reader + an EmotionUpdater call-signature change to thread npc traits).
-**To fix:** Add a per-NPC traits reader; have `EmotionUpdater` build/parameterize the model per `npc_id`
-(or pass traits into `apply_shock`/`apply_mood_hint`), removing the global default.
-
----
-
-## ISSUE-097: director plateau-tick signal is always 0 (no relationship-plateau tracker)
-**Found:** 2026-06-12, during F1.5 (director → scheduler)
-**Severity:** P3 (nice-to-fix)
-**Where:** `src/npc_engine/engines/director/director_tick.py` (`_decide_for_pair`)
-**Description:** `DirectorTick` always passes `relationship_plateau_ticks=0` to `decide()`, so the
-`relationship_catalyst` plateau beat can never fire. Only the idle (`re_engage_idle`) and HOSTILE
-(`tension_escalation`) paths are live.
-**Why deferred:** F1.5 scope is the decide→emit wiring; tracking ticks-since-Standing-band-changed
-needs a small per-pair tracker/store, its own slice.
-**To fix:** Track consecutive ticks since the pair's Standing band last changed (a per-pair counter,
-e.g. on the RELATES_TO edge or an in-memory store) and feed it into `decide()`.
-
----
-
 ## ISSUE-098: composition root builds a fresh PlayerLocationReader per factory
 **Found:** 2026-06-12, during F1.5
 **Severity:** P3 (nice-to-fix)
@@ -209,33 +164,5 @@ consolidated memory" (see review §4 / L6 evidence).
 
 ---
 
-## ISSUE-108: `scheming_engine.advance_step` creates a SCHEME_STEP edge with no paired Event
-**Found:** 2026-06-14, during /fix-parallel SEV-01 (W1 adjacent finding)
-**Severity:** P2 (annoying)
-**Where:** `src/npc_engine/engines/scheming/scheming_engine.py` (`advance_step` call to `add_scheme_step(session=...)`)
-**Description:** SEV-01 made the AUTO-advance path (`scheme_advance_tick`) mint the Event and link the
-SCHEME_STEP atomically in one transaction. The manual `advance_step` path still calls
-`add_scheme_step(session=...)` standalone, creating a SCHEME_STEP edge with no paired Event node — a
-possible orphan-edge / inconsistent-scheme concern on that separate call site.
-**Why deferred:** Different call site and semantics from SEV-01's auto-advance fix (out of that task's scope).
-**To fix:** Decide whether the manual step path must also mint/refer to an Event; if so, route it through an
-atomic `run_in_tx` like the auto-advance path (pass `tx=`).
 
----
-
-
----
-
-## ISSUE-112: EventHandler high-severity witness recording is dead code
-**Found:** 2026-06-16, during /fix-next SEV-24 (events slice)
-**Severity:** P3 (nice-to-fix)
-**Where:** `src/npc_engine/engines/events/event_handler.py::_record_witnesses`
-**Description:** The post-emit witness block reads `actor_id = raw_props.get("src_character_id", "") or None`,
-but `_build_event` never sets `src_character_id`, so `actor_id` is always `None` and the WITNESSED edges are
-never recorded. Only the `get_characters_at_location` read still fires (a wasted DB round-trip on every
-severity ≥ HIGH_SEVERITY_THRESHOLD event). Behaviour was preserved verbatim through the SEV-24 migration.
-**Why deferred:** Wiring an actor source into event templates is a feature change outside the repository-facade
-slice; preserving exact behaviour was the migration's contract.
-**To fix:** Either add `src_character_id` to `EventTemplate`/`_build_event` so witnessing actually fires, or
-drop the dead block (and its read) if event-actor witnessing is not a desired feature.
 
