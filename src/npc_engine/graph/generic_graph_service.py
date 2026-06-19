@@ -1,7 +1,7 @@
 """
 generic_graph_service.py - Combined registry-driven graph CRUD service.
 Layer: graph
-Purpose: (auto-detected — review)
+Purpose: Combined registry-driven graph CRUD service.
 
 Does NOT: enforce auth scopes or define node/edge logic directly.
 

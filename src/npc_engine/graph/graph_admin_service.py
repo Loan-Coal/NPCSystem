@@ -1,7 +1,7 @@
 """
 graph_admin_service.py - Admin-only graph operations and destructive mutations.
 Layer: graph
-Purpose: (auto-detected — review)
+Purpose: Admin-only graph operations and destructive mutations.
 
 Does NOT: validate bearer token scopes.
 

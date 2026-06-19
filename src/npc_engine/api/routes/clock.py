@@ -1,7 +1,7 @@
 """
 clock.py - Clock state and manual tick advancement routes.
 Layer: api
-Purpose: (auto-detected — review)
+Purpose: Clock state and manual tick advancement routes.
 
 Does NOT: define gossip or event domain logic.
 

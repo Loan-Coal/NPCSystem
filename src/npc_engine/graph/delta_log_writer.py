@@ -1,7 +1,7 @@
 """
 delta_log_writer.py - Persists relation edge delta logs in Neo4j.
 Layer: graph
-Purpose: (auto-detected — review)
+Purpose: Persists relation edge delta logs in Neo4j.
 
 Does NOT: validate relation bounds.
 

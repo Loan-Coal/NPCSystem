@@ -1,7 +1,7 @@
 """
 enum_validator.py - Builds merged enum value sets from base and schema extensions.
 Layer: config
-Purpose: (auto-detected — review)
+Purpose: Builds merged enum value sets from base and schema extensions.
 
 Does NOT: validate API requests directly.
 

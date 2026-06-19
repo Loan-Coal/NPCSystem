@@ -1,7 +1,7 @@
 """
 event_handler.py - Orchestrates weighted event generation and awareness seeding.
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Orchestrates weighted event generation and awareness seeding.
 
 Does NOT: run periodic scheduler loops, open Neo4j sessions, or hold a transaction.
 

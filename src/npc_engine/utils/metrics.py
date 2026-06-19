@@ -1,7 +1,7 @@
 """
 metrics.py - In-memory metrics registry and bounded label helpers for observability.
 Layer: config
-Purpose: (auto-detected — review)
+Purpose: In-memory metrics registry and bounded label helpers for observability.
 
 Does NOT: export metrics to external backends.
 

@@ -1,7 +1,7 @@
 """
 cleanup_scheduler.py - Background scheduler for expired idempotency record cleanup.
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Background scheduler for expired idempotency record cleanup.
 
 Does NOT: perform request preflight/replay logic.
 

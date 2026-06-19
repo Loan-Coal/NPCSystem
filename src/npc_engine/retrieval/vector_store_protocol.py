@@ -1,7 +1,7 @@
 """
 vector_store_protocol.py - Protocol for vector search backends.
 Layer: retrieval
-Purpose: (auto-detected — review)
+Purpose: Protocol for vector search backends.
 
 Does NOT: define backend factory logic.
 

@@ -1,7 +1,7 @@
 """
 middleware.py - FastAPI middleware that enforces API key auth on protected routes.
 Layer: api
-Purpose: (auto-detected — review)
+Purpose: FastAPI middleware that enforces API key auth on protected routes.
 
 Does NOT: execute route business logic.
 

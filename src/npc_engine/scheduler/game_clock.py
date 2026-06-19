@@ -1,7 +1,7 @@
 """
 game_clock.py - Thread-safe game clock state with manual advance.
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Thread-safe game clock state with manual advance.
 
 Does NOT: trigger engine ticks.
 

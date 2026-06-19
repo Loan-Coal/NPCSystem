@@ -1,7 +1,7 @@
 """
 field_validators.py - Per-field type, range, and byte-limit validators for registry payloads.
 Layer: config
-Purpose: (auto-detected — review)
+Purpose: Per-field type, range, and byte-limit validators for registry payloads.
 
 Does NOT: orchestrate payload-level validation or resolve edge/node definitions.
 

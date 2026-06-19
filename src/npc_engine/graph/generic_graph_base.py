@@ -1,7 +1,7 @@
 """
 generic_graph_base.py - Shared session/registry base for generic graph services.
 Layer: graph
-Purpose: (auto-detected — review)
+Purpose: Shared session/registry base for generic graph services.
 
 Does NOT: execute business logic or validate payloads.
 

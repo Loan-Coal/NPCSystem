@@ -1,7 +1,7 @@
 """
 extension_loader.py - Resolves and validates registry extension YAML documents.
 Layer: config
-Purpose: (auto-detected — review)
+Purpose: Resolves and validates registry extension YAML documents.
 
 Does NOT: apply merge policies or build runtime registry state.
 

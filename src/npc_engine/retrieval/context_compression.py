@@ -1,7 +1,7 @@
 """
 context_compression.py - In-memory compression cache and deterministic text compression.
 Layer: retrieval
-Purpose: (auto-detected — review)
+Purpose: In-memory compression cache and deterministic text compression.
 
 Does NOT: call external LLM services.
 

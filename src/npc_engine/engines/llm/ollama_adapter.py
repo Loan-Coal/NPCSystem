@@ -1,7 +1,7 @@
 """
 ollama_adapter.py - HTTP adapter for Ollama-compatible backend.
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: HTTP adapter for Ollama-compatible backend.
 
 Does NOT: choose backend implementations.
 

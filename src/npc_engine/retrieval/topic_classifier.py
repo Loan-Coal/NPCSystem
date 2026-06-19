@@ -1,7 +1,7 @@
 """
 topic_classifier.py - Keyword-based player message topic detection for dialogue weight profiles.
 Layer: retrieval
-Purpose: (auto-detected — review)
+Purpose: Keyword-based player message topic detection for dialogue weight profiles.
 
 Does NOT: call LLM adapters, access graph data, or perform any I/O.
 

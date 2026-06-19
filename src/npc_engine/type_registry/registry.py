@@ -1,7 +1,7 @@
 """
 registry.py - Facade for building immutable type registry state.
 Layer: config
-Purpose: (auto-detected — review)
+Purpose: Facade for building immutable type registry state.
 
 Does NOT: perform request-time graph validation.
 

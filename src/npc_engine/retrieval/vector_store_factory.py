@@ -1,7 +1,7 @@
 """
 vector_store_factory.py - Backend selector for vector store implementations.
 Layer: retrieval
-Purpose: (auto-detected — review)
+Purpose: Backend selector for vector store implementations.
 
 Does NOT: compute embeddings.
 

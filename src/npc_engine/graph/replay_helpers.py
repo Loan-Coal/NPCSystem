@@ -1,7 +1,7 @@
 """
 replay_helpers.py - Shared idempotent replay query helpers for graph transfer writers.
 Layer: graph
-Purpose: (auto-detected — review)
+Purpose: Shared idempotent replay query helpers for graph transfer writers.
 
 Does NOT: validate transfer business rules.
 

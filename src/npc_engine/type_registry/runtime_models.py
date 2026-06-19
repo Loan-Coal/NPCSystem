@@ -1,7 +1,7 @@
 """
 runtime_models.py - Builds dynamic Pydantic node and edge models from registry contracts.
 Layer: config
-Purpose: (auto-detected — review)
+Purpose: Builds dynamic Pydantic node and edge models from registry contracts.
 
 Does NOT: persist graph data or perform request validation.
 

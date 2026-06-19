@@ -1,7 +1,7 @@
 """
 permissions.py - Scope hierarchy helpers for route authorization.
 Layer: api
-Purpose: (auto-detected — review)
+Purpose: Scope hierarchy helpers for route authorization.
 
 Does NOT: validate bearer secrets.
 

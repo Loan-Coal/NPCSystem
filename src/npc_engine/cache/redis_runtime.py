@@ -1,7 +1,7 @@
 """
 redis_runtime.py - Optional Redis runtime integration for non-idempotency caches.
 Layer: services
-Purpose: (auto-detected — review)
+Purpose: Optional Redis runtime integration for non-idempotency caches.
 
 Does NOT: participate in idempotency replay decisions.
 

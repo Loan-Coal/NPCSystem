@@ -27,8 +27,11 @@ def _extract_module_docstring(source: str) -> str | None:
     return None
 
 
+PLACEHOLDER_PURPOSE_TEXT = "(auto-detected — review)"
+
+
 def _check_file(path: Path) -> list[str]:
-    """Return list of missing field names for the given file."""
+    """Return list of missing or invalid field names for the given file."""
     source = path.read_text(encoding="utf-8")
     docstring = _extract_module_docstring(source)
     if docstring is None:
@@ -43,6 +46,8 @@ def _check_file(path: Path) -> list[str]:
             missing.append(field)
     if path.name == "__init__.py" and "Public surface:" not in docstring:
         missing.append("Public surface:")
+    if PLACEHOLDER_PURPOSE_TEXT in docstring:
+        missing.append("Purpose: placeholder")
     return missing
 
 

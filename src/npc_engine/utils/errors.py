@@ -1,7 +1,7 @@
 """
 errors.py - Defines custom exception types for domain and boundary failures.
 Layer: config
-Purpose: (auto-detected — review)
+Purpose: Defines custom exception types for domain and boundary failures.
 
 Does NOT: map errors to HTTP responses or log exceptions.
 

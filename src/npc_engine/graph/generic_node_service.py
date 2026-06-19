@@ -1,7 +1,7 @@
 """
 generic_node_service.py - Registry-driven generic node CRUD operations.
 Layer: graph
-Purpose: (auto-detected — review)
+Purpose: Registry-driven generic node CRUD operations.
 
 Does NOT: enforce auth scopes or execute edge mutations.
 

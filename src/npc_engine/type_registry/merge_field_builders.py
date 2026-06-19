@@ -1,7 +1,7 @@
 """
 merge_field_builders.py - Primitive field builders and merge enforcement helpers.
 Layer: config
-Purpose: (auto-detected — review)
+Purpose: Primitive field builders and merge enforcement helpers.
 
 Does NOT: orchestrate registry merges or read files from disk.
 

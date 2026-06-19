@@ -1,7 +1,7 @@
 """
 context_config_models.py - Typed models for v1.4 context relevance and budget settings.
 Layer: config
-Purpose: (auto-detected — review)
+Purpose: Typed models for v1.4 context relevance and budget settings.
 
 Does NOT: load files from disk or execute runtime prompt logic.
 

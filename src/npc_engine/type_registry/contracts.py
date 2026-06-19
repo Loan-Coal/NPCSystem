@@ -1,7 +1,7 @@
 """
 contracts.py - Type-registry document contracts and immutable runtime models.
 Layer: config
-Purpose: (auto-detected — review)
+Purpose: Type-registry document contracts and immutable runtime models.
 
 Does NOT: read extension files from disk or apply merge policies.
 

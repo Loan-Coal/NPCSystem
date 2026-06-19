@@ -1,7 +1,7 @@
 """
 validation.py - Generic registry validation for node/edge payloads and topology.
 Layer: config
-Purpose: (auto-detected — review)
+Purpose: Generic registry validation for node/edge payloads and topology.
 
 Does NOT: execute graph writes or perform field-level type coercion.
 

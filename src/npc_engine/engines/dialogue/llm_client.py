@@ -1,7 +1,7 @@
 """
 llm_client.py - Thin wrapper for dialogue structured generation with timeout fallback.
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Thin wrapper for dialogue structured generation with timeout fallback.
 
 Does NOT: build prompts or mutate graph state.
 

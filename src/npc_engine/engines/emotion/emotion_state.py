@@ -1,7 +1,7 @@
 """
 emotion_state.py - Emotion state model and label derivation helpers.
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Emotion state model and label derivation helpers.
 
 Does NOT: persist emotion state by itself.
 

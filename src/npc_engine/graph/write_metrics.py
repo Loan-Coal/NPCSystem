@@ -1,7 +1,7 @@
 """
 write_metrics.py - Graph write operation metric helpers.
 Layer: graph
-Purpose: (auto-detected — review)
+Purpose: Graph write operation metric helpers.
 
 Does NOT: execute graph queries or manage transactions.
 

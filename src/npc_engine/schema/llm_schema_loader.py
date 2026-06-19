@@ -1,7 +1,7 @@
 """
 llm_schema_loader.py - Loads and validates v1.4 llm_config YAML settings.
 Layer: config
-Purpose: (auto-detected — review)
+Purpose: Loads and validates v1.4 llm_config YAML settings.
 
 Does NOT: mutate runtime state or build prompt payloads.
 

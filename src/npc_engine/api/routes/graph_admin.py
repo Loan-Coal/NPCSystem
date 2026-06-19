@@ -1,7 +1,7 @@
 """
 graph_admin.py - v1 graph_admin routes for privileged graph operations.
 Layer: api
-Purpose: (auto-detected — review)
+Purpose: v1 graph_admin routes for privileged graph operations.
 
 Does NOT: perform authentication itself.
 

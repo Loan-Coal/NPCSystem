@@ -1,7 +1,7 @@
 """
 guard_contract_test_sync.py - Enforces contract-YAML to test-change synchronization in CI.
 Layer: unknown
-Purpose: (auto-detected — review)
+Purpose: Enforces contract-YAML to test-change synchronization in CI.
 
 Does NOT: validate contract schema correctness.
 

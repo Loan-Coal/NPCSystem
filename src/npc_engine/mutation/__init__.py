@@ -1,7 +1,7 @@
 """
 mutation package - Relation delta bounds and log utilities.
 Layer: services
-Purpose: (auto-detected — review)
+Purpose: Relation delta bounds and log utilities.
 Public surface: (list re-exports here)
 
 Does NOT: execute graph persistence directly.

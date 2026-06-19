@@ -1,7 +1,7 @@
 """
 response_parser.py - Validates LLM structured output into dialogue response model.
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Validates LLM structured output into dialogue response model.
 
 Does NOT: call LLM services.
 

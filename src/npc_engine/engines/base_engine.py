@@ -1,7 +1,7 @@
 """
 base_engine.py - Defines a minimal asynchronous engine contract.
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Defines a minimal asynchronous engine contract.
 
 Does NOT: implement domain-specific engine behavior.
 

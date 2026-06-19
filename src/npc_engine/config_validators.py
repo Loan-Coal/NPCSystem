@@ -1,7 +1,7 @@
 """
 config_validators.py — Pure validation functions for Settings field values.
 Layer: unknown
-Purpose: (auto-detected — review)
+Purpose: Pure validation functions for Settings field values.
 
 Does NOT: read from environment, instantiate Settings, or perform I/O.
 

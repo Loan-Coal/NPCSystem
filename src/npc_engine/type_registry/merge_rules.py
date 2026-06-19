@@ -1,7 +1,7 @@
 """
 merge_rules.py - Applies additive-only merge rules for registry documents.
 Layer: config
-Purpose: (auto-detected — review)
+Purpose: Applies additive-only merge rules for registry documents.
 
 Does NOT: read files from disk or build field definitions.
 

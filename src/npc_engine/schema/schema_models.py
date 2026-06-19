@@ -1,7 +1,7 @@
 """
 schema_models.py - Pydantic models for game_schema.yaml meta-schema.
 Layer: config
-Purpose: (auto-detected — review)
+Purpose: Pydantic models for game_schema.yaml meta-schema.
 
 Does NOT: load files from disk.
 

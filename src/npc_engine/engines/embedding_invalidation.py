@@ -1,7 +1,7 @@
 """
 embedding_invalidation.py - Shared helper for best-effort embedding invalidation.
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Shared helper for best-effort embedding invalidation.
 
 Does NOT: decide business behavior when invalidation fails.
 

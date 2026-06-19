@@ -1,7 +1,7 @@
 """
 db.py - Manages Neo4j driver lifecycle and async session access.
 Layer: graph
-Purpose: (auto-detected — review)
+Purpose: Manages Neo4j driver lifecycle and async session access.
 
 Does NOT: execute graph domain queries.
 

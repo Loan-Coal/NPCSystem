@@ -1,7 +1,7 @@
 """
 degradation.py - Tiered executor for graceful dialogue degradation.
 Layer: engines
-Purpose: (auto-detected — review)
+Purpose: Tiered executor for graceful dialogue degradation.
 
 Does NOT: call LLM or graph services directly.
 
