@@ -1401,3 +1401,19 @@ artificial: all three are tightly coupled phases of one Neo4j atomic transaction
 **To fix:** Extract `_grant_item_rewards_in_tx` and `_grant_currency_reward_in_tx` helpers from `_apply_in_tx`;
 split `_collect_delivery_in_tx` at the possession-check vs transfer boundary.
 **Fixed:** 2026-06-19, in commit 58f6e45 (REM-W3)
+
+---
+
+## [FIXED] ISSUE-104: OCP residuals — emotion/TTS factory, mood-label table, llm `__init__` registration, scheme step kind
+**Found:** 2026-06-13, during /full-review (L7)
+**Severity:** P3 (nice-to-fix)
+**Where:** `engines/.../emotion_model_factory.py`, `dependencies.py` (TTS), `engines/.../mood_contagion_engine.py`, `engines/llm/__init__.py`, `engines/scheming/covert_event_factory.py`
+**Description:** Several extension axes remain closed: emotion-model factory is a 2-branch if + Literal;
+TTS backend selection is an if/elif in the composition root with no registry; mood label→VAD table is a
+hardcoded dict duplicated across two modules; new LLM backends require editing `llm/__init__.py`; scheme
+step kind is a free string with no enum/registry. The big OCP seams (distortion registry, location_writer,
+LLM backend validator, EmotionModelProtocol) DID land — these are the residuals.
+**Why deferred:** Roadmap pre-work, not blocking; each is added when its expansion axis is actually exercised.
+**To fix:** Mirror the LLM `register_backend()` registry pattern for emotion + TTS; extract the mood table
+to one module; introduce a `SchemeStepKind`.
+**Fixed:** 2026-06-19, in dd91e55 (REM-W4).

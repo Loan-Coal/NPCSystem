@@ -58,8 +58,13 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
   **✅ 2026-06-19:** extracted 4 helpers from quest_reward_repository (114); split monolith into
   dependencies_engines/{core,quest,tick_slots}/__init__ (105); hoisted get_proactive_queue import (095).
   2 R006 + 1 R001 entries removed from baseline (136 grandfathered). All 2491 tests pass, 86.83% cov.
-- [ ] **REM-W4 — OCP residuals** — ISSUE-104: registries/enums for emotion-model factory, TTS backend,
+- [x] **REM-W4 — OCP residuals** — ISSUE-104: registries/enums for emotion-model factory, TTS backend,
   shared mood→VAD table, LLM `__init__` self-registration, `SchemeStepKind` enum (mirror `register_backend`).
+  **✅ 2026-06-19:** emotion registry (`register_emotion_model`/`registered_emotion_models` + dispatcher);
+  `engines/tts/factory.py` TTS registry (`register_tts_backend`/`build_tts_client`); `MOOD_LABEL_TO_VAD`
+  exported from `emotion_state` (removed local dup in `mood_contagion_engine`); `SchemeStepKind(str,Enum)` in
+  `covert_event_factory`; `config.py` `Literal` → `str` + registry validators for both. 14 new unit tests.
+  2505 passed, 86.87% cov. Closes ISSUE-104.
 - [ ] **REM-W5 — engine slices** — ISSUE-112 (event actor + WITNESSED; node-schema change),
   ISSUE-108 (atomic `advance_step` via `emit_scheme_step_atomic`), ISSUE-097 (in-memory plateau tracker),
   ISSUE-096 (per-NPC traits via existing `trait_service`/`trait_queries` into `EmotionUpdater`),
