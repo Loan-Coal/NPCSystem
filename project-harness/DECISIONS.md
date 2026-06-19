@@ -3,6 +3,22 @@
 Non-obvious architectural choices. Each entry explains what was decided and why,
 so future maintainers can judge edge cases without re-deriving the rationale.
 
+## DEC-137: ISSUE-096 — per-NPC traits via TraitReadPort injection into EmotionUpdater
+**Date:** 2026-06-19
+**Context:** `EmotionUpdater` held a single shared `EmotionModelProtocol` instance. When
+`trait_modulated` was selected, all NPCs used `_DEMO_DEFAULT_TRAITS` (fear=1.5, etc.)
+regardless of their individual personalities.
+**Decision:** Add optional `trait_reader: TraitReadPort | None = None` to
+`EmotionUpdater.__init__`. When injected, each `apply_event_shock` and `apply_dialogue_mood`
+call fetches the NPC's personality trait multipliers via `get_npc_traits(npc_id=npc_id)` and
+instantiates a `TraitModulatedEmotionModel(traits=traits)` for that call. No shared state;
+each call is independent (pure). Created `TraitReadPort` Protocol in
+`engines/ports/trait_read_port.py` (one method: `get_npc_traits`). The graph-layer
+`Neo4jTraitReadRepository` implementation is deferred to slice-2 wiring.
+**Rationale:** Constructor injection at the boundary, per the DIP rule. The fallback
+(`self._model`, default `VadEmotionModel()`) is preserved when `trait_reader=None`, so all
+existing callers that don't inject a reader continue to work unchanged.
+
 ## DEC-136: ISSUE-094 — need/event trigger producers via IntentGraphPort injection
 **Date:** 2026-06-19
 **Context:** `ProactiveDialogueTick._collect_candidates` only collected memory candidates

@@ -1,16 +1,21 @@
 """
-Unit tests for EmotionUpdater.apply_event_shock.
+Unit tests for EmotionUpdater.apply_event_shock and per-NPC trait injection (ISSUE-096).
 
-Verifies severity-proportional valence/arousal shifts and label derivation.
+Verifies severity-proportional valence/arousal shifts, label derivation,
+and that an injected TraitReadPort provides per-NPC trait multipliers to
+TraitModulatedEmotionModel so different NPCs receive different shock magnitudes.
 """
 
 from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from npc_engine.engines.emotion.emotion_state import EmotionState, derive_label
 from npc_engine.engines.emotion.emotion_store import EmotionStore
 from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
+from npc_engine.engines.emotion.trait_modulated_model import TRAIT_FEAR_SENSITIVITY
 
 
 async def _make_updater(initial: EmotionState | None = None) -> EmotionUpdater:
@@ -82,3 +87,67 @@ async def test_apply_event_shock_zero_severity_no_change():
     state = await updater.apply_event_shock(npc_id="npc-1", severity=0)
     assert state.valence == 0
     assert state.arousal == 0
+
+
+# ---------------------------------------------------------------------------
+# ISSUE-096: per-NPC traits via TraitReadPort
+# ---------------------------------------------------------------------------
+
+
+def _make_trait_reader(traits_by_npc: dict[str, dict[str, float]]) -> MagicMock:
+    """Return a mock TraitReadPort that returns per-NPC trait dicts."""
+    reader = MagicMock()
+    async def _get(*, npc_id: str) -> dict[str, float]:
+        return traits_by_npc.get(npc_id, {})
+    reader.get_npc_traits = _get
+    return reader
+
+
+@pytest.mark.asyncio
+async def test_trait_reader_amplifies_shock_for_fearful_npc() -> None:
+    """ISSUE-096: fearful NPC (fear_sensitivity=2.0) receives a larger valence drop
+    than a neutral NPC (fear_sensitivity=1.0) for the same shock severity."""
+    store_fearful = EmotionStore()
+    store_neutral = EmotionStore()
+
+    fearful_reader = _make_trait_reader({"npc-fearful": {TRAIT_FEAR_SENSITIVITY: 2.0}})
+    neutral_reader = _make_trait_reader({"npc-neutral": {TRAIT_FEAR_SENSITIVITY: 1.0}})
+
+    updater_fearful = EmotionUpdater(emotion_store=store_fearful, trait_reader=fearful_reader)
+    updater_neutral = EmotionUpdater(emotion_store=store_neutral, trait_reader=neutral_reader)
+
+    state_fearful = await updater_fearful.apply_event_shock(npc_id="npc-fearful", severity=60)
+    state_neutral = await updater_neutral.apply_event_shock(npc_id="npc-neutral", severity=60)
+
+    assert state_fearful.valence < state_neutral.valence, (
+        f"Fearful NPC valence {state_fearful.valence} should be lower than "
+        f"neutral NPC valence {state_neutral.valence}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_different_npcs_use_their_own_traits() -> None:
+    """ISSUE-096: two NPCs sharing one updater receive trait-specific shock magnitudes."""
+    store = EmotionStore()
+    reader = _make_trait_reader({
+        "npc-a": {TRAIT_FEAR_SENSITIVITY: 0.5},
+        "npc-b": {TRAIT_FEAR_SENSITIVITY: 3.0},
+    })
+    updater = EmotionUpdater(emotion_store=store, trait_reader=reader)
+
+    state_a = await updater.apply_event_shock(npc_id="npc-a", severity=60)
+    state_b = await updater.apply_event_shock(npc_id="npc-b", severity=60)
+
+    assert state_b.valence < state_a.valence, (
+        f"High-fear NPC-B valence {state_b.valence} should be lower than "
+        f"low-fear NPC-A valence {state_a.valence}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_emotion_updater_unchanged_without_trait_reader() -> None:
+    """ISSUE-096: existing behaviour (no trait_reader) is unchanged — backward compat."""
+    updater = await _make_updater()
+    state = await updater.apply_event_shock(npc_id="npc-1", severity=60)
+    # Vad default: valence_delta = min(30, 60//3)=20, new_valence=-20
+    assert state.valence == -20
