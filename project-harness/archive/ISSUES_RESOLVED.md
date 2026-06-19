@@ -1304,3 +1304,58 @@ package docstrings).
 **To fix:** Sweep area-by-area (start with `graph/` and `engines/`), replacing each placeholder Purpose with an
 accurate one-line description; verify with the grep above returning zero matches.
 **Fixed:** 2026-06-19, in commit 8434391 (REM-W1b). All 113 files swept; grep returns zero.
+
+---
+
+## [FIXED] ISSUE-116: test_seed_chain_quests skip-existing tests assert _seed_edge never called
+**Found:** 2026-06-18, during SHIP-02 (OpenAI-compatible LLM adapter) — surfaced by `make check`
+**Severity:** P3 (nice-to-fix)
+**Where:** `tests/unit/test_seed_chain_quests.py` (`test_seed_chain_quests_skips_existing_nodes`, `test_seed_source_chain_quests_skips_existing_nodes`)
+**Description:** Both tests stub `_seed_node` to return `"skipped"` and then assert `mock_edge.assert_not_called()`, but `_seed_chain_quests` always calls `_seed_edge` (which upserts the latest props regardless of node existence). Same stale-expectation family as the FIXED ISSUE-040 (`test_seed.py`). Pre-existing: both fail on a clean tree (verified via `git stash`); unrelated to SHIP-02.
+**Why deferred:** Not the current task (SHIP-02 LLM adapter); demo-side seeding, no functional regression, does not gate the engine path.
+**To fix:** Update the two assertions to expect the actual `_seed_edge` upsert count (mirror ISSUE-040's resolution), or add skip-if-exists edge logic to `_seed_chain_quests` and keep the assertions.
+**Fixed:** 2026-06-19, in commit 6d9cfad (REM-W2). Changed both `mock_edge.assert_not_called()` to `assert mock_edge.call_count == len(...)`.
+
+---
+
+## [FIXED] ISSUE-101: `schedule_queries.py` scheduler reads 24% covered
+**Found:** 2026-06-13, during /full-review (L4)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/graph/schedule_queries.py`
+**Description:** Scheduler read queries are 24% covered; most read paths untested.
+**Why deferred:** Below the HIGH/scheme-feature priority of this review's Fix-now backlog.
+**To fix:** Add unit/integration tests for the scheduler read queries; bring coverage toward module norm.
+**Fixed:** 2026-06-19, in commit 34a3925 (REM-W2). 13 new unit tests in `tests/unit/test_schedule_queries.py` covering all 4 public functions (happy path, not-found, bad-JSON, multi-match).
+
+---
+
+## [FIXED] ISSUE-102: Intrigue board panel (G2.2) tests are crash-safety only
+**Found:** 2026-06-13, during /full-review (L4)
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/ui/` intrigue/scheme board panel tests
+**Description:** The G2.2 scheme board panel tests assert the widget does not crash on render but make no behavioral assertions (does it show the right schemes/steps for the active NPC?).
+**Why deferred:** Demo panel; poller is behaviorally tested (6 tests). Cosmetic risk only.
+**To fix:** Add assertions on panel content given a known schemes payload.
+**Fixed:** 2026-06-19, in commit 13fc6ea (REM-W2). Added `_TrackingFont` + 9-test `TestDrawBehavioral` class asserting header, no-data placeholder, discovered/hidden badges, goal texts, step summaries, and marker characters.
+
+---
+
+## [FIXED] ISSUE-110: `evals/runner.py` HTTP loop (`_run_case`/`main`) has no unit coverage
+**Found:** 2026-06-14, during /fix-next SEV-07
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/runner.py` (`_run_case`, `_setup_reputation`, `main`)
+**Description:** SEV-07 added `--cov=runner` to the gate; runner sits at 24%. Its guard/guarantee LOGIC is unit-tested (`test_eval_runner_guards.py`), but the HTTP eval loop, reputation setup, and the `main()` `guarantee_demonstrated` gate are exercised only by the live `make eval-llm-demo`, not unit tests.
+**Why deferred:** Unit-testing the loop needs httpx-client mocking + case fixtures (sizeable); out of SEV-07's hygiene scope, and total coverage stays ≥80%.
+**To fix:** Add unit tests mocking `httpx.Client` for `_run_case` happy/error paths and a `main()` test asserting exit code flips on `guarantee_demonstrated=False`.
+**Fixed:** 2026-06-19, in commit 3edd7f3 (REM-W2). 9 new unit tests in `tests/unit/test_eval_runner_loop.py`: `_run_case` (no-input skip, NPC-404 skip, request error, success, keyword_none fail) + `main()` (unreachable → 2, no cases → 2, guarantee-not-demonstrated → 1, all-pass → 0).
+
+---
+
+## [FIXED] ISSUE-111: `scenario_territorial_war.py::test_military_engine_tick_returns_skipped` is stale
+**Found:** 2026-06-16, during /fix-next SEV-24 (military slice)
+**Severity:** P3 (nice-to-fix)
+**Where:** `e2e/scenarios/scenario_territorial_war.py` (`test_military_engine_tick_returns_skipped`)
+**Description:** The test constructs `MilitaryEngine()` and asserts `run_tick` returns `skipped=True` — the pre-S6.5 no-op-stub contract. Since S6.5 the engine returns `battles_resolved`/`factions_yielded`, so the assertion was already wrong; after the SEV-24 migration the constructor also now requires a `military_repo` port, so the call fails at construction. Not collected by `make check` (it runs `tests/` only; scenarios need `--scenarios-only`), so it does not gate.
+**Why deferred:** Pre-existing stale test outside the SEV-24 slice's verification path; fixing it is e2e-test maintenance, not part of the repository-facade migration.
+**To fix:** Rewrite the test to inject a mock `MilitaryGraphPort` and assert the real `battles_resolved`/`factions_yielded` contract (mirror `tests/unit/test_military_engine.py`).
+**Fixed:** 2026-06-19, in commit 21145f3 (REM-W2). Rewrote test to inject `AsyncMock()` repo, patch services, assert `battles_resolved`/`factions_yielded`; passes under `--scenarios-only`.

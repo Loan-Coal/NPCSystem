@@ -46,9 +46,12 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
   with accurate one-liners; add a `check-docstrings` guard rejecting the placeholder. Grep returns zero when done.
   **✅ 2026-06-19:** 73 files updated (40 already fixed in prior sessions); `docstring_audit.py` guard added;
   5 unit tests green; `make check` 86.11% cov. Closes ISSUE-103/115.
-- [ ] **REM-W2 — stale tests + coverage** — ISSUE-116 (`test_seed_chain_quests` assertions),
+- [x] **REM-W2 — stale tests + coverage** — ISSUE-116 (`test_seed_chain_quests` assertions),
   ISSUE-111 (`scenario_territorial_war` MilitaryEngine ctor), ISSUE-101 (`schedule_queries` tests),
   ISSUE-110 (`evals/runner` HTTP-loop tests), ISSUE-102 (scheme-board panel behavioral assertions).
+  **✅ 2026-06-19:** fixed always-upsert skip assertions (116); rewrote stale military tick test to real
+  contract (111); 13 new schedule_queries unit tests (101); 9 eval runner HTTP-loop/main() tests (110);
+  9 behavioral draw assertions for scheme board panel (102). `make check` 86.81% cov.
 - [ ] **REM-W3 — size limits** — ISSUE-114 (split 3 >40-line fns in `quest_reward_repository`),
   ISSUE-105 (split `dependencies_engines.py` into a package, mirror `dependencies_advanced/`),
   then ISSUE-095 (hoist `get_proactive_queue` import once the split breaks the cycle).
