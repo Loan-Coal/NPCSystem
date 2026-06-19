@@ -154,6 +154,60 @@ async def test_missing_edge_defaults_neutral_no_crash() -> None:
 
 
 @pytest.mark.asyncio
+async def test_plateau_tracker_increments_when_standing_unchanged() -> None:
+    """ISSUE-097: consecutive ticks at the same Standing band increment the plateau counter."""
+    from npc_engine.engines.director.director_engine import PLATEAU_INJECT_THRESHOLD_TICKS
+
+    # relationship_catalyst fires when plateau_ticks > PLATEAU_INJECT_THRESHOLD_TICKS (20).
+    # idle=0 (no idle beat), standing=NEUTRAL.
+    # After PLATEAU_INJECT_THRESHOLD_TICKS+1 ticks the plateau counter crosses threshold.
+    adapter = DirectorTick(
+        location_reader=_FakeLocationReader([("npc_c", "player_1")], idle=0),
+        relation_reader=_FakeRelationReader(),  # NEUTRAL scalars
+        event_handler=_SpyEventHandler(),
+    )
+
+    for tick in range(PLATEAU_INJECT_THRESHOLD_TICKS + 2):
+        result = await adapter.run_tick(tick_id=tick)
+
+    # After enough ticks without Standing change, relationship_catalyst must fire.
+    beats = result["director_beats"]
+    assert len(beats) == 1
+    assert beats[0]["beat_kind"] == "relationship_catalyst"
+
+
+@pytest.mark.asyncio
+async def test_plateau_tracker_resets_on_standing_change() -> None:
+    """ISSUE-097: plateau counter resets when Standing band changes."""
+    from npc_engine.engines.director.director_engine import PLATEAU_INJECT_THRESHOLD_TICKS
+
+    class _AlternatingReader:
+        """Standing alternates between NEUTRAL and ALLIED every call to prevent accumulation."""
+        _call_count = 0
+
+        async def get_relation_scalars(self, *, src_id: str, dst_id: str) -> dict[str, int]:
+            self._call_count += 1
+            # Alternate between NEUTRAL (low affection) and ALLIED (high affection/trust)
+            if self._call_count % 2 == 0:
+                return {"trust": 5, "fear": 0, "affection": 5}   # NEUTRAL
+            return {"trust": 90, "fear": 0, "affection": 90}     # ALLIED
+
+    spy = _SpyEventHandler()
+    adapter = DirectorTick(
+        location_reader=_FakeLocationReader([("npc_d", "player_1")], idle=0),
+        relation_reader=_AlternatingReader(),
+        event_handler=spy,
+    )
+
+    for tick in range(PLATEAU_INJECT_THRESHOLD_TICKS + 5):
+        result = await adapter.run_tick(tick_id=tick)
+
+    # Standing alternates every tick → plateau never accumulates → no relationship_catalyst
+    beats = result["director_beats"]
+    assert not any(b["beat_kind"] == "relationship_catalyst" for b in beats)
+
+
+@pytest.mark.asyncio
 async def test_missing_edge_hostile_still_fires_when_triggered() -> None:
     """If the engine would decide on HOSTILE, but edge is missing default NEUTRAL prevents it."""
     # With missing edge and idle=3: NEUTRAL derived, no HOSTILE trigger, no beat.

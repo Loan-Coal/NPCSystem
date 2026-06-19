@@ -3,6 +3,20 @@
 Non-obvious architectural choices. Each entry explains what was decided and why,
 so future maintainers can judge edge cases without re-deriving the rationale.
 
+## DEC-135: ISSUE-097 — in-memory plateau tracker on DirectorTick (not RELATES_TO edge)
+**Date:** 2026-06-19
+**Context:** `DirectorTick` always passed `relationship_plateau_ticks=0` to `decide()`, so the
+`relationship_catalyst` beat could never fire. Two storage options: (A) store the per-pair
+Standing-band-change counter on the RELATES_TO edge (`plateau_ticks` property), (B) keep it
+in-memory on the `DirectorTick` instance.
+**Decision:** Option B — in-memory dict on `DirectorTick`: `_plateau_tracker` maps
+`(npc_id, player_id) → (last_standing: Standing, consecutive_ticks: int)`.
+Not persisted across restarts. The director recovers within one full cycle (≤ PLATEAU threshold ticks)
+after restart — acceptable for a beat injector. No graph schema change, no transaction overhead.
+**Why not A:** Writing to the RELATES_TO edge on every tick would add a graph write inside the
+director's hot tick loop (currently read-only); the edge schema would need a new field (schema change
+requiring approval). The in-memory approach is simpler, correct, and avoids write amplification.
+
 ## DEC-133: ISSUE-112 — activate WITNESSED edges via EventTemplate.src_character_id (optional field)
 **Date:** 2026-06-19
 **Context:** `_record_witnesses` in `EventHandler` was dead code — it read `src_character_id` from

@@ -6,6 +6,8 @@ Purpose: Tick-scheduler adapter that gates event-engine beat injection on the dr
          reads idle ticks and relationship standing, calls the pure decide() function, and
          on the first pair that returns a DirectorDecision emits a world event via the
          injected EventHandler. Returns metadata records for observability.
+         Maintains an in-memory plateau tracker (ISSUE-097/DEC-135): counts consecutive
+         ticks at the same Standing band per (npc, player) pair; resets on band change.
 Does NOT: call LLMs directly, write graph nodes, change event_type enums, or inject
           beat_kind into Event nodes. Beat metadata is purely in the returned dict + logs.
 Dependencies injected: PlayerLocationReadPort, RelationReadPort, EventHandler (via __init__).
@@ -60,11 +62,18 @@ class DirectorTick:
             beat_log: Optional DirectorBeatLog; when supplied, each fired beat is recorded
                 for the API director-beat read surface (F2.4). Default None preserves
                 backward-compatible behaviour for existing callers/tests.
+
+        In-memory plateau tracker (ISSUE-097/DEC-135):
+            _plateau_tracker maps (npc_id, player_id) → (last_standing, consecutive_ticks).
+            Counts consecutive ticks at the same Standing band; resets on band change.
+            Not persisted across process restarts — acceptable because beat injection is
+            idempotent and the director recovers within one full cycle of ticks.
         """
         self._location_reader = location_reader
         self._relation_reader = relation_reader
         self._event_handler = event_handler
         self._beat_log = beat_log
+        self._plateau_tracker: dict[tuple[str, str], tuple[Standing, int]] = {}
 
     async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
         """Evaluate director decide() for co-located pairs; emit a beat if one fires.
@@ -80,11 +89,15 @@ class DirectorTick:
         beats: list[dict[str, Any]] = []
 
         for npc_id, player_id in capped:
-            beat = await _decide_for_pair(
+            key = (npc_id, player_id)
+            plateau_ticks = _read_plateau(self._plateau_tracker, key)
+            beat, standing = await _decide_for_pair(
                 relation_reader=self._relation_reader,
                 location_reader=self._location_reader,
                 npc_id=npc_id, player_id=player_id, tick_id=tick_id,
+                plateau_ticks=plateau_ticks,
             )
+            _update_plateau(self._plateau_tracker, key, standing)
             if beat is not None:
                 record = await _emit_beat(
                     event_handler=self._event_handler,
@@ -116,6 +129,33 @@ class DirectorTick:
 # ---------------------------------------------------------------------------
 
 
+def _read_plateau(
+    tracker: dict[tuple[str, str], tuple[Standing, int]],
+    key: tuple[str, str],
+) -> int:
+    """Return the current plateau tick count for *key* (0 when unseen)."""
+    entry = tracker.get(key)
+    return entry[1] if entry is not None else 0
+
+
+def _update_plateau(
+    tracker: dict[tuple[str, str], tuple[Standing, int]],
+    key: tuple[str, str],
+    standing: Standing,
+) -> None:
+    """Increment the plateau counter for *key* if standing is unchanged; reset otherwise.
+
+    On first encounter or band change, sets count=1 (one tick at this standing just happened).
+    Subsequent calls at the same band increment the counter, so the next _read_plateau
+    returns the number of consecutive prior ticks at this standing (including the current one).
+    """
+    entry = tracker.get(key)
+    if entry is None or entry[0] != standing:
+        tracker[key] = (standing, 1)
+    else:
+        tracker[key] = (standing, entry[1] + 1)
+
+
 async def _decide_for_pair(
     *,
     relation_reader: RelationReadPort,
@@ -123,8 +163,9 @@ async def _decide_for_pair(
     npc_id: str,
     player_id: str,
     tick_id: int,
-) -> DirectorDecision | None:
-    """Derive standing and idle count for one pair; return decide() result or None.
+    plateau_ticks: int = 0,
+) -> tuple[DirectorDecision | None, Standing]:
+    """Derive standing and idle count for one pair; return (decide() result, standing).
 
     On RelationEdgeNotFoundError, defaults to Standing.NEUTRAL (no crash).
 
@@ -134,9 +175,10 @@ async def _decide_for_pair(
         npc_id: NPC character ID.
         player_id: Player character ID.
         tick_id: Current game tick.
+        plateau_ticks: Consecutive ticks at current Standing band (from _plateau_tracker).
 
     Returns:
-        DirectorDecision if the director wants to inject a beat, otherwise None.
+        Tuple of (DirectorDecision or None, derived Standing).
     """
     try:
         scalars = await relation_reader.get_relation_scalars(src_id=npc_id, dst_id=player_id)
@@ -147,7 +189,12 @@ async def _decide_for_pair(
     idle = await location_reader.get_player_idle_ticks(
         npc_id=npc_id, player_id=player_id, tick_id=tick_id
     )
-    return decide(player_idle_ticks=idle, relationship_phase=standing)
+    decision = decide(
+        player_idle_ticks=idle,
+        relationship_phase=standing,
+        relationship_plateau_ticks=plateau_ticks,
+    )
+    return decision, standing
 
 
 async def _emit_beat(
