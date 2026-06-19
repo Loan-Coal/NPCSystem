@@ -1,3 +1,6 @@
+# Roadmap loop iteration logs
+project-harness/.loop-logs/
+
 # Python
 __pycache__/
 *.pyc

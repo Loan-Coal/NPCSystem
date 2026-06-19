@@ -1,0 +1,17 @@
+/expand-next
+
+You are running unattended inside a loop. One phase per invocation. After the
+skill completes its work (or halts), the LAST line of your response MUST be
+exactly one of these control tokens, alone on its own line:
+
+  LOOP_CONTINUE        - a phase was fully completed (all its steps ticked [x],
+                         make check green, committed) and >=1 unchecked phase
+                         still remains in project-harness/ROADMAP.md
+  LOOP_DONE            - no unchecked [ ] phase steps remain in ROADMAP.md
+  LOOP_HALT: <reason>  - the target phase cannot proceed (un-approved DECISION,
+                         schema/dependency/public-interface change needing
+                         approval, red make check, or any STOP condition in the
+                         skill). Give the precise blocker in <reason>.
+
+Do not invent work outside the target phase. Do not skip a blocked phase to a
+later one. Emit exactly one token.
