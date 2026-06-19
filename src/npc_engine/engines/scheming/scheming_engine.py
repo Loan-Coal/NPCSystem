@@ -148,9 +148,9 @@ class SchemingEngine:
     ) -> None:
         """Record one scheme step atomically (Event + SCHEME_STEP in one transaction).
 
-        When a TypeRegistry is injected, builds a registry-valid covert Event via
-        build_covert_event_props and calls emit_scheme_step_atomic so the Event node
-        and SCHEME_STEP edge are written atomically (ISSUE-108/DEC-134).
+        Builds a registry-valid covert Event via _build_covert_event and calls
+        emit_scheme_step_atomic so the Event node and SCHEME_STEP edge are written
+        atomically (ISSUE-108/DEC-134). Requires TypeRegistry at construction time.
 
         Args:
             inputs: SchemeStepInput with npc_id, goal, location_id for event construction.
@@ -163,6 +163,18 @@ class SchemingEngine:
                 "SchemingEngine.advance_step requires a TypeRegistry (DEC-134). "
                 "Inject registry= via the constructor."
             )
+        event_id, event = self._build_covert_event(inputs)
+        await self._repo.emit_scheme_step_atomic(
+            event=event,
+            scheme_id=inputs.scheme_id,
+            event_id=event_id,
+            step_order=inputs.step_order,
+            completed=inputs.completed,
+        )
+
+    def _build_covert_event(self, inputs: SchemeStepInput) -> tuple[str, object]:
+        """Build a registry-valid covert Event node; return (event_id, model instance)."""
+        assert self._registry is not None  # guarded by advance_step caller
         event_id = uuid.uuid4().hex
         now_iso = datetime.now(timezone.utc).isoformat()
         props = build_covert_event_props(
@@ -175,12 +187,5 @@ class SchemingEngine:
             now_iso=now_iso,
         )
         validated = validate_node_write(self._registry, _EVENT_NODE_TYPE, props.model_dump())
-        event = self._registry.node_models[_EVENT_NODE_TYPE](**validated)
-        await self._repo.emit_scheme_step_atomic(
-            event=event,
-            scheme_id=inputs.scheme_id,
-            event_id=event_id,
-            step_order=inputs.step_order,
-            completed=inputs.completed,
-        )
+        return event_id, self._registry.node_models[_EVENT_NODE_TYPE](**validated)
 

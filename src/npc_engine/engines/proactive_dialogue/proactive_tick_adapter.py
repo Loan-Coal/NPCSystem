@@ -164,20 +164,7 @@ async def _collect_candidates(
     tick_id: int,
     intent_repo: IntentGraphPort | None = None,
 ) -> tuple[list[TriggerCandidate], dict[int, ProactiveTrigger]]:
-    """Check each pair and return routing candidates + trigger map.
-
-    For each pair, collects memory candidates via engine.check_trigger, then
-    (if intent_repo is provided) need and event candidates via IntentGraphPort.
-
-    Args:
-        engine: ProactiveDialogueEngine for check_trigger calls.
-        pairs: Capped list of (npc_id, player_id) pairs.
-        tick_id: Current game tick.
-        intent_repo: Optional IntentGraphPort for need/event candidates (ISSUE-094).
-
-    Returns:
-        Tuple of (candidates list, {id(candidate): ProactiveTrigger}).
-    """
+    """Collect memory + intent candidates for all pairs; return (candidates, trigger_map)."""
     candidates: list[TriggerCandidate] = []
     trigger_map: dict[int, ProactiveTrigger] = {}
     for npc_id, player_id in pairs:
@@ -193,23 +180,32 @@ async def _collect_candidates(
             candidates.append(candidate)
             trigger_map[id(candidate)] = trigger
         if intent_repo is not None:
-            need_cands, need_map = await _collect_need_candidates(
+            cands, tmap = await _merge_intent_candidates(
                 intent_repo=intent_repo,
                 npc_id=npc_id,
                 player_id=player_id,
                 tick_id=tick_id,
             )
-            candidates.extend(need_cands)
-            trigger_map.update(need_map)
-            event_cands, event_map = await _collect_event_candidates(
-                intent_repo=intent_repo,
-                npc_id=npc_id,
-                player_id=player_id,
-                tick_id=tick_id,
-            )
-            candidates.extend(event_cands)
-            trigger_map.update(event_map)
+            candidates.extend(cands)
+            trigger_map.update(tmap)
     return candidates, trigger_map
+
+
+async def _merge_intent_candidates(
+    *,
+    intent_repo: IntentGraphPort,
+    npc_id: str,
+    player_id: str,
+    tick_id: int,
+) -> tuple[list[TriggerCandidate], dict[int, ProactiveTrigger]]:
+    """Combine need + event candidates for one (npc, player) pair."""
+    need_cands, need_map = await _collect_need_candidates(
+        intent_repo=intent_repo, npc_id=npc_id, player_id=player_id, tick_id=tick_id,
+    )
+    event_cands, event_map = await _collect_event_candidates(
+        intent_repo=intent_repo, npc_id=npc_id, player_id=player_id, tick_id=tick_id,
+    )
+    return need_cands + event_cands, {**need_map, **event_map}
 
 
 async def _collect_need_candidates(
@@ -219,20 +215,7 @@ async def _collect_need_candidates(
     player_id: str,
     tick_id: int,
 ) -> tuple[list[TriggerCandidate], dict[int, ProactiveTrigger]]:
-    """Build need-sourced trigger candidates from the NPC's unmet needs.
-
-    Constructs a synthetic ProactiveTrigger per need so the winner can be passed
-    to generate_line using the existing trigger → line pipeline.
-
-    Args:
-        intent_repo: IntentGraphPort providing get_unmet_needs.
-        npc_id: NPC whose unmet needs are fetched.
-        player_id: Player co-located with the NPC (for trigger identity).
-        tick_id: Current game tick.
-
-    Returns:
-        Tuple of (candidates, {id(candidate): synthetic ProactiveTrigger}).
-    """
+    """Build need-sourced candidates from the NPC's unmet needs."""
     needs = await intent_repo.get_unmet_needs(npc_id=npc_id)
     candidates: list[TriggerCandidate] = []
     trigger_map: dict[int, ProactiveTrigger] = {}
@@ -262,19 +245,7 @@ async def _collect_event_candidates(
     player_id: str,
     tick_id: int,
 ) -> tuple[list[TriggerCandidate], dict[int, ProactiveTrigger]]:
-    """Build event-sourced trigger candidates from events the NPC recently witnessed.
-
-    Looks back RECENT_EVENT_LOOKBACK_TICKS ticks from tick_id.
-
-    Args:
-        intent_repo: IntentGraphPort providing get_witnessed_events.
-        npc_id: NPC whose witnessed events are fetched.
-        player_id: Player co-located with the NPC.
-        tick_id: Current game tick.
-
-    Returns:
-        Tuple of (candidates, {id(candidate): synthetic ProactiveTrigger}).
-    """
+    """Build event-sourced candidates from events the NPC recently witnessed."""
     since = max(0, tick_id - RECENT_EVENT_LOOKBACK_TICKS)
     events = await intent_repo.get_witnessed_events(npc_id=npc_id, since_tick=since)
     candidates: list[TriggerCandidate] = []
