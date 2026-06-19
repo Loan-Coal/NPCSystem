@@ -41,9 +41,11 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
 - [x] **REM-W0/W1a (done 2026-06-19)** — ISSUE-056, 064, 072, 076 archived (already fixed in code);
   ISSUE-106 (`inspect.iscoroutinefunction`), ISSUE-109 (local `_KNOWLEDGE_STATE_KNOWS`), ISSUE-098
   (shared `get_player_location_reader`/`get_relation_reader` singletons). All verified green.
-- [ ] **REM-W1b — docstring sweep** — ISSUE-103/115: replace `Purpose: (auto-detected — review)` across
+- [x] **REM-W1b — docstring sweep** — ISSUE-103/115: replace `Purpose: (auto-detected — review)` across
   113 `src/npc_engine/` files (graph 22, engines 16, type_registry 13, retrieval 13, schema 11, api 11, …)
   with accurate one-liners; add a `check-docstrings` guard rejecting the placeholder. Grep returns zero when done.
+  **✅ 2026-06-19:** 73 files updated (40 already fixed in prior sessions); `docstring_audit.py` guard added;
+  5 unit tests green; `make check` 86.11% cov. Closes ISSUE-103/115.
 - [ ] **REM-W2 — stale tests + coverage** — ISSUE-116 (`test_seed_chain_quests` assertions),
   ISSUE-111 (`scenario_territorial_war` MilitaryEngine ctor), ISSUE-101 (`schedule_queries` tests),
   ISSUE-110 (`evals/runner` HTTP-loop tests), ISSUE-102 (scheme-board panel behavioral assertions).

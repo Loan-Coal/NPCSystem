@@ -1273,3 +1273,34 @@ code). The previously-listed `awareness_seeder.py` site no longer exists (module
 forbidden from importing application code, so it embedded the raw `"knows"` literal.
 **Why deferred:** Constrained context; lower severity than live engine paths.
 **To fix:** Add a local seeder-side constant and reference it. (Done.)
+
+---
+
+## [FIXED] ISSUE-103: 135 module docstrings carry stale `Purpose: (auto-detected — review)` placeholder
+**Found:** 2026-06-13, during /full-review (L5)
+**Severity:** P3 (nice-to-fix)
+**Where:** 135 `.py` files across `src/`
+**Description:** Module docstrings still carry the auto-generated `Purpose: (auto-detected — review)`
+placeholder. ISSUE-072/076 each tracked a single file; the real population is 135. `check-docstrings`
+passes because a docstring is present — the placeholder text is not validated.
+**Why deferred:** Large mechanical sweep; no runtime impact; out of scope of the Fix-now feature debt.
+**To fix:** Replace placeholders with real one-line Purpose statements (consider a lint that rejects the placeholder text).
+**Fixed:** 2026-06-19, in commit 8434391 (REM-W1b). 113 files swept; guard added to `docstring_audit.py`. Grep returns zero.
+
+---
+
+## [FIXED] ISSUE-115: ~110 module docstrings still carry the `(auto-detected — review)` placeholder Purpose line
+**Found:** 2026-06-18, during the market-deployment documentation refresh
+**Severity:** P3 (nice-to-fix)
+**Where:** ~113 `.py` files across `src/npc_engine/` (top areas: graph 22, engines 16, type_registry 13,
+retrieval 13, schema 11, api 11). Find with `grep -rl "auto-detected — review" src/npc_engine --include=*.py`.
+**Description:** Many module-level docstrings have `Purpose: (auto-detected — review)` placeholders left by a
+bulk docstring-scaffolding pass. The CLAUDE.md documentation rule requires a real one-sentence Purpose on every
+module. This refresh fixed the 9 engine package `__init__.py` files + `scheduler/tick_scheduler.py`; the
+module-level files remain.
+**Why deferred:** Fixing all ~113 accurately means reading each module to write a correct Purpose — a separate,
+sizeable sweep beyond the agreed scope of this market-facing docs task (ENGINES.md, API.md, ARCHITECTURE.md,
+package docstrings).
+**To fix:** Sweep area-by-area (start with `graph/` and `engines/`), replacing each placeholder Purpose with an
+accurate one-line description; verify with the grep above returning zero matches.
+**Fixed:** 2026-06-19, in commit 8434391 (REM-W1b). All 113 files swept; grep returns zero.
