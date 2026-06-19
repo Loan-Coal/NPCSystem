@@ -3,6 +3,19 @@
 Non-obvious architectural choices. Each entry explains what was decided and why,
 so future maintainers can judge edge cases without re-deriving the rationale.
 
+## DEC-133: ISSUE-112 — activate WITNESSED edges via EventTemplate.src_character_id (optional field)
+**Date:** 2026-06-19
+**Context:** `_record_witnesses` in `EventHandler` was dead code — it read `src_character_id` from
+`raw_props` but `_build_event` never set it, so `actor_id` was always None. The fix had two options:
+(A) add `src_character_id: str | None = None` to `EventTemplate` and propagate it through `_build_event`;
+(B) drop the dead block entirely.
+**Decision:** Option A. `src_character_id` is already an optional field in `event.yaml` (no schema
+change needed). Adding it to `EventTemplate` as optional keeps the witnessing mechanic alive for
+character-centric event templates that specify an actor, while autonomous templates (no actor) continue
+to skip witnessing unchanged. The actor is excluded from the `witness_ids` list to avoid self-witness.
+**Why not B:** Witnessing is a designed mechanic; dropping it would require a schema or port cleanup
+and would lose the capability permanently. A is non-breaking and costs one optional field.
+
 ## DEC-132: Performance strategy — measure-first, evidence-gated; no wholesale Python→compiled rewrite; Kùzu as graph direction
 **Date:** 2026-06-19
 **Context:** A proposed phase was a wholesale rewrite of hot/orchestration code from Python to a compiled

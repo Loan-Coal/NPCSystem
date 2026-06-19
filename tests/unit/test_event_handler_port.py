@@ -131,3 +131,33 @@ async def test_run_tick_skips_when_over_severity_cap() -> None:
 
     assert result == {"tick_id": 4, "created": 0}
     repo.emit_event_atomic.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_witness_fires_when_template_has_src_character_id() -> None:
+    """ISSUE-112: when EventTemplate.src_character_id is set and witnesses are present,
+    record_witnesses must be called (the path was dead before — actor_id was always None)."""
+    template = _template(severity=90, src_character_id="captain_sorn")
+    repo = _event_repo()
+    repo.get_characters_at_location = AsyncMock(return_value=["mira_innkeeper", "aldric"])
+    handler = _make_handler([template], event_repo=repo, world_state_repo=_world_state_repo())
+
+    await handler.run_tick(tick_id=5)
+
+    repo.record_witnesses.assert_awaited_once()
+    kwargs = repo.record_witnesses.call_args.kwargs
+    assert kwargs["subject_id"] == "captain_sorn"
+    assert "captain_sorn" not in kwargs["witness_ids"]  # actor excluded from witnesses
+
+
+@pytest.mark.asyncio
+async def test_witness_not_called_when_no_src_character_id() -> None:
+    """ISSUE-112: when template has no src_character_id, record_witnesses is not called."""
+    template = _template(severity=90)  # no src_character_id
+    repo = _event_repo()
+    repo.get_characters_at_location = AsyncMock(return_value=["mira_innkeeper"])
+    handler = _make_handler([template], event_repo=repo, world_state_repo=_world_state_repo())
+
+    await handler.run_tick(tick_id=6)
+
+    repo.record_witnesses.assert_not_awaited()

@@ -208,7 +208,7 @@ class EventHandler:
         """Build the validated Event node model, returning (event, event_id, raw_props)."""
         event_id = str(uuid4())
         now = datetime.now(timezone.utc).isoformat()
-        raw_props = {
+        raw_props: dict[str, Any] = {
             "id": event_id,
             "summary": template.summary_template,
             "severity": template.severity,
@@ -219,6 +219,8 @@ class EventHandler:
             "is_public": True,
             "last_graph_updated_at": now,
         }
+        if template.src_character_id is not None:
+            raw_props["src_character_id"] = template.src_character_id
         validated_props = validate_node_write(self._registry, "event", raw_props)
         event = self._registry.node_models["event"](**validated_props)
         return event, event_id, raw_props

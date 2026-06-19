@@ -26,6 +26,7 @@ class EventTemplate(BaseModel):
     event_type: str
     faction_id: str | None = None
     reputation_delta: int | None = None
+    src_character_id: str | None = None
 
     model_config = ConfigDict(frozen=True)
 
