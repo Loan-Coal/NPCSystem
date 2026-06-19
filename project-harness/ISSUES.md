@@ -29,16 +29,6 @@ clean seam for them. Deferring avoided scope creep in the overnight loop.
 
 ---
 
-## ISSUE-095: dialogue_ws lazily imports get_proactive_queue inside the handler
-**Found:** 2026-06-12, during F1.2
-**Severity:** P3 (nice-to-fix)
-**Where:** `src/npc_engine/api/routes/dialogue_ws.py` (`dialogue_ws` body)
-**Description:** `get_proactive_queue` is imported inside the WS handler function to avoid a potential
-import cycle at module load.
-**Why deferred:** Works correctly; promoting to a top-level import is cosmetic and needs the
-api/dependencies_engines import graph confirmed acyclic first.
-**To fix:** Verify no circular import, then hoist the import to module top-level.
-
 ---
 
 ## ISSUE-096: trait-modulated emotion uses global demo-default traits, not per-NPC traits
@@ -219,18 +209,6 @@ to one module; introduce a `SchemeStepKind`.
 
 ---
 
-## ISSUE-105: `dependencies_engines.py` exceeds its DEC-076 400-line growth cap
-**Found:** 2026-06-13, during /full-review (L2)
-**Severity:** P3 (nice-to-fix)
-**Where:** `src/npc_engine/api/dependencies_engines.py` (~513 lines)
-**Description:** DEC-076 (2026-06-09) capped the file at 400 lines pending a per-engine submodule pattern;
-scheme + director + memory + goal factories pushed it past without a new DECISIONS entry.
-**Why deferred:** Composition-root refactor; not blocking. Relates to DEC-115 (second composition root).
-**To fix:** Extract advanced engine factories into a submodule, or add a DECISIONS entry re-baselining the cap.
-**Progress:** 2026-06-15 (SEV-17) — per-engine submodule pattern established by splitting the *sibling* root
-`dependencies_advanced.py` into `dependencies_advanced/{politics,social,progression}.py`. `dependencies_engines.py`
-itself is still 512 lines (DEC-076-grandfathered); apply the same split or re-baseline to close this. STILL OPEN.
-
 ---
 
 ## ISSUE-107: No cross-session e2e test for persistent memory recall
@@ -260,17 +238,6 @@ atomic `run_in_tx` like the auto-advance path (pass `tx=`).
 
 ---
 
-
-## ISSUE-114: `quest_reward_repository.py` has 3 functions > 40 lines (R006 violations)
-**Found:** 2026-06-17, during SEV-24 Wave 5 check-rules run
-**Severity:** P3 (nice-to-fix)
-**Where:** `src/npc_engine/graph/repositories/quest_reward_repository.py` — `apply_rewards_atomic`, `_apply_in_tx`, `_collect_delivery_in_tx`
-**Description:** Three transaction-helper methods exceed the 40-line hard limit (R006). They were introduced
-in the quest cluster wave without triggering the baseline, and Wave 5 now exposes them. Splitting is
-artificial: all three are tightly coupled phases of one Neo4j atomic transaction.
-**Why deferred:** Refactoring graph-layer transaction helpers is out of scope for Wave 5 (session cleanup).
-**To fix:** Extract `_grant_item_rewards_in_tx` and `_grant_currency_reward_in_tx` helpers from `_apply_in_tx`;
-split `_collect_delivery_in_tx` at the possession-check vs transfer boundary.
 
 ---
 

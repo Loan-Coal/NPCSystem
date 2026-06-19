@@ -1359,3 +1359,45 @@ accurate one-line description; verify with the grep above returning zero matches
 **Why deferred:** Pre-existing stale test outside the SEV-24 slice's verification path; fixing it is e2e-test maintenance, not part of the repository-facade migration.
 **To fix:** Rewrite the test to inject a mock `MilitaryGraphPort` and assert the real `battles_resolved`/`factions_yielded` contract (mirror `tests/unit/test_military_engine.py`).
 **Fixed:** 2026-06-19, in commit 21145f3 (REM-W2). Rewrote test to inject `AsyncMock()` repo, patch services, assert `battles_resolved`/`factions_yielded`; passes under `--scenarios-only`.
+
+---
+
+## [FIXED] ISSUE-095: dialogue_ws lazily imports get_proactive_queue inside the handler
+**Found:** 2026-06-12, during F1.2
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/api/routes/dialogue_ws.py` (`dialogue_ws` body)
+**Description:** `get_proactive_queue` is imported inside the WS handler function to avoid a potential
+import cycle at module load.
+**Why deferred:** Works correctly; promoting to a top-level import is cosmetic and needs the
+api/dependencies_engines import graph confirmed acyclic first.
+**To fix:** Verify no circular import, then hoist the import to module top-level.
+**Fixed:** 2026-06-19, in commit 5fbe254 (REM-W3)
+
+---
+
+## [FIXED] ISSUE-105: `dependencies_engines.py` exceeds its DEC-076 400-line growth cap
+**Found:** 2026-06-13, during /full-review (L2)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/api/dependencies_engines.py` (~513 lines)
+**Description:** DEC-076 (2026-06-09) capped the file at 400 lines pending a per-engine submodule pattern;
+scheme + director + memory + goal factories pushed it past without a new DECISIONS entry.
+**Why deferred:** Composition-root refactor; not blocking. Relates to DEC-115 (second composition root).
+**To fix:** Extract advanced engine factories into a submodule, or add a DECISIONS entry re-baselining the cap.
+**Progress:** 2026-06-15 (SEV-17) — per-engine submodule pattern established by splitting the *sibling* root
+`dependencies_advanced.py` into `dependencies_advanced/{politics,social,progression}.py`. `dependencies_engines.py`
+itself is still 512 lines (DEC-076-grandfathered); apply the same split or re-baseline to close this. STILL OPEN.
+**Fixed:** 2026-06-19, in commit 806ca13 (REM-W3) — split into dependencies_engines/{core,quest,tick_slots}/__init__.
+
+---
+
+## [FIXED] ISSUE-114: `quest_reward_repository.py` has 3 functions > 40 lines (R006 violations)
+**Found:** 2026-06-17, during SEV-24 Wave 5 check-rules run
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/graph/repositories/quest_reward_repository.py` — `apply_rewards_atomic`, `_apply_in_tx`, `_collect_delivery_in_tx`
+**Description:** Three transaction-helper methods exceed the 40-line hard limit (R006). They were introduced
+in the quest cluster wave without triggering the baseline, and Wave 5 now exposes them. Splitting is
+artificial: all three are tightly coupled phases of one Neo4j atomic transaction.
+**Why deferred:** Refactoring graph-layer transaction helpers is out of scope for Wave 5 (session cleanup).
+**To fix:** Extract `_grant_item_rewards_in_tx` and `_grant_currency_reward_in_tx` helpers from `_apply_in_tx`;
+split `_collect_delivery_in_tx` at the possession-check vs transfer boundary.
+**Fixed:** 2026-06-19, in commit 58f6e45 (REM-W3)

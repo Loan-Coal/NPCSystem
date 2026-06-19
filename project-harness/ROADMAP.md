@@ -52,9 +52,12 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
   **✅ 2026-06-19:** fixed always-upsert skip assertions (116); rewrote stale military tick test to real
   contract (111); 13 new schedule_queries unit tests (101); 9 eval runner HTTP-loop/main() tests (110);
   9 behavioral draw assertions for scheme board panel (102). `make check` 86.81% cov.
-- [ ] **REM-W3 — size limits** — ISSUE-114 (split 3 >40-line fns in `quest_reward_repository`),
+- [x] **REM-W3 — size limits** — ISSUE-114 (split 3 >40-line fns in `quest_reward_repository`),
   ISSUE-105 (split `dependencies_engines.py` into a package, mirror `dependencies_advanced/`),
   then ISSUE-095 (hoist `get_proactive_queue` import once the split breaks the cycle).
+  **✅ 2026-06-19:** extracted 4 helpers from quest_reward_repository (114); split monolith into
+  dependencies_engines/{core,quest,tick_slots}/__init__ (105); hoisted get_proactive_queue import (095).
+  2 R006 + 1 R001 entries removed from baseline (136 grandfathered). All 2491 tests pass, 86.83% cov.
 - [ ] **REM-W4 — OCP residuals** — ISSUE-104: registries/enums for emotion-model factory, TTS backend,
   shared mood→VAD table, LLM `__init__` self-registration, `SchemeStepKind` enum (mirror `register_backend`).
 - [ ] **REM-W5 — engine slices** — ISSUE-112 (event actor + WITNESSED; node-schema change),
