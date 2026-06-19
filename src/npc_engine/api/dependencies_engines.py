@@ -17,6 +17,12 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from npc_engine.graph.repositories.player_location_read_repository import (
+        Neo4jPlayerLocationReadRepository,
+    )
 
 from npc_engine.api.dependencies_infra import (
     _register_adapter,
@@ -412,6 +418,40 @@ def get_proactive_queue() -> ProactiveQueue:
 
 
 @lru_cache
+def get_player_location_reader() -> Neo4jPlayerLocationReadRepository:
+    """Return the shared Neo4jPlayerLocationReadRepository singleton (ISSUE-098).
+
+    The reader is stateless (it takes the graph driver and opens its own sessions),
+    so a single shared instance is reused across the proactive/intent/player-model/
+    director factories instead of each constructing its own.
+
+    Returns:
+        Neo4jPlayerLocationReadRepository wired to the shared graph driver.
+    """
+    from npc_engine.api.dependencies_infra import get_graph_db
+    from npc_engine.graph.repositories.player_location_read_repository import (
+        Neo4jPlayerLocationReadRepository,
+    )
+
+    return Neo4jPlayerLocationReadRepository(get_graph_db())
+
+
+@lru_cache
+def get_relation_reader() -> Neo4jRelationReadRepository:
+    """Return the shared Neo4jRelationReadRepository singleton (ISSUE-098).
+
+    Stateless graph-read adapter reused across the player-model/director/reputation
+    factories instead of each constructing its own.
+
+    Returns:
+        Neo4jRelationReadRepository wired to the shared graph driver.
+    """
+    from npc_engine.api.dependencies_infra import get_graph_db
+
+    return Neo4jRelationReadRepository(get_graph_db())
+
+
+@lru_cache
 def get_proactive_dialogue_engine() -> ProactiveDialogueTick:
     """Create singleton ProactiveDialogueTick wired to the shared LLM client and graph ports.
 
@@ -423,9 +463,6 @@ def get_proactive_dialogue_engine() -> ProactiveDialogueTick:
         ProactiveDialogueTick adapter ready for the tick scheduler.
     """
     from npc_engine.api.dependencies_infra import get_graph_db
-    from npc_engine.graph.repositories.player_location_read_repository import (
-        Neo4jPlayerLocationReadRepository,
-    )
     from npc_engine.graph.repositories.proactive_memory_read_repository import (
         Neo4jProactiveMemoryReadRepository,
     )
@@ -433,7 +470,7 @@ def get_proactive_dialogue_engine() -> ProactiveDialogueTick:
     engine_config = get_engine_model_config_for("proactive_dialogue")
     llm_client = _register_adapter(create_llm_client_for_engine(engine_config, get_settings()))
     graph_db = get_graph_db()
-    location_reader = Neo4jPlayerLocationReadRepository(graph_db)
+    location_reader = get_player_location_reader()
     engine = ProactiveDialogueEngine(
         llm_client=llm_client,
         memory_service=Neo4jProactiveMemoryReadRepository(graph_db),
@@ -459,13 +496,10 @@ def get_intent_formation_engine() -> IntentFormationEngine:
     """
     from npc_engine.api.dependencies_infra import get_graph_db
     from npc_engine.graph.repositories.intent_repository import Neo4jIntentRepository
-    from npc_engine.graph.repositories.player_location_read_repository import (
-        Neo4jPlayerLocationReadRepository,
-    )
 
     graph_db = get_graph_db()
     return IntentFormationEngine(
-        location_reader=Neo4jPlayerLocationReadRepository(graph_db),
+        location_reader=get_player_location_reader(),
         intent_repo=Neo4jIntentRepository(graph_db),
     )
 
@@ -482,9 +516,6 @@ def get_player_model_tick() -> PlayerModelTick:
         PlayerModelTick wired to a pure PlayerModelEngine and the injected graph ports.
     """
     from npc_engine.api.dependencies_infra import get_graph_db
-    from npc_engine.graph.repositories.player_location_read_repository import (
-        Neo4jPlayerLocationReadRepository,
-    )
     from npc_engine.graph.repositories.player_model_repository import (
         Neo4jPlayerModelRepository,
     )
@@ -492,8 +523,8 @@ def get_player_model_tick() -> PlayerModelTick:
     graph_db = get_graph_db()
     return PlayerModelTick(
         engine=PlayerModelEngine(),
-        location_reader=Neo4jPlayerLocationReadRepository(graph_db),
-        relation_reader=Neo4jRelationReadRepository(graph_db),
+        location_reader=get_player_location_reader(),
+        relation_reader=get_relation_reader(),
         model_repo=Neo4jPlayerModelRepository(graph_db),
     )
 
@@ -509,15 +540,9 @@ def get_director_tick() -> DirectorTick:
     Returns:
         DirectorTick wired to the injected read ports and the singleton EventHandler.
     """
-    from npc_engine.api.dependencies_infra import get_graph_db
-    from npc_engine.graph.repositories.player_location_read_repository import (
-        Neo4jPlayerLocationReadRepository,
-    )
-
-    graph_db = get_graph_db()
     return DirectorTick(
-        location_reader=Neo4jPlayerLocationReadRepository(graph_db),
-        relation_reader=Neo4jRelationReadRepository(graph_db),
+        location_reader=get_player_location_reader(),
+        relation_reader=get_relation_reader(),
         event_handler=get_event_handler(),
         beat_log=get_director_beat_log(),
     )
@@ -629,7 +654,7 @@ def get_reputation_engine() -> ReputationTickAdapter:
     graph_db = get_graph_db()
     reputation_engine = ReputationEngine(
         config=config,
-        relation_reader=Neo4jRelationReadRepository(graph_db),
+        relation_reader=get_relation_reader(),
         reputation_repo=Neo4jReputationRepository(graph_db),
     )
     settings = get_settings()

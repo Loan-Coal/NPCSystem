@@ -281,14 +281,21 @@ Add an entry to `ISSUES.md`. Format:
 **To fix:** What needs to happen to fix it.
 ```
 
-ID is monotonic across the file. Never reuse IDs. Never delete entries — when an
-issue is fixed, change the heading to `## [FIXED] ISSUE-NNN: <title>` and add a
-`**Fixed:** YYYY-MM-DD, in <commit/task>` line.
+ID is monotonic and never reused. Check **both** `ISSUES.md` and
+`archive/ISSUES_RESOLVED.md` when picking the next id — fixed entries live in the
+archive, so IDs there are still taken. Never delete entries — when an issue is fixed,
+change the heading to `## [FIXED] ISSUE-NNN: <title>`, add a
+`**Fixed:** YYYY-MM-DD, in <commit/task>` line, then move the entry (see below).
 
 ### When you fix an issue
 
-If a current task fixes an existing logged issue, update the issue's status before
-closing the task.
+If a current task fixes an existing logged issue:
+1. Mark it `[FIXED]` and add the `**Fixed:** YYYY-MM-DD, in <commit/task>` line.
+2. Move the entry out of `ISSUES.md` into `project-harness/archive/ISSUES_RESOLVED.md`
+   (single append-only archive; preserve the entry's IDs and content verbatim).
+   This keeps `ISSUES.md` to open issues only, so the start-of-session read stays lean.
+
+Do this before closing the task. Rationale: DEC-130.
 
 ### When NOT to log an issue
 

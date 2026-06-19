@@ -25,6 +25,47 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
 
 ---
 
+## Active — ISSUES.md remediation program (REM-*)
+
+> Drains the open `project-harness/ISSUES.md` backlog. Full file-level plan with rationale and the
+> user-approved design decisions: **`~/.claude/plans/go-through-the-issues-md-frolicking-yao.md`**.
+> Decisions baked in (from planning Q&A, 2026-06-19): ISSUE-071 = full SystemStateContext slice;
+> ISSUE-107 = add `memories_recalled` to `DialogueResponse`; ISSUE-112 = wire `src_character_id`
+> actor onto events; engine slices 094/096/097/108 all in scope; ISSUE-105 = split
+> `dependencies_engines` into submodules; ISSUE-104 = all 5 OCP residuals; ISSUE-083 deferred;
+> ISSUE-051 (WONTFIX) + ISSUE-092 (Redis, blocked on Unity phase) excluded.
+> **Sequencing:** safe hygiene → tests → size limits → OCP → engine slices → headline features.
+> Each wave is independently committable; close each issue (`[FIXED]` + move to
+> `archive/ISSUES_RESOLVED.md`) and log non-obvious choices in DECISIONS.md as it lands.
+
+- [x] **REM-W0/W1a (done 2026-06-19)** — ISSUE-056, 064, 072, 076 archived (already fixed in code);
+  ISSUE-106 (`inspect.iscoroutinefunction`), ISSUE-109 (local `_KNOWLEDGE_STATE_KNOWS`), ISSUE-098
+  (shared `get_player_location_reader`/`get_relation_reader` singletons). All verified green.
+- [ ] **REM-W1b — docstring sweep** — ISSUE-103/115: replace `Purpose: (auto-detected — review)` across
+  113 `src/npc_engine/` files (graph 22, engines 16, type_registry 13, retrieval 13, schema 11, api 11, …)
+  with accurate one-liners; add a `check-docstrings` guard rejecting the placeholder. Grep returns zero when done.
+- [ ] **REM-W2 — stale tests + coverage** — ISSUE-116 (`test_seed_chain_quests` assertions),
+  ISSUE-111 (`scenario_territorial_war` MilitaryEngine ctor), ISSUE-101 (`schedule_queries` tests),
+  ISSUE-110 (`evals/runner` HTTP-loop tests), ISSUE-102 (scheme-board panel behavioral assertions).
+- [ ] **REM-W3 — size limits** — ISSUE-114 (split 3 >40-line fns in `quest_reward_repository`),
+  ISSUE-105 (split `dependencies_engines.py` into a package, mirror `dependencies_advanced/`),
+  then ISSUE-095 (hoist `get_proactive_queue` import once the split breaks the cycle).
+- [ ] **REM-W4 — OCP residuals** — ISSUE-104: registries/enums for emotion-model factory, TTS backend,
+  shared mood→VAD table, LLM `__init__` self-registration, `SchemeStepKind` enum (mirror `register_backend`).
+- [ ] **REM-W5 — engine slices** — ISSUE-112 (event actor + WITNESSED; node-schema change),
+  ISSUE-108 (atomic `advance_step` via `emit_scheme_step_atomic`), ISSUE-097 (in-memory plateau tracker),
+  ISSUE-096 (per-NPC traits via existing `trait_service`/`trait_queries` into `EmotionUpdater`),
+  ISSUE-094 (`need`/`event` proactive trigger producers). Each: regression test + DECISIONS note.
+- [ ] **REM-W6 — headline features (P2)** — ISSUE-071 (SystemStateContext Tier-0 block: route resolves
+  trade/quest facts → `context_builder` + new prompt YAML), ISSUE-107 (`memories_recalled` field +
+  two-session memory-recall e2e scenario).
+- [ ] **REM-W7 — demo dry-run** — ISSUE-100: add the missing `if runner.dry_run` guard near the ACT-8
+  determinism beat so `make demo-run ARGS=--dry-run` completes non-networked.
+- [ ] **REM-W8 — rules baseline backlog (P2)** — ISSUE-053: work the SEV remediation briefs, shrinking
+  `scripts/rules_baseline.txt` via `make check-rules-update` (Waves 3/4 already reduce R001/R006). Done when empty.
+
+---
+
 ## Next — Shippable demo game (B2B proof-slice)
 
 > **End goal: license the engine to studios (B2B).** The thing that closes that sale is not a bigger engine
@@ -107,8 +148,73 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
 
 ### Open decisions for this program (need a `DECISIONS.md` call when reached)
 - [x] **OD-Ship-platform** — SHIP-01 resolved to **Unity** (DEC-125): integration-reference dual use.
-- [ ] **OD-Ship-graph** — Neo4j GPLv3 resolution for a distributed build: commercial/startup license **or**
-  migrate the `graph/` layer to an embeddable Cypher store (Kùzu). **Deferred until a demo runs** (DEC-124).
+- [ ] **OD-Ship-graph** — Neo4j GPLv3 resolution for a distributed build. **Direction set (DEC-132):**
+  evaluate-and-likely-adopt **Kùzu** (MIT, embedded, no JVM/Bolt) — wins on licensing, footprint/FPS, **and**
+  graph latency at once. Gated on a time-boxed porting spike (PERF-04); Cypher-dialect cost over `graph/` is
+  the open unknown. (Advances the earlier "deferred until a demo runs" stance — DEC-124.)
+
+---
+
+## Next+1 — Integration readiness → measurement → evidence-gated perf
+
+> Source: 2026-06-19 adversarial roadmap critique (multi-lens, code-grounded). Reshapes three proposed phases
+> (setup routes / expanded evals / Python→compiled rewrite). **Hard ordering: INTEG → EVAL → PERF.** INTEG
+> lands on `main` before Unity (it unblocks SHIP-05b). EVAL + PERF overlap Unity dev but EVAL precedes PERF.
+> **No long-lived rewrite branch** — PERF is incremental on `main`, gated by EVAL's harness.
+> Decisions: **DEC-131** (integration bootstrap), **DEC-132** (perf strategy + Kùzu direction).
+
+### Phase INTEG — Integration-ready engine surface (lands on `main`, gates SHIP-05b)
+- **Goal:** a cold machine + a fresh native-Unity client complete first-run setup and reach a working dialogue
+  with no manual key/config step. Completes P0.
+- **Constraints:** auth on all non-bootstrap routes; setup routes call `setup/` validators (no logic in route);
+  localhost bind; DEC-131 bootstrap.
+- [ ] **INTEG-01** — `POST /setup/validate` → `validate_path_a`/`validate_path_b` (typed `ValidationResult`);
+  validate `api_url` (https + host sanity) to close the SSRF-shaped probe. Exit: Unity gets typed A/B pass/fail.
+- [ ] **INTEG-02** — `GET/POST /setup/config` → `load_wizard_config`/`save_wizard_config`, round-trips
+  `~/.npc_engine/wizard_config.json`. Exit: choice survives restart via the route.
+- [ ] **INTEG-03** — setup routes auth-exempt + localhost-only (DEC-131). Exit: a key-less first launch reaches
+  `/setup/*` without a 401; off-box requests refused.
+- [ ] **INTEG-04** — confirm the launcher polls `GET /readiness`; write `docs/INTEGRATION.md` documenting the
+  REST/WS contract + error envelope (document, **not** an SX.1 freeze). Exit: a one-page contract Unity builds against.
+- [ ] **INTEG-05** — record no-CORS (native) + plaintext-cloud-key-by-design posture (DEC-131). Exit: posture documented.
+- **Effort:** ~1 session. **Blocks:** SHIP-05b.
+
+### Phase EVAL — Behavioral characterization + latency harness (precedes PERF; absorbs SHIP-10 latency)
+- **Goal:** measure how well the engines behave **and** where time goes — the SHIP-10 pitch numbers + the
+  regression net that makes PERF safe. Additive (new files) → `main`/short branches.
+- [ ] **EVAL-01** — per-stage latency timer in `dialogue_handler` + `context_builder` (LLM / graph groups /
+  assembly); p50/p95 + RAM-by-process; **split interactive (dialogue/trade) vs background, cold-start isolated.**
+  Absorbs SHIP-10's latency half. Exit: a real per-turn breakdown on the floor PC.
+- [ ] **EVAL-02** — golden-transcript regression suite (mock LLM) for dialogue/gossip/emotion/quest. Exit: a
+  behavior-altering change fails a test.
+- [ ] **EVAL-03** — content-determinism pin (same seed ⇒ same distortion/quest content; extends the SEV-22 RNG test).
+- [ ] **EVAL-04** — memory-recall-over-time eval (tick-N retention of tick-M facts).
+- [ ] **EVAL-05** — engine-quality eval expansion (LLM-judge: consistency, emotional coherence, belief
+  consistency under distortion). Exit: a quality scorecard for the pitch.
+- **Effort:** ~2-3 sessions. **Blocks:** PERF.
+
+### Phase PERF — Evidence-gated performance (incremental on `main`, after EVAL; DEC-132)
+- **Goal:** cut felt interactive latency + RAM/FPS contention by the highest-leverage means, verified against
+  EVAL's harness. Optimise the interactive path; leave background sim slow-but-throttled. Compiled core only if profiled.
+- **Constraints:** every step gated by EVAL-01 numbers + green golden transcripts; no long-lived branch.
+- [ ] **PERF-00** — preload the model at stack launch (warmup call in `stack_launcher.py`) → kills the
+  first-dialogue cold-start spike. Cheapest, biggest felt win.
+- [ ] **PERF-01** — stream first token: interactive client uses the existing WS `chunk` path, not the blocking
+  sync `/dialogue` → perceived latency = time-to-first-token.
+- [ ] **PERF-02** — `asyncio.gather` the independent graph reads in `context_builder.py:516-534`.
+- [ ] **PERF-03** — cache improvement (raise hit-rate / warm cold path) — the "after-refactor" work, pulled first.
+- [ ] **PERF-04** — Kùzu evaluation → likely adoption (DEC-132 / OD-Ship-graph): time-boxed porting spike;
+  measure RAM (no JVM) + latency (no Bolt) + dialect cost. Exit: go/no-go with numbers.
+- [ ] **PERF-05** — throttle/de-prioritize background ticks (`MAX_CONCURRENT_TICKS` + wider intervals) so sim
+  never contends with render or dialogue.
+- [ ] **PERF-06** — model-tier/VRAM tuning for the floor PC (16 GB RAM / 8-12 GB VRAM; 7B realistic at 8 GB VRAM).
+- [ ] **PERF-07** — selective PyO3/Rust extension of ONE proven CPU-bound hot function — **only if** EVAL-01
+  shows a meaningful CPU-bound share. Keep the Python architecture/tests/DI. **Not a wholesale rewrite** (DEC-132).
+- **Note (trade path):** the trade *mechanic* (`trade_engine.py`, `trade_handler_sync.py`) is deterministic
+  pricing + atomic graph transfers, **no LLM** → follows the graph wins (PERF-02/03/04), not preload/stream;
+  conversational *bartering* is the normal dialogue turn with negotiation context injected
+  (`negotiation_context.py`) and inherits PERF-00/01.
+- **Effort:** ~3-5 sessions for 00-06; PERF-07 optional/open-ended. **Depends on:** EVAL-01/02/03.
 
 ---
 

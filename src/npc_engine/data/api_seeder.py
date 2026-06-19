@@ -65,6 +65,12 @@ from npc_engine.data.seed_http import (
 
 _LOGGER = get_logger(__name__)
 
+# Local copy of the "knows" knowledge-state value. This seeder is forbidden (per the
+# module docstring) from importing application code, so it cannot reference
+# npc_engine.common.knowledge_types.KNOWLEDGE_STATE_KNOWS directly — the duplication
+# is deliberate (ISSUE-109).
+_KNOWLEDGE_STATE_KNOWS: str = "knows"
+
 
 # ---------------------------------------------------------------------------
 # Stable-ID helpers (KE-6)
@@ -173,7 +179,7 @@ def _seed_knows_about_edges(base_url: str, api_key: str, events: list[Any], c: C
                 c.record(label, 409)
             else:
                 props = {
-                    "knowledge_state": "knows",
+                    "knowledge_state": _KNOWLEDGE_STATE_KNOWS,
                     "learned_at_tick": events_by_id[evt["id"]]["tick_id"],
                     "distortion_type": None,
                     "distortion_level": None,

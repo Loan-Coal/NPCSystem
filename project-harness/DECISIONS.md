@@ -3,6 +3,88 @@
 Non-obvious architectural choices. Each entry explains what was decided and why,
 so future maintainers can judge edge cases without re-deriving the rationale.
 
+## DEC-132: Performance strategy — measure-first, evidence-gated; no wholesale Python→compiled rewrite; Kùzu as graph direction
+**Date:** 2026-06-19
+**Context:** A proposed phase was a wholesale rewrite of hot/orchestration code from Python to a compiled
+language (Rust/C++) for latency/RAM, motivated by "Python is slower" + felt turn latency + FPS contention
+(the engine runs on the player's PC beside Unity). Code review found a dialogue turn is ONE LLM call
+(`dialogue_handler.py:179-186`) dominating wall-clock; context assembly is sequential with no `asyncio.gather`
+(`context_builder.py:516-534`); a cache exists but the cold path is heavy; and **no latency measurement exists
+anywhere** (SHIP-10 unchecked). The CPU-bound Python glue is ~2-3% of a multi-second turn (estimate).
+**Decision:** Do NOT do a wholesale rewrite. Adopt an evidence-gated order:
+1. Instrument per-stage latency (interactive vs background, cold-start isolated) — Phase EVAL.
+2. Take language-agnostic interactive wins: preload the model (kills first-dialogue cold-start), stream the
+   first token over the existing WS `chunk` path, `asyncio.gather` + warm the graph cache.
+3. **Graph direction = evaluate-and-likely-adopt Kùzu** (MIT, embedded, no JVM, no Bolt) — wins on licensing
+   (vs Neo4j GPLv3), RAM/FPS, and graph latency at once; advances OD-Ship-graph (DEC-124). Time-box a porting
+   spike; Cypher-dialect cost over `graph/` is the gating unknown.
+4. Throttle/de-prioritize background ticks so simulation never steals CPU/VRAM from render or dialogue.
+5. A selective PyO3/Rust extension of a SINGLE hot function only if step 1 proves it CPU-bound — never a
+   wholesale port, never on a long-lived branch (merge-hell risk: solo dev, ~2000 tests, and no
+   golden-transcript net to port against until Phase EVAL builds one).
+**Why:** Felt latency is I/O-bound (LLM + un-gathered, JVM-hosted, cold-cache graph), not interpreter speed;
+the live-game design means only the interactive dialogue path must be fast and it is model-bound. Every
+proportionate move beats a rewrite on the stated goals. From the 2026-06-19 adversarial roadmap critique.
+**Scope:** Phases EVAL + PERF (see ROADMAP "Next+1").
+
+## DEC-131: Integration-readiness — setup routes public-on-localhost; no CORS (native Unity)
+**Date:** 2026-06-19
+**Context:** SHIP-05b (Unity wizard) must call setup-validate + setup-config on first launch, but every route
+except `/health`,`/readiness`,`/dashboard` requires an API key (`auth/middleware.py`) — and on first run no
+engine key exists yet (chicken-and-egg). The client target is native desktop Unity (DEC-125).
+**Decision:**
+- **Setup routes are auth-exempt and localhost-only.** Add `/setup/*` to the public-path list in
+  `auth/middleware.py`; rely on the existing `127.0.0.1` bind (`stack_launcher.py`) so they are unreachable
+  off-box. The localhost boundary is the trust boundary — no token bootstrap needed.
+- **No CORS middleware.** A native desktop Unity client is not a browser; CORS is a browser-only concern.
+  Revisit only if a WebGL/browser build is ever targeted.
+- **The path-B cloud API key persists plaintext** in `~/.npc_engine/wizard_config.json` by design — it is the
+  player's own key on their own machine; document the location/perms, do not build a keychain.
+**Why:** Simplest correct bootstrap for a single-machine bundle; the OS process boundary + localhost bind
+already provide the isolation a generated local token would. From the 2026-06-19 adversarial roadmap critique.
+**Scope:** Phase INTEG (INTEG-01..05). Also harden the validate route's `api_url` probe (https + host sanity)
+to close an SSRF-shaped primitive (`path_validator.py`).
+
+## DEC-130: Resolved issues archived out of ISSUES.md into archive/ISSUES_RESOLVED.md
+**Date:** 2026-06-19
+**Context:** ISSUES.md had grown to 1438 lines / 137 KB, 83 of its 117 entries `[FIXED]`.
+CLAUDE.md mandates reading ISSUES.md at the start of every session, so the closed
+entries were taxing every session read for no live value.
+**Decision:** Move all `[FIXED]` entries to `project-harness/archive/ISSUES_RESOLVED.md`
+(single append-only file in the existing `archive/` folder). ISSUES.md now holds open
+issues only (34 entries, 438 lines). Entries are relocated, not deleted — IDs and order
+preserved; next-id lookup must consult both files. Chose the archive folder over top-level
+because `archive/` already holds superseded harness records (old ROADMAPs, STATUS history)
+and resolved issues are the same category.
+**Workflow change:** When an issue is fixed, mark `[FIXED]` + `**Fixed:**` line, then move
+it to the archive (documented in the ISSUES.md rules block). CLAUDE.md's "Issues log"
+section still describes only the in-place `[FIXED]` step — update it there if this becomes
+the standing convention.
+
+## DEC-129: SHIP-05 wizard split — P0 backend layer now, P1 Unity screen later
+**Date:** 2026-06-18
+**Context:** SHIP-05 "first-run wizard UX" is in P0 (platform-agnostic). DEC-125 already decided the
+wizard UI targets Unity/C#. These two facts conflict: a Unity screen cannot be built until the Unity
+project exists (P1 work). Two pure options were: (A) block SHIP-05 entirely until P1, or (B) build
+a Python TUI as a throwaway placeholder. Both are worse than a third option.
+**Decision:** Split SHIP-05 into two sub-items:
+- **SHIP-05a (P0):** Backend data layer only — `wizard_config.py` (LLMPath enum + WizardConfig Pydantic
+  model + JSON persistence to `~/.npc_engine/wizard_config.json`) and `path_validator.py` (async
+  validation for path A: Ollama running + model present; path B: HTTP probe of the API endpoint with
+  the supplied key). No screen, no TUI. These are the testable, platform-agnostic primitives that the
+  Unity wizard (SHIP-05b) will drive from C#.
+- **SHIP-05b (P1):** Unity setup screen that presents the A/B choice, collects the API key for path B,
+  calls the validator (via the engine's `/setup/validate` endpoint or by reading the config file), and
+  writes `wizard_config.json`. Grouped with SHIP-06/07/08 Unity client work.
+**Why not a Python TUI:** A console popup before the Unity window is non-commercial and would not be
+copied by a studio — it undermines the B2B integration reference that DEC-125 prioritised.
+**Why not block entirely:** The backend primitives are genuinely platform-agnostic and are testable
+independently. Building them now means SHIP-05b (Unity) is pure UI wiring with no logic to implement.
+**Modules (SHIP-05a):** `src/npc_engine/setup/wizard_config.py`, `src/npc_engine/setup/path_validator.py`.
+**Config file location:** `~/.npc_engine/wizard_config.json` (user home dir, created on first wizard run).
+**API surface for SHIP-05b:** `load_wizard_config()` / `save_wizard_config()` from `wizard_config.py`;
+`validate_path_a()` / `validate_path_b()` from `path_validator.py` (both async, return a typed result).
+
 ## DEC-128: SHIP-04 Neo4j launch strategy — detect-and-launch with PATH-based install check
 **Date:** 2026-06-18
 **Context:** SHIP-04 requires a Neo4j launch strategy for end-user machines (Docker is excluded — the

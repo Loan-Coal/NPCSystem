@@ -8,6 +8,7 @@ correct cumulative results (no lost updates under asyncio.gather).
 from __future__ import annotations
 
 import asyncio
+import inspect
 
 import pytest
 
@@ -30,12 +31,12 @@ def test_emotion_store_has_lock():
 
 def test_emotion_store_set_is_coroutine():
     """EmotionStore.set must be a coroutine function."""
-    assert asyncio.iscoroutinefunction(EmotionStore.set)
+    assert inspect.iscoroutinefunction(EmotionStore.set)
 
 
 def test_emotion_store_get_is_coroutine():
     """EmotionStore.get must be a coroutine function."""
-    assert asyncio.iscoroutinefunction(EmotionStore.get)
+    assert inspect.iscoroutinefunction(EmotionStore.get)
 
 
 @pytest.mark.asyncio
@@ -93,12 +94,12 @@ def test_session_store_has_lock():
 
 def test_session_store_append_turns_is_coroutine():
     """SessionStore.append_turns must be a coroutine function."""
-    assert asyncio.iscoroutinefunction(SessionStore.append_turns)
+    assert inspect.iscoroutinefunction(SessionStore.append_turns)
 
 
 def test_session_store_get_turns_is_coroutine():
     """SessionStore.get_turns must be a coroutine function."""
-    assert asyncio.iscoroutinefunction(SessionStore.get_turns)
+    assert inspect.iscoroutinefunction(SessionStore.get_turns)
 
 
 @pytest.mark.asyncio
