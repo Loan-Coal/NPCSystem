@@ -17,6 +17,21 @@ after restart — acceptable for a beat injector. No graph schema change, no tra
 director's hot tick loop (currently read-only); the edge schema would need a new field (schema change
 requiring approval). The in-memory approach is simpler, correct, and avoids write amplification.
 
+## DEC-134: ISSUE-108 — advance_step uses emit_scheme_step_atomic; SchemeStepInput gains event fields
+**Date:** 2026-06-19
+**Context:** `SchemingEngine.advance_step` called `add_scheme_step` which created a SCHEME_STEP
+edge pointing at an `event_id` with no guarantee the Event node exists. `SchemeAdvanceTick`
+already uses `emit_scheme_step_atomic` (Event + SCHEME_STEP in one transaction). The manual
+path should do the same.
+**Decision:** Inject `TypeRegistry` into `SchemingEngine.__init__` (optional, raises
+`RuntimeError` in `advance_step` when absent). `SchemeStepInput` gains `npc_id`, `goal`,
+`location_id` (replacing `event_id`); `advance_step` generates the event_id internally, builds
+a covert Event via `build_covert_event_props`, validates it, and calls `emit_scheme_step_atomic`.
+Tick_id defaults to 0 (the tick is not available at the manual-advance call site).
+**Why this way:** `SchemingEngine.advance_step` has no production callers — all live advancement
+goes through `SchemeAdvanceTick`. Changing the interface is safe and makes both paths consistent.
+No schema change (event node already supports all required fields).
+
 ## DEC-133: ISSUE-112 — activate WITNESSED edges via EventTemplate.src_character_id (optional field)
 **Date:** 2026-06-19
 **Context:** `_record_witnesses` in `EventHandler` was dead code — it read `src_character_id` from

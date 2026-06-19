@@ -86,28 +86,65 @@ async def test_cap_blocks_excess_schemes() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _make_registry() -> MagicMock:
+    """Return a mock TypeRegistry that validates props unchanged and returns a mock model."""
+    from unittest.mock import MagicMock
+    registry = MagicMock()
+    registry.node_models = {"event": MagicMock(return_value=MagicMock())}
+    # validate_node_write passes props through unchanged in the mock
+    return registry
+
+
+def _make_engine_with_registry(
+    max_active: int = 2,
+    active_schemes: list[SchemeRecord] | None = None,
+) -> tuple[SchemingEngine, AsyncMock, MagicMock]:
+    """Make engine with TypeRegistry injected (ISSUE-108 path)."""
+    from npc_engine.type_registry.node_validator import validate_node_write
+    repo = _make_repo(active_schemes)
+    repo.get_npc_location_id = AsyncMock(return_value="loc_tavern")
+    repo.emit_scheme_step_atomic = AsyncMock()
+    registry = _make_registry()
+    engine = SchemingEngine(
+        settings=_make_settings(max_active),
+        scheming_repo=repo,
+        registry=registry,
+    )
+    return engine, repo, registry
+
+
 @pytest.mark.asyncio
-async def test_advance_step_calls_add_scheme_step() -> None:
-    """advance_step delegates to the port with the correct params."""
-    engine, repo = _make_engine()
+async def test_advance_step_uses_emit_scheme_step_atomic_when_registry_injected() -> None:
+    """ISSUE-108: advance_step calls emit_scheme_step_atomic (not add_scheme_step) when
+    TypeRegistry is injected, ensuring Event + SCHEME_STEP are written atomically."""
+    engine, repo, _registry = _make_engine_with_registry()
 
     await engine.advance_step(
-        SchemeStepInput(scheme_id="s1", event_id="evt_42", step_order=1, completed=False)
+        SchemeStepInput(
+            scheme_id="s1", npc_id="aldric", goal="corner_grain",
+            location_id="loc_market", step_order=1, completed=False
+        )
     )
 
-    repo.add_scheme_step.assert_called_once_with(
-        scheme_id="s1", event_id="evt_42", step_order=1, completed=False
-    )
+    repo.emit_scheme_step_atomic.assert_awaited_once()
+    kwargs = repo.emit_scheme_step_atomic.call_args.kwargs
+    assert kwargs["scheme_id"] == "s1"
+    assert kwargs["step_order"] == 1
+    assert kwargs["completed"] is False
+    repo.add_scheme_step.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_advance_step_marks_completed() -> None:
-    """advance_step correctly forwards completed=True."""
-    engine, repo = _make_engine()
+    """advance_step forwards completed=True via emit_scheme_step_atomic."""
+    engine, repo, _ = _make_engine_with_registry()
 
     await engine.advance_step(
-        SchemeStepInput(scheme_id="s2", event_id="evt_99", step_order=3, completed=True)
+        SchemeStepInput(
+            scheme_id="s2", npc_id="aldric", goal="corner_grain",
+            location_id="loc_market", step_order=3, completed=True
+        )
     )
 
-    _, kwargs = repo.add_scheme_step.call_args
+    kwargs = repo.emit_scheme_step_atomic.call_args.kwargs
     assert kwargs["completed"] is True
