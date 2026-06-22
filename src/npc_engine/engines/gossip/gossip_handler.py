@@ -9,11 +9,11 @@ Does NOT: run global scheduling loops, open Neo4j sessions.
 
 Dependencies injected: GossipGraphPort, Settings, GossipWeightConfig, EmbeddingIndex.
 
-NOTE: This file is ~280 lines, near the 300-line soft limit. Splitting would be
-artificial because run_tick + _process_pairs + _build_write_params + _run_side_effects
-are all tightly coupled phases of a single orchestration class. Splitting would
-scatter the gossip tick logic across multiple files with no independent reuse value.
-See DEC-061 in project-harness/DECISIONS.md.
+300-LINE WAIVER: run_tick + _process_pairs + _build_write_params + _run_side_effects
+are tightly coupled phases of a single gossip-tick orchestration class; splitting
+would scatter the tick logic across files with no independent reuse value. The
+_build_write_params / _run_side_effects length is docstring- and call-formatting-
+inflated over low-complexity per-pair logic (R006, accepted). See DEC-061 and DEC-140.
 """
 
 from __future__ import annotations

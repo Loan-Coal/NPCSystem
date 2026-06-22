@@ -13,6 +13,10 @@ Does NOT: handle quest offer flow (see quest_offer_service.QuestOfferService).
           Does NOT: apply rewards (see quest_reward_router.QuestRewardRouter).
           Does NOT: hold a Neo4j session (DEC-122 / SEV-24).
 Dependencies injected: Settings, TypeRegistry, QuestLifecycleGraphPort (via __init__).
+
+300-LINE WAIVER: one cohesive state machine; the offer and reward concerns are
+already extracted (QuestOfferService / QuestRewardRouter). Further splitting the
+transition methods separates behaviour from shared state. See DEC-140.
 """
 
 from __future__ import annotations

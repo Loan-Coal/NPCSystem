@@ -8,6 +8,10 @@ Does NOT: score or filter intents; does not call LLMs.
 Dependencies injected: AsyncSession (caller-managed).
 Used by: engines.agenda.conversation_intent_service,
          graph.intent_queue_writer, graph.intent_queue_reader
+
+300-LINE WAIVER: a flat catalog of cohesive Cypher query strings + their thin
+runners; splitting fragments the query catalog with no encapsulation gain.
+See DEC-140 (ISSUE-053 baseline catalog).
 """
 from __future__ import annotations
 

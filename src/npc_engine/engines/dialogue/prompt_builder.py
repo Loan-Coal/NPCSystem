@@ -6,11 +6,10 @@ Does NOT: call LLM adapters or perform I/O beyond YAML loading.
 Dependencies injected: None (loads YAML from _PROMPTS_DIR at module level).
 Used by: npc_engine.engines.dialogue.dialogue_handler
 
-NOTE: This file slightly exceeds the 300-line limit (~321 lines). The excess is
-entirely in named constant blocks (_EPOCH_GUARDS, _ECHO_GUARD_TEXT, _GAP_KEYWORDS)
-that cannot be extracted without creating trivially thin sibling modules carrying
-only string literals — an artificial split. Each builder function remains well under
-40 lines. A DECISIONS.md entry is deferred; the task brief forbids editing that file.
+300-LINE WAIVER: the excess is entirely in named constant blocks (_EPOCH_GUARDS,
+_ECHO_GUARD_TEXT, _GAP_KEYWORDS) that cannot be extracted without creating trivially
+thin sibling modules carrying only string literals — an artificial split. Each
+builder function remains well under 40 lines. See DEC-140 (ISSUE-053 baseline catalog).
 """
 
 from __future__ import annotations

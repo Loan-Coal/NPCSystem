@@ -11,6 +11,10 @@ Dependencies: npc_engine.utils.logging (structured logging only), npc_engine.dat
 Dependencies injected: base_url and api_key via CLI args or env vars.
 Used by: make seed-api, manual tooling.
 
+300-LINE WAIVER: data-seeding tooling — one cohesive idempotent seed flow per
+resource type; a split would scatter the seed contract with no reuse value.
+See DEC-140 (ISSUE-053 baseline catalog).
+
 Idempotency contract (get-then-skip):
   Resources with stable IDs (Faction, Location, Character, Event, edges):
     Before each POST, a GET is issued for the stable ID.  If the resource

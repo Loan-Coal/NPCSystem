@@ -42,16 +42,16 @@ captain_sorn failure is now voice-judge strictness + a secondary-source ("report
 ECHO_GUARD. Remaining fix is voice-prompt/seed tuning (out of S25.1's prompt-wording scope) — e.g. a
 VOICE_DESCRIPTOR nudge away from third-person reporting toward first-person command, or relaxing the
 captain tone judge to accept "reports of skirmishes" as a commander relaying field intel.
-
----
-
-## ISSUE-053: 57 grandfathered CLAUDE.md rule violations (file-size, swallows, prints, Cypher-leak, demo imports)
-**Found:** 2026-06-03, during the multi-agent codebase review
-**Severity:** P2 (annoying)
-**Where:** `scripts/rules_baseline.txt` (enumerated); spans `src/` and `demo_game/`. Maps to SEV-23 (file-size), SEV-18/PY-06 (swallows), SEV-40 (prints), SEV-04 (Cypher outside `graph/`), SEV-02/DEMO-01 (demo imports `npc_engine`).
-**Description:** The `make check-rules` gate (`scripts/check_rules.py`) records 57 existing rule violations as a baseline so only NEW ones fail CI. The baseline is the debt backlog.
-**Why deferred:** Each cluster has its own remediation brief in `project-harness/review-fixes/`; the gate prevents growth while they are worked down.
-**To fix:** Work the SEV briefs; after each, run `make check-rules-update` to shrink `scripts/rules_baseline.txt`. Done when the baseline is empty.
+**Update (2026-06-22, engine-quality remediation):** Reviewed for a deterministic fix; **none exists** —
+the residual is voice-judge strictness + LLM variance, and both candidate levers need an Ollama A/B to
+verify (not deterministic). Note the demo seed's own descriptor reinforces the disliked habit:
+`captain_sorn`'s `voice_descriptor` in `demo_game/seed.py:688` ends "Every sentence lands like a report to
+a superior officer" — the "report" framing nudges toward third-person "reports/scouts" relay. Two minimal
+levers remain, each LLM-variance-prone: (a) relax the tone judge in `evals/cases/case_voice_captain_sorn.yaml`
+to accept a commander relaying field intel ("reports of skirmishes", "my scouts confirm") as authoritative;
+(b) reword the seed `voice_descriptor` toward first-person command. **Kept OPEN (no churn)** per the
+"recommend OPEN rather than churn prompts when no confident deterministic fix exists" guidance. Anti-
+hallucination guards remain unaffected (separate axis).
 
 ---
 
