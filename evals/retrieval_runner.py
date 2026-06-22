@@ -247,6 +247,7 @@ async def _main() -> int:
     )
 
     graph_db = GraphDB(settings=settings)
+    await graph_db.connect()
     driver = graph_db.driver
 
     # Smoke-check Neo4j connectivity

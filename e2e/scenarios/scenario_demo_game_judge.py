@@ -465,7 +465,7 @@ async def test_planted_rumor_propagates_to_mira_dialogue(
         http_client,
         "/v1/dialogue",
         {
-            "player_id": "player_eval_rumor",
+            "player_id": "player_demo",  # seeded by demo_game.seed (strict-player policy, ISSUE-118)
             "npc_id": "mira_innkeeper",
             "player_message": "Have you heard anything about Aldric the merchant lately?",
             "session_id": f"judge_rumor_{uuid.uuid4().hex[:8]}",

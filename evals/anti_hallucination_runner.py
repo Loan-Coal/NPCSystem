@@ -42,7 +42,11 @@ _REFUSAL_KEYWORDS: tuple[str, ...] = (
     "unaware",
 )
 
-_PLAYER_ID = "player_eval"
+# Use the demo-world player that demo_game.seed always creates. A bespoke id like
+# "player_eval" has no Character node, so first-contact dialogue 422s (ISSUE-118,
+# strict-player policy). The ah_demo_* cases all target the demo world. (DEC after
+# 2026-06-22 debug session.)
+_PLAYER_ID = "player_demo"
 _SESSION_PREFIX = "ah_eval"
 
 # learned_from_player cases score like `grounded` but require a pre-flight check that

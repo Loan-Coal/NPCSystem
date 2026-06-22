@@ -1888,3 +1888,17 @@ re-pointed at a larger/specialized model later by editing its `llm_config.yaml` 
 **Trade-off:** Slightly lower generation quality than 14b/mixtral for dialogue and quest-generation, accepted
 in exchange for a single resident model, no missing-model failures, and tick latency under the demo timeout.
 Revisit if a machine with more VRAM is targeted, or per-engine quality needs justify a second resident model.
+
+## DEC-142: Run all engines on qwen2.5:14b (supersedes DEC-141) — quality over latency
+**Date:** 2026-06-22 · **Status:** ✅ ACCEPTED (supersedes DEC-141) · **Drives:** `src/npc_engine/engines/*/llm_config.yaml`
+**Context:** DEC-141 standardized every engine on `qwen2.5:7b` for speed/one-resident-model. Live eval runs
+(`scenario_demo_game_judge`) showed 7b materially weakens NPC voice/persona — captain_sorn hedges, mira loses
+warmth + source attribution, old_henryk stops distorting — turning the borderline ISSUE-083 voice cases into
+clear fails. The owner prioritizes showcase quality for the upcoming Unreal demo over per-call latency.
+**Decision:** Point all five engines at `qwen2.5:14b` (already pulled, ~9 GB, one resident model). This keeps
+the single-model simplicity that motivated DEC-141 (no missing `mistral:7b-instruct`, no 26 GB `mixtral`
+cold-load) while restoring voice quality. **Supersedes DEC-141.**
+**Trade-off:** Dialogue ~11 s/call vs ~3 s on 7b; background ticks (`/v1/clock/advance`) are slower and may
+exceed the demo client's 15 s `graph_timeout` under heavy ticks — acceptable for quality-first local runs.
+ISSUE-083 (captain voice) may remain borderline even on 14b; it is documented and non-blocking.
+Revisit if latency becomes the priority (drop back toward 7b) or a larger-VRAM machine allows per-engine tiers.

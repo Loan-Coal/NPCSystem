@@ -87,6 +87,14 @@ async def test_memory_consolidation_coherence(http_client: httpx.Client) -> None
     )
     assert resp.status_code == 200, f"Character creation failed: {resp.text}"
 
+    # Create the player node too — strict-player policy (ISSUE-118): first-contact
+    # dialogue 422s if the player has no Character node.
+    player_resp = http_client.post(
+        f"{_GRAPH}/nodes/Character",
+        json={"properties": char_props(player_id, "Judge Player", is_player=True)},
+    )
+    assert player_resp.status_code == 200, f"Player creation failed: {player_resp.text}"
+
     try:
         # Send dialogue turns to populate the session store via the HTTP API
         player_messages = [

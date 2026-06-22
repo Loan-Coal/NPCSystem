@@ -1,7 +1,7 @@
 engine: quest_generation
 llm:
   backend: ollama
-  model: qwen2.5:7b
+  model: qwen2.5:14b
   temperature: 0.7
   max_tokens: 256
   top_p: 0.9

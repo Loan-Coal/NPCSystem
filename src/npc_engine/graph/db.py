@@ -40,6 +40,17 @@ class GraphDB:
                 auth=(self._settings.NEO4J_USER, self._settings.NEO4J_PASSWORD),
             )
 
+    @property
+    def driver(self) -> AsyncDriver:
+        """Return the connected Neo4j driver.
+
+        Raises:
+            RuntimeError: If connect() has not been called yet.
+        """
+        if self._driver is None:
+            raise RuntimeError("GraphDB is not connected")
+        return self._driver
+
     async def close(self) -> None:
         """Close the Neo4j driver and release its connection pool."""
         if self._driver is not None:
