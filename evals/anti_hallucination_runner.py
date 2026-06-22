@@ -363,14 +363,15 @@ def run(
 
     Args:
         base_url: Base URL of the NPC engine API.
-        api_key: API key passed in X-API-Key header.
+        api_key: API key passed in the Authorization: Bearer header.
         fixture_path: Path to the JSON fixture file.
         report_dir: Directory to write the markdown report into.
     Returns:
         0 if all non-skipped cases pass, 1 if any fail, 2 on connectivity error.
     """
     cases = _load_fixture(fixture_path)
-    headers = {"X-API-Key": api_key}
+    # Engine auth middleware accepts only `Authorization: Bearer` (not X-API-Key).
+    headers = {"Authorization": f"Bearer {api_key}"}
     results: list[dict[str, Any]] = []
     outcomes: list[str] = []
 
