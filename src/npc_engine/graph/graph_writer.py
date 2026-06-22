@@ -25,6 +25,7 @@ from npc_engine.graph.relation_delta_writer import apply_relation_delta as apply
 from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.graph.transfer_validators import build_currency_transfer_command, build_item_transfer_command
 from npc_engine.graph.write_metrics import CURRENCY_TRANSFERS_METRIC, record_graph_write_metrics
+from npc_engine.utils.errors import NodeNotFoundError
 from npc_engine.utils.metrics import increment_metric
 
 __all__ = [
@@ -48,6 +49,13 @@ _CYPHER_ENSURE_RELATES_TO = (
     "RETURN r"
 )
 
+# Diagnostic (ISSUE-118): when the MERGE matches nothing, an endpoint Character is
+# missing. This names which id(s) are absent so the caller raises a clear error
+# instead of silently no-opping and 500ing on a later re-read.
+_CYPHER_PRESENT_CHARACTERS = (
+    "MATCH (c:Character) WHERE c.id IN [$src_id, $dst_id] RETURN collect(c.id) AS present"
+)
+
 
 async def ensure_relation_edge(
     session: AsyncSession,
@@ -64,11 +72,22 @@ async def ensure_relation_edge(
         session: Active Neo4j async session the coordinator opens a transaction on.
         src_id: ID of the source Character node.
         dst_id: ID of the destination Character node.
+
+    Raises:
+        NodeNotFoundError: If either endpoint Character node is missing, so callers
+            fail fast with a clear error instead of a silent no-op (ISSUE-118).
     """
     now = datetime.now(timezone.utc).isoformat()
 
     async def _work(tx: AsyncTransaction) -> None:
-        await tx.run(_CYPHER_ENSURE_RELATES_TO, src_id=src_id, dst_id=dst_id, now=now)
+        result = await tx.run(_CYPHER_ENSURE_RELATES_TO, src_id=src_id, dst_id=dst_id, now=now)
+        if await result.single() is not None:
+            return
+        present_result = await tx.run(_CYPHER_PRESENT_CHARACTERS, src_id=src_id, dst_id=dst_id)
+        present_record = await present_result.single()
+        present = set(present_record["present"]) if present_record else set()
+        missing = [node_id for node_id in (src_id, dst_id) if node_id not in present]
+        raise NodeNotFoundError(node_type="Character", node_id=", ".join(missing) or f"{src_id}, {dst_id}")
 
     await run_in_tx(session, _work)
 

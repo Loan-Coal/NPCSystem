@@ -18,28 +18,6 @@ Rules:
 
 ---
 
-## ISSUE-118: live first-contact dialogue 500s when the player Character node is missing (village/tavern worlds)
-**Found:** 2026-06-22, during live demo verification (unmasked by the ISSUE-117 fix)
-**Severity:** P2 (annoying — breaks `make demo-village`/`demo-tavern` live; latent robustness gap for any client)
-**Where:** `demo_game/scenarios/run_village_crisis.py` / `run_tavern_intrigue.py` (player_id="player");
-`src/npc_engine/graph/relation_writer.py::ensure_relation_edge` + `get_relation_values`;
-`src/npc_engine/graph/repositories/dialogue_repository.py::_apply_first_contact_retry`.
-**Description:** The village/tavern scenarios send `player_id="player"`, but those eval worlds never seed a
-`player` Character node (GET /v1/graph/nodes/Character/player → 404; the demo world seeds `player_demo`, which
-works). On first contact the handler catches `RelationEdgeNotFoundError`, calls `ensure_relation_edge`, then
-re-applies the delta. But `ensure_relation_edge`'s MATCH...MERGE silently no-ops when an endpoint node is
-absent, so the re-read raises `RelationEdgeNotFoundError(src_id=vw_guard, dst_id=player)` again → unhandled →
-HTTP 500. Two facets: (1) data — the scenarios reference a non-existent player; (2) robustness — the engine
-should fail fast with a clear "character node not found" 4xx (or auto-create the player node) rather than 500.
-Relevant to the Unreal client: it must ensure the player Character node exists before first dialogue, or the
-engine should handle a missing player gracefully.
-**Why deferred:** Separate from the ISSUE-117 fix; needs a decision (fix the eval-world seeds to create
-`player`, vs. harden `ensure_relation_edge`/first-contact to validate-and-fail-clearly or auto-create).
-**To fix:** Either seed a `player` node in the village/tavern worlds (and/or align scenario player_id), and/or
-make `ensure_relation_edge` raise a clear `NodeNotFoundError` (HTTP 4xx) when an endpoint node is missing.
-
----
-
 ## ISSUE-083: two voice tone_judge cases fail under epoch=war / stage_b_v2.9 (captain_sorn, mira_innkeeper)
 **Found:** 2026-06-09, during eval re-run
 **Severity:** P3 (nice-to-fix — voice quality, not anti-hallucination)

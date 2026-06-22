@@ -11,7 +11,7 @@ Used by: api.main (router registration)
 from __future__ import annotations
 
 from neo4j import AsyncSession
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from npc_engine.api.dependencies import get_db_session, get_dialogue_handler, get_settings
 from npc_engine.api.dependencies_engines import get_director_beat_log
@@ -22,9 +22,16 @@ from npc_engine.engines.dialogue.system_state_context import resolve_system_stat
 from npc_engine.engines.director.director_beat_log import DirectorBeatLog, DirectorBeatRecord
 from npc_engine.graph.intent_queue_reader import get_pending_intents as get_pending_intents_from_queue
 from npc_engine.graph.intent_queue_writer import mark_delivered as mark_intent_delivered
+from npc_engine.utils.errors import NodeNotFoundError
+from npc_engine.utils.logging import get_logger
 
 # Default number of recent director beats returned by the director-beats read route.
 DEFAULT_DIRECTOR_BEAT_LIMIT: int = 10
+
+_logger = get_logger(__name__)
+
+# HTTP status for a dialogue referencing a Character node that does not exist (ISSUE-118).
+_CHARACTER_NOT_FOUND_STATUS: int = 422
 
 router = APIRouter()
 
@@ -47,7 +54,15 @@ async def dialogue(
         player_id=request.player_id,
         settings=settings,
     )
-    return await handler.handle(request=request, system_state_context=system_ctx)
+    try:
+        return await handler.handle(request=request, system_state_context=system_ctx)
+    except NodeNotFoundError as exc:
+        # Redacted (L8-02): never echo the internal node id to the client; log it server-side.
+        _logger.info("dialogue_character_not_found", extra={"node_id": exc.node_id})
+        raise HTTPException(
+            status_code=_CHARACTER_NOT_FOUND_STATUS,
+            detail={"code": "CHARACTER_NOT_FOUND", "message": "Character not found."},
+        ) from exc
 
 
 @router.get("/dialogue/pending", response_model=list[ConversationIntentResponse])

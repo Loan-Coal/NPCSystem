@@ -1611,3 +1611,25 @@ before `@dataclass` installed the frozen `__setattr__`, so `cls.__dict__.get("__
 import (after the decorators run). It wraps each frozen subclass's `__setattr__` so the machinery attributes go
 through `object.__setattr__` while declared fields stay immutable. Verified: regression test + container
 hot-patch (machinery assignment now succeeds; the masked RelationEdgeNotFoundError is now surfaced cleanly).
+
+---
+
+## [FIXED] ISSUE-118: live first-contact dialogue 500s when the player Character node is missing
+**Found:** 2026-06-22, during live demo verification (unmasked by the ISSUE-117 fix)
+**Severity:** P2 (annoying — broke `make demo-village`/`demo-tavern` live; latent robustness gap for any client)
+**Where:** `src/npc_engine/graph/graph_writer.py::ensure_relation_edge`;
+`src/npc_engine/api/routes/dialogue.py`.
+**Fixed:** 2026-06-22, in fix/issue-118-first-contact (engine-hardening option per the user).
+**Description:** The village/tavern scenarios send `player_id="player"`, but those eval worlds never seed a
+`player` Character node (the demo world seeds `player_demo`, which works). On first contact,
+`ensure_relation_edge`'s `MATCH (a),(b) MERGE ...` silently no-opped when an endpoint node was absent, so the
+re-read raised `RelationEdgeNotFoundError(src_id=vw_guard, dst_id=player)` → unhandled → HTTP 500.
+**Resolution (harden the engine):** `ensure_relation_edge` now detects the no-match (MERGE returns no row),
+runs a diagnostic query to name the missing Character id(s), and raises a typed `NodeNotFoundError` instead of
+silently no-opping. The dialogue route catches `NodeNotFoundError` and returns a redacted HTTP 422
+(`CHARACTER_NOT_FOUND`, "Character not found.") — the internal node id is logged server-side only (L8-02),
+never echoed. Regression test `tests/unit/test_first_contact_missing_node.py` (ensure_relation_edge raises +
+route returns 422). `make check` green (2534). Note: the village/tavern *scenarios* still reference a
+non-existent `player` node, so those demos won't complete until a `player` node is seeded — that is a separate
+eval-world data gap, intentionally not fixed here (the chosen path was engine hardening, which is what matters
+for the Unreal client).

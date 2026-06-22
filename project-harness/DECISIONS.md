@@ -1873,3 +1873,18 @@ No per-function comment is required; this entry is the catalog and the baseline 
 **Revisit:** when a file gains a genuine new seam (a distinct responsibility, not a line-count split) or a
 function's *logic* (not its docstring) grows, do the real split and ratchet down. Until then the baseline is
 accepted debt, not an open task.
+
+## DEC-141: Standardize all engine LLM configs on qwen2.5:7b for local single-model runtime
+**Date:** 2026-06-22 · **Status:** ✅ ACCEPTED · **Drives:** `src/npc_engine/engines/*/llm_config.yaml`
+**Context:** The five engine `llm_config.yaml` files referenced three different Ollama models —
+`qwen2.5:14b` (dialogue/memory/proactive), `mistral:7b-instruct` (chapter, NOT pulled on the dev machine),
+and `mixtral:8x7b` (quest_generation, 26 GB). On a single local GPU this caused: (a) `mistral:7b-instruct`
+missing → chapter engine LLM errors; (b) `mixtral:8x7b` cold-loads of 26 GB → `/v1/clock/advance` exceeding
+the demo client's 15 s timeout; (c) model thrashing as ticks switched models. The target is a downloadable
+game that runs fully locally (DEC-124 path A), where one resident model is far more reliable than three.
+**Decision:** Point all five engines at `qwen2.5:7b` (already pulled, ~2× faster than 14b, ~4.7 GB resident,
+no missing model, no 26 GB cold-load). Per-engine config is unchanged structurally, so any engine can be
+re-pointed at a larger/specialized model later by editing its `llm_config.yaml` (OCP — no code change).
+**Trade-off:** Slightly lower generation quality than 14b/mixtral for dialogue and quest-generation, accepted
+in exchange for a single resident model, no missing-model failures, and tick latency under the demo timeout.
+Revisit if a machine with more VRAM is targeted, or per-engine quality needs justify a second resident model.
