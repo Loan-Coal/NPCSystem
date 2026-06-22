@@ -46,7 +46,6 @@ R006|src/npc_engine/engines/dialogue/degradation.py::execute_with_degradation
 R006|src/npc_engine/engines/dialogue/dialogue_handler.py::DialogueHandler.__init__
 R006|src/npc_engine/engines/dialogue/dialogue_handler.py::DialogueHandler.handle
 R006|src/npc_engine/engines/dialogue/llm_client.py::DialogueLLMClient._generate_with_retry
-R006|src/npc_engine/engines/dialogue/llm_client.py::DialogueLLMClient.stream_text
 R006|src/npc_engine/engines/dialogue/prompt_builder.py::_build_knowledge_gaps
 R006|src/npc_engine/engines/dialogue/relation_mutator.py::apply_dialogue_relation_deltas
 R006|src/npc_engine/engines/economy/pricing_rules_loader.py::load_pricing_rules

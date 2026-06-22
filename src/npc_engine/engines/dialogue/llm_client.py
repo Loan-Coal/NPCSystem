@@ -131,11 +131,8 @@ class DialogueLLMClient:
                     system=system,
                 )
                 normalized_response = DialogueResponse.model_validate(raw).model_dump(mode="python")
-                increment_metric(
-                    metric=LLM_TOKENS_OUT_METRIC,
-                    amount=float(
-                        estimate_tokens(json.dumps(normalized_response, sort_keys=True, ensure_ascii=True))
-                    ),
+                self._emit_tokens_out(
+                    text=json.dumps(normalized_response, sort_keys=True, ensure_ascii=True),
                     labels=labels,
                 )
                 if self._log_prompts:
@@ -177,14 +174,26 @@ class DialogueLLMClient:
             "facial_expression": {"type": "neutral", "intensity": 20},
         }
 
+    def _emit_tokens_out(
+        self, *, text: str, labels: dict[str, str], fallback_reason: str | None = None
+    ) -> None:
+        """Record the output-token metric for one generation, tagging fallback if served."""
+
+        metric_labels = labels if fallback_reason is None else {**labels, "fallback": fallback_reason}
+        increment_metric(
+            metric=LLM_TOKENS_OUT_METRIC,
+            amount=float(estimate_tokens(text)),
+            labels=metric_labels,
+        )
+
     def _fallback_with_metrics(self, labels: dict[str, str], fallback_reason: str, archetype: str = "default") -> dict[str, Any]:
         """Emit fallback token metrics and return the archetype-keyed payload."""
 
         fallback = self._load_fallback_dialogue(archetype=archetype)
-        increment_metric(
-            metric=LLM_TOKENS_OUT_METRIC,
-            amount=float(estimate_tokens(json.dumps(fallback, sort_keys=True, ensure_ascii=True))),
-            labels={**labels, "fallback": fallback_reason},
+        self._emit_tokens_out(
+            text=json.dumps(fallback, sort_keys=True, ensure_ascii=True),
+            labels=labels,
+            fallback_reason=fallback_reason,
         )
         return fallback
 
@@ -220,18 +229,10 @@ class DialogueLLMClient:
                     system=system,
                 )
             ]
-            increment_metric(
-                metric=LLM_TOKENS_OUT_METRIC,
-                amount=float(estimate_tokens("".join(chunks))),
-                labels=labels,
-            )
+            self._emit_tokens_out(text="".join(chunks), labels=labels)
             return chunks
         except (LLMTimeoutError, LLMRequestError):
             fallback = self._load_fallback_dialogue(archetype=archetype)
             text = str(fallback["npc_response"])
-            increment_metric(
-                metric=LLM_TOKENS_OUT_METRIC,
-                amount=float(estimate_tokens(text)),
-                labels={**labels, "fallback": "error"},
-            )
+            self._emit_tokens_out(text=text, labels=labels, fallback_reason="error")
             return [text]
