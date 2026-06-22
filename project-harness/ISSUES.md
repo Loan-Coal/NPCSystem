@@ -14,18 +14,6 @@ Rules:
 
 ---
 
-## ISSUE-098: composition root builds a fresh PlayerLocationReader per factory
-**Found:** 2026-06-12, during F1.5
-**Severity:** P3 (nice-to-fix)
-**Where:** `src/npc_engine/api/dependencies_engines.py` (proactive/intent/player_model/director factories)
-**Description:** Four `@lru_cache` factories each construct their own `PlayerLocationReader()`. It is
-stateless so this is functionally fine, but a shared `get_player_location_reader()` singleton would be
-more consistent with the rest of the composition root.
-**Why deferred:** Cosmetic; not blocking. Surfaced by the F1.5 worker.
-**To fix:** Add `@lru_cache get_player_location_reader()` and reuse it across the four factories.
-
----
-
 ## ISSUE-100: `make demo-run ARGS=--dry-run` fails partway (pre-existing, ~ACT 8)
 **Found:** 2026-06-12, during G3.1 (verifying the intrigue arc in the demo sequence)
 **Severity:** P3 (nice-to-fix)

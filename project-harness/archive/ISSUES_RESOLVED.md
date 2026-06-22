@@ -1532,3 +1532,20 @@ the pieces; the headline capability has no end-to-end proof.
 **Why deferred:** Needs a human decision on WHICH dialogue-response field to assert on for "NPC recalls the
 consolidated memory" (see review §4 / L6 evidence).
 **To fix:** Pick the assertion field; write a two-session e2e scenario; wire into the e2e battery.
+
+---
+
+## [FIXED] ISSUE-098: composition root builds a fresh PlayerLocationReader per factory
+**Found:** 2026-06-12, during F1.5
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/api/dependencies_engines/tick_slots.py` (proactive/intent/player_model/director factories)
+**Fixed:** 2026-06-22, in REM-W (already implemented during the dependencies_engines package split; regression test `tests/unit/test_dependencies_engines_singletons.py` added to lock the invariant).
+**Description:** Four `@lru_cache` factories each construct their own `PlayerLocationReader()`. It is
+stateless so this is functionally fine, but a shared `get_player_location_reader()` singleton would be
+more consistent with the rest of the composition root.
+**Why deferred:** Cosmetic; not blocking. Surfaced by the F1.5 worker.
+**To fix:** Add `@lru_cache get_player_location_reader()` and reuse it across the four factories.
+**Resolution:** `get_player_location_reader()` is an `@lru_cache` singleton in `tick_slots.py:60`; the four
+factories (`get_proactive_dialogue_engine`, `get_intent_formation_engine`, `get_player_model_tick`,
+`get_director_tick`) all inject its result. Added a regression test asserting (a) the getter is a cached
+singleton and (b) all four adapters share the same `_location_reader` instance.

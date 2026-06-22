@@ -492,3 +492,106 @@ EXP-95 (scenario picker), plus EXP-80/81/85/92 demo beats.
 `make test` + `make test-demo` green before every merge. New work ships with tests.
 `make check` (lint · check-rules · check-layers · check-docstrings · type · check-harness · test-cov ≥80%)
 is the canonical health gate. Green as of Phase 25 completion (1967 passed, 22 skipped, 85.70% coverage).
+
+---
+
+## Sign-off Review (2026-06-22)
+
+> Code-grounded verification of all non-archived work items against the live codebase.
+> 32 spot-checks run; all 32 VERIFIED. Goal: sign off on the engine, push `feat/shippable-demo-game` → `main`, begin Unity.
+
+### ✅ Done — verified in codebase
+
+**Engine quality remediation (REM-W series, 2026-06-19)**
+- REM-W0/W1a: ISSUE-056/064/072/076 archived; ISSUE-106/109/098 initial fixes applied.
+- REM-W1b: Docstring sweep — 73 files updated; `scripts/docstring_audit.py` guard added; `make check` 86.11%. Closes ISSUE-103/115.
+- REM-W2: Stale tests + coverage — ISSUE-116/111/101/110/102; 13+9+9 new tests. `make check` 86.81%.
+- REM-W3: Size limits — ISSUE-114/105/095; `dependencies_engines/` split into package; `get_proactive_queue` hoisted. 86.83%.
+- REM-W4: OCP residuals — ISSUE-104; `register_emotion_model`, `register_tts_backend`, `SchemeStepKind`, `MOOD_LABEL_TO_VAD`, config registry validators; 14 new tests. 86.87%.
+- REM-W5: Engine slices — ISSUE-112 (`src_character_id`/WITNESSED), ISSUE-108 (`emit_scheme_step_atomic`), ISSUE-097 (`_plateau_tracker`), ISSUE-094 (`IntentGraphPort`/need+event producers), ISSUE-096 (`TraitReadPort`/per-NPC traits). DEC-133–137. 86.94%.
+- REM-W6: Headline features — ISSUE-071 (`SystemStateContext` Tier-0 block + `system_state_v1.yaml`), ISSUE-107 (`memories_recalled` in `DialogueResponse` + e2e scenario). DEC-138–139. 2523 passed, 86.88%.
+
+**Shippable runtime (SHIP series)**
+- SHIP-01: Unity selected as game-client platform (DEC-125).
+- SHIP-02: `OpenAICompatibleAdapter` registered in `engines/llm/factory.py` (DEC-126); 18 tests.
+- SHIP-03: `npc_engine.setup` package — `vram_detector`, `model_tiers`, `ollama_manager`, `first_run_flow`; `scripts/setup_local.py`; 33 tests (DEC-127).
+- SHIP-04: `neo4j_manager`, `stack_launcher`, `scripts/launcher.py`, `packaging/npc_engine.spec`; `make package` (DEC-128); 19 tests.
+- SHIP-05a: `wizard_config.py` + `path_validator.py` in `setup/` (DEC-129).
+
+**Phase F — Activate & expose (engine wiring + API routes)**
+- F1.1–F1.7: relationship phase write-through, proactive queue drain, trait-modulated emotion injection, `PlayerModelEngine` tick, drama director tick, `SchemingEngine` + `SchemeDetectionTick`, memory-decay tick.
+- F2.1–F2.5: relationship phase route, player-model route, schemes route, pending-intents + director-beat route, `is_deception` flag on beliefs read.
+- F3.1–F3.6: secret-share standing gate, mood surfaced in dialogue context, deception belief anti-hallucination carve-out, `MemoryEngine` DI-injected into quest lifecycle, `dialogue_turn` node persistence, player `KNOWS_ABOUT` seed edges.
+
+**Phase G — Demo expansion**
+- G1.1–G1.4: live facial-expression glyph, RETRIEVAL panel poller, location breadcrumb, relationship phase panel.
+- G2.1–G2.5: player-model panel, `scheme_board_panel.py` (INTRIGUE tab), director-beat surface, proactive NPC hail in interactive window, deception "tell" affordance.
+- G3.1–G3.2: scripted "Intrigue" scenario; scheme/deception/player-model seed data.
+
+**Phase H — Make the demo a game**
+- H0.1–H0.5: `break_pledge`, treaty client methods, investigations route + client, chapters route + client, `post_quest_choice` wrapper.
+- H1.1–H1.6: multi-objective win, currency win/lose axis, faction tension penalty, tick deadline pressure, ≥2 failure states + `failure_reason`, grade end-card.
+- H2.1–H2.8: `branch_panel.py` primitive, 14-NPC cast + `seed_npc_data.py`, 7 locations + district tier, 5 factions, 18 quests across 6 chains, rival quest lock, `world_objectives.py` multi-world, replayable scenario forks.
+- H3.1–H3.5: `oath_panel.py`, `treaty_panel.py`, `investigation_panel.py`, chapter banner, tension HUD.
+
+**Expansion program (EXP-201..230) and Phases 0–26** — fully archived; see archive entries at top of file.
+
+---
+
+### ❌ Not Done — open items
+
+#### Engine hygiene (P2/P3 — minor, non-blocking)
+| ID | Item | Priority | Notes |
+|----|------|----------|-------|
+| REM-W7 / ISSUE-100 | `make demo-run ARGS=--dry-run` fails near ACT 8 — add missing `if runner.dry_run` guard | P3 | Non-networked dry-run only; actual gameplay unaffected |
+| REM-W8 / ISSUE-053 | 57 grandfathered `check-rules` violations in `scripts/rules_baseline.txt` | P2 | Gate prevents new violations; these are pre-existing cosmetic debt |
+| ISSUE-083 | Voice judge residual: `captain_sorn` voice judge borderline-fails (secondary-source phrasing habit) | P3 | Anti-hallucination gate unaffected; purely voice colour |
+| ~~ISSUE-098~~ FIXED | Four factories in `dependencies_engines/` each create their own `PlayerLocationReader()` instead of sharing a singleton | P3 | Resolved 2026-06-22: shared `get_player_location_reader()` singleton already wired; regression test added. Archived. |
+
+#### Unity game slice (blocked on Unity development — not engine issues)
+| ID | Item |
+|----|------|
+| SHIP-05b | Unity setup wizard screen (drives `wizard_config.py` / `path_validator.py` from SHIP-05a) |
+| SHIP-06 | The legible hook — one emergent payoff demonstrable end-to-end in Unity |
+| SHIP-07 | Talk-to-NPC UI + live relationship/knowledge-graph side panel in Unity |
+| SHIP-08 | Authored 10-minute arc with clear win/lose |
+| SHIP-09 | Public distribution build (itch.io / Steam Next Fest) |
+
+#### B2B proof wrap (post-game)
+| ID | Item |
+|----|------|
+| SHIP-10 | Instrumentation + perf numbers (engagement signals, per-dialogue latency + cost) |
+| SHIP-11 | ≤30-second marketing clip of the hook propagating across town |
+
+#### Future phases (sequenced after Unity dev begins)
+| Phase | Goal | Effort |
+|-------|------|--------|
+| INTEG-01..05 | Setup routes (`/setup/validate`, `/setup/config`), localhost-only auth exemption, `docs/INTEGRATION.md` | ~1 session |
+| EVAL-01..05 | Per-stage latency timer, golden-transcript regression suite, content-determinism pin, memory-recall eval, engine-quality scorecard | ~2–3 sessions |
+| PERF-00..07 | Model warmup, first-token streaming, `asyncio.gather` graph reads, cache hit-rate, Kùzu spike, tick throttle, VRAM tuning, optional PyO3 | ~3–5 sessions |
+
+#### Deferred / type-C (needs DECISIONS call before starting)
+| ID | Item |
+|----|------|
+| H-D1 | Engine military battle sim with balanced player military verb |
+| H-D2 | Server-side automatic cross-faction standing decrement |
+| OD-Ship-graph | Neo4j GPLv3 / Kùzu evaluation spike (DEC-132 direction set; spike not yet run) |
+
+#### Parked backlog (no active dev; kept in code)
+| ID | Item |
+|----|------|
+| S17.9 | Legacy niche-engine expansions (succession, clique, skill, military) |
+| S21.6 | `demo_game/` file-size rule cluster (`client.py` 1524L, `seed.py` 1265L, …) — several already waived |
+| Phase X | Engine SDKs — SX.1 OpenAPI freeze, SX.2 Unity C# package, SX.3 Unreal plugin, SX.4 sample scenes |
+
+---
+
+### Verdict
+
+**The engine is ready for `main`.** All claimed completions are verified in the codebase (32/32). Remaining open items are P2/P3 hygiene (REM-W7/W8) or future milestones gated on Unity development. None block engine functionality, test coverage (86.88%), or the packaged runtime.
+
+**Recommended merge sequence:**
+1. Run `make check` one final time on `feat/shippable-demo-game` to confirm green.
+2. Merge `feat/shippable-demo-game` → `main`.
+3. Open a `feat/unity-game` branch; start with SHIP-05b (Unity wizard screen, drives SHIP-05a validators already shipped).
+4. Tackle REM-W7 + REM-W8 on a short cleanup branch if desired before or during Unity dev.
