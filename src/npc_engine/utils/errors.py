@@ -13,9 +13,12 @@ Dependencies injected: None.
 # gain. Do not grow without a real split (a new error *family* with shared behaviour).
 #
 # Exception classes use @dataclass(frozen=True) for field immutability (STRUCT-06).
-# StructuredNPCSystemError.__init_subclass__ patches each frozen subclass's __setattr__
-# to allow Python's exception machinery to set __traceback__, __cause__, and __context__,
-# which frozen=True would otherwise block.
+# _enable_exception_machinery() (called at module import, AFTER the dataclass decorator
+# has installed each subclass's frozen __setattr__) wraps that __setattr__ so Python's
+# exception machinery can still set __traceback__/__cause__/__context__ explicitly — as
+# asyncio/concurrent.futures do when an exception crosses an executor or await boundary.
+# Without it, frozen=True raises FrozenInstanceError there, surfacing as an HTTP 500 on
+# the LLM-error/degradation path instead of a graceful fallback.
 # All P1 deferred migrations completed as of service #17.
 
 from __future__ import annotations
@@ -33,23 +36,6 @@ class StructuredNPCSystemError(NPCSystemError):
     _EXCEPTION_MACHINERY_ATTRS: frozenset[str] = frozenset(
         {"__traceback__", "__cause__", "__context__", "__suppress_context__"}
     )
-
-    def __init_subclass__(cls, **kwargs: object) -> None:
-        super().__init_subclass__(**kwargs)
-        original_setattr = cls.__dict__.get("__setattr__")
-        if original_setattr is None:
-            return
-        # Wrap the frozen __setattr__ so Python's exception machinery can still
-        # set __traceback__, __cause__, and __context__ after raise.
-        _machinery = StructuredNPCSystemError._EXCEPTION_MACHINERY_ATTRS
-
-        def _patched_setattr(self: object, name: str, value: object, _orig: object = original_setattr) -> None:
-            if name in _machinery:
-                object.__setattr__(self, name, value)
-            else:
-                _orig(self, name, value)  # type: ignore[operator]
-
-        cls.__setattr__ = _patched_setattr  # type: ignore[method-assign]
 
     def __str__(self) -> str:
         """Return 'ClassName(field=value, ...)' for all instance fields."""
@@ -332,3 +318,33 @@ class ContextBudgetError(Exception):
             f"tier={self.tier}, used_tokens={self.used_tokens}, "
             f"budget_tokens={self.budget_tokens}, detail={self.detail})"
         )
+
+
+def _enable_exception_machinery(base: type) -> None:
+    """Allow Python's exception machinery to set __traceback__/__cause__/__context__
+    on every frozen StructuredNPCSystemError subclass.
+
+    Wraps each subclass's @dataclass(frozen=True)-generated __setattr__ so the
+    machinery attributes go through object.__setattr__ while declared fields stay
+    immutable. Must run after the dataclass decorator has installed __setattr__,
+    so it is invoked at module import (not in __init_subclass__, which runs before
+    the decorator and therefore could never see the frozen __setattr__).
+    """
+    machinery = base._EXCEPTION_MACHINERY_ATTRS  # type: ignore[attr-defined]
+    for cls in base.__subclasses__():
+        frozen_setattr = cls.__setattr__
+        if getattr(frozen_setattr, "_allows_machinery", False):
+            continue
+
+        def _patched(self: object, name: str, value: object, _orig: object = frozen_setattr) -> None:
+            if name in machinery:
+                object.__setattr__(self, name, value)
+            else:
+                _orig(self, name, value)  # type: ignore[operator]
+
+        _patched._allows_machinery = True  # type: ignore[attr-defined]
+        cls.__setattr__ = _patched  # type: ignore[assignment]
+        _enable_exception_machinery(cls)
+
+
+_enable_exception_machinery(StructuredNPCSystemError)

@@ -1592,3 +1592,22 @@ top-of-file justifying comments were added to the previously-undocumented files 
 `intent_queries.py`, `quest_lifecycle_engine.py`, `prompt_builder.py`, `gossip_handler.py`).
 **To fix (historical):** Work the SEV briefs; shrink `scripts/rules_baseline.txt`; done when empty. (Superseded
 by DEC-140's done definition.)
+
+---
+
+## [FIXED] ISSUE-117: frozen domain exceptions reject __traceback__/__cause__ → opaque HTTP 500, broken LLM fallback
+**Found:** 2026-06-22, during live demo verification (make demo-village / demo-tavern)
+**Severity:** P1 (blocking — defeats the engine boundary fallback contract; turns recoverable LLM errors into 500s)
+**Where:** `src/npc_engine/utils/errors.py` (StructuredNPCSystemError frozen-dataclass subclasses)
+**Fixed:** 2026-06-22, in fix/frozen-exception-traceback (regression test `tests/unit/test_errors_machinery.py`).
+**Description:** Domain exceptions are `@dataclass(frozen=True)`. When Python's exception machinery (or
+asyncio/concurrent.futures, when an exception crosses an executor/await boundary — exactly the LLM call path)
+assigns `__traceback__`/`__cause__`/`__context__` *explicitly*, the frozen `__setattr__` raised
+`FrozenInstanceError: cannot assign to field '__traceback__'`. This second error propagated unhandled →
+HTTP 500, instead of the intended "LLM timeout/error → serve canned fallback" degradation. It also MASKED the
+real underlying error (see ISSUE-118). The existing `__init_subclass__` workaround never applied: it ran
+before `@dataclass` installed the frozen `__setattr__`, so `cls.__dict__.get("__setattr__")` was always None.
+**Resolution:** Replaced the broken `__init_subclass__` with `_enable_exception_machinery()`, invoked at module
+import (after the decorators run). It wraps each frozen subclass's `__setattr__` so the machinery attributes go
+through `object.__setattr__` while declared fields stay immutable. Verified: regression test + container
+hot-patch (machinery assignment now succeeds; the masked RelationEdgeNotFoundError is now surfaced cleanly).
