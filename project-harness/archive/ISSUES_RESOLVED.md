@@ -1549,3 +1549,23 @@ more consistent with the rest of the composition root.
 factories (`get_proactive_dialogue_engine`, `get_intent_formation_engine`, `get_player_model_tick`,
 `get_director_tick`) all inject its result. Added a regression test asserting (a) the getter is a cached
 singleton and (b) all four adapters share the same `_location_reader` instance.
+
+---
+
+## [FIXED] ISSUE-100: `make demo-run ARGS=--dry-run` fails partway (~ACT 8)
+**Found:** 2026-06-12, during G3.1 (verifying the intrigue arc in the demo sequence)
+**Severity:** P3 (nice-to-fix)
+**Where:** `demo_game/run.py` `main()` / `demo_game/encoding_utils.py`
+**Fixed:** 2026-06-22, in REM-W7 (wired the existing `ensure_utf8_stdout()` into `run.py:main()`).
+**Description:** `make demo-run ARGS=--dry-run` exited with an error around the ACT-8/determinism region.
+**Diagnosis correction:** The original "missing `if runner.dry_run` guard" hypothesis was wrong — that
+guard already exists and is correct (`determinism_beat.py:69`). The real cause is a `UnicodeEncodeError`:
+the ACT-8 cue prints a `→` (U+2192) glyph, and on a Windows cp1252 console `print()` cannot encode it.
+The cue prints *before* (and independent of) the dry_run guard, so a **live** Windows run crashes at the
+same point. Several demo scene files contain `→`/`×`/em-dash glyphs, so per-string ASCII edits would be
+whack-a-mole.
+**Resolution:** `demo_game/encoding_utils.ensure_utf8_stdout()` already existed, was tested and idempotent,
+and its docstring already named `demo_game.run` as a user — the call had simply never been wired in. Added
+`ensure_utf8_stdout()` as the first statement of `main()` (1 import + 1 call), reconfiguring stdout/stderr
+to UTF-8 for the whole run. Regression test `demo_game/tests/test_run_dry_run_encoding.py` drives the full
+dry-run sequence past ACT 8 on a cp1252-backed stdout and asserts it completes.

@@ -27,6 +27,7 @@ from typing import Any
 
 from demo_game.client import EngineClient
 from demo_game.config import DemoConfig
+from demo_game.encoding_utils import ensure_utf8_stdout
 from demo_game.run_scenes import (
     AntiHallucinationBeat,
     BranchBeat,
@@ -600,6 +601,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """Entry point."""
+    ensure_utf8_stdout()  # ISSUE-100: cue glyphs (→, ×, em-dash) crash cp1252 stdout
     args = _parse_args()
 
     if args.dry_run and args.cached:

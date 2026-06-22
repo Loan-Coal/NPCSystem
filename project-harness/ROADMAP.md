@@ -86,8 +86,10 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
   `DialogueResponse`; port return type changed to `tuple[str, list[str]]`; `_extract_used_memory_ids`
   in adapter parses JSON; IDs threaded via closure in handler; 5 mock files updated; e2e scenario
   `scenario_memory_recall_e2e.py` written (DEC-139). `make check` green: 2523 passed, 86.88% cov.
-- [ ] **REM-W7 — demo dry-run** — ISSUE-100: add the missing `if runner.dry_run` guard near the ACT-8
-  determinism beat so `make demo-run ARGS=--dry-run` completes non-networked.
+- [x] **REM-W7 — demo dry-run** — ISSUE-100 (FIXED 2026-06-22): the failure was a cp1252
+  `UnicodeEncodeError` on the ACT-8 `→` cue glyph (printed before the dry_run guard, so live Windows
+  runs crashed too), *not* a missing guard. Wired the existing `ensure_utf8_stdout()` into `run.py:main()`;
+  regression test `demo_game/tests/test_run_dry_run_encoding.py`. Archived.
 - [ ] **REM-W8 — rules baseline backlog (P2)** — ISSUE-053: work the SEV remediation briefs, shrinking
   `scripts/rules_baseline.txt` via `make check-rules-update` (Waves 3/4 already reduce R001/R006). Done when empty.
 
@@ -543,7 +545,7 @@ is the canonical health gate. Green as of Phase 25 completion (1967 passed, 22 s
 #### Engine hygiene (P2/P3 — minor, non-blocking)
 | ID | Item | Priority | Notes |
 |----|------|----------|-------|
-| REM-W7 / ISSUE-100 | `make demo-run ARGS=--dry-run` fails near ACT 8 — add missing `if runner.dry_run` guard | P3 | Non-networked dry-run only; actual gameplay unaffected |
+| ~~REM-W7 / ISSUE-100~~ FIXED | `make demo-run ARGS=--dry-run` failed near ACT 8 — root cause was a cp1252 `UnicodeEncodeError` on the `→` cue glyph, not a guard | P3 | Fixed 2026-06-22 by wiring `ensure_utf8_stdout()` into `run.py:main()`; also hardens live Windows runs. Archived. |
 | REM-W8 / ISSUE-053 | 57 grandfathered `check-rules` violations in `scripts/rules_baseline.txt` | P2 | Gate prevents new violations; these are pre-existing cosmetic debt |
 | ISSUE-083 | Voice judge residual: `captain_sorn` voice judge borderline-fails (secondary-source phrasing habit) | P3 | Anti-hallucination gate unaffected; purely voice colour |
 | ~~ISSUE-098~~ FIXED | Four factories in `dependencies_engines/` each create their own `PlayerLocationReader()` instead of sharing a singleton | P3 | Resolved 2026-06-22: shared `get_player_location_reader()` singleton already wired; regression test added. Archived. |

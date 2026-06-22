@@ -14,21 +14,6 @@ Rules:
 
 ---
 
-## ISSUE-100: `make demo-run ARGS=--dry-run` fails partway (pre-existing, ~ACT 8)
-**Found:** 2026-06-12, during G3.1 (verifying the intrigue arc in the demo sequence)
-**Severity:** P3 (nice-to-fix)
-**Where:** `demo_game/run.py` SCENES / `make demo-run` dry-run path
-**Description:** `make demo-run ARGS=--dry-run` (meant to print the scene sequence only) exits with error
-partway through (around the ACT 8/determinism region) — confirmed PRE-EXISTING (reproduces with G3.1
-changes stashed). Individual scenes respect `runner.dry_run`; the failure is elsewhere in the dry-run
-harness/sequence, not the new intrigue scenes.
-**Why deferred:** Out of G3.1 scope (G3.1 adds the intrigue scenes, which are unit-tested and respect
-dry_run); the dry-run harness bug predates this work.
-**To fix:** Bisect which scene/step errors under `--dry-run` and make the dry-run path fully non-networked
-end-to-end.
-
----
-
 ## Open
 
 ---
