@@ -15,14 +15,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from npc_engine.graph.chapter_queries import (
+from npc_engine.graph.narrative.chapter_queries import (
     count_completed_quests_since_tick,
     get_completed_quests_since_tick,
     get_current_chapter,
     get_max_beat_intensity_in_chapter,
     get_recent_events_for_chapter,
 )
-from npc_engine.graph.chapter_writer import (
+from npc_engine.graph.narrative.chapter_writer import (
     close_chapter,
     create_chapter,
     link_event_to_chapter,

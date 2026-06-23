@@ -10,7 +10,7 @@ Used by: (legacy callers only — no active imports as of SEV-04 story_pacing mi
 """
 from __future__ import annotations
 
-from npc_engine.graph.story_pacing_queries import (  # noqa: F401
+from npc_engine.graph.narrative.story_pacing_queries import (  # noqa: F401
     CYPHER_GET_ACTIVE_HIGH_SEVERITY_QUESTS,
     CYPHER_GET_RECENT_MAJOR_EVENTS,
 )

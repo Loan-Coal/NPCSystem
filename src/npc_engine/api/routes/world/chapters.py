@@ -24,7 +24,7 @@ from pydantic import BaseModel, ConfigDict
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
-from npc_engine.graph.chapter_queries import get_current_chapter
+from npc_engine.graph.narrative.chapter_queries import get_current_chapter
 
 router = APIRouter(prefix="/chapters", tags=["chapters"])
 
