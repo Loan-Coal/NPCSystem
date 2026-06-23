@@ -68,7 +68,7 @@ async def test_resolve_system_state_no_items_no_quest(fake_settings: MagicMock, 
         AsyncMock(return_value=[]),
     )
     monkeypatch.setattr(
-        "npc_engine.graph.quest_queries.get_active_quest_for_player",
+        "npc_engine.graph.quest.quest_queries.get_active_quest_for_player",
         AsyncMock(return_value=None),
     )
     session = AsyncMock()
@@ -85,7 +85,7 @@ async def test_resolve_system_state_with_items(fake_settings: MagicMock, monkeyp
         AsyncMock(return_value=[{"id": "sword"}, {"id": "shield"}]),
     )
     monkeypatch.setattr(
-        "npc_engine.graph.quest_queries.get_active_quest_for_player",
+        "npc_engine.graph.quest.quest_queries.get_active_quest_for_player",
         AsyncMock(return_value=None),
     )
     session = AsyncMock()
@@ -101,7 +101,7 @@ async def test_resolve_system_state_with_active_quest(fake_settings: MagicMock, 
         AsyncMock(return_value=[]),
     )
     monkeypatch.setattr(
-        "npc_engine.graph.quest_queries.get_active_quest_for_player",
+        "npc_engine.graph.quest.quest_queries.get_active_quest_for_player",
         AsyncMock(return_value={"quest_id": "q1", "status": "in_progress"}),
     )
     session = AsyncMock()
@@ -118,7 +118,7 @@ async def test_resolve_system_state_no_player_skips_quest(fake_settings: MagicMo
         items_mock,
     )
     monkeypatch.setattr(
-        "npc_engine.graph.quest_queries.get_active_quest_for_player",
+        "npc_engine.graph.quest.quest_queries.get_active_quest_for_player",
         quest_mock,
     )
     session = AsyncMock()

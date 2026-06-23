@@ -160,7 +160,7 @@ class _SessionStub:
 
 @pytest.mark.asyncio
 async def test_get_draft_quests_returns_rows() -> None:
-    from npc_engine.graph.quest_node_service import get_draft_quests
+    from npc_engine.graph.quest.quest_node_service import get_draft_quests
 
     rows = [{"id": "q-1", "status": "draft", "quest_giver_id": "mira_innkeeper"}]
     session = _SessionStub(rows)
@@ -170,7 +170,7 @@ async def test_get_draft_quests_returns_rows() -> None:
 
 @pytest.mark.asyncio
 async def test_get_draft_quests_passes_giver_id() -> None:
-    from npc_engine.graph.quest_node_service import get_draft_quests
+    from npc_engine.graph.quest.quest_node_service import get_draft_quests
 
     session = _SessionStub([])
     await get_draft_quests(session, quest_giver_id="mira_innkeeper")  # type: ignore[arg-type]
@@ -179,7 +179,7 @@ async def test_get_draft_quests_passes_giver_id() -> None:
 
 @pytest.mark.asyncio
 async def test_get_draft_quests_empty_returns_empty_list() -> None:
-    from npc_engine.graph.quest_node_service import get_draft_quests
+    from npc_engine.graph.quest.quest_node_service import get_draft_quests
 
     session = _SessionStub([])
     result = await get_draft_quests(session)  # type: ignore[arg-type]
@@ -193,7 +193,7 @@ async def test_get_draft_quests_empty_returns_empty_list() -> None:
 
 @pytest.mark.asyncio
 async def test_offer_quest_returns_dict_on_success() -> None:
-    from npc_engine.graph.quest_node_service import offer_quest
+    from npc_engine.graph.quest.quest_node_service import offer_quest
 
     session = _SessionStub([{"quest_id": "q-1", "status": "offered"}])
     result = await offer_quest(session, quest_id="q-1")  # type: ignore[arg-type]
@@ -203,7 +203,7 @@ async def test_offer_quest_returns_dict_on_success() -> None:
 
 @pytest.mark.asyncio
 async def test_offer_quest_returns_none_when_not_found() -> None:
-    from npc_engine.graph.quest_node_service import offer_quest
+    from npc_engine.graph.quest.quest_node_service import offer_quest
 
     session = _SessionStub([])
     result = await offer_quest(session, quest_id="missing")  # type: ignore[arg-type]

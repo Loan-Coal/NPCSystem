@@ -59,7 +59,7 @@ async def resolve_system_state(
         SystemStateContext populated with live engine facts.
     """
     from npc_engine.graph.economy.item_queries import get_items_for_character
-    from npc_engine.graph.quest_queries import get_active_quest_for_player
+    from npc_engine.graph.quest.quest_queries import get_active_quest_for_player
 
     items = await get_items_for_character(session=session, character_id=npc_id)
     item_count = len(items) if isinstance(items, list) else 0

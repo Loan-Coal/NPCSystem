@@ -14,8 +14,8 @@ import pytest
 
 pytest.importorskip("neo4j")
 
-from npc_engine.graph.quest_writer import CYPHER_MERGE_QUEST_STATE
-from npc_engine.graph.quest_writer import upsert_quest_state
+from npc_engine.graph.quest.quest_writer import CYPHER_MERGE_QUEST_STATE
+from npc_engine.graph.quest.quest_writer import upsert_quest_state
 
 
 @dataclass

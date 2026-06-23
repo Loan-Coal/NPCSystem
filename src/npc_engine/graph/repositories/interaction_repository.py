@@ -15,15 +15,15 @@ from __future__ import annotations
 
 from typing import Any
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.quest_queries import get_active_quest_for_player
-from npc_engine.graph.quest_verification_queries import (
+from npc_engine.graph.quest.quest_queries import get_active_quest_for_player
+from npc_engine.graph.quest.quest_verification_queries import (
     count_player_co_located_with,
     count_player_has_item,
     count_player_located_at,
     count_player_was_at,
     count_target_inactive,
 )
-from npc_engine.graph.quest_writer import get_quest_state
+from npc_engine.graph.quest.quest_writer import get_quest_state
 
 
 class Neo4jInteractionRepository:

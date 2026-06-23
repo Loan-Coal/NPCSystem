@@ -5,7 +5,7 @@ Purpose: Cypher query strings for Quest node creation and retrieval.
 Does NOT: execute business logic or validate payloads.
 Dependencies: None (Cypher strings only).
 Dependencies injected: None.
-Used by: npc_engine.graph.quest_node_service
+Used by: npc_engine.graph.quest.quest_node_service
 """
 
 from __future__ import annotations

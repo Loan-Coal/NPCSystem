@@ -77,7 +77,7 @@ async def test_get_candidates_escapes_label() -> None:
     which is called by Neo4jQuestGenerationRepository and is the authoritative sanitization
     boundary — tested here directly.
     """
-    from npc_engine.graph.quest_generation_queries import get_candidate_ids_by_label
+    from npc_engine.graph.quest.quest_generation_queries import get_candidate_ids_by_label
 
     node_type = "event`) DETACH DELETE n //"
     resolved = resolve_node_label(node_type)

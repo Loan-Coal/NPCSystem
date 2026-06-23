@@ -44,7 +44,7 @@ from npc_engine.graph.memory.memory_queries import (
 )
 from npc_engine.graph.reputation.reputation_queries import get_reputation_context_for_npc
 from npc_engine.graph.relations.trust_queries import get_second_hop_events, get_trust_scores_for_events
-from npc_engine.graph.quest_queries import get_active_quest_for_player
+from npc_engine.graph.quest.quest_queries import get_active_quest_for_player
 from .context_budget_enforcer import ContextCompressionCache, fill_to_budget
 from .context_builder_helpers import (
     expand_query,

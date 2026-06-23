@@ -23,7 +23,7 @@ from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.dependency_singletons import get_quest_generation_engine
 from npc_engine.api.helpers import OkEnvelope, error_response, ok_response
 from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
-from npc_engine.graph.quest_node_service import get_draft_quests, get_quest, offer_quest
+from npc_engine.graph.quest.quest_node_service import get_draft_quests, get_quest, offer_quest
 from npc_engine.utils.logging import get_logger
 
 logger = get_logger(__name__)

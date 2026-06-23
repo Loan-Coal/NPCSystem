@@ -15,7 +15,7 @@ from typing import Any
 from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.graph.transaction_coordinator import run_in_tx
-from npc_engine.graph.quest_node_queries import (
+from npc_engine.graph.quest.quest_node_queries import (
     CYPHER_CREATE_QUEST,
     CYPHER_GET_DRAFT_QUESTS,
     CYPHER_GET_QUEST,

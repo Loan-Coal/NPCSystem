@@ -19,12 +19,12 @@ from neo4j import AsyncTransaction
 
 from npc_engine.graph.db import GraphDB
 from npc_engine.graph.event.event_writer import upsert_quest_lifecycle_event
-from npc_engine.graph.quest_chain_queries import (
+from npc_engine.graph.quest.quest_chain_queries import (
     get_choice_unlocked_quest,
     get_unlocked_quests,
 )
-from npc_engine.graph.quest_node_service import get_quest
-from npc_engine.graph.quest_writer import (
+from npc_engine.graph.quest.quest_node_service import get_quest
+from npc_engine.graph.quest.quest_writer import (
     create_quest_state_if_absent,
     get_quest_state,
     update_quest_node_status,

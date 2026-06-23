@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from npc_engine.graph.quest_queries import get_active_quest_for_player
+from npc_engine.graph.quest.quest_queries import get_active_quest_for_player
 
 
 def _mock_session(records: list[dict]) -> MagicMock:
