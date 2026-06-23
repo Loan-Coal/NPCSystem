@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from npc_engine.graph.pledge_violation_service import check_pledge_violations
+from npc_engine.graph.political.pledge_violation_service import check_pledge_violations
 
 
 # ---------------------------------------------------------------------------
@@ -38,26 +38,26 @@ async def test_violation_detected_via_witnessed_edge() -> None:
 
     with (
         patch(
-            "npc_engine.graph.pledge_violation_service.get_active_pledges_for_pledger",
+            "npc_engine.graph.political.pledge_violation_service.get_active_pledges_for_pledger",
             new_callable=AsyncMock,
             return_value=[_pledge("fealty", sworn_at_tick=5)],
         ),
         patch(
-            "npc_engine.graph.pledge_violation_service.get_witnessed_violations",
+            "npc_engine.graph.political.pledge_violation_service.get_witnessed_violations",
             new_callable=AsyncMock,
             return_value=[{"action_type": "desert", "witnessed_at_tick": 10, "event_id": "evt-1"}],
         ),
         patch(
-            "npc_engine.graph.pledge_violation_service.get_participated_violations",
+            "npc_engine.graph.political.pledge_violation_service.get_participated_violations",
             new_callable=AsyncMock,
             return_value=[],
         ),
         patch(
-            "npc_engine.graph.pledge_violation_service.break_pledge",
+            "npc_engine.graph.political.pledge_violation_service.break_pledge",
             new_callable=AsyncMock,
         ) as mock_break,
         patch(
-            "npc_engine.graph.pledge_violation_service._emit_violation_event",
+            "npc_engine.graph.political.pledge_violation_service._emit_violation_event",
             new_callable=AsyncMock,
         ) as mock_emit,
     ):
@@ -76,22 +76,22 @@ async def test_violation_detected_via_participated_in_edge() -> None:
 
     with (
         patch(
-            "npc_engine.graph.pledge_violation_service.get_active_pledges_for_pledger",
+            "npc_engine.graph.political.pledge_violation_service.get_active_pledges_for_pledger",
             new_callable=AsyncMock,
             return_value=[_pledge("fealty", sworn_at_tick=5)],
         ),
         patch(
-            "npc_engine.graph.pledge_violation_service.get_witnessed_violations",
+            "npc_engine.graph.political.pledge_violation_service.get_witnessed_violations",
             new_callable=AsyncMock,
             return_value=[],
         ),
         patch(
-            "npc_engine.graph.pledge_violation_service.get_participated_violations",
+            "npc_engine.graph.political.pledge_violation_service.get_participated_violations",
             new_callable=AsyncMock,
             return_value=[{"role": "rebel", "event_id": "evt-2", "tick_id": 12}],
         ),
-        patch("npc_engine.graph.pledge_violation_service.break_pledge", new_callable=AsyncMock),
-        patch("npc_engine.graph.pledge_violation_service._emit_violation_event", new_callable=AsyncMock),
+        patch("npc_engine.graph.political.pledge_violation_service.break_pledge", new_callable=AsyncMock),
+        patch("npc_engine.graph.political.pledge_violation_service._emit_violation_event", new_callable=AsyncMock),
     ):
         result = await check_pledge_violations(session, pledger_id="char-1", tick=15)
 
@@ -106,12 +106,12 @@ async def test_no_violation_when_no_active_pledges() -> None:
 
     with (
         patch(
-            "npc_engine.graph.pledge_violation_service.get_active_pledges_for_pledger",
+            "npc_engine.graph.political.pledge_violation_service.get_active_pledges_for_pledger",
             new_callable=AsyncMock,
             return_value=[],
         ),
         patch(
-            "npc_engine.graph.pledge_violation_service.break_pledge",
+            "npc_engine.graph.political.pledge_violation_service.break_pledge",
             new_callable=AsyncMock,
         ) as mock_break,
     ):
@@ -128,22 +128,22 @@ async def test_no_violation_when_action_type_not_in_violation_set() -> None:
 
     with (
         patch(
-            "npc_engine.graph.pledge_violation_service.get_active_pledges_for_pledger",
+            "npc_engine.graph.political.pledge_violation_service.get_active_pledges_for_pledger",
             new_callable=AsyncMock,
             return_value=[_pledge("fealty", sworn_at_tick=5)],
         ),
         patch(
-            "npc_engine.graph.pledge_violation_service.get_witnessed_violations",
+            "npc_engine.graph.political.pledge_violation_service.get_witnessed_violations",
             new_callable=AsyncMock,
             return_value=[],  # query filters — empty means no match
         ),
         patch(
-            "npc_engine.graph.pledge_violation_service.get_participated_violations",
+            "npc_engine.graph.political.pledge_violation_service.get_participated_violations",
             new_callable=AsyncMock,
             return_value=[],
         ),
         patch(
-            "npc_engine.graph.pledge_violation_service.break_pledge",
+            "npc_engine.graph.political.pledge_violation_service.break_pledge",
             new_callable=AsyncMock,
         ) as mock_break,
     ):
@@ -171,21 +171,21 @@ async def test_multiple_pledges_only_violated_ones_returned() -> None:
 
     with (
         patch(
-            "npc_engine.graph.pledge_violation_service.get_active_pledges_for_pledger",
+            "npc_engine.graph.political.pledge_violation_service.get_active_pledges_for_pledger",
             new_callable=AsyncMock,
             return_value=pledges,
         ),
         patch(
-            "npc_engine.graph.pledge_violation_service.get_witnessed_violations",
+            "npc_engine.graph.political.pledge_violation_service.get_witnessed_violations",
             side_effect=witnessed_side_effect,
         ),
         patch(
-            "npc_engine.graph.pledge_violation_service.get_participated_violations",
+            "npc_engine.graph.political.pledge_violation_service.get_participated_violations",
             new_callable=AsyncMock,
             return_value=[],
         ),
-        patch("npc_engine.graph.pledge_violation_service.break_pledge", new_callable=AsyncMock),
-        patch("npc_engine.graph.pledge_violation_service._emit_violation_event", new_callable=AsyncMock),
+        patch("npc_engine.graph.political.pledge_violation_service.break_pledge", new_callable=AsyncMock),
+        patch("npc_engine.graph.political.pledge_violation_service._emit_violation_event", new_callable=AsyncMock),
     ):
         result = await check_pledge_violations(session, pledger_id="char-1", tick=15)
 
@@ -200,25 +200,25 @@ async def test_same_pledge_not_broken_twice_if_both_checks_trigger() -> None:
 
     with (
         patch(
-            "npc_engine.graph.pledge_violation_service.get_active_pledges_for_pledger",
+            "npc_engine.graph.political.pledge_violation_service.get_active_pledges_for_pledger",
             new_callable=AsyncMock,
             return_value=[_pledge("fealty")],
         ),
         patch(
-            "npc_engine.graph.pledge_violation_service.get_witnessed_violations",
+            "npc_engine.graph.political.pledge_violation_service.get_witnessed_violations",
             new_callable=AsyncMock,
             return_value=[{"action_type": "desert", "witnessed_at_tick": 10, "event_id": "e1"}],
         ),
         patch(
-            "npc_engine.graph.pledge_violation_service.get_participated_violations",
+            "npc_engine.graph.political.pledge_violation_service.get_participated_violations",
             new_callable=AsyncMock,
             return_value=[{"role": "rebel", "event_id": "e2", "tick_id": 11}],
         ),
         patch(
-            "npc_engine.graph.pledge_violation_service.break_pledge",
+            "npc_engine.graph.political.pledge_violation_service.break_pledge",
             new_callable=AsyncMock,
         ) as mock_break,
-        patch("npc_engine.graph.pledge_violation_service._emit_violation_event", new_callable=AsyncMock),
+        patch("npc_engine.graph.political.pledge_violation_service._emit_violation_event", new_callable=AsyncMock),
     ):
         result = await check_pledge_violations(session, pledger_id="char-1", tick=15)
 
@@ -234,7 +234,7 @@ async def test_same_pledge_not_broken_twice_if_both_checks_trigger() -> None:
 @pytest.mark.asyncio
 async def test_get_active_pledges_for_pledger_queries_session() -> None:
     """get_active_pledges_for_pledger runs the right query and returns dicts."""
-    from npc_engine.graph.pledge_queries import get_active_pledges_for_pledger
+    from npc_engine.graph.political.pledge_queries import get_active_pledges_for_pledger
 
     record = MagicMock()
     record.__iter__ = MagicMock(return_value=iter([
@@ -266,7 +266,7 @@ async def test_get_active_pledges_for_pledger_queries_session() -> None:
 @pytest.mark.asyncio
 async def test_get_all_active_pledgers_returns_distinct_ids() -> None:
     """get_all_active_pledgers returns a list of distinct pledger IDs."""
-    from npc_engine.graph.pledge_queries import get_all_active_pledgers
+    from npc_engine.graph.political.pledge_queries import get_all_active_pledgers
 
     record = MagicMock()
     record.__getitem__ = MagicMock(side_effect=lambda k: "char-1" if k == "pledger_id" else None)

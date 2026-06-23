@@ -4,7 +4,7 @@ Layer: graph
 Purpose: Cypher queries for Treaty nodes and BOUND_BY edges.
 Does NOT: implement business logic or call LLMs.
 Dependencies injected: AsyncSession.
-Used by: npc_engine.graph.treaty_service
+Used by: npc_engine.graph.political.treaty_service
 """
 
 from __future__ import annotations

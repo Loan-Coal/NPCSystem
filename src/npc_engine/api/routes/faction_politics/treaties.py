@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
-from npc_engine.graph.treaty_service import (
+from npc_engine.graph.political.treaty_service import (
     TreatyCondition,
     break_treaty,
     create_treaty,

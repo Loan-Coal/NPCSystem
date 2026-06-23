@@ -4,7 +4,7 @@ Layer: graph
 Purpose: Cypher queries for PLEDGE edges between characters.
 Does NOT: implement business logic or call LLMs.
 Dependencies injected: AsyncSession.
-Used by: npc_engine.graph.pledge_service
+Used by: npc_engine.graph.political.pledge_service
 """
 
 from __future__ import annotations

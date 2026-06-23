@@ -15,14 +15,14 @@ from __future__ import annotations
 from typing import Any
 
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.political_agenda_writer import set_agenda_status
-from npc_engine.graph.political_queries import (
+from npc_engine.graph.political.political_agenda_writer import set_agenda_status
+from npc_engine.graph.political.political_queries import (
     get_agenda_votes,
     get_expired_open_agendas,
     get_heirs_for_character,
     get_vacant_inheritable_titles,
 )
-from npc_engine.graph.political_title_writer import grant_title
+from npc_engine.graph.political.political_title_writer import grant_title
 
 
 class Neo4jPoliticalRepository:

@@ -17,7 +17,7 @@ from typing import Any, Literal
 from neo4j import AsyncSession
 from pydantic import BaseModel
 
-from npc_engine.graph.treaty_queries import (
+from npc_engine.graph.political.treaty_queries import (
     CYPHER_CREATE_BOUND_BY,
     CYPHER_CREATE_TREATY,
     CYPHER_SET_TREATY_STATUS,

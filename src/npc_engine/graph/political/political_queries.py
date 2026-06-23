@@ -8,8 +8,8 @@ Does NOT: write to the graph, call LLMs, or import engine-layer code.
 Dependencies injected: None (pure Cypher, session passed per call).
 Used by: npc_engine.engines.succession.succession_engine,
          npc_engine.engines.agenda.agenda_engine,
-         npc_engine.graph.political_title_writer, npc_engine.graph.political_agenda_writer,
-         npc_engine.graph.political_leverage_writer
+         npc_engine.graph.political.political_title_writer, npc_engine.graph.political.political_agenda_writer,
+         npc_engine.graph.political.political_leverage_writer
 """
 
 from __future__ import annotations

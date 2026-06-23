@@ -7,13 +7,13 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
-from npc_engine.graph.pledge_service import (
+from npc_engine.graph.political.pledge_service import (
     break_pledge,
     create_pledge,
     get_pledges_for_character_svc,
     get_expiring_pledges_svc,
 )
-from npc_engine.graph.pledge_violation_service import check_pledge_violations
+from npc_engine.graph.political.pledge_violation_service import check_pledge_violations
 
 
 # ---------------------------------------------------------------------------
@@ -71,7 +71,7 @@ async def test_create_pledge_passes_optional_fields() -> None:
 async def test_get_pledges_for_character_svc_delegates() -> None:
     expected = [{"pledger_id": "char-1", "pledge_type": "protect", "is_active": True}]
     with patch(
-        "npc_engine.graph.pledge_service.get_pledges_for_character",
+        "npc_engine.graph.political.pledge_service.get_pledges_for_character",
         new_callable=AsyncMock,
         return_value=expected,
     ) as mock_fn:
@@ -84,7 +84,7 @@ async def test_get_pledges_for_character_svc_delegates() -> None:
 @pytest.mark.asyncio
 async def test_get_pledges_for_character_svc_passes_active_only_false() -> None:
     with patch(
-        "npc_engine.graph.pledge_service.get_pledges_for_character",
+        "npc_engine.graph.political.pledge_service.get_pledges_for_character",
         new_callable=AsyncMock,
         return_value=[],
     ) as mock_fn:
@@ -105,7 +105,7 @@ async def test_check_pledge_violations_returns_empty_list_when_no_pledges() -> N
 
     session = AsyncMock()
     with patch(
-        "npc_engine.graph.pledge_violation_service.get_active_pledges_for_pledger",
+        "npc_engine.graph.political.pledge_violation_service.get_active_pledges_for_pledger",
         new_callable=AsyncMock,
         return_value=[],
     ):
@@ -251,7 +251,7 @@ async def test_break_pledge_no_faction_swing_when_same_faction() -> None:
 async def test_get_expiring_pledges_svc_delegates() -> None:
     expected = [{"pledger_id": "char-1", "pledge_type": "fealty"}]
     with patch(
-        "npc_engine.graph.pledge_service.get_expiring_pledges",
+        "npc_engine.graph.political.pledge_service.get_expiring_pledges",
         new_callable=AsyncMock,
         return_value=expected,
     ) as mock_fn:

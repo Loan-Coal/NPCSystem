@@ -37,7 +37,7 @@ from npc_engine.graph.economy.owes_queries import get_debts_for_character
 from npc_engine.graph.group.group_service import get_groups_for_character_svc
 from npc_engine.graph.gossip.rumor_service import get_rumors_for_character_svc
 from npc_engine.graph.character.trait_service import get_traits_svc
-from npc_engine.graph.pledge_service import get_pledges_for_character_svc
+from npc_engine.graph.political.pledge_service import get_pledges_for_character_svc
 from npc_engine.graph.memory.memory_queries import (
     get_memories_for_character,
     get_player_memories_for_npc,

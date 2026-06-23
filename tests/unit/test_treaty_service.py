@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from npc_engine.graph.treaty_service import (
+from npc_engine.graph.political.treaty_service import (
     TreatyCondition,
     break_treaty,
     check_treaty_conditions_mechanical,
@@ -113,7 +113,7 @@ async def test_create_treaty_passes_optional_fields() -> None:
 async def test_get_active_treaties_svc_delegates() -> None:
     expected = [{"id": "t-1", "status": "active"}]
     with patch(
-        "npc_engine.graph.treaty_service.get_active_treaties",
+        "npc_engine.graph.political.treaty_service.get_active_treaties",
         new_callable=AsyncMock,
         return_value=expected,
     ) as mock_fn:
@@ -164,7 +164,7 @@ async def test_check_conditions_returns_empty_when_no_tribute_due() -> None:
     conditions = [TreatyCondition(type="no_attack")]
     conditions_json = json.dumps([c.model_dump() for c in conditions])
     with patch(
-        "npc_engine.graph.treaty_service.get_treaty_conditions",
+        "npc_engine.graph.political.treaty_service.get_treaty_conditions",
         new_callable=AsyncMock,
         return_value=conditions_json,
     ):
@@ -178,15 +178,15 @@ async def test_check_conditions_returns_violation_when_tribute_unpayable() -> No
     conditions = [TreatyCondition(type="tribute", amount=100, interval_ticks=5, target_faction_id="faction-b")]
     conditions_json = json.dumps([c.model_dump() for c in conditions])
     with patch(
-        "npc_engine.graph.treaty_service.get_treaty_conditions",
+        "npc_engine.graph.political.treaty_service.get_treaty_conditions",
         new_callable=AsyncMock,
         return_value=conditions_json,
     ), patch(
-        "npc_engine.graph.treaty_service.get_treaty_parties",
+        "npc_engine.graph.political.treaty_service.get_treaty_parties",
         new_callable=AsyncMock,
         return_value=["faction-a", "faction-b"],
     ), patch(
-        "npc_engine.graph.treaty_service.check_tribute_payment",
+        "npc_engine.graph.political.treaty_service.check_tribute_payment",
         new_callable=AsyncMock,
         return_value=(False, "tribute unpaid: treasury 0 < required 100"),
     ):
@@ -199,7 +199,7 @@ async def test_check_conditions_returns_violation_when_tribute_unpayable() -> No
 async def test_check_conditions_returns_violation_when_treaty_not_found() -> None:
     session = AsyncMock()
     with patch(
-        "npc_engine.graph.treaty_service.get_treaty_conditions",
+        "npc_engine.graph.political.treaty_service.get_treaty_conditions",
         new_callable=AsyncMock,
         return_value=None,
     ):
@@ -217,11 +217,11 @@ async def test_check_conditions_returns_violation_when_treaty_not_found() -> Non
 async def test_check_tribute_payment_returns_paid_when_treasury_sufficient() -> None:
     session = AsyncMock()
     with patch(
-        "npc_engine.graph.treaty_service.get_faction_treasury",
+        "npc_engine.graph.political.treaty_service.get_faction_treasury",
         new_callable=AsyncMock,
         return_value=200,
     ), patch(
-        "npc_engine.graph.treaty_service.deduct_faction_treasury",
+        "npc_engine.graph.political.treaty_service.deduct_faction_treasury",
         new_callable=AsyncMock,
     ) as mock_deduct:
         paid, msg = await check_tribute_payment(
@@ -236,11 +236,11 @@ async def test_check_tribute_payment_returns_paid_when_treasury_sufficient() -> 
 async def test_check_tribute_payment_returns_violation_when_treasury_insufficient() -> None:
     session = AsyncMock()
     with patch(
-        "npc_engine.graph.treaty_service.get_faction_treasury",
+        "npc_engine.graph.political.treaty_service.get_faction_treasury",
         new_callable=AsyncMock,
         return_value=50,
     ), patch(
-        "npc_engine.graph.treaty_service.deduct_faction_treasury",
+        "npc_engine.graph.political.treaty_service.deduct_faction_treasury",
         new_callable=AsyncMock,
     ) as mock_deduct:
         paid, msg = await check_tribute_payment(
@@ -257,11 +257,11 @@ async def test_check_tribute_payment_returns_violation_when_treasury_insufficien
 async def test_check_tribute_payment_exact_balance_succeeds() -> None:
     session = AsyncMock()
     with patch(
-        "npc_engine.graph.treaty_service.get_faction_treasury",
+        "npc_engine.graph.political.treaty_service.get_faction_treasury",
         new_callable=AsyncMock,
         return_value=100,
     ), patch(
-        "npc_engine.graph.treaty_service.deduct_faction_treasury",
+        "npc_engine.graph.political.treaty_service.deduct_faction_treasury",
         new_callable=AsyncMock,
     ) as mock_deduct:
         paid, msg = await check_tribute_payment(
@@ -281,15 +281,15 @@ async def test_check_conditions_no_violation_when_tribute_paid() -> None:
     conditions = [TreatyCondition(type="tribute", amount=50, interval_ticks=5, target_faction_id="faction-b")]
     conditions_json = json.dumps([c.model_dump() for c in conditions])
     with patch(
-        "npc_engine.graph.treaty_service.get_treaty_conditions",
+        "npc_engine.graph.political.treaty_service.get_treaty_conditions",
         new_callable=AsyncMock,
         return_value=conditions_json,
     ), patch(
-        "npc_engine.graph.treaty_service.get_treaty_parties",
+        "npc_engine.graph.political.treaty_service.get_treaty_parties",
         new_callable=AsyncMock,
         return_value=["faction-a", "faction-b"],
     ), patch(
-        "npc_engine.graph.treaty_service.check_tribute_payment",
+        "npc_engine.graph.political.treaty_service.check_tribute_payment",
         new_callable=AsyncMock,
         return_value=(True, None),
     ):
@@ -303,11 +303,11 @@ async def test_check_conditions_no_violation_when_tick_not_due() -> None:
     conditions = [TreatyCondition(type="tribute", amount=100, interval_ticks=5, target_faction_id="faction-b")]
     conditions_json = json.dumps([c.model_dump() for c in conditions])
     with patch(
-        "npc_engine.graph.treaty_service.get_treaty_conditions",
+        "npc_engine.graph.political.treaty_service.get_treaty_conditions",
         new_callable=AsyncMock,
         return_value=conditions_json,
     ), patch(
-        "npc_engine.graph.treaty_service.get_treaty_parties",
+        "npc_engine.graph.political.treaty_service.get_treaty_parties",
         new_callable=AsyncMock,
         return_value=["faction-a", "faction-b"],
     ):
@@ -323,11 +323,11 @@ async def test_check_conditions_violation_when_no_payer_found() -> None:
     conditions = [TreatyCondition(type="tribute", amount=100, interval_ticks=5, target_faction_id="faction-a")]
     conditions_json = json.dumps([c.model_dump() for c in conditions])
     with patch(
-        "npc_engine.graph.treaty_service.get_treaty_conditions",
+        "npc_engine.graph.political.treaty_service.get_treaty_conditions",
         new_callable=AsyncMock,
         return_value=conditions_json,
     ), patch(
-        "npc_engine.graph.treaty_service.get_treaty_parties",
+        "npc_engine.graph.political.treaty_service.get_treaty_parties",
         new_callable=AsyncMock,
         return_value=["faction-a"],
     ):
@@ -345,7 +345,7 @@ async def test_check_conditions_violation_when_no_payer_found() -> None:
 async def test_get_expiring_treaties_svc_delegates() -> None:
     expected = ["treaty-1", "treaty-2"]
     with patch(
-        "npc_engine.graph.treaty_service.get_expiring_treaties",
+        "npc_engine.graph.political.treaty_service.get_expiring_treaties",
         new_callable=AsyncMock,
         return_value=expected,
     ) as mock_fn:

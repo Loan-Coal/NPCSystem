@@ -109,8 +109,8 @@ R006|src/npc_engine/graph/economy/item_writer.py::transfer_item_atomic
 R006|src/npc_engine/graph/memory/memory_service.py::create_memory
 R006|src/npc_engine/graph/military/military_writer.py::create_army
 R006|src/npc_engine/graph/economy/owes_queries.py::get_debts_for_character
-R006|src/npc_engine/graph/pledge_service.py::break_pledge
-R006|src/npc_engine/graph/pledge_violation_service.py::check_pledge_violations
+R006|src/npc_engine/graph/political/pledge_service.py::break_pledge
+R006|src/npc_engine/graph/political/pledge_violation_service.py::check_pledge_violations
 R006|src/npc_engine/graph/relations/relation_delta_writer.py::apply_relation_delta
 R006|src/npc_engine/graph/repositories/dialogue_repository.py::Neo4jDialogueRepository.apply_relation_deltas
 R006|src/npc_engine/graph/reputation/reputation_event_seeder.py::create_reputation_event
@@ -120,8 +120,8 @@ R006|src/npc_engine/graph/reputation/reputation_writer.py::adjust_reputation
 R006|src/npc_engine/graph/scheduling/schedule_service.py::ScheduleService.create_schedule
 R006|src/npc_engine/graph/transfer_validators.py::build_currency_transfer_command
 R006|src/npc_engine/graph/transfer_validators.py::build_item_transfer_command
-R006|src/npc_engine/graph/treaty_service.py::check_treaty_conditions_mechanical
-R006|src/npc_engine/graph/treaty_service.py::create_treaty
+R006|src/npc_engine/graph/political/treaty_service.py::check_treaty_conditions_mechanical
+R006|src/npc_engine/graph/political/treaty_service.py::create_treaty
 R006|src/npc_engine/graph/relations/trust_queries.py::get_second_hop_events
 R006|src/npc_engine/main.py::lifespan
 R006|src/npc_engine/retrieval/context_budget_enforcer.py::_fit_compressible_tier

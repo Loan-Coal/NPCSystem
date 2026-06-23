@@ -15,12 +15,12 @@ from __future__ import annotations
 from typing import Any
 
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.pledge_service import (
+from npc_engine.graph.political.pledge_service import (
     break_pledge,
     get_all_active_pledgers_svc,
     get_expiring_pledges_svc,
 )
-from npc_engine.graph.pledge_violation_service import check_pledge_violations
+from npc_engine.graph.political.pledge_violation_service import check_pledge_violations
 
 
 class Neo4jPledgeRepository:

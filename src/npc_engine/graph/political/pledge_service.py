@@ -7,7 +7,7 @@ Does NOT: call LLMs, detect violations, or orchestrate oath engine scheduling.
 Dependencies injected: AsyncSession.
 Dependencies: graph.pledge_queries
 Used by: npc_engine.engines.oath.oath_engine, npc_engine.api.routes.pledges,
-         npc_engine.graph.pledge_violation_service
+         npc_engine.graph.political.pledge_violation_service
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from typing import Any
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.pledge_queries import (
+from npc_engine.graph.political.pledge_queries import (
     CYPHER_ADJUST_STANDS_WITH,
     CYPHER_CREATE_PLEDGE,
     CYPHER_DEACTIVATE_PLEDGE,

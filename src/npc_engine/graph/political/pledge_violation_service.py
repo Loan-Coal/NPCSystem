@@ -19,12 +19,12 @@ from uuid import uuid4
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.pledge_queries import (
+from npc_engine.graph.political.pledge_queries import (
     get_active_pledges_for_pledger,
     get_participated_violations,
     get_witnessed_violations,
 )
-from npc_engine.graph.pledge_service import break_pledge
+from npc_engine.graph.political.pledge_service import break_pledge
 
 _logger = logging.getLogger(__name__)
 
