@@ -35,7 +35,7 @@ def test_detects_upward_violation(tmp_path):
     checker = _import_checker()
     # graph (2) importing retrieval (3) — upward violation
     src = textwrap.dedent("""\
-        from npc_engine.retrieval.embedding_index import EmbeddingIndex
+        from npc_engine.retrieval.embedding import EmbeddingIndex
     """)
     (tmp_path / "bad.py").write_text(src)
     violations = checker.find_violations_in_file(tmp_path / "bad.py", "graph")

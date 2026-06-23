@@ -11,10 +11,10 @@ import json
 import pytest
 
 from npc_engine.config import Settings
-from npc_engine.retrieval.context_builder import _enforce_final_serialized_budget, _estimate_tokens, build_serialized_context
-from npc_engine.retrieval.context_merger import ContextItem, MergedContext
-from npc_engine.retrieval.context_serializer import serialize_context
-from npc_engine.retrieval.vector_store_protocol import VectorSearchResult
+from npc_engine.retrieval.context import _enforce_final_serialized_budget, _estimate_tokens, build_serialized_context
+from npc_engine.retrieval.context import ContextItem, MergedContext
+from npc_engine.retrieval.context import serialize_context
+from npc_engine.retrieval.embedding import VectorSearchResult
 from npc_engine.schema.context_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
 from npc_engine.world.world_state import WorldState
 
@@ -100,21 +100,21 @@ def _patch_graph_calls(monkeypatch, tier_a_items=None) -> None:
     def fake_assemble(*, npc_id, character_bundle, events, location_id, location_context, group_memberships=None, believed_rumors=None, traits=None, active_pledges=None):
         return _items
 
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_world_state", fake_world_reader)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_character_with_relations", fake_character_reader)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_known_event_ids_for_npc", fake_known_event_ids)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_npc_location_id", fake_location_id)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_location_context", fake_location_context)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_events_for_npc", fake_events)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_reputation_context_for_npc", fake_reputation)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.assemble_tier_a_context", fake_assemble)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_memories_for_character", fake_memories)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_beliefs_for_character", fake_beliefs)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_goals_for_character", fake_goals)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_items_for_character", fake_items)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_secrets_for_character", fake_secrets)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_debts_for_character", fake_obligations)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_groups_for_character_svc", fake_group_memberships)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_world_state", fake_world_reader)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_character_with_relations", fake_character_reader)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_known_event_ids_for_npc", fake_known_event_ids)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_npc_location_id", fake_location_id)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_location_context", fake_location_context)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_events_for_npc", fake_events)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_reputation_context_for_npc", fake_reputation)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.assemble_tier_a_context", fake_assemble)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_memories_for_character", fake_memories)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_beliefs_for_character", fake_beliefs)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_goals_for_character", fake_goals)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_items_for_character", fake_items)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_secrets_for_character", fake_secrets)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_debts_for_character", fake_obligations)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_groups_for_character_svc", fake_group_memberships)
 
     async def fake_believed_rumors(session, *, character_id, min_confidence=0):
         return []
@@ -125,14 +125,14 @@ def _patch_graph_calls(monkeypatch, tier_a_items=None) -> None:
     async def fake_pledges(session, character_id, active_only=True):
         return []
 
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_rumors_for_character_svc", fake_believed_rumors)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_traits_svc", fake_traits)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_pledges_for_character_svc", fake_pledges)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_rumors_for_character_svc", fake_believed_rumors)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_traits_svc", fake_traits)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_pledges_for_character_svc", fake_pledges)
 
     async def fake_needs(session, character_id):
         return []
 
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_needs_for_character", fake_needs)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_needs_for_character", fake_needs)
 
     async def fake_trust_scores(session, *, npc_id, event_ids):
         return {}
@@ -146,15 +146,15 @@ def _patch_graph_calls(monkeypatch, tier_a_items=None) -> None:
     async def fake_npc_player_edge(session, *, npc_id, player_id):
         return None
 
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_trust_scores_for_events", fake_trust_scores)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_second_hop_events", fake_second_hop)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_active_quest_for_player", fake_active_quest)
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_npc_player_edge", fake_npc_player_edge)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_trust_scores_for_events", fake_trust_scores)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_second_hop_events", fake_second_hop)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_active_quest_for_player", fake_active_quest)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_npc_player_edge", fake_npc_player_edge)
 
     async def fake_player_memories(session, *, npc_id, player_id, k=5):
         return []
 
-    monkeypatch.setattr("npc_engine.retrieval.context_builder.get_player_memories_for_npc", fake_player_memories)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_player_memories_for_npc", fake_player_memories)
 
 
 @pytest.mark.asyncio
@@ -269,7 +269,7 @@ async def test_builder_passes_known_event_ids_as_filter_to_embedding_index(monke
 
     _patch_graph_calls(monkeypatch)
     monkeypatch.setattr(
-        "npc_engine.retrieval.context_builder.get_known_event_ids_for_npc",
+        "npc_engine.retrieval.context.context_builder.get_known_event_ids_for_npc",
         fake_known_event_ids_non_empty,
     )
 
@@ -374,7 +374,7 @@ async def test_top_unmet_need_appears_in_context(monkeypatch) -> None:
 
     _patch_graph_calls(monkeypatch)
     monkeypatch.setattr(
-        "npc_engine.retrieval.context_builder.get_needs_for_character",
+        "npc_engine.retrieval.context.context_builder.get_needs_for_character",
         fake_needs,
     )
 
@@ -413,7 +413,7 @@ async def test_no_top_need_when_npc_has_no_needs(monkeypatch) -> None:
 
     _patch_graph_calls(monkeypatch)
     monkeypatch.setattr(
-        "npc_engine.retrieval.context_builder.get_needs_for_character",
+        "npc_engine.retrieval.context.context_builder.get_needs_for_character",
         fake_no_needs,
     )
 
@@ -469,7 +469,7 @@ async def test_player_scoped_memory_in_context(monkeypatch) -> None:
 
     _patch_graph_calls(monkeypatch)
     monkeypatch.setattr(
-        "npc_engine.retrieval.context_builder.get_player_memories_for_npc",
+        "npc_engine.retrieval.context.context_builder.get_player_memories_for_npc",
         fake_player_memories,
     )
 

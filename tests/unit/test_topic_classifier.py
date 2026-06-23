@@ -8,7 +8,7 @@ Dependencies injected: None.
 
 import pytest
 
-from npc_engine.retrieval.topic_classifier import detect_dialogue_profile
+from npc_engine.retrieval.embedding import detect_dialogue_profile
 
 
 @pytest.mark.parametrize("message", [

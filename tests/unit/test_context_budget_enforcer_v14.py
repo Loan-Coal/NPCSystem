@@ -8,14 +8,14 @@ Dependencies injected: none.
 
 import pytest
 
-from npc_engine.retrieval.context_budget_enforcer import (
+from npc_engine.retrieval.context import (
     ContextBudgetError,
     ContextCompressionCache,
     build_compression_cache_key,
     enforce_context_budget,
     fill_to_budget,
 )
-from npc_engine.retrieval.context_merger import ContextItem, MergedContext
+from npc_engine.retrieval.context import ContextItem, MergedContext
 from npc_engine.schema.context_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
 from npc_engine.utils.errors import TokenBudgetExceededError
 

@@ -10,8 +10,8 @@ import json
 
 import pytest
 
-from npc_engine.retrieval.context_merger import ContextItem
-from npc_engine.retrieval.context_scoring import rank_tier_items
+from npc_engine.retrieval.context import ContextItem
+from npc_engine.retrieval.context import rank_tier_items
 from npc_engine.schema.context_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
 
 

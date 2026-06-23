@@ -17,14 +17,17 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any
 
 import httpx
 import yaml
 
+import preconditions
 from matchers import EvalConfigError, JudgeResult, evaluate
 from report import write_report
 from summary import format_summary_lines, summarize
+
+# Default player id when a case seed omits one (mirrors _run_case / _setup_reputation).
+_DEFAULT_PLAYER_ID = "player_eval"
 
 # Guard battery prefixes (mirror summary._GUARD_PREFIXES): adversarial + negative cases.
 _GUARD_PREFIXES: tuple[str, ...] = ("case_adv_", "case_neg_")
@@ -281,45 +284,17 @@ def _run_case(case: dict, client: httpx.Client, base_url: str) -> dict:
 
 
 def _setup_reputation(case: dict, client: httpx.Client, base_url: str) -> None:
-    """Pre-seed player reputation with a faction before the dialogue call."""
-    from datetime import datetime, timezone
+    """Pre-seed player reputation with a faction before the dialogue call.
 
+    The player node itself is created up-front by ``preconditions.ensure_player_node``
+    in ``main()`` (strict-player policy), so this only issues the reputation PUT.
+    """
     seed = case.get("seed", {})
-    player_id = seed.get("player_id", "player_eval")
+    player_id = seed.get("player_id", _DEFAULT_PLAYER_ID)
     faction_id = seed.get("faction_id")
     standing = seed.get("player_reputation_standing")
     if faction_id is None or standing is None:
         return
-
-    check = client.get(f"{base_url}/v1/graph/nodes/Character/{player_id}", timeout=10.0)
-    if check.status_code == 404:
-        now = datetime.now(timezone.utc).isoformat()
-        create_resp = client.post(
-            f"{base_url}/v1/graph/nodes/Character",
-            json={"properties": {
-                "id": player_id,
-                "name": player_id,
-                "archetype": "player",
-                "biography": "The player character.",
-                "is_player": True,
-                "is_active": True,
-                "gossipy": 50,
-                "credulity": 50,
-                "honesty": 50,
-                "current_mood": "neutral",
-                "voice_descriptor": None,
-                "created_at": now,
-                "updated_at": now,
-                "last_graph_updated_at": now,
-            }},
-            timeout=10.0,
-        )
-        if create_resp.status_code >= 400:
-            print(
-                f"  [WARN] could not create player node {player_id}: {create_resp.status_code}",
-                file=sys.stderr,
-            )
-            return
 
     resp = client.put(
         f"{base_url}/v1/admin/characters/{player_id}/reputation/{faction_id}",
@@ -339,6 +314,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--api-key", default=os.getenv("API_KEY_SECRET", "eval-key-change-me"))
     parser.add_argument("--cases", default="evals/cases", type=Path)
     parser.add_argument("--reports", default="evals/reports", type=Path)
+    parser.add_argument(
+        "--reset-world",
+        action="store_true",
+        help="Reset world_state to the age_of_peace baseline before the run (default off).",
+    )
     args = parser.parse_args(argv)
 
     cases = _load_cases(args.cases)
@@ -357,8 +337,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Server not reachable at {args.base_url}: {exc}", file=sys.stderr)
             return 2
 
+        if args.reset_world:
+            preconditions.reset_world(client, args.base_url, preconditions.WorldBaseline())
+
         for case in cases:
             case_id = case["case_id"]
+            player_id = case.get("seed", {}).get("player_id", _DEFAULT_PLAYER_ID)
+            preconditions.ensure_player_node(client, args.base_url, player_id)
             _setup_reputation(case=case, client=client, base_url=args.base_url)
 
             print(f"  running {case_id} ...")

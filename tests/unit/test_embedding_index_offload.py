@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from npc_engine.retrieval import embedding_index
-from npc_engine.retrieval.embedding_index import EMBED_DIMENSION, EmbeddingIndex
+from npc_engine.retrieval.embedding import embedding_index
+from npc_engine.retrieval.embedding import EMBED_DIMENSION, EmbeddingIndex
 
 
 @pytest.mark.asyncio

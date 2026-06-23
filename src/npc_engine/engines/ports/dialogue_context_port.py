@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, Any
 
 if TYPE_CHECKING:
-    from npc_engine.retrieval.dialogue_context_cache import (
+    from npc_engine.retrieval.dialogue_context import (
         DialogueContextCache,
         PartialDialogueContextCache,
     )

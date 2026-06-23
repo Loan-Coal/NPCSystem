@@ -17,7 +17,7 @@ from pathlib import Path
 from npc_engine.engines.dialogue.dialogue_models import DialogueResponse
 from pydantic import ValidationError
 from npc_engine.engines.llm.protocols import LLMClientProtocol
-from npc_engine.retrieval.context_utils import estimate_tokens
+from npc_engine.retrieval.context import estimate_tokens
 from npc_engine.utils.errors import LLMRequestError, LLMTimeoutError
 from npc_engine.utils.metrics import increment_metric
 

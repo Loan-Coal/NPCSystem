@@ -5,7 +5,7 @@ Purpose: Functions for creating Belief nodes, retrieving them, and updating conf
 Does NOT: implement business logic, validate request payloads, or call LLMs.
 Dependencies: graph.belief_queries, common.json_utils, world.time_utils
 Dependencies injected: AsyncSession.
-Used by: npc_engine.api.routes.beliefs, npc_engine.retrieval.context_builder
+Used by: npc_engine.api.routes.beliefs, npc_engine.retrieval.context.context_builder
 """
 
 from __future__ import annotations

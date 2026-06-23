@@ -15,8 +15,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from npc_engine.retrieval import context_builder
-from npc_engine.retrieval.vector_store_protocol import VectorSearchResult
+from npc_engine.retrieval.context import context_builder
+from npc_engine.retrieval.embedding import VectorSearchResult
 
 
 def _settings(*, enabled: bool) -> SimpleNamespace:
@@ -33,7 +33,7 @@ async def test_rerank_offloads_off_event_loop_thread(monkeypatch) -> None:
         return candidates
 
     monkeypatch.setattr(
-        "npc_engine.retrieval.cross_encoder_reranker.rerank", _spy_rerank
+        "npc_engine.retrieval.embedding.cross_encoder_reranker.rerank", _spy_rerank
     )
     results = [VectorSearchResult(id="ev_1", score=0.9, payload={})]
 
@@ -53,7 +53,7 @@ async def test_rerank_skipped_when_disabled(monkeypatch) -> None:
         return candidates
 
     monkeypatch.setattr(
-        "npc_engine.retrieval.cross_encoder_reranker.rerank", _spy_rerank
+        "npc_engine.retrieval.embedding.cross_encoder_reranker.rerank", _spy_rerank
     )
     results = [VectorSearchResult(id="ev_1", score=0.9, payload={})]
 
@@ -73,7 +73,7 @@ async def test_rerank_skipped_when_empty(monkeypatch) -> None:
         return candidates
 
     monkeypatch.setattr(
-        "npc_engine.retrieval.cross_encoder_reranker.rerank", _spy_rerank
+        "npc_engine.retrieval.embedding.cross_encoder_reranker.rerank", _spy_rerank
     )
 
     out = await context_builder._maybe_cross_encode(_settings(enabled=True), "q", [])

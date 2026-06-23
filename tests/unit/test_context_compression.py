@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from npc_engine.retrieval.context_compression import (
+from npc_engine.retrieval.context import (
     COMPRESSION_SUFFIX,
     MIN_COMPRESSED_CHARS,
     ContextCompressionCache,
@@ -19,8 +19,8 @@ from npc_engine.retrieval.context_compression import (
     _extract_graph_timestamp,
     build_compression_cache_key,
 )
-from npc_engine.retrieval.context_merger import ContextItem
-from npc_engine.retrieval.context_utils import CHARS_PER_TOKEN_ESTIMATE
+from npc_engine.retrieval.context import ContextItem
+from npc_engine.retrieval.context import CHARS_PER_TOKEN_ESTIMATE
 
 
 # ---------------------------------------------------------------------------

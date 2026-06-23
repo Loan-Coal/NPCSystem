@@ -10,13 +10,13 @@ Used by: retrieval.context_builder
 
 from __future__ import annotations
 
-from npc_engine.retrieval.context_compression import (
+from .context_compression import (
     COMPRESSION_SUFFIX,
     ContextCompressionCache,
     build_compression_cache_key,
 )
-from npc_engine.retrieval.context_merger import ContextItem, MergedContext
-from npc_engine.retrieval.context_utils import estimate_tokens
+from .context_merger import ContextItem, MergedContext
+from .context_utils import estimate_tokens
 from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.utils.errors import ContextBudgetError
 
@@ -215,7 +215,7 @@ def fill_to_budget(
     Raises:
         ContextBudgetError: Only if tier0 alone exceeds TIER0_MAX_TOKENS (data error).
     """
-    from npc_engine.retrieval.context_serializer import serialize_context
+    from .context_serializer import serialize_context
 
     cache = compression_cache or ContextCompressionCache()
 

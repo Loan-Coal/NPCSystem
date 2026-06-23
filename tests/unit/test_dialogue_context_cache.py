@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 import pytest
 
-from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache
+from npc_engine.retrieval.dialogue_context import DialogueContextCache
 
 
 def _make_key(

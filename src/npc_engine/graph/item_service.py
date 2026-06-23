@@ -5,7 +5,7 @@ Purpose: Functions for creating Item nodes, retrieving them, and transferring ow
 Does NOT: implement business logic, validate request payloads, or call LLMs.
 Dependencies: graph.item_queries, common.json_utils, world.time_utils
 Dependencies injected: AsyncSession.
-Used by: npc_engine.api.routes.items, npc_engine.retrieval.context_builder,
+Used by: npc_engine.api.routes.items, npc_engine.retrieval.context.context_builder,
          npc_engine.engines.dialogue.action_resolver
 """
 

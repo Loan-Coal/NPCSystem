@@ -18,10 +18,10 @@ from pydantic import BaseModel, ConfigDict
 
 from npc_engine.api.dependencies import get_db_session, get_embedding_index
 from npc_engine.api.dependency_singletons import get_llm_config
-from npc_engine.retrieval.embedding_index import EmbeddingIndex
+from npc_engine.retrieval.embedding import EmbeddingIndex
 from npc_engine.config import Settings, get_settings
-from npc_engine.retrieval.context_builder import build_serialized_context
-from npc_engine.retrieval.context_utils import estimate_tokens
+from npc_engine.retrieval.context import build_serialized_context
+from npc_engine.retrieval.context import estimate_tokens
 from npc_engine.schema.context_config_models import LLMConfig
 
 router = APIRouter(prefix="/debug")

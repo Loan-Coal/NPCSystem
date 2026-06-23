@@ -13,9 +13,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from npc_engine.retrieval.context_merger import MergedContext
-from npc_engine.retrieval.context_serializer import serialize_context
-from npc_engine.retrieval.context_utils import estimate_tokens
+from .context_merger import MergedContext
+from .context_serializer import serialize_context
+from .context_utils import estimate_tokens
 from npc_engine.utils.errors import ContextBudgetError
 
 

@@ -292,3 +292,21 @@ def http_client(base_url: str, api_key: str) -> httpx.Client:
 @pytest.fixture(autouse=True, scope="session")
 def ensure_transcripts_dir():
     TRANSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@pytest.fixture
+def clean_world(http_client: httpx.Client):
+    """Reset world_state to the age_of_peace baseline and ensure the player node.
+
+    Reusable clean-state guard (evals/preconditions.prepare). The session-scoped
+    http_client already has base_url baked in, so base_url="" yields relative paths.
+    Tests that need a non-default epoch (e.g. war) set it AFTER requesting this fixture.
+    """
+    from preconditions import Preconditions, WorldBaseline, prepare
+
+    prepare(
+        http_client,
+        "",
+        baseline=WorldBaseline(),
+        pre=Preconditions(player_id="player_demo"),
+    )

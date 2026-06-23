@@ -10,9 +10,9 @@ Dependencies injected: None.
 
 from __future__ import annotations
 
-from npc_engine.retrieval.context_compression import COMPRESSION_SUFFIX
-from npc_engine.retrieval.context_merger import MergedContext
-from npc_engine.retrieval.context_utils import estimate_tokens
+from .context_compression import COMPRESSION_SUFFIX
+from .context_merger import MergedContext
+from .context_utils import estimate_tokens
 from npc_engine.utils.metrics import increment_metric
 
 

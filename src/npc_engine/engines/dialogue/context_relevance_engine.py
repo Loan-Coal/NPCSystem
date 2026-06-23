@@ -9,7 +9,7 @@ Dependencies injected: None.
 """
 from __future__ import annotations
 
-from npc_engine.retrieval.context_relevance_engine import (
+from npc_engine.retrieval.context import (
     ContextRelevanceCandidate,
     MAX_COMPONENT_SCORE,
     MIN_COMPONENT_SCORE,

@@ -159,29 +159,12 @@ async def test_memory_consolidation_coherence(http_client: httpx.Client) -> None
 @pytest.mark.llm_eval
 async def test_hostile_npc_tone_with_low_reputation(
     http_client: httpx.Client,
+    clean_world: None,
 ) -> None:
     """NPC response is hostile/suspicious when player reputation is -80."""
     judge = make_judge()
 
-    # Reset world to age_of_peace so test 4's war epoch doesn't contaminate tone.
-    now = datetime.now(timezone.utc).isoformat()
-    api_post(
-        http_client,
-        "/v1/graph/nodes/world_state",
-        {
-            "properties": {
-                "id": "world",
-                "epoch": "age_of_peace",
-                "faction_standings": {},
-                "active_conditions": [],
-                "weather": "clear",
-                "time_of_day": "morning",
-                "last_updated_at": now,
-                "last_graph_updated_at": now,
-            }
-        },
-    )
-
+    # World reset to the age_of_peace baseline is handled by the clean_world fixture.
     # Set player_1's reputation with Aldric's faction (guild) to -80
     rep_result = api_put(
         http_client,
@@ -241,29 +224,12 @@ async def test_hostile_npc_tone_with_low_reputation(
 @pytest.mark.llm_eval
 async def test_goal_hinting_in_dialogue(
     http_client: httpx.Client,
+    clean_world: None,
 ) -> None:
     """NPC hints at personal mission without directly stating 'I have a goal'."""
     judge = make_judge()
 
-    # Reset world to age_of_peace so test 4's war epoch doesn't dominate the response.
-    now = datetime.now(timezone.utc).isoformat()
-    api_post(
-        http_client,
-        "/v1/graph/nodes/world_state",
-        {
-            "properties": {
-                "id": "world",
-                "epoch": "age_of_peace",
-                "faction_standings": {},
-                "active_conditions": [],
-                "weather": "clear",
-                "time_of_day": "morning",
-                "last_updated_at": now,
-                "last_graph_updated_at": now,
-            }
-        },
-    )
-
+    # World reset to the age_of_peace baseline is handled by the clean_world fixture.
     # Aldric (npc_1) has seed goal: "Expose the guild's corruption to the city council"
     # Use a unique session_id so test 2's hostile-tone turns don't contaminate this context.
     dialogue_result = api_post(

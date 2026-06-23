@@ -13,9 +13,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Import ensures the module is in sys.modules before patch() accesses it.
-import npc_engine.retrieval.sentence_encoder as _sentence_encoder_module
+import npc_engine.retrieval.embedding.sentence_encoder as _sentence_encoder_module
 
-from npc_engine.retrieval.embedding_index import EMBED_DIMENSION, _embed_text
+from npc_engine.retrieval.embedding import EMBED_DIMENSION, _embed_text
 
 
 _MODEL_NAME = "all-MiniLM-L6-v2"

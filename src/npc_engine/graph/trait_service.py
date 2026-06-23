@@ -5,7 +5,7 @@ Purpose: Create, read, and remove character trait relationships via HAS_TRAIT ed
 Does NOT: implement business logic or call LLMs.
 Dependencies: graph.trait_queries
 Dependencies injected: AsyncSession.
-Used by: npc_engine.api.routes.traits, npc_engine.retrieval.subgraph_retriever
+Used by: npc_engine.api.routes.traits, npc_engine.retrieval.graph_rag.subgraph_retriever
 """
 
 from __future__ import annotations

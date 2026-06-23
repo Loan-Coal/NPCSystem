@@ -4,7 +4,7 @@ Layer: graph
 Purpose: Functions for creating Memory nodes, retrieving them, and running vividness decay.
 Does NOT: implement business logic, validate request payloads, or call LLMs.
 Dependencies injected: AsyncSession.
-Used by: npc_engine.engines.memory.memory_engine, npc_engine.retrieval.context_builder
+Used by: npc_engine.engines.memory.memory_engine, npc_engine.retrieval.context.context_builder
 """
 
 from __future__ import annotations

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from npc_engine.retrieval.context_merger import ContextItem
+from .context_merger import ContextItem
 from npc_engine.schema.context_config_models import RelevanceWeights
 
 

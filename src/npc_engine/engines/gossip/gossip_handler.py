@@ -41,7 +41,7 @@ from npc_engine.engines.gossip.pair_selector import select_pairs
 from npc_engine.engines.gossip.secret_share_policy import secret_share_probability
 from npc_engine.engines.ports.gossip_port import GossipGraphPort
 from npc_engine.engines.relationship.standing import derive_standing
-from npc_engine.retrieval.embedding_index import EmbeddingIndex
+from npc_engine.retrieval.embedding import EmbeddingIndex
 from npc_engine.utils.logging import get_logger
 
 from typing import TYPE_CHECKING, Any

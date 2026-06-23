@@ -14,12 +14,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from npc_engine.retrieval.graph_rag import (
+from npc_engine.retrieval.graph_rag.graph_rag import (
     EmbeddingIndexProtocol,
     _recency_score,
     graph_rag_retrieve,
 )
-from npc_engine.retrieval.vector_store_protocol import VectorSearchResult
+from npc_engine.retrieval.embedding import VectorSearchResult
 from npc_engine.world.time_utils import TimePoint
 
 
@@ -98,7 +98,7 @@ async def test_graph_rag_retrieve_ranking() -> None:
     idx = _make_index([seed_a, seed_b])
 
     with patch(
-        "npc_engine.retrieval.graph_rag.expand_seeds",
+        "npc_engine.retrieval.graph_rag.graph_rag.expand_seeds",
         new=AsyncMock(return_value=expansion_rows),
     ):
         results = await graph_rag_retrieve(
@@ -142,7 +142,7 @@ async def test_graph_rag_retrieve_top_k_limit() -> None:
     idx = _make_index(seeds)
 
     with patch(
-        "npc_engine.retrieval.graph_rag.expand_seeds",
+        "npc_engine.retrieval.graph_rag.graph_rag.expand_seeds",
         new=AsyncMock(return_value=[]),
     ):
         results = await graph_rag_retrieve(

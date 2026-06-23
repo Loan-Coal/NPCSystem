@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from npc_engine.retrieval.context_builder_helpers import (
+from npc_engine.retrieval.context import (
     expand_query,
     keyword_overlap,
     rerank_by_keyword,

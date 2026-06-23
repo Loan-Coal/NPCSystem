@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from npc_engine.retrieval.embedding_index import EmbeddingIndex
+from npc_engine.retrieval.embedding.embedding_index import EmbeddingIndex
 
 
 class ReindexJobService:

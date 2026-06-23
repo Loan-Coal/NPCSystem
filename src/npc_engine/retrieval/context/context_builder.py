@@ -45,29 +45,29 @@ from npc_engine.graph.memory_queries import (
 from npc_engine.graph.reputation_queries import get_reputation_context_for_npc
 from npc_engine.graph.trust_queries import get_second_hop_events, get_trust_scores_for_events
 from npc_engine.graph.quest_queries import get_active_quest_for_player
-from npc_engine.retrieval.context_budget_enforcer import ContextCompressionCache, fill_to_budget
-from npc_engine.retrieval.context_builder_helpers import (
+from .context_budget_enforcer import ContextCompressionCache, fill_to_budget
+from .context_builder_helpers import (
     expand_query,
     normalize_ratio,
     rerank_by_keyword,
     to_json_safe,
 )
-from npc_engine.retrieval.context_merger import ContextItem, MergedContext, merge_context
-from npc_engine.retrieval.memory_temporal import annotate_memory_ages
-from npc_engine.retrieval.context_metrics import (
+from .context_merger import ContextItem, MergedContext, merge_context
+from npc_engine.retrieval.graph_rag.memory_temporal import annotate_memory_ages
+from .context_metrics import (
     CONTEXT_CACHE_HITS_METRIC,
     CONTEXT_CACHE_MISSES_METRIC,
     record_compression_metrics,
     record_context_metrics,
 )
-from npc_engine.retrieval.context_scoring import rank_tier_items
-from npc_engine.retrieval.graph_rag import graph_rag_retrieve
-from npc_engine.retrieval.topic_classifier import detect_dialogue_profile
+from .context_scoring import rank_tier_items
+from npc_engine.retrieval.graph_rag.graph_rag import graph_rag_retrieve
+from npc_engine.retrieval.embedding.topic_classifier import detect_dialogue_profile
 from npc_engine.world.time_utils import TimePoint
-from npc_engine.retrieval.context_utils import serialize_json
-from npc_engine.retrieval.dialogue_context_cache import DialogueContextCache, PartialDialogueContextCache
-from npc_engine.retrieval.subgraph_retriever import assemble_tier_a_context
-from npc_engine.retrieval.vector_store_protocol import VectorSearchResult
+from .context_utils import serialize_json
+from npc_engine.retrieval.dialogue_context.dialogue_context_cache import DialogueContextCache, PartialDialogueContextCache
+from npc_engine.retrieval.graph_rag.subgraph_retriever import assemble_tier_a_context
+from npc_engine.retrieval.embedding.vector_store_protocol import VectorSearchResult
 from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.utils.metrics import increment_metric
 from npc_engine.graph.world_state_reader import get_world_state
@@ -327,7 +327,7 @@ async def _maybe_cross_encode(settings: Settings, player_message: str, tier_b_re
     """
     if not (settings.CROSS_ENCODER_ENABLED and tier_b_results):
         return tier_b_results
-    from npc_engine.retrieval import cross_encoder_reranker
+    from npc_engine.retrieval.embedding import cross_encoder_reranker
     reranked = await asyncio.to_thread(cross_encoder_reranker.rerank, player_message, tier_b_results)
     return list(reranked)
 
@@ -572,12 +572,12 @@ def _to_json_safe(value: Any) -> Any:
 
 # Backward-compatibility shims for tests that import these names directly.
 def _enforce_final_serialized_budget_with_context(context: MergedContext, budget: int) -> tuple[MergedContext, str]:
-    from npc_engine.retrieval.context_builder_helpers import enforce_final_serialized_budget_with_context
+    from .context_builder_helpers import enforce_final_serialized_budget_with_context
     return enforce_final_serialized_budget_with_context(context=context, budget=budget)
 
 
 def _enforce_final_serialized_budget(context: MergedContext, budget: int) -> str:
-    from npc_engine.retrieval.context_builder_helpers import enforce_final_serialized_budget_with_context
+    from .context_builder_helpers import enforce_final_serialized_budget_with_context
     _, serialized = enforce_final_serialized_budget_with_context(context=context, budget=budget)
     return serialized
 
@@ -587,5 +587,5 @@ def _normalize_ratio(value: float) -> float:
 
 
 def _estimate_tokens(text: str) -> int:
-    from npc_engine.retrieval.context_utils import estimate_tokens
+    from .context_utils import estimate_tokens
     return estimate_tokens(text)

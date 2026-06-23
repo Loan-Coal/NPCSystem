@@ -15,9 +15,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from npc_engine.common.json_utils import parse_json_object
-from npc_engine.retrieval.context_merger import ContextItem
-from npc_engine.retrieval.context_relevance_engine import ContextRelevanceCandidate, rank_context_candidates
-from npc_engine.retrieval.context_utils import parse_node_identity
+from .context_merger import ContextItem
+from .context_relevance_engine import ContextRelevanceCandidate, rank_context_candidates
+from .context_utils import parse_node_identity
 from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.world.time_utils import TimePoint, total_days
 

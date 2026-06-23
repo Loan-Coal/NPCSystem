@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from npc_engine.retrieval.cross_encoder_reranker import rerank
+from npc_engine.retrieval.embedding import rerank
 
 
 def _result(item_id: str, content: str) -> dict:
@@ -26,7 +26,7 @@ def test_rerank_orders_by_descending_score(monkeypatch):
     mock_model = MagicMock()
     mock_model.predict.return_value = [0.1, 0.9, 0.5]
 
-    with patch("npc_engine.retrieval.cross_encoder_reranker._get_cross_encoder", return_value=mock_model):
+    with patch("npc_engine.retrieval.embedding.cross_encoder_reranker._get_cross_encoder", return_value=mock_model):
         candidates = [
             _result("low", "low relevance text"),
             _result("high", "very relevant text"),
@@ -44,7 +44,7 @@ def test_rerank_falls_back_to_content_field(monkeypatch):
     mock_model = MagicMock()
     mock_model.predict.return_value = [0.5]
 
-    with patch("npc_engine.retrieval.cross_encoder_reranker._get_cross_encoder", return_value=mock_model):
+    with patch("npc_engine.retrieval.embedding.cross_encoder_reranker._get_cross_encoder", return_value=mock_model):
         candidates = [{"id": "x", "score": 0.5, "payload": {"content": "some content"}}]
         result = rerank("query", candidates)
 
@@ -58,7 +58,7 @@ def test_rerank_prefers_summary_over_content(monkeypatch):
     mock_model = MagicMock()
     mock_model.predict.return_value = [0.5]
 
-    with patch("npc_engine.retrieval.cross_encoder_reranker._get_cross_encoder", return_value=mock_model):
+    with patch("npc_engine.retrieval.embedding.cross_encoder_reranker._get_cross_encoder", return_value=mock_model):
         candidates = [{"id": "x", "score": 0.5, "payload": {"summary": "summary text", "content": "content text"}}]
         rerank("query", candidates)
 
@@ -71,7 +71,7 @@ def test_rerank_empty_text_when_no_text_field(monkeypatch):
     mock_model = MagicMock()
     mock_model.predict.return_value = [0.5]
 
-    with patch("npc_engine.retrieval.cross_encoder_reranker._get_cross_encoder", return_value=mock_model):
+    with patch("npc_engine.retrieval.embedding.cross_encoder_reranker._get_cross_encoder", return_value=mock_model):
         candidates = [{"id": "x", "score": 0.5, "payload": {"other_field": "value"}}]
         rerank("query", candidates)
 

@@ -14,8 +14,8 @@ from __future__ import annotations
 import json
 
 from npc_engine.engines.interaction.negotiation_store import NegotiationSession
-from npc_engine.retrieval.context_merger import ContextItem
-from npc_engine.retrieval.context_utils import serialize_json
+from npc_engine.retrieval.context import ContextItem
+from npc_engine.retrieval.context import serialize_json
 
 ACTIVE_NEGOTIATION_KEY = "active_negotiation"
 _ACTIVE_NEGOTIATION_PRIORITY = 100

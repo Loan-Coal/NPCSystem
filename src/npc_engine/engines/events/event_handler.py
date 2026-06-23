@@ -27,7 +27,7 @@ from npc_engine.engines.events.event_pool import EventTemplate, load_event_pool
 from npc_engine.engines.ports.event_port import EventGraphPort
 from npc_engine.engines.ports.world_state_port import WorldStateGraphPort
 from npc_engine.graph.event_emission_service import RoutineOverridePlan
-from npc_engine.retrieval.embedding_index import EmbeddingIndex
+from npc_engine.retrieval.embedding import EmbeddingIndex
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.type_registry.node_validator import validate_node_write
 

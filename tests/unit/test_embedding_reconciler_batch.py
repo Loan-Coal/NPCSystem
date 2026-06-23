@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 
-from npc_engine.retrieval.embedding_reconciler import EmbeddingReconciler
+from npc_engine.retrieval.embedding import EmbeddingReconciler
 
 
 # ---------------------------------------------------------------------------

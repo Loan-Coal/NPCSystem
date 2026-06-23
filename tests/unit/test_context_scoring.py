@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from npc_engine.retrieval.context_merger import ContextItem
-from npc_engine.retrieval.context_scoring import (
+from npc_engine.retrieval.context import ContextItem
+from npc_engine.retrieval.context import (
     _build_candidate,
     _extract_recency_score,
     _extract_relation_score,
@@ -216,7 +216,7 @@ def test_extract_relation_score_tier_a_priority_clamped():
 def test_rank_tier_items_returns_list():
     items = [_make_item(key="character:npc_1"), _make_item(key="quest:q_01")]
     cfg = _make_llm_config()
-    with patch("npc_engine.retrieval.context_scoring.rank_context_candidates", return_value=items) as mock_rank:
+    with patch("npc_engine.retrieval.context.context_scoring.rank_context_candidates", return_value=items) as mock_rank:
         result = rank_tier_items(items=items, llm_config=cfg, vector_scores={})
     assert result == items
     mock_rank.assert_called_once()
@@ -224,7 +224,7 @@ def test_rank_tier_items_returns_list():
 
 def test_rank_tier_items_empty_list():
     cfg = _make_llm_config()
-    with patch("npc_engine.retrieval.context_scoring.rank_context_candidates", return_value=[]):
+    with patch("npc_engine.retrieval.context.context_scoring.rank_context_candidates", return_value=[]):
         result = rank_tier_items(items=[], llm_config=cfg, vector_scores={})
     assert result == []
 

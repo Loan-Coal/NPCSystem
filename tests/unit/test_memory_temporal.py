@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 
-from npc_engine.retrieval.memory_temporal import (
+from npc_engine.retrieval.graph_rag.memory_temporal import (
     AGE_LONG_PAST,
     AGE_RECENT,
     annotate_memory_ages,

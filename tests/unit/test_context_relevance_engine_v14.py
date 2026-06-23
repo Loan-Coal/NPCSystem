@@ -13,7 +13,7 @@ from npc_engine.engines.dialogue.context_relevance_engine import (
     rank_context_candidates,
     score_candidate,
 )
-from npc_engine.retrieval.context_merger import ContextItem
+from npc_engine.retrieval.context import ContextItem
 from npc_engine.schema.context_config_models import RelevanceWeights
 
 

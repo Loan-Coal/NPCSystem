@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from npc_engine.retrieval.embedding_reconciler import EmbeddingReconciler
+from npc_engine.retrieval.embedding import EmbeddingReconciler
 
 EMBED_DIM = 4  # small dimension for test vectors
 

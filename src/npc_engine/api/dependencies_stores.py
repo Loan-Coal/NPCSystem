@@ -31,13 +31,13 @@ from npc_engine.graph.repositories.relation_phase_write_repository import (
 from npc_engine.graph.repositories.relation_read_repository import (
     Neo4jRelationReadRepository,
 )
-from npc_engine.retrieval.dialogue_context_adapter import Neo4jDialogueContextAdapter
+from npc_engine.retrieval.dialogue_context import Neo4jDialogueContextAdapter
 from npc_engine.engines.idempotency.service import IdempotencyService
 from npc_engine.graph.repositories.idempotency_repository import Neo4jIdempotencyRepository
-from npc_engine.retrieval.dialogue_context_cache import PartialDialogueContextCache
-from npc_engine.retrieval.embedding_index import EmbeddingIndex
-from npc_engine.retrieval.reindex_job_service import ReindexJobService
-from npc_engine.retrieval.vector_store_factory import create_vector_store
+from npc_engine.retrieval.dialogue_context import PartialDialogueContextCache
+from npc_engine.retrieval.embedding import EmbeddingIndex
+from npc_engine.retrieval.graph_rag.reindex_job_service import ReindexJobService
+from npc_engine.retrieval.embedding import create_vector_store
 from npc_engine.scheduler.engine_status_store import EngineStatusStore
 from npc_engine.scheduler.game_clock import GameClock
 

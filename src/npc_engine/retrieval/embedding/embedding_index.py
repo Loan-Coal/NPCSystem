@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 import asyncio
 
-from npc_engine.retrieval.vector_store_protocol import VectorSearchResult, VectorStoreProtocol
+from .vector_store_protocol import VectorSearchResult, VectorStoreProtocol
 
 EMBED_DIMENSION = 384  # all-MiniLM-L6-v2 output dimension
 
@@ -20,7 +20,7 @@ EMBED_DIMENSION = 384  # all-MiniLM-L6-v2 output dimension
 def _embed_text(text: str, model_name: str) -> list[float]:
     if text == "":
         return [0.0] * EMBED_DIMENSION
-    from npc_engine.retrieval.sentence_encoder import embed
+    from .sentence_encoder import embed
     return embed(text, model_name=model_name)
 
 

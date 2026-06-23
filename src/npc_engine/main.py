@@ -56,7 +56,7 @@ from npc_engine.engines.contracts.contract_loader import load_engine_contracts
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm_runtime_config import validate_all_engine_llm_configs
 from npc_engine.engines.idempotency.cleanup_scheduler import IdempotencyCleanupScheduler
-from npc_engine.retrieval.embedding_reconciler import EmbeddingReconciler
+from npc_engine.retrieval.embedding import EmbeddingReconciler
 from npc_engine.graph.schema_bootstrap import ensure_core_constraints
 from npc_engine.scheduler.tick_autopilot import TickAutopilot
 from npc_engine.scheduler.tick_budget_guard import TickBudgetGuard

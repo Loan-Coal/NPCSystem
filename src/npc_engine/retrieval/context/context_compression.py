@@ -16,8 +16,8 @@ from dataclasses import dataclass
 from typing import TypeAlias
 
 from npc_engine.common.json_utils import parse_json_object
-from npc_engine.retrieval.context_merger import ContextItem
-from npc_engine.retrieval.context_utils import CHARS_PER_TOKEN_ESTIMATE, parse_node_identity
+from .context_merger import ContextItem
+from .context_utils import CHARS_PER_TOKEN_ESTIMATE, parse_node_identity
 from npc_engine.schema.context_config_models import LLMConfig
 
 

@@ -12,8 +12,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from npc_engine.retrieval.context_merger import MergedContext
-from npc_engine.retrieval.context_utils import serialize_json
+from .context_merger import MergedContext
+from .context_utils import serialize_json
 
 
 def _safe_parse(text: str) -> Any:

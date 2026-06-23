@@ -2,7 +2,7 @@
 Module: test_context_utils
 Layer: retrieval (test)
 Purpose: Regression tests for serialize_json temporal/non-native value handling.
-Dependencies: npc_engine.retrieval.context_utils, neo4j.time, datetime.
+Dependencies: npc_engine.retrieval.context.context_utils, neo4j.time, datetime.
 Used by: pytest.
 """
 
@@ -13,7 +13,7 @@ from datetime import datetime
 
 from neo4j.time import DateTime as Neo4jDateTime
 
-from npc_engine.retrieval.context_utils import serialize_json
+from npc_engine.retrieval.context import serialize_json
 
 
 def test_serialize_json_handles_python_datetime() -> None:

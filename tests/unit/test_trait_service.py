@@ -107,7 +107,7 @@ async def test_remove_trait_returns_none() -> None:
 
 
 def test_assemble_tier_a_context_includes_top_5_traits() -> None:
-    from npc_engine.retrieval.subgraph_retriever import assemble_tier_a_context
+    from npc_engine.retrieval.graph_rag.subgraph_retriever import assemble_tier_a_context
 
     traits = [
         {"name": "Brave", "intensity": 90, "is_secret": False},
@@ -138,7 +138,7 @@ def test_assemble_tier_a_context_includes_top_5_traits() -> None:
 
 
 def test_assemble_tier_a_context_no_traits_skips_item() -> None:
-    from npc_engine.retrieval.subgraph_retriever import assemble_tier_a_context
+    from npc_engine.retrieval.graph_rag.subgraph_retriever import assemble_tier_a_context
 
     items = assemble_tier_a_context(
         npc_id="npc-1",

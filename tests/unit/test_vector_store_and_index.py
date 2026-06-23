@@ -10,9 +10,9 @@ import pytest
 from unittest.mock import patch
 
 from npc_engine.config import Settings
-import npc_engine.retrieval.sentence_encoder as _sentence_encoder_module
-from npc_engine.retrieval.embedding_index import EmbeddingIndex, EMBED_DIMENSION
-from npc_engine.retrieval.vector_store_factory import InMemoryVectorStore, create_vector_store
+import npc_engine.retrieval.embedding.sentence_encoder as _sentence_encoder_module
+from npc_engine.retrieval.embedding import EmbeddingIndex, EMBED_DIMENSION
+from npc_engine.retrieval.embedding import InMemoryVectorStore, create_vector_store
 
 _MODEL_NAME = "all-MiniLM-L6-v2"
 _UNIT_VECTOR = [1.0 / (EMBED_DIMENSION ** 0.5)] * EMBED_DIMENSION

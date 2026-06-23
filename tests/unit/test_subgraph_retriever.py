@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from npc_engine.retrieval.subgraph_retriever import _flatten_event_row
+from npc_engine.retrieval.graph_rag.subgraph_retriever import _flatten_event_row
 
 
 class TestFlattenEventRow:

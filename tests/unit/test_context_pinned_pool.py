@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import pytest
 
-from npc_engine.retrieval.context_budget_enforcer import (
+from npc_engine.retrieval.context import (
     enforce_context_budget,
     fill_to_budget,
 )
-from npc_engine.retrieval.context_merger import ContextItem, MergedContext
+from npc_engine.retrieval.context import ContextItem, MergedContext
 from npc_engine.schema.context_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
 
 
@@ -111,7 +111,7 @@ class TestEnforceContextBudgetPinnedPool:
 
     def test_total_tokens_within_budget(self) -> None:
         """Total tier-A token count must not exceed the configured tier-A budget."""
-        from npc_engine.retrieval.context_utils import estimate_tokens
+        from npc_engine.retrieval.context import estimate_tokens
 
         config = _llm_config()
         context = _over_budget_context()
@@ -181,7 +181,7 @@ class TestFillToBudgetPinnedPool:
 
     def test_total_tokens_within_prompt_budget(self) -> None:
         """Serialized output must not exceed the prompt_token_budget."""
-        from npc_engine.retrieval.context_utils import estimate_tokens
+        from npc_engine.retrieval.context import estimate_tokens
 
         context = _over_budget_context()
         prompt_budget = 200

@@ -5,7 +5,7 @@ Purpose: Functions for creating and retrieving OWES edges between Characters.
 Does NOT: implement business logic, validate request payloads, or call LLMs.
 Dependencies: graph.owes_queries
 Dependencies injected: AsyncSession.
-Used by: npc_engine.api.routes.debts, npc_engine.retrieval.context_builder
+Used by: npc_engine.api.routes.debts, npc_engine.retrieval.context.context_builder
 """
 
 from __future__ import annotations

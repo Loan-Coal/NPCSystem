@@ -6,7 +6,7 @@ Does NOT: implement business logic or call LLMs.
 Dependencies: graph.rumor_queries
 Dependencies injected: AsyncSession.
 Used by: npc_engine.engines.gossip.gossip_handler, npc_engine.api.routes.rumors,
-         npc_engine.retrieval.context_builder
+         npc_engine.retrieval.context.context_builder
 """
 
 from __future__ import annotations

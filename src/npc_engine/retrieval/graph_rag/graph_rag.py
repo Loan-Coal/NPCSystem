@@ -28,7 +28,7 @@ from typing import Any, Protocol
 from neo4j import AsyncSession
 
 from npc_engine.graph.graph_rag_queries import expand_seeds
-from npc_engine.retrieval.vector_store_protocol import VectorSearchResult
+from npc_engine.retrieval.embedding.vector_store_protocol import VectorSearchResult
 from npc_engine.world.time_utils import TimePoint, total_days
 
 

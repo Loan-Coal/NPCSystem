@@ -267,7 +267,7 @@ async def test_get_expiring_pledges_svc_delegates() -> None:
 
 
 def test_assemble_tier_a_context_includes_active_pledges() -> None:
-    from npc_engine.retrieval.subgraph_retriever import assemble_tier_a_context
+    from npc_engine.retrieval.graph_rag.subgraph_retriever import assemble_tier_a_context
     import json
 
     pledges = [
@@ -291,7 +291,7 @@ def test_assemble_tier_a_context_includes_active_pledges() -> None:
 
 
 def test_assemble_tier_a_context_skips_inactive_pledges() -> None:
-    from npc_engine.retrieval.subgraph_retriever import assemble_tier_a_context
+    from npc_engine.retrieval.graph_rag.subgraph_retriever import assemble_tier_a_context
 
     pledges = [
         {"pledgee_id": "char-2", "pledge_type": "protect", "severity": 80, "is_active": False},
@@ -309,7 +309,7 @@ def test_assemble_tier_a_context_skips_inactive_pledges() -> None:
 
 
 def test_assemble_tier_a_context_no_pledges_skips_item() -> None:
-    from npc_engine.retrieval.subgraph_retriever import assemble_tier_a_context
+    from npc_engine.retrieval.graph_rag.subgraph_retriever import assemble_tier_a_context
 
     items = assemble_tier_a_context(
         npc_id="npc-1",

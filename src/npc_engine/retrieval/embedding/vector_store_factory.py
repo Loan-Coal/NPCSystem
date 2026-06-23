@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 from npc_engine.config import Settings
-from npc_engine.retrieval.vector_store_protocol import VectorSearchResult, VectorStoreProtocol
+from .vector_store_protocol import VectorSearchResult, VectorStoreProtocol
 
 
 def _dot_similarity(left: list[float], right: list[float]) -> float:

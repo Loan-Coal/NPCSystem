@@ -19,6 +19,8 @@ from typing import Any
 import httpx
 from pydantic import BaseModel
 
+import preconditions
+
 # Import write_report from sibling module (evals/ on sys.path when run via Makefile)
 from report import write_report
 
@@ -382,6 +384,12 @@ def run(
         except Exception as exc:
             print(f"Server not reachable at {base_url}: {exc}", file=sys.stderr)
             return 2
+
+        # Clean-state guard: reset world_state to the declared age_of_peace baseline so a
+        # prior run leaving epoch="war" cannot contaminate the score (ISSUE-119, DEC after
+        # 2026-06-23). The demo seeder force-sets war; the anti-hallucination fixture is
+        # authored against age_of_peace.
+        preconditions.reset_world(client, base_url, preconditions.WorldBaseline())
 
         for case in cases:
             case_id = case["id"]

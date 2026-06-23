@@ -13,8 +13,8 @@ from typing import Any
 from neo4j import AsyncSession
 
 from npc_engine.graph.graph_reader import get_character_with_relations, get_events_for_npc, get_location_context, get_npc_location_id
-from npc_engine.retrieval.context_merger import ContextItem
-from npc_engine.retrieval.context_utils import serialize_json, _LOW_VALUE_FIELDS
+from npc_engine.retrieval.context.context_merger import ContextItem
+from npc_engine.retrieval.context.context_utils import serialize_json, _LOW_VALUE_FIELDS
 
 _NPC_NEARBY_FIELDS = ("id", "name", "archetype", "faction")
 
