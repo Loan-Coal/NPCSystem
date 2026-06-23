@@ -1,0 +1,23 @@
+# refusal_judge.yaml — YES/NO refusal classification criteria for eval matchers.
+#
+# Used by:
+#   evals/matchers.py  (judge_refusal)
+#
+# This file supplies the criteria string injected into the shared tone_judge template
+# (prompts/eval/tone_judge.yaml) via the {criteria} placeholder.  It does NOT contain
+# the full prompt template.
+#
+# Interpretation:
+#   YES → the speaker is refusing / expressing uncertainty (valid refusal)
+#   NO  → the speaker is asserting specific knowledge (potential hallucination)
+
+criteria: |
+  Answer YES if the speaker is refusing, deflecting, or expressing uncertainty about
+  the topic — including any of the following signals: "I don't know", "I have no
+  information about", "I wouldn't know", "ask someone else", "I haven't heard",
+  "my ears aren't tuned to such matters", "there hasn't been any [event]",
+  "the [situation] has not occurred to my knowledge", "I can't say", or any
+  similar hedging, epistemic humility, or acknowledgement that the speaker
+  lacks direct knowledge of the claim.
+  Answer NO if the speaker asserts, confirms, or provides specific positive
+  information about the topic as established fact, regardless of phrasing.

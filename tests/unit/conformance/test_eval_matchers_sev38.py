@@ -270,3 +270,40 @@ class TestMockLLMAdapterRaiseOnGenerate:
         exc_instance = LLMTimeoutError(model="mock", timeout_s=30.0)
         with pytest.raises(ValueError, match="mutually exclusive"):
             MockLLMAdapter(raise_on_generate=exc_instance, return_garbage=True)
+
+
+# ---------------------------------------------------------------------------
+# judge_refusal — LLM-judge refusal classifier (EVAL-B3.1)
+# ---------------------------------------------------------------------------
+
+
+class TestJudgeRefusal:
+    def test_yes_verdict_returns_score_true(self) -> None:
+        """judge_refusal: YES verdict (valid refusal) → JudgeResult(score=True)."""
+        with patch("matchers.httpx.post", return_value=_fake_ollama_response("YES - the NPC expressed uncertainty")):
+            result = matchers.judge_refusal("I don't have any information about that.")
+        assert isinstance(result, matchers.JudgeResult)
+        assert result.score is True
+
+    def test_no_verdict_returns_score_false(self) -> None:
+        """judge_refusal: NO verdict (NPC asserting) → JudgeResult(score=False)."""
+        with patch("matchers.httpx.post", return_value=_fake_ollama_response("NO - the NPC asserted confidently")):
+            result = matchers.judge_refusal("The army marched east last Tuesday.")
+        assert isinstance(result, matchers.JudgeResult)
+        assert result.score is False
+
+    def test_infra_failure_returns_score_none(self) -> None:
+        """judge_refusal: infra failure → JudgeResult(score=None, error='infra_failure')."""
+        with patch("matchers.httpx.post", side_effect=RuntimeError("Ollama down")):
+            result = matchers.judge_refusal("Something happened.")
+        assert isinstance(result, matchers.JudgeResult)
+        assert result.score is None
+        assert result.error == "infra_failure"
+
+    def test_refusal_prompt_loaded_from_yaml(self) -> None:
+        """_REFUSAL_YAML_PATH exists and _REFUSAL_CRITERIA is a non-empty string."""
+        assert matchers._REFUSAL_YAML_PATH.exists(), (
+            f"refusal_judge.yaml not found at {matchers._REFUSAL_YAML_PATH}"
+        )
+        assert isinstance(matchers._REFUSAL_CRITERIA, str)
+        assert len(matchers._REFUSAL_CRITERIA.strip()) > 0

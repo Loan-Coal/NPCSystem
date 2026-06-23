@@ -60,6 +60,7 @@ class JudgeResult:
 # ---------------------------------------------------------------------------
 
 _PROMPT_YAML_PATH = Path(__file__).resolve().parents[1] / "prompts" / "eval" / "tone_judge.yaml"
+_REFUSAL_YAML_PATH = Path(__file__).resolve().parents[1] / "prompts" / "eval" / "refusal_judge.yaml"
 
 
 def _load_judge_prompt_template() -> str:
@@ -77,6 +78,23 @@ def _load_judge_prompt_template() -> str:
 
 
 _JUDGE_PROMPT_TMPL: str = _load_judge_prompt_template()
+
+
+def _load_refusal_criteria() -> str:
+    """Load the refusal judge criteria string from prompts/eval/refusal_judge.yaml.
+
+    Returns:
+        The criteria string with the YES/NO refusal classification criterion.
+
+    Raises:
+        FileNotFoundError: If prompts/eval/refusal_judge.yaml does not exist.
+    """
+    with _REFUSAL_YAML_PATH.open(encoding="utf-8") as fh:
+        data = yaml.safe_load(fh)
+    return str(data["criteria"])
+
+
+_REFUSAL_CRITERIA: str = _load_refusal_criteria()
 
 # ---------------------------------------------------------------------------
 # Structured logger
@@ -281,6 +299,25 @@ def _eval_affirms_judge(exp: dict, resp: dict) -> JudgeResult:
     if affirmed:
         return JudgeResult(score=False, error=f"NPC affirmed false claim: {verdict.error}")
     return JudgeResult(score=True, error="")
+
+
+def judge_refusal(content: str) -> JudgeResult:
+    """Call the LLM judge to decide whether content is a valid refusal.
+
+    Uses the criteria from prompts/eval/refusal_judge.yaml injected into the shared
+    tone_judge template.  Polarity: YES = valid refusal (pass), NO = assertion (fail).
+
+    Args:
+        content: The NPC response text to classify.
+
+    Returns:
+        JudgeResult(score=True) when the judge says YES (valid refusal),
+        JudgeResult(score=False) when the judge says NO (NPC asserted),
+        JudgeResult(score=None, error='infra_failure') on transport failure.
+    """
+    if not content:
+        return JudgeResult(score=False, error="empty content cannot be a refusal")
+    return _run_binary_judge(criteria=_REFUSAL_CRITERIA, content=content)
 
 
 def _eval_context_block_expected(exp: dict, resp: dict) -> tuple[bool, str]:
