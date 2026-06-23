@@ -10,14 +10,14 @@ import pytest
 
 def test_idempotency_store_importable_from_graph_layer() -> None:
     """Neo4jIdempotencyStore must live in graph.idempotency_writer."""
-    from npc_engine.graph.idempotency_writer import Neo4jIdempotencyStore  # noqa: F401
+    from npc_engine.graph.idempotency.idempotency_writer import Neo4jIdempotencyStore  # noqa: F401
 
     assert Neo4jIdempotencyStore is not None
 
 
 def test_idempotency_queries_importable_from_graph_layer() -> None:
     """Cypher constants must live in graph.idempotency_queries."""
-    from npc_engine.graph.idempotency_queries import (  # noqa: F401
+    from npc_engine.graph.idempotency.idempotency_queries import (  # noqa: F401
         CYPHER_CREATE_PENDING_IF_ABSENT,
         CYPHER_DELETE_EXPIRED,
         CYPHER_ENSURE_IDEMPOTENCY_CONSTRAINT,
@@ -31,7 +31,7 @@ def test_idempotency_queries_importable_from_graph_layer() -> None:
 
 def test_idempotency_models_importable_from_graph_layer() -> None:
     """IdempotencyRecord must live in graph.idempotency_models."""
-    from npc_engine.graph.idempotency_models import IdempotencyRecord  # noqa: F401
+    from npc_engine.graph.idempotency.idempotency_models import IdempotencyRecord  # noqa: F401
 
     assert IdempotencyRecord is not None
 

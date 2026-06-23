@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from npc_engine.config import Settings
 from npc_engine.engines.idempotency.models import IdempotencyPreflightResult
 from npc_engine.engines.idempotency.store_protocol import IdempotencyStoreProtocol
-from npc_engine.graph.idempotency_models import IdempotencyRecord
+from npc_engine.graph.idempotency.idempotency_models import IdempotencyRecord
 
 
 async def create_pending(

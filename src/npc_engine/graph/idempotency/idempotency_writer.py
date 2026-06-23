@@ -14,8 +14,8 @@ from typing import Any
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.idempotency_models import IdempotencyRecord
-from npc_engine.graph.idempotency_queries import (
+from npc_engine.graph.idempotency.idempotency_models import IdempotencyRecord
+from npc_engine.graph.idempotency.idempotency_queries import (
     CYPHER_CREATE_PENDING_IF_ABSENT,
     CYPHER_DELETE_EXPIRED,
     CYPHER_ENSURE_IDEMPOTENCY_CONSTRAINT,

@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from npc_engine.config import Settings
-from npc_engine.graph.idempotency_models import IdempotencyRecord
+from npc_engine.graph.idempotency.idempotency_models import IdempotencyRecord
 from npc_engine.engines.idempotency.service import IdempotencyService
 
 

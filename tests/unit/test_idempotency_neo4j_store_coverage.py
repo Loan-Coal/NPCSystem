@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from npc_engine.graph.idempotency_writer import Neo4jIdempotencyStore
+from npc_engine.graph.idempotency.idempotency_writer import Neo4jIdempotencyStore
 
 
 def _iso(dt: datetime) -> str:

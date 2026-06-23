@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from npc_engine.graph.idempotency_models import IdempotencyRecord
+from npc_engine.graph.idempotency.idempotency_models import IdempotencyRecord
 
 
 class IdempotencyStoreProtocol(Protocol):

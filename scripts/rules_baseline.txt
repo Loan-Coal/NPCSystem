@@ -101,7 +101,7 @@ R006|src/npc_engine/graph/graph_admin_service.py::GraphAdminService.apply_unboun
 R006|src/npc_engine/graph/graph_writer.py::apply_buy_sell_currency_transfer
 R006|src/npc_engine/graph/graph_writer.py::apply_currency_transfer
 R006|src/npc_engine/graph/graph_writer.py::apply_item_transfer
-R006|src/npc_engine/graph/idempotency_writer.py::Neo4jIdempotencyStore.upsert_pending
+R006|src/npc_engine/graph/idempotency/idempotency_writer.py::Neo4jIdempotencyStore.upsert_pending
 R006|src/npc_engine/graph/item_service.py::create_item
 R006|src/npc_engine/graph/item_service.py::transfer_ownership
 R006|src/npc_engine/graph/item_writer.py::execute_item_transfer_in_tx
