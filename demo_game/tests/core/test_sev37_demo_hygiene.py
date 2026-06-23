@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-_DEMO_ROOT = Path(__file__).parent.parent
+_DEMO_ROOT = Path(__file__).parent.parent.parent
 
 
 # ---------------------------------------------------------------------------
