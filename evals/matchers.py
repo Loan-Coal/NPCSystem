@@ -30,6 +30,8 @@ from typing import Any
 import httpx
 import yaml
 
+import judge_config
+
 
 # ---------------------------------------------------------------------------
 # Public exceptions and return types
@@ -90,9 +92,13 @@ _logger = _logging.getLogger(__name__)
 # can never demonstrate the anti-hallucination guarantee. Override via env for tuning.
 MIN_GUARD_RESPONSE_CHARS = int(os.getenv("MIN_GUARD_RESPONSE_CHARS", "20"))
 
-_JUDGE_URL = os.getenv("JUDGE_OLLAMA_URL", "http://localhost:11434")
-_JUDGE_MODEL = os.getenv("JUDGE_MODEL", "qwen2.5:14b")
-_JUDGE_TIMEOUT = float(os.getenv("JUDGE_TIMEOUT_SECONDS", "30"))
+# The judge model/URL/timeout come from judge_config, which enforces the
+# judge != generation-model separation invariant (default judge: mixtral:8x7b,
+# DEC-143). resolve_judge_model() raises JudgeModelCollisionError at import if
+# JUDGE_MODEL is set to an engine generation model.
+_JUDGE_URL = judge_config.resolve_judge_url()
+_JUDGE_MODEL = judge_config.resolve_judge_model()
+_JUDGE_TIMEOUT = judge_config.resolve_judge_timeout()
 
 
 # ---------------------------------------------------------------------------

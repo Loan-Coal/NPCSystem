@@ -14,7 +14,7 @@ Requirements:
   - Running NPC Engine API server
   - Running Ollama instance for the judge  (JUDGE_OLLAMA_URL env var,
     falls back to OLLAMA_API_URL, then http://localhost:11434)
-  - JUDGE_MODEL env var (default: "llama3")
+  - JUDGE_MODEL env var (default: "mixtral:8x7b" — must differ from the generation model, DEC-143)
   - Seed data loaded (`make seed-api`)
 
 These tests are probabilistic. A single retry is built in. Treat failures
@@ -23,34 +23,17 @@ as warnings rather than hard CI blockers — the LLM response may vary.
 
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import datetime, timezone
 
 import httpx
 import pytest
 
+from e2e.helpers.judge_client import make_judge
 from e2e.scenarios.conftest import api_post, api_put, char_props
-
-_JUDGE_OLLAMA_URL = (
-    os.getenv("JUDGE_OLLAMA_URL")
-    or os.getenv("OLLAMA_API_URL", "http://localhost:11434")
-)
-_JUDGE_MODEL = os.getenv("JUDGE_MODEL", "qwen2.5:7b")
 
 _ADMIN = "/v1/admin"
 _GRAPH = "/v1/graph"
-
-
-def _make_judge():
-    """Create an OllamaAdapter for the LLM judge."""
-    from npc_engine.engines.llm.ollama_adapter import OllamaAdapter
-
-    return OllamaAdapter(
-        base_url=_JUDGE_OLLAMA_URL,
-        model_name=_JUDGE_MODEL,
-        timeout_seconds=60.0,
-    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -125,9 +108,8 @@ async def test_memory_consolidation_coherence(http_client: httpx.Client) -> None
         memory_id = resp.json()["data"]["memory_id"]
 
         assert memory_id is not None, (
-            "MemoryConsolidationEngine returned None — LLM may be unreachable "
-            f"(JUDGE_OLLAMA_URL={_JUDGE_OLLAMA_URL}) or the session store may "
-            "not have accumulated enough turns."
+            "MemoryConsolidationEngine returned None — the LLM stack may be "
+            "unreachable, or the session store may not have accumulated enough turns."
         )
 
         # Retrieve the memory content
@@ -143,7 +125,7 @@ async def test_memory_consolidation_coherence(http_client: httpx.Client) -> None
         # Judge: does it read as a coherent personal memory?
         from e2e.helpers.llm_judge import llm_judge
 
-        judge = _make_judge()
+        judge = make_judge()
         verdict = await llm_judge(
             content=content,
             criteria=(
@@ -179,7 +161,7 @@ async def test_hostile_npc_tone_with_low_reputation(
     http_client: httpx.Client,
 ) -> None:
     """NPC response is hostile/suspicious when player reputation is -80."""
-    judge = _make_judge()
+    judge = make_judge()
 
     # Reset world to age_of_peace so test 4's war epoch doesn't contaminate tone.
     now = datetime.now(timezone.utc).isoformat()
@@ -261,7 +243,7 @@ async def test_goal_hinting_in_dialogue(
     http_client: httpx.Client,
 ) -> None:
     """NPC hints at personal mission without directly stating 'I have a goal'."""
-    judge = _make_judge()
+    judge = make_judge()
 
     # Reset world to age_of_peace so test 4's war epoch doesn't dominate the response.
     now = datetime.now(timezone.utc).isoformat()
@@ -333,7 +315,7 @@ async def test_goal_hinting_in_dialogue(
 @pytest.mark.llm_eval
 async def test_war_epoch_reflects_danger(http_client: httpx.Client) -> None:
     """NPC conveys danger when epoch='war' and asked about road safety."""
-    judge = _make_judge()
+    judge = make_judge()
     now = datetime.now(timezone.utc).isoformat()
 
     api_post(

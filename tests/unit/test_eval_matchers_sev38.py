@@ -19,6 +19,15 @@ import matchers
 from matchers import EvalConfigError, JudgeResult, evaluate
 
 
+def test_matchers_judge_model_defaults_to_mixtral() -> None:
+    """matchers wires its judge model through judge_config (default mixtral:8x7b).
+
+    Tripwire for the model-separation invariant: if this regresses to a qwen2.5
+    generation model, the suite is self-evaluating again (DEC-143).
+    """
+    assert matchers._JUDGE_MODEL == "mixtral:8x7b"
+
+
 # ---------------------------------------------------------------------------
 # context_block_expected — must raise EvalConfigError when no context provided
 # ---------------------------------------------------------------------------

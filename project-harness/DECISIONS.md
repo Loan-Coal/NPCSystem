@@ -1902,3 +1902,21 @@ cold-load) while restoring voice quality. **Supersedes DEC-141.**
 exceed the demo client's 15 s `graph_timeout` under heavy ticks — acceptable for quality-first local runs.
 ISSUE-083 (captain voice) may remain borderline even on 14b; it is documented and non-blocking.
 Revisit if latency becomes the priority (drop back toward 7b) or a larger-VRAM machine allows per-engine tiers.
+
+## DEC-143: Eval judge model MUST differ from the generation model (no self-evaluation)
+**Date:** 2026-06-23 · **Status:** ✅ ACCEPTED · **Drives:** `evals/judge_config.py`, `evals/matchers.py`, `e2e/helpers/judge_client.py`, `e2e/scenarios/scenario_*_judge.py`
+**Context:** The eval suite used `qwen2.5:14b` (the generation model per DEC-142) as the LLM judge in
+`matchers.py` and `scenario_demo_game_judge.py`, and `qwen2.5:7b` (same family) in `scenario_llm_judge.py`.
+The model graded its own output — a Stage-A baseline run showed a concrete self-eval false positive
+(`case_adv_lira_troop_positions`: a clean refusal flagged "affirmed false claim" with empty reasoning).
+`_make_judge()` was also duplicated verbatim across the two scenario files.
+**Decision:** Introduce a single src-free resolver `evals/judge_config.py` consumed by both `matchers.py`
+and the e2e `judge_client.py`. The judge model defaults to **`mixtral:8x7b`** (different family from the
+`qwen2.5` generation model). `resolve_judge_model()` **hard-fails** (`JudgeModelCollisionError`) if the
+resolved judge exactly equals any engine generation model discovered from the `llm_config.yaml` files, and
+logs a loud **warning** on a same-family judge (e.g. `qwen2.5:7b`). The duplicated `_make_judge()` /
+`_ollama_reachable()` are consolidated into `e2e/helpers/judge_client.py`. `JudgeModelCollisionError` is a
+local eval exception (mirrors `EvalConfigError`) so `evals/` stays src-free.
+**Trade-off:** `mixtral:8x7b` is ~26 GB, so judge passes are slower than qwen2.5 — acceptable for an offline
+eval harness. The exact-match-fail + same-family-warn rule (vs same-family-fail) keeps `qwen2.5:7b` usable as
+a judge in a pinch while still flagging the weaker separation.

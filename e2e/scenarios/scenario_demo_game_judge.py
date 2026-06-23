@@ -19,7 +19,7 @@ Requirements:
   - Running NPC Engine API server (docker-compose up -d)
   - Demo world seeded: make demo-seed  (skipped=53 on re-run)
   - Running Ollama instance (JUDGE_OLLAMA_URL env var, falls back to http://localhost:11434)
-  - JUDGE_MODEL env var (default: "qwen2.5:7b")
+  - JUDGE_MODEL env var (default: "mixtral:8x7b" — must differ from the generation model, DEC-143)
 
 These tests are probabilistic. A single retry is built in.
 
@@ -32,42 +32,23 @@ captain_sorn KNOWS_ABOUT northern_war_begins — best NPC for war-epoch dialogue
 
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import datetime, timezone
 
 import httpx
 import pytest
 
+from e2e.helpers.judge_client import make_judge, ollama_reachable, resolve_judge_model
 from e2e.scenarios.conftest import api_get, api_post
 
-_JUDGE_OLLAMA_URL = (
-    os.getenv("JUDGE_OLLAMA_URL")
-    or os.getenv("OLLAMA_API_URL", "http://localhost:11434")
-)
-_JUDGE_MODEL = os.getenv("JUDGE_MODEL", "qwen2.5:14b")
-
-
-def _make_judge():
-    """Create an OllamaAdapter for the LLM judge."""
-    from npc_engine.engines.llm.ollama_adapter import OllamaAdapter
-
-    return OllamaAdapter(
-        base_url=_JUDGE_OLLAMA_URL,
-        model_name=_JUDGE_MODEL,
-        timeout_seconds=60.0,
-    )
+# Resolved judge model (mixtral:8x7b by default, DEC-143) — used in skip messages
+# and the reachability probe.
+_JUDGE_MODEL = resolve_judge_model()
 
 
 def _ollama_reachable() -> bool:
-    """Return True if Ollama is running AND the judge model is pulled."""
-    try:
-        resp = httpx.get(f"{_JUDGE_OLLAMA_URL}/api/tags", timeout=2.0)
-        resp.raise_for_status()
-        available = {m["name"] for m in resp.json().get("models", [])}
-        return _JUDGE_MODEL in available or f"{_JUDGE_MODEL}:latest" in available
-    except Exception:  # noqa: BLE001
-        return False
+    """Return True if Ollama is running AND the resolved judge model is pulled."""
+    return ollama_reachable(_JUDGE_MODEL)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -87,7 +68,7 @@ async def test_war_epoch_captain_sorn_acknowledges_war(
             f"run: ollama serve && ollama pull {_JUDGE_MODEL}"
         )
 
-    judge = _make_judge()
+    judge = make_judge()
     now = datetime.now(timezone.utc).isoformat()
 
     # Set demo world to war epoch — id is "world" (DEC-022)
@@ -205,7 +186,7 @@ async def test_captain_sorn_direct_war_confirmation(
             f"run: ollama serve && ollama pull {_JUDGE_MODEL}"
         )
 
-    judge = _make_judge()
+    judge = make_judge()
     now = datetime.now(timezone.utc).isoformat()
 
     api_post(
@@ -280,7 +261,7 @@ async def test_mira_innkeeper_oblique_gossip(
             f"run: ollama serve && ollama pull {_JUDGE_MODEL}"
         )
 
-    judge = _make_judge()
+    judge = make_judge()
     now = datetime.now(timezone.utc).isoformat()
 
     api_post(
@@ -353,7 +334,7 @@ async def test_old_henryk_distorted_account(
             f"run: ollama serve && ollama pull {_JUDGE_MODEL}"
         )
 
-    judge = _make_judge()
+    judge = make_judge()
     now = datetime.now(timezone.utc).isoformat()
 
     api_post(
@@ -436,7 +417,7 @@ async def test_planted_rumor_propagates_to_mira_dialogue(
             f"run: ollama serve && ollama pull {_JUDGE_MODEL}"
         )
 
-    judge = _make_judge()
+    judge = make_judge()
 
     # 1. Plant the fabricated belief at lira_fence (tavern).
     plant_result = api_post(
