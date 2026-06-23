@@ -146,3 +146,39 @@ new DI option in `api/dependency_singletons.py`; add Docker Compose Redis servic
 
 
 
+
+## ISSUE-120: Gate red from PR-2/PR-3 reorg debt (lint F401 + check-rules baseline drift)
+**Found:** 2026-06-23, during REORG-PR6 (folder reorg) — pre-existing at base c1c7607.
+**Severity:** P2 (annoying — `make check` is red independent of PR-6)
+**Where:** `src/npc_engine/retrieval/*/__init__.py` (facade re-exports), `scripts/rules_baseline.txt`
+**Description:** `make lint` reports 21 ruff F401 errors ("re-exported but missing from `__all__`")
+in the retrieval facade `__init__.py` files added by PR-3. Separately, `make check-rules` reports
+30 R001/R006 violations because PR-3 (and PR-2) moved files without path-updating their
+grandfathered entries in `rules_baseline.txt`, so the old paths read as "fixed" and the new paths
+read as NEW violations. `make check-harness` H1 fails because the red lint has no logged ticket.
+**Why deferred:** Out of REORG-PR6 scope (graph/ only). These are PR-2/PR-3 artifacts; PR-6 added
+ZERO new lint or check-rules violations (verified: base set == head set). Fixing touches retrieval
+facades + baseline, which belong to those PRs.
+**To fix:** Add re-exported names to each retrieval facade `__all__` (or `# noqa: F401`); path-rewrite
+the 30 stale retrieval entries in `rules_baseline.txt` (same fix applied to graph/ in PR-6), then
+`make check-rules` and `make lint` go green.
+
+---
+
+## ISSUE-121: anti_hallucination eval runner depends on incomplete untracked WIP (preconditions.py)
+**Found:** 2026-06-23, during REORG-PR6 — pre-existing at base c1c7607.
+**Severity:** P2 (annoying — 8 failing unit tests; not a PR-6 regression)
+**Where:** `tests/unit/test_anti_hallucination_runner.py`, `evals/anti_hallucination_runner.py:22,392`,
+untracked WIP `evals/preconditions.py`, `tests/unit/test_preconditions.py`, `tests/unit/test_runner_player_node.py`
+**Description:** A prior session added `import preconditions` + `preconditions.reset_world(...)` to the
+tracked `anti_hallucination_runner.py`, depending on an untracked, incomplete `evals/preconditions.py`.
+`reset_world` raises `PreconditionError: Unmet world_condition world_state:age_of_peace` under the test
+mocks, failing 8 `test_anti_hallucination_runner.py` cases. Confirmed identical failures at base
+c1c7607 → pre-existing, unrelated to the graph reorg.
+**Why deferred:** Out of REORG-PR6 scope; it is someone else's unfinished WIP. (PR-6's `git add -A`
+briefly swept the 3 untracked files into a commit; they have been untracked again — session-start state.)
+**To fix:** Either complete `evals/preconditions.py` (make `reset_world` satisfy the mocked PATCH) or
+gate the precondition calls behind a real-server check; then commit the 3 WIP files deliberately or
+remove the runner's dependency on them.
+
+---
