@@ -3,7 +3,7 @@ Module: test_scheme_reader
 Layer: tests/unit
 Purpose: Unit tests for graph/scheme_reader.py — active-scheme reads for the cap
          check, advance tick, and detection tick. All Neo4j I/O is mocked.
-Dependencies: pytest, unittest.mock, npc_engine.graph.scheme_reader
+Dependencies: pytest, unittest.mock, npc_engine.graph.intrigue.scheme_reader
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from npc_engine.graph.scheme_reader import (
+from npc_engine.graph.intrigue.scheme_reader import (
     ActiveSchemeProgress,
     SchemeRecord,
     SchemeWithSteps,
@@ -192,7 +192,7 @@ async def test_schemes_with_steps_filters_null_step_placeholders() -> None:
 
 def test_scheme_status_literal_exists_in_reader_module() -> None:
     """SEV-03: scheme_reader must export SchemeStatus as a Literal type."""
-    from npc_engine.graph import scheme_reader
+    from npc_engine.graph.intrigue import scheme_reader
     assert hasattr(scheme_reader, "SchemeStatus"), (
         "scheme_reader must export SchemeStatus Literal for typed status fields"
     )
@@ -201,7 +201,7 @@ def test_scheme_status_literal_exists_in_reader_module() -> None:
 def test_scheme_record_status_is_literal_typed() -> None:
     """SEV-03: SchemeRecord.status field annotation must reference SchemeStatus."""
     import typing
-    from npc_engine.graph.scheme_reader import SchemeRecord, SchemeStatus
+    from npc_engine.graph.intrigue.scheme_reader import SchemeRecord, SchemeStatus
 
     # Pydantic v2: model_fields carries annotation info
     field = SchemeRecord.model_fields.get("status")
@@ -215,7 +215,7 @@ def test_scheme_record_status_is_literal_typed() -> None:
 
 def test_scheme_with_steps_status_is_literal_typed() -> None:
     """SEV-03: SchemeWithSteps.status must accept only SchemeStatus values."""
-    from npc_engine.graph.scheme_reader import SchemeWithSteps
+    from npc_engine.graph.intrigue.scheme_reader import SchemeWithSteps
 
     for value in ("active", "discovered", "completed"):
         obj = SchemeWithSteps(scheme_id="s", goal="g", status=value)
@@ -226,7 +226,7 @@ def test_active_status_constant_exists_in_reader() -> None:
     """SEV-03: _ACTIVE_STATUS constant must exist so Cypher params use it, not raw
     string literals.
     """
-    from npc_engine.graph import scheme_reader
+    from npc_engine.graph.intrigue import scheme_reader
     # The constant may be private (_ACTIVE_STATUS) — check module-level dict.
     module_vars = vars(scheme_reader)
     active_constants = [v for v in module_vars.values() if v == "active" and not callable(v)]

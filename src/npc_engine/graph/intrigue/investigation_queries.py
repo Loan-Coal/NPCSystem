@@ -6,7 +6,7 @@ Purpose: Read-only Cypher queries for the Detective/Mystery investigation module
          contradicting rumors linked to a crime event.
 Does NOT: write to the graph, call LLMs, or import engine-layer code.
 Dependencies injected: None (pure Cypher, session passed per call).
-Used by: npc_engine.graph.investigation_service, npc_engine.engines.investigation.investigation_engine
+Used by: npc_engine.graph.intrigue.investigation_service, npc_engine.engines.investigation.investigation_engine
 """
 
 from __future__ import annotations

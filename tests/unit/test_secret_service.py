@@ -40,8 +40,8 @@ def _make_game_time() -> TimePoint:
 @pytest.mark.asyncio
 async def test_create_secret_returns_uuid_string():
     session = _make_session()
-    with patch("npc_engine.graph.secret_service.uuid.uuid4", return_value="secret-uuid-001"):
-        from npc_engine.graph.secret_service import create_secret
+    with patch("npc_engine.graph.intrigue.secret_service.uuid.uuid4", return_value="secret-uuid-001"):
+        from npc_engine.graph.intrigue.secret_service import create_secret
 
         secret_id = await create_secret(
             session,
@@ -60,8 +60,8 @@ async def test_create_secret_passes_correct_params_to_cypher():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    with patch("npc_engine.graph.secret_service.uuid.uuid4", return_value="secret-uuid-002"):
-        from npc_engine.graph.secret_service import create_secret
+    with patch("npc_engine.graph.intrigue.secret_service.uuid.uuid4", return_value="secret-uuid-002"):
+        from npc_engine.graph.intrigue.secret_service import create_secret
 
         await create_secret(
             session,
@@ -101,7 +101,7 @@ async def test_get_secrets_returns_list_for_character():
     session = MagicMock()
     session.run = _mock_run
 
-    from npc_engine.graph.secret_queries import get_secrets_for_character
+    from npc_engine.graph.intrigue.secret_queries import get_secrets_for_character
 
     results = await get_secrets_for_character(session, character_id="char_1")
     assert len(results) == 2
@@ -125,7 +125,7 @@ async def test_get_secrets_returns_empty_list_when_none():
     session = MagicMock()
     session.run = _mock_run
 
-    from npc_engine.graph.secret_queries import get_secrets_for_character
+    from npc_engine.graph.intrigue.secret_queries import get_secrets_for_character
 
     results = await get_secrets_for_character(session, character_id="char_empty")
     assert results == []
@@ -152,7 +152,7 @@ async def test_get_secrets_passes_k_limit_to_query():
     session = MagicMock()
     session.run = _mock_run
 
-    from npc_engine.graph.secret_queries import get_secrets_for_character
+    from npc_engine.graph.intrigue.secret_queries import get_secrets_for_character
 
     await get_secrets_for_character(session, character_id="char_1", k=5)
     assert captured[0]["k"] == 5
@@ -168,10 +168,10 @@ async def test_get_secrets_svc_delegates_to_query_layer():
     session = MagicMock()
 
     with patch(
-        "npc_engine.graph.secret_service.get_secrets_for_character",
+        "npc_engine.graph.intrigue.secret_service.get_secrets_for_character",
         new=AsyncMock(return_value=[{"id": "s1", "content": "x", "severity": 50, "created_at": ""}]),
     ) as mock_get:
-        from npc_engine.graph.secret_service import get_secrets_for_character_svc
+        from npc_engine.graph.intrigue.secret_service import get_secrets_for_character_svc
 
         results = await get_secrets_for_character_svc(session, character_id="char_1", k=2)
 
@@ -190,7 +190,7 @@ async def test_create_secret_severity_zero():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.secret_service import create_secret
+    from npc_engine.graph.intrigue.secret_service import create_secret
 
     await create_secret(
         session,
@@ -210,7 +210,7 @@ async def test_create_secret_severity_hundred():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.secret_service import create_secret
+    from npc_engine.graph.intrigue.secret_service import create_secret
 
     await create_secret(
         session,
@@ -233,11 +233,11 @@ async def test_create_secret_severity_hundred():
 async def test_get_secrets_svc_k_zero_passes_through():
     """k=0 is forwarded to the query without error."""
     with patch(
-        "npc_engine.graph.secret_service.get_secrets_for_character",
+        "npc_engine.graph.intrigue.secret_service.get_secrets_for_character",
         new_callable=AsyncMock,
         return_value=[],
     ) as mock_get:
-        from npc_engine.graph.secret_service import get_secrets_for_character_svc
+        from npc_engine.graph.intrigue.secret_service import get_secrets_for_character_svc
 
         result = await get_secrets_for_character_svc(MagicMock(), character_id="char_1", k=0)
 
@@ -253,11 +253,11 @@ async def test_get_secrets_svc_k_larger_than_total_returns_all():
         {"id": "s2", "content": "B", "severity": 40},
     ]
     with patch(
-        "npc_engine.graph.secret_service.get_secrets_for_character",
+        "npc_engine.graph.intrigue.secret_service.get_secrets_for_character",
         new_callable=AsyncMock,
         return_value=fake_secrets,
     ):
-        from npc_engine.graph.secret_service import get_secrets_for_character_svc
+        from npc_engine.graph.intrigue.secret_service import get_secrets_for_character_svc
 
         result = await get_secrets_for_character_svc(MagicMock(), character_id="char_1", k=1000)
 

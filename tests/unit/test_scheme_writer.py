@@ -3,7 +3,7 @@ Module: test_scheme_writer
 Layer: tests/unit
 Purpose: Unit tests for graph/scheme_writer.py — Cypher targets scheme node +
          EXECUTES_SCHEME/SCHEME_STEP edges. All Neo4j I/O is mocked.
-Dependencies: pytest, unittest.mock, npc_engine.graph.scheme_writer
+Dependencies: pytest, unittest.mock, npc_engine.graph.intrigue.scheme_writer
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from npc_engine.graph.scheme_writer import (
+from npc_engine.graph.intrigue.scheme_writer import (
     add_scheme_step,
     mark_scheme_discovered,
     upsert_scheme,

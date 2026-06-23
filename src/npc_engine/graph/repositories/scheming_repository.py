@@ -21,14 +21,14 @@ from neo4j import AsyncTransaction
 from npc_engine.graph.db import GraphDB
 from npc_engine.graph.event.event_writer import upsert_event
 from npc_engine.graph.graph_reader import get_npc_location_id
-from npc_engine.graph.scheme_reader import (
+from npc_engine.graph.intrigue.scheme_reader import (
     ActiveSchemeProgress,
     SchemeRecord,
     get_active_schemes,
     get_all_active_schemes_with_steps,
 )
-from npc_engine.graph.scheme_reader import get_discoverable_scheme_ids
-from npc_engine.graph.scheme_writer import add_scheme_step, mark_scheme_discovered, upsert_scheme
+from npc_engine.graph.intrigue.scheme_reader import get_discoverable_scheme_ids
+from npc_engine.graph.intrigue.scheme_writer import add_scheme_step, mark_scheme_discovered, upsert_scheme
 from npc_engine.graph.transaction_coordinator import run_in_tx
 
 

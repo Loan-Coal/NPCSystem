@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from npc_engine.engines.scheming.scheme_advance_tick import SchemeAdvanceTick
-from npc_engine.graph.scheme_reader import ActiveSchemeProgress
+from npc_engine.graph.intrigue.scheme_reader import ActiveSchemeProgress
 
 
 # ---------------------------------------------------------------------------

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from npc_engine.api.routes.faction_politics import schemes as route_mod
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.graph.scheme_reader import SchemeStepView, SchemeWithSteps
+from npc_engine.graph.intrigue.scheme_reader import SchemeStepView, SchemeWithSteps
 
 
 def _client(schemes: list[SchemeWithSteps], monkeypatch) -> TestClient:

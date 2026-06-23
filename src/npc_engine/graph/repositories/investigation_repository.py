@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.investigation_queries import (
+from npc_engine.graph.intrigue.investigation_queries import (
     get_alibi_window,
     get_contradicting_rumors,
     get_deductions_for_character,

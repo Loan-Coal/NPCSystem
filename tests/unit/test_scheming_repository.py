@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from npc_engine.graph.repositories.scheming_repository import Neo4jSchemingRepository
-from npc_engine.graph.scheme_reader import ActiveSchemeProgress, SchemeRecord
+from npc_engine.graph.intrigue.scheme_reader import ActiveSchemeProgress, SchemeRecord
 
 
 # ---------------------------------------------------------------------------

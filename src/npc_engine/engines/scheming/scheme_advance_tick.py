@@ -22,7 +22,7 @@ from uuid import uuid4
 from npc_engine.config import Settings
 from npc_engine.engines.ports.scheming_port import SchemingGraphPort
 from npc_engine.engines.scheming.covert_event_factory import build_covert_event_props
-from npc_engine.graph.scheme_reader import ActiveSchemeProgress
+from npc_engine.graph.intrigue.scheme_reader import ActiveSchemeProgress
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.type_registry.node_validator import validate_node_write
 

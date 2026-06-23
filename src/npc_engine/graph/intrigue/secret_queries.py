@@ -5,7 +5,7 @@ Purpose: Cypher query strings and read accessors for Secret nodes and KNOWS_SECR
 Does NOT: execute business logic or validate payloads.
 Dependencies: None (Cypher strings only).
 Dependencies injected: AsyncSession.
-Used by: npc_engine.graph.secret_service
+Used by: npc_engine.graph.intrigue.secret_service
 """
 
 from __future__ import annotations

@@ -21,7 +21,7 @@ from npc_engine.config import get_settings
 from npc_engine.engines.investigation.scheme_detection_tick import SchemeDetectionTick
 from npc_engine.graph.db import GraphDB
 from npc_engine.graph.repositories.scheming_repository import Neo4jSchemingRepository
-from npc_engine.graph.scheme_writer import upsert_scheme
+from npc_engine.graph.intrigue.scheme_writer import upsert_scheme
 
 
 def _uid(prefix: str) -> str:

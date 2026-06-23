@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
-from npc_engine.graph.secret_service import (
+from npc_engine.graph.intrigue.secret_service import (
     create_secret,
     delete_secret,
     get_secrets_for_character_svc,

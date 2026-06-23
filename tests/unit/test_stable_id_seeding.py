@@ -201,7 +201,7 @@ async def test_create_secret_uses_supplied_id():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.secret_service import create_secret
+    from npc_engine.graph.intrigue.secret_service import create_secret
 
     result = await create_secret(
         session,

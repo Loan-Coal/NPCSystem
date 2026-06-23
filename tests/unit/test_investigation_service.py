@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, call, patch
 
 import pytest
 
-from npc_engine.graph.investigation_service import (
+from npc_engine.graph.intrigue.investigation_service import (
     _CYPHER_CREATE_DEDUCTION,
     _CYPHER_CREATE_EVIDENCE,
     _CYPHER_CREATE_IMPLICATES,

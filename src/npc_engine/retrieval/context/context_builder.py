@@ -32,7 +32,7 @@ from npc_engine.graph.needs_goals.need_queries import get_needs_for_character
 from npc_engine.graph.knowledge.belief_queries import get_beliefs_for_character
 from npc_engine.graph.needs_goals.goal_queries import get_goals_for_character
 from npc_engine.graph.economy.item_queries import get_items_for_character
-from npc_engine.graph.secret_queries import get_secrets_for_character
+from npc_engine.graph.intrigue.secret_queries import get_secrets_for_character
 from npc_engine.graph.economy.owes_queries import get_debts_for_character
 from npc_engine.graph.group.group_service import get_groups_for_character_svc
 from npc_engine.graph.gossip.rumor_service import get_rumors_for_character_svc

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from npc_engine.graph.scheme_reader import ActiveSchemeProgress, SchemeRecord
+from npc_engine.graph.intrigue.scheme_reader import ActiveSchemeProgress, SchemeRecord
 
 
 class SchemingGraphPort(Protocol):

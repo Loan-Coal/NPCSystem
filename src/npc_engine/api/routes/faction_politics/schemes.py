@@ -18,7 +18,7 @@ from pydantic import BaseModel
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
-from npc_engine.graph.scheme_reader import SchemeWithSteps, get_schemes_with_steps_for_npc
+from npc_engine.graph.intrigue.scheme_reader import SchemeWithSteps, get_schemes_with_steps_for_npc
 
 router = APIRouter(prefix="/npc", tags=["schemes"])
 
