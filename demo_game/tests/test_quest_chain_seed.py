@@ -3,7 +3,7 @@ Module: test_quest_chain_seed
 Layer: demo_game (tests)
 Purpose: Verify that seed_all issues exactly 2 UNLOCKS edge upserts for the
     hand-authored quest chains in EXP-19.
-Dependencies: demo_game.seed, unittest.mock (no network, no engine required)
+Dependencies: demo_game.seeds.seed, unittest.mock (no network, no engine required)
 Used by: pytest (make test-demo)
 
 Does NOT: touch Neo4j, the NPC Engine API, or any real I/O.
@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, call
 
 import pytest
 
-from demo_game.seed import seed_all
+from demo_game.seeds.seed import seed_all
 
 
 # ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@ Module: test_proactive_dialogue_beat
 Layer: demo_game (tests)
 Purpose: Unit tests for ProactiveDialogueBeat — NPC-initiated proactive dialogue beat.
          Covers: intent rendered, empty list degrades gracefully, dry_run skips API.
-Dependencies: demo_game.proactive_dialogue_beat (ProactiveDialogueBeat)
+Dependencies: demo_game.beats.proactive_dialogue_beat (ProactiveDialogueBeat)
 Used by: pytest
 """
 
@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from demo_game.proactive_dialogue_beat import (
+from demo_game.beats.proactive_dialogue_beat import (
     ProactiveDialogueBeat,
     _PLAYER_ID,
     _NO_PENDING_MSG,

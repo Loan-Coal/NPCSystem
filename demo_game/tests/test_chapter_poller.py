@@ -3,7 +3,7 @@ Module: test_chapter_poller
 Layer: demo_game (tests)
 Purpose: Unit tests for ChapterPoller.
          No pygame, no network — all engine calls are mocked.
-Dependencies: demo_game.chapter_poller, demo_game.client, unittest.mock
+Dependencies: demo_game.pollers.chapter_poller, demo_game.client, unittest.mock
 Used by: make test-demo
 """
 
@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from demo_game.client import EngineClientError
-from demo_game.chapter_poller import ChapterPoller
+from demo_game.pollers.chapter_poller import ChapterPoller
 
 
 def _make_client(

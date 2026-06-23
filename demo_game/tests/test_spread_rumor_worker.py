@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from demo_game.action_workers import spread_rumor_worker
+from demo_game.workers.action_workers import spread_rumor_worker
 from demo_game.constants import SPREAD_RUMOR_TEXT, SPREAD_RUMOR_SEVERITY
 
 

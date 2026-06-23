@@ -4,7 +4,7 @@ Layer: demo_game (tests)
 Purpose: Unit tests for all BranchEffect subclasses. Verifies each effect's
          apply() calls the correct EngineClient mock method with the correct
          arguments. GotoBeatEffect is tested as a no-op.
-Dependencies: demo_game.branch_effects, unittest.mock, pytest
+Dependencies: demo_game.branches.branch_effects, unittest.mock, pytest
 Used by: make test-demo
 """
 
@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from demo_game.branch_effects import (
+from demo_game.branches.branch_effects import (
     BranchEffect,
     GotoBeatEffect,
     OfferQuestEffect,

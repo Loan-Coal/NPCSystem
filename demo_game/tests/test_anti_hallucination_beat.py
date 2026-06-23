@@ -5,7 +5,7 @@ Purpose: Unit tests for AntiHallucinationBeat — verifies the beat calls
          get_graph_edges("KNOWS_ABOUT") for aldric_merchant, calls post_dialogue
          with the correct NPC and player message, and prints the response without
          raising. No live engine required.
-Dependencies: demo_game.run_scenes (AntiHallucinationBeat)
+Dependencies: demo_game.runners.run_scenes (AntiHallucinationBeat)
 Used by: pytest
 """
 
@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from demo_game.run_scenes import AntiHallucinationBeat
+from demo_game.runners.run_scenes import AntiHallucinationBeat
 
 
 # ---------------------------------------------------------------------------

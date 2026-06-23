@@ -6,7 +6,7 @@ Purpose: Modal choice widget that presents a BranchNode to the player and
          (actions_panel.py); keyboard handling reuses the pattern from
          start_menu.py lines 111-144. Does NOT call the client or persist state
          — callers (scenario runner or game_controller) handle those steps.
-Dependencies: pygame, demo_game.constants, demo_game.branch_node
+Dependencies: pygame, demo_game.constants, demo_game.branches.branch_node
 Used by: demo_game.scenarios, demo_game.game_controller,
          demo_game.tests.test_branch_panel
 
@@ -27,7 +27,7 @@ import pygame
 from demo_game.constants import PALETTE
 
 if TYPE_CHECKING:
-    from demo_game.branch_node import BranchNode
+    from demo_game.branches.branch_node import BranchNode
 
 # ---------------------------------------------------------------------------
 # Layout and colour constants

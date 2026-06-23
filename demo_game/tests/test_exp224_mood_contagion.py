@@ -7,7 +7,7 @@ Purpose: TDD tests for EXP-224 mood-contagion visualiser slice-1.
            2. EmotionPoller optional second NPC (back-compat default=None).
          No pygame display required; Surface, Rect, and draw calls are mocked.
          No src/npc_engine imports.
-Dependencies: demo_game.ui.emotion_panel, demo_game.emotion_poller, unittest.mock
+Dependencies: demo_game.ui.emotion_panel, demo_game.pollers.emotion_poller, unittest.mock
 Used by: make test-demo / pytest demo_game/tests/ -k 'emotion_panel or emotion_poller'
 """
 
@@ -145,21 +145,21 @@ class TestEmotionPollerPairOptional:
 
     def test_constructor_no_pair_back_compat(self) -> None:
         """EmotionPoller(client) with no pair_npc_id defaults to None — back-compat."""
-        from demo_game.emotion_poller import EmotionPoller
+        from demo_game.pollers.emotion_poller import EmotionPoller
         client = MagicMock()
         poller = EmotionPoller(client, interval_s=999.0)
         assert poller._pair_npc_id is None
 
     def test_constructor_with_pair_npc_stores_id(self) -> None:
         """EmotionPoller(client, pair_npc_id='npc_b') stores the pair id."""
-        from demo_game.emotion_poller import EmotionPoller
+        from demo_game.pollers.emotion_poller import EmotionPoller
         client = MagicMock()
         poller = EmotionPoller(client, interval_s=999.0, pair_npc_id="npc_b")
         assert poller._pair_npc_id == "npc_b"
 
     def test_get_pair_emotion_default_empty(self) -> None:
         """get_pair_emotion() returns ('', 0.0, 0.0) with no pair configured."""
-        from demo_game.emotion_poller import EmotionPoller
+        from demo_game.pollers.emotion_poller import EmotionPoller
         poller = EmotionPoller(MagicMock(), interval_s=999.0)
         label, valence, arousal = poller.get_pair_emotion()
         assert label == ""
@@ -168,7 +168,7 @@ class TestEmotionPollerPairOptional:
 
     def test_poll_once_primary_unchanged_with_pair_none(self) -> None:
         """Single-NPC path: primary emotion still polled correctly when pair is None."""
-        from demo_game.emotion_poller import EmotionPoller
+        from demo_game.pollers.emotion_poller import EmotionPoller
         primary_data = {"label": "calm", "valence": 0.3, "arousal": 0.2}
         client = MagicMock()
         client.get_npc_emotion.return_value = primary_data
@@ -184,7 +184,7 @@ class TestEmotionPollerPairOptional:
 
     def test_poll_once_fetches_pair_emotion(self) -> None:
         """When pair_npc_id is set, _poll_once() also fetches the pair's emotion."""
-        from demo_game.emotion_poller import EmotionPoller
+        from demo_game.pollers.emotion_poller import EmotionPoller
         primary_data = {"label": "happy", "valence": 0.7, "arousal": 0.5}
         pair_data = {"label": "sad", "valence": -0.6, "arousal": 0.3}
 
@@ -205,7 +205,7 @@ class TestEmotionPollerPairOptional:
 
     def test_poll_once_pair_error_does_not_crash(self) -> None:
         """Pair poll failure must be swallowed; primary emotion is unaffected."""
-        from demo_game.emotion_poller import EmotionPoller
+        from demo_game.pollers.emotion_poller import EmotionPoller
         import logging
         primary_data = {"label": "happy", "valence": 0.7, "arousal": 0.5}
 
@@ -228,7 +228,7 @@ class TestEmotionPollerPairOptional:
 
     def test_set_pair_npc_id_updates_pair(self) -> None:
         """set_pair_npc_id() changes the tracked pair and clears stale data."""
-        from demo_game.emotion_poller import EmotionPoller
+        from demo_game.pollers.emotion_poller import EmotionPoller
         poller = EmotionPoller(MagicMock(), interval_s=999.0)
         poller.set_pair_npc_id("npc_b")
         assert poller._pair_npc_id == "npc_b"

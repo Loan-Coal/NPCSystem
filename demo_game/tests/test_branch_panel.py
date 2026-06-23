@@ -5,8 +5,8 @@ Purpose: Unit tests for BranchPanelWidget — keyboard navigation, option select
          cancel, and _wrap_text helper. No pygame display init required; pygame
          events are constructed as MagicMock objects following the pattern in
          test_action_bar.py.
-Dependencies: demo_game.ui.branch_panel, demo_game.branch_node,
-              demo_game.branch_effects, unittest.mock, pytest
+Dependencies: demo_game.ui.branch_panel, demo_game.branches.branch_node,
+              demo_game.branches.branch_effects, unittest.mock, pytest
 Used by: make test-demo
 """
 
@@ -17,8 +17,8 @@ from unittest.mock import MagicMock, patch
 import pygame
 import pytest
 
-from demo_game.branch_effects import RepDeltaEffect
-from demo_game.branch_node import BranchNode, BranchOption
+from demo_game.branches.branch_effects import RepDeltaEffect
+from demo_game.branches.branch_node import BranchNode, BranchOption
 from demo_game.ui.panels.branch_panel import (
     BranchPanelWidget,
     _handle_event,

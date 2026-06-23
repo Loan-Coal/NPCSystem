@@ -3,7 +3,7 @@ Module: seed
 Layer: demo_game (external client)
 Purpose: Seed the demo world via the NPC Engine HTTP API. Idempotent on re-run.
 Dependencies: demo_game.client, demo_game.config, demo_game.constants,
-              demo_game.seed_npc_data
+              demo_game.seeds.seed_npc_data
 Used by: make demo-seed, demo_game/tests/test_seed.py
 
 See project-harness/DECISIONS.md DEC-020, DEC-021, DEC-022 for seeder conventions.
@@ -31,7 +31,7 @@ from demo_game.constants import (
     NPC_ID_NEL_PICKPOCKET,
     NPC_ID_SERA_BARMAID,
 )
-from demo_game.seed_npc_data import (
+from demo_game.seeds.seed_npc_data import (
     FACTION_ID_CROWN_LOYALISTS,
     FACTION_ID_DOCKSIDE_SMUGGLERS,
     H2_CHAIN_QUESTS,

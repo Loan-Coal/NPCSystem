@@ -3,7 +3,7 @@ Module: test_treaty_poller
 Layer: demo_game (tests)
 Purpose: Unit tests for TreatyPoller.
          No pygame, no network — all engine calls are mocked.
-Dependencies: demo_game.treaty_poller, demo_game.client, unittest.mock
+Dependencies: demo_game.pollers.treaty_poller, demo_game.client, unittest.mock
 Used by: make test-demo
 """
 
@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, call
 import pytest
 
 from demo_game.client import EngineClientError
-from demo_game.treaty_poller import TreatyPoller
+from demo_game.pollers.treaty_poller import TreatyPoller
 
 
 def _make_client(

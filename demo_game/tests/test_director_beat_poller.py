@@ -4,7 +4,7 @@ Layer: demo_game (tests)
 Purpose: Unit tests for DirectorBeatPoller (G2.3).
          Covers: new-beat detection, pop_new_beat, degrade on error.
          No pygame, no network — all engine calls are mocked.
-Dependencies: demo_game.director_beat_poller, unittest.mock
+Dependencies: demo_game.pollers.director_beat_poller, unittest.mock
 Used by: pytest
 """
 
@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from demo_game.director_beat_poller import DirectorBeatPoller
+from demo_game.pollers.director_beat_poller import DirectorBeatPoller
 
 _BEAT_A = {"beat_kind": "tension_spike", "reason": "war", "npc_id": "mira_innkeeper",
             "player_id": "player_demo", "tick": 10}

@@ -2,7 +2,7 @@
 Module: test_remembers_you_beat
 Layer: demo_game (tests)
 Purpose: Unit tests for RemembersYouBeat demo scene — cross-session memory recall.
-Dependencies: demo_game.remembers_you_beat, unittest.mock
+Dependencies: demo_game.beats.remembers_you_beat, unittest.mock
 Used by: pytest
 """
 
@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, call
 
 import pytest
 
-from demo_game.remembers_you_beat import RemembersYouBeat, _MEMORY_MESSAGE
+from demo_game.beats.remembers_you_beat import RemembersYouBeat, _MEMORY_MESSAGE
 
 
 # ---------------------------------------------------------------------------

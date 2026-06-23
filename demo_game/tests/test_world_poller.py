@@ -1,9 +1,9 @@
 """
 Module: test_world_poller
 Layer: demo_game (tests)
-Purpose: Unit tests for demo_game.world_poller.WorldPoller.
+Purpose: Unit tests for demo_game.pollers.world_poller.WorldPoller.
          No pygame, no network — all engine calls are mocked.
-Dependencies: demo_game.world_poller, demo_game.client, unittest.mock
+Dependencies: demo_game.pollers.world_poller, demo_game.client, unittest.mock
 Used by: make test-demo
 """
 
@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from demo_game.client import EngineClientError
-from demo_game.world_poller import WorldPoller
+from demo_game.pollers.world_poller import WorldPoller
 
 
 def _make_client(

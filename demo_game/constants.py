@@ -8,7 +8,7 @@ Purpose: Fixed world-layout constants derived from the seeded demo world.
 Dependencies: none
 Used by: demo_game.ui.game_window, demo_game.ui.widgets, demo_game.ui.left_panel,
          demo_game.ui.quest_panel, demo_game.game_end_checker,
-         demo_game.game_end_poller
+         demo_game.pollers.game_end_poller
 
 FACTION_COLOURS and NPC_FACTIONS are hardcoded from the demo seed (DEC-028).
 Faction membership is stable for the Munich demo world; no API call needed.
@@ -23,7 +23,7 @@ H2.2-H2.5: added 6 new NPCs, 4 new locations + 2 districts, 2 new factions,
 
 from __future__ import annotations
 
-from demo_game.seed_npc_data import (
+from demo_game.seeds.seed_npc_data import (
     FACTION_ID_CROWN_LOYALISTS,
     FACTION_ID_DOCKSIDE_SMUGGLERS,
     LOC_ID_DOCKS,

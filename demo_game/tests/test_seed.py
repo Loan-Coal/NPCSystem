@@ -2,7 +2,7 @@
 Module: test_seed
 Layer: demo_game (tests)
 Purpose: TDD unit tests for seed — builder shapes, dependency order, idempotency.
-Dependencies: demo_game.seed, unittest.mock (no network, no engine required)
+Dependencies: demo_game.seeds.seed, unittest.mock (no network, no engine required)
 Used by: make test-demo
 """
 
@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from demo_game.seed import (
+from demo_game.seeds.seed import (
     build_event_payload,
     build_faction_payload,
     build_location_payload,
@@ -406,7 +406,7 @@ def test_seed_all_does_not_create_player_faction_standing_edges() -> None:
 
 
 def test_seed_quests_calls_post_quest_offer() -> None:
-    from demo_game.seed import _seed_quests
+    from demo_game.seeds.seed import _seed_quests
 
     client = _mock_client()
     client.post_quest_offer.return_value = {"data": {"quest_id": "aldric_deliver_quest"}}
@@ -421,11 +421,11 @@ def test_seed_quests_calls_post_quest_offer() -> None:
 def test_seed_quests_writes_quest_id_to_cache() -> None:
     import json as _json
     from unittest.mock import patch as _patch
-    from demo_game.seed import _seed_quests
+    from demo_game.seeds.seed import _seed_quests
 
     client = _mock_client()
     client.post_quest_offer.return_value = {"data": {"quest_id": "aldric_deliver_quest"}}
-    with _patch("demo_game.seed.Path") as mock_path_cls:
+    with _patch("demo_game.seeds.seed.Path") as mock_path_cls:
         mock_path_inst = MagicMock()
         mock_path_inst.exists.return_value = False
         mock_path_inst.parent = MagicMock()
@@ -438,7 +438,7 @@ def test_seed_quests_writes_quest_id_to_cache() -> None:
 
 def test_seed_quests_skips_post_quest_offer_if_quest_exists() -> None:
     """_seed_quests must not re-offer a quest that already exists (preserves completed state)."""
-    from demo_game.seed import _ALDRIC_QUEST_ID, _seed_quests
+    from demo_game.seeds.seed import _ALDRIC_QUEST_ID, _seed_quests
 
     client = MagicMock()
     client.get_node.return_value = {"id": _ALDRIC_QUEST_ID, "status": "completed"}
@@ -450,7 +450,7 @@ def test_seed_quests_skips_post_quest_offer_if_quest_exists() -> None:
 
 def test_seed_quests_non_fatal_on_client_error() -> None:
     from unittest.mock import patch as _patch
-    from demo_game.seed import _seed_quests
+    from demo_game.seeds.seed import _seed_quests
 
     client = MagicMock()
     client.post_quest_generate.side_effect = Exception("engine unavailable")
@@ -464,7 +464,7 @@ def test_seed_player_items_skips_amulet_if_already_owned() -> None:
     Simulates the post-delivery state: player→amulet edge was deleted (get_edge returns None),
     but aldric→amulet exists (get_graph_edges returns it).
     """
-    from demo_game.seed import _AMULET_ID, _PLAYER_ID, _seed_player_and_items
+    from demo_game.seeds.seed import _AMULET_ID, _PLAYER_ID, _seed_player_and_items
 
     client = MagicMock()
     client.get_node.return_value = {"id": "x"}  # all nodes exist
@@ -482,7 +482,7 @@ def test_seed_player_items_skips_amulet_if_already_owned() -> None:
 
 def test_seed_player_items_creates_owns_edge_when_no_owner() -> None:
     """_seed_player_and_items must create OWNS(player→amulet) when the amulet has no current owner."""
-    from demo_game.seed import _AMULET_ID, _PLAYER_ID, _seed_player_and_items
+    from demo_game.seeds.seed import _AMULET_ID, _PLAYER_ID, _seed_player_and_items
 
     client = MagicMock()
     client.get_node.return_value = None  # nothing exists yet
@@ -500,7 +500,7 @@ def test_seed_aldric_inventory_skips_spice_if_already_owned() -> None:
 
     Simulates the post-trade state: aldric→spice edge was deleted, but player→spice exists.
     """
-    from demo_game.seed import _SPICE_ID, _seed_aldric_inventory
+    from demo_game.seeds.seed import _SPICE_ID, _seed_aldric_inventory
 
     client = MagicMock()
     client.get_node.return_value = {"id": "x"}  # nodes exist
@@ -519,7 +519,7 @@ def test_seed_aldric_inventory_skips_spice_if_already_owned() -> None:
 def test_seed_all_calls_quest_offer() -> None:
     client = _mock_client()
     client.post_quest_offer.return_value = {"data": {"quest_id": "aldric_deliver_quest"}}
-    with patch("demo_game.seed.Path") as mock_path_cls:
+    with patch("demo_game.seeds.seed.Path") as mock_path_cls:
         mock_path_inst = MagicMock()
         mock_path_inst.exists.return_value = False
         mock_path_inst.parent = MagicMock()

@@ -6,7 +6,7 @@ Purpose: Pure win/lose condition evaluator for H1 multi-objective economy.
          Supports legion, bankruptcy, deadline, and overreach failure reasons.
          No I/O: accepts pre-fetched data and returns an ObjectiveState.
 Dependencies: demo_game.constants
-Used by: demo_game.game_end_poller, demo_game.ui.game_window
+Used by: demo_game.pollers.game_end_poller, demo_game.ui.game_window
 
 300-LINE WAIVER (DEC-108): this is one cohesive pure win/lose evaluator — the four win
 predicates, four failure predicates, grade scoring, the priority `_select_failure` chain,

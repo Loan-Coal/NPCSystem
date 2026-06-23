@@ -3,7 +3,7 @@ Module: test_action_workers
 Layer: demo_game (tests)
 Purpose: Unit tests for action_workers background-thread functions and BribeScene
          from run_scenes (EXP-93: fix BribeScene to use adjust_npc_reputation).
-Dependencies: demo_game.action_workers, demo_game.run_scenes, unittest.mock, queue
+Dependencies: demo_game.workers.action_workers, demo_game.runners.run_scenes, unittest.mock, queue
 Used by: make test-demo
 """
 
@@ -15,11 +15,11 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from demo_game.action_workers import _get_current_tick, bribe_worker, travel_worker
+from demo_game.workers.action_workers import _get_current_tick, bribe_worker, travel_worker
 from demo_game.client import EngineClientError
 from demo_game.constants import BRIBE_GOLD_COST, BRIBE_STANDING_GAIN
-from demo_game.run_scenes import BribeScene
-from demo_game.run_scenes import _BRIBE_LOCATION
+from demo_game.runners.run_scenes import BribeScene
+from demo_game.runners.run_scenes import _BRIBE_LOCATION
 
 _EXPECTED_STANDING = 10 + BRIBE_STANDING_GAIN
 

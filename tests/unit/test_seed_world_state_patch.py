@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, call
 
-from demo_game.seed import _force_patch_world_state
+from demo_game.seeds.seed import _force_patch_world_state
 
 
 def test_force_patch_world_state_calls_patch_node_with_war_epoch() -> None:

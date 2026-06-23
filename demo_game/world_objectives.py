@@ -5,7 +5,7 @@ Purpose: Per-world win/lose objective bundles (H2.7 / DEMO-D2-08). Decouples the
          game_end_checker from a single hardcoded world so the demo, village, and
          tavern seeded worlds are each pickable and winnable.
 Dependencies: dataclasses, demo_game.constants
-Used by: demo_game.game_end_checker, demo_game.game_end_poller, demo_game.ui.game_window
+Used by: demo_game.game_end_checker, demo_game.pollers.game_end_poller, demo_game.ui.game_window
 
 game_end_checker.py was originally hardcoded to the demo world's factions, lose
 location, and antagonist. WorldObjectives bundles every world-specific win/lose

@@ -3,7 +3,7 @@ Module: test_pledge_poller
 Layer: demo_game (tests)
 Purpose: Unit tests for PledgePoller.
          No pygame, no network — all engine calls are mocked.
-Dependencies: demo_game.pledge_poller, demo_game.client, unittest.mock
+Dependencies: demo_game.pollers.pledge_poller, demo_game.client, unittest.mock
 Used by: make test-demo
 """
 
@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from demo_game.client import EngineClientError
-from demo_game.pledge_poller import PledgePoller
+from demo_game.pollers.pledge_poller import PledgePoller
 
 
 def _make_client(

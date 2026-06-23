@@ -9,7 +9,7 @@ import unittest.mock as mock
 
 def test_seed_world_state_id_is_world() -> None:
     """_WORLD_STATE_ID in seed.py must be 'world'."""
-    from demo_game.seed import _WORLD_STATE_ID  # type: ignore[import]
+    from demo_game.seeds.seed import _WORLD_STATE_ID  # type: ignore[import]
 
     assert _WORLD_STATE_ID == "world", (
         f"Expected 'world' (DEC-022) but got {_WORLD_STATE_ID!r}. "
@@ -19,7 +19,7 @@ def test_seed_world_state_id_is_world() -> None:
 
 def test_build_world_state_payload_uses_canonical_id() -> None:
     """build_world_state_payload must embed id='world'."""
-    from demo_game.seed import build_world_state_payload  # type: ignore[import]
+    from demo_game.seeds.seed import build_world_state_payload  # type: ignore[import]
 
     payload = build_world_state_payload("peace", [])
     assert payload.id == "world", (

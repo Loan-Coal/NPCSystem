@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from demo_game.run import DemoRunner
+from demo_game.runners.run import DemoRunner
 
 
 # ---------------------------------------------------------------------------
@@ -137,8 +137,8 @@ class TestDefaultOutputUnchanged:
 
     def test_default_runner_cinematic_is_false(self) -> None:
         """DemoRunner() without cinematic= arg must default to False."""
-        with patch("demo_game.run.DemoConfig") as mock_cfg, \
-             patch("demo_game.run.EngineClient"):
+        with patch("demo_game.runners.run.DemoConfig") as mock_cfg, \
+             patch("demo_game.runners.run.EngineClient"):
             mock_cfg.return_value.NPC_BASE_URL = "http://localhost:8000"
             mock_cfg.return_value.NPC_API_KEY = "test"
             runner = DemoRunner()

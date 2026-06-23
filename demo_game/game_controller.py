@@ -5,7 +5,7 @@ Purpose: Background-thread orchestration and queue dispatch for the demo game.
          Quest, trade, give-item, and travel action handlers; dialogue submission.
          Quest/trade handlers are delegated to QuestTradeController. Decoupled
          from pygame rendering so it can be unit-tested without a display.
-Dependencies: demo_game.action_workers, demo_game.dialogue_ws, demo_game.client,
+Dependencies: demo_game.workers.action_workers, demo_game.dialogue_ws, demo_game.client,
               demo_game.dialogue, demo_game.constants, demo_game.quest_trade_controller
               (demo is standalone — zero imports from src/npc_engine)
 Used by: demo_game.ui.game_window
@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable
 
 from demo_game.audio_player import play_audio_bytes
-from demo_game.action_workers import (
+from demo_game.workers.action_workers import (
     bribe_worker,
     consolidate_memory_worker,
     correct_rumor_worker,

@@ -218,7 +218,7 @@ demo-seed:
 # demo-run: play the scripted hackathon scenario (see docs/DEMO_SCRIPT.md)
 # ARGS: --dry-run (no API calls), --cached (recording mode, error on miss)
 demo-run:
-	$(PYTHON) -m demo_game.run $(ARGS)
+	$(PYTHON) -m demo_game.runners.run $(ARGS)
 
 # test-demo: run demo_game unit tests in isolation (separate from make test)
 # Requires: pip install -r demo_game/requirements.txt

@@ -3,7 +3,7 @@ Module: test_seed_exp223
 Layer: demo_game (tests)
 Purpose: EXP-223 — assert the richer world seed includes new NPCs and location.
          RED phase: these tests fail before the new data is added to seed.py.
-Dependencies: demo_game.seed, demo_game.constants, unittest.mock
+Dependencies: demo_game.seeds.seed, demo_game.constants, unittest.mock
 Used by: pytest demo_game/tests/ -k seed -q
 """
 
@@ -23,7 +23,7 @@ from demo_game.constants import (
     NPC_ID_NEL_PICKPOCKET,
     LOC_ID_CHAPEL,
 )
-from demo_game.seed import _NPCS, _LOCATIONS, seed_all
+from demo_game.seeds.seed import _NPCS, _LOCATIONS, seed_all
 
 
 # ---------------------------------------------------------------------------

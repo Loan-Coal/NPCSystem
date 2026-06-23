@@ -2,7 +2,7 @@
 Module: test_sev11_game_end
 Layer: demo_game (tests)
 Purpose: Regression tests for SEV-11: lose reachable, attribution freeze, neutral bribe guard.
-Dependencies: demo_game.game_end_checker, demo_game.game_end_poller, demo_game.game_controller
+Dependencies: demo_game.game_end_checker, demo_game.pollers.game_end_poller, demo_game.game_controller
 Used by: make test-demo
 """
 
@@ -16,7 +16,7 @@ from demo_game.game_end_checker import (
     LOSE_LOCATION_ID,
     check_lose,
 )
-from demo_game.game_end_poller import GameEndPoller
+from demo_game.pollers.game_end_poller import GameEndPoller
 
 
 # ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from demo_game.run_scenes import CorrectRumorScene, RumorTraceDisplay, SpreadRumorScene
+from demo_game.runners.run_scenes import CorrectRumorScene, RumorTraceDisplay, SpreadRumorScene
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +180,7 @@ class TestCorrectRumorScene:
 # Intrigue scenes (G3.1): DeceptionRevealScene + PlayerModelDisplay
 # ---------------------------------------------------------------------------
 
-from demo_game.run_scenes import DeceptionRevealScene, PlayerModelDisplay  # noqa: E402
+from demo_game.runners.run_scenes import DeceptionRevealScene, PlayerModelDisplay  # noqa: E402
 
 
 class TestDeceptionRevealScene:
@@ -239,10 +239,10 @@ class TestPlayerModelDisplay:
 # BranchBeat (H2.8): scripted fork over the H2.1 branch primitive
 # ---------------------------------------------------------------------------
 
-from demo_game.run_scenes import BranchBeat  # noqa: E402
-import demo_game.run_scenes as _rs  # noqa: E402
-from demo_game.branch_state import BranchState  # noqa: E402
-from demo_game.branch_node import BRANCH_ID_GARRICK  # noqa: E402
+from demo_game.runners.run_scenes import BranchBeat  # noqa: E402
+import demo_game.runners.run_scenes as _rs  # noqa: E402
+from demo_game.branches.branch_state import BranchState  # noqa: E402
+from demo_game.branches.branch_node import BRANCH_ID_GARRICK  # noqa: E402
 
 
 class TestBranchBeat:

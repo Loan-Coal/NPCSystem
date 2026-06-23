@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from demo_game.npc_initiative_poller import NpcInitiativePoller
+from demo_game.pollers.npc_initiative_poller import NpcInitiativePoller
 
 
 def _intent(npc_id: str, score: float) -> dict:

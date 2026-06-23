@@ -3,7 +3,7 @@ Module: test_branch_state
 Layer: demo_game (tests)
 Purpose: Unit tests for BranchState immutability, JSON round-trip, and
          save/load persistence. No I/O against a real filesystem except via tmp_path.
-Dependencies: demo_game.branch_state, pathlib, pytest
+Dependencies: demo_game.branches.branch_state, pathlib, pytest
 Used by: make test-demo
 """
 
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from demo_game.branch_state import (
+from demo_game.branches.branch_state import (
     BranchState,
     ChoiceRecord,
     load_branch_state,

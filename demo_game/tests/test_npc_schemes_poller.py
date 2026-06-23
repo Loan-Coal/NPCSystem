@@ -3,7 +3,7 @@ Module: test_npc_schemes_poller
 Layer: demo_game (tests)
 Purpose: Unit tests for NpcSchemesPoller (G2.2). No pygame, no network — all
          engine calls are mocked.
-Dependencies: demo_game.npc_schemes_poller, unittest.mock
+Dependencies: demo_game.pollers.npc_schemes_poller, unittest.mock
 Used by: pytest
 """
 
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from demo_game.npc_schemes_poller import NpcSchemesPoller
+from demo_game.pollers.npc_schemes_poller import NpcSchemesPoller
 
 _SAMPLE = [
     {

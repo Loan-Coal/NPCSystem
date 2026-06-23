@@ -2,7 +2,7 @@
 Module: test_sandbox_loop
 Layer: demo_game.tests
 Purpose: Unit tests for SandboxLoop — background auto-tick thread.
-Dependencies: demo_game.sandbox_loop
+Dependencies: demo_game.runners.sandbox_loop
 Used by: pytest
 """
 
@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 from unittest.mock import MagicMock
 
-from demo_game.sandbox_loop import SandboxLoop
+from demo_game.runners.sandbox_loop import SandboxLoop
 
 
 def _make_client() -> MagicMock:

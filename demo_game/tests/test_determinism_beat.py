@@ -3,7 +3,7 @@ Module: test_determinism_beat
 Layer: demo_game (tests)
 Purpose: Unit tests for DeterminismBeat scene — verifies HTTP calls, seed table
          printing, seeds_match assertion, and dry_run short-circuit.
-Dependencies: demo_game.determinism_beat, unittest.mock (no network, no engine)
+Dependencies: demo_game.beats.determinism_beat, unittest.mock (no network, no engine)
 Used by: make test-demo
 """
 
@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, call
 import pytest
 
 from demo_game.client import EngineClient
-from demo_game.determinism_beat import DeterminismBeat, _GOSSIP_TICK_PATH
+from demo_game.beats.determinism_beat import DeterminismBeat, _GOSSIP_TICK_PATH
 
 
 # ---------------------------------------------------------------------------

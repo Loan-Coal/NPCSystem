@@ -1,9 +1,9 @@
 """
 Module: test_emotion_poller
 Layer: demo_game (tests)
-Purpose: TDD unit tests for demo_game.emotion_poller.EmotionPoller.
+Purpose: TDD unit tests for demo_game.pollers.emotion_poller.EmotionPoller.
          No pygame, no network — all engine calls are mocked.
-Dependencies: demo_game.emotion_poller, demo_game.client, unittest.mock
+Dependencies: demo_game.pollers.emotion_poller, demo_game.client, unittest.mock
 Used by: make test-demo
 """
 
@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from demo_game.client import EngineClientError
-from demo_game.emotion_poller import EmotionPoller
+from demo_game.pollers.emotion_poller import EmotionPoller
 
 
 def _make_client(
@@ -68,7 +68,7 @@ class TestEmotionPollerPollOnce:
             _make_client(raises=EngineClientError("boom")), interval_s=999.0
         )
         poller.set_active_npc("mira_innkeeper")
-        with caplog.at_level(logging.WARNING, logger="demo_game.emotion_poller"):
+        with caplog.at_level(logging.WARNING, logger="demo_game.pollers.emotion_poller"):
             poller._poll_once()
         assert any("poll error" in r.message for r in caplog.records)
         label, valence, arousal = poller.get_emotion()
@@ -82,7 +82,7 @@ class TestEmotionPollerPollOnce:
             _make_client(raises=RuntimeError("network down")), interval_s=999.0
         )
         poller.set_active_npc("mira_innkeeper")
-        with caplog.at_level(logging.WARNING, logger="demo_game.emotion_poller"):
+        with caplog.at_level(logging.WARNING, logger="demo_game.pollers.emotion_poller"):
             poller._poll_once()
         assert any("poll error" in r.message for r in caplog.records)
 

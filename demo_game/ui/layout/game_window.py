@@ -6,13 +6,13 @@ Purpose: Main pygame game window — thin coordinator. Owns the event loop and
          Thread orchestration, queue dispatch, and quest/trade handlers live in
          game_controller.py (extracted per ISSUE-045 / DEC-032).
 Dependencies: pygame, demo_game.client, demo_game.config, demo_game.constants,
-              demo_game.game_controller, demo_game.emotion_poller,
-              demo_game.graph_panel.poller, demo_game.world_state_poller,
-              demo_game.npc_politics_poller, demo_game.npc_initiative_poller,
-              demo_game.npc_player_model_poller, demo_game.director_beat_poller,
-              demo_game.pledge_poller, demo_game.treaty_poller,
-              demo_game.chapter_poller, demo_game.tension_poller,
-              demo_game.intent_ui, demo_game.sandbox_loop,
+              demo_game.game_controller, demo_game.pollers.emotion_poller,
+              demo_game.graph_panel.poller, demo_game.pollers.world_state_poller,
+              demo_game.pollers.npc_politics_poller, demo_game.pollers.npc_initiative_poller,
+              demo_game.pollers.npc_player_model_poller, demo_game.pollers.director_beat_poller,
+              demo_game.pollers.pledge_poller, demo_game.pollers.treaty_poller,
+              demo_game.pollers.chapter_poller, demo_game.pollers.tension_poller,
+              demo_game.intent_ui, demo_game.runners.sandbox_loop,
               demo_game.ui.left_panel, demo_game.ui.right_panel,
               demo_game.ui.relation_ticker
 Used by: demo_game.__main__
@@ -35,32 +35,32 @@ from demo_game.config import DemoConfig, get_demo_config
 from demo_game.constants import LOCATION_DISPLAY_NAMES, LOCATION_NPC_MAP, LOCATIONS, NPC_DISPLAY_NAMES, NPC_LOCATION_MAP, PALETTE
 from demo_game.game_end_checker import ARC_WIN_SUBTITLES, LOSE_SUBTITLES, WIN_PATH_SUBTITLES
 from demo_game.game_controller import ControllerCallbacks, GameController
-from demo_game.game_end_poller import GameEndPoller
-from demo_game.gold_poller import GoldPoller
-from demo_game.emotion_poller import EmotionPoller
+from demo_game.pollers.game_end_poller import GameEndPoller
+from demo_game.pollers.gold_poller import GoldPoller
+from demo_game.pollers.emotion_poller import EmotionPoller
 from demo_game.graph_panel.poller import GraphPoller
 from demo_game.intent_ui import INTENT_BUBBLE_DISPLAY_SECONDS, INTENT_POLL_INTERVAL_SECONDS, TRIGGER_PHRASES
-from demo_game.npc_initiative_poller import NpcInitiativePoller
-from demo_game.npc_needs_poller import NpcNeedsPoller
-from demo_game.npc_goals_poller import NpcGoalsPoller
-from demo_game.npc_memory_poller import NpcMemoryPoller
-from demo_game.npc_player_model_poller import NpcPlayerModelPoller
-from demo_game.npc_schemes_poller import NpcSchemesPoller
-from demo_game.chapter_poller import ChapterPoller
-from demo_game.director_beat_poller import DirectorBeatPoller
-from demo_game.npc_politics_poller import NpcPoliticsPoller
-from demo_game.pledge_poller import PledgePoller
-from demo_game.tension_poller import TensionPoller
-from demo_game.treaty_poller import TreatyPoller
-from demo_game.world_poller import WorldPoller
-from demo_game.world_state_poller import WorldStatePoller
+from demo_game.pollers.npc_initiative_poller import NpcInitiativePoller
+from demo_game.pollers.npc_needs_poller import NpcNeedsPoller
+from demo_game.pollers.npc_goals_poller import NpcGoalsPoller
+from demo_game.pollers.npc_memory_poller import NpcMemoryPoller
+from demo_game.pollers.npc_player_model_poller import NpcPlayerModelPoller
+from demo_game.pollers.npc_schemes_poller import NpcSchemesPoller
+from demo_game.pollers.chapter_poller import ChapterPoller
+from demo_game.pollers.director_beat_poller import DirectorBeatPoller
+from demo_game.pollers.npc_politics_poller import NpcPoliticsPoller
+from demo_game.pollers.pledge_poller import PledgePoller
+from demo_game.pollers.tension_poller import TensionPoller
+from demo_game.pollers.treaty_poller import TreatyPoller
+from demo_game.pollers.world_poller import WorldPoller
+from demo_game.pollers.world_state_poller import WorldStatePoller
 from demo_game.ui.widgets import FontLoader
 from demo_game.ui.layout.left_panel import LeftPanelRenderer
 from demo_game.ui.layout.relation_ticker import RelationTicker
 from demo_game.ui.layout.right_panel import RightPanelRenderer
 
 if TYPE_CHECKING:
-    from demo_game.sandbox_loop import SandboxLoop
+    from demo_game.runners.sandbox_loop import SandboxLoop
 
 _LEFT_PANEL_RATIO = 0.60
 _NAV_BAR_H = 48

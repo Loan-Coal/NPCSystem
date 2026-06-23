@@ -4,7 +4,7 @@ Layer: demo_game (tests)
 Purpose: Unit tests for BranchNode and BranchOption construction, validation,
          and apply_all dispatch. Tests the garrick_deserter first-slice authored
          branch constants.
-Dependencies: demo_game.branch_node, demo_game.branch_effects, unittest.mock, pytest
+Dependencies: demo_game.branches.branch_node, demo_game.branches.branch_effects, unittest.mock, pytest
 Used by: make test-demo
 """
 
@@ -14,8 +14,8 @@ from unittest.mock import MagicMock, call
 
 import pytest
 
-from demo_game.branch_effects import GotoBeatEffect, RepDeltaEffect
-from demo_game.branch_node import (
+from demo_game.branches.branch_effects import GotoBeatEffect, RepDeltaEffect
+from demo_game.branches.branch_node import (
     BRANCH_ID_GARRICK,
     OPTION_LABEL_SPARE,
     OPTION_LABEL_TURN_IN,
@@ -188,7 +188,7 @@ def test_garrick_turn_in_applies_city_guard_faction() -> None:
 
 def test_build_garrick_branch_has_two_opposite_options() -> None:
     """build_garrick_branch returns the authored 2-option garrick fork (spare/turn-in)."""
-    from demo_game.branch_node import (
+    from demo_game.branches.branch_node import (
         build_garrick_branch, BRANCH_ID_GARRICK, OPTION_LABEL_SPARE, OPTION_LABEL_TURN_IN,
     )
 

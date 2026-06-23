@@ -3,7 +3,7 @@ Module: test_seed_h2
 Layer: demo_game (tests)
 Purpose: TDD tests for H2.2–H2.5 content expansion: 14 NPCs, 7 locations + districts,
          5 factions, 18 quests across 6 chains; verifies idempotency via KE-6.
-Dependencies: demo_game.seed, demo_game.seed_npc_data, demo_game.constants,
+Dependencies: demo_game.seeds.seed, demo_game.seeds.seed_npc_data, demo_game.constants,
               unittest.mock (no network, no engine required)
 Used by: pytest demo_game/tests/ -q
 """
@@ -30,8 +30,8 @@ from demo_game.constants import (
     NPC_FACTIONS,
     WIN_QUEST_CHAIN_IDS,
 )
-from demo_game.seed import _NPCS, _LOCATIONS, seed_all
-from demo_game.seed_npc_data import (
+from demo_game.seeds.seed import _NPCS, _LOCATIONS, seed_all
+from demo_game.seeds.seed_npc_data import (
     H2_CHAIN_QUESTS,
     H2_FACTIONS,
     H2_LOCATIONS,
@@ -223,7 +223,7 @@ def test_h2_new_locations_in_h2_locations() -> None:
 
 def test_h2_districts_defined() -> None:
     """H2_DISTRICTS must contain old_quarter and harbor_district."""
-    from demo_game.seed_npc_data import H2_DISTRICTS
+    from demo_game.seeds.seed_npc_data import H2_DISTRICTS
     dist_ids = {row[0] for row in H2_DISTRICTS}
     assert LOC_ID_OLD_QUARTER in dist_ids
     assert LOC_ID_HARBOR_DISTRICT in dist_ids

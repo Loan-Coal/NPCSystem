@@ -13,7 +13,7 @@ import sys
 from demo_game.arc_choice import ArcChoice
 
 # Subprocess module targets for scripted arcs.
-_MODULE_MUNICH = "demo_game.run"
+_MODULE_MUNICH = "demo_game.runners.run"
 _MODULE_VILLAGE = "demo_game.scenarios.run_village_crisis"
 _MODULE_TAVERN = "demo_game.scenarios.run_tavern_intrigue"
 

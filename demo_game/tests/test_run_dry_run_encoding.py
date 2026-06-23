@@ -16,7 +16,7 @@ from __future__ import annotations
 import io
 import sys
 
-from demo_game.run import main
+from demo_game.runners.run import main
 
 
 def _run_dry_run_on_cp1252_stdout(monkeypatch) -> str:

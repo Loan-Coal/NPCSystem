@@ -3,7 +3,7 @@ Module: test_npc_player_model_poller
 Layer: demo_game (tests)
 Purpose: Unit tests for NpcPlayerModelPoller (G2.1).
          No pygame, no network — all engine calls are mocked.
-Dependencies: demo_game.npc_player_model_poller, unittest.mock
+Dependencies: demo_game.pollers.npc_player_model_poller, unittest.mock
 Used by: pytest
 """
 
@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from demo_game.npc_player_model_poller import NpcPlayerModelPoller
+from demo_game.pollers.npc_player_model_poller import NpcPlayerModelPoller
 
 _PLAYER_ID = "player_demo"
 

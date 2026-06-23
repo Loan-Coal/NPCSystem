@@ -3,7 +3,7 @@ Module: test_npc_politics_poller
 Layer: demo_game (tests)
 Purpose: Unit tests for NpcPoliticsPoller.
          No pygame, no network — all engine calls are mocked.
-Dependencies: demo_game.npc_politics_poller, demo_game.client, unittest.mock
+Dependencies: demo_game.pollers.npc_politics_poller, demo_game.client, unittest.mock
 Used by: make test-demo
 """
 
@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from demo_game.client import EngineClientError
-from demo_game.npc_politics_poller import NpcPoliticsPoller
+from demo_game.pollers.npc_politics_poller import NpcPoliticsPoller
 
 
 def _make_client(

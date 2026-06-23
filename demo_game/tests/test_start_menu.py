@@ -61,7 +61,7 @@ def test_dispatch_free_play_opens_game_window(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_dispatch_munich_calls_subprocess(monkeypatch: pytest.MonkeyPatch) -> None:
-    """MUNICH arc choice delegates to subprocess running demo_game.run."""
+    """MUNICH arc choice delegates to subprocess running demo_game.runners.run."""
     from demo_game.arc_choice import ArcChoice
 
     monkeypatch.setattr(
@@ -79,7 +79,7 @@ def test_dispatch_munich_calls_subprocess(monkeypatch: pytest.MonkeyPatch) -> No
     assert call_args is not None
     cmd: list[str] = call_args[0][0]
     assert "-m" in cmd
-    assert any("demo_game.run" in part for part in cmd)
+    assert any("demo_game.runners.run" in part for part in cmd)
 
 
 def test_dispatch_village_calls_subprocess(monkeypatch: pytest.MonkeyPatch) -> None:
