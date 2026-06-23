@@ -13,7 +13,7 @@ Used by: api composition root (engines reading player/NPC co-location state).
 from __future__ import annotations
 
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.player_location_reader import PlayerLocationReader
+from npc_engine.graph.location.player_location_reader import PlayerLocationReader
 
 
 class Neo4jPlayerLocationReadRepository:

@@ -14,7 +14,7 @@ from typing import Any
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.location_history_queries import (
+from npc_engine.graph.location.location_history_queries import (
     CYPHER_CREATE_WAS_AT,
     CYPHER_DELETE_OLD_WAS_AT,
     get_alibi_window,

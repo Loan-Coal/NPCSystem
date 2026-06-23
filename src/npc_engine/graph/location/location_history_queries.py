@@ -5,7 +5,7 @@ Purpose: Cypher query strings and read accessors for WAS_AT edges (character loc
 Does NOT: execute business logic or validate payloads.
 Dependencies: None (Cypher strings only).
 Dependencies injected: AsyncSession.
-Used by: npc_engine.graph.location_history_service
+Used by: npc_engine.graph.location.location_history_service
 """
 
 from __future__ import annotations

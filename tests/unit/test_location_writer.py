@@ -32,7 +32,7 @@ def _make_session() -> MagicMock:
 @pytest.mark.asyncio
 async def test_write_part_of_calls_session_run():
     """write_part_of must call session.run exactly once."""
-    from npc_engine.graph.location_writer import write_part_of
+    from npc_engine.graph.location.location_writer import write_part_of
 
     session = _make_session()
     await write_part_of(session, child_id="loc_tavern", parent_id="loc_city", hierarchy_level=0)
@@ -43,7 +43,7 @@ async def test_write_part_of_calls_session_run():
 @pytest.mark.asyncio
 async def test_write_part_of_passes_correct_params():
     """write_part_of must forward child_id, parent_id, and hierarchy_level."""
-    from npc_engine.graph.location_writer import write_part_of
+    from npc_engine.graph.location.location_writer import write_part_of
 
     session = _make_session()
     await write_part_of(session, child_id="loc_tavern", parent_id="loc_city", hierarchy_level=0)
@@ -57,7 +57,7 @@ async def test_write_part_of_passes_correct_params():
 @pytest.mark.asyncio
 async def test_write_part_of_passes_established_at():
     """write_part_of must include an established_at timestamp string."""
-    from npc_engine.graph.location_writer import write_part_of
+    from npc_engine.graph.location.location_writer import write_part_of
 
     session = _make_session()
     await write_part_of(session, child_id="loc_x", parent_id="loc_y", hierarchy_level=1)
@@ -71,7 +71,7 @@ async def test_write_part_of_passes_established_at():
 @pytest.mark.asyncio
 async def test_write_part_of_is_idempotent():
     """Calling write_part_of twice with the same args must not raise."""
-    from npc_engine.graph.location_writer import write_part_of
+    from npc_engine.graph.location.location_writer import write_part_of
 
     session = _make_session()
     await write_part_of(session, child_id="loc_a", parent_id="loc_b", hierarchy_level=0)
@@ -83,7 +83,7 @@ async def test_write_part_of_is_idempotent():
 @pytest.mark.asyncio
 async def test_write_part_of_raises_on_self_loop():
     """write_part_of must raise ValueError when child_id == parent_id."""
-    from npc_engine.graph.location_writer import write_part_of
+    from npc_engine.graph.location.location_writer import write_part_of
 
     session = _make_session()
     with pytest.raises(ValueError, match="itself"):
@@ -98,7 +98,7 @@ async def test_write_part_of_raises_on_self_loop():
 @pytest.mark.asyncio
 async def test_delete_part_of_calls_session_run():
     """delete_part_of must call session.run exactly once."""
-    from npc_engine.graph.location_writer import delete_part_of
+    from npc_engine.graph.location.location_writer import delete_part_of
 
     session = _make_session()
     await delete_part_of(session, child_id="loc_tavern", parent_id="loc_city")
@@ -109,7 +109,7 @@ async def test_delete_part_of_calls_session_run():
 @pytest.mark.asyncio
 async def test_delete_part_of_passes_correct_params():
     """delete_part_of must forward child_id and parent_id."""
-    from npc_engine.graph.location_writer import delete_part_of
+    from npc_engine.graph.location.location_writer import delete_part_of
 
     session = _make_session()
     await delete_part_of(session, child_id="loc_tavern", parent_id="loc_city")

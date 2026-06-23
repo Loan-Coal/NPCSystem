@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from npc_engine.graph.location_history_service import (
+from npc_engine.graph.location.location_history_service import (
     get_alibi_window_svc,
     get_location_history_svc,
     prune_location_history,
@@ -108,7 +108,7 @@ async def test_record_departure_same_tick_gives_duration_zero() -> None:
 @pytest.mark.asyncio
 async def test_get_location_history_passes_limit_to_query() -> None:
     with patch(
-        "npc_engine.graph.location_history_service.get_location_history",
+        "npc_engine.graph.location.location_history_service.get_location_history",
         new_callable=AsyncMock,
         return_value=[],
     ) as mock_fn:
@@ -120,7 +120,7 @@ async def test_get_location_history_passes_limit_to_query() -> None:
 @pytest.mark.asyncio
 async def test_get_location_history_default_limit() -> None:
     with patch(
-        "npc_engine.graph.location_history_service.get_location_history",
+        "npc_engine.graph.location.location_history_service.get_location_history",
         new_callable=AsyncMock,
         return_value=[],
     ) as mock_fn:
@@ -137,7 +137,7 @@ async def test_get_location_history_default_limit() -> None:
 @pytest.mark.asyncio
 async def test_get_alibi_window_passes_tick_range() -> None:
     with patch(
-        "npc_engine.graph.location_history_service.get_alibi_window",
+        "npc_engine.graph.location.location_history_service.get_alibi_window",
         new_callable=AsyncMock,
         return_value=[],
     ) as mock_fn:

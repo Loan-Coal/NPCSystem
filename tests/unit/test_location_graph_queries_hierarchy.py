@@ -48,7 +48,7 @@ async def test_get_ancestors_returns_ordered_ids():
     ]
     session = _make_session_with_records(records)
 
-    from npc_engine.graph.location_graph_queries import get_ancestors
+    from npc_engine.graph.location.location_graph_queries import get_ancestors
 
     result = await get_ancestors(session, location_id="loc_tavern")
 
@@ -61,7 +61,7 @@ async def test_get_ancestors_returns_empty_for_root_node():
     """get_ancestors returns empty list when the node has no PART_OF edges."""
     session = _make_session_with_records([])
 
-    from npc_engine.graph.location_graph_queries import get_ancestors
+    from npc_engine.graph.location.location_graph_queries import get_ancestors
 
     result = await get_ancestors(session, location_id="loc_world")
 
@@ -73,7 +73,7 @@ async def test_get_ancestors_passes_location_id_to_cypher():
     """get_ancestors must forward location_id as a query parameter."""
     session = _make_session_with_records([])
 
-    from npc_engine.graph.location_graph_queries import get_ancestors
+    from npc_engine.graph.location.location_graph_queries import get_ancestors
 
     await get_ancestors(session, location_id="loc_barracks")
 
@@ -96,7 +96,7 @@ async def test_get_descendants_returns_flattened_ids():
     ]
     session = _make_session_with_records(records)
 
-    from npc_engine.graph.location_graph_queries import get_descendants
+    from npc_engine.graph.location.location_graph_queries import get_descendants
 
     result = await get_descendants(session, location_id="loc_city")
 
@@ -109,7 +109,7 @@ async def test_get_descendants_returns_empty_for_leaf_node():
     """get_descendants returns empty list when the node has no PART_OF children."""
     session = _make_session_with_records([])
 
-    from npc_engine.graph.location_graph_queries import get_descendants
+    from npc_engine.graph.location.location_graph_queries import get_descendants
 
     result = await get_descendants(session, location_id="loc_tavern")
 
@@ -121,7 +121,7 @@ async def test_get_descendants_passes_location_id_to_cypher():
     """get_descendants must forward location_id as a query parameter."""
     session = _make_session_with_records([])
 
-    from npc_engine.graph.location_graph_queries import get_descendants
+    from npc_engine.graph.location.location_graph_queries import get_descendants
 
     await get_descendants(session, location_id="loc_city")
 

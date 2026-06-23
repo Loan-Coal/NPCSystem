@@ -21,8 +21,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
-from npc_engine.graph.location_graph_queries import get_ancestors, get_descendants
-from npc_engine.graph.location_writer import delete_part_of, write_part_of
+from npc_engine.graph.location.location_graph_queries import get_ancestors, get_descendants
+from npc_engine.graph.location.location_writer import delete_part_of, write_part_of
 from npc_engine.utils.logging import get_logger
 
 logger = get_logger(__name__)

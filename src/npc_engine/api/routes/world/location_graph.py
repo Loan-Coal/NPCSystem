@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
-from npc_engine.graph.location_graph_queries import (
+from npc_engine.graph.location.location_graph_queries import (
     create_connection,
     delete_connection,
     get_connections_for_location,

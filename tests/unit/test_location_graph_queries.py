@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from npc_engine.graph.location_graph_queries import (
+from npc_engine.graph.location.location_graph_queries import (
     create_connection,
     delete_connection,
     get_connections_for_location,
