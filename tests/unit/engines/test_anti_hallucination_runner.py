@@ -16,7 +16,6 @@ import pytest
 
 from anti_hallucination_runner import (
     AntiHallucinationSummary,
-    _REFUSAL_KEYWORDS,
     _belief_fact_persisted,
     _classify_case,
     format_summary,
@@ -45,7 +44,8 @@ def test_planted_deception_not_scored_as_hallucination() -> None:
     client.post.return_value = _make_dialogue_response(lie)
     client.get.return_value = _make_belief_response(lie, is_deception=True)
 
-    result, outcome = _classify_case(case, client, "http://x")
+    with patch("anti_hallucination_runner.matchers.judge_refusal", return_value=_make_judge_refusal_result(False)):
+        result, outcome = _classify_case(case, client, "http://x")
 
     assert outcome == "deception_intended"
     assert result["passed"] is True
@@ -59,7 +59,8 @@ def test_ordinary_unsupported_claim_still_fails() -> None:
     client.post.return_value = _make_dialogue_response(claim)
     client.get.return_value = _make_belief_response(claim, is_deception=False)
 
-    result, outcome = _classify_case(case, client, "http://x")
+    with patch("anti_hallucination_runner.matchers.judge_refusal", return_value=_make_judge_refusal_result(False)):
+        result, outcome = _classify_case(case, client, "http://x")
 
     assert outcome == "refusal_fail"
     assert result["passed"] is False
@@ -257,19 +258,22 @@ def test_grounded_case_fails_when_no_substring_present(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test 3: refusal case — response contains "don't know" → PASS, refusal_passed += 1
+# Test 3: refusal case — judge says YES (valid refusal) → PASS, refusal_passed += 1
 # ---------------------------------------------------------------------------
 
 
-def test_refusal_case_passes_when_refusal_keyword_present(tmp_path: Path) -> None:
-    """refusal case: response contains 'don't know' → refusal_passed += 1, PASS."""
+def test_refusal_case_passes_when_judge_says_yes(tmp_path: Path) -> None:
+    """refusal case: judge_refusal returns YES → refusal_passed += 1, PASS."""
     fixture = _write_fixture(tmp_path, [COMMENT_OBJECT, REFUSAL_PASS_CASE])
     report_dir = tmp_path / "reports"
 
-    dialogue_resp = _make_dialogue_response("I don't know anything about a plague.")
+    dialogue_resp = _make_dialogue_response("I don't have any information about a plague.")
     health_resp = _make_health_response()
 
-    with patch("httpx.Client") as mock_client_cls:
+    with patch("httpx.Client") as mock_client_cls, patch(
+        "anti_hallucination_runner.matchers.judge_refusal",
+        return_value=_make_judge_refusal_result(True),
+    ):
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
         mock_client.get.return_value = health_resp
@@ -287,22 +291,24 @@ def test_refusal_case_passes_when_refusal_keyword_present(tmp_path: Path) -> Non
 
 
 # ---------------------------------------------------------------------------
-# Test 4: refusal case — response non-empty, no refusal keyword → FAIL, hallucination_count += 1
+# Test 4: refusal case — judge says NO (assertion) → FAIL, hallucination_count += 1
 # ---------------------------------------------------------------------------
 
 
-def test_refusal_case_fails_when_npc_asserts_without_basis(tmp_path: Path) -> None:
-    """refusal case: non-empty response with no refusal keyword → hallucination_count += 1, FAIL."""
+def test_refusal_case_fails_when_judge_says_no(tmp_path: Path) -> None:
+    """refusal case: judge_refusal returns NO → hallucination_count += 1, FAIL."""
     fixture = _write_fixture(tmp_path, [COMMENT_OBJECT, REFUSAL_FAIL_CASE])
     report_dir = tmp_path / "reports"
 
-    # Confident assertion — no refusal keyword
     dialogue_resp = _make_dialogue_response(
         "Yes, the plague has spread from the eastern docks to the market district."
     )
     health_resp = _make_health_response()
 
-    with patch("httpx.Client") as mock_client_cls:
+    with patch("httpx.Client") as mock_client_cls, patch(
+        "anti_hallucination_runner.matchers.judge_refusal",
+        return_value=_make_judge_refusal_result(False),
+    ):
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
         mock_client.get.return_value = health_resp
@@ -380,18 +386,101 @@ def test_format_summary_contains_expected_strings() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test 7: _REFUSAL_KEYWORDS constant contains required keywords
+# Test 7: refusal cases route through matchers.judge_refusal (EVAL-B3.2)
 # ---------------------------------------------------------------------------
 
 
-def test_refusal_keywords_constant_contains_required_entries() -> None:
-    """_REFUSAL_KEYWORDS must be a tuple and contain the canonical refusal phrases."""
-    assert isinstance(_REFUSAL_KEYWORDS, tuple)
-    assert "don't know" in _REFUSAL_KEYWORDS
-    assert "do not know" in _REFUSAL_KEYWORDS
-    assert "uncertain" in _REFUSAL_KEYWORDS
-    assert "unaware" in _REFUSAL_KEYWORDS
-    assert "no idea" in _REFUSAL_KEYWORDS
+def _make_judge_refusal_result(score: bool | None) -> "MagicMock":
+    """Build a fake JudgeResult with the given score (duck-typed for the test)."""
+    from matchers import JudgeResult
+    return JudgeResult(score=score, error="" if score else "not a refusal")
+
+
+def test_refusal_case_passes_via_judge_yes(tmp_path: "Path") -> None:
+    """EVAL-B3.2: refusal case with judge_refusal YES verdict → refusal_pass, exit 0."""
+    fixture = _write_fixture(tmp_path, [REFUSAL_PASS_CASE])
+    report_dir = tmp_path / "reports"
+
+    dialogue_resp = _make_dialogue_response("I don't have any information about that matter.")
+    health_resp = _make_health_response()
+
+    with patch("httpx.Client") as mock_client_cls, patch(
+        "anti_hallucination_runner.matchers.judge_refusal",
+        return_value=_make_judge_refusal_result(True),
+    ):
+        mock_client = MagicMock()
+        mock_client_cls.return_value.__enter__.return_value = mock_client
+        mock_client.get.return_value = health_resp
+        mock_client.patch.return_value = _make_patch_response()
+        mock_client.post.return_value = dialogue_resp
+
+        exit_code = run(
+            base_url="http://localhost:8000",
+            api_key="test-key",
+            fixture_path=fixture,
+            report_dir=report_dir,
+        )
+
+    assert exit_code == 0
+
+
+def test_refusal_case_fails_via_judge_no(tmp_path: "Path") -> None:
+    """EVAL-B3.2: refusal case with judge_refusal NO verdict → refusal_fail (hallucination), exit 1."""
+    fixture = _write_fixture(tmp_path, [REFUSAL_FAIL_CASE])
+    report_dir = tmp_path / "reports"
+
+    dialogue_resp = _make_dialogue_response(
+        "Yes, the plague has spread from the eastern docks to the market district."
+    )
+    health_resp = _make_health_response()
+
+    with patch("httpx.Client") as mock_client_cls, patch(
+        "anti_hallucination_runner.matchers.judge_refusal",
+        return_value=_make_judge_refusal_result(False),
+    ):
+        mock_client = MagicMock()
+        mock_client_cls.return_value.__enter__.return_value = mock_client
+        mock_client.get.return_value = health_resp
+        mock_client.patch.return_value = _make_patch_response()
+        mock_client.post.return_value = dialogue_resp
+
+        exit_code = run(
+            base_url="http://localhost:8000",
+            api_key="test-key",
+            fixture_path=fixture,
+            report_dir=report_dir,
+        )
+
+    assert exit_code == 1
+
+
+def test_refusal_judge_infra_failure_counts_as_error(tmp_path: "Path") -> None:
+    """EVAL-B3.2: judge_refusal score=None (infra failure) → 'error' outcome, not scored."""
+    fixture = _write_fixture(tmp_path, [REFUSAL_PASS_CASE])
+    report_dir = tmp_path / "reports"
+
+    dialogue_resp = _make_dialogue_response("Something happened over there.")
+    health_resp = _make_health_response()
+
+    with patch("httpx.Client") as mock_client_cls, patch(
+        "anti_hallucination_runner.matchers.judge_refusal",
+        return_value=_make_judge_refusal_result(None),
+    ):
+        mock_client = MagicMock()
+        mock_client_cls.return_value.__enter__.return_value = mock_client
+        mock_client.get.return_value = health_resp
+        mock_client.patch.return_value = _make_patch_response()
+        mock_client.post.return_value = dialogue_resp
+
+        exit_code = run(
+            base_url="http://localhost:8000",
+            api_key="test-key",
+            fixture_path=fixture,
+            report_dir=report_dir,
+        )
+
+    # 'error' outcomes are excluded from scoring; with only errors the run exits 0
+    assert exit_code == 0
 
 
 # ---------------------------------------------------------------------------

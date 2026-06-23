@@ -1903,6 +1903,20 @@ exceed the demo client's 15 s `graph_timeout` under heavy ticks — acceptable f
 ISSUE-083 (captain voice) may remain borderline even on 14b; it is documented and non-blocking.
 Revisit if latency becomes the priority (drop back toward 7b) or a larger-VRAM machine allows per-engine tiers.
 
+## DEC-145: evals/matchers.py size waiver (474 lines, >300 limit)
+**Date:** 2026-06-23
+**Context:** EVAL-B3 adds `judge_refusal()` + its YAML loader to `matchers.py`. The phase
+constraint explicitly requires "judge transport stays in the cov-measured `matchers.py`"
+(a split would remove the new lines from `--cov`, losing coverage credit). File is now 474 lines.
+**Decision:** Waive the 300-line limit for `evals/matchers.py`. The module is a single cohesive
+set of expectation evaluators sharing `_run_binary_judge`, `JudgeResult`, `EvalConfigError`,
+and the judge-model/URL singletons. Splitting into matcher sub-modules would require re-exporting
+all shared types and break the `--cov` requirement without structural benefit.
+**Rationale:** Same precedent as DEC-140 (cohesive-by-design debt, documented waiver).
+Every refusal and tone judge function must share `_run_binary_judge` and the module-level
+singletons; extracting them into a separate file would create circular-import risk or a
+helper module with no independent test surface.
+
 ## DEC-143: Eval judge model MUST differ from the generation model (no self-evaluation)
 **Date:** 2026-06-23 · **Status:** ✅ ACCEPTED · **Drives:** `evals/judge_config.py`, `evals/matchers.py`, `e2e/helpers/judge_client.py`, `e2e/scenarios/scenario_*_judge.py`
 **Context:** The eval suite used `qwen2.5:14b` (the generation model per DEC-142) as the LLM judge in

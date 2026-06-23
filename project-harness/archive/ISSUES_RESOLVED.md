@@ -1651,3 +1651,20 @@ c1c7607 → pre-existing, unrelated to the graph reorg.
 **Fix:** Added `_make_patch_response()` helper returning status_code=200 to all 8 `run()` tests in
 `tests/unit/engines/test_anti_hallucination_runner.py`; added `test_run_calls_reset_world_once_before_case_loop`
 regression guard (EVAL-B2.2). 2573 tests pass, 29 skipped.
+
+---
+
+## [FIXED] ISSUE-119: anti-hallucination eval is unreliable — brittle refusal detection + no world-state reset
+**Found:** 2026-06-22, during the eval debug session (after fixing the runner's auth so it executes at all)
+**Fixed:** 2026-06-23, in EVAL-B2 (world-state reset, commit 252a5fc) + EVAL-B3 (LLM-judge refusal scorer, commit cff420b + EVAL-B3.2 commit)
+**Severity:** P2 (the headline "0 hallucinations" guarantee cannot be trusted until the scorer is fixed)
+**Where:** `evals/anti_hallucination_runner.py` (`_is_refusal` / `_REFUSAL_KEYWORDS`; no world_state reset)
+**Description:** `_is_refusal()` was a fixed keyword match that missed common valid refusal phrasings
+("I don't have any information", "ask someone at the barracks", "my ears aren't tuned to such matters"),
+causing legitimate refusals to score as hallucinations. Secondary: no world-state reset let a prior run
+leaving epoch="war" contaminate the age_of_peace baseline (18 hallucinations with war → 15 after reset).
+**To fix:** (1) Replace `_is_refusal` keyword matching with the LLM judge — done in EVAL-B3 via
+`matchers.judge_refusal()` + `prompts/eval/refusal_judge.yaml`;
+(2) reset world_state at run start — done in EVAL-B2 via `preconditions.reset_world()`;
+(3) re-measure the true guard number (EVAL-FINAL, requires live stack).
+

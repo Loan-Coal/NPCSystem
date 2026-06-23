@@ -5,7 +5,7 @@ Purpose: Run evals/cases/anti_hallucination_demo.json against the live engine
          and report grounded/refusal/hallucination metrics.
 Dependencies: httpx, json, pathlib, argparse, sys, pydantic
 Used by: Makefile eval-anti-hallucination target, CI
-Does NOT: import from src/npc_engine/, call LLM judges, modify graph state
+Does NOT: import from src/npc_engine/, modify graph state
 """
 
 from __future__ import annotations
@@ -19,30 +19,11 @@ from typing import Any
 import httpx
 from pydantic import BaseModel
 
+import matchers
 import preconditions
 
 # Import write_report from sibling module (evals/ on sys.path when run via Makefile)
 from report import write_report
-
-
-_REFUSAL_KEYWORDS: tuple[str, ...] = (
-    "don't know",
-    "do not know",
-    "haven't heard",
-    "have not heard",
-    "not sure",
-    "not certain",
-    "no idea",
-    "can't say",
-    "cannot say",
-    "wouldn't know",
-    "would not know",
-    "doubt",
-    "uncertain",
-    "haven't come across",
-    "haven't seen",
-    "unaware",
-)
 
 # Use the demo-world player that demo_game.seed always creates. A bespoke id like
 # "player_eval" has no Character node, so first-contact dialogue 422s (ISSUE-118,
@@ -90,12 +71,6 @@ def classify_deception_belief(belief: dict[str, Any]) -> str:
     if belief.get("is_deception") is True:
         return "intended"
     return "hallucination"
-
-
-def _is_refusal(response_text: str) -> bool:
-    """Return True if the response contains at least one refusal keyword."""
-    lowered = response_text.lower()
-    return any(kw in lowered for kw in _REFUSAL_KEYWORDS)
 
 
 def _is_grounded(response_text: str, expected_fact_substrings: list[str]) -> bool:
@@ -267,13 +242,18 @@ def _classify_case(
     if expected_verdict == "grounded":
         passed = _is_grounded(response_text, expected_substrings)
         outcome = "grounded_pass" if passed else "grounded_fail"
-    elif _is_refusal(response_text):
-        passed, outcome = True, "refusal_pass"
-    elif _response_reflects_planted_deception(npc_id, client, base_url, response_text):
-        # NPC voiced a deliberately-planted lie — intended, not a hallucination (F3.3).
-        passed, outcome = True, "deception_intended"
     else:
-        passed, outcome = False, "refusal_fail"
+        refusal_verdict = matchers.judge_refusal(response_text)
+        if refusal_verdict.score is None:
+            # Infra failure (Ollama unreachable) — count as error, not a scored turn.
+            passed, outcome = False, "error"
+        elif refusal_verdict.score:
+            passed, outcome = True, "refusal_pass"
+        elif _response_reflects_planted_deception(npc_id, client, base_url, response_text):
+            # NPC voiced a deliberately-planted lie — intended, not a hallucination (F3.3).
+            passed, outcome = True, "deception_intended"
+        else:
+            passed, outcome = False, "refusal_fail"
 
     result = _build_result(
         case_id=case_id,

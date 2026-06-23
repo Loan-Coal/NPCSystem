@@ -18,28 +18,6 @@ Rules:
 
 ---
 
-## ISSUE-119: anti-hallucination eval is unreliable — brittle refusal detection + no world-state reset
-**Found:** 2026-06-22, during the eval debug session (after fixing the runner's auth so it executes at all)
-**Severity:** P2 (the headline "0 hallucinations" guarantee cannot be trusted until the scorer is fixed)
-**Where:** `evals/anti_hallucination_runner.py` (`_is_refusal` / `_REFUSAL_KEYWORDS` lines 26-96; no world_state reset)
-**Description:** With the auth bug fixed (X-API-Key → Bearer) the suite now runs (was 0/0 all-ERROR). It reports
-15-18 hallucinations, but **spot-checks show the engine refusing correctly** and the *scorer* mismarking good
-answers:
-- `ah_demo_mira_no_troop_count`: NPC says "I don't have any information about troop movements… ask someone at
-  the barracks" — a textbook refusal — scored as a hallucination.
-- `ah_demo_lira_no_war_knowledge`: NPC correctly says "there hasn't been a war for years, the peace has held" on
-  an age_of_peace baseline — scored as a hallucination.
-Root cause: `_is_refusal()` is a fixed keyword match (`don't know`, `unaware`, …) that misses common valid
-refusal phrasings ("I don't have any information", "ask someone at the barracks", "my ears aren't tuned to such
-matters"), so legitimate refusals fall through to `refusal_fail` and inflate `hallucination_count`. Secondary:
-the runner does not reset `world_state`, so a prior test leaving `epoch="war"` contaminates the baseline
-(measured: 18 hallucinations with epoch=war → 15 after resetting to age_of_peace).
-**Why deferred:** Separate from the listed errors (all fixed this session); fixing the scorer is eval-tuning,
-not an engine change, and needs care to avoid masking real leaks.
-**To fix:** (1) Replace `_is_refusal` keyword matching with the LLM judge (or a much broader refusal set);
-(2) reset `world_state` to a clean baseline at the start of the run (or run on a fresh seed); (3) re-measure the
-true guard number. Until then treat the hallucination counts as unreliable, not an engine regression.
-
 ---
 
 ## ISSUE-083: two voice tone_judge cases fail under epoch=war / stage_b_v2.9 (captain_sorn, mira_innkeeper)

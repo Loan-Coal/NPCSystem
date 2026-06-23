@@ -72,7 +72,7 @@ cov-measured `matchers.py`; refusal criterion lives only in `prompts/eval/`.
 anti-hallucination number against the live engine after the swap (manual, not gated).
 
 - [x] **EVAL-B3.1** Add `prompts/eval/refusal_judge.yaml` (header + `{criteria}`/`{content}`); add `matchers.judge_refusal(content) -> JudgeResult` (new `_REFUSAL_YAML_PATH` + loader mirroring the tone loader; reuse `_run_binary_judge`). Tests in `tests/unit/conformance/test_eval_matchers_sev38.py`: YES→score True, NO→False, infra→None; refusal prompt loaded. ✅ 2026-06-23
-- [ ] **EVAL-B3.2** Rewire `anti_hallucination_runner._classify_case` to use `matchers.judge_refusal` (delete `_REFUSAL_KEYWORDS`/`_is_refusal`; `score is None`→`error` outcome). Update the refusal tests in `test_anti_hallucination_runner.py` to patch `matchers.judge_refusal`. Mark **ISSUE-119 `[FIXED]`** + move to `archive/ISSUES_RESOLVED.md`.
+- [x] **EVAL-B3.2** Rewire `anti_hallucination_runner._classify_case` to use `matchers.judge_refusal` (delete `_REFUSAL_KEYWORDS`/`_is_refusal`; `score is None`→`error` outcome). Update the refusal tests in `test_anti_hallucination_runner.py` to patch `matchers.judge_refusal`. Mark **ISSUE-119 `[FIXED]`** + move to `archive/ISSUES_RESOLVED.md`. ✅ 2026-06-23
 
 ### Phase EVAL-B4 — Two-phase generate→judge, shared record model (DEC-144)
 **Goal:** A generation pass collects all engine replies → persists structured records → a judge pass reads
