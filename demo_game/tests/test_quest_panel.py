@@ -53,7 +53,7 @@ def _mock_rect(x: int = 0, y: int = 0, w: int = 400, h: int = 300) -> MagicMock:
 
 def test_quest_panel_no_data_draws_without_crash() -> None:
     from unittest.mock import patch
-    from demo_game.ui.quest_panel import QuestPanelWidget
+    from demo_game.ui.panels.quest_panel import QuestPanelWidget
 
     font = _MockFont()
     widget = QuestPanelWidget(font, font)
@@ -63,7 +63,7 @@ def test_quest_panel_no_data_draws_without_crash() -> None:
 
 
 def test_quest_panel_defaults_to_none() -> None:
-    from demo_game.ui.quest_panel import QuestPanelWidget
+    from demo_game.ui.panels.quest_panel import QuestPanelWidget
 
     font = _MockFont()
     widget = QuestPanelWidget(font, font)
@@ -83,7 +83,7 @@ _SAMPLE_QUEST = {
 
 
 def test_quest_panel_with_data_stores_quest() -> None:
-    from demo_game.ui.quest_panel import QuestPanelWidget
+    from demo_game.ui.panels.quest_panel import QuestPanelWidget
 
     font = _MockFont()
     widget = QuestPanelWidget(font, font, quest_data=_SAMPLE_QUEST)
@@ -92,7 +92,7 @@ def test_quest_panel_with_data_stores_quest() -> None:
 
 def test_quest_panel_with_data_draws_without_crash() -> None:
     from unittest.mock import patch
-    from demo_game.ui.quest_panel import QuestPanelWidget
+    from demo_game.ui.panels.quest_panel import QuestPanelWidget
 
     font = _MockFont()
     widget = QuestPanelWidget(font, font, quest_data=_SAMPLE_QUEST)
@@ -102,7 +102,7 @@ def test_quest_panel_with_data_draws_without_crash() -> None:
 
 
 def test_quest_panel_set_quest_updates_data() -> None:
-    from demo_game.ui.quest_panel import QuestPanelWidget
+    from demo_game.ui.panels.quest_panel import QuestPanelWidget
 
     font = _MockFont()
     widget = QuestPanelWidget(font, font)
@@ -112,7 +112,7 @@ def test_quest_panel_set_quest_updates_data() -> None:
 
 
 def test_quest_panel_set_quest_to_none_clears_data() -> None:
-    from demo_game.ui.quest_panel import QuestPanelWidget
+    from demo_game.ui.panels.quest_panel import QuestPanelWidget
 
     font = _MockFont()
     widget = QuestPanelWidget(font, font, quest_data=_SAMPLE_QUEST)
@@ -126,7 +126,7 @@ def test_quest_panel_set_quest_to_none_clears_data() -> None:
 
 
 def test_quest_panel_handle_event_no_op() -> None:
-    from demo_game.ui.quest_panel import QuestPanelWidget
+    from demo_game.ui.panels.quest_panel import QuestPanelWidget
 
     font = _MockFont()
     widget = QuestPanelWidget(font, font)
@@ -139,7 +139,7 @@ def test_quest_panel_handle_event_no_op() -> None:
 
 
 def test_quest_panel_set_accept_callback_stores_callable() -> None:
-    from demo_game.ui.quest_panel import QuestPanelWidget
+    from demo_game.ui.panels.quest_panel import QuestPanelWidget
 
     cb = MagicMock()
     font = _MockFont()
@@ -149,7 +149,7 @@ def test_quest_panel_set_accept_callback_stores_callable() -> None:
 
 
 def test_quest_panel_set_status_overrides_displayed_status() -> None:
-    from demo_game.ui.quest_panel import QuestPanelWidget
+    from demo_game.ui.panels.quest_panel import QuestPanelWidget
 
     font = _MockFont()
     widget = QuestPanelWidget(font, font, quest_data=_SAMPLE_QUEST)
@@ -160,7 +160,7 @@ def test_quest_panel_set_status_overrides_displayed_status() -> None:
 def test_quest_panel_accept_button_click_fires_callback() -> None:
     """When status=='offered' and the accept button rect is clicked, callback fires."""
     import pygame
-    from demo_game.ui.quest_panel import QuestPanelWidget
+    from demo_game.ui.panels.quest_panel import QuestPanelWidget
 
     cb = MagicMock()
     font = _MockFont()
@@ -182,7 +182,7 @@ def test_quest_panel_accept_button_click_fires_callback() -> None:
 def test_quest_panel_accept_button_click_outside_does_not_fire() -> None:
     """A click outside the accept rect must not fire the callback."""
     import pygame
-    from demo_game.ui.quest_panel import QuestPanelWidget
+    from demo_game.ui.panels.quest_panel import QuestPanelWidget
 
     cb = MagicMock()
     font = _MockFont()

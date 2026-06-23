@@ -54,10 +54,10 @@ from demo_game.tension_poller import TensionPoller
 from demo_game.treaty_poller import TreatyPoller
 from demo_game.world_poller import WorldPoller
 from demo_game.world_state_poller import WorldStatePoller
-from demo_game.ui.font_loader import FontLoader
-from demo_game.ui.left_panel import LeftPanelRenderer
-from demo_game.ui.relation_ticker import RelationTicker
-from demo_game.ui.right_panel import RightPanelRenderer
+from demo_game.ui.widgets import FontLoader
+from demo_game.ui.layout.left_panel import LeftPanelRenderer
+from demo_game.ui.layout.relation_ticker import RelationTicker
+from demo_game.ui.layout.right_panel import RightPanelRenderer
 
 if TYPE_CHECKING:
     from demo_game.sandbox_loop import SandboxLoop

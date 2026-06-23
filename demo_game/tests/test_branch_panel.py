@@ -19,7 +19,7 @@ import pytest
 
 from demo_game.branch_effects import RepDeltaEffect
 from demo_game.branch_node import BranchNode, BranchOption
-from demo_game.ui.branch_panel import (
+from demo_game.ui.panels.branch_panel import (
     BranchPanelWidget,
     _handle_event,
     _wrap_text,

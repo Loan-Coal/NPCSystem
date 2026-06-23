@@ -36,26 +36,27 @@ from demo_game.graph_panel.poller import GraphPoller
 
 if TYPE_CHECKING:
     from demo_game.game_end_checker import ObjectiveState
-from demo_game.ui.actions_panel import ActionsPanelWidget
-from demo_game.ui.emotion_panel import EmotionPanelWidget
-from demo_game.ui.investigation_panel import InvestigationPanelWidget
-from demo_game.ui.oath_panel import OathPanelWidget
-from demo_game.ui.treaty_panel import TreatyPanelWidget
-from demo_game.ui.goals_panel import GoalsPanelWidget
-from demo_game.ui.gossip_chain import GossipChainWidget
-from demo_game.ui.memory_panel import MemoryPanelWidget
-from demo_game.ui.faction_board import FactionBoardWidget
-from demo_game.ui.retrieval_panel import RetrievalPanelWidget
-from demo_game.ui.politics_panel import PoliticsPanelWidget
-from demo_game.ui.player_model_panel import PlayerModelPanelWidget
-from demo_game.ui.scheme_board_panel import SchemeBoardPanelWidget
-from demo_game.ui.inspect_panel import InspectPanelWidget
-from demo_game.ui.knowledge_sidebar import KnowledgeSidebarWidget
-from demo_game.ui.inventory_panel import InventoryPanelWidget
-from demo_game.ui.needs_panel import NeedsPanelWidget
-from demo_game.ui.quest_panel import QuestPanelWidget
-from demo_game.ui.trade_panel import TradePanelWidget
-from demo_game.ui.world_panel import WorldPanelWidget
+from demo_game.ui.panels import (
+    ActionsPanelWidget,
+    EmotionPanelWidget,
+    GoalsPanelWidget,
+    InspectPanelWidget,
+    InvestigationPanelWidget,
+    InventoryPanelWidget,
+    MemoryPanelWidget,
+    NeedsPanelWidget,
+    OathPanelWidget,
+    PlayerModelPanelWidget,
+    PoliticsPanelWidget,
+    QuestPanelWidget,
+    RetrievalPanelWidget,
+    SchemeBoardPanelWidget,
+    TradePanelWidget,
+    TreatyPanelWidget,
+    WorldPanelWidget,
+)
+from demo_game.ui.boards import FactionBoardWidget, GossipChainWidget
+from demo_game.ui.widgets import KnowledgeSidebarWidget
 
 PANEL_HEADER_H = 24  # Height of the tab-name header strip at the top of the right panel.
 

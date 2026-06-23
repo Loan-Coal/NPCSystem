@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 import pygame
 import pytest
 
-from demo_game.ui.oath_panel import OathPanelWidget
+from demo_game.ui.panels.oath_panel import OathPanelWidget
 
 
 @pytest.fixture(autouse=True)

@@ -33,7 +33,7 @@ def _make_font() -> MagicMock:
 
 def test_font_loader_cache_hit_returns_same_object() -> None:
     """Two calls with the same size must return the exact same object."""
-    from demo_game.ui.font_loader import FontLoader
+    from demo_game.ui.widgets.font_loader import FontLoader
 
     FontLoader._clear_cache()
     with patch("pygame.font.Font", return_value=_make_font()) as mock_font:
@@ -45,7 +45,7 @@ def test_font_loader_cache_hit_returns_same_object() -> None:
 
 
 def test_font_loader_different_sizes_return_different_objects() -> None:
-    from demo_game.ui.font_loader import FontLoader
+    from demo_game.ui.widgets.font_loader import FontLoader
 
     FontLoader._clear_cache()
     with patch("pygame.font.Font", side_effect=lambda *_a, **_kw: _make_font()):
@@ -62,7 +62,7 @@ def test_font_loader_different_sizes_return_different_objects() -> None:
 
 def test_font_loader_falls_back_when_ttf_missing() -> None:
     """If the TTF file doesn't exist, FontLoader must return a font (not raise)."""
-    from demo_game.ui.font_loader import FontLoader
+    from demo_game.ui.widgets.font_loader import FontLoader
 
     FontLoader._clear_cache()
     original_path = FontLoader._FONT_PATH
@@ -79,7 +79,7 @@ def test_font_loader_falls_back_when_ttf_missing() -> None:
 
 def test_font_loader_fallback_uses_none_as_font_name() -> None:
     """Fallback call must pass None (pygame default) as the font name."""
-    from demo_game.ui.font_loader import FontLoader
+    from demo_game.ui.widgets.font_loader import FontLoader
 
     FontLoader._clear_cache()
     original_path = FontLoader._FONT_PATH

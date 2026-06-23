@@ -34,7 +34,7 @@ class _MockFont:
 
 def _make_renderer():
     """Construct a LeftPanelRenderer with mock fonts (no display needed)."""
-    from demo_game.ui.left_panel import LeftPanelRenderer
+    from demo_game.ui.layout.left_panel import LeftPanelRenderer
 
     return LeftPanelRenderer(
         font_body=_MockFont(),
@@ -65,7 +65,7 @@ def _make_rect(x: int = 0, y: int = 0, w: int = 300, h: int = 80) -> MagicMock:
 
 def test_location_breadcrumb_renders_chain() -> None:
     """Mock PART_OF edges (tavern → market_district → kingsport) → chain rendered."""
-    from demo_game.ui.left_panel import build_location_breadcrumb
+    from demo_game.ui.layout.left_panel import build_location_breadcrumb
 
     # Simulate: tavern PART_OF market_district PART_OF kingsport (no further parent)
     def mock_get_edges(edge_type: str, src_id: str | None = None, **_kwargs) -> list[dict]:
@@ -84,7 +84,7 @@ def test_location_breadcrumb_renders_chain() -> None:
 
 def test_breadcrumb_bare_name_when_no_parent() -> None:
     """When no PART_OF edge exists, the breadcrumb is just the bare location name."""
-    from demo_game.ui.left_panel import build_location_breadcrumb
+    from demo_game.ui.layout.left_panel import build_location_breadcrumb
 
     def mock_get_edges(edge_type: str, src_id: str | None = None, **_kwargs) -> list[dict]:
         return []
@@ -95,7 +95,7 @@ def test_breadcrumb_bare_name_when_no_parent() -> None:
 
 def test_breadcrumb_two_level_chain() -> None:
     """Single PART_OF parent → 'child ▸ parent'."""
-    from demo_game.ui.left_panel import build_location_breadcrumb
+    from demo_game.ui.layout.left_panel import build_location_breadcrumb
 
     def mock_get_edges(edge_type: str, src_id: str | None = None, **_kwargs) -> list[dict]:
         if src_id == "tavern":
@@ -108,7 +108,7 @@ def test_breadcrumb_two_level_chain() -> None:
 
 def test_breadcrumb_cycle_guard() -> None:
     """Malformed graph with a cycle must not loop forever — terminates safely."""
-    from demo_game.ui.left_panel import build_location_breadcrumb
+    from demo_game.ui.layout.left_panel import build_location_breadcrumb
 
     # tavern → a → b → tavern (cycle)
     def mock_get_edges(edge_type: str, src_id: str | None = None, **_kwargs) -> list[dict]:
@@ -147,7 +147,7 @@ def test_draw_location_breadcrumb_renders_text_via_font() -> None:
 
     renderer._font_label = _CapturingFont()
 
-    with patch("demo_game.ui.left_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.layout.left_panel.pygame") as mock_pygame:
         mock_pygame.draw.rect = MagicMock()
         surface = MagicMock()
         rect = _make_rect()
@@ -176,7 +176,7 @@ def test_draw_location_breadcrumb_bare_name_is_noop() -> None:
 
     renderer._font_label = _CapturingFont()
 
-    with patch("demo_game.ui.left_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.layout.left_panel.pygame") as mock_pygame:
         mock_pygame.draw.rect = MagicMock()
         surface = MagicMock()
         rect = _make_rect()

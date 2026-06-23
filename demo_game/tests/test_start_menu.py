@@ -37,7 +37,7 @@ def test_start_menu_init_no_display(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("pygame.display.set_mode", lambda *a, **kw: MagicMock())
     monkeypatch.setattr("pygame.display.set_caption", lambda *a: None)
 
-    from demo_game.ui.start_menu import StartMenu
+    from demo_game.ui.widgets.start_menu import StartMenu
 
     StartMenu()  # should not raise
 
@@ -47,11 +47,11 @@ def test_dispatch_free_play_opens_game_window(monkeypatch: pytest.MonkeyPatch) -
     from demo_game.arc_choice import ArcChoice
 
     monkeypatch.setattr(
-        "demo_game.ui.start_menu.StartMenu.show",
+        "demo_game.ui.widgets.start_menu.StartMenu.show",
         lambda *a, **kw: ArcChoice.FREE_PLAY,
     )
     mock_run = MagicMock()
-    monkeypatch.setattr("demo_game.ui.game_window.run", mock_run)
+    monkeypatch.setattr("demo_game.ui.layout.game_window.run", mock_run)
 
     from demo_game import _dispatch
 
@@ -65,7 +65,7 @@ def test_dispatch_munich_calls_subprocess(monkeypatch: pytest.MonkeyPatch) -> No
     from demo_game.arc_choice import ArcChoice
 
     monkeypatch.setattr(
-        "demo_game.ui.start_menu.StartMenu.show",
+        "demo_game.ui.widgets.start_menu.StartMenu.show",
         lambda *a, **kw: ArcChoice.MUNICH,
     )
     mock_sp = MagicMock()
@@ -87,7 +87,7 @@ def test_dispatch_village_calls_subprocess(monkeypatch: pytest.MonkeyPatch) -> N
     from demo_game.arc_choice import ArcChoice
 
     monkeypatch.setattr(
-        "demo_game.ui.start_menu.StartMenu.show",
+        "demo_game.ui.widgets.start_menu.StartMenu.show",
         lambda *a, **kw: ArcChoice.VILLAGE,
     )
     mock_sp = MagicMock()
@@ -108,7 +108,7 @@ def test_dispatch_tavern_calls_subprocess(monkeypatch: pytest.MonkeyPatch) -> No
     from demo_game.arc_choice import ArcChoice
 
     monkeypatch.setattr(
-        "demo_game.ui.start_menu.StartMenu.show",
+        "demo_game.ui.widgets.start_menu.StartMenu.show",
         lambda *a, **kw: ArcChoice.TAVERN,
     )
     mock_sp = MagicMock()

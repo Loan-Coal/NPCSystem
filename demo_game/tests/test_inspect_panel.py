@@ -36,7 +36,7 @@ class _MockFont:
 
 
 def _make_widget():
-    from demo_game.ui.inspect_panel import InspectPanelWidget
+    from demo_game.ui.panels.inspect_panel import InspectPanelWidget
 
     return InspectPanelWidget(_MockFont(), _MockFont())
 
@@ -230,31 +230,31 @@ def test_emotion_label_empty() -> None:
 
 
 def test_join_list() -> None:
-    from demo_game.ui.inspect_panel import _join
+    from demo_game.ui.panels.inspect_panel import _join
 
     assert _join(["brave", "loyal"]) == "brave, loyal"
 
 
 def test_join_empty_list() -> None:
-    from demo_game.ui.inspect_panel import _join
+    from demo_game.ui.panels.inspect_panel import _join
 
     assert _join([]) == "—"
 
 
 def test_join_none() -> None:
-    from demo_game.ui.inspect_panel import _join
+    from demo_game.ui.panels.inspect_panel import _join
 
     assert _join(None) == "—"
 
 
 def test_truncate_short() -> None:
-    from demo_game.ui.inspect_panel import _truncate
+    from demo_game.ui.panels.inspect_panel import _truncate
 
     assert _truncate("hello", 10) == "hello"
 
 
 def test_truncate_long() -> None:
-    from demo_game.ui.inspect_panel import _truncate
+    from demo_game.ui.panels.inspect_panel import _truncate
 
     result = _truncate("a" * 20, 10)
     assert len(result) == 10

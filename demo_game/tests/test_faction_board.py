@@ -37,7 +37,7 @@ class _MockFont:
 
 
 def _make_widget():
-    from demo_game.ui.faction_board import FactionBoardWidget
+    from demo_game.ui.boards.faction_board import FactionBoardWidget
     return FactionBoardWidget(_MockFont(), _MockFont())
 
 
@@ -124,11 +124,11 @@ def test_draw_renders_faction_names() -> None:
         def get_linesize(self) -> int:
             return 14
 
-    from demo_game.ui.faction_board import FactionBoardWidget
+    from demo_game.ui.boards.faction_board import FactionBoardWidget
     w = FactionBoardWidget(_CapturingFont(), _CapturingFont())
     w.set_standings(_SAMPLE_STANDINGS)
 
-    with patch("demo_game.ui.faction_board.pygame") as mock_pygame:
+    with patch("demo_game.ui.boards.faction_board.pygame") as mock_pygame:
         mock_pygame.draw = MagicMock()
         mock_pygame.Rect = MagicMock(return_value=MagicMock())
         surface, rect = _make_surface_rect()
@@ -158,11 +158,11 @@ def test_draw_renders_standing_values() -> None:
         def get_linesize(self) -> int:
             return 14
 
-    from demo_game.ui.faction_board import FactionBoardWidget
+    from demo_game.ui.boards.faction_board import FactionBoardWidget
     w = FactionBoardWidget(_CapturingFont(), _CapturingFont())
     w.set_standings(_SAMPLE_STANDINGS)
 
-    with patch("demo_game.ui.faction_board.pygame") as mock_pygame:
+    with patch("demo_game.ui.boards.faction_board.pygame") as mock_pygame:
         mock_pygame.draw = MagicMock()
         mock_pygame.Rect = MagicMock(return_value=MagicMock())
         surface, rect = _make_surface_rect()
@@ -176,7 +176,7 @@ def test_draw_renders_standing_values() -> None:
 
 def test_draw_no_data_does_not_crash() -> None:
     """draw() with no standings renders gracefully (empty-state hint)."""
-    with patch("demo_game.ui.faction_board.pygame") as mock_pygame:
+    with patch("demo_game.ui.boards.faction_board.pygame") as mock_pygame:
         mock_pygame.draw = MagicMock()
         mock_pygame.Rect = MagicMock(return_value=MagicMock())
         w = _make_widget()
@@ -186,7 +186,7 @@ def test_draw_no_data_does_not_crash() -> None:
 
 def test_draw_fills_background() -> None:
     """draw() calls pygame.draw.rect for background fill."""
-    with patch("demo_game.ui.faction_board.pygame") as mock_pygame:
+    with patch("demo_game.ui.boards.faction_board.pygame") as mock_pygame:
         mock_pygame.draw = MagicMock()
         mock_pygame.Rect = MagicMock(return_value=MagicMock())
         w = _make_widget()
@@ -293,13 +293,13 @@ def test_get_faction_standings_calls_correct_path() -> None:
 
 def test_right_panel_has_faction_tab() -> None:
     """RightPanel enum includes a FACTION tab."""
-    from demo_game.ui.right_panel import RightPanel
+    from demo_game.ui.layout.right_panel import RightPanel
     tab_values = {tab.value for tab in RightPanel}
     assert "FACTION" in tab_values
 
 
 def test_right_panel_faction_cycles() -> None:
     """RightPanel.FACTION is reachable via cycle_tab traversal."""
-    from demo_game.ui.right_panel import RightPanel
+    from demo_game.ui.layout.right_panel import RightPanel
     panels = list(RightPanel)
     assert RightPanel.FACTION in panels

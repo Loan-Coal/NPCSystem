@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from demo_game.client import EngineClientError
-from demo_game.ui.relation_ticker import RelationSnapshot, RelationTicker
+from demo_game.ui.layout.relation_ticker import RelationSnapshot, RelationTicker
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ def test_tick_respects_ttl_skips_refetch() -> None:
     client = _make_client(_REL_DATA)
     ticker = RelationTicker(client)
 
-    with patch("demo_game.ui.relation_ticker.time") as mock_time:
+    with patch("demo_game.ui.layout.relation_ticker.time") as mock_time:
         mock_time.monotonic.return_value = 0.0
         ticker.tick("mira_innkeeper")
         # Second call still within TTL
@@ -83,7 +83,7 @@ def test_tick_refetches_after_ttl_expires() -> None:
     client = _make_client(_REL_DATA)
     ticker = RelationTicker(client)
 
-    with patch("demo_game.ui.relation_ticker.time") as mock_time:
+    with patch("demo_game.ui.layout.relation_ticker.time") as mock_time:
         mock_time.monotonic.return_value = 0.0
         ticker.tick("mira_innkeeper")
         # Advance past TTL (4.0 s)
@@ -132,7 +132,7 @@ def test_get_delta_text_formats_positive_and_negative_deltas() -> None:
     client.get_npc_relationship.side_effect = [_REL_DATA, _REL_DATA_CHANGED]
     ticker = RelationTicker(client)
 
-    with patch("demo_game.ui.relation_ticker.time") as mock_time:
+    with patch("demo_game.ui.layout.relation_ticker.time") as mock_time:
         mock_time.monotonic.return_value = 0.0
         ticker.tick("mira_innkeeper")
         # Advance past TTL so second tick fetches
@@ -156,7 +156,7 @@ def test_reset_baseline_promotes_current() -> None:
     client.get_npc_relationship.side_effect = [_REL_DATA, _REL_DATA_CHANGED]
     ticker = RelationTicker(client)
 
-    with patch("demo_game.ui.relation_ticker.time") as mock_time:
+    with patch("demo_game.ui.layout.relation_ticker.time") as mock_time:
         mock_time.monotonic.return_value = 0.0
         ticker.tick("mira_innkeeper")
         mock_time.monotonic.return_value = 5.0

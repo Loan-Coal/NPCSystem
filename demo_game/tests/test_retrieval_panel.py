@@ -37,7 +37,7 @@ class _MockFont:
 
 
 def _make_widget():
-    from demo_game.ui.retrieval_panel import RetrievalPanelWidget
+    from demo_game.ui.panels.retrieval_panel import RetrievalPanelWidget
     return RetrievalPanelWidget(_MockFont(), _MockFont())
 
 
@@ -143,11 +143,11 @@ def test_draw_renders_item_keys() -> None:
         def get_linesize(self) -> int:
             return 14
 
-    from demo_game.ui.retrieval_panel import RetrievalPanelWidget
+    from demo_game.ui.panels.retrieval_panel import RetrievalPanelWidget
     w = RetrievalPanelWidget(_CapturingFont(), _CapturingFont())
     w.set_payload(_SAMPLE_PAYLOAD)
 
-    with patch("demo_game.ui.retrieval_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.panels.retrieval_panel.pygame") as mock_pygame:
         mock_pygame.draw = MagicMock()
         mock_pygame.Rect = MagicMock(return_value=MagicMock())
         surface, rect = _make_surface_rect()
@@ -177,11 +177,11 @@ def test_draw_renders_token_count() -> None:
         def get_linesize(self) -> int:
             return 14
 
-    from demo_game.ui.retrieval_panel import RetrievalPanelWidget
+    from demo_game.ui.panels.retrieval_panel import RetrievalPanelWidget
     w = RetrievalPanelWidget(_CapturingFont(), _CapturingFont())
     w.set_payload(_SAMPLE_PAYLOAD)
 
-    with patch("demo_game.ui.retrieval_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.panels.retrieval_panel.pygame") as mock_pygame:
         mock_pygame.draw = MagicMock()
         mock_pygame.Rect = MagicMock(return_value=MagicMock())
         surface, rect = _make_surface_rect()
@@ -193,7 +193,7 @@ def test_draw_renders_token_count() -> None:
 
 def test_draw_no_data_does_not_crash() -> None:
     """draw() with no items renders gracefully (empty-state hint)."""
-    with patch("demo_game.ui.retrieval_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.panels.retrieval_panel.pygame") as mock_pygame:
         mock_pygame.draw = MagicMock()
         mock_pygame.Rect = MagicMock(return_value=MagicMock())
         w = _make_widget()
@@ -203,7 +203,7 @@ def test_draw_no_data_does_not_crash() -> None:
 
 def test_draw_fills_background() -> None:
     """draw() calls pygame.draw.rect for background fill."""
-    with patch("demo_game.ui.retrieval_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.panels.retrieval_panel.pygame") as mock_pygame:
         mock_pygame.draw = MagicMock()
         mock_pygame.Rect = MagicMock(return_value=MagicMock())
         w = _make_widget()
@@ -301,13 +301,13 @@ def test_get_retrieval_debug_empty_items_graceful() -> None:
 
 def test_right_panel_has_retrieval_tab() -> None:
     """RightPanel enum includes a RETRIEVAL tab."""
-    from demo_game.ui.right_panel import RightPanel
+    from demo_game.ui.layout.right_panel import RightPanel
     tab_values = {tab.value for tab in RightPanel}
     assert "RETRIEVAL" in tab_values
 
 
 def test_right_panel_retrieval_cycles() -> None:
     """RightPanel.RETRIEVAL is reachable via cycle_tab from MEMORY."""
-    from demo_game.ui.right_panel import RightPanel
+    from demo_game.ui.layout.right_panel import RightPanel
     panels = list(RightPanel)
     assert RightPanel.RETRIEVAL in panels

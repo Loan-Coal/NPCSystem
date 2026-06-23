@@ -48,7 +48,7 @@ from demo_game.dialogue import (
 from demo_game.quest_trade_controller import QuestTradeController
 
 if TYPE_CHECKING:
-    from demo_game.ui.right_panel import RightPanelRenderer
+    from demo_game.ui.layout.right_panel import RightPanelRenderer
 
 _logger = logging.getLogger(__name__)
 
@@ -363,7 +363,7 @@ class GameController:
             return
         if status == "ok":
             right.set_quest(payload)
-            from demo_game.ui.right_panel import RightPanel as _RP
+            from demo_game.ui.layout.right_panel import RightPanel as _RP
             right.switch_to(_RP.PLAYER_STATUS)
             if self._cb.on_set_status:
                 self._cb.on_set_status("Quest generated!", 3.0)

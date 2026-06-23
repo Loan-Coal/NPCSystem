@@ -35,14 +35,14 @@ def _dispatch(window_w: int, window_h: int) -> None:
         window_w: Width passed to the start menu and game window.
         window_h: Height passed to the start menu and game window.
     """
-    from demo_game.ui.start_menu import StartMenu  # lazy: keep pygame off headless import path (ISSUE-091)
+    from demo_game.ui.widgets.start_menu import StartMenu  # lazy: keep pygame off headless import path (ISSUE-091)
 
     choice = StartMenu().show(window_w=window_w, window_h=window_h)
 
     if choice == ArcChoice.FREE_PLAY:
         # Lazy import: keep the pygame-backed game_window off the `import demo_game`
         # path so headless test collection never triggers SDL_Init (ISSUE-091).
-        import demo_game.ui.game_window as _game_window
+        import demo_game.ui.layout.game_window as _game_window
 
         _game_window.run(window_w=window_w, window_h=window_h)
         return

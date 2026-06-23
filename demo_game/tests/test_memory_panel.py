@@ -29,7 +29,7 @@ class _MockFont:
 
 
 def _make_widget():
-    from demo_game.ui.memory_panel import MemoryPanelWidget
+    from demo_game.ui.panels.memory_panel import MemoryPanelWidget
     return MemoryPanelWidget(_MockFont(), _MockFont())
 
 
@@ -107,7 +107,7 @@ def _make_surface_rect():
 
 def test_draw_no_data_does_not_crash() -> None:
     """draw() with no memories does not raise."""
-    with patch("demo_game.ui.memory_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.panels.memory_panel.pygame") as mock_pygame:
         mock_pygame.draw = MagicMock()
         mock_pygame.Rect = MagicMock(return_value=MagicMock())
         w = _make_widget()
@@ -117,7 +117,7 @@ def test_draw_no_data_does_not_crash() -> None:
 
 def test_draw_with_memories_does_not_crash() -> None:
     """draw() with memories does not raise."""
-    with patch("demo_game.ui.memory_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.panels.memory_panel.pygame") as mock_pygame:
         mock_pygame.draw = MagicMock()
         mock_pygame.Rect = MagicMock(return_value=MagicMock())
         w = _make_widget()
@@ -128,7 +128,7 @@ def test_draw_with_memories_does_not_crash() -> None:
 
 def test_draw_fills_background() -> None:
     """draw() calls pygame.draw.rect for background fill."""
-    with patch("demo_game.ui.memory_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.panels.memory_panel.pygame") as mock_pygame:
         mock_pygame.draw = MagicMock()
         mock_pygame.Rect = MagicMock(return_value=MagicMock())
         w = _make_widget()
@@ -143,27 +143,27 @@ def test_draw_fills_background() -> None:
 
 
 def test_vividness_colour_high() -> None:
-    from demo_game.ui.memory_panel import _vividness_colour, _CLR_VIVID_HIGH
+    from demo_game.ui.panels.memory_panel import _vividness_colour, _CLR_VIVID_HIGH
     assert _vividness_colour(80) == _CLR_VIVID_HIGH
 
 
 def test_vividness_colour_medium() -> None:
-    from demo_game.ui.memory_panel import _vividness_colour, _CLR_VIVID_MED
+    from demo_game.ui.panels.memory_panel import _vividness_colour, _CLR_VIVID_MED
     assert _vividness_colour(50) == _CLR_VIVID_MED
 
 
 def test_vividness_colour_low() -> None:
-    from demo_game.ui.memory_panel import _vividness_colour, _CLR_VIVID_LOW
+    from demo_game.ui.panels.memory_panel import _vividness_colour, _CLR_VIVID_LOW
     assert _vividness_colour(20) == _CLR_VIVID_LOW
 
 
 def test_vividness_colour_boundary_high() -> None:
-    from demo_game.ui.memory_panel import _vividness_colour, _CLR_VIVID_HIGH
+    from demo_game.ui.panels.memory_panel import _vividness_colour, _CLR_VIVID_HIGH
     assert _vividness_colour(75) == _CLR_VIVID_HIGH
 
 
 def test_vividness_colour_boundary_medium() -> None:
-    from demo_game.ui.memory_panel import _vividness_colour, _CLR_VIVID_MED
+    from demo_game.ui.panels.memory_panel import _vividness_colour, _CLR_VIVID_MED
     assert _vividness_colour(40) == _CLR_VIVID_MED
 
 
@@ -174,7 +174,7 @@ def test_vividness_colour_boundary_medium() -> None:
 
 def test_memory_block_renders_temporal_fields() -> None:
     """_draw_memory_block renders occurred_at_game_time and historical marker."""
-    from demo_game.ui.memory_panel import MemoryPanelWidget
+    from demo_game.ui.panels.memory_panel import MemoryPanelWidget
 
     rendered_texts: list[str] = []
 
@@ -203,7 +203,7 @@ def test_memory_block_renders_temporal_fields() -> None:
 
     widget = MemoryPanelWidget(_CapturingFont(), _CapturingFont())
 
-    with patch("demo_game.ui.memory_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.panels.memory_panel.pygame") as mock_pygame:
         mock_pygame.draw = MagicMock()
         mock_pygame.Rect = MagicMock(return_value=MagicMock())
         surface = MagicMock()
@@ -219,7 +219,7 @@ def test_memory_block_renders_temporal_fields() -> None:
 
 def test_memory_block_omits_temporal_fields_when_absent() -> None:
     """_draw_memory_block renders normally when temporal fields are absent (no crash)."""
-    from demo_game.ui.memory_panel import MemoryPanelWidget
+    from demo_game.ui.panels.memory_panel import MemoryPanelWidget
 
     rendered_texts: list[str] = []
 
@@ -247,7 +247,7 @@ def test_memory_block_omits_temporal_fields_when_absent() -> None:
 
     widget = MemoryPanelWidget(_CapturingFont(), _CapturingFont())
 
-    with patch("demo_game.ui.memory_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.panels.memory_panel.pygame") as mock_pygame:
         mock_pygame.draw = MagicMock()
         mock_pygame.Rect = MagicMock(return_value=MagicMock())
         surface = MagicMock()

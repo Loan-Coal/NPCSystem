@@ -46,7 +46,7 @@ def test_trade_intent_magic_string_not_in_game_controller() -> None:
 
 def test_trade_intent_magic_string_not_in_action_bar() -> None:
     """Inline string must not appear in action_bar source."""
-    src = _DEMO_ROOT / "ui" / "action_bar.py"
+    src = _DEMO_ROOT / "ui" / "widgets" / "action_bar.py"
     text = src.read_text(encoding="utf-8")
     assert "\"I'd like to trade.\"" not in text, (
         "Magic string still present in action_bar.py — use TRADE_INTENT_MESSAGE"
@@ -81,7 +81,7 @@ _POLLER_FILES = [
     _DEMO_ROOT / "quest_trade_controller.py",
     _DEMO_ROOT / "action_workers.py",
     _DEMO_ROOT / "knowledge_sidebar_fetcher.py",
-    _DEMO_ROOT / "ui" / "game_window.py",
+    _DEMO_ROOT / "ui" / "layout" / "game_window.py",
 ]
 
 

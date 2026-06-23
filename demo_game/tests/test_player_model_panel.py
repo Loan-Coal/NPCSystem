@@ -31,7 +31,7 @@ class _MockFont:
 
 
 def _make_widget():
-    from demo_game.ui.player_model_panel import PlayerModelPanelWidget
+    from demo_game.ui.panels.player_model_panel import PlayerModelPanelWidget
     return PlayerModelPanelWidget(_MockFont(), _MockFont())
 
 

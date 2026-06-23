@@ -27,8 +27,7 @@ from demo_game.constants import (
     NPC_FACTIONS,
     PALETTE,
 )
-from demo_game.ui.action_bar import ActionBarWidget
-from demo_game.ui.widgets import DegradationBadge, EventBanner, InputBox, NpcListWidget, ScrollableLog
+from demo_game.ui.widgets import ActionBarWidget, DegradationBadge, EventBanner, InputBox, NpcListWidget, ScrollableLog
 
 # Fixed UI element heights — do not scale with window size.
 _LOC_BAR_H = 80

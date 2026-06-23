@@ -27,7 +27,7 @@ class _MockFont:
 
 
 def _make_widget():
-    from demo_game.ui.scheme_board_panel import SchemeBoardPanelWidget
+    from demo_game.ui.panels.scheme_board_panel import SchemeBoardPanelWidget
     return SchemeBoardPanelWidget(_MockFont(), _MockFont())
 
 
@@ -110,7 +110,7 @@ class _TrackingFont(_MockFont):
 
 
 def _make_tracking_widget() -> tuple:
-    from demo_game.ui.scheme_board_panel import SchemeBoardPanelWidget
+    from demo_game.ui.panels.scheme_board_panel import SchemeBoardPanelWidget
 
     font_body = _TrackingFont()
     font_label = _TrackingFont()

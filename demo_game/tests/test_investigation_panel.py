@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 import pygame
 import pytest
 
-from demo_game.ui.investigation_panel import InvestigationPanelWidget
+from demo_game.ui.panels.investigation_panel import InvestigationPanelWidget
 
 
 @pytest.fixture(autouse=True)

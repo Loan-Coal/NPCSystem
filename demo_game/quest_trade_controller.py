@@ -18,7 +18,7 @@ from demo_game.client import EngineClient, EngineClientError
 from demo_game.constants import RIVAL_QUEST_PAIRS
 
 if TYPE_CHECKING:
-    from demo_game.ui.right_panel import RightPanelRenderer
+    from demo_game.ui.layout.right_panel import RightPanelRenderer
 
 _logger = logging.getLogger(__name__)
 
@@ -97,7 +97,7 @@ class QuestTradeController:
         if data.get("negotiation_state"):
             right.set_quest(data["negotiation_state"])
         if data.get("status") == "pending_confirm":
-            from demo_game.ui.right_panel import RightPanel as _RP
+            from demo_game.ui.layout.right_panel import RightPanel as _RP
             right.switch_to(_RP.PLAYER_STATUS)
             self._status(_HINT_QUEST_COMPLETE, 2.0)
         elif data.get("narration_hint") == "npc_refuses_objective_not_met":
@@ -162,7 +162,7 @@ class QuestTradeController:
         right.set_negotiation_state(None)
         self._status("Trade complete!", 4.0)
         try:
-            from demo_game.ui.right_panel import RightPanel as _RP
+            from demo_game.ui.layout.right_panel import RightPanel as _RP
             self._refresh_inventory(right)
             right.switch_to(_RP.PLAYER_INVENTORY)
         except EngineClientError as exc:
@@ -204,7 +204,7 @@ class QuestTradeController:
         if ui_directive in {"show_quest_panel", "show_reward_overlay"}:
             if data.get("negotiation_state"):
                 right.set_quest(data["negotiation_state"])
-            from demo_game.ui.right_panel import RightPanel as _RP
+            from demo_game.ui.layout.right_panel import RightPanel as _RP
             right.switch_to(_RP.PLAYER_STATUS)
             self._status(f"Gave {item_name} — quest delivered!", 3.0)
         else:
@@ -217,7 +217,7 @@ class QuestTradeController:
 
     def open_trade(self, npc_id: str, payload: dict, right: RightPanelRenderer) -> None:
         """Open or resume a trade session for the given NPC."""
-        from demo_game.ui.right_panel import RightPanel as _RP
+        from demo_game.ui.layout.right_panel import RightPanel as _RP
         try:
             npc_char = self._client.get_node("Character", npc_id)
             right.set_npc_trade_gold((npc_char or {}).get("currency_balance"))
@@ -248,7 +248,7 @@ class QuestTradeController:
 
     def open_quest(self, npc_id: str, proposal: Any, right: RightPanelRenderer) -> None:
         """Open a quest proposal session for the given NPC."""
-        from demo_game.ui.right_panel import RightPanel as _RP
+        from demo_game.ui.layout.right_panel import RightPanel as _RP
         try:
             result = self._client.post_interaction(
                 player_id=self._player_id,
@@ -265,7 +265,7 @@ class QuestTradeController:
 
     def claim_completion(self, npc_id: str, proposal: Any, right: RightPanelRenderer) -> None:
         """Send a claim_completion or give_item proposal and handle the response."""
-        from demo_game.ui.right_panel import RightPanel as _RP
+        from demo_game.ui.layout.right_panel import RightPanel as _RP
         try:
             result = self._client.post_interaction(
                 player_id=self._player_id,
@@ -283,7 +283,7 @@ class QuestTradeController:
 
     def open_trade_fallback(self, npc_id: str, right: RightPanelRenderer) -> None:
         """Open a trade session via the fallback path (player typed 'I'd like to trade.')."""
-        from demo_game.ui.right_panel import RightPanel as _RP
+        from demo_game.ui.layout.right_panel import RightPanel as _RP
         self.active_npc_id_for_trade = npc_id
         try:
             npc_char = self._client.get_node("Character", npc_id)

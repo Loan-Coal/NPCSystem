@@ -40,7 +40,7 @@ class _MockFont:
 
 def _make_renderer():
     """Construct a LeftPanelRenderer with mock fonts."""
-    from demo_game.ui.left_panel import LeftPanelRenderer
+    from demo_game.ui.layout.left_panel import LeftPanelRenderer
 
     return LeftPanelRenderer(
         font_body=_MockFont(),
@@ -187,7 +187,7 @@ class TestSetRelationshipPhase:
         renderer.set_active_npc("mira_innkeeper")
         renderer.set_relationship_phase(None)
 
-        with patch("demo_game.ui.left_panel.pygame") as mock_pygame:
+        with patch("demo_game.ui.layout.left_panel.pygame") as mock_pygame:
             mock_pygame.draw.rect = MagicMock()
             mock_pygame.draw.circle = MagicMock()
             mock_pygame.image.load = MagicMock(side_effect=Exception("no png"))
@@ -210,7 +210,7 @@ class TestSetRelationshipPhase:
 
         renderer._font_label = _Cap()
 
-        with patch("demo_game.ui.left_panel.pygame") as mock_pygame:
+        with patch("demo_game.ui.layout.left_panel.pygame") as mock_pygame:
             mock_pygame.draw.rect = MagicMock()
             mock_pygame.draw.circle = MagicMock()
             mock_pygame.image.load = MagicMock(side_effect=Exception("no png"))
@@ -237,7 +237,7 @@ class TestSetRelationshipPhase:
 
         renderer._font_label = _Cap()
 
-        with patch("demo_game.ui.left_panel.pygame") as mock_pygame:
+        with patch("demo_game.ui.layout.left_panel.pygame") as mock_pygame:
             mock_pygame.draw.rect = MagicMock()
             mock_pygame.draw.circle = MagicMock()
             mock_pygame.image.load = MagicMock(side_effect=Exception("no png"))

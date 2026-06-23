@@ -37,7 +37,7 @@ class _MockFont:
 
 def _make_widget():
     """Return a fresh EmotionPanelWidget with mock fonts."""
-    from demo_game.ui.emotion_panel import EmotionPanelWidget
+    from demo_game.ui.panels.emotion_panel import EmotionPanelWidget
     return EmotionPanelWidget(_MockFont(), _MockFont())
 
 
@@ -103,7 +103,7 @@ class TestEmotionPanelRendersPair:
 
     def test_draw_pair_does_not_crash(self) -> None:
         """draw() with both primary and pair data set must not raise."""
-        with patch("demo_game.ui.emotion_panel.pygame") as mock_pygame:
+        with patch("demo_game.ui.panels.emotion_panel.pygame") as mock_pygame:
             mock_pygame.draw.rect = MagicMock()
             mock_pygame.draw.line = MagicMock()
             mock_pygame.Rect = MagicMock(return_value=MagicMock())
@@ -116,7 +116,7 @@ class TestEmotionPanelRendersPair:
 
     def test_draw_single_no_pair_unchanged(self) -> None:
         """draw() with no pair set must still render without crashing (back-compat)."""
-        with patch("demo_game.ui.emotion_panel.pygame") as mock_pygame:
+        with patch("demo_game.ui.panels.emotion_panel.pygame") as mock_pygame:
             mock_pygame.draw.rect = MagicMock()
             mock_pygame.draw.line = MagicMock()
             mock_pygame.Rect = MagicMock(return_value=MagicMock())

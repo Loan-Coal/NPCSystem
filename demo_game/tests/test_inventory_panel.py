@@ -34,7 +34,7 @@ class _MockFont:
 
 
 def _make_widget():
-    from demo_game.ui.inventory_panel import InventoryPanelWidget
+    from demo_game.ui.panels.inventory_panel import InventoryPanelWidget
 
     font = _MockFont()
     return InventoryPanelWidget(font, font)

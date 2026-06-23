@@ -26,7 +26,7 @@ class _MockFont:
 
 
 def _make_widget():
-    from demo_game.ui.politics_panel import PoliticsPanelWidget
+    from demo_game.ui.panels.politics_panel import PoliticsPanelWidget
     return PoliticsPanelWidget(_MockFont(), _MockFont())
 
 
@@ -101,7 +101,7 @@ def _make_rect_mock() -> MagicMock:
 class TestPoliticsPanelDraw:
     def _draw_with_patch(self, w, pledges=None, leverage=None) -> MagicMock:
         from unittest.mock import patch
-        with patch("demo_game.ui.politics_panel.pygame") as mock_pygame:
+        with patch("demo_game.ui.panels.politics_panel.pygame") as mock_pygame:
             mock_pygame.draw.rect = MagicMock()
             mock_pygame.draw.line = MagicMock()
             mock_pygame.Rect = MagicMock(return_value=MagicMock())
@@ -135,20 +135,20 @@ class TestPoliticsPanelDraw:
 
     def test_leverage_status_colour_held(self) -> None:
         """held status maps to amber colour."""
-        from demo_game.ui.politics_panel import _leverage_status_colour, _CLR_HELD
+        from demo_game.ui.panels.politics_panel import _leverage_status_colour, _CLR_HELD
         assert _leverage_status_colour("held") == _CLR_HELD
 
     def test_leverage_status_colour_used(self) -> None:
         """used status maps to grey colour."""
-        from demo_game.ui.politics_panel import _leverage_status_colour, _CLR_USED
+        from demo_game.ui.panels.politics_panel import _leverage_status_colour, _CLR_USED
         assert _leverage_status_colour("used") == _CLR_USED
 
     def test_leverage_status_colour_exposed(self) -> None:
         """exposed status maps to red colour."""
-        from demo_game.ui.politics_panel import _leverage_status_colour, _CLR_EXPOSED
+        from demo_game.ui.panels.politics_panel import _leverage_status_colour, _CLR_EXPOSED
         assert _leverage_status_colour("exposed") == _CLR_EXPOSED
 
     def test_leverage_status_colour_unknown(self) -> None:
         """unknown status defaults to held colour."""
-        from demo_game.ui.politics_panel import _leverage_status_colour, _CLR_HELD
+        from demo_game.ui.panels.politics_panel import _leverage_status_colour, _CLR_HELD
         assert _leverage_status_colour("mystery") == _CLR_HELD

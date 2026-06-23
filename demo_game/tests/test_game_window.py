@@ -28,12 +28,12 @@ def _make_game_window(window_w: int, window_h: int):
         patch("pygame.init"),
         patch("pygame.display.set_mode", return_value=MagicMock()),
         patch("pygame.display.set_caption"),
-        patch("demo_game.ui.font_loader.FontLoader.get", return_value=MagicMock()),
-        patch("demo_game.ui.game_window.GraphPoller") as mock_gp,
-        patch("demo_game.ui.game_window.WorldStatePoller") as mock_wsp,
-        patch("demo_game.ui.game_window.EmotionPoller") as mock_ep,
-        patch("demo_game.ui.game_window.LeftPanelRenderer") as mock_lp,
-        patch("demo_game.ui.game_window.RightPanelRenderer") as mock_rp,
+        patch("demo_game.ui.widgets.font_loader.FontLoader.get", return_value=MagicMock()),
+        patch("demo_game.ui.layout.game_window.GraphPoller") as mock_gp,
+        patch("demo_game.ui.layout.game_window.WorldStatePoller") as mock_wsp,
+        patch("demo_game.ui.layout.game_window.EmotionPoller") as mock_ep,
+        patch("demo_game.ui.layout.game_window.LeftPanelRenderer") as mock_lp,
+        patch("demo_game.ui.layout.game_window.RightPanelRenderer") as mock_rp,
     ):
         mock_gp.return_value.start = MagicMock()
         mock_wsp.return_value.start = MagicMock()
@@ -41,7 +41,7 @@ def _make_game_window(window_w: int, window_h: int):
         mock_ep.return_value.set_active_npc = MagicMock()
         mock_lp.return_value.setup = MagicMock()
 
-        from demo_game.ui.game_window import GameWindow, _LEFT_PANEL_RATIO, _NAV_BAR_H
+        from demo_game.ui.layout.game_window import GameWindow, _LEFT_PANEL_RATIO, _NAV_BAR_H
         gw = GameWindow(mock_client, mock_cfg, window_w=window_w, window_h=window_h)
         return gw, _LEFT_PANEL_RATIO, _NAV_BAR_H
 

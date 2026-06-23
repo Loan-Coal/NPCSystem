@@ -16,7 +16,7 @@ import pytest
 
 from demo_game.client import EngineClientError
 from demo_game.knowledge_sidebar_fetcher import fetch_npc_knowledge
-from demo_game.ui.knowledge_sidebar import KnowledgeSidebarWidget
+from demo_game.ui.widgets.knowledge_sidebar import KnowledgeSidebarWidget
 
 
 # ---------------------------------------------------------------------------

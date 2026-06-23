@@ -37,7 +37,7 @@ class _MockFont:
 
 def _make_renderer():
     """Build a RightPanelRenderer with mocked graph poller and mock fonts."""
-    from demo_game.ui.right_panel import RightPanelRenderer
+    from demo_game.ui.layout.right_panel import RightPanelRenderer
 
     mock_graph_poller = MagicMock()
     font = _MockFont()
@@ -50,14 +50,14 @@ def _make_renderer():
 
 
 def test_right_panel_enum_has_twenty_values() -> None:
-    from demo_game.ui.right_panel import RightPanel
+    from demo_game.ui.layout.right_panel import RightPanel
 
     panels = list(RightPanel)
     assert len(panels) == 21  # G2.2 added INTRIGUE (after H3's OATH/TREATY/INVESTIGATE)
 
 
 def test_right_panel_enum_values() -> None:
-    from demo_game.ui.right_panel import RightPanel
+    from demo_game.ui.layout.right_panel import RightPanel
 
     values = {p.value for p in RightPanel}
     assert "GRAPH" in values
@@ -71,7 +71,7 @@ def test_right_panel_enum_values() -> None:
 
 
 def test_right_panel_graph_is_first() -> None:
-    from demo_game.ui.right_panel import RightPanel
+    from demo_game.ui.layout.right_panel import RightPanel
 
     assert list(RightPanel)[0] == RightPanel.GRAPH
 
@@ -82,7 +82,7 @@ def test_right_panel_graph_is_first() -> None:
 
 
 def test_renderer_initial_tab_is_graph() -> None:
-    from demo_game.ui.right_panel import RightPanel
+    from demo_game.ui.layout.right_panel import RightPanel
 
     renderer = _make_renderer()
     assert renderer.active == RightPanel.GRAPH
@@ -99,7 +99,7 @@ def test_renderer_show_sidebar_false_on_graph() -> None:
 
 
 def test_cycle_tab_graph_to_knowledge() -> None:
-    from demo_game.ui.right_panel import RightPanel
+    from demo_game.ui.layout.right_panel import RightPanel
 
     renderer = _make_renderer()
     renderer.cycle_tab()
@@ -107,7 +107,7 @@ def test_cycle_tab_graph_to_knowledge() -> None:
 
 
 def test_cycle_tab_knowledge_to_player_status() -> None:
-    from demo_game.ui.right_panel import RightPanel
+    from demo_game.ui.layout.right_panel import RightPanel
 
     renderer = _make_renderer()
     renderer.cycle_tab()
@@ -116,7 +116,7 @@ def test_cycle_tab_knowledge_to_player_status() -> None:
 
 
 def test_cycle_tab_player_status_to_chain() -> None:
-    from demo_game.ui.right_panel import RightPanel
+    from demo_game.ui.layout.right_panel import RightPanel
 
     renderer = _make_renderer()
     for _ in range(3):
@@ -125,7 +125,7 @@ def test_cycle_tab_player_status_to_chain() -> None:
 
 
 def test_cycle_tab_wraps_back_to_graph() -> None:
-    from demo_game.ui.right_panel import RightPanel
+    from demo_game.ui.layout.right_panel import RightPanel
 
     renderer = _make_renderer()
     n_panels = len(list(RightPanel))
@@ -158,7 +158,7 @@ def test_show_sidebar_true_only_on_knowledge() -> None:
 
 
 def test_start_item_pick_switches_to_inventory_tab() -> None:
-    from demo_game.ui.right_panel import RightPanel
+    from demo_game.ui.layout.right_panel import RightPanel
 
     renderer = _make_renderer()
     renderer.start_item_pick(lambda _: None)
@@ -176,7 +176,7 @@ def test_start_item_pick_on_selected_calls_callback_with_item() -> None:
 
 
 def test_start_item_pick_on_selected_returns_to_actions_tab() -> None:
-    from demo_game.ui.right_panel import RightPanel
+    from demo_game.ui.layout.right_panel import RightPanel
 
     renderer = _make_renderer()
     renderer.start_item_pick(lambda _: None)
@@ -185,7 +185,7 @@ def test_start_item_pick_on_selected_returns_to_actions_tab() -> None:
 
 
 def test_start_item_pick_on_cancel_returns_to_actions_tab() -> None:
-    from demo_game.ui.right_panel import RightPanel
+    from demo_game.ui.layout.right_panel import RightPanel
 
     renderer = _make_renderer()
     renderer.start_item_pick(lambda _: None)

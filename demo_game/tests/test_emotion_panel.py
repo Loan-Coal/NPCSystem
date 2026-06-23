@@ -26,7 +26,7 @@ class _MockFont:
 
 
 def _make_widget():
-    from demo_game.ui.emotion_panel import EmotionPanelWidget
+    from demo_game.ui.panels.emotion_panel import EmotionPanelWidget
     return EmotionPanelWidget(_MockFont(), _MockFont())
 
 
@@ -95,7 +95,7 @@ def test_set_emotion_accepts_float_strings_coerced() -> None:
 
 
 def test_draw_no_data_does_not_crash() -> None:
-    with patch("demo_game.ui.emotion_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.panels.emotion_panel.pygame") as mock_pygame:
         mock_pygame.draw.rect = MagicMock()
         mock_pygame.draw.line = MagicMock()
         mock_pygame.Rect = MagicMock(return_value=MagicMock())
@@ -109,7 +109,7 @@ def test_draw_no_data_does_not_crash() -> None:
 
 
 def test_draw_with_data_does_not_crash() -> None:
-    with patch("demo_game.ui.emotion_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.panels.emotion_panel.pygame") as mock_pygame:
         mock_pygame.draw.rect = MagicMock()
         mock_pygame.draw.line = MagicMock()
         mock_pygame.Rect = MagicMock(return_value=MagicMock())

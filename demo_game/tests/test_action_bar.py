@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 import pygame
 import pytest
 
-from demo_game.ui.action_bar import ActionBarWidget, _PRESETS
+from demo_game.ui.widgets.action_bar import ActionBarWidget, _PRESETS
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +110,7 @@ def test_action_bar_draw_no_crash() -> None:
     """draw() must not raise regardless of surface/rect mocks."""
     widget = ActionBarWidget(_MockFont())
     surface = MagicMock()
-    with patch("demo_game.ui.action_bar.pygame") as mock_pygame:
+    with patch("demo_game.ui.widgets.action_bar.pygame") as mock_pygame:
         mock_pygame.MOUSEBUTTONDOWN = pygame.MOUSEBUTTONDOWN
         mock_pygame.mouse.get_pos.return_value = (-1, -1)
         mock_pygame.Rect = MagicMock(side_effect=lambda *a, **kw: MagicMock())

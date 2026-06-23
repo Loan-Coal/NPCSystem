@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 import pygame
 import pytest
 
-from demo_game.ui.treaty_panel import TreatyPanelWidget
+from demo_game.ui.panels.treaty_panel import TreatyPanelWidget
 
 
 @pytest.fixture(autouse=True)

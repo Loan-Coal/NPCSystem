@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, call, patch
 import pygame
 import pytest
 
-from demo_game.ui.gossip_chain import GossipChainWidget
+from demo_game.ui.boards.gossip_chain import GossipChainWidget
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +72,7 @@ def test_draw_with_distortion_types_no_crash() -> None:
     widget = GossipChainWidget(font, font)
     widget.set_chain(_EDGES_WITH_TYPES)
     surface = MagicMock()
-    with patch("demo_game.ui.gossip_chain.pygame.draw"):
+    with patch("demo_game.ui.boards.gossip_chain.pygame.draw"):
         widget.draw(surface, pygame.Rect(0, 0, 400, 500))
 
 
@@ -87,7 +87,7 @@ def test_exaggeration_badge_rendered() -> None:
     widget = GossipChainWidget(font, font)
     widget.set_chain(_EDGES_WITH_TYPES)
     surface = MagicMock()
-    with patch("demo_game.ui.gossip_chain.pygame.draw"):
+    with patch("demo_game.ui.boards.gossip_chain.pygame.draw"):
         widget.draw(surface, pygame.Rect(0, 0, 400, 500))
     assert any("EXAGGERATION" in t for t in font.rendered_texts), (
         f"Expected 'EXAGGERATION' in rendered texts; got: {font.rendered_texts}"
@@ -100,7 +100,7 @@ def test_omission_badge_rendered() -> None:
     widget = GossipChainWidget(font, font)
     widget.set_chain(_EDGES_WITH_TYPES)
     surface = MagicMock()
-    with patch("demo_game.ui.gossip_chain.pygame.draw"):
+    with patch("demo_game.ui.boards.gossip_chain.pygame.draw"):
         widget.draw(surface, pygame.Rect(0, 0, 400, 500))
     assert any("OMISSION" in t for t in font.rendered_texts), (
         f"Expected 'OMISSION' in rendered texts; got: {font.rendered_texts}"
@@ -113,7 +113,7 @@ def test_none_distortion_type_no_badge() -> None:
     widget = GossipChainWidget(font, font)
     widget.set_chain(_EDGES_WITH_TYPES)
     surface = MagicMock()
-    with patch("demo_game.ui.gossip_chain.pygame.draw"):
+    with patch("demo_game.ui.boards.gossip_chain.pygame.draw"):
         widget.draw(surface, pygame.Rect(0, 0, 400, 500))
     # captain_sorn has None distortion_type — no "[NONE]" badge should appear
     assert not any("[NONE]" in t for t in font.rendered_texts), (

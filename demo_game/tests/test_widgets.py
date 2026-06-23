@@ -16,7 +16,8 @@ import pygame
 import pytest
 
 from demo_game.constants import PALETTE
-from demo_game.ui.widgets import DegradationBadge, EventBanner, NpcListWidget, ScrollableLog, _emotion_colour, _wrap_text
+from demo_game.ui.widgets import DegradationBadge, EventBanner, NpcListWidget, ScrollableLog
+from demo_game.ui.widgets.widgets import _emotion_colour, _wrap_text
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +318,7 @@ def test_npc_list_widget_faction_dot_drawn_for_each_row() -> None:
     widget = _make_npc_list()
     mock_surface = MagicMock()
 
-    with patch("demo_game.ui.widgets.pygame") as mock_pygame:
+    with patch("demo_game.ui.widgets.widgets.pygame") as mock_pygame:
         mock_pygame.Rect = MagicMock(side_effect=lambda *a, **kw: MagicMock())
         widget.draw(mock_surface, MagicMock())
         assert mock_pygame.draw.circle.call_count == 2
@@ -333,7 +334,7 @@ def test_npc_list_widget_neutral_faction_uses_grey() -> None:
     )
     mock_surface = MagicMock()
 
-    with patch("demo_game.ui.widgets.pygame") as mock_pygame:
+    with patch("demo_game.ui.widgets.widgets.pygame") as mock_pygame:
         mock_pygame.Rect = MagicMock(side_effect=lambda *a, **kw: MagicMock())
         widget.draw(mock_surface, MagicMock())
         call_args = mock_pygame.draw.circle.call_args
@@ -351,7 +352,7 @@ def test_scrollable_log_draw_has_amber_border() -> None:
     surface = MagicMock()
     rect = pg.Rect(0, 0, 200, 100)
 
-    with patch("demo_game.ui.widgets.pygame.draw") as mock_draw:
+    with patch("demo_game.ui.widgets.widgets.pygame.draw") as mock_draw:
         log.draw(surface, rect)
 
     border_found = any(
@@ -375,7 +376,7 @@ def test_scrollable_log_draw_labels_use_bracket_format() -> None:
     log.add_message("Mira", "Hello.")
     surface = MagicMock()
 
-    with patch("demo_game.ui.widgets.pygame.draw"):
+    with patch("demo_game.ui.widgets.widgets.pygame.draw"):
         log.draw(surface, pg.Rect(0, 0, 200, 100))
 
     assert any(t.startswith("[") and t.endswith("]:") for t in rendered_texts), (
@@ -395,7 +396,7 @@ def test_npc_list_active_row_renders_arrow_prefix_in_amber() -> None:
     widget = NpcListWidget(_TrackingFont(), row_height=36)
     widget.set_npcs(["mira_innkeeper"], {"mira_innkeeper": "Mira"}, active_id="mira_innkeeper")
 
-    with patch("demo_game.ui.widgets.pygame") as mock_pygame:
+    with patch("demo_game.ui.widgets.widgets.pygame") as mock_pygame:
         mock_pygame.Rect = MagicMock(side_effect=lambda *a, **kw: MagicMock())
         widget.draw(MagicMock(), MagicMock())
 
@@ -420,7 +421,7 @@ def test_npc_list_inactive_row_does_not_render_arrow_prefix() -> None:
         active_id="mira_innkeeper",
     )
 
-    with patch("demo_game.ui.widgets.pygame") as mock_pygame:
+    with patch("demo_game.ui.widgets.widgets.pygame") as mock_pygame:
         mock_pygame.Rect = MagicMock(side_effect=lambda *a, **kw: MagicMock())
         widget.draw(MagicMock(), MagicMock())
 
@@ -437,7 +438,7 @@ def test_npc_list_widget_thieves_guild_uses_purple() -> None:
     )
     mock_surface = MagicMock()
 
-    with patch("demo_game.ui.widgets.pygame") as mock_pygame:
+    with patch("demo_game.ui.widgets.widgets.pygame") as mock_pygame:
         mock_pygame.Rect = MagicMock(side_effect=lambda *a, **kw: MagicMock())
         widget.draw(mock_surface, MagicMock())
         call_args = mock_pygame.draw.circle.call_args
@@ -470,7 +471,7 @@ def test_event_banner_draw_no_crash() -> None:
     banner = EventBanner(_MockFont())
     banner.show("test_event", duration_s=60.0)
     surface = MagicMock()
-    with patch("demo_game.ui.widgets.pygame.draw") as mock_draw:
+    with patch("demo_game.ui.widgets.widgets.pygame.draw") as mock_draw:
         mock_draw.rect = MagicMock()
         banner.draw(surface, pygame.Rect(0, 0, 400, 300))
 
@@ -479,7 +480,7 @@ def test_event_banner_draw_is_noop_when_inactive() -> None:
     """draw() must not blit anything when the banner is inactive."""
     banner = EventBanner(_MockFont())
     surface = MagicMock()
-    with patch("demo_game.ui.widgets.pygame.draw") as mock_draw:
+    with patch("demo_game.ui.widgets.widgets.pygame.draw") as mock_draw:
         banner.draw(surface, pygame.Rect(0, 0, 400, 300))
         mock_draw.rect.assert_not_called()
     surface.blit.assert_not_called()
@@ -522,7 +523,7 @@ class TestScrollableLogStreaming:
 
     def test_begin_streaming_uses_npc_colour_by_default(self) -> None:
         """begin_streaming without explicit colour uses the NPC amber label colour."""
-        from demo_game.ui import widgets as w
+        from demo_game.ui.widgets import widgets as w
         log = _make_log()
         log.begin_streaming("Mira")
         colour = log._messages[0][2]
@@ -540,7 +541,7 @@ class TestScrollableLogStreaming:
         log = _make_log()
         log.begin_streaming("Mira")
         surface = MagicMock()
-        with patch("demo_game.ui.widgets.pygame.draw"):
+        with patch("demo_game.ui.widgets.widgets.pygame.draw"):
             log.draw(surface, pygame.Rect(0, 0, 200, 100))
 
     def test_subsequent_add_message_starts_new_entry(self) -> None:

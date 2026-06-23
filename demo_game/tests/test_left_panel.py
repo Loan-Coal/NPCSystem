@@ -35,7 +35,7 @@ class _MockFont:
 
 def _make_renderer():
     """Construct a LeftPanelRenderer with mock fonts (no display needed)."""
-    from demo_game.ui.left_panel import LeftPanelRenderer
+    from demo_game.ui.layout.left_panel import LeftPanelRenderer
 
     return LeftPanelRenderer(
         font_body=_MockFont(),
@@ -66,27 +66,27 @@ def _make_rect(x: int = 0, y: int = 0, w: int = 200, h: int = 96) -> MagicMock:
 
 def test_expression_glyphs_constant_exists() -> None:
     """EXPRESSION_GLYPHS must be a module-level dict[str, str]."""
-    from demo_game.ui import left_panel
+    from demo_game.ui.layout import left_panel
 
     assert hasattr(left_panel, "EXPRESSION_GLYPHS"), "EXPRESSION_GLYPHS missing from left_panel"
     assert isinstance(left_panel.EXPRESSION_GLYPHS, dict)
 
 
 def test_expression_glyphs_maps_angry() -> None:
-    from demo_game.ui.left_panel import EXPRESSION_GLYPHS
+    from demo_game.ui.layout.left_panel import EXPRESSION_GLYPHS
 
     assert "angry" in EXPRESSION_GLYPHS
     assert isinstance(EXPRESSION_GLYPHS["angry"], str)
 
 
 def test_expression_glyphs_maps_happy() -> None:
-    from demo_game.ui.left_panel import EXPRESSION_GLYPHS
+    from demo_game.ui.layout.left_panel import EXPRESSION_GLYPHS
 
     assert "happy" in EXPRESSION_GLYPHS
 
 
 def test_expression_glyphs_maps_neutral() -> None:
-    from demo_game.ui.left_panel import EXPRESSION_GLYPHS
+    from demo_game.ui.layout.left_panel import EXPRESSION_GLYPHS
 
     assert "neutral" in EXPRESSION_GLYPHS
 
@@ -122,7 +122,7 @@ def test_set_facial_expression_overwrites_previous() -> None:
 
 def test_draw_portrait_zone_renders_known_expression_glyph() -> None:
     """Known expression 'angry' → the mapped glyph must be rendered via font.render."""
-    from demo_game.ui.left_panel import EXPRESSION_GLYPHS
+    from demo_game.ui.layout.left_panel import EXPRESSION_GLYPHS
 
     renderer = _make_renderer()
     renderer.set_active_npc("mira_innkeeper")
@@ -130,7 +130,7 @@ def test_draw_portrait_zone_renders_known_expression_glyph() -> None:
 
     expected_glyph = EXPRESSION_GLYPHS["angry"]
 
-    with patch("demo_game.ui.left_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.layout.left_panel.pygame") as mock_pygame:
         mock_pygame.draw.rect = MagicMock()
         mock_pygame.draw.circle = MagicMock()
         mock_pygame.image.load = MagicMock(side_effect=Exception("no png"))
@@ -158,7 +158,7 @@ def test_draw_portrait_zone_renders_known_expression_glyph() -> None:
 
 def test_draw_portrait_zone_renders_glyph_as_font_render() -> None:
     """Portrait zone must call font.render with the mapped glyph string."""
-    from demo_game.ui.left_panel import EXPRESSION_GLYPHS
+    from demo_game.ui.layout.left_panel import EXPRESSION_GLYPHS
 
     renderer = _make_renderer()
     renderer.set_active_npc("mira_innkeeper")
@@ -174,7 +174,7 @@ def test_draw_portrait_zone_renders_glyph_as_font_render() -> None:
 
     renderer._font_loc = _CapturingFont()
 
-    with patch("demo_game.ui.left_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.layout.left_panel.pygame") as mock_pygame:
         mock_pygame.draw.rect = MagicMock()
         mock_pygame.draw.circle = MagicMock()
         mock_pygame.image.load = MagicMock(side_effect=Exception("no png"))
@@ -195,7 +195,7 @@ def test_draw_portrait_zone_renders_glyph_as_font_render() -> None:
 
 def test_draw_portrait_zone_unknown_expression_falls_back_to_neutral() -> None:
     """Unknown expression string → neutral glyph rendered, no KeyError."""
-    from demo_game.ui.left_panel import EXPRESSION_GLYPHS
+    from demo_game.ui.layout.left_panel import EXPRESSION_GLYPHS
 
     renderer = _make_renderer()
     renderer.set_active_npc("mira_innkeeper")
@@ -211,7 +211,7 @@ def test_draw_portrait_zone_unknown_expression_falls_back_to_neutral() -> None:
 
     renderer._font_loc = _CapturingFont()
 
-    with patch("demo_game.ui.left_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.layout.left_panel.pygame") as mock_pygame:
         mock_pygame.draw.rect = MagicMock()
         mock_pygame.draw.circle = MagicMock()
         mock_pygame.image.load = MagicMock(side_effect=Exception("no png"))
@@ -227,7 +227,7 @@ def test_draw_portrait_zone_unknown_expression_falls_back_to_neutral() -> None:
 
 def test_draw_portrait_zone_none_expression_falls_back_to_neutral() -> None:
     """None expression → neutral glyph rendered, no crash."""
-    from demo_game.ui.left_panel import EXPRESSION_GLYPHS
+    from demo_game.ui.layout.left_panel import EXPRESSION_GLYPHS
 
     renderer = _make_renderer()
     renderer.set_active_npc("mira_innkeeper")
@@ -243,7 +243,7 @@ def test_draw_portrait_zone_none_expression_falls_back_to_neutral() -> None:
 
     renderer._font_loc = _CapturingFont()
 
-    with patch("demo_game.ui.left_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.layout.left_panel.pygame") as mock_pygame:
         mock_pygame.draw.rect = MagicMock()
         mock_pygame.draw.circle = MagicMock()
         mock_pygame.image.load = MagicMock(side_effect=Exception("no png"))
@@ -264,7 +264,7 @@ def test_draw_portrait_zone_none_expression_falls_back_to_neutral() -> None:
 
 def test_draw_portrait_zone_default_state_renders_neutral_glyph() -> None:
     """Fresh renderer (no set_facial_expression called) → neutral glyph, no crash."""
-    from demo_game.ui.left_panel import EXPRESSION_GLYPHS
+    from demo_game.ui.layout.left_panel import EXPRESSION_GLYPHS
 
     renderer = _make_renderer()
     renderer.set_active_npc("mira_innkeeper")
@@ -280,7 +280,7 @@ def test_draw_portrait_zone_default_state_renders_neutral_glyph() -> None:
 
     renderer._font_loc = _CapturingFont()
 
-    with patch("demo_game.ui.left_panel.pygame") as mock_pygame:
+    with patch("demo_game.ui.layout.left_panel.pygame") as mock_pygame:
         mock_pygame.draw.rect = MagicMock()
         mock_pygame.draw.circle = MagicMock()
         mock_pygame.image.load = MagicMock(side_effect=Exception("no png"))

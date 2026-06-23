@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 import pygame
 import pytest
 
-from demo_game.ui.gossip_chain import GossipChainWidget
+from demo_game.ui.boards.gossip_chain import GossipChainWidget
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ def test_gossip_chain_draw_empty_no_crash() -> None:
     """draw() with no data must not raise."""
     widget = GossipChainWidget(_MockFont(), _MockFont())
     surface = MagicMock()
-    with patch("demo_game.ui.gossip_chain.pygame.draw"):
+    with patch("demo_game.ui.boards.gossip_chain.pygame.draw"):
         widget.draw(surface, pygame.Rect(0, 0, 400, 500))
 
 
@@ -113,5 +113,5 @@ def test_gossip_chain_draw_with_data_no_crash() -> None:
     widget = GossipChainWidget(_MockFont(), _MockFont())
     widget.set_chain(_SAMPLE_EDGES)
     surface = MagicMock()
-    with patch("demo_game.ui.gossip_chain.pygame.draw"):
+    with patch("demo_game.ui.boards.gossip_chain.pygame.draw"):
         widget.draw(surface, pygame.Rect(0, 0, 400, 500))
