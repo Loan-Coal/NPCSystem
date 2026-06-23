@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
 from npc_engine.engines.relationship.standing import Standing, derive_standing
-from npc_engine.graph.relation_reader import RelationReader
+from npc_engine.graph.relations.relation_reader import RelationReader
 
 
 class RelationshipResponse(BaseModel):

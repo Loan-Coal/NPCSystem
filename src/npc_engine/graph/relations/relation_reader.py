@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from neo4j import AsyncSession, AsyncTransaction
 
-from npc_engine.graph.relation_phase_reader import RelationPhaseRow, get_relation_phase_state
-from npc_engine.graph.relation_writer import get_relation_values
+from npc_engine.graph.relations.relation_phase_reader import RelationPhaseRow, get_relation_phase_state
+from npc_engine.graph.relations.relation_writer import get_relation_values
 from npc_engine.graph.transaction_coordinator import run_in_tx
 
 

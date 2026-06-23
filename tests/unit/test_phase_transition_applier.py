@@ -16,7 +16,7 @@ import pytest
 
 from npc_engine.engines.relationship import phase_transition_applier as mod
 from npc_engine.engines.relationship.affinity_engine import RelationshipPhase
-from npc_engine.graph.relation_phase_reader import RelationPhaseRow
+from npc_engine.graph.relations.relation_phase_reader import RelationPhaseRow
 
 
 class _FakeReader:

@@ -69,7 +69,7 @@ class _FakeSession:
 @pytest.mark.asyncio
 async def test_returns_scalars_and_phase() -> None:
     """get_relation_phase_state maps the record into a RelationPhaseRow."""
-    from npc_engine.graph.relation_phase_reader import get_relation_phase_state
+    from npc_engine.graph.relations.relation_phase_reader import get_relation_phase_state
 
     record = _FakeRecord({"trust": 30, "fear": 5, "affection": 40, "relationship_phase": "ACQUAINTANCE", "phase_started_at_tick": 7})
     session = _FakeSession(record)
@@ -89,7 +89,7 @@ async def test_returns_scalars_and_phase() -> None:
 @pytest.mark.asyncio
 async def test_returns_none_when_no_edge() -> None:
     """get_relation_phase_state returns None when no RELATES_TO edge exists."""
-    from npc_engine.graph.relation_phase_reader import get_relation_phase_state
+    from npc_engine.graph.relations.relation_phase_reader import get_relation_phase_state
 
     session = _FakeSession(None)
 
@@ -101,7 +101,7 @@ async def test_returns_none_when_no_edge() -> None:
 @pytest.mark.asyncio
 async def test_phase_defaults_to_none_when_unset() -> None:
     """A null relationship_phase property is surfaced as None (never-transitioned edge)."""
-    from npc_engine.graph.relation_phase_reader import get_relation_phase_state
+    from npc_engine.graph.relations.relation_phase_reader import get_relation_phase_state
 
     record = _FakeRecord({"trust": 0, "fear": 0, "affection": 0, "relationship_phase": None, "phase_started_at_tick": None})
     session = _FakeSession(record)

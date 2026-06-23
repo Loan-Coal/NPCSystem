@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from npc_engine.api.routes.social.relationship import router, _get_relation_reader
-from npc_engine.graph.relation_phase_reader import RelationPhaseRow
+from npc_engine.graph.relations.relation_phase_reader import RelationPhaseRow
 
 
 class _FakeReader:

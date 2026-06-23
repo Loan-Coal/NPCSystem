@@ -21,7 +21,7 @@ from neo4j import AsyncSession, AsyncTransaction
 from npc_engine.config import Settings
 from npc_engine.graph.currency_writer import get_outbound_session_total, transfer_currency_atomic
 from npc_engine.graph.item_writer import transfer_item_atomic
-from npc_engine.graph.relation_delta_writer import apply_relation_delta as apply_relation_delta
+from npc_engine.graph.relations.relation_delta_writer import apply_relation_delta as apply_relation_delta
 from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.graph.transfer_validators import build_currency_transfer_command, build_item_transfer_command
 from npc_engine.graph.write_metrics import CURRENCY_TRANSFERS_METRIC, record_graph_write_metrics

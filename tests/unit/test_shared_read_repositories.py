@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from npc_engine.graph.relation_phase_reader import RelationPhaseRow
+from npc_engine.graph.relations.relation_phase_reader import RelationPhaseRow
 from npc_engine.graph.repositories.character_read_repository import (
     Neo4jCharacterReadRepository,
 )

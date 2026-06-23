@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from npc_engine.graph.trust_queries import get_second_hop_events, get_trust_scores_for_events
+from npc_engine.graph.relations.trust_queries import get_second_hop_events, get_trust_scores_for_events
 
 
 def _mock_session(records: list[dict]) -> MagicMock:

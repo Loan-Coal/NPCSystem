@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from npc_engine.graph.relation_delta_writer import apply_relation_delta
+from npc_engine.graph.relations.relation_delta_writer import apply_relation_delta
 from npc_engine.utils.errors import RelationDeltaExceededError, RelationEdgeNotFoundError
 
 
@@ -87,10 +87,10 @@ async def test_apply_relation_delta_happy_path() -> None:
     settings = _make_settings()
 
     with (
-        patch("npc_engine.graph.relation_delta_writer.get_relation_values", return_value=current),
-        patch("npc_engine.graph.relation_delta_writer.set_relation_values", return_value=None),
-        patch("npc_engine.graph.relation_delta_writer.write_delta_log", return_value=None),
-        patch("npc_engine.graph.relation_delta_writer.record_graph_write_metrics"),
+        patch("npc_engine.graph.relations.relation_delta_writer.get_relation_values", return_value=current),
+        patch("npc_engine.graph.relations.relation_delta_writer.set_relation_values", return_value=None),
+        patch("npc_engine.graph.relations.relation_delta_writer.write_delta_log", return_value=None),
+        patch("npc_engine.graph.relations.relation_delta_writer.record_graph_write_metrics"),
     ):
         result = await apply_relation_delta(
             session=session,
@@ -119,10 +119,10 @@ async def test_apply_relation_delta_missing_edge_raises() -> None:
     settings = _make_settings()
 
     with (
-        patch("npc_engine.graph.relation_delta_writer.get_relation_values", return_value=current),
-        patch("npc_engine.graph.relation_delta_writer.set_relation_values", return_value=None),
-        patch("npc_engine.graph.relation_delta_writer.write_delta_log", return_value=None),
-        patch("npc_engine.graph.relation_delta_writer.record_graph_write_metrics"),
+        patch("npc_engine.graph.relations.relation_delta_writer.get_relation_values", return_value=current),
+        patch("npc_engine.graph.relations.relation_delta_writer.set_relation_values", return_value=None),
+        patch("npc_engine.graph.relations.relation_delta_writer.write_delta_log", return_value=None),
+        patch("npc_engine.graph.relations.relation_delta_writer.record_graph_write_metrics"),
     ):
         with pytest.raises(RelationEdgeNotFoundError) as exc_info:
             await apply_relation_delta(
@@ -151,10 +151,10 @@ async def test_apply_relation_delta_exceeds_turn_raises() -> None:
     settings = _make_settings(max_per_turn=15)
 
     with (
-        patch("npc_engine.graph.relation_delta_writer.get_relation_values", return_value=current),
-        patch("npc_engine.graph.relation_delta_writer.set_relation_values", return_value=None),
-        patch("npc_engine.graph.relation_delta_writer.write_delta_log", return_value=None),
-        patch("npc_engine.graph.relation_delta_writer.record_graph_write_metrics"),
+        patch("npc_engine.graph.relations.relation_delta_writer.get_relation_values", return_value=current),
+        patch("npc_engine.graph.relations.relation_delta_writer.set_relation_values", return_value=None),
+        patch("npc_engine.graph.relations.relation_delta_writer.write_delta_log", return_value=None),
+        patch("npc_engine.graph.relations.relation_delta_writer.record_graph_write_metrics"),
     ):
         with pytest.raises(RelationDeltaExceededError):
             await apply_relation_delta(

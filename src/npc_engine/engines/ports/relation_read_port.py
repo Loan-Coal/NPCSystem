@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from npc_engine.graph.relation_phase_reader import RelationPhaseRow
+from npc_engine.graph.relations.relation_phase_reader import RelationPhaseRow
 
 
 class RelationReadPort(Protocol):

@@ -13,8 +13,8 @@ Used by: api composition root (engines reading RELATES_TO edges).
 from __future__ import annotations
 
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.relation_phase_reader import RelationPhaseRow
-from npc_engine.graph.relation_reader import RelationReader
+from npc_engine.graph.relations.relation_phase_reader import RelationPhaseRow
+from npc_engine.graph.relations.relation_reader import RelationReader
 
 
 class Neo4jRelationReadRepository:

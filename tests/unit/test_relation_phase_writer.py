@@ -79,7 +79,7 @@ class _FakeSession:
 async def test_writes_phase_fields() -> None:
     """write_relationship_phase sets relationship_phase and phase_started_at_tick."""
     from npc_engine.engines.relationship.affinity_engine import RelationshipPhase
-    from npc_engine.graph.relation_phase_writer import write_relationship_phase
+    from npc_engine.graph.relations.relation_phase_writer import write_relationship_phase
 
     session = _FakeSession()
     await write_relationship_phase(
@@ -101,7 +101,7 @@ async def test_writes_phase_fields() -> None:
 async def test_cypher_targets_relates_to_edge() -> None:
     """write_relationship_phase Cypher query targets the RELATES_TO edge."""
     from npc_engine.engines.relationship.affinity_engine import RelationshipPhase
-    from npc_engine.graph.relation_phase_writer import write_relationship_phase
+    from npc_engine.graph.relations.relation_phase_writer import write_relationship_phase
 
     session = _FakeSession()
     await write_relationship_phase(

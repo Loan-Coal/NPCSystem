@@ -13,7 +13,7 @@ Used by: api composition root (dependencies.build_dialogue_handler).
 from __future__ import annotations
 
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.relation_phase_writer import write_relationship_phase
+from npc_engine.graph.relations.relation_phase_writer import write_relationship_phase
 
 
 class Neo4jRelationPhaseWriteRepository:

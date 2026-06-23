@@ -17,7 +17,7 @@ from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.config import Settings
 from npc_engine.graph.delta_log_writer import write_delta_log
-from npc_engine.graph.relation_writer import get_relation_values, set_relation_values
+from npc_engine.graph.relations.relation_writer import get_relation_values, set_relation_values
 from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.graph.write_metrics import record_graph_write_metrics
 from npc_engine.mutation.delta_log_manager import RelationDeltaEntry, append_delta
