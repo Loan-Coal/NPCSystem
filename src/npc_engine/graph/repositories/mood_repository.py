@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.mood_queries import (
+from npc_engine.graph.emotion.mood_queries import (
     get_all_character_moods,
     get_co_located_affectionate_pairs,
     set_character_mood,

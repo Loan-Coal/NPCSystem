@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from npc_engine.graph.emotion_writer import EmotionGraphWriter
+from npc_engine.graph.emotion.emotion_writer import EmotionGraphWriter
 
 
 @pytest.mark.asyncio

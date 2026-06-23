@@ -13,7 +13,7 @@ Used by: api composition root (dependencies_stores.get_emotion_updater).
 from __future__ import annotations
 
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.emotion_writer import EmotionGraphWriter
+from npc_engine.graph.emotion.emotion_writer import EmotionGraphWriter
 
 
 class Neo4jEmotionRepository:
