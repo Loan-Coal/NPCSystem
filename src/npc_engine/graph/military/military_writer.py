@@ -7,7 +7,7 @@ Does NOT: read graph state beyond what MERGE requires, call LLMs, or import engi
          Territory/control writes are in military_control_writer.py.
 Dependencies injected: None (pure Cypher, session passed per call).
 Used by: npc_engine.graph.repositories.military_repository.Neo4jMilitaryRepository,
-         npc_engine.graph.military_control_writer
+         npc_engine.graph.military.military_control_writer
 """
 
 from __future__ import annotations

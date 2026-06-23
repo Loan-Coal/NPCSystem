@@ -22,7 +22,7 @@ import pytest
 
 def test_emit_battle_event_importable_from_graph():
     """emit_battle_event must be importable from graph.military_writer."""
-    from npc_engine.graph.military_writer import emit_battle_event  # noqa: F401
+    from npc_engine.graph.military.military_writer import emit_battle_event  # noqa: F401
 
     assert callable(emit_battle_event)
 

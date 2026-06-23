@@ -17,18 +17,18 @@ from __future__ import annotations
 from typing import Any
 
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.military_control_writer import (
+from npc_engine.graph.military.military_control_writer import (
     add_faction_treasury,
     remove_controls_location,
     set_controls_location,
     set_resource_depletion,
 )
-from npc_engine.graph.military_queries import (
+from npc_engine.graph.military.military_queries import (
     get_armies_in_conflict,
     get_army_at_location,
     get_faction_resource_nodes,
 )
-from npc_engine.graph.military_writer import emit_battle_event, set_army_strength
+from npc_engine.graph.military.military_writer import emit_battle_event, set_army_strength
 
 
 class Neo4jMilitaryRepository:

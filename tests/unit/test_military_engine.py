@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from npc_engine.engines.military.military_engine import MilitaryEngine
-from npc_engine.graph.military_writer import _validate_composition
+from npc_engine.graph.military.military_writer import _validate_composition
 
 
 @pytest.fixture
