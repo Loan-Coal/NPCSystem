@@ -35,7 +35,7 @@ def _make_session() -> MagicMock:
 async def test_create_debt_happy_path():
     session = _make_session()
 
-    from npc_engine.graph.owes_service import create_debt
+    from npc_engine.graph.economy.owes_service import create_debt
 
     await create_debt(
         session,
@@ -60,7 +60,7 @@ async def test_create_debt_happy_path():
 async def test_create_debt_invalid_kind_raises():
     session = _make_session()
 
-    from npc_engine.graph.owes_service import create_debt
+    from npc_engine.graph.economy.owes_service import create_debt
 
     with pytest.raises(ValueError, match="kind must be one of"):
         await create_debt(
@@ -101,7 +101,7 @@ async def test_get_debts_returns_list_for_character():
     session = MagicMock()
     session.run = _mock_run
 
-    from npc_engine.graph.owes_queries import get_debts_for_character
+    from npc_engine.graph.economy.owes_queries import get_debts_for_character
 
     results = await get_debts_for_character(session, character_id="char_a")
     assert len(results) == 2
@@ -126,7 +126,7 @@ async def test_get_debts_returns_empty_list_when_none():
     session = MagicMock()
     session.run = _mock_run
 
-    from npc_engine.graph.owes_queries import get_debts_for_character
+    from npc_engine.graph.economy.owes_queries import get_debts_for_character
 
     results = await get_debts_for_character(session, character_id="char_empty")
     assert results == []
@@ -153,7 +153,7 @@ async def test_get_debts_passes_k_limit_to_query():
     session = MagicMock()
     session.run = _mock_run
 
-    from npc_engine.graph.owes_queries import get_debts_for_character
+    from npc_engine.graph.economy.owes_queries import get_debts_for_character
 
     await get_debts_for_character(session, character_id="char_1", k=3)
     assert all(c["k"] == 3 for c in captured)
@@ -170,10 +170,10 @@ async def test_get_debts_svc_delegates_to_query_layer():
     fake_result = [{"other_id": "char_b", "role": "debtor", "kind": "favor", "magnitude": "x", "due_by": "", "status": "pending"}]
 
     with patch(
-        "npc_engine.graph.owes_service.get_debts_for_character",
+        "npc_engine.graph.economy.owes_service.get_debts_for_character",
         new=AsyncMock(return_value=fake_result),
     ) as mock_get:
-        from npc_engine.graph.owes_service import get_debts_for_character_svc
+        from npc_engine.graph.economy.owes_service import get_debts_for_character_svc
 
         results = await get_debts_for_character_svc(session, character_id="char_a", k=3)
 
@@ -190,7 +190,7 @@ async def test_get_debts_svc_delegates_to_query_layer():
 async def test_update_debt_status_happy_path():
     session = _make_session()
 
-    from npc_engine.graph.owes_service import update_debt_status
+    from npc_engine.graph.economy.owes_service import update_debt_status
 
     await update_debt_status(
         session,
@@ -216,7 +216,7 @@ async def test_update_debt_status_happy_path():
 async def test_update_debt_status_invalid_status_raises():
     session = _make_session()
 
-    from npc_engine.graph.owes_service import update_debt_status
+    from npc_engine.graph.economy.owes_service import update_debt_status
 
     with pytest.raises(ValueError, match="status must be one of"):
         await update_debt_status(
@@ -238,7 +238,7 @@ async def test_create_debt_remaining_valid_kinds(kind: str):
     """money, item, service (in addition to favor) must all be accepted."""
     session = _make_session()
 
-    from npc_engine.graph.owes_service import create_debt
+    from npc_engine.graph.economy.owes_service import create_debt
 
     await create_debt(
         session,
@@ -262,7 +262,7 @@ async def test_update_debt_status_to_defaulted():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.owes_service import update_debt_status
+    from npc_engine.graph.economy.owes_service import update_debt_status
 
     await update_debt_status(
         session,
@@ -280,7 +280,7 @@ async def test_update_debt_status_to_pending():
     """Re-setting to 'pending' is a valid operation (no error)."""
     session = _make_session()
 
-    from npc_engine.graph.owes_service import update_debt_status
+    from npc_engine.graph.economy.owes_service import update_debt_status
 
     await update_debt_status(
         session,
@@ -327,7 +327,7 @@ async def test_get_debts_creditor_rows_have_role_creditor():
     session = MagicMock()
     session.run = _mock_run
 
-    from npc_engine.graph.owes_queries import get_debts_for_character
+    from npc_engine.graph.economy.owes_queries import get_debts_for_character
 
     results = await get_debts_for_character(session, character_id="char_creditor")
     assert len(results) == 1

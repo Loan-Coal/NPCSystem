@@ -5,7 +5,7 @@ Purpose: Cypher query strings for item ownership (OWNS edge) and item transfer r
 Does NOT: execute queries or validate business rules.
 Dependencies: None (Cypher strings only).
 Dependencies injected: AsyncSession.
-Used by: npc_engine.graph.item_service
+Used by: npc_engine.graph.economy.item_service
 """
 
 from __future__ import annotations

@@ -14,7 +14,7 @@ from typing import cast
 import pytest
 from neo4j import AsyncSession
 
-from npc_engine.graph.item_writer import CYPHER_APPLY_ITEM_TRANSFER, CYPHER_GRANT_SYSTEM_ITEM, transfer_item_atomic
+from npc_engine.graph.economy.item_writer import CYPHER_APPLY_ITEM_TRANSFER, CYPHER_GRANT_SYSTEM_ITEM, transfer_item_atomic
 from npc_engine.utils.errors import ItemTransferValidationError, NodeNotFoundError
 
 

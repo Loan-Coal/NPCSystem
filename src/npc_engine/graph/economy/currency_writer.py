@@ -19,7 +19,7 @@ from neo4j import AsyncSession, AsyncTransaction
 from pydantic import BaseModel, ConfigDict
 
 from npc_engine.config import Settings
-from npc_engine.graph.currency_queries import (
+from npc_engine.graph.economy.currency_queries import (
     CYPHER_APPLY_SYSTEM_REWARD_TRANSFER,
     CYPHER_APPLY_TRANSFER,
     CYPHER_GET_CHARACTER_BALANCE,

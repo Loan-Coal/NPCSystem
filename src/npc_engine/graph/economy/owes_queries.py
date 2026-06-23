@@ -5,7 +5,7 @@ Purpose: Cypher query strings and read accessors for OWES edges between Characte
 Does NOT: execute business logic or validate payloads.
 Dependencies: None (Cypher strings only).
 Dependencies injected: AsyncSession.
-Used by: npc_engine.graph.owes_service
+Used by: npc_engine.graph.economy.owes_service
 """
 
 from __future__ import annotations

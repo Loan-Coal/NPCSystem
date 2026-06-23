@@ -24,7 +24,7 @@ from npc_engine.api.dependency_singletons import get_pricing_engine, get_trade_e
 from npc_engine.api.helpers import OkEnvelope, ok_response
 from npc_engine.engines.economy.pricing_engine import PricingEngine
 from npc_engine.engines.economy.trade_engine import TradeEngine
-from npc_engine.graph.pricing_queries import (
+from npc_engine.graph.economy.pricing_queries import (
     get_active_event_types_at_location,
     get_character_location_id,
     get_character_location_type,

@@ -64,7 +64,7 @@ def fake_settings() -> MagicMock:
 @pytest.mark.asyncio
 async def test_resolve_system_state_no_items_no_quest(fake_settings: MagicMock, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "npc_engine.graph.item_queries.get_items_for_character",
+        "npc_engine.graph.economy.item_queries.get_items_for_character",
         AsyncMock(return_value=[]),
     )
     monkeypatch.setattr(
@@ -81,7 +81,7 @@ async def test_resolve_system_state_no_items_no_quest(fake_settings: MagicMock, 
 @pytest.mark.asyncio
 async def test_resolve_system_state_with_items(fake_settings: MagicMock, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "npc_engine.graph.item_queries.get_items_for_character",
+        "npc_engine.graph.economy.item_queries.get_items_for_character",
         AsyncMock(return_value=[{"id": "sword"}, {"id": "shield"}]),
     )
     monkeypatch.setattr(
@@ -97,7 +97,7 @@ async def test_resolve_system_state_with_items(fake_settings: MagicMock, monkeyp
 @pytest.mark.asyncio
 async def test_resolve_system_state_with_active_quest(fake_settings: MagicMock, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "npc_engine.graph.item_queries.get_items_for_character",
+        "npc_engine.graph.economy.item_queries.get_items_for_character",
         AsyncMock(return_value=[]),
     )
     monkeypatch.setattr(
@@ -114,7 +114,7 @@ async def test_resolve_system_state_no_player_skips_quest(fake_settings: MagicMo
     items_mock = AsyncMock(return_value=[])
     quest_mock = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "npc_engine.graph.item_queries.get_items_for_character",
+        "npc_engine.graph.economy.item_queries.get_items_for_character",
         items_mock,
     )
     monkeypatch.setattr(

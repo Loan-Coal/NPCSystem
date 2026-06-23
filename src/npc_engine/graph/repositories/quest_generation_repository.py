@@ -25,7 +25,7 @@ from npc_engine.graph.event.event_trigger_queries import (
 from npc_engine.graph.needs_goals.goal_queries import get_goals_for_character
 from npc_engine.graph.graph_reader import get_npc_location_id
 from npc_engine.graph.group.group_service import get_groups_for_character_svc
-from npc_engine.graph.item_queries import get_items_for_character
+from npc_engine.graph.economy.item_queries import get_items_for_character
 from npc_engine.graph.emotion.mood_queries import get_character_mood
 from npc_engine.graph.needs_goals.need_queries import get_all_needs_below_threshold, get_needs_for_character
 from npc_engine.graph.need_quest_queries import has_draft_quest

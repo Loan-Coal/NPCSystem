@@ -14,7 +14,7 @@ from typing import Any
 
 from neo4j import AsyncSession, AsyncTransaction
 
-from npc_engine.graph.owes_queries import (
+from npc_engine.graph.economy.owes_queries import (
     CYPHER_CREATE_DEBT,
     CYPHER_UPDATE_DEBT_STATUS,
     get_debts_for_character,

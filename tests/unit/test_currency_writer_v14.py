@@ -14,7 +14,7 @@ from typing import cast
 import pytest
 from neo4j import AsyncSession
 
-from npc_engine.graph.currency_writer import (
+from npc_engine.graph.economy.currency_writer import (
     CYPHER_APPLY_SYSTEM_REWARD_TRANSFER,
     CYPHER_APPLY_TRANSFER,
     transfer_currency_atomic,

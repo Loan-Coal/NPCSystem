@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
-from npc_engine.graph.item_service import (
+from npc_engine.graph.economy.item_service import (
     create_item,
     delete_item,
     get_items_for_character_svc,

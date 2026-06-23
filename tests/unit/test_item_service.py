@@ -40,8 +40,8 @@ def _make_game_time() -> TimePoint:
 @pytest.mark.asyncio
 async def test_create_item_returns_uuid_string():
     session = _make_session()
-    with patch("npc_engine.graph.item_service.uuid.uuid4", return_value="item-uuid-001"):
-        from npc_engine.graph.item_service import create_item
+    with patch("npc_engine.graph.economy.item_service.uuid.uuid4", return_value="item-uuid-001"):
+        from npc_engine.graph.economy.item_service import create_item
 
         item_id = await create_item(
             session,
@@ -64,8 +64,8 @@ async def test_create_item_passes_correct_params_to_cypher():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    with patch("npc_engine.graph.item_service.uuid.uuid4", return_value="item-uuid-002"):
-        from npc_engine.graph.item_service import create_item
+    with patch("npc_engine.graph.economy.item_service.uuid.uuid4", return_value="item-uuid-002"):
+        from npc_engine.graph.economy.item_service import create_item
 
         await create_item(
             session,
@@ -112,7 +112,7 @@ async def test_get_items_for_character_returns_list():
     session = MagicMock()
     session.run = _mock_run
 
-    from npc_engine.graph.item_queries import get_items_for_character
+    from npc_engine.graph.economy.item_queries import get_items_for_character
 
     results = await get_items_for_character(session, character_id="char_1")
     assert len(results) == 2
@@ -135,7 +135,7 @@ async def test_get_item_by_id_returns_item_dict():
     session = MagicMock()
     session.run = AsyncMock(return_value=result_mock)
 
-    from npc_engine.graph.item_queries import get_item_by_id
+    from npc_engine.graph.economy.item_queries import get_item_by_id
 
     item = await get_item_by_id(session, item_id="i1")
     assert item is not None
@@ -150,7 +150,7 @@ async def test_get_item_by_id_returns_none_when_not_found():
     session = MagicMock()
     session.run = AsyncMock(return_value=result_mock)
 
-    from npc_engine.graph.item_queries import get_item_by_id
+    from npc_engine.graph.economy.item_queries import get_item_by_id
 
     item = await get_item_by_id(session, item_id="nonexistent")
     assert item is None
@@ -173,7 +173,7 @@ async def test_get_items_returns_empty_list_when_none():
     session = MagicMock()
     session.run = _mock_run
 
-    from npc_engine.graph.item_queries import get_items_for_character
+    from npc_engine.graph.economy.item_queries import get_items_for_character
 
     results = await get_items_for_character(session, character_id="char_empty")
     assert results == []
@@ -189,7 +189,7 @@ async def test_transfer_ownership_calls_detach_and_attach():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.item_service import transfer_ownership
+    from npc_engine.graph.economy.item_service import transfer_ownership
 
     await transfer_ownership(
         session,
@@ -256,7 +256,7 @@ async def test_create_item_value_zero():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.item_service import create_item
+    from npc_engine.graph.economy.item_service import create_item
 
     await create_item(
         session,
@@ -280,7 +280,7 @@ async def test_create_item_not_unique_serializes_false_string():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.item_service import create_item
+    from npc_engine.graph.economy.item_service import create_item
 
     await create_item(
         session,
@@ -309,11 +309,11 @@ async def test_get_items_svc_delegates_to_query_layer():
     fake_items = [{"id": "i1", "name": "Sword", "value": 50}]
 
     with patch(
-        "npc_engine.graph.item_service.get_items_for_character",
+        "npc_engine.graph.economy.item_service.get_items_for_character",
         new_callable=AsyncMock,
         return_value=fake_items,
     ) as mock_get:
-        from npc_engine.graph.item_service import get_items_for_character_svc
+        from npc_engine.graph.economy.item_service import get_items_for_character_svc
 
         result = await get_items_for_character_svc(session, character_id="char_1")
 
@@ -324,11 +324,11 @@ async def test_get_items_svc_delegates_to_query_layer():
 @pytest.mark.asyncio
 async def test_get_items_svc_returns_empty_for_character_with_no_items():
     with patch(
-        "npc_engine.graph.item_service.get_items_for_character",
+        "npc_engine.graph.economy.item_service.get_items_for_character",
         new_callable=AsyncMock,
         return_value=[],
     ):
-        from npc_engine.graph.item_service import get_items_for_character_svc
+        from npc_engine.graph.economy.item_service import get_items_for_character_svc
 
         result = await get_items_for_character_svc(MagicMock(), character_id="no_items_char")
 

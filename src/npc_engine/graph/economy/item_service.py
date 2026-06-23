@@ -17,7 +17,7 @@ from typing import Any
 from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.common.json_utils import dump_json
-from npc_engine.graph.item_queries import (
+from npc_engine.graph.economy.item_queries import (
     CYPHER_ATTACH_ITEM_OWNER,
     CYPHER_CREATE_ITEM_NODE,
     CYPHER_DETACH_ITEM_OWNER,

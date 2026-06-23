@@ -45,7 +45,7 @@ from npc_engine.engines.interaction.trade_handler import (
 from npc_engine.engines.ports.interaction_port import InteractionGraphPort
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
 from npc_engine.graph.intent.interaction_queries import write_debt_edge
-from npc_engine.graph.pricing_queries import (
+from npc_engine.graph.economy.pricing_queries import (
     get_active_event_types_at_location,
     get_character_location_id,
     get_character_location_type,
