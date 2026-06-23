@@ -27,22 +27,22 @@ _GRAPH = _SRC / "graph"
 
 
 def test_event_queries_module_exists() -> None:
-    assert (_GRAPH / "event_queries.py").is_file(), "graph/event_queries.py must exist"
+    assert (_GRAPH / "event" / "event_queries.py").is_file(), "graph/event_queries.py must exist"
 
 
 def test_event_queries_has_get_characters_at_location() -> None:
-    text = (_GRAPH / "event_queries.py").read_text(encoding="utf-8")
+    text = (_GRAPH / "event" / "event_queries.py").read_text(encoding="utf-8")
     assert "get_characters_at_location" in text
 
 
 def test_event_queries_seed_awareness_has_is_active_guard() -> None:
     """Awareness seeding must exclude inactive characters."""
-    text = (_GRAPH / "event_queries.py").read_text(encoding="utf-8")
+    text = (_GRAPH / "event" / "event_queries.py").read_text(encoding="utf-8")
     assert "c.is_active = true" in text
 
 
 def test_event_queries_has_get_locations_by_tag() -> None:
-    text = (_GRAPH / "event_queries.py").read_text(encoding="utf-8")
+    text = (_GRAPH / "event" / "event_queries.py").read_text(encoding="utf-8")
     assert "get_locations_by_tag" in text
 
 
@@ -74,13 +74,13 @@ def test_location_scoper_no_inline_cypher_run() -> None:
 
 
 def test_faction_politics_queries_module_exists() -> None:
-    assert (_GRAPH / "faction_politics_queries.py").is_file(), (
+    assert (_GRAPH / "faction" / "faction_politics_queries.py").is_file(), (
         "graph/faction_politics_queries.py must exist"
     )
 
 
 def test_faction_politics_queries_has_required_functions() -> None:
-    text = (_GRAPH / "faction_politics_queries.py").read_text(encoding="utf-8")
+    text = (_GRAPH / "faction" / "faction_politics_queries.py").read_text(encoding="utf-8")
     assert "get_recent_events" in text
     assert "get_character_factions" in text
     assert "get_all_standings" in text
@@ -99,13 +99,13 @@ def test_faction_politics_engine_no_raw_cypher() -> None:
 
 
 def test_quest_generation_queries_module_exists() -> None:
-    assert (_GRAPH / "quest_generation_queries.py").is_file(), (
+    assert (_GRAPH / "quest" / "quest_generation_queries.py").is_file(), (
         "graph/quest_generation_queries.py must exist"
     )
 
 
 def test_quest_generation_queries_has_required_functions() -> None:
-    text = (_GRAPH / "quest_generation_queries.py").read_text(encoding="utf-8")
+    text = (_GRAPH / "quest" / "quest_generation_queries.py").read_text(encoding="utf-8")
     assert "get_character_info" in text
     assert "get_candidate_ids_by_label" in text
     assert "check_node_labels" in text
