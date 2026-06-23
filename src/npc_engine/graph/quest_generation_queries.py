@@ -15,7 +15,7 @@ from typing import Any
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.generic_graph_utils import cypher_identifier
+from npc_engine.graph.generic.generic_graph_utils import cypher_identifier
 
 # ---------------------------------------------------------------------------
 # Cypher constants

@@ -14,7 +14,7 @@ import pytest
 pytest.importorskip("neo4j")
 from neo4j import AsyncSession
 
-from npc_engine.graph.generic_graph_service import GenericGraphService
+from npc_engine.graph.generic.generic_graph_service import GenericGraphService
 from npc_engine.schema.schema_loader import load_game_schema
 from npc_engine.type_registry.registry import build_type_registry
 from npc_engine.utils.errors import NodeNotFoundError

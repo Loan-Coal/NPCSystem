@@ -10,7 +10,7 @@ import pytest
 
 from npc_engine.engines.quest_generation.quest_generation_engine import QuestGenerationEngine
 from npc_engine.engines.quest_generation.slot_models import SlotDefinition
-from npc_engine.graph.generic_graph_utils import cypher_identifier, resolve_node_label
+from npc_engine.graph.generic.generic_graph_utils import cypher_identifier, resolve_node_label
 from npc_engine.graph.graph_admin_service import GraphAdminService
 
 _INJECTION_LABEL = "Character`}) MATCH (n2) DETACH DELETE n2 //"

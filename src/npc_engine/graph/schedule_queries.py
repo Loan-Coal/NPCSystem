@@ -13,7 +13,7 @@ from typing import Any, cast
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.generic_graph_utils import to_native
+from npc_engine.graph.generic.generic_graph_utils import to_native
 
 # ---------------------------------------------------------------------------
 # Cypher constants

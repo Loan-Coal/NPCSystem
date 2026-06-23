@@ -93,8 +93,8 @@ R006|src/npc_engine/engines/quest_generation/quest_generation_engine.py::QuestGe
 R006|src/npc_engine/engines/quest_generation/world_state_quest_trigger.py::WorldStateQuestTrigger._generate_for_epoch
 R006|src/npc_engine/engines/routine/routine_engine.py::RoutineEngine.run_tick
 R006|src/npc_engine/engines/story_pacing/story_pacing_engine.py::StoryPacingEngine.run_tick
-R006|src/npc_engine/graph/generic_edge_service.py::GenericEdgeService.list_edges
-R006|src/npc_engine/graph/generic_edge_service.py::GenericEdgeService.upsert_edge
+R006|src/npc_engine/graph/generic/generic_edge_service.py::GenericEdgeService.list_edges
+R006|src/npc_engine/graph/generic/generic_edge_service.py::GenericEdgeService.upsert_edge
 R006|src/npc_engine/graph/goal_service.py::create_goal
 R006|src/npc_engine/graph/gossip_spread_service.py::inject_rumor_belief
 R006|src/npc_engine/graph/graph_admin_service.py::GraphAdminService.apply_unbounded_relation_delta

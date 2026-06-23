@@ -9,8 +9,8 @@ Dependencies injected: AsyncSession, TypeRegistry.
 """
 from __future__ import annotations
 
-from npc_engine.graph.generic_node_service import GenericNodeService
-from npc_engine.graph.generic_edge_service import GenericEdgeService
+from npc_engine.graph.generic.generic_node_service import GenericNodeService
+from npc_engine.graph.generic.generic_edge_service import GenericEdgeService
 
 __all__ = ["GenericGraphService"]
 

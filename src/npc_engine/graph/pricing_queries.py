@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.generic_graph_utils import to_native
+from npc_engine.graph.generic.generic_graph_utils import to_native
 
 
 CYPHER_GET_CHARACTER_LOCATION_TYPE = """

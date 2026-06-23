@@ -41,7 +41,7 @@ from npc_engine.engines.quest_generation.slot_models import (
     SlotFill,
 )
 from npc_engine.engines.quest_generation.slot_validator import SlotValidator
-from npc_engine.graph.generic_graph_utils import resolve_node_label
+from npc_engine.graph.generic.generic_graph_utils import resolve_node_label
 from npc_engine.utils.errors import LLMRequestError, LLMTimeoutError
 
 _logger = logging.getLogger(__name__)

@@ -13,8 +13,8 @@ from typing import Any
 
 from npc_engine.type_registry.contracts import RuntimeFieldDefinition
 from npc_engine.type_registry.validation import RegistryOperation, validate_node_payload
-from npc_engine.graph.generic_graph_base import _GenericGraphServiceBase
-from npc_engine.graph.generic_graph_utils import (
+from npc_engine.graph.generic.generic_graph_base import _GenericGraphServiceBase
+from npc_engine.graph.generic.generic_graph_utils import (
     cypher_identifier,
     decode_properties,
     encode_properties,
