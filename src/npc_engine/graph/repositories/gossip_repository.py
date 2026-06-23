@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 
 from npc_engine.common.json_utils import dump_json, parse_json_list
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.goal_queries import get_goals_for_character
+from npc_engine.graph.needs_goals.goal_queries import get_goals_for_character
 from npc_engine.graph.gossip_batch_queries import (
     select_batch_event_trust,
     select_gossip_secret,

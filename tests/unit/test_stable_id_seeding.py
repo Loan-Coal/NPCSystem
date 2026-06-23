@@ -158,7 +158,7 @@ async def test_create_goal_uses_supplied_id():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.goal_service import create_goal
+    from npc_engine.graph.needs_goals.goal_service import create_goal
 
     result = await create_goal(
         session,

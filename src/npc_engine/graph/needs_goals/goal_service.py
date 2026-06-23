@@ -17,7 +17,7 @@ from typing import Any
 from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.common.json_utils import dump_json
-from npc_engine.graph.goal_queries import (
+from npc_engine.graph.needs_goals.goal_queries import (
     CYPHER_CREATE_GOAL,
     CYPHER_UPDATE_GOAL_STATUS,
     get_goals_for_character,

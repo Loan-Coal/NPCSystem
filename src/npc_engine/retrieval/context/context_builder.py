@@ -28,9 +28,9 @@ from npc_engine.graph.graph_reader import (
     get_npc_location_id,
     get_npc_player_edge,
 )
-from npc_engine.graph.need_queries import get_needs_for_character
+from npc_engine.graph.needs_goals.need_queries import get_needs_for_character
 from npc_engine.graph.belief_queries import get_beliefs_for_character
-from npc_engine.graph.goal_queries import get_goals_for_character
+from npc_engine.graph.needs_goals.goal_queries import get_goals_for_character
 from npc_engine.graph.item_queries import get_items_for_character
 from npc_engine.graph.secret_queries import get_secrets_for_character
 from npc_engine.graph.owes_queries import get_debts_for_character

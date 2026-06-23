@@ -5,7 +5,7 @@ Purpose: Cypher string constants and read accessor for Goal nodes and PURSUES ed
 Does NOT: execute write operations or open transactions.
 Dependencies: None (Cypher strings only).
 Dependencies injected: AsyncSession.
-Used by: npc_engine.graph.goal_service
+Used by: npc_engine.graph.needs_goals.goal_service
 """
 
 from __future__ import annotations

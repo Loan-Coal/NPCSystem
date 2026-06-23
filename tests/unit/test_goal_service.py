@@ -40,8 +40,8 @@ def _make_game_time() -> TimePoint:
 @pytest.mark.asyncio
 async def test_create_goal_returns_uuid_string():
     session = _make_session()
-    with patch("npc_engine.graph.goal_service.uuid.uuid4", return_value="goal-uuid-001"):
-        from npc_engine.graph.goal_service import create_goal
+    with patch("npc_engine.graph.needs_goals.goal_service.uuid.uuid4", return_value="goal-uuid-001"):
+        from npc_engine.graph.needs_goals.goal_service import create_goal
 
         goal_id = await create_goal(
             session,
@@ -60,8 +60,8 @@ async def test_create_goal_runs_cypher_with_correct_params():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    with patch("npc_engine.graph.goal_service.uuid.uuid4", return_value="goal-uuid-002"):
-        from npc_engine.graph.goal_service import create_goal
+    with patch("npc_engine.graph.needs_goals.goal_service.uuid.uuid4", return_value="goal-uuid-002"):
+        from npc_engine.graph.needs_goals.goal_service import create_goal
 
         await create_goal(
             session,
@@ -117,7 +117,7 @@ async def test_get_active_goals_returns_list_sorted_by_urgency():
     session = MagicMock()
     session.run = _mock_run
 
-    from npc_engine.graph.goal_queries import get_goals_for_character
+    from npc_engine.graph.needs_goals.goal_queries import get_goals_for_character
 
     results = await get_goals_for_character(session, character_id="char_1", k=5)
 
@@ -152,7 +152,7 @@ async def test_get_goals_with_status_filter():
     session = MagicMock()
     session.run = _mock_run
 
-    from npc_engine.graph.goal_queries import get_goals_for_character
+    from npc_engine.graph.needs_goals.goal_queries import get_goals_for_character
 
     results = await get_goals_for_character(
         session, character_id="char_1", k=5, status_filter="achieved"
@@ -174,7 +174,7 @@ async def test_get_goals_returns_empty_list_when_none():
     session = MagicMock()
     session.run = _mock_run
 
-    from npc_engine.graph.goal_queries import get_goals_for_character
+    from npc_engine.graph.needs_goals.goal_queries import get_goals_for_character
 
     results = await get_goals_for_character(session, character_id="no_char", k=5)
     assert results == []
@@ -190,7 +190,7 @@ async def test_update_goal_status_calls_cypher():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.goal_service import update_goal_status
+    from npc_engine.graph.needs_goals.goal_service import update_goal_status
 
     await update_goal_status(session, goal_id="goal-uuid-001", new_status="achieved")
 
@@ -211,7 +211,7 @@ async def test_create_goal_urgency_zero():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.goal_service import create_goal
+    from npc_engine.graph.needs_goals.goal_service import create_goal
 
     await create_goal(
         session,
@@ -231,7 +231,7 @@ async def test_create_goal_urgency_hundred():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.goal_service import create_goal
+    from npc_engine.graph.needs_goals.goal_service import create_goal
 
     await create_goal(
         session,
@@ -251,7 +251,7 @@ async def test_create_goal_status_always_defaults_to_active():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.goal_service import create_goal
+    from npc_engine.graph.needs_goals.goal_service import create_goal
 
     await create_goal(
         session,
@@ -276,7 +276,7 @@ async def test_update_goal_status_to_abandoned():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.goal_service import update_goal_status
+    from npc_engine.graph.needs_goals.goal_service import update_goal_status
 
     await update_goal_status(session, goal_id="goal-uuid-002", new_status="abandoned")
 
@@ -293,11 +293,11 @@ async def test_update_goal_status_to_abandoned():
 async def test_get_goals_svc_empty_status_filter_passes_through():
     """status_filter='' (empty string) is forwarded to the query to return all statuses."""
     with patch(
-        "npc_engine.graph.goal_service.get_goals_for_character",
+        "npc_engine.graph.needs_goals.goal_service.get_goals_for_character",
         new_callable=AsyncMock,
         return_value=[],
     ) as mock_get:
-        from npc_engine.graph.goal_service import get_goals_for_character_svc
+        from npc_engine.graph.needs_goals.goal_service import get_goals_for_character_svc
 
         await get_goals_for_character_svc(
             MagicMock(), character_id="char_1", k=5, status_filter=""
@@ -314,11 +314,11 @@ async def test_get_goals_svc_k_exceeds_total_returns_all():
         {"id": "g2", "description": "Goal B", "urgency": 30, "status": "achieved"},
     ]
     with patch(
-        "npc_engine.graph.goal_service.get_goals_for_character",
+        "npc_engine.graph.needs_goals.goal_service.get_goals_for_character",
         new_callable=AsyncMock,
         return_value=fake_goals,
     ):
-        from npc_engine.graph.goal_service import get_goals_for_character_svc
+        from npc_engine.graph.needs_goals.goal_service import get_goals_for_character_svc
 
         result = await get_goals_for_character_svc(MagicMock(), character_id="char_1", k=1000)
 
