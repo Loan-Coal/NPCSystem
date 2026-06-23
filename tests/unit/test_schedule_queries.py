@@ -1,5 +1,5 @@
 """
-Unit tests for npc_engine.graph.schedule_queries.
+Unit tests for npc_engine.graph.scheduling.schedule_queries.
 
 Covers all four public read functions:
 - get_schedule: found / not found
@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from npc_engine.graph.schedule_queries import (
+from npc_engine.graph.scheduling.schedule_queries import (
     get_character_location_at,
     get_character_schedule,
     get_characters_at_location,

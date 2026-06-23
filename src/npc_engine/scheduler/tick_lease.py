@@ -13,7 +13,7 @@ from typing import Protocol
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.tick_lease_queries import (
+from npc_engine.graph.scheduling.tick_lease_queries import (
     ensure_tick_lease_constraint,
     is_lease_done,
     mark_lease_done,

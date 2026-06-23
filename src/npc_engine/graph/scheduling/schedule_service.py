@@ -15,13 +15,13 @@ from typing import Any
 
 from neo4j import AsyncSession, AsyncTransaction
 
-from npc_engine.graph.schedule_queries import (
+from npc_engine.graph.scheduling.schedule_queries import (
     get_character_location_at,
     get_character_schedule,
     get_characters_at_location,
     get_schedule,
 )
-from npc_engine.graph.schedule_writer import (
+from npc_engine.graph.scheduling.schedule_writer import (
     assign_schedule,
     unassign_schedule,
     upsert_schedule,

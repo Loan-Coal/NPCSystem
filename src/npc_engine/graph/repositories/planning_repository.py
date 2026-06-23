@@ -22,7 +22,7 @@ from npc_engine.graph.needs_goals.need_queries import (
     get_needs_for_character,
     get_satisfying_location_for_need,
 )
-from npc_engine.graph.routine_queries import update_character_location
+from npc_engine.graph.scheduling.routine_queries import update_character_location
 from npc_engine.world.time_utils import TimePoint
 
 

@@ -29,7 +29,7 @@ from collections.abc import Awaitable, Callable
 from neo4j import AsyncSession
 
 from npc_engine.engines.base_engine import BaseEngine
-from npc_engine.graph.tick_scheduler_queries import is_tick_done, mark_tick_done
+from npc_engine.graph.scheduling.tick_scheduler_queries import is_tick_done, mark_tick_done
 from npc_engine.scheduler.engine_status_store import EngineStatusStore
 from npc_engine.scheduler.game_clock import ClockState, GameClock
 from npc_engine.scheduler.tick_lease import TickLeaseRepository, TickLeaseRepositoryProtocol

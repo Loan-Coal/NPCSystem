@@ -11,7 +11,7 @@ Used by: (legacy callers — routine_engine, event_handler, dialogue_handler)
 """
 from __future__ import annotations
 
-from npc_engine.graph.routine_queries import (  # noqa: F401
+from npc_engine.graph.scheduling.routine_queries import (  # noqa: F401
     CYPHER_CLEAR_ROUTINE_OVERRIDE,
     CYPHER_GET_SCHEDULED_CHARACTERS,
     CYPHER_SET_ROUTINE_OVERRIDE,

@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict
 from npc_engine.graph.event.event_queries import get_characters_at_location, seed_awareness_tx
 from npc_engine.graph.event.event_writer import _EventNode, upsert_event
 from npc_engine.graph.reputation.reputation_writer import adjust_reputation_for_event
-from npc_engine.graph.routine_queries import set_routine_override
+from npc_engine.graph.scheduling.routine_queries import set_routine_override
 from npc_engine.graph.transaction_coordinator import run_in_tx
 from npc_engine.graph.world_state.world_state_reader import get_world_state
 from npc_engine.graph.world_state.world_state_writer import upsert_world_state_tx

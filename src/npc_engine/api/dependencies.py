@@ -49,7 +49,7 @@ from npc_engine.engines.tts.factory import build_tts_client
 from npc_engine.engines.tts.protocols import TTSClientProtocol
 from npc_engine.graph.faction_service import FactionService
 from npc_engine.graph.reputation.reputation_service import ReputationService
-from npc_engine.graph.schedule_service import ScheduleService
+from npc_engine.graph.scheduling.schedule_service import ScheduleService
 from npc_engine.graph.generic.generic_graph_service import GenericGraphService
 from npc_engine.graph.graph_admin_service import GraphAdminService
 from npc_engine.schema.context_config_models import LLMConfig

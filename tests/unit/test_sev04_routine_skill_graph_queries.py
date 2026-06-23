@@ -14,7 +14,7 @@ import inspect
 
 def test_graph_routine_queries_module_importable() -> None:
     """graph.routine_queries must exist and export the four query functions."""
-    from npc_engine.graph import routine_queries  # noqa: F401 - import is the assertion
+    from npc_engine.graph.scheduling import routine_queries  # noqa: F401 - import is the assertion
     assert hasattr(routine_queries, "get_scheduled_characters")
     assert hasattr(routine_queries, "update_character_location")
     assert hasattr(routine_queries, "clear_routine_override")
@@ -23,7 +23,7 @@ def test_graph_routine_queries_module_importable() -> None:
 
 def test_graph_routine_queries_functions_are_async() -> None:
     """All four routine query helpers must be coroutine functions."""
-    from npc_engine.graph import routine_queries
+    from npc_engine.graph.scheduling import routine_queries
 
     for name in (
         "get_scheduled_characters",

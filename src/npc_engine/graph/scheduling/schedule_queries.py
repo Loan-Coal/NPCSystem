@@ -4,7 +4,7 @@ Layer: graph
 Purpose: Read-only Cypher accessors for Schedule nodes and FOLLOWS_SCHEDULE edges.
 Does NOT: execute write operations or open transactions.
 Dependencies injected: AsyncSession.
-Used by: npc_engine.graph.schedule_service
+Used by: npc_engine.graph.scheduling.schedule_service
 """
 
 from __future__ import annotations

@@ -17,7 +17,7 @@ from typing import Any
 
 from npc_engine.graph.db import GraphDB
 from npc_engine.graph.location.location_history_service import record_departure
-from npc_engine.graph.routine_queries import (
+from npc_engine.graph.scheduling.routine_queries import (
     clear_routine_override,
     get_scheduled_characters,
     update_character_location,

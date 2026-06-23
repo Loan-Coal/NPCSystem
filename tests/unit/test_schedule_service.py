@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from npc_engine.graph.schedule_service import ScheduleService
+from npc_engine.graph.scheduling.schedule_service import ScheduleService
 from npc_engine.utils.errors import ScheduleAssignmentError, ScheduleNotFoundError
 
 
@@ -47,7 +47,7 @@ async def test_create_schedule_returns_properties():
     service, _ = _make_service()
     entries = [{"time_of_day": "morning", "location_id": "loc_1", "activity": "patrol"}]
 
-    with patch("npc_engine.graph.schedule_service.upsert_schedule", new_callable=AsyncMock) as mock_upsert:
+    with patch("npc_engine.graph.scheduling.schedule_service.upsert_schedule", new_callable=AsyncMock) as mock_upsert:
         result = await service.create_schedule(
             schedule_id="sched_1",
             name="Guard Shift",
@@ -82,7 +82,7 @@ async def test_create_schedule_rejects_invalid_time_of_day():
 @pytest.mark.asyncio
 async def test_assign_schedule_calls_writer():
     service, _ = _make_service()
-    with patch("npc_engine.graph.schedule_service.assign_schedule", new_callable=AsyncMock) as mock_assign:
+    with patch("npc_engine.graph.scheduling.schedule_service.assign_schedule", new_callable=AsyncMock) as mock_assign:
         await service.assign_schedule(character_id="char_1", schedule_id="sched_1")
     mock_assign.assert_awaited_once_with(
         mock_assign.call_args[0][0],  # tx
@@ -99,7 +99,7 @@ async def test_assign_schedule_propagates_error():
         schedule_id="sched_x",
         detail="Character or Schedule node not found",
     )
-    with patch("npc_engine.graph.schedule_service.assign_schedule", new_callable=AsyncMock, side_effect=err):
+    with patch("npc_engine.graph.scheduling.schedule_service.assign_schedule", new_callable=AsyncMock, side_effect=err):
         with pytest.raises(ScheduleAssignmentError):
             await service.assign_schedule(character_id="char_x", schedule_id="sched_x")
 
@@ -113,7 +113,7 @@ async def test_assign_schedule_propagates_error():
 async def test_get_schedule_returns_dict():
     service, _ = _make_service()
     fake = {"id": "sched_1", "name": "Guard Shift", "entries": "[]"}
-    with patch("npc_engine.graph.schedule_service.get_schedule", new_callable=AsyncMock, return_value=fake):
+    with patch("npc_engine.graph.scheduling.schedule_service.get_schedule", new_callable=AsyncMock, return_value=fake):
         result = await service.get_schedule("sched_1")
     assert result["id"] == "sched_1"
 
@@ -121,7 +121,7 @@ async def test_get_schedule_returns_dict():
 @pytest.mark.asyncio
 async def test_get_schedule_raises_when_not_found():
     service, _ = _make_service()
-    with patch("npc_engine.graph.schedule_service.get_schedule", new_callable=AsyncMock, return_value=None):
+    with patch("npc_engine.graph.scheduling.schedule_service.get_schedule", new_callable=AsyncMock, return_value=None):
         with pytest.raises(ScheduleNotFoundError):
             await service.get_schedule("missing")
 
@@ -135,7 +135,7 @@ async def test_get_schedule_raises_when_not_found():
 async def test_get_character_location_at_valid():
     service, _ = _make_service()
     with patch(
-        "npc_engine.graph.schedule_service.get_character_location_at",
+        "npc_engine.graph.scheduling.schedule_service.get_character_location_at",
         new_callable=AsyncMock,
         return_value="loc_tavern",
     ):
@@ -154,7 +154,7 @@ async def test_get_character_location_at_invalid_time_raises():
 async def test_get_character_location_at_returns_none_when_no_schedule():
     service, _ = _make_service()
     with patch(
-        "npc_engine.graph.schedule_service.get_character_location_at",
+        "npc_engine.graph.scheduling.schedule_service.get_character_location_at",
         new_callable=AsyncMock,
         return_value=None,
     ):
@@ -171,7 +171,7 @@ async def test_get_character_location_at_returns_none_when_no_schedule():
 async def test_get_characters_at_location_valid():
     service, _ = _make_service()
     with patch(
-        "npc_engine.graph.schedule_service.get_characters_at_location",
+        "npc_engine.graph.scheduling.schedule_service.get_characters_at_location",
         new_callable=AsyncMock,
         return_value=["char_1", "char_2"],
     ):
@@ -190,7 +190,7 @@ async def test_get_characters_at_location_invalid_time_raises():
 async def test_get_characters_at_location_returns_empty():
     service, _ = _make_service()
     with patch(
-        "npc_engine.graph.schedule_service.get_characters_at_location",
+        "npc_engine.graph.scheduling.schedule_service.get_characters_at_location",
         new_callable=AsyncMock,
         return_value=[],
     ):
@@ -206,7 +206,7 @@ async def test_get_characters_at_location_returns_empty():
 @pytest.mark.asyncio
 async def test_unassign_schedule_calls_writer():
     service, _ = _make_service()
-    with patch("npc_engine.graph.schedule_service.unassign_schedule", new_callable=AsyncMock) as mock_unassign:
+    with patch("npc_engine.graph.scheduling.schedule_service.unassign_schedule", new_callable=AsyncMock) as mock_unassign:
         await service.unassign_schedule(character_id="char_1")
     mock_unassign.assert_awaited_once()
     _, kwargs = mock_unassign.call_args
@@ -223,7 +223,7 @@ async def test_get_character_schedule_returns_schedule_when_assigned():
     service, _ = _make_service()
     fake = {"id": "sched_1", "name": "Day Patrol", "entries": "[]"}
     with patch(
-        "npc_engine.graph.schedule_service.get_character_schedule",
+        "npc_engine.graph.scheduling.schedule_service.get_character_schedule",
         new_callable=AsyncMock,
         return_value=fake,
     ):
@@ -236,7 +236,7 @@ async def test_get_character_schedule_returns_schedule_when_assigned():
 async def test_get_character_schedule_returns_none_when_unassigned():
     service, _ = _make_service()
     with patch(
-        "npc_engine.graph.schedule_service.get_character_schedule",
+        "npc_engine.graph.scheduling.schedule_service.get_character_schedule",
         new_callable=AsyncMock,
         return_value=None,
     ):
@@ -260,7 +260,7 @@ async def test_create_schedule_with_full_five_slot_schedule():
         {"time_of_day": "evening",   "location_id": "loc_3", "activity": "dinner"},
         {"time_of_day": "night",     "location_id": "loc_1", "activity": "sleep"},
     ]
-    with patch("npc_engine.graph.schedule_service.upsert_schedule", new_callable=AsyncMock):
+    with patch("npc_engine.graph.scheduling.schedule_service.upsert_schedule", new_callable=AsyncMock):
         result = await service.create_schedule(
             schedule_id="sched_full",
             name="Full Day",
@@ -277,7 +277,7 @@ async def test_create_schedule_allows_entries_without_activity():
     """Entries without an 'activity' key are valid (activity is optional)."""
     service, _ = _make_service()
     entries = [{"time_of_day": "morning", "location_id": "loc_1"}]
-    with patch("npc_engine.graph.schedule_service.upsert_schedule", new_callable=AsyncMock):
+    with patch("npc_engine.graph.scheduling.schedule_service.upsert_schedule", new_callable=AsyncMock):
         result = await service.create_schedule(
             schedule_id="sched_no_activity",
             name="Minimal",

@@ -4,7 +4,7 @@ Layer: graph
 Purpose: Cypher mutation functions for Schedule nodes and FOLLOWS_SCHEDULE edges.
 Does NOT: manage transaction lifecycle or execute queries directly on AsyncSession.
 Dependencies injected: AsyncTransaction (via caller).
-Used by: npc_engine.graph.schedule_service
+Used by: npc_engine.graph.scheduling.schedule_service
 """
 
 from __future__ import annotations
