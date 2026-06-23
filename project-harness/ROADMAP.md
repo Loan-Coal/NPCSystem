@@ -25,6 +25,85 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
 
 ---
 
+## Active — Eval suite redesign (EVAL-B2..FINAL)
+
+> **Approved plan (full detail, source of truth):** `~/.claude/plans/plan-the-full-implementation-glistening-parnas.md`.
+> Goal of the program: make the eval suite measure the *engine*, not the harness — trustworthy,
+> model-separated (judge ≠ generation), state-clean evaluation.
+>
+> **Already shipped (do not redo):**
+> - **B-1 — model-separation invariant + judge consolidation (DEC-143).** `evals/judge_config.py`
+>   (`resolve_judge_model`/`discover_generation_models`/`JudgeModelCollisionError`, default judge
+>   `mixtral:8x7b`, exact-collision hard-fail + same-family warn); `matchers.py` wired; duplicated
+>   `_make_judge`/`_ollama_reachable` consolidated into `e2e/helpers/judge_client.py`; both scenario
+>   suites rewired. Tests: `tests/unit/engines/test_judge_config.py` + the mixtral tripwire in
+>   `tests/unit/conformance/test_eval_matchers_sev38.py`. ✅
+> - **B-2 production code — clean-state + precondition guard.** `evals/preconditions.py`
+>   (`WorldBaseline`, `Preconditions`, `reset_world`, `ensure_player_node`, `assert_preconditions`,
+>   `prepare`); `runner.py` ensures the player node per case + `--reset-world` flag;
+>   `anti_hallucination_runner.run()` resets to age_of_peace; `clean_world` fixture in
+>   `e2e/scenarios/conftest.py`; scenario tests 2/3 use it. Tests: `tests/unit/test_preconditions.py`,
+>   `tests/unit/test_runner_player_node.py`. ✅ (commit 252a5fc)
+>
+> **Gate state going in: RED.** The B-2 `reset_world` call broke 8 `test_anti_hallucination_runner.py`
+> cases (mock client returns a non-200 `.patch()`) — logged as **ISSUE-121**. EVAL-B2 below closes it.
+>
+> **Hard constraints (all phases):** `evals/` stays **src-free** (local exceptions, mirror `EvalConfigError`);
+> judge prompts only in `prompts/eval/`; Pydantic v2 for any data crossing a boundary; ≤300 lines/file,
+> ≤40 lines/function, ≤3 nesting; `make check` green per step. `test-cov` measures only
+> `npc_engine + matchers + summary + runner` — new lines in those need same-phase tests; new standalone
+> eval modules stay **out** of `--cov`.
+
+### Phase EVAL-B2 — Finish clean-state guard (close ISSUE-121)
+**Goal:** Restore the gate to green after the committed B-2 wiring. **Effort:** ~½ session.
+**Constraint:** Do not weaken `reset_world`; fix the *tests* to model a real 200 PATCH.
+**Notes:** B-2 production code already landed (252a5fc); only the unit tests lag. The 8 failures all live in
+`tests/unit/engines/test_anti_hallucination_runner.py` and are caused by the mock client's `.patch()` not
+returning `status_code == 200`, so `preconditions.reset_world` raises `PreconditionError`.
+
+- [ ] **EVAL-B2.1** Update `tests/unit/engines/test_anti_hallucination_runner.py` so the mocked client returns a 200 `.patch()` (or patches `anti_hallucination_runner.preconditions.reset_world`) — the 8 failing cases pass for the right reason. `make check` green.
+- [ ] **EVAL-B2.2** Add a focused test asserting `run()` calls `preconditions.reset_world` once before the case loop (regression guard for the contamination fix), and confirm `runner.main` ensures the player node for a non-reputation case (already covered by `test_runner_player_node.py` — extend if gaps). Mark **ISSUE-121 `[FIXED]`** + move it to `archive/ISSUES_RESOLVED.md`.
+
+### Phase EVAL-B3 — LLM-judge refusal scorer (close ISSUE-119)
+**Goal:** Replace the brittle keyword refusal match with the LLM judge so valid refusals are not scored as
+hallucinations (and vice-versa). **Effort:** ~1 session. **Constraint:** judge transport stays in the
+cov-measured `matchers.py`; refusal criterion lives only in `prompts/eval/`.
+**Notes:** `anti_hallucination_runner._is_refusal` / `_REFUSAL_KEYWORDS` are the target. Re-measure the true
+anti-hallucination number against the live engine after the swap (manual, not gated).
+
+- [ ] **EVAL-B3.1** Add `prompts/eval/refusal_judge.yaml` (header + `{criteria}`/`{content}`); add `matchers.judge_refusal(content) -> JudgeResult` (new `_REFUSAL_YAML_PATH` + loader mirroring the tone loader; reuse `_run_binary_judge`). Tests in `tests/unit/conformance/test_eval_matchers_sev38.py`: YES→score True, NO→False, infra→None; refusal prompt loaded.
+- [ ] **EVAL-B3.2** Rewire `anti_hallucination_runner._classify_case` to use `matchers.judge_refusal` (delete `_REFUSAL_KEYWORDS`/`_is_refusal`; `score is None`→`error` outcome). Update the refusal tests in `test_anti_hallucination_runner.py` to patch `matchers.judge_refusal`. Mark **ISSUE-119 `[FIXED]`** + move to `archive/ISSUES_RESOLVED.md`.
+
+### Phase EVAL-B4 — Two-phase generate→judge, shared record model (DEC-144)
+**Goal:** A generation pass collects all engine replies → persists structured records → a judge pass reads
+and scores them; covers the case-based evals AND the scenario judge tests via one Pydantic v2 record model.
+**Effort:** ~1–1.5 sessions. **Constraint:** purely additive (`make eval`/`make eval-anti-hallucination`
+unchanged); new modules out of `--cov`; transcripts under `e2e/transcripts/` (gitignored).
+**Notes:** Multi-step scenario tests (memory consolidation, gossip KNOWS_ABOUT count, planted rumor) do NOT
+fit single-turn generate→judge — keep them as pytest but route through the shared `judge_client` +
+`clean_world` and persist a record (`judge_kind=None` for the pure graph-count test). Add a `DECISIONS.md`
+**DEC-144** entry for the two-phase architecture.
+
+- [ ] **EVAL-B4.1** `evals/eval_records.py` — Pydantic v2 `GenerationRecord` (incl. `judge_kind: Literal[...]|None`, `expected_polarity: Literal["pass_on_yes","pass_on_no"]`), `JudgedRecord`, `TranscriptFile`, `write_transcript`/`read_transcript`. Unit test: round-trip + schema-mismatch raises + polarity literal enforced.
+- [ ] **EVAL-B4.2** `evals/generate_runner.py` (split a pure `generate_record_builder.py` if a function nears 40 lines): reuse `runner._load_cases`/`_expected_with_guards`; POST `/v1/dialogue` per LLM-judge expectation → `GenerationRecord` (affirms ⇒ `pass_on_no`); second loop emits anti-hallucination `refusal_judge` records; calls `ensure_player_node`. `make eval-generate` target. Unit test with mock client.
+- [ ] **EVAL-B4.3** `evals/judge_runner.py`: `read_transcript` → `matchers._run_binary_judge` per record → apply polarity (None ⇒ inconclusive) → `JudgedRecord`; feed existing `summary.summarize`/`report.write_report` via a thin `_to_result_dict` adapter. `make eval-judge` target. Unit test (patch `_run_binary_judge`, assert polarity + summary headline).
+- [ ] **EVAL-B4.4** Scenario record persistence: autouse `persist_scenario_records` fixture in conftest writes a session-collected `GenerationRecord` list at teardown; single-turn judge tests append records; multi-step tests append provenance records (gossip-count uses `judge_kind=None` + before/after metadata). Add **DEC-144**.
+
+### Phase EVAL-FINAL — Trustworthy re-run vs Stage-A baseline (manual, live)
+**Goal:** Prove the redesign with real numbers, self-eval bias removed. **Effort:** ~½ session, **live** (engine
++ Ollama up). **Constraint:** not `make check`-gated (requires the running stack); record outputs in the
+Session Log.
+**Notes:** Stage-A baseline to beat — `make eval` 1/53 (missing player node) → 41/53 (after node);
+anti-hallucination 27/40 via brittle scorer; scenarios self-evaluated on qwen2.5.
+
+- [ ] **EVAL-FINAL.1** With both worlds seeded and `JUDGE_MODEL=mixtral:8x7b`: run `make eval --reset-world`, `make eval-anti-hallucination`, `make eval-generate` + `make eval-judge`, `make eval-llm`, `make eval-llm-demo`, and `retrieval_runner` in-container. Produce a **new-vs-Stage-A** table; confirm judge ≠ generation, player-node 422s gone, true anti-hallucination number re-measured. Re-judge one saved transcript with a second `JUDGE_MODEL` to demonstrate generate-once / judge-many. If the demo-world gossip-propagation failures persist, log a **new ISSUE** (next id 122) — do not fold into this program.
+
+**Batching for `/expand-next`:** EVAL-B2 is a short close-out (one commit may suffice). EVAL-B3 is one session.
+EVAL-B4 is its own session (4 steps, one commit each). EVAL-FINAL is a manual live run, not TDD-gated — run it
+after B-4 with the stack up.
+
+---
+
 ## Active — Folder reorganisation (REORG-PR6..PR9)
 
 > Branch: `refactor/folder-reorg`. Full per-PR details, exact file lists, and domain tables:
