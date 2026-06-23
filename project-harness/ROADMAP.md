@@ -25,6 +25,29 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
 
 ---
 
+## Active — Folder reorganisation (REORG-PR6..PR9)
+
+> Branch: `refactor/folder-reorg`. Full per-PR details, exact file lists, and domain tables:
+> **`~/.claude/plans/review-the-codebase-and-greedy-thimble.md`**.
+> **PRs 1–5 committed** — `api/routes/` (a9a7d0b), `api/` (3d18596), `retrieval/` (88b9333),
+> `demo_game/ui/` (0c18a6a), `demo_game/` (827212d).
+> Verification per PR: `make test` (2542 passed + 8 pre-existing ISSUE-119 skips) +
+> `make test-demo` (1093 passed) + `make check-layers`. Facade `__init__.py` pattern throughout.
+
+- [x] **PR-1** `src/npc_engine/api/routes/` → 8 domain sub-packages; single wiring file `router_registry.py` updated. ✅ a9a7d0b
+- [x] **PR-2** `src/npc_engine/api/` → `errors/`, `helpers/`, `dashboard/` sub-packages; `dependencies.py` re-exported from new `wiring/` sub-package. ✅ 3d18596
+- [x] **PR-3** `src/npc_engine/retrieval/` → `context/`, `embedding/`, `graph_rag/`, `dialogue_context/`. ✅ 88b9333
+- [x] **PR-4** `demo_game/ui/` → `panels/`, `boards/`, `widgets/`, `layout/`. ✅ 0c18a6a
+- [x] **PR-5** `demo_game/` root → `pollers/` (17), `beats/` (3), `workers/` (1), `seeds/` (2), `branches/` (3), `runners/` (3). Makefile `demo-run` updated to `demo_game.runners.run`. ✅ 827212d
+- [ ] **PR-6 `src/npc_engine/graph/`** — the big one. ~136 files → 24 domain sub-packages + slim root. Highest blast radius (~150 import lines across api/engines/services/retrieval/scheduler + graph/repositories). **Approach:** create all sub-package dirs + facade `__init__.py` files first, then sweep call sites **domain-by-domain** with `make test` after each domain batch. Domain mapping: `gossip/`, `faction/`, `political/`, `quest/`, `reputation/`, `economy/`, `knowledge/`, `intrigue/`, `character/`, `needs_goals/`, `relations/`, `event/`, `location/`, `scheduling/`, `military/`, `emotion/`, `memory/`, `intent/`, `narrative/`, `idempotency/`, `group/`, `world_state/`, `generic/`, `infra/`. Stays at root: `graph_reader`, `graph_writer`, `graph_admin_service`, `graph_edit_validator`, `graph_rag_queries` (~5 files). See plan file for exact per-domain file lists.
+- [ ] **PR-7 `tests/unit/`** — 345 files → mirror source layout. No facades (tests aren't imported). Add `__init__.py` per new subdir. Sub-dirs: `conformance/`, `api/`, `engines/`, `graph/`, `retrieval/`, `llm/`, `world/`, `config/`, `utils/` (already exists). Update Makefile explicit-path targets (`smoke`, `test-v14-*`). Read `test_architecture_conformance`, `test_check_layers`, `test_docstring_audit` before moving — update any path assertions in the same PR.
+- [ ] **PR-8 `demo_game/tests/`** — 80 files → mirror demo_game layout. Sub-dirs: `ui/`, `pollers/`, `beats/`, `scenarios/`, `core/`, `seeds/`. Keep `demo_game/tests/conftest.py` at tests root. Add `__init__.py` per subdir.
+- [ ] **PR-9 (optional) `graph/repositories/`** — 39 files → mirror the PR-6 domain split. Defer until PR-6 lands and navigation need is confirmed.
+
+**Batching for `/expand-next`:** PR-6 is a session on its own (domain-by-domain sweep). PR-7 + PR-8 are mechanical moves that can run in a single session. PR-9 is optional cleanup.
+
+---
+
 ## Active — ISSUES.md remediation program (REM-*)
 
 > Drains the open `project-harness/ISSUES.md` backlog. Full file-level plan with rationale and the

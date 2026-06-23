@@ -48,9 +48,9 @@ make demo-snapshot            # snapshot current demo state to cache
 | Path | What it is |
 |------|-----------|
 | `demo_game/` | Pygame demo app (zero imports from `src/`) |
-| `demo_game/run.py` | Scripted scenario runner (`make demo-run`) |
+| `demo_game/runners/run.py` | Scripted scenario runner (`make demo-run`) |
 | `demo_game/client.py` | `EngineClient` — REST API wrapper |
-| `demo_game/seed.py` | Demo world seeder (5 NPCs, 3 locations, 3 factions) |
+| `demo_game/seeds/seed.py` | Demo world seeder (5 NPCs, 3 locations, 3 factions) |
 | `seeds/worlds/seed_village_world.py` | Village eval world (vw_ prefix) |
 | `seeds/worlds/seed_tavern_world.py` | Tavern eval world (tw_ prefix) |
 | `src/npc_engine/prompts/` | All runtime LLM prompt YAML files (no prompt strings in Python). Eval-judge prompts live under `src/npc_engine/prompts/eval/`. |
