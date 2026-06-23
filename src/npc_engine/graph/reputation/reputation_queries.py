@@ -4,7 +4,7 @@ Layer: graph
 Purpose: Read-only Cypher accessors for HAS_REPUTATION_WITH edges.
 Does NOT: execute write operations or open transactions.
 Dependencies injected: AsyncSession.
-Used by: npc_engine.graph.reputation_service, npc_engine.retrieval.context.context_builder
+Used by: npc_engine.graph.reputation.reputation_service, npc_engine.retrieval.context.context_builder
 """
 
 from __future__ import annotations

@@ -113,10 +113,10 @@ R006|src/npc_engine/graph/pledge_service.py::break_pledge
 R006|src/npc_engine/graph/pledge_violation_service.py::check_pledge_violations
 R006|src/npc_engine/graph/relation_delta_writer.py::apply_relation_delta
 R006|src/npc_engine/graph/repositories/dialogue_repository.py::Neo4jDialogueRepository.apply_relation_deltas
-R006|src/npc_engine/graph/reputation_event_seeder.py::create_reputation_event
-R006|src/npc_engine/graph/reputation_queries.py::get_reputation_context_for_npc
-R006|src/npc_engine/graph/reputation_service.py::ReputationService.adjust_reputation_with_event
-R006|src/npc_engine/graph/reputation_writer.py::adjust_reputation
+R006|src/npc_engine/graph/reputation/reputation_event_seeder.py::create_reputation_event
+R006|src/npc_engine/graph/reputation/reputation_queries.py::get_reputation_context_for_npc
+R006|src/npc_engine/graph/reputation/reputation_service.py::ReputationService.adjust_reputation_with_event
+R006|src/npc_engine/graph/reputation/reputation_writer.py::adjust_reputation
 R006|src/npc_engine/graph/schedule_service.py::ScheduleService.create_schedule
 R006|src/npc_engine/graph/transfer_validators.py::build_currency_transfer_command
 R006|src/npc_engine/graph/transfer_validators.py::build_item_transfer_command

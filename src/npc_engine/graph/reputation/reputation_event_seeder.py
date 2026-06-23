@@ -5,7 +5,7 @@ Purpose: Creates a reputation-change Event node and seeds KNOWS_ABOUT edges for
          co-located NPCs so the standing change enters the gossip pipeline.
 Does NOT: adjust the HAS_REPUTATION_WITH edge itself (that is reputation_writer's job).
 Dependencies injected: AsyncTransaction (via caller).
-Used by: npc_engine.graph.reputation_service
+Used by: npc_engine.graph.reputation.reputation_service
 """
 
 from __future__ import annotations

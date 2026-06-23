@@ -61,7 +61,7 @@ class _FakeSession:
 
 @pytest.mark.asyncio
 async def test_get_reputation_returns_dict_when_found() -> None:
-    from npc_engine.graph.reputation_queries import get_reputation
+    from npc_engine.graph.reputation.reputation_queries import get_reputation
 
     session = _FakeSession([{"standing": 60, "faction_id": "fac_1", "faction_name": "Guild"}])
     result = await get_reputation(session, character_id="char_1", faction_id="fac_1")
@@ -71,7 +71,7 @@ async def test_get_reputation_returns_dict_when_found() -> None:
 
 @pytest.mark.asyncio
 async def test_get_reputation_returns_none_when_missing() -> None:
-    from npc_engine.graph.reputation_queries import get_reputation
+    from npc_engine.graph.reputation.reputation_queries import get_reputation
 
     session = _FakeSession([])
     result = await get_reputation(session, character_id="char_1", faction_id="fac_missing")
@@ -85,7 +85,7 @@ async def test_get_reputation_returns_none_when_missing() -> None:
 
 @pytest.mark.asyncio
 async def test_list_reputations_returns_all_edges() -> None:
-    from npc_engine.graph.reputation_queries import list_reputations
+    from npc_engine.graph.reputation.reputation_queries import list_reputations
 
     records = [
         {"faction_id": "fac_1", "faction_name": "Guild", "standing": 40},
@@ -100,7 +100,7 @@ async def test_list_reputations_returns_all_edges() -> None:
 
 @pytest.mark.asyncio
 async def test_list_reputations_returns_empty_when_no_edges() -> None:
-    from npc_engine.graph.reputation_queries import list_reputations
+    from npc_engine.graph.reputation.reputation_queries import list_reputations
 
     session = _FakeSession([])
     result = await list_reputations(session, character_id="char_unknown")
@@ -114,7 +114,7 @@ async def test_list_reputations_returns_empty_when_no_edges() -> None:
 
 @pytest.mark.asyncio
 async def test_get_reputation_context_returns_items_above_threshold() -> None:
-    from npc_engine.graph.reputation_queries import get_reputation_context_for_npc
+    from npc_engine.graph.reputation.reputation_queries import get_reputation_context_for_npc
 
     records = [
         {"faction_name": "Guild", "standing": 40},
@@ -131,7 +131,7 @@ async def test_get_reputation_context_returns_items_above_threshold() -> None:
 
 @pytest.mark.asyncio
 async def test_get_reputation_context_returns_empty_when_no_factions() -> None:
-    from npc_engine.graph.reputation_queries import get_reputation_context_for_npc
+    from npc_engine.graph.reputation.reputation_queries import get_reputation_context_for_npc
 
     session = _FakeSession([])
     result = await get_reputation_context_for_npc(

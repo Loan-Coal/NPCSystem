@@ -51,7 +51,7 @@ class _FakeTx:
 
 @pytest.mark.asyncio
 async def test_set_reputation_succeeds_with_valid_standing() -> None:
-    from npc_engine.graph.reputation_writer import set_reputation
+    from npc_engine.graph.reputation.reputation_writer import set_reputation
 
     tx = _FakeTx(single_record={"standing": 40})
     await set_reputation(tx, character_id="char_1", faction_id="fac_1", standing=40)
@@ -60,7 +60,7 @@ async def test_set_reputation_succeeds_with_valid_standing() -> None:
 
 @pytest.mark.asyncio
 async def test_set_reputation_clamps_above_100() -> None:
-    from npc_engine.graph.reputation_writer import set_reputation
+    from npc_engine.graph.reputation.reputation_writer import set_reputation
 
     tx = _FakeTx(single_record={"standing": 100})
     await set_reputation(tx, character_id="char_1", faction_id="fac_1", standing=150)
@@ -69,7 +69,7 @@ async def test_set_reputation_clamps_above_100() -> None:
 
 @pytest.mark.asyncio
 async def test_set_reputation_clamps_below_minus_100() -> None:
-    from npc_engine.graph.reputation_writer import set_reputation
+    from npc_engine.graph.reputation.reputation_writer import set_reputation
 
     tx = _FakeTx(single_record={"standing": -100})
     await set_reputation(tx, character_id="char_1", faction_id="fac_1", standing=-150)
@@ -78,7 +78,7 @@ async def test_set_reputation_clamps_below_minus_100() -> None:
 
 @pytest.mark.asyncio
 async def test_set_reputation_raises_when_node_missing() -> None:
-    from npc_engine.graph.reputation_writer import set_reputation
+    from npc_engine.graph.reputation.reputation_writer import set_reputation
 
     tx = _FakeTx(single_record=None)
     with pytest.raises(ReputationNotFoundError):
@@ -92,7 +92,7 @@ async def test_set_reputation_raises_when_node_missing() -> None:
 
 @pytest.mark.asyncio
 async def test_adjust_reputation_increases_standing() -> None:
-    from npc_engine.graph.reputation_writer import adjust_reputation
+    from npc_engine.graph.reputation.reputation_writer import adjust_reputation
 
     # First run (read) returns 30, second run (write) returns 50
     call_count = 0
@@ -111,7 +111,7 @@ async def test_adjust_reputation_increases_standing() -> None:
 
 @pytest.mark.asyncio
 async def test_adjust_reputation_clamps_at_ceiling() -> None:
-    from npc_engine.graph.reputation_writer import adjust_reputation
+    from npc_engine.graph.reputation.reputation_writer import adjust_reputation
 
     call_count = 0
 
@@ -129,7 +129,7 @@ async def test_adjust_reputation_clamps_at_ceiling() -> None:
 
 @pytest.mark.asyncio
 async def test_adjust_reputation_clamps_at_floor() -> None:
-    from npc_engine.graph.reputation_writer import adjust_reputation
+    from npc_engine.graph.reputation.reputation_writer import adjust_reputation
 
     call_count = 0
 
@@ -147,7 +147,7 @@ async def test_adjust_reputation_clamps_at_floor() -> None:
 
 @pytest.mark.asyncio
 async def test_adjust_reputation_defaults_to_zero_when_no_existing_edge() -> None:
-    from npc_engine.graph.reputation_writer import adjust_reputation
+    from npc_engine.graph.reputation.reputation_writer import adjust_reputation
 
     call_count = 0
 

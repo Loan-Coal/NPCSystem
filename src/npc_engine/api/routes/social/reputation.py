@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_reputation_service
 from npc_engine.api.helpers import OkEnvelope, graph_error_to_http, ok_response, require_node
-from npc_engine.graph.reputation_service import ReputationService
+from npc_engine.graph.reputation.reputation_service import ReputationService
 from npc_engine.utils.errors import ReputationNotFoundError
 
 # ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from npc_engine.graph.reputation_event_seeder import (
+from npc_engine.graph.reputation.reputation_event_seeder import (
     REPUTATION_EVENT_SEVERITY,
     REPUTATION_EVENT_TYPE,
     _build_summary,

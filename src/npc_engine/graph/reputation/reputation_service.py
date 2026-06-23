@@ -14,16 +14,16 @@ from typing import Any
 from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.graph.transaction_coordinator import run_in_tx
-from npc_engine.graph.reputation_queries import (
+from npc_engine.graph.reputation.reputation_queries import (
     get_reputation,
     get_reputation_context_for_npc,
     list_reputations,
 )
-from npc_engine.graph.reputation_event_seeder import (
+from npc_engine.graph.reputation.reputation_event_seeder import (
     create_reputation_event,
     seed_reputation_awareness,
 )
-from npc_engine.graph.reputation_writer import (
+from npc_engine.graph.reputation.reputation_writer import (
     adjust_reputation,
     adjust_reputation_for_event,
     set_reputation,

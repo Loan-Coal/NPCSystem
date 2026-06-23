@@ -4,7 +4,7 @@ Layer: graph
 Purpose: Cypher mutation functions for HAS_REPUTATION_WITH edges between Character and Faction.
 Does NOT: manage transaction lifecycle or execute queries directly on AsyncSession.
 Dependencies injected: AsyncTransaction (via caller).
-Used by: npc_engine.graph.reputation_service
+Used by: npc_engine.graph.reputation.reputation_service
 """
 
 from __future__ import annotations

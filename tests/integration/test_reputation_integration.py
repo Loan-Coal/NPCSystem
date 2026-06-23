@@ -14,7 +14,7 @@ from uuid import uuid4
 import pytest
 from neo4j import AsyncGraphDatabase
 
-from npc_engine.graph.reputation_service import ReputationService
+from npc_engine.graph.reputation.reputation_service import ReputationService
 from npc_engine.utils.errors import ReputationNotFoundError
 
 

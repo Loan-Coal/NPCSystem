@@ -64,7 +64,7 @@ class _FakeSession:
 
 @pytest.mark.asyncio
 async def test_propagated_rep_returns_list_of_dicts() -> None:
-    from npc_engine.graph.reputation_queries import get_propagated_reputation_for_npc
+    from npc_engine.graph.reputation.reputation_queries import get_propagated_reputation_for_npc
 
     session = _FakeSession([
         {
@@ -83,7 +83,7 @@ async def test_propagated_rep_returns_list_of_dicts() -> None:
 
 @pytest.mark.asyncio
 async def test_propagated_rep_returns_empty_when_no_events() -> None:
-    from npc_engine.graph.reputation_queries import get_propagated_reputation_for_npc
+    from npc_engine.graph.reputation.reputation_queries import get_propagated_reputation_for_npc
 
     session = _FakeSession([])
     result = await get_propagated_reputation_for_npc(session, npc_id="mira_innkeeper", player_id="player_1")
@@ -92,7 +92,7 @@ async def test_propagated_rep_returns_empty_when_no_events() -> None:
 
 @pytest.mark.asyncio
 async def test_propagated_rep_passes_player_id_to_query() -> None:
-    from npc_engine.graph.reputation_queries import get_propagated_reputation_for_npc
+    from npc_engine.graph.reputation.reputation_queries import get_propagated_reputation_for_npc
 
     session = _FakeSession([])
     await get_propagated_reputation_for_npc(session, npc_id="npc_a", player_id="the_player")
@@ -103,7 +103,7 @@ async def test_propagated_rep_passes_player_id_to_query() -> None:
 @pytest.mark.asyncio
 async def test_propagated_rep_uses_distorted_account_when_present() -> None:
     """The distorted_summary (gossip version) is preferred over raw summary by coalesce."""
-    from npc_engine.graph.reputation_queries import get_propagated_reputation_for_npc
+    from npc_engine.graph.reputation.reputation_queries import get_propagated_reputation_for_npc
 
     distorted = "word is the stranger paid off the whole guild council"
     session = _FakeSession([
@@ -121,7 +121,7 @@ async def test_propagated_rep_uses_distorted_account_when_present() -> None:
 
 @pytest.mark.asyncio
 async def test_propagated_rep_negative_delta() -> None:
-    from npc_engine.graph.reputation_queries import get_propagated_reputation_for_npc
+    from npc_engine.graph.reputation.reputation_queries import get_propagated_reputation_for_npc
 
     session = _FakeSession([
         {
@@ -138,7 +138,7 @@ async def test_propagated_rep_negative_delta() -> None:
 
 @pytest.mark.asyncio
 async def test_propagated_rep_multiple_events() -> None:
-    from npc_engine.graph.reputation_queries import get_propagated_reputation_for_npc
+    from npc_engine.graph.reputation.reputation_queries import get_propagated_reputation_for_npc
 
     rows = [
         {"faction_id": "merchants_guild", "reputation_delta": 30, "account": "...", "knowledge_state": "rumor"},
@@ -151,7 +151,7 @@ async def test_propagated_rep_multiple_events() -> None:
 
 @pytest.mark.asyncio
 async def test_propagated_rep_default_limit_passed() -> None:
-    from npc_engine.graph.reputation_queries import _PROPAGATED_REP_LIMIT, get_propagated_reputation_for_npc
+    from npc_engine.graph.reputation.reputation_queries import _PROPAGATED_REP_LIMIT, get_propagated_reputation_for_npc
 
     session = _FakeSession([])
     await get_propagated_reputation_for_npc(session, npc_id="npc_a", player_id="p")
@@ -160,7 +160,7 @@ async def test_propagated_rep_default_limit_passed() -> None:
 
 @pytest.mark.asyncio
 async def test_propagated_rep_custom_limit() -> None:
-    from npc_engine.graph.reputation_queries import get_propagated_reputation_for_npc
+    from npc_engine.graph.reputation.reputation_queries import get_propagated_reputation_for_npc
 
     session = _FakeSession([])
     await get_propagated_reputation_for_npc(session, npc_id="npc_a", player_id="p", limit=3)
