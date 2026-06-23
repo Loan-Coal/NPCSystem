@@ -17,7 +17,7 @@ from typing import Any
 from npc_engine.graph.belief_queries import get_beliefs_for_character
 from npc_engine.graph.causality_service import record_causation
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.event_trigger_queries import (
+from npc_engine.graph.event.event_trigger_queries import (
     get_any_military_npc,
     get_military_npc_at_location,
     get_unprocessed_trigger_events,

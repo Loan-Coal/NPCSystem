@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
-from npc_engine.graph.event_queries import get_recent_player_events
+from npc_engine.graph.event.event_queries import get_recent_player_events
 
 # ---------------------------------------------------------------------------
 # Constants

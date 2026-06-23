@@ -19,7 +19,7 @@ from typing import Any
 from neo4j import AsyncTransaction
 
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.event_writer import upsert_event
+from npc_engine.graph.event.event_writer import upsert_event
 from npc_engine.graph.graph_reader import get_npc_location_id
 from npc_engine.graph.scheme_reader import (
     ActiveSchemeProgress,

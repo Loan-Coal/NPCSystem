@@ -19,7 +19,7 @@ from neo4j import AsyncTransaction
 from npc_engine.config import Settings
 from npc_engine.graph.currency_writer import execute_currency_transfer_in_tx, get_character_balance
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.event_writer import upsert_quest_lifecycle_event
+from npc_engine.graph.event.event_writer import upsert_quest_lifecycle_event
 from npc_engine.graph.item_queries import check_item_possession_in_tx
 from npc_engine.graph.item_writer import execute_item_transfer_in_tx
 from npc_engine.graph.quest_writer import get_quest_state, upsert_quest_state

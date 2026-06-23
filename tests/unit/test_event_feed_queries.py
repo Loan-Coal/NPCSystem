@@ -15,7 +15,7 @@ import pytest
 
 pytest.importorskip("neo4j")
 
-from npc_engine.graph.event_feed_queries import get_recent_event_feed
+from npc_engine.graph.event.event_feed_queries import get_recent_event_feed
 
 
 @dataclass

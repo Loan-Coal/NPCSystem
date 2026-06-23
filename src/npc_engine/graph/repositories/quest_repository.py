@@ -18,7 +18,7 @@ from typing import Any
 from neo4j import AsyncTransaction
 
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.event_writer import upsert_quest_lifecycle_event
+from npc_engine.graph.event.event_writer import upsert_quest_lifecycle_event
 from npc_engine.graph.quest_chain_queries import (
     get_choice_unlocked_quest,
     get_unlocked_quests,

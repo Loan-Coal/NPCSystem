@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from npc_engine.graph.event_writer import ensure_quest_event_provenance
+from npc_engine.graph.event.event_writer import ensure_quest_event_provenance
 from npc_engine.schema.schema_loader import load_game_schema
 from npc_engine.type_registry.registry import build_type_registry
 from npc_engine.utils.errors import QuestProvenanceError

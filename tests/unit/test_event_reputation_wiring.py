@@ -17,10 +17,10 @@ import pytest
 
 from npc_engine.engines.events.event_handler import EventHandler
 from npc_engine.engines.events.event_pool import EventTemplate
-from npc_engine.graph.event_emission_service import emit_event_atomic
+from npc_engine.graph.event.event_emission_service import emit_event_atomic
 from npc_engine.utils.errors import ReputationNotFoundError
 
-_SVC = "npc_engine.graph.event_emission_service"
+_SVC = "npc_engine.graph.event.event_emission_service"
 
 
 async def _run_work(_session, work):

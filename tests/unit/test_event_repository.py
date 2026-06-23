@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from npc_engine.graph.event_emission_service import RoutineOverridePlan
+from npc_engine.graph.event.event_emission_service import RoutineOverridePlan
 from npc_engine.graph.repositories.event_repository import Neo4jEventRepository
 
 _MOD = "npc_engine.graph.repositories.event_repository"

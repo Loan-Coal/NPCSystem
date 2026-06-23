@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from npc_engine.graph.event_emission_service import RoutineOverridePlan
-from npc_engine.graph.event_writer import _EventNode
+from npc_engine.graph.event.event_emission_service import RoutineOverridePlan
+from npc_engine.graph.event.event_writer import _EventNode
 
 
 class EventGraphPort(Protocol):
