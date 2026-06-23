@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from npc_engine.graph.faction_writer import (
+from npc_engine.graph.faction.faction_writer import (
     CYPHER_ADD_MEMBER,
     CYPHER_REMOVE_MEMBER,
     CYPHER_SET_CONTROLS,

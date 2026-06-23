@@ -28,7 +28,7 @@ from npc_engine.graph.narrative.chapter_writer import (
     link_event_to_chapter,
 )
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.faction_queries import get_faction_standings_summary
+from npc_engine.graph.faction.faction_queries import get_faction_standings_summary
 
 
 class Neo4jChapterRepository:

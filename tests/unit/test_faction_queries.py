@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from npc_engine.graph.faction_queries import (
+from npc_engine.graph.faction.faction_queries import (
     get_controlled_locations,
     get_faction,
     get_factions_for_character,

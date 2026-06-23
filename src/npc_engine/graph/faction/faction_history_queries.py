@@ -5,7 +5,7 @@ Purpose: Cypher queries for creating and reading FactionStandingEvent nodes.
 Does NOT: implement business logic or call LLMs.
 Dependencies: None (Cypher strings only).
 Dependencies injected: AsyncSession.
-Used by: npc_engine.graph.faction_history_service
+Used by: npc_engine.graph.faction.faction_history_service
 """
 
 from __future__ import annotations

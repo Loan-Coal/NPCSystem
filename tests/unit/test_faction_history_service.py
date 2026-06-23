@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from npc_engine.graph.faction_history_service import (
+from npc_engine.graph.faction.faction_history_service import (
     _least_squares_slope,
     get_standing_history_svc,
     get_standing_trend,
@@ -69,7 +69,7 @@ async def test_record_standing_change_passes_optional_fields() -> None:
 @pytest.mark.asyncio
 async def test_get_standing_history_svc_passes_args() -> None:
     with patch(
-        "npc_engine.graph.faction_history_service.get_standing_history",
+        "npc_engine.graph.faction.faction_history_service.get_standing_history",
         new_callable=AsyncMock,
         return_value=[],
     ) as mock_fn:
@@ -89,7 +89,7 @@ async def test_get_standing_history_svc_passes_args() -> None:
 @pytest.mark.asyncio
 async def test_get_standing_trend_returns_zero_with_fewer_than_two_points() -> None:
     with patch(
-        "npc_engine.graph.faction_history_service.get_raw_trend_rows",
+        "npc_engine.graph.faction.faction_history_service.get_raw_trend_rows",
         new_callable=AsyncMock,
         return_value=[{"tick_id": 5, "delta": 10}],
     ):
@@ -101,7 +101,7 @@ async def test_get_standing_trend_returns_zero_with_fewer_than_two_points() -> N
 @pytest.mark.asyncio
 async def test_get_standing_trend_returns_zero_with_no_points() -> None:
     with patch(
-        "npc_engine.graph.faction_history_service.get_raw_trend_rows",
+        "npc_engine.graph.faction.faction_history_service.get_raw_trend_rows",
         new_callable=AsyncMock,
         return_value=[],
     ):
@@ -118,7 +118,7 @@ async def test_get_standing_trend_positive_for_increasing_deltas() -> None:
         {"tick_id": 3, "delta": 6},
     ]
     with patch(
-        "npc_engine.graph.faction_history_service.get_raw_trend_rows",
+        "npc_engine.graph.faction.faction_history_service.get_raw_trend_rows",
         new_callable=AsyncMock,
         return_value=rows,
     ):
@@ -135,7 +135,7 @@ async def test_get_standing_trend_negative_for_decreasing_deltas() -> None:
         {"tick_id": 3, "delta": -2},
     ]
     with patch(
-        "npc_engine.graph.faction_history_service.get_raw_trend_rows",
+        "npc_engine.graph.faction.faction_history_service.get_raw_trend_rows",
         new_callable=AsyncMock,
         return_value=rows,
     ):

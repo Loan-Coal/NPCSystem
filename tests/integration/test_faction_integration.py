@@ -14,7 +14,7 @@ from uuid import uuid4
 import pytest
 from neo4j import AsyncGraphDatabase
 
-from npc_engine.graph.faction_service import FactionService
+from npc_engine.graph.faction.faction_service import FactionService
 from npc_engine.utils.errors import FactionMembershipError, FactionNotFoundError
 
 

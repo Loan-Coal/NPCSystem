@@ -15,7 +15,7 @@ from typing import Any
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.faction_history_queries import (
+from npc_engine.graph.faction.faction_history_queries import (
     CYPHER_CREATE_FACTION_STANDING_EVENT,
     get_raw_trend_rows,
     get_standing_history,

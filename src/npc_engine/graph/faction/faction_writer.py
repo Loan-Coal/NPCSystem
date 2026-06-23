@@ -4,7 +4,7 @@ Layer: graph
 Purpose: Cypher mutation functions for Faction nodes and their edges.
 Does NOT: manage transaction lifecycle or execute queries directly on AsyncSession.
 Dependencies injected: AsyncTransaction (via caller).
-Used by: npc_engine.graph.faction_service
+Used by: npc_engine.graph.faction.faction_service
 """
 
 from __future__ import annotations

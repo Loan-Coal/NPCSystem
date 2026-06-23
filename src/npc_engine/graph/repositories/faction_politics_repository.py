@@ -19,13 +19,13 @@ from typing import Any
 from neo4j import AsyncTransaction
 
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.faction_history_service import record_standing_change
-from npc_engine.graph.faction_politics_queries import (
+from npc_engine.graph.faction.faction_history_service import record_standing_change
+from npc_engine.graph.faction.faction_politics_queries import (
     get_all_standings,
     get_character_factions,
     get_recent_events,
 )
-from npc_engine.graph.faction_writer import set_standing
+from npc_engine.graph.faction.faction_writer import set_standing
 from npc_engine.graph.transaction_coordinator import run_in_tx
 
 

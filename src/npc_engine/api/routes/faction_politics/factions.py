@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_faction_service
 from npc_engine.api.helpers import OkEnvelope, graph_error_to_http, ok_response, require_node
-from npc_engine.graph.faction_service import FactionService
+from npc_engine.graph.faction.faction_service import FactionService
 from npc_engine.utils.errors import FactionMembershipError, FactionNotFoundError
 
 # ---------------------------------------------------------------------------

@@ -15,7 +15,7 @@ from neo4j import AsyncSession, AsyncTransaction
 from pydantic import BaseModel
 
 from npc_engine.graph.transaction_coordinator import run_in_tx
-from npc_engine.graph.faction_queries import (
+from npc_engine.graph.faction.faction_queries import (
     get_controlled_locations,
     get_faction,
     get_factions_for_character,
@@ -24,7 +24,7 @@ from npc_engine.graph.faction_queries import (
     list_factions,
     list_standings,
 )
-from npc_engine.graph.faction_writer import (
+from npc_engine.graph.faction.faction_writer import (
     add_member,
     remove_controls,
     remove_member,
