@@ -34,7 +34,7 @@ from npc_engine.graph.goal_queries import get_goals_for_character
 from npc_engine.graph.item_queries import get_items_for_character
 from npc_engine.graph.secret_queries import get_secrets_for_character
 from npc_engine.graph.owes_queries import get_debts_for_character
-from npc_engine.graph.group_service import get_groups_for_character_svc
+from npc_engine.graph.group.group_service import get_groups_for_character_svc
 from npc_engine.graph.rumor_service import get_rumors_for_character_svc
 from npc_engine.graph.trait_service import get_traits_svc
 from npc_engine.graph.pledge_service import get_pledges_for_character_svc

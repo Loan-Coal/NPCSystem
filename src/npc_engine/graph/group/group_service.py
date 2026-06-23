@@ -15,7 +15,7 @@ from typing import Any
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.group_queries import (
+from npc_engine.graph.group.group_queries import (
     CYPHER_ADD_MEMBER,
     CYPHER_CREATE_GROUP,
     CYPHER_DISSOLVE_GROUP,

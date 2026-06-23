@@ -58,7 +58,7 @@ async def test_military_battle_service_delegates_to_graph_emit():
 def test_clique_graph_wrappers_importable():
     """get_high_affection_pairs, get_existing_shared_group, get_stale_cliques
     must be importable from graph.group_queries."""
-    from npc_engine.graph.group_queries import (  # noqa: F401
+    from npc_engine.graph.group.group_queries import (  # noqa: F401
         get_existing_shared_group,
         get_high_affection_pairs,
         get_stale_cliques,

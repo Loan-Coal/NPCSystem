@@ -117,7 +117,8 @@
       "Bash(python scripts/docstring_audit.py)",
       "Bash(python scripts/check_harness_honesty.py)",
       "Bash(python -m mypy src/npc_engine/graph/relation_delta_writer.py src/npc_engine/graph/relation_phase_writer.py src/npc_engine/graph/relation_phase_reader.py src/npc_engine/graph/relation_reader.py src/npc_engine/graph/graph_writer.py)",
-      "Bash(python -)"
+      "Bash(python -)",
+      "Bash(grep -A 20 \"NEW rule violation\" /tmp/check_b2.log | head -30)"
     ],
     "additionalDirectories": [
       "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem",

@@ -5,7 +5,7 @@ Purpose: Cypher query strings and read accessors for Group nodes and membership 
 Does NOT: execute business logic or validate payloads.
 Dependencies: None (Cypher strings only).
 Dependencies injected: AsyncSession.
-Used by: npc_engine.graph.group_service
+Used by: npc_engine.graph.group.group_service
 """
 
 from __future__ import annotations

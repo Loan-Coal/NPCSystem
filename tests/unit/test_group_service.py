@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from npc_engine.graph.group_service import (
+from npc_engine.graph.group.group_service import (
     add_member,
     create_group,
     dissolve_group,
@@ -126,7 +126,7 @@ async def test_dissolve_group_sets_correct_tick():
 async def test_get_groups_for_character_returns_list():
     expected = [{"id": "g-1", "name": "Clique", "kind": "clique", "role": "member"}]
     with patch(
-        "npc_engine.graph.group_service.get_groups_for_character",
+        "npc_engine.graph.group.group_service.get_groups_for_character",
         new_callable=AsyncMock,
         return_value=expected,
     ) as mock_fn:
@@ -140,7 +140,7 @@ async def test_get_groups_for_character_returns_list():
 async def test_get_members_returns_list():
     expected = [{"character_id": "c-1", "character_name": "Alice", "role": "member"}]
     with patch(
-        "npc_engine.graph.group_service.get_members",
+        "npc_engine.graph.group.group_service.get_members",
         new_callable=AsyncMock,
         return_value=expected,
     ) as mock_fn:
