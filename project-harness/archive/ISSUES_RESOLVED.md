@@ -1633,3 +1633,21 @@ route returns 422). `make check` green (2534). Note: the village/tavern *scenari
 non-existent `player` node, so those demos won't complete until a `player` node is seeded — that is a separate
 eval-world data gap, intentionally not fixed here (the chosen path was engine hardening, which is what matters
 for the Unreal client).
+
+---
+
+## [FIXED] ISSUE-121: anti_hallucination eval runner depends on incomplete untracked WIP (preconditions.py)
+**Found:** 2026-06-23, during REORG-PR6 — pre-existing at base c1c7607.
+**Fixed:** 2026-06-23, in EVAL-B2.
+**Severity:** P2 (annoying — 8 failing unit tests; not a PR-6 regression)
+**Where:** `tests/unit/test_anti_hallucination_runner.py`, `evals/anti_hallucination_runner.py:22,392`,
+untracked WIP `evals/preconditions.py`, `tests/unit/test_preconditions.py`, `tests/unit/test_runner_player_node.py`
+**Description:** A prior session added `import preconditions` + `preconditions.reset_world(...)` to the
+tracked `anti_hallucination_runner.py`, depending on an untracked, incomplete `evals/preconditions.py`.
+`reset_world` raises `PreconditionError: Unmet world_condition world_state:age_of_peace` under the test
+mocks, failing 8 `test_anti_hallucination_runner.py` cases. Confirmed identical failures at base
+c1c7607 → pre-existing, unrelated to the graph reorg.
+**Why deferred:** Out of REORG-PR6 scope; it is someone else's unfinished WIP.
+**Fix:** Added `_make_patch_response()` helper returning status_code=200 to all 8 `run()` tests in
+`tests/unit/engines/test_anti_hallucination_runner.py`; added `test_run_calls_reset_world_once_before_case_loop`
+regression guard (EVAL-B2.2). 2573 tests pass, 29 skipped.

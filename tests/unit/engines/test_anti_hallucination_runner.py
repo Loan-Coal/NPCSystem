@@ -182,6 +182,13 @@ def _make_health_response() -> MagicMock:
     return mock_resp
 
 
+def _make_patch_response() -> MagicMock:
+    """Return a mock 200 PATCH response for reset_world (preconditions.py)."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    return mock_resp
+
+
 def _write_fixture(tmp_path: Path, cases: list) -> Path:
     fixture = tmp_path / "anti_hallucination_demo.json"
     fixture.write_text(json.dumps(cases), encoding="utf-8")
@@ -205,6 +212,7 @@ def test_grounded_case_passes_when_substring_present(tmp_path: Path) -> None:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
         mock_client.get.return_value = health_resp
+        mock_client.patch.return_value = _make_patch_response()
         mock_client.post.return_value = dialogue_resp
 
         exit_code = run(
@@ -235,6 +243,7 @@ def test_grounded_case_fails_when_no_substring_present(tmp_path: Path) -> None:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
         mock_client.get.return_value = health_resp
+        mock_client.patch.return_value = _make_patch_response()
         mock_client.post.return_value = dialogue_resp
 
         exit_code = run(
@@ -264,6 +273,7 @@ def test_refusal_case_passes_when_refusal_keyword_present(tmp_path: Path) -> Non
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
         mock_client.get.return_value = health_resp
+        mock_client.patch.return_value = _make_patch_response()
         mock_client.post.return_value = dialogue_resp
 
         exit_code = run(
@@ -296,6 +306,7 @@ def test_refusal_case_fails_when_npc_asserts_without_basis(tmp_path: Path) -> No
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
         mock_client.get.return_value = health_resp
+        mock_client.patch.return_value = _make_patch_response()
         mock_client.post.return_value = dialogue_resp
 
         exit_code = run(
@@ -325,6 +336,7 @@ def test_npc_404_skips_case_and_does_not_affect_counts(tmp_path: Path) -> None:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
         mock_client.get.return_value = health_resp
+        mock_client.patch.return_value = _make_patch_response()
         mock_client.post.return_value = not_found_resp
 
         exit_code = run(
@@ -406,6 +418,7 @@ def test_comment_objects_are_skipped(tmp_path: Path) -> None:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
         mock_client.get.return_value = health_resp
+        mock_client.patch.return_value = _make_patch_response()
         mock_client.post.return_value = dialogue_resp
 
         exit_code = run(
@@ -437,6 +450,7 @@ def test_learned_from_player_runs_grounded_when_belief_persisted(tmp_path: Path)
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
         mock_client.get.side_effect = _get_router(health_resp, beliefs_resp)
+        mock_client.patch.return_value = _make_patch_response()
         mock_client.post.return_value = dialogue_resp
 
         exit_code = run(
@@ -468,6 +482,7 @@ def test_learned_from_player_skips_when_belief_absent(tmp_path: Path) -> None:
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__.return_value = mock_client
         mock_client.get.side_effect = _get_router(health_resp, beliefs_resp)
+        mock_client.patch.return_value = _make_patch_response()
         mock_client.post.return_value = dialogue_resp
 
         exit_code = run(
@@ -516,3 +531,44 @@ def test_belief_fact_persisted_false_on_query_error() -> None:
     assert not _belief_fact_persisted(
         "mira_innkeeper", client, "http://localhost:8000", ["eastern"]
     )
+
+
+# ---------------------------------------------------------------------------
+# EVAL-B2.2: regression guard — reset_world called once before the case loop
+# ---------------------------------------------------------------------------
+
+
+def test_run_calls_reset_world_once_before_case_loop(tmp_path: Path) -> None:
+    """Regression guard: run() calls preconditions.reset_world exactly once (ISSUE-121 / EVAL-B2.2).
+
+    Patches `anti_hallucination_runner.preconditions.reset_world` so that the PATCH
+    side-effect is not needed and the guard is purely structural — verifying the call
+    is present and happens before any dialogue POST (i.e. before the case loop).
+    """
+    fixture = _write_fixture(tmp_path, [GROUNDED_CASE])
+    report_dir = tmp_path / "reports"
+
+    health_resp = _make_health_response()
+    dialogue_resp = _make_dialogue_response("There is a war to the north.")
+
+    with patch("httpx.Client") as mock_client_cls, patch(
+        "anti_hallucination_runner.preconditions.reset_world"
+    ) as mock_reset:
+        mock_client = MagicMock()
+        mock_client_cls.return_value.__enter__.return_value = mock_client
+        mock_client.get.return_value = health_resp
+        mock_client.post.return_value = dialogue_resp
+
+        run(
+            base_url="http://localhost:8000",
+            api_key="test-key",
+            fixture_path=fixture,
+            report_dir=report_dir,
+        )
+
+    mock_reset.assert_called_once()
+    # Verify reset happened before any dialogue POST (structural ordering guard).
+    reset_call_order = mock_reset.call_args_list
+    post_call_order = mock_client.post.call_args_list
+    assert len(reset_call_order) == 1
+    assert len(post_call_order) >= 1

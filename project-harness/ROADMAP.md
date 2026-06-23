@@ -61,8 +61,8 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
 `tests/unit/engines/test_anti_hallucination_runner.py` and are caused by the mock client's `.patch()` not
 returning `status_code == 200`, so `preconditions.reset_world` raises `PreconditionError`.
 
-- [ ] **EVAL-B2.1** Update `tests/unit/engines/test_anti_hallucination_runner.py` so the mocked client returns a 200 `.patch()` (or patches `anti_hallucination_runner.preconditions.reset_world`) — the 8 failing cases pass for the right reason. `make check` green.
-- [ ] **EVAL-B2.2** Add a focused test asserting `run()` calls `preconditions.reset_world` once before the case loop (regression guard for the contamination fix), and confirm `runner.main` ensures the player node for a non-reputation case (already covered by `test_runner_player_node.py` — extend if gaps). Mark **ISSUE-121 `[FIXED]`** + move it to `archive/ISSUES_RESOLVED.md`.
+- [x] **EVAL-B2.1** Update `tests/unit/engines/test_anti_hallucination_runner.py` so the mocked client returns a 200 `.patch()` (or patches `anti_hallucination_runner.preconditions.reset_world`) — the 8 failing cases pass for the right reason. `make check` green. ✅ 2026-06-23
+- [x] **EVAL-B2.2** Add a focused test asserting `run()` calls `preconditions.reset_world` once before the case loop (regression guard for the contamination fix), and confirm `runner.main` ensures the player node for a non-reputation case (already covered by `test_runner_player_node.py` — extend if gaps). Mark **ISSUE-121 `[FIXED]`** + move it to `archive/ISSUES_RESOLVED.md`. ✅ 2026-06-23
 
 ### Phase EVAL-B3 — LLM-judge refusal scorer (close ISSUE-119)
 **Goal:** Replace the brittle keyword refusal match with the LLM judge so valid refusals are not scored as
