@@ -150,7 +150,7 @@ def test_register_dashboard_serves_index() -> None:
 
 def test_dashboard_directory_assets_exist() -> None:
     """All SPA asset files referenced by index.html are present on disk."""
-    root = Path(__file__).resolve().parents[2] / "dashboard"
+    root = Path(__file__).resolve().parents[3] / "dashboard"
     expected = [
         "index.html",
         "css/app.css",
@@ -169,7 +169,7 @@ def test_dashboard_directory_assets_exist() -> None:
 
 def test_api_js_targets_existing_endpoints() -> None:
     """The API wrapper references the engine routes this dashboard depends on."""
-    api_js = (Path(__file__).resolve().parents[2] / "dashboard" / "js" / "api.js").read_text(encoding="utf-8")
+    api_js = (Path(__file__).resolve().parents[3] / "dashboard" / "js" / "api.js").read_text(encoding="utf-8")
     for fragment in (
         "/graph/nodes/",
         "/graph/edges/",

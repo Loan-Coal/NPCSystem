@@ -20,7 +20,7 @@ from npc_engine.engines.faction_politics.rules_loader import (
 )
 
 _RULES_PATH = (
-    Path(__file__).resolve().parent.parent.parent
+    Path(__file__).resolve().parent.parent.parent.parent
     / "src" / "npc_engine" / "engines" / "faction_politics" / "rules.yaml"
 )
 

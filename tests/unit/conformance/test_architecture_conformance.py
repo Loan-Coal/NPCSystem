@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2] / "src" / "npc_engine"
+PROJECT_ROOT = Path(__file__).resolve().parents[3] / "src" / "npc_engine"
 EXCLUDED_PATH_PARTS = {
     "__pycache__",
     ".venv",

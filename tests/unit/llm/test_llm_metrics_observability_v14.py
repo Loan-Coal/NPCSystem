@@ -11,7 +11,7 @@ from typing import Any, AsyncIterator
 
 import pytest
 
-_FALLBACK_PATH = str(Path(__file__).resolve().parents[2] / "src" / "npc_engine" / "data" / "fallback_responses.json")
+_FALLBACK_PATH = str(Path(__file__).resolve().parents[3] / "src" / "npc_engine" / "data" / "fallback_responses.json")
 
 from npc_engine.engines.dialogue.llm_client import DialogueLLMClient
 from npc_engine.utils.errors import LLMRequestError

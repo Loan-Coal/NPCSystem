@@ -33,7 +33,7 @@ run:
 	uvicorn npc_engine.main:app --reload --reload-include="*.yaml" --reload-include="*.json"
 
 smoke:
-	$(PYTHON) -m pytest tests/unit/test_boot_smoke.py -q
+	$(PYTHON) -m pytest tests/unit/conformance/test_boot_smoke.py -q
 
 # Boot gate (L9-01 / L9-05): rebuild the app image stamped with the current git
 # SHA, start it, and fail if it never becomes healthy or if /health reports a
@@ -50,19 +50,19 @@ test-cov:
 	$(PYTHON) -m pytest tests/ -q --cov=npc_engine --cov=matchers --cov=summary --cov=runner --cov-report=term-missing --cov-fail-under=80
 
 test-cov-v13:
-	$(PYTHON) -m pytest -q tests/unit/test_schema_loader.py tests/unit/test_v1_route_versioning.py tests/unit/test_embedding_reconciler.py tests/unit/test_main_reconciler_lifespan.py tests/unit/test_schema_resolvers.py --cov=src/npc_engine/schema --cov=src/npc_engine/retrieval/embedding_reconciler --cov-report=term-missing --cov-fail-under=80
+	$(PYTHON) -m pytest -q tests/unit/config/test_schema_loader.py tests/unit/conformance/test_v1_route_versioning.py tests/unit/retrieval/test_embedding_reconciler.py tests/unit/api/test_main_reconciler_lifespan.py tests/unit/config/test_schema_resolvers.py --cov=src/npc_engine/schema --cov=src/npc_engine/retrieval/embedding_reconciler --cov-report=term-missing --cov-fail-under=80
 
 test-cov-full-report:
 	$(PYTHON) -m pytest -q tests/ --cov=npc_engine --cov=evals --cov-report=term-missing
 
 test-v13-contracts:
-	$(PYTHON) -m pytest -q tests/unit/test_schema_loader.py tests/unit/test_v1_route_versioning.py tests/unit/test_auth_permissions_v13.py
+	$(PYTHON) -m pytest -q tests/unit/config/test_schema_loader.py tests/unit/conformance/test_v1_route_versioning.py tests/unit/api/test_auth_permissions_v13.py
 
 test-v13-graph-admin:
-	$(PYTHON) -m pytest -q tests/unit/test_graph_v13_routes.py tests/unit/test_graph_warning_pipeline.py tests/unit/test_graph_admin_reindex_jobs.py
+	$(PYTHON) -m pytest -q tests/unit/api/test_graph_v13_routes.py tests/unit/api/test_graph_warning_pipeline.py tests/unit/api/test_graph_admin_reindex_jobs.py
 
 test-v13-retrieval:
-	$(PYTHON) -m pytest -q tests/unit/test_vector_store_and_index.py tests/unit/test_context_builder.py tests/unit/test_embedding_reconciler.py tests/unit/test_main_reconciler_lifespan.py
+	$(PYTHON) -m pytest -q tests/unit/retrieval/test_vector_store_and_index.py tests/unit/retrieval/test_context_builder.py tests/unit/retrieval/test_embedding_reconciler.py tests/unit/api/test_main_reconciler_lifespan.py
 
 check-contracts:
 	$(PYTHON) -m npc_engine.scripts.check_contracts
@@ -71,19 +71,19 @@ check-contract-sync:
 	$(PYTHON) -m npc_engine.scripts.guard_contract_test_sync
 
 test-v14-p0:
-	$(PYTHON) -m pytest -q tests/unit/test_auth_idempotency_middleware_v14.py tests/unit/test_idempotency_service_v14.py tests/unit/test_llm_config_loader_v14.py tests/unit/test_engine_contract_schema_checker_v14.py tests/unit/test_main_reconciler_lifespan.py
+	$(PYTHON) -m pytest -q tests/unit/api/test_auth_idempotency_middleware_v14.py tests/unit/graph/test_idempotency_service_v14.py tests/unit/llm/test_llm_config_loader_v14.py tests/unit/conformance/test_engine_contract_schema_checker_v14.py tests/unit/api/test_main_reconciler_lifespan.py
 
 test-v14-p1:
-	$(PYTHON) -m pytest -q tests/unit/test_context_relevance_engine_v14.py tests/unit/test_context_budget_enforcer_v14.py tests/unit/test_context_builder.py tests/unit/test_context_pipeline.py
+	$(PYTHON) -m pytest -q tests/unit/retrieval/test_context_relevance_engine_v14.py tests/unit/retrieval/test_context_budget_enforcer_v14.py tests/unit/retrieval/test_context_builder.py
 
 test-v14-p2:
-	$(PYTHON) -m pytest -q tests/unit/test_currency_verification_engine_v14.py tests/unit/test_currency_writer_v14.py tests/unit/test_graph_writer_currency_coordinator_v14.py tests/unit/test_action_currency_routing_v14.py tests/unit/test_auth_idempotency_middleware_v14.py
+	$(PYTHON) -m pytest -q tests/unit/graph/test_currency_verification_engine_v14.py tests/unit/graph/test_currency_writer_v14.py tests/unit/graph/test_graph_writer_currency_coordinator_v14.py tests/unit/graph/test_action_currency_routing_v14.py tests/unit/api/test_auth_idempotency_middleware_v14.py
 
 test-v14-p3:
-	$(PYTHON) -m pytest -q tests/unit/test_quest_lifecycle_engine_v14.py tests/unit/test_quest_reward_routing_v14.py tests/unit/test_quest_event_provenance_v14.py tests/unit/test_graph_writer_quest_reward_coordinator_v14.py tests/unit/test_quest_routes_v14.py tests/unit/test_v1_route_versioning.py tests/integration/test_quest_lifecycle_integration_v14.py
+	$(PYTHON) -m pytest -q tests/unit/engines/test_quest_lifecycle_engine_v14.py tests/unit/graph/test_quest_reward_routing_v14.py tests/unit/graph/test_quest_event_provenance_v14.py tests/unit/graph/test_graph_writer_quest_reward_coordinator_v14.py tests/unit/api/test_quest_routes_v14.py tests/unit/conformance/test_v1_route_versioning.py tests/integration/test_quest_lifecycle_integration_v14.py
 
 test-v14-p4:
-	$(PYTHON) -m pytest -q tests/contract tests/unit/test_simulate_world_flow_v14.py tests/unit/test_guard_contract_test_sync_v14.py
+	$(PYTHON) -m pytest -q tests/contract tests/unit/api/test_simulate_world_flow_v14.py tests/unit/conformance/test_guard_contract_test_sync_v14.py
 	$(PYTHON) -m npc_engine.scripts.simulate_world_flow
 
 test-v14-p5:

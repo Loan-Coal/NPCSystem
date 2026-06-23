@@ -20,7 +20,7 @@ from npc_engine.utils.errors import QuestProvenanceError
 
 
 def _type_registry():
-    schema_path = Path(__file__).resolve().parents[2] / "src" / "npc_engine" / "game_schema.yaml"
+    schema_path = Path(__file__).resolve().parents[3] / "src" / "npc_engine" / "game_schema.yaml"
     return build_type_registry(base_schema=load_game_schema(schema_path=str(schema_path)), extension_sources=())
 
 

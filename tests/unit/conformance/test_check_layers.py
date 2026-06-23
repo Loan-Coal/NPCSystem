@@ -13,7 +13,7 @@ def _import_checker():
     import importlib.util, sys
     spec = importlib.util.spec_from_file_location(
         "check_layers",
-        Path(__file__).resolve().parent.parent.parent / "scripts" / "check_layers.py",
+        Path(__file__).resolve().parent.parent.parent.parent / "scripts" / "check_layers.py",
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -58,7 +58,7 @@ def test_detects_engines_importing_api(tmp_path):
 def test_src_tree_clean_after_fixes():
     """After SEV-31 fixes the src tree must have zero layer violations."""
     checker = _import_checker()
-    src_root = Path(__file__).resolve().parent.parent.parent / "src" / "npc_engine"
+    src_root = Path(__file__).resolve().parent.parent.parent.parent / "src" / "npc_engine"
     violations = checker.find_violations(src_root)
     if violations:
         msgs = "\n".join(f"{f}:{ln}: {msg}" for f, ln, msg in violations)
@@ -97,5 +97,5 @@ def test_ranked_and_exempt_packages_not_flagged(tmp_path):
 def test_real_src_tree_has_no_unranked_packages():
     """The real tree must be fully ranked/exempt (scripts exempt, prompts has no .py)."""
     checker = _import_checker()
-    src_root = Path(__file__).resolve().parent.parent.parent / "src" / "npc_engine"
+    src_root = Path(__file__).resolve().parent.parent.parent.parent / "src" / "npc_engine"
     assert checker.find_unranked_packages(src_root) == []

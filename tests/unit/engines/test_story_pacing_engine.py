@@ -19,7 +19,7 @@ from npc_engine.world.world_state import WorldState
 
 
 _RULES_PATH = (
-    Path(__file__).resolve().parent.parent.parent
+    Path(__file__).resolve().parent.parent.parent.parent
     / "src" / "npc_engine" / "engines" / "story_pacing" / "pacing_rules.yaml"
 )
 
