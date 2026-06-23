@@ -5,7 +5,7 @@ Purpose: Cypher queries for Trait nodes and HAS_TRAIT edges.
 Does NOT: implement business logic or call LLMs.
 Dependencies: None (Cypher strings only).
 Dependencies injected: AsyncSession.
-Used by: npc_engine.graph.trait_service
+Used by: npc_engine.graph.character.trait_service
 """
 
 from __future__ import annotations

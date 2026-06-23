@@ -12,7 +12,7 @@ Used by: api composition root (engines reading the active NPC roster).
 
 from __future__ import annotations
 
-from npc_engine.graph.character_reader import get_npc_ids as get_npc_ids_query
+from npc_engine.graph.character.character_reader import get_npc_ids as get_npc_ids_query
 from npc_engine.graph.db import GraphDB
 
 

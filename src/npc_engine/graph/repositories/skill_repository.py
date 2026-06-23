@@ -15,8 +15,8 @@ from __future__ import annotations
 from typing import Any
 
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.skill_queries import get_completed_quests_with_skills
-from npc_engine.graph.skill_service import increment_xp
+from npc_engine.graph.character.skill_queries import get_completed_quests_with_skills
+from npc_engine.graph.character.skill_service import increment_xp
 
 
 class Neo4jSkillRepository:

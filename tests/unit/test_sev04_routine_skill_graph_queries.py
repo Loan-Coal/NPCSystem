@@ -37,7 +37,7 @@ def test_graph_routine_queries_functions_are_async() -> None:
 
 def test_graph_skill_queries_has_completed_quests_function() -> None:
     """graph.skill_queries must expose get_completed_quests_with_skills."""
-    from npc_engine.graph import skill_queries  # noqa: F401
+    from npc_engine.graph.character import skill_queries  # noqa: F401
     assert hasattr(skill_queries, "get_completed_quests_with_skills")
     assert inspect.iscoroutinefunction(skill_queries.get_completed_quests_with_skills)
 

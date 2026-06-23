@@ -14,7 +14,7 @@ from typing import Any
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.skill_queries import (
+from npc_engine.graph.character.skill_queries import (
     CYPHER_INCREMENT_XP,
     CYPHER_MERGE_HAS_SKILL,
     XP_PER_LEVEL,

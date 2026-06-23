@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from npc_engine.api.routes.social import player_model as route_mod
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.graph.player_model_writer import PlayerModelRecord
+from npc_engine.graph.character.player_model_writer import PlayerModelRecord
 
 
 def _client(record: PlayerModelRecord | None, monkeypatch) -> TestClient:

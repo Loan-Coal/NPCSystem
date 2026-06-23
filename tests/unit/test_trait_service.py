@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from npc_engine.graph.trait_service import add_trait, get_traits_svc, remove_trait
+from npc_engine.graph.character.trait_service import add_trait, get_traits_svc, remove_trait
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ async def test_add_trait_returns_none() -> None:
 async def test_get_traits_svc_delegates_to_query() -> None:
     expected = [{"trait_id": "trait-brave", "name": "Brave", "intensity": 80, "is_secret": False}]
     with patch(
-        "npc_engine.graph.trait_service.get_traits",
+        "npc_engine.graph.character.trait_service.get_traits",
         new_callable=AsyncMock,
         return_value=expected,
     ) as mock_fn:
@@ -70,7 +70,7 @@ async def test_get_traits_svc_delegates_to_query() -> None:
 @pytest.mark.asyncio
 async def test_get_traits_svc_returns_empty_list() -> None:
     with patch(
-        "npc_engine.graph.trait_service.get_traits",
+        "npc_engine.graph.character.trait_service.get_traits",
         new_callable=AsyncMock,
         return_value=[],
     ):

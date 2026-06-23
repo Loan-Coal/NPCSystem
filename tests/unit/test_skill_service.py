@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from npc_engine.graph.skill_service import (
+from npc_engine.graph.character.skill_service import (
     add_skill,
     check_skill_threshold_svc,
     get_characters_with_skill_svc,
@@ -73,7 +73,7 @@ async def test_add_skill_defaults_xp_to_zero() -> None:
 async def test_get_skills_svc_delegates_to_query() -> None:
     expected = [{"skill_id": "skill-sword", "level": 10, "xp": 50}]
     with patch(
-        "npc_engine.graph.skill_service.get_skills",
+        "npc_engine.graph.character.skill_service.get_skills",
         new_callable=AsyncMock,
         return_value=expected,
     ) as mock_fn:
@@ -86,7 +86,7 @@ async def test_get_skills_svc_delegates_to_query() -> None:
 @pytest.mark.asyncio
 async def test_get_skills_svc_returns_empty_list_when_no_skills() -> None:
     with patch(
-        "npc_engine.graph.skill_service.get_skills",
+        "npc_engine.graph.character.skill_service.get_skills",
         new_callable=AsyncMock,
         return_value=[],
     ):
@@ -139,7 +139,7 @@ async def test_increment_xp_passes_tick() -> None:
 async def test_get_characters_with_skill_svc_delegates() -> None:
     expected = [{"character_id": "char-1", "character_name": "Alice", "level": 20}]
     with patch(
-        "npc_engine.graph.skill_service.get_characters_with_skill",
+        "npc_engine.graph.character.skill_service.get_characters_with_skill",
         new_callable=AsyncMock,
         return_value=expected,
     ) as mock_fn:
@@ -157,7 +157,7 @@ async def test_get_characters_with_skill_svc_delegates() -> None:
 @pytest.mark.asyncio
 async def test_check_skill_threshold_svc_returns_true_when_met() -> None:
     with patch(
-        "npc_engine.graph.skill_service.check_skill_threshold",
+        "npc_engine.graph.character.skill_service.check_skill_threshold",
         new_callable=AsyncMock,
         return_value=True,
     ) as mock_fn:
@@ -174,7 +174,7 @@ async def test_check_skill_threshold_svc_returns_true_when_met() -> None:
 @pytest.mark.asyncio
 async def test_check_skill_threshold_svc_returns_false_when_not_met() -> None:
     with patch(
-        "npc_engine.graph.skill_service.check_skill_threshold",
+        "npc_engine.graph.character.skill_service.check_skill_threshold",
         new_callable=AsyncMock,
         return_value=False,
     ):
@@ -194,7 +194,7 @@ async def test_check_skill_threshold_svc_returns_false_when_not_met() -> None:
 async def test_check_skill_threshold_query_no_record_returns_false() -> None:
     session = AsyncMock()
     session.run.return_value.single = AsyncMock(return_value=None)
-    from npc_engine.graph.skill_queries import check_skill_threshold
+    from npc_engine.graph.character.skill_queries import check_skill_threshold
     result = await check_skill_threshold(
         session, character_id="char-x", skill_id="skill-x", min_level=1
     )
@@ -207,7 +207,7 @@ async def test_check_skill_threshold_query_record_true() -> None:
     record = MagicMock()
     record.__getitem__ = MagicMock(side_effect=lambda k: True if k == "meets_threshold" else None)
     session.run.return_value.single = AsyncMock(return_value=record)
-    from npc_engine.graph.skill_queries import check_skill_threshold
+    from npc_engine.graph.character.skill_queries import check_skill_threshold
     result = await check_skill_threshold(
         session, character_id="char-1", skill_id="skill-sword", min_level=5
     )

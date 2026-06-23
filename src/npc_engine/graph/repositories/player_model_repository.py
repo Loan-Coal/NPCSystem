@@ -13,7 +13,7 @@ Used by: api composition root (dependencies_engines.get_player_model_tick).
 from __future__ import annotations
 
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.player_model_writer import upsert_player_model
+from npc_engine.graph.character.player_model_writer import upsert_player_model
 
 
 class Neo4jPlayerModelRepository:

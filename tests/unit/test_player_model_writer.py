@@ -71,7 +71,7 @@ class _FakeSession:
 @pytest.mark.asyncio
 async def test_upsert_targets_player_model_node() -> None:
     """upsert_player_model Cypher targets the player_model node label."""
-    from npc_engine.graph.player_model_writer import upsert_player_model
+    from npc_engine.graph.character.player_model_writer import upsert_player_model
 
     session = _FakeSession()
     await upsert_player_model(
@@ -89,7 +89,7 @@ async def test_upsert_targets_player_model_node() -> None:
 @pytest.mark.asyncio
 async def test_upsert_targets_has_player_model_edge() -> None:
     """upsert_player_model Cypher creates/merges the HAS_PLAYER_MODEL edge."""
-    from npc_engine.graph.player_model_writer import upsert_player_model
+    from npc_engine.graph.character.player_model_writer import upsert_player_model
 
     session = _FakeSession()
     await upsert_player_model(
@@ -107,7 +107,7 @@ async def test_upsert_targets_has_player_model_edge() -> None:
 @pytest.mark.asyncio
 async def test_upsert_passes_correct_params() -> None:
     """upsert_player_model passes npc_id, player_id, perceived_trust, perceived_intent."""
-    from npc_engine.graph.player_model_writer import upsert_player_model
+    from npc_engine.graph.character.player_model_writer import upsert_player_model
 
     session = _FakeSession()
     await upsert_player_model(
@@ -170,7 +170,7 @@ class _FakeRecord:
 @pytest.mark.asyncio
 async def test_get_player_model_returns_none_when_missing() -> None:
     """get_player_model returns None when no node exists for the npc/player pair."""
-    from npc_engine.graph.player_model_writer import get_player_model
+    from npc_engine.graph.character.player_model_writer import get_player_model
 
     session = _FakeReadSession(record=None)
     result = await get_player_model(session=session, npc_id="npc_x", player_id="player_z")
@@ -181,7 +181,7 @@ async def test_get_player_model_returns_none_when_missing() -> None:
 @pytest.mark.asyncio
 async def test_get_player_model_returns_model_when_present() -> None:
     """get_player_model returns a PlayerModelRecord when node is found."""
-    from npc_engine.graph.player_model_writer import PlayerModelRecord, get_player_model
+    from npc_engine.graph.character.player_model_writer import PlayerModelRecord, get_player_model
 
     session = _FakeReadSession(
         record={

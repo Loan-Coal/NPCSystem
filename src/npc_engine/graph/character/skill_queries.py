@@ -5,7 +5,7 @@ Purpose: Cypher queries for Skill nodes and HAS_SKILL edges.
 Does NOT: implement business logic or call LLMs.
 Dependencies: None (Cypher strings only).
 Dependencies injected: AsyncSession.
-Used by: npc_engine.graph.skill_service
+Used by: npc_engine.graph.character.skill_service
 """
 
 from __future__ import annotations

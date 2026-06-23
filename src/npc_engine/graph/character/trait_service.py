@@ -14,7 +14,7 @@ from typing import Any
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.trait_queries import (
+from npc_engine.graph.character.trait_queries import (
     CYPHER_DELETE_HAS_TRAIT,
     CYPHER_MERGE_HAS_TRAIT,
     get_traits,

@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
-from npc_engine.graph.skill_service import (
+from npc_engine.graph.character.skill_service import (
     add_skill,
     check_skill_threshold_svc,
     get_characters_with_skill_svc,

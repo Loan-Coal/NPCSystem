@@ -47,7 +47,7 @@ from npc_engine.api.dependency_singletons import (
     get_type_registry,
 )
 from npc_engine.engines.emotion.emotion_bootstrap import EmotionBootstrapper
-from npc_engine.graph.character_reader import get_npc_ids
+from npc_engine.graph.character.character_reader import get_npc_ids
 from npc_engine.graph.repositories.emotion_bootstrap_repository import Neo4jEmotionBootstrapRepository
 from npc_engine.api.dependencies import get_sync_trade_handler
 from npc_engine.engines.interaction.dispatch import set_trade_handler

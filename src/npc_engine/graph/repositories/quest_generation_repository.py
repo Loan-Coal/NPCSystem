@@ -36,7 +36,7 @@ from npc_engine.graph.quest_generation_queries import (
     get_template_skill_requirements,
 )
 from npc_engine.graph.quest_node_service import create_quest
-from npc_engine.graph.skill_queries import check_skill_threshold
+from npc_engine.graph.character.skill_queries import check_skill_threshold
 from npc_engine.graph.world_state.world_state_reader import get_world_state
 
 
