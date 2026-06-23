@@ -219,20 +219,20 @@ runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyle
 > **No long-lived rewrite branch** — PERF is incremental on `main`, gated by EVAL's harness.
 > Decisions: **DEC-131** (integration bootstrap), **DEC-132** (perf strategy + Kùzu direction).
 
-### Phase INTEG — Integration-ready engine surface (lands on `main`, gates SHIP-05b)
+### Phase INTEG — Integration-ready engine surface (lands on `main`, gates SHIP-05b) ✅ 2026-06-23
 - **Goal:** a cold machine + a fresh native-Unity client complete first-run setup and reach a working dialogue
   with no manual key/config step. Completes P0.
 - **Constraints:** auth on all non-bootstrap routes; setup routes call `setup/` validators (no logic in route);
   localhost bind; DEC-131 bootstrap.
-- [ ] **INTEG-01** — `POST /setup/validate` → `validate_path_a`/`validate_path_b` (typed `ValidationResult`);
-  validate `api_url` (https + host sanity) to close the SSRF-shaped probe. Exit: Unity gets typed A/B pass/fail.
-- [ ] **INTEG-02** — `GET/POST /setup/config` → `load_wizard_config`/`save_wizard_config`, round-trips
-  `~/.npc_engine/wizard_config.json`. Exit: choice survives restart via the route.
-- [ ] **INTEG-03** — setup routes auth-exempt + localhost-only (DEC-131). Exit: a key-less first launch reaches
-  `/setup/*` without a 401; off-box requests refused.
-- [ ] **INTEG-04** — confirm the launcher polls `GET /readiness`; write `docs/INTEGRATION.md` documenting the
-  REST/WS contract + error envelope (document, **not** an SX.1 freeze). Exit: a one-page contract Unity builds against.
-- [ ] **INTEG-05** — record no-CORS (native) + plaintext-cloud-key-by-design posture (DEC-131). Exit: posture documented.
+- [x] **INTEG-01** — `POST /setup/validate` → `validate_path_a`/`validate_path_b` (typed `ValidationResult`);
+  `validate_api_url_safety` guards api_url against private/metadata IPs + http-external SSRF. ✅ f8c2dc6
+- [x] **INTEG-02** — `GET/POST /setup/config` → `load_wizard_config`/`save_wizard_config`, round-trips
+  `~/.npc_engine/wizard_config.json`. ✅ f8c2dc6
+- [x] **INTEG-03** — `/setup/*` + `/readiness` auth-exempt in `ApiKeyMiddleware` (DEC-131); localhost-only
+  by 127.0.0.1 bind; `setup_router` registered in `router_registry`. ✅ f8c2dc6
+- [x] **INTEG-04** — launcher polls `GET /readiness` (background uvicorn task + `_poll_readiness`); emits
+  `NPC_ENGINE_READY` to stdout; `docs/INTEGRATION.md` written (startup sequence, error envelope, auth posture). ✅ f8c2dc6
+- [x] **INTEG-05** — no-CORS + plaintext-cloud-key posture documented in `docs/INTEGRATION.md` (§Security posture). ✅ f8c2dc6
 - **Effort:** ~1 session. **Blocks:** SHIP-05b.
 
 ### Phase EVAL — Behavioral characterization + latency harness (precedes PERF; absorbs SHIP-10 latency)
