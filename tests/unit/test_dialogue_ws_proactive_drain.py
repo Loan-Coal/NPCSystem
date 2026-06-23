@@ -59,7 +59,7 @@ class TestDrainProactiveLines:
     @pytest.mark.asyncio
     async def test_lines_pushed_and_queue_emptied(self) -> None:
         """Pre-loaded lines are all sent via to_ws_message(); queue is empty after."""
-        from npc_engine.api.routes.dialogue_ws import drain_proactive_lines
+        from npc_engine.api.routes.dialogue.dialogue_ws import drain_proactive_lines
 
         queue = ProactiveQueue()
         line_a = _make_line("npc_1", tick=10)
@@ -80,7 +80,7 @@ class TestDrainProactiveLines:
     @pytest.mark.asyncio
     async def test_empty_queue_sends_nothing(self) -> None:
         """drain_proactive_lines returns 0 and does nothing when queue is empty."""
-        from npc_engine.api.routes.dialogue_ws import drain_proactive_lines
+        from npc_engine.api.routes.dialogue.dialogue_ws import drain_proactive_lines
 
         queue = ProactiveQueue()
         ws = _FakeWebSocket()
@@ -93,7 +93,7 @@ class TestDrainProactiveLines:
     @pytest.mark.asyncio
     async def test_isolates_per_recipient(self) -> None:
         """Lines for a different recipient are not sent to this recipient."""
-        from npc_engine.api.routes.dialogue_ws import drain_proactive_lines
+        from npc_engine.api.routes.dialogue.dialogue_ws import drain_proactive_lines
 
         queue = ProactiveQueue()
         line_for_other = _make_line("npc_3", tick=5)
@@ -109,7 +109,7 @@ class TestDrainProactiveLines:
     @pytest.mark.asyncio
     async def test_multiple_drain_rounds(self) -> None:
         """Enqueueing between drain calls accumulates correctly."""
-        from npc_engine.api.routes.dialogue_ws import drain_proactive_lines
+        from npc_engine.api.routes.dialogue.dialogue_ws import drain_proactive_lines
 
         queue = ProactiveQueue()
         ws = _FakeWebSocket()
@@ -128,7 +128,7 @@ class TestDrainProactiveLines:
     @pytest.mark.asyncio
     async def test_ws_message_type_is_proactive_line(self) -> None:
         """Each sent payload has type 'proactive_line' per DEC-073 wire format."""
-        from npc_engine.api.routes.dialogue_ws import drain_proactive_lines
+        from npc_engine.api.routes.dialogue.dialogue_ws import drain_proactive_lines
 
         queue = ProactiveQueue()
         await queue.enqueue("p1", _make_line("npc_1", tick=7))

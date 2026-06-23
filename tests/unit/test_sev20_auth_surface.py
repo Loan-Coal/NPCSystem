@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 
 from npc_engine.auth.middleware_helpers import is_public_path
-from npc_engine.api.routes.dialogue_ws import (
+from npc_engine.api.routes.dialogue.dialogue_ws import (
     MAX_WS_CONNECTIONS_PER_KEY,
     check_ws_connection_limit,
 )
@@ -105,7 +105,7 @@ def test_ws_connection_limit_rejects_over_cap() -> None:
 @pytest.mark.asyncio
 async def test_acquire_ws_slot_enforces_cap_and_releases() -> None:
     """Acquiring up to the cap succeeds; the next is rejected; releasing frees a slot."""
-    from npc_engine.api.routes import dialogue_ws
+    from npc_engine.api.routes.dialogue import dialogue_ws
 
     key = "test-key-hash"
     dialogue_ws._active_ws_connections.pop(key, None)
@@ -125,7 +125,7 @@ async def test_acquire_ws_slot_enforces_cap_and_releases() -> None:
 @pytest.mark.asyncio
 async def test_release_ws_slot_cleans_up_at_zero() -> None:
     """Releasing the last slot removes the key entirely (no unbounded dict growth)."""
-    from npc_engine.api.routes import dialogue_ws
+    from npc_engine.api.routes.dialogue import dialogue_ws
 
     key = "test-key-cleanup"
     dialogue_ws._active_ws_connections.pop(key, None)

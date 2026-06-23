@@ -51,7 +51,7 @@ def _sha1_8(text: str) -> str:
 
 def test_create_belief_request_accepts_stable_id():
     """CreateBeliefRequest should accept an explicit id without error."""
-    from npc_engine.api.routes.beliefs import CreateBeliefRequest
+    from npc_engine.api.routes.knowledge.beliefs import CreateBeliefRequest
 
     req = CreateBeliefRequest(content="The king is just.", confidence=70, id="bel_npc_1_abc12345")
     assert req.id == "bel_npc_1_abc12345"
@@ -59,49 +59,49 @@ def test_create_belief_request_accepts_stable_id():
 
 def test_create_belief_request_id_defaults_to_none():
     """When id is omitted it defaults to None."""
-    from npc_engine.api.routes.beliefs import CreateBeliefRequest
+    from npc_engine.api.routes.knowledge.beliefs import CreateBeliefRequest
 
     req = CreateBeliefRequest(content="The king is just.", confidence=70)
     assert req.id is None
 
 
 def test_create_goal_request_accepts_stable_id():
-    from npc_engine.api.routes.goals import CreateGoalRequest
+    from npc_engine.api.routes.knowledge.goals import CreateGoalRequest
 
     req = CreateGoalRequest(description="Find the merchant.", urgency=55, id="goal_npc_1_0")
     assert req.id == "goal_npc_1_0"
 
 
 def test_create_goal_request_id_defaults_to_none():
-    from npc_engine.api.routes.goals import CreateGoalRequest
+    from npc_engine.api.routes.knowledge.goals import CreateGoalRequest
 
     req = CreateGoalRequest(description="Find the merchant.", urgency=55)
     assert req.id is None
 
 
 def test_create_memory_request_accepts_stable_id():
-    from npc_engine.api.routes.memories import CreateMemoryRequest
+    from npc_engine.api.routes.knowledge.memories import CreateMemoryRequest
 
     req = CreateMemoryRequest(content="I saw the fire.", vividness=80, emotional_charge=50, id="mem_npc_1_0")
     assert req.id == "mem_npc_1_0"
 
 
 def test_create_memory_request_id_defaults_to_none():
-    from npc_engine.api.routes.memories import CreateMemoryRequest
+    from npc_engine.api.routes.knowledge.memories import CreateMemoryRequest
 
     req = CreateMemoryRequest(content="I saw the fire.", vividness=80, emotional_charge=50)
     assert req.id is None
 
 
 def test_create_secret_request_accepts_stable_id():
-    from npc_engine.api.routes.secrets import CreateSecretRequest
+    from npc_engine.api.routes.knowledge.secrets import CreateSecretRequest
 
     req = CreateSecretRequest(content="I bribed the guard.", severity=80, id="sec_npc_1")
     assert req.id == "sec_npc_1"
 
 
 def test_create_secret_request_id_defaults_to_none():
-    from npc_engine.api.routes.secrets import CreateSecretRequest
+    from npc_engine.api.routes.knowledge.secrets import CreateSecretRequest
 
     req = CreateSecretRequest(content="I bribed the guard.", severity=80)
     assert req.id is None

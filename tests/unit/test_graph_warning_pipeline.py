@@ -13,7 +13,7 @@ import pytest
 pytest.importorskip("neo4j")
 
 from npc_engine.api.dependencies import get_generic_graph_service
-from npc_engine.api.routes.graph import router as graph_router
+from npc_engine.api.routes.admin.graph import router as graph_router
 from npc_engine.utils.errors import RegistryPayloadValidationError
 from npc_engine.utils.metrics import get_counter_value, reset_metrics_registry
 

@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.routes import location_graph
+from npc_engine.api.routes.world import location_graph
 
 
 # ---------------------------------------------------------------------------
@@ -43,7 +43,7 @@ def _build_app() -> FastAPI:
 
 def test_connect_locations_happy_path_returns_201() -> None:
     with patch(
-        "npc_engine.api.routes.location_graph.create_connection",
+        "npc_engine.api.routes.world.location_graph.create_connection",
         new=AsyncMock(return_value=None),
     ):
         client = TestClient(_build_app())
@@ -66,7 +66,7 @@ def test_connect_locations_happy_path_returns_201() -> None:
 def test_connect_locations_all_valid_kinds_accepted() -> None:
     for kind in ("road", "river", "sea", "secret"):
         with patch(
-            "npc_engine.api.routes.location_graph.create_connection",
+            "npc_engine.api.routes.world.location_graph.create_connection",
             new=AsyncMock(return_value=None),
         ):
             client = TestClient(_build_app())
@@ -147,7 +147,7 @@ def test_list_connections_returns_200_with_envelope() -> None:
         {"destination_id": "loc-b", "destination_name": "Village", "kind": "road", "travel_cost": 2, "is_open": True}
     ]
     with patch(
-        "npc_engine.api.routes.location_graph.get_connections_for_location",
+        "npc_engine.api.routes.world.location_graph.get_connections_for_location",
         new=AsyncMock(return_value=fake_connections),
     ):
         client = TestClient(_build_app())
@@ -161,7 +161,7 @@ def test_list_connections_returns_200_with_envelope() -> None:
 
 def test_list_connections_returns_empty_list_when_none() -> None:
     with patch(
-        "npc_engine.api.routes.location_graph.get_connections_for_location",
+        "npc_engine.api.routes.world.location_graph.get_connections_for_location",
         new=AsyncMock(return_value=[]),
     ):
         client = TestClient(_build_app())
@@ -183,7 +183,7 @@ def test_shortest_path_returns_200_when_path_found() -> None:
         "total_cost": 3,
     }
     with patch(
-        "npc_engine.api.routes.location_graph.get_shortest_path",
+        "npc_engine.api.routes.world.location_graph.get_shortest_path",
         new=AsyncMock(return_value=fake_path),
     ):
         client = TestClient(_build_app())
@@ -198,7 +198,7 @@ def test_shortest_path_returns_200_when_path_found() -> None:
 
 def test_shortest_path_returns_404_when_no_path() -> None:
     with patch(
-        "npc_engine.api.routes.location_graph.get_shortest_path",
+        "npc_engine.api.routes.world.location_graph.get_shortest_path",
         new=AsyncMock(return_value=None),
     ):
         client = TestClient(_build_app())
@@ -214,7 +214,7 @@ def test_shortest_path_returns_404_when_no_path() -> None:
 
 def test_remove_connection_returns_200() -> None:
     with patch(
-        "npc_engine.api.routes.location_graph.delete_connection",
+        "npc_engine.api.routes.world.location_graph.delete_connection",
         new=AsyncMock(return_value=None),
     ):
         client = TestClient(_build_app())

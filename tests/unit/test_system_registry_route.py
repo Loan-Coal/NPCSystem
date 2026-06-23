@@ -13,7 +13,7 @@ import pytest
 pytest.importorskip("neo4j")
 
 from npc_engine.api.dependencies import get_type_registry
-from npc_engine.api.routes.system import admin_router
+from npc_engine.api.routes.admin.system import admin_router
 from npc_engine.type_registry.contracts import TypeRegistry
 
 

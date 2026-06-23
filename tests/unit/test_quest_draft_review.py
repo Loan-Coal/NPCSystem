@@ -22,7 +22,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.routes import quest_generation
+from npc_engine.api.routes.quest import quest_generation
 
 
 # ---------------------------------------------------------------------------
@@ -53,7 +53,7 @@ def test_list_draft_quests_returns_all_drafts() -> None:
     ]
 
     with patch(
-        "npc_engine.api.routes.quest_generation.get_draft_quests",
+        "npc_engine.api.routes.quest.quest_generation.get_draft_quests",
         new=AsyncMock(return_value=drafts),
     ):
         client = TestClient(_build_app(), raise_server_exceptions=True)
@@ -67,7 +67,7 @@ def test_list_draft_quests_returns_all_drafts() -> None:
 
 def test_list_draft_quests_empty_when_no_drafts() -> None:
     with patch(
-        "npc_engine.api.routes.quest_generation.get_draft_quests",
+        "npc_engine.api.routes.quest.quest_generation.get_draft_quests",
         new=AsyncMock(return_value=[]),
     ):
         client = TestClient(_build_app(), raise_server_exceptions=True)
@@ -87,7 +87,7 @@ def test_list_draft_quests_passes_giver_id_filter() -> None:
         return []
 
     with patch(
-        "npc_engine.api.routes.quest_generation.get_draft_quests",
+        "npc_engine.api.routes.quest.quest_generation.get_draft_quests",
         side_effect=_mock_get_drafts,
     ):
         client = TestClient(_build_app(), raise_server_exceptions=True)
@@ -103,7 +103,7 @@ def test_list_draft_quests_passes_giver_id_filter() -> None:
 
 def test_offer_draft_quest_returns_offered_status() -> None:
     with patch(
-        "npc_engine.api.routes.quest_generation.offer_quest",
+        "npc_engine.api.routes.quest.quest_generation.offer_quest",
         new=AsyncMock(return_value={"quest_id": "q-1", "status": "offered"}),
     ):
         client = TestClient(_build_app(), raise_server_exceptions=True)
@@ -117,7 +117,7 @@ def test_offer_draft_quest_returns_offered_status() -> None:
 
 def test_offer_draft_quest_returns_404_when_not_found() -> None:
     with patch(
-        "npc_engine.api.routes.quest_generation.offer_quest",
+        "npc_engine.api.routes.quest.quest_generation.offer_quest",
         new=AsyncMock(return_value=None),
     ):
         client = TestClient(_build_app(), raise_server_exceptions=False)

@@ -20,7 +20,10 @@ from npc_engine.api.dependency_singletons import (
     get_quest_generation_engine,
     get_tick_scheduler,
 )
-from npc_engine.api.routes import clock, debts, groups, quest_generation
+from npc_engine.api.routes.economy import groups
+from npc_engine.api.routes.knowledge import debts
+from npc_engine.api.routes.quest import quest_generation
+from npc_engine.api.routes.world import clock
 from npc_engine.config import Settings, get_settings
 
 # Sentinels that must never appear in a client-facing response body.
@@ -146,7 +149,7 @@ def test_require_node_does_not_echo_node_type() -> None:
 
 def test_locations_self_loop_does_not_leak_child_id() -> None:
     """L8-02: locations part_of self-loop 400 must not echo str(exc) (the child_id)."""
-    from npc_engine.api.routes import locations
+    from npc_engine.api.routes.world import locations
 
     app = FastAPI()
     app.include_router(locations.admin_router)
@@ -164,7 +167,7 @@ def test_locations_self_loop_does_not_leak_child_id() -> None:
 def test_economy_trade_not_found_does_not_leak_node_id() -> None:
     """L8-02: economy trade NodeNotFoundError 422 must not echo exc.node_id."""
     from npc_engine.api.dependency_singletons import get_trade_engine
-    from npc_engine.api.routes import economy
+    from npc_engine.api.routes.economy import economy
     from npc_engine.utils.errors import NodeNotFoundError
 
     class _BoomTrade:

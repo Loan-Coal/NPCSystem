@@ -53,7 +53,7 @@ def test_health_route_registered_and_returns_200() -> None:
     route_paths = [getattr(r, "path", None) for r in app.routes]
     assert "/health" in route_paths, f"expected /health in routes, got {route_paths}"
 
-    with patch("npc_engine.api.routes.system.get_settings", return_value=_MINIMAL_SETTINGS):
+    with patch("npc_engine.api.routes.admin.system.get_settings", return_value=_MINIMAL_SETTINGS):
         client = TestClient(app, raise_server_exceptions=True)
         response = client.get("/health")
 

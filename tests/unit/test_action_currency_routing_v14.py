@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.routes import action
+from npc_engine.api.routes.dialogue import action
 from npc_engine.config import Settings
 
 
@@ -40,8 +40,8 @@ def test_action_route_buy_item_uses_currency_coordinator(monkeypatch) -> None:
     async def fake_relation_delta(**kwargs):
         raise AssertionError("relation delta path should not run for buy_item")
 
-    monkeypatch.setattr("npc_engine.api.routes.action.apply_buy_sell_currency_transfer", fake_coordinator)
-    monkeypatch.setattr("npc_engine.api.routes.action.apply_relation_delta", fake_relation_delta)
+    monkeypatch.setattr("npc_engine.api.routes.dialogue.action.apply_buy_sell_currency_transfer", fake_coordinator)
+    monkeypatch.setattr("npc_engine.api.routes.dialogue.action.apply_relation_delta", fake_relation_delta)
 
     client = TestClient(_build_app())
     response = client.post(
@@ -72,8 +72,8 @@ def test_action_route_non_currency_path_still_uses_relation_delta(monkeypatch) -
     async def fake_relation_delta(**kwargs):
         called["relation"] = True
 
-    monkeypatch.setattr("npc_engine.api.routes.action.apply_buy_sell_currency_transfer", fake_coordinator)
-    monkeypatch.setattr("npc_engine.api.routes.action.apply_relation_delta", fake_relation_delta)
+    monkeypatch.setattr("npc_engine.api.routes.dialogue.action.apply_buy_sell_currency_transfer", fake_coordinator)
+    monkeypatch.setattr("npc_engine.api.routes.dialogue.action.apply_relation_delta", fake_relation_delta)
 
     client = TestClient(_build_app())
     response = client.post(

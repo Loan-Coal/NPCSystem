@@ -13,7 +13,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from npc_engine.api.routes import investigations as route_mod
+from npc_engine.api.routes.admin import investigations as route_mod
 from npc_engine.api.dependencies_advanced import get_investigation_engine
 
 

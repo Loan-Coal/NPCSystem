@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from npc_engine.api.routes.debug_retrieval import get_debug_retrieval
+from npc_engine.api.routes.admin.debug_retrieval import get_debug_retrieval
 
 
 # ---------------------------------------------------------------------------
@@ -54,7 +54,7 @@ _CONTEXT_JSON = json.dumps(_CONTEXT_PAYLOAD)
 async def test_debug_retrieval_returns_context_items() -> None:
     """Happy path: patched build_serialized_context returns items in the response."""
     with patch(
-        "npc_engine.api.routes.debug_retrieval.build_serialized_context",
+        "npc_engine.api.routes.admin.debug_retrieval.build_serialized_context",
         new_callable=AsyncMock,
         return_value=_CONTEXT_JSON,
     ):
@@ -78,7 +78,7 @@ async def test_debug_retrieval_returns_context_items() -> None:
 async def test_debug_retrieval_total_tokens_is_non_negative() -> None:
     """total_tokens field must be a non-negative integer."""
     with patch(
-        "npc_engine.api.routes.debug_retrieval.build_serialized_context",
+        "npc_engine.api.routes.admin.debug_retrieval.build_serialized_context",
         new_callable=AsyncMock,
         return_value=_CONTEXT_JSON,
     ):
@@ -99,7 +99,7 @@ async def test_debug_retrieval_total_tokens_is_non_negative() -> None:
 async def test_debug_retrieval_empty_context() -> None:
     """When context JSON is an empty object the handler returns zero items."""
     with patch(
-        "npc_engine.api.routes.debug_retrieval.build_serialized_context",
+        "npc_engine.api.routes.admin.debug_retrieval.build_serialized_context",
         new_callable=AsyncMock,
         return_value=json.dumps({}),
     ):

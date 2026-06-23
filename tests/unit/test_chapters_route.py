@@ -13,7 +13,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from npc_engine.api.routes import chapters as route_mod
+from npc_engine.api.routes.world import chapters as route_mod
 from npc_engine.api.dependencies import get_db_session
 
 

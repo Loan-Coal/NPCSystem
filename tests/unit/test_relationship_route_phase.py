@@ -13,7 +13,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from npc_engine.api.routes.relationship import router, _get_relation_reader
+from npc_engine.api.routes.social.relationship import router, _get_relation_reader
 from npc_engine.graph.relation_phase_reader import RelationPhaseRow
 
 

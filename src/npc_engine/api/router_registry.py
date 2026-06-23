@@ -13,51 +13,64 @@ from fastapi import FastAPI
 
 from npc_engine.config import Settings
 from npc_engine.api.dashboard_static import register_dashboard
-from npc_engine.api.routes.action import router as action_router
-from npc_engine.api.routes.batch import router as batch_router
-from npc_engine.api.routes.clock import router as clock_router
-from npc_engine.api.routes.dialogue import router as dialogue_router
-from npc_engine.api.routes.dialogue_ws import router as dialogue_ws_router
-from npc_engine.api.routes.graph import router as graph_router
-from npc_engine.api.routes.beliefs import router as beliefs_router
-from npc_engine.api.routes.goals import router as goals_router
-from npc_engine.api.routes.items import router as items_router
-from npc_engine.api.routes.memories import router as memories_router
-from npc_engine.api.routes.secrets import router as secrets_router
-from npc_engine.api.routes.debts import router as debts_router
-from npc_engine.api.routes.factions import router as factions_router
-from npc_engine.api.routes.schedules import router as schedules_router
-from npc_engine.api.routes.reputation import admin_router as reputation_admin_router
-from npc_engine.api.routes.reputation import graph_router as reputation_graph_router
-from npc_engine.api.routes.graph_admin import router as graph_admin_router
-from npc_engine.api.routes.npc_state import router as npc_state_router
-from npc_engine.api.routes.interaction import router as interaction_router
-from npc_engine.api.routes.quest import router as quest_router
-from npc_engine.api.routes.quest_generation import router as quest_generation_router
-from npc_engine.api.routes.economy import router as economy_router
-from npc_engine.api.routes.location_history import router as location_history_router
-from npc_engine.api.routes.causality import router as causality_router
-from npc_engine.api.routes.witnessed import router as witnessed_router
-from npc_engine.api.routes.groups import router as groups_router
-from npc_engine.api.routes.relationship import router as relationship_router
-from npc_engine.api.routes.player_model import router as player_model_router
-from npc_engine.api.routes.schemes import router as schemes_router
-from npc_engine.api.routes.rumors import router as rumors_router
-from npc_engine.api.routes.gossip_spread import router as gossip_spread_router
-from npc_engine.api.routes.rumor_trace import router as rumor_trace_router
-from npc_engine.api.routes.skills import router as skills_router
-from npc_engine.api.routes.traits import router as traits_router
-from npc_engine.api.routes.pledges import router as pledges_router
-from npc_engine.api.routes.treaties import router as treaties_router
-from npc_engine.api.routes.debug_retrieval import router as debug_retrieval_router
-from npc_engine.api.routes.locations import admin_router as locations_admin_router
-from npc_engine.api.routes.locations import read_router as locations_read_router
-from npc_engine.api.routes.player_events import router as player_events_router
-from npc_engine.api.routes.investigations import router as investigations_router
-from npc_engine.api.routes.chapters import router as chapters_router
-from npc_engine.api.routes.system import admin_router as system_admin_router
-from npc_engine.api.routes.system import router as system_router
-from npc_engine.api.routes.system import v1_router as system_v1_router
+from npc_engine.api.routes.admin import (
+    batch_router,
+    debug_retrieval_router,
+    graph_admin_router,
+    graph_router,
+    investigations_router,
+    system_admin_router,
+    system_router,
+    system_v1_router,
+)
+from npc_engine.api.routes.dialogue import (
+    action_router,
+    dialogue_router,
+    dialogue_ws_router,
+    interaction_router,
+    npc_state_router,
+)
+from npc_engine.api.routes.economy import (
+    economy_router,
+    groups_router,
+    items_router,
+    skills_router,
+    traits_router,
+)
+from npc_engine.api.routes.faction_politics import (
+    factions_router,
+    pledges_router,
+    schemes_router,
+    treaties_router,
+)
+from npc_engine.api.routes.knowledge import (
+    beliefs_router,
+    causality_router,
+    debts_router,
+    goals_router,
+    gossip_spread_router,
+    memories_router,
+    rumor_trace_router,
+    rumors_router,
+    secrets_router,
+    witnessed_router,
+)
+from npc_engine.api.routes.quest import quest_generation_router, quest_router
+from npc_engine.api.routes.social import (
+    player_model_router,
+    relationship_router,
+    reputation_admin_router,
+    reputation_graph_router,
+)
+from npc_engine.api.routes.world import (
+    chapters_router,
+    clock_router,
+    location_history_router,
+    locations_admin_router,
+    locations_read_router,
+    player_events_router,
+    schedules_router,
+)
 
 
 def _register_public_routers(app: FastAPI, settings: Settings) -> None:

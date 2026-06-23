@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
-from npc_engine.api.routes.gossip_spread import router, SpreadRumorRequest
+from npc_engine.api.routes.knowledge.gossip_spread import router, SpreadRumorRequest
 
 
 # ---------------------------------------------------------------------------
@@ -27,7 +27,7 @@ def _make_app() -> FastAPI:
 def client_and_mock():
     app = _make_app()
     with patch(
-        "npc_engine.api.routes.gossip_spread.get_db_session",
+        "npc_engine.api.routes.knowledge.gossip_spread.get_db_session",
         return_value=AsyncMock(),
     ):
         yield TestClient(app)
@@ -81,10 +81,10 @@ async def test_spread_route_returns_event_id_and_npc_id() -> None:
     mock_session.run.return_value = mock_result
 
     with patch(
-        "npc_engine.api.routes.gossip_spread.inject_rumor_belief",
+        "npc_engine.api.routes.knowledge.gossip_spread.inject_rumor_belief",
         new=AsyncMock(return_value="rumor_plant_mira_5"),
     ):
-        from npc_engine.api.routes.gossip_spread import spread_rumor_route
+        from npc_engine.api.routes.knowledge.gossip_spread import spread_rumor_route
 
         result = await spread_rumor_route(
             body=SpreadRumorRequest(

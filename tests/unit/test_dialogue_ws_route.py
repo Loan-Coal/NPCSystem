@@ -4,7 +4,7 @@ Layer: tests/unit
 Purpose: Unit tests for src/npc_engine/api/routes/dialogue_ws — verifies the
          WebSocket route assembles the done message correctly, including base64
          audio when TTS produces audio_bytes.
-Dependencies: npc_engine.api.routes.dialogue_ws, unittest.mock
+Dependencies: npc_engine.api.routes.dialogue.dialogue_ws, unittest.mock
 Used by: make test
 """
 
@@ -42,7 +42,7 @@ class TestDialogueWsRouteAudio:
 
     def test_done_message_includes_audio_bytes_b64_when_present(self) -> None:
         """When handler.handle() returns audio_bytes, done data must include audio_bytes_b64."""
-        from npc_engine.api.routes.dialogue_ws import _build_done_data
+        from npc_engine.api.routes.dialogue.dialogue_ws import _build_done_data
 
         wav_bytes = b"RIFF\x00\x00\x00\x00WAVEfmt "
         response = _make_response(audio_bytes=wav_bytes)
@@ -54,7 +54,7 @@ class TestDialogueWsRouteAudio:
 
     def test_done_message_audio_bytes_b64_is_none_when_absent(self) -> None:
         """When handler returns no audio, audio_bytes_b64 is None in done data."""
-        from npc_engine.api.routes.dialogue_ws import _build_done_data
+        from npc_engine.api.routes.dialogue.dialogue_ws import _build_done_data
 
         response = _make_response(audio_bytes=None)
         data = _build_done_data(response)
@@ -63,7 +63,7 @@ class TestDialogueWsRouteAudio:
 
     def test_done_message_contains_standard_fields(self) -> None:
         """done data always contains degradation_level, emotion, relation_deltas, action, facial_expression."""
-        from npc_engine.api.routes.dialogue_ws import _build_done_data
+        from npc_engine.api.routes.dialogue.dialogue_ws import _build_done_data
 
         response = _make_response()
         data = _build_done_data(response)

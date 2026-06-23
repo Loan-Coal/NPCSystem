@@ -8,7 +8,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from npc_engine.api.routes.player_events import router
+from npc_engine.api.routes.world.player_events import router
 
 
 # ---------------------------------------------------------------------------
@@ -47,8 +47,8 @@ _SAMPLE_EVENTS = [
     },
 ]
 
-_READER_PATH = "npc_engine.api.routes.player_events.get_recent_player_events"
-_SESSION_PATH = "npc_engine.api.routes.player_events.get_db_session"
+_READER_PATH = "npc_engine.api.routes.world.player_events.get_recent_player_events"
+_SESSION_PATH = "npc_engine.api.routes.world.player_events.get_db_session"
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +62,7 @@ async def test_player_events_returns_events_list() -> None:
     mock_session = AsyncMock()
 
     with patch(_READER_PATH, new=AsyncMock(return_value=_SAMPLE_EVENTS)):
-        from npc_engine.api.routes.player_events import list_player_events
+        from npc_engine.api.routes.world.player_events import list_player_events
 
         result = await list_player_events(
             player_id="player_1",
@@ -83,7 +83,7 @@ async def test_player_events_empty_returns_empty_list() -> None:
     mock_session = AsyncMock()
 
     with patch(_READER_PATH, new=AsyncMock(return_value=[])):
-        from npc_engine.api.routes.player_events import list_player_events
+        from npc_engine.api.routes.world.player_events import list_player_events
 
         result = await list_player_events(
             player_id="player_new",
@@ -107,7 +107,7 @@ async def test_player_events_reader_called_with_capped_limit() -> None:
     mock_reader = AsyncMock(return_value=[])
 
     with patch(_READER_PATH, new=mock_reader):
-        from npc_engine.api.routes.player_events import list_player_events
+        from npc_engine.api.routes.world.player_events import list_player_events
 
         await list_player_events(
             player_id="player_1",

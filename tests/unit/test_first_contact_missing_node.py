@@ -20,7 +20,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.routes import dialogue
+from npc_engine.api.routes.dialogue import dialogue
 from npc_engine.config import Settings
 from npc_engine.graph.graph_writer import ensure_relation_edge
 from npc_engine.utils.errors import NodeNotFoundError

@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.routes import dialogue
+from npc_engine.api.routes.dialogue import dialogue
 from npc_engine.auth.middleware import ApiKeyMiddleware
 from npc_engine.common.intent_models import ConversationIntent
 from npc_engine.config import Settings
@@ -35,7 +35,7 @@ _INTENT_B = ConversationIntent(
     trigger_ref="evt-war",
 )
 
-_ROUTE_MOD = "npc_engine.api.routes.dialogue"
+_ROUTE_MOD = "npc_engine.api.routes.dialogue.dialogue"
 
 
 def _settings() -> Settings:

@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from npc_engine.api.dependencies import get_db_session, get_quest_lifecycle_engine
 from npc_engine.api.dependencies_engines import get_quest_offer_service, get_quest_reward_router
-from npc_engine.api.routes import quest
+from npc_engine.api.routes.quest import quest
 from npc_engine.config import Settings
 
 

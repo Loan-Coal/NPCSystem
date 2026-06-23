@@ -16,7 +16,7 @@ pytest.importorskip("neo4j")
 
 from npc_engine.api.dashboard_models import DashboardConfigView
 from npc_engine.api.dashboard_static import DASHBOARD_MOUNT_PATH, register_dashboard
-from npc_engine.api.routes.system import v1_router
+from npc_engine.api.routes.admin.system import v1_router
 from npc_engine.auth.middleware_helpers import is_public_path
 from npc_engine.config import Settings, get_settings
 from npc_engine.utils.metrics import increment_metric, reset_metrics_registry

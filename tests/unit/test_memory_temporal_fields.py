@@ -104,7 +104,7 @@ async def test_create_memory_defaults_occurred_to_created() -> None:
 
 def test_create_memory_request_accepts_temporal_fields() -> None:
     """CreateMemoryRequest exposes optional occurred_at_game_time + is_historical."""
-    from npc_engine.api.routes.memories import CreateMemoryRequest
+    from npc_engine.api.routes.knowledge.memories import CreateMemoryRequest
 
     req = CreateMemoryRequest(
         content="c",

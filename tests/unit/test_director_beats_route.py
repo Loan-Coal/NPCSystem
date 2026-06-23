@@ -11,7 +11,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from npc_engine.api.routes.dialogue import router
+from npc_engine.api.routes.dialogue.dialogue import router
 from npc_engine.api.dependencies_engines import get_director_beat_log
 from npc_engine.engines.director.director_beat_log import DirectorBeatRecord
 
