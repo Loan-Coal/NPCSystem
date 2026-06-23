@@ -4,6 +4,7 @@ Layer: config
 Purpose: Async validators for the two LLM inference paths defined in wizard_config:
          path A (local Ollama) checks the daemon and model presence; path B (BYO API
          key) probes the configured endpoint with a lightweight HTTP call.
+         Also validates api_url for SSRF safety before any outbound probe (INTEG-01).
 Dependencies: httpx (async HTTP), npc_engine.setup.ollama_manager, wizard_config.
 Used by: SHIP-05b Unity wizard (drives validators via the /setup/validate API route
          or calls directly from the Python entry point).
@@ -14,6 +15,8 @@ Dependencies injected: OllamaManager api_base comes from config; httpx.AsyncClie
 from __future__ import annotations
 
 import enum
+import ipaddress
+import urllib.parse
 
 import httpx
 from pydantic import BaseModel
@@ -32,6 +35,21 @@ _HTTP_UNAUTHORIZED: int = 401
 
 # Relative path appended to api_url for the probe request (OpenAI-compatible).
 _MODELS_PATH: str = "/models"
+
+# Allowed schemes for external (non-localhost) api_url values.
+_ALLOWED_EXTERNAL_SCHEME: str = "https"
+
+# Loopback hostnames accepted for http:// (LM Studio, local proxy).
+_LOOPBACK_HOSTS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "::1"})
+
+# Private / metadata IPv4 network prefixes that must not be probed externally.
+_BLOCKED_NETWORKS: tuple[ipaddress.IPv4Network, ...] = (
+    ipaddress.IPv4Network("10.0.0.0/8"),
+    ipaddress.IPv4Network("172.16.0.0/12"),
+    ipaddress.IPv4Network("192.168.0.0/16"),
+    ipaddress.IPv4Network("169.254.0.0/16"),   # link-local / AWS metadata
+    ipaddress.IPv4Network("100.64.0.0/10"),    # CGNAT / Tailscale
+)
 
 
 class ValidationStatus(str, enum.Enum):
@@ -93,11 +111,66 @@ async def validate_path_a(config: WizardConfig) -> ValidationResult:
     return ValidationResult(status=ValidationStatus.OK)
 
 
+def validate_api_url_safety(api_url: str) -> ValidationResult | None:
+    """Check api_url for SSRF safety; return a ValidationResult on failure or None if safe.
+
+    Rules:
+    - Scheme must be ``https`` for external hosts, or ``http``/``https`` for loopback.
+    - Host must not be a private/CGNAT/link-local IP range.
+    - Host must be non-empty.
+
+    Args:
+        api_url: The raw URL string from WizardConfig.
+
+    Returns:
+        None if the URL is safe to probe, or a ``ValidationResult`` with
+        ``API_UNREACHABLE`` if it fails safety checks.
+    """
+    try:
+        parsed = urllib.parse.urlparse(api_url)
+    except ValueError:
+        return ValidationResult(
+            status=ValidationStatus.API_UNREACHABLE,
+            message=f"api_url is not a valid URL: {api_url!r}",
+        )
+
+    scheme = parsed.scheme.lower()
+    host = parsed.hostname or ""
+
+    if not host:
+        return ValidationResult(
+            status=ValidationStatus.API_UNREACHABLE,
+            message="api_url has no host — provide a full URL (e.g. https://api.openai.com/v1).",
+        )
+
+    is_loopback = host in _LOOPBACK_HOSTS
+    if not is_loopback and scheme != _ALLOWED_EXTERNAL_SCHEME:
+        return ValidationResult(
+            status=ValidationStatus.API_UNREACHABLE,
+            message=f"api_url must use https for external hosts (got '{scheme}://').",
+        )
+
+    if not is_loopback:
+        try:
+            addr = ipaddress.IPv4Address(host)
+            for net in _BLOCKED_NETWORKS:
+                if addr in net:
+                    return ValidationResult(
+                        status=ValidationStatus.API_UNREACHABLE,
+                        message=f"api_url points to a private/reserved address ({host}) — use a public HTTPS endpoint.",
+                    )
+        except ValueError:
+            pass  # hostname (not raw IP) — safe to probe
+
+    return None
+
+
 async def validate_path_b(config: WizardConfig) -> ValidationResult:
     """Validate the BYO-API-key inference path (path B).
 
     Sends a ``GET {api_url}/models`` request with the player's API key as a
     Bearer token. A 200 response means the endpoint and key are valid.
+    Rejects api_url values that point to private/reserved networks (SSRF guard).
 
     Args:
         config: Wizard configuration. Uses ``config.api_url`` and ``config.api_key``.
@@ -105,14 +178,17 @@ async def validate_path_b(config: WizardConfig) -> ValidationResult:
 
     Returns:
         A ``ValidationResult`` with status ``OK`` on HTTP 200, ``API_AUTH_FAILED`` on
-        HTTP 401 or missing key, and ``API_UNREACHABLE`` on any connection error or
-        unexpected HTTP status.
+        HTTP 401 or missing key, and ``API_UNREACHABLE`` on any connection error,
+        SSRF-blocked URL, or unexpected HTTP status.
     """
     if not config.api_key:
         return ValidationResult(
             status=ValidationStatus.API_AUTH_FAILED,
             message="No API key configured. Enter your API key in the wizard.",
         )
+    safety_error = validate_api_url_safety(config.api_url)
+    if safety_error is not None:
+        return safety_error
     return await _probe_api(config.api_url, config.api_key)
 
 

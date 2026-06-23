@@ -22,6 +22,8 @@ from npc_engine.utils.errors import IdempotencyKeyInvalidError, IdempotencyKeyRe
 
 
 HEALTH_PATH = "/health"
+READINESS_PATH = "/readiness"
+SETUP_PATH_PREFIX = "/setup"
 DOCS_PATHS = frozenset({"/docs", "/redoc", "/openapi.json"})
 DASHBOARD_PATH_PREFIX = "/dashboard"
 OPTIONS_METHOD = "OPTIONS"
@@ -45,10 +47,11 @@ def is_public_path(path: str, *, env: str = "dev") -> bool:
     """Return True when the path may be accessed without an API key.
 
     Rules:
-    - /health is always public (liveness probe must work in all environments).
+    - /health and /readiness are always public (process-manager probes).
+    - /setup/* is always public — localhost-only by bind (DEC-131); used by the
+      Unity wizard on first launch before an engine API key is configured.
     - /docs, /redoc, /openapi.json are public only when ENV == "dev" so that
       the full API surface is not enumerable in staging/prod.
-    - /readiness is NOT public; only /health has that exemption.
     - Dashboard assets are public in dev only (they supply their own Bearer tokens).
 
     Args:
@@ -59,7 +62,9 @@ def is_public_path(path: str, *, env: str = "dev") -> bool:
     Returns:
         True when the path is exempt from authentication for the given env.
     """
-    if path == HEALTH_PATH:
+    if path in (HEALTH_PATH, READINESS_PATH):
+        return True
+    if path.startswith(SETUP_PATH_PREFIX):
         return True
     if path in DOCS_PATHS or path.startswith(DASHBOARD_PATH_PREFIX):
         return env == "dev"

@@ -9,6 +9,7 @@ import pytest
 from npc_engine.setup.path_validator import (
     ValidationResult,
     ValidationStatus,
+    validate_api_url_safety,
     validate_path_a,
     validate_path_b,
 )
@@ -28,6 +29,51 @@ def _api_config(
     api_url: str = "https://api.openai.com/v1",
 ) -> WizardConfig:
     return WizardConfig(llm_path=LLMPath.API, api_key=api_key, api_url=api_url)
+
+
+# ---------------------------------------------------------------------------
+# ValidationResult model
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# validate_api_url_safety
+# ---------------------------------------------------------------------------
+
+class TestValidateApiUrlSafety:
+    def test_https_external_is_safe(self) -> None:
+        assert validate_api_url_safety("https://api.openai.com/v1") is None
+
+    def test_http_localhost_is_safe(self) -> None:
+        assert validate_api_url_safety("http://localhost:1234/v1") is None
+
+    def test_http_127_is_safe(self) -> None:
+        assert validate_api_url_safety("http://127.0.0.1:11434/v1") is None
+
+    def test_http_external_blocked(self) -> None:
+        result = validate_api_url_safety("http://api.openai.com/v1")
+        assert result is not None
+        assert result.status == ValidationStatus.API_UNREACHABLE
+        assert "https" in result.message
+
+    def test_private_10_blocked(self) -> None:
+        result = validate_api_url_safety("https://10.0.0.1/v1")
+        assert result is not None
+        assert result.status == ValidationStatus.API_UNREACHABLE
+
+    def test_private_192_168_blocked(self) -> None:
+        result = validate_api_url_safety("https://192.168.0.1/v1")
+        assert result is not None
+        assert result.status == ValidationStatus.API_UNREACHABLE
+
+    def test_link_local_blocked(self) -> None:
+        result = validate_api_url_safety("http://169.254.169.254/latest/meta-data/")
+        assert result is not None
+        assert result.status == ValidationStatus.API_UNREACHABLE
+
+    def test_no_host_blocked(self) -> None:
+        result = validate_api_url_safety("https:///v1")
+        assert result is not None
+        assert result.status == ValidationStatus.API_UNREACHABLE
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +204,17 @@ class TestValidatePathB:
         cfg = WizardConfig(llm_path=LLMPath.API, api_key=None)
         result = asyncio.run(validate_path_b(cfg))
         assert result.status == ValidationStatus.API_AUTH_FAILED
+
+    def test_private_ip_is_blocked_ssrf(self) -> None:
+        # http:// external — fails on scheme check (before IP check).
+        cfg = _api_config(api_url="http://192.168.1.1/v1")
+        result = asyncio.run(validate_path_b(cfg))
+        assert result.status == ValidationStatus.API_UNREACHABLE
+
+    def test_metadata_ip_is_blocked(self) -> None:
+        cfg = _api_config(api_url="http://169.254.169.254/v1")
+        result = asyncio.run(validate_path_b(cfg))
+        assert result.status == ValidationStatus.API_UNREACHABLE
 
     def test_non_200_non_401_is_unreachable(self) -> None:
         mock_resp = AsyncMock()

@@ -2,7 +2,7 @@
 test_sev20_auth_surface.py - Regression tests for auth surface gaps.
 
 Tests:
-- is_public_path env-awareness (docs gating, health always open, readiness not public)
+- is_public_path env-awareness (docs gating, health + readiness + /setup/* always open)
 - WS per-key connection cap constant and enforcement helper
 
 Does NOT: start HTTP/WS server or connect to Neo4j.
@@ -24,14 +24,20 @@ from npc_engine.api.routes.dialogue.dialogue_ws import (
 # ── is_public_path ────────────────────────────────────────────────────────────
 
 
-def test_readiness_is_not_public_in_dev() -> None:
-    """/readiness must require auth even in dev."""
-    assert is_public_path("/readiness", env="dev") is False
+def test_readiness_is_public_in_dev() -> None:
+    """/readiness is a process-manager probe — public in all envs (INTEG-04)."""
+    assert is_public_path("/readiness", env="dev") is True
 
 
-def test_readiness_is_not_public_in_prod() -> None:
-    """/readiness must require auth in prod."""
-    assert is_public_path("/readiness", env="prod") is False
+def test_readiness_is_public_in_prod() -> None:
+    """/readiness is a process-manager probe — public in prod (INTEG-04)."""
+    assert is_public_path("/readiness", env="prod") is True
+
+
+def test_setup_routes_are_public() -> None:
+    """/setup/* is auth-exempt for the first-run wizard (DEC-131, INTEG-03)."""
+    assert is_public_path("/setup/validate", env="prod") is True
+    assert is_public_path("/setup/config", env="prod") is True
 
 
 def test_docs_is_public_in_dev() -> None:

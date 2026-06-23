@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
+from contextlib import contextmanager
+from typing import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -24,14 +26,22 @@ def _make_launcher(
     return StackLauncher(neo4j_manager=neo4j, ollama_manager=ollama_manager)
 
 
+@contextmanager
+def _engine_patches() -> Generator[None, None, None]:
+    """Patch uvicorn.Server.serve + StackLauncher._poll_readiness for unit tests."""
+    with (
+        patch("asyncio.sleep", new_callable=AsyncMock),
+        patch("uvicorn.Server.serve", new_callable=AsyncMock),
+        patch.object(StackLauncher, "_poll_readiness", new_callable=AsyncMock, return_value=True),
+    ):
+        yield
+
+
 class TestStackLauncherNeo4j:
     def test_skips_neo4j_launch_if_already_running(self) -> None:
         launcher = _make_launcher(neo4j_running=True)
 
-        with (
-            patch("asyncio.sleep", new_callable=AsyncMock),
-            patch("uvicorn.Server.serve", new_callable=AsyncMock),
-        ):
+        with _engine_patches():
             asyncio.run(launcher.launch())
 
         launcher._neo4j.launch.assert_not_called()
@@ -51,10 +61,7 @@ class TestStackLauncherNeo4j:
         neo4j.launch = MagicMock(side_effect=fake_launch)
         launcher = StackLauncher(neo4j_manager=neo4j)
 
-        with (
-            patch("asyncio.sleep", new_callable=AsyncMock),
-            patch("uvicorn.Server.serve", new_callable=AsyncMock),
-        ):
+        with _engine_patches():
             asyncio.run(launcher.launch())
 
         assert launched == [True]
@@ -63,7 +70,7 @@ class TestStackLauncherNeo4j:
         launcher = _make_launcher(neo4j_running=False, neo4j_installed=False)
 
         with (
-            patch("asyncio.sleep", new_callable=AsyncMock),
+            _engine_patches(),
             pytest.raises(Neo4jNotInstalledError),
         ):
             asyncio.run(launcher.launch())
@@ -72,10 +79,7 @@ class TestStackLauncherNeo4j:
 class TestStackLauncherOllama:
     def test_skips_ollama_if_no_ollama_manager(self) -> None:
         launcher = _make_launcher(ollama_manager=None)
-        with (
-            patch("asyncio.sleep", new_callable=AsyncMock),
-            patch("uvicorn.Server.serve", new_callable=AsyncMock),
-        ):
+        with _engine_patches():
             asyncio.run(launcher.launch())
         # No error means Ollama section was gracefully skipped.
 
@@ -85,10 +89,7 @@ class TestStackLauncherOllama:
         ollama.launch = MagicMock(return_value=MagicMock(spec=subprocess.Popen))
         launcher = _make_launcher(ollama_manager=ollama)
 
-        with (
-            patch("asyncio.sleep", new_callable=AsyncMock),
-            patch("uvicorn.Server.serve", new_callable=AsyncMock),
-        ):
+        with _engine_patches():
             asyncio.run(launcher.launch())
 
         ollama.launch.assert_not_called()
@@ -106,10 +107,7 @@ class TestStackLauncherOllama:
         ollama.launch = MagicMock(side_effect=fake_launch)
         launcher = _make_launcher(ollama_manager=ollama)
 
-        with (
-            patch("asyncio.sleep", new_callable=AsyncMock),
-            patch("uvicorn.Server.serve", new_callable=AsyncMock),
-        ):
+        with _engine_patches():
             asyncio.run(launcher.launch())
 
         assert launched == [True]
@@ -122,10 +120,7 @@ class TestStackLauncherShutdown:
         launcher._neo4j.is_running = AsyncMock(side_effect=[False, True])
         launcher._neo4j.launch = MagicMock(return_value=fake_proc)
 
-        with (
-            patch("asyncio.sleep", new_callable=AsyncMock),
-            patch("uvicorn.Server.serve", new_callable=AsyncMock),
-        ):
+        with _engine_patches():
             asyncio.run(launcher.launch())
 
         launcher.shutdown()
@@ -133,9 +128,30 @@ class TestStackLauncherShutdown:
 
     def test_shutdown_is_noop_when_nothing_started(self) -> None:
         launcher = _make_launcher(neo4j_running=True)
+        with _engine_patches():
+            asyncio.run(launcher.launch())
+        launcher.shutdown()  # must not raise
+
+
+class TestStackLauncherReadiness:
+    def test_emits_ready_signal_when_engine_responds(self, capsys) -> None:
+        """ENGINE_READY_SIGNAL printed to stdout when /readiness returns 200."""
+        launcher = _make_launcher()
         with (
             patch("asyncio.sleep", new_callable=AsyncMock),
             patch("uvicorn.Server.serve", new_callable=AsyncMock),
+            patch.object(StackLauncher, "_poll_readiness", new_callable=AsyncMock, return_value=True),
         ):
             asyncio.run(launcher.launch())
-        launcher.shutdown()  # must not raise
+        assert "NPC_ENGINE_READY" in capsys.readouterr().out
+
+    def test_emits_warning_when_engine_not_ready(self, capsys) -> None:
+        """Warning written to stderr when /readiness never responds."""
+        launcher = _make_launcher()
+        with (
+            patch("asyncio.sleep", new_callable=AsyncMock),
+            patch("uvicorn.Server.serve", new_callable=AsyncMock),
+            patch.object(StackLauncher, "_poll_readiness", new_callable=AsyncMock, return_value=False),
+        ):
+            asyncio.run(launcher.launch())
+        assert "WARNING" in capsys.readouterr().err

@@ -62,6 +62,7 @@ from npc_engine.api.routes.social import (
     reputation_admin_router,
     reputation_graph_router,
 )
+from npc_engine.api.routes.setup import setup_router
 from npc_engine.api.routes.world import (
     chapters_router,
     clock_router,
@@ -80,6 +81,7 @@ def _register_public_routers(app: FastAPI, settings: Settings) -> None:
         app: The FastAPI application.
         settings: Runtime settings providing the /v1 prefix and feature flags.
     """
+    app.include_router(setup_router)   # Auth-exempt setup routes (DEC-131, INTEG-01..03)
     app.include_router(system_router)  # Public system routes (no auth)
     app.include_router(dialogue_router, prefix=settings.API_V1_PREFIX)
     if settings.DIALOGUE_STREAM_ENABLED:

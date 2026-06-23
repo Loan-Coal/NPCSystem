@@ -3,9 +3,10 @@ Module: stack_launcher
 Layer: config
 Purpose: Orchestrate the full NPC Engine stack on an end-user machine: start Neo4j,
          optionally start Ollama (local-inference path), then serve the FastAPI engine
-         via uvicorn until shutdown (SHIP-04).
+         via uvicorn until shutdown (SHIP-04). Polls GET /readiness after uvicorn
+         starts and emits "NPC_ENGINE_READY" to stdout when the engine is ready (INTEG-04).
 Dependencies: npc_engine.setup.neo4j_manager, npc_engine.setup.ollama_manager;
-              uvicorn; stdlib asyncio/subprocess.
+              uvicorn, httpx; stdlib asyncio/subprocess.
 Used by: scripts/launcher.py (the PyInstaller entry point).
 Does NOT: import any engine, services, graph, or API layer module.
 Dependencies injected: Neo4jManager, OllamaManager (StackLauncher constructor);
@@ -15,8 +16,10 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
+import sys
 from collections.abc import Awaitable, Callable
 
+import httpx
 import uvicorn
 
 from npc_engine.setup.neo4j_manager import (
@@ -50,6 +53,18 @@ _OLLAMA_HEALTH_RETRIES: int = 5
 
 # Delay between Ollama health-check retries (seconds).
 _OLLAMA_HEALTH_RETRY_DELAY: float = 1.0
+
+# Maximum retries when polling /readiness after uvicorn start.
+_ENGINE_READINESS_RETRIES: int = 30
+
+# Delay between /readiness poll attempts (seconds).
+_ENGINE_READINESS_RETRY_DELAY: float = 1.0
+
+# Timeout (seconds) per /readiness HTTP request.
+_ENGINE_READINESS_TIMEOUT: float = 2.0
+
+# Sentinel written to stdout when the engine is accepting requests.
+ENGINE_READY_SIGNAL: str = "NPC_ENGINE_READY"
 
 
 async def _wait_for_health(
@@ -165,15 +180,44 @@ class StackLauncher:
             _OLLAMA_HEALTH_RETRY_DELAY,
         )
 
+    async def _poll_readiness(self) -> bool:
+        """Poll GET /readiness until the engine accepts requests or retries are exhausted.
+
+        Returns:
+            True if the engine became ready within the retry limit, False otherwise.
+        """
+        url = f"http://{self._engine_host}:{self._engine_port}/readiness"
+        for _ in range(_ENGINE_READINESS_RETRIES):
+            try:
+                async with httpx.AsyncClient(timeout=_ENGINE_READINESS_TIMEOUT) as client:
+                    resp = await client.get(url)
+                if resp.status_code == 200:
+                    return True
+            except httpx.HTTPError:
+                pass
+            await asyncio.sleep(_ENGINE_READINESS_RETRY_DELAY)
+        return False
+
     async def _run_engine_server(self) -> None:
-        """Start the FastAPI engine via uvicorn and block until it exits."""
+        """Start the FastAPI engine via uvicorn, poll /readiness, then block until exit.
+
+        Emits ENGINE_READY_SIGNAL to stdout once the engine is accepting requests so
+        that the Unity game process can begin its first REST call. If readiness is not
+        confirmed within the retry window, the process continues (degraded start).
+        """
         config = uvicorn.Config(
             ENGINE_APP_IMPORT,
             host=self._engine_host,
             port=self._engine_port,
         )
         server = uvicorn.Server(config)
-        await server.serve()
+        server_task = asyncio.create_task(server.serve())
+        ready = await self._poll_readiness()
+        if ready:
+            print(ENGINE_READY_SIGNAL, flush=True)
+        else:
+            print("WARNING: engine did not become ready in time", file=sys.stderr, flush=True)
+        await server_task
 
     def shutdown(self) -> None:
         """Terminate any processes started by this launcher (Neo4j and/or Ollama)."""
