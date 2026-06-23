@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from npc_engine.common.intent_models import ConversationIntent
-from npc_engine.graph.intent_queue_writer import enqueue_intent, expire_old_intents, mark_delivered
+from npc_engine.graph.intent.intent_queue_writer import enqueue_intent, expire_old_intents, mark_delivered
 
-_WRITER_MOD = "npc_engine.graph.intent_queue_writer"
+_WRITER_MOD = "npc_engine.graph.intent.intent_queue_writer"
 
 _INTENT = ConversationIntent(
     npc_id="captain_sorn",

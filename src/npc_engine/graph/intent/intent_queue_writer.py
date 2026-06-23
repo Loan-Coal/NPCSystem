@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from neo4j import AsyncSession
 
 from npc_engine.common.intent_models import ConversationIntent
-from npc_engine.graph.intent_queries import (
+from npc_engine.graph.intent.intent_queries import (
     count_npc_pending_intents,
     delete_intent_by_id,
     expire_stale_intents,

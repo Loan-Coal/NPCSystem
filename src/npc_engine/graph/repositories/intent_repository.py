@@ -16,14 +16,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.intent_queries import (
+from npc_engine.graph.intent.intent_queries import (
     get_npc_location,
     get_player_location,
     get_unmet_needs,
     get_unresolved_goals,
     get_witnessed_events,
 )
-from npc_engine.graph.intent_queue_writer import enqueue_intent, expire_old_intents
+from npc_engine.graph.intent.intent_queue_writer import enqueue_intent, expire_old_intents
 
 if TYPE_CHECKING:
     from npc_engine.common.intent_models import ConversationIntent

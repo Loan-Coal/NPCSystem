@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from npc_engine.graph.intent_queue_reader import get_pending_intents
+from npc_engine.graph.intent.intent_queue_reader import get_pending_intents
 
-_READER_MOD = "npc_engine.graph.intent_queue_reader"
+_READER_MOD = "npc_engine.graph.intent.intent_queue_reader"
 
 _ROW_A = {
     "id": "npc1:player1:5:need",

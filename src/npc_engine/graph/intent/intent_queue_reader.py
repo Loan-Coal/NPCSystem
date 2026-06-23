@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from neo4j import AsyncSession
 
 from npc_engine.common.intent_models import ConversationIntent
-from npc_engine.graph.intent_queries import get_pending_for_player
+from npc_engine.graph.intent.intent_queries import get_pending_for_player
 
 if TYPE_CHECKING:
     from npc_engine.config import Settings

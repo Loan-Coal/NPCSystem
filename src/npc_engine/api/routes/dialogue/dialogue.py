@@ -20,8 +20,8 @@ from npc_engine.config import Settings
 from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
 from npc_engine.engines.dialogue.system_state_context import resolve_system_state
 from npc_engine.engines.director.director_beat_log import DirectorBeatLog, DirectorBeatRecord
-from npc_engine.graph.intent_queue_reader import get_pending_intents as get_pending_intents_from_queue
-from npc_engine.graph.intent_queue_writer import mark_delivered as mark_intent_delivered
+from npc_engine.graph.intent.intent_queue_reader import get_pending_intents as get_pending_intents_from_queue
+from npc_engine.graph.intent.intent_queue_writer import mark_delivered as mark_intent_delivered
 from npc_engine.utils.errors import NodeNotFoundError
 from npc_engine.utils.logging import get_logger
 
