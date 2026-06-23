@@ -310,3 +310,35 @@ def clean_world(http_client: httpx.Client):
         baseline=WorldBaseline(),
         pre=Preconditions(player_id="player_demo"),
     )
+
+
+@pytest.fixture(scope="session")
+def scenario_records_store() -> list:
+    """Mutable session-scoped store for GenerationRecords appended by scenario tests.
+
+    Tests that want to persist two-phase eval records call:
+        scenario_records_store.append(GenerationRecord(...))
+    The persist_scenario_records autouse fixture writes the store at session teardown.
+    """
+    return []
+
+
+@pytest.fixture(scope="session", autouse=True)
+def persist_scenario_records(scenario_records_store: list) -> None:
+    """Write accumulated scenario GenerationRecords to a transcript at session end.
+
+    Autouse at session scope: runs once per pytest session. If no records were
+    collected (scenario tests did not request scenario_records_store), the
+    transcript is skipped to avoid empty files.
+    """
+    yield
+    if not scenario_records_store:
+        return
+    from datetime import datetime, timezone
+    from eval_records import write_transcript
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    path = TRANSCRIPTS_DIR / f"scenario_records_{ts}.json"
+    try:
+        write_transcript(path, scenario_records_store)
+    except Exception:
+        pass  # teardown must not raise — transcript is best-effort

@@ -3,6 +3,35 @@
 Non-obvious architectural choices. Each entry explains what was decided and why,
 so future maintainers can judge edge cases without re-deriving the rationale.
 
+## DEC-144: EVAL-B4 — Two-phase generate→judge transcript architecture
+**Date:** 2026-06-23
+**Context:** The inline eval pipeline (runner.py / anti_hallucination_runner.py) mixes
+generation and judging in one pass, making it impossible to re-score saved responses
+with a different judge model (e.g. to compare mixtral:8x7b vs llama3) or to audit
+judge decisions separately from engine behavior.
+**Decision:** Split evaluation into two independent phases:
+1. **Generate pass** (`evals/generate_runner.py`, `make eval-generate`): POSTs
+   `/v1/dialogue` for every LLM-judge expectation in the YAML case suite and for every
+   refusal case in the anti-hallucination fixture. Each response is bundled with its
+   criteria string and expected polarity into a `GenerationRecord` (Pydantic v2, frozen),
+   and all records are written to a `TranscriptFile` under `e2e/transcripts/`.
+2. **Judge pass** (`evals/judge_runner.py`, `make eval-judge`): reads a saved transcript,
+   calls `matchers._run_binary_judge(criteria, content)` per record, applies
+   `expected_polarity` (pass_on_yes → score is True; pass_on_no → score is False;
+   None → inconclusive/False), and feeds `JudgedRecord` objects through the existing
+   `summary.summarize` / `report.write_report` pipeline via `_to_result_dict`.
+Grounded anti-hallucination cases (deterministic substring check) are excluded from
+the two-phase pipeline — they stay in `anti_hallucination_runner.py`.
+Scenario tests accumulate `GenerationRecord`s in a session-scoped store; the autouse
+`persist_scenario_records` fixture in `e2e/scenarios/conftest.py` writes a transcript
+at session teardown. The existing `make eval` / `make eval-anti-hallucination` targets
+are unchanged — the two-phase targets are purely additive.
+**Rationale:** Generate-once / judge-many enables independent judge model comparison
+without re-calling the engine. Separating generation from judging also decouples LLM
+latency (engine dialogue) from judge latency (Ollama mixtral), making partial re-runs
+cheap. The shared `GenerationRecord` model unifies the output of all three eval
+surfaces (YAML runner, anti-hallucination fixture, scenario tests) into one schema.
+
 ## DEC-139: ISSUE-107 — memories_recalled added to DialogueResponse; port return type changed
 **Date:** 2026-06-19
 **Context:** Callers of `POST /dialogue` had no visibility into which Memory node IDs
