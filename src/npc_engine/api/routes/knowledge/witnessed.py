@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, Query
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
-from npc_engine.graph.witnessed_service import (
+from npc_engine.graph.knowledge.witnessed_service import (
     get_witnessed_by_svc,
     get_witnesses_of_event_svc,
     mark_disclosed,

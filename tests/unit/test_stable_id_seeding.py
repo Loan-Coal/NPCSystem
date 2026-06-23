@@ -118,7 +118,7 @@ async def test_create_belief_uses_supplied_id():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.belief_service import create_belief
+    from npc_engine.graph.knowledge.belief_service import create_belief
 
     result = await create_belief(
         session,
@@ -139,8 +139,8 @@ async def test_create_belief_generates_uuid_when_no_id_given():
     """When node_id is None create_belief must generate a UUID."""
     session = _make_session()
 
-    with patch("npc_engine.graph.belief_service.uuid.uuid4", return_value="auto-uuid-001"):
-        from npc_engine.graph.belief_service import create_belief
+    with patch("npc_engine.graph.knowledge.belief_service.uuid.uuid4", return_value="auto-uuid-001"):
+        from npc_engine.graph.knowledge.belief_service import create_belief
 
         result = await create_belief(
             session,

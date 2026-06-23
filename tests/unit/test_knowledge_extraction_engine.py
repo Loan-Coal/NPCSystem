@@ -170,7 +170,7 @@ async def test_mixed_valid_and_invalid_facts():
 @pytest.mark.asyncio
 async def test_knowledge_writer_merges_belief_node():
     """write_belief must call tx.run with correct Cypher params."""
-    from npc_engine.graph.knowledge_writer import write_belief
+    from npc_engine.graph.knowledge.knowledge_writer import write_belief
 
     tx = AsyncMock()
     tx.__aenter__ = AsyncMock(return_value=tx)

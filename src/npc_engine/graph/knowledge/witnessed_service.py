@@ -15,7 +15,7 @@ from typing import Any
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.witnessed_queries import (
+from npc_engine.graph.knowledge.witnessed_queries import (
     CYPHER_CREATE_WITNESSED,
     CYPHER_MARK_DISCLOSED,
     get_undisclosed_witnesses,

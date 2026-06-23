@@ -5,7 +5,7 @@ Purpose: Cypher query strings and read accessors for CAUSED_BY edges (event cons
 Does NOT: execute business logic or validate payloads.
 Dependencies: None (Cypher strings only).
 Dependencies injected: AsyncSession.
-Used by: npc_engine.graph.causality_service
+Used by: npc_engine.graph.knowledge.causality_service
 """
 
 from __future__ import annotations

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from npc_engine.graph.witnessed_service import (
+from npc_engine.graph.knowledge.witnessed_service import (
     get_undisclosed_witnesses_svc,
     get_witnessed_by_svc,
     get_witnesses_of_event_svc,
@@ -71,7 +71,7 @@ async def test_record_witness_two_witnesses_for_same_event() -> None:
 @pytest.mark.asyncio
 async def test_get_witnesses_of_event_passes_event_id() -> None:
     with patch(
-        "npc_engine.graph.witnessed_service.get_witnesses_of_event",
+        "npc_engine.graph.knowledge.witnessed_service.get_witnesses_of_event",
         new_callable=AsyncMock,
         return_value=[{"witness_id": "char-A"}],
     ) as mock_fn:
@@ -89,7 +89,7 @@ async def test_get_witnesses_of_event_passes_event_id() -> None:
 @pytest.mark.asyncio
 async def test_get_witnessed_by_passes_subject_and_limit() -> None:
     with patch(
-        "npc_engine.graph.witnessed_service.get_witnessed_by",
+        "npc_engine.graph.knowledge.witnessed_service.get_witnessed_by",
         new_callable=AsyncMock,
         return_value=[],
     ) as mock_fn:
@@ -106,7 +106,7 @@ async def test_get_witnessed_by_passes_subject_and_limit() -> None:
 @pytest.mark.asyncio
 async def test_get_undisclosed_witnesses_passes_npc_id() -> None:
     with patch(
-        "npc_engine.graph.witnessed_service.get_undisclosed_witnesses",
+        "npc_engine.graph.knowledge.witnessed_service.get_undisclosed_witnesses",
         new_callable=AsyncMock,
         return_value=[{"subject_id": "char-B", "clarity": 80}],
     ) as mock_fn:

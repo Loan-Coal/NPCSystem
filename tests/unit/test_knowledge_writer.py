@@ -14,7 +14,7 @@ from typing import cast
 import pytest
 from neo4j import AsyncSession
 
-from npc_engine.graph.knowledge_writer import write_belief
+from npc_engine.graph.knowledge.knowledge_writer import write_belief
 
 
 class _FakeTx:

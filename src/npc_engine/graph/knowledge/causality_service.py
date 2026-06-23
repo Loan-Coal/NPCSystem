@@ -15,7 +15,7 @@ from typing import Any
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.causality_queries import (
+from npc_engine.graph.knowledge.causality_queries import (
     CYPHER_CREATE_CAUSED_BY,
     get_causes,
     get_consequence_chain,

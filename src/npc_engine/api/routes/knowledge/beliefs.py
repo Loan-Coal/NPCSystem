@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
-from npc_engine.graph.belief_service import (
+from npc_engine.graph.knowledge.belief_service import (
     create_belief,
     delete_belief,
     get_beliefs_for_character_svc,

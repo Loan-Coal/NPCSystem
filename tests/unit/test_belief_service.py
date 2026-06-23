@@ -40,8 +40,8 @@ def _make_game_time() -> TimePoint:
 @pytest.mark.asyncio
 async def test_create_belief_returns_uuid_string():
     session = _make_session()
-    with patch("npc_engine.graph.belief_service.uuid.uuid4", return_value="belief-uuid-001"):
-        from npc_engine.graph.belief_service import create_belief
+    with patch("npc_engine.graph.knowledge.belief_service.uuid.uuid4", return_value="belief-uuid-001"):
+        from npc_engine.graph.knowledge.belief_service import create_belief
 
         belief_id = await create_belief(
             session,
@@ -60,8 +60,8 @@ async def test_create_belief_runs_cypher_with_correct_params():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    with patch("npc_engine.graph.belief_service.uuid.uuid4", return_value="belief-uuid-002"):
-        from npc_engine.graph.belief_service import create_belief
+    with patch("npc_engine.graph.knowledge.belief_service.uuid.uuid4", return_value="belief-uuid-002"):
+        from npc_engine.graph.knowledge.belief_service import create_belief
 
         await create_belief(
             session,
@@ -106,7 +106,7 @@ async def test_get_beliefs_returns_list_sorted_by_confidence():
     session = MagicMock()
     session.run = _mock_run
 
-    from npc_engine.graph.belief_queries import get_beliefs_for_character
+    from npc_engine.graph.knowledge.belief_queries import get_beliefs_for_character
 
     results = await get_beliefs_for_character(session, character_id="char_1", k=5)
 
@@ -133,7 +133,7 @@ async def test_get_beliefs_returns_empty_list_when_none():
     session = MagicMock()
     session.run = _mock_run
 
-    from npc_engine.graph.belief_queries import get_beliefs_for_character
+    from npc_engine.graph.knowledge.belief_queries import get_beliefs_for_character
 
     results = await get_beliefs_for_character(session, character_id="no_char", k=5)
     assert results == []
@@ -149,7 +149,7 @@ async def test_update_confidence_calls_cypher():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.belief_service import update_confidence
+    from npc_engine.graph.knowledge.belief_service import update_confidence
 
     await update_confidence(session, belief_id="belief-uuid-001", new_confidence=55)
 
@@ -170,7 +170,7 @@ async def test_create_belief_confidence_zero():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.belief_service import create_belief
+    from npc_engine.graph.knowledge.belief_service import create_belief
 
     await create_belief(
         session,
@@ -190,7 +190,7 @@ async def test_create_belief_confidence_hundred():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.belief_service import create_belief
+    from npc_engine.graph.knowledge.belief_service import create_belief
 
     await create_belief(
         session,
@@ -213,11 +213,11 @@ async def test_create_belief_confidence_hundred():
 async def test_get_beliefs_svc_passes_k_zero():
     """k=0 is forwarded to the query (LIMIT 0 returns empty list)."""
     with patch(
-        "npc_engine.graph.belief_service.get_beliefs_for_character",
+        "npc_engine.graph.knowledge.belief_service.get_beliefs_for_character",
         new_callable=AsyncMock,
         return_value=[],
     ) as mock_get:
-        from npc_engine.graph.belief_service import get_beliefs_for_character_svc
+        from npc_engine.graph.knowledge.belief_service import get_beliefs_for_character_svc
 
         result = await get_beliefs_for_character_svc(MagicMock(), character_id="char_1", k=0)
 
@@ -233,11 +233,11 @@ async def test_get_beliefs_svc_k_larger_than_total_returns_all():
         {"id": "b2", "content": "B", "confidence": 40},
     ]
     with patch(
-        "npc_engine.graph.belief_service.get_beliefs_for_character",
+        "npc_engine.graph.knowledge.belief_service.get_beliefs_for_character",
         new_callable=AsyncMock,
         return_value=fake_records,
     ):
-        from npc_engine.graph.belief_service import get_beliefs_for_character_svc
+        from npc_engine.graph.knowledge.belief_service import get_beliefs_for_character_svc
 
         result = await get_beliefs_for_character_svc(MagicMock(), character_id="char_1", k=1000)
 
@@ -247,11 +247,11 @@ async def test_get_beliefs_svc_k_larger_than_total_returns_all():
 @pytest.mark.asyncio
 async def test_get_beliefs_svc_returns_empty_for_character_with_no_beliefs():
     with patch(
-        "npc_engine.graph.belief_service.get_beliefs_for_character",
+        "npc_engine.graph.knowledge.belief_service.get_beliefs_for_character",
         new_callable=AsyncMock,
         return_value=[],
     ):
-        from npc_engine.graph.belief_service import get_beliefs_for_character_svc
+        from npc_engine.graph.knowledge.belief_service import get_beliefs_for_character_svc
 
         result = await get_beliefs_for_character_svc(MagicMock(), character_id="no_beliefs_char", k=5)
 

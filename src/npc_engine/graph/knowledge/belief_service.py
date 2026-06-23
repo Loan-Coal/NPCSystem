@@ -16,7 +16,7 @@ from typing import Any
 from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.common.json_utils import dump_json
-from npc_engine.graph.belief_queries import (
+from npc_engine.graph.knowledge.belief_queries import (
     CYPHER_CREATE_BELIEF,
     CYPHER_UPDATE_CONFIDENCE,
     get_beliefs_for_character,

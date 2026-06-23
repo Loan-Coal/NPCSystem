@@ -15,7 +15,7 @@ from uuid import uuid4
 import pytest
 from neo4j import AsyncGraphDatabase
 
-from npc_engine.graph.belief_queries import get_beliefs_for_character
+from npc_engine.graph.knowledge.belief_queries import get_beliefs_for_character
 
 
 def _uid(prefix: str) -> str:

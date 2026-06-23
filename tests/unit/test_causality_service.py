@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from npc_engine.graph.causality_service import (
+from npc_engine.graph.knowledge.causality_service import (
     get_causes_svc,
     get_consequence_chain_svc,
     record_causation,
@@ -63,7 +63,7 @@ async def test_record_causation_accepts_quest_node_type() -> None:
 @pytest.mark.asyncio
 async def test_get_consequence_chain_passes_params() -> None:
     with patch(
-        "npc_engine.graph.causality_service.get_consequence_chain",
+        "npc_engine.graph.knowledge.causality_service.get_consequence_chain",
         new_callable=AsyncMock,
         return_value=[{"node_id": "event-B", "depth": 1}],
     ) as mock_fn:
@@ -80,7 +80,7 @@ async def test_get_consequence_chain_passes_params() -> None:
 @pytest.mark.asyncio
 async def test_get_consequence_chain_default_depth() -> None:
     with patch(
-        "npc_engine.graph.causality_service.get_consequence_chain",
+        "npc_engine.graph.knowledge.causality_service.get_consequence_chain",
         new_callable=AsyncMock,
         return_value=[],
     ) as mock_fn:
@@ -97,7 +97,7 @@ async def test_get_consequence_chain_default_depth() -> None:
 @pytest.mark.asyncio
 async def test_get_causes_passes_node_id() -> None:
     with patch(
-        "npc_engine.graph.causality_service.get_causes",
+        "npc_engine.graph.knowledge.causality_service.get_causes",
         new_callable=AsyncMock,
         return_value=[{"cause_id": "event-A"}],
     ) as mock_fn:
@@ -123,7 +123,7 @@ async def test_consequence_chain_returns_b_and_c_for_root_a() -> None:
         {"node_id": "event-C", "depth": 2, "causation": {"cause_id": "event-B"}},
     ]
     with patch(
-        "npc_engine.graph.causality_service.get_consequence_chain",
+        "npc_engine.graph.knowledge.causality_service.get_consequence_chain",
         new_callable=AsyncMock,
         return_value=chain,
     ):

@@ -5,7 +5,7 @@ Purpose: Cypher string constants and read accessors for Belief nodes and BELIEVE
 Does NOT: execute write operations, open transactions, or call any LLM.
 Dependencies: None (Cypher strings only).
 Dependencies injected: AsyncSession (per call).
-Used by: npc_engine.graph.belief_service, npc_engine.engines.knowledge_learning.knowledge_extraction_engine
+Used by: npc_engine.graph.knowledge.belief_service, npc_engine.engines.knowledge_learning.knowledge_extraction_engine
 """
 
 from __future__ import annotations

@@ -15,11 +15,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from npc_engine.graph.belief_queries import get_beliefs_for_character
+from npc_engine.graph.knowledge.belief_queries import get_beliefs_for_character
 from npc_engine.graph.db import GraphDB
 from npc_engine.graph.memory.memory_queries import get_memories_for_character
 from npc_engine.graph.memory.memory_service import create_memory
-from npc_engine.graph.witnessed_queries import get_undisclosed_witnesses
+from npc_engine.graph.knowledge.witnessed_queries import get_undisclosed_witnesses
 
 if TYPE_CHECKING:
     from npc_engine.world.time_utils import TimePoint
