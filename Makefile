@@ -188,6 +188,24 @@ eval-llm-demo:
 eval-retrieval:
 	$(PYTHON) -m evals.retrieval_runner
 
+# eval-generate: two-phase pipeline — generation pass (writes transcript to e2e/transcripts/)
+eval-generate:
+	@echo "Running eval generation pass against $(BASE_URL) ..."
+	$(PYTHON) evals/generate_runner.py \
+		--base-url $(BASE_URL) \
+		--api-key "$(API_KEY)" \
+		--cases evals/cases \
+		--fixture evals/cases/anti_hallucination_demo.json \
+		--out e2e/transcripts \
+		--run-id latest
+
+# eval-judge: two-phase pipeline — judge pass (reads transcript written by eval-generate)
+eval-judge:
+	@echo "Running eval judge pass from transcript $(TRANSCRIPT) ..."
+	$(PYTHON) evals/judge_runner.py \
+		--transcript $(TRANSCRIPT) \
+		--reports evals/reports
+
 # eval-combined: one command that runs dialogue evals + retrieval evals and prints both summaries
 eval-combined: eval eval-retrieval
 
