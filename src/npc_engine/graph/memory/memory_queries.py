@@ -4,7 +4,7 @@ Layer: graph
 Purpose: Cypher string constants and read accessors for Memory nodes and REMEMBERS edges.
 Does NOT: execute write operations or open transactions.
 Dependencies injected: AsyncSession.
-Used by: npc_engine.graph.memory_service
+Used by: npc_engine.graph.memory.memory_service
 """
 
 from __future__ import annotations

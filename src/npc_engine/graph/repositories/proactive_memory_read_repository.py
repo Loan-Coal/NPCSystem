@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from npc_engine.graph.db import GraphDB
-from npc_engine.graph.proactive_memory_reader import ProactiveMemoryReader
+from npc_engine.graph.memory.proactive_memory_reader import ProactiveMemoryReader
 
 
 class Neo4jProactiveMemoryReadRepository:

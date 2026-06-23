@@ -15,7 +15,7 @@ from typing import Any
 from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.common.json_utils import dump_json
-from npc_engine.graph.memory_queries import (
+from npc_engine.graph.memory.memory_queries import (
     CYPHER_CREATE_MEMORY,
     CYPHER_DECAY_VIVIDNESS,
     CYPHER_DECAY_VIVIDNESS_WEIGHTED,

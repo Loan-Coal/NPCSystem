@@ -179,7 +179,7 @@ async def test_create_memory_uses_supplied_id():
     session = _make_session()
     tx = session.begin_transaction.return_value
 
-    from npc_engine.graph.memory_service import create_memory
+    from npc_engine.graph.memory.memory_service import create_memory
 
     result = await create_memory(
         session,

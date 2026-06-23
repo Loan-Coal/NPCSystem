@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from npc_engine.graph.memory_queries import CYPHER_DECAY_VIVIDNESS_WEIGHTED
+from npc_engine.graph.memory.memory_queries import CYPHER_DECAY_VIVIDNESS_WEIGHTED
 
 
 # ---------------------------------------------------------------------------

@@ -66,9 +66,9 @@ async def test_create_memory_returns_uuid_string():
     session = _make_session()
 
     with patch(
-        "npc_engine.graph.memory_service.uuid.uuid4", return_value="test-uuid-1234"
+        "npc_engine.graph.memory.memory_service.uuid.uuid4", return_value="test-uuid-1234"
     ):
-        from npc_engine.graph.memory_service import create_memory
+        from npc_engine.graph.memory.memory_service import create_memory
 
         memory_id = await create_memory(
             session,
@@ -95,7 +95,7 @@ async def test_create_memory_serialises_game_time_as_json():
 
     session.begin_transaction.return_value.__aenter__.return_value.run = _run_capture
 
-    from npc_engine.graph.memory_service import create_memory
+    from npc_engine.graph.memory.memory_service import create_memory
 
     await create_memory(
         session,
@@ -128,11 +128,11 @@ async def test_get_memories_returns_list_from_query():
     ]
 
     with patch(
-        "npc_engine.graph.memory_service.get_memories_for_character",
+        "npc_engine.graph.memory.memory_service.get_memories_for_character",
         new_callable=AsyncMock,
         return_value=expected,
     ):
-        from npc_engine.graph.memory_service import get_memories_for_character_svc
+        from npc_engine.graph.memory.memory_service import get_memories_for_character_svc
 
         rows = await get_memories_for_character_svc(
             MagicMock(), character_id="char_1", k=5
@@ -169,7 +169,7 @@ def _make_decay_session(affected: int | None) -> MagicMock:
 async def test_decay_all_vividness_returns_affected_count():
     session = _make_decay_session(affected=3)
 
-    from npc_engine.graph.memory_service import decay_all_vividness
+    from npc_engine.graph.memory.memory_service import decay_all_vividness
 
     count = await decay_all_vividness(session, decay_per_day=5)
     assert count == 3
@@ -179,7 +179,7 @@ async def test_decay_all_vividness_returns_affected_count():
 async def test_decay_all_vividness_returns_zero_when_no_memories():
     session = _make_decay_session(affected=None)
 
-    from npc_engine.graph.memory_service import decay_all_vividness
+    from npc_engine.graph.memory.memory_service import decay_all_vividness
 
     count = await decay_all_vividness(session)
     assert count == 0
@@ -292,11 +292,11 @@ async def test_memory_engine_emotional_charge_formula_at_threshold():
 @pytest.mark.asyncio
 async def test_get_memories_svc_returns_empty_list_when_none():
     with patch(
-        "npc_engine.graph.memory_service.get_memories_for_character",
+        "npc_engine.graph.memory.memory_service.get_memories_for_character",
         new_callable=AsyncMock,
         return_value=[],
     ):
-        from npc_engine.graph.memory_service import get_memories_for_character_svc
+        from npc_engine.graph.memory.memory_service import get_memories_for_character_svc
 
         rows = await get_memories_for_character_svc(MagicMock(), character_id="no_char", k=5)
 
@@ -307,11 +307,11 @@ async def test_get_memories_svc_returns_empty_list_when_none():
 async def test_get_memories_svc_passes_k_to_query():
     """k is forwarded to the underlying query function."""
     with patch(
-        "npc_engine.graph.memory_service.get_memories_for_character",
+        "npc_engine.graph.memory.memory_service.get_memories_for_character",
         new_callable=AsyncMock,
         return_value=[],
     ) as mock_get:
-        from npc_engine.graph.memory_service import get_memories_for_character_svc
+        from npc_engine.graph.memory.memory_service import get_memories_for_character_svc
 
         await get_memories_for_character_svc(MagicMock(), character_id="char_1", k=0)
 

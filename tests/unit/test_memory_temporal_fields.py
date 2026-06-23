@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from npc_engine.graph.memory_queries import (
+from npc_engine.graph.memory.memory_queries import (
     CYPHER_CREATE_MEMORY,
     CYPHER_GET_MEMORIES_FOR_CHARACTER,
 )
@@ -55,7 +55,7 @@ async def test_create_memory_forwards_historical_event_time() -> None:
 
     session.begin_transaction.return_value.__aenter__.return_value.run = _run_capture
 
-    from npc_engine.graph.memory_service import create_memory
+    from npc_engine.graph.memory.memory_service import create_memory
 
     await create_memory(
         session,
@@ -86,7 +86,7 @@ async def test_create_memory_defaults_occurred_to_created() -> None:
 
     session.begin_transaction.return_value.__aenter__.return_value.run = _run_capture
 
-    from npc_engine.graph.memory_service import create_memory
+    from npc_engine.graph.memory.memory_service import create_memory
 
     await create_memory(
         session,

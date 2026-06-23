@@ -63,7 +63,7 @@ def _make_rows(
 @pytest.mark.asyncio
 async def test_memory_reader_returns_memories_sorted_vividness() -> None:
     """ProactiveMemoryReader returns rows in vividness DESC order as supplied by Cypher."""
-    from npc_engine.graph.proactive_memory_reader import ProactiveMemoryReader
+    from npc_engine.graph.memory.proactive_memory_reader import ProactiveMemoryReader
 
     rows = _make_rows([
         ("m1", "first memory", 90),
@@ -91,7 +91,7 @@ async def test_memory_reader_returns_memories_sorted_vividness() -> None:
 @pytest.mark.asyncio
 async def test_memory_reader_all_marked_unshared() -> None:
     """Every memory returned by ProactiveMemoryReader has shared=False (schema waiver)."""
-    from npc_engine.graph.proactive_memory_reader import ProactiveMemoryReader
+    from npc_engine.graph.memory.proactive_memory_reader import ProactiveMemoryReader
 
     rows = _make_rows([
         ("m1", "a memory", 80),
@@ -117,7 +117,7 @@ async def test_memory_reader_all_marked_unshared() -> None:
 @pytest.mark.asyncio
 async def test_memory_reader_passes_npc_id_and_k_to_session() -> None:
     """ProactiveMemoryReader passes npc_id and k to session.run()."""
-    from npc_engine.graph.proactive_memory_reader import ProactiveMemoryReader
+    from npc_engine.graph.memory.proactive_memory_reader import ProactiveMemoryReader
 
     session = _make_mock_session([])
 
@@ -145,7 +145,7 @@ async def test_memory_reader_passes_npc_id_and_k_to_session() -> None:
 @pytest.mark.asyncio
 async def test_memory_reader_returns_empty_list_when_no_rows() -> None:
     """ProactiveMemoryReader returns [] when the character has no memories."""
-    from npc_engine.graph.proactive_memory_reader import ProactiveMemoryReader
+    from npc_engine.graph.memory.proactive_memory_reader import ProactiveMemoryReader
 
     session = _make_mock_session([])
 
