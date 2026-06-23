@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import OkEnvelope, ok_response
+from npc_engine.api.helpers import OkEnvelope, ok_response
 from npc_engine.graph.rumor_trace_service import correct_rumor_at_npc, trace_rumor_chain
 
 router = APIRouter(prefix="/gossip", tags=["gossip"])

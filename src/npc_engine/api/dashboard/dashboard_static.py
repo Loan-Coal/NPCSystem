@@ -19,7 +19,7 @@ from starlette.staticfiles import StaticFiles
 from npc_engine.utils.logging import get_logger
 
 DASHBOARD_MOUNT_PATH = "/dashboard"
-_DASHBOARD_DIR = Path(__file__).resolve().parents[3] / "dashboard"
+_DASHBOARD_DIR = Path(__file__).resolve().parents[4] / "dashboard"
 _LOGGER = get_logger(__name__)
 
 

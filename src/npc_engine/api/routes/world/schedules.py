@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_schedule_service
-from npc_engine.api.route_helpers import OkEnvelope, graph_error_to_http, ok_response, require_node
+from npc_engine.api.helpers import OkEnvelope, graph_error_to_http, ok_response, require_node
 from npc_engine.graph.schedule_service import ScheduleService
 from npc_engine.utils.errors import ScheduleAssignmentError, ScheduleNotFoundError
 

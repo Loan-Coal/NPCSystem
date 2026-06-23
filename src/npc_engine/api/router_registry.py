@@ -12,7 +12,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from npc_engine.config import Settings
-from npc_engine.api.dashboard_static import register_dashboard
+from npc_engine.api.dashboard import register_dashboard
 from npc_engine.api.routes.admin import (
     batch_router,
     debug_retrieval_router,

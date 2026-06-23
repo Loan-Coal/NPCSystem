@@ -16,7 +16,7 @@ from neo4j import AsyncSession
 from fastapi import APIRouter, Depends, Query
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import OkEnvelope, ok_response
+from npc_engine.api.helpers import OkEnvelope, ok_response
 from npc_engine.graph.causality_service import (
     get_causes_svc,
     get_consequence_chain_svc,

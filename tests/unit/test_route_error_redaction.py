@@ -104,7 +104,7 @@ def test_group_exception_does_not_leak_exception_text(monkeypatch: pytest.Monkey
 
 def test_graph_error_to_http_redacts_node_identity() -> None:
     """L1-02: NodeNotFoundError must not leak node_type/node_id/class repr to the client."""
-    from npc_engine.api.route_helpers import graph_error_to_http
+    from npc_engine.api.helpers import graph_error_to_http
     from npc_engine.utils.errors import NodeNotFoundError
 
     exc = graph_error_to_http(NodeNotFoundError(node_type="Character", node_id="secret_id_42"))
@@ -116,7 +116,7 @@ def test_graph_error_to_http_redacts_node_identity() -> None:
 
 def test_graph_error_to_http_redacts_schema_path_but_keeps_validation_feedback() -> None:
     """L1-02: 422s expose caller-relevant feedback but never the internal schema path or class repr."""
-    from npc_engine.api.route_helpers import graph_error_to_http
+    from npc_engine.api.helpers import graph_error_to_http
     from npc_engine.utils.errors import RegistryPayloadValidationError, SchemaValidationError
 
     reg = graph_error_to_http(
@@ -138,7 +138,7 @@ def test_require_node_does_not_echo_node_type() -> None:
     """L1-08: require_node 404 must not echo the (URL-controlled) node_type label."""
     from fastapi import HTTPException
 
-    from npc_engine.api.route_helpers import require_node
+    from npc_engine.api.helpers import require_node
 
     with pytest.raises(HTTPException) as exc_info:
         require_node(None, node_type="SecretTypeLabel")

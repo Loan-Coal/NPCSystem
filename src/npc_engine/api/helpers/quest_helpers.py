@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException, Request
 
-from npc_engine.api.route_helpers import error_response
+from .route_helpers import error_response
 from npc_engine.api.schemas import QuestObjectiveBody
 from npc_engine.config import Settings
 from npc_engine.engines.quest.models import QuestObjectiveInput, QuestTransitionMeta

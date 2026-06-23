@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import OkEnvelope, ok_response
+from npc_engine.api.helpers import OkEnvelope, ok_response
 from npc_engine.graph.trait_service import add_trait, get_traits_svc, remove_trait
 
 # ---------------------------------------------------------------------------

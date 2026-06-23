@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_event_handler, get_gossip_handler
-from npc_engine.api.route_helpers import OkEnvelope, ok_response
+from npc_engine.api.helpers import OkEnvelope, ok_response
 from npc_engine.engines.events.event_handler import EventHandler
 from npc_engine.engines.gossip.gossip_handler import GossipHandler
 

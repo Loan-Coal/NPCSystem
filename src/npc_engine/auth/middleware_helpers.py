@@ -14,7 +14,7 @@ from uuid import UUID
 from fastapi import Request
 from starlette.responses import JSONResponse, Response
 
-from npc_engine.api.error_envelope import ErrorBody, ErrorEnvelope
+from npc_engine.api.errors import ErrorBody, ErrorEnvelope
 from npc_engine.auth.permissions import SCOPE_GRAPH_ADMIN, SCOPE_GRAPH_WRITE
 from npc_engine.config import Settings
 from npc_engine.engines.idempotency.models import IdempotencyPreflightResult

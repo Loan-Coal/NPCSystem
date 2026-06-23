@@ -18,7 +18,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
 from npc_engine.auth.api_key import resolve_scope_from_authorization
-from npc_engine.api.error_envelope import ErrorBody, ErrorEnvelope
+from npc_engine.api.errors import ErrorBody, ErrorEnvelope
 from npc_engine.auth.middleware_helpers import (
     HTTP_STATUS_BAD_REQUEST,
     HTTP_STATUS_FORBIDDEN,

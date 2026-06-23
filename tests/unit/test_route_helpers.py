@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from npc_engine.api.route_helpers import ErrEnvelope, OkEnvelope, ok_response
+from npc_engine.api.helpers import ErrEnvelope, OkEnvelope, ok_response
 
 
 class _Payload(BaseModel):

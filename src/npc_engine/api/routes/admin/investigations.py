@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from npc_engine.api.dependencies_advanced import get_investigation_engine
-from npc_engine.api.route_helpers import OkEnvelope, ok_response
+from npc_engine.api.helpers import OkEnvelope, ok_response
 from npc_engine.engines.investigation.investigation_engine import InvestigationEngine
 
 router = APIRouter(prefix="/investigations", tags=["investigations"])

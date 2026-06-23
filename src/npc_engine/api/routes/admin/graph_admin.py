@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_embedding_index, get_graph_admin_service, get_reindex_job_service
-from npc_engine.api.route_helpers import OkEnvelope, graph_error_to_http, ok_response
+from npc_engine.api.helpers import OkEnvelope, graph_error_to_http, ok_response
 from npc_engine.graph.graph_admin_service import GraphAdminService
 from npc_engine.retrieval.reindex_job_service import ReindexJobService
 from npc_engine.retrieval.embedding_index import EmbeddingIndex

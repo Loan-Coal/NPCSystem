@@ -15,8 +15,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from npc_engine.api.error_envelope import ErrorBody, ErrorDetail, ErrorEnvelope
-from npc_engine.api.exception_handlers import (
+from npc_engine.api.errors import ErrorBody, ErrorDetail, ErrorEnvelope
+from npc_engine.api.errors.exception_handlers import (
     _http_error_handler,
     _internal_error_handler,
     _validation_error_handler,

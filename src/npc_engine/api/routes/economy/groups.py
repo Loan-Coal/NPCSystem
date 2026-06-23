@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.route_helpers import OkEnvelope, error_response, ok_response
+from npc_engine.api.helpers import OkEnvelope, error_response, ok_response
 from npc_engine.graph.group_service import (
     add_member,
     create_group,

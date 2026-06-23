@@ -13,7 +13,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from starlette.responses import JSONResponse
 
-from npc_engine.api.error_envelope import ErrorBody, ErrorDetail, ErrorEnvelope
+from .error_envelope import ErrorBody, ErrorDetail, ErrorEnvelope
 from npc_engine.utils.errors import ContentRatingViolationError
 from npc_engine.utils.logging import get_logger
 

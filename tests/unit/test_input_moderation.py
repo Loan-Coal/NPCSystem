@@ -44,7 +44,7 @@ def test_mature_rating_passes_anything() -> None:
 
 
 def test_check_raises_422_via_route() -> None:
-    from npc_engine.api.error_envelope import ErrorBody, ErrorEnvelope
+    from npc_engine.api.errors import ErrorBody, ErrorEnvelope
     from fastapi.responses import JSONResponse
 
     app = FastAPI()

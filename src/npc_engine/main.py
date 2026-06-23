@@ -18,7 +18,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
-from npc_engine.api.exception_handlers import register_exception_handlers
+from npc_engine.api.errors import register_exception_handlers
 from npc_engine.api.rate_limit import RateLimitMiddleware
 from npc_engine.api.router_registry import register_routers
 from npc_engine.auth.middleware import ApiKeyMiddleware

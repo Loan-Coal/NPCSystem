@@ -16,10 +16,10 @@ from fastapi import APIRouter, Depends, Query
 from neo4j import AsyncSession
 from pydantic import BaseModel, ConfigDict
 
-from npc_engine.api.dashboard_models import DashboardConfigView
+from npc_engine.api.dashboard import DashboardConfigView
 from npc_engine.api.dependencies import get_db_session, get_game_schema, get_tick_scheduler, get_type_registry
 from npc_engine.api.dependency_singletons import _llm_adapters_to_close
-from npc_engine.api.route_helpers import OkEnvelope, ok_response
+from npc_engine.api.helpers import OkEnvelope, ok_response
 from npc_engine.config import Settings, get_settings
 from npc_engine.graph.event_feed_queries import get_recent_event_feed
 from npc_engine.scheduler.engine_status_store import EngineStatusRecord
