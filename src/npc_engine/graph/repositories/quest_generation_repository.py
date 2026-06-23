@@ -37,7 +37,7 @@ from npc_engine.graph.quest_generation_queries import (
 )
 from npc_engine.graph.quest_node_service import create_quest
 from npc_engine.graph.skill_queries import check_skill_threshold
-from npc_engine.graph.world_state_reader import get_world_state
+from npc_engine.graph.world_state.world_state_reader import get_world_state
 
 
 class Neo4jQuestGenerationRepository:

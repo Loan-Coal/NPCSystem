@@ -31,7 +31,7 @@ from npc_engine.graph.quest_writer import (
     upsert_quest_state,
 )
 from npc_engine.graph.transaction_coordinator import run_in_tx
-from npc_engine.graph.world_state_reader import get_world_state
+from npc_engine.graph.world_state.world_state_reader import get_world_state
 from npc_engine.utils.errors import QuestTransitionError
 from npc_engine.world.world_state import WorldState
 

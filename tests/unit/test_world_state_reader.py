@@ -13,7 +13,7 @@ from typing import cast
 import pytest
 from neo4j import AsyncSession
 
-from npc_engine.graph.world_state_reader import get_world_state
+from npc_engine.graph.world_state.world_state_reader import get_world_state
 
 
 @dataclass

@@ -70,7 +70,7 @@ from npc_engine.retrieval.graph_rag.subgraph_retriever import assemble_tier_a_co
 from npc_engine.retrieval.embedding.vector_store_protocol import VectorSearchResult
 from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.utils.metrics import increment_metric
-from npc_engine.graph.world_state_reader import get_world_state
+from npc_engine.graph.world_state.world_state_reader import get_world_state
 
 
 from pydantic import BaseModel

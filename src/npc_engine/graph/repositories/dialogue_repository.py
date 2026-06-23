@@ -20,7 +20,7 @@ from npc_engine.graph.db import GraphDB
 from npc_engine.graph.graph_reader import get_npc_archetype, get_npc_voice_descriptor
 from npc_engine.graph.graph_writer import apply_relation_delta, ensure_relation_edge
 from npc_engine.graph.routine_queries import set_routine_override as _set_routine_override
-from npc_engine.graph.world_state_reader import get_world_state as _get_world_state
+from npc_engine.graph.world_state.world_state_reader import get_world_state as _get_world_state
 from npc_engine.utils.errors import RelationEdgeNotFoundError
 
 if TYPE_CHECKING:

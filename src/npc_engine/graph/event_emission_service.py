@@ -23,8 +23,8 @@ from npc_engine.graph.event_writer import _EventNode, upsert_event
 from npc_engine.graph.reputation_writer import adjust_reputation_for_event
 from npc_engine.graph.routine_queries import set_routine_override
 from npc_engine.graph.transaction_coordinator import run_in_tx
-from npc_engine.graph.world_state_reader import get_world_state
-from npc_engine.graph.world_state_writer import upsert_world_state_tx
+from npc_engine.graph.world_state.world_state_reader import get_world_state
+from npc_engine.graph.world_state.world_state_writer import upsert_world_state_tx
 from npc_engine.utils.errors import ReputationNotFoundError
 
 LOGGER = logging.getLogger(__name__)
