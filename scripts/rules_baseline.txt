@@ -96,7 +96,7 @@ R006|src/npc_engine/engines/story_pacing/story_pacing_engine.py::StoryPacingEngi
 R006|src/npc_engine/graph/generic/generic_edge_service.py::GenericEdgeService.list_edges
 R006|src/npc_engine/graph/generic/generic_edge_service.py::GenericEdgeService.upsert_edge
 R006|src/npc_engine/graph/needs_goals/goal_service.py::create_goal
-R006|src/npc_engine/graph/gossip_spread_service.py::inject_rumor_belief
+R006|src/npc_engine/graph/gossip/gossip_spread_service.py::inject_rumor_belief
 R006|src/npc_engine/graph/graph_admin_service.py::GraphAdminService.apply_unbounded_relation_delta
 R006|src/npc_engine/graph/graph_writer.py::apply_buy_sell_currency_transfer
 R006|src/npc_engine/graph/graph_writer.py::apply_currency_transfer

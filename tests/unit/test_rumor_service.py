@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from npc_engine.graph.rumor_service import (
+from npc_engine.graph.gossip.rumor_service import (
     believe_rumor,
     create_derived_rumor,
     create_rumor,
@@ -143,7 +143,7 @@ async def test_believe_rumor_runs_query():
 async def test_get_rumors_for_character_svc_delegates():
     expected = [{"id": "r1", "content": "A rumor", "confidence": 75}]
     with patch(
-        "npc_engine.graph.rumor_service.get_rumors_for_character",
+        "npc_engine.graph.gossip.rumor_service.get_rumors_for_character",
         new_callable=AsyncMock,
         return_value=expected,
     ) as mock_fn:
@@ -157,7 +157,7 @@ async def test_get_rumors_for_character_svc_delegates():
 async def test_get_rumor_tree_svc_delegates():
     expected = [{"id": "child-1", "depth": 1}]
     with patch(
-        "npc_engine.graph.rumor_service.get_rumor_tree",
+        "npc_engine.graph.gossip.rumor_service.get_rumor_tree",
         new_callable=AsyncMock,
         return_value=expected,
     ) as mock_fn:
@@ -171,7 +171,7 @@ async def test_get_rumor_tree_svc_delegates():
 async def test_get_rumors_about_event_svc_delegates():
     expected = [{"id": "r-1", "content": "A rumor"}]
     with patch(
-        "npc_engine.graph.rumor_service.get_rumors_about_event",
+        "npc_engine.graph.gossip.rumor_service.get_rumors_about_event",
         new_callable=AsyncMock,
         return_value=expected,
     ) as mock_fn:

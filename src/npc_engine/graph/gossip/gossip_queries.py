@@ -24,7 +24,7 @@ from npc_engine.graph.relationships import (
 )
 
 # Re-export write-side symbols so callers can import from one place.
-from npc_engine.graph.gossip_write_queries import (  # noqa: F401
+from npc_engine.graph.gossip.gossip_write_queries import (  # noqa: F401
     fetch_relation_log,
     update_relation_log,
     write_knowledge_propagation,

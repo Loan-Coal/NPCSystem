@@ -29,7 +29,7 @@ def test_literal_members_are_exactly_knows_and_rumor() -> None:
 def test_consumers_reuse_the_shared_rumor_constant() -> None:
     """prompt_builder + gossip_spread_service must not redefine the value locally."""
     from npc_engine.engines.dialogue import prompt_builder
-    from npc_engine.graph import gossip_spread_service
+    from npc_engine.graph.gossip import gossip_spread_service
 
     assert prompt_builder._RUMOR_KNOWLEDGE_STATE == KNOWLEDGE_STATE_RUMOR
     assert gossip_spread_service._KNOWLEDGE_STATE_RUMOR == KNOWLEDGE_STATE_RUMOR

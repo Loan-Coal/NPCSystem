@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from npc_engine.graph.gossip_spread_service import inject_rumor_belief
+from npc_engine.graph.gossip.gossip_spread_service import inject_rumor_belief
 
 
 class _FakeResult:
@@ -67,7 +67,7 @@ async def test_inject_passes_correct_params(session: AsyncMock) -> None:
 @pytest.mark.asyncio
 async def test_inject_marks_event_as_fabricated(session: AsyncMock) -> None:
     """CYPHER_INJECT_RUMOR must set is_fabricated=true and is_canonical=false on the Event."""
-    from npc_engine.graph.gossip_spread_service import CYPHER_INJECT_RUMOR
+    from npc_engine.graph.gossip.gossip_spread_service import CYPHER_INJECT_RUMOR
 
     assert "is_fabricated = true" in CYPHER_INJECT_RUMOR
     assert "is_canonical = false" in CYPHER_INJECT_RUMOR

@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from npc_engine.graph.rumor_trace_service import (
+from npc_engine.graph.gossip.rumor_trace_service import (
     correct_rumor_at_npc,
     trace_rumor_chain,
 )

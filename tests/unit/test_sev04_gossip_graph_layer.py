@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import inspect
 
-from npc_engine.graph.gossip_queries import (
+from npc_engine.graph.gossip.gossip_queries import (
     CYPHER_SELECT_EVENT,
     CYPHER_GOSSIP_PAIRS,
     fetch_gossip_pairs,
@@ -24,7 +24,7 @@ from npc_engine.graph.gossip_queries import (
     write_knowledge_propagation,
     write_secret_propagation,
 )
-from npc_engine.graph.gossip_write_queries import CYPHER_PROPAGATE_KNOWLEDGE
+from npc_engine.graph.gossip.gossip_write_queries import CYPHER_PROPAGATE_KNOWLEDGE
 
 
 def test_select_event_in_graph_layer():

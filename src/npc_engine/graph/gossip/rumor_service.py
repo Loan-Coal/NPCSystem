@@ -16,7 +16,7 @@ from typing import Any
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.rumor_queries import (
+from npc_engine.graph.gossip.rumor_queries import (
     CYPHER_BELIEVE_RUMOR,
     CYPHER_CREATE_DERIVED_RUMOR,
     CYPHER_MERGE_ROOT_RUMOR,

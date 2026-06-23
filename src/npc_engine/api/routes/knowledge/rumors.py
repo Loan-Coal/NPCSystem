@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
-from npc_engine.graph.rumor_service import (
+from npc_engine.graph.gossip.rumor_service import (
     believe_rumor,
     create_rumor,
     get_rumor_tree_svc,

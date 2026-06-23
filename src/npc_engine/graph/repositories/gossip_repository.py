@@ -20,18 +20,18 @@ from datetime import datetime, timezone
 from npc_engine.common.json_utils import dump_json, parse_json_list
 from npc_engine.graph.db import GraphDB
 from npc_engine.graph.needs_goals.goal_queries import get_goals_for_character
-from npc_engine.graph.gossip_batch_queries import (
+from npc_engine.graph.gossip.gossip_batch_queries import (
     select_batch_event_trust,
     select_gossip_secret,
     write_batch_knowledge_propagation,
 )
-from npc_engine.graph.gossip_queries import fetch_gossip_pairs, fetch_known_node_ids
-from npc_engine.graph.gossip_write_queries import (
+from npc_engine.graph.gossip.gossip_queries import fetch_gossip_pairs, fetch_known_node_ids
+from npc_engine.graph.gossip.gossip_write_queries import (
     fetch_relation_log,
     update_relation_log,
     write_secret_propagation,
 )
-from npc_engine.graph.rumor_service import believe_rumor, create_rumor
+from npc_engine.graph.gossip.rumor_service import believe_rumor, create_rumor
 
 _LOG_GOSSIP_MAX_RETRIES = 3
 _LOG_GOSSIP_TAIL = 20

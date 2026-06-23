@@ -76,7 +76,7 @@ def test_gossip_pair_selector_query_requires_active_characters() -> None:
     """Gossip pair selection query must exclude inactive characters (SEV-04: now in graph layer)."""
 
     # After SEV-04 the CYPHER_GOSSIP_PAIRS query lives in graph/gossip_queries.py.
-    gossip_queries_path = PROJECT_ROOT / "graph" / "gossip_queries.py"
+    gossip_queries_path = PROJECT_ROOT / "graph" / "gossip" / "gossip_queries.py"
     gossip_queries_text = gossip_queries_path.read_text(encoding="utf-8")
 
     assert "a.is_active = true" in gossip_queries_text

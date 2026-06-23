@@ -184,7 +184,7 @@ async def test_gossip_no_rumor_when_distortion_below_threshold():
 @pytest.mark.asyncio
 async def test_rumor_mutation_distance_chain():
     """Verify that create_derived_rumor increments mutation_distance via service."""
-    from npc_engine.graph.rumor_service import create_derived_rumor
+    from npc_engine.graph.gossip.rumor_service import create_derived_rumor
 
     session = AsyncMock()
     parent_id = "rumor:root:event-1"
