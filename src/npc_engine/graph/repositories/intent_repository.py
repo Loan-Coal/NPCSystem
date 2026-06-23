@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.intent.intent_queries import (
     get_npc_location,
     get_player_location,

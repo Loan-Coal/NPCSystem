@@ -13,7 +13,7 @@ from typing import cast
 import pytest
 from neo4j import AsyncSession
 
-from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.infra.transaction_coordinator import run_in_tx
 
 
 class _FakeTx:

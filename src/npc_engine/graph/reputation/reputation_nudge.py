@@ -17,7 +17,7 @@ import logging
 from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.graph.relations.relation_writer import get_relation_values, set_relation_values
-from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.infra.transaction_coordinator import run_in_tx
 from npc_engine.utils.errors import RelationEdgeNotFoundError
 from npc_engine.utils.logging import get_logger
 

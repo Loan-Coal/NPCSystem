@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.political.political_agenda_writer import set_agenda_status
 from npc_engine.graph.political.political_queries import (
     get_agenda_votes,

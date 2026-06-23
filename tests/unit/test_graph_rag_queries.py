@@ -15,7 +15,7 @@ import pytest
 
 from npc_engine.graph import graph_rag_queries
 from npc_engine.graph.graph_rag_queries import _CYPHER_EXPAND_SEEDS, expand_seeds
-from npc_engine.graph.labels import EVENT
+from npc_engine.graph.infra.labels import EVENT
 
 
 def test_seed_match_is_label_filtered_not_full_scan() -> None:

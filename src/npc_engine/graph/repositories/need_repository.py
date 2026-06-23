@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.needs_goals.need_queries import get_all_needs_with_location
 from npc_engine.graph.needs_goals.need_writer import set_need_level
 

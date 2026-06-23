@@ -21,7 +21,7 @@ from npc_engine.graph.memory.memory_queries import (
     CYPHER_DECAY_VIVIDNESS_WEIGHTED,
     get_memories_for_character,
 )
-from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.infra.transaction_coordinator import run_in_tx
 from npc_engine.world.time_utils import TimePoint
 
 

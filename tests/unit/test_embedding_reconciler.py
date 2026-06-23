@@ -130,7 +130,7 @@ async def test_reconcile_once_noops_when_no_stale_rows() -> None:
 def test_stale_nodes_query_excludes_inactive_characters() -> None:
     """Reconciler query must filter inactive Characters at the DB level."""
 
-    from npc_engine.graph.embedding_sync_queries import _CYPHER_SELECT_STALE_NODES as CYPHER_SELECT_STALE_NODES
+    from npc_engine.graph.infra.embedding_sync_queries import _CYPHER_SELECT_STALE_NODES as CYPHER_SELECT_STALE_NODES
 
     character_block = CYPHER_SELECT_STALE_NODES.split("UNION")[0]
     assert "n.is_active = true" in character_block, (

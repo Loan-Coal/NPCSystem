@@ -236,7 +236,7 @@ async def _main() -> int:
     # Settings requires API_KEY_SECRET; provide a minimal eval default if missing.
     os.environ.setdefault("API_KEY_SECRET", "eval-key-placeholder")
     from npc_engine.config import get_settings
-    from npc_engine.graph.db import GraphDB
+    from npc_engine.graph.infra.db import GraphDB
     from npc_engine.retrieval.embedding_index import EmbeddingIndex
     from npc_engine.retrieval.vector_store_factory import create_vector_store
 

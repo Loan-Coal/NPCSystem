@@ -26,7 +26,7 @@ from npc_engine.graph.scheduling.schedule_writer import (
     unassign_schedule,
     upsert_schedule,
 )
-from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.infra.transaction_coordinator import run_in_tx
 from npc_engine.utils.errors import ScheduleNotFoundError
 
 _VALID_TIMES = frozenset({"morning", "midday", "afternoon", "evening", "night"})

@@ -16,7 +16,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
-from npc_engine.graph.embedding_sync_queries import batch_set_embeddings, select_stale_nodes
+from npc_engine.graph.infra.embedding_sync_queries import batch_set_embeddings, select_stale_nodes
 
 
 LOGGER = logging.getLogger(__name__)

@@ -118,8 +118,8 @@ R006|src/npc_engine/graph/reputation/reputation_queries.py::get_reputation_conte
 R006|src/npc_engine/graph/reputation/reputation_service.py::ReputationService.adjust_reputation_with_event
 R006|src/npc_engine/graph/reputation/reputation_writer.py::adjust_reputation
 R006|src/npc_engine/graph/scheduling/schedule_service.py::ScheduleService.create_schedule
-R006|src/npc_engine/graph/transfer_validators.py::build_currency_transfer_command
-R006|src/npc_engine/graph/transfer_validators.py::build_item_transfer_command
+R006|src/npc_engine/graph/infra/transfer_validators.py::build_currency_transfer_command
+R006|src/npc_engine/graph/infra/transfer_validators.py::build_item_transfer_command
 R006|src/npc_engine/graph/political/treaty_service.py::check_treaty_conditions_mechanical
 R006|src/npc_engine/graph/political/treaty_service.py::create_treaty
 R006|src/npc_engine/graph/relations/trust_queries.py::get_second_hop_events

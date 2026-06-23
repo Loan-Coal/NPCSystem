@@ -19,7 +19,7 @@ from neo4j import AsyncGraphDatabase
 from npc_engine.api.dependencies_infra import get_type_registry
 from npc_engine.config import get_settings
 from npc_engine.engines.scheming.scheme_advance_tick import SchemeAdvanceTick
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.repositories.scheming_repository import Neo4jSchemingRepository
 from npc_engine.graph.intrigue.scheme_reader import get_all_active_schemes_with_steps
 from npc_engine.graph.intrigue.scheme_writer import upsert_scheme

@@ -14,7 +14,7 @@ Used by: api composition root (dependencies_engines.get_interaction_graph_repo).
 from __future__ import annotations
 
 from typing import Any
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.quest.quest_queries import get_active_quest_for_player
 from npc_engine.graph.quest.quest_verification_queries import (
     count_player_co_located_with,

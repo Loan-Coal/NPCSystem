@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from npc_engine.graph.knowledge.belief_queries import get_beliefs_for_character
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.memory.memory_queries import get_memories_for_character
 from npc_engine.graph.memory.memory_service import create_memory
 from npc_engine.graph.knowledge.witnessed_queries import get_undisclosed_witnesses

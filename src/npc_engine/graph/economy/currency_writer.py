@@ -26,9 +26,9 @@ from npc_engine.graph.economy.currency_queries import (
     CYPHER_GET_OUTBOUND_SESSION_TOTAL,
     CYPHER_REPLAY_BY_IDEMPOTENCY,
 )
-from npc_engine.graph.transaction_coordinator import run_in_tx
-from npc_engine.graph.transfer_validators import build_currency_transfer_command
-from npc_engine.graph.replay_helpers import load_idempotent_replay_record
+from npc_engine.graph.infra.transaction_coordinator import run_in_tx
+from npc_engine.graph.infra.transfer_validators import build_currency_transfer_command
+from npc_engine.graph.infra.replay_helpers import load_idempotent_replay_record
 from npc_engine.utils.errors import CurrencyInsufficientFundsError, CurrencyValidationError, NodeNotFoundError
 
 

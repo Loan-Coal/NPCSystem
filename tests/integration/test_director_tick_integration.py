@@ -21,7 +21,7 @@ from neo4j import AsyncGraphDatabase
 from npc_engine.api.dependencies_engines import get_event_handler
 from npc_engine.config import get_settings
 from npc_engine.engines.director.director_tick import DirectorTick
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.repositories.relation_read_repository import (
     Neo4jRelationReadRepository,
 )

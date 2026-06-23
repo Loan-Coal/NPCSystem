@@ -14,8 +14,8 @@ from neo4j import AsyncSession, AsyncTransaction
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.graph.economy.item_queries import CYPHER_APPLY_ITEM_TRANSFER, CYPHER_GRANT_SYSTEM_ITEM, CYPHER_REPLAY_ITEM_TRANSFER
-from npc_engine.graph.replay_helpers import load_idempotent_replay_record
-from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.infra.replay_helpers import load_idempotent_replay_record
+from npc_engine.graph.infra.transaction_coordinator import run_in_tx
 from npc_engine.utils.errors import ItemTransferValidationError, NodeNotFoundError
 
 

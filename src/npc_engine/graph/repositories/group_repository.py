@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.group.group_queries import (
     get_existing_shared_group,
     get_high_affection_pairs,

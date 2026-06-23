@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.memory.proactive_memory_reader import ProactiveMemoryReader
 
 

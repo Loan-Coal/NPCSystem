@@ -12,7 +12,7 @@ Used by: api composition root (dependencies_advanced.politics.get_treaty_engine)
 
 from __future__ import annotations
 
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.political.treaty_queries import get_all_active_treaty_ids
 from npc_engine.graph.political.treaty_service import (
     check_treaty_conditions_mechanical,

@@ -14,7 +14,7 @@ Used by: api composition root (dependencies_engines.get_event_handler).
 from __future__ import annotations
 
 from npc_engine.graph.knowledge.causality_service import record_causation
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.event.event_emission_service import RoutineOverridePlan, emit_event_atomic
 from npc_engine.graph.event.event_queries import get_characters_at_location, get_locations_by_tag
 from npc_engine.graph.event.event_writer import _EventNode

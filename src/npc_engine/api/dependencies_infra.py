@@ -20,7 +20,7 @@ from npc_engine.cache.redis_runtime import RedisRuntime
 from npc_engine.config import Settings, get_settings
 from npc_engine.engines.llm_config_models import EngineModelConfig
 from npc_engine.engines.llm_runtime_config import get_config as get_engine_model_config_for
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.schema.llm_schema_loader import load_llm_config
 from npc_engine.schema.schema_loader import load_game_schema

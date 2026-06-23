@@ -13,7 +13,7 @@ import pytest
 pytest.importorskip("neo4j")
 
 from npc_engine.config import Settings
-from npc_engine.graph.transfer_validators import CurrencyTransferCommand, ItemTransferCommand
+from npc_engine.graph.infra.transfer_validators import CurrencyTransferCommand, ItemTransferCommand
 from npc_engine.graph.economy.currency_writer import CurrencyTransferWriteResult
 from npc_engine.graph.economy.item_writer import ItemTransferWriteResult
 from npc_engine.graph.graph_writer import apply_currency_transfer, apply_item_transfer

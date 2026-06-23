@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.emotion.emotion_reader import get_emotion_fields
 
 

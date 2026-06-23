@@ -18,7 +18,7 @@ from neo4j import AsyncGraphDatabase
 from npc_engine.config import Settings
 from npc_engine.engines.memory.memory_engine import MemoryEngine
 from npc_engine.engines.memory.memory_decay_tick import MemoryDecayTick
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.repositories.memory_repository import Neo4jMemoryRepository
 
 

@@ -20,7 +20,7 @@ from npc_engine.graph.intrigue.secret_queries import (
     CYPHER_CREATE_SECRET_NODE,
     get_secrets_for_character,
 )
-from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.infra.transaction_coordinator import run_in_tx
 from npc_engine.world.time_utils import TimePoint
 
 

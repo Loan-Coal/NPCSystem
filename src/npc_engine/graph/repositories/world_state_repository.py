@@ -12,7 +12,7 @@ Used by: api composition root (engines that read/write world state).
 
 from __future__ import annotations
 
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.world_state.world_state_reader import get_world_state
 from npc_engine.graph.world_state.world_state_writer import upsert_world_state
 from npc_engine.world.world_state import WorldState

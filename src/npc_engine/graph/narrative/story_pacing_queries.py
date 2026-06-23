@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 from neo4j import AsyncSession
 
-from npc_engine.graph.labels import EVENT, QUEST
+from npc_engine.graph.infra.labels import EVENT, QUEST
 
 # ---------------------------------------------------------------------------
 # Query constants

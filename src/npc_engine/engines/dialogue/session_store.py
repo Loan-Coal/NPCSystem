@@ -167,7 +167,7 @@ class SessionStore:
             session: Active Neo4j ``AsyncSession``.
             max_persisted_turns: Cap on turns written per (player, npc) pair.
         """
-        from npc_engine.graph.session_persistence import write_session_turns
+        from npc_engine.graph.infra.session_persistence import write_session_turns
 
         async with self._lock:
             snapshot = dict(self._sessions)
@@ -198,7 +198,7 @@ class SessionStore:
         Args:
             session: Active Neo4j ``AsyncSession``.
         """
-        from npc_engine.graph.session_persistence import read_all_session_turns
+        from npc_engine.graph.infra.session_persistence import read_all_session_turns
 
         records = await read_all_session_turns(session=session)  # type: ignore[arg-type]
         for rec in records:

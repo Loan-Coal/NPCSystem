@@ -19,7 +19,7 @@ from npc_engine.graph.economy.owes_queries import (
     CYPHER_UPDATE_DEBT_STATUS,
     get_debts_for_character,
 )
-from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.infra.transaction_coordinator import run_in_tx
 
 _VALID_KINDS = frozenset({"money", "favor", "item", "service"})
 _VALID_STATUSES = frozenset({"pending", "fulfilled", "defaulted"})

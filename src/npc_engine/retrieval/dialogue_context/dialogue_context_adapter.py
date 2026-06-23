@@ -16,7 +16,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from npc_engine.config import Settings
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.retrieval.context.context_builder import build_serialized_context
 from npc_engine.retrieval.context.context_protocols import EmbeddingIndexProtocol
 from npc_engine.schema.context_config_models import LLMConfig

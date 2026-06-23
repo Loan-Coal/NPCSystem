@@ -17,7 +17,7 @@ from typing import Any
 
 from neo4j import AsyncTransaction
 
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.event.event_writer import upsert_quest_lifecycle_event
 from npc_engine.graph.quest.quest_chain_queries import (
     get_choice_unlocked_quest,
@@ -30,7 +30,7 @@ from npc_engine.graph.quest.quest_writer import (
     update_quest_node_status,
     upsert_quest_state,
 )
-from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.infra.transaction_coordinator import run_in_tx
 from npc_engine.graph.world_state.world_state_reader import get_world_state
 from npc_engine.utils.errors import QuestTransitionError
 from npc_engine.world.world_state import WorldState

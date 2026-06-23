@@ -12,7 +12,7 @@ Used by: api composition root (dependencies_engines.get_reputation_engine).
 
 from __future__ import annotations
 
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.reputation.reputation_nudge import apply_trust_nudge
 
 

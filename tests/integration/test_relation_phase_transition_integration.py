@@ -20,7 +20,7 @@ from neo4j import AsyncGraphDatabase
 
 from npc_engine.engines.relationship.affinity_engine import RelationshipPhase
 from npc_engine.engines.relationship.phase_transition_applier import apply_phase_transition
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.repositories.relation_phase_write_repository import (
     Neo4jRelationPhaseWriteRepository,
 )

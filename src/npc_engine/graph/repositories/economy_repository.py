@@ -13,7 +13,7 @@ Used by: api composition root (dependencies_engines.get_trade_engine).
 from __future__ import annotations
 
 from npc_engine.graph.economy.currency_writer import transfer_currency_atomic
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.economy.item_writer import transfer_item_atomic
 from npc_engine.graph.economy.pricing_queries import (
     check_faction_membership,

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.military.military_control_writer import (
     add_faction_treasury,
     remove_controls_location,

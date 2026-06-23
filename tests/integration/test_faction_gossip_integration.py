@@ -17,7 +17,7 @@ from neo4j import AsyncGraphDatabase
 
 from npc_engine.engines.gossip.gossip_config import GossipWeightConfig
 from npc_engine.engines.gossip.pair_selector import select_pairs
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.repositories.gossip_repository import Neo4jGossipRepository
 
 

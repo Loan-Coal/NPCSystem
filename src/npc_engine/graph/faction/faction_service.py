@@ -14,7 +14,7 @@ from typing import Any
 from neo4j import AsyncSession, AsyncTransaction
 from pydantic import BaseModel
 
-from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.infra.transaction_coordinator import run_in_tx
 from npc_engine.graph.faction.faction_queries import (
     get_controlled_locations,
     get_faction,

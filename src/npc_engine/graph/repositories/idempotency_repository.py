@@ -11,7 +11,7 @@ Used by: api/dependencies_stores.get_idempotency_service.
 
 from __future__ import annotations
 
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.idempotency.idempotency_models import IdempotencyRecord
 from npc_engine.graph.idempotency.idempotency_writer import Neo4jIdempotencyStore
 

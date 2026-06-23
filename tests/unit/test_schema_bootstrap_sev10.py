@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
-from npc_engine.graph.schema_bootstrap import (
+from npc_engine.graph.infra.schema_bootstrap import (
     _COMPOSITE_INDEXES,
     _CORE_LABELS,
     _CYPHER_CREATE_CONSTRAINT_TEMPLATE,

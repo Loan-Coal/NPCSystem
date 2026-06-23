@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.labels import CHARACTER, EVENT, SECRET
-from npc_engine.graph.relationships import KNOWS_ABOUT, KNOWS_SECRET, RELATES_TO
+from npc_engine.graph.infra.labels import CHARACTER, EVENT, SECRET
+from npc_engine.graph.infra.relationships import KNOWS_ABOUT, KNOWS_SECRET, RELATES_TO
 
 # ---------------------------------------------------------------------------
 # Query constants

@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from npc_engine.graph.transfer_validators import (
+from npc_engine.graph.infra.transfer_validators import (
     CURRENCY_ERR_AMOUNT_INVALID,
     CURRENCY_ERR_PER_SESSION_LIMIT,
     CURRENCY_ERR_PER_TRANSACTION_LIMIT,

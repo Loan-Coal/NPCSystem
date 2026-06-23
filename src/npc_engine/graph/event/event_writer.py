@@ -13,7 +13,7 @@ from typing import Any, Protocol
 
 from neo4j import AsyncTransaction
 
-from npc_engine.graph.json_fields import serialize_provenance_field
+from npc_engine.graph.infra.json_fields import serialize_provenance_field
 from npc_engine.utils.errors import QuestProvenanceError
 
 

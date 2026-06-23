@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import Any
 
 from npc_engine.graph.knowledge.belief_queries import find_conflicting_belief
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.knowledge.knowledge_writer import write_belief
 
 

@@ -13,7 +13,7 @@ from typing import Any
 
 from neo4j import AsyncSession, AsyncTransaction
 
-from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.infra.transaction_coordinator import run_in_tx
 from npc_engine.graph.reputation.reputation_queries import (
     get_reputation,
     get_reputation_context_for_npc,

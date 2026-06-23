@@ -22,7 +22,7 @@ from npc_engine.graph.needs_goals.goal_queries import (
     CYPHER_UPDATE_GOAL_STATUS,
     get_goals_for_character,
 )
-from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.infra.transaction_coordinator import run_in_tx
 from npc_engine.world.time_utils import TimePoint
 
 

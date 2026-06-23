@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from npc_engine.graph.json_fields import serialize_provenance_field
+from npc_engine.graph.infra.json_fields import serialize_provenance_field
 
 
 # ---------------------------------------------------------------------------

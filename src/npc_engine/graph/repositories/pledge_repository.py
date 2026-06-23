@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.political.pledge_service import (
     break_pledge,
     get_all_active_pledgers_svc,

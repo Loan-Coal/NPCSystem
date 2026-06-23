@@ -12,7 +12,7 @@ Used by: api composition root (dependencies_engines.get_memory_engine).
 
 from __future__ import annotations
 
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.memory.memory_service import (
     create_memory,
     decay_all_vividness,

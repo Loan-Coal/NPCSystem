@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.narrative.story_pacing_queries import (
     get_active_high_severity_quests,
     get_recent_major_events,

@@ -21,7 +21,7 @@ from npc_engine.graph.knowledge.belief_queries import (
     CYPHER_UPDATE_CONFIDENCE,
     get_beliefs_for_character,
 )
-from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.infra.transaction_coordinator import run_in_tx
 from npc_engine.world.time_utils import TimePoint
 
 

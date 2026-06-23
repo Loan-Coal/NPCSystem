@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from npc_engine.graph.replay_helpers import load_idempotent_replay_record
+from npc_engine.graph.infra.replay_helpers import load_idempotent_replay_record
 
 
 # ---------------------------------------------------------------------------

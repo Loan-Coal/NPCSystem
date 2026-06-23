@@ -12,7 +12,7 @@ Used by: api composition root (dependencies_stores.get_emotion_updater).
 
 from __future__ import annotations
 
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.emotion.emotion_writer import EmotionGraphWriter
 
 

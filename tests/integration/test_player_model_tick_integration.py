@@ -19,7 +19,7 @@ from neo4j import AsyncGraphDatabase
 from npc_engine.config import get_settings
 from npc_engine.engines.player_model.player_model_engine import PlayerModelEngine
 from npc_engine.engines.player_model.player_model_tick import PlayerModelTick
-from npc_engine.graph.db import GraphDB
+from npc_engine.graph.infra.db import GraphDB
 from npc_engine.graph.character.player_model_writer import get_player_model
 from npc_engine.graph.repositories.player_model_repository import Neo4jPlayerModelRepository
 from npc_engine.graph.repositories.relation_read_repository import (

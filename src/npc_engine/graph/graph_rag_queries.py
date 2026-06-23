@@ -12,7 +12,7 @@ from typing import Any
 
 from neo4j import AsyncSession
 
-from npc_engine.graph.labels import EVENT
+from npc_engine.graph.infra.labels import EVENT
 
 # Seeds originate from the NPC's KNOWS_ABOUT set (Event nodes only — see
 # graph_reader.get_known_event_ids_for_npc), so the seed match is label-filtered

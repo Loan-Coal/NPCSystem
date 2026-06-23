@@ -24,7 +24,7 @@ from npc_engine.graph.economy.item_queries import (
     get_item_by_id,
     get_items_for_character,
 )
-from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.infra.transaction_coordinator import run_in_tx
 from npc_engine.world.time_utils import TimePoint
 
 

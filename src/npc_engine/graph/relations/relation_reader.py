@@ -15,7 +15,7 @@ from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.graph.relations.relation_phase_reader import RelationPhaseRow, get_relation_phase_state
 from npc_engine.graph.relations.relation_writer import get_relation_values
-from npc_engine.graph.transaction_coordinator import run_in_tx
+from npc_engine.graph.infra.transaction_coordinator import run_in_tx
 
 
 class RelationReader:
