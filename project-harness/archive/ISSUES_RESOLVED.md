@@ -1668,3 +1668,22 @@ leaving epoch="war" contaminate the age_of_peace baseline (18 hallucinations wit
 (2) reset world_state at run start — done in EVAL-B2 via `preconditions.reset_world()`;
 (3) re-measure the true guard number (EVAL-FINAL, requires live stack).
 
+
+---
+
+## [FIXED] ISSUE-120: Gate red from PR-2/PR-3 reorg debt (lint F401 + check-rules baseline drift)
+**Found:** 2026-06-23, during REORG-PR6 (folder reorg) — pre-existing at base c1c7607.
+**Severity:** P2 (annoying — `make check` is red independent of PR-6)
+**Where:** `src/npc_engine/retrieval/*/__init__.py` (facade re-exports), `scripts/rules_baseline.txt`
+**Description:** `make lint` reports 21 ruff F401 errors ("re-exported but missing from `__all__`")
+in the retrieval facade `__init__.py` files added by PR-3. Separately, `make check-rules` reports
+30 R001/R006 violations because PR-3 (and PR-2) moved files without path-updating their
+grandfathered entries in `rules_baseline.txt`, so the old paths read as "fixed" and the new paths
+read as NEW violations. `make check-harness` H1 fails because the red lint has no logged ticket.
+**Why deferred:** Out of REORG-PR6 scope (graph/ only). These are PR-2/PR-3 artifacts; PR-6 added
+ZERO new lint or check-rules violations (verified: base set == head set). Fixing touches retrieval
+facades + baseline, which belong to those PRs.
+**To fix:** Add re-exported names to each retrieval facade `__all__` (or `# noqa: F401`); path-rewrite
+the 30 stale retrieval entries in `rules_baseline.txt` (same fix applied to graph/ in PR-6), then
+`make check-rules` and `make lint` go green.
+**Fixed:** 2026-06-24, in 3950f90 (fix(gate): close ISSUE-120)
