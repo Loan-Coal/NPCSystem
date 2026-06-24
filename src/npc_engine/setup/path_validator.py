@@ -111,20 +111,29 @@ async def validate_path_a(config: WizardConfig) -> ValidationResult:
     return ValidationResult(status=ValidationStatus.OK)
 
 
-def validate_api_url_safety(api_url: str) -> ValidationResult | None:
-    """Check api_url for SSRF safety; return a ValidationResult on failure or None if safe.
+def _get_blocked_network_error(host: str) -> ValidationResult | None:
+    """Return a ValidationResult if host is a private/reserved IPv4 address, else None."""
+    try:
+        addr = ipaddress.IPv4Address(host)
+    except ValueError:
+        return None  # hostname, not a raw IP — safe to probe
+    for net in _BLOCKED_NETWORKS:
+        if addr in net:
+            return ValidationResult(
+                status=ValidationStatus.API_UNREACHABLE,
+                message=f"api_url points to a private/reserved address ({host}) — use a public HTTPS endpoint.",
+            )
+    return None
 
-    Rules:
-    - Scheme must be ``https`` for external hosts, or ``http``/``https`` for loopback.
-    - Host must not be a private/CGNAT/link-local IP range.
-    - Host must be non-empty.
+
+def validate_api_url_safety(api_url: str) -> ValidationResult | None:
+    """Return None if api_url is safe to probe; ValidationResult(API_UNREACHABLE) otherwise.
 
     Args:
-        api_url: The raw URL string from WizardConfig.
+        api_url: URL from WizardConfig; validated for scheme, non-empty host, and private-IP blocks.
 
     Returns:
-        None if the URL is safe to probe, or a ``ValidationResult`` with
-        ``API_UNREACHABLE`` if it fails safety checks.
+        None on a safe URL; ValidationResult(API_UNREACHABLE) on format or SSRF failure.
     """
     try:
         parsed = urllib.parse.urlparse(api_url)
@@ -151,16 +160,9 @@ def validate_api_url_safety(api_url: str) -> ValidationResult | None:
         )
 
     if not is_loopback:
-        try:
-            addr = ipaddress.IPv4Address(host)
-            for net in _BLOCKED_NETWORKS:
-                if addr in net:
-                    return ValidationResult(
-                        status=ValidationStatus.API_UNREACHABLE,
-                        message=f"api_url points to a private/reserved address ({host}) — use a public HTTPS endpoint.",
-                    )
-        except ValueError:
-            pass  # hostname (not raw IP) — safe to probe
+        blocked = _get_blocked_network_error(host)
+        if blocked is not None:
+            return blocked
 
     return None
 

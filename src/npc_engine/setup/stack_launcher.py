@@ -180,6 +180,15 @@ class StackLauncher:
             _OLLAMA_HEALTH_RETRY_DELAY,
         )
 
+    async def _check_ready(self, url: str) -> bool:
+        """Return True if a single GET to url responds with HTTP 200."""
+        try:
+            async with httpx.AsyncClient(timeout=_ENGINE_READINESS_TIMEOUT) as client:
+                resp = await client.get(url)
+            return resp.status_code == 200
+        except httpx.HTTPError:
+            return False
+
     async def _poll_readiness(self) -> bool:
         """Poll GET /readiness until the engine accepts requests or retries are exhausted.
 
@@ -188,13 +197,8 @@ class StackLauncher:
         """
         url = f"http://{self._engine_host}:{self._engine_port}/readiness"
         for _ in range(_ENGINE_READINESS_RETRIES):
-            try:
-                async with httpx.AsyncClient(timeout=_ENGINE_READINESS_TIMEOUT) as client:
-                    resp = await client.get(url)
-                if resp.status_code == 200:
-                    return True
-            except httpx.HTTPError:
-                pass
+            if await self._check_ready(url):
+                return True
             await asyncio.sleep(_ENGINE_READINESS_RETRY_DELAY)
         return False
 
@@ -214,9 +218,11 @@ class StackLauncher:
         server_task = asyncio.create_task(server.serve())
         ready = await self._poll_readiness()
         if ready:
-            print(ENGINE_READY_SIGNAL, flush=True)
+            sys.stdout.write(f"{ENGINE_READY_SIGNAL}\n")
+            sys.stdout.flush()
         else:
-            print("WARNING: engine did not become ready in time", file=sys.stderr, flush=True)
+            sys.stderr.write("WARNING: engine did not become ready in time\n")
+            sys.stderr.flush()
         await server_task
 
     def shutdown(self) -> None:

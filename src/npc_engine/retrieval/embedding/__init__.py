@@ -26,6 +26,10 @@ __all__ = [
     'create_vector_store',
     'embed',
     'cross_encoder_reranker',
+    # re-exported for backward compat (also used by unit tests)
+    'rerank',
+    '_embed_text',
+    'InMemoryVectorStore',
     'detect_dialogue_profile',
     'EMBED_DIMENSION',
     'EmbeddingIndex',

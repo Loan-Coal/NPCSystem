@@ -48,6 +48,10 @@ __all__ = [
     'COMPRESSION_SUFFIX',
     'ContextCompressionCache',
     'build_compression_cache_key',
+    # context_compression internals re-exported for backward compat
+    'MIN_COMPRESSED_CHARS',
+    '_compress_text',
+    '_extract_graph_timestamp',
     'ContextBudgetError',
     'enforce_context_budget',
     'fill_to_budget',
@@ -57,9 +61,28 @@ __all__ = [
     'record_context_metrics',
     'ContextRelevanceCandidate',
     'rank_context_candidates',
+    # context_relevance_engine internals re-exported for backward compat
+    'MAX_COMPONENT_SCORE',
+    'MIN_COMPONENT_SCORE',
+    'score_candidate',
+    # context_scoring internals re-exported for backward compat
+    '_build_candidate',
+    '_extract_recency_score',
+    '_extract_relation_score',
+    '_extract_severity_score',
+    '_infer_proximity_hops',
+    '_normalize_ratio',
+    '_quest_score',
     'rank_tier_items',
     'serialize_context',
     'enforce_final_serialized_budget_with_context',
+    # context_builder_helpers internals re-exported for backward compat
+    'expand_query',
+    'keyword_overlap',
+    'rerank_by_keyword',
     'EmbeddingIndexProtocol',
     'build_serialized_context',
+    # context_builder internals re-exported for backward compat
+    '_enforce_final_serialized_budget',
+    '_estimate_tokens',
 ]
