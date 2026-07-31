@@ -4,7 +4,18 @@
 
 - Python 3.14+
 - Neo4j 5 (Docker recommended — see quick start below)
-- Ollama with `mixtral:8x7b` **or** set `LLM_BACKEND=mock` to run without an LLM
+- Ollama with `qwen2.5:7b` (DEC-149). `mixtral:8x7b` is additionally required only for
+  the LLM-judge eval suite (DEC-143).
+
+### Running without a local LLM
+
+There is **no env var for this** — `LLM_BACKEND` was removed in ISSUE-003 and the leftover
+`.env` key was deleted in DEC-150. Backend and model are per-engine: set `llm.backend: mock`
+in each of the five `src/npc_engine/engines/*/llm_config.yaml` files to use the deterministic
+`MockLLMAdapter`. Registered backends are `mock`, `ollama`, `openai`; an unregistered name
+fails at config load, not at request time.
+
+Note this leaves five tracked files dirty in your working copy — do not commit them.
 
 ## Setup
 
