@@ -17,41 +17,28 @@ Requirements:
 
 from __future__ import annotations
 
-import os
 import uuid
 
-import httpx
 import pytest
 
+from e2e.helpers.judge_client import make_judge, ollama_reachable, resolve_judge_model
 from e2e.scenarios.conftest import api_post
 
-_JUDGE_OLLAMA_URL = (
-    os.getenv("JUDGE_OLLAMA_URL")
-    or os.getenv("OLLAMA_API_URL", "http://localhost:11434")
-)
-_JUDGE_MODEL = os.getenv("JUDGE_MODEL", "qwen2.5:14b")
+# Resolved judge model (mixtral:8x7b by default, DEC-143) — used in skip messages
+# and the reachability probe. Previously this module hardcoded a qwen2.5:14b default
+# and built its own adapter, bypassing the judge != generation-model collision guard
+# entirely; routing through judge_client restores the invariant (DEC-149).
+_JUDGE_MODEL = resolve_judge_model()
 
 
 def _make_judge():
-    """Create an OllamaAdapter for LLM judging."""
-    from npc_engine.engines.llm.ollama_adapter import OllamaAdapter
-
-    return OllamaAdapter(
-        base_url=_JUDGE_OLLAMA_URL,
-        model_name=_JUDGE_MODEL,
-        timeout_seconds=60.0,
-    )
+    """Create an OllamaAdapter for LLM judging with the separation invariant applied."""
+    return make_judge()
 
 
 def _ollama_reachable() -> bool:
-    """Return True if Ollama is running and the judge model is available."""
-    try:
-        resp = httpx.get(f"{_JUDGE_OLLAMA_URL}/api/tags", timeout=2.0)
-        resp.raise_for_status()
-        available = {m["name"] for m in resp.json().get("models", [])}
-        return _JUDGE_MODEL in available or f"{_JUDGE_MODEL}:latest" in available
-    except Exception:  # noqa: BLE001
-        return False
+    """Return True if Ollama is running AND the resolved judge model is pulled."""
+    return ollama_reachable(_JUDGE_MODEL)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
