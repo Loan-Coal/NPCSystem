@@ -5,11 +5,16 @@
 only the two type-C deferrals H-D1/H-D2 + parked backlog remain). The architectural-remediation SEV backlog
 (SEV-01..24, incl. the GraphRepository facade) is **fully drained** (47/47). `make check` GREEN.
 
-**Next:** the engine is feature-complete enough to prove. The active program is **shipping a downloadable
-demo game** as the **B2B proof-slice** — a ~10-minute experience that makes the (invisible) simulation
-*legible*, runs the LLM **locally OR via a player-supplied API key**, and doubles as the studio integration
-reference. See **"Next — Shippable demo game (B2B proof-slice)"** below. Engine choice for the LLM/graph
-runtime is recorded in **DEC-124** (dual LLM path; stay on Neo4j for now, copyleft revisit deferred).
+**Next (as of 2026-07-31):** the active program is the **eval pipeline — `EVAL-P0..P7`** (see
+*Active — Eval pipeline* below). 17.5 h budgeted against an 18 h ceiling, one phase per `/expand-next`
+session. Goal: turn the existing scoring *harness* into a reproducible, repeat-aware, calibrated *pipeline*
+that is independently publishable without the engine.
+
+**Deferred (2026-07-31):** all game-client integration work — `SHIP-05b..11` and `Phase X` (Unity/Unreal
+SDKs) — moved verbatim to **`project-harness/UNREAL_DEFERRED.md`**. Shipped engine-side runtime work
+(`P0` / `SHIP-01..05a`, `INTEG-01..05`, Phases `F`/`G`/`H`) stays here. Engine choice for the LLM/graph
+runtime remains **DEC-124** (dual LLM path; stay on Neo4j for now, copyleft revisit deferred via
+`OD-Ship-graph`/`PERF-04`).
 
 ## Archive (completed history)
 
@@ -96,11 +101,512 @@ Session Log.
 **Notes:** Stage-A baseline to beat — `make eval` 1/53 (missing player node) → 41/53 (after node);
 anti-hallucination 27/40 via brittle scorer; scenarios self-evaluated on qwen2.5.
 
-- [ ] **EVAL-FINAL.1** With both worlds seeded and `JUDGE_MODEL=mixtral:8x7b`: run `make eval --reset-world`, `make eval-anti-hallucination`, `make eval-generate` + `make eval-judge`, `make eval-llm`, `make eval-llm-demo`, and `retrieval_runner` in-container. Produce a **new-vs-Stage-A** table; confirm judge ≠ generation, player-node 422s gone, true anti-hallucination number re-measured. Re-judge one saved transcript with a second `JUDGE_MODEL` to demonstrate generate-once / judge-many. If the demo-world gossip-propagation failures persist, log a **new ISSUE** (next id 122) — do not fold into this program.
+- [x] **EVAL-FINAL.1 — SUPERSEDED 2026-07-31 by `EVAL-P0.4`.** Not run as written. Its entire scope (live
+  run of every eval target with both worlds seeded + a new-vs-Stage-A table) is absorbed into **EVAL-P0.4**
+  below, which additionally instruments per-turn and per-judge-call timings. Running it separately would
+  repeat ~90 minutes of live execution and produce no timing data. Original text preserved below.
+
+  > **EVAL-FINAL.1 (original)** With both worlds seeded and `JUDGE_MODEL=mixtral:8x7b`: run `make eval --reset-world`, `make eval-anti-hallucination`, `make eval-generate` + `make eval-judge`, `make eval-llm`, `make eval-llm-demo`, and `retrieval_runner` in-container. Produce a **new-vs-Stage-A** table; confirm judge ≠ generation, player-node 422s gone, true anti-hallucination number re-measured. Re-judge one saved transcript with a second `JUDGE_MODEL` to demonstrate generate-once / judge-many. If the demo-world gossip-propagation failures persist, log a **new ISSUE** (next id 122) — do not fold into this program.
 
 **Batching for `/expand-next`:** EVAL-B2 is a short close-out (one commit may suffice). EVAL-B3 is one session.
-EVAL-B4 is its own session (4 steps, one commit each). EVAL-FINAL is a manual live run, not TDD-gated — run it
-after B-4 with the stack up.
+EVAL-B4 is its own session (4 steps, one commit each). EVAL-FINAL is superseded by EVAL-P0.4 below.
+
+---
+
+## Active — Eval pipeline (EVAL-P0..P7) ← **the current program**
+
+> **Origin:** an externally-written proposal (`project-harness/npc_system_eval_plan_idea`) reviewed
+> adversarially on 2026-07-31. The proposal was **not** adopted as written — its phase numbering,
+> effort estimates and several load-bearing repo claims were wrong. This block is renumbered and
+> re-timed from measurements taken against the codebase. **Do not consult the proposal for
+> sequencing or estimates**; it is retained only for its methodology arguments.
+>
+> **Goal of the program:** turn the existing scoring *harness* into an eval *pipeline* — reproducible,
+> repeat-aware, uncertainty-quantified, calibrated against adjudicated labels, and independently
+> publishable without the engine.
+>
+> **Measured facts this program is planned against** (all commands run 2026-07-31):
+>
+> | Quantity | Value | How measured |
+> |---|---|---|
+> | YAML golden cases | **53** (not 56) | `ls evals/cases/*.yaml` |
+> | — guard cases (`case_adv_`/`case_neg_`) | **37**, all `requires_world: demo` | parsed |
+> | — world split | demo **49** · village **3** · tavern **1** | parsed `seed.requires_world` |
+> | Anti-hallucination fixture cases | **41** (25 refusal / 16 grounded) | `anti_hallucination_demo.json` |
+> | Retrieval labelled cases | **20**, each with `relevant_node_ids` | `retrieval_demo.json` |
+> | Dialogue POSTs per full generation | **94** | 53 + 41 |
+> | **Judge LLM calls per full run** | **115** | 8 declared tone + 8 declared affirms + 37 injected tone + 37 injected affirms + 25 refusal |
+> | Tests in `tests/` | **2,637** (the proposal claimed ~951) | `pytest tests/ --collect-only` |
+> | Stats libs installed | `numpy` only — `sklearn`/`scipy`/`statsmodels` **absent** | import probe |
+> | `wilson\|kappa\|calibrat\|confusion\|human_verdict` in code | **0 hits** | grep |
+> | `added_in\|retired_in\|golden_set_version` | **0 hits** | grep |
+>
+> **Refuted proposal claims — do not plan against these:**
+> - *"k=15 full set ≈ 5 hours."* 15 × generation ≈ 5 h **alone**; judging adds 15 × 115 = **1,725
+>   `mixtral:8x7b` calls** (~26 GB model, DEC-143). k=15 full-set is multi-day, not overnight.
+> - *"Prompts externalised and versioned."* Three inconsistent, unreachable signals:
+>   `prompt_builder.py:30 PROMPT_VERSION="stage_b_v2.13"` (a Python constant injected into the prompt
+>   text at `:286`), `engines/dialogue/llm_config.yaml prompt.version: 1` (never bumped), and filename
+>   `_v1` suffixes. Exactly **one** in-file `version:` key repo-wide. **`--prompt-version` has nothing
+>   to switch on** — that is EVAL-P1.2, a hidden prerequisite.
+> - *"The hard half (the scoring function) already exists."* `matchers.py` is 12 per-response boolean
+>   matchers; `summary.py` computes counts, not rates. Nothing computes entity rate, knowledge boundary,
+>   pass-rate-over-k, Wilson, κ, or a confusion matrix. The **harness** exists; the **scorers** are new.
+> - *"The calibration labels already exist."* They do not. Zero hits, repo-wide.
+>
+> **Hard constraints (all phases):** `evals/` stays **src-free** behind exactly one sanctioned adapter
+> (`evals/engine_adapter.py`, EVAL-P0.2) so the harness + schemas + a synthetic fixture set can be
+> published standalone while the engine stays private; judge prompts only in `prompts/eval/`;
+> Pydantic v2 for any data crossing a boundary; ≤300 lines/file, ≤40 lines/function, ≤3 nesting;
+> `make check` green per step. `test-cov` measures only `npc_engine + matchers + summary + runner` —
+> edits to those three need same-phase tests to hold ≥80 %; new standalone eval modules stay **out** of `--cov`.
+>
+> **Effort budget: 17.5 h against an 18 h ceiling.** There is **no slack**. If a phase overruns,
+> **EVAL-P7 (dashboard) is the designated cut** — that is an explicit trade, not silent compression.
+> Everything that did not fit is under `### Parked (out of budget)` at the end of this block.
+>
+> **New tests live in `tests/unit/evals/`** (mirror-source subdir per the PR-7 convention; needs an
+> `__init__.py`). The five existing root-level eval tests are **not** moved — out of scope.
+
+### Phase EVAL-P0 — Foundations: src-free repair, gated `evals/`, measured baseline
+**Goal:** `evals/` genuinely honours the src-free constraint behind one named adapter and is covered by
+lint; and a recorded live baseline replaces the proposal's unmeasured "20 minutes" with per-turn and
+per-judge-call numbers that every later estimate depends on.
+**Effort:** 2 h (+ ~1.5 h wall-clock background for the baseline run)
+**Constraint:** No behaviour change to any existing scorer — `make eval` and `make eval-retrieval` output
+must be byte-identical before and after EVAL-P0.2.
+**Notes:** Absorbs **EVAL-FINAL.1** (already ticked as superseded above); do not run it separately.
+`retrieval_runner.py` **already violates** the src-free rule this program is about to enforce — it imports
+`npc_engine.graph.graph_reader` (`:104`), `npc_engine.config`, `npc_engine.graph.infra.db`,
+`npc_engine.retrieval.embedding_index`, `npc_engine.retrieval.vector_store_factory` (`:238-241`). `evals/`
+has **no `__init__.py`** and two incompatible entry conventions: flat imports (`import preconditions`, run as
+`python evals/runner.py`, working only because `pyproject.toml` sets `pythonpath = [..., "evals"]`) versus
+package imports (`from evals.retrieval_matchers import …`, run as `python -m evals.retrieval_runner`). Every
+gate scopes to `src/` only (`scripts/check_rules.py:108`; `lint` = `ruff check src/`; `type` = `mypy src/`;
+`rules_baseline.txt` has zero `evals/` entries) — so nothing in `evals/` is linted, typed or docstring-checked
+today. **DEC-147 ✅ ACCEPTED 2026-07-31 (all five clauses, incl. §4 lint gate with the 30-min time-box).**
+
+- [x] **EVAL-P0.1** Resolve the uncommitted generation-model drift and make the documented model authoritative.
+      ✅ **2026-07-31 — 🔶 DEC-149 (ACCEPTED): all five engines on `qwen2.5:7b`**, `CLAUDE.md` authoritative.
+      Answer to the ask-gate: **7b, fleet-wide** (not dialogue-only — a mixed fleet makes `RunConfig.generation_model`
+      dishonest and `discover_generation_models()` multi-valued). Judge **unchanged** (`mixtral:8x7b`) so the
+      EVAL-P0.4 baseline stays comparable to the Stage-A counts. Full stale-`14b` sweep done: `CLAUDE.md`,
+      `README.md`, `docs/DEMO.md` (×4, plus the judge-model prerequisite it never documented), `docs/ENGINES.md`,
+      `docs/ARCHITECTURE.md`, `CONTRIBUTING.md`, both `.env.example`s, `evals/judge_config.py` docstring.
+      Measured-on-14b latency comments (`demo_game/constants.py`, `test_dialogue_ws_timeout.py`) were **annotated,
+      not rewritten** — the 38 s figure is a real measurement and 7b is faster, so the bound stays conservative;
+      EVAL-P0.4 re-measures. `model_tiers.py`'s `MODEL_14B` is a legitimate VRAM tier and was left alone.
+      **Also fixed:** `e2e/scenarios/scenario_voice_from_graph.py` hardcoded a `qwen2.5:14b` judge default and
+      built its own adapter, **bypassing the DEC-143 collision guard entirely** — now routed through
+      `judge_client`. **Also found:** `OLLAMA_MODEL` is published in both `.env.example`s but read by zero code
+      paths and named the *judge* model → **ISSUE-125**. `tests/unit/engines/test_judge_config.py::
+      test_discover_generation_models_reads_real_configs` pinned the old `14b` state and was already red under
+      the drift; updated to `7b`.
+      **Follow-through — 🔶 DEC-150 (ACCEPTED), same session, before the P0.4 baseline:** the three findings
+      above were closed rather than logged. (a) `OLLAMA_MODEL` **and** `LLM_BACKEND` — the only 2 of 55 keys
+      absent from `config.py` — deleted from both `.env.example`s, completing `ISSUE-003` (fixed 2026-05-06),
+      which had already removed both from `config.py` and simply missed the `.env.example` cleanup;
+      **ISSUE-125 closed and archived** with a correction noting it under-described the problem as one key
+      and as an open question. (b) `CONTRIBUTING.md`'s `LLM_BACKEND=mock` instruction has been **inert since
+      ISSUE-003** — replaced with the working mechanism (`llm.backend: mock` in the five engine YAMLs,
+      verified against `registered_backends()` and `EngineModelConfig`). (c) `tests/unit/evals/
+      test_judge_bypass_guard.py` now enforces DEC-143 by AST scan; **validated against the pre-fix
+      `scenario_voice_from_graph.py` from git, where it flags both halves of the real bypass at `:32` and
+      `:39`.** `make check` green: 2,618 passed, 29 skipped, coverage 87.10 %.
+      Files: `edit src/npc_engine/engines/dialogue/llm_config.yaml`, `edit project-harness/CLAUDE.md`,
+      `create tests/unit/evals/__init__.py`, `create tests/unit/evals/test_model_identity.py`.
+      RED anchor: `tests/unit/evals/test_model_identity.py::test_documented_generation_model_matches_config`
+      fails because the model string in `CLAUDE.md` does not equal `llm.model` in `llm_config.yaml`.
+      Validation: `git status` shows no unstaged `llm_config.yaml`; `judge_config.discover_generation_models()`
+      returns exactly the model named in `CLAUDE.md`.
+      ⚠️ **ask-gate:** changing the shipped generation model has engine-wide effect. `/expand-next` must
+      **halt and ask which model is intended** before committing — do not guess from the working tree.
+
+- [ ] **EVAL-P0.2** Introduce the single sanctioned adapter and a guard that keeps every other module src-free.
+      Files: `create evals/__init__.py`, `create evals/engine_adapter.py`, `edit evals/retrieval_runner.py`,
+      `create tests/unit/evals/test_src_free.py`. Move the five `npc_engine` imports out of `retrieval_runner`
+      into `engine_adapter.build_retrieval_stack()` / `engine_adapter.known_event_ids(session, npc_id)`.
+      RED anchor: `tests/unit/evals/test_src_free.py::test_only_engine_adapter_imports_npc_engine` fails
+      because `retrieval_runner` still names `npc_engine`.
+      Validation: the guard AST-scans every `evals/*.py`, permits `npc_engine` imports **only** in
+      `engine_adapter.py`, and reports the other 12 modules clean; `make eval-retrieval` prints an identical
+      table to the pre-change run.
+
+- [ ] **EVAL-P0.3** Bring `evals/` under the lint gate. Files: `edit Makefile` (`lint: ruff check src/ evals/`),
+      plus the ruff fixes it demands, `create tests/unit/evals/test_gate_scope.py`.
+      RED anchor: `tests/unit/evals/test_gate_scope.py::test_lint_target_covers_evals` fails because the
+      `lint` recipe names only `src/`.
+      Validation: `make lint` exits 0 with `evals/` in scope; `make check` green.
+      **Time-box 30 min.** If ruff surfaces more than ~20 violations, fix the mechanical ones, add the rest to
+      a new `# evals/` section of `scripts/rules_baseline.txt`, and log the remainder as an ISSUE — do not let
+      this phase become a cleanup sweep. mypy + docstring coverage for `evals/` is **Parked**.
+      ⚠️ **ask-gate:** edits the shared `make check` health gate.
+
+- [ ] **EVAL-P0.4** *(live; not `make check`-gated — requires engine + Neo4j + Ollama up)* Measured baseline.
+      With **all three** worlds seeded (`make demo-seed`, `make seed-village-world`, `make seed-tavern-world` —
+      required, or 4 of 53 cases silently skip) and `JUDGE_MODEL=mixtral:8x7b`: run
+      `python evals/runner.py --reset-world --base-url … --api-key …` (the `eval` target passes no `ARGS`, so
+      `--reset-world` must be invoked directly), then `make eval-anti-hallucination`, `make eval-generate` +
+      `make eval-judge`, `make eval-retrieval`.
+      Files: `edit project-harness/ROADMAP.md` (Session Log).
+      Validation: a Session Log table stating (a) measured **seconds per dialogue turn**, (b) measured
+      **seconds per `mixtral` judge call**, (c) the implied wall-clock for k=3 and k=15 over the full set,
+      computed from (a) and (b) — this is the number that replaces the proposal's "20 minutes", (d) pass counts
+      against the Stage-A baseline (`make eval` 41/53; anti-hallucination 27/40), (e) how many cases **skipped**.
+      Re-judge one saved transcript with a second `JUDGE_MODEL` to demonstrate generate-once / judge-many.
+
+### Phase EVAL-P1 — Transcript schema v2: reproducible run identity
+**Goal:** A generation artifact a stranger can reproduce from — exact config, k repeats, git SHA, golden-set
+version, per-turn timing, and the retrieved context that produced each reply.
+**Effort:** 3 h · **running total: 5 h**
+**Constraint:** Hard break to `version: 2`; `read_transcript` rejects v1 loudly. Nothing to migrate —
+`e2e/transcripts/` is gitignored and no v1 artifact is tracked anywhere. `TranscriptFile` and
+`GenerationRecord` stay `frozen=True`.
+**Notes:** **DEC-146 ✅ ACCEPTED 2026-07-31 (hard break, no v1 reader; `seed` stays absent).** **`seed` must NOT appear in the config block** — `LLMGenerateProtocol.generate()`
+(`engines/llm/protocols.py`) has no `seed` parameter and `ollama_adapter.py` never sets `options.seed`; claiming
+it would be dishonest. Adding it is a Protocol change across three adapters → **Parked**. `model`/`temperature`/
+`top_p`/`max_tokens` **are** honest: read them as *files* from `src/npc_engine/engines/*/llm_config.yaml`, the
+exact precedent `judge_config.py:87` already sets — reading a YAML file is not a src import. Retrieved context
+comes from `GET /v1/admin/debug/retrieval`, which **re-runs** retrieval with `session_turns=[]` and flattens
+tier/priority to sentinels (`admin/debug_retrieval.py:80-108`) — it is an *approximation* of the context that
+produced the reply, and that caveat goes in the schema docstring verbatim, not in a backlog. **Depends on:**
+EVAL-P0.2 (`evals/__init__.py` must exist). **Blocks:** EVAL-P2, EVAL-P3, EVAL-P4, EVAL-P7.
+
+- [ ] **EVAL-P1.1** Run-config model. Files: `create evals/run_config.py`, `create tests/unit/evals/test_run_config.py`.
+      Frozen Pydantic v2 `RunConfig`: `prompt_version`, `generation_model`, `temperature`, `top_p`, `max_tokens`,
+      `judge_model`, `retrieval_profile`, `git_sha`, `golden_set_version`. `resolve_run_config()` reads the engine
+      YAML + `git rev-parse --short HEAD` + `judge_config.resolve_judge_model()`.
+      RED anchor: `tests/unit/evals/test_run_config.py::test_resolve_reads_dialogue_llm_config` fails — module absent.
+      Validation: `python -c "from run_config import resolve_run_config as r; print(r().model_dump_json(indent=2))"`
+      prints a block with a non-empty 7-char `git_sha` and a `generation_model` equal to `llm_config.yaml`'s.
+      **No `seed` field exists on the model** — assert its absence in the test.
+
+- [ ] **EVAL-P1.2** Single-source the prompt version (the hidden prerequisite). Make `llm_config.yaml`'s
+      `prompt.version` authoritative and have `prompt_builder` read it instead of hardcoding.
+      Files: `edit src/npc_engine/engines/dialogue/prompt_builder.py`, `edit src/npc_engine/engines/dialogue/llm_config.yaml`,
+      `create tests/unit/conformance/test_prompt_version_single_source.py`, `edit tests/unit/engines/test_prompt_builder.py`.
+      RED anchor: `tests/unit/conformance/test_prompt_version_single_source.py::test_prompt_version_matches_llm_config`
+      fails because `PROMPT_VERSION = "stage_b_v2.13"` (`prompt_builder.py:30`) ≠ `prompt.version: 1`.
+      Validation: editing `prompt.version` in the YAML changes what `resolve_run_config().prompt_version` returns
+      **with no Python edit**, and the existing `test_prompt_builder.py:138` assertion still passes.
+      *Not an ask-gate:* `PROMPT_VERSION` has no callers outside its own module except that one test
+      (verified by grep — `demo_game/constants.py` uses a separate `DEMO_CACHE_VERSION`).
+
+- [ ] **EVAL-P1.3** Schema v2. Files: `edit evals/eval_records.py`, `create evals/retrieved_item.py`,
+      `create tests/unit/evals/test_eval_records_v2.py`. `_TRANSCRIPT_VERSION = 2`; `TranscriptFile` gains
+      `gen_id`, `k`, `config: RunConfig`; `GenerationRecord` gains `repetition: int`, `duration_ms: int`,
+      `retrieved_context: tuple[RetrievedItem, ...]`; `read_transcript` raises a new `TranscriptVersionError`
+      on `version != 2`.
+      RED anchor: `tests/unit/evals/test_eval_records_v2.py::test_read_transcript_rejects_v1` fails because
+      `read_transcript` currently accepts any version.
+      Validation: v2 round-trip passes; a hand-written v1 JSON raises `TranscriptVersionError` naming both versions.
+      **Size watch:** `eval_records.py` is 136 L today — split `RetrievedItem` into its own module *before* writing,
+      per the 300-line rule.
+
+- [ ] **EVAL-P1.4** `--k`, `--gen-id`, and retrieved-context capture. Files: `edit evals/generate_runner.py`,
+      `edit Makefile`, `edit .gitignore`, `create tests/unit/evals/test_generate_runner_k.py`. Each case runs k
+      times; each turn records `duration_ms` and a `GET /v1/admin/debug/retrieval` capture; output goes to
+      `evals/generations/<gen_id>/{meta.json,outputs.jsonl}` (gitignored).
+      RED anchor: `tests/unit/evals/test_generate_runner_k.py::test_k_repeats_produce_k_records_per_case` fails
+      because `collect_records` has no repeat loop.
+      Validation: `make eval-generate ARGS="--k 2 --gen-id smoke"` against a mock client writes
+      `evals/generations/smoke/` containing 2× the single-run record count, every record carrying
+      `repetition ∈ {0,1}`, `duration_ms > 0`, and a non-empty `retrieved_context`.
+      **Size watch:** `generate_runner.py` is 276 L — extract the capture helper into a new module, do not grow it.
+
+### Phase EVAL-P2 — Statistics, hand-implemented
+**Goal:** A binary judge plus k repeats becomes a per-case pass rate with a Wilson interval and a flakiness
+class — no statistics library, every number defensible line by line.
+**Effort:** 2 h · **running total: 7 h**
+**Constraint:** `math` only. **No new dependency** — `sklearn`, `scipy` and `statsmodels` are all absent from
+the venv, and declaring one trips the CLAUDE.md ask-gate. (This also moots the proposal's
+"`sklearn.metrics.cohen_kappa_score`, ~5 lines".)
+**Notes:** Do **not** bolt k onto `summary.EvalSummary` — it is a count model whose `guarantee_demonstrated`
+uses guard *cases*, and it is inside `--cov`. Add new modules and leave `summary.py` serving the legacy
+headline until EVAL-P6 folds it in. Wilson at the k you can afford is wide and the report must say so:
+3/3 ⇒ **[0.438, 1.000]**, 3/5 ⇒ **[0.237, 0.763]**. Print k next to every rate.
+**Depends on:** EVAL-P1.4 (needs `repetition` on records).
+
+- [ ] **EVAL-P2.1** Wilson score interval. Files: `create evals/statistics.py`, `create tests/unit/evals/test_statistics.py`.
+      `wilson_interval(successes, trials, z=1.96) -> tuple[float, float]` and `pass_rate(successes, trials)`.
+      RED anchor: `tests/unit/evals/test_statistics.py::test_wilson_3_of_3` fails — module absent.
+      Validation: a table-driven test pins (0,3)→[0.000, 0.562], (3,3)→[0.438, 1.000], (3,5)→[0.237, 0.763]
+      to 3 dp, with the hand-worked arithmetic in the test docstring; `trials == 0` raises, never returns [0,1].
+
+- [ ] **EVAL-P2.2** Per-case statistics. Files: `create evals/case_stats.py`, `create tests/unit/evals/test_case_stats.py`.
+      Frozen Pydantic `CaseStat(case_id, k, passes, pass_rate, ci_low, ci_high, classification)` with
+      `classification: Literal["stable_pass", "flaky", "stable_fail"]`; `classify(passes, k)`;
+      `aggregate(judged_records) -> tuple[CaseStat, ...]` grouped by `case_id` across repetitions.
+      RED anchor: `tests/unit/evals/test_case_stats.py::test_two_of_three_classifies_flaky` fails.
+      Validation: over a fixture transcript with k=3, a case at 2/3 reports `flaky` with CI [0.208, 0.939];
+      3/3 reports `stable_pass`; 0/3 reports `stable_fail`; the list sorts by instability with flaky cases first.
+
+- [ ] **EVAL-P2.3** Honest denominators. `runner._run_case` turns a 404 NPC into `passed: True, skipped: True`
+      and `summary.summarize` counts it in `total_cases` — with only the demo world seeded that is **4 free
+      passes out of 53**. Files: `edit evals/summary.py`, `edit tests/unit/engines/test_eval_summary.py`.
+      Add `evaluated_cases` (excludes fully-skipped) and make `format_summary_lines` print it as the
+      denominator alongside `total_cases`.
+      RED anchor: `tests/unit/engines/test_eval_summary.py::test_skipped_cases_excluded_from_evaluated_denominator` fails.
+      Validation: a 53-case fixture with 4 fully-skipped cases reports `49 evaluated / 53 total` and no summary
+      line quotes 53 as a pass-rate denominator. **`summary.py` is in `--cov`** — coverage must stay ≥80 %.
+
+### Phase EVAL-P3 — Deterministic graph scorers (no LLM)
+**Goal:** Two LLM-free scorers over cached text — unsupported-entity rate and unpropagated-event references —
+that measure the architecture's own thesis rather than generic output quality.
+**Effort:** 2.5 h · **running total: 9.5 h**
+**Constraint:** src-free **over HTTP**, not through `engine_adapter.py`: entity vocabulary from
+`GET /v1/graph/nodes/{node_type}?limit&offset`, knowledge from `GET /v1/graph/edges/KNOWS_ABOUT/{src}/{dst}`
+(both confirmed present in `live_openapi.json`). Scorers are **pure functions** over
+`(text, vocabulary, known_ids)`; the HTTP fetch lives in a separate module so scorers unit-test with zero I/O.
+**Notes:** These need a live engine + Neo4j, so they can **never** run inside `make check` — `test-cov` runs
+`pytest tests/` with mocks and no Docker. Only their pure halves are gated. The proposal's "run them on every
+save" is achievable but means leaving `docker-compose up -d` running, not a zero-cost loop.
+**`KNOWS_ABOUT` is not the only license to speak.** The anti-hallucination fixture's own `knowledge_basis`
+field cites **beliefs** (`ah_demo_sorn_walls_belief`) and **goals** (`ah_demo_sorn_guild_goal`) as valid
+grounds; memories and `WITNESSED` edges too. A `KNOWS_ABOUT`-only metric **will flag correct answers as
+violations** — so the metric is named *unpropagated-event reference rate*, and the excluded edge types are
+enumerated in the module docstring. Extraction is **alias-table whole-word matching, not NER**: pronouns are
+invisible, partial names ("the Captain") need the table, and an unnamed fabrication ("a merchant from the
+eastern docks") is undetectable — those go in the README as documented limits, not the backlog.
+**Depends on:** EVAL-P1.3.
+
+- [ ] **EVAL-P3.1** Vocabulary fetch. Files: `create evals/graph_vocabulary.py`,
+      `create tests/unit/evals/test_graph_vocabulary.py`. Paged `GET /v1/graph/nodes/{node_type}` over
+      Character / Location / Event / Faction into a frozen `GraphVocabulary` Pydantic model, cached to
+      `evals/generations/<gen_id>/vocabulary.json` so scoring is replayable with the engine down.
+      RED anchor: `tests/unit/evals/test_graph_vocabulary.py::test_paginates_until_short_page` fails — module absent.
+      Validation: against a mock client returning 2 pages, the model holds every id from both pages and issues
+      exactly 3 requests (two full, one short); re-running with a cache file present issues **zero** requests.
+
+- [ ] **EVAL-P3.2** Unsupported-entity scorer (pure). Files: `create evals/entity_scorer.py`,
+      `create evals/cases/entity_aliases.yaml`, `create tests/unit/evals/test_entity_scorer.py`.
+      `unsupported_entity_rate(text, vocabulary, aliases) -> EntityScore` with `mentions`, `unsupported`, `rate`.
+      RED anchor: `tests/unit/evals/test_entity_scorer.py::test_unknown_proper_noun_counts_as_unsupported` fails.
+      Validation: on a fixture text naming `mira_innkeeper` (known), "the Captain" (alias → `captain_sorn`, known)
+      and "Warden Aldous" (absent), the scorer returns `mentions=3, unsupported=1, rate=0.333`; a pronoun-only
+      sentence returns `mentions=0` and the docstring states pronouns are out of scope.
+
+- [ ] **EVAL-P3.3** Unpropagated-event-reference scorer (pure). Files: `create evals/knowledge_scorer.py`,
+      `create tests/unit/evals/test_knowledge_scorer.py`.
+      `unpropagated_references(text, event_vocabulary, npc_known_event_ids) -> KnowledgeScore`.
+      RED anchor: `tests/unit/evals/test_knowledge_scorer.py::test_event_not_in_known_set_is_flagged` fails.
+      Validation: `old_henryk` referencing `northern_war_begins` while its known-set excludes it yields one
+      violation; the same text for `captain_sorn` (direct `KNOWS_ABOUT`, per the demo world table in `CLAUDE.md`)
+      yields zero. The module docstring **lists** belief / goal / memory / `WITNESSED` as deliberately excluded
+      grounds and states the resulting false-positive risk.
+
+- [ ] **EVAL-P3.4** Wire both into the score pass. Files: `create evals/deterministic_pass.py`,
+      `edit Makefile`, `create tests/unit/evals/test_deterministic_pass.py`.
+      RED anchor: `tests/unit/evals/test_deterministic_pass.py::test_scores_every_record_without_llm` fails.
+      Validation: `make eval-score TRANSCRIPT=<file>` scores a cached transcript and prints both rates with
+      **no network call to Ollama** — asserted by a test that fails if `matchers._run_binary_judge` is invoked.
+
+### Phase EVAL-P4 — Retrieval decomposition over the existing annotations
+**Goal:** Separate retrieval failure from generation failure, so a failing case can be attributed rather
+than guessed at.
+**Effort:** 1.5 h · **running total: 11 h**
+**Constraint:** Reuse `retrieval_matchers.recall_at_k` / `precision_at_k` **verbatim**. New code is the
+*join*, not the metric.
+**Notes:** ~60 % of this already exists and the proposal's Phase 4/7 retrieval work is largely duplication.
+`retrieval_demo.json` already carries `relevant_node_ids` per (npc, query) — precisely the "required fact
+annotation" the proposal wants to invent, for **20** cases. What is genuinely missing is computing it against
+the `retrieved_context` **captured in the transcript** (EVAL-P1.4) rather than a second in-process retrieval,
+so retrieval quality and generation quality come from the same run. Annotating the **53 dialogue** cases is
+**Parked** — it is mechanical but large.
+**Depends on:** EVAL-P1.4, EVAL-P2.2.
+
+- [ ] **EVAL-P4.1** Shared key→node-id extraction. `retrieval_runner._node_id_from_key` (`:58`) is needed by
+      both runners. Files: `create evals/context_keys.py`, `edit evals/retrieval_runner.py`,
+      `create tests/unit/evals/test_context_keys.py`.
+      RED anchor: `tests/unit/evals/test_context_keys.py::test_rag_prefix_strips_to_node_id` fails — module absent.
+      Validation: `rag:northern_war_begins` → `northern_war_begins`, `character:mira_innkeeper` → `mira_innkeeper`,
+      a bare key round-trips; `make eval-retrieval` output unchanged.
+
+- [ ] **EVAL-P4.2** Decomposition table. Files: `create evals/retrieval_join.py`,
+      `create tests/unit/evals/test_retrieval_join.py`. Per record, compute context recall/precision of
+      `retrieved_context` against the case's `relevant_node_ids`, then cross-tabulate
+      `retrieval_hit × case_passed` into a 2×2.
+      RED anchor: `tests/unit/evals/test_retrieval_join.py::test_retrieved_but_failed_is_a_generation_failure` fails.
+      Validation: over a fixture transcript the table reports four counts — *retrieved & passed*,
+      **retrieved & failed (generation failure)**, *not retrieved & failed (retrieval failure)*, and
+      *not retrieved & passed (lucky)* — and the four sum to the record count.
+
+### Phase EVAL-P5 — Calibration: model pre-label + human adjudication
+**Goal:** A versioned, reproducible calibration artifact — 250 outputs pre-labelled by a reference model and
+adjudicated by the maintainer — with **every scorer measured separately** as a full confusion matrix plus
+Cohen's κ, so the eval can state how much its own headline can be trusted.
+**Effort:** 2.5 h of build time · **running total: 13.5 h** (+ ~2–3 h of your adjudication, done outside
+a coding session — it is not `/expand-next` work)
+**Constraint:** The reference labeller must differ from **both** the generation model (`qwen2.5`) **and** the
+judge (`mixtral:8x7b`) — a direct extension of DEC-143's collision invariant. Client is **raw `httpx` against
+the Anthropic REST API**; the `anthropic` SDK is a new dependency and trips the ask-gate. `ANTHROPIC_API_KEY`
+from env only, never committed, never logged. κ is hand-implemented (~15 lines on `math`) — `sklearn` is absent.
+**Notes:** The proposal's framing — *"the labels already exist, so this is cheap"* — is **false**; grep for
+`calibrat|human_verdict|kappa|confusion` returns zero repo-wide. Because you adjudicate model-proposed labels
+rather than labelling cold, store **both** `pre_label` and `human_verdict` on every row: the disagreement rate
+between them is then a free, publishable reference-model-vs-you number with no second pass. **Calibrate each
+scorer separately** — keyword matchers, tone judge, affirms judge, refusal judge, and the two EVAL-P3 graph
+scorers. An aggregate conceals which component drags. The real labels stay private; only the **schema** and a
+synthetic sample are publishable (see Parked).
+**Depends on:** EVAL-P1.3 (labels reference `record_id`), EVAL-P3 (graph scorers must exist to be calibrated).
+**Needs a `DECISIONS.md` call when reached:** propose **DEC-149 — reference-labeller model separation**
+(labeller ∉ {generation models} ∪ {judge model}, enforced like `JudgeModelCollisionError`). It gates **EVAL-P5.2**.
+
+- [ ] **EVAL-P5.1** Label record model. Files: `create evals/calibration_records.py`,
+      `create tests/unit/evals/test_calibration_records.py`. Frozen Pydantic `CalibrationLabel(record_id,
+      scorer, output_text, pre_label: bool, pre_labeller_model: str, human_verdict: bool | None,
+      adjudicated_at: str | None, notes: str)` + JSONL read/write to `evals/calibration/labels_v1.jsonl`.
+      RED anchor: `tests/unit/evals/test_calibration_records.py::test_unadjudicated_row_round_trips_with_null_verdict` fails.
+      Validation: 3 rows round-trip through JSONL byte-identically; a row missing `pre_labeller_model` raises
+      `ValidationError`; the **frozen output text** is stored inline, never a pointer to something regenerable.
+
+- [ ] **EVAL-P5.2** Pre-labelling runner. Files: `create evals/label_runner.py`,
+      `create tests/unit/evals/test_label_runner.py`, `edit Makefile`. `httpx.post` → Anthropic REST, one
+      pre-label per transcript record per scorer, with a `LabellerModelCollisionError` guard mirroring
+      `judge_config.resolve_judge_model`.
+      RED anchor: `tests/unit/evals/test_label_runner.py::test_labeller_equal_to_judge_model_raises` fails.
+      Validation: against a mocked HTTP client, 5 records produce 5 `CalibrationLabel` rows with
+      `human_verdict=None`; setting the labeller to `mixtral:8x7b` or to a discovered generation model raises;
+      a missing `ANTHROPIC_API_KEY` fails fast with a named error and **never** appears in any log line.
+      ✅ **DEC-149 ACCEPTED 2026-07-31** — no longer a halt condition.
+
+- [ ] **EVAL-P5.3** Adjudication CLI. Files: `create evals/adjudicate.py`, `create tests/unit/evals/test_adjudicate.py`.
+      Prints one row at a time (output text + `pre_label` + scorer), accepts keep/flip/skip, writes
+      `human_verdict` + `adjudicated_at` back in place, and is **resumable** — re-running skips adjudicated rows.
+      RED anchor: `tests/unit/evals/test_adjudicate.py::test_resume_skips_already_adjudicated_rows` fails.
+      Validation: on a 5-row file with 2 adjudicated, the CLI presents exactly 3 rows; flipping one writes
+      `human_verdict != pre_label` and leaves `pre_label` untouched.
+
+- [ ] **EVAL-P5.4** Confusion matrices + κ. Files: `create evals/calibration.py`,
+      `create tests/unit/evals/test_calibration.py`, `edit Makefile` (`eval-calibrate`).
+      Per scorer: TP/FP/FN/TN, precision, recall, and hand-implemented `cohens_kappa`. Plus the free
+      pre-label-vs-human agreement rate.
+      RED anchor: `tests/unit/evals/test_calibration.py::test_cohens_kappa_matches_worked_example` fails.
+      Validation: κ pinned to 3 dp against a hand-worked 2×2 in the test docstring; perfect agreement → 1.000,
+      chance-level → 0.000. `make eval-calibrate` prints **one matrix per scorer** — never a single aggregate —
+      and the false-positive cell is labelled as the dangerous one.
+
+### Phase EVAL-P6 — One CLI; legacy targets become aliases
+**Goal:** A single `python -m evals <verb>` entry point, with the seven legacy make targets reduced to thin
+aliases so the gate stays green at every commit and no target is orphaned.
+**Effort:** 1.5 h · **running total: 15 h**
+**Constraint:** **No target is deleted in this phase.** Deletion is a separate final step once nothing
+references them — that step is Parked. **DEC-148 ✅ ACCEPTED 2026-07-31 (ordering locked: coverage parity → aliases → delete last).**
+**Notes:** **Blocked by a dependency the proposal never names.** `generate_runner._build_yaml_records_for_case`
+records **only** `tone_judge` / `affirms_judge` (`_LLM_JUDGE_KINDS`, `:36`) — `min_length`, `keyword_none`,
+`schema`, `in_set`, `range` and `keyword_any` all remain in `runner.py`'s inline pass, and grounded
+anti-hallucination cases return `None` (`_build_ah_record:129`). So the transcript path today scores a **strict
+subset** of `make eval` and cannot replace it. That is EVAL-P6.1 and it must land before any alias.
+Separately: `judge_runner._to_result_dict` sets `case_id = record_id`, so each guard case emits two records and
+`summary` reports **74** guard turns where `make eval` reports **37** — the two headlines are not comparable
+(logged as **ISSUE-123**; closed here).
+**Depends on:** EVAL-P1.3, EVAL-P2.3, EVAL-P3.4.
+
+- [ ] **EVAL-P6.1** Deterministic matchers off the transcript. Files: `edit evals/generate_runner.py`,
+      `create evals/deterministic_records.py`, `create tests/unit/evals/test_deterministic_records.py`.
+      Every non-judge expectation becomes a record with `judge_kind=None` plus the data the matcher needs;
+      grounded anti-hallucination cases gain records too.
+      RED anchor: `tests/unit/evals/test_deterministic_records.py::test_keyword_none_expectation_produces_a_record` fails
+      because `_LLM_JUDGE_KINDS` filters it out.
+      Validation: for a fixture case with `schema + keyword_none + tone_judge`, the transcript holds **3** records
+      (2 deterministic, 1 judged), and scoring the transcript reproduces `make eval`'s per-case verdict exactly —
+      asserted case-by-case against a recorded `make eval` result fixture.
+
+- [ ] **EVAL-P6.2** Fix the guard-turn double count (**closes ISSUE-123**). Files: `edit evals/judge_runner.py`,
+      `edit tests/unit/test_judge_runner.py`. Group records back to `case_id` before `summarize`, so one case is
+      one guard turn regardless of how many expectations it carries.
+      RED anchor: `tests/unit/test_judge_runner.py::test_guard_turn_count_matches_case_count_not_record_count` fails
+      (reports 2 for a single guard case).
+      Validation: a fixture with 37 guard cases × 2 records reports **37** guard turns, matching `make eval`;
+      mark ISSUE-123 `[FIXED]` and move it to `archive/ISSUES_RESOLVED.md`.
+
+- [ ] **EVAL-P6.3** Verb dispatch + aliases. Files: `create evals/__main__.py`, `edit Makefile`,
+      `create tests/unit/evals/test_cli_dispatch.py`. Verbs: `generate`, `score`, `judge`, `calibrate`,
+      `report`, `retrieval`. All seven legacy targets (`eval`, `eval-report`, `eval-anti-hallucination`,
+      `eval-llm`, `eval-llm-demo`, `eval-retrieval`, `eval-combined`) become one-line aliases delegating to it.
+      RED anchor: `tests/unit/evals/test_cli_dispatch.py::test_unknown_verb_exits_2_with_verb_list` fails.
+      Validation: `python -m evals --help` lists all six verbs; each legacy `make` target still runs and
+      produces the same exit code as before; `make check` green.
+      ⚠️ **ask-gate:** rewrites seven Makefile targets — a shared public surface.
+
+### Phase EVAL-P7 — Engine-developer eval dashboard
+**Goal:** A local dev-facing dashboard that reads the run artifacts and makes flakiness, calibration and
+per-case history legible — the surface that eventually replaces the CLI as the way the suite is driven.
+**Effort:** 2.5 h · **running total: 17.5 h**
+**Constraint:** Lives **inside `evals/`** as its own small FastAPI app (`python -m evals dashboard`), importing
+the evals package directly — **no API layer**, and `evals/` stays independently publishable. It is **not** the
+existing designer dashboard served from `src/npc_engine/api/` at `/dashboard` (`make dashboard`) — that one is
+game-designer-facing and stays exactly where it is. Jinja templates + inline SVG; HTMX for partial refresh.
+**No node/npm in this repo.** **DEC-148 ✅ ACCEPTED 2026-07-31.**
+**Notes:** **Do not start before EVAL-P1/P2/P3 have landed** — the artifact schema this reads must be settled or
+the UI gets rewritten. Three views only; the run-comparison view depends on `compare`, which is Parked.
+**This phase is the designated cut if the budget overruns** — it sits last precisely so that cutting it
+costs nothing already built.
+**Depends on:** EVAL-P1.3, EVAL-P2.2, EVAL-P3.4, EVAL-P5.4.
+
+- [ ] **EVAL-P7.1** App skeleton + run list. Files: `create evals/dashboard/__init__.py`,
+      `create evals/dashboard/app.py`, `create evals/dashboard/templates/runs.html`,
+      `create tests/unit/evals/test_dashboard_runs.py`. Lists `evals/generations/*/meta.json` sorted newest
+      first with gen_id, k, pass rate, prompt version, git SHA, timestamp.
+      RED anchor: `tests/unit/evals/test_dashboard_runs.py::test_run_list_renders_gen_ids_newest_first` fails — module absent.
+      Validation: against a tmp dir holding 3 `meta.json` files, `GET /` returns 200 and the three gen_ids in
+      descending timestamp order; an **empty** directory returns 200 with an explicit empty-state message,
+      not a traceback.
+
+- [ ] **EVAL-P7.2** Run detail. Files: `create evals/dashboard/templates/run_detail.html`,
+      `edit evals/dashboard/app.py`, `create tests/unit/evals/test_dashboard_detail.py`.
+      Headline pass rate **with k rendered adjacent to it**, the calibration badge (per-scorer κ from
+      EVAL-P5.4), both EVAL-P3 deterministic rates, the full config block, and the flaky table sorted by
+      instability.
+      RED anchor: `tests/unit/evals/test_dashboard_detail.py::test_headline_renders_k_adjacent_to_rate` fails.
+      Validation: for a k=3 fixture the page contains the literal string `k=3` within the headline element —
+      a k=3 number must be visually impossible to mistake for a k=15 number — and the flaky table lists
+      2/3 cases above 3/3 cases.
+
+- [ ] **EVAL-P7.3** Per-case drill-down. Files: `create evals/dashboard/templates/case_detail.html`,
+      `edit evals/dashboard/app.py`, `create tests/unit/evals/test_dashboard_case.py`.
+      All k outputs side by side, judge reasoning per repetition, the retrieved context, and the
+      expected-vs-actual for each expectation.
+      RED anchor: `tests/unit/evals/test_dashboard_case.py::test_all_k_outputs_render_side_by_side` fails.
+      Validation: a k=3 case page shows 3 distinct output panes each labelled with its `repetition`, and each
+      pane lists that repetition's `retrieved_context` item keys.
+
+### Parked (out of budget)
+
+Not compressed into optimistic estimates — genuinely out of the 18 h ceiling. Each line says why.
+
+- **`compare` / A-B diff (~1.5 h).** Cannot be *tested* without two full generations (~2 h wall-clock each at
+  k=3), and switching prompt versions at runtime needs a selector that does not exist even after EVAL-P1.2
+  makes the version *readable*. Pick this up first if budget frees.
+- **Required-fact annotation for the 53 dialogue cases (~2.5 h).** Mechanical but large. Unlocks context
+  recall/precision across the dialogue suite rather than only the 20 already-annotated retrieval cases.
+- **Golden-set versioning: `added_in` / `retired_in` + intersection diffing (~1 h).** Only pays off once
+  `compare` exists — until then, tagging 53 cases buys nothing measurable.
+- **Publishable extraction: 8-case synthetic fixture set + README methodology section + committed example
+  artifacts (~2 h).** The artifact schema must settle (EVAL-P1/P3/P5) before the synthetic set is worth writing,
+  or it gets rewritten with it.
+- **LLM `seed` support (~1 h).** `LLMGenerateProtocol.generate()` has no `seed` and `ollama_adapter.py` never
+  sets `options.seed`. Adding it changes a Protocol shared by three adapters → ask-gate. Until then `RunConfig`
+  **honestly omits seed** and the report says runs are `temperature=0.15`, not deterministic.
+- **Judge-noise vs system-noise split (~1 h).** Genuinely uncommon and cheap to code once the loop exists —
+  but each measurement costs another ~115 `mixtral` calls, which the budget cannot absorb.
+- **Deleting the seven legacy make targets (~0.5 h).** Deliberately after EVAL-P6, once nothing references them.
+- **`evals/` under `mypy` + `check-docstrings` (~1 h).** Unbounded until EVAL-P0.3's ruff pass reveals the true
+  violation count in the 13 existing modules.
+- **Judge-cost reduction (~1 h, high value).** `runner._guard_expectations` injects **both** a `tone_judge` and
+  an `affirms_judge` into all 37 demo guard cases — that is why the suite costs 115 judge calls per run rather
+  than ~25. Merging or gating the two injected judges is the single largest cost lever in the suite and it is
+  free. Promote this above EVAL-P7 if EVAL-P0.4's measured timings come in worse than expected.
+
+**Batching for `/expand-next`:** EVAL-P0 is one session (P0.1 needs a human answer first; P0.4 is a live run,
+not TDD). EVAL-P1 is its own session (4 steps, one commit each). EVAL-P2 + EVAL-P4 fit one session together.
+EVAL-P3 is its own session. EVAL-P5 is one session **plus** offline adjudication time. EVAL-P6 is one session.
+EVAL-P7 is one session — and is the cut if anything before it overruns.
+
+**Ordering against other programs:** nothing competes. `REM-W0..W8` is fully drained; `REORG-PR6..PR8` shipped
+and `PR-9` is optional/deferred; `P0`/`INTEG` are complete and `P1`/`P2` moved to `UNREAL_DEFERRED.md`. Of the
+`Next+1` block, `EVAL-01` (per-stage latency timer, in-engine) stays independent and still gates `PERF`;
+**`EVAL-05` (engine-quality eval expansion) is superseded by this program** and should be struck when reached.
 
 ---
 
@@ -255,31 +761,9 @@ after B-4 with the stack up.
   the configured API endpoint + key). No UI. Exit: config round-trips through JSON; path-A and
   path-B validators return typed results; `make check` green.
 
-### Phase P1 — The game slice (gated on SHIP-01)
-- **Goal:** a ~10-minute authored experience whose core loop makes one emergent behaviour *visible and
-  re-tellable in a 30-second clip*. Reuse the existing seed world (5–8 NPCs / existing locations/factions).
-- **Constraints:** keep scope brutally small — one town, one hook, one win/lose; the simulation must be the star.
-- [ ] **SHIP-05b (wizard Unity screen)** — Unity setup screen (C#) that presents the A/B choice,
-  collects the API key for path B, calls the validators (drives `wizard_config.py` / `path_validator.py`
-  from SHIP-05a), and writes `wizard_config.json`. Exit: both paths reachable from one Unity scene;
-  choice survives restart. (DEC-129)
-- [ ] **SHIP-06 (the legible hook)** — implement ONE emergent payoff the player can trigger and watch:
-  e.g. *tell NPC A a secret → advance a gossip tick → NPC C across town repeats it, distorted*; or *betray
-  someone, leave, return → they remember*. Exit: the hook is demonstrable end-to-end in the chosen client.
-- [ ] **SHIP-07 (client + live legibility panel)** — talk-to-NPC UI plus a live relationship/knowledge-graph
-  side panel (port the pygame graph-viz concept) so the invisible state is on screen. Exit: graph mutates
-  visibly as the player acts.
-- [ ] **SHIP-08 (10-minute arc)** — an authored short scenario over the seed world with a clear win/lose and
-  the hook on the critical path. Exit: a first-time player reaches an ending in ~10 min.
-- [ ] **SHIP-09 (distribution)** — a public build (itch.io and/or a Steam Next Fest demo) of the chosen path(s).
-  Exit: a stranger can download and play without a setup call.
-
-### Phase P2 — B2B proof wrap
-- **Goal:** convert player reactions into the evidence a studio's product/eng leads ask for.
-- [ ] **SHIP-10 (instrumentation + perf)** — capture engagement/retention signals and per-dialogue
-  **latency + cost** (both LLM paths). Exit: a one-pager of real numbers for the pitch.
-- [ ] **SHIP-11 (marketing clip)** — a ≤30-second screen capture of the SHIP-06 hook propagating across town.
-  Exit: a shareable clip that makes the differentiator legible without narration.
+### Phases P1 (game slice) + P2 (B2B proof wrap) — **DEFERRED**
+> Moved verbatim to **`project-harness/UNREAL_DEFERRED.md`** (2026-07-31). Covers `SHIP-05b..09`
+> and `SHIP-10/11`. Step IDs preserved. `SHIP-10`'s latency half lives on as `EVAL-01` below.
 
 ### Open decisions for this program (need a `DECISIONS.md` call when reached)
 - [x] **OD-Ship-platform** — SHIP-01 resolved to **Unity** (DEC-125): integration-reference dual use.
@@ -567,13 +1051,8 @@ EXP-95 (scenario picker), plus EXP-80/81/85/92 demo beats.
 - [ ] **S21.6** — File-size rule cluster, `demo_game/` scope (`client.py` 1524L, `seed.py` 1265L,
   `run.py`, `run_scenes.py`, `game_controller.py`, `ui/*`, `scenarios/*`). Demo code, high split
   risk, low value; several already waived (DEC-029/032/034/049/074/075).
-- [ ] **Phase X — Engine SDKs (Unity / Unreal)** — DEFERRED COMMERCIAL MILESTONE. Drop-in plugins
-  wrapping the REST/WS API; highest commercial ROI but its own 8+ session milestone, sequenced after
-  the OpenAPI contract is frozen. See OPEN_QUESTIONS OQ-13 (start vs finish engine depth).
-  - [ ] **SX.1** OpenAPI contract freeze + versioned client spec.
-  - [ ] **SX.2** Unity C# package (REST + WS, auth, models).
-  - [ ] **SX.3** Unreal plugin (parity).
-  - [ ] **SX.4** Sample integration scene per engine + docs.
+- **Phase X — Engine SDKs (Unity / Unreal)** — moved verbatim to
+  **`project-harness/UNREAL_DEFERRED.md`** (2026-07-31). `SX.1`–`SX.4` preserved there.
 
 ---
 
@@ -656,20 +1135,9 @@ is the canonical health gate. Green as of Phase 25 completion (1967 passed, 22 s
 | ISSUE-083 | Voice judge residual: `captain_sorn` voice judge borderline-fails (secondary-source phrasing habit) | P3 | Anti-hallucination gate unaffected; purely voice colour |
 | ~~ISSUE-098~~ FIXED | Four factories in `dependencies_engines/` each create their own `PlayerLocationReader()` instead of sharing a singleton | P3 | Resolved 2026-06-22: shared `get_player_location_reader()` singleton already wired; regression test added. Archived. |
 
-#### Unity game slice (blocked on Unity development — not engine issues)
-| ID | Item |
-|----|------|
-| SHIP-05b | Unity setup wizard screen (drives `wizard_config.py` / `path_validator.py` from SHIP-05a) |
-| SHIP-06 | The legible hook — one emergent payoff demonstrable end-to-end in Unity |
-| SHIP-07 | Talk-to-NPC UI + live relationship/knowledge-graph side panel in Unity |
-| SHIP-08 | Authored 10-minute arc with clear win/lose |
-| SHIP-09 | Public distribution build (itch.io / Steam Next Fest) |
-
-#### B2B proof wrap (post-game)
-| ID | Item |
-|----|------|
-| SHIP-10 | Instrumentation + perf numbers (engagement signals, per-dialogue latency + cost) |
-| SHIP-11 | ≤30-second marketing clip of the hook propagating across town |
+#### Unity game slice + B2B proof wrap — **DEFERRED**
+Both tables (`SHIP-05b..09`, `SHIP-10/11`) moved verbatim to
+**`project-harness/UNREAL_DEFERRED.md`** (2026-07-31).
 
 #### Future phases (sequenced after Unity dev begins)
 | Phase | Goal | Effort |
@@ -690,7 +1158,7 @@ is the canonical health gate. Green as of Phase 25 completion (1967 passed, 22 s
 |----|------|
 | S17.9 | Legacy niche-engine expansions (succession, clique, skill, military) |
 | S21.6 | `demo_game/` file-size rule cluster (`client.py` 1524L, `seed.py` 1265L, …) — several already waived |
-| Phase X | Engine SDKs — SX.1 OpenAPI freeze, SX.2 Unity C# package, SX.3 Unreal plugin, SX.4 sample scenes |
+| Phase X | Engine SDKs — **moved to `project-harness/UNREAL_DEFERRED.md`** (2026-07-31) |
 
 ---
 

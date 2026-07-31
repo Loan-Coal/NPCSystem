@@ -1687,3 +1687,36 @@ facades + baseline, which belong to those PRs.
 the 30 stale retrieval entries in `rules_baseline.txt` (same fix applied to graph/ in PR-6), then
 `make check-rules` and `make lint` go green.
 **Fixed:** 2026-06-24, in 3950f90 (fix(gate): close ISSUE-120)
+
+---
+
+## [FIXED] ISSUE-125: `OLLAMA_MODEL` env var is documented in both `.env.example` files but read by no code
+**Found:** 2026-07-31, during the DEC-149 qwen2.5:7b migration / 14b doc sweep
+**Severity:** P3 (nice-to-fix)
+**Where:** `.env.example:28`, `src/npc_engine/.env.example:29`
+**Description:** Both `.env.example` files publish `OLLAMA_MODEL` as if it selected the generation model.
+`grep -rn OLLAMA_MODEL --include=*.py` returns **zero** hits outside `.venv` — nothing reads it. Worse, its
+value was `mixtral:8x7b`, i.e. the *judge* model (DEC-143), so anyone setting it believed they were
+configuring generation, got no effect, and was pointed at the wrong model. Actual engine model selection is
+per-engine `src/npc_engine/engines/*/llm_config.yaml`.
+**Why deferred:** Deleting a published config key is a config-surface change, and DEC-149's scope was the
+model migration plus the stale-`14b` sweep. The immediate trap is defused: the value now reads `qwen2.5:7b`
+and both files carry a `NOTE:` that the key is unread and names the real source of truth.
+**To fix:** Either delete the key from both `.env.example` files, or wire it as a genuine override in
+`config.py` with a documented precedence order against `llm_config.yaml`. Decide which; do not leave it
+half-live. A test asserting every key in `.env.example` is referenced somewhere in `src/` would prevent
+recurrence.
+**Fixed:** 2026-07-31, in DEC-150 — both keys deleted from both `.env.example` files.
+**Correction to this entry as originally written:** it under-described the problem in two ways.
+(1) It is **two** dead keys, not one — `LLM_BACKEND` is equally dead, and a scan of all 55 keys
+showed exactly these two absent from `config.py` (53 are live). (2) It framed "delete vs wire up"
+as an open question; it was not. `ISSUE-003` (fixed 2026-05-06) had already removed **both** from
+`config.py` deliberately, so the `.env.example` entries were leftovers from an incomplete removal
+and deletion was the already-accepted end state. The entry also missed the collateral:
+`CONTRIBUTING.md` instructed contributors to set `LLM_BACKEND=mock` to run without an LLM, which
+has been inert since ISSUE-003 — fixed in DEC-150 by documenting `llm.backend: mock` in the five
+engine YAMLs instead.
+**Not adopted:** the suggested "every `.env.example` key is referenced in `src/`" guard test was
+considered and not built — deletion resolves the present rot, and the guard was judged not worth
+its false-positive surface now. Reconsider if a third orphan key appears.
+

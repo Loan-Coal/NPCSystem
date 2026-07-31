@@ -1,0 +1,450 @@
+# NPCSystem — Eval Pipeline Build Plan
+Weekend push (5–8h) + follow-on week (~6–10h). Written 30 July 2026.
+
+---
+
+# SATURDAY, FIRST THREE MOVES
+
+Scope confirmed: **Phases 0–2.** Unreal scene later. Everything below is ~3.5h of work plus background generation.
+
+**1. Before you open an editor (2 min).** Kick off `eval generate` at k=3 on your current config, in the background. ~60 min wall-clock. You need cached outputs to build scorers against, and if you start this after building you'll sit blocked with nothing to do.
+
+**2. While it runs — Phase 1 (~2-2.5h).** Split `generate` from `score`. Generation writes raw outputs *plus the retrieved context* to `evals/generations/<gen_id>/` with the config that produced them. Tag existing golden cases with `added_in`, then extend the set where coverage is thin. No metrics yet.\n\nNote: the k=3 run from step 1 uses the *old* golden set. That's fine and intentional — it exists to give you text to build scorers against, not to be a result.
+
+**3. Once outputs exist — Phase 2 (~2h).** Build the two deterministic scorers against cached text: hallucinated-entity rate and knowledge-boundary violations. Both are graph queries, both run in seconds, so this is where you finally get a tight loop. Add the per-case pass rate, Wilson interval, and flaky classification over the k repeats.
+
+**If that finishes early**, Phase 3 (calibration) is the highest-value next thing and it's only 1–1.5h — the labels already exist and re-scoring is now free.
+
+**Sunday evening, whatever else happened:** start a k=15 generation run before bed. It's ~5 hours of wall-clock and it gives you the first number you could actually quote.
+
+**One thing to measure in the first 30 minutes:** confirm the 20-minute figure. If it's closer to 40, drop to k=3 on a subset for everything except the overnight run, and say so in the plan.
+
+---
+
+**Goal:** turn the existing scoring function into an eval *pipeline* — comparable, persisted, uncertainty-aware. Sunday target is a working CLI spine, no UI.
+
+**Why this and not the Unreal scene or the SDK UI:** evaluation is the stated required skill in every AI Engineer job description worth applying to, and it's the one thing your current portfolio does not visibly demonstrate. This is also the cheapest of the three options, because the hard half (the scoring function) already exists.
+
+---
+
+## What you already have
+
+- Sample dialogue and event prompts run against a local LLM + agents
+- Keyword and tone checks via scripts
+- LLM-as-judge against expected answers, **binary pass/fail**
+- **A hand-labelled calibration set, judge measured against it at 90%+ precision** ← the rarest asset here; see below
+- Golden set frozen, but expanded ad-hoc when new test ideas come up
+- Prompts **externalised and versioned** ← the expensive prerequisite, already done
+- ~951 passing tests on the deterministic layer
+- Three-tier dialogue engine (LLM+RAG / graph templates / canned fallback)
+
+## What's missing
+
+| Gap | Consequence |
+|---|---|
+| Calibration not versioned or reproducible | The 90%+ claim can't be recomputed or defended when challenged |
+| Precision only, no recall | Says nothing about false *positives* — the judge silently passing real failures |
+| Golden set grows without version tags | Adding hard cases drops the aggregate and **reads as a regression** when nothing changed |
+| No run persistence | Can't answer "did last week's change help?" |
+| No repeats | A single judge run is close to meaningless — judges are noisy |
+| No uncertainty | Can't distinguish a real improvement from sampling noise |
+| Judge noise and system noise conflated | A flaky case could be an unreliable engine *or* an unreliable judge — currently indistinguishable |
+| No compare operation | A/B testing impossible despite having versioned prompts |
+| No flakiness tracking | Unstable cases are invisible until they embarrass you in a demo |
+
+---
+
+## The asset you're underrating
+
+You hand-labelled a set and measured the judge against it. **Almost nobody does this.** Most people who build an LLM-judge eval stop at "I have a judge" and never ask whether the judge is correct. You went one level up — that's meta-evaluation, and it's the difference between a metric and a number.
+
+It's also the answer to the hardest question an interviewer can ask about eval work: *"how do you know your evaluation measures anything real?"*
+
+Treat it as a first-class, versioned artifact (Phase 2), not a one-off measurement living in your CV.
+
+---
+
+## Build it yourself, or adopt a tool?
+
+Your criteria: free, something you learn from, easy to use, good for the resume, scalable. **Those pull in two directions**, so it's worth being explicit about what the resume signal actually is.
+
+The job descriptions ask for "evaluation frameworks" — the ability to *design and reason about* evaluation. "I set up Langfuse" is a weaker claim than "I built a golden set, calibrated my judge against human labels, and quantified variance." Tool operation is learnable in an afternoon; methodology isn't, which is exactly why they screen on it.
+
+But the strongest candidate does both — owns the methodology *and* knows the industry tooling.
+
+**Recommendation: own the eval logic, adopt tooling for storage and UI — and do them in that order.**
+
+| | Weekend | Next week |
+|---|---|---|
+| **Own** | Golden set, calibration, k-repeats, statistics, compare | — |
+| **Adopt** | — | Tracing + storage + dashboard |
+
+Why this order and not the reverse:
+
+- The methodology is the differentiator and it's the part you can't outsource. Do it while you have focused time.
+- Tool setup is a fixed cost that competes directly with Phase 2 and 3 this weekend. It's also the part you can do tired, next week.
+- If you adopt first, the tool's opinions shape your design — and most prompt-eval tools assume a simple prompt→output shape that will fight your multi-agent + Neo4j setup.
+
+**On specific tools**, when you get to next week:
+
+- **Langfuse** — open source, self-hostable free, also has a hosted free tier (check current limits yourself, they change). Tracing + datasets + eval + comparison UI. Best fit for your criteria: recognisable on a CV, genuinely scalable, and the tracing concepts transfer directly to production AI work — which is a real gap in your current experience. Self-hosting is Docker Compose and non-trivial; the hosted tier is the easy path.
+- **promptfoo** — free, MIT, YAML-configured, purpose-built for prompt A/B, could be running in two hours. But it's opinionated toward single-prompt testing and will resist your agent pipeline. Good for the prompt dimension, poor for the retrieval one.
+- **W&B Weave** — recognisable name, free tier, solid. Heavier than you need.
+
+The genuine win from adopting: a tool gives you Phase 6's dashboard for free, which is 4–6 hours you don't spend on frontend work. Given the 20-minute generation cost, tracing is also the thing most likely to tell you *why* a run was slow.
+
+**Scalability, honestly:** JSON files on disk are fine for hundreds of runs and will not embarrass you. Don't let "scalable" pull you into infrastructure you don't need yet — that's a decision to make when run history gets unwieldy, not before.
+
+## The core design decision
+
+**Keep the binary judge. Add k-repeats. Derive a continuous per-case pass rate.**
+
+Do NOT convert the judge to 1–5 scores. Numeric LLM-judge scores are poorly calibrated — the model gives 4 and 3 to indistinguishable outputs. Binary judgments are the most reliable mode an LLM judge has. Repetition gives you resolution without sacrificing that reliability.
+
+What falls out:
+
+- **Per-case pass rate** — case 7 passes 3/5 → 0.6. Continuous, from a binary judge, free.
+- **Wilson confidence intervals** — binary + repeats is textbook binomial. ~10 lines. "85%" becomes "85%, CI [76, 91]".
+- **Two-proportion test for A/B** — the correct instrument for comparing two prompt versions, not eyeballing.
+- **Flakiness classification** — 5/5 stable-pass, 0/5 stable-fail, anything between = FLAKY. Flaky cases are the highest-information rows in the suite.
+
+**Calibration warning:** small k gives wide per-case CIs — 3/3 only bounds you to roughly [44%, 100%]. Given your 20-minute generation cost, **k=3 is the working floor and k=15 is an overnight job.** See the k table below. Never quote a low-k number as if it were tight.
+
+---
+
+# THE 20-MINUTE CONSTRAINT — read this before anything else
+
+A full eval run takes ~20 minutes on your local model. That single fact reshapes the plan, because naive k=5 repeats means **100 minutes per run and 200 minutes for an A/B pair.** You would spend the weekend watching a progress bar.
+
+## Split generation from scoring
+
+This is the highest-leverage change in the whole document.
+
+**The 20 minutes is *generation*, not scoring.** Right now they are fused, so every time you tweak a metric you pay full inference cost again. Separate them:
+
+```
+eval generate --config <cfg> --k 3     # slow: ~20 min x k. Writes raw outputs to disk.
+eval score <generation_id>             # fast: re-scores cached outputs. Seconds to minutes.
+```
+
+What this buys you:
+
+- **Metric development becomes free.** Write a new scorer, run it over yesterday's cached outputs, see results in seconds. Without this, every metric iteration costs 20 minutes — and you will simply stop iterating.
+- **Calibration becomes free** — Phase 3 replays scorers over stored outputs with zero inference.
+- **Generation moves to wall-clock time, not your time.** Kick off a k=5 run at dinner; it is done after dinner.
+- **Reproducibility improves** — the exact text that was scored is on disk permanently. This is also what makes your calibration labels stable.
+
+Store generations as `evals/generations/<gen_id>/` alongside the config that produced them, and have run records reference `generation_id`. A "run" becomes generation + scoring pass, and the two version independently.
+
+## Two-tier metrics
+
+Your metric picks make this fall out naturally — **two of the three are deterministic**:
+
+| Tier | Metrics | Cost | Run it |
+|---|---|---|---|
+| **Fast** | Hallucinated entity rate, knowledge-boundary violations | Graph queries over cached text. **Seconds.** | Every save, if you like |
+| **Slow** | Keyword + tone LLM judge | LLM inference | On demand / overnight |
+
+The fast tier needs **no LLM at all** — cached output text checked against Neo4j. That is your tight iteration loop, and it sidesteps the 20-minute problem entirely.
+
+## Revised k guidance
+
+| Purpose | k | Generation cost | When |
+|---|---|---|---|
+| Building scorers | reuse cached outputs | 0 | Continuously |
+| Iterating on config | k=3 on a 5-8 case subset | ~5 min | During the day |
+| Real comparison | k=3 full set | ~60 min | Over lunch / while building |
+| A number you would quote | k=15 full set | ~5 hours | **Start Sunday evening, read Monday** |
+
+I earlier said k=5 minimum. With 20-minute runs, **k=3 is the honest working floor and k=15 is an overnight job**, not an afternoon one. Do not quote a k=3 number as if it were tight — the confidence interval will show you why.
+
+---
+
+# WEEKEND
+
+Ordered by value per hour. You said **resume signal wins any forced trade-off** and **CLI spine by Sunday** — so no UI this weekend, and rigour outranks presentation.
+
+**Before anything else on Saturday: kick off a generation run.** `eval generate --k 3` on your current config, in the background, first thing. You need cached outputs to build scorers against; start it after building and you are blocked for an hour with nothing to do.
+
+| # | Phase | Time | Cut? |
+|---|---|---|---|
+| 0 | **Start a k=3 generation run** | 2 min, then background | Never |
+| 1 | Split generate/score + schemas + golden set work | ~2-2.5h | No — everything depends on it |
+| 2 | Deterministic metrics (hallucinated entity, knowledge boundary) | ~2h | No — fastest feedback, strongest differentiator |
+| 3 | Scorer calibration (per-component) | 1-1.5h | No — cheapest high-value work |
+| 4 | `compare` / A/B diff | 1.5h | Cut first if needed |
+
+**~7-7.5h** for all four; **~4.5h for Phases 0-2**, which is your confirmed scope. Generation runs in background rather than in your working hours.
+
+**If you only get 5 hours: 0, 1, 2, and a partial 3.** The A/B diff is the easiest phase to pick up cold next week — everything it needs is already on disk by then.
+
+The HTML report has moved out of the weekend entirely, per your CLI-spine answer.
+
+## Phase 1 — Split generate/score + schemas + golden set (~2-2.5h)
+
+The structural change everything else depends on. No visible output; resist skipping it.
+
+**Steps**
+
+1. **Split the pipeline in two.** `eval generate` runs the system and writes raw outputs; `eval score` reads cached outputs and produces metrics. They must be independently runnable.
+2. Add `--k N` to `generate`. Repeats live in generation, not scoring.
+3. Generation artifact — `evals/generations/<gen_id>/`:
+   ```
+   meta.json:  {"gen_id": "...", "timestamp": "...", "git_sha": "...", "k": 3,
+               "golden_set_version": "v2",
+               "config": {"prompt_version": "v2",
+                          "retrieval": {"hops": 2, "max_nodes": 12, "rerank": false},
+                          "model": {"name": "...", "temperature": ..., "seed": ...}}}
+   outputs.jsonl: one line per (case_id, repetition) with the exact generated text,
+                  plus the retrieved context that produced it.
+   ```
+   **Store the retrieved context, not just the final text.** Without it you cannot compute retrieval metrics later without regenerating, and regenerating costs 20 minutes.
+4. **Improve and tag the golden set.** You flagged this needs real work, not just annotation — so budget for both. Add `added_in` tags to existing cases, then extend coverage where it's thin. Ordering matters: tag what exists first so today's cases keep their history, then append new ones with a fresh version. Aim for coverage of the failure modes you actually care about (hostile NPCs, knowledge boundaries, gossip that shouldn't have propagated) rather than case count.
+   ```
+   {"case_id": "dlg_greet_hostile_01", "tier": "llm", "added_in": "v1",
+    "tags": [...], "input": {...},
+    "expect": {"keywords_any": [...], "keywords_none": [...], "tone": "guarded"}}
+   ```
+   This is what lets `compare` diff on the intersection of two runs (Phase 4) so that appending hard cases doesn't read as a regression.
+5. **Never edit a case in place.** Changing an input or expectation silently invalidates every historical run containing it. Retire it (`"retired_in": "v3"`) and add a corrected case with a new `case_id`.
+6. Score record references the generation: `{"score_id": ..., "gen_id": ..., "scorer_versions": {...}, "cases": [...], "aggregate": {...}}`.
+
+**Pro:** turns a 20-minute feedback loop into a seconds-long one. Everything downstream gets cheaper.
+**Con:** zero visible output, and it's refactoring rather than building. Do it anyway — this is the phase that makes the rest of the weekend possible.
+
+## Phase 2 — Deterministic metrics + statistics (~2h) ← fastest feedback
+
+You picked hallucinated entity rate and knowledge-boundary violations. **Both are pure graph queries over cached text — no LLM, so they run in seconds.** That makes this the phase where you can actually iterate.
+
+They're also a stronger story than the judge: objectively verifiable, no calibration needed, and they measure your architecture's *stated thesis* rather than generic output quality.
+
+**Steps**
+
+1. **Hallucinated entity rate.** Extract entity mentions from output text, check each against Neo4j. Rate = mentions of entities that don't exist (or that this NPC has no path to) over total mentions. Deterministic, objective, and it's the classic RAG failure mode. Note the extraction method honestly — string matching against known entity names is fine and defensible; don't imply NER you didn't build.
+2. **Knowledge-boundary violations.** Did the NPC reference a fact that, per the gossip graph, hasn't propagated to it? A graph-path existence check. This one is genuinely novel — it tests your gossip propagation premise directly, and I've not seen an equivalent metric in a portfolio project.
+3. **The statistics layer**, over the k repeats from Phase 1:
+   - Per case: `passes/k` → pass rate; Wilson confidence interval; classification (`stable_pass` / `flaky` / `stable_fail`)
+   - Aggregate across all trials (cases x k)
+4. **Flakiness is the headline output.** A case at 2/3 is unreliable, and unreliable cases are where a live demo embarrasses you. Sort by instability and this becomes the most useful table you own.
+5. Optional, cheap once the loop exists: **separate judge noise from system noise.** Run the judge k times against one *fixed* cached output to measure judge instability, versus running the system k times to measure system instability. When a case looks flaky, this tells you which component is at fault. Genuinely uncommon.
+
+**Pro:** seconds-long iteration, objective metrics, and it ties measurement to your deterministic-core design philosophy.
+**Con:** entity extraction has edge cases (pronouns, aliases, partial names) that will eat time if you let them. Timebox it; imperfect extraction with a documented method beats perfect extraction you didn't finish.
+
+## Phase 3 — Scorer calibration (1–1.5h) ← highest value per hour
+
+The labels already exist and re-scoring is now free. This is formatting plus one command, and it produces the most defensible claim in the project.
+
+**Steps**
+
+1. Move your hand labels into `evals/calibration/labels_v1.jsonl`:
+   ```
+   {"case_id": "...", "output": "<the exact text you judged>",
+    "human_verdict": "pass", "labeller": "lohann", "labelled_at": "..."}
+   ```
+   Store the **frozen output text**, not a pointer to something regenerated — otherwise calibration needs a 20-minute run and the labels drift out of correspondence.
+2. `eval calibrate` replays the scorers over those stored outputs and compares against your verdicts.
+3. **Calibrate each scorer separately, not just the stack.** You ran the labelled set through the judge *and* the keyword/tone scripts together, so 90%+ describes the combination — which hides where the weakness is:
+
+   | Scorer | Good at | Fails by |
+   |---|---|---|
+   | Keyword checks | Precise, deterministic, free | Brittle — misses valid paraphrases, so **false negatives** |
+   | Tone/LLM judge | Handles paraphrase and nuance | Noisy and lenient, so **false positives** |
+   | Deterministic graph metrics | Objective, no calibration needed | Only cover what the graph knows |
+   | Combined | — | Inherits all of the above; the aggregate conceals which component drags |
+
+   Keywords at 99% and judge at 82% is a completely different action plan from the reverse, and right now you can't tell which world you're in.
+4. Report the **full confusion matrix** per scorer, not just precision:
+
+   |  | Human: pass | Human: fail |
+   |---|---|---|
+   | **Judge: pass** | true positive | **false positive ← the dangerous one** |
+   | **Judge: fail** | false negative | true negative |
+
+   False positives mean the judge is lenient and is *hiding real failures from you*. False negatives just send you chasing phantoms. Precision speaks to one direction only.
+5. Add **Cohen's kappa**. Human-vs-judge is inter-rater agreement and kappa is its standard measure — it corrects for chance agreement, which raw accuracy doesn't. ~5 lines via `sklearn.metrics.cohen_kappa_score`.
+6. Re-run whenever a judge prompt changes. A judge edit that improves a metric while wrecking calibration is otherwise silent.
+
+**Pro:** the expensive part (labelling) is already done. Makes your CV number reproducible and defensible, and answers the hardest interview question about eval work.
+**Con:** none. If time runs short, cut Phase 4 before this.
+
+**Later:** re-label a sample a week apart and report your own self-agreement. Your kappa with the judge is bounded by your kappa with yourself — a sophisticated touch when you have time.
+
+## Phase 4 — `compare` / A/B diff (1.5h)
+
+Prompts are already externalised and versioned, so A/B isn't something you build — it's two generations and a diff.
+
+**You named two dimensions: graph context retrieval and agent prompt versioning.** Both go in the `config` block from Phase 1.
+
+**Vary one at a time.** Change the prompt *and* the retrieval config together and the delta is unattributable — you learn something moved, not what. Factorial designs recover interactions but need far more runs than 20-minute generation allows. Note the limitation rather than pretending it away.
+
+**Retrieval deserves its own metric, and it's the more interesting dimension.** End-to-end pass/fail measures retrieval only indirectly, so a failure could be bad retrieval *or* good retrieval fumbled by generation — the same decomposition problem as judge-vs-system noise. Because Phase 1 stores retrieved context, you can add:
+
+- **Context recall** — did the retrieved subgraph contain the fact the case needs?
+- **Context precision** — how much injected context was irrelevant? Bears directly on token cost and the lost-in-the-middle failure mode.
+
+Then you can say *"deeper hops raised recall but hurt end-to-end because precision collapsed"* — worth more than any dashboard. Every AI Engineer JD names retrieval judgment; almost no portfolio measures retrieval separately from generation. It needs each golden case annotated with its required fact, so it's scoped to next week.
+
+**Steps**
+
+1. `eval generate --prompt-version v2` and `--prompt-version v3`, same golden set, same k, **same retrieval config**. Score both.
+2. **Diff on the intersection by default** — only cases present in both, via `added_in`. Report new/retired cases separately. `--all-cases` as explicit opt-out.
+3. `eval compare <score_a> <score_b>` prints:
+   - Aggregate delta on the common subset, with a two-proportion test (or simply: do the CIs overlap? — simpler and honest)
+   - **Regressions**, sorted by magnitude. The most useful list you'll own.
+   - **Fixes**
+   - **Stability changes** — moved into or out of flaky, even at an unchanged mean
+   - **Set changes** — "3 cases added in v2, excluded from the delta"
+4. Plain terminal table. No formatting effort.
+
+**Pro:** makes the whole thing a decision tool. Directly answers "did this change help?" — the question the JDs screen for.
+**Con:** needs two generations, so ~40 minutes of wall-clock before you can test it. Start them early.
+
+# FOLLOW-ON WEEK (~6–10h)
+
+## Phase 5 — Static HTML report (2h) — moved out of the weekend
+
+`eval report <score_id> [--compare <score_id>] > report.html`
+
+Static HTML, not a server: one command, no build step, can't break — and a committed report renders on GitHub without anyone running your code, which matters given the engine stays private.
+
+Contents, in priority order:
+
+1. Headline pass rate + confidence interval, with **k stated prominently** (a k=3 number must not look like a k=15 number)
+2. **Calibration badge** — per-scorer confusion matrices and kappa, so the report states how much its own headline can be trusted. The detail that makes a reader stop.
+3. Deterministic metrics: hallucinated entity rate, knowledge-boundary violations
+4. Run metadata: git SHA, config block, golden set version, generation ID
+5. **Flaky-case table sorted by instability**
+6. Regression/fix table when `--compare` is given
+7. Per-case drill-down: expected vs the k actual outputs, with judge reasoning
+
+
+## Phase 6 — The actual dashboard (only if you still want it)
+
+Now that run records are structured JSON on disk, the dashboard is a **reader**, not a rewrite.
+
+**Build one app with two route groups, not two apps.** Splitting SDK-user-facing from internal-dev-facing is architecturally right and you'll want it eventually — but two apps now means two shells, two build setups, two navs, and roughly double the yak-shaving before either shows anything. One app splits cleanly later; two apps merged is genuinely annoying. Defer it.
+
+Prioritise the **internal/eval** routes. The SDK-user-facing UI is a product feature — valuable for the startup ambition, but it doesn't touch what's being screened for.
+
+**Views, in build order**
+
+1. Run list — sortable, with pass rate, prompt version, git SHA, timestamp
+2. Metric over time — aggregate pass rate per run with CI bands
+3. Run diff — the Phase 3 compare output, rendered
+4. Case drill-down — all k outputs side by side, judge reasoning, history of this case across runs
+5. Flaky leaderboard — cases ranked by instability across all runs
+
+**Stack: FastAPI + server-rendered templates (+ inline SVG or a small JS lib for charts).**
+
+| | Pros | Cons |
+|---|---|---|
+| **FastAPI + templates/HTMX** ← pick this | Engine is Python, so the dashboard imports the eval package directly — **no API layer at all**. One `pip install`, one command to run. Already known from Thales. Smallest surface to maintain solo. | Charts need inline SVG or a small JS lib. Utilitarian look. Doesn't back the Angular CV claim. |
+| React + Vite | Best-looking result per hour. Recharts makes metric-over-time trivial. Most reviewers read React fluently. | It's React *plus* FastAPI — the API layer doesn't go away. Adds node/npm to a Python repo. Ramp-up cost. Two languages, solo. |
+| Angular | Only option that converts a CV claim into evidence. Zero ramp-up. | Heaviest scaffolding for a small tool. Rare in AI/startup codebases. Nobody screens AI Engineers on Angular, so the claim being backed is low-value. |
+| Streamlit / Gradio | Hours, not days. Charts free. Pure Python. | Reads as prototype, not engineering — directly undercuts a repo whose purpose is demonstrating rigour. Avoid. |
+
+The decisive argument is the missing API layer: the dashboard just imports the eval module. Spend the saved hours on Phase 7 instead — the A/B sweep is worth more to every reader you care about than visual polish.
+
+Counter-case for React: only if you expect the SDK-user UI to become real later, or you want frontend optionality.
+
+**Build it as if a stranger will use it** — README, quickstart, sensible empty states, self-explaining errors. That's the forward-deployed muscle (making an opaque system legible to someone who didn't build it) applied to something you were building anyway, and it captures most of the "builds for other people" signal without a second UI.
+
+## Phase 7 — A/B expansion + retrieval metrics (3–4h)
+
+Two pieces, in this order:
+
+**1. Annotate golden cases with required facts.** For each case, record which node or fact the retrieval must surface for a correct answer. Tedious but mechanical, and it unlocks context recall/precision — the retrieval-level metrics described in Phase 4. This is the highest-value next-week work, above the dashboard.
+
+**2. Sweep.** Run the golden set across *n* configs in one command, produce a ranked table. "I swept retrieval depth and prompt versions and picked the winner on measured pass rate with confidence intervals" is a far stronger sentence than "I tried some prompts."
+
+**Watch for the multiple-comparisons trap.** Sweep ten prompt variants against a noisy metric and the best-looking one is partly winning on luck. Either hold out a second golden subset to confirm the winner, or note the effect explicitly. Naming this problem in an interview is worth more than avoiding it silently.
+
+## Later / optional
+
+- SDK-user-facing UI (graph node editor, quest viewer) — product value, not resume value
+- Unreal scene polish + quest UI — see below
+- CI integration: run the fast subset on every commit, fail on regression
+
+---
+
+# Repo strategy — the middle path
+
+**Publish the eval harness, golden set and reports. Keep the engine private.**
+
+- Full verifiability on exactly the thing being screened for — a hiring engineer can read your golden set, your Wilson interval implementation, your flakiness classification, and your committed reports.
+- Startup ambitions intact; engine, Neo4j schema and game logic stay closed.
+- Sidesteps "90%+ precision" being an unverifiable claim on a resume.
+
+**Build for this from Phase 1** by keeping `evals/` self-contained behind one adapter. The decision then stays open at zero cost.
+
+### "But what if I make a game with it later?"
+
+No conflict. You own the copyright and can license however you like — dual-license or source-available if you want belt and braces. Godot and Bevy are open and plenty of commercial games ship on them. A game's value is content, art and design; nobody clones unlaunched NPC middleware and beats you to a game you haven't made.
+
+More importantly, the split above means **you never have to decide about the engine.** The hiring signal lives entirely in `evals/`; the commercialisable asset lives entirely in the engine.
+
+### "Should it be executable by others?"
+
+**No — readable beats runnable here, and chasing portability is wasted effort.** Running the harness needs your local LLM, your weights, your Neo4j. A stranger was never going to execute it.
+
+What a reviewer actually needs, all committed to the repo:
+
+1. A README showing the golden-set format and one worked example
+2. **The calibration section** — labelled set format, confusion matrix, kappa. Put this near the top; it's the thing that distinguishes the repo.
+3. One sample run record (`evals/runs/example.json`)
+4. One rendered HTML report (`evals/reports/example.html` — renders on GitHub)
+5. The compare output for two prompt versions, as a code block in the README
+
+That's a complete, evaluable artifact that runs on nobody's machine.
+
+**Extraction note:** keeping `evals/` behind a single thin adapter from Phase 1 means extraction later is a directory copy plus one stub, not a refactor. Worth the discipline on Saturday even though it costs nothing visible.
+
+### Publish the method, not the data
+
+Your golden set and calibration labels contain real prompts and expected NPC behaviour — publishing them leaks engine design, which is exactly what you want to keep private. But **a reviewer is evaluating your methodology, not your test cases.**
+
+So publish:
+
+- The harness: runner, Wilson intervals, flakiness classification, `calibrate`, `compare`
+- The **schemas** — golden case format, run record, calibration label format
+- A **small synthetic sample set** (5–10 fabricated cases in the real format) so everything runs and the reports render
+- Committed example outputs generated from the synthetic set
+- The README methodology section, with your *real* headline numbers quoted as results
+
+Keep private: the real golden set, the real calibration labels, the engine.
+
+This gives a hiring engineer everything they need to judge your rigour, leaks nothing about the product, and — usefully — a clean synthetic fixture set is itself good engineering practice rather than a compromise.
+
+---
+
+# On the Unreal scene (option a)
+
+Defer it, with one caveat.
+
+You already link a 10-minute playable Unreal demo on your resume, so a prettier room adds less than it feels like it does — the marginal viewer doesn't need better lighting, they need to understand what's technically hard.
+
+And when you do record the cold-outreach video, **the eval work is a better second act than better graphics.** "Here's the NPC talking — and here's how I know that wasn't luck" is a far stronger 90 seconds than the same scene, nicer. The dashboard is the reveal; the scene is just the setup.
+
+The quest UI is a different question. That's a genuine product gap, and worth doing — just not for the resume, and not this weekend.
+
+---
+
+# What this becomes on your resume
+
+Replacing the current *"Validated engine via a two-phase LLM-judge reaching 90+% precision"* — a number with no method behind it — with something like:
+
+> Built an evaluation pipeline for the dialogue engine: a versioned golden set scored by deterministic graph checks (hallucinated-entity rate, knowledge-boundary violations against the Neo4j state) alongside a two-phase LLM judge, with each scorer calibrated against a hand-labelled set and reported as a confusion matrix. Separated generation from scoring so cached outputs could be re-scored without re-inference, ran each case k times to turn binary verdicts into per-case pass rates with confidence intervals, and A/B tested graph retrieval configurations and prompt versions to catch regressions before release.
+
+The generation/scoring split is worth keeping in the bullet — it's an engineering decision driven by a real constraint (20-minute inference), and interviewers respond to constraint-driven design far better than to feature lists.
+
+Why this is a different class of claim:
+
+- **It leads with judge calibration**, which is the rarest thing you have. "I validated my evaluator" is a sentence most senior engineers can't say about their own systems.
+- **It names methods, not adjectives** — golden set, confusion matrix, confidence intervals, A/B comparison.
+- **It admits the instrument is imperfect**, which reads as calibration rather than weakness. Overclaiming is the more common failure and it's easy to catch in an interview.
+- **It ends on a decision the measurement enabled** — catching regressions — rather than on a number.
+
+It also maps almost word-for-word onto the stated requirements: Anthropic's "evaluation frameworks", Glean's "offline and online techniques, designing experiments", Harvey's "evals & harnesses that capture real-world quality", and Cohere's "move beyond trial and error."
+
+**Interview question this now answers.** *"How do you know your eval measures anything real?"* — most candidates have nothing. You have a labelled set, a reproducible command, and a matrix.

@@ -3,6 +3,130 @@
 Non-obvious architectural choices. Each entry explains what was decided and why,
 so future maintainers can judge edge cases without re-deriving the rationale.
 
+## DEC-146: Transcript schema v2 — hard break, no v1 compatibility
+**Date:** 2026-07-31 · **Status:** ✅ ACCEPTED (approved 2026-07-31) · **Gates:** `EVAL-P1.3` (and therefore
+every later EVAL-P phase) · **Drives:** `evals/eval_records.py`, `evals/run_config.py`, `evals/retrieved_item.py`
+**Context:** `TranscriptFile` (DEC-144) is `frozen=True` at `version: 1` and carries only `generated_at` +
+`records`. It cannot answer "what produced this run?" — there is no config block, no `k`, no `gen_id`, no
+`git_sha`, no golden-set version, no per-turn timing, and no retrieved context. Every downstream capability
+in the EVAL-P program (statistics over repeats, retrieval decomposition, calibration keyed to a record,
+A/B comparison) needs at least one of those. Because the model is frozen, these are not additive fields —
+adding them is a schema migration with a compatibility decision.
+**Decision:** Bump `_TRANSCRIPT_VERSION` to **2** as a **hard break**. `read_transcript` raises a new
+`TranscriptVersionError` naming both the expected and found version when `version != 2`. No v1 reader, no
+migration shim, no `Optional`-with-default softening.
+- `TranscriptFile` gains: `gen_id: str`, `k: int`, `config: RunConfig`.
+- `GenerationRecord` gains: `repetition: int`, `duration_ms: int`, `retrieved_context: tuple[RetrievedItem, ...]`.
+- `RunConfig` (new, frozen): `prompt_version`, `generation_model`, `temperature`, `top_p`, `max_tokens`,
+  `judge_model`, `retrieval_profile`, `git_sha`, `golden_set_version`. **No `seed` field** — see Trade-off.
+- Generation output moves to a directory artifact `evals/generations/<gen_id>/{meta.json,outputs.jsonl}`
+  (gitignored), alongside the existing single-file transcript path.
+**Rationale:** A hard break costs nothing here and an optional-field migration costs permanently.
+`e2e/transcripts/` is gitignored (`.gitignore:24`) and `evals/generations/` will be too — **no v1 transcript
+is tracked anywhere in the repo**, so there is literally nothing to migrate. The alternative (all-new-fields-
+optional, stay at v1) makes the published schema permanently ambiguous about which runs carry a config block
+and which do not — which is precisely the reproducibility hole this program exists to close, re-introduced at
+the schema level. A hard break also fails loud on a stale local artifact instead of silently scoring it with
+a missing config.
+**Trade-off:** Any transcript sitting in a developer's untracked `e2e/transcripts/` becomes unreadable and
+must be regenerated (~20 min). Accepted: they are throwaway artifacts by design.
+**`seed` is deliberately absent.** `LLMGenerateProtocol.generate()` (`engines/llm/protocols.py`) has no `seed`
+parameter and `ollama_adapter.py` never sets `options.seed`. A `seed` field would be permanently `None` — a
+reproducibility claim the engine cannot honour. Adding real seed support changes a Protocol shared by three
+adapters (ask-gate) and is parked. Until then the report states `temperature=0.15`, **not** "deterministic".
+**Alternatives rejected:** (a) additive optional fields at v1 — permanent schema ambiguity, above;
+(b) a sibling `meta.json` with the transcript untouched — splits one logical artifact across two files that
+drift apart, and the record-level fields (`repetition`, `duration_ms`, `retrieved_context`) cannot live there anyway.
+
+---
+
+## DEC-147: The `evals/` boundary contract — one sanctioned adapter, everything else src-free
+**Date:** 2026-07-31 · **Status:** ✅ ACCEPTED (approved 2026-07-31) · **Gates:** `EVAL-P0.2`, `EVAL-P0.3`
+· **Drives:** `evals/engine_adapter.py`, `evals/__init__.py`, `evals/retrieval_runner.py`, `Makefile`
+**Context:** The stated intent is that `evals/` be publishable standalone — harness, schemas and a synthetic
+fixture set — while the engine stays private. DEC-143 and the EVAL-B block already assert "`evals/` stays
+src-free", and `judge_config.py` / `preconditions.py` / `matchers.py` honour it with local exception classes.
+**That claim is currently false.** `evals/retrieval_runner.py` imports five `npc_engine` modules:
+`npc_engine.graph.graph_reader` (`:104`), and `npc_engine.config`, `npc_engine.graph.infra.db`,
+`npc_engine.retrieval.embedding_index`, `npc_engine.retrieval.vector_store_factory` (`:238-241`). It genuinely
+needs in-process access to the embedding index and the Neo4j driver — this is not gratuitous.
+Two further inconsistencies block any consolidation: `evals/` has **no `__init__.py`**, and it runs two
+incompatible entry conventions — flat imports (`import preconditions`; `python evals/runner.py`; works only
+because `pyproject.toml` sets `pythonpath = [..., "evals"]`) versus package imports
+(`from evals.retrieval_matchers import …`; `python -m evals.retrieval_runner`).
+Separately, **no gate covers `evals/` at all**: `lint` is `ruff check src/`, `type` is `mypy src/`,
+`scripts/check_rules.py:108` iterates `src/npc_engine`, `docstring_audit.py` scans `src/`, and
+`rules_baseline.txt` holds zero `evals/` entries. The one directory intended for publication is the one
+directory with no enforcement.
+**Decision:** Define the boundary explicitly rather than aspirationally.
+1. **Exactly one module — `evals/engine_adapter.py` — may import `npc_engine`.** It exposes a narrow surface
+   (`build_retrieval_stack()`, `known_event_ids(session, npc_id)`) and nothing else. Every other `evals/`
+   module is src-free, enforced by an AST-scanning guard test, not by convention.
+2. **Prefer HTTP over the adapter.** Where the engine already exposes a route, `evals/` uses it and does not
+   touch the adapter: entity vocabulary via `GET /v1/graph/nodes/{node_type}?limit&offset`, knowledge via
+   `GET /v1/graph/edges/KNOWS_ABOUT/{src}/{dst}`, retrieved context via `GET /v1/admin/debug/retrieval`.
+   The adapter exists only for what has no route (in-process vector search).
+3. **Reading a `src/` YAML file is not a src import.** `judge_config.py:87` already globs
+   `src/npc_engine/engines/*/llm_config.yaml`; `RunConfig` resolution does the same. Files are data.
+4. **`evals/` joins the lint gate** (`make lint` covers `src/ evals/`). mypy and docstring coverage are
+   deferred until the ruff pass reveals the real violation count.
+5. **The eval dashboard lives inside `evals/`**, as its own small FastAPI app (`python -m evals dashboard`)
+   importing the evals package directly. It is *not* added to `src/npc_engine/api/`, and it is distinct from
+   the game-designer dashboard already served at `/dashboard`.
+**Rationale:** "Src-free" as an unenforced convention lasted exactly as long as it took one runner to need a
+vector store. A single named exception plus a mechanical guard is honest and survives; a blanket rule that is
+already violated is not. Keeping the dashboard inside `evals/` is what makes "copy the directory plus one
+stub" a real extraction path rather than an aspiration — if the UI imported `npc_engine`, publication would
+require a rewrite.
+**Trade-off:** The published `evals/` directory ships one module that will not import on a machine without the
+engine. Accepted: that module is the documented seam, its absence degrades exactly one runner
+(`eval-retrieval`), and the synthetic fixture set exercises every other path.
+**Alternatives rejected:** (a) port `retrieval_runner` to pure HTTP — `/v1/admin/debug/retrieval` returns an
+already-assembled context with tier/priority flattened, so raw vector-search ranking is not recoverable and
+retrieval metrics would silently change meaning; (b) accept the violation and drop the src-free claim — gives
+up the publication story, which is the program's main deliverable.
+
+---
+
+## DEC-148: Legacy eval targets consolidate into one CLI via aliases, deleted last
+**Date:** 2026-07-31 · **Status:** ✅ ACCEPTED (approved 2026-07-31) · **Gates:** `EVAL-P6.3`, `EVAL-P7`
+· **Drives:** `evals/__main__.py`, `Makefile`, `evals/dashboard/`
+**Context:** Seven eval entry points have accreted: `make eval`, `eval-report` (a bare alias for `eval`),
+`eval-anti-hallucination`, `eval-llm`, `eval-llm-demo`, `eval-retrieval`, `eval-combined` — plus the two-phase
+`eval-generate` / `eval-judge` added by DEC-144, which were explicitly "purely additive". The end state must be
+one coherent pipeline, not old and new runners living side by side. But a naive cutover is blocked:
+`generate_runner._build_yaml_records_for_case` records only `tone_judge`/`affirms_judge`
+(`_LLM_JUDGE_KINDS`, `:36`), leaving `min_length`, `keyword_none`, `schema`, `in_set`, `range` and
+`keyword_any` in `runner.py`'s inline pass and returning `None` for grounded anti-hallucination cases
+(`_build_ah_record:129`). **The transcript path therefore scores a strict subset of `make eval` and cannot
+replace it today.**
+**Decision:** Consolidate in three ordered moves, each independently green:
+1. **Close the coverage gap first.** Every deterministic expectation becomes a transcript record, so scoring
+   a transcript reproduces `make eval`'s per-case verdict exactly — asserted case-by-case against a recorded
+   fixture, not assumed.
+2. **Introduce `python -m evals <verb>`** (`generate`, `score`, `judge`, `calibrate`, `report`, `retrieval`)
+   and reduce all seven legacy make targets to one-line aliases delegating to it. Muscle memory and any
+   external reference keep working; the gate stays green at every commit; nothing is orphaned.
+3. **Delete the aliases last**, as a separate final step, once nothing references them.
+The CLI is the intermediate surface, not the destination: the eventual driver is the engine-developer-facing
+dashboard (DEC-147 §5), which imports the same verbs in-process.
+**Rationale:** Ordering is the whole decision. Deleting targets before step 1 would silently reduce what is
+being measured — the anti-hallucination guarantee is computed from `keyword_none` and `affirms_judge`
+failures inside guard cases (`summary._tally_failures`), and `keyword_none` is one of the kinds the transcript
+path currently drops. A hard cutover would also be one large commit that cannot be made green incrementally,
+violating the one-step-one-commit rule the roadmap is built on.
+**Trade-off:** The seven targets survive one phase longer than strictly necessary, and the alias layer is
+throwaway work. Accepted — it is minutes of work and it is what keeps every intermediate commit green.
+**Related defect (blocking a comparable headline):** `judge_runner._to_result_dict` sets
+`case_id = record_id` (e.g. `case_adv_x:tone_judge:0`), and each guard case emits two records, so
+`summary` reports **74** guard turns where `make eval` reports **37**. The two headlines describe the same
+run with different denominators. Logged as **ISSUE-123**, closed in `EVAL-P6.2`.
+**Alternatives rejected:** (a) keep all seven targets as the public surface and unify only underneath — the
+published harness still presents seven entry points, which reads as accretion; (b) hard cutover in one phase —
+one un-greenable commit, and it would ship the coverage regression described above.
+
+---
+
 ## DEC-144: EVAL-B4 — Two-phase generate→judge transcript architecture
 **Date:** 2026-06-23
 **Context:** The inline eval pipeline (runner.py / anti_hallucination_runner.py) mixes
@@ -1963,3 +2087,65 @@ local eval exception (mirrors `EvalConfigError`) so `evals/` stays src-free.
 **Trade-off:** `mixtral:8x7b` is ~26 GB, so judge passes are slower than qwen2.5 — acceptable for an offline
 eval harness. The exact-match-fail + same-family-warn rule (vs same-family-fail) keeps `qwen2.5:7b` usable as
 a judge in a pinch while still flagging the weaker separation.
+
+## DEC-149: All five engines standardise on qwen2.5:7b (supersedes DEC-142)
+**Date:** 2026-07-31 · **Status:** ✅ ACCEPTED · **Drives:** `src/npc_engine/engines/*/llm_config.yaml`, `evals/judge_config.py` (discovery), EVAL-P0.1, EVAL-P1.1
+**Context:** DEC-141 put all engines on `qwen2.5:7b`; DEC-142 reverted to `qwen2.5:14b` for quality. The
+working tree had since drifted into a **mixed fleet** — an unstaged `14b → 7b` edit on `dialogue` only,
+with `chapter`, `memory_consolidation`, `quest_generation` and `proactive_dialogue` still on `14b`, while
+`CLAUDE.md`'s Stack table documented `14b`. This is fatal to the EVAL program specifically: `RunConfig`
+(EVAL-P1.1) records a single `generation_model`, and `judge_config.discover_generation_models()` globs
+**all five** configs — so a mixed fleet makes "which model produced this number" unanswerable and makes
+every recorded eval number uninterpretable.
+**Options:**
+  1. All five → `7b` — one resident model (~4.7 GB) on 12 GB VRAM, ~2× faster per turn than 14b.
+  2. `dialogue` only → `7b` — smallest diff, but formalises the drift and keeps `RunConfig` dishonest.
+  3. All five → `14b` — honours DEC-142, but ~2× the wall-clock on all 94 dialogue POSTs per full run,
+     and k=3/k=15 estimates scale directly off per-turn latency.
+**Decision:** Option 1. All five engines on `qwen2.5:7b`, and `CLAUDE.md` is the authoritative source —
+pinned by `tests/unit/evals/test_model_identity.py`, which fails if the Stack table and any engine
+`llm_config.yaml` diverge, or if the fleet ever declares more than one model again.
+**Trade-off:** Lower per-turn generation quality than `14b` — the exact trade DEC-142 rejected. Accepted
+because the EVAL program's purpose is to *measure* quality rather than assume it, and an unmeasured
+quality preference is worth less than an attributable baseline. If EVAL-P0.4 shows 7b materially below the
+Stage-A pass counts (`make eval` 41/53, anti-hallucination 27/40), revisiting is a one-line change per
+engine plus the doc — the test makes the divergence impossible to do silently.
+**Also in this change:** `e2e/scenarios/scenario_voice_from_graph.py` hardcoded `JUDGE_MODEL` default
+`qwen2.5:14b` and built its own `OllamaAdapter`, **bypassing the DEC-143 collision guard entirely** — it
+now routes through `e2e/helpers/judge_client.py` like the other two judge scenarios.
+**Judge unaffected:** `mixtral:8x7b` stays the default judge (DEC-143). It is a different family, so the
+separation invariant holds; and holding the judge fixed is what keeps the EVAL-P0.4 baseline comparable
+to the Stage-A numbers. Judge cost is a separate lever, measured at EVAL-P0.4, not pre-emptively cut.
+
+## DEC-150: Complete ISSUE-003 — delete the dead `LLM_BACKEND` / `OLLAMA_MODEL` env keys, and enforce DEC-143 by AST scan
+**Date:** 2026-07-31 · **Status:** ✅ ACCEPTED · **Drives:** `.env.example` (both copies), `CONTRIBUTING.md`, `tests/unit/evals/test_judge_bypass_guard.py`
+**Context:** Three items surfaced while sweeping stale model references for DEC-149.
+  1. **Dead env keys.** `ISSUE-003` (fixed 2026-05-06) removed `LLM_BACKEND` **and** `OLLAMA_MODEL` from
+     `config.py` — superseded by per-engine `llm_config.yaml`. The `.env.example` cleanup was missed, so both
+     keys stayed published in both copies. A scan of all 55 keys found exactly these two absent from
+     `config.py`; the other 53 are live. `OLLAMA_MODEL`'s value was `mixtral:8x7b` — the *judge* model —
+     so it advertised the wrong model for a setting that did nothing.
+  2. **A broken contributor instruction.** `CONTRIBUTING.md` told contributors to set `LLM_BACKEND=mock` to
+     run without an LLM. That has been inert since ISSUE-003: backend selection reads
+     `engine_config.llm.backend` (`factory.py:71`). The documented no-GPU path did not work.
+  3. **An unenforced invariant.** DEC-143's judge-separation rule was bypassed for months by
+     `scenario_voice_from_graph.py`, whose docstring claimed compliance it did not have. Nothing failed.
+**Decision:**
+  1. **Delete** both keys from both `.env.example` files, replacing them with a comment naming
+     `llm_config.yaml` as the real source. Not re-wired as overrides — that would reverse ISSUE-003 and
+     reintroduce the global-vs-per-engine precedence ambiguity its removal eliminated.
+  2. **Document the real mechanism** in `CONTRIBUTING.md`: set `llm.backend: mock` in the five engine YAMLs.
+     Verified working — `mock` is a registered backend and `EngineModelConfig` validates it.
+  3. **Add `tests/unit/evals/test_judge_bypass_guard.py`**, an AST scan of `evals/`, `e2e/scenarios/` and
+     `e2e/helpers/` rejecting (a) `os.getenv("JUDGE_MODEL", <default>)` and (b) direct `OllamaAdapter(...)`
+     construction outside `judge_client.py` / `judge_config.py`.
+**Validation:** the detector was run against the **pre-fix** `scenario_voice_from_graph.py` recovered from
+git and flagged both halves of the real bypass at the exact lines (`:32` env default, `:39` adapter) — the
+guard is proven against the historical defect, not only against synthetic samples. It also carries
+self-tests for good/bad/allowlisted sources and a `test_scan_covers_the_known_judge_consumers` check so a
+mis-rooted glob cannot report an empty tree as clean.
+**Trade-off:** the mock path is now honest but clunkier to follow (five tracked YAMLs go dirty rather than
+one env var). Accepted over restoring an override: a truthful clunky path beats a convenient false one, and
+re-adding the override is a reversible follow-up if contributor friction proves real. The AST guard's
+allowlist is a small maintenance surface, accepted because the invariant it protects already failed once
+silently.

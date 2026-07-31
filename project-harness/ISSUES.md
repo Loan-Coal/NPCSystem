@@ -18,6 +18,55 @@ Rules:
 
 ---
 
+## ISSUE-123: `eval-judge` reports double the guard turns of `make eval` — the two headlines are not comparable
+**Found:** 2026-07-31, during eval-program planning (adversarial review of `npc_system_eval_plan_idea`)
+**Severity:** P2 (annoying — silently inflates the published anti-hallucination denominator)
+**Where:** `evals/judge_runner.py:81` (`_to_result_dict`), consumed by `evals/summary.py:93` (`_is_guard_case`)
+**Description:** `_to_result_dict` sets `case_id = judged.record_id`, which has the form
+`<case_id>:<judge_kind>:<index>` (e.g. `case_adv_false_premise_peace:tone_judge:0`). `summary._is_guard_case`
+matches on the `case_adv_`/`case_neg_` prefix, so the prefix survives and guard detection still works — but
+each guard case emits **two** records under the current guard injection (`runner._guard_expectations` appends
+a `tone_judge` **and**, for every demo-world guard case, an `affirms_judge`; all 37 guard cases are
+`requires_world: demo`). Result: `make eval-judge` reports `guard_turns = 74` where `make eval` reports
+`guard_turns = 37` for the identical run. The published headline string
+("N lore hallucinations across M adversarial turns") therefore differs between the two paths purely because
+of record fan-out, not because anything about the engine differs. Any figure quoted from `eval-judge` today
+overstates the adversarial-turn count by ~2×.
+**Why deferred:** Not the planning session's task (planning + review only, zero implementation). It is
+already scheduled as **EVAL-P6.2** in the `EVAL-P0..P7` program, which is the first step that can fix it
+without also needing the deterministic-matcher coverage gap closed (EVAL-P6.1).
+**To fix:** In `judge_runner`, group `JudgedRecord`s back to their originating `case_id` (strip the
+`:<judge_kind>:<index>` suffix) before handing them to `summary.summarize`, so one case contributes one guard
+turn regardless of how many expectations it carries. Regression test:
+`tests/unit/test_judge_runner.py::test_guard_turn_count_matches_case_count_not_record_count` — a fixture of
+37 guard cases × 2 records must report 37 guard turns. Cross-check the resulting headline against a
+`make eval` run over the same seeded worlds; the two strings must agree.
+
+---
+
+## ISSUE-124: `evals/` is not covered by `mypy`, `check-rules`, or `check-docstrings`
+**Found:** 2026-07-31, during eval-program planning
+**Severity:** P3 (nice-to-fix — no current defect, but zero enforcement on the directory intended for publication)
+**Where:** `Makefile` (`lint`, `type` recipes), `scripts/check_rules.py:108`, `scripts/docstring_audit.py`,
+`scripts/rules_baseline.txt`
+**Description:** Every quality gate scopes to `src/` only: `lint` is `ruff check src/`, `type` is `mypy src/`,
+`check_rules.py` iterates `_iter_py("src/npc_engine")`, `docstring_audit.py` scans `src/`, and
+`rules_baseline.txt` contains zero `evals/` entries. `test-cov` measures only
+`npc_engine + matchers + summary + runner`, so the other 10 `evals/` modules have no coverage floor either.
+Net effect: the 13 modules in `evals/` — the directory the project intends to publish standalone as its
+portfolio artifact — carry no lint, type, file-size, function-length, nesting, or docstring enforcement,
+while `src/` carries all six.
+**Why deferred:** `EVAL-P0.3` brings `evals/` under `ruff` only, deliberately time-boxed to 30 minutes,
+because the true violation count across 13 pre-existing modules is unknown and extending `mypy` +
+`check-docstrings` at the same time risks turning one roadmap step into an unbounded cleanup sweep.
+Tracked as a `Parked (out of budget)` line in the `EVAL-P0..P7` program.
+**To fix:** After `EVAL-P0.3` establishes the ruff baseline and the real violation count is visible:
+(1) add `evals/` to the `type` recipe and drive mypy to zero (or record a ratchet baseline, mirroring
+`scripts/mypy_ratchet.py`); (2) extend `docstring_audit.py`'s scan root to include `evals/` — most modules
+already carry the `Module:/Layer:/Purpose:` header, so this should be small; (3) extend
+`check_rules.py:_iter_py` to `evals/` and record any R001 file-size / R006 function-length residue in
+`rules_baseline.txt` under a dedicated `# evals/` section, per the DEC-140 documented-waiver convention.
+
 ---
 
 ## ISSUE-083: two voice tone_judge cases fail under epoch=war / stage_b_v2.9 (captain_sorn, mira_innkeeper)
@@ -116,13 +165,22 @@ new DI option in `api/dependency_singletons.py`; add Docker Compose Redis servic
 
 ---
 
-
----
-
-
----
-
-
-
-
----
+## ISSUE-122: `app` service has no restart policy — startup race vs Neo4j leaves the API permanently dead
+**Found:** 2026-06-25, while debugging DemoGame dialogue (engine appeared unreachable from the game)
+**Severity:** P2 (annoying — silently kills the whole API until a manual restart; high-confusion failure mode)
+**Where:** `docker-compose.yml` — `app` service
+**Description:** `npcsystem-app-1` exited (code 3) during FastAPI lifespan startup: `ensure_core_constraints`
+(`src/npc_engine/graph/schema_bootstrap.py:70`) opened a Neo4j session before Neo4j was accepting Bolt
+connections, raising `neo4j.exceptions.ServiceUnavailable: Couldn't connect to neo4j:7687 ... [Errno 111]`
+→ `Application startup failed. Exiting.`. Neo4j became healthy ~seconds later, but with **no `restart` policy**
+on the `app` service the container stayed dead. Result: port 8000 was never published and every client call
+connection-failed (`status -1`). From the DemoGame side this masqueraded as "the LLM is untied from dialogue"
+— the game was healthy; the API was simply down. A plain `docker compose up -d app` (which waits for
+neo4j-healthy) recovered it cleanly, confirming the only fault was the unguarded startup race + no auto-restart.
+**Why deferred:** User asked to log only, not implement. The immediate incident is resolved (container restarted,
+`/health` → 200). Recurs on any cold start where the app wins the race against Neo4j.
+**To fix:** On the `app` service in `docker-compose.yml`: (1) add `restart: on-failure` (or `unless-stopped`)
+so a lost startup race self-heals; and/or (2) ensure `depends_on: { neo4j: { condition: service_healthy } }`
+so the app never starts before Neo4j's healthcheck passes. Belt-and-suspenders: a short retry/backoff loop
+around `ensure_core_constraints` in `lifespan` (`src/npc_engine/main.py:124`) so a transient Bolt blip doesn't
+abort startup. Verify the Neo4j service actually defines a `healthcheck` for option (2) to be meaningful.
