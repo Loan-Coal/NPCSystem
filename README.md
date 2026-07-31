@@ -40,7 +40,7 @@ A game backend service that gives non-player characters persistent knowledge, re
 ## Quick start
 
 ```bash
-# Requirements: Python 3.14+, Neo4j 5, Ollama with qwen2.5:14b (or OpenAI GPT-4o)
+# Requirements: Python 3.14+, Neo4j 5, Ollama with qwen2.5:7b
 
 docker-compose up -d   # start Neo4j + API server
 make demo-seed         # seed demo world (idempotent)

@@ -197,8 +197,8 @@ def test_build_dialogue_prompt_injects_voice_from_context() -> None:
 def test_build_dialogue_prompt_contains_echo_guard_before_player_message() -> None:
     """ECHO_GUARD reinforcement must appear at max-attention position, before the fence.
 
-    Reinforces Rule 9 (echo prohibition) and presupposition resistance for the 14b
-    model right before the player message.
+    Reinforces Rule 9 (echo prohibition) and presupposition resistance for the local
+    qwen2.5 model right before the player message.
     """
     result = build_dialogue_prompt(_make_request(player_message="Grain's thirty silver now, right?"), "{}")
     guard_pos = result.find("ECHO_GUARD=")

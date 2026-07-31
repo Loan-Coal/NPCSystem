@@ -10,12 +10,13 @@ Watch the graph panel update in real time.
 |-------------|-------|
 | Docker + Docker Compose running | `docker compose ps` |
 | Python venv with demo deps installed | `pip install -r demo_game/requirements.txt` |
-| Ollama running with `qwen2.5:14b` pulled | `ollama list` |
+| Ollama running with `qwen2.5:7b` pulled | `ollama list` |
 
 One-time model pull:
 
 ```bash
-ollama pull qwen2.5:14b
+ollama pull qwen2.5:7b     # generation (all five engines, DEC-149)
+ollama pull mixtral:8x7b   # LLM judge, only needed for make eval-llm-demo (DEC-143)
 ```
 
 ## Setup
@@ -112,7 +113,10 @@ knowledge spreading through the social graph.
 make eval-llm-demo
 ```
 
-Requires Ollama with `qwen2.5:14b` running. Runs 2 judge tests:
+Requires Ollama with **both** the generation model `qwen2.5:7b` and the judge model
+`mixtral:8x7b` pulled. The judge must differ from every engine generation model
+(DEC-143) — `judge_config.resolve_judge_model()` hard-fails on a collision. Override
+the judge with `JUDGE_MODEL=…`. Runs 2 judge tests:
 
 - `test_war_epoch_captain_sorn_acknowledges_war` — does captain_sorn reference war/conflict?
 - `test_gossip_propagates_after_clock_advance` — is `northern_war_begins` present in the graph?
@@ -126,7 +130,7 @@ Requires Ollama with `qwen2.5:14b` running. Runs 2 judge tests:
 | `make demo-seed` → `created=53 skipped=0` | Fresh DB (first run) | Normal |
 | `make demo-seed` → `created=0 skipped=53` | World already seeded | Normal on re-run |
 | `make eval-llm-demo` skips all tests | Ollama not running | `ollama serve` then retry |
-| captain_sorn gives a generic response | Model not pulled | `ollama pull qwen2.5:14b` |
+| captain_sorn gives a generic response | Model not pulled | `ollama pull qwen2.5:7b` |
 | Pygame window fails to open | pygame-ce not installed | `pip install -r demo_game/requirements.txt` |
 
 ---

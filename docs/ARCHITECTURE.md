@@ -724,7 +724,7 @@ REDIS_CONNECT_TIMEOUT_SECONDS=1.0
 |---|---|---|
 | Graph database | Neo4j | Native graph traversal for relationship queries; Cypher is expressive for NPC knowledge |
 | LLM interface | Protocol + factory **registry** | Add a local or cloud backend by registering an adapter; engines depend only on `LLMClientProtocol`. Shipping backends: `ollama`, `mock`. |
-| Local LLM backend | Ollama (default `qwen2.5:14b`) | Self-hosted, privacy/offline goals; per-engine model selection via each engine's `llm_config.yaml`; prompt iteration prioritized over latency at this stage |
+| Local LLM backend | Ollama (default `qwen2.5:7b`) | Self-hosted, privacy/offline goals; per-engine model selection via each engine's `llm_config.yaml`, all five currently on one model (DEC-149) so eval numbers stay attributable to a single generator |
 | Retrieval strategy | Hybrid (graph Tier A + RAG Tier B) | Facts from graph are authoritative; RAG provides semantic similarity for open-ended context |
 | Gossip distortion | Deterministic pure function | Reproducible debugging; no LLM cost for NPC-to-NPC communication |
 | Emotion persistence | In-memory store + graph snapshot | Fast reads during dialogue; survives restarts via Neo4j flush |

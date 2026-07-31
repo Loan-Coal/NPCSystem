@@ -1,7 +1,7 @@
 engine: proactive_dialogue
 llm:
   backend: ollama
-  model: qwen2.5:14b
+  model: qwen2.5:7b
   temperature: 0.8
   max_tokens: 128
   top_p: 0.9

@@ -188,7 +188,8 @@ DEMO_MAX_MESSAGE_CHARS: int = 1000
 
 # Maximum seconds to wait for a single WebSocket frame from the dialogue endpoint.
 # The server fully generates the dialogue before streaming (dialogue_ws.py), so the
-# first frame waits the full LLM generation (~38s cold qwen2.5:14b). Must be >= the
+# first frame waits the full LLM generation (~38s cold, measured on qwen2.5:14b; the fleet
+# moved to the faster qwen2.5:7b in DEC-149, so this bound stays conservative). Must be >= the
 # HTTP dialogue timeout (config.DemoConfig.NPC_DIALOGUE_TIMEOUT_S) or the WS recv
 # trips before the first token (ISSUE-065). If the server dies mid-stream, ws.recv()
 # raises TimeoutError after this delay and the worker unlocks the UI via clear_waiting().

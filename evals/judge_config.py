@@ -8,11 +8,11 @@ Used by: evals/matchers.py and e2e/helpers/judge_client.py (single source of tru
 Does NOT: import from src/npc_engine/ (keeps evals/ src-free), call any LLM.
 
 The judge model MUST differ from every engine generation model. The generation
-models are discovered by reading the per-engine ``llm_config.yaml`` files. An exact
-collision (judge == a generation model, e.g. qwen2.5:14b) is a hard failure
-(JudgeModelCollisionError). A same-family judge (e.g. qwen2.5:7b vs qwen2.5:14b)
-is allowed but logs a loud warning. Default judge: mixtral:8x7b (different family,
-per DEC-143).
+models are discovered by reading the per-engine ``llm_config.yaml`` files — all five
+currently declare qwen2.5:7b (DEC-149). An exact collision (judge == a generation
+model, e.g. qwen2.5:7b) is a hard failure (JudgeModelCollisionError). A same-family
+judge (e.g. qwen2.5:14b against a qwen2.5:7b fleet) is allowed but logs a loud
+warning. Default judge: mixtral:8x7b (different family, per DEC-143).
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 engine: chapter
 llm:
   backend: ollama
-  model: qwen2.5:14b
+  model: qwen2.5:7b
   temperature: 0.5
   max_tokens: 150
   top_p: 0.9

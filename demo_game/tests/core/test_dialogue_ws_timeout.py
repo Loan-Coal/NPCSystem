@@ -1,8 +1,10 @@
 """
 Regression (ISSUE-065): the WebSocket dialogue frame timeout must be at least the
 HTTP dialogue timeout. The WS server fully generates the response before streaming
-(dialogue_ws.py), so time-to-first-frame equals the full LLM generation (~38s cold
-qwen2.5:14b). A stale 30s WS timeout tripped before the first token → ws_recv_timeout.
+(dialogue_ws.py), so time-to-first-frame equals the full LLM generation (~38s cold,
+measured on qwen2.5:14b; the fleet moved to the faster qwen2.5:7b in DEC-149, so the
+bound remains conservative). A stale 30s WS timeout tripped before the first token
+→ ws_recv_timeout.
 """
 
 from __future__ import annotations

@@ -65,9 +65,9 @@ def test_different_family_is_clean(caplog: pytest.LogCaptureFixture) -> None:
 
 
 def test_discover_generation_models_reads_real_configs() -> None:
-    """The real engine llm_config.yaml files declare exactly qwen2.5:14b (DEC-142)."""
+    """The real engine llm_config.yaml files declare exactly qwen2.5:7b (DEC-149)."""
     models = discover_generation_models(repo_root=_REPO_ROOT)
-    assert models == ("qwen2.5:14b",)
+    assert models == ("qwen2.5:7b",)
 
 
 def test_env_override_is_honored(monkeypatch: pytest.MonkeyPatch) -> None:

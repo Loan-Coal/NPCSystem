@@ -60,7 +60,7 @@ engine is logged and recorded but **does not stop the tick or the other engines*
 Engines that call an LLM declare `uses_llm: true` in their engine contract
 (`engines/contracts/<name>.yaml`) and own a co-located `llm_config.yaml`. The backend is
 pluggable via `LLMClientProtocol` + a factory registry; the shipping backends are
-**Ollama** (default, e.g. `qwen2.5:14b`) and a deterministic **Mock** adapter for tests.
+**Ollama** (default, e.g. `qwen2.5:7b`) and a deterministic **Mock** adapter for tests.
 LLM-using engines below are marked **🤖 LLM**.
 
 ---

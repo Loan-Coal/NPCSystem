@@ -159,7 +159,7 @@ _EPOCH_GUARDS: dict[str, str] = {
 
 # Max-attention reinforcement of Rule 9 (ECHO PROHIBITION) and false-premise/
 # presupposition resistance. The canonical rules live in system_v1.yaml, but a
-# 14b model tends to honour them more reliably when repeated as a short constraint
+# local qwen2.5 models tend to honour them more reliably when repeated as a short constraint
 # token right before the fenced player message. Mirrors the _EPOCH_GUARDS pattern.
 # S25.1 (ISSUE-083): scoped each directive to an explicit player-presupposition
 # pattern and dropped the unconditional "answer only in your own general terms" /
