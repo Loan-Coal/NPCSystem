@@ -115,6 +115,14 @@ EVAL-B4 is its own session (4 steps, one commit each). EVAL-FINAL is superseded 
 
 ## Active — Eval pipeline (EVAL-P0..P7) ← **the current program**
 
+<!-- LOOP:QUEUE start -->
+<!-- Everything between these two markers is the overnight loop's work queue.
+     scripts/roadmap_cursor.py sees NOTHING outside this fence — that is deliberate:
+     19 open tasks elsewhere in this file (Phase PERF, Phase EVAL, two bullets inside
+     "## Completed", Parked backlog, optional PR-9) must never be auto-started at 3am.
+     To widen the queue later, move the `end` marker — never delete the fence.
+     A task tagged ⏸️ is skipped even inside the fence. -->
+
 > **Origin:** an externally-written proposal (`project-harness/npc_system_eval_plan_idea`) reviewed
 > adversarially on 2026-07-31. The proposal was **not** adopted as written — its phase numbering,
 > effort estimates and several load-bearing repo claims were wrong. This block is renumbered and
@@ -570,6 +578,8 @@ costs nothing already built.
       RED anchor: `tests/unit/evals/test_dashboard_case.py::test_all_k_outputs_render_side_by_side` fails.
       Validation: a k=3 case page shows 3 distinct output panes each labelled with its `repetition`, and each
       pane lists that repetition's `retrieved_context` item keys.
+
+<!-- LOOP:QUEUE end -->
 
 ### Parked (out of budget)
 

@@ -2149,3 +2149,61 @@ one env var). Accepted over restoring an override: a truthful clunky path beats 
 re-adding the override is a reversible follow-up if contributor friction proves real. The AST guard's
 allowlist is a small maintenance surface, accepted because the invariant it protects already failed once
 silently.
+
+---
+
+## DEC-151: Overnight roadmap loop — Git Bash substrate, task granularity, fenced queue
+**Date:** 2026-08-01 · **Status:** ✅ ACCEPTED · **Drives:** `scripts/expand_loop.sh`, `scripts/loop_*.{sh,py}`, `scripts/*roadmap_cursor*.py`, `scripts/gate_*.py`, `scripts/classify_gate_failure.py`, `scripts/scan_fix_diff.py`, `.claude/commands/expand-linear-next.md`, `.claude/commands/fix-make-failure.md`, `Makefile` (`roadmap-verify`), `project-harness/ROADMAP.md` (queue fence)
+**Context:** Ported an overnight roadmap loop from a Linux work repo (`overnight-roadmap-loop-kit.zip`).
+It implements one ROADMAP task per fresh headless session, gates it, ticks it, commits it, and
+continues unattended. Analysis and the full port brief: `project-harness/OVERNIGHT_LOOP_PLAN.md`;
+operator guide: `project-harness/OVERNIGHT_LOOP.md`.
+
+**Decisions:**
+1. **Substrate — Git Bash, single working copy, no WSL.** The kit recommends WSL2, but this project's
+   venv, `make`, Docker, Ollama and the authenticated `claude` CLI are all Windows-native; WSL costs a
+   second auth, a second venv and a `/mnt/c` boundary for a gate that is 100 % Windows Python. MSYS2 was
+   rejected despite shipping `flock`/`setsid`: its `msys-2.0.dll` differs from Git Bash's (Jan 2026 vs
+   Aug 2025), mixing runtimes is fragile, and its advantage does not address the real hazard (below).
+   Claude Code's own Bash tool *is* Git Bash, so future maintenance sessions match the runtime.
+2. **One task per session**, not one phase. Phases here hold 2–5 heavy tasks and would exceed the 90-min
+   timeout. Tasks already carry `Files:` / `RED anchor:` / `Validation:`, which is an ideal unattended unit.
+   `/expand-next` is untouched for interactive use; the loop uses a new `/expand-linear-next`.
+3. **A `<!-- LOOP:QUEUE -->` fence in ROADMAP.md** scopes the loop to EVAL-P0..P7. Measured: 45 open tasks
+   exist, but **19 are traps** — Phase PERF (8), Phase EVAL (5), two bullets inside `## Completed ✅`,
+   Parked (2), optional PR-9, and one entry that is a question. A heuristic ("only `## Active`") would
+   still have swept up PR-9. Explicit fence beats inference.
+4. **Done is the checkbox, never `✅`.** This roadmap writes `✅` freely in prose (`DEC-147 ✅ ACCEPTED`),
+   so the kit's `✅ DONE` token would mark nearly every task done on sight.
+5. **AUTOFIX checks shell out to `make`**, not to `ruff`/`mypy` directly, so the classifier tracks gate
+   edits the roadmap itself plans (EVAL-P0.3 widens `lint`; EVAL-P6.3 rewrites seven targets).
+6. **`scripts/rules_baseline.txt` is a frozen path.** Unique to this repo: `make check-rules-update`
+   legitimately rewrites the violation baseline, so a repair session running it launders every new
+   violation into "expected" and the gate goes green having fixed nothing.
+7. **Services (`--with-services`) default OFF**, preflight-only. A failed boot degrades to skipping and
+   must never turn the gate red — an unreachable daemon at 2am is infrastructure, not a regression.
+   The mixtral judge (26.44 GB on a 12 GB GPU → CPU) is explicitly not loop work; DEC-144's
+   generate-once/judge-many split already separates it.
+8. **`--dangerously-skip-permissions` is the default**, matching the precedent in the superseded
+   `run-roadmap-loop.sh`. This overrides the global "never use it" rule *for unattended runs only*,
+   by explicit user decision; `--permission-args` allows switching to an allowlist without a code change.
+
+**Windows hazards found by measurement (not assumption):**
+- **`timeout` leaves the process tree alive** (rc=124 while grandchildren survive). A hung `claude` would
+  hold the git index and burn quota all night. Fixed via `/proc/<pid>/winpid` + `taskkill //T //F`, with
+  the reap **verified**; proven in the rig (process count unchanged across a forced timeout).
+- **CRLF:** `ROADMAP.md` is 1183/1183 CRLF with `core.autocrlf=false`. The kit's `read_text`/`write_text`
+  would rewrite every line LF on each `--mark`, turning one-line task commits into whole-file diffs.
+  The cursor uses `newline=""` on both ends; a regression test asserts a mark touches exactly 2 lines.
+- **UTF-8:** a cp1252 child dies on the roadmap's `—→✅⚠️`; all children get `PYTHONUTF8=1`.
+
+**Validation:** exercised end-to-end by a throwaway rig with stub gates and a fake `claude` earlier on
+`PATH` — the whole loop runs in ~40 s with zero model calls. It caught two real bugs before any night was
+spent: a phase boundary firing twice (`run_phase_boundary` clobbered the `rc` used as the follow-up guard)
+and `checkpoint_reports` silently failing because `git add` aborts whole on a missing pathspec. Verified
+paths: full drain (3 tasks / 2 phases, one boundary each), ask-gate skip, timeout + tree reap, red gate →
+`CLASSIFICATION=AUTOFIX` → bounded repair → revert → flag → tolerate, and no-token → clean halt.
+`make check` green after the port: **2655 passed, 29 skipped, 87.10 % coverage** (was 2618; +37 harness tests).
+
+**Rejected:** a PowerShell rewrite (the kit's own brief calls it a multi-day project that re-introduces
+every scar); tracking progress in a side-file cursor (the commit must be the transaction).

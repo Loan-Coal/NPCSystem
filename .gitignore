@@ -55,3 +55,6 @@ Thumbs.db
 
 # Archived review evidence (kept local-only, as the original review-evidence/ was)
 project-harness/archive/review-2026-06-03/review-evidence/
+
+# Overnight loop run state (baseline snapshots, locks) - never tracked
+project-harness/.loop-state/
