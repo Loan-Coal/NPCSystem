@@ -5,10 +5,16 @@
 only the two type-C deferrals H-D1/H-D2 + parked backlog remain). The architectural-remediation SEV backlog
 (SEV-01..24, incl. the GraphRepository facade) is **fully drained** (47/47). `make check` GREEN.
 
-**Next (as of 2026-07-31):** the active program is the **eval pipeline — `EVAL-P0..P7`** (see
-*Active — Eval pipeline* below). 17.5 h budgeted against an 18 h ceiling, one phase per `/expand-next`
-session. Goal: turn the existing scoring *harness* into a reproducible, repeat-aware, calibrated *pipeline*
-that is independently publishable without the engine.
+**Next (as of 2026-08-02):** the active program is the **eval pipeline — `EVAL-P0..P8`** (see
+*Active — Eval pipeline* below). ~20.1 h of coding, one phase per `/expand-next` session. Goal: turn the
+existing scoring *harness* into a reproducible, repeat-aware, calibrated *pipeline* that can also answer
+whether a given change improved the engine.
+
+**Revised 2026-08-02 by adversarial review — 🔶 DEC-153 (ACCEPTED).** Ten findings applied: a
+`DEC-149` id collision that falsely cleared EVAL-P5.2's ask-gate (now **DEC-152**), a wrong pinned Wilson
+interval used as a test oracle, a loop fence wide enough to drain the whole program without ever measuring
+anything, and the absence of any run-to-run comparison. **`compare` is promoted out of Parked to
+Phase EVAL-P8**; the 18 h ceiling is lifted rather than silently overrun. Full rationale: DEC-153.
 
 **Deferred (2026-07-31):** all game-client integration work — `SHIP-05b..11` and `Phase X` (Unity/Unreal
 SDKs) — moved verbatim to **`project-harness/UNREAL_DEFERRED.md`**. Shipped engine-side runtime work
@@ -121,7 +127,17 @@ EVAL-B4 is its own session (4 steps, one commit each). EVAL-FINAL is superseded 
      19 open tasks elsewhere in this file (Phase PERF, Phase EVAL, two bullets inside
      "## Completed", Parked backlog, optional PR-9) must never be auto-started at 3am.
      To widen the queue later, move the `end` marker — never delete the fence.
-     A task tagged ⏸️ is skipped even inside the fence. -->
+     A task tagged ⏸️ is skipped even inside the fence.
+
+     NARROWED 2026-08-02 (DEC-153 §3) to Phase EVAL-P0 only. Rationale: compute_next()
+     SKIPS flagged tasks and never blocks on them, so with the fence open through P7 the
+     loop would run P1..P7 while EVAL-P0.3 (ask-gate) and EVAL-P0.4 (live) sat unchecked
+     forever. P0.4 is the measured baseline "every later estimate depends on" — the loop
+     would have drained the entire program to all-boxes-checked without ever producing a
+     single eval number, since every gate is `make check` with mocked I/O.
+     REOPEN CONDITION: once EVAL-P0.3 and EVAL-P0.4 are both ticked by a human session,
+     move this `end` marker down to just above "### Parked (out of budget)" to release
+     P1..P8. Do not move it before then. -->
 
 > **Origin:** an externally-written proposal (`project-harness/npc_system_eval_plan_idea`) reviewed
 > adversarially on 2026-07-31. The proposal was **not** adopted as written — its phase numbering,
@@ -130,8 +146,12 @@ EVAL-B4 is its own session (4 steps, one commit each). EVAL-FINAL is superseded 
 > sequencing or estimates**; it is retained only for its methodology arguments.
 >
 > **Goal of the program:** turn the existing scoring *harness* into an eval *pipeline* — reproducible,
-> repeat-aware, uncertainty-quantified, calibrated against adjudicated labels, and independently
-> publishable without the engine.
+> repeat-aware, uncertainty-quantified, calibrated against adjudicated labels, and able to state whether
+> one run is better than another.
+>
+> **Not in scope (DEC-153 §8):** this program measures **single-turn** quality. Cross-session memory
+> retention, multi-turn coherence, and golden-transcript regression are the separate multi-turn program —
+> see *Next+1 → Phase EVAL* below, which is rescoped rather than superseded.
 >
 > **Measured facts this program is planned against** (all commands run 2026-07-31):
 >
@@ -163,14 +183,32 @@ EVAL-B4 is its own session (4 steps, one commit each). EVAL-FINAL is superseded 
 > - *"The calibration labels already exist."* They do not. Zero hits, repo-wide.
 >
 > **Hard constraints (all phases):** `evals/` stays **src-free** behind exactly one sanctioned adapter
-> (`evals/engine_adapter.py`, EVAL-P0.2) so the harness + schemas + a synthetic fixture set can be
-> published standalone while the engine stays private; judge prompts only in `prompts/eval/`;
+> (`evals/engine_adapter.py`, EVAL-P0.2). Note this is a **coupling-hygiene rule inside this program**:
+> src-free is not engine-free (EVAL-P3 fetches vocabulary over the engine's HTTP API; EVAL-P1.1 reads
+> engine YAML by path), and the extraction that would make the harness runnable by a stranger is a
+> **post-program milestone**, not a phase here (DEC-153 §6 — see *Post-program milestones* below);
+> judge prompts only in `prompts/eval/`;
 > Pydantic v2 for any data crossing a boundary; ≤300 lines/file, ≤40 lines/function, ≤3 nesting;
 > `make check` green per step. `test-cov` measures only `npc_engine + matchers + summary + runner` —
 > edits to those three need same-phase tests to hold ≥80 %; new standalone eval modules stay **out** of `--cov`.
 >
-> **Effort budget: 17.5 h against an 18 h ceiling.** There is **no slack**. If a phase overruns,
-> **EVAL-P7 (dashboard) is the designated cut** — that is an explicit trade, not silent compression.
+> **Effort budget: ~20.1 h of coding (DEC-153 §9).** The original 17.5 h/18 h framing was not credible —
+> it excluded EVAL-P0.4's ~1.5 h wall clock, EVAL-P5's human adjudication, and EVAL-P6.1's recorded-fixture
+> live run. The ceiling is therefore **lifted and restated honestly** rather than held and overrun:
+>
+> | Line | Cost |
+> |---|---|
+> | Original P0–P7 estimate | 17.5 h |
+> | + EVAL-P8 (`compare` + paired stats, DEC-153 §4) | +1.5 h |
+> | + EVAL-P4.0 (annotate 15 dialogue cases, DEC-153 §5) | +0.75 h |
+> | + EVAL-P0.4 raw-verdict capture (DEC-153 §7) | +0.33 h |
+> | **Coding total** | **~20.1 h** |
+>
+> **Non-coding costs, stated separately so they stop distorting the estimate:** ~1.5 h live wall clock
+> (EVAL-P0.4) · ~4 h live wall clock (EVAL-P8's two test generations) · **4–6 h of maintainer adjudication**
+> (EVAL-P5, 500 labels) — the single largest human cost in the program, and the one that cannot be bought.
+> **EVAL-P7 (dashboard) remains the designated cut if a phase overruns**; EVAL-P8 is *not* a cut candidate —
+> it carries the only statistic that answers "did this change help".
 > Everything that did not fit is under `### Parked (out of budget)` at the end of this block.
 >
 > **New tests live in `tests/unit/evals/`** (mirror-source subdir per the PR-7 convention; needs an
@@ -256,17 +294,34 @@ today. **DEC-147 ✅ ACCEPTED 2026-07-31 (all five clauses, incl. §4 lint gate 
       `python evals/runner.py --reset-world --base-url … --api-key …` (the `eval` target passes no `ARGS`, so
       `--reset-world` must be invoked directly), then `make eval-anti-hallucination`, `make eval-generate` +
       `make eval-judge`, `make eval-retrieval`.
-      Files: `edit project-harness/ROADMAP.md` (Session Log).
+      Files: `edit project-harness/ROADMAP.md` (Session Log), `create evals/generations/baseline/verdicts.json`.
       Validation: a Session Log table stating (a) measured **seconds per dialogue turn**, (b) measured
       **seconds per `mixtral` judge call**, (c) the implied wall-clock for k=3 and k=15 over the full set,
       computed from (a) and (b) — this is the number that replaces the proposal's "20 minutes", (d) pass counts
       against the Stage-A baseline (`make eval` 41/53; anti-hallucination 27/40), (e) how many cases **skipped**.
       Re-judge one saved transcript with a second `JUDGE_MODEL` to demonstrate generate-once / judge-many.
+      **(f) Raw per-case verdicts, not just counts (DEC-153 §7).** Persist the full
+      `{case_id: {passed, skipped, expectations: [...]}}` list to `evals/generations/baseline/verdicts.json`.
+      Three different headline denominators appear across this program — 53 total → 49 `evaluated_cases`
+      (EVAL-P2.3) → 74 vs 37 guard turns (EVAL-P6.2) — and the Stage-A figures are counts only, so they can
+      never be restated. Capturing verdicts makes every later denominator change a recomputation instead of
+      an orphaned baseline. **(g) Freeze the canonical denominator here**, in the Session Log, as
+      **`evaluated_cases` (skipped excluded) + case-level guard turns**, and quote it in every later headline.
+      **Note the Stage-A anti-hallucination figure is quoted as `27/40` but the fixture holds 41 cases**
+      (25 refusal / 16 grounded, verified) — state the corrected denominator when recording the comparison.
+      ⚠️ **This task and EVAL-P0.3 gate the loop fence.** Both must be ticked before the queue-fence end
+      marker may be moved down to release EVAL-P1..P8. (The literal marker token is deliberately not repeated
+      here — a second copy between the two real markers would truncate the parsed queue.)
+
+<!-- LOOP:QUEUE end -->
+<!-- ^ NARROWED 2026-08-02 (DEC-153 §3). Everything below is human-session work until
+     EVAL-P0.3 and EVAL-P0.4 are ticked; then move this marker down to just above
+     "### Parked (out of budget)". See the reopen condition at the fence start. -->
 
 ### Phase EVAL-P1 — Transcript schema v2: reproducible run identity
 **Goal:** A generation artifact a stranger can reproduce from — exact config, k repeats, git SHA, golden-set
 version, per-turn timing, and the retrieved context that produced each reply.
-**Effort:** 3 h · **running total: 5 h**
+**Effort:** 3 h · **running total: 5.33 h**
 **Constraint:** Hard break to `version: 2`; `read_transcript` rejects v1 loudly. Nothing to migrate —
 `e2e/transcripts/` is gitignored and no v1 artifact is tracked anywhere. `TranscriptFile` and
 `GenerationRecord` stay `frozen=True`.
@@ -325,20 +380,20 @@ EVAL-P0.2 (`evals/__init__.py` must exist). **Blocks:** EVAL-P2, EVAL-P3, EVAL-P
 ### Phase EVAL-P2 — Statistics, hand-implemented
 **Goal:** A binary judge plus k repeats becomes a per-case pass rate with a Wilson interval and a flakiness
 class — no statistics library, every number defensible line by line.
-**Effort:** 2 h · **running total: 7 h**
+**Effort:** 2 h · **running total: 7.33 h**
 **Constraint:** `math` only. **No new dependency** — `sklearn`, `scipy` and `statsmodels` are all absent from
 the venv, and declaring one trips the CLAUDE.md ask-gate. (This also moots the proposal's
 "`sklearn.metrics.cohen_kappa_score`, ~5 lines".)
 **Notes:** Do **not** bolt k onto `summary.EvalSummary` — it is a count model whose `guarantee_demonstrated`
 uses guard *cases*, and it is inside `--cov`. Add new modules and leave `summary.py` serving the legacy
 headline until EVAL-P6 folds it in. Wilson at the k you can afford is wide and the report must say so:
-3/3 ⇒ **[0.438, 1.000]**, 3/5 ⇒ **[0.237, 0.763]**. Print k next to every rate.
+3/3 ⇒ **[0.438, 1.000]**, 3/5 ⇒ **[0.231, 0.882]**. Print k next to every rate.
 **Depends on:** EVAL-P1.4 (needs `repetition` on records).
 
 - [ ] **EVAL-P2.1** Wilson score interval. Files: `create evals/statistics.py`, `create tests/unit/evals/test_statistics.py`.
       `wilson_interval(successes, trials, z=1.96) -> tuple[float, float]` and `pass_rate(successes, trials)`.
       RED anchor: `tests/unit/evals/test_statistics.py::test_wilson_3_of_3` fails — module absent.
-      Validation: a table-driven test pins (0,3)→[0.000, 0.562], (3,3)→[0.438, 1.000], (3,5)→[0.237, 0.763]
+      Validation: a table-driven test pins (0,3)→[0.000, 0.562], (3,3)→[0.438, 1.000], (3,5)→[0.231, 0.882]
       to 3 dp, with the hand-worked arithmetic in the test docstring; `trials == 0` raises, never returns [0,1].
 
 - [ ] **EVAL-P2.2** Per-case statistics. Files: `create evals/case_stats.py`, `create tests/unit/evals/test_case_stats.py`.
@@ -353,7 +408,8 @@ headline until EVAL-P6 folds it in. Wilson at the k you can afford is wide and t
       and `summary.summarize` counts it in `total_cases` — with only the demo world seeded that is **4 free
       passes out of 53**. Files: `edit evals/summary.py`, `edit tests/unit/engines/test_eval_summary.py`.
       Add `evaluated_cases` (excludes fully-skipped) and make `format_summary_lines` print it as the
-      denominator alongside `total_cases`.
+      denominator alongside `total_cases`. **`evaluated_cases` is the canonical denominator frozen at
+      EVAL-P0.4 (g)** — this step implements that decision, it does not re-open it.
       RED anchor: `tests/unit/engines/test_eval_summary.py::test_skipped_cases_excluded_from_evaluated_denominator` fails.
       Validation: a 53-case fixture with 4 fully-skipped cases reports `49 evaluated / 53 total` and no summary
       line quotes 53 as a pass-rate denominator. **`summary.py` is in `--cov`** — coverage must stay ≥80 %.
@@ -361,7 +417,7 @@ headline until EVAL-P6 folds it in. Wilson at the k you can afford is wide and t
 ### Phase EVAL-P3 — Deterministic graph scorers (no LLM)
 **Goal:** Two LLM-free scorers over cached text — unsupported-entity rate and unpropagated-event references —
 that measure the architecture's own thesis rather than generic output quality.
-**Effort:** 2.5 h · **running total: 9.5 h**
+**Effort:** 2.5 h · **running total: 9.83 h**
 **Constraint:** src-free **over HTTP**, not through `engine_adapter.py`: entity vocabulary from
 `GET /v1/graph/nodes/{node_type}?limit&offset`, knowledge from `GET /v1/graph/edges/KNOWS_ABOUT/{src}/{dst}`
 (both confirmed present in `live_openapi.json`). Scorers are **pure functions** over
@@ -412,16 +468,32 @@ eastern docks") is undetectable — those go in the README as documented limits,
 ### Phase EVAL-P4 — Retrieval decomposition over the existing annotations
 **Goal:** Separate retrieval failure from generation failure, so a failing case can be attributed rather
 than guessed at.
-**Effort:** 1.5 h · **running total: 11 h**
+**Effort:** 2.25 h · **running total: 12.08 h**
 **Constraint:** Reuse `retrieval_matchers.recall_at_k` / `precision_at_k` **verbatim**. New code is the
 *join*, not the metric.
 **Notes:** ~60 % of this already exists and the proposal's Phase 4/7 retrieval work is largely duplication.
 `retrieval_demo.json` already carries `relevant_node_ids` per (npc, query) — precisely the "required fact
 annotation" the proposal wants to invent, for **20** cases. What is genuinely missing is computing it against
 the `retrieved_context` **captured in the transcript** (EVAL-P1.4) rather than a second in-process retrieval,
-so retrieval quality and generation quality come from the same run. Annotating the **53 dialogue** cases is
-**Parked** — it is mechanical but large.
+so retrieval quality and generation quality come from the same run.
+⚠️ **Corrected 2026-08-02 (DEC-153 §5) — this phase had no real input.** EVAL-P4.2's cross-tab needs cases
+carrying **both** `relevant_node_ids` **and** a pass/fail verdict. **Zero cases have both:** the 20 annotated
+retrieval cases are ids `RET-001…` with no judge verdict, the 53 dialogue cases are `case_*.yaml` with a
+verdict and no annotation, and the id-set intersection is **empty** (verified). As written, P4.2 was
+buildable against fixtures and unbuildable against reality. EVAL-P4.0 below funds a **15-case** subset so the
+join has real data; the remaining 38 stay Parked.
 **Depends on:** EVAL-P1.4, EVAL-P2.2.
+
+- [ ] **EVAL-P4.0** Annotate the 15 highest-signal dialogue cases with `relevant_node_ids` (the P4.2
+      prerequisite). Files: `edit evals/cases/case_*.yaml` (15 files), `create tests/unit/evals/test_case_annotations.py`.
+      Choose the 15 from the **37 guard cases** (`case_adv_` / `case_neg_`) — that is where hallucination
+      actually lives and therefore where retrieval-vs-generation attribution pays. Each gains a
+      `relevant_node_ids: [...]` list naming the graph nodes a correct answer must have retrieved.
+      RED anchor: `tests/unit/evals/test_case_annotations.py::test_annotated_case_count_is_at_least_15` fails
+      because no `case_*.yaml` carries the key.
+      Validation: ≥15 cases parse with a non-empty `relevant_node_ids`; every id in every list exists in the
+      demo-world seed (assert against `demo_game/seeds/seed.py` node ids, so a typo fails the gate rather
+      than silently scoring as a retrieval miss); unannotated cases still load unchanged.
 
 - [ ] **EVAL-P4.1** Shared key→node-id extraction. `retrieval_runner._node_id_from_key` (`:58`) is needed by
       both runners. Files: `create evals/context_keys.py`, `edit evals/retrieval_runner.py`,
@@ -437,28 +509,44 @@ so retrieval quality and generation quality come from the same run. Annotating t
       RED anchor: `tests/unit/evals/test_retrieval_join.py::test_retrieved_but_failed_is_a_generation_failure` fails.
       Validation: over a fixture transcript the table reports four counts — *retrieved & passed*,
       **retrieved & failed (generation failure)**, *not retrieved & failed (retrieval failure)*, and
-      *not retrieved & passed (lucky)* — and the four sum to the record count.
+      *not retrieved & passed (lucky)* — and the four sum to the count of **annotated** records. Records for
+      unannotated cases are reported as an explicit excluded count with the denominator stated, never
+      silently dropped (the whole phase exists because a silent empty join looked like a working table).
 
 ### Phase EVAL-P5 — Calibration: model pre-label + human adjudication
-**Goal:** A versioned, reproducible calibration artifact — 250 outputs pre-labelled by a reference model and
-adjudicated by the maintainer — with **every scorer measured separately** as a full confusion matrix plus
-Cohen's κ, so the eval can state how much its own headline can be trusted.
-**Effort:** 2.5 h of build time · **running total: 13.5 h** (+ ~2–3 h of your adjudication, done outside
-a coding session — it is not `/expand-next` work)
-**Constraint:** The reference labeller must differ from **both** the generation model (`qwen2.5`) **and** the
-judge (`mixtral:8x7b`) — a direct extension of DEC-143's collision invariant. Client is **raw `httpx` against
-the Anthropic REST API**; the `anthropic` SDK is a new dependency and trips the ask-gate. `ANTHROPIC_API_KEY`
-from env only, never committed, never logged. κ is hand-implemented (~15 lines on `math`) — `sklearn` is absent.
+**Goal:** A versioned, reproducible calibration artifact — **500** outputs pre-labelled by a reference model
+and adjudicated by the maintainer — with **every scorer measured separately** as a full confusion matrix plus
+Cohen's κ **and its bootstrap CI**, so the eval can state how much its own headline can be trusted.
+**Effort:** 2.5 h of build time · **running total: 14.58 h** (+ **4–6 h of your adjudication**, done outside
+a coding session — it is not `/expand-next` work, and it is the largest human cost in the program)
+**Constraint:** The reference labeller must differ from **both** the generation model (`qwen2.5:7b`) **and**
+the judge (`mixtral:8x7b`) — a direct extension of DEC-143's collision invariant. **Labeller = `claude-opus-5`
+(🔶 DEC-152, ACCEPTED 2026-08-02).** Client is **raw `httpx` against the Anthropic REST API**; the `anthropic`
+SDK is a new dependency and trips the ask-gate. `ANTHROPIC_API_KEY` from env only, never committed, never
+logged. κ is hand-implemented (~15 lines on `math`) — `sklearn` is absent.
+**Sizing (DEC-153 §7):** 500 labels ÷ 6 scorers ≈ **85 rows each**, giving κ a standard error of roughly
+±0.10. At the original 250 that was ≈40 rows and ±0.15 — an uncertainty as wide as the thing being measured.
+Cost is **not** the constraint: 500 labels on `claude-opus-5` ($5/$25 per Mtok) is ≈ **$4**, halvable again
+via the Batches API since this is not latency-sensitive. **Your adjudication hours are the constraint** —
+doubling the label count doubles them, and that was an explicit trade.
 **Notes:** The proposal's framing — *"the labels already exist, so this is cheap"* — is **false**; grep for
 `calibrat|human_verdict|kappa|confusion` returns zero repo-wide. Because you adjudicate model-proposed labels
 rather than labelling cold, store **both** `pre_label` and `human_verdict` on every row: the disagreement rate
 between them is then a free, publishable reference-model-vs-you number with no second pass. **Calibrate each
 scorer separately** — keyword matchers, tone judge, affirms judge, refusal judge, and the two EVAL-P3 graph
 scorers. An aggregate conceals which component drags. The real labels stay private; only the **schema** and a
-synthetic sample are publishable (see Parked).
+synthetic sample are publishable (see *Post-program milestones*).
+⚠️ **Two honesty caveats that belong in the report, not a backlog (DEC-153 §7).** (a) You wrote the criteria,
+the prompts and the cases, so κ measures agreement with **the author's intent**, not with correctness — say
+which one it is. (b) You adjudicate *model-proposed* labels, so agreement is inflated by anchoring; the
+`pre_label`-vs-`human_verdict` disagreement rate measures disagreement but cannot separate "the model was
+right" from "you were anchored". Blinding a subsample was considered and **not** funded — state the limit.
 **Depends on:** EVAL-P1.3 (labels reference `record_id`), EVAL-P3 (graph scorers must exist to be calibrated).
-**Needs a `DECISIONS.md` call when reached:** propose **DEC-149 — reference-labeller model separation**
-(labeller ∉ {generation models} ∪ {judge model}, enforced like `JudgeModelCollisionError`). It gates **EVAL-P5.2**.
+**Decision:** 🔶 **DEC-152 ACCEPTED 2026-08-02** — reference-labeller model separation
+(labeller ∉ {generation models} ∪ {judge model}, enforced like `JudgeModelCollisionError`), labeller fixed at
+`claude-opus-5`. This **replaces the `DEC-149` reference that previously appeared here and at EVAL-P5.2**:
+`DEC-149` is *"All five engines standardise on qwen2.5:7b"* (DECISIONS.md), an unrelated decision, and citing
+it falsely marked P5.2's ask-gate cleared. See DEC-153 §1.
 
 - [ ] **EVAL-P5.1** Label record model. Files: `create evals/calibration_records.py`,
       `create tests/unit/evals/test_calibration_records.py`. Frozen Pydantic `CalibrationLabel(record_id,
@@ -469,14 +557,20 @@ synthetic sample are publishable (see Parked).
       `ValidationError`; the **frozen output text** is stored inline, never a pointer to something regenerable.
 
 - [ ] **EVAL-P5.2** Pre-labelling runner. Files: `create evals/label_runner.py`,
-      `create tests/unit/evals/test_label_runner.py`, `edit Makefile`. `httpx.post` → Anthropic REST, one
-      pre-label per transcript record per scorer, with a `LabellerModelCollisionError` guard mirroring
-      `judge_config.resolve_judge_model`.
+      `create tests/unit/evals/test_label_runner.py`, `edit Makefile`. `httpx.post` → Anthropic REST
+      (`POST /v1/messages`, `model="claude-opus-5"`, `anthropic-version: 2023-06-01`), one pre-label per
+      transcript record per scorer, with a `LabellerModelCollisionError` guard mirroring
+      `judge_config.resolve_judge_model`. Target **500 rows** across the six scorers. Prefer the Batches API
+      (`POST /v1/messages/batches`, 50 % cheaper, results keyed by `custom_id` and returned in **any** order)
+      — this is a bulk offline job with no latency requirement.
       RED anchor: `tests/unit/evals/test_label_runner.py::test_labeller_equal_to_judge_model_raises` fails.
       Validation: against a mocked HTTP client, 5 records produce 5 `CalibrationLabel` rows with
       `human_verdict=None`; setting the labeller to `mixtral:8x7b` or to a discovered generation model raises;
       a missing `ANTHROPIC_API_KEY` fails fast with a named error and **never** appears in any log line.
-      ✅ **DEC-149 ACCEPTED 2026-07-31** — no longer a halt condition.
+      ✅ **DEC-152 ACCEPTED 2026-08-02** (labeller = `claude-opus-5`) — no longer a halt condition.
+      *(Corrected 2026-08-02: this line previously cited `DEC-149`, which is the qwen2.5:7b fleet decision and
+      says nothing about labellers. The ask-gate was therefore marked cleared by a decision that was never
+      made. DEC-152 is the real one. See DEC-153 §1.)*
 
 - [ ] **EVAL-P5.3** Adjudication CLI. Files: `create evals/adjudicate.py`, `create tests/unit/evals/test_adjudicate.py`.
       Prints one row at a time (output text + `pre_label` + scorer), accepts keep/flip/skip, writes
@@ -487,17 +581,23 @@ synthetic sample are publishable (see Parked).
 
 - [ ] **EVAL-P5.4** Confusion matrices + κ. Files: `create evals/calibration.py`,
       `create tests/unit/evals/test_calibration.py`, `edit Makefile` (`eval-calibrate`).
-      Per scorer: TP/FP/FN/TN, precision, recall, and hand-implemented `cohens_kappa`. Plus the free
-      pre-label-vs-human agreement rate.
+      Per scorer: TP/FP/FN/TN, precision, recall, hand-implemented `cohens_kappa`, **and a bootstrap
+      confidence interval on κ** (`kappa_interval(rows, resamples=2000, seed)` — `math` + `random` only, no
+      new dependency). Plus the free pre-label-vs-human agreement rate.
       RED anchor: `tests/unit/evals/test_calibration.py::test_cohens_kappa_matches_worked_example` fails.
       Validation: κ pinned to 3 dp against a hand-worked 2×2 in the test docstring; perfect agreement → 1.000,
-      chance-level → 0.000. `make eval-calibrate` prints **one matrix per scorer** — never a single aggregate —
-      and the false-positive cell is labelled as the dangerous one.
+      chance-level → 0.000. **The CI is seeded and reproducible** — the same rows and seed yield the same
+      bounds across runs, and a fixture of ~85 rows produces a visibly wide interval. `make eval-calibrate`
+      prints **one matrix per scorer** — never a single aggregate — each κ rendered with its interval and its
+      n adjacent, and the false-positive cell labelled as the dangerous one.
+      **Rationale (DEC-153 §7):** a program created to stop reporting point estimates without error bars must
+      not report its own trust metric as a point estimate without error bars. At ~85 rows κ's SE is ≈ ±0.10,
+      so a κ of 0.60 is really ≈ [0.40, 0.80] — a difference that changes what the number licenses you to say.
 
 ### Phase EVAL-P6 — One CLI; legacy targets become aliases
 **Goal:** A single `python -m evals <verb>` entry point, with the seven legacy make targets reduced to thin
 aliases so the gate stays green at every commit and no target is orphaned.
-**Effort:** 1.5 h · **running total: 15 h**
+**Effort:** 1.5 h · **running total: 16.08 h**
 **Constraint:** **No target is deleted in this phase.** Deletion is a separate final step once nothing
 references them — that step is Parked. **DEC-148 ✅ ACCEPTED 2026-07-31 (ordering locked: coverage parity → aliases → delete last).**
 **Notes:** **Blocked by a dependency the proposal never names.** `generate_runner._build_yaml_records_for_case`
@@ -540,7 +640,7 @@ Separately: `judge_runner._to_result_dict` sets `case_id = record_id`, so each g
 ### Phase EVAL-P7 — Engine-developer eval dashboard
 **Goal:** A local dev-facing dashboard that reads the run artifacts and makes flakiness, calibration and
 per-case history legible — the surface that eventually replaces the CLI as the way the suite is driven.
-**Effort:** 2.5 h · **running total: 17.5 h**
+**Effort:** 2.5 h · **running total: 18.58 h**
 **Constraint:** Lives **inside `evals/`** as its own small FastAPI app (`python -m evals dashboard`), importing
 the evals package directly — **no API layer**, and `evals/` stays independently publishable. It is **not** the
 existing designer dashboard served from `src/npc_engine/api/` at `/dashboard` (`make dashboard`) — that one is
@@ -579,22 +679,57 @@ costs nothing already built.
       Validation: a k=3 case page shows 3 distinct output panes each labelled with its `repetition`, and each
       pane lists that repetition's `retrieved_context` item keys.
 
-<!-- LOOP:QUEUE end -->
+### Phase EVAL-P8 — Run-to-run comparison (promoted from Parked, DEC-153 §4)
+**Goal:** Answer the question the rest of the program cannot: **did this change make the engine better?**
+**Effort:** 1.5 h · **running total: ~20.1 h** (+ ~4 h live wall clock for two test generations)
+**Constraint:** Pure functions over two saved transcripts — no engine, no Ollama, no prompt-version selector.
+`compare` reads two `evals/generations/<gen_id>/` directories and never re-runs generation.
+**Notes:** The program otherwise builds run identity, k repeats, Wilson intervals, flakiness classes,
+calibration and a dashboard — an entire apparatus whose only decision-relevant use is comparison, which was
+Parked. Worse, the statistic that *works at affordable k* was planned nowhere: per-case Wilson at k=3 spans
+[0.438, 1.000] for 3/3, so a case that regressed 100 % → 50 % sits inside its own interval. The **paired
+case-level** test is the fix — n = 53 cases, not n = 3 repeats — and it detects real shifts even at k=1.
+**This phase is not a cut candidate**; EVAL-P7 is.
+**Depends on:** EVAL-P1.4 (two comparable generations), EVAL-P2.2 (`CaseStat`).
+
+- [ ] **EVAL-P8.1** Paired case-level significance (`math` only, no new dependency).
+      Files: `create evals/paired_stats.py`, `create tests/unit/evals/test_paired_stats.py`.
+      `mcnemar_exact(b, c) -> float` (exact binomial two-sided, not the χ² approximation — at 53 cases the
+      discordant counts are small enough that χ² is wrong) and
+      `paired_compare(before: tuple[CaseStat, ...], after: tuple[CaseStat, ...]) -> PairedResult` with
+      frozen Pydantic `PairedResult(improved, regressed, unchanged, p_value, verdict)` where
+      `verdict: Literal["better","worse","no_detectable_change"]`.
+      RED anchor: `tests/unit/evals/test_paired_stats.py::test_mcnemar_exact_matches_worked_example` fails — module absent.
+      Validation: pinned to 3 dp against a hand-worked table in the test docstring; (b=0, c=0) raises rather
+      than returning p=1.0; a fixture where 8 cases improve and 1 regresses reports `better`; a fixture where
+      3 improve and 3 regress reports `no_detectable_change` **even though the pass count rose**.
+
+- [ ] **EVAL-P8.2** `compare` verb over two generation directories.
+      Files: `create evals/compare.py`, `edit Makefile`, `create tests/unit/evals/test_compare.py`.
+      Load both transcripts → `case_stats.aggregate` each → inner-join on `case_id` → `paired_compare` →
+      per-case delta table sorted by regression first. **Report the intersection size and name every case
+      present in one run but not the other** — a silently shrunken denominator is the failure mode here.
+      RED anchor: `tests/unit/evals/test_compare.py::test_cases_missing_from_one_run_are_named_not_dropped` fails.
+      Validation: `make eval-compare BEFORE=<gen_id> AFTER=<gen_id>` prints the verdict with its p-value,
+      the k of **both** runs adjacent to every rate, and the four-way delta table; comparing a run against
+      itself yields `no_detectable_change` with p = 1.0 and zero discordant pairs.
 
 ### Parked (out of budget)
 
-Not compressed into optimistic estimates — genuinely out of the 18 h ceiling. Each line says why.
+Not compressed into optimistic estimates — genuinely out of scope for this program. Each line says why.
 
-- **`compare` / A-B diff (~1.5 h).** Cannot be *tested* without two full generations (~2 h wall-clock each at
-  k=3), and switching prompt versions at runtime needs a selector that does not exist even after EVAL-P1.2
-  makes the version *readable*. Pick this up first if budget frees.
-- **Required-fact annotation for the 53 dialogue cases (~2.5 h).** Mechanical but large. Unlocks context
-  recall/precision across the dialogue suite rather than only the 20 already-annotated retrieval cases.
-- **Golden-set versioning: `added_in` / `retired_in` + intersection diffing (~1 h).** Only pays off once
-  `compare` exists — until then, tagging 53 cases buys nothing measurable.
-- **Publishable extraction: 8-case synthetic fixture set + README methodology section + committed example
-  artifacts (~2 h).** The artifact schema must settle (EVAL-P1/P3/P5) before the synthetic set is worth writing,
-  or it gets rewritten with it.
+- ~~**`compare` / A-B diff (~1.5 h).**~~ **PROMOTED 2026-08-02 to Phase EVAL-P8** (DEC-153 §4). The original
+  reason for parking it — "cannot be tested without two full generations" — was true but not disqualifying:
+  the ~4 h is *wall clock*, not build effort, and it buys the only statistic in the program that answers
+  whether a change helped. The runtime prompt-version selector it was also blocked on turned out to be
+  unnecessary: `compare` reads two saved generation directories and never switches anything at runtime.
+- **Required-fact annotation for the remaining 38 dialogue cases (~1.75 h).** Mechanical but large.
+  **15 of the 53 are now funded as EVAL-P4.0** (DEC-153 §5) because EVAL-P4.2 has literally no input without
+  them; the other 38 widen context recall/precision from a subset to the whole dialogue suite.
+- **Golden-set versioning: `added_in` / `retired_in` + intersection diffing (~1 h).** Was parked as "only pays
+  off once `compare` exists". `compare` now exists (EVAL-P8), so **this is the first thing to pick up if
+  budget frees** — EVAL-P8.2 handles a changed case set by naming the difference, which is correct but manual;
+  versioning makes it automatic.
 - **LLM `seed` support (~1 h).** `LLMGenerateProtocol.generate()` has no `seed` and `ollama_adapter.py` never
   sets `options.seed`. Adding it changes a Protocol shared by three adapters → ask-gate. Until then `RunConfig`
   **honestly omits seed** and the report says runs are `temperature=0.15`, not deterministic.
@@ -605,18 +740,44 @@ Not compressed into optimistic estimates — genuinely out of the 18 h ceiling. 
   violation count in the 13 existing modules.
 - **Judge-cost reduction (~1 h, high value).** `runner._guard_expectations` injects **both** a `tone_judge` and
   an `affirms_judge` into all 37 demo guard cases — that is why the suite costs 115 judge calls per run rather
-  than ~25. Merging or gating the two injected judges is the single largest cost lever in the suite and it is
-  free. Promote this above EVAL-P7 if EVAL-P0.4's measured timings come in worse than expected.
+  than ~41. Merging or gating the two injected judges is the single largest cost lever in the suite and it is
+  free. **Decide at EVAL-P0.4 (DEC-153 §9).** The old promotion condition — *"if EVAL-P0.4's measured timings
+  come in worse than expected"* — was circular while the loop fence let P1..P7 run ahead of P0.4, which never
+  executed. With the fence narrowed to EVAL-P0, **P0.4 now runs before anything that spends judge calls**, so
+  the condition is executable as written. Preference order if it fires: **gate** the second judge (run it only
+  conditionally — ~50–70 % saving, semantics unchanged) over **merging** the two into one prompt (~65 %, but it
+  changes what the 37 guard cases measure and would break comparability with the Stage-A baseline).
 
-**Batching for `/expand-next`:** EVAL-P0 is one session (P0.1 needs a human answer first; P0.4 is a live run,
-not TDD). EVAL-P1 is its own session (4 steps, one commit each). EVAL-P2 + EVAL-P4 fit one session together.
-EVAL-P3 is its own session. EVAL-P5 is one session **plus** offline adjudication time. EVAL-P6 is one session.
-EVAL-P7 is one session — and is the cut if anything before it overruns.
+### Post-program milestones
+
+Not parked — **deferred with intent**, to be scheduled after EVAL-P5 lands and the artifact schema stops moving.
+
+- **Publishable extraction (~2 h): 8-case synthetic fixture set + README methodology section + committed
+  example artifacts.** Promoted out of Parked to its own milestone 2026-08-02 (DEC-153 §6). The src-free
+  constraint is enforced in every phase of this program, so the tax is already being paid; this is the only
+  thing that buys the benefit. **Decision point: after EVAL-P5.4.** Writing it earlier means rewriting it
+  when the schema shifts. Note the honest scope: `evals/` is *import*-free, not *engine*-free (EVAL-P3 fetches
+  vocabulary over HTTP, EVAL-P1.1 reads engine YAML by path), so the publishable artifact is the **harness +
+  schemas + synthetic fixtures + methodology**, not a suite a stranger can point at their own engine.
+
+**Batching for `/expand-next`:** EVAL-P0 is one session (P0.1 is done; P0.3 is an ask-gate and P0.4 is a live
+run, so **both need a human session** — see the fence note below). EVAL-P1 is its own session (4 steps, one
+commit each). EVAL-P2 + EVAL-P4 fit one session together (P4 now has 3 steps — P4.0 is annotation, not TDD).
+EVAL-P3 is its own session. EVAL-P5 is one session **plus** 4–6 h of offline adjudication. EVAL-P6 is one
+session. EVAL-P7 is one session — and is the cut if anything before it overruns. EVAL-P8 is one session and
+is **not** a cut candidate.
+
+**Loop fence state (DEC-153 §3):** the `<!-- LOOP:QUEUE end -->` marker sits **above Phase EVAL-P1**, so the
+overnight loop can only reach EVAL-P0.2. EVAL-P0.3 (ask-gate) and EVAL-P0.4 (live) are skipped by
+`compute_next` and must be done by a human; only then does the marker move down to release P1..P8.
 
 **Ordering against other programs:** nothing competes. `REM-W0..W8` is fully drained; `REORG-PR6..PR8` shipped
 and `PR-9` is optional/deferred; `P0`/`INTEG` are complete and `P1`/`P2` moved to `UNREAL_DEFERRED.md`. Of the
 `Next+1` block, `EVAL-01` (per-stage latency timer, in-engine) stays independent and still gates `PERF`;
 **`EVAL-05` (engine-quality eval expansion) is superseded by this program** and should be struck when reached.
+**`EVAL-02` and `EVAL-04` are NOT superseded** — they are rescoped as the multi-turn / cross-session program
+(DEC-153 §8), which measures the thing this program deliberately does not: whether an NPC remembers you across
+sessions. `EVAL-03` folds into the Parked LLM-`seed` work, which is its real prerequisite.
 
 ---
 
@@ -808,18 +969,28 @@ and `PR-9` is optional/deferred; `P0`/`INTEG` are complete and `P1`/`P2` moved t
 - [x] **INTEG-05** — no-CORS + plaintext-cloud-key posture documented in `docs/INTEGRATION.md` (§Security posture). ✅ f8c2dc6
 - **Effort:** ~1 session. **Blocks:** SHIP-05b.
 
-### Phase EVAL — Behavioral characterization + latency harness (precedes PERF; absorbs SHIP-10 latency)
+### Phase EVAL — Multi-turn behaviour + latency harness (precedes PERF; absorbs SHIP-10 latency)
 - **Goal:** measure how well the engines behave **and** where time goes — the SHIP-10 pitch numbers + the
   regression net that makes PERF safe. Additive (new files) → `main`/short branches.
+- **Rescoped 2026-08-02 (DEC-153 §8).** This block is **not** superseded by the `EVAL-P0..P8` pipeline; the two
+  are complementary and the overlap is now resolved item by item. `EVAL-P0..P8` measures **single-turn**
+  quality. This block owns **cross-session and multi-turn** behaviour — which is what a studio buyer actually
+  asks about ("does the NPC remember me next week"), and which nothing in the pipeline touches.
 - [ ] **EVAL-01** — per-stage latency timer in `dialogue_handler` + `context_builder` (LLM / graph groups /
   assembly); p50/p95 + RAM-by-process; **split interactive (dialogue/trade) vs background, cold-start isolated.**
   Absorbs SHIP-10's latency half. Exit: a real per-turn breakdown on the floor PC.
 - [ ] **EVAL-02** — golden-transcript regression suite (mock LLM) for dialogue/gossip/emotion/quest. Exit: a
-  behavior-altering change fails a test.
-- [ ] **EVAL-03** — content-determinism pin (same seed ⇒ same distortion/quest content; extends the SEV-22 RNG test).
-- [ ] **EVAL-04** — memory-recall-over-time eval (tick-N retention of tick-M facts).
-- [ ] **EVAL-05** — engine-quality eval expansion (LLM-judge: consistency, emotional coherence, belief
-  consistency under distortion). Exit: a quality scorecard for the pitch.
+  behavior-altering change fails a test. **Still live** — `EVAL-P1`'s transcript schema and `EVAL-P3`'s
+  LLM-free scoring pass are *inputs* to this, not replacements: a scoring pipeline is not a regression net.
+  Build it on the v2 transcript rather than inventing a second format.
+- [ ] ~~**EVAL-03**~~ — content-determinism pin (same seed ⇒ same distortion/quest content). **Folded into the
+  Parked "LLM `seed` support" item** (DEC-153 §8): `LLMGenerateProtocol.generate()` has no `seed` and
+  `ollama_adapter.py` never sets `options.seed`, so the pin is unbuildable for LLM-generated content until
+  that lands. The non-LLM half already exists as the SEV-22 RNG test.
+- [ ] **EVAL-04** — memory-recall-over-time eval (tick-N retention of tick-M facts). **Still live, and the
+  highest-value item in this block** — it is the only planned measurement of the engine's headline claim
+  (persistent memory) and the pipeline program explicitly does not cover it.
+- [ ] ~~**EVAL-05**~~ — engine-quality eval expansion. **Superseded by `EVAL-P0..P8`** — struck 2026-08-02.
 - **Effort:** ~2-3 sessions. **Blocks:** PERF.
 
 ### Phase PERF — Evidence-gated performance (incremental on `main`, after EVAL; DEC-132)

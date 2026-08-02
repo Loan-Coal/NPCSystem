@@ -2207,3 +2207,160 @@ paths: full drain (3 tasks / 2 phases, one boundary each), ask-gate skip, timeou
 
 **Rejected:** a PowerShell rewrite (the kit's own brief calls it a multi-day project that re-introduces
 every scar); tracking progress in a side-file cursor (the commit must be the transaction).
+
+---
+
+## DEC-152: Reference-labeller model separation — labeller is `claude-opus-5`
+**Date:** 2026-08-02 · **Status:** ✅ ACCEPTED · **Gates:** `EVAL-P5.2` · **Drives:** `evals/label_runner.py`, `evals/calibration_records.py`, `Makefile`
+**Context:** EVAL-P5 calibrates each scorer against adjudicated labels. Because the maintainer adjudicates
+*model-proposed* labels rather than labelling cold, the pre-labelling model is load-bearing: it defines the
+starting point for every human verdict and therefore, indirectly, every κ the program publishes.
+
+DEC-143 established that the eval judge must differ from the generation model (no self-evaluation). The same
+invariant must extend to the labeller, or the calibration measures a model against itself one step removed.
+
+**This decision exists because the roadmap claimed it already did.** `EVAL-P5` said *"propose **DEC-149** —
+reference-labeller model separation … It gates EVAL-P5.2"*, and `EVAL-P5.2` then said *"✅ DEC-149 ACCEPTED
+2026-07-31 — no longer a halt condition."* But `DEC-149` is *"All five engines standardise on qwen2.5:7b"* —
+an unrelated decision written during EVAL-P0.1. A grep for `labeller|labeler` across DECISIONS.md returns
+nothing substantive. **The ask-gate was marked cleared by a decision that was never made.**
+
+That was not cosmetic. The overnight loop's ask-gate detector is a regex on the literal string `ask-gate`
+(`scripts/_roadmap_cursor_core.py:39`), so P5.2 no longer carried a live gate — it carried a *clearance*. An
+unattended session reaching it would have picked its own labeller, wired a paid API client, and spent money
+against a policy nobody approved.
+
+**Decision:**
+1. **Invariant:** the reference labeller ∉ {discovered generation models} ∪ {judge model}, enforced at runtime
+   by `LabellerModelCollisionError`, mirroring `judge_config.resolve_judge_model`'s `JudgeModelCollisionError`.
+2. **Labeller = `claude-opus-5`** via raw `httpx` against `POST /v1/messages`
+   (`anthropic-version: 2023-06-01`). The `anthropic` SDK stays out — it is a new dependency and trips the
+   CLAUDE.md ask-gate; the REST surface needed here is one endpoint.
+3. **Prefer the Batches API** (`POST /v1/messages/batches`) — 50 % cheaper, and this is a bulk offline job with
+   no latency requirement. Results are keyed by `custom_id` and return in **any** order; key by it, never by
+   position.
+4. `ANTHROPIC_API_KEY` from env only. Never committed, never logged, never in an error message.
+
+**Options considered:** `claude-sonnet-5` ($3/$15 per Mtok, ≈$0.65) and `claude-haiku-4-5` ($1/$5, ≈$0.33)
+were both cheaper; a two-model panel (Opus 5 + Sonnet 5, disagreements prioritised for adjudication) was the
+most informative. A third *local* Ollama model was also viable and free.
+**Rationale for Opus 5:** cost is not the axis. 500 labels ≈ **$4** at $5/$25 per Mtok, halvable via Batches —
+against 4–6 h of maintainer adjudication time, the dollar figure is noise. What the labeller buys is the
+quality of the anchor: you adjudicate its proposals, so a weak pre-label biases you toward weak judgments,
+which is the precise opposite of what a calibration artifact is for. Saving $3 on the artifact that defines
+"correct" for every downstream κ is a false economy. The local-model option was rejected for the same reason.
+
+**Trade-off:** introduces an external paid dependency into a program whose other components are all local.
+Accepted because it is bounded (one offline batch, ~$4, no runtime path), and because the alternative —
+calibrating against a model from the same family as the judge or generation fleet — defeats the phase.
+
+**Related:** DEC-143 (judge ≠ generation), DEC-150 (DEC-143 enforced by AST scan), DEC-153 §1.
+
+---
+
+## DEC-153: Eval-pipeline revision after the 2026-08-02 adversarial review
+**Date:** 2026-08-02 · **Status:** ✅ ACCEPTED · **Drives:** `project-harness/ROADMAP.md` (the `EVAL-P0..P8` block, the `LOOP:QUEUE` fence, `Next+1 → Phase EVAL`)
+**Context:** The `EVAL-P0..P7` program was reviewed adversarially against the codebase rather than read. Ten
+findings survived verification; each is applied to ROADMAP.md. Three were defects with concrete failure modes
+already armed, not stylistic notes. Recorded here because the roadmap now reads as if it was always this way,
+and the reasons would otherwise be lost.
+
+**1 — `DEC-149` id collision falsely cleared EVAL-P5.2's ask-gate.** Split out as **DEC-152** (above), which is
+the real labeller decision. The roadmap's P5.2 line is corrected in place with a note, not silently rewritten.
+
+**2 — A wrong Wilson interval was pinned as a test oracle.** ROADMAP EVAL-P2.1 stated `3/5 ⇒ [0.237, 0.763]`
+in two places and required it *"pinned to 3 dp, with the hand-worked arithmetic in the test docstring"*. The
+correct interval is **[0.231, 0.882]**; `[0.237, 0.763]` is the Wilson interval for **5/10**. Three of the four
+pinned values were right, which is what made it dangerous: a TDD agent implementing `wilson_interval`
+correctly would have seen exactly one test fail, and the cheapest repair is to bend the *implementation* to
+match the constant. Corrected. The error also understated the roadmap's own argument — the true interval is
+**wider** (0.651 vs 0.526), strengthening the case that k=3 is uninformative per case.
+*(Verified against an independent computation; the other three pins — (0,3), (3,3), (2,3) — are correct.)*
+
+**3 — The loop fence let the program complete without ever measuring anything.** `compute_next`
+(`scripts/_roadmap_cursor_core.py:186`) **skips** flagged tasks and never blocks on them. With the fence open
+through EVAL-P7, the loop would run P1..P7 while **EVAL-P0.3** (ask-gate) and **EVAL-P0.4** (live) sat
+unchecked indefinitely. Every gate is `make check` — `pytest` with mocked I/O and no Docker — so every scorer
+would be verified against fixtures and the terminal state is *all boxes ticked, `make check` green, zero eval
+numbers produced*. For a program whose entire deliverable is numbers, that is the structural failure mode.
+**Decision:** move `<!-- LOOP:QUEUE end -->` to sit **above Phase EVAL-P1**, using the mechanism the fence was
+built for (DEC-151 §3). The loop reaches EVAL-P0.2 and stops. Reopen only when P0.3 and P0.4 are both ticked.
+**Rejected:** making all flagged tasks halt the queue (one ask-gate anywhere stalls the night, defeating the
+loop on mixed queues) and adding a new blocking marker (~1 h of harness work to solve a case the existing
+fence already covers).
+
+**4 — The program measured but could never compare.** Run identity, k repeats, Wilson intervals, flakiness
+classes, calibration and a dashboard all exist to support the question *"did this change help?"* — and
+`compare` was Parked. Worse, the statistic that works at affordable k was planned nowhere: per-case Wilson at
+k=3 spans [0.438, 1.000] for 3/3, so a case regressing 100 % → 50 % sits inside its own interval. **Decision:**
+promote `compare` to **Phase EVAL-P8**, including a **paired case-level** test (McNemar exact + bootstrap over
+53 cases — n=53, not n=3), which detects real shifts even at k=1. EVAL-P7 remains the designated cut; **EVAL-P8
+is not a cut candidate.** The 18 h ceiling is lifted rather than held-and-overrun (§9).
+
+**5 — EVAL-P4 had no real data.** P4.2 cross-tabulates `retrieval_hit × case_passed`, which needs cases
+carrying both `relevant_node_ids` and a pass/fail verdict. **Zero cases have both:** the 20 annotated retrieval
+cases are `RET-001…` with no judge verdict; the 53 dialogue cases are `case_*.yaml` with a verdict and no
+annotation; the id-set intersection is **empty** (verified). As specified, P4 was buildable against fixtures
+and unbuildable against reality — its stated goal ("so a failing case can be attributed rather than guessed
+at") was unreachable within the program. **Decision:** fund **EVAL-P4.0**, annotating **15** cases drawn from
+the 37 guard cases (~45 min) — that is where hallucination lives and therefore where attribution pays. The
+remaining 38 stay Parked. P4.2 must report the excluded count explicitly; a silently empty join looks exactly
+like a working table.
+
+**6 — "Independently publishable" was enforced everywhere and delivered nowhere.** The src-free constraint
+appears in every phase header and drives real work (P0.2 adapter, P0.3 lint gate, DEC-147), while its payoff —
+synthetic fixtures + README methodology + example artifacts — was Parked at ~2 h. And src-free ≠ engine-free:
+EVAL-P3 fetches vocabulary over the engine's HTTP API and EVAL-P1.1 reads engine YAML by path, so a stranger
+still cannot run it. **Decision:** keep the constraint (it is good coupling hygiene on its own merits), restate
+it honestly in the constraints block, and move extraction to a named **post-program milestone** with a
+decision point after EVAL-P5.4 — the schema must settle first or it gets rewritten.
+**Rejected:** funding it inside the program (it can only be written after P1/P3/P5, so it absorbs every
+upstream overrun) and demoting publishability entirely (gives up a real B2B asset for a doc edit).
+
+**7 — Calibration was under-powered, and denominators churned.** (a) 250 labels ÷ 6 scorers ≈ 40 rows each,
+putting κ's standard error near ±0.15 — a program built to stop reporting point estimates without error bars
+would have reported its own trust metric as a point estimate without error bars. **Decision:** **500 labels**
+across all six scorers (≈85 each, SE ≈ ±0.10) plus a **seeded bootstrap CI on κ**. Cost ≈$4; the real price is
+adjudication rising from ~2–3 h to **4–6 h**, accepted explicitly. Blinding a subsample to measure anchoring
+was considered and **not** funded — the limit is stated in the report instead, alongside the caveat that κ
+measures agreement with the author's intent rather than with correctness.
+(b) Three headline denominators appear across the program (53 total → 49 `evaluated_cases` → 74 vs 37 guard
+turns) with no restatement plan, while P0.4's whole value is comparability with Stage-A. **Decision:** P0.4
+persists **raw per-case verdicts**, not counts, *and* freezes the canonical denominator
+(`evaluated_cases` + case-level guard turns) up front. Also noted: the Stage-A anti-hallucination figure is
+quoted as `27/40` while the fixture holds **41** cases (25 refusal / 16 grounded, verified) — an off-by-one
+that must be corrected when the comparison is recorded.
+
+**8 — Overlap with `Next+1 → Phase EVAL` was half-resolved.** `EVAL-05` was struck as superseded, but
+`EVAL-02`/`03`/`04` were left ambiguous. **Decision:** the `EVAL-P0..P8` pipeline is explicitly **single-turn**
+quality. `EVAL-02` (golden transcripts) and `EVAL-04` (memory-recall-over-time) are **rescoped, not
+superseded**, as the multi-turn / cross-session program — `EVAL-04` in particular is the only planned
+measurement of the engine's headline claim (persistent memory), which the pipeline does not touch and which is
+what a studio buyer actually asks about. `EVAL-03` folds into the Parked LLM-`seed` item, its real
+prerequisite. `EVAL-05` struck.
+
+**9 — The budget was not credible, and the one free win was parked behind a circular condition.** 17.5 h
+against an 18 h ceiling with *"no slack"* excluded P0.4's ~1.5 h wall clock, P5's human adjudication, and
+P6.1's recorded-fixture live run. **Decision:** lift the ceiling and restate honestly — **~20.1 h coding**
+(17.5 + 1.5 P8 + 0.75 P4.0 + 0.33 P0.4 verdicts), with wall-clock and human time itemised **separately** so
+they stop distorting the estimate. Separately, judge-cost reduction (both a `tone_judge` and an `affirms_judge`
+injected into all 37 guard cases → 115 calls/run instead of ~41) was Parked with the condition *"promote if
+EVAL-P0.4's measured timings come in worse than expected"* — circular, because the fence meant P0.4 never ran.
+Fixing §3 makes the condition executable as written, so it stays parked-with-a-trigger rather than being
+promoted blind. Preference if it fires: **gate** the second judge (~50–70 %, semantics unchanged) over
+**merging** (~65 %, but changes what the guard cases measure and breaks Stage-A comparability).
+
+**10 — Scope honesty.** Even fully executed, this program will not detect small regressions (Wilson resolution
+at k=3 is ~50 points per case — mitigated but not solved by §4's paired test), will not catch unnamed
+fabrication (the EVAL-P3 scorers are alias-table whole-word matching, so *"a merchant from the eastern docks"*
+is undetectable), and will not measure the cross-session behaviour the B2B pitch rests on (§8). These are
+stated in the roadmap rather than discovered later.
+
+**Validation:** all ten findings were verified against the codebase before being applied — Wilson intervals
+recomputed independently; `compute_next`'s skip semantics read at source; the `RET-*` ↔ `case_*` id
+intersection computed (empty); the anti-hallucination fixture parsed (41 real cases + 1 comment object);
+`DEC-149`'s actual subject read from DECISIONS.md; the absence of any labeller decision confirmed by grep.
+
+**Rejected wholesale:** treating the review as advisory and leaving the roadmap as-is. Findings §1 and §3 each
+had an armed failure mode — unapproved paid API calls in an unattended session, and a program that reports
+completion having measured nothing.

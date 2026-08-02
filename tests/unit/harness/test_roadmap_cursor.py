@@ -154,12 +154,58 @@ def test_verify_flags_a_duplicate_task_id() -> None:
     assert any("duplicate task id" in f for f in verify(parse_roadmap(lines), lines))
 
 
-def test_real_roadmap_parses_and_verifies_clean() -> None:
+def _real_roadmap_phases():
     path = Path(__file__).resolve().parents[3] / "project-harness" / "ROADMAP.md"
     with open(path, encoding="utf-8", newline="") as handle:
         lines = handle.read().splitlines(keepends=True)
-    phases = parse_roadmap(lines)
+    return parse_roadmap(lines), lines
+
+
+def test_real_roadmap_parses_and_verifies_clean() -> None:
+    """Structural invariant — holds no matter where the fence is placed.
+
+    Deliberately does NOT pin the fence width: DEC-153 §3 makes moving the
+    ``end`` marker a planned, recurring operation (narrow it so the loop cannot
+    outrun a live measurement task, widen it once that task is ticked). A test
+    that froze the width would fail on every intentional move and train whoever
+    hits it to edit the number without reading why.
+    """
+    phases, lines = _real_roadmap_phases()
     assert verify(phases, lines) == []
-    assert [p.id for p in phases] == [f"EVAL-P{n}" for n in range(8)]
-    actionable = sum(len(p.pending) for p in phases)
-    assert actionable == 22
+    assert phases, "queue fence parsed to zero phases"
+    ids = [p.id for p in phases]
+    assert ids == [f"EVAL-P{n}" for n in range(len(ids))], (
+        f"queue must be a contiguous EVAL-P prefix starting at P0, got {ids}"
+    )
+
+
+def test_real_roadmap_fence_state_tripwire() -> None:
+    """Snapshot of the *current* fence, so a move is a conscious act.
+
+    UPDATE DELIBERATELY when the fence moves, and only alongside the ROADMAP
+    reopen condition. Current state (2026-08-02, DEC-153 §3): narrowed to
+    EVAL-P0 because ``compute_next`` skips flagged tasks without blocking, so a
+    wider fence let the loop drain EVAL-P1..P7 while EVAL-P0.3 (ask-gate) and
+    EVAL-P0.4 (the live measured baseline every later estimate depends on) sat
+    unchecked forever — finishing the program having measured nothing.
+    """
+    phases, _ = _real_roadmap_phases()
+    assert [p.id for p in phases] == ["EVAL-P0"]
+    assert sum(len(p.pending) for p in phases) == 1
+    # Filter on `not done` the way the loop does: EVAL-P0.1 is *also* skippable
+    # (its body still carries the ask-gate that gated the model choice) but it is
+    # already ticked, so it is not something the loop is being held back on.
+    flagged = [t.id for p in phases for t in p.tasks if t.skippable and not t.done]
+    assert flagged == ["EVAL-P0.3", "EVAL-P0.4"]
+
+
+def test_real_roadmap_end_marker_is_not_repeated_inside_the_queue() -> None:
+    """A second ``end`` token between the markers would silently truncate the queue.
+
+    The narrowed fence put P0.4's body next to the marker it talks about, so the
+    prose was one backtick-quoted token away from cutting the queue short.
+    """
+    _, lines = _real_roadmap_phases()
+    start, end = fence_bounds(lines)
+    inner = "".join(lines[start:end])
+    assert "LOOP:QUEUE end" not in inner
