@@ -18,6 +18,37 @@ Rules:
 
 ---
 
+## ISSUE-126: `expand_loop.sh --dry-run` never terminates (its own usage block advertises the hanging form)
+**Found:** 2026-08-02, during loop-readiness verification of the DEC-153 roadmap changes
+**Severity:** P2 (annoying) — costs a wasted invocation and leaves a stale lock, no data loss
+**Where:** `scripts/expand_loop.sh` — `run_claude_session` (dry-run early return) vs the `main()` while-loop; usage block at `:55-59`
+**Description:** A task is ticked by the **claude session** (`/expand-linear-next` marks, gates and commits
+it), not by the loop driver — `grep "cursor --mark" scripts/expand_loop.sh` returns nothing. Under
+`--dry-run`, `run_claude_session` returns before any session runs, so the task is never marked. `cursor
+--next` therefore returns the same task on every iteration and the loop spins forever, sleeping
+`TASK_SLEEP_SECS` (20 s) between identical iterations, until killed.
+
+The script's own usage block advertises exactly the hanging invocation:
+`bash scripts/expand_loop.sh --dry-run   # no model calls at all`.
+
+Bounding it works — `--dry-run --max-tasks 1` completes cleanly (`reached --max-tasks 1`, tree untouched,
+queue still `open=1`), which is also what proves the diagnosis: a dry run leaves the queue unchanged.
+
+**Second-order effect:** killing the spinning loop leaves the `mkdir`-based lock behind
+(`project-harness/.loop-state/loop.lock/` containing `pid`), so the *next* run aborts with
+`FATAL: another loop holds …`. Recovery is `rm -rf project-harness/.loop-state/loop.lock`, which is not
+documented anywhere.
+
+**Why deferred:** found while verifying a roadmap change, not while working on the harness; fixing it is a
+separate task and the roadmap's single-task-focus rule applies. It does not affect real (non-dry-run) nights —
+DEC-151's rig validated the real path with a fake `claude` on `PATH`, which *does* mark tasks.
+
+**To fix:** either (a) make `--dry-run` imply `--max-tasks 1` unless the caller sets it explicitly, (b) have
+the dry-run path simulate the mark so the queue advances and the loop drains as it would live, or (c) detect
+no-progress (same task id returned twice in a row) and abort with a clear message — (c) also protects the
+live path against a session that silently fails to tick. Correct the usage block either way, and document
+the stale-lock recovery in `project-harness/OVERNIGHT_LOOP.md`.
+
 ## ISSUE-123: `eval-judge` reports double the guard turns of `make eval` — the two headlines are not comparable
 **Found:** 2026-07-31, during eval-program planning (adversarial review of `npc_system_eval_plan_idea`)
 **Severity:** P2 (annoying — silently inflates the published anti-hallucination denominator)
