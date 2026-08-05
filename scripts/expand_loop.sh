@@ -56,7 +56,12 @@
 #   bash scripts/expand_loop.sh --max-tasks 1            # first bring-up, watch it
 #   bash scripts/expand_loop.sh --max-phases 1
 #   bash scripts/expand_loop.sh --start-at 20:00 --stop-at 08:00
+#   bash scripts/expand_loop.sh --stop-at none           # run the queue out, any hour
 #   bash scripts/expand_loop.sh --dry-run                # no model calls at all
+#
+# --stop-at resolves ONCE at startup to the next occurrence of that time, so a run
+# started at 09:00 stops at 08:00 TOMORROW, and one started at 06:00 stops at 08:00
+# today. It only stops new work from STARTING; a running task is never interrupted.
 # ==============================================================================
 
 set -uo pipefail
@@ -93,9 +98,14 @@ CONSECUTIVE_BLOCKED_PHASES=0
 SKIPPED_PHASES=""
 START_BRANCH=""
 SESSION_LOG=""
+# Absolute epoch instant, resolved once in main(). Empty = the stop guard is disabled.
+STOP_EPOCH=""
 
 usage() {
-  sed -n '2,60p' "$0" | sed 's/^# \{0,1\}//'
+  # Prints the header block: every comment line after the shebang, stopping at the first
+  # line that is not a comment. A hardcoded range silently truncated whenever the header
+  # grew, which is how the --stop-at docs went missing from --help.
+  awk 'NR == 1 { next } !/^#/ { exit } { sub(/^# ?/, ""); print }' "$0"
   exit 0
 }
 
@@ -131,8 +141,11 @@ done
 # ======================================================================================
 # logging
 # ======================================================================================
-TIMESTAMP() { TZ="$RESTART_TZ" date '+%Y-%m-%d %H:%M:%S'; }
-TODAY()     { TZ="$RESTART_TZ" date '+%Y-%m-%d'; }
+# Plain `date`, no TZ prefix: Git Bash ships no tzdata, so TZ=<any name> silently
+# returns UTC (measured — TZ=Foo/Bar behaves identically to TZ=Europe/Paris). The bare
+# system clock is the only one that reads correct local time here.
+TIMESTAMP() { date '+%Y-%m-%d %H:%M:%S'; }
+TODAY()     { date '+%Y-%m-%d'; }
 
 log() {
   local line="[$(TIMESTAMP)] $*"
@@ -142,6 +155,7 @@ log() {
 fatal() { log "FATAL: $*"; exit 1; }
 
 cursor() { $PY_RUN "$REPO_ROOT/scripts/roadmap_cursor.py" "$@"; }
+clock()  { $PY_RUN "$REPO_ROOT/scripts/loop_clock.py"     "$@"; }
 
 # ======================================================================================
 # preflight
@@ -150,7 +164,7 @@ preflight() {
   compat_force_utf8
   export ROADMAP_FILE
   mkdir -p "$LOOP_LOG_DIR" "$LOOP_STATE_DIR"
-  SESSION_LOG="$LOOP_LOG_DIR/loop-$(TZ="$RESTART_TZ" date '+%Y%m%d-%H%M%S').log"
+  SESSION_LOG="$LOOP_LOG_DIR/loop-$(date '+%Y%m%d-%H%M%S').log"
   : > "$SESSION_LOG"
 
   compat_lock_acquire "$LOCK_DIR" || fatal "another loop holds $LOCK_DIR"
@@ -179,6 +193,13 @@ preflight() {
 
   cursor --verify >/dev/null || fatal "roadmap failed --verify; fix the grammar first"
 
+  # Fail fast on the clock flags, BEFORE the multi-minute baseline seed. Defaulting an
+  # unparseable stop time to "stop now" would silently reproduce the bug this replaced.
+  clock --next-stop "$STOP_AT" >/dev/null \
+    || fatal "unparseable --stop-at '$STOP_AT' (want HH:MM[:SS], or 'none' to disable)"
+  [ -z "$START_AT" ] || clock --next-stop "$START_AT" >/dev/null \
+    || fatal "unparseable --start-at '$START_AT' (want HH:MM[:SS])"
+
   if [ "$WITH_SERVICES" = "1" ]; then
     if compat_services_up "$SERVICES_HEALTH_TIMEOUT"; then
       log "preflight: services healthy — integration tests will RUN this night"
@@ -198,21 +219,31 @@ preflight() {
 # ======================================================================================
 wait_until_start() {
   [ -n "$START_AT" ] || return 0
-  local now target
-  now="$(TZ="$RESTART_TZ" date +%s)"
-  target="$(TZ="$RESTART_TZ" date -d "today $START_AT" +%s 2>/dev/null)" || return 0
-  [ "$target" -le "$now" ] && target="$(TZ="$RESTART_TZ" date -d "tomorrow $START_AT" +%s)"
-  local delta=$((target - now))
-  log "sleeping ${delta}s until $START_AT before starting work"
+  local now target delta
+  now="$(date +%s)"
+  target="$(clock --next-stop "$START_AT")" || return 0
+  [ -n "$target" ] || return 0
+  delta=$((target - now))
+  log "sleeping ${delta}s until $(clock --describe "$target") before starting work"
   sleep "$delta"
 }
 
-past_morning_stop() {
-  # Stops STARTING new work between the stop hour and noon; never interrupts running work.
-  local now stop
-  now="$(TZ="$RESTART_TZ" date +%H%M%S)"; now="${now#"${now%%[!0]*}"}"; now="${now:-0}"
-  stop="$(echo "$STOP_AT" | tr -d ':')"; stop="${stop#"${stop%%[!0]*}"}"; stop="${stop:-0}"
-  [ "$now" -ge "$stop" ] && [ "$now" -lt 120000 ]
+resolve_stop_deadline() {
+  # Resolved ONCE, and only after wait_until_start returns, so --start-at 09:00 gets a
+  # deadline of 08:00 TOMORROW rather than one that has already passed.
+  STOP_EPOCH="$(clock --next-stop "$STOP_AT")"
+  if [ -n "$STOP_EPOCH" ]; then
+    log "stop deadline: $(clock --describe "$STOP_EPOCH") — new work will not START past it"
+  else
+    log "stop deadline: disabled (--stop-at $STOP_AT) — running until the queue drains"
+  fi
+}
+
+past_stop_deadline() {
+  # Compares two absolute epochs, so it is immune to the time-of-day ambiguity that made
+  # the old guard exit a 13:21 run instantly. Never interrupts work already running.
+  [ -n "$STOP_EPOCH" ] || return 1
+  [ "$(date +%s)" -ge "$STOP_EPOCH" ]
 }
 
 # ======================================================================================
@@ -571,14 +602,15 @@ ORIGINAL_ARGV=("$@")
 main() {
   preflight
   wait_until_start
+  resolve_stop_deadline
 
   [ "$(cursor --status | tail -1)" ] && log "starting: $(cursor --status | tail -1)"
   seed_gate_baseline "init"
 
   local next phase task rc
   while :; do
-    if past_morning_stop; then
-      log "past morning stop ($STOP_AT) — not starting new work"; break
+    if past_stop_deadline; then
+      log "reached the $STOP_AT stop deadline — not starting new work"; break
     fi
     if [ "$MAX_TASKS" -gt 0 ] && [ "$TASKS_DONE" -ge "$MAX_TASKS" ]; then
       log "reached --max-tasks $MAX_TASKS"; break

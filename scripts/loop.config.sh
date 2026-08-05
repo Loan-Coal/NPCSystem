@@ -34,9 +34,16 @@ ALLOW_MAIN="${ALLOW_MAIN:-0}"
 DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
 
 # ── pacing ────────────────────────────────────────────────────────────────────────────
-# System timezone measured as Central Europe Standard Time (+02:00).
-RESTART_TZ="${RESTART_TZ:-Europe/Paris}"
-# Stop STARTING new work past this local time. Never interrupts work already running.
+# There is deliberately no timezone knob. Git Bash ships no tzdata, so `TZ=Europe/Paris`
+# silently resolved to UTC — as did `TZ=Foo/Bar`, identically, which is how it went
+# unnoticed while every log line and the morning guard ran 2h behind local. The loop now
+# uses the bare system clock, which is correct, and epoch seconds across the shell/Python
+# boundary, which carry no zone at all. Restoring named zones would need `pip install
+# tzdata`; do not add the knob back without it.
+#
+# Resolved at startup to the NEXT occurrence of this time (09:00 start -> 08:00 tomorrow;
+# 06:00 start -> 08:00 today). Only stops new work STARTING; never interrupts a running
+# task. Set to "none" to disable entirely. See scripts/loop_clock.py.
 MORNING_STOP_HOUR_LOCAL="${MORNING_STOP_HOUR_LOCAL:-08:00:00}"
 # Per-task cap on one implementing claude session (90 min).
 CLAUDE_TIMEOUT="${CLAUDE_TIMEOUT:-5400}"
