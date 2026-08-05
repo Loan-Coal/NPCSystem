@@ -5,7 +5,7 @@ Purpose: Loads labeled retrieval cases from evals/cases/retrieval_demo.json, cal
          retrieval stack in-process (EmbeddingIndex + graph KNOWS_ABOUT query) for each
          (npc_id, query) pair, computes precision@k / recall@k / MRR, and prints a
          summary table. Requires a running Neo4j + populated embedding index (make demo-seed).
-Dependencies: npc_engine.retrieval.embedding_index, npc_engine.graph, evals.retrieval_matchers
+Dependencies: evals.engine_adapter (sole gateway to npc_engine), evals.retrieval_matchers
 Used by: make eval-retrieval (python -m evals.retrieval_runner)
 
 NOTE: This runner hits Neo4j and the embedding index when invoked from make eval-retrieval.
@@ -18,11 +18,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 from typing import Any
 
+from evals import engine_adapter
 from evals.retrieval_matchers import mrr, precision_at_k, recall_at_k
 from evals.retrieval_summary import format_retrieval_summary_lines, summarize_retrieval
 
@@ -101,13 +101,11 @@ async def _retrieve_ranked_ids(
     Returns:
         Ordered list of node ID strings (most relevant first).
     """
-    from npc_engine.graph.graph_reader import get_known_event_ids_for_npc
-
     vector_results = await embedding_index.search(query=query, top_k=k)
     ranked: list[str] = [r["id"] for r in vector_results]
 
     # Append KNOWS_ABOUT event IDs (graph-sourced, not vector-ranked)
-    known_event_ids = await get_known_event_ids_for_npc(session=graph_session, npc_id=npc_id)
+    known_event_ids = await engine_adapter.known_event_ids(session=graph_session, npc_id=npc_id)
     for event_id in sorted(known_event_ids):
         if event_id not in ranked:
             ranked.append(event_id)
@@ -232,23 +230,8 @@ async def _main() -> int:
         raw_cases = json.load(fh)
     cases = [RetrievalCase(**c) for c in raw_cases]
 
-    # Bootstrap settings and stack
-    # Settings requires API_KEY_SECRET; provide a minimal eval default if missing.
-    os.environ.setdefault("API_KEY_SECRET", "eval-key-placeholder")
-    from npc_engine.config import get_settings
-    from npc_engine.graph.infra.db import GraphDB
-    from npc_engine.retrieval.embedding_index import EmbeddingIndex
-    from npc_engine.retrieval.vector_store_factory import create_vector_store
-
-    settings = get_settings()
-    vector_store = create_vector_store(settings=settings)
-    embedding_index = EmbeddingIndex(
-        vector_store=vector_store, model_name=settings.EMBEDDING_MODEL
-    )
-
-    graph_db = GraphDB(settings=settings)
-    await graph_db.connect()
-    driver = graph_db.driver
+    # Bootstrap settings and stack via the sanctioned adapter (keeps this module src-free).
+    embedding_index, driver = await engine_adapter.build_retrieval_stack()
 
     # Smoke-check Neo4j connectivity
     try:

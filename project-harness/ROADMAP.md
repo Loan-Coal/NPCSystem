@@ -268,7 +268,7 @@ today. **DEC-147 ✅ ACCEPTED 2026-07-31 (all five clauses, incl. §4 lint gate 
       ⚠️ **ask-gate:** changing the shipped generation model has engine-wide effect. `/expand-next` must
       **halt and ask which model is intended** before committing — do not guess from the working tree.
 
-- [ ] **EVAL-P0.2** Introduce the single sanctioned adapter and a guard that keeps every other module src-free.
+- [x] **EVAL-P0.2** Introduce the single sanctioned adapter and a guard that keeps every other module src-free.
       Files: `create evals/__init__.py`, `create evals/engine_adapter.py`, `edit evals/retrieval_runner.py`,
       `create tests/unit/evals/test_src_free.py`. Move the five `npc_engine` imports out of `retrieval_runner`
       into `engine_adapter.build_retrieval_stack()` / `engine_adapter.known_event_ids(session, npc_id)`.
@@ -276,7 +276,7 @@ today. **DEC-147 ✅ ACCEPTED 2026-07-31 (all five clauses, incl. §4 lint gate 
       because `retrieval_runner` still names `npc_engine`.
       Validation: the guard AST-scans every `evals/*.py`, permits `npc_engine` imports **only** in
       `engine_adapter.py`, and reports the other 12 modules clean; `make eval-retrieval` prints an identical
-      table to the pre-change run.
+      table to the pre-change run. ✅ AUTO (EVAL-P0.2, 2026-08-05)
 
 - [ ] **EVAL-P0.3** Bring `evals/` under the lint gate. Files: `edit Makefile` (`lint: ruff check src/ evals/`),
       plus the ruff fixes it demands, `create tests/unit/evals/test_gate_scope.py`.
