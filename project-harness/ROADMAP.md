@@ -718,13 +718,13 @@ right" from "you were anchored". Blinding a subsample was considered and **not**
 `DEC-149` is *"All five engines standardise on qwen2.5:7b"* (DECISIONS.md), an unrelated decision, and citing
 it falsely marked P5.2's ask-gate cleared. See DEC-153 §1.
 
-- [ ] **EVAL-P5.1** Label record model. Files: `create evals/calibration_records.py`,
+- [x] **EVAL-P5.1** Label record model. Files: `create evals/calibration_records.py`,
       `create tests/unit/evals/test_calibration_records.py`. Frozen Pydantic `CalibrationLabel(record_id,
       scorer, output_text, pre_label: bool, pre_labeller_model: str, human_verdict: bool | None,
       adjudicated_at: str | None, notes: str)` + JSONL read/write to `evals/calibration/labels_v1.jsonl`.
       RED anchor: `tests/unit/evals/test_calibration_records.py::test_unadjudicated_row_round_trips_with_null_verdict` fails.
       Validation: 3 rows round-trip through JSONL byte-identically; a row missing `pre_labeller_model` raises
-      `ValidationError`; the **frozen output text** is stored inline, never a pointer to something regenerable.
+      `ValidationError`; the **frozen output text** is stored inline, never a pointer to something regenerable. ✅ AUTO (EVAL-P5.1, 2026-08-07)
 
 - [ ] **EVAL-P5.2** Pre-labelling runner. Files: `create evals/label_runner.py`,
       `create tests/unit/evals/test_label_runner.py`, `edit Makefile`. `httpx.post` → Anthropic REST
