@@ -665,12 +665,12 @@ join has real data; the remaining 38 stay Parked.
       demo-world seed (assert against `demo_game/seeds/seed.py` node ids, so a typo fails the gate rather
       than silently scoring as a retrieval miss); unannotated cases still load unchanged. ✅ AUTO (EVAL-P4.0, 2026-08-07)
 
-- [ ] **EVAL-P4.1** Shared key→node-id extraction. `retrieval_runner._node_id_from_key` (`:58`) is needed by
+- [x] **EVAL-P4.1** Shared key→node-id extraction. `retrieval_runner._node_id_from_key` (`:58`) is needed by
       both runners. Files: `create evals/context_keys.py`, `edit evals/retrieval_runner.py`,
       `create tests/unit/evals/test_context_keys.py`.
       RED anchor: `tests/unit/evals/test_context_keys.py::test_rag_prefix_strips_to_node_id` fails — module absent.
       Validation: `rag:northern_war_begins` → `northern_war_begins`, `character:mira_innkeeper` → `mira_innkeeper`,
-      a bare key round-trips; `make eval-retrieval` output unchanged.
+      a bare key round-trips; `make eval-retrieval` output unchanged. ✅ AUTO (EVAL-P4.1, 2026-08-07)
 
 - [ ] **EVAL-P4.2** Decomposition table. Files: `create evals/retrieval_join.py`,
       `create tests/unit/evals/test_retrieval_join.py`. Per record, compute context recall/precision of

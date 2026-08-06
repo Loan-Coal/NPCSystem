@@ -55,23 +55,6 @@ class RetrievalCase(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _node_id_from_key(key: str) -> str:
-    """Extract the leaf node ID from a context item key.
-
-    Keys follow the pattern ``prefix:node_id`` (e.g. ``character:mira_innkeeper``,
-    ``location:loc_tavern``, ``rag:northern_war_begins``) or bare strings.
-    Returns the last colon-separated segment.
-
-    Args:
-        key: A ContextItem key string.
-
-    Returns:
-        The trailing node ID substring after the last colon, or the full key
-        when no colon is present.
-    """
-    return key.rsplit(":", 1)[-1]
-
-
 async def _retrieve_ranked_ids(
     npc_id: str,
     query: str,
