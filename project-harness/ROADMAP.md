@@ -749,7 +749,7 @@ it falsely marked P5.2's ask-gate cleared. See DEC-153 §1.
       Validation: on a 5-row file with 2 adjudicated, the CLI presents exactly 3 rows; flipping one writes
       `human_verdict != pre_label` and leaves `pre_label` untouched. ✅ AUTO (EVAL-P5.3, 2026-08-07)
 
-- [ ] **EVAL-P5.4** Confusion matrices + κ. Files: `create evals/calibration.py`,
+- [x] **EVAL-P5.4** Confusion matrices + κ. Files: `create evals/calibration.py`,
       `create tests/unit/evals/test_calibration.py`, `edit Makefile` (`eval-calibrate`).
       Per scorer: TP/FP/FN/TN, precision, recall, hand-implemented `cohens_kappa`, **and a bootstrap
       confidence interval on κ** (`kappa_interval(rows, resamples=2000, seed)` — `math` + `random` only, no
@@ -762,7 +762,7 @@ it falsely marked P5.2's ask-gate cleared. See DEC-153 §1.
       n adjacent, and the false-positive cell labelled as the dangerous one.
       **Rationale (DEC-153 §7):** a program created to stop reporting point estimates without error bars must
       not report its own trust metric as a point estimate without error bars. At ~85 rows κ's SE is ≈ ±0.10,
-      so a κ of 0.60 is really ≈ [0.40, 0.80] — a difference that changes what the number licenses you to say.
+      so a κ of 0.60 is really ≈ [0.40, 0.80] — a difference that changes what the number licenses you to say. ✅ AUTO (EVAL-P5.4, 2026-08-07)
 
 ### Phase EVAL-P6 — One CLI; legacy targets become aliases
 **Goal:** A single `python -m evals <verb>` entry point, with the seven legacy make targets reduced to thin

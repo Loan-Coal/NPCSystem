@@ -15,7 +15,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-layers check-docstrings roadmap-verify type-ratchet type-ratchet-update check-harness \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-score scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-score eval-calibrate scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world package
@@ -226,6 +226,11 @@ eval-score:
 		--transcript $(TRANSCRIPT) \
 		--aliases evals/cases/entity_aliases.yaml \
 		$(ARGS)
+
+# eval-calibrate: per-scorer confusion matrices, Cohen's κ with bootstrap CI (EVAL-P5.4).
+# Usage: make eval-calibrate [LABELS=evals/calibration/labels_v1.jsonl]
+eval-calibrate:
+	$(PYTHON) evals/calibration.py $(if $(LABELS),--file $(LABELS),)
 
 # eval-combined: one command that runs dialogue evals + retrieval evals and prints both summaries
 eval-combined: eval eval-retrieval
