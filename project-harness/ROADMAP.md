@@ -560,11 +560,11 @@ headline until EVAL-P6 folds it in. Wilson at the k you can afford is wide and t
 3/3 ⇒ **[0.438, 1.000]**, 3/5 ⇒ **[0.231, 0.882]**. Print k next to every rate.
 **Depends on:** EVAL-P1.4 (needs `repetition` on records).
 
-- [ ] **EVAL-P2.1** Wilson score interval. Files: `create evals/statistics.py`, `create tests/unit/evals/test_statistics.py`.
+- [x] **EVAL-P2.1** Wilson score interval. Files: `create evals/statistics.py`, `create tests/unit/evals/test_statistics.py`.
       `wilson_interval(successes, trials, z=1.96) -> tuple[float, float]` and `pass_rate(successes, trials)`.
       RED anchor: `tests/unit/evals/test_statistics.py::test_wilson_3_of_3` fails — module absent.
       Validation: a table-driven test pins (0,3)→[0.000, 0.562], (3,3)→[0.438, 1.000], (3,5)→[0.231, 0.882]
-      to 3 dp, with the hand-worked arithmetic in the test docstring; `trials == 0` raises, never returns [0,1].
+      to 3 dp, with the hand-worked arithmetic in the test docstring; `trials == 0` raises, never returns [0,1]. ✅ AUTO (EVAL-P2.1, 2026-08-06)
 
 - [ ] **EVAL-P2.2** Per-case statistics. Files: `create evals/case_stats.py`, `create tests/unit/evals/test_case_stats.py`.
       Frozen Pydantic `CaseStat(case_id, k, passes, pass_rate, ci_low, ci_high, classification)` with
