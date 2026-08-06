@@ -32,3 +32,19 @@ Now reviewing the EVAL-P1.4 / EVAL-P1.3 / EVAL-P1.1 diffs. Here are my findings:
 4. **TranscriptVersionError exception not used** in tests. The new `TranscriptVersionError` is defined in `evals/eval_records.py:250-264` but there's no integration test confirming `read_transcript()` actually raises it when version mismatches occur (v1 → v2). Schema version enforcement works, but error path is untested.
 
 5. **Project-rule violation: Makefile output directory change is silent**. `eval-generate` switched default `--out` from `e2e/transcripts/` to `evals/generations/` without updating downstream consumers. Judge pass still reads from legacy location by default — coupling risk if eval-generate output path diverges. Should verify judge_runner defaults match or add explicit path coordination in CI recipes.
+
+## 2026-08-06 23:52:52 — phase EVAL-P3
+
+**EVAL-P3 Diff Review: 5 Findings**
+
+1. **CLI can't score knowledge meaningfully** — `deterministic_pass.py:237` hardcodes `npc_known_events={}`, so the CLI always reports 100% knowledge_rate (assuming event mentions). The main() function has no parameter to supply NPC known-events, limiting real-world CLI use to entity scoring only. Documented limitations should be in the module docstring, not buried in the score_transcript() params.
+
+2. **Redundant denominator field** — `summary.py:127-128` introduces `evaluated_cases` (total_cases - skipped_cases) then immediately sets `total_turns = evaluated_cases`, making the two fields identical. While this clarifies intent, the docstring at line 49 should explain why both fields exist instead of just renaming total_turns.
+
+3. **API response format assumption** — `graph_vocabulary.py:100` assumes the JSON response has a `"data"` key without validation: `resp.json()["data"]`. If the endpoint returns unexpected structure, this raises an uncaught KeyError. No docstring states the expected response schema.
+
+4. **Missing entity-rate edge case test** — All alias tests use known entities. No test covers a scenario where an entity mention has no alias in the table at all (e.g., an NPC name spoken for the first time). This is documented as "out of scope" but should have an explicit test confirming zero mentions for unaliased text.
+
+5. **Knowledge scorer false-positive risk not tested** — `knowledge_scorer.py:18-22` warns that beliefs/goals/memories aren't in npc_known_event_ids, causing false violations. No test verifies this edge case or documents which knowledge sources ARE included. The docstring should reference a test that demonstrates the risk.
+
+**All tests pass.** No file exceeds 300 lines. Module docstrings present.
