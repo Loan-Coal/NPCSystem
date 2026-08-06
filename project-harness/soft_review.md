@@ -48,3 +48,22 @@ Now reviewing the EVAL-P1.4 / EVAL-P1.3 / EVAL-P1.1 diffs. Here are my findings:
 5. **Knowledge scorer false-positive risk not tested** — `knowledge_scorer.py:18-22` warns that beliefs/goals/memories aren't in npc_known_event_ids, causing false violations. No test verifies this edge case or documents which knowledge sources ARE included. The docstring should reference a test that demonstrates the risk.
 
 **All tests pass.** No file exceeds 300 lines. Module docstrings present.
+
+## 2026-08-07 00:57:53 — phase EVAL-P4
+
+## Findings (EVAL-P4 commits)
+
+**1. Layer not defined (CLAUDE.md violation)**  
+Module docstrings declare `Layer: evals (evaluation harness)`, but evals is not in CLAUDE.md's official layer model (which lists: api, auth, data, engines, scheduler, services, cache, retrieval, graph, mutation, world, config, common, type_registry, schema, utils). Either add evals to CLAUDE.md or reassign files to data/.
+
+**2. Precision computed but unused**  
+retrieval_join.py:126 computes `precision_at_k`, but only `recall` determines `retrieval_hit` (line 129). Precision is exposed in `PerRecordResult` but never used. Design choice is undocumented.
+
+**3. RECALL_HIT_THRESHOLD=0.0 not tested for value**  
+Threshold set to 0.0 means any recall > 0 is a hit. Tests validate boundary cases (0 vs >0) but not the threshold value itself. If threshold changes, no test catches it.
+
+**4. record_id format not validated**  
+`_case_id_from_record_id()` assumes format `<case_id>:<judge_kind>:<index>` but doesn't validate. Malformed record_ids (e.g., no colon) silently produce incorrect case_id values.
+
+**5. Hard-coded case count in regression test**  
+`test_guard_case_total_is_37()` requires manual update whenever cases are added/deleted, making it brittle despite being intentional.
