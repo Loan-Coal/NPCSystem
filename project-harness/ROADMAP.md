@@ -672,7 +672,7 @@ join has real data; the remaining 38 stay Parked.
       Validation: `rag:northern_war_begins` → `northern_war_begins`, `character:mira_innkeeper` → `mira_innkeeper`,
       a bare key round-trips; `make eval-retrieval` output unchanged. ✅ AUTO (EVAL-P4.1, 2026-08-07)
 
-- [ ] **EVAL-P4.2** Decomposition table. Files: `create evals/retrieval_join.py`,
+- [x] **EVAL-P4.2** Decomposition table. Files: `create evals/retrieval_join.py`,
       `create tests/unit/evals/test_retrieval_join.py`. Per record, compute context recall/precision of
       `retrieved_context` against the case's `relevant_node_ids`, then cross-tabulate
       `retrieval_hit × case_passed` into a 2×2.
@@ -681,7 +681,7 @@ join has real data; the remaining 38 stay Parked.
       **retrieved & failed (generation failure)**, *not retrieved & failed (retrieval failure)*, and
       *not retrieved & passed (lucky)* — and the four sum to the count of **annotated** records. Records for
       unannotated cases are reported as an explicit excluded count with the denominator stated, never
-      silently dropped (the whole phase exists because a silent empty join looked like a working table).
+      silently dropped (the whole phase exists because a silent empty join looked like a working table). ✅ AUTO (EVAL-P4.2, 2026-08-07)
 
 ### Phase EVAL-P5 — Calibration: model pre-label + human adjudication
 **Goal:** A versioned, reproducible calibration artifact — **500** outputs pre-labelled by a reference model
