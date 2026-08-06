@@ -566,13 +566,13 @@ headline until EVAL-P6 folds it in. Wilson at the k you can afford is wide and t
       Validation: a table-driven test pins (0,3)→[0.000, 0.562], (3,3)→[0.438, 1.000], (3,5)→[0.231, 0.882]
       to 3 dp, with the hand-worked arithmetic in the test docstring; `trials == 0` raises, never returns [0,1]. ✅ AUTO (EVAL-P2.1, 2026-08-06)
 
-- [ ] **EVAL-P2.2** Per-case statistics. Files: `create evals/case_stats.py`, `create tests/unit/evals/test_case_stats.py`.
+- [x] **EVAL-P2.2** Per-case statistics. Files: `create evals/case_stats.py`, `create tests/unit/evals/test_case_stats.py`.
       Frozen Pydantic `CaseStat(case_id, k, passes, pass_rate, ci_low, ci_high, classification)` with
       `classification: Literal["stable_pass", "flaky", "stable_fail"]`; `classify(passes, k)`;
       `aggregate(judged_records) -> tuple[CaseStat, ...]` grouped by `case_id` across repetitions.
       RED anchor: `tests/unit/evals/test_case_stats.py::test_two_of_three_classifies_flaky` fails.
       Validation: over a fixture transcript with k=3, a case at 2/3 reports `flaky` with CI [0.208, 0.939];
-      3/3 reports `stable_pass`; 0/3 reports `stable_fail`; the list sorts by instability with flaky cases first.
+      3/3 reports `stable_pass`; 0/3 reports `stable_fail`; the list sorts by instability with flaky cases first. ✅ AUTO (EVAL-P2.2, 2026-08-06)
 
 - [ ] **EVAL-P2.3** Honest denominators. `runner._run_case` turns a 404 NPC into `passed: True, skipped: True`
       and `summary.summarize` counts it in `total_cases` — with only the demo world seeded that is **4 free
