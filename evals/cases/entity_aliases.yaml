@@ -1,0 +1,61 @@
+# Entity alias table for the NPC Engine demo world.
+#
+# Keys:   text strings (aliases) that may appear in generated NPC dialogue.
+# Values: canonical graph node IDs as they exist in Neo4j.
+#
+# Matching rules:
+#   - Whole-word, case-insensitive (regex \b boundaries).
+#   - Multi-word entries (e.g. "the Captain") are matched before their
+#     single-word substrings to prevent double-counting.
+#
+# Documented limits:
+#   - Pronouns (she, he, they, it) are out of scope — not listed here.
+#   - Unnamed fabrications ("a merchant from the eastern docks") are
+#     undetectable via alias matching and will not appear as false positives.
+#   - Partial names without a table entry ("the Warden") are missed.
+
+aliases:
+  # --- Characters ---
+  mira_innkeeper: mira_innkeeper
+  Mira: mira_innkeeper
+  the innkeeper: mira_innkeeper
+
+  aldric_merchant: aldric_merchant
+  Aldric: aldric_merchant
+  the merchant: aldric_merchant
+
+  captain_sorn: captain_sorn
+  Sorn: captain_sorn
+  the Captain: captain_sorn
+  Captain Sorn: captain_sorn
+  Captain: captain_sorn
+
+  lira_fence: lira_fence
+  Lira: lira_fence
+  the fence: lira_fence
+
+  old_henryk: old_henryk
+  Old Henryk: old_henryk
+  Henryk: old_henryk
+
+  # --- Locations ---
+  tavern: tavern
+  the tavern: tavern
+  market_square: market_square
+  the market: market_square
+  guard_barracks: guard_barracks
+  the barracks: guard_barracks
+
+  # --- Events ---
+  northern_war_begins: northern_war_begins
+  the northern war: northern_war_begins
+  the war in the north: northern_war_begins
+
+  # --- Factions ---
+  thieves_guild: thieves_guild
+  the guild: thieves_guild
+  the thieves guild: thieves_guild
+  merchants_guild: merchants_guild
+  the merchants guild: merchants_guild
+  northern_kingdom: northern_kingdom
+  the northern kingdom: northern_kingdom

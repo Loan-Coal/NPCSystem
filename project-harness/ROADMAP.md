@@ -612,13 +612,13 @@ eastern docks") is undetectable — those go in the README as documented limits,
       Validation: against a mock client returning 2 pages, the model holds every id from both pages and issues
       exactly 3 requests (two full, one short); re-running with a cache file present issues **zero** requests. ✅ AUTO (EVAL-P3.1, 2026-08-06)
 
-- [ ] **EVAL-P3.2** Unsupported-entity scorer (pure). Files: `create evals/entity_scorer.py`,
+- [x] **EVAL-P3.2** Unsupported-entity scorer (pure). Files: `create evals/entity_scorer.py`,
       `create evals/cases/entity_aliases.yaml`, `create tests/unit/evals/test_entity_scorer.py`.
       `unsupported_entity_rate(text, vocabulary, aliases) -> EntityScore` with `mentions`, `unsupported`, `rate`.
       RED anchor: `tests/unit/evals/test_entity_scorer.py::test_unknown_proper_noun_counts_as_unsupported` fails.
       Validation: on a fixture text naming `mira_innkeeper` (known), "the Captain" (alias → `captain_sorn`, known)
       and "Warden Aldous" (absent), the scorer returns `mentions=3, unsupported=1, rate=0.333`; a pronoun-only
-      sentence returns `mentions=0` and the docstring states pronouns are out of scope.
+      sentence returns `mentions=0` and the docstring states pronouns are out of scope. ✅ AUTO (EVAL-P3.2, 2026-08-06)
 
 - [ ] **EVAL-P3.3** Unpropagated-event-reference scorer (pure). Files: `create evals/knowledge_scorer.py`,
       `create tests/unit/evals/test_knowledge_scorer.py`.
