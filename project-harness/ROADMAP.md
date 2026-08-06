@@ -505,14 +505,14 @@ tier/priority to sentinels (`admin/debug_retrieval.py:80-108`) — it is an *app
 produced the reply, and that caveat goes in the schema docstring verbatim, not in a backlog. **Depends on:**
 EVAL-P0.2 (`evals/__init__.py` must exist). **Blocks:** EVAL-P2, EVAL-P3, EVAL-P4, EVAL-P7.
 
-- [ ] **EVAL-P1.1** Run-config model. Files: `create evals/run_config.py`, `create tests/unit/evals/test_run_config.py`.
+- [x] **EVAL-P1.1** Run-config model. Files: `create evals/run_config.py`, `create tests/unit/evals/test_run_config.py`.
       Frozen Pydantic v2 `RunConfig`: `prompt_version`, `generation_model`, `temperature`, `top_p`, `max_tokens`,
       `judge_model`, `retrieval_profile`, `git_sha`, `golden_set_version`. `resolve_run_config()` reads the engine
       YAML + `git rev-parse --short HEAD` + `judge_config.resolve_judge_model()`.
       RED anchor: `tests/unit/evals/test_run_config.py::test_resolve_reads_dialogue_llm_config` fails — module absent.
       Validation: `python -c "from run_config import resolve_run_config as r; print(r().model_dump_json(indent=2))"`
       prints a block with a non-empty 7-char `git_sha` and a `generation_model` equal to `llm_config.yaml`'s.
-      **No `seed` field exists on the model** — assert its absence in the test.
+      **No `seed` field exists on the model** — assert its absence in the test. ✅ AUTO (EVAL-P1.1, 2026-08-06)
 
 - [ ] **EVAL-P1.2** Single-source the prompt version (the hidden prerequisite). Make `llm_config.yaml`'s
       `prompt.version` authoritative and have `prompt_builder` read it instead of hardcoding.
