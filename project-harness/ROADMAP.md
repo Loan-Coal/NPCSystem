@@ -604,13 +604,13 @@ invisible, partial names ("the Captain") need the table, and an unnamed fabricat
 eastern docks") is undetectable — those go in the README as documented limits, not the backlog.
 **Depends on:** EVAL-P1.3.
 
-- [ ] **EVAL-P3.1** Vocabulary fetch. Files: `create evals/graph_vocabulary.py`,
+- [x] **EVAL-P3.1** Vocabulary fetch. Files: `create evals/graph_vocabulary.py`,
       `create tests/unit/evals/test_graph_vocabulary.py`. Paged `GET /v1/graph/nodes/{node_type}` over
       Character / Location / Event / Faction into a frozen `GraphVocabulary` Pydantic model, cached to
       `evals/generations/<gen_id>/vocabulary.json` so scoring is replayable with the engine down.
       RED anchor: `tests/unit/evals/test_graph_vocabulary.py::test_paginates_until_short_page` fails — module absent.
       Validation: against a mock client returning 2 pages, the model holds every id from both pages and issues
-      exactly 3 requests (two full, one short); re-running with a cache file present issues **zero** requests.
+      exactly 3 requests (two full, one short); re-running with a cache file present issues **zero** requests. ✅ AUTO (EVAL-P3.1, 2026-08-06)
 
 - [ ] **EVAL-P3.2** Unsupported-entity scorer (pure). Files: `create evals/entity_scorer.py`,
       `create evals/cases/entity_aliases.yaml`, `create tests/unit/evals/test_entity_scorer.py`.
