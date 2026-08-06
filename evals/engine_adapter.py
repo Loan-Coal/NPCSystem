@@ -43,6 +43,21 @@ async def build_retrieval_stack() -> tuple[Any, Any]:
     return embedding_index, graph_db.driver
 
 
+def neo4j_uri() -> str:
+    """Return the configured Neo4j URI, for diagnostics in connection-failure messages.
+
+    Kept here rather than importing Settings at the call site: engine_adapter is the
+    only module allowed to touch npc_engine (DEC-147 §2).
+
+    Returns:
+        The NEO4J_URI value from Settings.
+    """
+    from npc_engine.config import get_settings
+
+    os.environ.setdefault("API_KEY_SECRET", "eval-key-placeholder")
+    return str(get_settings().NEO4J_URI)
+
+
 async def known_event_ids(session: Any, npc_id: str) -> set[str]:
     """Return event node IDs the NPC has direct graph knowledge of (KNOWS_ABOUT edges).
 

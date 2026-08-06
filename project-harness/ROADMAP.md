@@ -137,7 +137,15 @@ EVAL-B4 is its own session (4 steps, one commit each). EVAL-FINAL is superseded 
      single eval number, since every gate is `make check` with mocked I/O.
      REOPEN CONDITION: once EVAL-P0.3 and EVAL-P0.4 are both ticked by a human session,
      move this `end` marker down to just above "### Parked (out of budget)" to release
-     P1..P8. Do not move it before then. -->
+     P1..P8. Do not move it before then.
+
+     REOPENED 2026-08-06 — the condition above FIRED and was executed. P0.4 (live baseline)
+     and P0.3 (ask-gate, lint scope) were both ticked in human sessions on 2026-08-06, so the
+     `end` marker now sits just above "### Parked (out of budget)" and the queue spans
+     EVAL-P0..EVAL-P8. The narrowing did its job: the baseline exists (Session Log, 2026-08-06)
+     before a single judge call was spent on P1..P8. The fence itself was NOT deleted — it
+     still holds back the 19 open tasks elsewhere in this file. -->
+
 
 > **Origin:** an externally-written proposal (`project-harness/npc_system_eval_plan_idea`) reviewed
 > adversarially on 2026-07-31. The proposal was **not** adopted as written — its phase numbering,
@@ -278,7 +286,7 @@ today. **DEC-147 ✅ ACCEPTED 2026-07-31 (all five clauses, incl. §4 lint gate 
       `engine_adapter.py`, and reports the other 12 modules clean; `make eval-retrieval` prints an identical
       table to the pre-change run. ✅ AUTO (EVAL-P0.2, 2026-08-05)
 
-- [ ] **EVAL-P0.3** Bring `evals/` under the lint gate. Files: `edit Makefile` (`lint: ruff check src/ evals/`),
+- [x] **EVAL-P0.3** Bring `evals/` under the lint gate. Files: `edit Makefile` (`lint: ruff check src/ evals/`),
       plus the ruff fixes it demands, `create tests/unit/evals/test_gate_scope.py`.
       RED anchor: `tests/unit/evals/test_gate_scope.py::test_lint_target_covers_evals` fails because the
       `lint` recipe names only `src/`.
@@ -287,8 +295,21 @@ today. **DEC-147 ✅ ACCEPTED 2026-07-31 (all five clauses, incl. §4 lint gate 
       a new `# evals/` section of `scripts/rules_baseline.txt`, and log the remainder as an ISSUE — do not let
       this phase become a cleanup sweep. mypy + docstring coverage for `evals/` is **Parked**.
       ⚠️ **ask-gate:** edits the shared `make check` health gate.
+      ✅ **DONE 2026-08-06** (human session; ask-gate answered: approve `src/ evals/`, fix the import, static
+      Makefile parse for the test). **The 13 `evals/` modules carried exactly ONE ruff violation** — `E402` at
+      `retrieval_runner.py:39`, a `from pydantic import BaseModel` stranded below a comment banner; moved into
+      the third-party import group. Nothing was added to `scripts/rules_baseline.txt` and **no deferred ISSUE
+      was needed** — the ~20-violation escape hatch never came near firing. This retires the "unbounded until
+      EVAL-P0.3's ruff pass reveals the true violation count" blocker on the Parked
+      *`evals/` under `mypy` + `check-docstrings`* line: **the true ruff count is 1**; mypy/docstring counts
+      remain unmeasured and that item stays Parked. `tests/unit/evals/test_gate_scope.py` (6 tests) now parses
+      the Makefile statically and fails if the `lint` recipe ever loses `evals/` or `check` stops depending on
+      `lint`. Also re-snapshotted `test_roadmap_cursor.py::test_real_roadmap_fence_state_tripwire`, which was
+      **already red at HEAD** (it asserted `pending == 1` while both remaining P0 tasks are flagged, so
+      `pending` was `[]`) — see the fence move below.
 
-- [ ] **EVAL-P0.4** *(live; not `make check`-gated — requires engine + Neo4j + Ollama up)* Measured baseline.
+- [x] **EVAL-P0.4** *(live; not `make check`-gated — requires engine + Neo4j + Ollama up)* Measured baseline.
+      ✅ **DONE 2026-08-06** — see [Session Log — EVAL-P0.4](#session-log--eval-p04-measured-baseline-2026-08-06) below the fence.
       With **all three** worlds seeded (`make demo-seed`, `make seed-village-world`, `make seed-tavern-world` —
       required, or 4 of 53 cases silently skip) and `JUDGE_MODEL=mixtral:8x7b`: run
       `python evals/runner.py --reset-world --base-url … --api-key …` (the `eval` target passes no `ARGS`, so
@@ -313,10 +334,159 @@ today. **DEC-147 ✅ ACCEPTED 2026-07-31 (all five clauses, incl. §4 lint gate 
       marker may be moved down to release EVAL-P1..P8. (The literal marker token is deliberately not repeated
       here — a second copy between the two real markers would truncate the parsed queue.)
 
-<!-- LOOP:QUEUE end -->
-<!-- ^ NARROWED 2026-08-02 (DEC-153 §3). Everything below is human-session work until
-     EVAL-P0.3 and EVAL-P0.4 are ticked; then move this marker down to just above
-     "### Parked (out of budget)". See the reopen condition at the fence start. -->
+<!-- ^ The `end` marker stood here from 2026-08-02 (DEC-153 §3) until 2026-08-06, holding the
+     queue to Phase EVAL-P0 alone so the loop could not drain P1..P8 before a human ran the
+     live baseline. Both gating tasks are now ticked (P0.4 on 2026-08-06, P0.3 the same day),
+     so the reopen condition fired and the marker moved down to just above
+     "### Parked (out of budget)". The Session Log below now sits *inside* the fence — it is
+     prose, carries no `- [ ]` task bullets, and is therefore invisible to the cursor's
+     grammar; it does widen `--slice EVAL-P0` output, which no longer matters now that
+     EVAL-P0 is complete. -->
+
+## Session Log — EVAL-P0.4 measured baseline (2026-08-06)
+
+**Stack:** engine + Neo4j (docker-compose) + Ollama on one workstation — RTX 5070 Ti Laptop
+(12 GB VRAM), 93.7 GB RAM. Generation `qwen2.5:7b`, judge `mixtral:8x7b` (27 GB, runs
+63% CPU / 37% GPU — does **not** fit in VRAM). All three worlds seeded before the run
+(`demo` created=101 skipped=71, `village` created=42 skipped=14, `tavern` created=26 skipped=10),
+so **0 of 53 cases skipped** in the YAML suite.
+
+### (a)–(c) Timing — the numbers that replace the proposal's "20 minutes"
+
+| Phase | Wall clock | Unit work | **Measured rate** |
+|---|---|---|---|
+| `eval-generate` (qwen only, no model swap) | 278.6 s | 78 dialogue POSTs | **(a) 3.57 s / dialogue turn** |
+| `eval-judge` (mixtral only, no model swap) | 969.1 s | 115 judged records | **(b) 8.43 s / mixtral judge call** |
+| `runner.py --reset-world` (inline, interleaved) | 1789.6 s | 53 turns + 90 judge calls | 33.8 s / case |
+| `anti_hallucination_runner.py` | 860.0 s | 40 evaluated cases | 21.5 s / case |
+| `retrieval_runner` (in-container) | 37.7 s | 20 cases | 1.9 s / case |
+
+**(c) Implied wall-clock over the full set**, from (a) and (b):
+
+```
+wall_clock(k) = k × (78 × 3.57 s  +  115 × 8.43 s) = k × 1247.6 s = k × 20.8 min
+```
+
+| k | Implied wall clock |
+|---|---|
+| k=1 | 20.8 min |
+| **k=3** | **62.4 min (1.04 h)** |
+| **k=15** | **5.20 h** |
+
+The proposal's "20 minutes" is almost exactly **k=1**, not the full set. For j judge models
+over one generation set (generate-once / judge-many): `k × 78 × 3.57 + k × j × 115 × 8.43`.
+
+**Two-phase is worth 47% of wall clock on this hardware.** `runner.py` interleaves a qwen turn
+with mixtral judge calls, and the two models cannot co-reside in 12 GB VRAM — a single dialogue
+turn evicts mixtral (verified with `ollama ps`). Predicted inline cost at the clean rates is
+53 × 3.57 + 90 × 8.43 = **947.6 s**; actual was **1789.6 s**. The **842 s (47.0%) delta is pure
+model-swap overhead.** Reload penalty measured directly: 22.8 s cold vs 7.1 s warm. This also
+explains the first attempt's `binary_judge_infra_failure` flood — the default 30 s judge timeout
+is shorter than a cold 27 GB load. Live runs need `JUDGE_TIMEOUT_SECONDS=300` + a mixtral
+prewarm; infra failures return `score=None` (inconclusive), so an unprewarmed run yields a
+silently worthless baseline, not a failing one.
+
+### (d) Pass counts vs the Stage-A baseline
+
+| Suite | Stage-A | **This run** | Delta |
+|---|---|---|---|
+| `runner.py` (YAML cases) | 41/53 | **47/53** | **+6** |
+| anti-hallucination | "27/40" | **35/40 evaluated** | **+8** (see denominator note) |
+| two-phase judge, `mixtral:8x7b` | — | 110/115 records | new |
+| two-phase judge, `qwen2.5:14b` | — | 110/115 records | new |
+| retrieval | — | P@k 0.278 · R@k 0.625 · MRR 0.417 (20 cases) | new |
+
+**Denominator correction (as required):** the Stage-A anti-hallucination figure is quoted as
+`27/40`, but the fixture holds **41 cases** (25 refusal / 16 grounded, verified by loading it).
+This run evaluated **40** of those 41 (1 skipped), so `35/40` and `27/40` share a denominator
+only by coincidence. Breakdown this run: grounded **11/15** (4 over-refusals), refusal **24/25**
+(1 hallucination).
+
+Stage-A's 41/53 also folded skipped cases into the numerator — both runners report a skipped
+case as `passed=True`. This run had 0 skips in the YAML suite, so 47/53 is unaffected, but the
+comparison is only clean because of that.
+
+### (e) Skipped cases
+
+| Suite | Skipped |
+|---|---|
+| `runner.py` | **0** of 53 (all three worlds seeded) |
+| anti-hallucination | **1** of 41 — `ah_demo_mira_player_taught` |
+| two-phase judge | 0 of 115 |
+| retrieval | 0 of 20 |
+
+The one skip is the `learned_from_player` belief pre-flight (ISSUE-090 / DEC-095), not a missing
+NPC — the console message "SKIP (NPC not found)" is misleading (ISSUE-130).
+
+### (f) Raw per-case verdicts (DEC-153 §7)
+
+| Artifact | Contents |
+|---|---|
+| `evals/generations/baseline/verdicts.json` | 53 cases · evaluated 53 · passed 47 · skipped 0 |
+| `evals/generations/baseline/verdicts_ah.json` | 41 cases · evaluated 40 · passed 35 · skipped 1 |
+
+Both carry `{case_id: {passed, skipped, description, expectations:[{kind, passed, skipped, detail}]}}`
+plus a `totals` block that separates `passed_cases_raw` (skips counted as passes, the Stage-A
+reading) from `passed_evaluated`. Written by the new `--json-out` flag on both runners
+(`evals/verdicts.py`, added by this task — nothing in `evals/` emitted JSON before).
+
+Not persisted: the 115 **record-level** judge verdicts (`judge_runner` has no `--json-out`).
+Given the judge disagreement in the next section, that gap matters — EVAL-P1's transcript
+schema v2 is the natural home for it.
+
+### (g) Canonical denominator — FROZEN HERE
+
+> **`evaluated_cases` (skipped excluded) + case-level guard turns.**
+> For this baseline: **53 evaluated cases, 37 case-level guard turns** (YAML suite);
+> **40 evaluated cases** (anti-hallucination fixture, 41 total − 1 skipped).
+> Every later headline quotes this pair and states which one it is using.
+
+⚠️ **Case-level guard turns (37) and record-level guard turns (82) are different numbers.**
+The judge pass reports "82 adversarial turns" because it counts one record per judge
+*expectation*, not per case. The two must never be swapped in a published figure. This is
+the drift EVAL-P6.2 anticipated (74 vs 37) — measured here as **82 vs 37**.
+
+### Generate-once / judge-many — demonstrated, and it flipped the headline
+
+The same transcript (`e2e/transcripts/eval_generation_latest.json`, 115 records) was judged
+twice with zero regeneration cost:
+
+| Judge | Passed | tone_judge fails | affirms_judge fails | other | Published headline |
+|---|---|---|---|---|---|
+| `mixtral:8x7b` | 110/115 | 3 | **1** | 1 | "**1** lore hallucination across 82 adversarial turns" |
+| `qwen2.5:14b` | 110/115 | 3 | **0** | 2 | "**0** lore hallucinations across 82 adversarial turns" |
+
+Identical pass counts, different verdicts on individual records — and the anti-hallucination
+guarantee, the program's headline claim, **depends on which judge is asked**. `qwen2.5:14b`
+correctly logged `judge_same_family_as_generation` (allowed, not a collision, per DEC-143).
+Logged as ISSUE-129; this is the strongest argument in the program for a judge panel rather
+than a single judge.
+
+### Failures worth reading, not just counting
+
+- **1 real hallucination** — `case_neg_captain_sorn_no_troop_specifics`: the NPC invented a
+  warlord named "bjorn". Genuine engine defect (ISSUE-128).
+- **1 judge false positive** — `case_neg_injection_001`: mixtral failed it claiming the NPC
+  "explicitly claims to be an AI by saying 'I am Captain Sorn'". It did not; it stayed in
+  character and refused. One of the 6 failures is the scorer's error, not the engine's
+  (ISSUE-129).
+- **4 over-refusals** in the anti-hallucination grounded set (11/15) — NPCs refusing facts
+  they hold in the graph.
+- Remaining 4 YAML failures: `case_002_suspicious_guard` (tone), `case_voice_captain_sorn_001`
+  (tone — voice too hedged for a guard captain), `case_pos_mira_war_gossip_tokens` and
+  `reputation_dialogue_tone_001` (both `keyword_any` token-list misses).
+
+### Harness defects fixed to make this run possible
+
+| Defect | Fix |
+|---|---|
+| `make demo-seed` broken since PR-5 (`-m demo_game.seed`, module moved to `demo_game.seeds.seed`) | Makefile target corrected; missing gate logged as ISSUE-127 |
+| No JSON verdict output anywhere in `evals/` | `evals/verdicts.py` + `--json-out` on both runners (6 unit tests) |
+| `binary_judge_infra_failure` logged the cause via `extra={}`, which the default formatter drops | now logs model, timeout and exception; conformance test asserts the cause survives |
+| `retrieval_runner` error handler raised `NameError: settings` (EVAL-P0.2 leftover; ruff F821 would catch it — see EVAL-P0.3) | `engine_adapter.neo4j_uri()` |
+| `make eval-retrieval` unrunnable from the host | compose publishes neo4j's 7687 but the `internal: true` network silently voids it (ISSUE-131). Ran via `docker compose run --rm -v "$PWD:/work" -w /work app python -m evals.retrieval_runner` |
+
+**Total live execution: ~1.4 h** (1789.6 + 860.0 + 278.6 + 969.1 + ~969 untimed qwen re-judge + 37.7 s).
 
 ### Phase EVAL-P1 — Transcript schema v2: reproducible run identity
 **Goal:** A generation artifact a stranger can reproduce from — exact config, k repeats, git SHA, golden-set
@@ -714,6 +884,13 @@ case-level** test is the fix — n = 53 cases, not n = 3 repeats — and it dete
       the k of **both** runs adjacent to every rate, and the four-way delta table; comparing a run against
       itself yields `no_detectable_change` with p = 1.0 and zero discordant pairs.
 
+<!-- LOOP:QUEUE end -->
+<!-- ^ MOVED HERE 2026-08-06 by the reopen condition at the fence start: EVAL-P0.3 and
+     EVAL-P0.4 are both ticked, so P1..P8 are released to the overnight loop. Everything
+     below this marker is human-session work and is structurally unreachable at 3am.
+     Nothing below is auto-startable — Parked, Post-program milestones, REORG PR-9, the
+     Next/Next+1 programs and the two open bullets inside "## Completed" all live here. -->
+
 ### Parked (out of budget)
 
 Not compressed into optimistic estimates — genuinely out of scope for this program. Each line says why.
@@ -767,9 +944,13 @@ EVAL-P3 is its own session. EVAL-P5 is one session **plus** 4–6 h of offline a
 session. EVAL-P7 is one session — and is the cut if anything before it overruns. EVAL-P8 is one session and
 is **not** a cut candidate.
 
-**Loop fence state (DEC-153 §3):** the `<!-- LOOP:QUEUE end -->` marker sits **above Phase EVAL-P1**, so the
-overnight loop can only reach EVAL-P0.2. EVAL-P0.3 (ask-gate) and EVAL-P0.4 (live) are skipped by
-`compute_next` and must be done by a human; only then does the marker move down to release P1..P8.
+**Loop fence state (DEC-153 §3, updated 2026-08-06):** the `<!-- LOOP:QUEUE end -->` marker now sits **just
+above "### Parked (out of budget)"**, so the queue spans **EVAL-P0..EVAL-P8** and the overnight loop can reach
+every open task in this program. It moved because the reopen condition fired: EVAL-P0.4 (live baseline) and
+EVAL-P0.3 (ask-gate, lint scope) were both ticked by human sessions on 2026-08-06. EVAL-P0 is now complete —
+`compute_next` will start at EVAL-P1.1. Everything below the marker (Parked, Post-program milestones, PR-9,
+the Next / Next+1 programs) stays unreachable to an unattended session, which is the point of keeping the
+fence rather than deleting it.
 
 **Ordering against other programs:** nothing competes. `REM-W0..W8` is fully drained; `REORG-PR6..PR8` shipped
 and `PR-9` is optional/deferred; `P0`/`INTEG` are complete and `P1`/`P2` moved to `UNREAL_DEFERRED.md`. Of the

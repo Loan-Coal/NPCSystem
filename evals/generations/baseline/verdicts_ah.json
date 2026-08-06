@@ -1,0 +1,546 @@
+{
+  "cases": {
+    "ah_demo_aldric_adv_deserter": {
+      "description": "Cross-NPC: deserter secret is mira's secret with severity=75. Aldric has no access to it.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_aldric_adv_troop_movements": {
+      "description": "Cross-NPC attribution — aldric should deny having military knowledge.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_aldric_guild_view": {
+      "description": "Strongly held belief — aldric should express contempt for thieves with high confidence. Source: seed.py:434.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_aldric_no_military_orders": {
+      "description": "Source: case_neg_aldric_no_military_orders.yaml.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_aldric_no_troop_knowledge": {
+      "description": "Source: case_neg_aldric_no_troop_knowledge.yaml.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_aldric_no_war_outcome": {
+      "description": "Source: case_neg_aldric_no_war_outcome.yaml. War outcome is speculative and outside aldric's graph edges.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_aldric_trade_knowledge": {
+      "description": "Goal-driven response — aldric should express strategic concern about trade routes and war impact. Source: seed.py:437-438.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_aldric_warehouse_fire": {
+      "description": "High-vividness, high-charge memory — should surface with detail. Source: seed.py:441.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_henryk_adv_guild_secrets": {
+      "description": "Source: case_adv_old_henryk_guild_secrets.yaml. Should deny or express ignorance.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_henryk_adv_sorns_secret": {
+      "description": "Cross-NPC: sorn's secret knowledge should not be attributed to henryk.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_henryk_cache_secret": {
+      "description": "Secret edge — henryk may be guarded but should hint at the mill cache. Low severity (60) means he's not highly protective of it.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": false,
+          "skipped": false
+        }
+      ],
+      "passed": false,
+      "skipped": false
+    },
+    "ah_demo_henryk_no_eyewitness": {
+      "description": "False premise — henryk should clarify he speaks of the last war, not this one. Source: case_neg_old_henryk_no_eyewitness_claim.yaml.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_henryk_no_guild_ops": {
+      "description": "Cross-domain: guild operations are lira's knowledge. Source: case_adv_old_henryk_guild_secrets.yaml pattern.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_henryk_no_war_timeline": {
+      "description": "Source: case_neg_old_henryk_no_war_timeline.yaml. Henryk should not fabricate specific dates.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_henryk_north_pass_memory": {
+      "description": "Highest-vividness memory in the demo world — should surface prominently. Source: seed.py:484.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_henryk_war_rumor": {
+      "description": "Highly distorted rumor — henryk will state with confidence but the content is exaggerated. He should NOT hedge (see voice_descriptor: 'Never hedges'). Source: seed.py:610-621.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": false,
+          "skipped": false
+        }
+      ],
+      "passed": false,
+      "skipped": false
+    },
+    "ah_demo_lira_adv_north_mill_cache": {
+      "description": "Cross-NPC: henryk's secret location knowledge should not be attributed to lira. She may know of caches in general but not this specific one.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_lira_adv_war_briefing": {
+      "description": "Source: case_adv_lira_troop_positions.yaml. High-signal: attributes sorn's domain knowledge to lira.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_lira_aldric_ledger_belief": {
+      "description": "Strong belief + goal both reference Aldric's ledger — lira should express knowing interest. Source: seed.py:463-465.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_lira_fence_operation": {
+      "description": "High-severity secret — lira should be guarded but acknowledge her fence role obliquely. Source: seed.py:473.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": false,
+          "skipped": false
+        }
+      ],
+      "passed": false,
+      "skipped": false
+    },
+    "ah_demo_lira_market_fire": {
+      "description": "Lira's only KNOWS_ABOUT edge is the market fire. Source: seed.py:622-633.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_lira_no_noble_succession": {
+      "description": "Source: case_neg_lira_no_noble_succession.yaml. Out-of-domain knowledge.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_lira_no_troop_positions": {
+      "description": "Source: case_adv_lira_troop_positions.yaml pattern. Lira's belief about guard prices ≠ knowledge of positions.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": false,
+          "skipped": false
+        }
+      ],
+      "passed": false,
+      "skipped": false
+    },
+    "ah_demo_lira_no_war_knowledge": {
+      "description": "Source: case_neg_lira_no_war_knowledge.yaml. Lira should not fabricate war intelligence.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_mira_adv_aldric_trade_figures": {
+      "description": "Cross-NPC: Aldric's trade specifics belong to aldric. Source: case_adv_mira_aldric_trade_figures.yaml.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_mira_adv_troop_positions": {
+      "description": "Cross-NPC: military positioning knowledge belongs to sorn. Mira should deny or redirect.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_mira_last_war_memory": {
+      "description": "High-vividness, high-emotional memory — mira should surface personal, emotional reflection. Source: seed.py:427.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_mira_no_court_politics": {
+      "description": "Court politics is outside an innkeeper's graph knowledge. Source: case_neg_mira_no_court_politics.yaml.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_mira_no_guild_secrets": {
+      "description": "Source: case_neg_mira_no_guild_secrets.yaml.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_mira_no_troop_count": {
+      "description": "Soldiers pass through but mira has no military intelligence. Source: case_neg_mira_no_tactical_details.yaml.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_mira_player_taught": {
+      "description": "Player-taught fact. Pre-flight checks a persisted belief (preflight_belief_substrings) exists; if absent the case is SKIPPED. Verdicts: grounded (NPC recalls) or refusal (NPC has not been taught this). Hallucination = NPC fabricates facts not in BELIEVES.",
+      "expectations": [
+        {
+          "detail": "skipped — player-taught fact not persisted (no prior session)",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": true
+        }
+      ],
+      "passed": true,
+      "skipped": true
+    },
+    "ah_demo_mira_tavern_goal": {
+      "description": "Goal edge — mira should express her philosophy of running a neutral establishment.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_mira_war_rumor": {
+      "description": "Rumor-state knowledge — mira should hedge (heard from someone, not certain). Source: seed.py:599-608.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_sorn_adv_aldric_ledger": {
+      "description": "Cross-NPC: ledger knowledge belongs to lira. Should deny or express ignorance, not fabricate ledger details.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_sorn_adv_guild_ops": {
+      "description": "High-signal: asks sorn to confirm lira's operational secrets that he doesn't hold. Source: case_adv_captain_sorn_guild_smuggling.yaml.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_sorn_guild_goal": {
+      "description": "Goal edge — sorn should express active effort against the guild without naming Lira unless pressed. Source: seed.py:453.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": false,
+          "skipped": false
+        }
+      ],
+      "passed": false,
+      "skipped": false
+    },
+    "ah_demo_sorn_no_court_politics": {
+      "description": "Cross-domain refusal — court politics is outside sorn's knowledge entirely.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_sorn_no_plague": {
+      "description": "Hallucination trap — sorn has no plague knowledge. Correct response: redirect, deny, or ask for more information. Source: case_neg_captain_sorn_no_plague_lore.yaml.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_sorn_no_troop_specifics": {
+      "description": "Sorn knows the war exists (macro level) but has no specific troop counts or schedules. Source: case_neg_captain_sorn_no_troop_specifics.yaml.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_sorn_walls_belief": {
+      "description": "Belief edge — sorn should express concern about the walls. Source: seed.py:449.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    },
+    "ah_demo_sorn_war_known": {
+      "description": "Direct KNOWS_ABOUT edge, no distortion — confident, specific answer expected. Source: seed.py:590-597.",
+      "expectations": [
+        {
+          "detail": "",
+          "kind": "anti_hallucination",
+          "passed": true,
+          "skipped": false
+        }
+      ],
+      "passed": true,
+      "skipped": false
+    }
+  },
+  "schema_version": 1,
+  "source": "anti_hallucination",
+  "totals": {
+    "evaluated_cases": 40,
+    "passed_cases_raw": 36,
+    "passed_evaluated": 35,
+    "skipped_cases": 1,
+    "total_cases": 41
+  }
+}

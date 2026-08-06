@@ -236,7 +236,15 @@ def _run_binary_judge(criteria: str, content: str) -> JudgeResult:
         data = r.json()
         raw = str(data.get("response", ""))
     except Exception as exc:
-        _logger.warning("binary_judge_infra_failure", extra={"error": str(exc)})
+        # The cause goes in the format args, not extra=: the default formatter drops
+        # extra keys, so every judge failure printed as a bare event name with no
+        # cause — a 30s timeout and a dead Ollama looked identical.
+        _logger.warning(
+            "binary_judge_infra_failure model=%s timeout_s=%s error=%r",
+            _JUDGE_MODEL,
+            _JUDGE_TIMEOUT,
+            exc,
+        )
         return JudgeResult(score=None, error="infra_failure")
 
     passed, reasoning = _parse_judge_verdict(raw)

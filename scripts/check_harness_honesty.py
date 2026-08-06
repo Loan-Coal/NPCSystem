@@ -36,9 +36,15 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore") if path.exists() else ""
 
 
+# Must stay identical to the Makefile `lint` recipe's scope (EVAL-P0.3): this script
+# exists to catch the harness claiming a gate is green when it is not, so a narrower
+# scope here would silently exempt evals/ from the very check it was just brought under.
+_LINT_PATHS = ("src/", "evals/")
+
+
 def _lint_clean() -> bool:
-    """True if `ruff check src/` reports no errors."""
-    proc = subprocess.run([sys.executable, "-m", "ruff", "check", "src/"],
+    """True if ruff over the `make lint` scope (src/ + evals/) reports no errors."""
+    proc = subprocess.run([sys.executable, "-m", "ruff", "check", *_LINT_PATHS],
                           cwd=REPO_ROOT, capture_output=True, text=True)
     return proc.returncode == 0
 

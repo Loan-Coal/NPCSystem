@@ -2364,3 +2364,48 @@ intersection computed (empty); the anti-hallucination fixture parsed (41 real ca
 **Rejected wholesale:** treating the review as advisory and leaving the roadmap as-is. Findings §1 and §3 each
 had an armed failure mode — unapproved paid API calls in an unattended session, and a program that reports
 completion having measured nothing.
+
+---
+
+## DEC-154: `evals/` joins the lint gate; the loop fence reopens to EVAL-P0..P8
+**Date:** 2026-08-06 · **Status:** ✅ ACCEPTED · **Drives:** `Makefile` (`lint`), `scripts/check_harness_honesty.py`, `project-harness/ROADMAP.md` (the `LOOP:QUEUE` fence), `tests/unit/evals/test_gate_scope.py`, `tests/unit/harness/test_roadmap_cursor.py`
+**Context:** EVAL-P0.3 is ask-gated because it edits the shared `make check` health gate. Answered by the
+human session on 2026-08-06. Recorded because three of the four decisions below are invisible in the diff.
+
+**1 — `lint` scope becomes `ruff check src/ evals/`, and nothing wider.** `tests/`, `scripts/` and
+`demo_game/` were offered and declined: their violation counts are unmeasured and the phase carried a 30-min
+time-box. **Measured result: the 13 `evals/` modules held exactly ONE violation** — `E402` at
+`retrieval_runner.py:39`, a `from pydantic import BaseModel` stranded below a comment banner. Fixed by moving
+it into the third-party import group rather than `# noqa`-ing it, so the import-order rule is satisfied and
+not merely suppressed. The escape hatch the roadmap wrote (fix the mechanical ones, baseline the rest, log an
+ISSUE) never fired: `scripts/rules_baseline.txt` is untouched and no ISSUE was opened.
+**Consequence for the Parked item:** *"`evals/` under `mypy` + `check-docstrings`"* was parked as *"unbounded
+until EVAL-P0.3's ruff pass reveals the true violation count"*. The ruff count is now known and it is 1. That
+does **not** transfer to mypy or docstrings — those remain unmeasured — so the item stays Parked, but its
+stated blocker is retired and the next session can size it directly.
+
+**2 — `check_harness_honesty._lint_clean()` had to move with it.** That script re-runs ruff itself and had
+`src/` hardcoded. Left alone it would report "lint clean" while `make lint` was red on `evals/` — the script
+whose single purpose is catching the harness lying about a gate would have become the lie. Scope is now the
+named `_LINT_PATHS = ("src/", "evals/")` and `test_gate_scope.py` asserts it equals the Makefile recipe's
+scope in both directions. This was not in the phase's file list; it is in scope because the phase's claim is
+"`evals/` is gated", and it was not gated while an honesty checker could green-light it.
+
+**3 — The fence reopened, releasing EVAL-P1..P8.** DEC-153 §3 narrowed `<!-- LOOP:QUEUE end -->` to sit above
+Phase EVAL-P1 and wrote the reopen condition: both EVAL-P0.3 and EVAL-P0.4 ticked. Both are now ticked
+(P0.4 measured the live baseline earlier on 2026-08-06), so the condition fired and the marker moved to just
+above `### Parked (out of budget)`. Queue: **9 phases, 23 open tasks, 3 flagged** (`EVAL-P1.2`, `EVAL-P5.2`,
+`EVAL-P6.3`, all ask-gate); `--next` returns `EVAL-P1.1`. The narrowing did its job — the baseline exists
+before a single judge call was spent on P1..P8, which is exactly what DEC-153 §3 was protecting. The fence
+was **not** deleted: the 19 open tasks below the marker stay structurally unreachable at 3am.
+The EVAL-P0.4 Session Log now sits *inside* the fence. It is prose with no `- [ ]` bullets, so the cursor's
+grammar cannot see it; the only effect is a longer `--slice EVAL-P0`, and EVAL-P0 is complete.
+
+**4 — The fence tripwire was re-snapshotted, and it was already red before this task touched it.**
+`test_real_roadmap_fence_state_tripwire` asserted `pending == 1`. `PhaseEntry.pending` **excludes flagged
+tasks**, and the only two tasks left in EVAL-P0 were both flagged, so the true value was 0 — verified against
+the committed `HEAD` copy of ROADMAP.md, not just the working tree. The test had therefore been failing
+independently of EVAL-P0.3, and `make check` could not have gone green without addressing it. Rewritten to
+assert **sorted id lists** (`EVAL-P0..P8`; flagged `== ["EVAL-P1.2", "EVAL-P5.2", "EVAL-P6.3"]`) alongside the
+counts: a bare count tells whoever trips it that *something* moved, never *which* task appeared or vanished,
+which is the one thing a deliberate-update tripwire has to report.

@@ -89,8 +89,11 @@ test-v14-p4:
 test-v14-p5:
 	$(PYTHON) -m pytest -q tests/unit -k "metrics or observability"
 
+# lint: ruff over the shipped engine AND the eval harness (EVAL-P0.3).
+# evals/ is in scope because it is production-adjacent code that gates releases;
+# tests/unit/evals/test_gate_scope.py fails if this recipe ever loses evals/.
 lint:
-	$(PYTHON) -m ruff check src/
+	$(PYTHON) -m ruff check src/ evals/
 
 type:
 	$(PYTHON) -m mypy src/
@@ -237,7 +240,7 @@ hello:
 
 # demo-seed: seed the demo world via the HTTP API (idempotent — safe to re-run)
 demo-seed:
-	$(PYTHON) -m demo_game.seed
+	$(PYTHON) -m demo_game.seeds.seed
 
 # demo-run: play the scripted hackathon scenario (see docs/DEMO_SCRIPT.md)
 # ARGS: --dry-run (no API calls), --cached (recording mode, error on miss)

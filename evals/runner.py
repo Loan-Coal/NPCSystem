@@ -25,6 +25,7 @@ import preconditions
 from matchers import EvalConfigError, JudgeResult, evaluate
 from report import write_report
 from summary import format_summary_lines, summarize
+from verdicts import write_verdicts
 
 # Default player id when a case seed omits one (mirrors _run_case / _setup_reputation).
 _DEFAULT_PLAYER_ID = "player_eval"
@@ -319,6 +320,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Reset world_state to the age_of_peace baseline before the run (default off).",
     )
+    parser.add_argument(
+        "--json-out",
+        type=Path,
+        default=None,
+        help="Also write raw per-case verdicts as JSON to this path (DEC-153 §7).",
+    )
     args = parser.parse_args(argv)
 
     cases = _load_cases(args.cases)
@@ -368,6 +375,9 @@ def main(argv: list[str] | None = None) -> int:
             results.append(result)
 
     report_path = write_report(results=results, output_dir=args.reports)
+    if args.json_out is not None:
+        verdicts_path = write_verdicts(results, args.json_out, source="runner")
+        print(f"Verdicts: {verdicts_path}")
     passed = sum(1 for r in results if r["passed"])
     total = len(results)
 

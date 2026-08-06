@@ -22,6 +22,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel
+
 from evals import engine_adapter
 from evals.retrieval_matchers import mrr, precision_at_k, recall_at_k
 from evals.retrieval_summary import format_retrieval_summary_lines, summarize_retrieval
@@ -35,8 +37,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Case schema (Pydantic v2)
 # ---------------------------------------------------------------------------
-
-from pydantic import BaseModel
 
 
 class RetrievalCase(BaseModel):
@@ -238,8 +238,11 @@ async def _main() -> int:
         await driver.verify_connectivity()
     except Exception as exc:  # noqa: BLE001
         print(
-            f"ERROR: Cannot connect to Neo4j at {settings.NEO4J_URI}: {exc}\n"
-            "Run `docker-compose up -d && make demo-seed` first.",
+            f"ERROR: Cannot connect to Neo4j at {engine_adapter.neo4j_uri()}: {exc}\n"
+            "Run `docker-compose up -d && make demo-seed` first. Note that the neo4j\n"
+            "service sits on the compose `internal` network, so its declared 7687 port\n"
+            "is NOT published to the host — run this eval inside the app container:\n"
+            "  docker compose exec app python -m evals.retrieval_runner",
             file=sys.stderr,
         )
         return 1

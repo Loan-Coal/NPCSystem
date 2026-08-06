@@ -183,20 +183,37 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     """Snapshot of the *current* fence, so a move is a conscious act.
 
     UPDATE DELIBERATELY when the fence moves, and only alongside the ROADMAP
-    reopen condition. Current state (2026-08-02, DEC-153 §3): narrowed to
-    EVAL-P0 because ``compute_next`` skips flagged tasks without blocking, so a
-    wider fence let the loop drain EVAL-P1..P7 while EVAL-P0.3 (ask-gate) and
-    EVAL-P0.4 (the live measured baseline every later estimate depends on) sat
-    unchecked forever — finishing the program having measured nothing.
+    reopen condition.
+
+    History. 2026-08-02 (DEC-153 §3) narrowed the fence to EVAL-P0 because
+    ``compute_next`` skips flagged tasks without blocking, so a wider fence let the
+    loop drain EVAL-P1..P7 while EVAL-P0.3 (ask-gate) and EVAL-P0.4 (the live
+    measured baseline every later estimate depends on) sat unchecked forever —
+    finishing the program having measured nothing. That narrowing worked: the
+    baseline was measured on 2026-08-06 before a judge call was spent on P1..P8.
+
+    Current state (2026-08-06, EVAL-P0.3): the reopen condition fired — both
+    gating tasks are ticked — so the ``end`` marker moved down to just above
+    "### Parked (out of budget)" and the queue spans EVAL-P0..EVAL-P8.
+
+    Note the *previous* snapshot asserted ``pending == 1`` and was already red at
+    the time this was rewritten: ``pending`` excludes flagged tasks, and by then the
+    only two tasks left in EVAL-P0 were both flagged, so the true value was 0. Assert
+    over sorted id lists rather than bare counts — a count says nothing about which
+    task appeared or vanished, which is exactly what a tripwire needs to report.
     """
     phases, _ = _real_roadmap_phases()
-    assert [p.id for p in phases] == ["EVAL-P0"]
-    assert sum(len(p.pending) for p in phases) == 1
-    # Filter on `not done` the way the loop does: EVAL-P0.1 is *also* skippable
-    # (its body still carries the ask-gate that gated the model choice) but it is
-    # already ticked, so it is not something the loop is being held back on.
+    assert [p.id for p in phases] == [f"EVAL-P{n}" for n in range(9)]
+    # EVAL-P0 is complete: every task done, nothing actionable and nothing held back.
+    evals_p0 = next(p for p in phases if p.id == "EVAL-P0")
+    assert evals_p0.pending == ()
+    assert evals_p0.is_done
+    assert sum(len(p.pending) for p in phases) == 23
+    # Filter on `not done` the way the loop does: EVAL-P0.1/P0.3/P0.4 are *also*
+    # skippable (their bodies still carry the ask-gate / live markers that gated
+    # them) but they are ticked, so the loop is not being held back on them.
     flagged = [t.id for p in phases for t in p.tasks if t.skippable and not t.done]
-    assert flagged == ["EVAL-P0.3", "EVAL-P0.4"]
+    assert flagged == ["EVAL-P1.2", "EVAL-P5.2", "EVAL-P6.3"]
 
 
 def test_real_roadmap_end_marker_is_not_repeated_inside_the_queue() -> None:

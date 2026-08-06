@@ -24,6 +24,7 @@ import preconditions
 
 # Import write_report from sibling module (evals/ on sys.path when run via Makefile)
 from report import write_report
+from verdicts import write_verdicts
 
 # Use the demo-world player that demo_game.seed always creates. A bespoke id like
 # "player_eval" has no Character node, so first-contact dialogue 422s (ISSUE-118,
@@ -340,6 +341,7 @@ def run(
     api_key: str,
     fixture_path: Path,
     report_dir: Path,
+    json_out: Path | None = None,
 ) -> int:
     """Run the anti-hallucination eval suite and return an exit code.
 
@@ -348,6 +350,7 @@ def run(
         api_key: API key passed in the Authorization: Bearer header.
         fixture_path: Path to the JSON fixture file.
         report_dir: Directory to write the markdown report into.
+        json_out: Optional path for raw per-case verdicts JSON (DEC-153 §7).
     Returns:
         0 if all non-skipped cases pass, 1 if any fail, 2 on connectivity error.
     """
@@ -391,6 +394,8 @@ def run(
 
     report_path = write_report(results=results, output_dir=report_dir)
     print(f"\nReport: {report_path}")
+    if json_out is not None:
+        print(f"Verdicts: {write_verdicts(results, json_out, source='anti_hallucination')}")
 
     failures = summary.hallucination_count + summary.over_refusal_count
     return 0 if failures == 0 else 1
@@ -415,6 +420,12 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
     )
     parser.add_argument("--reports", default="evals/reports", type=Path)
+    parser.add_argument(
+        "--json-out",
+        type=Path,
+        default=None,
+        help="Also write raw per-case verdicts as JSON to this path (DEC-153 §7).",
+    )
     args = parser.parse_args(argv)
 
     return run(
@@ -422,6 +433,7 @@ def main(argv: list[str] | None = None) -> int:
         api_key=args.api_key,
         fixture_path=args.fixture,
         report_dir=args.reports,
+        json_out=args.json_out,
     )
 
 

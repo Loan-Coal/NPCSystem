@@ -129,18 +129,25 @@ class TestToneJudgeInfraFailure:
         response: dict = {"npc_response": "Sure, I can help."}
 
         warning_logged = False
+        logged_args: tuple = ()
 
         class _FakeLogger:
             def warning(self, msg: str, *args: object, **kwargs: object) -> None:
-                nonlocal warning_logged
-                if msg == "binary_judge_infra_failure":
+                nonlocal warning_logged, logged_args
+                if msg.startswith("binary_judge_infra_failure"):
                     warning_logged = True
+                    logged_args = args
 
         with patch("matchers._logger", _FakeLogger()), \
              patch("matchers.httpx.post", side_effect=ConnectionError("unreachable")):
             matchers._eval_tone_judge(exp, response)
 
         assert warning_logged, "Expected WARNING 'binary_judge_infra_failure' to be logged"
+        # The cause must reach the log line: a bare event name cannot distinguish a
+        # judge timeout from an unreachable Ollama, which is the whole point of the log.
+        assert any("unreachable" in repr(a) for a in logged_args), (
+            f"Expected the underlying exception in the log args, got {logged_args!r}"
+        )
 
     def test_timeout_returns_judge_result_score_none(self) -> None:
         """tone_judge timeout also returns JudgeResult(score=None)."""

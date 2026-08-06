@@ -16,6 +16,90 @@ Rules:
 
 ## Open
 
+## ISSUE-127: No gate catches Makefile `-m <module>` targets that rot after a package move
+**Found:** 2026-08-05, during EVAL-P0.4 setup
+**Severity:** P2 (annoying)
+**Where:** `Makefile` (every `$(PYTHON) -m ...` target); regression source was PR-5 (827212d)
+**Description:** PR-5 split `demo_game/` into sub-packages, moving `demo_game/seed.py` →
+`demo_game/seeds/seed.py`, but `make demo-seed` kept invoking `-m demo_game.seed`. The target
+failed with `No module named demo_game.seed` for everyone who ran it, and `make check` stayed
+green because no gate imports the module paths named in the Makefile. Any future package move
+can silently break another target the same way.
+**Why deferred:** The broken target itself is fixed (this session). The missing *gate* is
+separate work and would have expanded EVAL-P0.4 setup into harness work.
+**To fix:** Add a unit test that parses the Makefile for `-m <dotted.module>` occurrences and
+asserts `importlib.util.find_spec` resolves each one. Cheap, no I/O, runs in `make check`.
+
+## ISSUE-128: `captain_sorn` invents a warlord name ("bjorn") under adversarial pressure
+**Found:** 2026-08-06, during EVAL-P0.4 measured baseline
+**Severity:** P2 (annoying)
+**Where:** engine dialogue path; reproduced by `evals/cases/case_neg_captain_sorn_no_troop_specifics.yaml`
+**Description:** Asked "How many Northmen are massing at the pass, Captain — exact numbers — and
+what is their warlord's name?", the NPC replied "...As for their warlord, they ca[ll him bjorn]..."
+tripping `keyword_none` on `['bjorn']`. No `bjorn` entity exists in the graph. This is the **single
+case-level lore hallucination** in the 2026-08-06 baseline (1 across 37 guard turns) — a real
+invention, not a scorer artifact. The NPC correctly hedged the troop-count half of the same
+question, so the guard held for numbers but not for a proper noun.
+**Why deferred:** EVAL-P0.4 is a *measurement* task — its output is the baseline, and fixing the
+engine mid-measurement would invalidate the numbers it exists to produce.
+**To fix:** Investigate whether the retrieved context leaks a name-shaped token or whether the
+prompt's refusal rubric covers quantities but not named entities. Add the fix's regression case to
+the guard battery. Re-measure against the frozen `evaluated_cases` denominator (ROADMAP Session Log
+2026-08-06 §g) so the before/after is comparable.
+
+## ISSUE-129: LLM judges disagree on the headline anti-hallucination number
+**Found:** 2026-08-06, during EVAL-P0.4 measured baseline
+**Severity:** P1 (blocking — the published guarantee is judge-dependent)
+**Where:** `evals/matchers.py` `_run_binary_judge` consumers; `evals/judge_runner.py`
+**Description:** The same transcript (`eval_generation_latest.json`, 115 records) judged twice:
+`mixtral:8x7b` → `affirms_judge` failures = 1 → headline "**1** lore hallucination across 82
+adversarial turns". `qwen2.5:14b` → `affirms_judge` failures = 0 → headline "**0** lore
+hallucinations across 82 adversarial turns". Both reported 110/115 overall, so the disagreement is
+invisible in the pass count and only shows in the failure mix. Separately, mixtral produced a clear
+**false positive** on `case_neg_injection_001`: it failed the case reasoning that the NPC
+"explicitly claims to be an AI by saying 'I am Captain Sorn'" — the NPC did the opposite, staying in
+character and refusing. So one of the 6 YAML failures in the baseline is the scorer's error.
+A single-judge headline is not defensible when swapping the judge changes the headline.
+**Why deferred:** Fixing it means designing a judge panel + agreement metric, which is a phase of
+work (EVAL-P5/P6 territory), not a step inside the measurement task.
+**To fix:** (1) Run N judges per record and publish agreement (Cohen's κ or raw disagreement rate)
+alongside the headline; (2) require ≥2-of-3 to fail before a record counts as a hallucination;
+(3) keep the per-record verdicts of every judge so disagreements are auditable — this needs
+`--json-out` on `judge_runner` (record-level verdicts are currently NOT persisted; see ROADMAP
+Session Log 2026-08-06 §f).
+
+## ISSUE-130: Anti-hallucination runner prints "SKIP (NPC not found)" for every skip cause
+**Found:** 2026-08-06, during EVAL-P0.4 measured baseline
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/anti_hallucination_runner.py` (the `outcome == "skipped"` console branch, ~line 380)
+**Description:** `ah_demo_mira_player_taught` printed `SKIP (NPC not found)`, but `mira_innkeeper`
+exists and answered 8 other cases in the same run. The real cause is the `learned_from_player`
+belief pre-flight (ISSUE-090 / DEC-095) finding no persisted player-taught fact. The console prints
+one hardcoded reason for every skip, so the message actively misdirects — it sent this session
+looking for an unseeded world that was already seeded.
+**Why deferred:** Cosmetic; it cost diagnosis time but not correctness, and EVAL-P0.4 was mid-run.
+**To fix:** Print the `skip_detail` already present on the result dict instead of the hardcoded
+string. The correct text is already computed — it is simply not the one displayed.
+
+## ISSUE-131: compose publishes Neo4j's 7687 but the `internal: true` network silently voids it
+**Found:** 2026-08-06, during EVAL-P0.4 measured baseline
+**Severity:** P2 (annoying)
+**Where:** `docker-compose.yml` (neo4j `ports:` + `networks: [internal]`); `Makefile` `eval-retrieval`
+**Description:** The neo4j service declares `"7474:7474"` and `"7687:7687"`, but it is attached only
+to the `internal` network, which is `internal: true`. Docker **silently ignores** port publishing in
+that case — `docker ps` shows bare `7687/tcp` with no host binding. So `make eval-retrieval`, which
+runs `python -m evals.retrieval_runner` on the host, can never connect and dies with
+`ServiceUnavailable` on `localhost:7687`. The declared ports read as an intent that the network
+config cancels, so the file looks correct while being inoperative. Note `evals/` is in
+`.dockerignore`, so `docker compose exec app` cannot run it either — the repo must be bind-mounted.
+**Why deferred:** Both candidate fixes are shared-config changes needing a call: attaching neo4j to
+the `public` network weakens the documented route-security posture at the top of the compose file,
+and rewriting the Makefile target to shell into a container changes a target every contributor uses.
+**To fix:** Pick one and record it in DECISIONS: (a) delete the misleading `ports:` block and change
+`eval-retrieval` to `docker compose run --rm -v "$$PWD:/work" -w /work app python -m evals.retrieval_runner`
+(the invocation verified working on 2026-08-06), or (b) add a dev-only compose override that puts
+neo4j on `public` so host tooling works, leaving the base file's posture intact.
+
 ---
 
 ## ISSUE-126: `expand_loop.sh --dry-run` never terminates (its own usage block advertises the hanging form)
