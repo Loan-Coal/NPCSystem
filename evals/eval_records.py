@@ -146,6 +146,43 @@ class TranscriptFile(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def write_generation_dir(
+    gen_dir: Path,
+    records: Sequence[GenerationRecord],
+    *,
+    gen_id: str,
+    k: int,
+    config: RunConfig | None = None,
+) -> None:
+    """Write a k-repeat generation run to <gen_dir>/{meta.json,outputs.jsonl}.
+
+    meta.json holds the TranscriptFile metadata block (no records array).
+    outputs.jsonl has one GenerationRecord as compact JSON per line.
+    Creates gen_dir and parents if needed; overwrites any existing files.
+
+    Args:
+        gen_dir: Target directory (e.g. evals/generations/smoke/).
+        records: Ordered sequence of GenerationRecords to persist.
+        gen_id: Generation run identifier written into meta.json.
+        k: Number of repetitions per case in this run.
+        config: Reproducibility snapshot; None for pre-EVAL-P1.4 callers.
+    """
+    gen_dir.mkdir(parents=True, exist_ok=True)
+    meta = TranscriptFile(
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        gen_id=gen_id,
+        k=k,
+        config=config,
+        records=(),
+    )
+    (gen_dir / "meta.json").write_text(
+        meta.model_dump_json(indent=2, exclude={"records"}),
+        encoding="utf-8",
+    )
+    jsonl_lines = "\n".join(r.model_dump_json() for r in records)
+    (gen_dir / "outputs.jsonl").write_text(jsonl_lines, encoding="utf-8")
+
+
 def write_transcript(path: Path, records: Sequence[GenerationRecord]) -> None:
     """Serialise records to a JSON transcript file.
 

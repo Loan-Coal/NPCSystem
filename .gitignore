@@ -23,6 +23,7 @@ htmlcov/
 # E2E and eval outputs
 e2e/transcripts/
 evals/reports/
+evals/generations/
 transcripts/
 
 # Codebase-review raw run-logs + agent transcripts (synthesis lives in

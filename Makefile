@@ -197,7 +197,8 @@ eval-llm-demo:
 eval-retrieval:
 	$(PYTHON) -m evals.retrieval_runner
 
-# eval-generate: two-phase pipeline — generation pass (writes transcript to e2e/transcripts/)
+# eval-generate: two-phase pipeline — generation pass (writes to evals/generations/<gen-id>/ or legacy transcript)
+# Pass ARGS="--k 2 --gen-id smoke" to enable k-repeat output.
 eval-generate:
 	@echo "Running eval generation pass against $(BASE_URL) ..."
 	$(PYTHON) evals/generate_runner.py \
@@ -205,8 +206,9 @@ eval-generate:
 		--api-key "$(API_KEY)" \
 		--cases evals/cases \
 		--fixture evals/cases/anti_hallucination_demo.json \
-		--out e2e/transcripts \
-		--run-id latest
+		--out evals/generations \
+		--run-id latest \
+		$(ARGS)
 
 # eval-judge: two-phase pipeline — judge pass (reads transcript written by eval-generate)
 eval-judge:

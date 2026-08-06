@@ -536,7 +536,7 @@ EVAL-P0.2 (`evals/__init__.py` must exist). **Blocks:** EVAL-P2, EVAL-P3, EVAL-P
       **Size watch:** `eval_records.py` is 136 L today — split `RetrievedItem` into its own module *before* writing,
       per the 300-line rule. ✅ AUTO (EVAL-P1.3, 2026-08-06)
 
-- [ ] **EVAL-P1.4** `--k`, `--gen-id`, and retrieved-context capture. Files: `edit evals/generate_runner.py`,
+- [x] **EVAL-P1.4** `--k`, `--gen-id`, and retrieved-context capture. Files: `edit evals/generate_runner.py`,
       `edit Makefile`, `edit .gitignore`, `create tests/unit/evals/test_generate_runner_k.py`. Each case runs k
       times; each turn records `duration_ms` and a `GET /v1/admin/debug/retrieval` capture; output goes to
       `evals/generations/<gen_id>/{meta.json,outputs.jsonl}` (gitignored).
@@ -545,7 +545,7 @@ EVAL-P0.2 (`evals/__init__.py` must exist). **Blocks:** EVAL-P2, EVAL-P3, EVAL-P
       Validation: `make eval-generate ARGS="--k 2 --gen-id smoke"` against a mock client writes
       `evals/generations/smoke/` containing 2× the single-run record count, every record carrying
       `repetition ∈ {0,1}`, `duration_ms > 0`, and a non-empty `retrieved_context`.
-      **Size watch:** `generate_runner.py` is 276 L — extract the capture helper into a new module, do not grow it.
+      **Size watch:** `generate_runner.py` is 276 L — extract the capture helper into a new module, do not grow it. ✅ AUTO (EVAL-P1.4, 2026-08-06)
 
 ### Phase EVAL-P2 — Statistics, hand-implemented
 **Goal:** A binary judge plus k repeats becomes a per-case pass rate with a Wilson interval and a flakiness
