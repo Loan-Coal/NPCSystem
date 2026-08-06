@@ -15,7 +15,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-layers check-docstrings roadmap-verify type-ratchet type-ratchet-update check-harness \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-score scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world package
@@ -216,6 +216,16 @@ eval-judge:
 	$(PYTHON) evals/judge_runner.py \
 		--transcript $(TRANSCRIPT) \
 		--reports evals/reports
+
+# eval-score: deterministic (no-LLM) scoring pass over a cached transcript.
+# Usage: make eval-score TRANSCRIPT=evals/generations/<run>/outputs.jsonl
+# Optional: add ARGS="--vocabulary evals/generations/<run>/vocabulary.json" to enable entity scoring.
+eval-score:
+	@echo "Scoring transcript $(TRANSCRIPT) with deterministic scorers (no LLM) ..."
+	$(PYTHON) evals/deterministic_pass.py \
+		--transcript $(TRANSCRIPT) \
+		--aliases evals/cases/entity_aliases.yaml \
+		$(ARGS)
 
 # eval-combined: one command that runs dialogue evals + retrieval evals and prints both summaries
 eval-combined: eval eval-retrieval

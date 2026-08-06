@@ -629,11 +629,11 @@ eastern docks") is undetectable — those go in the README as documented limits,
       yields zero. The module docstring **lists** belief / goal / memory / `WITNESSED` as deliberately excluded
       grounds and states the resulting false-positive risk. ✅ AUTO (EVAL-P3.3, 2026-08-06)
 
-- [ ] **EVAL-P3.4** Wire both into the score pass. Files: `create evals/deterministic_pass.py`,
+- [x] **EVAL-P3.4** Wire both into the score pass. Files: `create evals/deterministic_pass.py`,
       `edit Makefile`, `create tests/unit/evals/test_deterministic_pass.py`.
       RED anchor: `tests/unit/evals/test_deterministic_pass.py::test_scores_every_record_without_llm` fails.
       Validation: `make eval-score TRANSCRIPT=<file>` scores a cached transcript and prints both rates with
-      **no network call to Ollama** — asserted by a test that fails if `matchers._run_binary_judge` is invoked.
+      **no network call to Ollama** — asserted by a test that fails if `matchers._run_binary_judge` is invoked. ✅ AUTO (EVAL-P3.4, 2026-08-06)
 
 ### Phase EVAL-P4 — Retrieval decomposition over the existing annotations
 **Goal:** Separate retrieval failure from generation failure, so a failing case can be attributed rather

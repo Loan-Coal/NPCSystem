@@ -98,3 +98,11 @@ Every failure pre-dated this task (baseline attribution). Nothing new broke.
 ## 2026-08-06 14:25:04 — task EVAL-P2.2 committed with a pre-existing red gate
 
 Every failure pre-dated this task (baseline attribution). Nothing new broke.
+
+## 2026-08-06 23:02:38 — task EVAL-P3.1 committed with a pre-existing red gate
+
+Every failure pre-dated this task (baseline attribution). Nothing new broke.
+
+## 2026-08-06 23:20:54 — task EVAL-P3.3 committed with a pre-existing red gate
+
+Every failure pre-dated this task (baseline attribution). Nothing new broke.
