@@ -90,3 +90,11 @@ Required test coverage of 80% reached. Total coverage: 87.09%
 FAILED tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_fence_state_tripwire
 1 failed, 2721 passed, 29 skipped, 2232 warnings in 67.86s (0:01:07)
 make: *** [Makefile:50: test-cov] Error 1
+
+## 2026-08-06 14:14:57 — task EVAL-P2.1 committed with a pre-existing red gate
+
+Every failure pre-dated this task (baseline attribution). Nothing new broke.
+
+## 2026-08-06 14:25:04 — task EVAL-P2.2 committed with a pre-existing red gate
+
+Every failure pre-dated this task (baseline attribution). Nothing new broke.

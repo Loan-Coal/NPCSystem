@@ -154,6 +154,24 @@ def test_format_summary_markdown_contains_headline() -> None:
     assert blob.lstrip().startswith("##")
 
 
+def test_skipped_cases_excluded_from_evaluated_denominator() -> None:
+    """49 evaluated / 53 total — skipped cases excluded from the evaluated denominator.
+
+    53 cases total, 4 fully-skipped → evaluated_cases must be 49.
+    No summary line may quote 53 as a pass-rate denominator.
+    """
+    normal = [_case(f"case_pos_{i:02d}", [_exp("schema", True)]) for i in range(49)]
+    skipped = [_case(f"case_skip_{i:02d}", [_exp("runner", True, skipped=True)]) for i in range(4)]
+    results = normal + skipped
+    assert len(results) == 53
+    s = summary.summarize(results)
+    assert s.evaluated_cases == 49
+    lines = summary.format_summary_lines(s)
+    blob = "\n".join(lines)
+    assert "49 evaluated" in blob
+    assert "53 total" in blob
+
+
 def test_write_report_embeds_guarantee_section(tmp_path) -> None:
     import report  # noqa: PLC0415  (eval harness module, path inserted at top)
 

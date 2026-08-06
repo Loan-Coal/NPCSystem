@@ -33,6 +33,7 @@ class EvalSummary:
 
     Attributes:
         total_cases: Number of eval cases in the run.
+        evaluated_cases: Cases that were not fully skipped (canonical pass-rate denominator).
         total_turns: Cases that actually invoked the NPC (not fully skipped).
         guard_cases: Adversarial + negative cases (the anti-hallucination battery).
         guard_turns: Guard cases that actually ran (denominator of the headline).
@@ -46,6 +47,7 @@ class EvalSummary:
     """
 
     total_cases: int
+    evaluated_cases: int
     total_turns: int
     guard_cases: int
     guard_turns: int
@@ -121,9 +123,12 @@ def summarize(results: list[dict]) -> EvalSummary:
 
     tally = _tally_failures(results)
 
+    evaluated_cases = total_cases - skipped_cases
+
     return EvalSummary(
         total_cases=total_cases,
-        total_turns=total_cases - skipped_cases,
+        evaluated_cases=evaluated_cases,
+        total_turns=evaluated_cases,
         guard_cases=len(guard_results),
         guard_turns=guard_turns,
         hallucination_failures=tally["hallucination"],
@@ -182,8 +187,8 @@ def format_summary_lines(summary: EvalSummary) -> list[str]:
         "",
         f"  Guard battery (adversarial + negative): {summary.guard_cases} cases, "
         f"{summary.guard_turns} turns evaluated",
-        f"  All cases: {summary.total_cases} ({summary.total_turns} turns, "
-        f"{summary.skipped_cases} skipped)",
+        f"  All cases: {summary.evaluated_cases} evaluated / {summary.total_cases} total "
+        f"({summary.skipped_cases} skipped)",
         "",
         "  Failure breakdown:",
         f"    schema failures:        {summary.schema_failures}",
@@ -204,8 +209,8 @@ def format_summary_markdown(summary: EvalSummary) -> list[str]:
         "",
         f"- Guard battery (adversarial + negative): **{summary.guard_cases}** cases, "
         f"**{summary.guard_turns}** turns evaluated",
-        f"- All cases: {summary.total_cases} ({summary.total_turns} turns, "
-        f"{summary.skipped_cases} skipped)",
+        f"- All cases: {summary.evaluated_cases} evaluated / {summary.total_cases} total "
+        f"({summary.skipped_cases} skipped)",
         "",
         "| Failure kind | Count |",
         "|---|---|",

@@ -574,7 +574,7 @@ headline until EVAL-P6 folds it in. Wilson at the k you can afford is wide and t
       Validation: over a fixture transcript with k=3, a case at 2/3 reports `flaky` with CI [0.208, 0.939];
       3/3 reports `stable_pass`; 0/3 reports `stable_fail`; the list sorts by instability with flaky cases first. ✅ AUTO (EVAL-P2.2, 2026-08-06)
 
-- [ ] **EVAL-P2.3** Honest denominators. `runner._run_case` turns a 404 NPC into `passed: True, skipped: True`
+- [x] **EVAL-P2.3** Honest denominators. `runner._run_case` turns a 404 NPC into `passed: True, skipped: True`
       and `summary.summarize` counts it in `total_cases` — with only the demo world seeded that is **4 free
       passes out of 53**. Files: `edit evals/summary.py`, `edit tests/unit/engines/test_eval_summary.py`.
       Add `evaluated_cases` (excludes fully-skipped) and make `format_summary_lines` print it as the
@@ -582,7 +582,7 @@ headline until EVAL-P6 folds it in. Wilson at the k you can afford is wide and t
       EVAL-P0.4 (g)** — this step implements that decision, it does not re-open it.
       RED anchor: `tests/unit/engines/test_eval_summary.py::test_skipped_cases_excluded_from_evaluated_denominator` fails.
       Validation: a 53-case fixture with 4 fully-skipped cases reports `49 evaluated / 53 total` and no summary
-      line quotes 53 as a pass-rate denominator. **`summary.py` is in `--cov`** — coverage must stay ≥80 %.
+      line quotes 53 as a pass-rate denominator. **`summary.py` is in `--cov`** — coverage must stay ≥80 %. ✅ AUTO (EVAL-P2.3, 2026-08-06)
 
 ### Phase EVAL-P3 — Deterministic graph scorers (no LLM)
 **Goal:** Two LLM-free scorers over cached text — unsupported-entity rate and unpropagated-event references —
