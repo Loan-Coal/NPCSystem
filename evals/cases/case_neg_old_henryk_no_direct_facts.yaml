@@ -26,6 +26,9 @@ expected:
       - "heading south to reinforce"
       - "border forts"
 
+relevant_node_ids:
+  - old_henryk
+  - northern_war_begins
 notes: >
   Requires demo world seed (make demo-seed). The forbidden phrases are the
   exact authoritative statements captain_sorn would use. Henryk's distorted

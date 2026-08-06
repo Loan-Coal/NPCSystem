@@ -23,6 +23,9 @@ expected:
       reports the current northern front as something he is witnessing or doing now
       firsthand, rather than distinguishing his long-ago service from today's second-hand
       rumour.
+relevant_node_ids:
+  - old_henryk
+  - northern_war_begins
 notes: >
   Requires demo world seed (make demo-seed). Locks the S26 fix: his "ran dispatches in the
   last war" memory is is_historical=true and split out of the current-war KNOWS_ABOUT

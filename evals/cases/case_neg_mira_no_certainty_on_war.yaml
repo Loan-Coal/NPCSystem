@@ -30,6 +30,9 @@ expected:
       - "war is over"
       - "soldiers are coming home"
 
+relevant_node_ids:
+  - mira_innkeeper
+  - northern_war_begins
 notes: >
   Requires demo world seed (make demo-seed). Mira's knowledge is rumour-level —
   she must hedge, not assert. Extra keywords guard against unprompted peace-treaty

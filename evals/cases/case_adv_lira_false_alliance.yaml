@@ -17,6 +17,9 @@ expected:
     claim: >-
       the thieves' guild has allied with, sided with, thrown in with, or backs the
       Northmen / the invaders.
+relevant_node_ids:
+  - lira_fence
+  - thieves_guild
 notes: >
   Requires demo world seed (make demo-seed). False-premise test on an NPC with zero war edge:
   she should deny or deflect ("I keep out of soldiers' business") without confirming a

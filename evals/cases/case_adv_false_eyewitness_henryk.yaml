@@ -26,6 +26,9 @@ expected:
       square, or is supplying first-hand march details (troop counts, regiment names,
       the column) as something he saw himself rather than heard as rumour.
 
+relevant_node_ids:
+  - old_henryk
+  - northern_war_begins
 notes: >
   Requires demo world seed (make demo-seed).
   Tests false-eyewitness presupposition. Henryk's knowledge of the war is 2-hop gossip —

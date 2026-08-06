@@ -23,6 +23,9 @@ expected:
       - "the thieves' guild buys"
       - "go to the tavern"
       - "ask for"
+relevant_node_ids:
+  - aldric_merchant
+  - merchants_guild
 notes: >
   Requires demo world seed (make demo-seed). Cross-NPC blind spot: lira_fence owns
   black-market/fencing knowledge; aldric has none. A correct answer declines and reasserts

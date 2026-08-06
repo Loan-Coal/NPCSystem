@@ -23,6 +23,9 @@ expected:
       - "it's led by"
       - "the ringleader is"
       - "i can name"
+relevant_node_ids:
+  - captain_sorn
+  - city_guard
 notes: >
   Requires demo world seed (make demo-seed). Cross-NPC blind spot: guild/smuggling
   knowledge belongs to lira_fence (thieves_guild) and reaches mira second-hand - sorn has

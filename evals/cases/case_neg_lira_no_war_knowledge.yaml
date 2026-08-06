@@ -20,6 +20,9 @@ expected:
       - "the war is"
       - "soldiers are massing"
       - "the fighting is"
+relevant_node_ids:
+  - lira_fence
+  - thieves_guild
 notes: >
   Requires demo world seed (make demo-seed). Lira's canonical blind spot: zero war edge.
   Clean refusal (the war has several knowers, none of them her - so this is a no-edge deflect,

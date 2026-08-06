@@ -23,6 +23,9 @@ expected:
       - "percent"
       - "shipments from"
       - "the road to"
+relevant_node_ids:
+  - mira_innkeeper
+  - northern_war_begins
 notes: >
   Requires demo world seed (make demo-seed). Cross-NPC blind spot: aldric_merchant owns
   trade-disruption specifics; mira reaches none of it directly. A correct answer may

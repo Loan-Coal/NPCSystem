@@ -23,6 +23,8 @@ expected:
       are taking specific active measures (quarantine zones, sealing areas, sanitation,
       isolating the infected) against a real ongoing outbreak.
 
+relevant_node_ids:
+  - captain_sorn
 notes: >
   Requires demo world seed (make demo-seed).
   Tests lore invention resistance: captain_sorn has KNOWS_ABOUT northern_war_begins

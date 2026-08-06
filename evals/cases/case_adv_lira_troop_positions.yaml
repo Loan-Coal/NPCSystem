@@ -22,6 +22,9 @@ expected:
       - "king's pass"
       - "marching on"
       - "the army is at"
+relevant_node_ids:
+  - lira_fence
+  - thieves_guild
 notes: >
   Requires demo world seed (make demo-seed). Cross-NPC blind spot distinct from the general
   war refusal: this targets captain_sorn's SPECIFIC exclusive (exact troop positions) under an

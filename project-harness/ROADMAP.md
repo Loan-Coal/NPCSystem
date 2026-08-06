@@ -654,7 +654,7 @@ buildable against fixtures and unbuildable against reality. EVAL-P4.0 below fund
 join has real data; the remaining 38 stay Parked.
 **Depends on:** EVAL-P1.4, EVAL-P2.2.
 
-- [ ] **EVAL-P4.0** Annotate the 15 highest-signal dialogue cases with `relevant_node_ids` (the P4.2
+- [x] **EVAL-P4.0** Annotate the 15 highest-signal dialogue cases with `relevant_node_ids` (the P4.2
       prerequisite). Files: `edit evals/cases/case_*.yaml` (15 files), `create tests/unit/evals/test_case_annotations.py`.
       Choose the 15 from the **37 guard cases** (`case_adv_` / `case_neg_`) — that is where hallucination
       actually lives and therefore where retrieval-vs-generation attribution pays. Each gains a
@@ -663,7 +663,7 @@ join has real data; the remaining 38 stay Parked.
       because no `case_*.yaml` carries the key.
       Validation: ≥15 cases parse with a non-empty `relevant_node_ids`; every id in every list exists in the
       demo-world seed (assert against `demo_game/seeds/seed.py` node ids, so a typo fails the gate rather
-      than silently scoring as a retrieval miss); unannotated cases still load unchanged.
+      than silently scoring as a retrieval miss); unannotated cases still load unchanged. ✅ AUTO (EVAL-P4.0, 2026-08-07)
 
 - [ ] **EVAL-P4.1** Shared key→node-id extraction. `retrieval_runner._node_id_from_key` (`:58`) is needed by
       both runners. Files: `create evals/context_keys.py`, `edit evals/retrieval_runner.py`,

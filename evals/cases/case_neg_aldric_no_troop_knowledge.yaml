@@ -27,6 +27,9 @@ expected:
       - "they are marching to"
       - "i supply the garrison"
 
+relevant_node_ids:
+  - aldric_merchant
+  - northern_war_begins
 notes: >
   Requires demo world seed (make demo-seed).
   Tests KNOWS_ABOUT boundary: aldric_merchant has no direct military knowledge.

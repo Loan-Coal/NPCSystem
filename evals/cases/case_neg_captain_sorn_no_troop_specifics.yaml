@@ -28,6 +28,9 @@ expected:
       - "gathered at the pass"
       - "thousand men"
       - "precisely"
+relevant_node_ids:
+  - captain_sorn
+  - northern_war_begins
 notes: >
   Requires demo world seed (make demo-seed). Tests the boundary of a REAL edge: sorn owns
   the fact of the war but not fabricated specifics. As a case_neg_ guard case the runner
