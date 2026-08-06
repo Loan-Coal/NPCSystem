@@ -620,14 +620,14 @@ eastern docks") is undetectable — those go in the README as documented limits,
       and "Warden Aldous" (absent), the scorer returns `mentions=3, unsupported=1, rate=0.333`; a pronoun-only
       sentence returns `mentions=0` and the docstring states pronouns are out of scope. ✅ AUTO (EVAL-P3.2, 2026-08-06)
 
-- [ ] **EVAL-P3.3** Unpropagated-event-reference scorer (pure). Files: `create evals/knowledge_scorer.py`,
+- [x] **EVAL-P3.3** Unpropagated-event-reference scorer (pure). Files: `create evals/knowledge_scorer.py`,
       `create tests/unit/evals/test_knowledge_scorer.py`.
       `unpropagated_references(text, event_vocabulary, npc_known_event_ids) -> KnowledgeScore`.
       RED anchor: `tests/unit/evals/test_knowledge_scorer.py::test_event_not_in_known_set_is_flagged` fails.
       Validation: `old_henryk` referencing `northern_war_begins` while its known-set excludes it yields one
       violation; the same text for `captain_sorn` (direct `KNOWS_ABOUT`, per the demo world table in `CLAUDE.md`)
       yields zero. The module docstring **lists** belief / goal / memory / `WITNESSED` as deliberately excluded
-      grounds and states the resulting false-positive risk.
+      grounds and states the resulting false-positive risk. ✅ AUTO (EVAL-P3.3, 2026-08-06)
 
 - [ ] **EVAL-P3.4** Wire both into the score pass. Files: `create evals/deterministic_pass.py`,
       `edit Makefile`, `create tests/unit/evals/test_deterministic_pass.py`.
