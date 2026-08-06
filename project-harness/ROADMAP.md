@@ -525,7 +525,7 @@ EVAL-P0.2 (`evals/__init__.py` must exist). **Blocks:** EVAL-P2, EVAL-P3, EVAL-P
       *Not an ask-gate:* `PROMPT_VERSION` has no callers outside its own module except that one test
       (verified by grep — `demo_game/constants.py` uses a separate `DEMO_CACHE_VERSION`).
 
-- [ ] **EVAL-P1.3** Schema v2. Files: `edit evals/eval_records.py`, `create evals/retrieved_item.py`,
+- [x] **EVAL-P1.3** Schema v2. Files: `edit evals/eval_records.py`, `create evals/retrieved_item.py`,
       `create tests/unit/evals/test_eval_records_v2.py`. `_TRANSCRIPT_VERSION = 2`; `TranscriptFile` gains
       `gen_id`, `k`, `config: RunConfig`; `GenerationRecord` gains `repetition: int`, `duration_ms: int`,
       `retrieved_context: tuple[RetrievedItem, ...]`; `read_transcript` raises a new `TranscriptVersionError`
@@ -534,7 +534,7 @@ EVAL-P0.2 (`evals/__init__.py` must exist). **Blocks:** EVAL-P2, EVAL-P3, EVAL-P
       `read_transcript` currently accepts any version.
       Validation: v2 round-trip passes; a hand-written v1 JSON raises `TranscriptVersionError` naming both versions.
       **Size watch:** `eval_records.py` is 136 L today — split `RetrievedItem` into its own module *before* writing,
-      per the 300-line rule.
+      per the 300-line rule. ✅ AUTO (EVAL-P1.3, 2026-08-06)
 
 - [ ] **EVAL-P1.4** `--k`, `--gen-id`, and retrieved-context capture. Files: `edit evals/generate_runner.py`,
       `edit Makefile`, `edit .gitignore`, `create tests/unit/evals/test_generate_runner_k.py`. Each case runs k

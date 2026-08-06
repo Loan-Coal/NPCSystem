@@ -192,9 +192,8 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     finishing the program having measured nothing. That narrowing worked: the
     baseline was measured on 2026-08-06 before a judge call was spent on P1..P8.
 
-    Current state (2026-08-06, EVAL-P0.3): the reopen condition fired — both
-    gating tasks are ticked — so the ``end`` marker moved down to just above
-    "### Parked (out of budget)" and the queue spans EVAL-P0..EVAL-P8.
+    Current state (2026-08-06, EVAL-P1.3): EVAL-P1.1 and EVAL-P1.3 are ticked;
+    EVAL-P1.2 is flagged (skippable). Queue spans EVAL-P0..EVAL-P8.
 
     Note the *previous* snapshot asserted ``pending == 1`` and was already red at
     the time this was rewritten: ``pending`` excludes flagged tasks, and by then the
@@ -208,7 +207,7 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     evals_p0 = next(p for p in phases if p.id == "EVAL-P0")
     assert evals_p0.pending == ()
     assert evals_p0.is_done
-    assert sum(len(p.pending) for p in phases) == 23
+    assert sum(len(p.pending) for p in phases) == 21
     # Filter on `not done` the way the loop does: EVAL-P0.1/P0.3/P0.4 are *also*
     # skippable (their bodies still carry the ask-gate / live markers that gated
     # them) but they are ticked, so the loop is not being held back on them.

@@ -3,11 +3,12 @@ test_eval_records.py - Unit tests for evals/eval_records.py.
 
 Covers:
 - GenerationRecord round-trips through write_transcript/read_transcript
-- read_transcript raises ValidationError on schema mismatch
+- read_transcript raises TranscriptVersionError on v1 transcripts
+- read_transcript raises ValidationError on v2 schema mismatch
 - judge_kind=None is a valid GenerationRecord
 - Invalid expected_polarity raises ValidationError
 - JudgedRecord carries score + passed + reasoning
-- TranscriptFile version defaults to 1
+- TranscriptFile version defaults to 2
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from eval_records import (
     GenerationRecord,
     JudgedRecord,
     TranscriptFile,
+    TranscriptVersionError,
     read_transcript,
     write_transcript,
 )
@@ -53,13 +55,28 @@ def test_generation_record_round_trip(tmp_path: Path) -> None:
 
 
 def test_schema_mismatch_raises(tmp_path: Path) -> None:
+    """v2 JSON with an invalid record raises ValidationError."""
     path = tmp_path / "bad.json"
     path.write_text(
-        '{"version": 1, "generated_at": "2026-01-01T00:00:00+00:00", "records": [{"bad_field": 1}]}',
+        '{"version": 2, "generated_at": "2026-01-01T00:00:00+00:00", "records": [{"bad_field": 1}]}',
         encoding="utf-8",
     )
     with pytest.raises(ValidationError):
         read_transcript(path)
+
+
+def test_v1_transcript_raises_version_error(tmp_path: Path) -> None:
+    """v1 JSON raises TranscriptVersionError naming both found and expected versions."""
+    path = tmp_path / "v1.json"
+    path.write_text(
+        '{"version": 1, "generated_at": "2026-01-01T00:00:00+00:00", "records": []}',
+        encoding="utf-8",
+    )
+    with pytest.raises(TranscriptVersionError) as exc_info:
+        read_transcript(path)
+    msg = str(exc_info.value)
+    assert "1" in msg
+    assert "2" in msg
 
 
 def test_judge_kind_none_allowed() -> None:
@@ -92,9 +109,10 @@ def test_judged_record_score_none_allowed() -> None:
     assert judged.score is None
 
 
-def test_transcript_file_version_defaults_to_one() -> None:
+def test_transcript_file_version_defaults_to_two() -> None:
+    """TranscriptFile version defaults to 2 as of EVAL-P1.3 (hard break from v1)."""
     tf = TranscriptFile(generated_at="2026-06-23T00:00:00+00:00", records=())
-    assert tf.version == 1
+    assert tf.version == 2
     assert tf.records == ()
 
 

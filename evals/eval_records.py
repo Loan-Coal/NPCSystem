@@ -4,24 +4,50 @@ Layer: evals (eval harness — not part of src/)
 Purpose: Pydantic v2 record models for the two-phase generate→judge eval pipeline.
          GenerationRecord holds one engine reply + judge metadata; JudgedRecord
          adds the verdict; TranscriptFile bundles records for persist/replay.
-Dependencies: pydantic, stdlib (pathlib, datetime, typing)
+Dependencies: pydantic, stdlib (pathlib, datetime, typing), run_config, retrieved_item
 Used by: generate_runner, judge_runner, e2e/scenarios/conftest (persist_scenario_records)
 """
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from retrieved_item import RetrievedItem
+from run_config import RunConfig
+
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-_TRANSCRIPT_VERSION: int = 1
+_TRANSCRIPT_VERSION: int = 2
+
+
+# ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
+
+
+class TranscriptVersionError(ValueError):
+    """Raised when a transcript file has an unsupported schema version.
+
+    Attributes:
+        found: The version number found in the file.
+        expected: The version number this reader requires.
+    """
+
+    def __init__(self, *, found: int, expected: int) -> None:
+        self.found = found
+        self.expected = expected
+        super().__init__(
+            f"Transcript version mismatch: found {found}, expected {expected}. "
+            f"This reader requires version {expected}; v{found} transcripts are not supported."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -47,6 +73,10 @@ class GenerationRecord(BaseModel):
         world_epoch: World epoch at the time of generation (default age_of_peace).
         active_conditions: Active world conditions at the time of generation.
         metadata: Arbitrary extra data (e.g. expected_substrings for grounded checks).
+        repetition: Zero-based repeat index within a k-repeat run (default 0).
+        duration_ms: Wall-clock milliseconds taken to generate npc_response (default 0).
+        retrieved_context: Context items captured from GET /v1/admin/debug/retrieval at
+            generation time. An approximation — see RetrievedItem module docstring.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -63,6 +93,9 @@ class GenerationRecord(BaseModel):
     world_epoch: str = "age_of_peace"
     active_conditions: tuple[str, ...] = ()
     metadata: dict[str, Any] = Field(default_factory=dict)
+    repetition: int = 0
+    duration_ms: int = 0
+    retrieved_context: tuple[RetrievedItem, ...] = ()
 
 
 class JudgedRecord(GenerationRecord):
@@ -88,8 +121,13 @@ class TranscriptFile(BaseModel):
     """A bundle of GenerationRecords written during a generate pass.
 
     Attributes:
-        version: Schema version (always 1 today; increment on breaking change).
+        version: Schema version (2 as of EVAL-P1.3; read_transcript rejects v1 loudly).
         generated_at: ISO-8601 timestamp of when the transcript was written.
+        gen_id: Identifier for this generation run (e.g. 'smoke-001'). Empty when
+            the transcript was written by a pre-EVAL-P1.4 runner.
+        k: Number of repetitions per case in this run. Defaults to 1.
+        config: Exact reproducibility snapshot for this run. None when the transcript
+            was written by a pre-EVAL-P1.4 runner.
         records: Ordered tuple of GenerationRecords from a single run.
     """
 
@@ -97,6 +135,9 @@ class TranscriptFile(BaseModel):
 
     version: int = _TRANSCRIPT_VERSION
     generated_at: str
+    gen_id: str = ""
+    k: int = 1
+    config: RunConfig | None = None
     records: tuple[GenerationRecord, ...]
 
 
@@ -109,6 +150,8 @@ def write_transcript(path: Path, records: Sequence[GenerationRecord]) -> None:
     """Serialise records to a JSON transcript file.
 
     Creates parent directories if needed. Overwrites any existing file.
+    Writes schema version 2; the gen_id, k, and config fields default to empty
+    sentinel values until generate_runner is updated in EVAL-P1.4.
 
     Args:
         path: Destination file path (typically under e2e/transcripts/).
@@ -128,9 +171,21 @@ def read_transcript(path: Path) -> TranscriptFile:
     Args:
         path: Path to a JSON file written by write_transcript.
     Returns:
-        Validated TranscriptFile.
+        Validated TranscriptFile (version 2 only).
     Raises:
+        TranscriptVersionError: If the file's version field is not 2.
         ValidationError: If the file does not conform to the TranscriptFile schema.
         FileNotFoundError: If the path does not exist.
     """
-    return TranscriptFile.model_validate_json(path.read_text(encoding="utf-8"))
+    raw = path.read_text(encoding="utf-8")
+    try:
+        header = json.loads(raw)
+        found_version = header.get("version")
+    except json.JSONDecodeError:
+        found_version = None
+    if found_version != _TRANSCRIPT_VERSION:
+        raise TranscriptVersionError(
+            found=int(found_version) if isinstance(found_version, int) else 0,
+            expected=_TRANSCRIPT_VERSION,
+        )
+    return TranscriptFile.model_validate_json(raw)
