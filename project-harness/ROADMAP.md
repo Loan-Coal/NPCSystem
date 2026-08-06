@@ -742,12 +742,12 @@ it falsely marked P5.2's ask-gate cleared. See DEC-153 §1.
       says nothing about labellers. The ask-gate was therefore marked cleared by a decision that was never
       made. DEC-152 is the real one. See DEC-153 §1.)*
 
-- [ ] **EVAL-P5.3** Adjudication CLI. Files: `create evals/adjudicate.py`, `create tests/unit/evals/test_adjudicate.py`.
+- [x] **EVAL-P5.3** Adjudication CLI. Files: `create evals/adjudicate.py`, `create tests/unit/evals/test_adjudicate.py`.
       Prints one row at a time (output text + `pre_label` + scorer), accepts keep/flip/skip, writes
       `human_verdict` + `adjudicated_at` back in place, and is **resumable** — re-running skips adjudicated rows.
       RED anchor: `tests/unit/evals/test_adjudicate.py::test_resume_skips_already_adjudicated_rows` fails.
       Validation: on a 5-row file with 2 adjudicated, the CLI presents exactly 3 rows; flipping one writes
-      `human_verdict != pre_label` and leaves `pre_label` untouched.
+      `human_verdict != pre_label` and leaves `pre_label` untouched. ✅ AUTO (EVAL-P5.3, 2026-08-07)
 
 - [ ] **EVAL-P5.4** Confusion matrices + κ. Files: `create evals/calibration.py`,
       `create tests/unit/evals/test_calibration.py`, `edit Makefile` (`eval-calibrate`).
