@@ -1056,6 +1056,280 @@ case-level** test is the fix — n = 53 cases, not n = 3 repeats — and it dete
      Nothing below is auto-startable — Parked, Post-program milestones, REORG PR-9, the
      Next/Next+1 programs and the two open bullets inside "## Completed" all live here. -->
 
+## Program 2 — Metric validity and the portfolio artifact (EVAL-P9..P14)
+
+**Status: PLANNED, NOT QUEUED.** This block sits *below* the `LOOP:QUEUE end` marker on purpose, so the
+overnight loop cannot reach it. Release it by moving the end marker down **only after** EVAL-P5..P8 are
+ticked and EVAL-P6.4 has produced a measured baseline — every phase here calibrates against that baseline,
+and starting earlier means redoing it. Phase ids continue the `EVAL-P<n>` sequence because
+`test_real_roadmap_parses_and_verifies_clean` asserts the in-fence phases are a contiguous `EVAL-P` prefix;
+a differently-named phase would fail that test the moment it was released.
+
+**Why this program exists (measured, 2026-08-07).** Program 1 makes the numbers *precise*. It does not make
+them *valid*. The case inventory is:
+
+| Bucket | Count |
+|---|---|
+| `case_neg_*` (must not say X) | 24 |
+| `case_adv_*` (must not be tricked) | 13 |
+| `case_pos_*` (must say/do X) | **7** |
+| `case_00x`, `case_voice_*`, moderation, reputation | 9 |
+| anti-hallucination fixture | 26 refusal / **16 grounded** |
+
+Roughly **63 of 95 cases test "don't do the wrong thing"; ~26 test "do the right thing."** 32 of the 118
+expectations are `keyword_none`. The published headline — *"0 lore hallucinations across 37 guard turns"* —
+is therefore **maximised by refusing more**, and the EVAL-P0.4 baseline shows it is already happening:
+refusal **24/25 (96%)** against grounded **11/15 (73%)**, four of them NPCs denying facts they hold in the
+graph. An engine change that made NPCs more evasive would register as an improvement. No Wilson interval,
+kappa or McNemar test detects that, because it is a construct-validity failure upstream of all of them.
+
+**Audience ordering (human decision, 2026-08-07): resume/portfolio first, then engine development, then
+studio.** This is why EVAL-P13 (writeup + dashboard polish) sits ahead of the engine-development work
+(fast subset, regression gate, breadth) rather than last: for a reader who spends five minutes on the repo,
+legible rigour — intervals, calibration, an un-gameable headline — is the differentiator, and coverage
+across the other 40 engine directories is not. It is also why EVAL-P7 stops being the designated cut.
+
+**Budget (human decision, 2026-08-07): up to ~3 h wall clock for a full run, overnight.** From the P0.4
+rates: 95 cases at k=3 is ~62 min; +35 capability cases takes it to ~85 min; 6-8 measured multi-turn
+scenarios at k=3 must fit in the remaining ~90 min, and EVAL-P12.1 measures whether they do before anything
+depends on it.
+
+### Phase EVAL-P9 — Capability battery: make the headline un-gameable
+**Goal:** ~35 new `case_pos_*` so the capability rate has a denominator comparable to the guard battery,
+and an evasive engine visibly loses points instead of silently gaining them.
+**Effort:** ~1.5 h harness + **4-5 h of your authoring** (the second number is the real cost)
+**Constraint:** Case content is yours. A case encodes what an NPC *should* say, which is a product decision
+no unattended session can make. The loop's job is to remove the mechanical 80% — finding which facts each
+NPC can legitimately speak to — not to invent intent.
+**Notes:** New cases change `golden_set_version` (EVAL-P1.5), so runs before and after are **not** directly
+comparable and `compare` will correctly refuse to pretend otherwise. Land the whole battery in one commit so
+there is exactly one discontinuity, and record the pre-battery baseline `gen_id` next to it.
+**Depends on:** EVAL-P6.1, EVAL-P6.4.
+
+- [ ] **EVAL-P9.1** Capability case contract + coverage rule. Files: `create docs/CAPABILITY_CASES.md`,
+      `create tests/unit/evals/test_capability_coverage.py`.
+      Define what a `case_pos_*` asserts: a fact the NPC demonstrably holds (KNOWS_ABOUT, BELIEVES, a memory,
+      a witnessed event, or a goal), a player message that legitimately elicits it, and an expectation that
+      fails on refusal as well as on fabrication. Add a coverage test: every Character with at least one
+      grounded knowledge edge in the demo world has at least one capability case.
+      RED anchor: `tests/unit/evals/test_capability_coverage.py::test_every_grounded_npc_has_a_capability_case`
+      fails — 7 capability cases cannot cover the seeded NPCs.
+      Validation: the test names the specific uncovered NPCs rather than reporting a bare count, so the
+      output is a work list.
+
+- [ ] **EVAL-P9.2** Draft generator over the graph. Files: `create evals/case_drafts.py`,
+      `create tests/unit/evals/test_case_drafts.py`, `edit evals/__main__.py`, `edit Makefile`.
+      For each (NPC, grounded fact) pair reachable over the graph API, emit a **draft** YAML case into
+      `evals/cases/_drafts/` with the npc_id, the grounding edge, a generated player message and a
+      `keyword_any` expectation seeded from the fact's own tokens. Drafts are never loaded by the runner.
+      RED anchor: `tests/unit/evals/test_case_drafts.py::test_draft_is_written_to_drafts_dir_not_cases_dir` fails.
+      Validation: a fixture graph with 3 NPCs and 5 grounded facts yields 5 drafts, each naming its grounding
+      edge in a `# grounded_by:` comment; `_load_cases` still returns exactly the promoted cases and never a
+      draft; running twice is idempotent.
+
+- [ ] **EVAL-P9.3** *(live; requires the seeded stack)* Generate the drafts, then **review and promote ~35**
+      into `evals/cases/`. This is the authoring session — edit the player message, tighten the expectation,
+      delete the drafts that are not worth a case, and add a `tone_judge` or `affirms_judge` expectation
+      where a keyword check would be gameable. Aim for the split `neg 24 / adv 13 / pos ~42`.
+      Validation: `make eval` loads the promoted cases with no schema errors; the EVAL-P9.1 coverage test is
+      green; `golden_set_version` changes exactly once, in one commit, with the pre-battery `gen_id` recorded
+      in the commit message.
+      **This task is for a human session. The unattended loop must not start it.**
+
+- [ ] **EVAL-P9.4** `capability_rate` as a first-class metric. Files: `edit evals/summary.py`,
+      `edit evals/case_stats.py`, `edit tests/unit/engines/test_eval_summary.py`.
+      Classify every case as `guard` or `capability` from its id prefix and grounding, and compute both rates
+      with their own Wilson intervals and denominators. Do **not** average them into one score — the whole
+      point is that they move in opposite directions under evasion.
+      RED anchor: `tests/unit/engines/test_eval_summary.py::test_capability_and_guard_rates_are_reported_separately` fails.
+      Validation: a fixture with 40 guard and 42 capability cases reports two rates, two n's and two
+      intervals; a case that matches neither classifier raises rather than being silently dropped into either.
+
+### Phase EVAL-P10 — Paired headline and the evasion gate
+**Goal:** Make the trade visible and mechanical: no guard number is ever printed without its capability
+counterpart, and a run that buys guard points with capability points is called a regression.
+**Effort:** ~1.5 h
+**Constraint:** Pure reporting and comparison logic over artifacts that already exist. No new live runs.
+**Depends on:** EVAL-P9.4, EVAL-P8.2.
+
+- [ ] **EVAL-P10.1** Refuse to emit an unpaired headline. Files: `edit evals/summary.py`, `edit evals/report.py`,
+      `edit tests/unit/engines/test_eval_summary.py`.
+      `format_summary_lines` renders guard and capability adjacent, each with k, n and interval, and raises
+      when asked to render a summary carrying only one of them.
+      RED anchor: `tests/unit/engines/test_eval_summary.py::test_summary_without_capability_rate_raises` fails.
+      Validation: the rendered report contains both rates within the same block; no code path can produce a
+      report quoting the guard rate alone.
+
+- [ ] **EVAL-P10.2** Evasion regression rule in `compare`. Files: `edit evals/compare.py`,
+      `edit evals/paired_stats.py`, `edit tests/unit/evals/test_compare.py`.
+      Add `verdict: "regression_evasion"` when capability falls while guard rises, evaluated on the paired
+      per-case table rather than on the headline rates, so it survives a changed case set.
+      RED anchor: `tests/unit/evals/test_compare.py::test_capability_down_guard_up_is_called_evasion` fails.
+      Validation: a fixture where 6 capability cases regress and 4 guard cases improve reports
+      `regression_evasion` **even though the total pass count rose** — the exact shape that would otherwise
+      read as progress.
+
+- [ ] **EVAL-P10.3** Over-refusal rate on grounded cases. Files: `create evals/refusal_rate.py`,
+      `create tests/unit/evals/test_refusal_rate.py`.
+      Score the 16 grounded anti-hallucination cases plus the capability battery for refusal-when-grounded,
+      using the existing `refusal_judge`, and report it with its interval next to the other two rates.
+      RED anchor: `tests/unit/evals/test_refusal_rate.py::test_grounded_refusal_is_counted_as_a_failure` fails.
+      Validation: replaying the P0.4 grounded set reproduces **4/15 over-refusals** — the number this metric
+      exists to have caught, checked against a recorded fixture rather than a live run.
+
+### Phase EVAL-P11 — Calibration follow-through: act on kappa
+**Goal:** Turn the EVAL-P5 calibration artifact from a number you have into a decision you made.
+**Effort:** ~2 h, **plus a re-adjudication sample if any scorer fails its threshold**
+**Constraint:** This phase is *conditional on the measured kappa values*. If every scorer clears the
+threshold, most of it collapses to writing that down. Do not pre-build remediation for a scorer that turns
+out to be fine.
+**Notes:** Program 1 measures scorer trust and stops. A calibration artifact that never changes a scorer is
+an expensive way to feel rigorous. The P0.4 run already produced one confirmed judge false positive
+(`case_neg_injection_001`, ISSUE-129) and a judge disagreement that flips the headline between "0" and "1".
+**Depends on:** EVAL-P5.5, EVAL-P5.6, and a completed adjudication pass.
+
+- [ ] **EVAL-P11.1** Threshold policy. Files: `create docs/SCORER_TRUST_POLICY.md`,
+      `create tests/unit/evals/test_trust_policy.py`.
+      State, before looking at the numbers, what kappa licenses what claim — e.g. below 0.60 a scorer's rate
+      may be shown but not published; below 0.40 it is not shown at all. Encode it as a function so a report
+      cannot quote a rate its own calibration does not support.
+      RED anchor: `tests/unit/evals/test_trust_policy.py::test_low_kappa_scorer_cannot_be_published` fails.
+      Validation: a scorer at kappa 0.35 is refused publication by the policy function and the refusal names
+      the scorer, its kappa and its interval.
+
+- [ ] **EVAL-P11.2** Remediate the failing scorers. Files: `edit src/npc_engine/prompts/eval/*.yaml`,
+      `edit tests/unit/evals/test_calibration.py`.
+      For each scorer below threshold, rewrite its criteria (prompt-only change, versioned in `prompts/`),
+      then re-label and re-adjudicate a ~30-row sample for that scorer alone and confirm kappa moved.
+      Validation: the re-adjudicated sample shows a higher kappa with a non-overlapping lower bound, or the
+      change is reverted and the scorer is recorded as unfixed rather than quietly kept.
+
+- [ ] **EVAL-P11.3** Settle the judge on evidence (**closes ISSUE-129**). Files: `edit evals/judge_config.py`,
+      `edit project-harness/DECISIONS.md`.
+      Judge one adjudicated transcript with both `mixtral:8x7b` and `qwen2.5:14b`, compute each judge's kappa
+      against your verdicts, and pick the winner in a DECISIONS entry naming both numbers.
+      Validation: the decision cites two kappas with intervals and n; ISSUE-129 moves to the archive; the
+      chosen judge becomes the documented default and every prior headline is annotated with which judge
+      produced it.
+
+### Phase EVAL-P12 — Measured multi-turn: promote the differentiator
+**Goal:** Turn 6-8 binary e2e scenarios into rates with intervals, so gossip propagation, grief persistence
+and reputation drift — the things the engine is actually *for* — produce numbers instead of a green tick.
+**Effort:** ~3 h build + measured live time (EVAL-P12.1 determines it)
+**Constraint:** **Reset strategy is `preconditions.reset_world()` per repetition (human decision,
+2026-08-07).** Its completeness is *unverified*: it restores what `WorldBaseline` knows about, and anything
+a scenario mutates outside that — emotion store, session cache, tick counter — survives into the next
+repetition and correlates the repeats. EVAL-P12.1 exists to find that out before any interval is computed
+over it. If reset is incomplete, the honest output is sequences without intervals, not intervals anyway.
+**Notes:** The two worlds use different vocabularies — `scenario_gossip_chain` drives `npc_1`, `npc_6`,
+`loc_market`, while `evals/` drives `aldric_merchant`, `old_henryk`, `market_square`. Reconciling them is
+real work and is EVAL-P12.2, not a footnote.
+**Depends on:** EVAL-P2.2 (`CaseStat`), EVAL-P1.6 (judged records), EVAL-P6.4.
+
+- [ ] **EVAL-P12.1** *(live; requires the seeded stack)* Measure what `reset_world` actually clears.
+      Files: `create e2e/scripts/measure_reset_fidelity.py`, `create docs/RESET_FIDELITY.md`.
+      Run a mutating scenario, reset, and diff the full graph plus every in-process store the API exposes.
+      Enumerate exactly what survives, and time the reset.
+      Validation: a table of surviving state with a verdict per item (acceptable / correlates repeats), and a
+      measured per-reset cost feeding the EVAL-P12.4 budget. **If anything material survives, EVAL-P12.4
+      reports sequences and no Wilson intervals** — computing intervals over correlated trials is precisely
+      the error this whole programme exists to stop.
+      **This task is for a human session. The unattended loop must not start it.**
+
+- [ ] **EVAL-P12.2** Reconcile the two world vocabularies. Files: `create evals/world_map.py`,
+      `create tests/unit/evals/test_world_map.py`.
+      A declarative mapping from scenario ids (`npc_1`, `loc_market`) to eval-world ids
+      (`aldric_merchant`, `market_square`), so one measured scenario can run against the seeded eval world.
+      RED anchor: `tests/unit/evals/test_world_map.py::test_unmapped_scenario_id_raises` fails.
+      Validation: an unmapped id raises and names it; the mapping is total over the 6-8 promoted scenarios,
+      asserted by a test that enumerates their ids rather than trusting the map to be complete.
+
+- [ ] **EVAL-P12.3** Sequence runner. Files: `create evals/sequence_runner.py`,
+      `create tests/unit/evals/test_sequence_runner.py`.
+      Run one scenario k times with `reset_world` between repetitions, recording per-repetition outcome,
+      duration and the reset cost. Reuses `CaseStat` so flakiness classification comes free.
+      RED anchor: `tests/unit/evals/test_sequence_runner.py::test_reset_is_called_between_every_repetition` fails.
+      Validation: with k=3 against a mock, reset is invoked exactly 3 times and never *after* the last
+      repetition; a scenario that throws mid-run records a failed repetition rather than aborting the set.
+
+- [ ] **EVAL-P12.4** Promote 6 scenarios and report their rates. Files: `edit evals/sequence_runner.py`,
+      `edit Makefile`, `create tests/unit/evals/test_sequence_rates.py`.
+      Start with `gossip_chain`, `grief_persistence`, `reputation_drift`, `memory_consolidation`,
+      `time_passage`, `mood_contagion` — chosen because each maps to a claim a studio would ask about.
+      RED anchor: `tests/unit/evals/test_sequence_rates.py::test_scenario_rate_carries_k_and_interval` fails.
+      Validation: output reads like `gossip reaches the 2-hop target 13/15 (k=3) [0.621, 0.963]`, with k
+      adjacent to every rate, and the run fits the remaining wall-clock budget measured in EVAL-P12.1.
+
+### Phase EVAL-P13 — The portfolio artifact
+**Goal:** Make the rigour legible in five minutes to someone who will never run the suite.
+**Effort:** ~2.5 h
+**Constraint:** Nothing new is measured here. If a number is not already produced by EVAL-P9..P12, it does
+not go in. The failure mode of this phase is inventing a metric to have something to show.
+**Notes:** Ordered ahead of the engine-development tier by the audience decision of 2026-08-07. The pitch is
+not "the engine scores well" — it is "the engine is measured honestly", which is rarer and, for this reader,
+worth more. Every headline carries n, k, judge and an interval; every known limit is stated rather than
+omitted.
+**Depends on:** EVAL-P7.3, EVAL-P9.4, EVAL-P10.1, EVAL-P12.4.
+
+- [ ] **EVAL-P13.1** Methodology writeup. Files: `create docs/EVAL_METHODOLOGY.md`.
+      One page per technique, each with *why the naive alternative is wrong*: Wilson over normal approximation
+      at small n; exact McNemar over chi-squared at 53 cases; kappa with a bootstrap CI over a bare kappa;
+      `evaluated_cases` over `total_cases`; capability paired with guard. Include the anti-metric section —
+      what this suite cannot see (pronouns, unnamed fabrications, single-turn only, one judge).
+      Validation: every claim links to the module that computes it and the test that pins it; a reader can
+      check any number without running anything.
+
+- [ ] **EVAL-P13.2** Dashboard headline card. Files: `edit evals/dashboard/templates/run_detail.html`,
+      `edit evals/dashboard/app.py`, `edit tests/unit/evals/test_dashboard_detail.py`.
+      One card carrying the paired rates with intervals, the per-scorer kappa badge, the judge name and the
+      run config block — the screenshot that goes in the README.
+      RED anchor: `tests/unit/evals/test_dashboard_detail.py::test_headline_card_shows_both_rates_and_judge` fails.
+      Validation: the card renders both rates, both n's, k, the judge model and the git SHA; a run whose
+      calibration does not license publication renders the EVAL-P11.1 refusal in place of the rate.
+
+- [ ] **EVAL-P13.3** README metrics section. Files: `edit README.md`.
+      The headline block, the dashboard screenshot, and a three-line honest-limits note. Link the
+      methodology doc.
+      Validation: every number in the README appears verbatim in a committed report artifact; no figure is
+      hand-typed, and a stale-number check names any that drift.
+
+### Phase EVAL-P14 — Multi-turn track v2: the separate schema (bones)
+**Goal:** The design, not the build. A specification complete enough that a later session can implement it
+without re-deciding anything — because EVAL-P12 deliberately bends the single-turn schema to fit sequences,
+and that bend has a known breaking point.
+**Effort:** ~2 h of design; the implementation is its own multi-week programme and is **not** scoped here.
+**Constraint:** Produces documents and one schema module. No runner, no dashboard, no migration.
+**Notes:** EVAL-P12 works because six scenarios can be squeezed into a record shape built for single turns.
+It stops working when a scenario needs per-turn retrieval capture, per-turn judging, or branching. Writing
+the v2 schema now, while the constraints are fresh from P12, costs 2 h; writing it after P12's compromises
+have hardened into five call sites costs far more.
+**Depends on:** EVAL-P12.4 (the compromises must be real before they can be designed away).
+
+- [ ] **EVAL-P14.1** Sequence transcript schema. Files: `create docs/SEQUENCE_SCHEMA.md`,
+      `create evals/sequence_records.py`, `create tests/unit/evals/test_sequence_records.py`.
+      Frozen Pydantic: `SequenceRun(run_id, scenario_id, k, config, repetitions)`,
+      `Repetition(index, reset_receipt, turns)`, `Turn(index, actor, message, response, world_epoch, tick,
+      retrieved_context, duration_ms)`. `reset_receipt` records what the reset actually cleared, from
+      EVAL-P12.1 — so every repetition carries its own independence evidence rather than assuming it.
+      RED anchor: `tests/unit/evals/test_sequence_records.py::test_repetition_without_a_reset_receipt_raises` fails.
+      Validation: a 3-repetition, 5-turn run round-trips; a repetition missing its receipt raises; the model
+      is frozen and carries no field the harness cannot populate.
+
+- [ ] **EVAL-P14.2** Independence and statistics policy. Files: `create docs/SEQUENCE_STATS_POLICY.md`.
+      State which statistics are valid under which reset fidelity: full reset permits Wilson and McNemar;
+      partial reset permits sequence reporting and order-effect tests only. Include the order-effect check
+      (does repetition 3 systematically differ from repetition 1) as the empirical test of the assumption.
+      Validation: the policy names, for each metric the dashboard can render, the reset fidelity it requires
+      — so an incomplete reset downgrades the output automatically rather than by remembering to.
+
+- [ ] **EVAL-P14.3** Cost model and migration note. Files: `edit docs/SEQUENCE_SCHEMA.md`.
+      Wall-clock model as a function of scenarios x k x turns x reset cost, using EVAL-P12.1's measured
+      numbers, and the explicit list of what EVAL-P12 would have to give up to migrate. State the trigger
+      condition for starting the build — e.g. more than 10 scenarios, or the first scenario needing per-turn
+      judging — so the decision is made by a condition rather than by enthusiasm.
+      Validation: the model predicts EVAL-P12.4's measured run time within 25%; if it cannot, the model is
+      wrong and the schema built on it is suspect.
+
 ### Parked (out of budget)
 
 Not compressed into optimistic estimates — genuinely out of scope for this program. Each line says why.
