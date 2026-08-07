@@ -14,6 +14,7 @@ which re-runs retrieval with session_turns=[] — also noted per EVAL-P1 constra
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 _DIALOGUE_LLM_CONFIG = (
     _REPO_ROOT / "src" / "npc_engine" / "engines" / "dialogue" / "llm_config.yaml"
 )
+_CASES_DIR = _REPO_ROOT / "evals" / "cases"
 
 _LLM_KEY = "llm"
 _PROMPT_KEY = "prompt"
@@ -36,8 +38,20 @@ _TOP_P_KEY = "top_p"
 _MAX_TOKENS_KEY = "max_tokens"
 _VERSION_KEY = "version"
 
+_GOLDEN_SET_HEX_CHARS = 12
 _DEFAULT_RETRIEVAL_PROFILE = "default"
-_DEFAULT_GOLDEN_SET_VERSION = "unversioned"
+
+
+class GoldenSetVersionError(ValueError):
+    """Raised when golden_set_version cannot be computed due to an empty or missing cases dir."""
+
+    def __init__(self, cases_dir: Path) -> None:
+        """Initialise with the offending directory path."""
+        super().__init__(
+            f"Cannot compute golden_set_version: no case files found in {cases_dir!r}. "
+            "Provide a directory containing at least one case file."
+        )
+        self.cases_dir = cases_dir
 
 
 class RunConfig(BaseModel):
@@ -55,8 +69,11 @@ class RunConfig(BaseModel):
         judge_model: LLM model used for judging (must differ from generation_model,
             enforced by judge_config.resolve_judge_model()).
         retrieval_profile: Named retrieval configuration applied during generation.
+            Not yet wired to any retrieval configuration — the value is recorded for
+            future use but does not currently select a retrieval strategy.
         git_sha: Short (7-char) git commit hash at the time resolve_run_config() ran.
-        golden_set_version: Version tag of the eval case golden set.
+        golden_set_version: First 12 hex chars of a SHA-256 digest over sorted case file
+            names and bytes — changes on any content edit, stable across mtime-only changes.
 
     No ``seed`` field: LLMGenerateProtocol.generate() has no seed parameter and
     ollama_adapter.py never sets options.seed — claiming seed reproducibility would
@@ -74,6 +91,43 @@ class RunConfig(BaseModel):
     retrieval_profile: str
     git_sha: str
     golden_set_version: str
+
+
+def resolve_golden_set_version(cases_dir: Path) -> str:
+    """Compute a content-stable version hash from case file names and bytes.
+
+    Hashes each file's name and byte content in sorted-name order with SHA-256.
+    Returns the first 12 hex characters — stable across mtime changes, unstable
+    across any content or naming edit.
+
+    The retrieved context recorded in each GenerationRecord is an approximation
+    (re-run from GET /v1/admin/debug/retrieval with session_turns=[]) — this hash
+    describes what was in the case files, not what retrieval returned.
+
+    Args:
+        cases_dir: Directory containing eval case files.
+    Returns:
+        12-hex-char content hash string.
+    Raises:
+        GoldenSetVersionError: If cases_dir has no files (including missing dir).
+    """
+    try:
+        files = sorted(
+            (f for f in cases_dir.iterdir() if f.is_file()),
+            key=lambda f: f.name,
+        )
+    except (FileNotFoundError, NotADirectoryError, OSError):
+        files = []
+
+    if not files:
+        raise GoldenSetVersionError(cases_dir)
+
+    digest = hashlib.sha256()
+    for f in files:
+        digest.update(f.name.encode())
+        digest.update(f.read_bytes())
+
+    return digest.hexdigest()[:_GOLDEN_SET_HEX_CHARS]
 
 
 def _read_llm_config(config_path: Path) -> dict[str, Any]:
@@ -110,23 +164,26 @@ def _resolve_git_sha() -> str:
 def resolve_run_config(
     *,
     retrieval_profile: str = _DEFAULT_RETRIEVAL_PROFILE,
-    golden_set_version: str = _DEFAULT_GOLDEN_SET_VERSION,
+    cases_dir: Path | None = None,
     config_path: Path | None = None,
 ) -> RunConfig:
     """Build a RunConfig from live engine config, git state, and judge resolution.
 
     Reads llm_config.yaml for generation parameters (model, temperature, top_p,
     max_tokens, prompt version); calls git for the commit SHA; calls
-    judge_config.resolve_judge_model() for the judge model.
+    judge_config.resolve_judge_model() for the judge model; computes
+    golden_set_version from case file content via resolve_golden_set_version().
 
     Args:
         retrieval_profile: Named retrieval configuration; defaults to 'default'.
-        golden_set_version: Golden-set version tag; defaults to 'unversioned'.
+        cases_dir: Directory of eval case files used to compute golden_set_version;
+            defaults to evals/cases/ relative to the repo root.
         config_path: Override path to the dialogue llm_config.yaml (for testing).
     Returns:
         Frozen RunConfig instance.
     Raises:
         JudgeModelCollisionError: If the resolved judge model equals the generation model.
+        GoldenSetVersionError: If cases_dir is empty or missing.
         RuntimeError: If git rev-parse fails.
         FileNotFoundError: If llm_config.yaml cannot be found at config_path.
         KeyError: If llm_config.yaml is missing required keys (llm.model, etc.).
@@ -148,5 +205,5 @@ def resolve_run_config(
         judge_model=judge_model,
         retrieval_profile=retrieval_profile,
         git_sha=_resolve_git_sha(),
-        golden_set_version=golden_set_version,
+        golden_set_version=resolve_golden_set_version(cases_dir or _CASES_DIR),
     )

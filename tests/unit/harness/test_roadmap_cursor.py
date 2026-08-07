@@ -218,8 +218,6 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     assert evals_p0.is_done
     pending = sorted(task_id for p in phases for task_id in p.pending)
     assert pending == [
-        "EVAL-P1.2",
-        "EVAL-P1.5",
         "EVAL-P1.6",
         "EVAL-P5.5",
         "EVAL-P5.6",

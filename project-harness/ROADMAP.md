@@ -555,7 +555,7 @@ EVAL-P0.2 (`evals/__init__.py` must exist). **Blocks:** EVAL-P2, EVAL-P3, EVAL-P
       `repetition ∈ {0,1}`, `duration_ms > 0`, and a non-empty `retrieved_context`.
       **Size watch:** `generate_runner.py` is 276 L — extract the capture helper into a new module, do not grow it. ✅ AUTO (EVAL-P1.4, 2026-08-06)
 
-- [ ] **EVAL-P1.5** Honest `golden_set_version`. Two runs over different case sets currently record the
+- [x] **EVAL-P1.5** Honest `golden_set_version`. Two runs over different case sets currently record the
       same run identity: `run_config.py:40` defaults `golden_set_version` to the constant `"unversioned"`
       and nothing ever overrides it, so the field claims reproducibility it does not provide — the same
       class of defect as EVAL-P1.2, found while planning it.
@@ -567,7 +567,7 @@ EVAL-P0.2 (`evals/__init__.py` must exist). **Blocks:** EVAL-P2, EVAL-P3, EVAL-P
       Validation: editing one byte of one case file changes the hash; touching a file's mtime without
       changing content does not; an empty or missing cases dir raises a named error rather than returning
       the hash of nothing. **Leave `retrieval_profile` as-is** but state in its field docstring that it is
-      not yet wired to any retrieval configuration, so no reader mistakes a default for a measurement.
+      not yet wired to any retrieval configuration, so no reader mistakes a default for a measurement. ✅ AUTO (EVAL-P1.5, 2026-08-07)
 
 - [ ] **EVAL-P1.6** Persist the judge pass. `judge_runner.main` writes a markdown report
       (`report.write_report`) and prints a summary — **the 115 record-level verdicts are never saved in any
