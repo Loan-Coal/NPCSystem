@@ -8,7 +8,7 @@ llm:
   stop_sequences: []
 prompt:
   name: trigger_v1
-  version: 1
+  version: "1"
 output_schema_ref: proactive_dialogue_response_v1
 fallback:
   policy: graceful_degradation

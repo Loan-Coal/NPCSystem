@@ -255,7 +255,7 @@ def _make_engine_model_config():  # type: ignore[return]
             top_p=0.95,
             stop_sequences=[],
         ),
-        prompt=EnginePromptRef(name="dialogue_main", version=1),
+        prompt=EnginePromptRef(name="dialogue_main", version="v1"),
         output_schema_ref="dialogue_response_v1",
         fallback=EngineFallbackPolicy(
             policy="graceful_degradation", tiers=["full", "graph_only", "canned"]

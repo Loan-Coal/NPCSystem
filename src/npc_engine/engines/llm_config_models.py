@@ -52,9 +52,9 @@ class EnginePromptRef(BaseModel):
     """Reference to the versioned prompt template used by this engine."""
 
     name: str = Field(min_length=1)
-    version: int = Field(gt=0)
+    version: str = Field(min_length=1)
 
-    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
 
 class EngineFallbackPolicy(BaseModel):

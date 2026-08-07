@@ -32,7 +32,7 @@ llm:
   stop_sequences: []
 prompt:
   name: dialogue_main
-  version: 1
+  version: "v1"
 output_schema_ref: dialogue_response_v1
 fallback:
   policy: graceful_degradation
@@ -160,7 +160,7 @@ llm:
   stop_sequences: []
 prompt:
   name: dialogue_main
-  version: 1
+  version: "v1"
 output_schema_ref: dialogue_response_v1
 """
     _write_engine_config(tmp_path, "dialogue", incomplete)

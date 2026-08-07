@@ -514,7 +514,7 @@ EVAL-P0.2 (`evals/__init__.py` must exist). **Blocks:** EVAL-P2, EVAL-P3, EVAL-P
       prints a block with a non-empty 7-char `git_sha` and a `generation_model` equal to `llm_config.yaml`'s.
       **No `seed` field exists on the model** — assert its absence in the test. ✅ AUTO (EVAL-P1.1, 2026-08-06)
 
-- [ ] **EVAL-P1.2** Single-source the prompt version (the hidden prerequisite). Make `llm_config.yaml`'s
+- [x] **EVAL-P1.2** Single-source the prompt version (the hidden prerequisite). Make `llm_config.yaml`'s
       `prompt.version` authoritative and have `prompt_builder` read it instead of hardcoding.
       Files: `edit src/npc_engine/engines/dialogue/prompt_builder.py`, `edit src/npc_engine/engines/dialogue/llm_config.yaml`,
       `create tests/unit/conformance/test_prompt_version_single_source.py`, `edit tests/unit/engines/test_prompt_builder.py`.
@@ -531,7 +531,7 @@ EVAL-P0.2 (`evals/__init__.py` must exist). **Blocks:** EVAL-P2, EVAL-P3, EVAL-P
       except that one test (verified by grep, `demo_game/constants.py` uses a separate `DEMO_CACHE_VERSION`).
       WARNING: the sentence that used to sit here contained the literal token the cursor's skip-regex
       matches, so this task was flagged and skipped for the entire program despite the sentence saying the
-      opposite. Reworded 2026-08-07; root cause logged as **ISSUE-134**.
+      opposite. Reworded 2026-08-07; root cause logged as **ISSUE-134**. ✅ AUTO (EVAL-P1.2, 2026-08-07)
 
 - [x] **EVAL-P1.3** Schema v2. Files: `edit evals/eval_records.py`, `create evals/retrieved_item.py`,
       `create tests/unit/evals/test_eval_records_v2.py`. `_TRANSCRIPT_VERSION = 2`; `TranscriptFile` gains

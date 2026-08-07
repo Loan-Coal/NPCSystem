@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from npc_engine.common.knowledge_types import KNOWLEDGE_STATE_RUMOR
 from npc_engine.common.yaml_utils import load_yaml_mapping
@@ -27,7 +27,11 @@ from npc_engine.engines.dialogue.prompt_builder_standing import build_standing_l
 
 logger = logging.getLogger(__name__)
 
-PROMPT_VERSION = "stage_b_v2.13"
+_LLM_CONFIG_PATH = Path(__file__).resolve().parent / "llm_config.yaml"
+_CFG: dict[str, Any] = load_yaml_mapping(_LLM_CONFIG_PATH, "llm_config.yaml must be a mapping")
+PROMPT_VERSION = str(_CFG["prompt"]["version"])
+if not PROMPT_VERSION:
+    raise ValueError("llm_config.yaml prompt.version is empty — set a non-empty version string")
 
 _PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts" / "dialogue"
 _PROMPT_PATH = _PROMPTS_DIR / "system_v1.yaml"
