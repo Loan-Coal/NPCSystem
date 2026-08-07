@@ -28,6 +28,7 @@ import generation_records
 import preconditions
 from context_capture import capture_retrieval_context
 from eval_records import GenerationRecord, write_generation_dir, write_transcript
+from run_config import RunConfig, resolve_run_config
 
 # Stable private helpers from sibling runners; generate_runner is sole two-phase consumer.
 from anti_hallucination_runner import _PLAYER_ID as _AH_PLAYER_ID
@@ -156,11 +157,19 @@ def run(
     *,
     gen_id: str = "",
     k: int = 1,
+    cases_dir: Path | None = None,
+    config: RunConfig | None = None,
 ) -> Path:
     """Collect records and write output to either gen-dir or legacy transcript.
 
     gen_id non-empty: <out_dir>/<gen_id>/{meta.json,outputs.jsonl}.
     gen_id empty: legacy TranscriptFile at <out_dir>/<stem>_<run_id>.json.
+
+    A gen-dir run always records a RunConfig in meta.json. Resolving it is what makes
+    the artifact reproducible — prompt version, generation model and sampling params,
+    judge model, git SHA and golden-set hash. It is resolved here rather than in main()
+    so that every caller of run() gets it, and it is resolved *before* the (slow)
+    generation pass so a misconfigured run fails in seconds rather than after an hour.
 
     Args:
         yaml_cases, ah_cases: Eval cases to process.
@@ -170,13 +179,22 @@ def run(
         run_id: Identifier for the legacy filename.
         gen_id: Non-empty selects gen-dir format.
         k: Repetitions per case.
+        cases_dir: Case directory used to compute golden_set_version; defaults to
+            evals/cases/ when omitted.
+        config: Pre-resolved run config; resolved from the live repo when omitted.
     Returns:
         Path to the written output.
+    Raises:
+        JudgeModelCollisionError: If the judge model equals the generation model.
+        GoldenSetVersionError: If cases_dir is empty or missing.
     """
+    resolved_config = config
+    if gen_id and resolved_config is None:
+        resolved_config = resolve_run_config(cases_dir=cases_dir)
     records = collect_records(yaml_cases, ah_cases, client, base_url, k=k)
     if gen_id:
         gen_dir = out_dir / gen_id
-        write_generation_dir(gen_dir, records, gen_id=gen_id, k=k)
+        write_generation_dir(gen_dir, records, gen_id=gen_id, k=k, config=resolved_config)
         return gen_dir
     path = out_dir / f"{_TRANSCRIPT_STEM}_{run_id}.json"
     write_transcript(path, records)
@@ -226,6 +244,7 @@ def main(argv: list[str] | None = None) -> int:
             run_id=args.run_id,
             gen_id=args.gen_id,
             k=args.k,
+            cases_dir=args.cases,
         )
 
     print(f"Transcript written: {path}")

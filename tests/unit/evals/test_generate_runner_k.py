@@ -8,9 +8,13 @@ Used by: pytest (make test / make check).
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from generate_runner import collect_records
+import pytest
+
+from generate_runner import collect_records, run
 
 
 def _make_yaml_case(case_id: str = "tc001") -> dict:
@@ -81,3 +85,67 @@ def test_k_equals_one_is_default(mock_ensure: MagicMock) -> None:
     assert len(records_explicit) == 1
     assert records_default[0].repetition == 0
     assert records_explicit[0].repetition == 0
+
+
+@patch("generate_runner.preconditions.ensure_player_node")
+def test_gen_dir_run_records_a_non_null_run_config(
+    mock_ensure: MagicMock, tmp_path: Path
+) -> None:
+    """A gen-dir run must persist a resolved RunConfig, never null.
+
+    Regression guard. EVAL-P1.1/P1.2/P1.3/P1.5 built RunConfig, made prompt_version
+    single-sourced and golden_set_version content-derived — but generate_runner never
+    imported run_config and called write_generation_dir without config=, whose default
+    is None. Four completed tasks were therefore unreachable from the generation path
+    and every artifact recorded "config": null. The original EVAL-P1.4 checklist
+    asserted repetition/duration_ms/retrieved_context and never asserted this, which is
+    exactly why the gate stayed green while run identity was absent.
+    """
+    cases_dir = tmp_path / "cases"
+    cases_dir.mkdir()
+    (cases_dir / "case_a.yaml").write_text("case_id: tc001\n", encoding="utf-8")
+
+    out_dir = tmp_path / "generations"
+    run(
+        yaml_cases=[_make_yaml_case()],
+        ah_cases=[],
+        client=_make_mock_client(),
+        base_url="http://test",
+        out_dir=out_dir,
+        run_id="unused",
+        gen_id="smoke",
+        k=1,
+        cases_dir=cases_dir,
+    )
+
+    meta = json.loads((out_dir / "smoke" / "meta.json").read_text(encoding="utf-8"))
+    assert meta["config"] is not None, "meta.json must carry a resolved RunConfig"
+    for field in ("prompt_version", "generation_model", "judge_model", "git_sha"):
+        assert meta["config"][field], f"{field} must be non-empty in the recorded config"
+    assert meta["config"]["golden_set_version"] != "unversioned"
+
+
+@patch("generate_runner.preconditions.ensure_player_node")
+def test_gen_dir_run_resolves_config_before_generating(
+    mock_ensure: MagicMock, tmp_path: Path
+) -> None:
+    """A misconfigured run must fail before the generation pass, not after it.
+
+    Resolving config after collect_records would mean an hour of dialogue POSTs is
+    spent before the run dies on a bad judge model or an empty cases dir.
+    """
+    client = _make_mock_client()
+    with pytest.raises(Exception):
+        run(
+            yaml_cases=[_make_yaml_case()],
+            ah_cases=[],
+            client=client,
+            base_url="http://test",
+            out_dir=tmp_path / "generations",
+            run_id="unused",
+            gen_id="smoke",
+            k=1,
+            cases_dir=tmp_path / "does_not_exist",
+        )
+
+    client.post.assert_not_called()
