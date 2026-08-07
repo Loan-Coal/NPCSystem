@@ -15,9 +15,11 @@ Does NOT: call /v1/dialogue, modify graph state, import from src/npc_engine/
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
+import judge_config
 import matchers
 from eval_records import GenerationRecord, JudgedRecord, read_transcript
 from report import write_report
@@ -25,11 +27,62 @@ from summary import format_summary_lines, summarize
 
 
 # ---------------------------------------------------------------------------
-# Polarity application
+# Constants
 # ---------------------------------------------------------------------------
 
 _PASS_ON_YES: str = "pass_on_yes"
 _PASS_ON_NO: str = "pass_on_no"
+_JSONL_ENCODING: str = "utf-8"
+_RECORD_ID_COLON_SEGMENTS: int = 2
+
+
+# ---------------------------------------------------------------------------
+# JSONL persistence
+# ---------------------------------------------------------------------------
+
+
+def _write_judged_jsonl(
+    judged_records: list[JudgedRecord],
+    path: Path,
+    judge_model: str,
+) -> None:
+    """Write one JSONL row per JudgedRecord to path.
+
+    Each row contains: record_id, case_id (prefix of record_id), judge_kind,
+    passed, score, detail, judge_model, and repetition. score=null signals an
+    infra failure and is distinguishable from a genuine fail (score=false).
+    Creates parent directories if needed; overwrites any existing file.
+
+    Args:
+        judged_records: Scored records from a judge pass.
+        path: Destination .jsonl file (e.g. evals/generations/<gen_id>/judged.jsonl).
+        judge_model: Name of the LLM model used in this judge run — recorded on
+            every row so a transcript judged twice by different models stays
+            attributable (ISSUE-129 traceability requirement).
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = [
+        {
+            "record_id": r.record_id,
+            "case_id": r.record_id.rsplit(":", _RECORD_ID_COLON_SEGMENTS)[0],
+            "judge_kind": r.judge_kind,
+            "passed": r.passed,
+            "score": r.score,
+            "detail": r.reasoning,
+            "judge_model": judge_model,
+            "repetition": r.repetition,
+        }
+        for r in judged_records
+    ]
+    path.write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n",
+        encoding=_JSONL_ENCODING,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Polarity application
+# ---------------------------------------------------------------------------
 
 
 def _apply_polarity(score: bool | None, polarity: str) -> bool:
@@ -149,6 +202,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to transcript file written by eval-generate.",
     )
     parser.add_argument("--reports", default="evals/reports", type=Path)
+    parser.add_argument(
+        "--json-out",
+        dest="json_out",
+        type=Path,
+        default=None,
+        help=(
+            "Write one JSONL row per judged record to this path. "
+            "Conventional location: evals/generations/<gen_id>/judged.jsonl."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if not args.transcript.exists():
@@ -160,6 +223,13 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         print(f"Failed to load transcript: {exc}", file=sys.stderr)
         return 2
+
+    if args.json_out is not None:
+        _write_judged_jsonl(
+            judged_records,
+            args.json_out,
+            judge_config.resolve_judge_model(),
+        )
 
     result_dicts = [_to_result_dict(r) for r in judged_records]
     report_path = write_report(results=result_dicts, output_dir=args.reports)

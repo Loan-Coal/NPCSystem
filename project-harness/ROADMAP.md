@@ -569,7 +569,7 @@ EVAL-P0.2 (`evals/__init__.py` must exist). **Blocks:** EVAL-P2, EVAL-P3, EVAL-P
       the hash of nothing. **Leave `retrieval_profile` as-is** but state in its field docstring that it is
       not yet wired to any retrieval configuration, so no reader mistakes a default for a measurement. ✅ AUTO (EVAL-P1.5, 2026-08-07)
 
-- [ ] **EVAL-P1.6** Persist the judge pass. `judge_runner.main` writes a markdown report
+- [x] **EVAL-P1.6** Persist the judge pass. `judge_runner.main` writes a markdown report
       (`report.write_report`) and prints a summary — **the 115 record-level verdicts are never saved in any
       machine-readable form.** The EVAL-P0.4 session log already noted this ("Not persisted: the 115
       record-level judge verdicts; `judge_runner` has no `--json-out`") but nothing was scheduled, and three
@@ -588,7 +588,7 @@ EVAL-P0.2 (`evals/__init__.py` must exist). **Blocks:** EVAL-P2, EVAL-P3, EVAL-P
       `JudgedRecord`; `judge_model` is recorded on **every** row (so a transcript judged twice by different
       models stays attributable — the ISSUE-129 disagreement is unreadable otherwise); an infra failure
       writes `passed=false, score=null` and is distinguishable from a genuine fail, never silently dropped.
-      **Blocks:** EVAL-P5.6, EVAL-P7.2, EVAL-P7.3, EVAL-P8.2.
+      **Blocks:** EVAL-P5.6, EVAL-P7.2, EVAL-P7.3, EVAL-P8.2. ✅ AUTO (EVAL-P1.6, 2026-08-07)
 
 ### Phase EVAL-P2 — Statistics, hand-implemented
 **Goal:** A binary judge plus k repeats becomes a per-case pass rate with a Wilson interval and a flakiness

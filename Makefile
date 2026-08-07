@@ -220,11 +220,13 @@ eval-generate:
 		$(ARGS)
 
 # eval-judge: two-phase pipeline — judge pass (reads transcript written by eval-generate)
+# Pass GEN_ID=<id> to also write evals/generations/<id>/judged.jsonl (EVAL-P1.6).
 eval-judge:
 	@echo "Running eval judge pass from transcript $(TRANSCRIPT) ..."
 	$(PYTHON) -m evals judge \
 		--transcript $(TRANSCRIPT) \
-		--reports evals/reports
+		--reports evals/reports \
+		$(if $(GEN_ID),--json-out evals/generations/$(GEN_ID)/judged.jsonl,)
 
 # eval-score: deterministic (no-LLM) scoring pass over a cached transcript.
 # Usage: make eval-score TRANSCRIPT=evals/generations/<run>/outputs.jsonl
