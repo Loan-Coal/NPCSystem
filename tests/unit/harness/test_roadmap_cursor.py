@@ -192,10 +192,16 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     finishing the program having measured nothing. That narrowing worked: the
     baseline was measured on 2026-08-06 before a judge call was spent on P1..P8.
 
-    Current state (2026-08-07, after EVAL-P6.3): EVAL-P0.*, EVAL-P1.1, EVAL-P1.3,
-    EVAL-P1.4, EVAL-P2.*, EVAL-P3.*, EVAL-P4.*, EVAL-P5.1, EVAL-P5.3, EVAL-P5.4 and
-    EVAL-P6.3 are ticked; EVAL-P1.2 and EVAL-P5.2 are flagged (skippable). Queue spans
-    EVAL-P0..EVAL-P8.
+    Current state (2026-08-07, queue readied for the metrics program): EVAL-P0.*,
+    EVAL-P1.1, EVAL-P1.3, EVAL-P1.4, EVAL-P2.*, EVAL-P3.*, EVAL-P4.*, EVAL-P5.1,
+    EVAL-P5.2 (superseded), EVAL-P5.3, EVAL-P5.4 and EVAL-P6.3 are ticked. Eleven tasks
+    are actionable by the loop; the only two flagged are EVAL-P6.4 and EVAL-P8.3, both
+    of which need a running engine + Neo4j + Ollama and are therefore human-session work.
+
+    EVAL-P1.2 was flagged until 2026-08-07 **by accident**: its body contained the phrase
+    "Not an ask-gate", and the cursor's skip-regex matches that literal token regardless
+    of the negation around it, so the loop skipped the task for a reason that stated the
+    opposite of what was meant (ISSUE-134). Reworded rather than special-cased.
 
     Note the *previous* snapshot asserted ``pending == 13``, then ``== 11``, and was red
     both times: EVAL-P4.0 and then all of P4/P5 were completed without updating it, so
@@ -212,6 +218,10 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     assert evals_p0.is_done
     pending = sorted(task_id for p in phases for task_id in p.pending)
     assert pending == [
+        "EVAL-P1.2",
+        "EVAL-P1.5",
+        "EVAL-P5.5",
+        "EVAL-P5.6",
         "EVAL-P6.1",
         "EVAL-P6.2",
         "EVAL-P7.1",
@@ -224,7 +234,26 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     # skippable (their bodies still carry the ask-gate / live markers that gated
     # them) but they are ticked, so the loop is not being held back on them.
     flagged = [t.id for p in phases for t in p.tasks if t.skippable and not t.done]
-    assert flagged == ["EVAL-P1.2", "EVAL-P5.2"]
+    assert flagged == ["EVAL-P6.4", "EVAL-P8.3"]
+
+
+def test_real_roadmap_is_entirely_crlf() -> None:
+    """ROADMAP.md must stay 100% CRLF, or a one-line ``--mark`` becomes a whole-file diff.
+
+    ``roadmap_cursor`` reads and writes with ``newline=""`` precisely so each line keeps
+    its original terminator; the property that makes "the commit is the transaction" hold
+    is that every line already agrees. Any tool that rewrites the file through Python's
+    universal-newline handling silently converts all 1500+ lines to LF, and the next
+    ``--mark`` then produces a diff touching the whole file instead of one checkbox.
+    That happened on 2026-08-07 and was only caught by inspection — hence this guard.
+    """
+    path = Path(__file__).resolve().parents[3] / "project-harness" / "ROADMAP.md"
+    raw = path.read_bytes()
+    total_lf = raw.count(b"\n")
+    crlf = raw.count(b"\r\n")
+
+    assert total_lf > 0, "roadmap is empty"
+    assert crlf == total_lf, f"{total_lf - crlf} lines are bare LF; roadmap must be all CRLF"
 
 
 def test_real_roadmap_end_marker_is_not_repeated_inside_the_queue() -> None:

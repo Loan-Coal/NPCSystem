@@ -522,8 +522,16 @@ EVAL-P0.2 (`evals/__init__.py` must exist). **Blocks:** EVAL-P2, EVAL-P3, EVAL-P
       fails because `PROMPT_VERSION = "stage_b_v2.13"` (`prompt_builder.py:30`) ≠ `prompt.version: 1`.
       Validation: editing `prompt.version` in the YAML changes what `resolve_run_config().prompt_version` returns
       **with no Python edit**, and the existing `test_prompt_builder.py:138` assertion still passes.
-      *Not an ask-gate:* `PROMPT_VERSION` has no callers outside its own module except that one test
-      (verified by grep — `demo_game/constants.py` uses a separate `DEMO_CACHE_VERSION`).
+      **Approach chosen 2026-08-07 (human decision): YAML authoritative, module-level read.** Set
+      `prompt.version: stage_b_v2.13` in `llm_config.yaml`, then make `prompt_builder.py:30` read it:
+      `PROMPT_VERSION = str(_CFG["prompt"]["version"])`. Assert the value is a non-empty string at read
+      time, so a YAML typo fails loudly at import instead of silently injecting an empty version into
+      every prompt. `run_config.py:143` already reads the same key and needs no change.
+      *No human decision is pending on this task.* `PROMPT_VERSION` has no callers outside its own module
+      except that one test (verified by grep, `demo_game/constants.py` uses a separate `DEMO_CACHE_VERSION`).
+      WARNING: the sentence that used to sit here contained the literal token the cursor's skip-regex
+      matches, so this task was flagged and skipped for the entire program despite the sentence saying the
+      opposite. Reworded 2026-08-07; root cause logged as **ISSUE-134**.
 
 - [x] **EVAL-P1.3** Schema v2. Files: `edit evals/eval_records.py`, `create evals/retrieved_item.py`,
       `create tests/unit/evals/test_eval_records_v2.py`. `_TRANSCRIPT_VERSION = 2`; `TranscriptFile` gains
@@ -546,6 +554,20 @@ EVAL-P0.2 (`evals/__init__.py` must exist). **Blocks:** EVAL-P2, EVAL-P3, EVAL-P
       `evals/generations/smoke/` containing 2× the single-run record count, every record carrying
       `repetition ∈ {0,1}`, `duration_ms > 0`, and a non-empty `retrieved_context`.
       **Size watch:** `generate_runner.py` is 276 L — extract the capture helper into a new module, do not grow it. ✅ AUTO (EVAL-P1.4, 2026-08-06)
+
+- [ ] **EVAL-P1.5** Honest `golden_set_version`. Two runs over different case sets currently record the
+      same run identity: `run_config.py:40` defaults `golden_set_version` to the constant `"unversioned"`
+      and nothing ever overrides it, so the field claims reproducibility it does not provide — the same
+      class of defect as EVAL-P1.2, found while planning it.
+      Files: `edit evals/run_config.py`, `edit tests/unit/evals/test_run_config.py`.
+      Add `resolve_golden_set_version(cases_dir) -> str`: sha256 over each case file's name and bytes in
+      sorted-name order, rendered as the first 12 hex chars. Call it from `resolve_run_config`.
+      RED anchor: `tests/unit/evals/test_run_config.py::test_golden_set_version_changes_when_a_case_changes`
+      fails because the value is a hardcoded constant.
+      Validation: editing one byte of one case file changes the hash; touching a file's mtime without
+      changing content does not; an empty or missing cases dir raises a named error rather than returning
+      the hash of nothing. **Leave `retrieval_profile` as-is** but state in its field docstring that it is
+      not yet wired to any retrieval configuration, so no reader mistakes a default for a measurement.
 
 ### Phase EVAL-P2 — Statistics, hand-implemented
 **Goal:** A binary judge plus k repeats becomes a per-case pass rate with a Wilson interval and a flakiness
@@ -726,7 +748,13 @@ it falsely marked P5.2's ask-gate cleared. See DEC-153 §1.
       Validation: 3 rows round-trip through JSONL byte-identically; a row missing `pre_labeller_model` raises
       `ValidationError`; the **frozen output text** is stored inline, never a pointer to something regenerable. ✅ AUTO (EVAL-P5.1, 2026-08-07)
 
-- [ ] **EVAL-P5.2** Pre-labelling runner. Files: `create evals/label_runner.py`,
+- [x] **EVAL-P5.2 — SUPERSEDED 2026-08-07 by `EVAL-P5.6`.** Not run as written. The maintainer elected to
+      pre-label with Opus through the Claude CLI rather than an in-repo `httpx` client, which removes the
+      API-key handling, the ~$4 batch cost and the `LabellerModelCollisionError` guard (the labeller is now
+      chosen by the human at the prompt, not resolved in code). The transcript-join half of this task is
+      real and survives as **EVAL-P5.6**; the prompt itself is committed at
+      `evals/calibration/LABEL_PROMPT.md`. Original text kept below for provenance.
+      Pre-labelling runner. Files: `create evals/label_runner.py`,
       `create tests/unit/evals/test_label_runner.py`, `edit Makefile`. `httpx.post` → Anthropic REST
       (`POST /v1/messages`, `model="claude-opus-5"`, `anthropic-version: 2023-06-01`), one pre-label per
       transcript record per scorer, with a `LabellerModelCollisionError` guard mirroring
@@ -764,6 +792,49 @@ it falsely marked P5.2's ask-gate cleared. See DEC-153 §1.
       not report its own trust metric as a point estimate without error bars. At ~85 rows κ's SE is ≈ ±0.10,
       so a κ of 0.60 is really ≈ [0.40, 0.80] — a difference that changes what the number licenses you to say. ✅ AUTO (EVAL-P5.4, 2026-08-07)
 
+- [ ] **EVAL-P5.5** Put the scorer on an axis of its own confusion matrix (**closes ISSUE-133**).
+      `confusion_counts` (`calibration.py:73-88`) and `cohens_kappa` (`:115-149`) both compare `pre_label`
+      against `human_verdict`, and `CalibrationLabel` has no field for the scorer's own verdict — `scorer`
+      is only a grouping key (`:231`). So `make eval-calibrate` reports how often the reference labeller
+      agrees with the maintainer, which this phase's own notes call the *free secondary* number, while the
+      headline question ("can I trust `tone_judge`?") is not computed at all.
+      Files: `edit evals/calibration_records.py`, `edit evals/calibration.py`,
+      `edit tests/unit/evals/test_calibration.py`, `edit tests/unit/evals/test_calibration_records.py`.
+      Add `scorer_verdict: bool` to `CalibrationLabel`. Make `scorer_verdict` vs `human_verdict` the
+      headline matrix and keep `pre_label` vs `human_verdict` as a clearly-labelled secondary block. Both
+      κ values get their own bootstrap CI and n.
+      RED anchor: `tests/unit/evals/test_calibration.py::test_headline_matrix_compares_scorer_verdict_to_human`
+      fails because no such field exists.
+      Validation: a fixture where the scorer and the human agree 9/10 but the reference labeller agrees
+      10/10 reports **two different** κ values, and the printed FP cell reads "scorer said pass, human
+      said fail". A row missing `scorer_verdict` raises `ValidationError`.
+      **Decision 2026-08-07 (human): option A.** Human adjudication time, local judge compute and CLI token
+      cost are all identical with or without this field; only this version can change what gets fixed in the
+      engine. Must land before any adjudication session — labels adjudicated against the old axis answer
+      the wrong question and cannot be re-derived without redoing the hours.
+
+- [ ] **EVAL-P5.6** Batch export + validating import for the CLI labelling pass (replaces EVAL-P5.2).
+      Files: `create evals/label_export.py`, `create evals/label_import.py`,
+      `create tests/unit/evals/test_label_export.py`, `create tests/unit/evals/test_label_import.py`,
+      `edit evals/__main__.py`, `edit Makefile`.
+      `label_export` writes batches of at most 25 items as JSON (`record_id`, `scorer`, `npc_id`,
+      `player_message`, `criteria`, `output_text`, plus `vocabulary` for the two graph scorers) for
+      `evals/calibration/LABEL_PROMPT.md` to consume. **It must never emit `scorer_verdict` or any judge
+      verdict** — the artifact is void if the labeller can see the answer it is measured against.
+      `label_import` reads the model's minimal JSONL (`record_id`, `scorer`, `pre_label`, `notes`), joins
+      `output_text` from the transcript and `scorer_verdict` from the judged records, stamps
+      `pre_labeller_model`, and writes validated `CalibrationLabel` rows.
+      RED anchor: `tests/unit/evals/test_label_import.py::test_unknown_record_id_is_rejected_not_dropped`
+      fails — module absent.
+      Validation: a raw row naming a `record_id` absent from the transcript raises a named error rather than
+      being skipped; a raw row carrying `output_text` or `scorer_verdict` is rejected as contaminated; 5 raw
+      rows produce 5 rows with `human_verdict=None`; round-tripping through `write_calibration_labels` is
+      byte-identical. Add verbs `label-export` / `label-import` and the matching make targets.
+      **Depends on:** EVAL-P5.5 (schema) and, for full six-scorer coverage, EVAL-P6.1 (the deterministic
+      records must exist in the transcript before they can be exported). Safe to build before P6.1 — the
+      join is by `record_id` and the tests are fixture-driven — but do not *run* it against a pre-P6.1
+      generation or four of the six scorers will silently have no rows.
+
 ### Phase EVAL-P6 — One CLI; legacy targets become aliases
 **Goal:** A single `python -m evals <verb>` entry point, with the seven legacy make targets reduced to thin
 aliases so the gate stays green at every commit and no target is orphaned.
@@ -789,6 +860,19 @@ Separately: `judge_runner._to_result_dict` sets `case_id = record_id`, so each g
       Validation: for a fixture case with `schema + keyword_none + tone_judge`, the transcript holds **3** records
       (2 deterministic, 1 judged), and scoring the transcript reproduces `make eval`'s per-case verdict exactly —
       asserted case-by-case against a recorded `make eval` result fixture.
+      **Refinement 2026-08-07 (scope confirmed by the maintainer: full parity).** "Recorded `make eval` result
+      fixture" cannot mean a live A/B: `runner.py` generates *and* scores in one pass, so its verdicts come
+      from a different set of NPC responses than any separately-generated transcript, and the two would differ
+      for reasons that have nothing to do with scoring. The testable property is **matcher equivalence** —
+      build a fixture of `(expectation, response)` pairs covering every kind and assert that
+      `matchers.evaluate()` and the transcript path return an identical `(passed, detail)` for each. That is
+      deterministic, needs no live stack, and is the property the alias in EVAL-P6.3 actually depends on.
+      Cover all ten kinds: `schema`, `keyword_none`, `keyword_any`, `keyword_all`, `min_length`, `in_set`,
+      `range`, `substring`, `regex`, `context_block_expected` — plus grounded anti-hallucination cases,
+      which return `None` today (`_build_ah_record:129`).
+      **Add a guard test** that fails when a new `_eval_*` matcher appears in `matchers.py` without a
+      corresponding recorder, so this cannot silently regress to a subset — the failure mode the whole
+      phase exists to close.
 
 - [ ] **EVAL-P6.2** Fix the guard-turn double count (**closes ISSUE-123**). Files: `edit evals/judge_runner.py`,
       `edit tests/unit/test_judge_runner.py`. Group records back to `case_id` before `summarize`, so one case is
@@ -797,6 +881,29 @@ Separately: `judge_runner._to_result_dict` sets `case_id = record_id`, so each g
       (reports 2 for a single guard case).
       Validation: a fixture with 37 guard cases × 2 records reports **37** guard turns, matching `make eval`;
       mark ISSUE-123 `[FIXED]` and move it to `archive/ISSUES_RESOLVED.md`.
+
+- [ ] **EVAL-P6.4** *(live; not `make check`-gated — requires engine + Neo4j + Ollama up)* **The first
+      measured k=3 run.** Every statistic built in EVAL-P2 through EVAL-P5 has so far only ever seen
+      fixtures: `evals/generations/baseline/` holds `verdicts.json` and `verdicts_ah.json` but **no
+      `meta.json` and no `outputs.jsonl`**, and the only transcript on disk
+      (`e2e/transcripts/eval_generation_latest.json`) is `version: 1`, which `read_transcript` now rejects
+      by design. So no k>1 run has ever executed and no `retrieved_context` has ever been captured.
+      **Run only after EVAL-P1.2, EVAL-P1.5, EVAL-P6.1 and EVAL-P6.2 have landed** — a run made before them
+      records a false `prompt_version`, a placeholder `golden_set_version`, and scores a strict subset of
+      `make eval`, so it has to be thrown away and regenerated.
+      Preconditions that are easy to get wrong and produce a silently worthless artifact rather than a
+      failing one: all three worlds seeded; `JUDGE_TIMEOUT_SECONDS=300` (a cold 27 GB mixtral load takes
+      22.8 s against a 30 s default, and infra failures score `None`, i.e. inconclusive, not failed); and a
+      mixtral prewarm before the judge pass.
+      Expected wall clock from the EVAL-P0.4 rates: `k × (78 × 3.57 s + 115 × 8.43 s)` ≈ **62 min at k=3**.
+      Judge policy for this run — **single judge (`mixtral:8x7b`), with the `qwen2.5:14b` disagreement
+      stated as a known limit** (human decision, 2026-08-07). ISSUE-129 stays open; the headline remains
+      judge-dependent and must say so.
+      Validation: `evals/generations/<gen_id>/` contains `meta.json` + `outputs.jsonl`; every record carries
+      `repetition` in `{0,1,2}`, `duration_ms > 0` and a non-empty `retrieved_context`; `make eval-score` and
+      the EVAL-P4.2 cross-tab both produce non-empty tables. Record the resulting `gen_id` in this task's
+      DONE marker — EVAL-P5.6, EVAL-P7 and EVAL-P8 all consume it by name.
+      **This task is for a human session. The unattended loop must not start it.**
 
 - [x] **EVAL-P6.3** Verb dispatch + aliases. Files: `create evals/__main__.py`, `edit Makefile`,
       `create tests/unit/evals/test_cli_dispatch.py`. Verbs: `generate`, `score`, `judge`, `calibrate`,
@@ -893,6 +1000,18 @@ case-level** test is the fix — n = 53 cases, not n = 3 repeats — and it dete
       Validation: `make eval-compare BEFORE=<gen_id> AFTER=<gen_id>` prints the verdict with its p-value,
       the k of **both** runs adjacent to every rate, and the four-way delta table; comparing a run against
       itself yields `no_detectable_change` with p = 1.0 and zero discordant pairs.
+
+- [ ] **EVAL-P8.3** *(live; requires the full stack)* **Second measured run and the first real comparison.**
+      EVAL-P8.2's unit tests are fixture-driven, so `compare` can be green while never having compared two
+      real generations. Generate a second k=3 run at a different commit (any change worth measuring — a
+      prompt-version bump is the cheapest honest one), then run `compare` against EVAL-P6.4's `gen_id`.
+      Expected wall clock ≈ **62 min**, plus the judge pass.
+      Validation: the comparison names the intersection size and every case present in one run and not the
+      other; the verdict is one of `better` / `worse` / `no_detectable_change` with its exact McNemar
+      p-value; and the k of both runs is printed next to every rate. Sanity check first by comparing
+      EVAL-P6.4's run against itself — that must yield p = 1.0 with zero discordant pairs before any
+      cross-run number is believed.
+      **This task is for a human session. The unattended loop must not start it.**
 
 <!-- LOOP:QUEUE end -->
 <!-- ^ MOVED HERE 2026-08-06 by the reopen condition at the fence start: EVAL-P0.3 and

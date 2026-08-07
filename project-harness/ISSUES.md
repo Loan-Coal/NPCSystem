@@ -344,3 +344,25 @@ supplied by the labeller). Make `scorer_verdict × human_verdict` the headline m
 `pre_label × human_verdict` as the secondary reference-labeller agreement number. Update
 `confusion_counts`, `cohens_kappa`, `kappa_interval`, `ScorerReport`, `_print_scorer_report` and
 `tests/unit/evals/test_calibration.py`. Decision recorded 2026-08-07 (option A, chosen by maintainer).
+
+## ISSUE-134: the loop's skip-regex matches "ask-gate" inside a sentence that negates it
+**Found:** 2026-08-07, while readying the queue for the metrics program
+**Severity:** P2 (annoying — silently withholds work from the loop, and says the opposite of what it means)
+**Where:** `scripts/_roadmap_cursor_core.py:39` (`ASK_GATE_RE = re.compile(r"ask-gate", re.IGNORECASE)`),
+applied over a whole task block by `_flags_for` (`:130-140`).
+**Description:** The flag scan is a bare substring match over the task's entire body, so any prose that
+merely *mentions* the token flags the task. EVAL-P1.2's body ended with "*Not an ask-gate:* `PROMPT_VERSION`
+has no callers outside its own module" — an explicit statement that no human decision was pending — and the
+regex matched the two words inside it. The task was therefore skipped by every unattended session for the
+whole program, for a reason that asserted the opposite of what the sentence said. The same trap applies to
+`LIVE_RE` (`\(live[;,)\s]`) and to any future flag token: a task that discusses a gate is indistinguishable
+from a task that has one. Nothing surfaces this — `--list-flagged` prints `EVAL-P1.2  ask-gate`, which looks
+entirely correct.
+**Why deferred:** The immediate blockage is cleared by rewording EVAL-P1.2 (done 2026-08-07), and a parser
+change touches the one module that both the loop and the `/expand-linear-next` skill depend on. Rewording is
+also arguably the right fix — prose that discusses a gate is genuinely ambiguous to a regex.
+**To fix:** Prefer an explicit, unambiguous marker over prose sniffing: require a dedicated token such as a
+leading `⛔ ask-gate` on its own line (mirroring how `⏸️` already works as `DEFERRED_TOKEN`), and match only
+that. Keep the current regex as a deprecation warning surfaced by `--verify` for one cycle so no existing
+gated task silently becomes actionable. Add a test asserting that a body containing "not an ask-gate" is
+**not** flagged. Until then, never write the literal token in a task body unless the task really is gated.
