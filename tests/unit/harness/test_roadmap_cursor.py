@@ -192,23 +192,25 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     finishing the program having measured nothing. That narrowing worked: the
     baseline was measured on 2026-08-06 before a judge call was spent on P1..P8.
 
-    Current state (2026-08-07, queue readied for the metrics program): EVAL-P0.*,
-    EVAL-P1.1, EVAL-P1.3, EVAL-P1.4, EVAL-P2.*, EVAL-P3.*, EVAL-P4.*, EVAL-P5.1,
-    EVAL-P5.2 (superseded), EVAL-P5.3, EVAL-P5.4 and EVAL-P6.3 are ticked. Eleven tasks
-    are actionable by the loop; the only two flagged are EVAL-P6.4 and EVAL-P8.3, both
-    of which need a running engine + Neo4j + Ollama and are therefore human-session work.
+    Current state (2026-08-07, phase EVAL-P1 complete): EVAL-P0.*, EVAL-P1.*, EVAL-P2.*,
+    EVAL-P3.*, EVAL-P4.*, EVAL-P5.1, EVAL-P5.2 (superseded), EVAL-P5.3, EVAL-P5.4 and
+    EVAL-P6.3 are ticked. Nine tasks are actionable by the loop; the only two flagged
+    are EVAL-P6.4 and EVAL-P8.3, both of which need a running engine + Neo4j + Ollama
+    and are therefore human-session work.
 
     EVAL-P1.2 was flagged until 2026-08-07 **by accident**: its body contained the phrase
     "Not an ask-gate", and the cursor's skip-regex matches that literal token regardless
     of the negation around it, so the loop skipped the task for a reason that stated the
     opposite of what was meant (ISSUE-134). Reworded rather than special-cased.
 
-    Note the *previous* snapshot asserted ``pending == 13``, then ``== 11``, and was red
-    both times: EVAL-P4.0 and then all of P4/P5 were completed without updating it, so
-    the phase gate reported HALT for four consecutive phases and a genuine regression
-    would have looked identical. It now asserts over sorted id lists rather than bare
-    counts — a count says nothing about *which* task appeared or vanished, which is
-    exactly what a tripwire needs to report.
+    Note the *previous* snapshot asserted ``pending == 13``, then ``== 11``, then a list
+    still containing ``EVAL-P1.6`` after it landed, and was red every time: a snapshot
+    updated by whichever task happens to touch this file goes stale again the moment a
+    *later* task in the same phase run completes, so any phase committing more than one
+    task will trip the gate red unless the snapshot update rides on the last task, not
+    the first (ISSUE-136). It now asserts over sorted id lists rather than bare counts —
+    a count says nothing about *which* task appeared or vanished, which is exactly what
+    a tripwire needs to report.
     """
     phases, _ = _real_roadmap_phases()
     assert [p.id for p in phases] == [f"EVAL-P{n}" for n in range(9)]
@@ -216,9 +218,12 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     evals_p0 = next(p for p in phases if p.id == "EVAL-P0")
     assert evals_p0.pending == ()
     assert evals_p0.is_done
+    # EVAL-P1 is complete: every task done, nothing actionable and nothing held back.
+    evals_p1 = next(p for p in phases if p.id == "EVAL-P1")
+    assert evals_p1.pending == ()
+    assert evals_p1.is_done
     pending = sorted(task_id for p in phases for task_id in p.pending)
     assert pending == [
-        "EVAL-P1.6",
         "EVAL-P5.5",
         "EVAL-P5.6",
         "EVAL-P6.1",
