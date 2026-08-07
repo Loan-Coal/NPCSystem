@@ -192,51 +192,67 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     finishing the program having measured nothing. That narrowing worked: the
     baseline was measured on 2026-08-06 before a judge call was spent on P1..P8.
 
-    Current state (2026-08-07, phase EVAL-P1 complete): EVAL-P0.*, EVAL-P1.*, EVAL-P2.*,
-    EVAL-P3.*, EVAL-P4.*, EVAL-P5.1, EVAL-P5.2 (superseded), EVAL-P5.3, EVAL-P5.4,
-    EVAL-P6.1, EVAL-P6.2 and EVAL-P6.3 are ticked. Seven tasks are actionable by the
-    loop; the only two flagged are EVAL-P6.4 and EVAL-P8.3, both of which need a
-    running engine + Neo4j + Ollama and are therefore human-session work.
+    Current state (2026-08-07): the fence spans EVAL-P0..EVAL-P14 — Program 1
+    (P0..P8, precision) plus Program 2 (P9..P14, validity + the portfolio artifact),
+    released to the loop on 2026-08-07.
+
+    **What this pins, and why it no longer pins the pending list.** Earlier revisions
+    asserted ``pending == 13``, then ``== 11``, then an exact id list, and were red every
+    time (ISSUE-136). That is structural, not carelessness: *pending shrinks by one every
+    time the loop succeeds*, so pinning it means the gate turns red on the first completed
+    task of every night and stays red, which is exactly what happened across EVAL-P2..P5 —
+    four phases committed under "pre-existing red gate" where a genuine regression would
+    have looked identical. A tripwire that fires on success is not a tripwire.
+
+    So this now pins the two things that should only change by deliberate human edit:
+
+    * **the phase span** — a fence move is a conscious act, and P0..P14 must stay
+      contiguous or ``compute_next`` silently skips a programme;
+    * **the flagged set** — the loop refuses flagged tasks, so an accidental flag hides
+      work forever and an accidental unflag hands a human decision to a 3am session.
+
+    Pending is asserted only structurally (non-empty, and every id belongs to a phase in
+    the fence), which catches a corrupted queue without firing on progress.
 
     EVAL-P1.2 was flagged until 2026-08-07 **by accident**: its body contained the phrase
     "Not an ask-gate", and the cursor's skip-regex matches that literal token regardless
     of the negation around it, so the loop skipped the task for a reason that stated the
-    opposite of what was meant (ISSUE-134). Reworded rather than special-cased.
-
-    Note the *previous* snapshot asserted ``pending == 13``, then ``== 11``, then a list
-    still containing ``EVAL-P1.6`` after it landed, and was red every time: a snapshot
-    updated by whichever task happens to touch this file goes stale again the moment a
-    *later* task in the same phase run completes, so any phase committing more than one
-    task will trip the gate red unless the snapshot update rides on the last task, not
-    the first (ISSUE-136). It now asserts over sorted id lists rather than bare counts —
-    a count says nothing about *which* task appeared or vanished, which is exactly what
-    a tripwire needs to report.
+    opposite of what was meant (ISSUE-134). That is precisely the failure the flagged-set
+    assertion below exists to catch.
     """
     phases, _ = _real_roadmap_phases()
-    assert [p.id for p in phases] == [f"EVAL-P{n}" for n in range(9)]
-    # EVAL-P0 is complete: every task done, nothing actionable and nothing held back.
-    evals_p0 = next(p for p in phases if p.id == "EVAL-P0")
-    assert evals_p0.pending == ()
-    assert evals_p0.is_done
-    # EVAL-P1 is complete: every task done, nothing actionable and nothing held back.
-    evals_p1 = next(p for p in phases if p.id == "EVAL-P1")
-    assert evals_p1.pending == ()
-    assert evals_p1.is_done
-    pending = sorted(task_id for p in phases for task_id in p.pending)
-    assert pending == [
-        "EVAL-P5.5",
-        "EVAL-P5.6",
-        "EVAL-P7.1",
-        "EVAL-P7.2",
-        "EVAL-P7.3",
-        "EVAL-P8.1",
-        "EVAL-P8.2",
-    ]
+    assert [p.id for p in phases] == [f"EVAL-P{n}" for n in range(15)]
+
+    # Program 1's foundation phases are complete: nothing actionable, nothing held back.
+    for phase_id in ("EVAL-P0", "EVAL-P1", "EVAL-P2", "EVAL-P3", "EVAL-P4"):
+        phase = next(p for p in phases if p.id == phase_id)
+        assert phase.pending == (), f"{phase_id} regained a pending task"
+        assert phase.is_done, f"{phase_id} is no longer done"
+
     # Filter on `not done` the way the loop does: EVAL-P0.1/P0.3/P0.4 are *also*
     # skippable (their bodies still carry the ask-gate / live markers that gated
     # them) but they are ticked, so the loop is not being held back on them.
-    flagged = [t.id for p in phases for t in p.tasks if t.skippable and not t.done]
-    assert flagged == ["EVAL-P6.4", "EVAL-P8.3"]
+    flagged = {t.id: sorted(t.flags) for p in phases for t in p.tasks if t.skippable and not t.done}
+    assert flagged == {
+        # Need a running engine + Neo4j + Ollama.
+        "EVAL-P6.4": ["live"],
+        "EVAL-P8.3": ["live"],
+        "EVAL-P9.3": ["live"],
+        "EVAL-P12.1": ["live"],
+        "EVAL-P12.4": ["live"],
+        # Inputs do not exist yet: no adjudicated labels, no published run artifact.
+        "EVAL-P11.2": ["deferred"],
+        "EVAL-P11.3": ["deferred"],
+        "EVAL-P13.2": ["deferred"],
+        "EVAL-P13.3": ["deferred"],
+        "EVAL-P14.3": ["deferred"],
+    }
+
+    # Structural only — pending shrinks on every success and must not fire this gate.
+    known_task_ids = {t.id for p in phases for t in p.tasks}
+    pending = [task_id for p in phases for task_id in p.pending]
+    assert pending, "queue drained — move the fence or the programme is over"
+    assert set(pending) <= known_task_ids
 
 
 def test_real_roadmap_is_entirely_crlf() -> None:

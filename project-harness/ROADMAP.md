@@ -1049,21 +1049,18 @@ case-level** test is the fix — n = 53 cases, not n = 3 repeats — and it dete
       cross-run number is believed.
       **This task is for a human session. The unattended loop must not start it.**
 
-<!-- LOOP:QUEUE end -->
-<!-- ^ MOVED HERE 2026-08-06 by the reopen condition at the fence start: EVAL-P0.3 and
-     EVAL-P0.4 are both ticked, so P1..P8 are released to the overnight loop. Everything
-     below this marker is human-session work and is structurally unreachable at 3am.
-     Nothing below is auto-startable — Parked, Post-program milestones, REORG PR-9, the
-     Next/Next+1 programs and the two open bullets inside "## Completed" all live here. -->
-
 ## Program 2 — Metric validity and the portfolio artifact (EVAL-P9..P14)
 
-**Status: PLANNED, NOT QUEUED.** This block sits *below* the `LOOP:QUEUE end` marker on purpose, so the
-overnight loop cannot reach it. Release it by moving the end marker down **only after** EVAL-P5..P8 are
-ticked and EVAL-P6.4 has produced a measured baseline — every phase here calibrates against that baseline,
-and starting earlier means redoing it. Phase ids continue the `EVAL-P<n>` sequence because
-`test_real_roadmap_parses_and_verifies_clean` asserts the in-fence phases are a contiguous `EVAL-P` prefix;
-a differently-named phase would fail that test the moment it was released.
+**Status: RELEASED to the loop 2026-08-07** (human decision). Phase ids continue the `EVAL-P<n>` sequence
+because `test_real_roadmap_parses_and_verifies_clean` asserts the in-fence phases are a contiguous `EVAL-P`
+prefix; any other name would fail that test on release.
+
+⚠️ **Read the flag list at the queue's closing marker before assuming this programme can complete
+unattended.** Eight of its tasks are flagged because their inputs do not exist yet: the capability battery
+needs *your* authoring (EVAL-P9.3), the calibration follow-through needs an adjudicated label set that has
+not been produced, and the multi-turn and portfolio phases need a live stack and a real run artifact
+respectively. The loop can build the harness for all of it tonight; it cannot produce the measurements, and
+a green queue here does **not** mean the metrics got better.
 
 **Why this program exists (measured, 2026-08-07).** Program 1 makes the numbers *precise*. It does not make
 them *valid*. The case inventory is:
@@ -1197,14 +1194,16 @@ an expensive way to feel rigorous. The P0.4 run already produced one confirmed j
       Validation: a scorer at kappa 0.35 is refused publication by the policy function and the refusal names
       the scorer, its kappa and its interval.
 
-- [ ] **EVAL-P11.2** Remediate the failing scorers. Files: `edit src/npc_engine/prompts/eval/*.yaml`,
+- [ ] **EVAL-P11.2** ⏸️ *(blocked: needs adjudicated kappa — no calibration labels exist yet)*
+      Remediate the failing scorers. Files: `edit src/npc_engine/prompts/eval/*.yaml`,
       `edit tests/unit/evals/test_calibration.py`.
       For each scorer below threshold, rewrite its criteria (prompt-only change, versioned in `prompts/`),
       then re-label and re-adjudicate a ~30-row sample for that scorer alone and confirm kappa moved.
       Validation: the re-adjudicated sample shows a higher kappa with a non-overlapping lower bound, or the
       change is reverted and the scorer is recorded as unfixed rather than quietly kept.
 
-- [ ] **EVAL-P11.3** Settle the judge on evidence (**closes ISSUE-129**). Files: `edit evals/judge_config.py`,
+- [ ] **EVAL-P11.3** ⏸️ *(blocked: needs two judged transcripts adjudicated against your verdicts)*
+      Settle the judge on evidence (**closes ISSUE-129**). Files: `edit evals/judge_config.py`,
       `edit project-harness/DECISIONS.md`.
       Judge one adjudicated transcript with both `mixtral:8x7b` and `qwen2.5:14b`, compute each judge's kappa
       against your verdicts, and pick the winner in a DECISIONS entry naming both numbers.
@@ -1252,7 +1251,8 @@ real work and is EVAL-P12.2, not a footnote.
       Validation: with k=3 against a mock, reset is invoked exactly 3 times and never *after* the last
       repetition; a scenario that throws mid-run records a failed repetition rather than aborting the set.
 
-- [ ] **EVAL-P12.4** Promote 6 scenarios and report their rates. Files: `edit evals/sequence_runner.py`,
+- [ ] **EVAL-P12.4** *(live; wall-clock budget comes from EVAL-P12.1's measurement)*
+      Promote 6 scenarios and report their rates. Files: `edit evals/sequence_runner.py`,
       `edit Makefile`, `create tests/unit/evals/test_sequence_rates.py`.
       Start with `gossip_chain`, `grief_persistence`, `reputation_drift`, `memory_consolidation`,
       `time_passage`, `mood_contagion` — chosen because each maps to a claim a studio would ask about.
@@ -1279,7 +1279,7 @@ omitted.
       Validation: every claim links to the module that computes it and the test that pins it; a reader can
       check any number without running anything.
 
-- [ ] **EVAL-P13.2** Dashboard headline card. Files: `edit evals/dashboard/templates/run_detail.html`,
+- [ ] **EVAL-P13.2** ⏸️ *(blocked: needs a real run artifact to render)* Dashboard headline card. Files: `edit evals/dashboard/templates/run_detail.html`,
       `edit evals/dashboard/app.py`, `edit tests/unit/evals/test_dashboard_detail.py`.
       One card carrying the paired rates with intervals, the per-scorer kappa badge, the judge name and the
       run config block — the screenshot that goes in the README.
@@ -1287,7 +1287,8 @@ omitted.
       Validation: the card renders both rates, both n's, k, the judge model and the git SHA; a run whose
       calibration does not license publication renders the EVAL-P11.1 refusal in place of the rate.
 
-- [ ] **EVAL-P13.3** README metrics section. Files: `edit README.md`.
+- [ ] **EVAL-P13.3** ⏸️ *(blocked: every README number must be copied from a committed artifact,
+      never typed — none exist yet)* README metrics section. Files: `edit README.md`.
       The headline block, the dashboard screenshot, and a three-line honest-limits note. Link the
       methodology doc.
       Validation: every number in the README appears verbatim in a committed report artifact; no figure is
@@ -1322,13 +1323,33 @@ have hardened into five call sites costs far more.
       Validation: the policy names, for each metric the dashboard can render, the reset fidelity it requires
       — so an incomplete reset downgrades the output automatically rather than by remembering to.
 
-- [ ] **EVAL-P14.3** Cost model and migration note. Files: `edit docs/SEQUENCE_SCHEMA.md`.
+- [ ] **EVAL-P14.3** ⏸️ *(blocked: the model is validated against EVAL-P12.4's measured run time)*
+      Cost model and migration note. Files: `edit docs/SEQUENCE_SCHEMA.md`.
       Wall-clock model as a function of scenarios x k x turns x reset cost, using EVAL-P12.1's measured
       numbers, and the explicit list of what EVAL-P12 would have to give up to migrate. State the trigger
       condition for starting the build — e.g. more than 10 scenarios, or the first scenario needing per-turn
       judging — so the decision is made by a condition rather than by enthusiasm.
       Validation: the model predicts EVAL-P12.4's measured run time within 25%; if it cannot, the model is
       wrong and the schema built on it is suspect.
+
+<!-- LOOP:QUEUE end -->
+<!-- ^ MOVED HERE 2026-08-07: Program 2 (EVAL-P9..P14) is released to the overnight loop.
+     Everything below this marker is human-session work and is structurally unreachable
+     at 3am — Parked, Post-program milestones, REORG PR-9, the Next/Next+1 programs and
+     the two open bullets inside "## Completed" all live here.
+
+     Program 2 is released with EIGHT tasks deliberately flagged, because the loop skips
+     flagged tasks without blocking and would otherwise drain a whole programme of code
+     against inputs that do not exist — finishing the night having measured nothing, the
+     exact failure DEC-153 §3 narrowed the original fence to prevent. Flagged and why:
+       EVAL-P9.3   authoring — only a human can say what an NPC *should* say
+       EVAL-P11.2  needs adjudicated kappa; no calibration labels exist yet
+       EVAL-P11.3  needs two judged transcripts adjudicated against each other
+       EVAL-P12.1  live stack; measures reset fidelity
+       EVAL-P12.4  live stack; budget comes from P12.1
+       EVAL-P13.2  needs a real run artifact to render
+       EVAL-P13.3  README numbers must be copied from a committed artifact, never typed
+       EVAL-P14.3  cost model is validated against P12.4's measured time -->
 
 ### Parked (out of budget)
 
