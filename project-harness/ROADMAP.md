@@ -569,6 +569,27 @@ EVAL-P0.2 (`evals/__init__.py` must exist). **Blocks:** EVAL-P2, EVAL-P3, EVAL-P
       the hash of nothing. **Leave `retrieval_profile` as-is** but state in its field docstring that it is
       not yet wired to any retrieval configuration, so no reader mistakes a default for a measurement.
 
+- [ ] **EVAL-P1.6** Persist the judge pass. `judge_runner.main` writes a markdown report
+      (`report.write_report`) and prints a summary — **the 115 record-level verdicts are never saved in any
+      machine-readable form.** The EVAL-P0.4 session log already noted this ("Not persisted: the 115
+      record-level judge verdicts; `judge_runner` has no `--json-out`") but nothing was scheduled, and three
+      later pieces of this program silently depend on it: EVAL-P5.6 has no source for `scorer_verdict`,
+      EVAL-P8.2 cannot build `CaseStat` without re-running the judge (violating its own "no Ollama"
+      constraint), and EVAL-P7.3 cannot show per-repetition judge reasoning.
+      Files: `edit evals/judge_runner.py`, `create tests/unit/evals/test_judged_records.py`,
+      `edit Makefile`.
+      Add `--json-out` writing `evals/generations/<gen_id>/judged.jsonl`, one JSON object per
+      `JudgedRecord`: `record_id`, `case_id`, `judge_kind`, `passed`, `score`, `detail`, `judge_model`, and
+      the `repetition` carried through from the generation record. Mirror the `--json-out` precedent
+      `evals/verdicts.py` already set for the two case-level runners in EVAL-P0.4.
+      RED anchor: `tests/unit/evals/test_judged_records.py::test_json_out_writes_one_row_per_judged_record`
+      fails — the flag does not exist.
+      Validation: a 6-record fixture transcript produces 6 JSONL rows that round-trip back into
+      `JudgedRecord`; `judge_model` is recorded on **every** row (so a transcript judged twice by different
+      models stays attributable — the ISSUE-129 disagreement is unreadable otherwise); an infra failure
+      writes `passed=false, score=null` and is distinguishable from a genuine fail, never silently dropped.
+      **Blocks:** EVAL-P5.6, EVAL-P7.2, EVAL-P7.3, EVAL-P8.2.
+
 ### Phase EVAL-P2 — Statistics, hand-implemented
 **Goal:** A binary judge plus k repeats becomes a per-case pass rate with a Wilson interval and a flakiness
 class — no statistics library, every number defensible line by line.

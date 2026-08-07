@@ -220,6 +220,7 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     assert pending == [
         "EVAL-P1.2",
         "EVAL-P1.5",
+        "EVAL-P1.6",
         "EVAL-P5.5",
         "EVAL-P5.6",
         "EVAL-P6.1",
