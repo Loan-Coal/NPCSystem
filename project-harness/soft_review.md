@@ -67,3 +67,21 @@ Threshold set to 0.0 means any recall > 0 is a hit. Tests validate boundary case
 
 **5. Hard-coded case count in regression test**  
 `test_guard_case_total_is_37()` requires manual update whenever cases are added/deleted, making it brittle despite being intentional.
+
+## 2026-08-07 17:34:02 — phase EVAL-P1
+
+Looking at EVAL-P1.6 (persist judge pass verdicts), here are 5 concrete findings:
+
+**1. Missing path validation for --json-out** — `main()` validates `--transcript` exists upfront but skips validation for `--json-out`. If the parent directory can't be created (permission, path issues), file I/O fails deep in `_write_judged_jsonl()` with a generic exception instead of a clear error message. Should check write-ability early or catch and report clearly (inconsistent with line 234-235 error handling for transcript).
+
+**2. Unexplained rsplit magic in case_id extraction** — Line in `_write_judged_jsonl()`:
+```python
+"case_id": r.record_id.rsplit(":", _RECORD_ID_COLON_SEGMENTS)[0],
+```
+The constant `_RECORD_ID_COLON_SEGMENTS=2` extracts the prefix correctly but lacks a comment explaining why this works. The name `_RECORD_ID_COLON_SEGMENTS` is ambiguous (could mean segment count, not rsplit maxsplit). One-line comment needed per CLAUDE.md rule.
+
+**3. Test gap: nested directory creation untested** — `test_json_out_writes_one_row_per_judged_record()` writes to `tmp_path / "judged.jsonl"` (single level), never testing `mkdir(parents=True, exist_ok=True)` on deeply nested paths like `tmp_path / "a/b/c/judged.jsonl"`.
+
+**4. No test for write failures** — Test suite doesn't cover permission errors, disk full, or path-is-a-file scenarios when calling `_write_judged_jsonl()`. If `path.write_text()` fails, the exception propagates uncaught, crashing the judge run.
+
+**5. Inconsistent encoding constant usage in tests** — `test_judged_records.py` hardcodes `encoding="utf-8"` instead of using the module-level `_JSONL_ENCODING` constant. Test should import and use the same constant.
