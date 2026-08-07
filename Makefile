@@ -15,7 +15,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-layers check-docstrings roadmap-verify type-ratchet type-ratchet-update check-harness \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-score eval-calibrate scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world package
@@ -150,9 +150,18 @@ verify-v14-p4: lint type check-contracts check-contract-sync test-v14-p4
 
 verify-v14-p5: lint type test-v14-p5
 
+# ---------------------------------------------------------------------------
+# Eval targets. Every one below is a thin alias over `python -m evals <verb>`
+# (EVAL-P6.3). No target was deleted; deleting them is a separate, later step
+# once nothing references them (DEC-148: coverage parity -> aliases -> delete last).
+# Exception: eval-llm / eval-llm-demo stay direct pytest invocations — they are
+# test-suite runs, not harness modules, so routing them through the CLI would mean
+# the CLI shelling out to pytest. See DEC-155.
+# ---------------------------------------------------------------------------
+
 eval:
 	@echo "Running eval cases against $(BASE_URL) ..."
-	$(PYTHON) evals/runner.py \
+	$(PYTHON) -m evals report \
 		--base-url $(BASE_URL) \
 		--api-key "$(API_KEY)" \
 		--cases evals/cases \
@@ -165,7 +174,7 @@ eval-report: eval
 # eval-anti-hallucination: run JSON-fixture anti-hallucination eval against the live engine
 eval-anti-hallucination:
 	@echo "Running anti-hallucination eval against $(BASE_URL) ..."
-	$(PYTHON) evals/anti_hallucination_runner.py \
+	$(PYTHON) -m evals anti-hallucination \
 		--base-url $(BASE_URL) \
 		--api-key $(API_KEY) \
 		--fixture evals/cases/anti_hallucination_demo.json \
@@ -195,13 +204,13 @@ eval-llm-demo:
 
 # eval-retrieval: measure retrieval precision@k/recall@k/MRR against demo world labels
 eval-retrieval:
-	$(PYTHON) -m evals.retrieval_runner
+	$(PYTHON) -m evals retrieval
 
 # eval-generate: two-phase pipeline — generation pass (writes to evals/generations/<gen-id>/ or legacy transcript)
 # Pass ARGS="--k 2 --gen-id smoke" to enable k-repeat output.
 eval-generate:
 	@echo "Running eval generation pass against $(BASE_URL) ..."
-	$(PYTHON) evals/generate_runner.py \
+	$(PYTHON) -m evals generate \
 		--base-url $(BASE_URL) \
 		--api-key "$(API_KEY)" \
 		--cases evals/cases \
@@ -213,7 +222,7 @@ eval-generate:
 # eval-judge: two-phase pipeline — judge pass (reads transcript written by eval-generate)
 eval-judge:
 	@echo "Running eval judge pass from transcript $(TRANSCRIPT) ..."
-	$(PYTHON) evals/judge_runner.py \
+	$(PYTHON) -m evals judge \
 		--transcript $(TRANSCRIPT) \
 		--reports evals/reports
 
@@ -222,7 +231,7 @@ eval-judge:
 # Optional: add ARGS="--vocabulary evals/generations/<run>/vocabulary.json" to enable entity scoring.
 eval-score:
 	@echo "Scoring transcript $(TRANSCRIPT) with deterministic scorers (no LLM) ..."
-	$(PYTHON) evals/deterministic_pass.py \
+	$(PYTHON) -m evals score \
 		--transcript $(TRANSCRIPT) \
 		--aliases evals/cases/entity_aliases.yaml \
 		$(ARGS)
@@ -230,7 +239,12 @@ eval-score:
 # eval-calibrate: per-scorer confusion matrices, Cohen's κ with bootstrap CI (EVAL-P5.4).
 # Usage: make eval-calibrate [LABELS=evals/calibration/labels_v1.jsonl]
 eval-calibrate:
-	$(PYTHON) evals/calibration.py $(if $(LABELS),--file $(LABELS),)
+	$(PYTHON) -m evals calibrate $(if $(LABELS),--file $(LABELS),)
+
+# eval-adjudicate: resumable interactive adjudication of calibration labels (EVAL-P5.3).
+# Usage: make eval-adjudicate [LABELS=evals/calibration/labels_v1.jsonl]
+eval-adjudicate:
+	$(PYTHON) -m evals adjudicate $(if $(LABELS),--file $(LABELS),)
 
 # eval-combined: one command that runs dialogue evals + retrieval evals and prints both summaries
 eval-combined: eval eval-retrieval

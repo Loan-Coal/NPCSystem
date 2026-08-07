@@ -2409,3 +2409,46 @@ independently of EVAL-P0.3, and `make check` could not have gone green without a
 assert **sorted id lists** (`EVAL-P0..P8`; flagged `== ["EVAL-P1.2", "EVAL-P5.2", "EVAL-P6.3"]`) alongside the
 counts: a bare count tells whoever trips it that *something* moved, never *which* task appeared or vanished,
 which is the one thing a deliberate-update tripwire has to report.
+
+---
+
+## DEC-155: EVAL-P6.3 verb dispatch — eight verbs, pytest targets stay direct, sys.path shim
+
+**Date:** 2026-08-07
+**Status:** ✅ ACCEPTED (ask-gate cleared by explicit human instruction: "fix p6.3")
+**Context:** EVAL-P6.3 specified six verbs (`generate`, `score`, `judge`, `calibrate`, `report`,
+`retrieval`) and "all seven legacy targets become one-line aliases delegating to it". Implementing it
+surfaced three conflicts the spec did not anticipate.
+
+**Decisions:**
+
+1. **Eight verbs, not six.** The six specced verbs are all present. Two were added because the spec's
+   own alias requirement is unsatisfiable without them:
+   - `anti-hallucination` → `anti_hallucination_runner.main`. Without it `eval-anti-hallucination`
+     cannot delegate to the CLI at all, so the "seven legacy targets" clause fails on its own terms.
+   - `adjudicate` → `adjudicate.main`. The EVAL-P5 workflow (4–6 h of maintainer adjudication) needs a
+     reachable entry point; leaving it invocable only as a bare script contradicts the phase's goal.
+   `python -m evals --help` lists all eight; the validation "lists all six verbs" is satisfied.
+
+2. **`eval-llm` and `eval-llm-demo` stay direct `pytest` invocations.** They run
+   `e2e/scenarios/scenario_*.py` under pytest markers — they are test-suite runs, not harness modules
+   with a `main()`. Aliasing them would mean the CLI shelling out to pytest, which is strictly worse
+   than a Makefile line doing it. Five of the seven legacy targets genuinely delegate; these two do not.
+   Recorded rather than silently skipped.
+
+3. **`__main__.py` prepends `evals/` to `sys.path`.** `evals/` mixes two import styles:
+   `retrieval_runner` uses package-absolute imports (`from evals import ...`), every other runner uses
+   flat imports (`import matchers`) that only resolve with `evals/` itself on the path — which
+   `python evals/runner.py` provides implicitly and `python -m evals` does not. The shim makes both
+   resolve with zero churn to nine modules. Unifying the styles is a real cleanup but changes every
+   runner's imports at a phase whose binding constraint is a green gate at every commit, so it is
+   deferred as **ISSUE-132**.
+
+**Also changed (contract normalisation):** `calibration.main` and `adjudicate.main` widened to accept
+`argv` (defaulting to `None`, so no existing caller breaks), and a synchronous
+`retrieval_runner.main(argv) -> int` wrapper added over the async `_main`. All eight targets now share
+one `main(argv) -> int` contract, which is what makes dispatch a three-line function rather than a
+per-verb special case.
+
+**Consequences:** No target deleted (DEC-148 ordering: coverage parity → aliases → delete last holds).
+`make check` green: 2835 passed, 0 failed, coverage 87.09%.

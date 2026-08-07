@@ -192,15 +192,17 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     finishing the program having measured nothing. That narrowing worked: the
     baseline was measured on 2026-08-06 before a judge call was spent on P1..P8.
 
-    Current state (2026-08-07, EVAL-P4.1): EVAL-P1.1, EVAL-P1.3, EVAL-P2.1, EVAL-P2.2,
-    EVAL-P2.3, EVAL-P3.1, EVAL-P3.2, EVAL-P3.3, EVAL-P3.4, EVAL-P4.0, EVAL-P4.1 are
-    ticked; EVAL-P1.2, EVAL-P5.2, EVAL-P6.3 are flagged (skippable). Queue spans
+    Current state (2026-08-07, after EVAL-P6.3): EVAL-P0.*, EVAL-P1.1, EVAL-P1.3,
+    EVAL-P1.4, EVAL-P2.*, EVAL-P3.*, EVAL-P4.*, EVAL-P5.1, EVAL-P5.3, EVAL-P5.4 and
+    EVAL-P6.3 are ticked; EVAL-P1.2 and EVAL-P5.2 are flagged (skippable). Queue spans
     EVAL-P0..EVAL-P8.
 
-    Note the *previous* snapshot asserted ``pending == 13`` and was already red at
-    the time this was rewritten: EVAL-P4.0 was completed without updating the tripwire.
-    Assert over sorted id lists rather than bare counts — a count says nothing about
-    which task appeared or vanished, which is exactly what a tripwire needs to report.
+    Note the *previous* snapshot asserted ``pending == 13``, then ``== 11``, and was red
+    both times: EVAL-P4.0 and then all of P4/P5 were completed without updating it, so
+    the phase gate reported HALT for four consecutive phases and a genuine regression
+    would have looked identical. It now asserts over sorted id lists rather than bare
+    counts — a count says nothing about *which* task appeared or vanished, which is
+    exactly what a tripwire needs to report.
     """
     phases, _ = _real_roadmap_phases()
     assert [p.id for p in phases] == [f"EVAL-P{n}" for n in range(9)]
@@ -208,12 +210,21 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     evals_p0 = next(p for p in phases if p.id == "EVAL-P0")
     assert evals_p0.pending == ()
     assert evals_p0.is_done
-    assert sum(len(p.pending) for p in phases) == 11
+    pending = sorted(task_id for p in phases for task_id in p.pending)
+    assert pending == [
+        "EVAL-P6.1",
+        "EVAL-P6.2",
+        "EVAL-P7.1",
+        "EVAL-P7.2",
+        "EVAL-P7.3",
+        "EVAL-P8.1",
+        "EVAL-P8.2",
+    ]
     # Filter on `not done` the way the loop does: EVAL-P0.1/P0.3/P0.4 are *also*
     # skippable (their bodies still carry the ask-gate / live markers that gated
     # them) but they are ticked, so the loop is not being held back on them.
     flagged = [t.id for p in phases for t in p.tasks if t.skippable and not t.done]
-    assert flagged == ["EVAL-P1.2", "EVAL-P5.2", "EVAL-P6.3"]
+    assert flagged == ["EVAL-P1.2", "EVAL-P5.2"]
 
 
 def test_real_roadmap_end_marker_is_not_repeated_inside_the_queue() -> None:

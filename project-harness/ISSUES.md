@@ -299,3 +299,48 @@ so a lost startup race self-heals; and/or (2) ensure `depends_on: { neo4j: { con
 so the app never starts before Neo4j's healthcheck passes. Belt-and-suspenders: a short retry/backoff loop
 around `ensure_core_constraints` in `lifespan` (`src/npc_engine/main.py:124`) so a transient Bolt blip doesn't
 abort startup. Verify the Neo4j service actually defines a `healthcheck` for option (2) to be meaningful.
+
+## ISSUE-132: `evals/` mixes flat and package-absolute imports
+**Found:** 2026-08-07, during EVAL-P6.3
+**Severity:** P3 (nice-to-fix — currently papered over, not breaking)
+**Where:** `evals/retrieval_runner.py:27-29` (package-absolute) vs `evals/generate_runner.py:22-30`,
+`judge_runner.py:21-24`, `runner.py:24-28`, `deterministic_pass.py:31-34`, `calibration.py:20`,
+`adjudicate.py:18`, `report.py:10-11` (flat).
+**Description:** `retrieval_runner` imports `from evals import engine_adapter`; every other runner
+imports `import matchers` / `from summary import ...`. Flat imports only resolve when `evals/` itself
+is on `sys.path` — which `python evals/runner.py` provides implicitly and `python -m evals` does not.
+pytest hides the split entirely because `pyproject.toml:60` sets
+`pythonpath = ["src", "e2e/scenarios", "e2e", "evals"]`, so both styles work under test and the
+inconsistency is invisible until something is invoked as a module.
+**Why deferred:** EVAL-P6.3's binding constraint is a green gate at every commit; converting nine
+modules' imports is a behaviour-neutral change with a wide blast radius that would also break the
+documented `docker compose exec app python -m evals.retrieval_runner` workaround (ISSUE-131) if done
+carelessly. `evals/__main__.py` prepends `evals/` to `sys.path`, which makes both styles resolve today.
+See DEC-155 §3.
+**To fix:** Convert every flat import in `evals/` to `from evals.x import y`, delete the `sys.path`
+shim in `evals/__main__.py:30-32`, and drop `"evals"` from `pyproject.toml`'s `pythonpath` so the gate
+stops masking a regression. Verify `docker compose exec app python -m evals.retrieval_runner` still
+runs, since ISSUE-131 makes it the only way to run retrieval against Neo4j.
+
+## ISSUE-133: calibration confusion matrix has no scorer axis — `make eval-calibrate` cannot calibrate a scorer
+**Found:** 2026-08-07, while planning EVAL-P5 adjudication
+**Severity:** P1 (blocking — invalidates the phase's stated goal, and wastes 4–6 h of maintainer time if
+adjudication starts before it is fixed)
+**Where:** `evals/calibration.py:73-88` (`confusion_counts`), `:115-149` (`cohens_kappa`), `:261` (the
+printed header), `evals/calibration_records.py:50-57` (`CalibrationLabel` fields).
+**Description:** EVAL-P5's goal is "every scorer measured separately as a full confusion matrix plus
+Cohen's κ". As built, both axes of the matrix are `pre_label` (the reference labeller) and
+`human_verdict` (the maintainer) — the scorer's own verdict is never compared to anything.
+`CalibrationLabel` has no field to hold it, and `scorer` is used only as a grouping key
+(`calibration.py:231`). So `make eval-calibrate` answers "how often does claude-opus-5 agree with the
+maintainer, partitioned by which scorer's criteria were in play" — which the ROADMAP describes as the
+*free secondary* number — while the headline question ("can I trust `tone_judge`?") is not computed at
+all. P0.4 already produced one confirmed scorer false positive (`case_neg_injection_001`, ISSUE-129),
+so the untrustworthy-scorer risk is measured-real, not hypothetical.
+**Why deferred:** Not deferred — scheduled. It must land before any adjudication session, and after
+EVAL-P6.1, since labels bind to one generation and re-generating after P6.1 would invalidate them.
+**To fix:** Add `scorer_verdict: bool` to `CalibrationLabel` (joined from the judged transcript, never
+supplied by the labeller). Make `scorer_verdict × human_verdict` the headline matrix and keep
+`pre_label × human_verdict` as the secondary reference-labeller agreement number. Update
+`confusion_counts`, `cohens_kappa`, `kappa_interval`, `ScorerReport`, `_print_scorer_report` and
+`tests/unit/evals/test_calibration.py`. Decision recorded 2026-08-07 (option A, chosen by maintainer).

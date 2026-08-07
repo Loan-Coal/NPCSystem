@@ -238,5 +238,27 @@ async def _main() -> int:
     return 0
 
 
+def main(argv: list[str] | None = None) -> int:
+    """Synchronous entry point wrapping the async retrieval eval.
+
+    Exists so the module presents the same ``main(argv) -> int`` contract as every
+    other evals entry point, which is what ``python -m evals retrieval`` dispatches to.
+    This runner takes no options today; any argument is rejected rather than ignored.
+
+    Args:
+        argv: Command-line arguments; defaults to sys.argv[1:]. Must be empty.
+    Returns:
+        0 on success, 1 on connectivity/setup failure, 2 on unexpected arguments.
+    """
+    args = sys.argv[1:] if argv is None else argv
+    if args:
+        print(
+            f"retrieval takes no arguments; got: {' '.join(args)}",
+            file=sys.stderr,
+        )
+        return 2
+    return asyncio.run(_main())
+
+
 if __name__ == "__main__":
-    sys.exit(asyncio.run(_main()))
+    sys.exit(main())

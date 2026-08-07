@@ -305,11 +305,15 @@ def run_calibration(
 # ---------------------------------------------------------------------------
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     """CLI entry point: print calibration matrices for a labels JSONL file.
 
     Usage:
         python evals/calibration.py [--file PATH]
+        python -m evals calibrate [--file PATH]
+
+    Args:
+        argv: Command-line arguments; defaults to sys.argv[1:].
     """
     import argparse
 
@@ -322,7 +326,7 @@ def main() -> None:
         default=LABELS_FILE,
         help="Path to labels JSONL (default: evals/calibration/labels_v1.jsonl).",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if not args.file.exists():
         print(f"ERROR: Labels file not found: {args.file}", file=sys.stderr)

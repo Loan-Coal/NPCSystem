@@ -798,7 +798,7 @@ Separately: `judge_runner._to_result_dict` sets `case_id = record_id`, so each g
       Validation: a fixture with 37 guard cases × 2 records reports **37** guard turns, matching `make eval`;
       mark ISSUE-123 `[FIXED]` and move it to `archive/ISSUES_RESOLVED.md`.
 
-- [ ] **EVAL-P6.3** Verb dispatch + aliases. Files: `create evals/__main__.py`, `edit Makefile`,
+- [x] **EVAL-P6.3** Verb dispatch + aliases. Files: `create evals/__main__.py`, `edit Makefile`,
       `create tests/unit/evals/test_cli_dispatch.py`. Verbs: `generate`, `score`, `judge`, `calibrate`,
       `report`, `retrieval`. All seven legacy targets (`eval`, `eval-report`, `eval-anti-hallucination`,
       `eval-llm`, `eval-llm-demo`, `eval-retrieval`, `eval-combined`) become one-line aliases delegating to it.
@@ -806,6 +806,16 @@ Separately: `judge_runner._to_result_dict` sets `case_id = record_id`, so each g
       Validation: `python -m evals --help` lists all six verbs; each legacy `make` target still runs and
       produces the same exit code as before; `make check` green.
       ⚠️ **ask-gate:** rewrites seven Makefile targets — a shared public surface.
+      ✅ **DONE 2026-08-07** — ask-gate cleared by explicit human instruction ("fix p6.3"). Three
+      deviations from the spec as written, all recorded in **DEC-155**: (1) **eight** verbs, not six —
+      `anti-hallucination` is required for `eval-anti-hallucination` to delegate at all, and `adjudicate`
+      is added because the EVAL-P5 workflow needs it; the six specced verbs are all present.
+      (2) `eval-llm` / `eval-llm-demo` stay direct `pytest` invocations — they are test-suite runs, not
+      harness modules, so aliasing them would make the CLI shell out to pytest. (3) `__main__.py`
+      prepends `evals/` to `sys.path` because the package mixes flat and package-absolute imports
+      (**ISSUE-132**); unifying them is out of scope for a phase whose constraint is a green gate at every
+      commit. Also widened `calibration.main` / `adjudicate.main` to accept `argv` and added a sync
+      `retrieval_runner.main`, so all eight targets share one `main(argv) -> int` contract.
 
 ### Phase EVAL-P7 — Engine-developer eval dashboard
 **Goal:** A local dev-facing dashboard that reads the run artifacts and makes flakiness, calibration and
