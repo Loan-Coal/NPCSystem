@@ -252,3 +252,7 @@ Required test coverage of 80% reached. Total coverage: 87.09%
 FAILED tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_fence_state_tripwire
 1 failed, 2844 passed, 29 skipped, 2232 warnings in 70.56s (0:01:10)
 make: *** [Makefile:50: test-cov] Error 1
+
+## 2026-08-07 17:43:23 — no status token from task EVAL-P5.5
+
+The session ended without a bare AUTO_STATUS line. Log: C:/Users/lohan/Documents/hackathons/NPCSystem/project-harness/.loop-logs/task-EVAL-P5.5-1786117385.log
