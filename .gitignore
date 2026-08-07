@@ -24,6 +24,10 @@ htmlcov/
 e2e/transcripts/
 evals/reports/
 evals/generations/
+# Calibration labels are private (EVAL-P5 / ROADMAP "Post-program milestones"):
+# only the schema and a synthetic sample are publishable. The prompt is tracked.
+evals/calibration/*.jsonl
+evals/calibration/batches/
 transcripts/
 
 # Codebase-review raw run-logs + agent transcripts (synthesis lives in
