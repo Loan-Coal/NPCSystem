@@ -6,8 +6,10 @@ Covers:
   per YAML case, using a mock httpx client.
 - affirms_judge expectations produce expected_polarity="pass_on_no".
 - tone_judge expectations produce expected_polarity="pass_on_yes".
+- Non-judge expectations produce deterministic (judge_kind=None) records (EVAL-P6.1).
 - Anti-hallucination refusal cases produce expected_polarity="pass_on_yes"
-  with judge_kind="refusal_judge".
+  with judge_kind="refusal_judge"; grounded cases produce a deterministic
+  anti_hallucination_grounded record instead of being dropped (EVAL-P6.1).
 - write_transcript is called once with all records.
 - ensure_player_node is called per YAML case.
 """
@@ -68,6 +70,18 @@ _AH_GROUNDED_CASE: dict = {
     "notes": "Should confirm war is ongoing.",
 }
 
+_MIXED_CASE: dict = {
+    "case_id": "case_mixed_001",
+    "description": "schema + keyword_none + tone_judge in one case",
+    "seed": {"npc_id": "mira_innkeeper", "player_id": "player_eval"},
+    "input": {"player_message": "Good morning!"},
+    "expected": [
+        {"kind": "schema"},
+        {"kind": "keyword_none", "keywords": ["dragon"]},
+        {"kind": "tone_judge", "description": "Answer YES if the NPC replies warmly."},
+    ],
+}
+
 
 def _make_mock_client(npc_response: str = "Hello traveller.") -> MagicMock:
     """Return a mock httpx.Client that returns 200 dialogue responses."""
@@ -120,7 +134,8 @@ def test_affirms_judge_case_produces_pass_on_no_record() -> None:
     assert affirms_records[0].expected_polarity == "pass_on_no"
 
 
-def test_non_judge_expectations_are_skipped() -> None:
+def test_non_judge_expectations_produce_deterministic_records() -> None:
+    """EVAL-P6.1: min_length is no longer dropped — it gets a judge_kind=None record."""
     client = _make_mock_client()
     records = collect_records(
         yaml_cases=[_TONE_CASE],
@@ -128,9 +143,13 @@ def test_non_judge_expectations_are_skipped() -> None:
         client=client,
         base_url="http://localhost:8000",
     )
-    # _TONE_CASE has one tone_judge and one min_length; only tone_judge is emitted
-    assert len(records) == 1
-    assert records[0].judge_kind == "tone_judge"
+    # _TONE_CASE has one tone_judge and one min_length; both are now emitted.
+    assert len(records) == 2
+    by_kind = {r.judge_kind: r for r in records if r.judge_kind is not None}
+    assert "tone_judge" in by_kind
+    deterministic = [r for r in records if r.judge_kind is None]
+    assert len(deterministic) == 1
+    assert deterministic[0].matcher_kind == "min_length"
 
 
 def test_ah_refusal_case_produces_refusal_judge_record() -> None:
@@ -160,6 +179,21 @@ def test_ah_grounded_case_produces_no_llm_judge_record() -> None:
     assert len(judge_records) == 0
 
 
+def test_ah_grounded_case_produces_deterministic_record() -> None:
+    """EVAL-P6.1: grounded AH cases are no longer dropped from the transcript."""
+    client = _make_mock_client("The war marches on.")
+    records = collect_records(
+        yaml_cases=[],
+        ah_cases=[_AH_GROUNDED_CASE],
+        client=client,
+        base_url="http://localhost:8000",
+    )
+    assert len(records) == 1
+    assert records[0].judge_kind is None
+    assert records[0].matcher_kind == "anti_hallucination_grounded"
+    assert records[0].source == "anti_hallucination"
+
+
 def test_ensure_player_node_called_per_yaml_case() -> None:
     client = _make_mock_client()
     with patch("generate_runner.preconditions.ensure_player_node") as mock_ensure:
@@ -170,6 +204,24 @@ def test_ensure_player_node_called_per_yaml_case() -> None:
             base_url="http://localhost:8000",
         )
     assert mock_ensure.call_count == 2
+
+
+def test_mixed_case_produces_deterministic_and_judged_records() -> None:
+    """EVAL-P6.1: schema + keyword_none + tone_judge -> 3 records (2 deterministic, 1 judged)."""
+    client = _make_mock_client("Good day to you, traveller.")
+    records = collect_records(
+        yaml_cases=[_MIXED_CASE],
+        ah_cases=[],
+        client=client,
+        base_url="http://localhost:8000",
+    )
+    assert len(records) == 3
+    kinds = sorted(r.matcher_kind or r.judge_kind for r in records)
+    assert kinds == ["keyword_none", "schema", "tone_judge"]
+    deterministic = [r for r in records if r.judge_kind is None]
+    assert len(deterministic) == 2
+    judged = [r for r in records if r.judge_kind is not None]
+    assert len(judged) == 1
 
 
 def test_transcript_written(tmp_path: Path) -> None:

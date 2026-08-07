@@ -133,30 +133,6 @@ no-progress (same task id returned twice in a row) and abort with a clear messag
 live path against a session that silently fails to tick. Correct the usage block either way, and document
 the stale-lock recovery in `project-harness/OVERNIGHT_LOOP.md`.
 
-## ISSUE-123: `eval-judge` reports double the guard turns of `make eval` — the two headlines are not comparable
-**Found:** 2026-07-31, during eval-program planning (adversarial review of `npc_system_eval_plan_idea`)
-**Severity:** P2 (annoying — silently inflates the published anti-hallucination denominator)
-**Where:** `evals/judge_runner.py:81` (`_to_result_dict`), consumed by `evals/summary.py:93` (`_is_guard_case`)
-**Description:** `_to_result_dict` sets `case_id = judged.record_id`, which has the form
-`<case_id>:<judge_kind>:<index>` (e.g. `case_adv_false_premise_peace:tone_judge:0`). `summary._is_guard_case`
-matches on the `case_adv_`/`case_neg_` prefix, so the prefix survives and guard detection still works — but
-each guard case emits **two** records under the current guard injection (`runner._guard_expectations` appends
-a `tone_judge` **and**, for every demo-world guard case, an `affirms_judge`; all 37 guard cases are
-`requires_world: demo`). Result: `make eval-judge` reports `guard_turns = 74` where `make eval` reports
-`guard_turns = 37` for the identical run. The published headline string
-("N lore hallucinations across M adversarial turns") therefore differs between the two paths purely because
-of record fan-out, not because anything about the engine differs. Any figure quoted from `eval-judge` today
-overstates the adversarial-turn count by ~2×.
-**Why deferred:** Not the planning session's task (planning + review only, zero implementation). It is
-already scheduled as **EVAL-P6.2** in the `EVAL-P0..P7` program, which is the first step that can fix it
-without also needing the deterministic-matcher coverage gap closed (EVAL-P6.1).
-**To fix:** In `judge_runner`, group `JudgedRecord`s back to their originating `case_id` (strip the
-`:<judge_kind>:<index>` suffix) before handing them to `summary.summarize`, so one case contributes one guard
-turn regardless of how many expectations it carries. Regression test:
-`tests/unit/test_judge_runner.py::test_guard_turn_count_matches_case_count_not_record_count` — a fixture of
-37 guard cases × 2 records must report 37 guard turns. Cross-check the resulting headline against a
-`make eval` run over the same seeded worlds; the two strings must agree.
-
 ---
 
 ## ISSUE-124: `evals/` is not covered by `mypy`, `check-rules`, or `check-docstrings`
@@ -366,3 +342,45 @@ leading `⛔ ask-gate` on its own line (mirroring how `⏸️` already works as 
 that. Keep the current regex as a deprecation warning surfaced by `--verify` for one cycle so no existing
 gated task silently becomes actionable. Add a test asserting that a body containing "not an ask-gate" is
 **not** flagged. Until then, never write the literal token in a task body unless the task really is gated.
+
+## ISSUE-135: `generate_runner.collect_records` skips the `learned_from_player` preflight for AH cases
+**Found:** 2026-08-07, while planning EVAL-P6.1
+**Severity:** P2 (annoying — can mis-score a category of anti-hallucination cases in the two-phase pipeline)
+**Where:** `evals/generate_runner.py:200-207` (the `ah_cases` loop in `collect_records`)
+**Description:** `anti_hallucination_runner._classify_case` gates `learned_from_player` cases on
+`_belief_fact_persisted` (a pre-flight GET against `/v1/admin/beliefs/{npc_id}`) and skips the case — rather
+than scoring it — when the player-taught fact was never persisted in a prior session (ISSUE-090/DEC-095).
+`generate_runner.collect_records`'s AH loop has no equivalent check: it calls `/v1/dialogue` for every
+`ah_case` unconditionally and always builds a record. A `learned_from_player` case run through
+`eval-generate` → `eval-judge`/`eval-score` before the taught fact exists will therefore be scored as a
+false-fail (or false-pass) instead of skipped, which the single-phase `anti_hallucination_runner` path
+already avoids.
+**Why deferred:** Out of scope for EVAL-P6.1 (deterministic-matcher coverage) and EVAL-P6.2 (guard-turn
+double-count) — orthogonal to both. Only matters once `learned_from_player` cases are actually run through
+the two-phase pipeline; today's fixture (`anti_hallucination_demo.json`) does exercise that category via
+`make eval-anti-hallucination`, not via `eval-generate`.
+**To fix:** Port the `_belief_fact_persisted` pre-flight into `generate_runner.collect_records`'s AH loop
+(same GET, same `preflight_belief_substrings` fallback to `expected_fact_substrings`) and skip building any
+record — deterministic or judged — for a `learned_from_player` case whose fact isn't persisted yet. Add a
+regression test with a mocked "belief not found" response asserting zero records are produced for such a case.
+
+## ISSUE-136: roadmap fence tripwire snapshot goes stale mid-phase when a phase commits more than one task
+**Found:** 2026-08-07, during overnight loop review of phase EVAL-P1
+**Severity:** P2 (annoying — trips a false-positive HALT on the overnight loop, not a real regression)
+**Where:** `tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_fence_state_tripwire`
+**Description:** The test is a hand-maintained snapshot of the roadmap's pending-task-id list, deliberately
+updated by whoever's commit changes which tasks are pending (DEC-153-era design: "UPDATE DELIBERATELY when
+the fence moves"). In practice the update rides whichever task's commit happens to touch the file — usually
+the first task worked in a phase — not the last. EVAL-P1.2's commit updated the snapshot correctly for the
+state at that moment, but EVAL-P1.5 and EVAL-P1.6 landed afterward in the same `expand_loop.sh` run without
+a further update, so the phase-boundary `make check` gate went red on a stale assertion rather than a real
+failure. The same pattern is recorded in the test's own docstring for EVAL-P4 and EVAL-P5 — this is the
+fourth occurrence, all false positives, all costing a "FLAGGED FOR HUMAN" halt and a soft-review cycle.
+**Why deferred:** Each occurrence so far has been cheap to diagnose and fix by hand (see commit 86254cb for
+the EVAL-P1 instance), and redesigning the tripwire is out of scope for a mid-phase review pass.
+**To fix:** Either (a) derive the assertion from `git diff` against the phase's start-of-phase baseline
+instead of a hardcoded literal list, so it self-updates with whatever the phase actually completed, or
+(b) move the snapshot-update responsibility into `expand_loop.sh`'s phase-boundary step itself (it already
+knows the phase just closed) rather than leaving it to whichever task's author remembers. Either fix should
+keep the "assert sorted id lists, not bare counts" property the current test already has, since that part
+works as intended.

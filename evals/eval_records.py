@@ -5,7 +5,8 @@ Purpose: Pydantic v2 record models for the two-phase generate→judge eval pipel
          GenerationRecord holds one engine reply + judge metadata; JudgedRecord
          adds the verdict; TranscriptFile bundles records for persist/replay.
 Dependencies: pydantic, stdlib (pathlib, datetime, typing), run_config, retrieved_item
-Used by: generate_runner, judge_runner, e2e/scenarios/conftest (persist_scenario_records)
+Used by: generate_runner, judge_runner, deterministic_records, e2e/scenarios/conftest
+         (persist_scenario_records)
 """
 
 from __future__ import annotations
@@ -51,6 +52,30 @@ class TranscriptVersionError(ValueError):
 
 
 # ---------------------------------------------------------------------------
+# Deterministic matcher kinds (EVAL-P6.1)
+# ---------------------------------------------------------------------------
+
+# Every non-judge matcher kind evaluable off a transcript, plus the grounded
+# anti-hallucination check (not a matchers.py kind, but scored the same way —
+# no LLM call, replayed from stored metadata). Single source of truth: both
+# GenerationRecord.matcher_kind and deterministic_records.covered_matcher_kinds()
+# derive from this alias so the two can never drift apart silently.
+DeterministicMatcherKind = Literal[
+    "schema",
+    "min_length",
+    "keyword_any",
+    "keyword_all",
+    "keyword_none",
+    "in_set",
+    "range",
+    "substring",
+    "regex",
+    "context_block_expected",
+    "anti_hallucination_grounded",
+]
+
+
+# ---------------------------------------------------------------------------
 # Record models
 # ---------------------------------------------------------------------------
 
@@ -69,10 +94,17 @@ class GenerationRecord(BaseModel):
         npc_response: The engine reply to evaluate.
         criteria: Verbatim criteria string for _run_binary_judge.
         judge_kind: Which judge function to apply, or None for deterministic checks.
+        matcher_kind: Which deterministic matcher applies when judge_kind is None
+            (e.g. 'min_length', 'schema'). None for judge-based records and for
+            records written before EVAL-P6.1.
         expected_polarity: How to map the YES/NO judge verdict to pass/fail.
         world_epoch: World epoch at the time of generation (default age_of_peace).
         active_conditions: Active world conditions at the time of generation.
-        metadata: Arbitrary extra data (e.g. expected_substrings for grounded checks).
+        metadata: Arbitrary extra data. Deterministic records (matcher_kind set)
+            store {"expectation": <raw expectation dict>, "response": <raw API
+            response dict>} here so deterministic_records.score_record can replay
+            the matcher without re-calling the engine; anti_hallucination_grounded
+            records store {"expected_fact_substrings": [...], "response": {...}}.
         repetition: Zero-based repeat index within a k-repeat run (default 0).
         duration_ms: Wall-clock milliseconds taken to generate npc_response (default 0).
         retrieved_context: Context items captured from GET /v1/admin/debug/retrieval at
@@ -89,6 +121,7 @@ class GenerationRecord(BaseModel):
     npc_response: str
     criteria: str
     judge_kind: Literal["tone_judge", "affirms_judge", "refusal_judge"] | None
+    matcher_kind: DeterministicMatcherKind | None = None
     expected_polarity: Literal["pass_on_yes", "pass_on_no"]
     world_epoch: str = "age_of_peace"
     active_conditions: tuple[str, ...] = ()

@@ -1720,3 +1720,34 @@ engine YAMLs instead.
 considered and not built — deletion resolves the present rot, and the guard was judged not worth
 its false-positive surface now. Reconsider if a third orphan key appears.
 
+## [FIXED] ISSUE-123: `eval-judge` reports double the guard turns of `make eval` — the two headlines are not comparable
+**Found:** 2026-07-31, during eval-program planning (adversarial review of `npc_system_eval_plan_idea`)
+**Severity:** P2 (annoying — silently inflates the published anti-hallucination denominator)
+**Where:** `evals/judge_runner.py:81` (`_to_result_dict`), consumed by `evals/summary.py:93` (`_is_guard_case`)
+**Description:** `_to_result_dict` sets `case_id = judged.record_id`, which has the form
+`<case_id>:<judge_kind>:<index>` (e.g. `case_adv_false_premise_peace:tone_judge:0`). `summary._is_guard_case`
+matches on the `case_adv_`/`case_neg_` prefix, so the prefix survives and guard detection still works — but
+each guard case emits **two** records under the current guard injection (`runner._guard_expectations` appends
+a `tone_judge` **and**, for every demo-world guard case, an `affirms_judge`; all 37 guard cases are
+`requires_world: demo`). Result: `make eval-judge` reports `guard_turns = 74` where `make eval` reports
+`guard_turns = 37` for the identical run. The published headline string
+("N lore hallucinations across M adversarial turns") therefore differs between the two paths purely because
+of record fan-out, not because anything about the engine differs. Any figure quoted from `eval-judge` today
+overstates the adversarial-turn count by ~2×.
+**Why deferred:** Not the planning session's task (planning + review only, zero implementation). It is
+already scheduled as **EVAL-P6.2** in the `EVAL-P0..P7` program, which is the first step that can fix it
+without also needing the deterministic-matcher coverage gap closed (EVAL-P6.1).
+**To fix:** In `judge_runner`, group `JudgedRecord`s back to their originating `case_id` (strip the
+`:<judge_kind>:<index>` suffix) before handing them to `summary.summarize`, so one case contributes one guard
+turn regardless of how many expectations it carries. Regression test:
+`tests/unit/test_judge_runner.py::test_guard_turn_count_matches_case_count_not_record_count` — a fixture of
+37 guard cases × 2 records must report 37 guard turns. Cross-check the resulting headline against a
+`make eval` run over the same seeded worlds; the two strings must agree.
+**Fixed:** 2026-08-07, in EVAL-P6.2 — `judge_case_grouping.group_by_case` (split out of `judge_runner.py` to
+respect the 300-line file cap) groups `JudgedRecord`s by `(case_id, repetition)` — not `case_id` alone, so a
+future k>1 run (EVAL-P6.4) still counts each repetition as its own turn — before handing merged result dicts
+to `summary.summarize`. Regression test
+`tests/unit/test_judge_runner.py::test_guard_turn_count_matches_case_count_not_record_count` passes: a
+fixture of 37 guard cases × 2 records now reports 37 guard turns. `_write_judged_jsonl`'s per-record JSONL
+output is unchanged — only the summary/report path was double-counting.
+

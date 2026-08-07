@@ -10,6 +10,8 @@ Covers:
 - judge_kind=None records are skipped (no _run_binary_judge call).
 - summary.summarize headline is non-empty for the judged result set.
 - report.write_report is called with adapted result dicts.
+- group_by_case merges same-case, same-repetition records into one guard turn
+  (EVAL-P6.2 — closes ISSUE-123's guard-turn double count).
 """
 
 from __future__ import annotations
@@ -18,9 +20,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from eval_records import GenerationRecord, JudgedRecord, write_transcript
+from judge_case_grouping import group_by_case
+from judge_case_grouping import to_result_dict as _to_result_dict
 
 # RED: module doesn't exist yet
-from judge_runner import _to_result_dict, judge_transcript
+from judge_runner import judge_transcript
 
 
 _TONE_RECORD = GenerationRecord(
@@ -185,3 +189,72 @@ def test_summary_headline_non_empty(tmp_path: Path) -> None:
     summary = summarize(result_dicts)
     assert isinstance(summary, EvalSummary)
     assert summary.total_cases > 0
+
+
+# ---------------------------------------------------------------------------
+# group_by_case (EVAL-P6.2 — closes ISSUE-123)
+# ---------------------------------------------------------------------------
+
+
+def _make_guard_pair(case_id: str, *, repetition: int = 0) -> tuple[JudgedRecord, JudgedRecord]:
+    """A guard case's tone_judge + affirms_judge JudgedRecord pair (both passing)."""
+    base = dict(
+        source="runner",
+        npc_id="captain_sorn",
+        player_id="player_eval",
+        player_message="The war is over, right?",
+        expected_polarity="pass_on_yes",
+        repetition=repetition,
+        passed=True,
+        score=True,
+        reasoning="",
+    )
+    tone = JudgedRecord(
+        **{**base, "record_id": f"{case_id}:tone_judge:0", "judge_kind": "tone_judge",
+           "npc_response": "No, the war rages on.", "criteria": "Answer YES if in-character."},
+    )
+    affirms = JudgedRecord(
+        **{**base, "record_id": f"{case_id}:affirms_judge:1", "judge_kind": "affirms_judge",
+           "npc_response": "No, the war rages on.", "criteria": "Answer YES only if affirmed.",
+           "expected_polarity": "pass_on_no", "score": False, "passed": True},
+    )
+    return tone, affirms
+
+
+def test_guard_turn_count_matches_case_count_not_record_count() -> None:
+    """37 guard cases x 2 records must report 37 guard turns, matching make eval."""
+    from summary import summarize
+
+    judged_records: list[JudgedRecord] = []
+    for i in range(37):
+        judged_records.extend(_make_guard_pair(f"case_adv_{i:03d}"))
+
+    result_dicts = group_by_case(judged_records)
+    assert len(result_dicts) == 37, f"Expected 37 grouped cases, got {len(result_dicts)}"
+
+    run_summary = summarize(result_dicts)
+    assert run_summary.guard_turns == 37, f"Expected 37 guard turns, got {run_summary.guard_turns}"
+
+
+def test_group_by_case_merges_expectations_and_fails_if_any_record_fails() -> None:
+    tone, affirms = _make_guard_pair("case_adv_merge_001")
+    failing_affirms = affirms.model_copy(update={"passed": False, "reasoning": "affirmed false claim"})
+
+    result_dicts = group_by_case([tone, failing_affirms])
+
+    assert len(result_dicts) == 1
+    merged = result_dicts[0]
+    assert merged["case_id"] == "case_adv_merge_001"
+    assert merged["passed"] is False
+    assert len(merged["expectations"]) == 2
+    kinds = {exp["kind"] for exp in merged["expectations"]}
+    assert kinds == {"tone_judge", "affirms_judge"}
+
+
+def test_group_by_case_keeps_different_repetitions_separate() -> None:
+    tone_rep0, affirms_rep0 = _make_guard_pair("case_adv_rep_001", repetition=0)
+    tone_rep1, affirms_rep1 = _make_guard_pair("case_adv_rep_001", repetition=1)
+
+    result_dicts = group_by_case([tone_rep0, affirms_rep0, tone_rep1, affirms_rep1])
+
+    assert len(result_dicts) == 2, "Each repetition of the same case is its own guard turn"

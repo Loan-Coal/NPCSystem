@@ -2,11 +2,13 @@
 Module: judge_runner
 Layer: evals (eval harness — not part of src/)
 Purpose: Judge pass of the two-phase eval pipeline. Reads a TranscriptFile written
-         by generate_runner, scores each GenerationRecord via _run_binary_judge,
-         applies expected_polarity to derive pass/fail, and feeds the results into
-         the existing summary + report pipeline.
+         by generate_runner, scores each GenerationRecord via _run_binary_judge, and
+         applies expected_polarity to derive pass/fail. Result-dict adaptation and
+         per-case grouping (EVAL-P6.2 — closes ISSUE-123's guard-turn double count)
+         live in judge_case_grouping; this module owns scoring and the CLI.
 Dependencies: argparse, pathlib, sys; matchers (_run_binary_judge), eval_records
-         (read_transcript, JudgedRecord), summary (summarize, format_summary_lines),
+         (read_transcript, JudgedRecord), judge_case_grouping (group_by_case,
+         case_id_from_record_id), summary (summarize, format_summary_lines),
          report (write_report)
 Used by: Makefile eval-judge target
 Does NOT: call /v1/dialogue, modify graph state, import from src/npc_engine/
@@ -22,6 +24,7 @@ from pathlib import Path
 import judge_config
 import matchers
 from eval_records import GenerationRecord, JudgedRecord, read_transcript
+from judge_case_grouping import case_id_from_record_id, group_by_case
 from report import write_report
 from summary import format_summary_lines, summarize
 
@@ -33,7 +36,6 @@ from summary import format_summary_lines, summarize
 _PASS_ON_YES: str = "pass_on_yes"
 _PASS_ON_NO: str = "pass_on_no"
 _JSONL_ENCODING: str = "utf-8"
-_RECORD_ID_COLON_SEGMENTS: int = 2
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +66,7 @@ def _write_judged_jsonl(
     rows = [
         {
             "record_id": r.record_id,
-            "case_id": r.record_id.rsplit(":", _RECORD_ID_COLON_SEGMENTS)[0],
+            "case_id": case_id_from_record_id(r.record_id),
             "judge_kind": r.judge_kind,
             "passed": r.passed,
             "score": r.score,
@@ -101,42 +103,6 @@ def _apply_polarity(score: bool | None, polarity: str) -> bool:
     if polarity == _PASS_ON_YES:
         return score is True
     return score is False  # pass_on_no: NO verdict = did not affirm = PASS
-
-
-# ---------------------------------------------------------------------------
-# Result dict adapter
-# ---------------------------------------------------------------------------
-
-
-def _to_result_dict(judged: JudgedRecord) -> dict:
-    """Adapt a JudgedRecord to the result dict shape expected by summary.summarize.
-
-    The shape mirrors runner._run_case output:
-    {case_id, description, passed, expectations: [{kind, passed, skipped, detail}],
-     response, error}.
-
-    Args:
-        judged: A scored JudgedRecord.
-    Returns:
-        Result dict consumable by summary.summarize and report.write_report.
-    """
-    exp_result: dict = {
-        "kind": judged.judge_kind or "none",
-        "passed": judged.passed,
-        "skipped": False,
-        "detail": judged.reasoning or "",
-    }
-    if judged.score is None:
-        exp_result["inconclusive"] = True
-
-    return {
-        "case_id": judged.record_id,
-        "description": f"[{judged.source}] {judged.npc_id}",
-        "passed": judged.passed,
-        "expectations": [exp_result],
-        "response": {"npc_response": judged.npc_response},
-        "error": None,
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
             judge_config.resolve_judge_model(),
         )
 
-    result_dicts = [_to_result_dict(r) for r in judged_records]
+    result_dicts = group_by_case(judged_records)
     report_path = write_report(results=result_dicts, output_dir=args.reports)
 
     run_summary = summarize(result_dicts)
@@ -240,7 +206,7 @@ def main(argv: list[str] | None = None) -> int:
 
     passed = sum(1 for r in result_dicts if r["passed"])
     total = len(result_dicts)
-    print(f"\n{passed}/{total} judged records passed. Report: {report_path}")
+    print(f"\n{passed}/{total} judged cases passed. Report: {report_path}")
 
     return 0 if passed == total else 1
 

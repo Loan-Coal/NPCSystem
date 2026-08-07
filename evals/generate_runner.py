@@ -2,10 +2,13 @@
 Module: generate_runner
 Layer: evals (eval harness — not part of src/)
 Purpose: Generation pass of the two-phase eval pipeline. Calls /v1/dialogue for every
-         LLM-judge expectation, captures retrieval context, and writes gen-dir output
-         {meta.json,outputs.jsonl} or a legacy TranscriptFile for the judge pass.
-Dependencies: httpx, argparse, pathlib, sys, time; runner, matchers,
-         anti_hallucination_runner, preconditions, eval_records, context_capture
+         expectation (LLM-judge and deterministic alike), captures retrieval context,
+         and writes gen-dir output {meta.json,outputs.jsonl} or a legacy TranscriptFile
+         for the judge pass. Record construction (judge, deterministic, AH) lives in
+         generation_records; this module owns the HTTP collection loop and CLI.
+Dependencies: httpx, argparse, pathlib, sys, time; runner, generation_records,
+         deterministic_records, anti_hallucination_runner, preconditions, eval_records,
+         context_capture
 Used by: Makefile eval-generate target, judge_runner (reads transcript it writes)
 Does NOT: call the LLM judge, modify graph state, import from src/npc_engine/
 """
@@ -17,123 +20,27 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 import httpx
 
+import deterministic_records
+import generation_records
 import preconditions
 from context_capture import capture_retrieval_context
 from eval_records import GenerationRecord, write_generation_dir, write_transcript
-from matchers import _AFFIRMATION_CRITERIA_TMPL, _REFUSAL_CRITERIA
 
 # Stable private helpers from sibling runners; generate_runner is sole two-phase consumer.
 from anti_hallucination_runner import _PLAYER_ID as _AH_PLAYER_ID
 from anti_hallucination_runner import _load_fixture
-from runner import _expected_with_guards, _load_cases
+from runner import _load_cases
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-_LLM_JUDGE_KINDS: frozenset[str] = frozenset({"tone_judge", "affirms_judge"})
 _DEFAULT_PLAYER_ID: str = "player_eval"
 _DEFAULT_BASE_URL: str = "http://localhost:8000"
 _TRANSCRIPT_STEM: str = "eval_generation"
-
-
-# ---------------------------------------------------------------------------
-# Criteria derivation helpers
-# ---------------------------------------------------------------------------
-
-
-def _criteria_for_tone(exp: dict) -> str:
-    """Extract the judge criteria string from a tone_judge expectation."""
-    return exp.get("judge_prompt") or exp.get("description", "")
-
-
-def _criteria_for_affirms(exp: dict) -> str:
-    """Derive criteria for an affirms_judge expectation, mirroring matchers._eval_affirms_judge."""
-    claim = exp.get("claim")
-    if claim:
-        return _AFFIRMATION_CRITERIA_TMPL.format(claim=str(claim).strip())
-    return exp.get("description", "")
-
-
-# ---------------------------------------------------------------------------
-# Record builders
-# ---------------------------------------------------------------------------
-
-
-def _build_yaml_records_for_case(
-    case: dict,
-    npc_response: str,
-) -> list[GenerationRecord]:
-    """Build one GenerationRecord per LLM-judge expectation in a YAML case.
-
-    Non-judge expectations (min_length, keyword_none, schema) are excluded —
-    those remain in runner.py's deterministic inline pass.
-
-    Args:
-        case: YAML eval case dict (case_id, seed, input, expected).
-        npc_response: The engine reply already obtained.
-    Returns:
-        List of GenerationRecords, one per tone_judge/affirms_judge expectation.
-    """
-    records: list[GenerationRecord] = []
-    case_id: str = case.get("case_id", "")
-    npc_id: str = case.get("seed", {}).get("npc_id", "")
-    player_id: str = case.get("seed", {}).get("player_id", _DEFAULT_PLAYER_ID)
-
-    for i, exp in enumerate(_expected_with_guards(case)):
-        kind = exp.get("kind", "")
-        if kind not in _LLM_JUDGE_KINDS:
-            continue
-
-        if kind == "tone_judge":
-            criteria = _criteria_for_tone(exp)
-            polarity = "pass_on_yes"
-        else:  # affirms_judge
-            criteria = _criteria_for_affirms(exp)
-            polarity = "pass_on_no"
-
-        records.append(
-            GenerationRecord(
-                record_id=f"{case_id}:{kind}:{i}",
-                source="runner",
-                npc_id=npc_id,
-                player_id=player_id,
-                player_message=case.get("input", {}).get("player_message", ""),
-                npc_response=npc_response,
-                criteria=criteria,
-                judge_kind=kind,
-                expected_polarity=polarity,
-            )
-        )
-    return records
-
-
-def _build_ah_record(case: dict, npc_response: str) -> GenerationRecord | None:
-    """Build a refusal_judge GenerationRecord for an AH fixture case.
-
-    Returns None for grounded cases (expected_verdict != 'refusal') — deterministic.
-
-    Args:
-        case: Anti-hallucination fixture case dict.
-        npc_response: The engine reply already obtained.
-    Returns:
-        GenerationRecord or None.
-    """
-    if case.get("expected_verdict") != "refusal":
-        return None
-    return GenerationRecord(
-        record_id=f"{case['id']}:refusal_judge:0",
-        source="anti_hallucination",
-        npc_id=case["npc_id"],
-        player_id=_AH_PLAYER_ID,
-        player_message=case["question"],
-        npc_response=npc_response,
-        criteria=_REFUSAL_CRITERIA,
-        judge_kind="refusal_judge",
-        expected_polarity="pass_on_yes",
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -141,8 +48,13 @@ def _build_ah_record(case: dict, npc_response: str) -> GenerationRecord | None:
 # ---------------------------------------------------------------------------
 
 
-def _post_dialogue(case_npc_id: str, player_id: str, message: str, client: httpx.Client, base_url: str) -> str:
-    """POST /v1/dialogue and return the npc_response string (empty on error)."""
+def _post_dialogue(case_npc_id: str, player_id: str, message: str, client: httpx.Client, base_url: str) -> dict[str, Any]:
+    """POST /v1/dialogue and return the full parsed response body (empty dict on error).
+
+    Deterministic matchers (in_set, range, schema) check fields beyond npc_response
+    (facial_expression.type, action.type, relation_deltas.*), so the whole body must
+    be preserved for EVAL-P6.1's deterministic records to replay faithfully.
+    """
     try:
         resp = client.post(
             f"{base_url}/v1/dialogue",
@@ -150,9 +62,55 @@ def _post_dialogue(case_npc_id: str, player_id: str, message: str, client: httpx
             timeout=60.0,
         )
         resp.raise_for_status()
-        return str(resp.json().get("npc_response", ""))
+        return dict(resp.json())
     except Exception:
-        return ""
+        return {}
+
+
+def _stamp(records: list[GenerationRecord], *, rep: int, duration_ms: int, retrieved: tuple) -> list[GenerationRecord]:
+    """Copy each record with the per-repetition fields filled in (records are frozen)."""
+    update = {"repetition": rep, "duration_ms": duration_ms, "retrieved_context": retrieved}
+    return [r.model_copy(update=update) for r in records]
+
+
+def _collect_yaml_case_records(
+    case: dict, client: httpx.Client, base_url: str, rep: int
+) -> list[GenerationRecord]:
+    """Call /v1/dialogue for one YAML case and build its judge + deterministic records."""
+    inp = case.get("input")
+    if inp is None:
+        return []
+    player_id = case.get("seed", {}).get("player_id", _DEFAULT_PLAYER_ID)
+    preconditions.ensure_player_node(client, base_url, player_id)
+    npc_id = case.get("seed", {}).get("npc_id", "")
+    player_message = inp["player_message"]
+
+    t0 = time.perf_counter()
+    response = _post_dialogue(npc_id, player_id, player_message, client, base_url)
+    duration_ms = int((time.perf_counter() - t0) * 1000)
+    retrieved = capture_retrieval_context(client, base_url, npc_id, player_message)
+
+    records = generation_records.build_yaml_case_records(case, response, default_player_id=_DEFAULT_PLAYER_ID)
+    return _stamp(records, rep=rep, duration_ms=duration_ms, retrieved=retrieved)
+
+
+def _collect_ah_case_records(case: dict, client: httpx.Client, base_url: str, rep: int) -> list[GenerationRecord]:
+    """Call /v1/dialogue for one AH fixture case and build its refusal/grounded record."""
+    t0 = time.perf_counter()
+    response = _post_dialogue(case["npc_id"], _AH_PLAYER_ID, case["question"], client, base_url)
+    duration_ms = int((time.perf_counter() - t0) * 1000)
+    retrieved = capture_retrieval_context(client, base_url, case["npc_id"], case["question"])
+    npc_response = response.get("npc_response", "") or ""
+
+    records = [
+        r
+        for r in (
+            generation_records.build_ah_refusal_record(case, npc_response, player_id=_AH_PLAYER_ID),
+            deterministic_records.build_ah_grounded_record(case, response, player_id=_AH_PLAYER_ID),
+        )
+        if r is not None
+    ]
+    return _stamp(records, rep=rep, duration_ms=duration_ms, retrieved=retrieved)
 
 
 def collect_records(
@@ -162,11 +120,13 @@ def collect_records(
     base_url: str,
     k: int = 1,
 ) -> list[GenerationRecord]:
-    """Generate dialogue responses and build records for all LLM-judge cases.
+    """Generate dialogue responses and build records for every covered expectation.
 
     Each case runs k times; each repetition captures duration_ms and a retrieval
-    context approximation from GET /v1/admin/debug/retrieval. YAML cases first,
-    then AH refusal cases (grounded AH cases excluded — deterministic).
+    context approximation from GET /v1/admin/debug/retrieval. YAML cases first
+    (judge + deterministic records, EVAL-P6.1), then AH cases (refusal cases get a
+    refusal_judge record; grounded cases get a deterministic anti_hallucination_grounded
+    record — no case type is dropped from the transcript).
 
     Args:
         yaml_cases: Loaded YAML eval cases.
@@ -175,37 +135,14 @@ def collect_records(
         base_url: NPC engine base URL.
         k: Number of repetitions per case (default 1).
     Returns:
-        List of GenerationRecords for all LLM-judge expectations.
+        List of GenerationRecords for every judge and deterministic expectation.
     """
     records: list[GenerationRecord] = []
-
     for rep in range(k):
         for case in yaml_cases:
-            inp = case.get("input")
-            if inp is None:
-                continue
-            player_id = case.get("seed", {}).get("player_id", _DEFAULT_PLAYER_ID)
-            preconditions.ensure_player_node(client, base_url, player_id)
-            npc_id = case.get("seed", {}).get("npc_id", "")
-            player_message = inp["player_message"]
-            t0 = time.perf_counter()
-            npc_response = _post_dialogue(npc_id, player_id, player_message, client, base_url)
-            duration_ms = int((time.perf_counter() - t0) * 1000)
-            retrieved = capture_retrieval_context(client, base_url, npc_id, player_message)
-            records.extend(
-                rec.model_copy(update={"repetition": rep, "duration_ms": duration_ms, "retrieved_context": retrieved})
-                for rec in _build_yaml_records_for_case(case, npc_response)
-            )
-
+            records.extend(_collect_yaml_case_records(case, client, base_url, rep))
         for case in ah_cases:
-            t0 = time.perf_counter()
-            npc_response = _post_dialogue(case["npc_id"], _AH_PLAYER_ID, case["question"], client, base_url)
-            duration_ms = int((time.perf_counter() - t0) * 1000)
-            retrieved = capture_retrieval_context(client, base_url, case["npc_id"], case["question"])
-            record = _build_ah_record(case, npc_response)
-            stamped = [record.model_copy(update={"repetition": rep, "duration_ms": duration_ms, "retrieved_context": retrieved})] if record else []
-            records.extend(stamped)
-
+            records.extend(_collect_ah_case_records(case, client, base_url, rep))
     return records
 
 

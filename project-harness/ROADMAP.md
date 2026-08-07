@@ -872,7 +872,7 @@ Separately: `judge_runner._to_result_dict` sets `case_id = record_id`, so each g
 (logged as **ISSUE-123**; closed here).
 **Depends on:** EVAL-P1.3, EVAL-P2.3, EVAL-P3.4.
 
-- [ ] **EVAL-P6.1** Deterministic matchers off the transcript. Files: `edit evals/generate_runner.py`,
+- [x] **EVAL-P6.1** Deterministic matchers off the transcript. Files: `edit evals/generate_runner.py`,
       `create evals/deterministic_records.py`, `create tests/unit/evals/test_deterministic_records.py`.
       Every non-judge expectation becomes a record with `judge_kind=None` plus the data the matcher needs;
       grounded anti-hallucination cases gain records too.
@@ -894,14 +894,29 @@ Separately: `judge_runner._to_result_dict` sets `case_id = record_id`, so each g
       **Add a guard test** that fails when a new `_eval_*` matcher appears in `matchers.py` without a
       corresponding recorder, so this cannot silently regress to a subset — the failure mode the whole
       phase exists to close.
+      ✅ AUTO (EVAL-P6.1, 2026-08-07). Implemented as planned, with two additive deviations kept inside the
+      phase's own scope: `eval_records.DeterministicMatcherKind` (a `Literal`, not a raw `str`, for
+      `GenerationRecord.matcher_kind` — required-strict per the coding-style rules) is the single source of
+      truth both `deterministic_records.covered_matcher_kinds()` and the guard test derive from; and
+      `generate_runner.py`'s record-builder helpers were split into a new `evals/generation_records.py`
+      (SRP: HTTP collection loop + CLI vs. per-case record construction) to keep `generate_runner.py` under
+      the 300-line file cap after the new dispatch logic landed. `_post_dialogue` now returns the full parsed
+      response body (was `npc_response` only) — `in_set`/`range` check `facial_expression.type`,
+      `action.type`, `relation_deltas.*`, which the deterministic records must be able to replay.
 
-- [ ] **EVAL-P6.2** Fix the guard-turn double count (**closes ISSUE-123**). Files: `edit evals/judge_runner.py`,
+- [x] **EVAL-P6.2** Fix the guard-turn double count (**closes ISSUE-123**). Files: `edit evals/judge_runner.py`,
       `edit tests/unit/test_judge_runner.py`. Group records back to `case_id` before `summarize`, so one case is
       one guard turn regardless of how many expectations it carries.
       RED anchor: `tests/unit/test_judge_runner.py::test_guard_turn_count_matches_case_count_not_record_count` fails
       (reports 2 for a single guard case).
       Validation: a fixture with 37 guard cases × 2 records reports **37** guard turns, matching `make eval`;
       mark ISSUE-123 `[FIXED]` and move it to `archive/ISSUES_RESOLVED.md`.
+      ✅ AUTO (EVAL-P6.2, 2026-08-07). `group_by_case` groups by `(case_id, repetition)`, not `case_id` alone,
+      so a future k>1 run (EVAL-P6.4) still counts each repetition as its own guard turn instead of collapsing
+      them. Split into a new `evals/judge_case_grouping.py` alongside `judge_runner.py` for the same
+      300-line-cap reason as EVAL-P6.1's `generation_records.py` split; `judge_runner._write_judged_jsonl`'s
+      per-record JSONL output is unchanged, only the summarize/report path was double-counting. ISSUE-123
+      moved to `archive/ISSUES_RESOLVED.md` as `[FIXED]`.
 
 - [ ] **EVAL-P6.4** *(live; not `make check`-gated — requires engine + Neo4j + Ollama up)* **The first
       measured k=3 run.** Every statistic built in EVAL-P2 through EVAL-P5 has so far only ever seen

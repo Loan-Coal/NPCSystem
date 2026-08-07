@@ -193,10 +193,10 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     baseline was measured on 2026-08-06 before a judge call was spent on P1..P8.
 
     Current state (2026-08-07, phase EVAL-P1 complete): EVAL-P0.*, EVAL-P1.*, EVAL-P2.*,
-    EVAL-P3.*, EVAL-P4.*, EVAL-P5.1, EVAL-P5.2 (superseded), EVAL-P5.3, EVAL-P5.4 and
-    EVAL-P6.3 are ticked. Nine tasks are actionable by the loop; the only two flagged
-    are EVAL-P6.4 and EVAL-P8.3, both of which need a running engine + Neo4j + Ollama
-    and are therefore human-session work.
+    EVAL-P3.*, EVAL-P4.*, EVAL-P5.1, EVAL-P5.2 (superseded), EVAL-P5.3, EVAL-P5.4,
+    EVAL-P6.1, EVAL-P6.2 and EVAL-P6.3 are ticked. Seven tasks are actionable by the
+    loop; the only two flagged are EVAL-P6.4 and EVAL-P8.3, both of which need a
+    running engine + Neo4j + Ollama and are therefore human-session work.
 
     EVAL-P1.2 was flagged until 2026-08-07 **by accident**: its body contained the phrase
     "Not an ask-gate", and the cursor's skip-regex matches that literal token regardless
@@ -226,8 +226,6 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     assert pending == [
         "EVAL-P5.5",
         "EVAL-P5.6",
-        "EVAL-P6.1",
-        "EVAL-P6.2",
         "EVAL-P7.1",
         "EVAL-P7.2",
         "EVAL-P7.3",
