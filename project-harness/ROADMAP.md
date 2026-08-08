@@ -975,14 +975,14 @@ the UI gets rewritten. Three views only; the run-comparison view depends on `com
 costs nothing already built.
 **Depends on:** EVAL-P1.3, EVAL-P2.2, EVAL-P3.4, EVAL-P5.4.
 
-- [ ] **EVAL-P7.1** App skeleton + run list. Files: `create evals/dashboard/__init__.py`,
+- [x] **EVAL-P7.1** App skeleton + run list. Files: `create evals/dashboard/__init__.py`,
       `create evals/dashboard/app.py`, `create evals/dashboard/templates/runs.html`,
       `create tests/unit/evals/test_dashboard_runs.py`. Lists `evals/generations/*/meta.json` sorted newest
       first with gen_id, k, pass rate, prompt version, git SHA, timestamp.
       RED anchor: `tests/unit/evals/test_dashboard_runs.py::test_run_list_renders_gen_ids_newest_first` fails — module absent.
       Validation: against a tmp dir holding 3 `meta.json` files, `GET /` returns 200 and the three gen_ids in
       descending timestamp order; an **empty** directory returns 200 with an explicit empty-state message,
-      not a traceback.
+      not a traceback. ✅ AUTO (EVAL-P7.1, 2026-08-08)
 
 - [ ] **EVAL-P7.2** Run detail. Files: `create evals/dashboard/templates/run_detail.html`,
       `edit evals/dashboard/app.py`, `create tests/unit/evals/test_dashboard_detail.py`.
