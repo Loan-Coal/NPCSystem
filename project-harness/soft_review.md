@@ -142,3 +142,21 @@ Reviewing the EVAL-P8 diff for `compare.py` and tests:
 - ⚠️ Silent error skipping  
 - ⚠️ No guard for k=0 runs  
 - ⚠️ PairedResult contract not shown in diff
+
+## 2026-08-08 11:55:34 — phase EVAL-P9
+
+## Review Summary: EVAL-P9 Commits
+
+**5 Findings:**
+
+1. **File size violation (CRITICAL)** — `evals/case_drafts.py` is **359 lines**, exceeds CLAUDE.md hard limit of 300. Extract protocol/models/helpers to a separate module or split into sub-modules.
+
+2. **Function length violation (HIGH)** — `main()` in `case_drafts.py` (lines 290–358) is ~69 lines, exceeds CLAUDE.md strict limit of 40. Break into `_parse_args()` and `_run_generation()`.
+
+3. **Code duplication** — `_GUARD_PREFIXES` and `_CAPABILITY_PREFIX` duplicated in both `summary.py` and `case_stats.py` with "mirrored to avoid circular import" comment. Extract to shared `batteries.py` or `_constants.py` instead.
+
+4. **Incomplete test coverage** — `classify_battery()` (case_stats.py) has only one test (`test_unclassifiable_case_raises`). Missing positive tests for `"guard"` and `"capability"` classifications.
+
+5. **Unclear Protocol contract** — `HttpClient` protocol (case_drafts.py:56) defines only `.get()`, but code depends on response having `.raise_for_status()` and `.json()`. Either document response interface or use `TypeVar` + response type parameter.
+
+**Tests pass; logic is sound.** Violations are structural (size/nesting) and maintainability (duplication), not functional.
