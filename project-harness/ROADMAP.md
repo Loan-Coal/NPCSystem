@@ -1103,7 +1103,7 @@ comparable and `compare` will correctly refuse to pretend otherwise. Land the wh
 there is exactly one discontinuity, and record the pre-battery baseline `gen_id` next to it.
 **Depends on:** EVAL-P6.1, EVAL-P6.4.
 
-- [ ] **EVAL-P9.1** Capability case contract + coverage rule. Files: `create docs/CAPABILITY_CASES.md`,
+- [x] **EVAL-P9.1** Capability case contract + coverage rule. Files: `create docs/CAPABILITY_CASES.md`,
       `create tests/unit/evals/test_capability_coverage.py`.
       Define what a `case_pos_*` asserts: a fact the NPC demonstrably holds (KNOWS_ABOUT, BELIEVES, a memory,
       a witnessed event, or a goal), a player message that legitimately elicits it, and an expectation that
@@ -1112,7 +1112,7 @@ there is exactly one discontinuity, and record the pre-battery baseline `gen_id`
       RED anchor: `tests/unit/evals/test_capability_coverage.py::test_every_grounded_npc_has_a_capability_case`
       fails — 7 capability cases cannot cover the seeded NPCs.
       Validation: the test names the specific uncovered NPCs rather than reporting a bare count, so the
-      output is a work list.
+      output is a work list. ✅ AUTO ⚠️ UNVERIFIED (EVAL-P9.1, deliberate work-list test: 9 demo NPCs uncovered until EVAL-P9.3 authoring session, 2026-08-08)
 
 - [ ] **EVAL-P9.2** Draft generator over the graph. Files: `create evals/case_drafts.py`,
       `create tests/unit/evals/test_case_drafts.py`, `edit evals/__main__.py`, `edit Makefile`.
