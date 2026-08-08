@@ -1015,7 +1015,7 @@ case-level** test is the fix — n = 53 cases, not n = 3 repeats — and it dete
 **This phase is not a cut candidate**; EVAL-P7 is.
 **Depends on:** EVAL-P1.4 (two comparable generations), EVAL-P2.2 (`CaseStat`).
 
-- [ ] **EVAL-P8.1** Paired case-level significance (`math` only, no new dependency).
+- [x] **EVAL-P8.1** Paired case-level significance (`math` only, no new dependency).
       Files: `create evals/paired_stats.py`, `create tests/unit/evals/test_paired_stats.py`.
       `mcnemar_exact(b, c) -> float` (exact binomial two-sided, not the χ² approximation — at 53 cases the
       discordant counts are small enough that χ² is wrong) and
@@ -1025,7 +1025,7 @@ case-level** test is the fix — n = 53 cases, not n = 3 repeats — and it dete
       RED anchor: `tests/unit/evals/test_paired_stats.py::test_mcnemar_exact_matches_worked_example` fails — module absent.
       Validation: pinned to 3 dp against a hand-worked table in the test docstring; (b=0, c=0) raises rather
       than returning p=1.0; a fixture where 8 cases improve and 1 regresses reports `better`; a fixture where
-      3 improve and 3 regress reports `no_detectable_change` **even though the pass count rose**.
+      3 improve and 3 regress reports `no_detectable_change` **even though the pass count rose**. ✅ AUTO (EVAL-P8.1, 2026-08-08)
 
 - [ ] **EVAL-P8.2** `compare` verb over two generation directories.
       Files: `create evals/compare.py`, `edit Makefile`, `create tests/unit/evals/test_compare.py`.
