@@ -984,7 +984,7 @@ costs nothing already built.
       descending timestamp order; an **empty** directory returns 200 with an explicit empty-state message,
       not a traceback. ✅ AUTO (EVAL-P7.1, 2026-08-08)
 
-- [ ] **EVAL-P7.2** Run detail. Files: `create evals/dashboard/templates/run_detail.html`,
+- [x] **EVAL-P7.2** Run detail. Files: `create evals/dashboard/templates/run_detail.html`,
       `edit evals/dashboard/app.py`, `create tests/unit/evals/test_dashboard_detail.py`.
       Headline pass rate **with k rendered adjacent to it**, the calibration badge (per-scorer κ from
       EVAL-P5.4), both EVAL-P3 deterministic rates, the full config block, and the flaky table sorted by
@@ -992,7 +992,7 @@ costs nothing already built.
       RED anchor: `tests/unit/evals/test_dashboard_detail.py::test_headline_renders_k_adjacent_to_rate` fails.
       Validation: for a k=3 fixture the page contains the literal string `k=3` within the headline element —
       a k=3 number must be visually impossible to mistake for a k=15 number — and the flaky table lists
-      2/3 cases above 3/3 cases.
+      2/3 cases above 3/3 cases. ✅ AUTO (EVAL-P7.2, 2026-08-08)
 
 - [ ] **EVAL-P7.3** Per-case drill-down. Files: `create evals/dashboard/templates/case_detail.html`,
       `edit evals/dashboard/app.py`, `create tests/unit/evals/test_dashboard_case.py`.
