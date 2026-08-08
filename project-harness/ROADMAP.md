@@ -1027,7 +1027,7 @@ case-level** test is the fix — n = 53 cases, not n = 3 repeats — and it dete
       than returning p=1.0; a fixture where 8 cases improve and 1 regresses reports `better`; a fixture where
       3 improve and 3 regress reports `no_detectable_change` **even though the pass count rose**. ✅ AUTO (EVAL-P8.1, 2026-08-08)
 
-- [ ] **EVAL-P8.2** `compare` verb over two generation directories.
+- [x] **EVAL-P8.2** `compare` verb over two generation directories.
       Files: `create evals/compare.py`, `edit Makefile`, `create tests/unit/evals/test_compare.py`.
       Load both transcripts → `case_stats.aggregate` each → inner-join on `case_id` → `paired_compare` →
       per-case delta table sorted by regression first. **Report the intersection size and name every case
@@ -1035,7 +1035,7 @@ case-level** test is the fix — n = 53 cases, not n = 3 repeats — and it dete
       RED anchor: `tests/unit/evals/test_compare.py::test_cases_missing_from_one_run_are_named_not_dropped` fails.
       Validation: `make eval-compare BEFORE=<gen_id> AFTER=<gen_id>` prints the verdict with its p-value,
       the k of **both** runs adjacent to every rate, and the four-way delta table; comparing a run against
-      itself yields `no_detectable_change` with p = 1.0 and zero discordant pairs.
+      itself yields `no_detectable_change` with p = 1.0 and zero discordant pairs. ✅ AUTO (EVAL-P8.2, 2026-08-08)
 
 - [ ] **EVAL-P8.3** *(live; requires the full stack)* **Second measured run and the first real comparison.**
       EVAL-P8.2's unit tests are fixture-driven, so `compare` can be green while never having compared two

@@ -82,6 +82,9 @@ VERBS: dict[str, VerbTarget] = {
     "label-import": VerbTarget(
         "label_import", "main", "Import a CLI labelling session into validated CalibrationLabel rows."
     ),
+    "compare": VerbTarget(
+        "compare", "main", "McNemar paired comparison of two generation directories."
+    ),
 }
 
 

@@ -15,7 +15,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-layers check-docstrings roadmap-verify type-ratchet type-ratchet-update check-harness \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world package
@@ -247,6 +247,14 @@ eval-calibrate:
 # Usage: make eval-adjudicate [LABELS=evals/calibration/labels_v1.jsonl]
 eval-adjudicate:
 	$(PYTHON) -m evals adjudicate $(if $(LABELS),--file $(LABELS),)
+
+# eval-compare: McNemar paired comparison of two generation directories (EVAL-P8.2).
+# Usage: make eval-compare BEFORE=<gen_id> AFTER=<gen_id>
+eval-compare:
+	@echo "Comparing $(BEFORE) vs $(AFTER) ..."
+	$(PYTHON) -m evals compare \
+		--before evals/generations/$(BEFORE) \
+		--after evals/generations/$(AFTER)
 
 # label-export: export transcript records as JSON batches for the CLI labelling pass (EVAL-P5.6).
 # Usage: make label-export TRANSCRIPT=evals/generations/<gen_id>/outputs.jsonl OUT_DIR=evals/calibration/export
