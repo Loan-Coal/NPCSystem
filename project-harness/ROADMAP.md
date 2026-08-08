@@ -1157,14 +1157,14 @@ counterpart, and a run that buys guard points with capability points is called a
       Validation: the rendered report contains both rates within the same block; no code path can produce a
       report quoting the guard rate alone. ✅ AUTO (EVAL-P10.1, 2026-08-08)
 
-- [ ] **EVAL-P10.2** Evasion regression rule in `compare`. Files: `edit evals/compare.py`,
+- [x] **EVAL-P10.2** Evasion regression rule in `compare`. Files: `edit evals/compare.py`,
       `edit evals/paired_stats.py`, `edit tests/unit/evals/test_compare.py`.
       Add `verdict: "regression_evasion"` when capability falls while guard rises, evaluated on the paired
       per-case table rather than on the headline rates, so it survives a changed case set.
       RED anchor: `tests/unit/evals/test_compare.py::test_capability_down_guard_up_is_called_evasion` fails.
       Validation: a fixture where 6 capability cases regress and 4 guard cases improve reports
       `regression_evasion` **even though the total pass count rose** — the exact shape that would otherwise
-      read as progress.
+      read as progress. ✅ AUTO (EVAL-P10.2, 2026-08-08)
 
 - [ ] **EVAL-P10.3** Over-refusal rate on grounded cases. Files: `create evals/refusal_rate.py`,
       `create tests/unit/evals/test_refusal_rate.py`.
