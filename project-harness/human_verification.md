@@ -256,3 +256,7 @@ make: *** [Makefile:50: test-cov] Error 1
 ## 2026-08-07 17:43:23 — no status token from task EVAL-P5.5
 
 The session ended without a bare AUTO_STATUS line. Log: C:/Users/lohan/Documents/hackathons/NPCSystem/project-harness/.loop-logs/task-EVAL-P5.5-1786117385.log
+
+## 2026-08-08 11:14:20 — task EVAL-P9.1 introduced a confirmed regression
+
+Committed anyway as visible debt (scar 6.5). Run 1 of 3.

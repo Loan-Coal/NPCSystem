@@ -1114,7 +1114,7 @@ there is exactly one discontinuity, and record the pre-battery baseline `gen_id`
       Validation: the test names the specific uncovered NPCs rather than reporting a bare count, so the
       output is a work list. ✅ AUTO ⚠️ UNVERIFIED (EVAL-P9.1, deliberate work-list test: 9 demo NPCs uncovered until EVAL-P9.3 authoring session, 2026-08-08)
 
-- [ ] **EVAL-P9.2** Draft generator over the graph. Files: `create evals/case_drafts.py`,
+- [x] **EVAL-P9.2** Draft generator over the graph. Files: `create evals/case_drafts.py`,
       `create tests/unit/evals/test_case_drafts.py`, `edit evals/__main__.py`, `edit Makefile`.
       For each (NPC, grounded fact) pair reachable over the graph API, emit a **draft** YAML case into
       `evals/cases/_drafts/` with the npc_id, the grounding edge, a generated player message and a
@@ -1122,7 +1122,7 @@ there is exactly one discontinuity, and record the pre-battery baseline `gen_id`
       RED anchor: `tests/unit/evals/test_case_drafts.py::test_draft_is_written_to_drafts_dir_not_cases_dir` fails.
       Validation: a fixture graph with 3 NPCs and 5 grounded facts yields 5 drafts, each naming its grounding
       edge in a `# grounded_by:` comment; `_load_cases` still returns exactly the promoted cases and never a
-      draft; running twice is idempotent.
+      draft; running twice is idempotent. ✅ AUTO (EVAL-P9.2, 2026-08-08)
 
 - [ ] **EVAL-P9.3** *(live; requires the seeded stack)* Generate the drafts, then **review and promote ~35**
       into `evals/cases/`. This is the authoring session — edit the player message, tighten the expectation,

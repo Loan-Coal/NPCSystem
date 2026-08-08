@@ -85,6 +85,9 @@ VERBS: dict[str, VerbTarget] = {
     "compare": VerbTarget(
         "compare", "main", "McNemar paired comparison of two generation directories."
     ),
+    "draft-cases": VerbTarget(
+        "case_drafts", "main", "Generate draft capability cases from the live graph into evals/cases/_drafts/."
+    ),
 }
 
 

@@ -15,7 +15,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-layers check-docstrings roadmap-verify type-ratchet type-ratchet-update check-harness \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world package
@@ -273,6 +273,17 @@ label-import:
 
 # eval-combined: one command that runs dialogue evals + retrieval evals and prints both summaries
 eval-combined: eval eval-retrieval
+
+# draft-cases: generate draft capability cases from the live graph into evals/cases/_drafts/.
+# Requires: running engine (make docker-compose up -d && make demo-seed).
+# Usage: make draft-cases [NPC_IDS="npc_a npc_b"] [REQUIRES_WORLD=demo] [OVERWRITE=1]
+draft-cases:
+	$(PYTHON) -m evals draft-cases \
+		--base-url $(BASE_URL) \
+		--drafts-dir evals/cases/_drafts \
+		--requires-world $(or $(REQUIRES_WORLD),demo) \
+		$(if $(NPC_IDS),--npc-ids $(NPC_IDS),) \
+		$(if $(OVERWRITE),--overwrite,)
 
 # ---------------------------------------------------------------------------
 # Demo game targets (Phase 2)
