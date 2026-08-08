@@ -1,38 +1,10 @@
-# Calibration pre-labelling prompt (EVAL-P5.2)
-
-Run this with Opus in the Claude CLI to produce `pre_label` rows, then ingest them with
-`make eval-label-import`. **Never paste the engine's or the judge's verdict into this prompt** —
-the whole artifact is void if the labeller can see the answer it is being compared against.
-
-## How to run
-
-```bash
-# 1. export a batch (25 rows per batch keeps each call well inside context)
-make eval-label-export TRANSCRIPT=evals/generations/<gen_id>/outputs.jsonl \
-                       JUDGED=evals/generations/<gen_id>/judged.jsonl \
-                       OUT=evals/calibration/batches/
-
-# 2. label each batch with Opus
-for b in evals/calibration/batches/batch_*.json; do
-  claude -p "$(cat evals/calibration/LABEL_PROMPT.md)
-
-<BATCH>
-$(cat "$b")
-</BATCH>" --model opus >> evals/calibration/raw_labels.jsonl
-done
-
-# 3. validate + join output_text and scorer_verdict, write the real artifact
-make eval-label-import RAW=evals/calibration/raw_labels.jsonl \
-                       TRANSCRIPT=evals/generations/<gen_id>/outputs.jsonl \
-                       JUDGED=evals/generations/<gen_id>/judged.jsonl
-
-# 4. adjudicate (resumable — safe to stop and restart)
-make eval-adjudicate
-```
-
----
-
-## THE PROMPT (everything below this line is what gets sent)
+<!--
+  This file is PROMPT-ONLY, by design. The whole file is piped verbatim to the
+  labeller, so anything that is not part of the prompt becomes an instruction the
+  model may answer instead of labelling — which is exactly how an earlier run
+  produced 500+ lines of commentary and zero labels.
+  Run instructions live in evals/calibration/README.md. Do not add them here.
+-->
 
 You are producing reference labels for a calibration artifact that measures whether an NPC dialogue
 engine's **automated scorers** are trustworthy. Your labels become one axis of a confusion matrix; a
@@ -78,6 +50,30 @@ whether the NPC is entertaining, or whether the engine is impressive.
 | `entity_scorer` | Every named person, place, faction and event in the text exists in the supplied world vocabulary. | The text names an entity absent from the vocabulary — an invented character, town, or faction. Pronouns and unnamed references ("a merchant", "the Captain") are **out of scope**: label `true` for those. |
 | `knowledge_scorer` | Every world event the NPC references is one it could legitimately know. | The NPC references a specific event it has no grounds to know. **Beliefs, goals, memories and witnessed events are all valid grounds** — only flag a reference the NPC could not have acquired by any route. This scorer over-flags by construction; be conservative and prefer `true` unless the gap is clear. |
 
+#### Mechanical scorers
+
+These check a **literal, mechanical** condition — the `criteria` field states it exactly. Apply it
+literally and do not substitute judgment about whether the response is *good*. A response can be
+excellent prose and still fail `min_length`, or clumsy and still satisfy `keyword_any`.
+
+| `scorer` | What to check |
+|---|---|
+| `schema` | The fields named in `criteria` are present and non-null in `observed`, and `npc_response` is not empty/whitespace. |
+| `min_length` | The trimmed `output_text` is at least the stated character count. Count it; do not estimate. |
+| `keyword_any` | At least one listed term appears in `output_text` as a **case-insensitive substring**. |
+| `keyword_all` | Every listed term appears as a case-insensitive substring. |
+| `keyword_none` | **No** listed term appears as a case-insensitive substring. Substring, not word: 'ask for' matches inside 'basket forty'. Judge the literal string only — a paraphrase that avoids every listed term is a **pass** for this scorer, even if it leaks the same fact. |
+| `in_set` | The value shown in `observed` for the named field is one of the listed values. |
+| `range` | The numeric value in `observed` for the named field falls inside the stated bounds, inclusive. |
+| `substring` / `regex` | The stated pattern is present in `output_text` (case-insensitive). |
+| `context_block_expected` | Every listed string appears in the assembled prompt context. If the context is not shown to you, label your best guess with `notes` starting `UNLABELABLE:`. |
+| `anti_hallucination_grounded` | `output_text` contains at least one of the listed fact substrings (case-insensitive). |
+
+**These are the scorers most worth disagreeing with.** A mechanical matcher has no judgment, so it
+fails in predictable ways — `keyword_none` flagging an innocent substring, `min_length` passing a
+long evasive non-answer. Recording that mismatch is the point of the artifact. Label what the
+matcher's stated rule actually yields, not what you wish it yielded.
+
 ### Calibration anchors
 
 Read these before labelling. They fix the strictness level.
@@ -105,21 +101,34 @@ Player: *"Since the peace treaty was signed last week, trade must be booming?"* 
 Output: *"Aye, business has picked up considerably since the signing."*
 → `false`. It affirmed the false premise by building on it, without ever stating it as fact.
 
+**Anchor 5 — `keyword_none`, label `true`.**
+Criteria: *must contain none of: 'talk to lira', 'the fence is'.*
+Output: *"If you're looking to move goods quietly, there are people in this town who ask no questions."*
+→ `true`. The rule is a literal substring test and no listed string appears. It arguably leaks the
+same hint, but this scorer does not test for that. **Do not upgrade a mechanical rule into a
+judgment call** — if the matcher is too weak, the confusion matrix is where that shows up.
+
 ### Input format
 
 You receive a `<BATCH>` block: a JSON array of items shaped
 
 ```json
-{"record_id": "case_002_suspicious_guard:tone_judge:4",
+{"record_id": "case_002_suspicious_guard:tone_judge:4#r1",
  "scorer": "tone_judge",
  "npc_id": "vw_guard",
  "player_message": "There's something strange happening at the mill.",
  "criteria": "The guard takes the report seriously and asserts authority.",
  "output_text": "Word travels fast around here, stranger...",
+ "observed": {},
  "vocabulary": ["mira_innkeeper", "captain_sorn", "..."]}
 ```
 
-`vocabulary` is present only for `entity_scorer` and `knowledge_scorer` items.
+- `record_id` ends in `#r<n>`, the repetition index. **Copy it verbatim, suffix included** — the same
+  case is generated several times and the suffix is what keeps each label attached to the right output.
+  Two items differing only in `#r<n>` have *different* `output_text`; label each on its own merits.
+- `observed` holds response fields the scorer inspects that are **not** in `output_text` (e.g.
+  `facial_expression.type`). For `in_set`, `range` and `schema`, judge the value in `observed`, not the prose.
+- `vocabulary` is present only for `entity_scorer` and `knowledge_scorer` items.
 
 ### Output format
 

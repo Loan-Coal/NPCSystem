@@ -15,7 +15,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-layers check-docstrings roadmap-verify type-ratchet type-ratchet-update check-harness \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts mock-calibrate label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world package
@@ -255,6 +255,41 @@ eval-compare:
 	$(PYTHON) -m evals compare \
 		--before evals/generations/$(BEFORE) \
 		--after evals/generations/$(AFTER)
+
+# eval-deterministic-verdicts: replay every deterministic matcher to judged-format JSONL (no LLM).
+# Required alongside eval-judge before label-import: judged.jsonl covers LLM-judge records only.
+# Usage: make eval-deterministic-verdicts TRANSCRIPT=evals/generations/<id>/outputs.jsonl GEN_ID=<id>
+eval-deterministic-verdicts:
+	@echo "Replaying deterministic matchers from $(TRANSCRIPT) ..."
+	$(PYTHON) -m evals deterministic-verdicts \
+		--transcript $(TRANSCRIPT) \
+		--json-out evals/generations/$(GEN_ID)/deterministic_judged.jsonl
+
+# mock-calibrate: exercise export -> import -> adjudicate -> calibrate with RANDOM labels.
+# Spends no Claude credits and produces a MEANINGLESS report — for pipeline testing only.
+# Usage: make mock-calibrate GEN_ID=<id>
+mock-calibrate:
+	@echo "MOCK calibration dry run for $(GEN_ID) — results are random and meaningless."
+	$(PYTHON) -m evals label-export \
+		--transcript evals/generations/$(GEN_ID)/outputs.jsonl \
+		--out-dir evals/calibration/batches
+	$(PYTHON) -m evals deterministic-verdicts \
+		--transcript evals/generations/$(GEN_ID)/outputs.jsonl \
+		--json-out evals/generations/$(GEN_ID)/deterministic_judged.jsonl
+	$(PYTHON) scripts/mock_labeller.py \
+		--batches evals/calibration/batches \
+		--out evals/calibration/mock_raw_labels.jsonl
+	$(PYTHON) -m evals label-import \
+		--raw evals/calibration/mock_raw_labels.jsonl \
+		--transcript evals/generations/$(GEN_ID)/outputs.jsonl \
+		--judged evals/generations/$(GEN_ID)/judged.jsonl \
+		         evals/generations/$(GEN_ID)/deterministic_judged.jsonl \
+		--model mock-random-v1 \
+		--out evals/calibration/mock_labels.jsonl
+	$(PYTHON) scripts/mock_adjudicate.py \
+		--labels evals/calibration/mock_labels.jsonl \
+		--out evals/calibration/mock_labels_adjudicated.jsonl
+	$(PYTHON) -m evals calibrate --file evals/calibration/mock_labels_adjudicated.jsonl
 
 # label-export: export transcript records as JSON batches for the CLI labelling pass (EVAL-P5.6).
 # Usage: make label-export TRANSCRIPT=evals/generations/<gen_id>/outputs.jsonl OUT_DIR=evals/calibration/export

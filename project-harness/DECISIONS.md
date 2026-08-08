@@ -2452,3 +2452,55 @@ per-verb special case.
 
 **Consequences:** No target deleted (DEC-148 ordering: coverage parity → aliases → delete last holds).
 `make check` green: 2835 passed, 0 failed, coverage 87.09%.
+
+---
+
+## DEC-156: Calibration pipeline — composite item ids, deterministic scorer verdicts, prompt-only LABEL_PROMPT
+
+**Date:** 2026-08-08
+**Status:** ✅ ACCEPTED (ask-gate cleared by explicit human instruction: "these scorers exist for a
+reason and are valuable data: keep them, build the pipeline to take them into account")
+**Context:** The first real labelling attempt produced 921 export items of which 576 (62.5%) carried
+`criteria: ""` and were unlabelable, and every labelling run returned prose instead of JSONL. Tracing
+it surfaced four distinct defects, three of them silent.
+
+**Decisions:**
+
+1. **Deterministic scorers are calibrated, not filtered out.** The obvious fix — export only the 345
+   LLM-judge records — was rejected. A mechanical matcher has no judgment and therefore fails in
+   predictable ways (`keyword_none` flagging an innocent substring, `min_length` passing a long
+   evasive non-answer); measuring that is the artifact's purpose. New `criteria_rendering.py` renders
+   each matcher's `metadata["expectation"]` into a labelable sentence, and surfaces the response
+   fields the matcher actually inspects (`in_set`/`range`/`schema` judge `facial_expression.type`,
+   `relation_deltas.trust` — fields absent from `output_text`, so those items were previously
+   unanswerable even in principle). An unmapped matcher kind raises rather than rendering blank.
+
+2. **Labelled items are addressed by a composite `<record_id>#r<n>`** (`record_identity.py`).
+   `GenerationRecord.record_id` omits `repetition`, so the k=3 run emitted 921 records under only
+   **307 unique ids**, each repeated 3× with *different* response text. `label_import`'s
+   `dict[record_id]` indexes kept the last repetition and silently joined every label to it — pairing
+   a label made against one response with another response's verdict. Changing `record_id` itself was
+   rejected: it would invalidate the existing transcript and force a ~60 min regeneration for no gain.
+
+3. **`label-import --judged` accepts multiple files, and a missing verdict is fatal.**
+   `judged.jsonl` holds LLM-judge records only; `deterministic_records.score_record` could always
+   replay a matcher verdict but no verb ever persisted one, so nothing on disk covered the other 62%.
+   New `deterministic-verdicts` verb writes them. Importing a record with no verdict now raises
+   `MissingVerdictError` rather than defaulting to `False`, which would fabricate data points.
+
+4. **`LABEL_PROMPT.md` is prompt-only.** The labelling loop pipes the whole file, so its "How to run"
+   header was being read as the model's task — the direct cause of 513 lines of commentary and zero
+   labels across ~10 sessions. Run instructions moved to `evals/calibration/README.md`.
+
+5. **`python -m evals` forces UTF-8 on stdout/stderr.** `calibrate` crashed with
+   `UnicodeEncodeError` on `≥` under the Windows cp1252 console — *after* a completed adjudication
+   pass, i.e. it would have destroyed the summary at the end of a 4-6 hour session.
+
+**Also added:** `scripts/mock_labeller.py` + `scripts/mock_adjudicate.py` and `make mock-calibrate`,
+which drive the whole chain on seeded random labels for zero Claude spend. Defects 3 and 5 were both
+found by that dry run, not by inspection. Mock artifacts are stamped `mock-random-v1` /
+`adjudicated_at="MOCK"` and written to `mock_*.jsonl` so they can never be mistaken for a real pass.
+
+**Consequences:** All 921 items now labelable and uniquely addressed (was 345 labelable / 307
+addressable). `make check` green: 2945 passed, coverage 87.14%; the single remaining failure is the
+pre-existing EVAL-P9.3 work-list test documented in ROADMAP.md:1115.

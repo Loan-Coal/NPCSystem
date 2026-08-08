@@ -400,3 +400,33 @@ works as intended.
 **Description:** `summarize` is 45 lines, exceeding the 40-line strict limit from CLAUDE.md. Introduced before EVAL-P10.
 **Why deferred:** Pre-existing violation, not introduced by EVAL-P10.1. Fixing it is a separate refactor.
 **To fix:** Extract battery-result filtering into a helper (e.g., `_collect_battery_stats`) to bring `summarize` under 40 lines.
+
+## ISSUE-139: Night-shift loop sweeps unrelated working-tree changes into its commits
+**Found:** 2026-08-08, during calibration pipeline repair
+**Severity:** P2 (annoying)
+**Where:** `scripts/expand_loop.sh` / `/expand-linear-next` commit step
+**Description:** The unattended loop stages the whole working tree, so changes made by a concurrent
+interactive session are absorbed into whatever roadmap commit the loop is writing. Observed
+concretely: an interactive fix to `evals/eval_records.py` (`read_transcript` gen-dir support) plus
+its regression tests were committed under `24f6a01 feat(evals): capability_rate as first-class
+metric (EVAL-P9.4)`, a commit that has nothing to do with them. HEAD moved from 73e6c36 to 9fa5493
+mid-session. Consequences: misleading history, `[UNVERIFIED: regression]` tags applied to code the
+loop never gated, and a real risk of the loop committing half-finished interactive work.
+**Why deferred:** Not blocking; the calibration work was committed separately and intact. Fixing it
+means changing the loop's commit step, which is CI-adjacent and needs its own task.
+**To fix:** Have the loop stage explicit paths (or `git stash push --keep-index` around its commit),
+and refuse to commit when the tree contains modifications it did not make. Alternatively run the loop
+in a dedicated worktree so interactive sessions cannot collide with it.
+
+## ISSUE-140: evals/calibration/raw_labels.jsonl holds 513 lines of prose, zero labels
+**Found:** 2026-08-08, during calibration pipeline repair
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/calibration/raw_labels.jsonl`
+**Description:** Accumulated output from ~10 failed labelling attempts across several sessions. Every
+non-blank line is assistant commentary (some of it AI prose diagnosing the very bug that produced
+it); a parse check found 0 valid label rows. The file is also cp1252-encoded, so `label-import`
+fails on it with `UnicodeDecodeError` before it can reject the content.
+**Why deferred:** Deleting it was not authorised in-session, and it is inert — the corrected loop in
+`evals/calibration/README.md` filters non-JSON lines and writes UTF-8, and the real run should write
+a fresh file. Kept as evidence of the failure mode until the first successful labelling pass.
+**To fix:** Delete it once a real labelling run has produced a valid `raw_labels.jsonl`.

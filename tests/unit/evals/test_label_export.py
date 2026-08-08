@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 
 from eval_records import GenerationRecord
+from record_identity import composite_item_id
 from label_export import (
     GRAPH_SCORER_KINDS,
     MAX_BATCH_SIZE,
@@ -94,7 +95,8 @@ def test_export_item_never_has_scorer_verdict_field() -> None:
 def test_build_export_item_includes_required_fields() -> None:
     """build_export_item includes record_id, scorer, npc_id, player_message, criteria, output_text."""
     item = build_export_item(_TONE_RECORD)
-    assert item.record_id == "case_001:tone_judge:0"
+    # Repetition-qualified: the bare record_id repeats k times in a k-repeat run.
+    assert item.record_id == "case_001:tone_judge:0#r0"
     assert item.scorer == "tone_judge"
     assert item.npc_id == "mira_innkeeper"
     assert item.player_message == "Hello there."
@@ -243,4 +245,6 @@ def test_build_export_items_preserves_order() -> None:
         _make_record("case_003:tone_judge:1"),
     ]
     items = build_export_items(records)
-    assert [item.record_id for item in items] == [r.record_id for r in records]
+    assert [item.record_id for item in items] == [
+        composite_item_id(r.record_id, r.repetition) for r in records
+    ]

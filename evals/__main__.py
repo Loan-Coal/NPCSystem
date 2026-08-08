@@ -31,6 +31,26 @@ _EVALS_DIR = str(Path(__file__).resolve().parent)
 if _EVALS_DIR not in sys.path:
     sys.path.insert(0, _EVALS_DIR)
 
+
+def _force_utf8_streams() -> None:
+    """Reconfigure stdout/stderr to UTF-8 so report glyphs cannot crash a verb.
+
+    Several runners print non-ASCII (κ, ≥, →, ✓). On a Windows console defaulting
+    to cp1252 those raise UnicodeEncodeError mid-run — calibration.py crashed this
+    way *after* a completed adjudication pass, losing the summary. errors='replace'
+    keeps output flowing on any terminal that still cannot represent a glyph.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass  # Non-reconfigurable stream (pipe/pytest capture) — leave as-is.
+
+
+_force_utf8_streams()
+
 _HELP_FLAGS = frozenset({"--help", "-h", "help"})
 _EXIT_USAGE = 2
 _EXIT_OK = 0
@@ -75,6 +95,11 @@ VERBS: dict[str, VerbTarget] = {
     ),
     "adjudicate": VerbTarget(
         "adjudicate", "main", "Resumable interactive adjudication of calibration labels."
+    ),
+    "deterministic-verdicts": VerbTarget(
+        "deterministic_verdicts",
+        "main",
+        "Replay deterministic matchers to judged-format JSONL (no LLM).",
     ),
     "label-export": VerbTarget(
         "label_export", "main", "Export transcript records as JSON batches for CLI labelling."

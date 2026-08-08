@@ -26,6 +26,7 @@ from calibration_records import (
     read_calibration_labels,
     write_calibration_labels,
 )
+from record_identity import composite_item_id, split_item_id
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -52,6 +53,27 @@ class UnknownRecordIdError(Exception):
         super().__init__(
             f"record_id {record_id!r} not found in transcript index — "
             f"this row cannot be imported without its source output_text and scorer_verdict."
+        )
+
+
+class MissingVerdictError(Exception):
+    """Raised when a labelled record has no scorer_verdict in any judged file.
+
+    A calibration row without the scorer's own verdict has nothing to compare the
+    label against; importing it as a default False would fabricate a data point.
+    Deterministic records need `python -m evals deterministic-verdicts` — the LLM
+    judge pass alone does not cover them.
+
+    Attributes:
+        record_id: The offending identifier.
+    """
+
+    def __init__(self, record_id: str) -> None:
+        self.record_id = record_id
+        super().__init__(
+            f"record_id {record_id!r} has no scorer_verdict in the supplied judged file(s). "
+            f"Deterministic scorers require a deterministic-verdicts pass; pass its output "
+            f"as an additional --judged argument."
         )
 
 
@@ -144,12 +166,18 @@ def import_labels(
         record_id: str = raw.get("record_id", "")
         _check_contamination(raw, record_id)
 
-        if record_id not in transcript_index:
+        # Normalise: a bare (pre-composite) record_id means repetition 0.
+        base, repetition = split_item_id(record_id)
+        item_id = composite_item_id(base, repetition)
+
+        if item_id not in transcript_index:
             raise UnknownRecordIdError(record_id)
+        if item_id not in judged_index:
+            raise MissingVerdictError(record_id)
 
         row = RawLabelRow.model_validate(raw)
-        output_text: str = transcript_index[record_id]
-        scorer_verdict: bool = judged_index[record_id]
+        output_text: str = transcript_index[item_id]
+        scorer_verdict: bool = judged_index[item_id]
 
         results.append(
             CalibrationLabel(
@@ -188,12 +216,17 @@ def read_raw_rows(path: Path) -> list[dict[str, Any]]:
 
 
 def _build_transcript_index(transcript_path: Path) -> dict[str, str]:
-    """Build a record_id→output_text index from a generation transcript outputs.jsonl.
+    """Build an item_id→output_text index from a generation transcript outputs.jsonl.
+
+    Keyed by the repetition-qualified item id, not the bare record_id: a k-repeat
+    run emits k records sharing one record_id with different npc_response text, so
+    a bare-record_id dict would keep only the last repetition and silently join
+    labels to the wrong output.
 
     Args:
         transcript_path: Path to the outputs.jsonl of a generation run.
     Returns:
-        Dict mapping record_id to npc_response.
+        Dict mapping composite item_id to npc_response.
     Raises:
         FileNotFoundError: If the path does not exist.
     """
@@ -202,17 +235,21 @@ def _build_transcript_index(transcript_path: Path) -> dict[str, str]:
         if not line.strip():
             continue
         obj = json.loads(line)
-        index[obj["record_id"]] = obj.get("npc_response", "")
+        key = composite_item_id(obj["record_id"], int(obj.get("repetition", 0)))
+        index[key] = obj.get("npc_response", "")
     return index
 
 
 def _build_judged_index(judged_path: Path) -> dict[str, bool]:
-    """Build a record_id→scorer_verdict index from a judged.jsonl file.
+    """Build an item_id→scorer_verdict index from a judged.jsonl file.
+
+    Keyed by the repetition-qualified item id for the same reason as
+    _build_transcript_index — see that function's docstring.
 
     Args:
         judged_path: Path to the judged.jsonl of a judge/deterministic pass.
     Returns:
-        Dict mapping record_id to the passed (scorer_verdict) bool.
+        Dict mapping composite item_id to the passed (scorer_verdict) bool.
     Raises:
         FileNotFoundError: If the path does not exist.
     """
@@ -221,7 +258,8 @@ def _build_judged_index(judged_path: Path) -> dict[str, bool]:
         if not line.strip():
             continue
         obj = json.loads(line)
-        index[obj["record_id"]] = bool(obj.get("passed", False))
+        key = composite_item_id(obj["record_id"], int(obj.get("repetition", 0)))
+        index[key] = bool(obj.get("passed", False))
     return index
 
 
@@ -259,8 +297,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--judged",
         type=Path,
         required=True,
+        nargs="+",
         metavar="PATH",
-        help="Path to the judged.jsonl (judge_runner or deterministic_pass output).",
+        help=(
+            "Path(s) to judged JSONL files. Pass both the LLM judge's judged.jsonl "
+            "and the deterministic-verdicts output to cover every scorer."
+        ),
     )
     p.add_argument(
         "--out",
@@ -296,7 +338,10 @@ def main(argv: list[str] | None = None) -> int:
 
     raw_rows = read_raw_rows(args.raw)
     transcript_index = _build_transcript_index(args.transcript)
-    judged_index = _build_judged_index(args.judged)
+
+    judged_index: dict[str, bool] = {}
+    for judged_path in args.judged:
+        judged_index.update(_build_judged_index(judged_path))
 
     new_labels = import_labels(raw_rows, transcript_index, judged_index, args.model)
 

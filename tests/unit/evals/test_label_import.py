@@ -18,9 +18,11 @@ import pytest
 from calibration_records import CalibrationLabel, read_calibration_labels, write_calibration_labels
 from label_import import (
     ContaminatedRowError,
+    MissingVerdictError,
     UnknownRecordIdError,
     import_labels,
 )
+from record_identity import composite_item_id
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -28,20 +30,29 @@ from label_import import (
 
 _PRE_LABELLER = "claude-opus-5"
 
+# Both indexes are keyed by the repetition-qualified item id, which is what
+# _build_transcript_index / _build_judged_index now emit. Raw label rows below
+# stay bare on purpose: import_labels must normalise a bare id to repetition 0.
 _TRANSCRIPT_INDEX: dict[str, str] = {
-    "case_001:tone_judge:0": "Sure, I can help you with that.",
-    "case_002:affirms_judge:0": "Yes, the northern war has begun.",
-    "case_003:refusal_judge:0": "I cannot assist with that request.",
-    "case_004:tone_judge:1": "Happy to assist you, traveller.",
-    "case_005:affirms_judge:1": "Indeed, the guard captain told me so.",
+    composite_item_id(record_id, 0): text
+    for record_id, text in {
+        "case_001:tone_judge:0": "Sure, I can help you with that.",
+        "case_002:affirms_judge:0": "Yes, the northern war has begun.",
+        "case_003:refusal_judge:0": "I cannot assist with that request.",
+        "case_004:tone_judge:1": "Happy to assist you, traveller.",
+        "case_005:affirms_judge:1": "Indeed, the guard captain told me so.",
+    }.items()
 }
 
 _JUDGED_INDEX: dict[str, bool] = {
-    "case_001:tone_judge:0": True,
-    "case_002:affirms_judge:0": False,
-    "case_003:refusal_judge:0": True,
-    "case_004:tone_judge:1": True,
-    "case_005:affirms_judge:1": False,
+    composite_item_id(record_id, 0): verdict
+    for record_id, verdict in {
+        "case_001:tone_judge:0": True,
+        "case_002:affirms_judge:0": False,
+        "case_003:refusal_judge:0": True,
+        "case_004:tone_judge:1": True,
+        "case_005:affirms_judge:1": False,
+    }.items()
 }
 
 _RAW_ROWS: list[dict[str, Any]] = [
@@ -145,3 +156,54 @@ def test_round_trip_is_byte_identical(tmp_path: Path) -> None:
     write_calibration_labels(out, labels)
     loaded = read_calibration_labels(out)
     assert loaded == labels
+
+
+# ---------------------------------------------------------------------------
+# Repetition identity (regression: k-repeat runs collapsing to one record)
+# ---------------------------------------------------------------------------
+
+
+def test_repetitions_join_to_their_own_output_and_verdict() -> None:
+    """Each repetition of a case keeps its own output_text and scorer_verdict.
+
+    Regression test: GenerationRecord.record_id omits `repetition`, so a k=3 run
+    emits three records sharing one record_id with different npc_response text.
+    While the indexes were keyed on the bare record_id, only the last repetition
+    survived and every label was joined to it — silently pairing a label made
+    against one response with a different response's verdict.
+    """
+    base = "case_001:tone_judge:0"
+    transcript = {
+        composite_item_id(base, 0): "First reply.",
+        composite_item_id(base, 1): "Second reply.",
+        composite_item_id(base, 2): "Third reply.",
+    }
+    judged = {
+        composite_item_id(base, 0): True,
+        composite_item_id(base, 1): False,
+        composite_item_id(base, 2): True,
+    }
+    raw = [
+        {"record_id": composite_item_id(base, i), "scorer": "tone_judge",
+         "pre_label": True, "notes": ""}
+        for i in range(3)
+    ]
+
+    labels = import_labels(raw, transcript, judged, _PRE_LABELLER)
+
+    assert len(labels) == 3
+    assert [lbl.output_text for lbl in labels] == ["First reply.", "Second reply.", "Third reply."]
+    assert [lbl.scorer_verdict for lbl in labels] == [True, False, True]
+    assert len({lbl.record_id for lbl in labels}) == 3
+
+
+def test_missing_scorer_verdict_is_rejected_not_defaulted() -> None:
+    """A record with no verdict in any judged file raises rather than importing False.
+
+    Deterministic scorers are absent from the LLM judge's judged.jsonl; importing
+    them with a default False would fabricate calibration data points.
+    """
+    raw = [{"record_id": "case_001:tone_judge:0", "scorer": "tone_judge",
+            "pre_label": True, "notes": ""}]
+    with pytest.raises(MissingVerdictError):
+        import_labels(raw, _TRANSCRIPT_INDEX, {}, _PRE_LABELLER)
