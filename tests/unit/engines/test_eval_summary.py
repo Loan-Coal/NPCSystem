@@ -138,7 +138,10 @@ def test_guarantee_not_demonstrated_when_hallucination_present() -> None:
 
 
 def test_format_summary_lines_contains_headline() -> None:
-    results = [_case("case_adv_x", [_exp("keyword_none", True)])]
+    results = [
+        _case("case_adv_x", [_exp("keyword_none", True)]),
+        _case("case_pos_x", [_exp("affirms_judge", True)]),  # paired capability case required
+    ]
     s = summary.summarize(results)
     lines = summary.format_summary_lines(s)
     blob = "\n".join(lines)
@@ -148,7 +151,10 @@ def test_format_summary_lines_contains_headline() -> None:
 
 
 def test_format_summary_markdown_contains_headline() -> None:
-    results = [_case("case_adv_x", [_exp("keyword_none", True)])]
+    results = [
+        _case("case_adv_x", [_exp("keyword_none", True)]),
+        _case("case_pos_x", [_exp("affirms_judge", True)]),  # paired capability case required
+    ]
     s = summary.summarize(results)
     md = summary.format_summary_markdown(s)
     blob = "\n".join(md)
@@ -159,12 +165,13 @@ def test_format_summary_markdown_contains_headline() -> None:
 def test_skipped_cases_excluded_from_evaluated_denominator() -> None:
     """49 evaluated / 53 total — skipped cases excluded from the evaluated denominator.
 
-    53 cases total, 4 fully-skipped → evaluated_cases must be 49.
+    53 cases total (48 cap + 1 guard evaluated, 4 skipped) → evaluated_cases must be 49.
     No summary line may quote 53 as a pass-rate denominator.
     """
-    normal = [_case(f"case_pos_{i:02d}", [_exp("schema", True)]) for i in range(49)]
+    cap = [_case(f"case_pos_{i:02d}", [_exp("schema", True)]) for i in range(48)]
+    guard = [_case("case_adv_g00", [_exp("keyword_none", True)])]  # 1 evaluated guard case
     skipped = [_case(f"case_skip_{i:02d}", [_exp("runner", True, skipped=True)]) for i in range(4)]
-    results = normal + skipped
+    results = cap + guard + skipped
     assert len(results) == 53
     s = summary.summarize(results)
     assert s.evaluated_cases == 49
@@ -214,8 +221,23 @@ def test_write_report_embeds_guarantee_section(tmp_path) -> None:
     results = [
         _case("case_adv_roleplay_swap", [_exp("schema", True), _exp("keyword_none", True)]),
         _case("case_neg_lira_no_system_reveal", [_exp("keyword_none", True)]),
+        _case("case_pos_mira_trade", [_exp("affirms_judge", True)]),
     ]
     report_path = report.write_report(results=results, output_dir=tmp_path)
     text = report_path.read_text(encoding="utf-8")
     assert "Anti-Hallucination Guarantee" in text
     assert "0 lore hallucinations across 2 adversarial turns" in text
+
+
+def test_summary_without_capability_rate_raises() -> None:
+    """format_summary_lines must raise when guard_rate is set but capability_rate is absent."""
+    results = [
+        _case("case_adv_x", [_exp("keyword_none", True)]),
+        _case("case_neg_y", [_exp("keyword_none", True)]),
+        # no case_pos_* → capability_rate will be None
+    ]
+    s = summary.summarize(results)
+    assert s.guard_rate is not None
+    assert s.capability_rate is None
+    with pytest.raises(ValueError, match="capability"):
+        summary.format_summary_lines(s)

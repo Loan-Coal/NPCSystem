@@ -384,3 +384,11 @@ instead of a hardcoded literal list, so it self-updates with whatever the phase 
 knows the phase just closed) rather than leaving it to whichever task's author remembers. Either fix should
 keep the "assert sorted id lists, not bare counts" property the current test already has, since that part
 works as intended.
+
+## ISSUE-137: `evals/summary.py::summarize` exceeds the 40-line function limit
+**Found:** 2026-08-08, during EVAL-P10.1
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/summary.py:168–212` (`summarize`, 45 lines)
+**Description:** `summarize` is 45 lines, exceeding the 40-line strict limit from CLAUDE.md. Introduced before EVAL-P10.
+**Why deferred:** Pre-existing violation, not introduced by EVAL-P10.1. Fixing it is a separate refactor.
+**To fix:** Extract battery-result filtering into a helper (e.g., `_collect_battery_stats`) to bring `summarize` under 40 lines.

@@ -1,5 +1,10 @@
 """
-report.py - Markdown report generation for eval runs.
+Module: report
+Layer: eval harness (standalone — not part of the npc_engine layer model)
+Purpose: Write markdown reports for completed eval runs, embedding the anti-hallucination
+         guarantee section (guard + capability rates paired) and per-case pass/fail details.
+Dependencies: summary.py, retrieval_summary.py, stdlib (datetime, pathlib).
+Used by: runner.py (writes report at end of run), __main__.py.
 """
 
 from __future__ import annotations

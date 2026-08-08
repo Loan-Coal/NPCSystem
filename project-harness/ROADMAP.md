@@ -1149,13 +1149,13 @@ counterpart, and a run that buys guard points with capability points is called a
 **Constraint:** Pure reporting and comparison logic over artifacts that already exist. No new live runs.
 **Depends on:** EVAL-P9.4, EVAL-P8.2.
 
-- [ ] **EVAL-P10.1** Refuse to emit an unpaired headline. Files: `edit evals/summary.py`, `edit evals/report.py`,
+- [x] **EVAL-P10.1** Refuse to emit an unpaired headline. Files: `edit evals/summary.py`, `edit evals/report.py`,
       `edit tests/unit/engines/test_eval_summary.py`.
       `format_summary_lines` renders guard and capability adjacent, each with k, n and interval, and raises
       when asked to render a summary carrying only one of them.
       RED anchor: `tests/unit/engines/test_eval_summary.py::test_summary_without_capability_rate_raises` fails.
       Validation: the rendered report contains both rates within the same block; no code path can produce a
-      report quoting the guard rate alone.
+      report quoting the guard rate alone. ✅ AUTO (EVAL-P10.1, 2026-08-08)
 
 - [ ] **EVAL-P10.2** Evasion regression rule in `compare`. Files: `edit evals/compare.py`,
       `edit evals/paired_stats.py`, `edit tests/unit/evals/test_compare.py`.
