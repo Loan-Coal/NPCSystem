@@ -176,6 +176,39 @@ def build_export_items(
     return [build_export_item(record, vocabulary) for record in records]
 
 
+def filter_by_scorer(
+    items: Sequence[ExportItem],
+    scorers: set[str] | None,
+) -> list[ExportItem]:
+    """Keep only items whose scorer is in `scorers`.
+
+    Used to export a labelling set for the scorers worth a human's time. Scorers
+    whose verdict never varies across a run (e.g. schema, which passed every
+    record) cannot yield a meaningful kappa no matter how carefully they are
+    labelled, so excluding them is a real saving rather than a shortcut.
+
+    Args:
+        items: Export items to filter.
+        scorers: Scorer names to keep; None means keep everything.
+    Returns:
+        Items in original order, filtered.
+    Raises:
+        ValueError: If a requested scorer matches no item — a silent empty
+            export would look like a completed pass with nothing to label.
+    """
+    if scorers is None:
+        return list(items)
+
+    present = {item.scorer for item in items}
+    unknown = scorers - present
+    if unknown:
+        raise ValueError(
+            f"No items for scorer(s) {sorted(unknown)}. Present in this transcript: "
+            f"{sorted(present)}"
+        )
+    return [item for item in items if item.scorer in scorers]
+
+
 def write_export_batches(
     items: Sequence[ExportItem],
     out_dir: Path,
@@ -260,6 +293,16 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help=f"Items per batch file (default: {MAX_BATCH_SIZE}).",
     )
+    p.add_argument(
+        "--scorer",
+        action="append",
+        default=None,
+        metavar="NAME",
+        help=(
+            "Export only this scorer; repeatable. Omit to export every scorer. "
+            "Use to skip scorers whose verdict never varies (no kappa signal)."
+        ),
+    )
     return p
 
 
@@ -282,10 +325,12 @@ def main(argv: list[str] | None = None) -> int:
         vocab_dict = json.loads(args.vocabulary.read_text(encoding="utf-8"))
 
     items = build_export_items(records, vocab_dict)
+    items = filter_by_scorer(items, set(args.scorer) if args.scorer else None)
     paths = write_export_batches(items, args.out_dir, args.batch_size)
 
+    scope = f" for {sorted(set(args.scorer))}" if args.scorer else ""
     print(
-        f"Exported {len(items)} item(s) across {len(paths)} batch file(s) → {args.out_dir}",
+        f"Exported {len(items)} item(s){scope} across {len(paths)} batch file(s) → {args.out_dir}",
         file=sys.stderr,
     )
     return 0

@@ -20,6 +20,7 @@ import pytest
 from eval_records import GenerationRecord
 from record_identity import composite_item_id
 from label_export import (
+    filter_by_scorer,
     GRAPH_SCORER_KINDS,
     MAX_BATCH_SIZE,
     ExportItem,
@@ -248,3 +249,31 @@ def test_build_export_items_preserves_order() -> None:
     assert [item.record_id for item in items] == [
         composite_item_id(r.record_id, r.repetition) for r in records
     ]
+
+
+# ---------------------------------------------------------------------------
+# Scorer filtering (hand-labelling ergonomics)
+# ---------------------------------------------------------------------------
+
+
+def test_filter_by_scorer_keeps_only_requested_kinds() -> None:
+    """filter_by_scorer keeps only items whose scorer is in the requested set."""
+    items = [
+        build_export_item(_make_record("c1:tone_judge:0")),
+        build_export_item(_make_record("c2:affirms_judge:0", judge_kind="affirms_judge")),
+    ]
+    kept = filter_by_scorer(items, {"tone_judge"})
+    assert [i.scorer for i in kept] == ["tone_judge"]
+
+
+def test_filter_by_scorer_none_is_passthrough() -> None:
+    """A None filter returns every item — the default export is unfiltered."""
+    items = [build_export_item(_make_record("c1:tone_judge:0"))]
+    assert filter_by_scorer(items, None) == items
+
+
+def test_filter_by_scorer_unknown_kind_raises() -> None:
+    """A scorer name that matches nothing is a typo, not an empty export."""
+    items = [build_export_item(_make_record("c1:tone_judge:0"))]
+    with pytest.raises(ValueError):
+        filter_by_scorer(items, {"tone_judeg"})
