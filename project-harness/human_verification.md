@@ -260,3 +260,7 @@ The session ended without a bare AUTO_STATUS line. Log: C:/Users/lohan/Documents
 ## 2026-08-08 11:14:20 — task EVAL-P9.1 introduced a confirmed regression
 
 Committed anyway as visible debt (scar 6.5). Run 1 of 3.
+
+## 2026-08-08 11:28:53 — task EVAL-P9.2 committed with a pre-existing red gate
+
+Every failure pre-dated this task (baseline attribution). Nothing new broke.

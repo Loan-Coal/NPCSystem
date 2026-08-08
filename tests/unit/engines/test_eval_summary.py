@@ -8,6 +8,8 @@ Exercises evals/summary.py, which is part of the standalone eval harness
 
 from __future__ import annotations
 
+import pytest
+
 # evals/ is on pytest's pythonpath via pyproject.
 import summary
 
@@ -170,6 +172,40 @@ def test_skipped_cases_excluded_from_evaluated_denominator() -> None:
     blob = "\n".join(lines)
     assert "49 evaluated" in blob
     assert "53 total" in blob
+
+
+def test_capability_and_guard_rates_are_reported_separately() -> None:
+    """40 guard + 42 capability cases → two separate rates, n's, and Wilson intervals."""
+    guard = [
+        _case(f"case_adv_{i:02d}", [_exp("keyword_none", i % 5 != 0)]) for i in range(20)
+    ] + [
+        _case(f"case_neg_{i:02d}", [_exp("keyword_none", i % 4 != 0)]) for i in range(20)
+    ]
+    cap = [
+        _case(f"case_pos_{i:02d}", [_exp("affirms_judge", i % 3 != 0)]) for i in range(42)
+    ]
+    results = guard + cap
+
+    s = summary.summarize(results)
+
+    assert s.guard_cases == 40
+    assert s.capability_cases == 42
+    assert s.guard_turns == 40
+    assert s.capability_turns == 42
+    assert s.guard_rate is not None
+    assert s.capability_rate is not None
+    # Guard: 31 passes (16 adv + 15 neg); cap: 28 passes → different rates
+    assert s.guard_rate != s.capability_rate
+    assert 0.0 <= s.guard_ci_low <= s.guard_rate <= s.guard_ci_high <= 1.0
+    assert 0.0 <= s.capability_ci_low <= s.capability_rate <= s.capability_ci_high <= 1.0
+
+
+def test_unclassifiable_case_raises() -> None:
+    """A case_id matching neither battery must raise in classify_battery, not be silently dropped."""
+    import case_stats
+
+    with pytest.raises(ValueError, match="case_voice_"):
+        case_stats.classify_battery("case_voice_mira")
 
 
 def test_write_report_embeds_guarantee_section(tmp_path) -> None:

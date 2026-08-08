@@ -238,8 +238,13 @@ def write_transcript(path: Path, records: Sequence[GenerationRecord]) -> None:
 def read_transcript(path: Path) -> TranscriptFile:
     """Load and validate a transcript file.
 
+    Supports both formats written by this module: the legacy single-file
+    TranscriptFile JSON (write_transcript) and the gen-dir split format
+    (write_generation_dir, meta.json + outputs.jsonl). The split format is
+    detected by filename (``outputs.jsonl``) plus a sibling ``meta.json``.
+
     Args:
-        path: Path to a JSON file written by write_transcript.
+        path: Path to a JSON transcript file, or to a gen-dir's outputs.jsonl.
     Returns:
         Validated TranscriptFile (version 2 only).
     Raises:
@@ -247,6 +252,10 @@ def read_transcript(path: Path) -> TranscriptFile:
         ValidationError: If the file does not conform to the TranscriptFile schema.
         FileNotFoundError: If the path does not exist.
     """
+    meta_path = path.with_name("meta.json")
+    if path.name == "outputs.jsonl" and meta_path.exists():
+        return _read_generation_dir(path, meta_path)
+
     raw = path.read_text(encoding="utf-8")
     try:
         header = json.loads(raw)
@@ -259,3 +268,27 @@ def read_transcript(path: Path) -> TranscriptFile:
             expected=_TRANSCRIPT_VERSION,
         )
     return TranscriptFile.model_validate_json(raw)
+
+
+def _read_generation_dir(outputs_path: Path, meta_path: Path) -> TranscriptFile:
+    """Reassemble a TranscriptFile from the gen-dir split format.
+
+    Args:
+        outputs_path: Path to outputs.jsonl (one GenerationRecord per line).
+        meta_path: Path to the sibling meta.json (TranscriptFile minus records).
+    Returns:
+        Validated TranscriptFile combining meta.json fields with the parsed records.
+    Raises:
+        TranscriptVersionError: If meta.json's version field is not 2.
+        ValidationError: If either file does not conform to its schema.
+    """
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    found_version = meta.get("version")
+    if found_version != _TRANSCRIPT_VERSION:
+        raise TranscriptVersionError(
+            found=int(found_version) if isinstance(found_version, int) else 0,
+            expected=_TRANSCRIPT_VERSION,
+        )
+    lines = [line for line in outputs_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    meta["records"] = [json.loads(line) for line in lines]
+    return TranscriptFile.model_validate(meta)

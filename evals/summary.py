@@ -11,9 +11,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from statistics import pass_rate, wilson_interval
+
 # Guard battery = the cases that prove "NPCs never invent lore or break character".
 # Adversarial cases (case_adv_*) and negative knowledge-guard cases (case_neg_*).
 _GUARD_PREFIXES: tuple[str, ...] = ("case_adv_", "case_neg_")
+# Capability battery = positive cases proving the NPC can demonstrate grounded knowledge.
+_CAPABILITY_PREFIX: str = "case_pos_"
 
 # Matcher kinds tracked individually in the failure breakdown.
 _KIND_SCHEMA: str = "schema"
@@ -37,6 +41,16 @@ class EvalSummary:
         total_turns: Cases that actually invoked the NPC (not fully skipped).
         guard_cases: Adversarial + negative cases (the anti-hallucination battery).
         guard_turns: Guard cases that actually ran (denominator of the headline).
+        guard_passes: Guard cases that both ran and passed.
+        guard_rate: Pass rate over guard turns; None when guard_turns == 0.
+        guard_ci_low: Lower bound of the 95 % Wilson CI for guard_rate; None when no turns.
+        guard_ci_high: Upper bound of the 95 % Wilson CI for guard_rate; None when no turns.
+        capability_cases: Positive (case_pos_*) cases in the run.
+        capability_turns: Capability cases that actually ran (non-skipped denominator).
+        capability_passes: Capability cases that both ran and passed.
+        capability_rate: Pass rate over capability turns; None when capability_turns == 0.
+        capability_ci_low: Lower bound of the 95 % Wilson CI; None when no turns.
+        capability_ci_high: Upper bound of the 95 % Wilson CI; None when no turns.
         hallucination_failures: keyword_none + affirms_judge failures within guard cases.
         schema_failures: Failed schema expectations across all cases.
         keyword_none_failures: Failed keyword_none expectations across all cases.
@@ -58,6 +72,16 @@ class EvalSummary:
     affirms_judge_failures: int
     other_failures: int
     skipped_cases: int
+    guard_passes: int = 0
+    guard_rate: float | None = None
+    guard_ci_low: float | None = None
+    guard_ci_high: float | None = None
+    capability_cases: int = 0
+    capability_turns: int = 0
+    capability_passes: int = 0
+    capability_rate: float | None = None
+    capability_ci_low: float | None = None
+    capability_ci_high: float | None = None
 
     @property
     def guarantee_demonstrated(self) -> bool:
@@ -97,6 +121,31 @@ def _is_guard_case(case_id: str) -> bool:
     return case_id.startswith(_GUARD_PREFIXES)
 
 
+def _is_capability_case(case_id: str) -> bool:
+    """True if the case belongs to the positive capability battery (case_pos_*)."""
+    return case_id.startswith(_CAPABILITY_PREFIX)
+
+
+def _battery_rate_stats(
+    battery: list[dict],
+) -> tuple[int, int, float | None, float | None, float | None]:
+    """Compute pass rate, passes, and Wilson CI for a pre-filtered battery list.
+
+    Args:
+        battery: Result dicts already filtered to one battery type.
+    Returns:
+        (turns, passes, rate, ci_low, ci_high) — rate/ci fields are None when turns == 0.
+    """
+    evaluated = [r for r in battery if not _is_skipped_case(r)]
+    n_turns = len(evaluated)
+    n_passes = sum(1 for r in evaluated if r.get("passed"))
+    if n_turns == 0:
+        return n_turns, n_passes, None, None, None
+    rate = pass_rate(n_passes, n_turns)
+    ci_low, ci_high = wilson_interval(n_passes, n_turns)
+    return n_turns, n_passes, rate, ci_low, ci_high
+
+
 def _failed_expectations(result: dict) -> list[dict]:
     """Return non-skipped, failing expectations for a case."""
     return [
@@ -117,20 +166,22 @@ def summarize(results: list[dict]) -> EvalSummary:
     """
     total_cases = len(results)
     skipped_cases = sum(1 for result in results if _is_skipped_case(result))
+    evaluated_cases = total_cases - skipped_cases
 
     guard_results = [r for r in results if _is_guard_case(r.get("case_id", ""))]
-    guard_turns = sum(1 for r in guard_results if not _is_skipped_case(r))
+    cap_results = [r for r in results if _is_capability_case(r.get("case_id", ""))]
+
+    g_turns, g_passes, g_rate, g_ci_low, g_ci_high = _battery_rate_stats(guard_results)
+    c_turns, c_passes, c_rate, c_ci_low, c_ci_high = _battery_rate_stats(cap_results)
 
     tally = _tally_failures(results)
-
-    evaluated_cases = total_cases - skipped_cases
 
     return EvalSummary(
         total_cases=total_cases,
         evaluated_cases=evaluated_cases,
         total_turns=evaluated_cases,
         guard_cases=len(guard_results),
-        guard_turns=guard_turns,
+        guard_turns=g_turns,
         hallucination_failures=tally["hallucination"],
         schema_failures=tally["schema"],
         keyword_none_failures=tally["keyword_none"],
@@ -138,6 +189,16 @@ def summarize(results: list[dict]) -> EvalSummary:
         affirms_judge_failures=tally["affirms_judge"],
         other_failures=tally["other"],
         skipped_cases=skipped_cases,
+        guard_passes=g_passes,
+        guard_rate=g_rate,
+        guard_ci_low=g_ci_low,
+        guard_ci_high=g_ci_high,
+        capability_cases=len(cap_results),
+        capability_turns=c_turns,
+        capability_passes=c_passes,
+        capability_rate=c_rate,
+        capability_ci_low=c_ci_low,
+        capability_ci_high=c_ci_high,
     )
 
 
@@ -177,8 +238,19 @@ def _tally_failures(results: list[dict]) -> dict[str, int]:
     return tally
 
 
+def _fmt_rate(rate: float | None, ci_low: float | None, ci_high: float | None) -> str:
+    """Format a rate + Wilson CI as a compact string, or 'N/A' when not computed."""
+    if rate is None:
+        return "N/A (no evaluated turns)"
+    return f"{rate:.3f}  95% CI [{ci_low:.3f}–{ci_high:.3f}]"
+
+
 def format_summary_lines(summary: EvalSummary) -> list[str]:
     """Render the summary as plain-text console lines."""
+    g_rate_str = _fmt_rate(summary.guard_rate, summary.guard_ci_low, summary.guard_ci_high)
+    c_rate_str = _fmt_rate(
+        summary.capability_rate, summary.capability_ci_low, summary.capability_ci_high
+    )
     return [
         _SEPARATOR,
         "ANTI-HALLUCINATION GUARANTEE",
@@ -187,6 +259,10 @@ def format_summary_lines(summary: EvalSummary) -> list[str]:
         "",
         f"  Guard battery (adversarial + negative): {summary.guard_cases} cases, "
         f"{summary.guard_turns} turns evaluated",
+        f"  Guard rate:       {g_rate_str}",
+        f"  Capability battery (case_pos_*): {summary.capability_cases} cases, "
+        f"{summary.capability_turns} turns evaluated",
+        f"  Capability rate:  {c_rate_str}",
         f"  All cases: {summary.evaluated_cases} evaluated / {summary.total_cases} total "
         f"({summary.skipped_cases} skipped)",
         "",
@@ -202,13 +278,19 @@ def format_summary_lines(summary: EvalSummary) -> list[str]:
 
 def format_summary_markdown(summary: EvalSummary) -> list[str]:
     """Render the summary as markdown lines for the top of the eval report."""
+    g_rate_str = _fmt_rate(summary.guard_rate, summary.guard_ci_low, summary.guard_ci_high)
+    c_rate_str = _fmt_rate(
+        summary.capability_rate, summary.capability_ci_low, summary.capability_ci_high
+    )
     return [
         "## Anti-Hallucination Guarantee",
         "",
         f"**{summary.headline}**",
         "",
         f"- Guard battery (adversarial + negative): **{summary.guard_cases}** cases, "
-        f"**{summary.guard_turns}** turns evaluated",
+        f"**{summary.guard_turns}** turns — rate {g_rate_str}",
+        f"- Capability battery (case_pos_*): **{summary.capability_cases}** cases, "
+        f"**{summary.capability_turns}** turns — rate {c_rate_str}",
         f"- All cases: {summary.evaluated_cases} evaluated / {summary.total_cases} total "
         f"({summary.skipped_cases} skipped)",
         "",

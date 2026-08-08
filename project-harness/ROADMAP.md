@@ -1133,14 +1133,14 @@ there is exactly one discontinuity, and record the pre-battery baseline `gen_id`
       in the commit message.
       **This task is for a human session. The unattended loop must not start it.**
 
-- [ ] **EVAL-P9.4** `capability_rate` as a first-class metric. Files: `edit evals/summary.py`,
+- [x] **EVAL-P9.4** `capability_rate` as a first-class metric. Files: `edit evals/summary.py`,
       `edit evals/case_stats.py`, `edit tests/unit/engines/test_eval_summary.py`.
       Classify every case as `guard` or `capability` from its id prefix and grounding, and compute both rates
       with their own Wilson intervals and denominators. Do **not** average them into one score — the whole
       point is that they move in opposite directions under evasion.
       RED anchor: `tests/unit/engines/test_eval_summary.py::test_capability_and_guard_rates_are_reported_separately` fails.
       Validation: a fixture with 40 guard and 42 capability cases reports two rates, two n's and two
-      intervals; a case that matches neither classifier raises rather than being silently dropped into either.
+      intervals; a case that matches neither classifier raises rather than being silently dropped into either. ✅ AUTO ⚠️ UNVERIFIED (EVAL-P9.4, confirmed regression: tests/unit/evals/test_capability_coverage.py::test_every_grounded_npc_has_a_capability_case (pre-existing from EVAL-P9.1 [66be773], not introduced by this task), 2026-08-08)
 
 ### Phase EVAL-P10 — Paired headline and the evasion gate
 **Goal:** Make the trade visible and mechanical: no guard number is ever printed without its capability

@@ -20,6 +20,7 @@ from eval_records import (
     TranscriptFile,
     TranscriptVersionError,
     read_transcript,
+    write_generation_dir,
 )
 from retrieved_item import RetrievedItem
 from run_config import RunConfig
@@ -111,6 +112,46 @@ def test_retrieved_item_is_frozen() -> None:
     item = RetrievedItem(key="k", tier="unknown", priority=0, text="t")
     with pytest.raises(Exception):
         item.key = "new_key"  # type: ignore[misc]
+
+
+def test_read_transcript_reads_gen_dir_split_format(tmp_path: Path) -> None:
+    """read_transcript reconstructs a TranscriptFile from meta.json + outputs.jsonl.
+
+    Regression test: write_generation_dir (used by generate_runner's gen-id path)
+    splits a run into meta.json (header) and outputs.jsonl (one record per line),
+    which is not a single JSON document with a top-level "version" key. Before this
+    fix, read_transcript tried json.loads() on the whole outputs.jsonl, failed to
+    parse multi-line JSONL as one JSON value, and raised TranscriptVersionError
+    (found=0) even though the run was version 2 — breaking judge/score/label-export
+    for every gen-id run.
+    """
+    record = GenerationRecord(**_BASE_FIELDS)
+    gen_dir = tmp_path / "k3_deadbeef"
+    write_generation_dir(gen_dir, [record, record], gen_id="k3_deadbeef", k=3, config=_MINIMAL_RUN_CONFIG)
+
+    loaded = read_transcript(gen_dir / "outputs.jsonl")
+
+    assert loaded.version == 2
+    assert loaded.gen_id == "k3_deadbeef"
+    assert loaded.k == 3
+    assert loaded.config is not None
+    assert loaded.config.generation_model == "test-model:7b"
+    assert len(loaded.records) == 2
+    assert loaded.records[0].record_id == "case_001:tone_judge:0"
+
+
+def test_read_transcript_rejects_gen_dir_v1(tmp_path: Path) -> None:
+    """read_transcript raises TranscriptVersionError for a gen-dir meta.json with the wrong version."""
+    gen_dir = tmp_path / "stale_run"
+    gen_dir.mkdir()
+    (gen_dir / "meta.json").write_text(
+        json.dumps({"version": 1, "generated_at": "2026-01-01T00:00:00+00:00", "gen_id": "stale", "k": 1, "config": None}),
+        encoding="utf-8",
+    )
+    (gen_dir / "outputs.jsonl").write_text("", encoding="utf-8")
+
+    with pytest.raises(TranscriptVersionError):
+        read_transcript(gen_dir / "outputs.jsonl")
 
 
 def test_transcript_version_error_names_both_versions() -> None:

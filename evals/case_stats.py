@@ -22,6 +22,7 @@ from statistics import pass_rate, wilson_interval
 # ---------------------------------------------------------------------------
 
 Classification = Literal["stable_pass", "flaky", "stable_fail"]
+Battery = Literal["guard", "capability"]
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -37,6 +38,36 @@ _INSTABILITY_ORDER: dict[Classification, int] = {
     _STABLE_FAIL: 1,
     _STABLE_PASS: 2,
 }
+
+# Battery classification prefixes (mirrored from summary.py to avoid circular import).
+_GUARD_PREFIXES: tuple[str, ...] = ("case_adv_", "case_neg_")
+_CAPABILITY_PREFIX: str = "case_pos_"
+
+
+# ---------------------------------------------------------------------------
+# Battery classification
+# ---------------------------------------------------------------------------
+
+
+def classify_battery(case_id: str) -> Battery:
+    """Classify a case_id as belonging to the guard or capability battery.
+
+    Args:
+        case_id: The case identifier string (e.g. ``case_adv_foo``, ``case_pos_bar``).
+    Returns:
+        ``'guard'`` for adversarial/negative cases; ``'capability'`` for positive cases.
+    Raises:
+        ValueError: When ``case_id`` matches neither prefix — it must never be silently
+            dropped into either rate denominator.
+    """
+    if case_id.startswith(_GUARD_PREFIXES):
+        return "guard"
+    if case_id.startswith(_CAPABILITY_PREFIX):
+        return "capability"
+    raise ValueError(
+        f"Case '{case_id}' matches neither the guard battery "
+        f"(case_adv_*/case_neg_*) nor the capability battery (case_pos_*)"
+    )
 
 
 # ---------------------------------------------------------------------------
