@@ -103,3 +103,19 @@ The constant `_RECORD_ID_COLON_SEGMENTS=2` extracts the prefix correctly but lac
 5. **Vocabulary path existence check could fail silently** (label_export.py:293–294) — If `args.vocabulary` is provided but file doesn't exist, the check `if args.vocabulary.exists()` silently leaves `vocab_dict = None`. Should raise an error instead of silently skipping, since user explicitly specified a path.
 
 **Pre-merge checklist:** Fix (1) and (2); add test for (3); add validation for (4). Item (5) is lower priority but recommended.
+
+## 2026-08-08 10:07:04 — phase EVAL-P7
+
+**FINDINGS (EVAL-P7.1/P7.2/P7.3):**
+
+1. **Async/sync mismatch (HIGH)**: `run_list()`, `run_detail()`, and `case_detail()` in app.py are declared `async def` but perform only blocking sync I/O (`.read_text()`, `.glob()`, JSON parsing). FastAPI will not error but this wastes thread resources. Either change routes to `def` (sync) or delegate I/O to a thread pool via `asyncio.to_thread()`.
+
+2. **Edge case: integer coercion on missing field**: In `app.py:239` and `app.py:153/194`, code does `int(r.get("repetition", 0))` without validation. If `repetition` is `None` or a non-numeric string, this raises. Should validate at parse time or use safer coercion (e.g., `int(r.get("repetition") or 0)`).
+
+3. **Redundant template loading**: `_load_template()` is called once per request (3 routes), re-reading disk each time. Should cache template objects at module init to avoid I/O on every request.
+
+4. **Missing docstring on detail._compute_kappa_parts()**: Private function with a complex calculation (Cohen's kappa). Should document what each variable (tp/fp/fn/tn/pe) represents for maintainability.
+
+5. **Division-by-zero potential**: `run_detail()` at line 245 computes `passes / total` without checking if `total == 0` first (already handled), but `_compute_kappa_parts()` at line 199 assumes `abs(1.0 - pe) > 1e-12` to avoid division by zero — good safeguard, but undocumented. Add a comment.
+
+**Summary**: Code is solid overall (good module structure, proper docstrings, 80%+ test coverage). Three concrete fixes: (1) convert sync routes or use thread pools, (2) validate integer conversions, (3) cache templates.
