@@ -85,3 +85,21 @@ The constant `_RECORD_ID_COLON_SEGMENTS=2` extracts the prefix correctly but lac
 **4. No test for write failures** — Test suite doesn't cover permission errors, disk full, or path-is-a-file scenarios when calling `_write_judged_jsonl()`. If `path.write_text()` fails, the exception propagates uncaught, crashing the judge run.
 
 **5. Inconsistent encoding constant usage in tests** — `test_judged_records.py` hardcodes `encoding="utf-8"` instead of using the module-level `_JSONL_ENCODING` constant. Test should import and use the same constant.
+
+## 2026-08-08 09:06:46 — phase EVAL-P5
+
+## Code Review: EVAL-P5.6 Batch Export + Import
+
+**5 findings (ordered by severity):**
+
+1. **File size violation** — `label_import.py` is 309 lines, exceeds the 300-line hard limit in CLAUDE.md. Must split before merge. Consider extracting index builders (`_build_transcript_index`, `_build_judged_index`) into a separate `label_import_io.py` module.
+
+2. **Missing defensive check for judged_index lookup** (label_import.py:461) — `scorer_verdict: bool = judged_index[record_id]` can crash with bare `KeyError` if `record_id` exists in transcript but not in judged. Should use `.get()` or raise a domain error like `UnknownRecordIdError`. Current error message would be opaque.
+
+3. **No test for mismatched indices** — Test suite covers unknown record_id in transcript, but not the reverse case: record_id in transcript that's missing from judged_index. Add a test to ensure this raises a clear validation error, not a bare KeyError.
+
+4. **Missing JSON key validation in index builders** (label_import.py:514, 533) — If a JSONL line lacks `"record_id"`, both `_build_transcript_index` and `_build_judged_index` crash with bare `KeyError` instead of a validation error. Wrap in try/except to provide context (e.g., "Line X of Y missing 'record_id'").
+
+5. **Vocabulary path existence check could fail silently** (label_export.py:293–294) — If `args.vocabulary` is provided but file doesn't exist, the check `if args.vocabulary.exists()` silently leaves `vocab_dict = None`. Should raise an error instead of silently skipping, since user explicitly specified a path.
+
+**Pre-merge checklist:** Fix (1) and (2); add test for (3); add validation for (4). Item (5) is lower priority but recommended.
