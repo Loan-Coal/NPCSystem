@@ -318,3 +318,7 @@ make: *** [Makefile:50: test-cov] Error 1
 ## 2026-08-08 12:18:40 — task EVAL-P10.1 committed with a pre-existing red gate
 
 Every failure pre-dated this task (baseline attribution). Nothing new broke.
+
+## 2026-08-08 12:27:54 — task EVAL-P10.2 committed with a pre-existing red gate
+
+Every failure pre-dated this task (baseline attribution). Nothing new broke.
