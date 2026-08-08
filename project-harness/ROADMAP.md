@@ -834,7 +834,7 @@ it falsely marked P5.2's ask-gate cleared. See DEC-153 §1.
       engine. Must land before any adjudication session — labels adjudicated against the old axis answer
       the wrong question and cannot be re-derived without redoing the hours. ✅ AUTO (EVAL-P5.5, 2026-08-08)
 
-- [ ] **EVAL-P5.6** Batch export + validating import for the CLI labelling pass (replaces EVAL-P5.2).
+- [x] **EVAL-P5.6** Batch export + validating import for the CLI labelling pass (replaces EVAL-P5.2).
       Files: `create evals/label_export.py`, `create evals/label_import.py`,
       `create tests/unit/evals/test_label_export.py`, `create tests/unit/evals/test_label_import.py`,
       `edit evals/__main__.py`, `edit Makefile`.
@@ -854,7 +854,7 @@ it falsely marked P5.2's ask-gate cleared. See DEC-153 §1.
       **Depends on:** EVAL-P5.5 (schema) and, for full six-scorer coverage, EVAL-P6.1 (the deterministic
       records must exist in the transcript before they can be exported). Safe to build before P6.1 — the
       join is by `record_id` and the tests are fixture-driven — but do not *run* it against a pre-P6.1
-      generation or four of the six scorers will silently have no rows.
+      generation or four of the six scorers will silently have no rows. ✅ AUTO (EVAL-P5.6, 2026-08-08)
 
 ### Phase EVAL-P6 — One CLI; legacy targets become aliases
 **Goal:** A single `python -m evals <verb>` entry point, with the seven legacy make targets reduced to thin

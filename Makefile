@@ -15,7 +15,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-layers check-docstrings roadmap-verify type-ratchet type-ratchet-update check-harness \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world package
@@ -247,6 +247,21 @@ eval-calibrate:
 # Usage: make eval-adjudicate [LABELS=evals/calibration/labels_v1.jsonl]
 eval-adjudicate:
 	$(PYTHON) -m evals adjudicate $(if $(LABELS),--file $(LABELS),)
+
+# label-export: export transcript records as JSON batches for the CLI labelling pass (EVAL-P5.6).
+# Usage: make label-export TRANSCRIPT=evals/generations/<gen_id>/outputs.jsonl OUT_DIR=evals/calibration/export
+label-export:
+	$(PYTHON) -m evals label-export --transcript $(TRANSCRIPT) --out-dir $(OUT_DIR) \
+		$(if $(VOCABULARY),--vocabulary $(VOCABULARY),) \
+		$(if $(BATCH_SIZE),--batch-size $(BATCH_SIZE),)
+
+# label-import: import a CLI labelling session into CalibrationLabel rows (EVAL-P5.6).
+# Usage: make label-import RAW=<path> TRANSCRIPT=<outputs.jsonl> JUDGED=<judged.jsonl>
+label-import:
+	$(PYTHON) -m evals label-import --raw $(RAW) --transcript $(TRANSCRIPT) --judged $(JUDGED) \
+		$(if $(OUT),--out $(OUT),) \
+		$(if $(MODEL),--model $(MODEL),) \
+		$(if $(APPEND),--append,)
 
 # eval-combined: one command that runs dialogue evals + retrieval evals and prints both summaries
 eval-combined: eval eval-retrieval

@@ -76,6 +76,12 @@ VERBS: dict[str, VerbTarget] = {
     "adjudicate": VerbTarget(
         "adjudicate", "main", "Resumable interactive adjudication of calibration labels."
     ),
+    "label-export": VerbTarget(
+        "label_export", "main", "Export transcript records as JSON batches for CLI labelling."
+    ),
+    "label-import": VerbTarget(
+        "label_import", "main", "Import a CLI labelling session into validated CalibrationLabel rows."
+    ),
 }
 
 
