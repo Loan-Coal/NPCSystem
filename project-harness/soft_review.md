@@ -119,3 +119,26 @@ The constant `_RECORD_ID_COLON_SEGMENTS=2` extracts the prefix correctly but lac
 5. **Division-by-zero potential**: `run_detail()` at line 245 computes `passes / total` without checking if `total == 0` first (already handled), but `_compute_kappa_parts()` at line 199 assumes `abs(1.0 - pe) > 1e-12` to avoid division by zero — good safeguard, but undocumented. Add a comment.
 
 **Summary**: Code is solid overall (good module structure, proper docstrings, 80%+ test coverage). Three concrete fixes: (1) convert sync routes or use thread pools, (2) validate integer conversions, (3) cache templates.
+
+## 2026-08-08 10:41:32 — phase EVAL-P8
+
+Reviewing the EVAL-P8 diff for `compare.py` and tests:
+
+## Findings
+
+1. **Missing import path verification:** `compare.py` imports from `case_stats` and `paired_stats` (lines 25-26) as if they're in the same directory/package, but the diff shows only `evals/__main__.py` being modified to add the `compare` subcommand. Need to verify these modules exist in `evals/` and are importable — the imports will fail at runtime if they're elsewhere.
+
+2. **Silent malformed-line skipping (line 133-134):** `_read_judged_rows()` catches all exceptions and silently passes, including JSON decode errors. This hides data corruption. A single corrupted line means that case's stat becomes incomplete, yet `compare_runs()` reports the intersection size without flagging the silent data loss. Recommend logging skipped lines or raising on structural corruption.
+
+3. **Majority-vote threshold edge case (line 202):** `before.passes * 2 > before.k` fails when k=0 (empty run). A run with zero rows produces zero CaseStat objects → empty `before_map`, but the logic doesn't guard against division by zero in `pass_rate()` or undefined pass rates. Empty runs should either be rejected upfront or produce a warning in the report.
+
+4. **Test doesn't verify `paired_result` type:** Line 101-104 check `paired_result.p_value`, `verdict`, `improved`, `regressed`, but the actual `PairedResult` model/interface is not shown in the diff. If `PairedResult` is from `paired_stats.py` (not in this diff), there's no contract visible that guarantees these fields exist. The tests pass by assumption.
+
+5. **Overlong case_id column truncation:** Line 323 formats case_id with `<50` width. If a record_id is longer (e.g., nested UUID:judge_type:repetition strings), it silently truncates in output. No guard or ellipsis (e.g., `<50.47`) to signal truncation. Edge case but silent data loss in human output.
+
+**Pre-merge checklist status:**  
+- ✅ Tests present (5 happy-path + 1 empty run test)  
+- ⚠️ Import paths unverified  
+- ⚠️ Silent error skipping  
+- ⚠️ No guard for k=0 runs  
+- ⚠️ PairedResult contract not shown in diff
