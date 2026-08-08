@@ -1,9 +1,10 @@
 """
 Module: calibration
 Layer: evals (eval harness — not part of src/)
-Purpose: Per-scorer calibration reports with confusion matrices, Cohen's κ, and a
-         seeded bootstrap CI. Prints one matrix per scorer — never a single aggregate.
-         Called by `make eval-calibrate`; importable for scripted use.
+Purpose: Per-scorer calibration reports with two confusion matrices each: a headline
+         (scorer_verdict vs human_verdict) and a secondary (pre_label vs human_verdict),
+         each with Cohen's κ and a seeded bootstrap CI. Prints one pair of matrices per
+         scorer — never a single aggregate. Called by `make eval-calibrate`.
 Dependencies: calibration_records, dataclasses, math, random, pathlib, sys, typing
 Used by: make eval-calibrate (CLI), tests/unit/evals/test_calibration.py
 """
@@ -53,7 +54,13 @@ class ConfusionCounts:
 
 @dataclass(frozen=True)
 class ScorerReport:
-    """Full calibration report for one scorer."""
+    """Full calibration report for one scorer.
+
+    counts / kappa / kappa_lo / kappa_hi are the HEADLINE axis:
+        scorer_verdict vs human_verdict (can I trust this scorer?).
+    pre_label_counts / pre_label_kappa / … are the SECONDARY axis:
+        pre_label vs human_verdict (free reference-labeller agreement).
+    """
 
     scorer: str
     counts: ConfusionCounts
@@ -63,6 +70,10 @@ class ScorerReport:
     prec: float
     rec: float
     pre_label_agreement: float
+    pre_label_counts: ConfusionCounts
+    pre_label_kappa: float
+    pre_label_kappa_lo: float
+    pre_label_kappa_hi: float
 
 
 # ---------------------------------------------------------------------------
@@ -71,14 +82,34 @@ class ScorerReport:
 
 
 def confusion_counts(rows: Sequence[CalibrationLabel]) -> ConfusionCounts:
-    """Tally TP/FP/FN/TN from adjudicated rows (human_verdict is not None).
+    """Tally TP/FP/FN/TN — HEADLINE axis: scorer_verdict vs human_verdict.
 
-    FP = pre_label=True, human_verdict=False — the dangerous cell.
+    FP = scorer_verdict=True, human_verdict=False — the dangerous cell
+    (scorer said pass, human said fail).
 
     Args:
-        rows: CalibrationLabel rows (may include unadjudicated; those are skipped).
+        rows: CalibrationLabel rows (unadjudicated rows are skipped).
     Returns:
-        ConfusionCounts with counts from adjudicated rows only.
+        ConfusionCounts from adjudicated rows only.
+    """
+    adj = [r for r in rows if r.human_verdict is not None]
+    tp = sum(1 for r in adj if r.scorer_verdict is True and r.human_verdict is True)
+    fp = sum(1 for r in adj if r.scorer_verdict is True and r.human_verdict is False)
+    fn = sum(1 for r in adj if r.scorer_verdict is False and r.human_verdict is True)
+    tn = sum(1 for r in adj if r.scorer_verdict is False and r.human_verdict is False)
+    return ConfusionCounts(tp=tp, fp=fp, fn=fn, tn=tn)
+
+
+def pre_label_confusion_counts(rows: Sequence[CalibrationLabel]) -> ConfusionCounts:
+    """Tally TP/FP/FN/TN — SECONDARY axis: pre_label vs human_verdict.
+
+    FP = pre_label=True, human_verdict=False (reference labeller said pass,
+    human said fail).
+
+    Args:
+        rows: CalibrationLabel rows (unadjudicated rows are skipped).
+    Returns:
+        ConfusionCounts from adjudicated rows only.
     """
     adj = [r for r in rows if r.human_verdict is not None]
     tp = sum(1 for r in adj if r.pre_label is True and r.human_verdict is True)
@@ -112,41 +143,60 @@ def recall(counts: ConfusionCounts) -> float:
     return counts.tp / denom if denom > 0 else 1.0
 
 
-def cohens_kappa(rows: Sequence[CalibrationLabel]) -> float:
-    """Hand-computed Cohen's κ between pre_label and human_verdict.
+def _kappa_from_matrix(tp: int, fp: int, fn: int, tn: int) -> float:
+    """Compute Cohen's κ from a 2×2 confusion matrix. Returns 1.0 when Pe==1."""
+    n = tp + fp + fn + tn
+    po = (tp + tn) / n
+    p_yes_a = (tp + fp) / n
+    p_yes_b = (tp + fn) / n
+    p_no_a = (fn + tn) / n
+    p_no_b = (fp + tn) / n
+    pe = p_yes_a * p_yes_b + p_no_a * p_no_b
+    if abs(1.0 - pe) < 1e-12:
+        return 1.0
+    return (po - pe) / (1.0 - pe)
 
-    κ = (Po - Pe) / (1 - Pe)
-    where Po is observed agreement and Pe is chance-expected agreement.
-    Only adjudicated rows (human_verdict is not None) are used.
-    Returns 1.0 for the degenerate case where Pe == 1 (all labels identical).
+
+def cohens_kappa(rows: Sequence[CalibrationLabel]) -> float:
+    """Cohen's κ — HEADLINE axis: scorer_verdict vs human_verdict.
+
+    κ = (Po - Pe) / (1 - Pe). Only adjudicated rows are used.
 
     Args:
         rows: CalibrationLabel rows with human_verdict set.
     Returns:
-        κ in [-1, 1], typically [0, 1] for a useful scorer.
+        κ in [-1, 1].
     Raises:
         ValueError: If fewer than 2 adjudicated rows are available.
     """
     adj = [r for r in rows if r.human_verdict is not None]
-    n = len(adj)
-    if n < 2:
-        raise ValueError(f"cohens_kappa requires ≥2 adjudicated rows; got {n}")
+    if len(adj) < 2:
+        raise ValueError(f"cohens_kappa requires ≥2 adjudicated rows; got {len(adj)}")
+    tp = sum(1 for r in adj if r.scorer_verdict is True and r.human_verdict is True)
+    fp = sum(1 for r in adj if r.scorer_verdict is True and r.human_verdict is False)
+    fn = sum(1 for r in adj if r.scorer_verdict is False and r.human_verdict is True)
+    tn = sum(1 for r in adj if r.scorer_verdict is False and r.human_verdict is False)
+    return _kappa_from_matrix(tp, fp, fn, tn)
 
+
+def pre_label_kappa(rows: Sequence[CalibrationLabel]) -> float:
+    """Cohen's κ — SECONDARY axis: pre_label vs human_verdict.
+
+    Args:
+        rows: CalibrationLabel rows with human_verdict set.
+    Returns:
+        κ in [-1, 1].
+    Raises:
+        ValueError: If fewer than 2 adjudicated rows are available.
+    """
+    adj = [r for r in rows if r.human_verdict is not None]
+    if len(adj) < 2:
+        raise ValueError(f"pre_label_kappa requires ≥2 adjudicated rows; got {len(adj)}")
     tp = sum(1 for r in adj if r.pre_label is True and r.human_verdict is True)
     fp = sum(1 for r in adj if r.pre_label is True and r.human_verdict is False)
     fn = sum(1 for r in adj if r.pre_label is False and r.human_verdict is True)
     tn = sum(1 for r in adj if r.pre_label is False and r.human_verdict is False)
-
-    po = (tp + tn) / n
-    p_yes_model = (tp + fp) / n
-    p_yes_human = (tp + fn) / n
-    p_no_model = (fn + tn) / n
-    p_no_human = (fp + tn) / n
-    pe = p_yes_model * p_yes_human + p_no_model * p_no_human
-
-    if abs(1.0 - pe) < 1e-12:
-        return 1.0
-    return (po - pe) / (1.0 - pe)
+    return _kappa_from_matrix(tp, fp, fn, tn)
 
 
 def kappa_interval(
@@ -154,11 +204,11 @@ def kappa_interval(
     resamples: int,
     seed: int,
 ) -> tuple[float, float]:
-    """Bootstrap 95% CI on Cohen's κ using only math and random.
+    """Bootstrap 95% CI on κ — HEADLINE axis (scorer_verdict vs human_verdict).
 
-    Draws `resamples` bootstrap samples of the adjudicated rows with replacement,
-    computes κ on each, and returns the 2.5th and 97.5th percentiles. The same
-    rows + seed always produce the same bounds.
+    Draws `resamples` bootstrap samples of adjudicated rows with replacement,
+    computes κ on each, returns the 2.5th and 97.5th percentiles.
+    Same rows + seed always produce the same bounds.
 
     Args:
         rows: CalibrationLabel rows (unadjudicated rows are ignored).
@@ -173,7 +223,6 @@ def kappa_interval(
     n = len(adj)
     if n < 2:
         raise ValueError(f"kappa_interval requires ≥2 adjudicated rows; got {n}")
-
     rng = random.Random(seed)
     kappas: list[float] = []
     for _ in range(resamples):
@@ -182,7 +231,42 @@ def kappa_interval(
             kappas.append(cohens_kappa(sample))
         except ValueError:
             pass
+    kappas.sort()
+    total = len(kappas)
+    lo_idx = math.floor(total * CI_LO_PERCENTILE)
+    hi_idx = min(math.ceil(total * CI_HI_PERCENTILE) - 1, total - 1)
+    hi_idx = max(hi_idx, lo_idx)
+    return kappas[lo_idx], kappas[hi_idx]
 
+
+def pre_label_kappa_interval(
+    rows: Sequence[CalibrationLabel],
+    resamples: int,
+    seed: int,
+) -> tuple[float, float]:
+    """Bootstrap 95% CI on κ — SECONDARY axis (pre_label vs human_verdict).
+
+    Args:
+        rows: CalibrationLabel rows (unadjudicated rows are ignored).
+        resamples: Number of bootstrap resamples.
+        seed: RNG seed — fix it to keep the interval reproducible.
+    Returns:
+        (lo, hi) — 95% bootstrap CI bounds.
+    Raises:
+        ValueError: If fewer than 2 adjudicated rows are available.
+    """
+    adj = [r for r in rows if r.human_verdict is not None]
+    n = len(adj)
+    if n < 2:
+        raise ValueError(f"pre_label_kappa_interval requires ≥2 adjudicated rows; got {n}")
+    rng = random.Random(seed)
+    kappas: list[float] = []
+    for _ in range(resamples):
+        sample = [adj[rng.randrange(n)] for _ in range(n)]
+        try:
+            kappas.append(pre_label_kappa(sample))
+        except ValueError:
+            pass
     kappas.sort()
     total = len(kappas)
     lo_idx = math.floor(total * CI_LO_PERCENTILE)
@@ -218,32 +302,42 @@ def agreement_rate(rows: Sequence[CalibrationLabel]) -> float:
 def calibrate_scorer(scorer: str, rows: Sequence[CalibrationLabel]) -> ScorerReport:
     """Compute the full calibration report for one scorer.
 
-    Filters rows to this scorer and adjudicated rows only.
+    Filters to this scorer's adjudicated rows and computes two confusion matrices:
+    headline (scorer_verdict vs human_verdict) and secondary (pre_label vs human_verdict).
 
     Args:
         scorer: Scorer name (e.g. 'tone_judge').
         rows: All CalibrationLabel rows (multi-scorer OK).
     Returns:
-        ScorerReport with confusion matrix, κ, CI, precision, recall, agreement rate.
+        ScorerReport with headline and secondary κ, CI, precision, recall.
     Raises:
         ValueError: If fewer than 2 adjudicated rows exist for this scorer.
     """
     scorer_rows = [r for r in rows if r.scorer == scorer]
     counts = confusion_counts(scorer_rows)
-    kappa = cohens_kappa(scorer_rows)
+    kappa_val = cohens_kappa(scorer_rows)
     lo, hi = kappa_interval(scorer_rows, resamples=BOOTSTRAP_RESAMPLES, seed=BOOTSTRAP_SEED)
     prec = precision(counts)
     rec = recall(counts)
     rate = agreement_rate(scorer_rows)
+    pl_counts = pre_label_confusion_counts(scorer_rows)
+    pl_kappa = pre_label_kappa(scorer_rows)
+    pl_lo, pl_hi = pre_label_kappa_interval(
+        scorer_rows, resamples=BOOTSTRAP_RESAMPLES, seed=BOOTSTRAP_SEED
+    )
     return ScorerReport(
         scorer=scorer,
         counts=counts,
-        kappa=kappa,
+        kappa=kappa_val,
         kappa_lo=lo,
         kappa_hi=hi,
         prec=prec,
         rec=rec,
         pre_label_agreement=rate,
+        pre_label_counts=pl_counts,
+        pre_label_kappa=pl_kappa,
+        pre_label_kappa_lo=pl_lo,
+        pre_label_kappa_hi=pl_hi,
     )
 
 
@@ -253,20 +347,35 @@ def calibrate_scorer(scorer: str, rows: Sequence[CalibrationLabel]) -> ScorerRep
 
 
 def _print_scorer_report(report: ScorerReport, print_fn=print) -> None:
-    """Print one scorer's confusion matrix and κ with its bootstrap CI."""
+    """Print one scorer's two confusion matrices and κ values with bootstrap CIs."""
     c = report.counts
+    p = report.pre_label_counts
     print_fn(f"\n{'=' * 62}")
     print_fn(f"Scorer: {report.scorer}  (n={c.n})")
     print_fn(f"{'=' * 62}")
-    print_fn("  Confusion matrix  (pre_label vs human_verdict):")
-    print_fn("                     human=T   human=F")
-    print_fn(f"    pre=T            {c.tp:6d}    {c.fp:6d}  ← FP: dangerous (said pass, human said fail)")
-    print_fn(f"    pre=F            {c.fn:6d}    {c.tn:6d}")
-    print_fn(f"  Precision : {report.prec:.3f}   Recall : {report.rec:.3f}")
-    print_fn(f"  Pre-label vs human agreement : {report.pre_label_agreement:.3f}")
+    print_fn("  HEADLINE — scorer_verdict vs human_verdict:")
+    print_fn("                       human=T   human=F")
     print_fn(
-        f"  Cohen's κ : {report.kappa:.3f}  "
+        f"    scorer=T             {c.tp:6d}    {c.fp:6d}"
+        f"  ← FP: dangerous (scorer said pass, human said fail)"
+    )
+    print_fn(f"    scorer=F             {c.fn:6d}    {c.tn:6d}")
+    print_fn(f"  Precision : {report.prec:.3f}   Recall : {report.rec:.3f}")
+    print_fn(
+        f"  Headline κ : {report.kappa:.3f}  "
         f"95% CI [{report.kappa_lo:.3f}, {report.kappa_hi:.3f}]  n={c.n}"
+    )
+    print_fn("\n  SECONDARY — pre_label vs human_verdict:")
+    print_fn("                       human=T   human=F")
+    print_fn(
+        f"    pre=T                {p.tp:6d}    {p.fp:6d}"
+        f"  ← FP: ref-labeller said pass, human said fail"
+    )
+    print_fn(f"    pre=F                {p.fn:6d}    {p.tn:6d}")
+    print_fn(f"  Pre-label agreement : {report.pre_label_agreement:.3f}")
+    print_fn(
+        f"  Secondary κ : {report.pre_label_kappa:.3f}  "
+        f"95% CI [{report.pre_label_kappa_lo:.3f}, {report.pre_label_kappa_hi:.3f}]  n={p.n}"
     )
 
 

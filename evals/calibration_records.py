@@ -2,10 +2,10 @@
 Module: calibration_records
 Layer: evals (eval harness — not part of src/)
 Purpose: Pydantic v2 model for calibration labels and JSONL persistence.
-         CalibrationLabel stores a pre-label from the reference model plus
-         an optional human verdict for the EVAL-P5 calibration artifact.
+         CalibrationLabel stores the scorer's own verdict, a pre-label from
+         the reference model, and an optional human verdict for EVAL-P5.
 Dependencies: pydantic, stdlib (pathlib, typing)
-Used by: label_runner, adjudicate, calibration (EVAL-P5.2–P5.4)
+Used by: label_runner, adjudicate, calibration (EVAL-P5.2–P5.5)
 """
 
 from __future__ import annotations
@@ -33,12 +33,19 @@ class CalibrationLabel(BaseModel):
     output_text is stored verbatim (not as a pointer) so the artifact is
     self-contained and reproducible even if the generation transcripts change.
 
+    The headline calibration axis is scorer_verdict vs human_verdict — this
+    measures how much you can trust the automated scorer. pre_label vs
+    human_verdict is the secondary (reference-labeller vs maintainer).
+
     Attributes:
         record_id: Stable identifier from the generation transcript
             (same format as GenerationRecord.record_id).
         scorer: Which scorer is being calibrated (e.g. 'tone_judge').
         output_text: The NPC output text being labelled, stored inline.
-        pre_label: Model-proposed label (True = positive/pass, False = negative/fail).
+        scorer_verdict: The automated scorer's own output for this row
+            (True = pass, False = fail). Headline confusion axis.
+        pre_label: Reference-model-proposed label (True = pass, False = fail).
+            Secondary confusion axis.
         pre_labeller_model: Model that produced pre_label (e.g. 'claude-opus-5').
         human_verdict: Maintainer's verdict after adjudication; None = not yet done.
         adjudicated_at: ISO-8601 timestamp of adjudication, or None if pending.
@@ -50,6 +57,7 @@ class CalibrationLabel(BaseModel):
     record_id: str
     scorer: str
     output_text: str
+    scorer_verdict: bool
     pre_label: bool
     pre_labeller_model: str
     human_verdict: bool | None

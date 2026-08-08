@@ -2,7 +2,9 @@
 Module: test_calibration
 Layer: test (unit)
 Purpose: Unit tests for calibration.py — confusion matrices, Cohen's κ with
-         bootstrap CI, and per-scorer calibration reports for EVAL-P5.4.
+         bootstrap CI, and per-scorer calibration reports (EVAL-P5.4/P5.5).
+         Covers both the headline axis (scorer_verdict vs human_verdict) and
+         the secondary axis (pre_label vs human_verdict).
 Dependencies: pytest, calibration_records, calibration (evals/)
 Used by: pytest (make test / make check)
 """
@@ -35,14 +37,20 @@ def _label(
     i: int,
     *,
     pre_label: bool,
+    scorer_verdict: bool | None = None,
     human_verdict: bool | None = None,
     scorer: str = "tone_judge",
 ) -> CalibrationLabel:
-    """Build a CalibrationLabel for testing."""
+    """Build a CalibrationLabel for testing.
+
+    scorer_verdict defaults to pre_label when omitted so existing tests that
+    set pre_label to mirror the confusion matrix continue to work unchanged.
+    """
     return CalibrationLabel(
         record_id=f"case_{i:03d}:{scorer}:0",
         scorer=scorer,
         output_text=f"Output for row {i}.",
+        scorer_verdict=scorer_verdict if scorer_verdict is not None else pre_label,
         pre_label=pre_label,
         pre_labeller_model=_LABELLER,
         human_verdict=human_verdict,
@@ -61,10 +69,14 @@ def _make_rows_from_matrix(
 ) -> list[CalibrationLabel]:
     """Build adjudicated CalibrationLabel rows from a confusion matrix.
 
-    TP: pre_label=True,  human_verdict=True
-    FP: pre_label=True,  human_verdict=False  (said pass, human said fail — dangerous)
-    FN: pre_label=False, human_verdict=True
-    TN: pre_label=False, human_verdict=False
+    Maps the matrix to BOTH scorer_verdict and pre_label so the headline
+    (scorer_verdict vs human_verdict) and secondary (pre_label vs human_verdict)
+    confusion matrices are identical. Tests that check a single κ value remain valid.
+
+    TP: scorer_verdict=pre_label=True,  human_verdict=True
+    FP: scorer_verdict=pre_label=True,  human_verdict=False  (dangerous)
+    FN: scorer_verdict=pre_label=False, human_verdict=True
+    TN: scorer_verdict=pre_label=False, human_verdict=False
     """
     rows: list[CalibrationLabel] = []
     i = 0
@@ -208,3 +220,56 @@ def test_kappa_interval_wide_at_85_rows() -> None:
         rows.append(_label(i, pre_label=pre, human_verdict=human))
     lo, hi = kappa_interval(rows, resamples=2000, seed=42)
     assert hi - lo >= 0.10
+
+
+# ---------------------------------------------------------------------------
+# EVAL-P5.5 RED anchor
+# ---------------------------------------------------------------------------
+
+
+def test_headline_matrix_compares_scorer_verdict_to_human() -> None:
+    """Headline κ compares scorer_verdict to human_verdict; secondary compares pre_label.
+
+    Fixture: scorer agrees 9/10 with human; pre_label agrees 10/10.
+      scorer vs human   → TP=9, FP=1, FN=0, TN=0
+      pre_label vs human → TP=9, FP=0, FN=0, TN=1
+    The two kappa values must differ; the FP cell must read
+    'scorer said pass, human said fail'.
+    """
+    from calibration import _print_scorer_report, calibrate_scorer
+
+    rows = [
+        CalibrationLabel(
+            record_id=f"case_{i:03d}:tone_judge:0",
+            scorer="tone_judge",
+            output_text=f"output {i}",
+            scorer_verdict=True,
+            pre_label=True,
+            pre_labeller_model=_LABELLER,
+            human_verdict=True,
+            adjudicated_at="2026-08-07T10:00:00+00:00",
+            notes="",
+        )
+        for i in range(9)
+    ]
+    rows.append(
+        CalibrationLabel(
+            record_id="case_009:tone_judge:0",
+            scorer="tone_judge",
+            output_text="output 9",
+            scorer_verdict=True,
+            pre_label=False,
+            pre_labeller_model=_LABELLER,
+            human_verdict=False,
+            adjudicated_at="2026-08-07T10:00:00+00:00",
+            notes="",
+        )
+    )
+    assert rows[0].scorer_verdict is True  # RED: AttributeError until field is added
+
+    report = calibrate_scorer("tone_judge", rows)
+    assert report.kappa != report.pre_label_kappa
+
+    lines: list[str] = []
+    _print_scorer_report(report, print_fn=lines.append)
+    assert any("scorer said pass" in ln and "human said fail" in ln for ln in lines)

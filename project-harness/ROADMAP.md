@@ -813,7 +813,7 @@ it falsely marked P5.2's ask-gate cleared. See DEC-153 §1.
       not report its own trust metric as a point estimate without error bars. At ~85 rows κ's SE is ≈ ±0.10,
       so a κ of 0.60 is really ≈ [0.40, 0.80] — a difference that changes what the number licenses you to say. ✅ AUTO (EVAL-P5.4, 2026-08-07)
 
-- [ ] **EVAL-P5.5** Put the scorer on an axis of its own confusion matrix (**closes ISSUE-133**).
+- [x] **EVAL-P5.5** Put the scorer on an axis of its own confusion matrix (**closes ISSUE-133**).
       `confusion_counts` (`calibration.py:73-88`) and `cohens_kappa` (`:115-149`) both compare `pre_label`
       against `human_verdict`, and `CalibrationLabel` has no field for the scorer's own verdict — `scorer`
       is only a grouping key (`:231`). So `make eval-calibrate` reports how often the reference labeller
@@ -832,7 +832,7 @@ it falsely marked P5.2's ask-gate cleared. See DEC-153 §1.
       **Decision 2026-08-07 (human): option A.** Human adjudication time, local judge compute and CLI token
       cost are all identical with or without this field; only this version can change what gets fixed in the
       engine. Must land before any adjudication session — labels adjudicated against the old axis answer
-      the wrong question and cannot be re-derived without redoing the hours.
+      the wrong question and cannot be re-derived without redoing the hours. ✅ AUTO (EVAL-P5.5, 2026-08-08)
 
 - [ ] **EVAL-P5.6** Batch export + validating import for the CLI labelling pass (replaces EVAL-P5.2).
       Files: `create evals/label_export.py`, `create evals/label_import.py`,
