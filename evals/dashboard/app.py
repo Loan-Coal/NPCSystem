@@ -2,8 +2,8 @@
 Module: evals.dashboard.app
 Layer: evals (evaluation harness — standalone, outside npc_engine layer model)
 Purpose: FastAPI application for the local dev-facing eval dashboard (EVAL-P7). Exposes
-         GET / listing all eval runs sorted newest-first, and GET /runs/{gen_id} for the
-         run-detail view (pass rate, calibration badge, deterministic rates, flaky table).
+         GET / (run list), GET /runs/{gen_id} (run detail), and
+         GET /runs/{gen_id}/case?record_id=… (per-case k-repetition drill-down).
          Uses stdlib string.Template for HTML rendering — no jinja2 required.
 Dependencies: fastapi, starlette (HTMLResponse, HTTPException), pathlib, json, html,
               string, evals.dashboard.detail (all stdlib or already-installed packages).
@@ -18,7 +18,7 @@ from pathlib import Path
 from string import Template
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
 from evals.dashboard.detail import (
@@ -124,6 +124,79 @@ def _render_runs_table(runs: list[dict[str, Any]]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Case detail helpers
+# ---------------------------------------------------------------------------
+
+_VERDICT_CSS: dict[bool | None, tuple[str, str]] = {
+    True: ("pass", "PASS"),
+    False: ("fail", "FAIL"),
+    None: ("unknown", "?"),
+}
+
+
+def _parse_jsonl(path: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            rows.append(json.loads(line))
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return rows
+
+
+def _read_output_rows(gen_dir: Path, record_id: str) -> list[dict[str, Any]]:
+    """Read outputs.jsonl for record_id, sorted by repetition; empty list if absent."""
+    path = gen_dir / "outputs.jsonl"
+    if not path.exists():
+        return []
+    rows = [r for r in _parse_jsonl(path) if r.get("record_id") == record_id]
+    rows.sort(key=lambda r: int(r.get("repetition", 0)))
+    return rows
+
+
+def _read_judged_by_rep(gen_dir: Path, record_id: str) -> dict[int, dict[str, Any]]:
+    """Build {repetition: judged_row} map for one record_id."""
+    return {
+        int(r.get("repetition", 0)): r
+        for r in read_judged_rows(gen_dir)
+        if r.get("record_id") == record_id
+    }
+
+
+def _render_single_pane(row: dict[str, Any], judged: dict[str, Any], rep: int) -> str:
+    """Render one repetition pane with data-rep attr, response, context keys, reasoning."""
+    passed: bool | None = judged.get("passed")
+    verdict_cls, verdict_label = _VERDICT_CSS.get(passed, ("unknown", "?"))
+    npc_response = _html.escape(str(row.get("npc_response", "")))
+    reasoning = _html.escape(str(judged.get("reasoning", "")))
+    ctx_items: list[dict[str, Any]] = row.get("retrieved_context", [])
+    ctx_keys_html = "".join(
+        f'<li><code>{_html.escape(str(item.get("key", "")))}</code></li>'
+        for item in ctx_items
+    )
+    return (
+        f'<div class="pane" data-rep="{rep}">'
+        f'<h3>Repetition {rep} <span class="verdict {verdict_cls}">{verdict_label}</span></h3>'
+        f"<p><strong>Response:</strong></p><pre>{npc_response}</pre>"
+        f"<p><strong>Context keys:</strong></p><ul>{ctx_keys_html}</ul>"
+        f"<p><strong>Reasoning:</strong></p><pre>{reasoning}</pre>"
+        f"</div>"
+    )
+
+
+def _render_case_panes(
+    output_rows: list[dict[str, Any]],
+    judged_by_rep: dict[int, dict[str, Any]],
+) -> str:
+    """Render all repetition panes in a side-by-side flex container."""
+    panes: list[str] = []
+    for row in output_rows:
+        rep = int(row.get("repetition", 0))
+        panes.append(_render_single_pane(row, judged_by_rep.get(rep, {}), rep))
+    return f'<div class="panes-container">{"".join(panes)}</div>'
+
+
+# ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
 
@@ -140,7 +213,7 @@ def make_app(
         calibration_dir: Directory containing calibration labels_v1.jsonl.
             Defaults to evals/calibration/ relative to this package.
     Returns:
-        FastAPI application with GET / and GET /runs/{gen_id} routes.
+        FastAPI application with GET /, GET /runs/{gen_id}, and GET /runs/{gen_id}/case routes.
     """
     resolved_dir = generations_dir if generations_dir is not None else _DEFAULT_GENERATIONS_DIR
     resolved_cal = calibration_dir if calibration_dir is not None else _DEFAULT_CALIBRATION_DIR
@@ -187,6 +260,26 @@ def make_app(
             deterministic_rates=_DET_RATES_NA,
             config_block=config_block,
             flaky_table=flaky_table,
+        )
+        return HTMLResponse(body)
+
+    @dashboard.get("/runs/{gen_id}/case", response_class=HTMLResponse)
+    async def case_detail(gen_id: str, record_id: str = Query(...)) -> HTMLResponse:
+        """Return the per-case drill-down page showing all k repetitions side by side."""
+        gen_dir = resolved_dir / gen_id
+        if not (gen_dir / "meta.json").exists():
+            raise HTTPException(status_code=404, detail=f"Run {gen_id!r} not found.")
+        output_rows = _read_output_rows(gen_dir, record_id)
+        if not output_rows:
+            raise HTTPException(status_code=404, detail=f"Case {record_id!r} not found.")
+        judged_by_rep = _read_judged_by_rep(gen_dir, record_id)
+        panes_html = _render_case_panes(output_rows, judged_by_rep)
+        tpl = _load_template("case_detail.html")
+        body = tpl.safe_substitute(
+            page_title=f"Case: {record_id}",
+            gen_id=_html.escape(gen_id),
+            record_id=_html.escape(record_id),
+            panes=panes_html,
         )
         return HTMLResponse(body)
 

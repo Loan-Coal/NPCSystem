@@ -994,13 +994,13 @@ costs nothing already built.
       a k=3 number must be visually impossible to mistake for a k=15 number — and the flaky table lists
       2/3 cases above 3/3 cases. ✅ AUTO (EVAL-P7.2, 2026-08-08)
 
-- [ ] **EVAL-P7.3** Per-case drill-down. Files: `create evals/dashboard/templates/case_detail.html`,
+- [x] **EVAL-P7.3** Per-case drill-down. Files: `create evals/dashboard/templates/case_detail.html`,
       `edit evals/dashboard/app.py`, `create tests/unit/evals/test_dashboard_case.py`.
       All k outputs side by side, judge reasoning per repetition, the retrieved context, and the
       expected-vs-actual for each expectation.
       RED anchor: `tests/unit/evals/test_dashboard_case.py::test_all_k_outputs_render_side_by_side` fails.
       Validation: a k=3 case page shows 3 distinct output panes each labelled with its `repetition`, and each
-      pane lists that repetition's `retrieved_context` item keys.
+      pane lists that repetition's `retrieved_context` item keys. ✅ AUTO (EVAL-P7.3, 2026-08-08)
 
 ### Phase EVAL-P8 — Run-to-run comparison (promoted from Parked, DEC-153 §4)
 **Goal:** Answer the question the rest of the program cannot: **did this change make the engine better?**
