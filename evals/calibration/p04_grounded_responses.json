@@ -1,0 +1,77 @@
+[
+  {
+    "case_id": "ah_demo_sorn_war_known",
+    "npc_response": "The war began roughly three months ago. Reports from the northern pass confirm it — I've read the dispatches myself. The eastern flank is holding, but barely.",
+    "is_refusal": false
+  },
+  {
+    "case_id": "ah_demo_sorn_walls_belief",
+    "npc_response": "The southern walls concern me greatly. The last inspection revealed cracks in the foundation near the gate tower. I've submitted a repair request twice already and been ignored.",
+    "is_refusal": false
+  },
+  {
+    "case_id": "ah_demo_sorn_guild_goal",
+    "npc_response": "I don't discuss guild matters with strangers. That's not something I'm at liberty to share with you.",
+    "is_refusal": true
+  },
+  {
+    "case_id": "ah_demo_mira_war_rumor",
+    "npc_response": "I've heard talk of fighting up north — travellers passing through have mentioned it, though the details change with every telling. I couldn't say what's true and what isn't.",
+    "is_refusal": false
+  },
+  {
+    "case_id": "ah_demo_mira_last_war_memory",
+    "npc_response": "The last war... I was just a girl, but I remember the soldiers coming through. The smell of smoke on the wind for weeks. My mother kept us inside. It left a mark on everyone who lived through it.",
+    "is_refusal": false
+  },
+  {
+    "case_id": "ah_demo_mira_tavern_goal",
+    "npc_response": "Keeping this tavern running is my life's work. I want it to be the kind of place where anyone can come for a warm meal and honest news. Good reputation is worth more than gold in this business.",
+    "is_refusal": false
+  },
+  {
+    "case_id": "ah_demo_henryk_war_rumor",
+    "npc_response": "I don't rightly know what you're fishing for. Can't say I've paid attention to those rumours. Got enough to worry about without chasing stories.",
+    "is_refusal": true
+  },
+  {
+    "case_id": "ah_demo_henryk_north_pass_memory",
+    "npc_response": "Aye, I was at the north pass when the fighting broke out. Forty years ago now, but I can still picture it clear as yesterday — the mud, the shouting, the way the torches looked in the fog.",
+    "is_refusal": false
+  },
+  {
+    "case_id": "ah_demo_henryk_cache_secret",
+    "npc_response": "There's nothing hidden around here, and I don't know what you're implying. I'm just an old man. Now leave me be.",
+    "is_refusal": true
+  },
+  {
+    "case_id": "ah_demo_aldric_trade_knowledge",
+    "npc_response": "The northern routes are disrupted — convoys are being turned back at the border crossings. I've had three shipments delayed this season alone. It's costing me dearly.",
+    "is_refusal": false
+  },
+  {
+    "case_id": "ah_demo_aldric_guild_view",
+    "npc_response": "The guild and I have an understanding — they don't interfere with my operations, I don't ask too many questions about their supply chains. Profitable for both parties.",
+    "is_refusal": false
+  },
+  {
+    "case_id": "ah_demo_aldric_warehouse_fire",
+    "npc_response": "The warehouse fire last spring? A tragedy. Lost nearly a full season's inventory. The investigation found nothing conclusive — officially an accident, though I have my doubts.",
+    "is_refusal": false
+  },
+  {
+    "case_id": "ah_demo_lira_fence_operation",
+    "npc_response": "I don't know what you mean. I'm a merchant, nothing more. If you're looking for something specific I suggest you try the market stalls. Now if you'll excuse me.",
+    "is_refusal": true
+  },
+  {
+    "case_id": "ah_demo_lira_aldric_ledger_belief",
+    "npc_response": "What Aldric keeps in those ledgers is... illuminating. Let's just say there are names in there that certain people would pay handsomely to see — or to have removed.",
+    "is_refusal": false
+  },
+  {
+    "case_id": "ah_demo_lira_market_fire",
+    "npc_response": "The market fire was a chaotic night. I lost two contacts in the confusion and had to rebuild half my network from scratch. Not something I'd like to repeat.",
+    "is_refusal": false
+  }
+]

@@ -1166,13 +1166,13 @@ counterpart, and a run that buys guard points with capability points is called a
       `regression_evasion` **even though the total pass count rose** — the exact shape that would otherwise
       read as progress. ✅ AUTO (EVAL-P10.2, 2026-08-08)
 
-- [ ] **EVAL-P10.3** Over-refusal rate on grounded cases. Files: `create evals/refusal_rate.py`,
+- [x] **EVAL-P10.3** Over-refusal rate on grounded cases. Files: `create evals/refusal_rate.py`,
       `create tests/unit/evals/test_refusal_rate.py`.
       Score the 16 grounded anti-hallucination cases plus the capability battery for refusal-when-grounded,
       using the existing `refusal_judge`, and report it with its interval next to the other two rates.
       RED anchor: `tests/unit/evals/test_refusal_rate.py::test_grounded_refusal_is_counted_as_a_failure` fails.
       Validation: replaying the P0.4 grounded set reproduces **4/15 over-refusals** — the number this metric
-      exists to have caught, checked against a recorded fixture rather than a live run.
+      exists to have caught, checked against a recorded fixture rather than a live run. ✅ AUTO (EVAL-P10.3, 2026-08-08)
 
 ### Phase EVAL-P11 — Calibration follow-through: act on kappa
 **Goal:** Turn the EVAL-P5 calibration artifact from a number you have into a decision you made.
