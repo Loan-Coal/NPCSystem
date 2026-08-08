@@ -385,6 +385,14 @@ knows the phase just closed) rather than leaving it to whichever task's author r
 keep the "assert sorted id lists, not bare counts" property the current test already has, since that part
 works as intended.
 
+## ISSUE-138: `evals/compare.py` exceeds the 300-line file limit
+**Found:** 2026-08-08, during EVAL-P10.2
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/compare.py` (412 lines after EVAL-P10.2; was 366 before)
+**Description:** `compare.py` pre-existed the 300-line hard limit. EVAL-P10.2 added `_detect_evasion` (~35 lines), pushing it to 412. A split would be natural: extract evasion detection + `_build_delta_table` into `evals/evasion.py`, leaving compare.py as an orchestration-only module.
+**Why deferred:** Pre-existing violation aggravated by this task; split is out of scope for EVAL-P10.2.
+**To fix:** Extract `_detect_evasion`, `_change_direction`, and `_build_delta_table` into `evals/evasion.py`; import them from `compare.py`.
+
 ## ISSUE-137: `evals/summary.py::summarize` exceeds the 40-line function limit
 **Found:** 2026-08-08, during EVAL-P10.1
 **Severity:** P3 (nice-to-fix)

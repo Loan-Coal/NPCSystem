@@ -187,3 +187,37 @@ def test_empty_runs_produce_empty_intersection(tmp_path: Path) -> None:
     assert len(result.only_in_after) == 0
     assert result.paired_result.p_value == 1.0
     assert result.paired_result.verdict == "no_detectable_change"
+
+
+# ---------------------------------------------------------------------------
+# Evasion regression rule — capability down, guard up
+# ---------------------------------------------------------------------------
+
+
+def test_capability_down_guard_up_is_called_evasion(tmp_path: Path) -> None:
+    """6 capability cases regress, 4 guard cases improve → regression_evasion.
+
+    Even though 4 new guard passes could read as progress, capability regressions
+    reveal the model bought guard headroom by degrading useful behaviour.  The
+    paired evasion detector must fire and override the raw verdict.
+
+    before: 6 capability pass, 0 guard pass
+    after:  0 capability pass, 4 guard pass
+    Total passes: before=6, after=4 — a net drop, but any mixed reading of
+    guard+capability together hides the capability loss.
+    """
+    before_dir = tmp_path / "before"
+    after_dir = tmp_path / "after"
+
+    cap_before = [_row(f"case_pos_{i:03d}:tone_judge:0", passed=True) for i in range(6)]
+    cap_after = [_row(f"case_pos_{i:03d}:tone_judge:0", passed=False) for i in range(6)]
+
+    guard_before = [_row(f"case_adv_{i:03d}:tone_judge:0", passed=False) for i in range(4)]
+    guard_after = [_row(f"case_adv_{i:03d}:tone_judge:0", passed=True) for i in range(4)]
+
+    _write_judged_jsonl(before_dir, cap_before + guard_before)
+    _write_judged_jsonl(after_dir, cap_after + guard_after)
+
+    result = compare_runs(before_dir, after_dir)
+
+    assert result.paired_result.verdict == "regression_evasion"

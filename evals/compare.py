@@ -22,7 +22,7 @@ from typing import Literal, Sequence
 
 from pydantic import BaseModel, ConfigDict
 
-from case_stats import CaseStat, classify
+from case_stats import CaseStat, classify, classify_battery
 from paired_stats import PairedResult, paired_compare
 from statistics import pass_rate, wilson_interval
 
@@ -242,6 +242,44 @@ def _build_delta_table(
     return tuple(deltas)
 
 
+def _detect_evasion(case_deltas: tuple[CaseDelta, ...]) -> bool:
+    """Return True when capability net-regresses while guard net-improves.
+
+    Counts per-battery change directions from the per-case delta table.
+    Cases whose case_id prefix matches neither battery are silently skipped
+    (they don't contribute to the evasion signal).
+
+    Evasion fires when:
+      capability regressions > capability improvements   (cap fell)
+      AND guard improvements > guard regressions         (guard rose)
+
+    Args:
+        case_deltas: Per-case delta table from _build_delta_table.
+    Returns:
+        True if the evasion pattern is present, False otherwise.
+    """
+    cap_regressions = cap_improvements = 0
+    guard_improvements = guard_regressions = 0
+    for d in case_deltas:
+        try:
+            battery = classify_battery(d.case_id)
+        except ValueError:
+            continue
+        if battery == "capability":
+            if d.change == "regressed":
+                cap_regressions += 1
+            elif d.change == "improved":
+                cap_improvements += 1
+        else:
+            if d.change == "improved":
+                guard_improvements += 1
+            elif d.change == "regressed":
+                guard_regressions += 1
+    cap_net_regressed = cap_regressions > cap_improvements
+    guard_net_improved = guard_improvements > guard_regressions
+    return cap_net_regressed and guard_net_improved
+
+
 def compare_runs(before_dir: Path, after_dir: Path) -> CompareResult:
     """Compare two eval generation directories using a McNemar paired test.
 
@@ -272,6 +310,15 @@ def compare_runs(before_dir: Path, after_dir: Path) -> CompareResult:
 
     paired_result = paired_compare(before_stats, after_stats)
     case_deltas = _build_delta_table(before_map, after_map)
+
+    if _detect_evasion(case_deltas):
+        paired_result = PairedResult(
+            improved=paired_result.improved,
+            regressed=paired_result.regressed,
+            unchanged=paired_result.unchanged,
+            p_value=paired_result.p_value,
+            verdict="regression_evasion",
+        )
 
     return CompareResult(
         before_gen_id=before_gen_id,

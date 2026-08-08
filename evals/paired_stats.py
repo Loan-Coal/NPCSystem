@@ -47,7 +47,7 @@ class PairedResult(BaseModel):
     regressed: int
     unchanged: int
     p_value: float
-    verdict: Literal["better", "worse", "no_detectable_change"]
+    verdict: Literal["better", "worse", "no_detectable_change", "regression_evasion"]
 
 
 # ---------------------------------------------------------------------------

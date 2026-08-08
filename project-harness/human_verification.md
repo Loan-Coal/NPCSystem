@@ -314,3 +314,7 @@ Required test coverage of 80% reached. Total coverage: 87.13%
 FAILED tests/unit/evals/test_capability_coverage.py::test_every_grounded_npc_has_a_capability_case
 1 failed, 2921 passed, 29 skipped, 2265 warnings in 85.24s (0:01:25)
 make: *** [Makefile:50: test-cov] Error 1
+
+## 2026-08-08 12:18:40 — task EVAL-P10.1 committed with a pre-existing red gate
+
+Every failure pre-dated this task (baseline attribution). Nothing new broke.
