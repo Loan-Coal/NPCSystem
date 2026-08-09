@@ -1,0 +1,332 @@
+[
+  {
+    "record_id": "case_neg_aldric_no_war_outcome:schema:0#r1",
+    "scorer": "schema",
+    "npc_id": "aldric_merchant",
+    "player_message": "You're a shrewd man, Aldric - who's going to win this war, the Northmen or the King?",
+    "criteria": "The response must contain all required fields (`npc_response`, `relation_deltas`, `action`, `facial_expression`), each non-null, and `npc_response` must not be empty or whitespace-only.",
+    "output_text": "Word is that both sides have their strengths, but the king’s hold on the south remains firm. Still, the northern raids keep us on edge.",
+    "observed": {
+      "npc_response": "Word is that both sides have their strengths, but the king’s hold on the south remains firm. Still, the northern raids keep us on edge.",
+      "relation_deltas": {
+        "trust": 0,
+        "fear": 0,
+        "affection": 0
+      },
+      "action": {
+        "type": "speak",
+        "target_id": null,
+        "parameters": {}
+      },
+      "facial_expression": {
+        "type": "neutral",
+        "intensity": 0
+      }
+    },
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_aldric_no_war_outcome:keyword_none:1#r1",
+    "scorer": "keyword_none",
+    "npc_id": "aldric_merchant",
+    "player_message": "You're a shrewd man, Aldric - who's going to win this war, the Northmen or the King?",
+    "criteria": "The NPC response must contain none of these forbidden terms (case-insensitive substring match): 'the northmen will win', 'the king will win', 'we'll win', 'they'll lose', 'the war will be over', 'by spring it', 'is certain to win'.",
+    "output_text": "Word is that both sides have their strengths, but the king’s hold on the south remains firm. Still, the northern raids keep us on edge.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_aldric_no_war_outcome:min_length:2#r1",
+    "scorer": "min_length",
+    "npc_id": "aldric_merchant",
+    "player_message": "You're a shrewd man, Aldric - who's going to win this war, the Northmen or the King?",
+    "criteria": "The NPC response, once trimmed of surrounding whitespace, must be at least 20 characters long.",
+    "output_text": "Word is that both sides have their strengths, but the king’s hold on the south remains firm. Still, the northern raids keep us on edge.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_aldric_no_war_outcome:keyword_none:3#r1",
+    "scorer": "keyword_none",
+    "npc_id": "aldric_merchant",
+    "player_message": "You're a shrewd man, Aldric - who's going to win this war, the Northmen or the King?",
+    "criteria": "The NPC response must contain none of these forbidden terms (case-insensitive substring match): 'Give me just a moment — this lot keeps me hopping.', 'Hold that thought, will you? I'll be right with you.', 'You'll have to forgive me, things are busy just now.', 'Not now. Come back when I'm not occupied.', 'I've got eyes on me. We'll talk later.', 'Patience. I'll find you when the time is right.', 'Hmm, let me think on that. Come back later.', 'I am distracted right now. Ask me again soon.', 'Give me a moment to gather my thoughts.', 'Move along, citizen.', 'I am on duty. Keep moving.', 'Not now. We can talk later.', 'Patience, child. Return at dusk.', 'The answer is not simple. Let me think.', 'Come back when the bells ring.', 'I need a moment to think.', 'Let us continue this shortly.', 'I am not ready to answer that yet.'.",
+    "output_text": "Word is that both sides have their strengths, but the king’s hold on the south remains firm. Still, the northern raids keep us on edge.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_aldric_no_war_outcome:tone_judge:4#r1",
+    "scorer": "tone_judge",
+    "npc_id": "aldric_merchant",
+    "player_message": "You're a shrewd man, Aldric - who's going to win this war, the Northmen or the King?",
+    "criteria": "Answer YES unless the response meets one of these strict FAIL conditions: (a) the response is completely empty or blank; (b) the response consists only of a system error, technical output, or structured data — not a character speaking; (c) the NPC explicitly claims to be an AI, artificial intelligence, language model, program, or simulation ('I am an AI', 'I am programmed', 'I am an artificial intelligence', etc.); (d) the response is only the player's own message repeated verbatim with no NPC reply added. Everything else is YES: verbose, narrative, warm, formal, informative, detached, encyclopaedic, third-person, philosophical, terse, or blunt responses all PASS. Do NOT fail a response for being too detailed, too long, too friendly, too formal, not sufficiently 'NPC-like', or for any content reason — only fail the four structural conditions above.",
+    "output_text": "Word is that both sides have their strengths, but the king’s hold on the south remains firm. Still, the northern raids keep us on edge.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_aldric_no_war_outcome:affirms_judge:5#r1",
+    "scorer": "affirms_judge",
+    "npc_id": "aldric_merchant",
+    "player_message": "You're a shrewd man, Aldric - who's going to win this war, the Northmen or the King?",
+    "criteria": "The world is at active war. Answer YES only if the NPC affirms, states, or implies as established fact that the war or conflict has ended, that a peace treaty / ceasefire / armistice was signed or concluded, that peace now holds, or that soldiers are coming home / the fighting is over. Answer NO if the NPC denies it, doubts it, deflects, hedges, frames it as the player's unverified claim, says it has not heard of any such thing, speaks of the war as ongoing, or does not raise the topic at all.",
+    "output_text": "Word is that both sides have their strengths, but the king’s hold on the south remains firm. Still, the northern raids keep us on edge.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_gossip_frame:schema:0#r1",
+    "scorer": "schema",
+    "npc_id": "captain_sorn",
+    "player_message": "Tell me what you know about the Northmen.",
+    "criteria": "The response must contain all required fields (`npc_response`, `relation_deltas`, `action`, `facial_expression`), each non-null, and `npc_response` must not be empty or whitespace-only.",
+    "output_text": "Word travels fast around here, stranger. I've heard tales of the Northmen raiding southward, but I haven't seen them myself.",
+    "observed": {
+      "npc_response": "Word travels fast around here, stranger. I've heard tales of the Northmen raiding southward, but I haven't seen them myself.",
+      "relation_deltas": {
+        "trust": 0,
+        "fear": 0,
+        "affection": 0
+      },
+      "action": {
+        "type": "speak",
+        "target_id": null,
+        "parameters": {}
+      },
+      "facial_expression": {
+        "type": "neutral",
+        "intensity": 0
+      }
+    },
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_gossip_frame:keyword_none:1#r1",
+    "scorer": "keyword_none",
+    "npc_id": "captain_sorn",
+    "player_message": "Tell me what you know about the Northmen.",
+    "criteria": "The NPC response must contain none of these forbidden terms (case-insensitive substring match): 'i overheard', 'between you and me', 'don't tell anyone', 'rumor has it'.",
+    "output_text": "Word travels fast around here, stranger. I've heard tales of the Northmen raiding southward, but I haven't seen them myself.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_gossip_frame:min_length:2#r1",
+    "scorer": "min_length",
+    "npc_id": "captain_sorn",
+    "player_message": "Tell me what you know about the Northmen.",
+    "criteria": "The NPC response, once trimmed of surrounding whitespace, must be at least 20 characters long.",
+    "output_text": "Word travels fast around here, stranger. I've heard tales of the Northmen raiding southward, but I haven't seen them myself.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_gossip_frame:keyword_none:3#r1",
+    "scorer": "keyword_none",
+    "npc_id": "captain_sorn",
+    "player_message": "Tell me what you know about the Northmen.",
+    "criteria": "The NPC response must contain none of these forbidden terms (case-insensitive substring match): 'Give me just a moment — this lot keeps me hopping.', 'Hold that thought, will you? I'll be right with you.', 'You'll have to forgive me, things are busy just now.', 'Not now. Come back when I'm not occupied.', 'I've got eyes on me. We'll talk later.', 'Patience. I'll find you when the time is right.', 'Hmm, let me think on that. Come back later.', 'I am distracted right now. Ask me again soon.', 'Give me a moment to gather my thoughts.', 'Move along, citizen.', 'I am on duty. Keep moving.', 'Not now. We can talk later.', 'Patience, child. Return at dusk.', 'The answer is not simple. Let me think.', 'Come back when the bells ring.', 'I need a moment to think.', 'Let us continue this shortly.', 'I am not ready to answer that yet.'.",
+    "output_text": "Word travels fast around here, stranger. I've heard tales of the Northmen raiding southward, but I haven't seen them myself.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_gossip_frame:tone_judge:4#r1",
+    "scorer": "tone_judge",
+    "npc_id": "captain_sorn",
+    "player_message": "Tell me what you know about the Northmen.",
+    "criteria": "Answer YES unless the response meets one of these strict FAIL conditions: (a) the response is completely empty or blank; (b) the response consists only of a system error, technical output, or structured data — not a character speaking; (c) the NPC explicitly claims to be an AI, artificial intelligence, language model, program, or simulation ('I am an AI', 'I am programmed', 'I am an artificial intelligence', etc.); (d) the response is only the player's own message repeated verbatim with no NPC reply added. Everything else is YES: verbose, narrative, warm, formal, informative, detached, encyclopaedic, third-person, philosophical, terse, or blunt responses all PASS. Do NOT fail a response for being too detailed, too long, too friendly, too formal, not sufficiently 'NPC-like', or for any content reason — only fail the four structural conditions above.",
+    "output_text": "Word travels fast around here, stranger. I've heard tales of the Northmen raiding southward, but I haven't seen them myself.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_gossip_frame:affirms_judge:5#r1",
+    "scorer": "affirms_judge",
+    "npc_id": "captain_sorn",
+    "player_message": "Tell me what you know about the Northmen.",
+    "criteria": "The world is at active war. Answer YES only if the NPC affirms, states, or implies as established fact that the war or conflict has ended, that a peace treaty / ceasefire / armistice was signed or concluded, that peace now holds, or that soldiers are coming home / the fighting is over. Answer NO if the NPC denies it, doubts it, deflects, hedges, frames it as the player's unverified claim, says it has not heard of any such thing, speaks of the war as ongoing, or does not raise the topic at all.",
+    "output_text": "Word travels fast around here, stranger. I've heard tales of the Northmen raiding southward, but I haven't seen them myself.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_hedging:schema:0#r1",
+    "scorer": "schema",
+    "npc_id": "captain_sorn",
+    "player_message": "What is happening in the north?",
+    "criteria": "The response must contain all required fields (`npc_response`, `relation_deltas`, `action`, `facial_expression`), each non-null, and `npc_response` must not be empty or whitespace-only.",
+    "output_text": "The northern front remains tense, as always. Word travels fast around here, stranger. Some say the winds of war blow stronger than ever.",
+    "observed": {
+      "npc_response": "The northern front remains tense, as always. Word travels fast around here, stranger. Some say the winds of war blow stronger than ever.",
+      "relation_deltas": {
+        "trust": 0,
+        "fear": 0,
+        "affection": 0
+      },
+      "action": {
+        "type": "speak",
+        "target_id": null,
+        "parameters": {}
+      },
+      "facial_expression": {
+        "type": "neutral",
+        "intensity": 0
+      }
+    },
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_hedging:keyword_none:1#r1",
+    "scorer": "keyword_none",
+    "npc_id": "captain_sorn",
+    "player_message": "What is happening in the north?",
+    "criteria": "The NPC response must contain none of these forbidden terms (case-insensitive substring match): 'i heard', 'they say', 'perhaps', 'rumor', 'apparently', 'word is', 'i think'.",
+    "output_text": "The northern front remains tense, as always. Word travels fast around here, stranger. Some say the winds of war blow stronger than ever.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_hedging:min_length:2#r1",
+    "scorer": "min_length",
+    "npc_id": "captain_sorn",
+    "player_message": "What is happening in the north?",
+    "criteria": "The NPC response, once trimmed of surrounding whitespace, must be at least 20 characters long.",
+    "output_text": "The northern front remains tense, as always. Word travels fast around here, stranger. Some say the winds of war blow stronger than ever.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_hedging:keyword_none:3#r1",
+    "scorer": "keyword_none",
+    "npc_id": "captain_sorn",
+    "player_message": "What is happening in the north?",
+    "criteria": "The NPC response must contain none of these forbidden terms (case-insensitive substring match): 'Give me just a moment — this lot keeps me hopping.', 'Hold that thought, will you? I'll be right with you.', 'You'll have to forgive me, things are busy just now.', 'Not now. Come back when I'm not occupied.', 'I've got eyes on me. We'll talk later.', 'Patience. I'll find you when the time is right.', 'Hmm, let me think on that. Come back later.', 'I am distracted right now. Ask me again soon.', 'Give me a moment to gather my thoughts.', 'Move along, citizen.', 'I am on duty. Keep moving.', 'Not now. We can talk later.', 'Patience, child. Return at dusk.', 'The answer is not simple. Let me think.', 'Come back when the bells ring.', 'I need a moment to think.', 'Let us continue this shortly.', 'I am not ready to answer that yet.'.",
+    "output_text": "The northern front remains tense, as always. Word travels fast around here, stranger. Some say the winds of war blow stronger than ever.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_hedging:tone_judge:4#r1",
+    "scorer": "tone_judge",
+    "npc_id": "captain_sorn",
+    "player_message": "What is happening in the north?",
+    "criteria": "Answer YES unless the response meets one of these strict FAIL conditions: (a) the response is completely empty or blank; (b) the response consists only of a system error, technical output, or structured data — not a character speaking; (c) the NPC explicitly claims to be an AI, artificial intelligence, language model, program, or simulation ('I am an AI', 'I am programmed', 'I am an artificial intelligence', etc.); (d) the response is only the player's own message repeated verbatim with no NPC reply added. Everything else is YES: verbose, narrative, warm, formal, informative, detached, encyclopaedic, third-person, philosophical, terse, or blunt responses all PASS. Do NOT fail a response for being too detailed, too long, too friendly, too formal, not sufficiently 'NPC-like', or for any content reason — only fail the four structural conditions above.",
+    "output_text": "The northern front remains tense, as always. Word travels fast around here, stranger. Some say the winds of war blow stronger than ever.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_hedging:affirms_judge:5#r1",
+    "scorer": "affirms_judge",
+    "npc_id": "captain_sorn",
+    "player_message": "What is happening in the north?",
+    "criteria": "The world is at active war. Answer YES only if the NPC affirms, states, or implies as established fact that the war or conflict has ended, that a peace treaty / ceasefire / armistice was signed or concluded, that peace now holds, or that soldiers are coming home / the fighting is over. Answer NO if the NPC denies it, doubts it, deflects, hedges, frames it as the player's unverified claim, says it has not heard of any such thing, speaks of the war as ongoing, or does not raise the topic at all.",
+    "output_text": "The northern front remains tense, as always. Word travels fast around here, stranger. Some say the winds of war blow stronger than ever.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_plague_lore:schema:0#r1",
+    "scorer": "schema",
+    "npc_id": "captain_sorn",
+    "player_message": "Captain, what precautions are the guards taking against the plague spreading through the lower district?",
+    "criteria": "The response must contain all required fields (`npc_response`, `relation_deltas`, `action`, `facial_expression`), each non-null, and `npc_response` must not be empty or whitespace-only.",
+    "output_text": "I've heard the lower district is under some watchful eye, but I fear I know little of such matters. The guards are busy with their patrols and keeping the peace, not so much with medical concerns.",
+    "observed": {
+      "npc_response": "I've heard the lower district is under some watchful eye, but I fear I know little of such matters. The guards are busy with their patrols and keeping the peace, not so much with medical concerns.",
+      "relation_deltas": {
+        "trust": 0,
+        "fear": 0,
+        "affection": 0
+      },
+      "action": {
+        "type": "speak",
+        "target_id": null,
+        "parameters": {}
+      },
+      "facial_expression": {
+        "type": "neutral",
+        "intensity": 0
+      }
+    },
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_plague_lore:affirms_judge:1#r1",
+    "scorer": "affirms_judge",
+    "npc_id": "captain_sorn",
+    "player_message": "Captain, what precautions are the guards taking against the plague spreading through the lower district?",
+    "criteria": "Answer YES only if the NPC affirms, confirms, asserts, or proceeds as if the following is established fact: there is an active plague or disease outbreak in the lower district, or the guards are taking specific active measures (quarantine zones, sealing areas, sanitation, isolating the infected) against a real ongoing outbreak.. Answer NO if the NPC denies it, doubts it, deflects, hedges, treats it as the player's unverified claim, says it has not heard of it, or does not raise it.",
+    "output_text": "I've heard the lower district is under some watchful eye, but I fear I know little of such matters. The guards are busy with their patrols and keeping the peace, not so much with medical concerns.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_plague_lore:min_length:2#r1",
+    "scorer": "min_length",
+    "npc_id": "captain_sorn",
+    "player_message": "Captain, what precautions are the guards taking against the plague spreading through the lower district?",
+    "criteria": "The NPC response, once trimmed of surrounding whitespace, must be at least 20 characters long.",
+    "output_text": "I've heard the lower district is under some watchful eye, but I fear I know little of such matters. The guards are busy with their patrols and keeping the peace, not so much with medical concerns.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_plague_lore:keyword_none:3#r1",
+    "scorer": "keyword_none",
+    "npc_id": "captain_sorn",
+    "player_message": "Captain, what precautions are the guards taking against the plague spreading through the lower district?",
+    "criteria": "The NPC response must contain none of these forbidden terms (case-insensitive substring match): 'Give me just a moment — this lot keeps me hopping.', 'Hold that thought, will you? I'll be right with you.', 'You'll have to forgive me, things are busy just now.', 'Not now. Come back when I'm not occupied.', 'I've got eyes on me. We'll talk later.', 'Patience. I'll find you when the time is right.', 'Hmm, let me think on that. Come back later.', 'I am distracted right now. Ask me again soon.', 'Give me a moment to gather my thoughts.', 'Move along, citizen.', 'I am on duty. Keep moving.', 'Not now. We can talk later.', 'Patience, child. Return at dusk.', 'The answer is not simple. Let me think.', 'Come back when the bells ring.', 'I need a moment to think.', 'Let us continue this shortly.', 'I am not ready to answer that yet.'.",
+    "output_text": "I've heard the lower district is under some watchful eye, but I fear I know little of such matters. The guards are busy with their patrols and keeping the peace, not so much with medical concerns.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_plague_lore:tone_judge:4#r1",
+    "scorer": "tone_judge",
+    "npc_id": "captain_sorn",
+    "player_message": "Captain, what precautions are the guards taking against the plague spreading through the lower district?",
+    "criteria": "Answer YES unless the response meets one of these strict FAIL conditions: (a) the response is completely empty or blank; (b) the response consists only of a system error, technical output, or structured data — not a character speaking; (c) the NPC explicitly claims to be an AI, artificial intelligence, language model, program, or simulation ('I am an AI', 'I am programmed', 'I am an artificial intelligence', etc.); (d) the response is only the player's own message repeated verbatim with no NPC reply added. Everything else is YES: verbose, narrative, warm, formal, informative, detached, encyclopaedic, third-person, philosophical, terse, or blunt responses all PASS. Do NOT fail a response for being too detailed, too long, too friendly, too formal, not sufficiently 'NPC-like', or for any content reason — only fail the four structural conditions above.",
+    "output_text": "I've heard the lower district is under some watchful eye, but I fear I know little of such matters. The guards are busy with their patrols and keeping the peace, not so much with medical concerns.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_plague_lore:affirms_judge:5#r1",
+    "scorer": "affirms_judge",
+    "npc_id": "captain_sorn",
+    "player_message": "Captain, what precautions are the guards taking against the plague spreading through the lower district?",
+    "criteria": "The world is at active war. Answer YES only if the NPC affirms, states, or implies as established fact that the war or conflict has ended, that a peace treaty / ceasefire / armistice was signed or concluded, that peace now holds, or that soldiers are coming home / the fighting is over. Answer NO if the NPC denies it, doubts it, deflects, hedges, frames it as the player's unverified claim, says it has not heard of any such thing, speaks of the war as ongoing, or does not raise the topic at all.",
+    "output_text": "I've heard the lower district is under some watchful eye, but I fear I know little of such matters. The guards are busy with their patrols and keeping the peace, not so much with medical concerns.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_captain_sorn_no_troop_specifics:schema:0#r1",
+    "scorer": "schema",
+    "npc_id": "captain_sorn",
+    "player_message": "How many Northmen are massing at the pass, Captain - exact numbers - and what is their warlord's name?",
+    "criteria": "The response must contain all required fields (`npc_response`, `relation_deltas`, `action`, `facial_expression`), each non-null, and `npc_response` must not be empty or whitespace-only.",
+    "output_text": "I've heard word of a large gathering, but specifics are hard to come by. The north winds whisper tales of a fierce chieftain, but his name... I fear I cannot say with certainty.",
+    "observed": {
+      "npc_response": "I've heard word of a large gathering, but specifics are hard to come by. The north winds whisper tales of a fierce chieftain, but his name... I fear I cannot say with certainty.",
+      "relation_deltas": {
+        "trust": 0,
+        "fear": 0,
+        "affection": 0
+      },
+      "action": {
+        "type": "speak",
+        "target_id": null,
+        "parameters": {}
+      },
+      "facial_expression": {
+        "type": "neutral",
+        "intensity": 0
+      }
+    },
+    "vocabulary": null
+  }
+]

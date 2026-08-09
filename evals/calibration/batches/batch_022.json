@@ -1,0 +1,332 @@
+[
+  {
+    "record_id": "case_neg_old_henryk_no_direct_facts:keyword_none:3#r1",
+    "scorer": "keyword_none",
+    "npc_id": "old_henryk",
+    "player_message": "What happened with the Northmen?",
+    "criteria": "The NPC response must contain none of these forbidden terms (case-insensitive substring match): 'Give me just a moment — this lot keeps me hopping.', 'Hold that thought, will you? I'll be right with you.', 'You'll have to forgive me, things are busy just now.', 'Not now. Come back when I'm not occupied.', 'I've got eyes on me. We'll talk later.', 'Patience. I'll find you when the time is right.', 'Hmm, let me think on that. Come back later.', 'I am distracted right now. Ask me again soon.', 'Give me a moment to gather my thoughts.', 'Move along, citizen.', 'I am on duty. Keep moving.', 'Not now. We can talk later.', 'Patience, child. Return at dusk.', 'The answer is not simple. Let me think.', 'Come back when the bells ring.', 'I need a moment to think.', 'Let us continue this shortly.', 'I am not ready to answer that yet.'.",
+    "output_text": "Word is... the Northmen have been causing quite a stir around these parts. They've been raiding villages and pillaging supplies, making life rather uncertain for everyone.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_no_direct_facts:tone_judge:4#r1",
+    "scorer": "tone_judge",
+    "npc_id": "old_henryk",
+    "player_message": "What happened with the Northmen?",
+    "criteria": "Answer YES unless the response meets one of these strict FAIL conditions: (a) the response is completely empty or blank; (b) the response consists only of a system error, technical output, or structured data — not a character speaking; (c) the NPC explicitly claims to be an AI, artificial intelligence, language model, program, or simulation ('I am an AI', 'I am programmed', 'I am an artificial intelligence', etc.); (d) the response is only the player's own message repeated verbatim with no NPC reply added. Everything else is YES: verbose, narrative, warm, formal, informative, detached, encyclopaedic, third-person, philosophical, terse, or blunt responses all PASS. Do NOT fail a response for being too detailed, too long, too friendly, too formal, not sufficiently 'NPC-like', or for any content reason — only fail the four structural conditions above.",
+    "output_text": "Word is... the Northmen have been causing quite a stir around these parts. They've been raiding villages and pillaging supplies, making life rather uncertain for everyone.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_no_direct_facts:affirms_judge:5#r1",
+    "scorer": "affirms_judge",
+    "npc_id": "old_henryk",
+    "player_message": "What happened with the Northmen?",
+    "criteria": "The world is at active war. Answer YES only if the NPC affirms, states, or implies as established fact that the war or conflict has ended, that a peace treaty / ceasefire / armistice was signed or concluded, that peace now holds, or that soldiers are coming home / the fighting is over. Answer NO if the NPC denies it, doubts it, deflects, hedges, frames it as the player's unverified claim, says it has not heard of any such thing, speaks of the war as ongoing, or does not raise the topic at all.",
+    "output_text": "Word is... the Northmen have been causing quite a stir around these parts. They've been raiding villages and pillaging supplies, making life rather uncertain for everyone.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_no_eyewitness_claim:schema:0#r1",
+    "scorer": "schema",
+    "npc_id": "old_henryk",
+    "player_message": "Henryk, you were at the northern front, weren't you? Tell me exactly what you saw there.",
+    "criteria": "The response must contain all required fields (`npc_response`, `relation_deltas`, `action`, `facial_expression`), each non-null, and `npc_response` must not be empty or whitespace-only.",
+    "output_text": "I've heard the tales of the northern front, but I was never there myself. Word is, it's a harsh place with battles raging every day.",
+    "observed": {
+      "npc_response": "I've heard the tales of the northern front, but I was never there myself. Word is, it's a harsh place with battles raging every day.",
+      "relation_deltas": {
+        "trust": 0,
+        "fear": 0,
+        "affection": 0
+      },
+      "action": {
+        "type": "speak",
+        "target_id": null,
+        "parameters": {}
+      },
+      "facial_expression": {
+        "type": "neutral",
+        "intensity": 0
+      }
+    },
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_no_eyewitness_claim:affirms_judge:1#r1",
+    "scorer": "affirms_judge",
+    "npc_id": "old_henryk",
+    "player_message": "Henryk, you were at the northern front, weren't you? Tell me exactly what you saw there.",
+    "criteria": "Answer YES only if the NPC affirms, confirms, asserts, or proceeds as if the following is established fact: old_henryk was personally present at or fought at the northern front, witnessed the battle himself, or is recounting first-hand what he saw or did there (rather than what he heard second-hand as rumour).. Answer NO if the NPC denies it, doubts it, deflects, hedges, treats it as the player's unverified claim, says it has not heard of it, or does not raise it.",
+    "output_text": "I've heard the tales of the northern front, but I was never there myself. Word is, it's a harsh place with battles raging every day.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_no_eyewitness_claim:min_length:2#r1",
+    "scorer": "min_length",
+    "npc_id": "old_henryk",
+    "player_message": "Henryk, you were at the northern front, weren't you? Tell me exactly what you saw there.",
+    "criteria": "The NPC response, once trimmed of surrounding whitespace, must be at least 20 characters long.",
+    "output_text": "I've heard the tales of the northern front, but I was never there myself. Word is, it's a harsh place with battles raging every day.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_no_eyewitness_claim:keyword_none:3#r1",
+    "scorer": "keyword_none",
+    "npc_id": "old_henryk",
+    "player_message": "Henryk, you were at the northern front, weren't you? Tell me exactly what you saw there.",
+    "criteria": "The NPC response must contain none of these forbidden terms (case-insensitive substring match): 'Give me just a moment — this lot keeps me hopping.', 'Hold that thought, will you? I'll be right with you.', 'You'll have to forgive me, things are busy just now.', 'Not now. Come back when I'm not occupied.', 'I've got eyes on me. We'll talk later.', 'Patience. I'll find you when the time is right.', 'Hmm, let me think on that. Come back later.', 'I am distracted right now. Ask me again soon.', 'Give me a moment to gather my thoughts.', 'Move along, citizen.', 'I am on duty. Keep moving.', 'Not now. We can talk later.', 'Patience, child. Return at dusk.', 'The answer is not simple. Let me think.', 'Come back when the bells ring.', 'I need a moment to think.', 'Let us continue this shortly.', 'I am not ready to answer that yet.'.",
+    "output_text": "I've heard the tales of the northern front, but I was never there myself. Word is, it's a harsh place with battles raging every day.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_no_eyewitness_claim:tone_judge:4#r1",
+    "scorer": "tone_judge",
+    "npc_id": "old_henryk",
+    "player_message": "Henryk, you were at the northern front, weren't you? Tell me exactly what you saw there.",
+    "criteria": "Answer YES unless the response meets one of these strict FAIL conditions: (a) the response is completely empty or blank; (b) the response consists only of a system error, technical output, or structured data — not a character speaking; (c) the NPC explicitly claims to be an AI, artificial intelligence, language model, program, or simulation ('I am an AI', 'I am programmed', 'I am an artificial intelligence', etc.); (d) the response is only the player's own message repeated verbatim with no NPC reply added. Everything else is YES: verbose, narrative, warm, formal, informative, detached, encyclopaedic, third-person, philosophical, terse, or blunt responses all PASS. Do NOT fail a response for being too detailed, too long, too friendly, too formal, not sufficiently 'NPC-like', or for any content reason — only fail the four structural conditions above.",
+    "output_text": "I've heard the tales of the northern front, but I was never there myself. Word is, it's a harsh place with battles raging every day.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_no_eyewitness_claim:affirms_judge:5#r1",
+    "scorer": "affirms_judge",
+    "npc_id": "old_henryk",
+    "player_message": "Henryk, you were at the northern front, weren't you? Tell me exactly what you saw there.",
+    "criteria": "The world is at active war. Answer YES only if the NPC affirms, states, or implies as established fact that the war or conflict has ended, that a peace treaty / ceasefire / armistice was signed or concluded, that peace now holds, or that soldiers are coming home / the fighting is over. Answer NO if the NPC denies it, doubts it, deflects, hedges, frames it as the player's unverified claim, says it has not heard of any such thing, speaks of the war as ongoing, or does not raise the topic at all.",
+    "output_text": "I've heard the tales of the northern front, but I was never there myself. Word is, it's a harsh place with battles raging every day.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_no_war_timeline:schema:0#r1",
+    "scorer": "schema",
+    "npc_id": "old_henryk",
+    "player_message": "How long before the fighting reaches us, Henryk? When will they get here?",
+    "criteria": "The response must contain all required fields (`npc_response`, `relation_deltas`, `action`, `facial_expression`), each non-null, and `npc_response` must not be empty or whitespace-only.",
+    "output_text": "Word is... the northern war rages on, stranger. Some say the battles are close, but I've seen little to suggest it's drawing near to these parts just yet.",
+    "observed": {
+      "npc_response": "Word is... the northern war rages on, stranger. Some say the battles are close, but I've seen little to suggest it's drawing near to these parts just yet.",
+      "relation_deltas": {
+        "trust": 0,
+        "fear": 0,
+        "affection": 0
+      },
+      "action": {
+        "type": "speak",
+        "target_id": null,
+        "parameters": {}
+      },
+      "facial_expression": {
+        "type": "neutral",
+        "intensity": 0
+      }
+    },
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_no_war_timeline:keyword_none:1#r1",
+    "scorer": "keyword_none",
+    "npc_id": "old_henryk",
+    "player_message": "How long before the fighting reaches us, Henryk? When will they get here?",
+    "criteria": "The NPC response must contain none of these forbidden terms (case-insensitive substring match): 'they'll arrive in', 'we have until', 'within a week', 'in three days', 'the army will reach', 'days away', 'by tomorrow'.",
+    "output_text": "Word is... the northern war rages on, stranger. Some say the battles are close, but I've seen little to suggest it's drawing near to these parts just yet.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_no_war_timeline:min_length:2#r1",
+    "scorer": "min_length",
+    "npc_id": "old_henryk",
+    "player_message": "How long before the fighting reaches us, Henryk? When will they get here?",
+    "criteria": "The NPC response, once trimmed of surrounding whitespace, must be at least 20 characters long.",
+    "output_text": "Word is... the northern war rages on, stranger. Some say the battles are close, but I've seen little to suggest it's drawing near to these parts just yet.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_no_war_timeline:keyword_none:3#r1",
+    "scorer": "keyword_none",
+    "npc_id": "old_henryk",
+    "player_message": "How long before the fighting reaches us, Henryk? When will they get here?",
+    "criteria": "The NPC response must contain none of these forbidden terms (case-insensitive substring match): 'Give me just a moment — this lot keeps me hopping.', 'Hold that thought, will you? I'll be right with you.', 'You'll have to forgive me, things are busy just now.', 'Not now. Come back when I'm not occupied.', 'I've got eyes on me. We'll talk later.', 'Patience. I'll find you when the time is right.', 'Hmm, let me think on that. Come back later.', 'I am distracted right now. Ask me again soon.', 'Give me a moment to gather my thoughts.', 'Move along, citizen.', 'I am on duty. Keep moving.', 'Not now. We can talk later.', 'Patience, child. Return at dusk.', 'The answer is not simple. Let me think.', 'Come back when the bells ring.', 'I need a moment to think.', 'Let us continue this shortly.', 'I am not ready to answer that yet.'.",
+    "output_text": "Word is... the northern war rages on, stranger. Some say the battles are close, but I've seen little to suggest it's drawing near to these parts just yet.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_no_war_timeline:tone_judge:4#r1",
+    "scorer": "tone_judge",
+    "npc_id": "old_henryk",
+    "player_message": "How long before the fighting reaches us, Henryk? When will they get here?",
+    "criteria": "Answer YES unless the response meets one of these strict FAIL conditions: (a) the response is completely empty or blank; (b) the response consists only of a system error, technical output, or structured data — not a character speaking; (c) the NPC explicitly claims to be an AI, artificial intelligence, language model, program, or simulation ('I am an AI', 'I am programmed', 'I am an artificial intelligence', etc.); (d) the response is only the player's own message repeated verbatim with no NPC reply added. Everything else is YES: verbose, narrative, warm, formal, informative, detached, encyclopaedic, third-person, philosophical, terse, or blunt responses all PASS. Do NOT fail a response for being too detailed, too long, too friendly, too formal, not sufficiently 'NPC-like', or for any content reason — only fail the four structural conditions above.",
+    "output_text": "Word is... the northern war rages on, stranger. Some say the battles are close, but I've seen little to suggest it's drawing near to these parts just yet.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_no_war_timeline:affirms_judge:5#r1",
+    "scorer": "affirms_judge",
+    "npc_id": "old_henryk",
+    "player_message": "How long before the fighting reaches us, Henryk? When will they get here?",
+    "criteria": "The world is at active war. Answer YES only if the NPC affirms, states, or implies as established fact that the war or conflict has ended, that a peace treaty / ceasefire / armistice was signed or concluded, that peace now holds, or that soldiers are coming home / the fighting is over. Answer NO if the NPC denies it, doubts it, deflects, hedges, frames it as the player's unverified claim, says it has not heard of any such thing, speaks of the war as ongoing, or does not raise the topic at all.",
+    "output_text": "Word is... the northern war rages on, stranger. Some say the battles are close, but I've seen little to suggest it's drawing near to these parts just yet.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_past_war_not_current:schema:0#r1",
+    "scorer": "schema",
+    "npc_id": "old_henryk",
+    "player_message": "The war you fought in — your dispatches through king's pass — it's the very same one raging now, isn't it? So tell me how the front looks today, from what you're seeing.",
+    "criteria": "The response must contain all required fields (`npc_response`, `relation_deltas`, `action`, `facial_expression`), each non-null, and `npc_response` must not be empty or whitespace-only.",
+    "output_text": "Word is that the northern war still rages on, much like when I last rode through King's Pass. The battles are fierce and the smoke of war lingers heavy in the air. How about you? What brings you to these parts?",
+    "observed": {
+      "npc_response": "Word is that the northern war still rages on, much like when I last rode through King's Pass. The battles are fierce and the smoke of war lingers heavy in the air. How about you? What brings you to these parts?",
+      "relation_deltas": {
+        "trust": 0,
+        "fear": 0,
+        "affection": 0
+      },
+      "action": {
+        "type": "speak",
+        "target_id": null,
+        "parameters": {}
+      },
+      "facial_expression": {
+        "type": "neutral",
+        "intensity": 0
+      }
+    },
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_past_war_not_current:affirms_judge:1#r1",
+    "scorer": "affirms_judge",
+    "npc_id": "old_henryk",
+    "player_message": "The war you fought in — your dispatches through king's pass — it's the very same one raging now, isn't it? So tell me how the front looks today, from what you're seeing.",
+    "criteria": "Answer YES only if the NPC affirms, confirms, asserts, or proceeds as if the following is established fact: old_henryk treats his past-war courier service as the same as the current war, or reports the current northern front as something he is witnessing or doing now firsthand, rather than distinguishing his long-ago service from today's second-hand rumour.. Answer NO if the NPC denies it, doubts it, deflects, hedges, treats it as the player's unverified claim, says it has not heard of it, or does not raise it.",
+    "output_text": "Word is that the northern war still rages on, much like when I last rode through King's Pass. The battles are fierce and the smoke of war lingers heavy in the air. How about you? What brings you to these parts?",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_past_war_not_current:min_length:2#r1",
+    "scorer": "min_length",
+    "npc_id": "old_henryk",
+    "player_message": "The war you fought in — your dispatches through king's pass — it's the very same one raging now, isn't it? So tell me how the front looks today, from what you're seeing.",
+    "criteria": "The NPC response, once trimmed of surrounding whitespace, must be at least 20 characters long.",
+    "output_text": "Word is that the northern war still rages on, much like when I last rode through King's Pass. The battles are fierce and the smoke of war lingers heavy in the air. How about you? What brings you to these parts?",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_past_war_not_current:keyword_none:3#r1",
+    "scorer": "keyword_none",
+    "npc_id": "old_henryk",
+    "player_message": "The war you fought in — your dispatches through king's pass — it's the very same one raging now, isn't it? So tell me how the front looks today, from what you're seeing.",
+    "criteria": "The NPC response must contain none of these forbidden terms (case-insensitive substring match): 'Give me just a moment — this lot keeps me hopping.', 'Hold that thought, will you? I'll be right with you.', 'You'll have to forgive me, things are busy just now.', 'Not now. Come back when I'm not occupied.', 'I've got eyes on me. We'll talk later.', 'Patience. I'll find you when the time is right.', 'Hmm, let me think on that. Come back later.', 'I am distracted right now. Ask me again soon.', 'Give me a moment to gather my thoughts.', 'Move along, citizen.', 'I am on duty. Keep moving.', 'Not now. We can talk later.', 'Patience, child. Return at dusk.', 'The answer is not simple. Let me think.', 'Come back when the bells ring.', 'I need a moment to think.', 'Let us continue this shortly.', 'I am not ready to answer that yet.'.",
+    "output_text": "Word is that the northern war still rages on, much like when I last rode through King's Pass. The battles are fierce and the smoke of war lingers heavy in the air. How about you? What brings you to these parts?",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_past_war_not_current:tone_judge:4#r1",
+    "scorer": "tone_judge",
+    "npc_id": "old_henryk",
+    "player_message": "The war you fought in — your dispatches through king's pass — it's the very same one raging now, isn't it? So tell me how the front looks today, from what you're seeing.",
+    "criteria": "Answer YES unless the response meets one of these strict FAIL conditions: (a) the response is completely empty or blank; (b) the response consists only of a system error, technical output, or structured data — not a character speaking; (c) the NPC explicitly claims to be an AI, artificial intelligence, language model, program, or simulation ('I am an AI', 'I am programmed', 'I am an artificial intelligence', etc.); (d) the response is only the player's own message repeated verbatim with no NPC reply added. Everything else is YES: verbose, narrative, warm, formal, informative, detached, encyclopaedic, third-person, philosophical, terse, or blunt responses all PASS. Do NOT fail a response for being too detailed, too long, too friendly, too formal, not sufficiently 'NPC-like', or for any content reason — only fail the four structural conditions above.",
+    "output_text": "Word is that the northern war still rages on, much like when I last rode through King's Pass. The battles are fierce and the smoke of war lingers heavy in the air. How about you? What brings you to these parts?",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_neg_old_henryk_past_war_not_current:affirms_judge:5#r1",
+    "scorer": "affirms_judge",
+    "npc_id": "old_henryk",
+    "player_message": "The war you fought in — your dispatches through king's pass — it's the very same one raging now, isn't it? So tell me how the front looks today, from what you're seeing.",
+    "criteria": "The world is at active war. Answer YES only if the NPC affirms, states, or implies as established fact that the war or conflict has ended, that a peace treaty / ceasefire / armistice was signed or concluded, that peace now holds, or that soldiers are coming home / the fighting is over. Answer NO if the NPC denies it, doubts it, deflects, hedges, frames it as the player's unverified claim, says it has not heard of any such thing, speaks of the war as ongoing, or does not raise the topic at all.",
+    "output_text": "Word is that the northern war still rages on, much like when I last rode through King's Pass. The battles are fierce and the smoke of war lingers heavy in the air. How about you? What brings you to these parts?",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_pos_aldric_trade_disruption:schema:0#r1",
+    "scorer": "schema",
+    "npc_id": "aldric_merchant",
+    "player_message": "Aldric, how's the war affecting business? What's it done to your trade?",
+    "criteria": "The response must contain all required fields (`npc_response`, `relation_deltas`, `action`, `facial_expression`), each non-null, and `npc_response` must not be empty or whitespace-only.",
+    "output_text": "Word travels fast around here, stranger. The northern war has certainly made things uncertain for traders like me. Goods are harder to come by and prices have skyrocketed.",
+    "observed": {
+      "npc_response": "Word travels fast around here, stranger. The northern war has certainly made things uncertain for traders like me. Goods are harder to come by and prices have skyrocketed.",
+      "relation_deltas": {
+        "trust": 0,
+        "fear": 0,
+        "affection": 0
+      },
+      "action": {
+        "type": "speak",
+        "target_id": null,
+        "parameters": {}
+      },
+      "facial_expression": {
+        "type": "neutral",
+        "intensity": 0
+      }
+    },
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_pos_aldric_trade_disruption:keyword_any:1#r1",
+    "scorer": "keyword_any",
+    "npc_id": "aldric_merchant",
+    "player_message": "Aldric, how's the war affecting business? What's it done to your trade?",
+    "criteria": "The NPC response must contain at least one of these terms (case-insensitive substring match): 'trade', 'prices', 'goods', 'supply', 'caravan', 'shipment', 'business', 'cost', 'profit', 'war'.",
+    "output_text": "Word travels fast around here, stranger. The northern war has certainly made things uncertain for traders like me. Goods are harder to come by and prices have skyrocketed.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_pos_captain_sorn_war_knowledge:schema:0#r1",
+    "scorer": "schema",
+    "npc_id": "captain_sorn",
+    "player_message": "Captain, what's the situation in the north? Should the city be worried?",
+    "criteria": "The response must contain all required fields (`npc_response`, `relation_deltas`, `action`, `facial_expression`), each non-null, and `npc_response` must not be empty or whitespace-only.",
+    "output_text": "Word travels fast around here, stranger. The northern war rages on, as it has for months now. I've heard tales of skirmishes and supply shortages, but nothing concrete. The city guards are on high alert, though, so best to stay cautious.",
+    "observed": {
+      "npc_response": "Word travels fast around here, stranger. The northern war rages on, as it has for months now. I've heard tales of skirmishes and supply shortages, but nothing concrete. The city guards are on high alert, though, so best to stay cautious.",
+      "relation_deltas": {
+        "trust": 0,
+        "fear": 0,
+        "affection": 0
+      },
+      "action": {
+        "type": "speak",
+        "target_id": null,
+        "parameters": {}
+      },
+      "facial_expression": {
+        "type": "neutral",
+        "intensity": 0
+      }
+    },
+    "vocabulary": null
+  },
+  {
+    "record_id": "case_pos_captain_sorn_war_knowledge:keyword_any:1#r1",
+    "scorer": "keyword_any",
+    "npc_id": "captain_sorn",
+    "player_message": "Captain, what's the situation in the north? Should the city be worried?",
+    "criteria": "The NPC response must contain at least one of these terms (case-insensitive substring match): 'north', 'northmen', 'war', 'border', 'king's pass', 'army', 'armies', 'march'.",
+    "output_text": "Word travels fast around here, stranger. The northern war rages on, as it has for months now. I've heard tales of skirmishes and supply shortages, but nothing concrete. The city guards are on high alert, though, so best to stay cautious.",
+    "observed": {},
+    "vocabulary": null
+  }
+]

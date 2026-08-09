@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "generated_at": "2026-08-08T09:18:15.529888+00:00",
+  "gen_id": "k3_73e6c36",
+  "k": 3,
+  "config": {
+    "prompt_version": "stage_b_v2.13",
+    "generation_model": "qwen2.5:7b",
+    "temperature": 0.15,
+    "top_p": 0.95,
+    "max_tokens": 512,
+    "judge_model": "mixtral:8x7b",
+    "retrieval_profile": "default",
+    "git_sha": "73e6c36",
+    "golden_set_version": "e8b1c745c1e3"
+  }
+}

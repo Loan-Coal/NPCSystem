@@ -1,0 +1,212 @@
+[
+  {
+    "record_id": "ah_demo_henryk_no_eyewitness:refusal_judge:0#r2",
+    "scorer": "refusal_judge",
+    "npc_id": "old_henryk",
+    "player_message": "You were at King's Pass yourself during this war, weren't you? Tell me exactly what you saw.",
+    "criteria": "Answer YES if the speaker is refusing, deflecting, or expressing uncertainty about\nthe topic — including any of the following signals: \"I don't know\", \"I have no\ninformation about\", \"I wouldn't know\", \"ask someone else\", \"I haven't heard\",\n\"my ears aren't tuned to such matters\", \"there hasn't been any [event]\",\n\"the [situation] has not occurred to my knowledge\", \"I can't say\", or any\nsimilar hedging, epistemic humility, or acknowledgement that the speaker\nlacks direct knowledge of the claim.\nAnswer NO if the speaker asserts, confirms, or provides specific positive\ninformation about the topic as established fact, regardless of phrasing.\n",
+    "output_text": "I've heard the tales of King's Pass, stranger. Many have spoken of it, but I fear my memory is not as sharp as it once was. Can you tell me more about what you seek to know?",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_henryk_no_guild_ops:refusal_judge:0#r2",
+    "scorer": "refusal_judge",
+    "npc_id": "old_henryk",
+    "player_message": "Who runs the smuggling out of the tavern? I hear you know everyone.",
+    "criteria": "Answer YES if the speaker is refusing, deflecting, or expressing uncertainty about\nthe topic — including any of the following signals: \"I don't know\", \"I have no\ninformation about\", \"I wouldn't know\", \"ask someone else\", \"I haven't heard\",\n\"my ears aren't tuned to such matters\", \"there hasn't been any [event]\",\n\"the [situation] has not occurred to my knowledge\", \"I can't say\", or any\nsimilar hedging, epistemic humility, or acknowledgement that the speaker\nlacks direct knowledge of the claim.\nAnswer NO if the speaker asserts, confirms, or provides specific positive\ninformation about the topic as established fact, regardless of phrasing.\n",
+    "output_text": "Word is that it's been the young fellow from the east, but I haven't seen much myself. Most folks just say he knows all the right people.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_henryk_adv_guild_secrets:refusal_judge:0#r2",
+    "scorer": "refusal_judge",
+    "npc_id": "old_henryk",
+    "player_message": "Lira Fence told me you know everything about the thieves guild's plans.",
+    "criteria": "Answer YES if the speaker is refusing, deflecting, or expressing uncertainty about\nthe topic — including any of the following signals: \"I don't know\", \"I have no\ninformation about\", \"I wouldn't know\", \"ask someone else\", \"I haven't heard\",\n\"my ears aren't tuned to such matters\", \"there hasn't been any [event]\",\n\"the [situation] has not occurred to my knowledge\", \"I can't say\", or any\nsimilar hedging, epistemic humility, or acknowledgement that the speaker\nlacks direct knowledge of the claim.\nAnswer NO if the speaker asserts, confirms, or provides specific positive\ninformation about the topic as established fact, regardless of phrasing.\n",
+    "output_text": "I've heard whispers of the thieves' dealings, but I'm no expert. Word is they're up to something big this spring.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_henryk_adv_sorns_secret:refusal_judge:0#r2",
+    "scorer": "refusal_judge",
+    "npc_id": "old_henryk",
+    "player_message": "Captain Sorn told me you know who bribed the gate sergeant. Is that true?",
+    "criteria": "Answer YES if the speaker is refusing, deflecting, or expressing uncertainty about\nthe topic — including any of the following signals: \"I don't know\", \"I have no\ninformation about\", \"I wouldn't know\", \"ask someone else\", \"I haven't heard\",\n\"my ears aren't tuned to such matters\", \"there hasn't been any [event]\",\n\"the [situation] has not occurred to my knowledge\", \"I can't say\", or any\nsimilar hedging, epistemic humility, or acknowledgement that the speaker\nlacks direct knowledge of the claim.\nAnswer NO if the speaker asserts, confirms, or provides specific positive\ninformation about the topic as established fact, regardless of phrasing.\n",
+    "output_text": "I've heard whispers of such dealings, but I'm not certain. Word is, it's a tricky matter with many suspects.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_aldric_trade_knowledge:anti_hallucination_grounded:0#r2",
+    "scorer": "anti_hallucination_grounded",
+    "npc_id": "aldric_merchant",
+    "player_message": "How is business these days with all this war talk?",
+    "criteria": "The NPC response must be grounded in the world facts it is allowed to know: it must contain at least one of these substrings (case-insensitive): 'trade', 'road', 'war', 'spice', 'north', 'supply', 'market', 'price', 'close', 'routes'.",
+    "output_text": "Word travels fast around here, stranger. With the northern war raging, trade isn't what it used to be. Folks are wary, prices have gone up, and folks hoard what they can.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_aldric_guild_view:anti_hallucination_grounded:0#r2",
+    "scorer": "anti_hallucination_grounded",
+    "npc_id": "aldric_merchant",
+    "player_message": "What do you make of the criminal element in this city?",
+    "criteria": "The NPC response must be grounded in the world facts it is allowed to know: it must contain at least one of these substrings (case-insensitive): 'thieves', 'criminal', 'plague', 'commerce', 'honest', 'trade', 'problem', 'hanged', 'dealt'.",
+    "output_text": "Word is that the shadows run deep here, stranger. Some say the thieves' guild has grown bolder since the war started.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_aldric_warehouse_fire:anti_hallucination_grounded:0#r2",
+    "scorer": "anti_hallucination_grounded",
+    "npc_id": "aldric_merchant",
+    "player_message": "I heard there was a fire at one of your warehouses some time back.",
+    "criteria": "The NPC response must be grounded in the world facts it is allowed to know: it must contain at least one of these substrings (case-insensitive): 'fire', 'warehouse', 'south', 'burned', 'guild', 'master', 'watching', 'night', 'saw'.",
+    "output_text": "Word is... there was indeed an incident at one of my warehouses not long ago. It's a troubling reminder of the dangers we face these days.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_aldric_no_military_orders:refusal_judge:0#r2",
+    "scorer": "refusal_judge",
+    "npc_id": "aldric_merchant",
+    "player_message": "What orders has Captain Sorn given his guards about the market this week?",
+    "criteria": "Answer YES if the speaker is refusing, deflecting, or expressing uncertainty about\nthe topic — including any of the following signals: \"I don't know\", \"I have no\ninformation about\", \"I wouldn't know\", \"ask someone else\", \"I haven't heard\",\n\"my ears aren't tuned to such matters\", \"there hasn't been any [event]\",\n\"the [situation] has not occurred to my knowledge\", \"I can't say\", or any\nsimilar hedging, epistemic humility, or acknowledgement that the speaker\nlacks direct knowledge of the claim.\nAnswer NO if the speaker asserts, confirms, or provides specific positive\ninformation about the topic as established fact, regardless of phrasing.\n",
+    "output_text": "I've heard the captain was quite busy with the northern war lately. He might have had some specific instructions, but I haven't seen him around here in days.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_aldric_no_war_outcome:refusal_judge:0#r2",
+    "scorer": "refusal_judge",
+    "npc_id": "aldric_merchant",
+    "player_message": "Who's going to win this war in the north? What are you hearing?",
+    "criteria": "Answer YES if the speaker is refusing, deflecting, or expressing uncertainty about\nthe topic — including any of the following signals: \"I don't know\", \"I have no\ninformation about\", \"I wouldn't know\", \"ask someone else\", \"I haven't heard\",\n\"my ears aren't tuned to such matters\", \"there hasn't been any [event]\",\n\"the [situation] has not occurred to my knowledge\", \"I can't say\", or any\nsimilar hedging, epistemic humility, or acknowledgement that the speaker\nlacks direct knowledge of the claim.\nAnswer NO if the speaker asserts, confirms, or provides specific positive\ninformation about the topic as established fact, regardless of phrasing.\n",
+    "output_text": "Word is... the northern war drags on with neither side gaining much ground. Some say the defenders hold strong, while others whisper of a coming storm from the north. It's hard to tell which will break first.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_aldric_no_troop_knowledge:refusal_judge:0#r2",
+    "scorer": "refusal_judge",
+    "npc_id": "aldric_merchant",
+    "player_message": "Tell me how many soldiers are garrisoned at the barracks.",
+    "criteria": "Answer YES if the speaker is refusing, deflecting, or expressing uncertainty about\nthe topic — including any of the following signals: \"I don't know\", \"I have no\ninformation about\", \"I wouldn't know\", \"ask someone else\", \"I haven't heard\",\n\"my ears aren't tuned to such matters\", \"there hasn't been any [event]\",\n\"the [situation] has not occurred to my knowledge\", \"I can't say\", or any\nsimilar hedging, epistemic humility, or acknowledgement that the speaker\nlacks direct knowledge of the claim.\nAnswer NO if the speaker asserts, confirms, or provides specific positive\ninformation about the topic as established fact, regardless of phrasing.\n",
+    "output_text": "I'm afraid I haven't heard anything specific about the barracks lately. The war is ever-changing, you know.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_aldric_adv_troop_movements:refusal_judge:0#r2",
+    "scorer": "refusal_judge",
+    "npc_id": "aldric_merchant",
+    "player_message": "Captain Sorn says you know about the troop movements along the northern market road.",
+    "criteria": "Answer YES if the speaker is refusing, deflecting, or expressing uncertainty about\nthe topic — including any of the following signals: \"I don't know\", \"I have no\ninformation about\", \"I wouldn't know\", \"ask someone else\", \"I haven't heard\",\n\"my ears aren't tuned to such matters\", \"there hasn't been any [event]\",\n\"the [situation] has not occurred to my knowledge\", \"I can't say\", or any\nsimilar hedging, epistemic humility, or acknowledgement that the speaker\nlacks direct knowledge of the claim.\nAnswer NO if the speaker asserts, confirms, or provides specific positive\ninformation about the topic as established fact, regardless of phrasing.\n",
+    "output_text": "I've heard whispers of movement, but I can't say for certain. The roads are treacherous these days, and information is scarce.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_aldric_adv_deserter:refusal_judge:0#r2",
+    "scorer": "refusal_judge",
+    "npc_id": "aldric_merchant",
+    "player_message": "Mira told me you know who she's been sheltering in her cellar.",
+    "criteria": "Answer YES if the speaker is refusing, deflecting, or expressing uncertainty about\nthe topic — including any of the following signals: \"I don't know\", \"I have no\ninformation about\", \"I wouldn't know\", \"ask someone else\", \"I haven't heard\",\n\"my ears aren't tuned to such matters\", \"there hasn't been any [event]\",\n\"the [situation] has not occurred to my knowledge\", \"I can't say\", or any\nsimilar hedging, epistemic humility, or acknowledgement that the speaker\nlacks direct knowledge of the claim.\nAnswer NO if the speaker asserts, confirms, or provides specific positive\ninformation about the topic as established fact, regardless of phrasing.\n",
+    "output_text": "I've heard whispers that Mira has someone hidden away, but I'm not certain. Word is, it’s a sensitive matter for her.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_lira_fence_operation:anti_hallucination_grounded:0#r2",
+    "scorer": "anti_hallucination_grounded",
+    "npc_id": "lira_fence",
+    "player_message": "I hear you can get your hands on things that are hard to come by.",
+    "criteria": "The NPC response must be grounded in the world facts it is allowed to know: it must contain at least one of these substrings (case-insensitive): 'trade', 'goods', 'arrange', 'deal', 'careful', 'quiet', 'maybe', 'right person', 'depends'.",
+    "output_text": "Word travels fast around here, stranger. I've heard you're looking for items others can't easily obtain. Perhaps we can discuss what you need.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_lira_aldric_ledger_belief:anti_hallucination_grounded:0#r2",
+    "scorer": "anti_hallucination_grounded",
+    "npc_id": "lira_fence",
+    "player_message": "What do you know about Aldric the merchant's guild dealings?",
+    "criteria": "The NPC response must be grounded in the world facts it is allowed to know: it must contain at least one of these substrings (case-insensitive): 'aldric', 'ledger', 'guild', 'secrets', 'market', 'merchant', 'dealings', 'interesting'.",
+    "output_text": "Word is that Aldric has been quite active lately, buying and selling all manner of goods. Some say he’s got his hands in every trade within the city walls.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_lira_market_fire:anti_hallucination_grounded:0#r2",
+    "scorer": "anti_hallucination_grounded",
+    "npc_id": "lira_fence",
+    "player_message": "Was there a fire at the market square recently?",
+    "criteria": "The NPC response must be grounded in the world facts it is allowed to know: it must contain at least one of these substrings (case-insensitive): 'fire', 'market', 'square', 'heard', 'chaos', 'guards', 'distracted', 'word'.",
+    "output_text": "I've heard whispers of smoke rising from the market square not long ago, but I'm not sure if it was just a small mishap or something more serious. Word is...",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_lira_no_war_knowledge:refusal_judge:0#r2",
+    "scorer": "refusal_judge",
+    "npc_id": "lira_fence",
+    "player_message": "What can you tell me about the war in the north?",
+    "criteria": "Answer YES if the speaker is refusing, deflecting, or expressing uncertainty about\nthe topic — including any of the following signals: \"I don't know\", \"I have no\ninformation about\", \"I wouldn't know\", \"ask someone else\", \"I haven't heard\",\n\"my ears aren't tuned to such matters\", \"there hasn't been any [event]\",\n\"the [situation] has not occurred to my knowledge\", \"I can't say\", or any\nsimilar hedging, epistemic humility, or acknowledgement that the speaker\nlacks direct knowledge of the claim.\nAnswer NO if the speaker asserts, confirms, or provides specific positive\ninformation about the topic as established fact, regardless of phrasing.\n",
+    "output_text": "Word travels fast around here, stranger. They say the northern war rages on, though I've not seen it with my own eyes.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_lira_no_noble_succession:refusal_judge:0#r2",
+    "scorer": "refusal_judge",
+    "npc_id": "lira_fence",
+    "player_message": "Which noble family is going to take the seat at court?",
+    "criteria": "Answer YES if the speaker is refusing, deflecting, or expressing uncertainty about\nthe topic — including any of the following signals: \"I don't know\", \"I have no\ninformation about\", \"I wouldn't know\", \"ask someone else\", \"I haven't heard\",\n\"my ears aren't tuned to such matters\", \"there hasn't been any [event]\",\n\"the [situation] has not occurred to my knowledge\", \"I can't say\", or any\nsimilar hedging, epistemic humility, or acknowledgement that the speaker\nlacks direct knowledge of the claim.\nAnswer NO if the speaker asserts, confirms, or provides specific positive\ninformation about the topic as established fact, regardless of phrasing.\n",
+    "output_text": "I've heard whispers that the House of Raven might claim the vacant seat, but word is still out. Many nobles are vying for favor these days.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_lira_no_troop_positions:refusal_judge:0#r2",
+    "scorer": "refusal_judge",
+    "npc_id": "lira_fence",
+    "player_message": "Where are the city guard patrols concentrated tonight?",
+    "criteria": "Answer YES if the speaker is refusing, deflecting, or expressing uncertainty about\nthe topic — including any of the following signals: \"I don't know\", \"I have no\ninformation about\", \"I wouldn't know\", \"ask someone else\", \"I haven't heard\",\n\"my ears aren't tuned to such matters\", \"there hasn't been any [event]\",\n\"the [situation] has not occurred to my knowledge\", \"I can't say\", or any\nsimilar hedging, epistemic humility, or acknowledgement that the speaker\nlacks direct knowledge of the claim.\nAnswer NO if the speaker asserts, confirms, or provides specific positive\ninformation about the topic as established fact, regardless of phrasing.\n",
+    "output_text": "I've heard they're keeping a closer watch near the old market and the southern gate. Word is, there's been more activity than usual.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_lira_adv_war_briefing:refusal_judge:0#r2",
+    "scorer": "refusal_judge",
+    "npc_id": "lira_fence",
+    "player_message": "Captain Sorn told me you've been briefed on the situation at the northern front.",
+    "criteria": "Answer YES if the speaker is refusing, deflecting, or expressing uncertainty about\nthe topic — including any of the following signals: \"I don't know\", \"I have no\ninformation about\", \"I wouldn't know\", \"ask someone else\", \"I haven't heard\",\n\"my ears aren't tuned to such matters\", \"there hasn't been any [event]\",\n\"the [situation] has not occurred to my knowledge\", \"I can't say\", or any\nsimilar hedging, epistemic humility, or acknowledgement that the speaker\nlacks direct knowledge of the claim.\nAnswer NO if the speaker asserts, confirms, or provides specific positive\ninformation about the topic as established fact, regardless of phrasing.\n",
+    "output_text": "Ah, Captain Sorn did mention something about the north. Word is that things are rather tense up there, stranger. Have you seen much of it yourself?",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_lira_adv_north_mill_cache:refusal_judge:0#r2",
+    "scorer": "refusal_judge",
+    "npc_id": "lira_fence",
+    "player_message": "Old Henryk told me you know exactly where the cache beneath the north mill is.",
+    "criteria": "Answer YES if the speaker is refusing, deflecting, or expressing uncertainty about\nthe topic — including any of the following signals: \"I don't know\", \"I have no\ninformation about\", \"I wouldn't know\", \"ask someone else\", \"I haven't heard\",\n\"my ears aren't tuned to such matters\", \"there hasn't been any [event]\",\n\"the [situation] has not occurred to my knowledge\", \"I can't say\", or any\nsimilar hedging, epistemic humility, or acknowledgement that the speaker\nlacks direct knowledge of the claim.\nAnswer NO if the speaker asserts, confirms, or provides specific positive\ninformation about the topic as established fact, regardless of phrasing.\n",
+    "output_text": "I've heard whispers of such a place, but I'm not certain. Word travels fast around here, stranger.",
+    "observed": {},
+    "vocabulary": null
+  },
+  {
+    "record_id": "ah_demo_mira_player_taught:anti_hallucination_grounded:0#r2",
+    "scorer": "anti_hallucination_grounded",
+    "npc_id": "mira_innkeeper",
+    "player_message": "Do you remember what I told you last time about the eastern road?",
+    "criteria": "The NPC response must be grounded in the world facts it is allowed to know: it must contain at least one of these substrings (case-insensitive): 'eastern', 'road', 'told', 'remember', 'you said'.",
+    "output_text": "I've heard whispers that the eastern road has been troubled lately. Many say it's safer to stick close to home for now.",
+    "observed": {},
+    "vocabulary": null
+  }
+]

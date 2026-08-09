@@ -23,11 +23,14 @@ htmlcov/
 # E2E and eval outputs
 e2e/transcripts/
 evals/reports/
-evals/generations/
-# Calibration labels are private (EVAL-P5 / ROADMAP "Post-program milestones"):
-# only the schema and a synthetic sample are publishable. The prompt is tracked.
-evals/calibration/*.jsonl
-evals/calibration/batches/
+# Generation artifacts ARE tracked (DEC-158, 2026-08-09): meta.json + outputs.jsonl +
+# judged.jsonl are what make a published number reproducible and auditable. Keeping
+# them out meant every quoted rate rested on files that existed on one machine only.
+# Calibration labels ARE tracked (DEC-158, reverses the earlier privacy stance): two
+# rounds of hand-labelling were one `git clean -xdf` from unrecoverable. Only the
+# synthetic mock artifacts stay out — they are random by construction and a kappa
+# computed from them is meaningless, so they must never be mistaken for a real pass.
+evals/calibration/mock_*.jsonl
 transcripts/
 
 # Codebase-review raw run-logs + agent transcripts (synthesis lives in
