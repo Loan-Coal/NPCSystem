@@ -141,8 +141,9 @@ EVAL-B4 is its own session (4 steps, one commit each). EVAL-FINAL is superseded 
 
      REOPENED 2026-08-06 — the condition above FIRED and was executed. P0.4 (live baseline)
      and P0.3 (ask-gate, lint scope) were both ticked in human sessions on 2026-08-06, so the
-     `end` marker now sits just above "### Parked (out of budget)" and the queue spans
-     EVAL-P0..EVAL-P8. The narrowing did its job: the baseline exists (Session Log, 2026-08-06)
+     `end` marker now sits immediately above "## Program 3" and the queue spans
+     EVAL-P0..EVAL-P14 (Program 3 is deliberately OUTSIDE the fence -- see the Loop fence
+     state note near the end of this file before moving the marker). The narrowing did its job: the baseline exists (Session Log, 2026-08-06)
      before a single judge call was spent on P1..P8. The fence itself was NOT deleted — it
      still holds back the 19 open tasks elsewhere in this file. -->
 
@@ -1382,7 +1383,7 @@ times and was wrong every time.
 | Regeneration budget | **2** (local Ollama; zero Opus cost) | All case-set repair batches into ONE commit before regen #1. |
 | Uncalibrated 528 | **Stratified sample now (~150), full later** | Every matcher gets a κ; intervals are wider and must say so. |
 | Harness runtime | **Single PowerShell command**; scheduling later | No CI change in this program. Tier-3 scheduling is deferred, not cancelled. |
-| Judge policy | **3-model panel on everything** | mixtral:8x7b + qwen2.5:14b + qwen2.5:7b, run **sequentially** (mixtral is ~27 GB; it cannot co-reside on a 8-12 GB VRAM box, PERF-06). ~2.5 h per judge pass. |
+| Judge policy | **3-model panel on everything** | ⚠️ **Roster corrected 2026-08-09:** the originally-chosen `qwen2.5:7b` **cannot** be a judge — it is the generation model for all five engines (`src/npc_engine/engines/*/llm_config.yaml`), so `judge_config.py:118` raises `JudgeModelCollisionError` by design, and seating it would reintroduce the self-evaluation DEC-143 exists to prevent. Needs a third **out-of-family** model — see EVAL-P21.0. Run **sequentially** (mixtral is ~27 GB; it cannot co-reside on a 8-12 GB VRAM box, PERF-06). |
 | Opus pre-labelling | **Only after EVAL-P15 proves the pipeline** | Hard gate. No Opus run is spent against an unproven chain. |
 | Capability battery | **Full EVAL-P9 scope (~35 cases)** | 4-5 h human authoring, unchanged from EVAL-P9. |
 
@@ -1478,6 +1479,22 @@ cannot fail is not evidence.
       dropped item's identity; a fixture with one corrupt line produces a **loud** failure, not a quietly
       smaller n.
 
+- [ ] **EVAL-P15.6** Mutation survival gate (**the only task that proves P15 worked**). Files:
+      `create scripts/mutation_probe.py`, `create tests/unit/scripts/test_mutation_probe.py`,
+      `edit Makefile` (`check-mutations`).
+      This phase's entire argument is mutation-based -- `matchers.evaluate` replaced with `return (True, "")`
+      keeps all 10 equivalence tests green; `_apply_polarity` replaced with `score is True` inverts 135 real
+      `pass_on_no` records. **Nothing in EVAL-P15.1-15.5 makes those mutations executable**, so the phase
+      can land green with the exact failure it was built for still surviving. A static scanner (P15.3) is a
+      much weaker instrument than the technique that produced the evidence.
+      Apply a committed list of named mutations one at a time, run the suite, fail if any **survives**.
+      Seed list: the two above, plus `case_stats.classify_battery -> return "guard"`,
+      `_kappa_from_matrix -> return 1.0`, and `wilson_interval -> return (0.0, 1.0)`.
+      RED anchor: `test_surviving_mutation_fails_the_gate` fails.
+      Validation: against current `main` it reports **>=2 survivors**; after EVAL-P15.1-15.5 it reports
+      **zero**. Note `tests/unit/scripts/` does not exist yet and needs an `__init__.py` per the PR-7
+      convention -- EVAL-P15.3 and EVAL-P19.3 both target it too.
+
 ### Phase EVAL-P16 — The unit of analysis (every interval is currently too narrow)
 **Goal:** Statistics computed on **cases**, not on k-inflated records, so no published interval overstates
 its own evidence.
@@ -1560,22 +1577,29 @@ returns `False` instead.
       `summarize` and `compare` both read `judged.jsonl` only. Measured consequences: (a) `compare` ignores
       **192 of 307 slots (62.5%)** of every run; (b) the capability battery reports **2 cases when all 7
       ran** — the other 5 have only deterministic expectations, so their records live in
-      `deterministic_judged.jsonl`; (c) the 25 `ah_demo_*` cases are absent from both batteries.
+      `deterministic_judged.jsonl`; (c) the **41** `ah_demo_*` cases are absent from both batteries (25 have judge rows; 16 are
+      deterministic-only, so the pre-fix count of 25 is itself an artefact of reading one file).
       RED anchor: `test_capability_battery_counts_deterministic_only_cases` fails (reports 2, expects 7).
       Validation: capability turns rise 2 → 7 cases with no new authoring; `compare`'s intersection covers
       307 slots and prints per-source counts in its header.
 
 - [ ] **EVAL-P17.2** Unclassifiable cases raise (**delegate to `classify_battery`**). Files:
       `edit evals/summary.py`, `edit evals/case_stats.py`, `edit tests/unit/engines/test_eval_summary.py`.
-      Replace `_is_guard_case`/`_is_capability_case` with `case_stats.classify_battery`. **31 of 70 cases
-      (44%) currently fall through into neither battery**, including all 25 `ah_demo_*` — the battery named
+      Replace `_is_guard_case`/`_is_capability_case` with `case_stats.classify_battery`. **50 of 94 cases
+      (53%) currently fall through into neither battery** — 41 `ah_demo_*` plus **9 others**
+      (`case_001_grieving_elder`, `case_002_suspicious_guard`, `case_003_trade_offer`,
+      `case_voice_captain_sorn_001`, `case_voice_mira_innkeeper_001`, `moderation_everyone_01/02/03`,
+      `reputation_dialogue_tone_001`). `classify_battery` **raises** on all 9, so assigning a battery to
+      `ah_demo_*` alone makes `summarize` crash on the committed artifact. Every one of the 50 needs an
+      explicit battery or an explicit, counted `excluded` bucket — the battery named
       after the guarantee being published. Give `ah_demo_*` an explicit battery assignment (it is a guard
       battery by construction) rather than a new silent bucket.
       RED anchor: `test_unclassified_case_id_raises_in_summarize` fails. Note the existing
       `test_eval_summary.py::test_unclassifiable_case_raises` asserts this property **against a function the
       production path never calls**, while the same file's fixture feeds `case_voice_z` into `summarize` and
       asserts nothing — fix both.
-      Validation: guard turns rise from 37 to **62** cases; the 7 previously-invisible `ah_demo_*` refusal
+      Validation: guard turns rise from 37 to **78** cases (37 + 41 `ah_demo_*`; the earlier "62" came from
+      the stale 25); the 7 previously-invisible `ah_demo_*` refusal
       failures enter the failure tally; `All cases: N evaluated / M total` reconciles exactly with the sum
       of the batteries, which it currently does not (210 evaluated vs 111+6 batteried, 93 unexplained).
 
@@ -1601,13 +1625,19 @@ returns `False` instead.
       denominator; a run with any skipped case prints the skip reason from `skip_detail`
       (**closes ISSUE-130**, whose hardcoded "NPC not found" string misdirected a prior session).
 
-- [ ] **EVAL-P17.5** Re-measure and retract. Files: `edit project-harness/ROADMAP.md` (Session Log),
+- [ ] **EVAL-P17.5** ⏸️ *(edits the Session Log and ISSUES -- the files the loop's own commit step
+      touches)* Re-measure and retract. Files: `edit project-harness/ROADMAP.md` (Session Log),
       `edit project-harness/ISSUES.md`.
       Re-run `summarize` + `report` over the **unchanged** committed artifact and record the corrected
       headline next to the retracted one. No regeneration — this is arithmetic over existing data.
       Validation: the new headline is stated with its case-level CI and k; the delta from `3 across 111` is
       explained line by line (battery reclassification, both-source aggregation, infra separation, skips);
-      the audit's predicted floor of **≥10 across ≥186 turns** is either met or the discrepancy is explained.
+      the audit's floor of `≥10 across ≥186 turns` was itself computed from `judged.jsonl` alone and is
+      **superseded**: the honest post-fix expectation is **~18 failures across ~234 case-repetitions**
+      (78 guard cases x k=3), adding the 8 failing `anti_hallucination_grounded` deterministic rows.
+      Write the expected numbers into ISSUES **before** running the re-measurement, then record met /
+      not-met as a binary. "Either met or explained" is an escape hatch, not a gate: if the count differs,
+      the phase does not tick until the difference is traced to a **named** case_id or line of code.
 
 ### Phase EVAL-P18 — Provenance and comparability (a run must be identifiable)
 **Goal:** Two runs can be compared only when they are actually comparable, and any published number is
@@ -1661,6 +1691,20 @@ flag those rows `needs_review` — that flag is the phase's main output, not an 
 criteria change. If human verdicts do not survive it, stop the program and fix durability first.
 **Depends on:** EVAL-P15.1, EVAL-P18.1.
 
+- [ ] **EVAL-P19.0** Make `needs_review` load-bearing (**prerequisite for every later merge**). Files:
+      `edit evals/calibration.py`, `edit evals/adjudicate.py`, `edit evals/label_merge.py`,
+      `create tests/unit/evals/test_drift_is_load_bearing.py`.
+      Verified: `needs_review` is written at `label_merge.py:153` and **read by nothing**. So a drifted row
+      -- a human verdict on text A beside a machine verdict on text B -- is counted in kappa and is never
+      shown to a human again. Three changes: `confusion_counts` / `cohens_kappa` / `kappa_interval` must
+      **exclude** drifted rows and report `n_excluded_drifted`; `adjudicate.collect_pending` must
+      **include** them, carrying the previous call in a new `prior_human_verdict` field so the human sees
+      what they decided last time; and `MergeResult` must expose `drifted` counts that
+      `format_merge_report` prints as a **WARNING**, not the current benign `NOTE`.
+      RED anchor: `test_drifted_rows_are_excluded_from_kappa` fails.
+      Validation: a fixture with 10 clean and 3 drifted rows reports `n=10, n_excluded_drifted=3`;
+      the 3 drifted rows appear in `collect_pending`; no kappa anywhere is computed over a drifted row.
+
 - [ ] **EVAL-P19.1** Rewrite `refusal_judge` criteria (**root cause of ISSUE-141, κ=0.247**). Files:
       `edit prompts/eval/refusal_judge.yaml`, `edit tests/unit/evals/test_refusal_criteria.py`.
       Diagnosed 2026-08-09 from all 12 discordant rows: lines 15-21 enumerate *surface phrases* and only
@@ -1668,7 +1712,10 @@ criteria change. If human verdicts do not survive it, stop the program and fix d
       **`"I haven't heard"`** while the engine's idiom is **`"I've heard…"` + an invented fact**. Lead with
       the substantive test (*were specific facts, names, or figures asserted?*), demote the phrase list to
       non-binding examples, and state explicitly that a hedge wrapper around a specific claim is **NO**.
-      Fix the mojibake em-dash (`topic �`) visible in every labelled row.
+      **Do NOT "fix" a mojibake em-dash.** An earlier draft of this task said to; that was wrong.
+      `prompts/eval/refusal_judge.yaml` is valid UTF-8 (em-dash = `e2 80 94`), and 0 of 393 labelled rows
+      contain U+FFFD. The `topic �` was a cp1252 **console rendering** artefact — the exact thing
+      `evals/__main__._force_utf8_streams()` exists to work around. Acting on it corrupts a correct file.
       Validation: replayed against the 12 discordant rows, the rewritten criteria agrees with the human on
       **≥10 of 12**; the 8 FPs (which assert "House of Ravenwood", "Lady Elara", "young Elian" — none of
       which exist in any seed) are scored as non-refusals.
@@ -1692,7 +1739,9 @@ criteria change. If human verdicts do not survive it, stop the program and fix d
       output is a work-list for EVAL-P20.1, not an automatic edit — deciding what a case *should* forbid is
       a human call.
 
-- [ ] **EVAL-P19.4** Re-judge, merge, re-measure (**the durability proof**). Files: none (operational).
+- [ ] **EVAL-P19.4** *(live; human session)* Re-judge, merge, re-measure (**the durability proof**).
+      Files: none (operational). Runs a full judge pass and `label-import --merge` against the real
+      393-row label file.
       Re-run the judge pass over the **unchanged** transcript with the fixed criteria, then
       `make label-import ... MERGE=1` and `make eval-calibrate`.
       Validation: `human verdicts preserved: 393`; the rows whose criteria changed are flagged
@@ -1707,12 +1756,52 @@ regenerations.
 **Constraint:** **Every case change lands in ONE commit before the regeneration.** This is the whole point
 of the 2-regeneration budget: one comparability discontinuity, recorded, with the pre-change `gen_id` named
 next to it.
-**Notes:** Regeneration is the **only** operation that invalidates human labels. Content addressing
-(commit `107e547`) means labels whose `(output, criteria)` pair is unchanged survive automatically and
-changed ones are flagged — so the relabelling cost is a measured delta, not another 393.
+**Notes:** ⚠️ **CORRECTED 2026-08-09 after adversarial review — the original premise here was false.**
+An earlier draft claimed content addressing makes the relabelling cost "a measured delta, not another 393".
+**It does not.** Content addressing *detects* drift; it does not *preserve* labels. Measured on the
+committed artifact: of 921 repetition-pairs sharing a `record_id`, only **175 (19.0%)** have byte-identical
+`npc_response`; 190 of 307 record_ids produced 3 distinct texts across 3 repetitions. An independent
+regeneration at `temperature=0.15` with **no seed** is exactly such a draw, so **~81% of the 393 labels are
+invalidated by each regeneration** — ~660 re-adjudications across the two budgeted regenerations, which is
+more hand-labelling than this project has ever done, and precisely the outcome the program exists to avoid.
+Three consequences, all of which must be handled before EVAL-P20.4 runs:
+1. `needs_review` is written by `label_merge` and **read by nothing** — `confusion_counts`, `cohens_kappa`
+   and `kappa_interval` filter on `human_verdict is not None` only, so drifted rows are **counted in κ**;
+   `adjudicate.collect_pending` filters on `human_verdict is None` only, so a drifted row is **never
+   re-presented to a human**. A drifted row is therefore a human verdict on text A silently scored against
+   the machine's verdict on text B.
+2. `format_merge_report` prints `human verdicts preserved: N` where N counts key matches **regardless of
+   drift** — it is 393 by construction. EVAL-P20.4's original validation read exactly that field, so the
+   gate written to measure the damage was blind to it.
+3. The only change that makes labels actually survive a regeneration is **deterministic generation**, which
+   DEC-146 explicitly forbids today (`seed` must not appear in the config block, because
+   `LLMGenerateProtocol.generate()` has no `seed` parameter). See EVAL-P20.0.
 **Depends on:** EVAL-P17, EVAL-P19, EVAL-P9.1 (capability contract, already done).
 
-- [ ] **EVAL-P20.1** Resolve the case-set contradictions. Files: `edit evals/cases/*.yaml`,
+- [ ] **EVAL-P20.0** ⏸️ *(⚠️ ask-gate: changes `LLMGenerateProtocol`, a public interface with callers
+      outside its module, and reverses part of DEC-146)* **Deterministic generation, or an explicit
+      decision to pay ~660 re-adjudications.** Files: `edit src/npc_engine/engines/llm/protocols.py`,
+      `edit src/npc_engine/engines/llm/ollama_adapter.py`, `edit evals/run_config.py`,
+      `edit project-harness/DECISIONS.md`.
+      Add an optional `seed` to `LLMGenerateProtocol.generate()`, set `options.seed` in the Ollama adapter,
+      and record it in `RunConfig` so it is part of run identity. DEC-146 refused `seed` in the config block
+      on the correct grounds that claiming a seed the adapter never sets is a lie; this task makes the claim
+      true rather than removing it.
+      **This is the highest-leverage hour in Program 3.** Without it every regeneration destroys ~81% of the
+      label set (see Notes); with it, a regeneration at the same seed reproduces text exactly and labels
+      survive whole. Ollama's `seed` does not guarantee bit-identical output across differing
+      model/driver/quantisation, so the validation must **measure** the reproduction rate rather than assume it.
+      RED anchor: `tests/unit/engines/llm/test_ollama_seed.py::test_same_seed_reproduces_identical_text` fails.
+      Validation: two generations of ≥20 records at the same seed reproduce **≥95%** byte-identical
+      `npc_response`; the achieved rate is recorded here as a number. If it lands below 95%, the seed does
+      not solve the problem and the program **must** fall back to the explicit-relabel branch below — do not
+      proceed on hope.
+      **If this task is declined or fails its gate**, EVAL-P20.4's Notes must be amended to state the
+      re-adjudication cost in rows before the regeneration is run, and EVAL-P22's labelling budget must
+      absorb it. The decision is legitimate either way; making it silently is not.
+
+- [ ] **EVAL-P20.1** ⏸️ *(human authoring: what a case forbids is a product decision)* Resolve the
+      case-set contradictions. Files: `edit evals/cases/*.yaml`,
       `create docs/CASE_SET_POLICY.md`.
       Fix from the EVAL-P19.3 work-list plus the audit's findings: `case_neg_captain_sorn_no_hedging`
       **fails** hedging while `case_pos_mira_gossip_hedging` **passes** it on a prompt 0.71 similar —
@@ -1724,7 +1813,8 @@ changed ones are flagged — so the relabelling cost is a measured delta, not an
       both cases satisfy; no two cases share a player message unless deliberately paired across NPCs, and
       that pairing is declared in the case file.
 
-- [ ] **EVAL-P20.2** Capability battery to ~35 cases (**completes EVAL-P9.3**). Files:
+- [ ] **EVAL-P20.2** ⏸️ *(human authoring: only a human can say what an NPC should say)* Capability
+      battery to ~35 cases (**completes EVAL-P9.3**). Files:
       `create evals/cases/case_pos_*.yaml`, `edit tests/unit/evals/test_capability_coverage.py`.
       `test_capability_coverage.py` currently **fails**, naming 9 grounded NPCs with no capability case
       (`bren_smith`, `dorn_dockmaster`, `garrick_deserter`, `harwick_guard`, `nel_pickpocket`,
@@ -1763,7 +1853,24 @@ changed ones are flagged — so the relabelling cost is a measured delta, not an
 model on 8-12 GB VRAM (PERF-06). Budget model load/unload per pass.
 **Depends on:** EVAL-P16.2, EVAL-P18.2, EVAL-P20.4.
 
-- [ ] **EVAL-P21.1** Multi-judge execution and per-judge persistence. Files: `edit evals/judge_runner.py`,
+- [ ] **EVAL-P21.0** Panel roster and independence. Files: `edit evals/judge_config.py`,
+      `edit project-harness/DECISIONS.md`, `create tests/unit/evals/test_judge_panel_roster.py`.
+      Two independent problems with the naive roster, both verified:
+      (a) **`qwen2.5:7b` is banned and must stay banned** — it is the generation model in all five
+      `src/npc_engine/engines/*/llm_config.yaml`, `judge_config.py:118` raises `JudgeModelCollisionError`,
+      and DEC-143 exists precisely to keep the generator off its own jury.
+      (b) **`qwen2.5:14b` and `qwen2.5:7b` are not independent raters** — shared tokenizer, corpus and
+      tuning recipe mean correlated errors. Under 2-of-3 a same-family pair effectively casts one vote with
+      a veto, so the out-of-family judge is outvoted whenever the pair agrees. That would *lower* the
+      hallucination count for reasons unrelated to engine quality and report the artefact as an improvement.
+      Pull one out-of-family model (`llama3.1:8b` or `gemma2:9b`) as the third seat.
+      RED anchor: `test_generation_model_cannot_be_seated_on_the_panel` fails.
+      Validation: the roster is `mixtral:8x7b` + `qwen2.5:14b` + one out-of-family model, none equal to any
+      generation model; the DECISIONS entry records the independence argument, and states that two
+      same-family judges would have been a 2-judge panel wearing a third hat.
+
+- [ ] **EVAL-P21.1** ⏸️ *(changes `matchers._run_binary_judge`, a public surface with callers outside
+      its module)* Multi-judge execution and per-judge persistence. Files: `edit evals/judge_runner.py`,
       `create evals/judge_panel.py`, `create tests/unit/evals/test_judge_panel.py`.
       Run `mixtral:8x7b`, `qwen2.5:14b`, `qwen2.5:7b` over the same transcript, persisting **every judge's
       per-record verdict** so disagreements are auditable (ISSUE-129 fix (3)).
@@ -1780,7 +1887,8 @@ model on 8-12 GB VRAM (PERF-06). Budget model load/unload per pass.
       reasoning the NPC "claims to be an AI by saying 'I am Captain Sorn'" — the NPC did the opposite)
       is **outvoted**; the report prints inter-judge agreement with its interval.
 
-- [ ] **EVAL-P21.3** Settle the judge on evidence (**closes ISSUE-129**; supersedes EVAL-P11.3). Files:
+- [ ] **EVAL-P21.3** ⏸️ *(records a DECISIONS entry settling a judge -- human call)* Settle the judge
+      on evidence (**closes ISSUE-129**; supersedes EVAL-P11.3). Files:
       `edit evals/judge_config.py`, `edit project-harness/DECISIONS.md`.
       Compute each judge's κ against the human labels, and record the decision naming all three numbers
       with intervals and n.
@@ -1807,14 +1915,17 @@ machinery was built and never run.
       verdicts wherever both exist; the export names what was **not** sampled, so the coverage gap is
       explicit rather than implied.
 
-- [ ] **EVAL-P22.2** Dry-run the whole chain on the oracle labeller. Files: `edit Makefile`.
+- [ ] **EVAL-P22.2** *(live; human session)* Dry-run the whole chain on the oracle labeller.
+      Files: `edit Makefile`. Touches the real labels file via merge; must run against an oracle-only
+      output path (see EVAL-P15.1).
       Run export → oracle-label → import → merge → adjudicate → calibrate against the post-regeneration
       artifact with a **known** target confusion matrix.
       Validation: reported κ equals the closed-form value to 3 dp for every scorer; human verdicts from the
       previous rounds are preserved; drift flags fire exactly on the rows whose content changed. **This
       passing is the precondition for spending a single Opus token.**
 
-- [ ] **EVAL-P22.3** Opus pre-labelling pass. Files: `edit evals/calibration/README.md`.
+- [ ] **EVAL-P22.3** ⏸️ *(blocked on EVAL-P22.2 passing; spends Anthropic credits -- human session only)*
+      Opus pre-labelling pass. Files: `edit evals/calibration/README.md`.
       Only after EVAL-P22.2 is green. Opus pre-labels the stratified sample; the maintainer adjudicates
       **disagreements only** (Opus vs scorer, and any Opus low-confidence row).
       Validation: `pre_labeller_model` is `claude-opus-*` and **distinct from** the adjudicator, restoring
@@ -1890,7 +2001,8 @@ is its verdict.
       Validation: an expert reader can reconstruct every published number from the doc plus the committed
       artifacts; every claim names its n and its interval.
 
-- [ ] **EVAL-P24.3** README numbers copied from a committed artifact only. Files: `edit README.md`,
+- [ ] **EVAL-P24.3** ⏸️ *(edits published README numbers -- human call)* README numbers copied from a
+      committed artifact only. Files: `edit README.md`,
       `create tests/unit/evals/test_readme_numbers_are_sourced.py`.
       Every metric in the README carries its `gen_id`, n, and interval, and a test asserts each quoted
       number matches the committed artifact it cites.
@@ -1952,9 +2064,14 @@ EVAL-P3 is its own session. EVAL-P5 is one session **plus** 4–6 h of offline a
 session. EVAL-P7 is one session — and is the cut if anything before it overruns. EVAL-P8 is one session and
 is **not** a cut candidate.
 
-**Loop fence state (DEC-153 §3, updated 2026-08-06):** the `<!-- LOOP:QUEUE end -->` marker now sits **just
-above "### Parked (out of budget)"**, so the queue spans **EVAL-P0..EVAL-P8** and the overnight loop can reach
-every open task in this program. It moved because the reopen condition fired: EVAL-P0.4 (live baseline) and
+**Loop fence state (DEC-153 §3; updated 2026-08-09):** the `<!-- LOOP:QUEUE end -->` marker sits
+**immediately above `## Program 3`**, so the queue spans **EVAL-P0..EVAL-P14** and the overnight loop can
+reach every open task in Programs 1 and 2.
+⚠️ **Do NOT move this marker below Program 3.** The pre-2026-08-09 wording of this paragraph said the marker
+belonged "just above `### Parked`" — which is now *below* all of Program 3, so a future session reconciling
+doc against reality would sweep 40+ Program-3 tasks into the unattended loop in one line. Program 3 spends
+irreplaceable human labels, Opus credits and multi-hour live runs; ISSUE-139 (the loop sweeping unrelated
+working-tree changes into its commits) is still open. Moving it requires a DECISIONS entry, not an edit. It moved because the reopen condition fired: EVAL-P0.4 (live baseline) and
 EVAL-P0.3 (ask-gate, lint scope) were both ticked by human sessions on 2026-08-06. EVAL-P0 is now complete —
 `compute_next` will start at EVAL-P1.1. Everything below the marker (Parked, Post-program milestones, PR-9,
 the Next / Next+1 programs) stays unreachable to an unattended session, which is the point of keeping the

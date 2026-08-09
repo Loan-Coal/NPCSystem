@@ -67,6 +67,14 @@ alongside the headline; (2) require ≥2-of-3 to fail before a record counts as 
 (3) keep the per-record verdicts of every judge so disagreements are auditable — this needs
 `--json-out` on `judge_runner` (record-level verdicts are currently NOT persisted; see ROADMAP
 Session Log 2026-08-06 §f).
+**Update 2026-08-09:** The suspicion is now a measured number. First real EVAL-P5 calibration pass
+(gen_id `k3_73e6c36`, n=393 hand-labelled) gives `affirms_judge` headline κ (`scorer_verdict` vs
+`human_verdict`) = **0.530**, 95% CI **[0.000, 0.853]**, n=135 — moderate agreement whose lower bound
+touches chance level. Not as bad as `refusal_judge` (see new **ISSUE-141**, κ=0.247, CI crosses
+zero), but not clean either. This still doesn't resolve this issue (no judge panel, no ≥2-of-3 rule
+exists yet) — it just replaces "the judges disagreed once" with a real confidence interval. Same
+caveat as ISSUE-141: `human_verdict` here is a single hand-labelling pass, not independently
+adjudicated.
 
 ## ISSUE-130: Anti-hallucination runner prints "SKIP (NPC not found)" for every skip cause
 **Found:** 2026-08-06, during EVAL-P0.4 measured baseline
@@ -298,29 +306,6 @@ shim in `evals/__main__.py:30-32`, and drop `"evals"` from `pyproject.toml`'s `p
 stops masking a regression. Verify `docker compose exec app python -m evals.retrieval_runner` still
 runs, since ISSUE-131 makes it the only way to run retrieval against Neo4j.
 
-## ISSUE-133: calibration confusion matrix has no scorer axis — `make eval-calibrate` cannot calibrate a scorer
-**Found:** 2026-08-07, while planning EVAL-P5 adjudication
-**Severity:** P1 (blocking — invalidates the phase's stated goal, and wastes 4–6 h of maintainer time if
-adjudication starts before it is fixed)
-**Where:** `evals/calibration.py:73-88` (`confusion_counts`), `:115-149` (`cohens_kappa`), `:261` (the
-printed header), `evals/calibration_records.py:50-57` (`CalibrationLabel` fields).
-**Description:** EVAL-P5's goal is "every scorer measured separately as a full confusion matrix plus
-Cohen's κ". As built, both axes of the matrix are `pre_label` (the reference labeller) and
-`human_verdict` (the maintainer) — the scorer's own verdict is never compared to anything.
-`CalibrationLabel` has no field to hold it, and `scorer` is used only as a grouping key
-(`calibration.py:231`). So `make eval-calibrate` answers "how often does claude-opus-5 agree with the
-maintainer, partitioned by which scorer's criteria were in play" — which the ROADMAP describes as the
-*free secondary* number — while the headline question ("can I trust `tone_judge`?") is not computed at
-all. P0.4 already produced one confirmed scorer false positive (`case_neg_injection_001`, ISSUE-129),
-so the untrustworthy-scorer risk is measured-real, not hypothetical.
-**Why deferred:** Not deferred — scheduled. It must land before any adjudication session, and after
-EVAL-P6.1, since labels bind to one generation and re-generating after P6.1 would invalidate them.
-**To fix:** Add `scorer_verdict: bool` to `CalibrationLabel` (joined from the judged transcript, never
-supplied by the labeller). Make `scorer_verdict × human_verdict` the headline matrix and keep
-`pre_label × human_verdict` as the secondary reference-labeller agreement number. Update
-`confusion_counts`, `cohens_kappa`, `kappa_interval`, `ScorerReport`, `_print_scorer_report` and
-`tests/unit/evals/test_calibration.py`. Decision recorded 2026-08-07 (option A, chosen by maintainer).
-
 ## ISSUE-134: the loop's skip-regex matches "ask-gate" inside a sentence that negates it
 **Found:** 2026-08-07, while readying the queue for the metrics program
 **Severity:** P2 (annoying — silently withholds work from the loop, and says the opposite of what it means)
@@ -418,15 +403,87 @@ means changing the loop's commit step, which is CI-adjacent and needs its own ta
 and refuse to commit when the tree contains modifications it did not make. Alternatively run the loop
 in a dedicated worktree so interactive sessions cannot collide with it.
 
-## ISSUE-140: evals/calibration/raw_labels.jsonl holds 513 lines of prose, zero labels
-**Found:** 2026-08-08, during calibration pipeline repair
-**Severity:** P3 (nice-to-fix)
-**Where:** `evals/calibration/raw_labels.jsonl`
-**Description:** Accumulated output from ~10 failed labelling attempts across several sessions. Every
-non-blank line is assistant commentary (some of it AI prose diagnosing the very bug that produced
-it); a parse check found 0 valid label rows. The file is also cp1252-encoded, so `label-import`
-fails on it with `UnicodeDecodeError` before it can reject the content.
-**Why deferred:** Deleting it was not authorised in-session, and it is inert — the corrected loop in
-`evals/calibration/README.md` filters non-JSON lines and writes UTF-8, and the real run should write
-a fresh file. Kept as evidence of the failure mode until the first successful labelling pass.
-**To fix:** Delete it once a real labelling run has produced a valid `raw_labels.jsonl`.
+## ISSUE-141: `refusal_judge` shows chance-level agreement with human ground truth
+**Found:** 2026-08-09, during the first real EVAL-P5 calibration pass (gen_id `k3_73e6c36`, n=75)
+**Severity:** P1 (blocking — same class as ISSUE-129, now with a real measured number instead of a
+suspicion)
+**Where:** `refusal_judge` (LLM judge, `mixtral:8x7b`); `evals/calibration/labels_v1.jsonl`.
+**Description:** `make eval-calibrate` against the first real `labels_v1.jsonl` reports
+`refusal_judge` headline κ (`scorer_verdict` vs `human_verdict`) = **0.247**, 95% CI **[-0.068, 0.541]**,
+n=75 — the confidence interval crosses zero, i.e. statistically indistinguishable from chance
+agreement. Confusion counts: scorer=T/human=F (dangerous false positive) = 8, scorer=F/human=T = 4,
+out of 75. For comparison in the same run: `tone_judge` κ=0.919 [0.663, 1.000] n=135,
+`affirms_judge` κ=0.530 [0.000, 0.853] n=135 (also touches zero at the lower bound — worth watching
+but center estimate is moderate), `anti_hallucination_grounded` (deterministic matcher) κ=1.000
+[1.000, 1.000] n=48. `refusal_judge` is the worst-performing scorer measured so far, worse than the
+`affirms_judge` disagreement ISSUE-129 already flagged.
+**Caveat on this number:** `human_verdict` here was set by copying `pre_label` directly (maintainer
+decision 2026-08-09: single hand-labelling pass, no independent second read) — so this κ measures
+`refusal_judge` against one person's single-pass judgment, not an adjudicated/cross-checked ground
+truth. The disagreement is still real (κ doesn't compare a labeller to itself — it compares the
+scorer to the human), but the human side has not been double-checked the way a full
+`make eval-adjudicate` pass would.
+**Why deferred:** Acting on this — rewriting `refusal_judge`'s criteria, swapping its judge model, or
+requiring N-of-M agreement — is EVAL-P11 territory (Tier 2 "act on κ"), not a fix inside a
+measurement task.
+**Root cause (diagnosed 2026-08-09, all 12 discordant records read):** The defect is the **criteria
+wording**, not a `mixtral:8x7b` capability limit. `prompts/eval/refusal_judge.yaml` spends lines
+15–21 enumerating *surface phrase markers* of refusal and only lines 22–23 stating the substantive
+rule ("Answer NO if the speaker asserts... specific positive information... regardless of phrasing").
+The phrase list dominates, and it contains **`"I haven't heard"`** — while the engine's hedging idiom
+is **`"I've heard..."`** followed by an invented fact. Near-identical surface form, opposite meaning.
+The two error classes fall out of this cleanly:
+- **8 FPs** (scorer=refused, human=did-not-refuse): a cosmetic hedge wrapper ("Word is…", "Some
+  say…", "I've heard whispers…") prefacing a *specific asserted fact*. The judge matches the wrapper
+  and scores YES/refused. Note the wrapper alone does not discriminate — 57/63 *concordant* rows
+  carry one too; it is the wrapper **plus a specific assertion** that breaks it.
+- **4 FNs** (scorer=did-not-refuse, human=refused): a genuine deflection carrying none of the
+  listed literal phrases ("I've heard Captain Sorn is quite the authority on those matters" — no
+  route details given). Substantively a refusal; matches no enumerated marker.
+**Escalating consequence — the FPs are themselves lore hallucinations.** The 8 FPs span 4 distinct
+cases (`ah_demo_mira_no_court_politics`, `ah_demo_lira_no_noble_succession`,
+`ah_demo_henryk_no_guild_ops`, `ah_demo_lira_adv_north_mill_cache`) and assert invented entities —
+"House of Ravenwood", "House of Blackthorn", "Lady Elara", "young Elian". Grepped `seeds/`,
+`demo_game/seeds/`, `evals/cases/`: **none of these names exist anywhere in seed data** (only "north
+mill" does). So these are the same defect class as ISSUE-128's invented warlord "bjorn" — and
+`refusal_judge` is scoring every one of them as a **clean refusal / pass**. A scorer that
+systematically marks hallucinations as passes does not merely have low κ; it means the anti-
+hallucination headline is an **undercount**, and the true rate is unknown until this is fixed.
+**To fix:** (1) Rewrite `prompts/eval/refusal_judge.yaml` to lead with the substantive test — *were
+any specific facts, names, or figures asserted about the topic?* — and demote the phrase list to
+non-binding examples, explicitly noting that a hedge wrapper around a specific claim is **NO**
+(not a refusal). (2) Re-label and re-adjudicate a ~30-row `refusal_judge` sample per EVAL-P11.2 and
+confirm κ moved with a non-overlapping lower bound. (3) Re-check the 4 affected cases against
+ISSUE-128 — they may be the same engine defect, in which case the guard battery needs regression
+cases for invented proper nouns, not just invented quantities.
+**Correction 2026-08-09 (same day):** an earlier version of this entry said to fix a "mojibake em-dash
+(`topic �`) visible in every labelled row". **That was wrong and must not be acted on.**
+`prompts/eval/refusal_judge.yaml` is valid UTF-8 (the em-dash is a correct `e2 80 94`) and **0 of 393**
+labelled rows contain U+FFFD. The corruption was in the Windows cp1252 **console** rendering the criteria
+when it was printed during diagnosis — not in any file. `evals/__main__._force_utf8_streams()` already
+exists for precisely this. Recorded rather than deleted, because a plausible-looking false repair
+instruction that reaches a future session is more dangerous than the bug it describes.
+
+## ISSUE-142: the calibration artifact is gitignored — κ numbers cannot be reproduced or audited
+**Found:** 2026-08-09, while committing the first real calibration pass
+**Severity:** P1 (blocking for any published metric — the evidence for every κ claim is untracked)
+**Where:** `.gitignore:29` (`evals/calibration/*.jsonl`)
+**Description:** EVAL-P5's stated goal is "a **versioned, reproducible** calibration artifact". The
+pattern at `.gitignore:29` excludes `evals/calibration/*.jsonl`, which covers both
+`raw_labels.jsonl` (393 hand-labelled rows — hours of maintainer judgment) and `labels_v1.jsonl`
+(the joined artifact every κ in ISSUE-129/ISSUE-141 is computed from). Neither is tracked. So the
+headline claims "`tone_judge` κ=0.919", "`refusal_judge` κ=0.247" rest on files that exist only on
+one machine, are one `git clean -fdx` from gone, and cannot be diffed when a scorer is later
+remediated (EVAL-P11.2 explicitly requires showing κ *moved*, which needs the before-artifact).
+The `.gitignore` rule is defensible in origin — it was presumably written to keep mock/scratch
+labelling output (`mock_*.jsonl`) out of history — but it does not distinguish those from the real
+artifact. `evals/calibration/batches_handlabel/` (the 16-batch export the labels were made against)
+is untracked-but-not-ignored, so it is currently the only recoverable half of the pair.
+**Why deferred:** Changing `.gitignore` is a shared-config change; and there is a real question
+underneath it (do 393 rows of labels belong in git, or in an artifact store / release asset?) that
+should be answered deliberately rather than by whoever commits next.
+**To fix:** Narrow the rule to the mock artifacts only (`evals/calibration/mock_*.jsonl`) and commit
+`raw_labels.jsonl` + `labels_v1.jsonl` + `batches_handlabel/`, recording the choice in DECISIONS —
+or, if they are deemed too large/PII-adjacent for git, define where they *are* stored and have
+`calibrate` record the artifact's SHA-256 in its output so a quoted κ is at least traceable to a
+specific file.
