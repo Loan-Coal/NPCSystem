@@ -86,16 +86,25 @@ def _now_iso() -> str:
 
 
 def _format_row_prompt(row: CalibrationLabel, index: int, total: int) -> str:
-    """Return a formatted display string for one adjudication row."""
+    """Return a formatted display string for one adjudication row.
+
+    Shows criteria and, when present, player_message and observed — without
+    these an adjudicator judging an in_set/range/schema row cannot see the
+    response field the scorer actually inspects, since that field is absent
+    from output_text entirely.
+    """
     label_str = "PASS" if row.pre_label else "FAIL"
-    return (
-        f"\n[{index}/{total}] scorer={row.scorer}  record_id={row.record_id}\n"
-        f"pre_label : {label_str}\n"
-        f"output_text:\n"
-        f"  {row.output_text}\n"
-        f"\n"
-        f"  keep(k) / flip(f) / skip(s): "
-    )
+    lines = [f"\n[{index}/{total}] scorer={row.scorer}  record_id={row.record_id}"]
+    if row.player_message:
+        lines.append(f"player_message:\n  {row.player_message}")
+    lines.append(f"criteria:\n  {row.criteria or '(none recorded)'}")
+    lines.append(f"pre_label : {label_str}")
+    lines.append(f"output_text:\n  {row.output_text}")
+    if row.observed:
+        lines.append(f"observed:\n  {row.observed}")
+    lines.append("")
+    lines.append("  keep(k) / flip(f) / skip(s): ")
+    return "\n".join(lines)
 
 
 def _read_command(read_line: Callable[[], str], print_fn: Callable[[str], None]) -> str:

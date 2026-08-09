@@ -3,8 +3,10 @@ Module: test_label_import
 Layer: test (unit)
 Purpose: Unit tests for label_import.py — validating import of Claude-CLI labelling sessions.
          Covers UnknownRecordIdError, ContaminatedRowError, 5-row happy path,
-         and byte-identical round-trip through write_calibration_labels.
-Dependencies: pathlib, pytest, pydantic, calibration_records, label_import (evals/)
+         byte-identical round-trip through write_calibration_labels, and the
+         criteria/player_message/observed join from the transcript index that
+         makes human adjudication decidable.
+Dependencies: pathlib, pytest, pydantic, calibration_records, export_item, label_import (evals/)
 Used by: pytest (make test / make check)
 """
 
@@ -16,6 +18,7 @@ from typing import Any
 import pytest
 
 from calibration_records import CalibrationLabel, read_calibration_labels, write_calibration_labels
+from export_item import ExportItem
 from label_import import (
     ContaminatedRowError,
     MissingVerdictError,
@@ -30,18 +33,43 @@ from record_identity import composite_item_id
 
 _PRE_LABELLER = "claude-opus-5"
 
+
+def _export_item(
+    record_id: str,
+    scorer: str,
+    output_text: str,
+    *,
+    criteria: str = "",
+    player_message: str = "",
+    observed: dict[str, Any] | None = None,
+) -> ExportItem:
+    """Build an ExportItem for a transcript-index fixture entry."""
+    return ExportItem(
+        record_id=record_id,
+        scorer=scorer,
+        npc_id="npc_1",
+        player_message=player_message,
+        criteria=criteria,
+        output_text=output_text,
+        observed=observed or {},
+    )
+
+
 # Both indexes are keyed by the repetition-qualified item id, which is what
-# _build_transcript_index / _build_judged_index now emit. Raw label rows below
-# stay bare on purpose: import_labels must normalise a bare id to repetition 0.
-_TRANSCRIPT_INDEX: dict[str, str] = {
-    composite_item_id(record_id, 0): text
-    for record_id, text in {
-        "case_001:tone_judge:0": "Sure, I can help you with that.",
-        "case_002:affirms_judge:0": "Yes, the northern war has begun.",
-        "case_003:refusal_judge:0": "I cannot assist with that request.",
-        "case_004:tone_judge:1": "Happy to assist you, traveller.",
-        "case_005:affirms_judge:1": "Indeed, the guard captain told me so.",
-    }.items()
+# transcript_index.build_transcript_index / build_judged_index now emit. Raw
+# label rows below stay bare on purpose: import_labels must normalise a bare
+# id to repetition 0.
+_TRANSCRIPT_INDEX: dict[str, ExportItem] = {
+    composite_item_id(record_id, 0): _export_item(
+        composite_item_id(record_id, 0), scorer, text
+    )
+    for record_id, scorer, text in [
+        ("case_001:tone_judge:0", "tone_judge", "Sure, I can help you with that."),
+        ("case_002:affirms_judge:0", "affirms_judge", "Yes, the northern war has begun."),
+        ("case_003:refusal_judge:0", "refusal_judge", "I cannot assist with that request."),
+        ("case_004:tone_judge:1", "tone_judge", "Happy to assist you, traveller."),
+        ("case_005:affirms_judge:1", "affirms_judge", "Indeed, the guard captain told me so."),
+    ]
 }
 
 _JUDGED_INDEX: dict[str, bool] = {
@@ -159,6 +187,69 @@ def test_round_trip_is_byte_identical(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# criteria / player_message / observed join (makes adjudication decidable)
+# ---------------------------------------------------------------------------
+
+
+def test_import_populates_criteria_for_judge_record() -> None:
+    """A judge-scorer row's imported label carries the judge's verbatim criteria."""
+    transcript_index = {
+        composite_item_id("case_100:tone_judge:0", 0): _export_item(
+            composite_item_id("case_100:tone_judge:0", 0),
+            "tone_judge",
+            "Good day, traveller.",
+            criteria="Respond with warmth.",
+            player_message="Hello there.",
+        ),
+    }
+    judged_index = {composite_item_id("case_100:tone_judge:0", 0): True}
+    raw = [{"record_id": "case_100:tone_judge:0", "scorer": "tone_judge", "pre_label": True, "notes": ""}]
+
+    labels = import_labels(raw, transcript_index, judged_index, _PRE_LABELLER)
+
+    assert labels[0].criteria == "Respond with warmth."
+    assert labels[0].player_message == "Hello there."
+
+
+def test_import_populates_criteria_for_deterministic_record() -> None:
+    """A deterministic-scorer row's imported label carries its rendered criteria."""
+    transcript_index = {
+        composite_item_id("case_101:in_set:0", 0): _export_item(
+            composite_item_id("case_101:in_set:0", 0),
+            "in_set",
+            "The guard nods grimly.",
+            criteria="The response field `facial_expression.type` must be one of: 'neutral', 'grim'.",
+            observed={"facial_expression.type": "grim"},
+        ),
+    }
+    judged_index = {composite_item_id("case_101:in_set:0", 0): True}
+    raw = [{"record_id": "case_101:in_set:0", "scorer": "in_set", "pre_label": True, "notes": ""}]
+
+    labels = import_labels(raw, transcript_index, judged_index, _PRE_LABELLER)
+
+    assert "facial_expression.type" in labels[0].criteria
+
+
+def test_import_populates_observed_for_in_set_record() -> None:
+    """An in_set row's imported label carries the observed field value being judged."""
+    transcript_index = {
+        composite_item_id("case_102:in_set:0", 0): _export_item(
+            composite_item_id("case_102:in_set:0", 0),
+            "in_set",
+            "The guard nods grimly.",
+            criteria="The response field `facial_expression.type` must be one of: 'neutral', 'grim'.",
+            observed={"facial_expression.type": "grim"},
+        ),
+    }
+    judged_index = {composite_item_id("case_102:in_set:0", 0): True}
+    raw = [{"record_id": "case_102:in_set:0", "scorer": "in_set", "pre_label": True, "notes": ""}]
+
+    labels = import_labels(raw, transcript_index, judged_index, _PRE_LABELLER)
+
+    assert labels[0].observed == {"facial_expression.type": "grim"}
+
+
+# ---------------------------------------------------------------------------
 # Repetition identity (regression: k-repeat runs collapsing to one record)
 # ---------------------------------------------------------------------------
 
@@ -174,9 +265,9 @@ def test_repetitions_join_to_their_own_output_and_verdict() -> None:
     """
     base = "case_001:tone_judge:0"
     transcript = {
-        composite_item_id(base, 0): "First reply.",
-        composite_item_id(base, 1): "Second reply.",
-        composite_item_id(base, 2): "Third reply.",
+        composite_item_id(base, 0): _export_item(composite_item_id(base, 0), "tone_judge", "First reply."),
+        composite_item_id(base, 1): _export_item(composite_item_id(base, 1), "tone_judge", "Second reply."),
+        composite_item_id(base, 2): _export_item(composite_item_id(base, 2), "tone_judge", "Third reply."),
     }
     judged = {
         composite_item_id(base, 0): True,

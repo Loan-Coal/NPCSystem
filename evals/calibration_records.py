@@ -3,7 +3,9 @@ Module: calibration_records
 Layer: evals (eval harness — not part of src/)
 Purpose: Pydantic v2 model for calibration labels and JSONL persistence.
          CalibrationLabel stores the scorer's own verdict, a pre-label from
-         the reference model, and an optional human verdict for EVAL-P5.
+         the reference model, an optional human verdict for EVAL-P5, and
+         (criteria, player_message, observed) display passthrough so a human
+         adjudicator can actually see what they are adjudicating against.
 Dependencies: pydantic, stdlib (pathlib, typing)
 Used by: label_runner, adjudicate, calibration (EVAL-P5.2–P5.5)
 """
@@ -11,7 +13,7 @@ Used by: label_runner, adjudicate, calibration (EVAL-P5.2–P5.5)
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from pydantic import BaseModel, ConfigDict
 
@@ -50,6 +52,19 @@ class CalibrationLabel(BaseModel):
         human_verdict: Maintainer's verdict after adjudication; None = not yet done.
         adjudicated_at: ISO-8601 timestamp of adjudication, or None if pending.
         notes: Free-text annotation from the adjudicator (empty string when absent).
+        criteria: What the scorer requires — verbatim judge criteria, or a
+            rendering of a deterministic matcher's expectation. Display-only
+            passthrough joined from the generation transcript at import time
+            (see label_import); never sent to or echoed by the labeller.
+            Defaults to "" so rows written before this field existed still load.
+        player_message: The player's turn that prompted output_text. Same
+            passthrough/backward-compat contract as criteria.
+        observed: Response fields the matcher inspects beyond output_text
+            (e.g. facial_expression.type, relation_deltas.trust) — the value
+            actually being judged for in_set/range/schema scorers, which is
+            otherwise absent from output_text and makes those rows unlabelable
+            without it. Empty for text-only scorers. Same passthrough/
+            backward-compat contract as criteria.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -63,6 +78,9 @@ class CalibrationLabel(BaseModel):
     human_verdict: bool | None
     adjudicated_at: str | None
     notes: str
+    criteria: str = ""
+    player_message: str = ""
+    observed: dict[str, Any] = {}
 
 
 # ---------------------------------------------------------------------------

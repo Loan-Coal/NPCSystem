@@ -2,11 +2,15 @@
 Module: label_import
 Layer: evals (eval harness — not part of src/)
 Purpose: Validate and import a Claude-CLI labelling session into CalibrationLabel rows.
-         Reads minimal JSONL (record_id, scorer, pre_label, notes), joins output_text
-         from the transcript index and scorer_verdict from the judged index, stamps
-         pre_labeller_model, and writes validated CalibrationLabel rows with
-         human_verdict=None.
-Dependencies: argparse, json, pathlib, sys, pydantic, calibration_records
+         Reads minimal JSONL (record_id, scorer, pre_label, notes), joins output_text,
+         criteria, player_message, and observed from the transcript index and
+         scorer_verdict from the judged index, stamps pre_labeller_model, and writes
+         validated CalibrationLabel rows with human_verdict=None. The transcript-index
+         builder lives in transcript_index.py and the exception types live in
+         label_import_errors.py (both split out to stay under the 300-line cap; the
+         transcript-index derivation is also shared with label_export via export_item.py).
+Dependencies: argparse, json, pathlib, sys, pydantic, calibration_records, export_item,
+              transcript_index, label_import_errors
 Used by: python -m evals label-import; make label-import (EVAL-P5.6)
 """
 
@@ -26,7 +30,27 @@ from calibration_records import (
     read_calibration_labels,
     write_calibration_labels,
 )
+from export_item import ExportItem
+from label_import_errors import (
+    ContaminatedRowError,
+    MissingVerdictError,
+    UnknownRecordIdError,
+)
 from record_identity import composite_item_id, split_item_id
+from transcript_index import build_judged_index, build_transcript_index
+
+# Re-exported for backward compatibility: callers historically imported the
+# error types from this module. Do not remove without checking for external
+# importers.
+__all__ = [
+    "ContaminatedRowError",
+    "MissingVerdictError",
+    "UnknownRecordIdError",
+    "RawLabelRow",
+    "import_labels",
+    "read_raw_rows",
+    "main",
+]
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -34,67 +58,6 @@ from record_identity import composite_item_id, split_item_id
 
 _CONTAMINATING_FIELDS: frozenset[str] = frozenset({"output_text", "scorer_verdict"})
 _DEFAULT_PRE_LABELLER: str = "claude-opus-5"
-
-
-# ---------------------------------------------------------------------------
-# Errors
-# ---------------------------------------------------------------------------
-
-
-class UnknownRecordIdError(Exception):
-    """Raised when a raw label row references a record_id absent from the transcript index.
-
-    Attributes:
-        record_id: The offending identifier.
-    """
-
-    def __init__(self, record_id: str) -> None:
-        self.record_id = record_id
-        super().__init__(
-            f"record_id {record_id!r} not found in transcript index — "
-            f"this row cannot be imported without its source output_text and scorer_verdict."
-        )
-
-
-class MissingVerdictError(Exception):
-    """Raised when a labelled record has no scorer_verdict in any judged file.
-
-    A calibration row without the scorer's own verdict has nothing to compare the
-    label against; importing it as a default False would fabricate a data point.
-    Deterministic records need `python -m evals deterministic-verdicts` — the LLM
-    judge pass alone does not cover them.
-
-    Attributes:
-        record_id: The offending identifier.
-    """
-
-    def __init__(self, record_id: str) -> None:
-        self.record_id = record_id
-        super().__init__(
-            f"record_id {record_id!r} has no scorer_verdict in the supplied judged file(s). "
-            f"Deterministic scorers require a deterministic-verdicts pass; pass its output "
-            f"as an additional --judged argument."
-        )
-
-
-class ContaminatedRowError(Exception):
-    """Raised when a raw label row carries a field that would contaminate labelling.
-
-    A row containing output_text or scorer_verdict has been exposed to the
-    answer it is measured against; the artifact is void if used.
-
-    Attributes:
-        record_id: The offending row's identifier.
-        field: The contaminating field name.
-    """
-
-    def __init__(self, record_id: str, field: str) -> None:
-        self.record_id = record_id
-        self.field = field
-        super().__init__(
-            f"Raw label row {record_id!r} contains contaminating field {field!r} — "
-            f"the labeller must not see scorer_verdict or output_text before labelling."
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +100,7 @@ def _check_contamination(raw: dict[str, Any], record_id: str) -> None:
 
 def import_labels(
     raw_rows: Sequence[dict[str, Any]],
-    transcript_index: Mapping[str, str],
+    transcript_index: Mapping[str, ExportItem],
     judged_index: Mapping[str, bool],
     pre_labeller_model: str,
 ) -> list[CalibrationLabel]:
@@ -147,8 +110,10 @@ def import_labels(
         raw_rows: Sequence of raw dicts from the Claude-CLI labelling JSONL.
                   Each must have record_id, scorer, pre_label. May have notes.
                   Must NOT have output_text or scorer_verdict.
-        transcript_index: Mapping from record_id to output_text (npc_response).
-                         Built from the generation transcript's outputs.jsonl.
+        transcript_index: Mapping from item_id to ExportItem, supplying
+                         output_text, criteria, player_message, and observed.
+                         Built from the generation transcript by
+                         transcript_index.build_transcript_index.
         judged_index: Mapping from record_id to scorer_verdict (bool).
                       Built from the judge runner's judged.jsonl or the
                       deterministic_pass result.
@@ -176,20 +141,23 @@ def import_labels(
             raise MissingVerdictError(record_id)
 
         row = RawLabelRow.model_validate(raw)
-        output_text: str = transcript_index[item_id]
+        export_item = transcript_index[item_id]
         scorer_verdict: bool = judged_index[item_id]
 
         results.append(
             CalibrationLabel(
                 record_id=row.record_id,
                 scorer=row.scorer,
-                output_text=output_text,
+                output_text=export_item.output_text,
                 scorer_verdict=scorer_verdict,
                 pre_label=row.pre_label,
                 pre_labeller_model=pre_labeller_model,
                 human_verdict=None,
                 adjudicated_at=None,
                 notes=row.notes,
+                criteria=export_item.criteria,
+                player_message=export_item.player_message,
+                observed=export_item.observed,
             )
         )
     return results
@@ -213,54 +181,6 @@ def read_raw_rows(path: Path) -> list[dict[str, Any]]:
     """
     lines = path.read_text(encoding="utf-8").splitlines()
     return [json.loads(line) for line in lines if line.strip()]
-
-
-def _build_transcript_index(transcript_path: Path) -> dict[str, str]:
-    """Build an item_id→output_text index from a generation transcript outputs.jsonl.
-
-    Keyed by the repetition-qualified item id, not the bare record_id: a k-repeat
-    run emits k records sharing one record_id with different npc_response text, so
-    a bare-record_id dict would keep only the last repetition and silently join
-    labels to the wrong output.
-
-    Args:
-        transcript_path: Path to the outputs.jsonl of a generation run.
-    Returns:
-        Dict mapping composite item_id to npc_response.
-    Raises:
-        FileNotFoundError: If the path does not exist.
-    """
-    index: dict[str, str] = {}
-    for line in transcript_path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        obj = json.loads(line)
-        key = composite_item_id(obj["record_id"], int(obj.get("repetition", 0)))
-        index[key] = obj.get("npc_response", "")
-    return index
-
-
-def _build_judged_index(judged_path: Path) -> dict[str, bool]:
-    """Build an item_id→scorer_verdict index from a judged.jsonl file.
-
-    Keyed by the repetition-qualified item id for the same reason as
-    _build_transcript_index — see that function's docstring.
-
-    Args:
-        judged_path: Path to the judged.jsonl of a judge/deterministic pass.
-    Returns:
-        Dict mapping composite item_id to the passed (scorer_verdict) bool.
-    Raises:
-        FileNotFoundError: If the path does not exist.
-    """
-    index: dict[str, bool] = {}
-    for line in judged_path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        obj = json.loads(line)
-        key = composite_item_id(obj["record_id"], int(obj.get("repetition", 0)))
-        index[key] = bool(obj.get("passed", False))
-    return index
 
 
 # ---------------------------------------------------------------------------
@@ -337,11 +257,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     raw_rows = read_raw_rows(args.raw)
-    transcript_index = _build_transcript_index(args.transcript)
+    transcript_index = build_transcript_index(args.transcript)
 
     judged_index: dict[str, bool] = {}
     for judged_path in args.judged:
-        judged_index.update(_build_judged_index(judged_path))
+        judged_index.update(build_judged_index(judged_path))
 
     new_labels = import_labels(raw_rows, transcript_index, judged_index, args.model)
 

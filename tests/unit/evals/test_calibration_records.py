@@ -144,3 +144,76 @@ def test_jsonl_one_line_per_row(tmp_path: Path) -> None:
     write_calibration_labels(out, rows)
     lines = [l for l in out.read_text(encoding="utf-8").splitlines() if l.strip()]
     assert len(lines) == 3
+
+
+# ---------------------------------------------------------------------------
+# Tests — criteria / player_message / observed passthrough fields (EVAL adjudication fix)
+# ---------------------------------------------------------------------------
+
+
+def test_new_display_fields_default_when_omitted() -> None:
+    """criteria, player_message, and observed default to '' / '' / {} when omitted."""
+    row = CalibrationLabel(
+        record_id="case_010:in_set:0",
+        scorer="in_set",
+        output_text="The guard nods grimly.",
+        scorer_verdict=True,
+        pre_label=True,
+        pre_labeller_model="claude-opus-5",
+        human_verdict=None,
+        adjudicated_at=None,
+        notes="",
+    )
+    assert row.criteria == ""
+    assert row.player_message == ""
+    assert row.observed == {}
+
+
+def test_legacy_row_without_new_fields_still_loads(tmp_path: Path) -> None:
+    """A JSONL line written before this change (no criteria/player_message/observed) still parses."""
+    out = tmp_path / "labels.jsonl"
+    legacy_line = json.dumps(
+        {
+            "record_id": "case_011:tone_judge:0",
+            "scorer": "tone_judge",
+            "output_text": "Good day, traveller.",
+            "scorer_verdict": True,
+            "pre_label": True,
+            "pre_labeller_model": "claude-opus-5",
+            "human_verdict": None,
+            "adjudicated_at": None,
+            "notes": "",
+        }
+    )
+    out.write_text(legacy_line, encoding="utf-8")
+    rows = read_calibration_labels(out)
+    assert len(rows) == 1
+    assert rows[0].criteria == ""
+    assert rows[0].player_message == ""
+    assert rows[0].observed == {}
+
+
+def test_new_fields_round_trip(tmp_path: Path) -> None:
+    """criteria, player_message, and observed survive a write/read round trip."""
+    row = CalibrationLabel(
+        record_id="case_012:in_set:0",
+        scorer="in_set",
+        output_text="The guard nods grimly.",
+        scorer_verdict=True,
+        pre_label=True,
+        pre_labeller_model="claude-opus-5",
+        human_verdict=None,
+        adjudicated_at=None,
+        notes="",
+        criteria="The response field `facial_expression.type` must be one of: 'neutral', 'grim'.",
+        player_message="What did you see, guard?",
+        observed={"facial_expression.type": "grim"},
+    )
+    out = tmp_path / "labels.jsonl"
+    write_calibration_labels(out, [row])
+    loaded = read_calibration_labels(out)
+    assert len(loaded) == 1
+    assert loaded[0] == row
+    assert loaded[0].criteria == row.criteria
+    assert loaded[0].player_message == row.player_message
+    assert loaded[0].observed == row.observed

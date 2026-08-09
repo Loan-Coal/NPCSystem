@@ -2504,3 +2504,58 @@ found by that dry run, not by inspection. Mock artifacts are stamped `mock-rando
 **Consequences:** All 921 items now labelable and uniquely addressed (was 345 labelable / 307
 addressable). `make check` green: 2945 passed, coverage 87.14%; the single remaining failure is the
 pre-existing EVAL-P9.3 work-list test documented in ROADMAP.md:1115.
+
+## DEC-157: Human adjudication display — join criteria/player_message/observed from the transcript, not the batch files
+
+**Date:** 2026-08-09
+**Status:** ✅ ACCEPTED (ask-gate for "changing a public interface with callers outside its module"
+cleared by explicit human instruction for this task)
+**Context:** `adjudicate.py`'s prompt showed only `scorer`, `record_id`, `pre_label`, and `output_text`
+— `CalibrationLabel` had no field for the criteria being judged. For `in_set`/`range`/`schema` scorer
+rows this made adjudication strictly impossible, not just hard: those matchers judge response fields
+(`facial_expression.type`, `relation_deltas.trust`, …) that never appear in `output_text` at all. Every
+such adjudication was a coin flip dressed up as a kappa measurement.
+
+**Decisions:**
+
+1. **`CalibrationLabel` gains three optional passthrough fields** — `criteria`, `player_message`,
+   `observed: dict[str, Any]` — all defaulted (`""` / `""` / `{}`) so rows written before this change
+   still parse. They are frozen like every other field on the model.
+
+2. **The join source is the generation transcript, not `evals/calibration/batches/*.json`.** The batch
+   files are a regenerable export artifact; coupling import to them would make label-import depend on
+   something derived, not primary. `label_export.py:build_export_item()` already derives exactly these
+   three values from a `GenerationRecord` (verbatim judge criteria, or `criteria_rendering` output plus
+   the matcher's observed fields for deterministic records) — reused as-is rather than re-implemented.
+   `label_import`'s `--transcript` argument was already required for `output_text`; it now also
+   supplies criteria/player_message/observed via the same `ExportItem` the export step produces.
+
+3. **The labeller contract is untouched.** `RawLabelRow` still has exactly four fields
+   (`record_id`, `scorer`, `pre_label`, `notes`); `_CONTAMINATING_FIELDS` still rejects
+   `output_text`/`scorer_verdict`. The three new fields are joined server-side from the transcript and
+   never round-trip through the labeller — a labeller that could see them could echo them back
+   uncritically, which is exactly the contamination `ContaminatedRowError` exists to prevent.
+
+4. **File split, not a 300+-line exception.** Both `label_export.py` (336) and `label_import.py` (354)
+   were already over the CLAUDE.md cap before this task and grew further with the join logic. `wc -l`
+   by hand, since `scripts/check_rules.py` only scans `src/npc_engine` and `demo_game` — this directory
+   is not gated automatically.
+   - `export_item.py` (new, 170 lines): `ExportItem` + the `GenerationRecord → ExportItem` derivation
+     (`build_export_item`, `build_export_items`, `_scorer_for_record`, `_expectation_for`,
+     `GRAPH_SCORER_KINDS`). Extracted so `label_import`'s join step can reuse the derivation without a
+     `label_export ↔ label_import` circular import. `label_export.py` re-exports the same names for
+     backward compatibility with existing importers.
+   - `transcript_index.py` (new, 78 lines): `build_transcript_index` (transcript → `item_id →
+     ExportItem`, replacing the old `item_id → str` index) and `build_judged_index` (unchanged, moved
+     as-is). `label_import.py`'s `_build_transcript_index`/`_build_judged_index` are gone; `main()` and
+     `import_labels()` call the module functions directly.
+   - `label_import_errors.py` (new, 66 lines): `UnknownRecordIdError`, `MissingVerdictError`,
+     `ContaminatedRowError`, moved out verbatim. `label_import.py` re-exports them.
+   - Result: `label_export.py` 336→222, `label_import.py` 354→274 — both now under the cap and smaller
+     than found, per file.
+
+**Consequences:** `evals/calibration_records.py`, `test_calibration_records.py`,
+`test_label_import.py`, `test_adjudicate.py` extended; `test_transcript_index.py` added. `make check`
+green except the pre-existing EVAL-P9.3 work-list failure (ROADMAP.md:1115). Verified by eye against
+`evals/calibration/mock_labels.jsonl`: an `in_set` row's adjudication prompt now shows
+`observed: {'facial_expression.type': 'neutral'}` alongside its criteria — previously invisible.

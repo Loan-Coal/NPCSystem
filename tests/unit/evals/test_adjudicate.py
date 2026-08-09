@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from calibration_records import CalibrationLabel, write_calibration_labels
-from adjudicate import apply_verdict, collect_pending
+from adjudicate import _format_row_prompt, apply_verdict, collect_pending
 
 
 # ---------------------------------------------------------------------------
@@ -31,6 +31,9 @@ def _make_label(
     pre_label: bool = True,
     human_verdict: bool | None = None,
     adjudicated_at: str | None = None,
+    criteria: str = "",
+    player_message: str = "",
+    observed: dict[str, object] | None = None,
 ) -> CalibrationLabel:
     """Build a CalibrationLabel for testing."""
     return CalibrationLabel(
@@ -43,6 +46,9 @@ def _make_label(
         human_verdict=human_verdict,
         adjudicated_at=adjudicated_at,
         notes="",
+        criteria=criteria,
+        player_message=player_message,
+        observed=observed or {},
     )
 
 
@@ -143,3 +149,36 @@ def test_collect_pending_preserves_order() -> None:
     expected_indices = [0, 2, 3, 5]
     for i, row in enumerate(pending):
         assert row.record_id == f"case_{expected_indices[i]:03d}:tone_judge:0"
+
+
+# ---------------------------------------------------------------------------
+# Display: criteria / observed must be visible, or adjudication is a coin flip
+# ---------------------------------------------------------------------------
+
+
+def test_format_row_prompt_includes_criteria() -> None:
+    """The adjudication prompt shows the scorer's criteria, not just pre_label."""
+    row = _make_label(0, criteria="The response must contain at least one of: 'sorry', 'apologise'.")
+    rendered = _format_row_prompt(row, 1, 1)
+    assert "sorry" in rendered
+    assert "apologise" in rendered
+
+
+def test_format_row_prompt_includes_observed_when_present() -> None:
+    """When observed is non-empty (in_set/range/schema scorers), its value is shown."""
+    row = _make_label(
+        0,
+        scorer="in_set",
+        criteria="The response field `facial_expression.type` must be one of: 'neutral', 'grim'.",
+        observed={"facial_expression.type": "grim"},
+    )
+    rendered = _format_row_prompt(row, 1, 1)
+    assert "facial_expression.type" in rendered
+    assert "grim" in rendered
+
+
+def test_format_row_prompt_includes_player_message_when_present() -> None:
+    """The player's turn that prompted the response is shown for context."""
+    row = _make_label(0, player_message="What did you see, guard?")
+    rendered = _format_row_prompt(row, 1, 1)
+    assert "What did you see, guard?" in rendered
