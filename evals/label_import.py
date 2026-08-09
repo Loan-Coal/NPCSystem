@@ -5,39 +5,44 @@ Purpose: Validate and import a Claude-CLI labelling session into CalibrationLabe
          Reads minimal JSONL (record_id, scorer, pre_label, notes), joins output_text,
          criteria, player_message, and observed from the transcript index and
          scorer_verdict from the judged index, stamps pre_labeller_model, and writes
-         validated CalibrationLabel rows with human_verdict=None. The transcript-index
-         builder lives in transcript_index.py and the exception types live in
-         label_import_errors.py (both split out to stay under the 300-line cap; the
-         transcript-index derivation is also shared with label_export via export_item.py).
-Dependencies: argparse, json, pathlib, sys, pydantic, calibration_records, export_item,
-              transcript_index, label_import_errors
+         validated CalibrationLabel rows with human_verdict=None, then reconciles
+         them against the existing labels file so no human verdict is ever lost.
+         Split out to stay under the 300-line cap: transcript_index.py (index
+         building, shared with label_export via export_item.py), label_import_errors.py
+         (exception types), raw_label_rows.py (the labeller-side contract), and
+         label_merge.py (no-clobber policy + reconciliation).
+Dependencies: argparse, pathlib, sys, calibration_records, content_hash, export_item,
+              transcript_index, label_import_errors, label_merge, raw_label_rows
 Used by: python -m evals label-import; make label-import (EVAL-P5.6)
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from pydantic import BaseModel, ConfigDict
-
 from calibration_records import (
     LABELS_FILE,
     CalibrationLabel,
-    read_calibration_labels,
     write_calibration_labels,
 )
+from content_hash import sha256_text
 from export_item import ExportItem
 from label_import_errors import (
     ContaminatedRowError,
     MissingVerdictError,
     UnknownRecordIdError,
 )
+from label_merge import format_merge_report, load_existing_or_refuse, merge_labels
+from raw_label_rows import RawLabelRow, check_contamination, read_raw_rows
 from record_identity import composite_item_id, split_item_id
-from transcript_index import build_judged_index, build_transcript_index
+from transcript_index import (
+    build_judged_index,
+    build_transcript_index,
+    read_transcript_provenance,
+)
 
 # Re-exported for backward compatibility: callers historically imported the
 # error types from this module. Do not remove without checking for external
@@ -56,34 +61,7 @@ __all__ = [
 # Constants
 # ---------------------------------------------------------------------------
 
-_CONTAMINATING_FIELDS: frozenset[str] = frozenset({"output_text", "scorer_verdict"})
 _DEFAULT_PRE_LABELLER: str = "claude-opus-5"
-
-
-# ---------------------------------------------------------------------------
-# Raw row model
-# ---------------------------------------------------------------------------
-
-
-class RawLabelRow(BaseModel):
-    """Minimal JSONL row produced by the Claude-CLI labelling pass.
-
-    The labeller returns only these four fields; all other CalibrationLabel
-    fields are joined from the transcript and judged records by import_labels.
-
-    Attributes:
-        record_id: Stable identifier matching the generation transcript.
-        scorer: Which scorer is being labelled (e.g. 'tone_judge').
-        pre_label: The labeller's proposed verdict (True = pass, False = fail).
-        notes: Free-text annotation from the labeller (empty string when absent).
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    record_id: str
-    scorer: str
-    pre_label: bool
-    notes: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -91,18 +69,13 @@ class RawLabelRow(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _check_contamination(raw: dict[str, Any], record_id: str) -> None:
-    """Raise ContaminatedRowError if any contaminating field is present in the raw dict."""
-    for field in _CONTAMINATING_FIELDS:
-        if field in raw:
-            raise ContaminatedRowError(record_id, field)
-
-
 def import_labels(
     raw_rows: Sequence[dict[str, Any]],
     transcript_index: Mapping[str, ExportItem],
     judged_index: Mapping[str, bool],
     pre_labeller_model: str,
+    gen_id: str = "",
+    golden_set_version: str = "",
 ) -> list[CalibrationLabel]:
     """Join raw label rows with transcript and judged record data into CalibrationLabel rows.
 
@@ -119,6 +92,9 @@ def import_labels(
                       deterministic_pass result.
         pre_labeller_model: Model identifier that produced pre_label
                             (e.g. 'claude-opus-5').
+        gen_id: Generation the labels are bound to, recorded on each row so a
+                label can never be silently attributed to a different run.
+        golden_set_version: Case-set fingerprint at label time, same rationale.
     Returns:
         List of CalibrationLabel rows with human_verdict=None and adjudicated_at=None.
     Raises:
@@ -129,7 +105,7 @@ def import_labels(
     results: list[CalibrationLabel] = []
     for raw in raw_rows:
         record_id: str = raw.get("record_id", "")
-        _check_contamination(raw, record_id)
+        check_contamination(raw, record_id)
 
         # Normalise: a bare (pre-composite) record_id means repetition 0.
         base, repetition = split_item_id(record_id)
@@ -158,29 +134,13 @@ def import_labels(
                 criteria=export_item.criteria,
                 player_message=export_item.player_message,
                 observed=export_item.observed,
+                gen_id=gen_id,
+                golden_set_version=golden_set_version,
+                output_sha256=sha256_text(export_item.output_text),
+                criteria_sha256=sha256_text(export_item.criteria),
             )
         )
     return results
-
-
-# ---------------------------------------------------------------------------
-# JSONL persistence helpers
-# ---------------------------------------------------------------------------
-
-
-def read_raw_rows(path: Path) -> list[dict[str, Any]]:
-    """Load raw label rows from a JSONL file written by the Claude-CLI labelling pass.
-
-    Args:
-        path: Path to the labeller's minimal JSONL output.
-    Returns:
-        List of raw dicts in file order.
-    Raises:
-        FileNotFoundError: If the path does not exist.
-        json.JSONDecodeError: If any line is not valid JSON.
-    """
-    lines = path.read_text(encoding="utf-8").splitlines()
-    return [json.loads(line) for line in lines if line.strip()]
 
 
 # ---------------------------------------------------------------------------
@@ -238,9 +198,21 @@ def _build_parser() -> argparse.ArgumentParser:
         help=f"Pre-labeller model identifier (default: {_DEFAULT_PRE_LABELLER}).",
     )
     p.add_argument(
-        "--append",
+        "--merge",
         action="store_true",
-        help="Append to an existing labels file rather than overwriting it.",
+        help=(
+            "Reconcile with the existing labels file: refresh scorer_verdict and "
+            "the transcript passthrough fields, preserve every human verdict. "
+            "Use this after fixing a judge's criteria and re-running the judge."
+        ),
+    )
+    p.add_argument(
+        "--force-overwrite",
+        action="store_true",
+        help=(
+            "Discard the existing labels file, including any human verdicts it "
+            "holds. Refused by default; a backup .bak is still written."
+        ),
     )
     return p
 
@@ -263,12 +235,25 @@ def main(argv: list[str] | None = None) -> int:
     for judged_path in args.judged:
         judged_index.update(build_judged_index(judged_path))
 
-    new_labels = import_labels(raw_rows, transcript_index, judged_index, args.model)
+    gen_id, golden_set_version = read_transcript_provenance(args.transcript)
+    new_labels = import_labels(
+        raw_rows,
+        transcript_index,
+        judged_index,
+        args.model,
+        gen_id=gen_id,
+        golden_set_version=golden_set_version,
+    )
+    existing = load_existing_or_refuse(
+        args.out, allow_merge=args.merge, allow_overwrite=args.force_overwrite
+    )
 
-    existing: list[CalibrationLabel] = []
-    if args.append and args.out.exists():
-        existing = read_calibration_labels(args.out)
+    if existing and args.merge:
+        result = merge_labels(existing, new_labels)
+        write_calibration_labels(args.out, result.rows)
+        print(format_merge_report(result, args.out, len(new_labels)), file=sys.stderr)
+        return 0
 
-    write_calibration_labels(args.out, existing + new_labels)
+    write_calibration_labels(args.out, new_labels)
     print(f"Imported {len(new_labels)} label(s) → {args.out}", file=sys.stderr)
     return 0

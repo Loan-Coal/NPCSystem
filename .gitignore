@@ -31,6 +31,9 @@ evals/reports/
 # synthetic mock artifacts stay out — they are random by construction and a kappa
 # computed from them is meaningless, so they must never be mistaken for a real pass.
 evals/calibration/mock_*.jsonl
+# Timestamped safety copies written before any rewrite of a file holding human
+# verdicts. Local recovery aid; the tracked labels file is the artifact.
+evals/calibration/*.bak
 transcripts/
 
 # Codebase-review raw run-logs + agent transcripts (synthesis lives in

@@ -12,10 +12,31 @@ Used by: label_runner, adjudicate, calibration (EVAL-P5.2–P5.5)
 
 from __future__ import annotations
 
+import os
+import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
 from pydantic import BaseModel, ConfigDict
+
+
+class DuplicateLabelKeyError(ValueError):
+    """Raised when a labels file contains the same (record_id, scorer) twice.
+
+    Attributes:
+        record_id: The duplicated record identifier.
+        scorer: The duplicated scorer name.
+    """
+
+    def __init__(self, record_id: str, scorer: str) -> None:
+        self.record_id = record_id
+        self.scorer = scorer
+        super().__init__(
+            f"duplicate label key: {record_id} / {scorer}. "
+            "Adjudication replaces rows by this key, so a duplicate means one "
+            "human verdict silently overwrites another."
+        )
 
 # ---------------------------------------------------------------------------
 # Default labels file location
@@ -78,14 +99,52 @@ class CalibrationLabel(BaseModel):
     human_verdict: bool | None
     adjudicated_at: str | None
     notes: str
+
     criteria: str = ""
     player_message: str = ""
     observed: dict[str, Any] = {}
+
+    # Provenance / content addressing. All default so the rows written before
+    # these fields existed still load unchanged.
+    label_schema_version: int = 1
+    gen_id: str = ""
+    golden_set_version: str = ""
+    output_sha256: str = ""
+    criteria_sha256: str = ""
+    human_labeller: str = ""
+    needs_review: bool = False
+
+    @property
+    def key(self) -> tuple[str, str]:
+        """Identity of the labelled item: (record_id, scorer).
+
+        One record can be judged by several scorers, so record_id alone is not
+        unique. Every merge, dedup and replace keys on this pair.
+        """
+        return (self.record_id, self.scorer)
 
 
 # ---------------------------------------------------------------------------
 # Persistence helpers
 # ---------------------------------------------------------------------------
+
+
+def _backup_path(path: Path, timestamp: str) -> Path:
+    """Return the .bak sibling path for a given file and timestamp."""
+    return path.with_suffix(path.suffix + f".{timestamp}.bak")
+
+
+def _holds_human_work(path: Path) -> bool:
+    """True if the file on disk contains at least one adjudicated row.
+
+    Read defensively: a corrupt or partially-written file is treated as holding
+    human work, because the safe action for an unreadable file is to back it up
+    rather than to overwrite it silently.
+    """
+    try:
+        return any(row.human_verdict is not None for row in read_calibration_labels(path))
+    except Exception:
+        return True
 
 
 def write_calibration_labels(
@@ -94,15 +153,26 @@ def write_calibration_labels(
 ) -> None:
     """Write calibration labels to a JSONL file, one record per line.
 
-    Creates parent directories if needed. Overwrites any existing file.
+    Writes atomically (temp file + os.replace) so an interrupted write cannot
+    truncate an existing label set — the adjudication CLI rewrites the whole
+    file after every verdict, so a torn write during a multi-hour session would
+    otherwise destroy the run. If the destination already holds adjudicated
+    rows, a timestamped .bak copy is made first.
 
     Args:
-        path: Destination file path.
+        path: Destination file path. Parent directories are created if needed.
         rows: Sequence of CalibrationLabel instances to persist.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    content = "\n".join(row.model_dump_json() for row in rows)
-    path.write_text(content, encoding="utf-8")
+
+    if path.exists() and _holds_human_work(path):
+        stamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+        shutil.copy2(path, _backup_path(path, stamp))
+
+    content = "".join(row.model_dump_json() + "\n" for row in rows)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def read_calibration_labels(path: Path) -> list[CalibrationLabel]:
@@ -115,10 +185,20 @@ def read_calibration_labels(path: Path) -> list[CalibrationLabel]:
     Raises:
         FileNotFoundError: If path does not exist.
         ValidationError: If any line does not conform to CalibrationLabel schema.
+        DuplicateLabelKeyError: If any (record_id, scorer) appears twice. A
+            duplicated key is never benign: adjudicate replaces rows by key, so
+            a duplicate means one verdict silently overwrites another.
     """
     lines = path.read_text(encoding="utf-8").splitlines()
-    return [
+    rows = [
         CalibrationLabel.model_validate_json(line)
         for line in lines
         if line.strip()
     ]
+
+    seen: set[tuple[str, str]] = set()
+    for row in rows:
+        if row.key in seen:
+            raise DuplicateLabelKeyError(row.record_id, row.scorer)
+        seen.add(row.key)
+    return rows

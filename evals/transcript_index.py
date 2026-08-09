@@ -55,6 +55,23 @@ def build_transcript_index(transcript_path: Path) -> dict[str, ExportItem]:
     }
 
 
+def read_transcript_provenance(transcript_path: Path) -> tuple[str, str]:
+    """Return (gen_id, golden_set_version) for a generation transcript.
+
+    Stamped onto every imported CalibrationLabel so a label can never be
+    silently attributed to a run other than the one it was made against.
+
+    Args:
+        transcript_path: Path to the outputs.jsonl of a generation run.
+    Returns:
+        (gen_id, golden_set_version). Either is "" for pre-EVAL-P1.4
+        transcripts that never recorded it.
+    """
+    transcript = read_transcript(transcript_path)
+    golden = transcript.config.golden_set_version if transcript.config else ""
+    return transcript.gen_id, golden
+
+
 def build_judged_index(judged_path: Path) -> dict[str, bool]:
     """Build an item_id→scorer_verdict index from a judged.jsonl file.
 

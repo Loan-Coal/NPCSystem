@@ -18,6 +18,7 @@ from typing import Callable, Sequence
 from calibration_records import (
     LABELS_FILE,
     CalibrationLabel,
+    DuplicateLabelKeyError,
     read_calibration_labels,
     write_calibration_labels,
 )
@@ -130,7 +131,19 @@ def _replace_row(
     old: CalibrationLabel,
     new: CalibrationLabel,
 ) -> list[CalibrationLabel]:
-    """Return a new list with old replaced by new (matched by record_id + scorer)."""
+    """Return a new list with old replaced by new (matched by record_id + scorer).
+
+    Raises:
+        DuplicateLabelKeyError: If the key matches more than one row. A
+            non-unique match means this single verdict would overwrite someone
+            else's verdict as well as its own target — the failure mode that
+            `--append`-produced duplicates caused silently.
+    """
+    matches = sum(
+        1 for r in all_rows if r.record_id == old.record_id and r.scorer == old.scorer
+    )
+    if matches > 1:
+        raise DuplicateLabelKeyError(old.record_id, old.scorer)
     return [
         new if (r.record_id == old.record_id and r.scorer == old.scorer) else r
         for r in all_rows
