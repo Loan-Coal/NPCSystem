@@ -1246,13 +1246,13 @@ real work and is EVAL-P12.2, not a footnote.
       the error this whole programme exists to stop.
       **This task is for a human session. The unattended loop must not start it.**
 
-- [ ] **EVAL-P12.2** Reconcile the two world vocabularies. Files: `create evals/world_map.py`,
+- [x] **EVAL-P12.2** Reconcile the two world vocabularies. Files: `create evals/world_map.py`,
       `create tests/unit/evals/test_world_map.py`.
       A declarative mapping from scenario ids (`npc_1`, `loc_market`) to eval-world ids
       (`aldric_merchant`, `market_square`), so one measured scenario can run against the seeded eval world.
       RED anchor: `tests/unit/evals/test_world_map.py::test_unmapped_scenario_id_raises` fails.
       Validation: an unmapped id raises and names it; the mapping is total over the 6-8 promoted scenarios,
-      asserted by a test that enumerates their ids rather than trusting the map to be complete.
+      asserted by a test that enumerates their ids rather than trusting the map to be complete. ✅ AUTO (EVAL-P12.2, 2026-08-09)
 
 - [ ] **EVAL-P12.3** Sequence runner. Files: `create evals/sequence_runner.py`,
       `create tests/unit/evals/test_sequence_runner.py`.
