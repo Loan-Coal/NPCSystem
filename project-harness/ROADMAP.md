@@ -918,7 +918,7 @@ Separately: `judge_runner._to_result_dict` sets `case_id = record_id`, so each g
       per-record JSONL output is unchanged, only the summarize/report path was double-counting. ISSUE-123
       moved to `archive/ISSUES_RESOLVED.md` as `[FIXED]`.
 
-- [ ] **EVAL-P6.4** *(live; not `make check`-gated — requires engine + Neo4j + Ollama up)* **The first
+- [x] **EVAL-P6.4** *(live; not `make check`-gated — requires engine + Neo4j + Ollama up)* **The first
       measured k=3 run.** Every statistic built in EVAL-P2 through EVAL-P5 has so far only ever seen
       fixtures: `evals/generations/baseline/` holds `verdicts.json` and `verdicts_ah.json` but **no
       `meta.json` and no `outputs.jsonl`**, and the only transcript on disk
@@ -940,6 +940,16 @@ Separately: `judge_runner._to_result_dict` sets `case_id = record_id`, so each g
       the EVAL-P4.2 cross-tab both produce non-empty tables. Record the resulting `gen_id` in this task's
       DONE marker — EVAL-P5.6, EVAL-P7 and EVAL-P8 all consume it by name.
       **This task is for a human session. The unattended loop must not start it.**
+      ✅ **DONE — gen_id `k3_73e6c36`** (git_sha `73e6c36`, `prompt_version: stage_b_v2.13`, judge
+      `mixtral:8x7b`). Run existed on disk unmarked; verified 2026-08-09 rather than trusted blind:
+      921 records, `repetition ∈ {0,1,2}` for all, `duration_ms > 0` for all, `retrieved_context`
+      non-empty for all — `evals/generations/k3_73e6c36/{meta.json,outputs.jsonl,judged.jsonl,
+      deterministic_judged.jsonl}` all present. `python -m evals score` over it produces a non-empty
+      table (`entity_rate: 1.0`, `knowledge_rate: 0.0` — the latter is worth a second look, not
+      re-verified here). The EVAL-P4.2 cross-tab already produces a non-empty table but only over the
+      15 EVAL-P4.0-annotated cases, per the known Tier-2 gap (38/53 cases still unannotated) — not
+      re-derived fresh for this run. This same gen_id also supplied the k3_73e6c36 label-export used
+      for the first real EVAL-P5 calibration pass (see ISSUE-129 update, new ISSUE-141).
 
 - [x] **EVAL-P6.3** Verb dispatch + aliases. Files: `create evals/__main__.py`, `edit Makefile`,
       `create tests/unit/evals/test_cli_dispatch.py`. Verbs: `generate`, `score`, `judge`, `calibrate`,
@@ -1350,6 +1360,544 @@ have hardened into five call sites costs far more.
        EVAL-P13.2  needs a real run artifact to render
        EVAL-P13.3  README numbers must be copied from a committed artifact, never typed
        EVAL-P14.3  cost model is validated against P12.4's measured time -->
+
+## Program 3 — Audit remediation and the regression harness (EVAL-P15..P24)
+
+**Why this program exists.** The 2026-08-09 adversarial audit (four parallel reviewers, findings verified
+by hand against the real `k3_73e6c36` artifact) established that the published headline
+`3 lore hallucinations across 111 adversarial turns` is not supportable. The floor is **≥10 across ≥186
+turns**, and that is a floor, not an estimate. The audit found the harness is not wrong in one place — it is
+wrong in a *pattern*: every aggregation silently drops what it does not recognise, and every interval is
+computed on the wrong unit. Those two defects account for most of the P1 list.
+
+**The binding constraint is that no human label may ever be re-made.** 393 rows have been hand-labelled
+twice. EVAL-P15 exists so that everything after it is provably correct *before* it consumes labelling
+effort or Opus credits, because the stated failure mode of this project is infra that was built several
+times and was wrong every time.
+
+**Locked decisions (human, 2026-08-09):**
+
+| Decision | Value | Consequence |
+|---|---|---|
+| Regeneration budget | **2** (local Ollama; zero Opus cost) | All case-set repair batches into ONE commit before regen #1. |
+| Uncalibrated 528 | **Stratified sample now (~150), full later** | Every matcher gets a κ; intervals are wider and must say so. |
+| Harness runtime | **Single PowerShell command**; scheduling later | No CI change in this program. Tier-3 scheduling is deferred, not cancelled. |
+| Judge policy | **3-model panel on everything** | mixtral:8x7b + qwen2.5:14b + qwen2.5:7b, run **sequentially** (mixtral is ~27 GB; it cannot co-reside on a 8-12 GB VRAM box, PERF-06). ~2.5 h per judge pass. |
+| Opus pre-labelling | **Only after EVAL-P15 proves the pipeline** | Hard gate. No Opus run is spent against an unproven chain. |
+| Capability battery | **Full EVAL-P9 scope (~35 cases)** | 4-5 h human authoring, unchanged from EVAL-P9. |
+
+**Metrics contract — the harness is done when one command prints all four:**
+1. Paired guard + capability rates with **case-level** Wilson CIs and k adjacent to every rate.
+2. Per-scorer κ with **cluster-corrected** CIs and a trust gate that refuses to publish an under-κ rate.
+3. Run-to-run McNemar with a comparability guard that refuses incomparable runs.
+4. Trend across runs plus a regression alert that exits non-zero on a drop.
+
+**Fence policy:** these phases sit **below** `<!-- LOOP:QUEUE end -->` and are deliberately unreachable by
+the overnight loop. Program 3 changes published numbers and consumes irreplaceable human labelling; ISSUE-139
+(the loop sweeping unrelated working-tree changes into its commits) is still open. Widening the fence is a
+separate, deliberate act after ISSUE-139 closes — never a side effect of starting this program.
+
+---
+
+### Phase EVAL-P15 — The proving ground (build this before fixing anything)
+**Goal:** A test apparatus that can *fail* when the pipeline computes a wrong number — which the current one
+provably cannot. Every later phase is verified by this one.
+**Effort:** ~4 h
+**Constraint:** No production behaviour changes in this phase. If a new test goes red against current code,
+that is a *finding*, recorded in ISSUES, not a licence to fix it here — the fix belongs to its own phase so
+the diff that changes a number is never mixed with the diff that changes a test.
+**Notes:** The audit's most damning structural fact: **zero of the 34 files in `tests/unit/evals/` reads a
+real pipeline artifact**, and named mutations survive the whole suite — `matchers.evaluate` replaced with
+`return (True, "")` keeps all 10 equivalence tests green; `_apply_polarity` replaced with `score is True`
+inverts 135 real `pass_on_no` records with `pass_on_no` having **zero grep hits** in tests. A suite that
+cannot fail is not evidence.
+**Depends on:** nothing. This is the entry point.
+
+- [ ] **EVAL-P15.1** Oracle mock labeller (replaces random-only mocking). Files:
+      `create scripts/oracle_labeller.py`, `create tests/unit/evals/test_oracle_labeller.py`,
+      `edit Makefile` (`mock-calibrate-oracle`).
+      `scripts/mock_labeller.py` emits *random* labels, so it proves data moves but can never prove the
+      pipeline computes the right value — κ from it is meaningless by construction. The oracle labeller
+      instead labels by a **declared rule** with a **known-by-construction confusion matrix**: given a
+      target (tp, fp, fn, tn) per scorer, it emits `pre_label`s that produce exactly that matrix against
+      the real `scorer_verdict`s on disk. The pipeline's output κ is then predictable in closed form.
+      RED anchor: `tests/unit/evals/test_oracle_labeller.py::test_emitted_labels_reproduce_the_requested_matrix` fails — module absent.
+      Validation: for a requested (tp=40, fp=5, fn=3, tn=12), `label-import --merge` → `calibrate` reports
+      **exactly** those counts and a κ equal to the hand-computed value to 3 dp. Any arithmetic error
+      anywhere in export → import → merge → calibrate now surfaces as a number mismatch, not a silent pass.
+
+- [ ] **EVAL-P15.2** Real-artifact integration tests. Files:
+      `create tests/integration/evals/test_real_artifact_invariants.py`,
+      `create tests/integration/evals/conftest.py`.
+      Read `evals/generations/k3_73e6c36/` (now tracked, commit `d267f64`) and assert invariants that hold
+      of the real data: every `record_id` in `judged.jsonl` ∪ `deterministic_judged.jsonl` resolves in
+      `outputs.jsonl`; the two verdict files are disjoint in `record_id`; every record has
+      `repetition ∈ {0..k-1}`, `duration_ms > 0`, non-empty `retrieved_context`; the label set's
+      `output_sha256` matches the transcript for all 393 rows.
+      RED anchor: `test_every_judged_record_resolves_in_the_transcript` fails — file absent.
+      Validation: the suite fails if the committed artifact is edited by one byte in a response field.
+      This is the single test file that would have caught the P1 findings on `compare` coverage, battery
+      classification, and the label join simultaneously.
+
+- [ ] **EVAL-P15.3** Anti-vacuous-test gate. Files: `create scripts/check_test_quality.py`,
+      `create tests/unit/scripts/test_check_test_quality.py`, `edit Makefile` (`check-test-quality`).
+      Static scan of `tests/**` flagging the patterns the audit found load-bearing: assertions comparing a
+      value to itself (`x == x` via a property defined as that expression); `pytest.raises(Exception)` where
+      a specific type is available; tests whose only assertions are `in`/`exists()`/truthiness on a string
+      the code emits unconditionally; and any parametrized test whose body never calls the module under test.
+      RED anchor: `test_self_comparing_assertion_is_flagged` fails.
+      Validation: run against the current suite it flags **at least** `test_retrieval_join.py`'s
+      `test_four_cells_sum_to_annotated_count` (asserts a property against its own definition),
+      `test_deterministic_pass.py::test_scores_every_record_without_llm` (asserts a mock is uncalled by a
+      module that cannot call it), and the 7 `pytest.raises(Exception)` frozen-model checks. Each flagged
+      item is either fixed or given an inline `# quality-ok: <reason>` waiver — never bulk-suppressed.
+
+- [ ] **EVAL-P15.4** Bring `evals/` under the gates (**closes ISSUE-124**). Files: `edit Makefile`,
+      `edit scripts/check_rules.py`, `edit scripts/docstring_audit.py`, `edit pyproject.toml`.
+      `evals/` is outside `mypy`, `check-rules`, `check-docstrings`, and effectively outside coverage
+      (`test-cov` gates 3 of 47 modules, diluted into a combined total dominated by `npc_engine`).
+      Add `--cov=evals --cov-fail-under=80` as its **own** gate, and extend the rule/docstring scanners to
+      `evals/`.
+      Validation: `make check` reports the real violation set — the audit counted **7 files over the
+      300-line cap** (`matchers.py` 482, `calibration.py` 451, `anti_hallucination_runner.py` 441,
+      `compare.py` 412, `runner.py` 403, `summary.py` 366, `case_drafts.py` 359), **30 functions over 40
+      lines** (worst: `runner._run_case` at 155), and `summary._tally_failures` at nesting depth 7.
+      Landing this red is acceptable **only** with each violation logged to ISSUES with an owning phase;
+      ISSUE-137/138 already cover two and understate the scope.
+
+- [ ] **EVAL-P15.5** Silent-drop audit. Files: `create tests/unit/evals/test_no_silent_drops.py`,
+      `edit evals/*.py` (log-and-raise at 16 sites).
+      The audit found 16 `except → return/pass/continue` sites that discard data with no log line, several
+      load-bearing: `compare.py:131` drops malformed judged rows (shrinking the denominator the module's own
+      docstring claims to protect), `context_capture.py:59` returns `()` so a retrieval *failure* is
+      indistinguishable from a genuine empty result, `calibration.py:232` drops degenerate bootstrap samples
+      then takes percentiles over the survivors (silently voiding nominal 95% coverage). All violate the
+      project's own "Never swallow errors (strict)" rule.
+      RED anchor: `test_malformed_judged_row_raises_rather_than_shrinking_the_denominator` fails.
+      Validation: every one of the 16 sites either re-raises, raises a domain error, or logs with the
+      dropped item's identity; a fixture with one corrupt line produces a **loud** failure, not a quietly
+      smaller n.
+
+### Phase EVAL-P16 — The unit of analysis (every interval is currently too narrow)
+**Goal:** Statistics computed on **cases**, not on k-inflated records, so no published interval overstates
+its own evidence.
+**Effort:** ~3 h
+**Constraint:** Pure functions over existing artifacts. No regeneration, no re-labelling — these are
+recomputations of numbers already on disk, so this phase's output is directly comparable to the audit's.
+**Notes:** `case_stats.aggregate`'s per-slot Wilson at n=k is *legitimate* (k repetitions of a fixed slot
+genuinely are i.i.d. draws). The violation appears only when those are **pooled across cases** as if
+independent. Measured: guard `108/111 → [0.9235, 0.9908]` published vs `36/37 → [0.8618, 0.9952]` correct —
+**6.2 points of invented confidence**, interval exactly half the honest width.
+**Depends on:** EVAL-P15.1, EVAL-P15.2.
+
+- [ ] **EVAL-P16.1** Case-level battery rates. Files: `edit evals/summary.py`,
+      `create evals/battery_rates.py`, `edit tests/unit/engines/test_eval_summary.py`.
+      `_battery_rate_stats` counts one Bernoulli trial per **(case, repetition)**. Collapse k repetitions to
+      one case-level verdict (majority at odd k; ties are a `RuntimeError`, not a coin flip) before the
+      Wilson call, and print `n_cases` and `k` adjacent to every rate.
+      RED anchor: `test_guard_rate_denominator_is_cases_not_case_repetitions` fails (reports 111, expects 37).
+      Validation: against the committed artifact the guard rate is `36/37` with CI `[0.8618, 0.9952]`;
+      the headline string names **cases**, and the numerator and denominator are the same unit — the audit
+      found `3 of 111` mixed failing *expectation records* over *case-repetitions*, inflating numerator and
+      denominator by different factors and understating the case-level rate 2×.
+
+- [ ] **EVAL-P16.2** Cluster bootstrap for κ. Files: `edit evals/calibration.py`,
+      `edit tests/unit/evals/test_calibration.py`.
+      `kappa_interval` resamples **rows**, but rows are clustered ~3-per-case by repetition. Resample
+      **cases** (all rows of a drawn case move together) and report `n_clusters` next to `n_rows`.
+      RED anchor: `test_bootstrap_resamples_cases_not_rows` fails.
+      Validation: on the committed labels `tone_judge` moves from the published `[0.663, 1.000]` to
+      `[0.000, 1.000]` — the honest interval **includes chance**. This is expected and must not be treated
+      as a regression: `tone_judge`'s entire κ rests on **3 clusters** (6 negative rows from 3 cases, the FP
+      cell holding 1 case), and 36% of the current resamples contain zero FP rows and return κ=1.0.
+
+- [ ] **EVAL-P16.3** κ must refuse when undefined. Files: `edit evals/calibration.py`,
+      `edit evals/dashboard/detail.py`, `edit tests/unit/evals/test_calibration.py`.
+      `_kappa_from_matrix` returns **1.0** when Pe=1, i.e. when κ=(Po−Pe)/(1−Pe)=0/0. A `return True` scorer
+      therefore publishes κ=1.000, CI [1.000, 1.000], precision 1.000, recall 1.000 — the exact signature of
+      a scorer with no discriminative power, reported as the best possible result. The branch is duplicated
+      independently at `dashboard/detail.py:200`; delete the duplicate and import the one implementation.
+      RED anchor: `test_degenerate_single_class_matrix_raises_rather_than_returning_one` fails.
+      Validation: a 60-row all-agree matrix raises `UndefinedKappaError` naming Pe and the cell counts;
+      the report renders `κ undefined (no variance in scorer output)`, never a number. Also make
+      precision/recall return `None` on an empty denominator instead of 1.000.
+
+- [ ] **EVAL-P16.4** McNemar on cases; boundary-aware intervals. Files: `edit evals/compare.py`,
+      `edit evals/paired_stats.py`, `edit tests/unit/evals/test_paired_stats.py`.
+      `compare` groups by `record_id` (`<case>:<kind>:<index>`) — an expectation **slot**, not a case — so
+      37 of 70 cases contribute 2-3 correlated pairs. Measured: a change breaking 2 cases carrying 3 slots
+      each gives 6 discordant slots → **p=0.031 "worse"**, where the 2-case test gives p=0.5. Group to
+      `case_id` before pairing. Additionally: at κ̂=1.0 the percentile bootstrap returns `[1.000, 1.000]` by
+      construction (2000/2000 resamples ≥ 1.0) — report `interval undefined at boundary (n_clusters=N)`
+      rather than zero uncertainty.
+      RED anchor: `test_mcnemar_pairs_cases_not_expectation_slots` fails.
+      Validation: the 2-case fixture reports p=0.5 / `no_detectable_change`; comparing the committed run
+      against itself still yields p=1.0 with zero discordant pairs.
+
+- [ ] **EVAL-P16.5** Family-wise error disclosure. Files: `edit evals/calibration.py`,
+      `create docs/STATISTICS_POLICY.md`.
+      Four scorers × two axes = **8** simultaneous 95% intervals per calibration run; P(≥1 miss) = 1−0.95⁸ =
+      **0.337**. Print the family size and a Holm-adjusted companion interval alongside the nominal one, and
+      state in the policy doc which is quoted where.
+      Validation: the calibration report names the family size; the policy doc states that per-case
+      cherry-picking from `compare`'s 115-row delta table is not a supported inference.
+
+### Phase EVAL-P17 — Headline integrity (the number is currently wrong)
+**Goal:** A headline whose denominator contains every evaluated case and whose numerator counts only real
+content failures.
+**Effort:** ~2.5 h
+**Constraint:** This phase **changes the published number**. Land it in one commit, record the before/after
+in the Session Log, and treat every prior quotation of `3 across 111` as retracted.
+**Notes:** Root cause is one pattern with several symptoms: aggregation reads only `judged.jsonl` and
+classifies by string prefix, silently dropping everything unrecognised. `case_stats.classify_battery`
+already **raises** on an unmatched prefix precisely to prevent this; `summary.py` reimplements the check and
+returns `False` instead.
+**Depends on:** EVAL-P15.2, EVAL-P16.1.
+
+- [ ] **EVAL-P17.1** Aggregate over **both** verdict sources (**one fix, three symptoms**). Files:
+      `edit evals/summary.py`, `edit evals/compare.py`, `create evals/verdict_sources.py`,
+      `edit tests/unit/engines/test_eval_summary.py`, `edit tests/unit/evals/test_compare.py`.
+      `summarize` and `compare` both read `judged.jsonl` only. Measured consequences: (a) `compare` ignores
+      **192 of 307 slots (62.5%)** of every run; (b) the capability battery reports **2 cases when all 7
+      ran** — the other 5 have only deterministic expectations, so their records live in
+      `deterministic_judged.jsonl`; (c) the 25 `ah_demo_*` cases are absent from both batteries.
+      RED anchor: `test_capability_battery_counts_deterministic_only_cases` fails (reports 2, expects 7).
+      Validation: capability turns rise 2 → 7 cases with no new authoring; `compare`'s intersection covers
+      307 slots and prints per-source counts in its header.
+
+- [ ] **EVAL-P17.2** Unclassifiable cases raise (**delegate to `classify_battery`**). Files:
+      `edit evals/summary.py`, `edit evals/case_stats.py`, `edit tests/unit/engines/test_eval_summary.py`.
+      Replace `_is_guard_case`/`_is_capability_case` with `case_stats.classify_battery`. **31 of 70 cases
+      (44%) currently fall through into neither battery**, including all 25 `ah_demo_*` — the battery named
+      after the guarantee being published. Give `ah_demo_*` an explicit battery assignment (it is a guard
+      battery by construction) rather than a new silent bucket.
+      RED anchor: `test_unclassified_case_id_raises_in_summarize` fails. Note the existing
+      `test_eval_summary.py::test_unclassifiable_case_raises` asserts this property **against a function the
+      production path never calls**, while the same file's fixture feeds `case_voice_z` into `summarize` and
+      asserts nothing — fix both.
+      Validation: guard turns rise from 37 to **62** cases; the 7 previously-invisible `ah_demo_*` refusal
+      failures enter the failure tally; `All cases: N evaluated / M total` reconciles exactly with the sum
+      of the batteries, which it currently does not (210 evaluated vs 111+6 batteried, 93 unexplained).
+
+- [ ] **EVAL-P17.3** Separate infra failure from content failure. Files: `edit evals/summary.py`,
+      `edit evals/runner.py`, `edit tests/unit/engines/test_eval_summary.py`.
+      `runner.py:248` writes `inconclusive: True` for a `score=None` judge result and **nothing ever reads
+      it**. `_tally_failures` buckets by kind alone, so an Ollama timeout on `affirms_judge` in a guard case
+      is counted as a **lore hallucination**. `refusal_rate.py:73` already handles this correctly — reuse
+      that convention.
+      RED anchor: `test_infra_failure_is_excluded_from_hallucination_count` fails.
+      Validation: a fixture with 3 judge timeouts reports `0 hallucinations` and a separate
+      `3 inconclusive (judge unavailable)` line; the headline never counts an outage as a defect, and an
+      inconclusive rate above a threshold makes the run **invalid** rather than quietly optimistic.
+
+- [ ] **EVAL-P17.4** Skips leave the numerator. Files: `edit evals/runner.py`, `edit evals/report.py`,
+      `edit tests/unit/evals/test_runner_skips.py`.
+      `_run_case` returns `passed: True` for both skip paths (no `input` field; NPC 404), so `report.py:38`
+      counts a skip as a **pass** in `194/210` while `summary._is_skipped_case` drops it from the rate
+      denominators — inflation in both directions at once. 4 cases depend on separately-seeded worlds,
+      including 1 of 7 capability cases, so an unseeded village world *raises* the capability rate.
+      RED anchor: `test_skipped_case_is_not_counted_as_passed` fails.
+      Validation: the top line reads `X/Y passed, Z skipped` with skips in neither numerator nor
+      denominator; a run with any skipped case prints the skip reason from `skip_detail`
+      (**closes ISSUE-130**, whose hardcoded "NPC not found" string misdirected a prior session).
+
+- [ ] **EVAL-P17.5** Re-measure and retract. Files: `edit project-harness/ROADMAP.md` (Session Log),
+      `edit project-harness/ISSUES.md`.
+      Re-run `summarize` + `report` over the **unchanged** committed artifact and record the corrected
+      headline next to the retracted one. No regeneration — this is arithmetic over existing data.
+      Validation: the new headline is stated with its case-level CI and k; the delta from `3 across 111` is
+      explained line by line (battery reclassification, both-source aggregation, infra separation, skips);
+      the audit's predicted floor of **≥10 across ≥186 turns** is either met or the discrepancy is explained.
+
+### Phase EVAL-P18 — Provenance and comparability (a run must be identifiable)
+**Goal:** Two runs can be compared only when they are actually comparable, and any published number is
+traceable to the exact inputs that produced it.
+**Effort:** ~2.5 h
+**Depends on:** EVAL-P15.2.
+
+- [ ] **EVAL-P18.1** `harness_version` replaces `golden_set_version` as the comparability key. Files:
+      `edit evals/run_config.py`, `edit tests/unit/evals/test_run_config.py`.
+      `golden_set_version` hashes `evals/cases/` **non-recursively** and nothing else. So editing
+      `prompts/eval/refusal_judge.yaml` — the exact fix EVAL-P19.1 makes — leaves the version **unchanged**
+      and two incomparable runs look comparable. Hash: `evals/cases/**` (recursive), `prompts/eval/*.yaml`,
+      `evals/matchers.py`, and the judge sampling options.
+      RED anchor: `test_editing_a_judge_criteria_changes_harness_version` fails.
+      Validation: editing one character of `refusal_judge.yaml` changes `harness_version`; adding a stray
+      `README.md` to `evals/cases/` does **not** (the current implementation hashes it).
+
+- [ ] **EVAL-P18.2** Record model identity, not model names. Files: `edit evals/run_config.py`,
+      `edit evals/engine_adapter.py`, `edit tests/unit/evals/test_run_config.py`.
+      `meta.json` records `qwen2.5:7b` — a **mutable tag**. A re-pull silently changes the model while the
+      artifact still claims the same string. Capture `generation_model_digest` and `judge_model_digest`
+      (Ollama `/api/show`), `ollama_version` (`/api/version`), `judge_temperature` (currently hardcoded at
+      `matchers.py:230` and recorded nowhere), and a hash of the dialogue prompt files. Also **delete or
+      populate `world_epoch`** — it is a Pydantic default (`eval_records.py:126`) that nothing ever writes,
+      so all 921 records claim `age_of_peace` as a constant while the guard rubric asserts active war. A
+      field that looks like provenance and is a constant is worse than no field.
+      RED anchor: `test_meta_records_model_digest_not_just_tag` fails.
+      Validation: two runs at the same tag but different digests are detectably different;
+      `world_epoch` either reflects the seeded world or is gone.
+
+- [ ] **EVAL-P18.3** `compare` refuses the incomparable. Files: `edit evals/compare.py`,
+      `edit tests/unit/evals/test_compare.py`.
+      Measured against the committed baseline: `compare --before baseline --after k3_73e6c36` prints
+      `Intersection: 0 cases / Verdict: NO_DETECTABLE_CHANGE / p=1.0000` and **exits 0** — a confident
+      verdict over nothing, and `test_compare.py:176` enshrines it as correct. Refuse (non-zero) on: empty
+      intersection; differing `harness_version`, `judge_model`, or `k`. Print both runs' config blocks in
+      the report header — `judged.jsonl` already carries `judge_model` per row and `compare.py:43` discards
+      it via `extra="ignore"`.
+      RED anchor: `test_empty_intersection_exits_nonzero` fails (currently asserts the opposite).
+      Validation: the real `baseline` vs `k3_73e6c36` invocation exits non-zero naming the mismatch;
+      a run compared against itself still yields p=1.0.
+
+### Phase EVAL-P19 — Scorer repair (no relabelling required)
+**Goal:** Fix the scorers the calibration condemned, then re-measure κ using `--merge` — proving the
+label-durability work and closing ISSUE-141 at zero labelling cost.
+**Effort:** ~2 h + one judge pass
+**Constraint:** **Prompt-and-matcher changes only. No regeneration.** Human verdicts are judgments of
+`(output_text, criteria)`. Output text does not change here; `criteria` does, so `--merge` will correctly
+flag those rows `needs_review` — that flag is the phase's main output, not an error.
+**Notes:** This is the first real exercise of `label-import --merge` (commit `107e547`) against a genuine
+criteria change. If human verdicts do not survive it, stop the program and fix durability first.
+**Depends on:** EVAL-P15.1, EVAL-P18.1.
+
+- [ ] **EVAL-P19.1** Rewrite `refusal_judge` criteria (**root cause of ISSUE-141, κ=0.247**). Files:
+      `edit prompts/eval/refusal_judge.yaml`, `edit tests/unit/evals/test_refusal_criteria.py`.
+      Diagnosed 2026-08-09 from all 12 discordant rows: lines 15-21 enumerate *surface phrases* and only
+      lines 22-23 state the substantive rule, so the phrase list dominates — and it contains
+      **`"I haven't heard"`** while the engine's idiom is **`"I've heard…"` + an invented fact**. Lead with
+      the substantive test (*were specific facts, names, or figures asserted?*), demote the phrase list to
+      non-binding examples, and state explicitly that a hedge wrapper around a specific claim is **NO**.
+      Fix the mojibake em-dash (`topic �`) visible in every labelled row.
+      Validation: replayed against the 12 discordant rows, the rewritten criteria agrees with the human on
+      **≥10 of 12**; the 8 FPs (which assert "House of Ravenwood", "Lady Elara", "young Elian" — none of
+      which exist in any seed) are scored as non-refusals.
+
+- [ ] **EVAL-P19.2** Word-boundary and dead-keyword matching. Files: `edit evals/matchers.py`,
+      `create evals/keyword_matching.py`, `edit tests/unit/evals/test_matchers_keywords.py`.
+      `_eval_keyword_none` uses bare lowercased `in`, so `'gore'`⊂`gorge`, `'graphic'`⊂**`geographic`**,
+      `'lira'`⊂`Lira's`, `'rumor'`⊂`rumors`. Add opt-in word-boundary matching and make it the default for
+      single-word terms.
+      RED anchor: `test_single_word_keyword_does_not_match_inside_a_longer_word` fails.
+      Validation: `geographic` no longer trips `graphic`; multi-word phrases keep substring semantics.
+
+- [ ] **EVAL-P19.3** Dead-keyword detector. Files: `create scripts/check_dead_keywords.py`,
+      `create tests/unit/scripts/test_check_dead_keywords.py`, `edit Makefile`.
+      A forbidden keyword that the engine's idiom can never emit is a guaranteed pass inflating the guard
+      denominator. Measured: `case_neg_lira_no_trust_disclosure` forbids `'thieves guild'` while the corpus
+      writes `"thieves' guild"` **20 times and `"thieves guild"` 0 times**; `case_neg_captain_sorn_no_hedging`
+      forbids `'i heard'` against a corpus of `"I've heard"`.
+      RED anchor: `test_keyword_never_present_in_corpus_is_flagged` fails.
+      Validation: run over the committed transcript it flags both, plus any keyword with zero corpus hits;
+      output is a work-list for EVAL-P20.1, not an automatic edit — deciding what a case *should* forbid is
+      a human call.
+
+- [ ] **EVAL-P19.4** Re-judge, merge, re-measure (**the durability proof**). Files: none (operational).
+      Re-run the judge pass over the **unchanged** transcript with the fixed criteria, then
+      `make label-import ... MERGE=1` and `make eval-calibrate`.
+      Validation: `human verdicts preserved: 393`; the rows whose criteria changed are flagged
+      `needs_review` and **named**; `refusal_judge` κ is re-reported with its cluster-corrected CI. If κ
+      clears the EVAL-P11.1 threshold, ISSUE-141 closes; if not, the scorer is recorded as unfixed and its
+      rate is refused publication — **never quietly kept**.
+
+### Phase EVAL-P20 — Case-set repair + capability battery → REGENERATION #1
+**Goal:** One coherent case set worth measuring, landed in exactly one commit, then the first of two
+regenerations.
+**Effort:** ~2 h harness + **4-5 h human authoring** (the real cost) + ~85 min generation + ~2.5 h panel judge
+**Constraint:** **Every case change lands in ONE commit before the regeneration.** This is the whole point
+of the 2-regeneration budget: one comparability discontinuity, recorded, with the pre-change `gen_id` named
+next to it.
+**Notes:** Regeneration is the **only** operation that invalidates human labels. Content addressing
+(commit `107e547`) means labels whose `(output, criteria)` pair is unchanged survive automatically and
+changed ones are flagged — so the relabelling cost is a measured delta, not another 393.
+**Depends on:** EVAL-P17, EVAL-P19, EVAL-P9.1 (capability contract, already done).
+
+- [ ] **EVAL-P20.1** Resolve the case-set contradictions. Files: `edit evals/cases/*.yaml`,
+      `create docs/CASE_SET_POLICY.md`.
+      Fix from the EVAL-P19.3 work-list plus the audit's findings: `case_neg_captain_sorn_no_hedging`
+      **fails** hedging while `case_pos_mira_gossip_hedging` **passes** it on a prompt 0.71 similar —
+      hedging is the primary mechanism by which an NPC avoids hallucinating, and the battery currently
+      scores it as both the failure mode and the success mode. Also: 3 pairs of cases have **byte-identical**
+      player messages (`case_neg_captain_sorn_no_hedging` ≡ `case_neg_mira_no_military_authority` ≡
+      `case_voice_captain_sorn_001`), inflating n without adding information.
+      Validation: the policy doc states when hedging is a pass and when it is a failure, in one rule that
+      both cases satisfy; no two cases share a player message unless deliberately paired across NPCs, and
+      that pairing is declared in the case file.
+
+- [ ] **EVAL-P20.2** Capability battery to ~35 cases (**completes EVAL-P9.3**). Files:
+      `create evals/cases/case_pos_*.yaml`, `edit tests/unit/evals/test_capability_coverage.py`.
+      `test_capability_coverage.py` currently **fails**, naming 9 grounded NPCs with no capability case
+      (`bren_smith`, `dorn_dockmaster`, `garrick_deserter`, `harwick_guard`, `nel_pickpocket`,
+      `nessa_priestess`, `sera_barmaid`, `tilda_herbalist`, `vex_spymaster`). Author against the EVAL-P9.1
+      contract; use `make draft-cases` (EVAL-P9.2) for the mechanical 80%.
+      **Guard against the audit's gameability finding:** a single canned hedge string currently passes
+      **37/37 guard and 6/7 capability** cases, because `keyword_any` lists are drawn from the same
+      vocabulary as the player prompt (`case_pos_aldric_trade_disruption` asks about *war* and *trade* and
+      forbids nothing). New cases must fail an echo of their own prompt.
+      Validation: `test_capability_coverage` passes; a scripted always-hedge responder scores **< 0.30**
+      capability (currently 0.857); every new case has a `relevant_node_ids` annotation so the retrieval
+      cross-tab stops covering only guard cases.
+
+- [ ] **EVAL-P20.3** Wire `refusal_rate` into the report. Files: `edit evals/summary.py`,
+      `edit evals/refusal_rate.py`, `edit tests/unit/evals/test_refusal_rate.py`.
+      `refusal_rate.py`'s own docstring says *"format_summary_lines integration (**future**)"* and
+      `grep score_refusal_rate` returns **zero non-test callers** — the one metric that would catch a
+      degenerate always-refuse engine is not wired in. `fmt_refusal_rate` also hides the excluded-infra
+      count: it prints `2/10` with no indication when 80% of the battery got no verdict.
+      RED anchor: `test_summary_includes_over_refusal_rate` fails.
+      Validation: the report prints the over-refusal rate with its interval and its excluded count next to
+      the guard and capability rates; the EVAL-P10.3 fixture still reproduces **4/15**.
+
+- [ ] **EVAL-P20.4** *(live; human session)* **Regeneration #1.** Files: none (operational).
+      Preconditions, each of which has silently produced a worthless artifact before: all three worlds
+      seeded; `JUDGE_TIMEOUT_SECONDS=300`; every panel model pre-warmed; working tree clean and committed.
+      Expected: ~85 min generation (95 cases at k=3), then the EVAL-P21 panel judge pass.
+      Validation: new `gen_id` recorded here **by name**; `make label-import ... MERGE=1` reports how many
+      of the 393 labels survived and names every drifted row; the survivor count is recorded as the true
+      cost of a regeneration — the number that makes the second one predictable.
+
+### Phase EVAL-P21 — The judge panel (closes ISSUE-129)
+**Goal:** A headline that does not change when the judge changes, with published agreement.
+**Effort:** ~3 h harness + ~2.5 h per judge pass
+**Constraint:** Panel models run **sequentially** — `mixtral:8x7b` (~27 GB) cannot co-reside with a second
+model on 8-12 GB VRAM (PERF-06). Budget model load/unload per pass.
+**Depends on:** EVAL-P16.2, EVAL-P18.2, EVAL-P20.4.
+
+- [ ] **EVAL-P21.1** Multi-judge execution and per-judge persistence. Files: `edit evals/judge_runner.py`,
+      `create evals/judge_panel.py`, `create tests/unit/evals/test_judge_panel.py`.
+      Run `mixtral:8x7b`, `qwen2.5:14b`, `qwen2.5:7b` over the same transcript, persisting **every judge's
+      per-record verdict** so disagreements are auditable (ISSUE-129 fix (3)).
+      RED anchor: `test_panel_persists_one_verdict_row_per_judge_per_record` fails.
+      Validation: `judged.jsonl` carries `judge_model` per row for all three; a record judged by 3 models
+      yields 3 rows; a judge that errors yields an explicit inconclusive, never a silent pass.
+
+- [ ] **EVAL-P21.2** Consensus rule and agreement metric. Files: `edit evals/judge_panel.py`,
+      `edit evals/summary.py`, `edit tests/unit/evals/test_judge_panel.py`.
+      Require **≥2-of-3 to fail** before a record counts as a hallucination (ISSUE-129 fix (2)), and publish
+      inter-judge agreement (Fleiss' κ or pairwise) next to the headline (fix (1)).
+      RED anchor: `test_single_dissenting_judge_does_not_create_a_hallucination` fails.
+      Validation: the `case_neg_injection_001` false positive the audit identified (mixtral failed it
+      reasoning the NPC "claims to be an AI by saying 'I am Captain Sorn'" — the NPC did the opposite)
+      is **outvoted**; the report prints inter-judge agreement with its interval.
+
+- [ ] **EVAL-P21.3** Settle the judge on evidence (**closes ISSUE-129**; supersedes EVAL-P11.3). Files:
+      `edit evals/judge_config.py`, `edit project-harness/DECISIONS.md`.
+      Compute each judge's κ against the human labels, and record the decision naming all three numbers
+      with intervals and n.
+      Validation: the DECISIONS entry cites three κ with CIs and n; ISSUE-129 moves to the archive; every
+      prior headline is annotated with which judge produced it.
+
+### Phase EVAL-P22 — Calibration at scale (the first Opus spend)
+**Goal:** Every scorer calibrated, including the 57% that never has been, with a real inter-rater axis.
+**Effort:** ~2 h harness + ~1-2 h human adjudication + Opus credits
+**Constraint:** **Hard gate — no Opus run before EVAL-P15.1's oracle labeller has proven the full chain on
+the post-regeneration artifact.** This is a locked human decision, not a guideline.
+**Notes:** 528 records (57.3%) across 6 deterministic matchers have **zero** human labels, and **525 of
+them are passes** — `keyword_none` (207 records, the named hallucination detector) has a measured failure
+rate of exactly zero and a measured accuracy of *unknown*. DEC-156 §1 decided these must be calibrated; the
+machinery was built and never run.
+**Depends on:** EVAL-P15.1, EVAL-P19.4, EVAL-P20.4.
+
+- [ ] **EVAL-P22.1** Stratified sampling for label export. Files: `edit evals/label_export.py`,
+      `create evals/label_sampling.py`, `create tests/unit/evals/test_label_sampling.py`.
+      Draw ~25-30 rows per uncalibrated matcher (~150 total), stratified by matcher kind **and** by verdict
+      so the sample is not all passes — a sample drawn from 525 passes and 3 failures would measure nothing.
+      RED anchor: `test_sample_is_stratified_by_verdict_not_just_kind` fails.
+      Validation: the sample is reproducible under a recorded seed; each matcher's draw contains both
+      verdicts wherever both exist; the export names what was **not** sampled, so the coverage gap is
+      explicit rather than implied.
+
+- [ ] **EVAL-P22.2** Dry-run the whole chain on the oracle labeller. Files: `edit Makefile`.
+      Run export → oracle-label → import → merge → adjudicate → calibrate against the post-regeneration
+      artifact with a **known** target confusion matrix.
+      Validation: reported κ equals the closed-form value to 3 dp for every scorer; human verdicts from the
+      previous rounds are preserved; drift flags fire exactly on the rows whose content changed. **This
+      passing is the precondition for spending a single Opus token.**
+
+- [ ] **EVAL-P22.3** Opus pre-labelling pass. Files: `edit evals/calibration/README.md`.
+      Only after EVAL-P22.2 is green. Opus pre-labels the stratified sample; the maintainer adjudicates
+      **disagreements only** (Opus vs scorer, and any Opus low-confidence row).
+      Validation: `pre_labeller_model` is `claude-opus-*` and **distinct from** the adjudicator, restoring
+      the secondary axis as a genuine reference-vs-maintainer number; `calibrate` detects and prints
+      `N/A (single rater)` for the legacy 393 rows where the two are the same person, instead of the
+      current tautological `1.000`.
+
+- [ ] **EVAL-P22.4** *(live; human session)* **Regeneration #2 — the final measured baseline.** Files: none.
+      The clean run against the repaired case set, panel judge, and fixed scorers. This is the artifact every
+      published number is quoted from.
+      Validation: `gen_id` recorded by name; all four metrics-contract items render; the run is stored as
+      the trend baseline for EVAL-P23.
+
+### Phase EVAL-P23 — The regression harness
+**Goal:** One PowerShell command that runs the suite, stores the result, compares to baseline, and exits
+non-zero on a regression.
+**Effort:** ~3 h
+**Constraint:** **No CI changes in this program** (human decision). The command must be schedulable later
+without modification — so it takes no interactive input, writes machine-readable output, and its exit code
+is its verdict.
+**Depends on:** EVAL-P16, EVAL-P17, EVAL-P18.3, EVAL-P22.4.
+
+- [ ] **EVAL-P23.1** Trend storage. Files: `create evals/trend_store.py`,
+      `create tests/unit/evals/test_trend_store.py`.
+      Append-only JSONL of one row per run: `gen_id`, `harness_version`, timestamp, every headline rate with
+      its CI and n, per-scorer κ, and the inconclusive rate. `compare` is strictly A-vs-B and nothing
+      aggregates across runs, so "is the engine improving over six weeks" is currently unanswerable.
+      RED anchor: `test_trend_rows_are_append_only_and_keyed_by_gen_id` fails.
+      Validation: re-recording an existing `gen_id` raises rather than duplicating; the store survives a
+      schema addition (unknown fields load).
+
+- [ ] **EVAL-P23.2** Regression thresholds. Files: `create evals/regression_gate.py`,
+      `create docs/REGRESSION_POLICY.md`, `create tests/unit/evals/test_regression_gate.py`.
+      Encode what counts as a regression: a rate whose CI lower bound falls below the baseline's **point
+      estimate**, or a McNemar `worse` verdict, or an inconclusive rate above the validity threshold. Use
+      the interval, not the point estimate — a point-estimate comparison at k=3 fires on noise.
+      RED anchor: `test_overlapping_intervals_do_not_trigger_a_regression` fails.
+      Validation: a fixture where the rate drops but intervals overlap does **not** fire; a fixture with a
+      real drop does, and the message names the metric, both intervals, and n.
+
+- [ ] **EVAL-P23.3** The single entry point. Files: `create scripts/Run-EvalHarness.ps1`,
+      `create tests/unit/scripts/test_run_eval_harness.py`, `edit Makefile`, `edit README.md`.
+      One PowerShell command: preflight (services up, models present, worlds seeded, tree clean) → generate →
+      panel judge → deterministic verdicts → score → calibrate → compare vs baseline → record trend → gate.
+      **Preflight must fail loudly**: every silently-worthless artifact in this project's history came from a
+      precondition that was false and unchecked.
+      RED anchor: `test_harness_exits_nonzero_when_a_precondition_fails` fails.
+      Validation: with services down it exits non-zero **before** generating anything, naming the failed
+      precondition; on a healthy stack it produces a run, a trend row, and a verdict; `--dry-run` prints the
+      plan without executing (and **terminates** — ISSUE-126 is the standing reminder that a `--dry-run`
+      which hangs is worse than none).
+
+### Phase EVAL-P24 — Publication gate
+**Goal:** The repo cannot state a number its own calibration does not support.
+**Effort:** ~2 h
+**Depends on:** EVAL-P21.3, EVAL-P22.3, EVAL-P23.
+
+- [ ] **EVAL-P24.1** Trust policy as a function (**completes EVAL-P11.1**). Files:
+      `create docs/SCORER_TRUST_POLICY.md`, `create tests/unit/evals/test_trust_policy.py`.
+      EVAL-P11.1 says to write the threshold **before** seeing the numbers. That is no longer possible — the
+      κ are known (0.919 / 0.530 / 1.000 / 0.247). **State that plainly in the doc** and anchor thresholds to
+      an external convention (Landis & Koch: <0.20 slight, 0.21-0.40 fair, 0.41-0.60 moderate, 0.61-0.80
+      substantial) rather than a cutoff tuned to today's results.
+      RED anchor: `test_low_kappa_scorer_cannot_be_published` fails.
+      Validation: a scorer at κ=0.35 is refused publication, the refusal naming the scorer, its κ and its
+      interval; the doc explicitly records the after-the-fact sequencing as a known weakness.
+
+- [ ] **EVAL-P24.2** Methodology writeup (**completes EVAL-P13.1**). Files:
+      `create docs/EVAL_METHODOLOGY.md`.
+      What is measured, on what denominator, with which judge, calibrated how, and — the section that makes
+      it credible — **an anti-metric section**: what these numbers do *not* show. Include the 2026-08-09
+      audit as a worked example of the harness catching its own errors.
+      Validation: an expert reader can reconstruct every published number from the doc plus the committed
+      artifacts; every claim names its n and its interval.
+
+- [ ] **EVAL-P24.3** README numbers copied from a committed artifact only. Files: `edit README.md`,
+      `create tests/unit/evals/test_readme_numbers_are_sourced.py`.
+      Every metric in the README carries its `gen_id`, n, and interval, and a test asserts each quoted
+      number matches the committed artifact it cites.
+      RED anchor: `test_every_readme_metric_matches_its_cited_artifact` fails.
+      Validation: editing a README number without updating the artifact **fails the build** — the mechanism
+      that makes a stale published claim impossible rather than merely discouraged.
+
 
 ### Parked (out of budget)
 
