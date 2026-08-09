@@ -2559,3 +2559,61 @@ such adjudication was a coin flip dressed up as a kappa measurement.
 green except the pre-existing EVAL-P9.3 work-list failure (ROADMAP.md:1115). Verified by eye against
 `evals/calibration/mock_labels.jsonl`: an `in_set` row's adjudication prompt now shows
 `observed: {'facial_expression.type': 'neutral'}` alongside its criteria — previously invisible.
+
+---
+
+## DEC-159: Program 3 method decisions — seed, design effect, targeted labelling, ratchet gates
+
+**Date:** 2026-08-09
+**Status:** ✅ ACCEPTED (four explicit human decisions, taken after a three-reviewer adversarial
+review of the Program 3 plan)
+
+**Context:** The Program 3 plan as first written rested on a false premise and three method choices
+that the review showed were wrong. Each was decided explicitly rather than defaulted.
+
+**Decisions:**
+
+1. **Deterministic generation is approved** (EVAL-P20.0), clearing the ask-gate on
+   `LLMGenerateProtocol` and reversing the `seed`-absent half of **DEC-146**. DEC-146 refused `seed`
+   in the config block on the correct grounds that claiming a seed the adapter never sets is a lie;
+   this makes the claim true rather than removing it. Rationale: measured, only **175 of 921
+   repetition-pairs (19.0%)** of `npc_response` are byte-identical, so a regeneration invalidates
+   ~81% of the 393 human labels — ~660 re-adjudications across two regenerations. One hour of work
+   removes the single largest cost in the program. The approval covers *adding* the seed, not
+   assuming it worked: the task gate **measures** the reproduction rate and requires ≥95%, because
+   Ollama's `seed` is not a bit-identical guarantee across quantisation or driver versions.
+
+2. **Interval correction is Rao-Scott design effect, not majority-vote collapse** (EVAL-P16.1).
+   Collapsing k=3 by majority estimates `p³+3p²(1−p)`, not `p` — extremising every rate above 0.5,
+   discarding the flakiness signal `case_stats.classify` exists to expose, and making the headline
+   say *turns* while counting *cases*. Keeping all n·k observations for the point estimate and
+   correcting only the interval via `n_eff = n/DEFF`, `DEFF = 1+(k−1)ρ` recovers the honest width
+   without moving the estimate. Side benefit: no collapse means no tie rule, so EVAL-P17.3's
+   `inconclusive` outcome needs only "a case with <2 conclusive repetitions is inconclusive".
+
+3. **Stratified labelling is extended to the four already-calibrated judge scorers**, with a target
+   of **≥20 case-clusters containing a human "fail"** each (EVAL-P22.1). Measured, the
+   cluster-corrected bootstrap returns `[0.000, 1.000]` for 3 of 4 scorers — not an estimator defect
+   but a sample defect: `tone_judge`'s entire false-positive cell is **one case**. Without this,
+   EVAL-P24.1's trust gate refuses every rate and the program ends with nothing publishable. The fix
+   is a better sample, not a better interval.
+
+4. **New `evals/` gates land report-only with a ratchet baseline, keeping `make check` green**
+   (EVAL-P15.4). Landing them red would fire `loop_gates.AUTOFIX_CHECK_SPECS`, hit
+   `MAX_CONSECUTIVE_RED_GATES=2`, and halt the overnight loop on **Program 2**, which is unrelated.
+   Follows the existing `rules_baseline.txt` grandfathering pattern. Measured coverage is already
+   ~78%, not the near-zero implied by "3 of 47 modules gated".
+
+**Also corrected in the same pass (not decisions — verified factual errors in the plan):**
+`qwen2.5:7b` cannot be a panel judge (it is the generation model in all five engines;
+`judge_config.py:118` raises `JudgeModelCollisionError`, and DEC-143 exists to keep the generator off
+its own jury); `ah_demo_*` is 41 cases not 25 and unclassifiable is 50 of 94 not 31 of 70, 9 of them
+non-`ah_demo` cases `classify_battery` raises on; `needs_review` was written by `label_merge` and read
+by nothing, so drifted rows were counted in κ and never re-shown to a human; and a claimed mojibake in
+`refusal_judge.yaml` did not exist — the file is valid UTF-8 and the corruption was a cp1252 console
+rendering, so the "fix" would have damaged a correct file.
+
+**Consequences:** Program 3 grows three tasks (EVAL-P15.6 mutation gate, EVAL-P19.0 drift enforcement,
+EVAL-P20.0 seed, EVAL-P21.0 panel roster). The stale "Loop fence state" paragraph was corrected in two
+places: it still described the marker as belonging "just above `### Parked`", which is now *below* all
+of Program 3, so reconciling the doc to reality would have swept 43 tasks into the unattended loop.

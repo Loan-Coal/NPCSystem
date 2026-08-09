@@ -1457,8 +1457,18 @@ cannot fail is not evidence.
       `edit scripts/check_rules.py`, `edit scripts/docstring_audit.py`, `edit pyproject.toml`.
       `evals/` is outside `mypy`, `check-rules`, `check-docstrings`, and effectively outside coverage
       (`test-cov` gates 3 of 47 modules, diluted into a combined total dominated by `npc_engine`).
-      Add `--cov=evals --cov-fail-under=80` as its **own** gate, and extend the rule/docstring scanners to
-      `evals/`.
+      **Strategy decided 2026-08-09 (human): report-only + ratchet baseline, gate stays GREEN.** Extend the
+      scanners to `evals/` but record the current violations into a grandfathered
+      `scripts/evals_baseline.txt` (mirroring the existing `rules_baseline.txt` pattern, 136 entries) with a
+      ratchet that **fails on growth**. Landing these gates red would fire
+      `loop_gates.AUTOFIX_CHECK_SPECS`, hit `MAX_CONSECUTIVE_RED_GATES=2`, and **halt the overnight loop on
+      every task in Program 2** — a program unrelated to this one. Coverage: note the measured figure is
+      already **~78%**, ~2 points from the 80% floor, not the near-zero the phase's framing implied; add it
+      as its own gate at the measured baseline and ratchet upward.
+      **Blocker to handle first:** `evals/statistics.py` **shadows the stdlib `statistics` module**
+      (`pyproject.toml` puts `evals` on `pythonpath`), which produces 8 of the 24 current mypy errors.
+      Renaming it touches 4 importers (`summary`, `compare`, `case_stats`, `refusal_rate`) and changes
+      `harness_version` inputs under EVAL-P18.1 — sequence it before, not during.
       Validation: `make check` reports the real violation set — the audit counted **7 files over the
       300-line cap** (`matchers.py` 482, `calibration.py` 451, `anti_hallucination_runner.py` 441,
       `compare.py` 412, `runner.py` 403, `summary.py` 366, `case_drafts.py` 359), **30 functions over 40
@@ -1509,14 +1519,23 @@ independent. Measured: guard `108/111 → [0.9235, 0.9908]` published vs `36/37 
 
 - [ ] **EVAL-P16.1** Case-level battery rates. Files: `edit evals/summary.py`,
       `create evals/battery_rates.py`, `edit tests/unit/engines/test_eval_summary.py`.
-      `_battery_rate_stats` counts one Bernoulli trial per **(case, repetition)**. Collapse k repetitions to
-      one case-level verdict (majority at odd k; ties are a `RuntimeError`, not a coin flip) before the
-      Wilson call, and print `n_cases` and `k` adjacent to every rate.
-      RED anchor: `test_guard_rate_denominator_is_cases_not_case_repetitions` fails (reports 111, expects 37).
-      Validation: against the committed artifact the guard rate is `36/37` with CI `[0.8618, 0.9952]`;
-      the headline string names **cases**, and the numerator and denominator are the same unit — the audit
-      found `3 of 111` mixed failing *expectation records* over *case-repetitions*, inflating numerator and
-      denominator by different factors and understating the case-level rate 2×.
+      **Method decided 2026-08-09 (human): Rao-Scott design effect, NOT majority-vote collapse.** Collapsing
+      k=3 by majority estimates `p^3 + 3p^2(1-p)`, not `p` — an extremising transform (p=0.6 -> 0.648) that
+      inflates every rate above 0.5, discards the flakiness signal `case_stats.classify` exists to expose,
+      and makes the headline say *turns* while counting *cases*.
+      Instead: keep **all n·k observations** for the point estimate, and correct only the **interval** for
+      intra-case correlation. `n_eff = n / DEFF`, `DEFF = 1 + (k-1)·rho`, with rho the intra-class
+      correlation of outcomes within a case (ANOVA estimator; clamp to [0,1]). At rho -> 1 (near-identical
+      repetitions, which is this corpus) `n_eff -> n_cases`, recovering the honest width **without moving
+      the point estimate**. Print `passes/records (n_cases=N, k=K, n_eff=E, rho=R)`.
+      This also dissolves the tie problem: there is no collapse, so there is no tie, and EVAL-P17.3's
+      third outcome needs only "count conclusive turns; a case with <2 conclusive repetitions is itself
+      inconclusive" rather than a majority rule over three outcomes.
+      RED anchor: `test_interval_is_widened_by_the_design_effect` fails.
+      Validation: against the committed artifact the guard **point estimate stays 108/111 = 0.973** and the
+      interval widens from the published `[0.9235, 0.9908]` toward the `n_eff≈37` width `[0.8618, 0.9952]`;
+      `n_eff` is reported and never exceeds `n_records`; at rho=0 the interval equals plain Wilson (a
+      regression test that the correction is inert when there is no clustering).
 
 - [ ] **EVAL-P16.2** Cluster bootstrap for κ. Files: `edit evals/calibration.py`,
       `edit tests/unit/evals/test_calibration.py`.
@@ -1778,9 +1797,9 @@ Three consequences, all of which must be handled before EVAL-P20.4 runs:
    `LLMGenerateProtocol.generate()` has no `seed` parameter). See EVAL-P20.0.
 **Depends on:** EVAL-P17, EVAL-P19, EVAL-P9.1 (capability contract, already done).
 
-- [ ] **EVAL-P20.0** ⏸️ *(⚠️ ask-gate: changes `LLMGenerateProtocol`, a public interface with callers
-      outside its module, and reverses part of DEC-146)* **Deterministic generation, or an explicit
-      decision to pay ~660 re-adjudications.** Files: `edit src/npc_engine/engines/llm/protocols.py`,
+- [ ] **EVAL-P20.0** *(live; human session — ask-gate CLEARED by explicit human approval 2026-08-09)*
+      **Deterministic generation.** Changes `LLMGenerateProtocol` (a public interface with callers outside
+      its module) and reverses the `seed`-absent half of DEC-146; both approved. Files: `edit src/npc_engine/engines/llm/protocols.py`,
       `edit src/npc_engine/engines/llm/ollama_adapter.py`, `edit evals/run_config.py`,
       `edit project-harness/DECISIONS.md`.
       Add an optional `seed` to `LLMGenerateProtocol.generate()`, set `options.seed` in the Ollama adapter,
@@ -1796,9 +1815,10 @@ Three consequences, all of which must be handled before EVAL-P20.4 runs:
       `npc_response`; the achieved rate is recorded here as a number. If it lands below 95%, the seed does
       not solve the problem and the program **must** fall back to the explicit-relabel branch below — do not
       proceed on hope.
-      **If this task is declined or fails its gate**, EVAL-P20.4's Notes must be amended to state the
-      re-adjudication cost in rows before the regeneration is run, and EVAL-P22's labelling budget must
-      absorb it. The decision is legitimate either way; making it silently is not.
+      **If it fails its >=95% gate** (Ollama's `seed` is not a bit-identical guarantee across differing
+      quantisation or driver versions), do **not** proceed on hope: amend EVAL-P20.4's Notes with the
+      measured re-adjudication cost in rows before the regeneration runs, and make EVAL-P22's labelling
+      budget absorb it. Approval covers adding the seed, not assuming it worked.
 
 - [ ] **EVAL-P20.1** ⏸️ *(human authoring: what a case forbids is a product decision)* Resolve the
       case-set contradictions. Files: `edit evals/cases/*.yaml`,
@@ -1910,6 +1930,13 @@ machinery was built and never run.
       `create evals/label_sampling.py`, `create tests/unit/evals/test_label_sampling.py`.
       Draw ~25-30 rows per uncalibrated matcher (~150 total), stratified by matcher kind **and** by verdict
       so the sample is not all passes — a sample drawn from 525 passes and 3 failures would measure nothing.
+      **Extended 2026-08-09 (human decision): sampling also covers the four ALREADY-calibrated judge
+      scorers, with an explicit target of >=20 case-clusters containing a human "fail" each.** Measured, the
+      cluster bootstrap returns `[0.000, 1.000]` for 3 of 4 scorers — not because the estimator is wrong but
+      because the negative class lives in only 3-5 clusters (`tone_judge`'s entire FP cell is **one case**).
+      The fix is a better sample, not a better interval. Without this, EVAL-P24.1's trust gate refuses to
+      publish every rate and Program 3 ends with nothing quotable. This is the labelling-budget line item
+      the program was missing.
       RED anchor: `test_sample_is_stratified_by_verdict_not_just_kind` fails.
       Validation: the sample is reproducible under a recorded seed; each matcher's draw contains both
       verdicts wherever both exist; the export names what was **not** sampled, so the coverage gap is
