@@ -1751,3 +1751,48 @@ to `summary.summarize`. Regression test
 fixture of 37 guard cases × 2 records now reports 37 guard turns. `_write_judged_jsonl`'s per-record JSONL
 output is unchanged — only the summary/report path was double-counting.
 
+## [FIXED] ISSUE-133: calibration confusion matrix has no scorer axis — `make eval-calibrate` cannot calibrate a scorer
+**Found:** 2026-08-07, while planning EVAL-P5 adjudication
+**Severity:** P1 (blocking — invalidates the phase's stated goal, and wastes 4–6 h of maintainer time if
+adjudication starts before it is fixed)
+**Where:** `evals/calibration.py:73-88` (`confusion_counts`), `:115-149` (`cohens_kappa`), `:261` (the
+printed header), `evals/calibration_records.py:50-57` (`CalibrationLabel` fields).
+**Description:** EVAL-P5's goal is "every scorer measured separately as a full confusion matrix plus
+Cohen's κ". As built, both axes of the matrix are `pre_label` (the reference labeller) and
+`human_verdict` (the maintainer) — the scorer's own verdict is never compared to anything.
+`CalibrationLabel` has no field to hold it, and `scorer` is used only as a grouping key
+(`calibration.py:231`). So `make eval-calibrate` answers "how often does claude-opus-5 agree with the
+maintainer, partitioned by which scorer's criteria were in play" — which the ROADMAP describes as the
+*free secondary* number — while the headline question ("can I trust `tone_judge`?") is not computed at
+all. P0.4 already produced one confirmed scorer false positive (`case_neg_injection_001`, ISSUE-129),
+so the untrustworthy-scorer risk is measured-real, not hypothetical.
+**Why deferred:** Not deferred — scheduled. It must land before any adjudication session, and after
+EVAL-P6.1, since labels bind to one generation and re-generating after P6.1 would invalidate them.
+**To fix:** Add `scorer_verdict: bool` to `CalibrationLabel` (joined from the judged transcript, never
+supplied by the labeller). Make `scorer_verdict × human_verdict` the headline matrix and keep
+`pre_label × human_verdict` as the secondary reference-labeller agreement number. Update
+`confusion_counts`, `cohens_kappa`, `kappa_interval`, `ScorerReport`, `_print_scorer_report` and
+`tests/unit/evals/test_calibration.py`. Decision recorded 2026-08-07 (option A, chosen by maintainer).
+**Fixed:** 2026-08-08, in EVAL-P5.5 (`5a420f1 feat(evals): add scorer_verdict axis as headline
+calibration matrix`). Verified for real 2026-08-09: `make eval-calibrate` against the first real
+`labels_v1.jsonl` (393 rows, gen_id `k3_73e6c36`) prints `HEADLINE — scorer_verdict vs human_verdict`
+per scorer with `pre_label × human_verdict` as a clearly labelled `SECONDARY` block underneath — the
+question this issue said was uncomputed ("can I trust `tone_judge`?") now has a number.
+
+## [FIXED] ISSUE-140: evals/calibration/raw_labels.jsonl holds 513 lines of prose, zero labels
+**Found:** 2026-08-08, during calibration pipeline repair
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/calibration/raw_labels.jsonl`
+**Description:** Accumulated output from ~10 failed labelling attempts across several sessions. Every
+non-blank line is assistant commentary (some of it AI prose diagnosing the very bug that produced
+it); a parse check found 0 valid label rows. The file is also cp1252-encoded, so `label-import`
+fails on it with `UnicodeDecodeError` before it can reject the content.
+**Why deferred:** Deleting it was not authorised in-session, and it is inert — the corrected loop in
+`evals/calibration/README.md` filters non-JSON lines and writes UTF-8, and the real run should write
+a fresh file. Kept as evidence of the failure mode until the first successful labelling pass.
+**To fix:** Delete it once a real labelling run has produced a valid `raw_labels.jsonl`.
+**Fixed:** 2026-08-09 — the maintainer hand-labelled the 393-item `tone_judge`/`affirms_judge`/
+`refusal_judge`/`anti_hallucination_grounded` export (`evals/calibration/batches_handlabel/`)
+directly, producing a valid UTF-8 `raw_labels.jsonl` (393 rows, all parse). `label-import` consumed
+it cleanly against gen_id `k3_73e6c36` into `evals/calibration/labels_v1.jsonl`.
+
