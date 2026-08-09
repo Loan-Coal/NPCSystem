@@ -416,3 +416,7 @@ FAILED tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_fence_state_
 FAILED tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_end_marker_is_not_repeated_inside_the_queue
 3 failed, 2978 passed, 29 skipped, 2265 warnings in 81.14s (0:01:21)
 make: *** [Makefile:50: test-cov] Error 1
+
+## 2026-08-09 23:45:12 — task EVAL-P12.2 committed with a pre-existing red gate
+
+Every failure pre-dated this task (baseline attribution). Nothing new broke.
