@@ -1196,14 +1196,14 @@ an expensive way to feel rigorous. The P0.4 run already produced one confirmed j
 (`case_neg_injection_001`, ISSUE-129) and a judge disagreement that flips the headline between "0" and "1".
 **Depends on:** EVAL-P5.5, EVAL-P5.6, and a completed adjudication pass.
 
-- [ ] **EVAL-P11.1** Threshold policy. Files: `create docs/SCORER_TRUST_POLICY.md`,
+- [x] **EVAL-P11.1** Threshold policy. Files: `create docs/SCORER_TRUST_POLICY.md`,
       `create tests/unit/evals/test_trust_policy.py`.
       State, before looking at the numbers, what kappa licenses what claim — e.g. below 0.60 a scorer's rate
       may be shown but not published; below 0.40 it is not shown at all. Encode it as a function so a report
       cannot quote a rate its own calibration does not support.
       RED anchor: `tests/unit/evals/test_trust_policy.py::test_low_kappa_scorer_cannot_be_published` fails.
       Validation: a scorer at kappa 0.35 is refused publication by the policy function and the refusal names
-      the scorer, its kappa and its interval.
+      the scorer, its kappa and its interval. ✅ AUTO (EVAL-P11.1, 2026-08-09)
 
 - [ ] **EVAL-P11.2** ⏸️ *(blocked: needs adjudicated kappa — no calibration labels exist yet)*
       Remediate the failing scorers. Files: `edit src/npc_engine/prompts/eval/*.yaml`,
