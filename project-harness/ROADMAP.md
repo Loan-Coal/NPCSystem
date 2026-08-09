@@ -141,9 +141,9 @@ EVAL-B4 is its own session (4 steps, one commit each). EVAL-FINAL is superseded 
 
      REOPENED 2026-08-06 — the condition above FIRED and was executed. P0.4 (live baseline)
      and P0.3 (ask-gate, lint scope) were both ticked in human sessions on 2026-08-06, so the
-     `end` marker now sits immediately above "## Program 3" and the queue spans
-     EVAL-P0..EVAL-P14 (Program 3 is deliberately OUTSIDE the fence -- see the Loop fence
-     state note near the end of this file before moving the marker). The narrowing did its job: the baseline exists (Session Log, 2026-08-06)
+     `end` marker now sits immediately BELOW Program 3 and the queue spans
+     EVAL-P0..EVAL-P24 (released 2026-08-09, DEC-160 -- see the Loop fence state note near
+     the end of this file). The narrowing did its job: the baseline exists (Session Log, 2026-08-06)
      before a single judge call was spent on P1..P8. The fence itself was NOT deleted — it
      still holds back the 19 open tasks elsewhere in this file. -->
 
@@ -1343,24 +1343,6 @@ have hardened into five call sites costs far more.
       Validation: the model predicts EVAL-P12.4's measured run time within 25%; if it cannot, the model is
       wrong and the schema built on it is suspect.
 
-<!-- LOOP:QUEUE end -->
-<!-- ^ MOVED HERE 2026-08-07: Program 2 (EVAL-P9..P14) is released to the overnight loop.
-     Everything below this marker is human-session work and is structurally unreachable
-     at 3am — Parked, Post-program milestones, REORG PR-9, the Next/Next+1 programs and
-     the two open bullets inside "## Completed" all live here.
-
-     Program 2 is released with EIGHT tasks deliberately flagged, because the loop skips
-     flagged tasks without blocking and would otherwise drain a whole programme of code
-     against inputs that do not exist — finishing the night having measured nothing, the
-     exact failure DEC-153 §3 narrowed the original fence to prevent. Flagged and why:
-       EVAL-P9.3   authoring — only a human can say what an NPC *should* say
-       EVAL-P11.2  needs adjudicated kappa; no calibration labels exist yet
-       EVAL-P11.3  needs two judged transcripts adjudicated against each other
-       EVAL-P12.1  live stack; measures reset fidelity
-       EVAL-P12.4  live stack; budget comes from P12.1
-       EVAL-P13.2  needs a real run artifact to render
-       EVAL-P13.3  README numbers must be copied from a committed artifact, never typed
-       EVAL-P14.3  cost model is validated against P12.4's measured time -->
 
 ## Program 3 — Audit remediation and the regression harness (EVAL-P15..P24)
 
@@ -1414,7 +1396,8 @@ inverts 135 real `pass_on_no` records with `pass_on_no` having **zero grep hits*
 cannot fail is not evidence.
 **Depends on:** nothing. This is the entry point.
 
-- [ ] **EVAL-P15.1** Oracle mock labeller (replaces random-only mocking). Files:
+- [ ] **EVAL-P15.1** ⏸️ *(writes label-shaped artifacts; must never target `LABELS_FILE` — human session)*
+      Oracle mock labeller (replaces random-only mocking). Files:
       `create scripts/oracle_labeller.py`, `create tests/unit/evals/test_oracle_labeller.py`,
       `edit Makefile` (`mock-calibrate-oracle`).
       `scripts/mock_labeller.py` emits *random* labels, so it proves data moves but can never prove the
@@ -1422,6 +1405,21 @@ cannot fail is not evidence.
       instead labels by a **declared rule** with a **known-by-construction confusion matrix**: given a
       target (tp, fp, fn, tn) per scorer, it emits `pre_label`s that produce exactly that matrix against
       the real `scorer_verdict`s on disk. The pipeline's output κ is then predictable in closed form.
+      **Paths are mandatory, not incidental:** `--out-dir evals/calibration/oracle_batches`,
+      `--out evals/calibration/oracle/labels_oracle.jsonl`. Add a hard guard in `label_import.py` refusing
+      any run whose `--model` matches `mock-*`/`oracle-*` while `--out` resolves to
+      `calibration_records.LABELS_FILE`, and a unit test asserting the oracle's output path can never equal
+      it. `label-import`'s `--out` **defaults to the real labels file**, so a target that forgets the flag
+      writes synthetic labels into 393 human verdicts.
+      **Feasibility check required:** the requested matrix is bounded by the rows that exist. Measured
+      `scorer_verdict=False` counts are `affirms_judge` 3, `refusal_judge` 7, `tone_judge` 6,
+      `anti_hallucination_grounded` 8, `keyword_any` 3, and **0** for the other five matchers — so the
+      naive example (tp=40, fp=5, fn=3, tn=12) needs 15 negatives and **is unsatisfiable for every scorer**.
+      The oracle must compute per-cell caps and raise a named error listing them rather than silently
+      emitting a different matrix. Use a satisfiable example (e.g. `refusal_judge` tp=60, fp=8, fn=4, tn=3).
+      **Expected κ must be a hardcoded decimal literal** in the test with the arithmetic shown in a comment;
+      the test file must import nothing from `evals/calibration*`, or it validates the broken function
+      (`_kappa_from_matrix` returns 1.0 at Pe=1) against itself.
       RED anchor: `tests/unit/evals/test_oracle_labeller.py::test_emitted_labels_reproduce_the_requested_matrix` fails — module absent.
       Validation: for a requested (tp=40, fp=5, fn=3, tn=12), `label-import --merge` → `calibrate` reports
       **exactly** those counts and a κ equal to the hand-computed value to 3 dp. Any arithmetic error
@@ -1724,6 +1722,20 @@ criteria change. If human verdicts do not survive it, stop the program and fix d
       Validation: a fixture with 10 clean and 3 drifted rows reports `n=10, n_excluded_drifted=3`;
       the 3 drifted rows appear in `collect_pending`; no kappa anywhere is computed over a drifted row.
 
+- [ ] **EVAL-P19.0b** Criteria replay verb (**prerequisite: P19.1 cannot be validated without it**).
+      Files: `create evals/criteria_replay.py`, `create tests/unit/evals/test_criteria_replay.py`,
+      `edit evals/__main__.py` (verb `replay-criteria`), `edit Makefile`.
+      No verb re-scores stored label rows against a *new* criteria file without a full judge pass, so
+      EVAL-P19.1's validation ("replayed against the 12 discordant rows...") is not executable today.
+      Build it over the existing `ExportItem` index: given a labels file and a criteria YAML, re-run only
+      the judge calls for the selected rows and report agreement against `human_verdict`.
+      This is the cheapest high-leverage tool in the program — it makes every future criteria change
+      verifiable on a subset instead of a 2.5 h panel pass.
+      RED anchor: `tests/unit/evals/test_criteria_replay.py::test_replay_scores_selected_rows_against_new_criteria` fails.
+      Validation: replaying the unchanged criteria over the 393 committed rows reproduces the stored
+      `scorer_verdict` exactly (a no-op replay must be a no-op); selecting 12 rows issues 12 judge calls,
+      not 393.
+
 - [ ] **EVAL-P19.1** Rewrite `refusal_judge` criteria (**root cause of ISSUE-141, κ=0.247**). Files:
       `edit prompts/eval/refusal_judge.yaml`, `edit tests/unit/evals/test_refusal_criteria.py`.
       Diagnosed 2026-08-09 from all 12 discordant rows: lines 15-21 enumerate *surface phrases* and only
@@ -1735,9 +1747,13 @@ criteria change. If human verdicts do not survive it, stop the program and fix d
       `prompts/eval/refusal_judge.yaml` is valid UTF-8 (em-dash = `e2 80 94`), and 0 of 393 labelled rows
       contain U+FFFD. The `topic �` was a cp1252 **console rendering** artefact — the exact thing
       `evals/__main__._force_utf8_streams()` exists to work around. Acting on it corrupts a correct file.
-      Validation: replayed against the 12 discordant rows, the rewritten criteria agrees with the human on
-      **≥10 of 12**; the 8 FPs (which assert "House of Ravenwood", "Lady Elara", "young Elian" — none of
-      which exist in any seed) are scored as non-refusals.
+      Validation: **the ≥10-of-12 figure is a diagnostic, not the gate** — those 12 rows were read to
+      write the fix, so scoring the fix on them is fitting and testing on the same points (n=12 also
+      carries a binomial CI of roughly [0.55, 0.98], barely distinguishable from a coin flip). The gate is:
+      replay **all 75 `refusal_judge` rows** via EVAL-P19.0b and require (a) the 8 FPs are scored as
+      non-refusals, (b) **the 63 currently-concordant rows stay concordant** — a rewrite that fixes 12 and
+      breaks 15 must fail — and (c) κ over the full 75 improves with its cluster-corrected CI reported.
+      **If the gate fails, the rewrite is reverted and ISSUE-141 stays open**; the task does not tick.
 
 - [ ] **EVAL-P19.2** Word-boundary and dead-keyword matching. Files: `edit evals/matchers.py`,
       `create evals/keyword_matching.py`, `edit tests/unit/evals/test_matchers_keywords.py`.
@@ -2038,6 +2054,18 @@ is its verdict.
       that makes a stale published claim impossible rather than merely discouraged.
 
 
+<!-- LOOP:QUEUE end -->
+<!-- ^ MOVED HERE 2026-08-09 (DEC-160): Program 3 (EVAL-P15..P24) released to the overnight loop.
+     This marker sat ABOVE Program 3 from 2026-08-09 until this move, deliberately, while the plan
+     was adversarially reviewed. It is released only now that three guards are in place:
+       1. loop_gates.FROZEN_PATH_PREFIXES now contains evals/calibration/ and evals/generations/,
+          so NO unattended session can write the 393 human labels or any run transcript.
+       2. Twelve Program-3 tasks carry (live / ⏸️ so the loop skips them: everything that spends
+          labels, Opus credits, live runs, human authoring, or settles a judge.
+       3. The plan was corrected after review — see DEC-159 for the four method decisions and the
+          five factual errors that would otherwise have been executed unattended.
+     Everything below this marker (Parked, Post-program milestones, PR-9, Next/Next+1) stays
+     unreachable, which is the point of keeping the fence rather than deleting it. -->
 ### Parked (out of budget)
 
 Not compressed into optimistic estimates — genuinely out of scope for this program. Each line says why.
@@ -2091,14 +2119,16 @@ EVAL-P3 is its own session. EVAL-P5 is one session **plus** 4–6 h of offline a
 session. EVAL-P7 is one session — and is the cut if anything before it overruns. EVAL-P8 is one session and
 is **not** a cut candidate.
 
-**Loop fence state (DEC-153 §3; updated 2026-08-09):** the `<!-- LOOP:QUEUE end -->` marker sits
-**immediately above `## Program 3`**, so the queue spans **EVAL-P0..EVAL-P14** and the overnight loop can
-reach every open task in Programs 1 and 2.
-⚠️ **Do NOT move this marker below Program 3.** The pre-2026-08-09 wording of this paragraph said the marker
-belonged "just above `### Parked`" — which is now *below* all of Program 3, so a future session reconciling
-doc against reality would sweep 40+ Program-3 tasks into the unattended loop in one line. Program 3 spends
-irreplaceable human labels, Opus credits and multi-hour live runs; ISSUE-139 (the loop sweeping unrelated
-working-tree changes into its commits) is still open. Moving it requires a DECISIONS entry, not an edit. It moved because the reopen condition fired: EVAL-P0.4 (live baseline) and
+**Loop fence state (DEC-160, 2026-08-09):** the `<!-- LOOP:QUEUE end -->` marker sits **immediately below
+Program 3**, so the queue spans **EVAL-P0..EVAL-P24** — 37 open tasks, 22 flagged.
+It was held *above* Program 3 for the duration of the adversarial review and released deliberately once
+three guards existed: `loop_gates.FROZEN_PATH_PREFIXES` now contains `evals/calibration/` and
+`evals/generations/` so no unattended session can write the 393 human labels or a run transcript; 13 of
+Program 3's tasks carry `(live` / `⏸️` so the loop skips everything that spends labels, credits, live runs,
+human authoring or a judge decision; and the plan itself was corrected (DEC-159) before release.
+⚠️ **Still open and relevant: ISSUE-139** — the loop stages the whole working tree, so a concurrent
+interactive session's edits get swept into whatever roadmap commit it is writing. Start the loop only from
+a clean tree, ideally in a dedicated worktree. Moving this marker further requires a DECISIONS entry. It moved because the reopen condition fired: EVAL-P0.4 (live baseline) and
 EVAL-P0.3 (ask-gate, lint scope) were both ticked by human sessions on 2026-08-06. EVAL-P0 is now complete —
 `compute_next` will start at EVAL-P1.1. Everything below the marker (Parked, Post-program milestones, PR-9,
 the Next / Next+1 programs) stays unreachable to an unattended session, which is the point of keeping the

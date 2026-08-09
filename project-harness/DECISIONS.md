@@ -2617,3 +2617,47 @@ rendering, so the "fix" would have damaged a correct file.
 EVAL-P20.0 seed, EVAL-P21.0 panel roster). The stale "Loop fence state" paragraph was corrected in two
 places: it still described the marker as belonging "just above `### Parked`", which is now *below* all
 of Program 3, so reconciling the doc to reality would have swept 43 tasks into the unattended loop.
+
+---
+
+## DEC-160: Release Program 3 to the overnight loop, with label paths frozen
+
+**Date:** 2026-08-09
+**Status:** ✅ ACCEPTED (explicit human instruction: "ready it to be implemented via the expand loop,
+but dont run the loop")
+
+**Context:** Program 3 was written below `<!-- LOOP:QUEUE end -->` and therefore invisible to the
+overnight loop, because it changes published numbers and consumes irreplaceable human labelling. The
+maintainer has now asked for it to be loop-executable. Moving the fence is the one action the
+2026-08-09 review flagged as capable of doing unbounded damage in a single line, so it is recorded
+here rather than performed as an edit.
+
+**Decisions:**
+
+1. **The fence moves below Program 3.** Queue spans EVAL-P0..EVAL-P24: 37 open, 22 flagged.
+
+2. **`evals/calibration/` and `evals/generations/` are added to
+   `loop_gates.FROZEN_PATH_PREFIXES`.** This is the load-bearing guard. Every other entry in that
+   tuple is a *gate surface* (editing it makes a red gate green without fixing anything); these two
+   are **irreplaceable data**. `labels_v1.jsonl` holds 393 hand-labelled verdicts and
+   `evals/generations/` holds the transcripts they join against. A `label-import` without `--merge`
+   overwrites every verdict with `None`, and `--out` **defaults to the real labels file**. No
+   unattended session may write either path under any circumstance.
+
+3. **Thirteen tasks are flagged so the loop skips them** — EVAL-P15.1, P17.5, P19.4, P20.0, P20.1,
+   P20.2, P20.4, P21.1, P21.3, P22.2, P22.3, P22.4, P24.3. Between them these cover every task that
+   spends human labels, Anthropic credits, a live multi-hour run, human authoring judgment, a public
+   interface change, or a judge decision. The loop implements the mechanical remainder.
+
+4. **The loop is NOT started by this decision.** The maintainer asked explicitly for readiness
+   without execution.
+
+**Known residual risk, accepted:** **ISSUE-139** is still open — the loop stages the whole working
+tree, so a concurrent interactive session's edits are swept into whatever roadmap commit it writes.
+Mitigation is procedural for now: start only from a clean tree, preferably in a dedicated worktree.
+Fixing it properly means changing the loop's commit step, which is CI-adjacent and needs its own task.
+
+**Guard verification performed before release:** `roadmap-verify` OK (queue lines 125-2056, 25
+phases); `--list-flagged` returns the 13 tasks above; `--next` returns EVAL-P11.1, i.e. the loop
+drains Program 2's trust-policy task first — which is the correct order, since EVAL-P19.4 and
+EVAL-P24.1 both need that threshold to exist; `pytest -k "loop_gates or scan_fix_diff"` 20 passed.

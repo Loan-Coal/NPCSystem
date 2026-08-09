@@ -41,7 +41,7 @@ bash scripts/expand_loop.sh --start-at 20:00 --stop-at 08:00
 ## The work queue
 
 Only tasks between `<!-- LOOP:QUEUE start -->` and `<!-- LOOP:QUEUE end -->` in
-`ROADMAP.md` exist to the loop. Currently EVAL-P0..P7. **19 open tasks elsewhere in the
+`ROADMAP.md` exist to the loop. Currently **EVAL-P0..P24** (Program 3 released 2026-08-09, DEC-160). **19 open tasks elsewhere in the
 file** (Phase PERF, Phase EVAL, two bullets inside `## Completed`, Parked, optional PR-9)
 are deliberately unreachable. To widen, move the `end` marker — never delete the fence.
 

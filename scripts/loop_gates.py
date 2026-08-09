@@ -79,11 +79,22 @@ DEMO_PATH_PREFIX = "demo_game/"
 # `make check-rules-update` legitimately rewrites it, so a repair session that runs the
 # update target launders every new violation into "expected" and the gate goes green
 # having fixed precisely nothing. The upstream kit has no ratchet and so no equivalent.
+#
+# `evals/calibration/` and `evals/generations/` are frozen for a different reason: they are
+# not gate surfaces, they are IRREPLACEABLE DATA. `evals/calibration/labels_v1.jsonl` holds
+# 393 hand-labelled human verdicts; `evals/generations/` holds the transcripts those labels
+# are joined against. Regenerating a transcript invalidates ~81% of the labels (measured:
+# only 175 of 921 repetition-pairs are byte-identical), and a stray `label-import` without
+# `--merge` overwrites every verdict with None. No unattended session may write either path
+# under any circumstances — the Program 3 tasks that legitimately touch them are all flagged
+# `(live` / `⏸️` so the loop skips them and a human runs them. Added 2026-08-09 (DEC-160).
 FROZEN_PATH_PREFIXES: tuple[str, ...] = (
     "tests/",
     "demo_game/tests/",
     "e2e/",
     ".github/",
+    "evals/calibration/",
+    "evals/generations/",
     "scripts/rules_baseline.txt",
     "scripts/check_rules.py",
     "scripts/check_layers.py",
