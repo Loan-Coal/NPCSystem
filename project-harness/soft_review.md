@@ -160,3 +160,26 @@ Reviewing the EVAL-P8 diff for `compare.py` and tests:
 5. **Unclear Protocol contract** — `HttpClient` protocol (case_drafts.py:56) defines only `.get()`, but code depends on response having `.raise_for_status()` and `.json()`. Either document response interface or use `TypeVar` + response type parameter.
 
 **Tests pass; logic is sound.** Violations are structural (size/nesting) and maintainability (duplication), not functional.
+
+## 2026-08-09 23:18:48 — phase EVAL-P11
+
+## EVAL-P11.1 Review: Scorer Trust Policy
+
+### Findings
+
+**1. Import path issue in test**  
+`tests/unit/evals/test_trust_policy.py` line 13 uses bare `from scorer_trust_policy import ...`. This will only work if tests are run with `evals/` in the path. Should be `from evals.scorer_trust_policy import ...` to match the module's documented location.
+
+**2. Premature "Used by" reference**  
+Module docstring claims `scorer_trust_policy.py` is "Used by: evals/report.py" but no such caller exists in the diff or repo. Remove the reference or add it when `report.py` actually calls the function.
+
+**3. Missing interval validation**  
+`check_publication()` accepts `interval: tuple[float, float]` but doesn't validate that `interval[0] <= kappa <= interval[1]`. If the caller passes a mismatched interval, no error is raised. Consider adding a guard if interval correctness matters to policy enforcement.
+
+**4. Boundary test approx precision**  
+`test_refusal_names_scorer_kappa_and_interval()` checks `"0.10" in text or "0.1" in text` to validate interval bounds appear in the string. The current `PolicyRefusal.__str__()` uses Python's default float formatting, which will output `0.1` not `0.10`. Test passes by accident. Clarify intent or use f-string formatting if exact decimal places matter.
+
+**5. Policy enforcement gap**  
+Documentation states "Report generators **must** call `check_publication`" and "Bypassing it is a policy violation" but there's no code-level enforcement — a caller can still import `kappa` directly and format it without calling the function. Consider adding a `@dataclass` decorator or module-level guard if this is a security boundary.
+
+✅ Tests pass, layer rules observed, docstrings complete, immutability enforced. Core logic is correct.
