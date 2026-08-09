@@ -1254,13 +1254,13 @@ real work and is EVAL-P12.2, not a footnote.
       Validation: an unmapped id raises and names it; the mapping is total over the 6-8 promoted scenarios,
       asserted by a test that enumerates their ids rather than trusting the map to be complete. ✅ AUTO (EVAL-P12.2, 2026-08-09)
 
-- [ ] **EVAL-P12.3** Sequence runner. Files: `create evals/sequence_runner.py`,
+- [x] **EVAL-P12.3** Sequence runner. Files: `create evals/sequence_runner.py`,
       `create tests/unit/evals/test_sequence_runner.py`.
       Run one scenario k times with `reset_world` between repetitions, recording per-repetition outcome,
       duration and the reset cost. Reuses `CaseStat` so flakiness classification comes free.
       RED anchor: `tests/unit/evals/test_sequence_runner.py::test_reset_is_called_between_every_repetition` fails.
       Validation: with k=3 against a mock, reset is invoked exactly 3 times and never *after* the last
-      repetition; a scenario that throws mid-run records a failed repetition rather than aborting the set.
+      repetition; a scenario that throws mid-run records a failed repetition rather than aborting the set. ✅ AUTO (EVAL-P12.3, 2026-08-09)
 
 - [ ] **EVAL-P12.4** *(live; wall-clock budget comes from EVAL-P12.1's measurement)*
       Promote 6 scenarios and report their rates. Files: `edit evals/sequence_runner.py`,
