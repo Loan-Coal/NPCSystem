@@ -299,12 +299,16 @@ label-export:
 		$(if $(BATCH_SIZE),--batch-size $(BATCH_SIZE),)
 
 # label-import: import a CLI labelling session into CalibrationLabel rows (EVAL-P5.6).
-# Usage: make label-import RAW=<path> TRANSCRIPT=<outputs.jsonl> JUDGED=<judged.jsonl>
+# Usage: make label-import RAW=<path> TRANSCRIPT=<outputs.jsonl> JUDGED=<judged.jsonl> [MERGE=1]
+# Refuses to overwrite a labels file holding human verdicts. Pass MERGE=1 on every
+# import after the first: it refreshes the machine-derived fields and keeps every
+# human verdict, so re-judging after a criteria fix costs no relabelling.
 label-import:
 	$(PYTHON) -m evals label-import --raw $(RAW) --transcript $(TRANSCRIPT) --judged $(JUDGED) \
 		$(if $(OUT),--out $(OUT),) \
 		$(if $(MODEL),--model $(MODEL),) \
-		$(if $(APPEND),--append,)
+		$(if $(MERGE),--merge,) \
+		$(if $(FORCE_OVERWRITE),--force-overwrite,)
 
 # eval-combined: one command that runs dialogue evals + retrieval evals and prints both summaries
 eval-combined: eval eval-retrieval

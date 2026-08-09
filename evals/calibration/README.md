@@ -33,8 +33,13 @@ foreach ($b in Get-ChildItem evals/calibration/batches/batch_*.json) {
 }
 
 # 4. join into the real artifact (pass BOTH judged files)
+#    label-import REFUSES to overwrite a labels file holding human verdicts.
+#    First import: no flag needed. Every later import: add --merge, which
+#    refreshes scorer_verdict + the transcript passthrough fields and preserves
+#    every human verdict. This is what makes fixing a judge's criteria and
+#    re-judging cost zero relabelling.
 make label-import RAW=evals/calibration/raw_labels.jsonl TRANSCRIPT=$GEN/outputs.jsonl \
-                  JUDGED="$GEN/judged.jsonl $GEN/deterministic_judged.jsonl"
+                  JUDGED="$GEN/judged.jsonl $GEN/deterministic_judged.jsonl" MERGE=1
 
 # 5. adjudicate (4-6 h, resumable) then report
 make eval-adjudicate
