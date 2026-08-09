@@ -1425,18 +1425,51 @@ cannot fail is not evidence.
       **exactly** those counts and a κ equal to the hand-computed value to 3 dp. Any arithmetic error
       anywhere in export → import → merge → calibrate now surfaces as a number mismatch, not a silent pass.
 
-- [ ] **EVAL-P15.2** Real-artifact integration tests. Files:
+- [ ] **EVAL-P15.2** Real-artifact invariants **+ conservation report**. Files:
       `create tests/integration/evals/test_real_artifact_invariants.py`,
-      `create tests/integration/evals/conftest.py`.
-      Read `evals/generations/k3_73e6c36/` (now tracked, commit `d267f64`) and assert invariants that hold
-      of the real data: every `record_id` in `judged.jsonl` ∪ `deterministic_judged.jsonl` resolves in
-      `outputs.jsonl`; the two verdict files are disjoint in `record_id`; every record has
-      `repetition ∈ {0..k-1}`, `duration_ms > 0`, non-empty `retrieved_context`; the label set's
-      `output_sha256` matches the transcript for all 393 rows.
+      `create tests/integration/evals/conftest.py`, `create scripts/check_conservation.py`,
+      `create tests/unit/scripts/test_check_conservation.py`, `edit Makefile` (`check-conservation`).
+
+      ⚠️ **CORRECTED 2026-08-09 after adversarial review.** An earlier draft of this task claimed it "would
+      have caught the P1 findings on `compare` coverage, battery classification, and the label join
+      simultaneously". **It would not, and the claim is struck.** Verified by running all six of its
+      invariants against `k3_73e6c36` — *the artifact that produced the wrong `3 across 111` headline* —
+      **all six pass.** They pass because the artifact was never corrupt: all 921 records are well-formed
+      and internally consistent. Every P1 defect lived in the **aggregators that read** the artifact, not
+      in the artifact. A green suite named `test_real_artifact_invariants` therefore manufactures exactly
+      the false confidence this phase exists to destroy.
+
+      **Part A — artifact-shape invariants (green today; keep them).** They are still worth having: they
+      lock the committed artifact against a silent edit. Every `record_id` in
+      `judged.jsonl` ∪ `deterministic_judged.jsonl` resolves in `outputs.jsonl`; the two verdict files are
+      disjoint; every record has `repetition ∈ {0..k-1}`, `duration_ms > 0`, non-empty `retrieved_context`;
+      all 393 labels' `output_sha256` match the transcript. State in the module docstring that these are
+      **integrity** checks, not correctness checks, so nobody mistakes them for the latter again.
       RED anchor: `test_every_judged_record_resolves_in_the_transcript` fails — file absent.
-      Validation: the suite fails if the committed artifact is edited by one byte in a response field.
-      This is the single test file that would have caught the P1 findings on `compare` coverage, battery
-      classification, and the label join simultaneously.
+      Validation (Part A): the suite fails if the committed artifact is edited by one byte in a response field.
+
+      **Part B — conservation identities (the actual detector).** The question that finds these bugs is not
+      *"is the data intact?"* but *"did the reader consume all of it?"* Assert that each aggregator's output
+      **accounts for its whole input**, and name the residual when it does not:
+      1. `guard_cases + capability_cases + explicitly_excluded_cases == total_cases`
+      2. `slots_read_by_compare == |judged ∪ deterministic_judged|`
+      3. `capability_battery_cases == capability_cases_actually_run`
+      4. `sum(battery turn counts) == the report's "All cases: N evaluated"` line
+
+      **Report-only, NOT wired into `make check` in this phase** (human decision 2026-08-09; same ratchet
+      logic as DEC-159 §4). All four identities **fail today by design** — that is the evidence the detector
+      works — and gating on them here would fire `loop_gates.AUTOFIX_CHECK_SPECS`, hit
+      `MAX_CONSECUTIVE_RED_GATES=2`, and halt the loop on a finding no repair session can legitimately fix.
+      `make check-conservation` prints violations and exits 0 until **EVAL-P17.6** flips it to a gate.
+      RED anchor: `tests/unit/scripts/test_check_conservation.py::test_residual_cases_are_reported_not_dropped` fails.
+      Validation (Part B): run against the committed artifact it reports **exactly these**, and the unit
+      test pins each number as a literal:
+        - identity 1 → **FAIL**: 37 guard + 7 capability = 44 of **94** cases; **50 cases in no battery**
+        - identity 2 → **FAIL**: `compare` reads **115 of 307** unique `record_id`s (345 of 921 rows with
+          repetitions) — **62.5% never read**
+        - identity 3 → **FAIL**: capability battery sees **2**, while **7** capability cases ran
+      The script must also pass cleanly on a synthetic *fixed* fixture, so it is proven to go green as well
+      as red — a detector that only ever reports failure is not distinguishable from one that is broken.
 
 - [ ] **EVAL-P15.3** Anti-vacuous-test gate. Files: `create scripts/check_test_quality.py`,
       `create tests/unit/scripts/test_check_test_quality.py`, `edit Makefile` (`check-test-quality`).
@@ -1655,6 +1688,19 @@ returns `False` instead.
       Write the expected numbers into ISSUES **before** running the re-measurement, then record met /
       not-met as a binary. "Either met or explained" is an escape hatch, not a gate: if the count differs,
       the phase does not tick until the difference is traced to a **named** case_id or line of code.
+
+- [ ] **EVAL-P17.6** Flip the conservation report to a gate (**closes the P15.2 loop**). Files:
+      `edit Makefile` (`check` depends on `check-conservation`), `edit scripts/check_conservation.py`.
+      EVAL-P15.2 ships the conservation identities report-only precisely because all four fail before this
+      phase. EVAL-P17.1/17.2 are what make them pass. This task is the other half of that bargain: without
+      it, `check-conservation` is a report nobody is obliged to read, and the defect class it detects can
+      silently return.
+      Make the script exit non-zero on any violation and add it to `make check`.
+      RED anchor: `tests/unit/scripts/test_check_conservation.py::test_violation_exits_nonzero` fails.
+      Validation: `make check-conservation` exits **0** against the post-P17 artifact with all four
+      identities satisfied; re-introducing the single-source read in `summary.py` (a one-line local revert,
+      not committed) makes it exit non-zero and name the residual cases. **If any identity still fails
+      here, EVAL-P17 is not done** — that is the phase's real exit criterion, not the headline number.
 
 ### Phase EVAL-P18 — Provenance and comparability (a run must be identifiable)
 **Goal:** Two runs can be compared only when they are actually comparable, and any published number is
