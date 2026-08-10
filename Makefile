@@ -15,7 +15,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-layers check-docstrings roadmap-verify check-human-gates type-ratchet type-ratchet-update check-harness \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts mock-calibrate mock-calibrate-oracle label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world package
@@ -296,6 +296,16 @@ mock-calibrate:
 		--labels evals/calibration/mock_labels.jsonl \
 		--out evals/calibration/mock_labels_adjudicated.jsonl
 	$(PYTHON) -m evals calibrate --file evals/calibration/mock_labels_adjudicated.jsonl
+
+# measure-reset-fidelity: measure what preconditions.reset_world actually clears (EVAL-P12.1).
+# Requires the stack up and all three worlds seeded. Writes docs/RESET_FIDELITY.md and
+# evals/reset_fidelity.json. The tier is derived from the evidence, never chosen: a report
+# claiming FULL while anything survived cannot be constructed.
+# Usage: make measure-reset-fidelity [REPEATS=5]
+measure-reset-fidelity:
+	$(PYTHON) e2e/scripts/measure_reset_fidelity.py \
+		--base-url $(BASE_URL) --api-key $(API_KEY) \
+		$(if $(REPEATS),--repeats $(REPEATS),)
 
 # mock-calibrate-oracle: exercise export -> import -> adjudicate -> calibrate with
 # RULE-BASED labels whose confusion matrix is known BEFORE the run (EVAL-P15.1).

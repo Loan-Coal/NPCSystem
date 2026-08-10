@@ -35,7 +35,7 @@ and sits in H2's and H9's ready sets, so if it slips both gates are ready in nam
 | # | Task | Gate | When it unblocks | Your time | Blocks |
 |---|---|---|---|---|---|
 | **0** | Release the loop | — | **now** | 10 min | everything |
-| **1** | `EVAL-P12.1` — reset fidelity | — | **now** (independent of the loop) | ~45 min | P12.4, P14.3, ISSUE-143 |
+| ~~**1**~~ | `EVAL-P12.1` — reset fidelity | — | ✅ **DONE 2026-08-10 — PARTIAL, 54 ms** | ~45 min | P12.4, P14.3, ISSUE-143 |
 | **2** | `EVAL-P17.5` — re-measure and retract | **H1** | after loop ticks **P17.4** | ~30 min | P13.3, fence reopen |
 | ~~**3**~~ | `EVAL-P15.1` — oracle labeller | — | ✅ **DONE 2026-08-10** | ~75 min | P19.4, P22.2, P22.3 |
 | **4** | `EVAL-P19.4` — re-judge, merge, re-measure κ | **H2** | after loop ticks **P19.1** + task 3 | ~90 min | publication of any guard rate |
@@ -116,11 +116,15 @@ the programme.
    - `evals/reset_fidelity.json` — **the machine-readable one, and the whole point of the
      strengthening.** Shape:
      ```json
-     {"fidelity": "PARTIAL", "surviving": ["emotion_store", "..."],
-      "reset_cost_ms": 1234, "measured_at": "...", "git_sha": "..."}
+     {"fidelity": "PARTIAL", "cleared": ["world_state.epoch", "..."],
+      "surviving": ["emotion_store", "unknown:session_store", "..."],
+      "duration_ms": 54, "measured_at": "...", "git_sha": "..."}
      ```
-     Field names must match `ResetReceipt` in `evals/sequence_records.py` so the v2 schema
-     (EVAL-P14.1) consumes it with no translation layer.
+     ⚠️ **Corrected 2026-08-10.** This block previously said `reset_cost_ms` and omitted `cleared`,
+     which contradicted the ROADMAP's own "parses into `ResetReceipt` with no field renaming" —
+     `ResetReceipt` is `cleared | surviving | duration_ms`. Resolved as a flat superset carrying the
+     model's field names verbatim plus the three run-level keys; `extra='ignore'` means the whole
+     document validates into `ResetReceipt` unchanged. See **DEC-166**.
 
 4. **Assign the tier from `docs/SEQUENCE_STATS_POLICY.md` §2.** `FULL` only if **nothing**
    survives. Anything else is `PARTIAL`. **There is no third tier** and the policy says so

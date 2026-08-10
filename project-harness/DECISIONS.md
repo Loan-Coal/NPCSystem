@@ -2952,3 +2952,63 @@ re-implementation. 296/1196 = 0.2474916… → **0.247**.
 requested and the κ computed by hand. `label-import --model oracle-matrix-v1` with the default `--out`
 raises `SyntheticLabelTargetError`, verified on the live CLI; `git diff evals/calibration/labels_v1.jsonl`
 is empty afterwards. The matrix saturates that scorer exactly (68 True + 7 False = 75) and has zero slack.
+
+---
+
+## DEC-166: `evals/reset_fidelity.json` is a flat superset of `ResetReceipt`, and the fidelity tier is validated rather than declared
+
+**Date:** 2026-08-10
+**Task:** EVAL-P12.1 (HUMAN_TASKS task 1)
+**Status:** Accepted (shape chosen by the human from four costed options)
+
+**The task specified two things that could not both be true.** HUMAN_TASKS prescribed
+`{fidelity, surviving, reset_cost_ms, measured_at, git_sha}`; the ROADMAP required the file to parse
+into `ResetReceipt` **with no field renaming**. `ResetReceipt` is `cleared | surviving | duration_ms`.
+Only `surviving` is common: `reset_cost_ms` *is* a rename of `duration_ms`, `fidelity` is not a field
+on the model, and `cleared` is absent from the prescribed JSON. Not a typo — a scope collision.
+`ResetReceipt` is a **per-repetition** record (k of them per run, one per reset); `reset_fidelity.json`
+is a **one-off measurement** of the repo's reset behaviour. `fidelity`, `measured_at` and `git_sha` are
+run-level provenance that has no place on a per-repetition receipt.
+
+**Chosen: flat superset.** The document carries `ResetReceipt`'s three field names verbatim and adds the
+three run-level keys alongside. Pydantic v2 defaults to `extra="ignore"`, so
+`ResetReceipt.model_validate(document)` succeeds **on the whole file** — the ROADMAP validation is
+literally satisfied, flat, with no wrapper and no schema change, and `surviving` stays top-level where
+the runbook expects it. Both documents were corrected to `duration_ms`.
+
+Rejected: an envelope with a nested `receipt` (moves `surviving` down a level and puts `fidelity` in a
+different object from the list it is derived from — where the two can drift); changing `ResetReceipt`
+(the rename is gratuitous, `Turn.duration_ms` uses the same name, `git_sha` already exists on
+`SequenceRunConfig`, and it re-opens ticked EVAL-P14.1's committed test file); emitting the prescribed
+shape and striking the ROADMAP line (guarantees the translation layer the strengthening existed to
+prevent).
+
+**The one real cost of this shape is a dependency on `extra="ignore"`,** so it is pinned:
+`test_reset_receipt_ignores_the_three_envelope_keys_rather_than_rejecting_them`. If anyone gives
+`ResetReceipt` `extra="forbid"`, the suite fails there instead of EVAL-P12.4 failing at runtime.
+
+**The tier is validated against the evidence, in both directions.** EVAL-P12.1 says a tier chosen to keep
+a metric alive "would be invisible to every gate in the repo". It is now visible to one:
+`ResetFidelityReport` has a model validator that derives the tier from `surviving` and **refuses
+construction** when the declared tier disagrees. FULL with survivors raises; PARTIAL with none raises;
+`Literal["FULL","PARTIAL"]` makes a third tier unrepresentable. The measurement script cannot report a
+convenient answer even if someone wants one.
+
+**An unobservable store is recorded, not dropped.** Six in-process singletons have no read endpoint
+(`session_store`, `dialogue_context_cache`, `embedding_index`, `idempotency_service`,
+`negotiation_store`, `reindex_job_service`). They enter `surviving` as `unknown:<name>`, which keeps the
+tier PARTIAL. Omitting them would be the single cheapest way to turn this PARTIAL into a false FULL, so
+each carries a recorded reason in `UNOBSERVABLE_STORES` and a unit test asserts the reason is non-empty.
+
+**Measured (not predicted):** tier **PARTIAL**. Cleared: `world_state.epoch`,
+`world_state.active_conditions` — exactly what `preconditions.reset_world` PATCHes. Surviving observed:
+`emotion_store`, `engine_status_store`, `game_clock.tick_id`, `graph.edges.RELATES_TO`,
+`graph.nodes.character`, `world_state.other_properties`. Per-reset cost **median 54 ms** over 5 resets
+`[57, 55, 54, 53, 51]`. The surviving set is stated as a **lower bound** in both artifacts: a component
+appears only if this scenario changed it.
+
+**Why the scenario PATCHes world_state before the baseline snapshot.** The first run reported
+`cleared=0`, because the world already held the values the scenario wrote, so the reset's own two targets
+never entered the diff — the measurement understated the reset for a reason that had nothing to do with
+the reset. The script now resets to `WorldBaseline()` *before* the baseline snapshot and mutates both
+target properties as part of the scenario.

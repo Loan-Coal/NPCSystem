@@ -21,6 +21,15 @@ Rules:
 **Severity:** P1 (blocking for EVAL-P12.4 — it is the exact defect class Program 3 exists to remove,
 shipped *inside* Program 3)
 **Where:** `evals/sequence_runner.py:160` (`wilson_interval(passes, k)`), reached from `run_sequence`
+**Update 2026-08-10 (EVAL-P12.1 measured):** the assumption is no longer unmeasured — it is measured
+and **false**. `evals/reset_fidelity.json` records tier **PARTIAL**: `reset_world` clears only
+`world_state.epoch` and `world_state.active_conditions`, while `emotion_store`, `game_clock.tick_id`,
+`graph.edges.RELATES_TO`, `graph.nodes.character`, `engine_status_store` and
+`world_state.other_properties` survive it, plus six stores with no read endpoint at all. So the
+interval at `:160` is not merely unjustified, it is **known** to be computed over correlated
+repetitions. **This issue stays OPEN**: EVAL-P12.1 supplies the evidence, EVAL-P12.4 Part A is the
+fix (thread `ResetReceipt` through `reset_fn` and withhold the CI at the runner). Per-reset cost for
+that task's budget: **median 54 ms**.
 **Description:** `run_sequence` calls `reset_fn` between repetitions, times it, and then computes an
 unconditional Wilson interval over the k outcomes. The reset function returns a **cost only** — no
 evidence of what it actually cleared. So the interval assumes i.i.d. Bernoulli trials on the strength of

@@ -1301,7 +1301,7 @@ over it. If reset is incomplete, the honest output is sequences without interval
 real work and is EVAL-P12.2, not a footnote.
 **Depends on:** EVAL-P2.2 (`CaseStat`), EVAL-P1.6 (judged records), EVAL-P6.4.
 
-- [ ] **EVAL-P12.1** *(live; requires the seeded stack)* Measure what `reset_world` actually clears.
+- [x] **EVAL-P12.1** *(live; requires the seeded stack)* Measure what `reset_world` actually clears.
       Files: `create e2e/scripts/measure_reset_fidelity.py`, `create docs/RESET_FIDELITY.md`,
       `create evals/reset_fidelity.json` (**machine-readable — new 2026-08-10, see below**).
       Run a mutating scenario, reset, and diff the full graph plus every in-process store the API exposes.
@@ -1313,9 +1313,20 @@ real work and is EVAL-P12.2, not a footnote.
       no evidence of what was cleared — so the interval the whole programme exists to make honest is
       currently published on an assumption nobody has measured. A doc would not have stopped that; an
       artifact the runner reads will. Emit **both**: the human-readable table *and*
-      `evals/reset_fidelity.json` carrying `{fidelity: "FULL"|"PARTIAL", surviving: [...],
-      reset_cost_ms: N, measured_at, git_sha}`, matching `ResetReceipt`'s field names in
-      `evals/sequence_records.py` so the v2 schema (EVAL-P14.1) consumes it without a translation layer.
+      `evals/reset_fidelity.json`.
+      ⚠️ **SHAPE CORRECTED 2026-08-10 (during implementation; resolved with the human).** This task
+      previously prescribed `{fidelity, surviving, reset_cost_ms, measured_at, git_sha}` *and* required
+      the file to parse into `ResetReceipt` **with no field renaming**. Those two requirements
+      contradict each other: `ResetReceipt` is `cleared | surviving | duration_ms`, so `reset_cost_ms`
+      **is** a rename and `fidelity` is not a field on the model at all. The conflict is structural, not
+      a typo — `ResetReceipt` is a *per-repetition* record, this file is a *one-off measurement*, and the
+      old shape flattened the two scopes. Resolved as a **flat superset**: the document carries
+      `ResetReceipt`'s three field names verbatim plus the three run-level keys, and Pydantic's default
+      `extra='ignore'` makes `ResetReceipt.model_validate(document)` succeed on the whole file. No schema
+      change, no wrapper, no translation layer. `duration_ms` replaces `reset_cost_ms`:
+      `{fidelity, cleared, surviving, duration_ms, measured_at, git_sha}`. A test pins the
+      `extra='ignore'` dependency, so if `ResetReceipt` ever gets `extra='forbid'` the suite says so
+      rather than EVAL-P12.4 discovering it at runtime. See DEC-166.
       **Do not invent a third tier** — `docs/SEQUENCE_STATS_POLICY.md` §2 says there is none, and
       "mostly full" is how a correlated run acquires an interval.
       Validation: a table of surviving state with a verdict per item (acceptable / correlates repeats), a
@@ -1328,6 +1339,21 @@ real work and is EVAL-P12.2, not a footnote.
       (SEQUENCE_STATS_POLICY §4) becomes the primary statistic instead. A tier chosen to keep a metric
       alive is the single worst outcome available here.
       **This task is for a human session. The unattended loop must not start it.**
+      ✅ **MEASURED 2026-08-10** (`make measure-reset-fidelity`, commit `c0c3836`, stack up, all three
+      worlds seeded). Tier **PARTIAL**. Snapshot covered **96 components** (34 node types, 57 edge
+      types, emotion store, game clock, engine-status store) across 40 characters.
+      **Cleared (2):** `world_state.epoch`, `world_state.active_conditions` — exactly the two properties
+      `preconditions.reset_world` PATCHes, and nothing else.
+      **Surviving, observed (6):** `emotion_store`, `engine_status_store`, `game_clock.tick_id`,
+      `graph.edges.RELATES_TO`, `graph.nodes.character`, `world_state.other_properties`.
+      **Surviving, unobservable (6):** `session_store`, `dialogue_context_cache`, `embedding_index`,
+      `idempotency_service`, `negotiation_store`, `reindex_job_service` — recorded as `unknown:<name>`,
+      never omitted. A store dropped for being unreadable is precisely how PARTIAL becomes a false FULL.
+      **Per-reset cost: median 54 ms** over 5 consecutive resets `[57, 55, 54, 53, 51]` — the number
+      EVAL-P12.4's `6 × k × (turns + reset_cost)` budget is computed from.
+      ⚠️ The surviving set is a **lower bound**: a component appears only if this scenario changed it.
+      `reset_world` touches two world_state properties, so everything else survives by construction; the
+      run proves it for what it exercised. ✅ HUMAN (EVAL-P12.1, 2026-08-10)
 
 - [x] **EVAL-P12.2** Reconcile the two world vocabularies. Files: `create evals/world_map.py`,
       `create tests/unit/evals/test_world_map.py`.

@@ -1,0 +1,24 @@
+{
+  "fidelity": "PARTIAL",
+  "cleared": [
+    "world_state.active_conditions",
+    "world_state.epoch"
+  ],
+  "surviving": [
+    "emotion_store",
+    "engine_status_store",
+    "game_clock.tick_id",
+    "graph.edges.RELATES_TO",
+    "graph.nodes.character",
+    "world_state.other_properties",
+    "unknown:session_store",
+    "unknown:dialogue_context_cache",
+    "unknown:embedding_index",
+    "unknown:idempotency_service",
+    "unknown:negotiation_store",
+    "unknown:reindex_job_service"
+  ],
+  "duration_ms": 54,
+  "measured_at": "2026-08-10T13:02:13.036302+00:00",
+  "git_sha": "c0c3836"
+}
