@@ -15,7 +15,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-layers check-docstrings roadmap-verify check-human-gates type-ratchet type-ratchet-update check-harness \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts mock-calibrate label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts mock-calibrate mock-calibrate-oracle label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world package
@@ -296,6 +296,46 @@ mock-calibrate:
 		--labels evals/calibration/mock_labels.jsonl \
 		--out evals/calibration/mock_labels_adjudicated.jsonl
 	$(PYTHON) -m evals calibrate --file evals/calibration/mock_labels_adjudicated.jsonl
+
+# mock-calibrate-oracle: exercise export -> import -> adjudicate -> calibrate with
+# RULE-BASED labels whose confusion matrix is known BEFORE the run (EVAL-P15.1).
+# Unlike mock-calibrate (random labels, kappa meaningless by construction), the
+# numbers this prints are predictable in closed form, so any arithmetic error
+# anywhere in the chain surfaces as a number mismatch rather than a silent pass.
+#
+# Defaults reproduce refusal_judge tp=60 fp=8 fn=4 tn=3 (n=75), which saturates
+# that scorer's rows exactly: 68 scorer_verdict=True and 7 scorer_verdict=False.
+# Expected kappa = 296/1196 = 0.247 to 3 dp — see tests/unit/evals/test_oracle_labeller.py.
+# The naive tp=40 fp=5 fn=3 tn=12 needs 15 negatives and is unsatisfiable for
+# EVERY scorer; the labeller raises UnsatisfiableMatrixError naming the caps.
+#
+# Never writes to the real labels file: --out is always under evals/calibration/oracle/,
+# and evals/synthetic_label_guard.py refuses an oracle-* model aimed at labels_v1.jsonl.
+# Usage: make mock-calibrate-oracle GEN_ID=<id> [SCORER=.. TP=.. FP=.. FN=.. TN=..] [MERGE=1]
+mock-calibrate-oracle:
+	@echo "ORACLE calibration for $(GEN_ID) — labels are synthetic; this measures the pipeline, not a scorer."
+	$(PYTHON) -m evals label-export \
+		--transcript evals/generations/$(GEN_ID)/outputs.jsonl \
+		--out-dir evals/calibration/oracle_batches
+	$(PYTHON) scripts/oracle_labeller.py \
+		--batches evals/calibration/oracle_batches \
+		--judged evals/generations/$(GEN_ID)/judged.jsonl \
+		         evals/generations/$(GEN_ID)/deterministic_judged.jsonl \
+		--scorer $(or $(SCORER),refusal_judge) \
+		--tp $(or $(TP),60) --fp $(or $(FP),8) --fn $(or $(FN),4) --tn $(or $(TN),3) \
+		--out evals/calibration/oracle/raw_labels_oracle.jsonl
+	$(PYTHON) -m evals label-import \
+		--raw evals/calibration/oracle/raw_labels_oracle.jsonl \
+		--transcript evals/generations/$(GEN_ID)/outputs.jsonl \
+		--judged evals/generations/$(GEN_ID)/judged.jsonl \
+		         evals/generations/$(GEN_ID)/deterministic_judged.jsonl \
+		--model oracle-matrix-v1 \
+		--out evals/calibration/oracle/labels_oracle.jsonl \
+		$(if $(MERGE),--merge,)
+	$(PYTHON) scripts/oracle_adjudicate.py \
+		--labels evals/calibration/oracle/labels_oracle.jsonl \
+		--out evals/calibration/oracle/labels_oracle_adjudicated.jsonl
+	$(PYTHON) -m evals calibrate --file evals/calibration/oracle/labels_oracle_adjudicated.jsonl
 
 # label-export: export transcript records as JSON batches for the CLI labelling pass (EVAL-P5.6).
 # Usage: make label-export TRANSCRIPT=evals/generations/<gen_id>/outputs.jsonl OUT_DIR=evals/calibration/export

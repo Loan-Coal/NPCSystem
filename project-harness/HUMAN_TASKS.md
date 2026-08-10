@@ -37,7 +37,7 @@ and sits in H2's and H9's ready sets, so if it slips both gates are ready in nam
 | **0** | Release the loop | — | **now** | 10 min | everything |
 | **1** | `EVAL-P12.1` — reset fidelity | — | **now** (independent of the loop) | ~45 min | P12.4, P14.3, ISSUE-143 |
 | **2** | `EVAL-P17.5` — re-measure and retract | **H1** | after loop ticks **P17.4** | ~30 min | P13.3, fence reopen |
-| **3** | `EVAL-P15.1` — oracle labeller | — | after loop ticks **P15.2** | ~75 min | P19.4, P22.2, P22.3 |
+| ~~**3**~~ | `EVAL-P15.1` — oracle labeller | — | ✅ **DONE 2026-08-10** | ~75 min | P19.4, P22.2, P22.3 |
 | **4** | `EVAL-P19.4` — re-judge, merge, re-measure κ | **H2** | after loop ticks **P19.1** + task 3 | ~90 min | publication of any guard rate |
 | **5** | `EVAL-P20.2` — capability cases | — *(clears **H6** with task 8)* | any time after task 0 | 2–3 h (of ~4–5 h) | a non-gameable headline |
 | — | **Week-2 boundary** — everything below needs the fence reopened | **H3** | | | |
@@ -202,8 +202,43 @@ cannot do it and why you must be careful when you do.
    broken function against itself. (`_kappa_from_matrix(60,0,0,0)` returns **1.0** today; verified
    2026-08-10. EVAL-P16.3 fixes that, and this test must not depend on whether it has.)
 
-**Validation:** `label-import --merge` → `calibrate` reports **exactly** the requested counts and a κ
-equal to your hand-computed value to 3 dp.
+**Validation:** `label-import` → `calibrate` reports **exactly** the requested counts and a κ equal to
+your hand-computed value to 3 dp.
+
+### ✅ Done 2026-08-10 — what was built, and the one spec defect fixed on the way
+
+**The ROADMAP's own Validation line mandated the matrix its Feasibility note proves impossible.**
+EVAL-P15.1 required `(tp=40, fp=5, fn=3, tn=12)` — 15 negatives — four lines after establishing that
+the largest `scorer_verdict=False` count across all ten matchers is **8**. Satisfying it literally
+would have meant weakening the labeller until an impossible request succeeded: destroying the
+instrument to pass the test of it. The line is **corrected in ROADMAP.md**, not worked around — the
+naive matrix is struck as a validation and kept as the negative case.
+
+**Measured, not predicted** — `make mock-calibrate-oracle GEN_ID=k3_73e6c36`:
+
+| | human=T | human=F |
+|---|---|---|
+| **scorer=T** | 60 | 8 |
+| **scorer=F** | 4 | 3 |
+
+`refusal_judge`, n=75, headline κ **0.247**, 95% CI [−0.071, 0.539] — equal to the hand-computed
+296/1196 = 0.2474916… to 3 dp. The matrix **saturates that scorer exactly** (68 `True` + 7 `False`), so
+it has zero slack: any change to the committed artifact's verdict counts makes it unsatisfiable, and
+the labeller raises `UnsatisfiableMatrixError` naming the per-cell caps rather than quietly emitting a
+different matrix.
+
+**The guard landed before the labeller.** `evals/synthetic_label_guard.py` refuses any
+`mock-*`/`oracle-*` `--model` whose `--out` resolves to `LABELS_FILE`, compared as absolute
+case-normalised paths so a relative spelling or a `..` segment cannot slip past. It is the **first**
+statement in `label_import.main()`, before any file is opened, and a test pins that ordering by aiming
+the run at inputs that do not exist — if the guard ever moves after the reads, the test sees
+`FileNotFoundError` instead and fails. Verified on the live CLI; `git diff labels_v1.jsonl` empty after.
+
+**Seven files, not three.** The extra four (`scripts/oracle_matrix.py` for the 300-line cap,
+`scripts/oracle_adjudicate.py` because `mock_adjudicate --agree-rate 1.0` sets
+`human_verdict = scorer_verdict` and collapses fp and fn to zero, the guard module, its test) are each
+justified in **DEC-165**. Oracle outputs are gitignored: regenerable from the committed transcript plus
+the declared rule, and inside a `FROZEN_PATH_PREFIXES` dir the loop would otherwise sweep up.
 
 ---
 

@@ -1,13 +1,18 @@
 """
 Module: label_import_errors
 Layer: evals (eval harness — not part of src/)
-Purpose: Typed exceptions for label_import.py's join and contamination checks.
-         Split out of label_import.py to stay under the 300-line cap.
+Purpose: Typed exceptions for label_import.py's join, contamination and
+         synthetic-target checks. Split out of label_import.py to stay under
+         the 300-line cap.
 Dependencies: stdlib only
-Used by: label_import (raises), tests/unit/evals/test_label_import.py (catches)
+Used by: label_import (raises), synthetic_label_guard (raises),
+         tests/unit/evals/test_label_import.py and
+         tests/unit/evals/test_synthetic_label_guard.py (catch)
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 
 class UnknownRecordIdError(Exception):
@@ -63,4 +68,28 @@ class ContaminatedRowError(Exception):
         super().__init__(
             f"Raw label row {record_id!r} contains contaminating field {field!r} — "
             f"the labeller must not see scorer_verdict or output_text before labelling."
+        )
+
+
+class SyntheticLabelTargetError(Exception):
+    """Raised when a mock/oracle labelling run targets the real human labels file.
+
+    `label-import`'s `--out` defaults to `calibration_records.LABELS_FILE`, which
+    holds hand-made human verdicts produced across two adjudication sittings.
+    A synthetic run that forgets `--out` would overwrite them, and no re-run can
+    reproduce them. This is a refusal, not a warning.
+
+    Attributes:
+        model: The offending `--model` identifier.
+        out_path: The destination that resolved to the real labels file.
+    """
+
+    def __init__(self, model: str, out_path: Path) -> None:
+        self.model = model
+        self.out_path = out_path
+        super().__init__(
+            f"Refusing to write synthetic labels from model {model!r} to {out_path} — "
+            f"that path resolves to the real human labels file. Human verdicts there "
+            f"cannot be regenerated. Pass an explicit --out under "
+            f"evals/calibration/oracle/ instead."
         )

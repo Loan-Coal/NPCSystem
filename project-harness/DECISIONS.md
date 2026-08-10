@@ -2890,3 +2890,65 @@ sorts by gate number — a report in file order would read as a queue starting w
 **Validation:** `check_human_gates.py --verify` → `HUMAN GATES OK (12 gates)`; the report shows all twelve
 `WAITING` with 21 blocked task ids; `--check EVAL-P15.2` exits 0 and `--check EVAL-P22.3` exits 1 naming H2;
 `roadmap_cursor.py --verify` unchanged at `20 phases`; ROADMAP.md still 100% CRLF (0 LF-only lines).
+
+---
+
+## DEC-165: The oracle labeller ships as four files, not one, and the guard lands before the labeller
+
+**Date:** 2026-08-10
+**Task:** EVAL-P15.1 (HUMAN_TASKS task 3)
+**Status:** Accepted
+
+EVAL-P15.1's file list is `create scripts/oracle_labeller.py`,
+`create tests/unit/evals/test_oracle_labeller.py`, `edit Makefile`. The implementation is seven files.
+Each departure is recorded here rather than left for a reader to discover as drift.
+
+**1. `evals/synthetic_label_guard.py` + `tests/unit/evals/test_synthetic_label_guard.py` (new).**
+The task body asks for the guard "in `label_import.py`". `label_import.py` was 260 of its 300 permitted
+lines, so the check went to its own module and the two lines that call it went into `main()`. It is the
+first thing `main()` does — before `read_raw_rows`, before any file is opened — so a refused run cannot
+have begun writing. `test_label_import_main_refuses_a_synthetic_run_at_the_default_out` pins that ordering
+by pointing the run at inputs that do not exist: if the guard ever moves after the reads, the test sees
+`FileNotFoundError` instead of `SyntheticLabelTargetError` and fails.
+
+**The guard was built and merged before a single line of the labeller.** `label-import --out` defaults to
+`calibration_records.LABELS_FILE`, which holds 393 hand-made verdicts produced across two sittings. Writing
+the labeller first and the guard second would have put a synthetic-label emitter and an unguarded default
+in the same working tree at the same time, and no re-run reproduces those verdicts.
+
+**2. `scripts/oracle_matrix.py` (new).** A single file held the models, the errors, the reader and the CLI
+at 418 lines — over the 300-line cap. Split on the I/O boundary, which is also the SRP boundary: the
+matrix model and the pure labelling rule (no file access, no RNG) on one side, the artifact reader and CLI
+on the other. `oracle_labeller.py` re-exports the names so callers and tests keep one import site.
+
+**3. `scripts/oracle_adjudicate.py` (new).** Not anticipated by the task, and load-bearing. The HEADLINE
+calibration axis is `scorer_verdict` × `human_verdict`, but a labeller emits `pre_label`; something must
+carry one to the other or the requested matrix never reaches the metric it was requested for. The existing
+`scripts/mock_adjudicate.py` cannot do it: it draws `human_verdict` from `scorer_verdict` at a probability,
+so `--agree-rate 1.0` yields `human_verdict == scorer_verdict` and collapses fp and fn to **zero** — the
+exact opposite of a requested off-diagonal. The oracle adjudicator copies `pre_label` verbatim and nothing
+else, which is what makes the matrix known before the run.
+
+**4. `.gitignore` (edit).** Oracle artifacts follow `evals/calibration/mock_*.jsonl` out of the repo, for a
+different reason: they are not random, but they are fully regenerable from the committed transcript plus
+the declared rule. Committing them would put regenerable files inside a `FROZEN_PATH_PREFIXES` directory
+that the loop's whole-tree staging (ISSUE-139) would then sweep into unrelated commits.
+
+**The validation the task shipped with was unsatisfiable, and was corrected rather than satisfied.**
+EVAL-P15.1's feasibility note proves `(tp=40, fp=5, fn=3, tn=12)` needs 15 negatives and that no scorer has
+more than 8; its Validation line then mandated exactly that matrix. Following it literally would have meant
+weakening the labeller until an impossible request succeeded — destroying the instrument in order to pass
+the test of it. The naive matrix is struck as a validation and kept as the negative case
+(`test_the_naive_example_is_rejected_and_the_caps_are_named`); `refusal_judge` (60, 8, 4, 3) replaces it.
+
+**Why the expected κ is a literal and the test imports nothing from `evals/calibration*`.**
+`_kappa_from_matrix(60, 0, 0, 0)` returns **1.0** today (Pe==1 short-circuit). EVAL-P16.3 is scheduled to
+change that. A test that imported the function to compute its own expectation would pass in both worlds and
+detect neither, so κ is a decimal literal with the arithmetic in a comment and a four-line local
+re-implementation. 296/1196 = 0.2474916… → **0.247**.
+
+**Validation (measured, not predicted):** `make mock-calibrate-oracle GEN_ID=k3_73e6c36` →
+`refusal_judge n=75`, matrix **60 / 8 / 4 / 3**, headline κ **0.247** 95% CI [−0.071, 0.539] — the counts
+requested and the κ computed by hand. `label-import --model oracle-matrix-v1` with the default `--out`
+raises `SyntheticLabelTargetError`, verified on the live CLI; `git diff evals/calibration/labels_v1.jsonl`
+is empty afterwards. The matrix saturates that scorer exactly (68 True + 7 False = 75) and has zero slack.

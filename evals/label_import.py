@@ -38,6 +38,7 @@ from label_import_errors import (
 from label_merge import format_merge_report, load_existing_or_refuse, merge_labels
 from raw_label_rows import RawLabelRow, check_contamination, read_raw_rows
 from record_identity import composite_item_id, split_item_id
+from synthetic_label_guard import check_synthetic_label_target
 from transcript_index import (
     build_judged_index,
     build_transcript_index,
@@ -224,9 +225,15 @@ def main(argv: list[str] | None = None) -> int:
         argv: Argument list; defaults to sys.argv[1:].
     Returns:
         0 on success, 1 on error.
+    Raises:
+        SyntheticLabelTargetError: If a mock/oracle --model is aimed at the real
+            human labels file. Checked before any input is read, so a refused
+            run cannot have begun writing.
     """
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+    check_synthetic_label_target(args.model, args.out)
 
     raw_rows = read_raw_rows(args.raw)
     transcript_index = build_transcript_index(args.transcript)

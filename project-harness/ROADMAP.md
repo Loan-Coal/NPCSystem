@@ -1587,7 +1587,7 @@ inverts 135 real `pass_on_no` records with `pass_on_no` having **zero grep hits*
 cannot fail is not evidence.
 **Depends on:** nothing. This is the entry point.
 
-- [ ] **EVAL-P15.1** ⏸️ *(writes label-shaped artifacts; must never target `LABELS_FILE` — human session)*
+- [x] **EVAL-P15.1** ⏸️ *(writes label-shaped artifacts; must never target `LABELS_FILE` — human session)*
       Oracle mock labeller (replaces random-only mocking). Files:
       `create scripts/oracle_labeller.py`, `create tests/unit/evals/test_oracle_labeller.py`,
       `edit Makefile` (`mock-calibrate-oracle`).
@@ -1612,9 +1612,22 @@ cannot fail is not evidence.
       the test file must import nothing from `evals/calibration*`, or it validates the broken function
       (`_kappa_from_matrix` returns 1.0 at Pe=1) against itself.
       RED anchor: `tests/unit/evals/test_oracle_labeller.py::test_emitted_labels_reproduce_the_requested_matrix` fails — module absent.
-      Validation: for a requested (tp=40, fp=5, fn=3, tn=12), `label-import --merge` → `calibrate` reports
-      **exactly** those counts and a κ equal to the hand-computed value to 3 dp. Any arithmetic error
-      anywhere in export → import → merge → calibrate now surfaces as a number mismatch, not a silent pass.
+      ⚠️ **VALIDATION CORRECTED 2026-08-10 (during the EVAL-P15.1 implementation).** The line below
+      previously mandated `(tp=40, fp=5, fn=3, tn=12)` — the exact matrix this task's own feasibility
+      note, four lines up, proves is **unsatisfiable for every scorer** (it needs 15 negatives; the
+      largest `scorer_verdict=False` count is 8). A task cannot require an outcome it also proves
+      impossible, and a session following the validation literally would have had to weaken the
+      labeller until the impossible request succeeded — destroying the instrument to satisfy the test
+      of it. The naive matrix is **struck** as a validation and kept only as the negative case.
+      Validation: for a requested `refusal_judge` (tp=60, fp=8, fn=4, tn=3), `label-import` →
+      `calibrate` reports **exactly** those counts and κ = **0.247** — the hand-computed
+      296/1196 = 0.2474916… to 3 dp. Any arithmetic error anywhere in export → import → merge →
+      calibrate now surfaces as a number mismatch, not a silent pass. Negative case: the struck
+      (40, 5, 3, 12) request must raise `UnsatisfiableMatrixError` naming the per-cell caps.
+      **MEASURED 2026-08-10:** `make mock-calibrate-oracle GEN_ID=k3_73e6c36` reports 60/8/4/3, n=75,
+      headline κ **0.247**, 95% CI [−0.071, 0.539]. The matrix saturates refusal_judge's rows exactly
+      (68 `scorer_verdict=True` + 7 `False` = 75), so it has **zero slack** — any change to the
+      committed artifact's verdict counts makes it unsatisfiable and the labeller will say so. ✅ AUTO (EVAL-P15.1, 2026-08-10)
 
 - [ ] **EVAL-P15.2** Real-artifact invariants **+ conservation report**. Files:
       `create tests/integration/evals/test_real_artifact_invariants.py`,

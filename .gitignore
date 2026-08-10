@@ -31,6 +31,13 @@ evals/reports/
 # synthetic mock artifacts stay out — they are random by construction and a kappa
 # computed from them is meaningless, so they must never be mistaken for a real pass.
 evals/calibration/mock_*.jsonl
+# Oracle labeller artifacts (EVAL-P15.1) — same reasoning as the mock ones, for a
+# different reason: they are not random but they ARE fully regenerable from the
+# committed transcript plus the declared rule, so committing them would add noise
+# the loop's whole-tree staging (ISSUE-139) would then sweep into unrelated commits.
+# `make mock-calibrate-oracle GEN_ID=<id>` rebuilds all of them byte-identically.
+evals/calibration/oracle/
+evals/calibration/oracle_batches/
 # Timestamped safety copies written before any rewrite of a file holding human
 # verdicts. Local recovery aid; the tracked labels file is the artifact.
 evals/calibration/*.bak
