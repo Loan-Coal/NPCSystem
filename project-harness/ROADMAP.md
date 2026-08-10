@@ -1333,12 +1333,12 @@ have hardened into five call sites costs far more.
       Validation: a 3-repetition, 5-turn run round-trips; a repetition missing its receipt raises; the model
       is frozen and carries no field the harness cannot populate. ✅ AUTO (EVAL-P14.1, 2026-08-10)
 
-- [ ] **EVAL-P14.2** Independence and statistics policy. Files: `create docs/SEQUENCE_STATS_POLICY.md`.
+- [x] **EVAL-P14.2** Independence and statistics policy. Files: `create docs/SEQUENCE_STATS_POLICY.md`.
       State which statistics are valid under which reset fidelity: full reset permits Wilson and McNemar;
       partial reset permits sequence reporting and order-effect tests only. Include the order-effect check
       (does repetition 3 systematically differ from repetition 1) as the empirical test of the assumption.
       Validation: the policy names, for each metric the dashboard can render, the reset fidelity it requires
-      — so an incomplete reset downgrades the output automatically rather than by remembering to.
+      — so an incomplete reset downgrades the output automatically rather than by remembering to. ✅ AUTO (EVAL-P14.2, 2026-08-10)
 
 - [ ] **EVAL-P14.3** ⏸️ *(blocked: the model is validated against EVAL-P12.4's measured run time)*
       Cost model and migration note. Files: `edit docs/SEQUENCE_SCHEMA.md`.
