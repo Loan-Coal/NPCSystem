@@ -183,3 +183,31 @@ Module docstring claims `scorer_trust_policy.py` is "Used by: evals/report.py" b
 Documentation states "Report generators **must** call `check_publication`" and "Bypassing it is a policy violation" but there's no code-level enforcement — a caller can still import `kappa` directly and format it without calling the function. Consider adding a `@dataclass` decorator or module-level guard if this is a security boundary.
 
 ✅ Tests pass, layer rules observed, docstrings complete, immutability enforced. Core logic is correct.
+
+## 2026-08-10 10:07:22 — phase EVAL-P13
+
+Now I'll generate my review findings:
+
+## Findings on EVAL-P13.1 (metrics branch)
+
+**Commit:** 04e2b33 — EVAL-P13.1 methodology writeup  
+**Files changed:** docs/EVAL_METHODOLOGY.md (+251), project-harness/ROADMAP.md (+2/-2)
+
+### 1. **Misleading claim about McNemar formula (line 79)**
+The formula uses `2^n` (written as `2^n` in the doc), but modern Python implementations use bitwise operations or exponentiation. The actual formula in `paired_stats.py:mcnemar_exact()` uses `math.pow(2, n)`, not bitshift. Minor, but the pseudocode notation differs from how it ships.
+
+### 2. **Trust policy table renders inconsistently (line 184–191)**
+The methodology documents κ range `0.40 – 0.60` using an en-dash in the table, but the actual implementation and docstring in `scorer_trust_policy.py` (line 74) use `0.40 <= kappa < 0.60`. The bound *should* be less-than on the upper end (not ≤), but the markdown table uses a visual range that could be misread as inclusive on both ends. The code is correct; the table formatting is ambiguous.
+
+### 3. **Missing docstring reference link (line 72)**
+The methodology claims "McNemar chi-squared approximation is only reliable when discordant pairs exceed 25", citing a "rule of thumb" without a reference. This is standard literature, but nowhere in `paired_stats.py` or its test is this threshold documented or cited — only verified empirically in `test_mcnemar_exact_matches_worked_example`. No *hard* edge case, but the methodology claims something untraceable to the code.
+
+### 4. **Judge model name changed post-documentation (line 231)**
+The anti-metric section names `mixtral:8x7b` as the default judge model. Check: does `judge_config.py` actually ship with this as default, or has it drifted? This is a data claim about current state that rots if judge_config changes without updating the doc.
+
+### 5. **`evaluated_cases` definition uses informal notation (line 132)**
+The doc writes `evaluated_cases = total_cases - skipped_cases` in pseudocode, but the actual line in `summary.py` is a Pydantic computed field or property. Readers looking for the implementation may misread the *location* as the code itself rather than a docstring; worth clarifying "this formula is implemented via" rather than assigning.
+
+---
+
+**Assessment:** Documentation is thorough and cross-linked correctly to existing shipping code. No correctness failures, but 2–3 ambiguities in presentation and 1 data claim that requires periodic re-verification (judge model). All cited tests pass.
