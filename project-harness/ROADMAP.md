@@ -1323,7 +1323,7 @@ the v2 schema now, while the constraints are fresh from P12, costs 2 h; writing 
 have hardened into five call sites costs far more.
 **Depends on:** EVAL-P12.4 (the compromises must be real before they can be designed away).
 
-- [ ] **EVAL-P14.1** Sequence transcript schema. Files: `create docs/SEQUENCE_SCHEMA.md`,
+- [x] **EVAL-P14.1** Sequence transcript schema. Files: `create docs/SEQUENCE_SCHEMA.md`,
       `create evals/sequence_records.py`, `create tests/unit/evals/test_sequence_records.py`.
       Frozen Pydantic: `SequenceRun(run_id, scenario_id, k, config, repetitions)`,
       `Repetition(index, reset_receipt, turns)`, `Turn(index, actor, message, response, world_epoch, tick,
@@ -1331,7 +1331,7 @@ have hardened into five call sites costs far more.
       EVAL-P12.1 — so every repetition carries its own independence evidence rather than assuming it.
       RED anchor: `tests/unit/evals/test_sequence_records.py::test_repetition_without_a_reset_receipt_raises` fails.
       Validation: a 3-repetition, 5-turn run round-trips; a repetition missing its receipt raises; the model
-      is frozen and carries no field the harness cannot populate.
+      is frozen and carries no field the harness cannot populate. ✅ AUTO (EVAL-P14.1, 2026-08-10)
 
 - [ ] **EVAL-P14.2** Independence and statistics policy. Files: `create docs/SEQUENCE_STATS_POLICY.md`.
       State which statistics are valid under which reset fidelity: full reset permits Wilson and McNemar;
