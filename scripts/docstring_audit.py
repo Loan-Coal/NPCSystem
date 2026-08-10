@@ -1,7 +1,7 @@
 """
 Module: docstring_audit
 Layer: config
-Purpose: CI gate — scan all src/npc_engine/**/*.py and report files missing
+Purpose: CI gate — scan src/npc_engine/**/*.py and evals/**/*.py for files missing
          mandatory docstring fields (Layer:, Purpose:, and for __init__.py Public surface:).
 Dependencies: pathlib, ast, json, sys
 Used by: make check-docstrings, CI pipeline
@@ -65,7 +65,12 @@ def main() -> int:
     """Run audit; print JSON findings; exit 1 if any file has missing fields."""
     repo_root = Path(__file__).parent.parent
     src_root = repo_root / "src" / "npc_engine"
-    findings = audit(src_root)
+    evals_root = repo_root / "evals"
+
+    src_findings = audit(src_root)
+    evals_findings = audit(evals_root)
+    findings = src_findings + evals_findings
+
     print(json.dumps(findings, indent=2))
     if findings:
         print(f"\n{len(findings)} file(s) missing mandatory docstring fields.", file=sys.stderr)

@@ -299,30 +299,6 @@ the stale-lock recovery in `project-harness/OVERNIGHT_LOOP.md`.
 
 ---
 
-## ISSUE-124: `evals/` is not covered by `mypy`, `check-rules`, or `check-docstrings`
-**Found:** 2026-07-31, during eval-program planning
-**Severity:** P3 (nice-to-fix — no current defect, but zero enforcement on the directory intended for publication)
-**Where:** `Makefile` (`lint`, `type` recipes), `scripts/check_rules.py:108`, `scripts/docstring_audit.py`,
-`scripts/rules_baseline.txt`
-**Description:** Every quality gate scopes to `src/` only: `lint` is `ruff check src/`, `type` is `mypy src/`,
-`check_rules.py` iterates `_iter_py("src/npc_engine")`, `docstring_audit.py` scans `src/`, and
-`rules_baseline.txt` contains zero `evals/` entries. `test-cov` measures only
-`npc_engine + matchers + summary + runner`, so the other 10 `evals/` modules have no coverage floor either.
-Net effect: the 13 modules in `evals/` — the directory the project intends to publish standalone as its
-portfolio artifact — carry no lint, type, file-size, function-length, nesting, or docstring enforcement,
-while `src/` carries all six.
-**Why deferred:** `EVAL-P0.3` brings `evals/` under `ruff` only, deliberately time-boxed to 30 minutes,
-because the true violation count across 13 pre-existing modules is unknown and extending `mypy` +
-`check-docstrings` at the same time risks turning one roadmap step into an unbounded cleanup sweep.
-Tracked as a `Parked (out of budget)` line in the `EVAL-P0..P7` program.
-**To fix:** After `EVAL-P0.3` establishes the ruff baseline and the real violation count is visible:
-(1) add `evals/` to the `type` recipe and drive mypy to zero (or record a ratchet baseline, mirroring
-`scripts/mypy_ratchet.py`); (2) extend `docstring_audit.py`'s scan root to include `evals/` — most modules
-already carry the `Module:/Layer:/Purpose:` header, so this should be small; (3) extend
-`check_rules.py:_iter_py` to `evals/` and record any R001 file-size / R006 function-length residue in
-`rules_baseline.txt` under a dedicated `# evals/` section, per the DEC-140 documented-waiver convention.
-
----
 
 ## ISSUE-083: two voice tone_judge cases fail under epoch=war / stage_b_v2.9 (captain_sorn, mira_innkeeper)
 **Found:** 2026-06-09, during eval re-run

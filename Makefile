@@ -13,7 +13,10 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         test-v13-contracts test-v13-graph-admin test-v13-retrieval \
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
-        check-rules check-rules-update check-layers check-docstrings roadmap-verify check-human-gates check-conservation check-test-quality type-ratchet type-ratchet-update check-harness \
+        check-rules check-rules-update check-evals-rules check-evals-rules-update \
+        check-layers check-docstrings roadmap-verify check-human-gates check-conservation check-test-quality \
+        type-ratchet type-ratchet-update type-evals type-evals-update check-harness \
+        test-cov-evals \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
@@ -107,12 +110,33 @@ check-rules:
 check-rules-update:
 	$(PYTHON) scripts/check_rules.py --update-baseline
 
+# check-evals-rules: enforce CLAUDE.md rules on evals/ with a separate ratcheted baseline
+# (scripts/evals_baseline.txt). Fails only on NEW violations; 59 grandfathered (EVAL-P15.4).
+check-evals-rules:
+	$(PYTHON) scripts/check_rules.py --evals
+
+check-evals-rules-update:
+	$(PYTHON) scripts/check_rules.py --update-evals-baseline
+
 # type-ratchet: kept for historical reference; mypy is now at 0 so 'make type' is the gate.
 type-ratchet:
 	$(PYTHON) scripts/mypy_ratchet.py
 
 type-ratchet-update:
 	$(PYTHON) scripts/mypy_ratchet.py --update
+
+# type-evals: ratchet mypy errors in evals/ (baseline 16 in .mypy_evals_baseline, EVAL-P15.4).
+# Fails only when the error count grows above baseline.
+type-evals:
+	$(PYTHON) scripts/mypy_evals_ratchet.py
+
+type-evals-update:
+	$(PYTHON) scripts/mypy_evals_ratchet.py --update
+
+# test-cov-evals: gate evals/ test coverage at ~78% measured baseline; floor 75 (EVAL-P15.4).
+# Runs evals unit tests and script tests only (fast; integration evals need real artifacts).
+test-cov-evals:
+	$(PYTHON) -m pytest tests/unit/evals/ tests/unit/scripts/ -q --cov=evals --cov-report=term-missing --cov-fail-under=75
 
 # check-harness: fail when the harness docs contradict the live gates.
 check-harness:
@@ -141,18 +165,19 @@ check-conservation:
 	$(PYTHON) scripts/check_conservation.py
 
 # check-test-quality: static scan of tests/** for anti-vacuous patterns (4 types).
-# Exits 0 always (report-only until EVAL-P15.4 wires it as a gate).
-# Each flagged item must be fixed or suppressed with '# quality-ok: <reason>'.
+# Exits 0 always (items are fixed or suppressed inline with '# quality-ok: <reason>').
+# Wired into make check as of EVAL-P15.4.
 check-test-quality:
 	$(PYTHON) scripts/check_test_quality.py
 
-# check-docstrings: fail when any src/ file lacks Layer:/Purpose: (+ Public surface: for __init__.py).
+# check-docstrings: fail when any src/ or evals/ file lacks Layer:/Purpose: (+ Public surface: for __init__.py).
 check-docstrings:
 	$(PYTHON) scripts/docstring_audit.py
 
 # check: the single canonical health gate. Same command locally and in CI.
 # mypy is at 0 (SEV-14 done) so 'type' is now a hard gate here.
-check: lint check-rules check-layers check-docstrings type check-harness check-human-gates test-cov
+# EVAL-P15.4 added: check-evals-rules type-evals check-test-quality test-cov-evals
+check: lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-harness check-human-gates check-test-quality test-cov test-cov-evals
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 

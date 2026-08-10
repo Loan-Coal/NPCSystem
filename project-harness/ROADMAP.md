@@ -1729,7 +1729,7 @@ cannot fail is not evidence.
       module that cannot call it), and the 7 `pytest.raises(Exception)` frozen-model checks. Each flagged
       item is either fixed or given an inline `# quality-ok: <reason>` waiver — never bulk-suppressed. ✅ AUTO (EVAL-P15.3, 2026-08-10)
 
-- [ ] **EVAL-P15.4** Bring `evals/` under the gates (**closes ISSUE-124**). Files: `edit Makefile`,
+- [x] **EVAL-P15.4** Bring `evals/` under the gates (**closes ISSUE-124**). Files: `edit Makefile`,
       `edit scripts/check_rules.py`, `edit scripts/docstring_audit.py`, `edit pyproject.toml`.
       `evals/` is outside `mypy`, `check-rules`, `check-docstrings`, and effectively outside coverage
       (`test-cov` gates 3 of 47 modules, diluted into a combined total dominated by `npc_engine`).
@@ -1756,7 +1756,7 @@ cannot fail is not evidence.
       `compare.py` 412, `runner.py` 403, `summary.py` 366, `case_drafts.py` 359), **30 functions over 40
       lines** (worst: `runner._run_case` at 155), and `summary._tally_failures` at nesting depth 7.
       Landing this red is acceptable **only** with each violation logged to ISSUES with an owning phase;
-      ISSUE-137/138 already cover two and understate the scope.
+      ISSUE-137/138 already cover two and understate the scope. ✅ AUTO (EVAL-P15.4, 2026-08-10)
 
 - [ ] **EVAL-P15.5** Silent-drop audit. Files: `create tests/unit/evals/test_no_silent_drops.py`,
       `edit evals/*.py` (log-and-raise at 16 sites).

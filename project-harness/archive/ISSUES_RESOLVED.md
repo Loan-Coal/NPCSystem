@@ -1852,3 +1852,18 @@ should be answered deliberately rather than by whoever commits next.
 or, if they are deemed too large/PII-adjacent for git, define where they *are* stored and have
 `calibrate` record the artifact's SHA-256 in its output so a quoted κ is at least traceable to a
 specific file.
+
+---
+
+## [FIXED] ISSUE-124: `evals/` is not covered by `mypy`, `check-rules`, or `check-docstrings`
+**Found:** 2026-07-31, during eval-program planning
+**Fixed:** 2026-08-10, in EVAL-P15.4
+**Severity:** P3 (nice-to-fix — no current defect, but zero enforcement on the directory intended for publication)
+**Where:** `Makefile` (`lint`, `type` recipes), `scripts/check_rules.py:108`, `scripts/docstring_audit.py`,
+`scripts/rules_baseline.txt`
+**Description:** Every quality gate scoped to `src/` only. Fixed by EVAL-P15.4:
+(1) `check_rules.py` extended to scan `evals/` via `--evals` flag, 59 violations grandfathered in
+`scripts/evals_baseline.txt`; (2) `docstring_audit.py` now scans `evals/` (2 violations fixed directly);
+(3) `scripts/mypy_evals_ratchet.py` + `.mypy_evals_baseline` (16 errors) added; (4) `test-cov-evals`
+gates evals coverage at 75% floor; all wired into `make check`.
+**Why deferred:** `EVAL-P0.3` brings `evals/` under `ruff` only, deliberately time-boxed to 30 minutes.

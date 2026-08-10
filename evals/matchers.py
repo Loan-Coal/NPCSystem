@@ -1,4 +1,8 @@
 """
+Module: matchers
+Layer: evals (standalone eval harness, outside the npc_engine layer model)
+Purpose: Expectation evaluators that score a single NPC response against a declared expectation.
+
 matchers.py - Expectation evaluators for eval cases.
 
 Supported kinds: schema, min_length, keyword_any, keyword_all, keyword_none,

@@ -4,7 +4,7 @@ Module: check_rules
 Layer: harness (repo-level dev tool, outside the package layer model)
 Purpose: Enforce the strict CLAUDE.md code rules as an executable, ratcheted gate.
 Dependencies: stdlib only.
-Used by: `make check-rules`, pre-commit, CI static-analysis.
+Used by: `make check-rules`, `make check-evals-rules`, pre-commit, CI static-analysis.
 
 This scanner turns the prose rules in project-harness/CLAUDE.md into checks. It uses
 a *baseline ratchet*: existing (grandfathered) violations are recorded in
@@ -12,9 +12,12 @@ scripts/rules_baseline.txt; the gate fails only when a NEW violation appears. Fi
 a baselined violation is reported and can be persisted with --update-baseline, so the
 debt can only ever shrink - it can never silently grow.
 
+evals/ is checked separately (--evals flag) against scripts/evals_baseline.txt using
+the same ratchet pattern.
+
 Rules:
   R001 file-size   - non-test .py over 300 lines (CLAUDE.md "300-line hard limit")
-  R002 print       - print() in src/npc_engine (CLAUDE.md "never print(), use logging")
+  R002 print       - print() in src/npc_engine and evals/ (CLAUDE.md "never print(), use logging")
   R003 swallow     - `except ...: pass` (CLAUDE.md "never swallow errors")
   R004 raise-exc   - `raise Exception(` (CLAUDE.md "custom exception hierarchy only")
   R005 cypher-leak - Cypher / session.run / begin_transaction outside graph/ (layer rule)
@@ -34,6 +37,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BASELINE_PATH = Path(__file__).resolve().parent / "rules_baseline.txt"
+EVALS_BASELINE_PATH = Path(__file__).resolve().parent / "evals_baseline.txt"
 
 MAX_NON_TEST_LINES = 300
 MAX_FUNCTION_LINES = 40  # CLAUDE.md: "no function or method may exceed 40 lines"
@@ -134,22 +138,46 @@ def _collect() -> set[str]:
     return found
 
 
-def _load_baseline() -> set[str]:
+def _collect_evals() -> set[str]:
+    """Scan evals/ for rule violations (R001, R002, R003, R004, R006).
+
+    Returns:
+        Set of violation signatures in the same format as _collect().
+    """
+    found: set[str] = set()
+    for path in _iter_py("evals"):
+        if _is_test_path(path):
+            continue
+        rel = _rel(path)
+        text = _read(path)
+        if len(text.splitlines()) > MAX_NON_TEST_LINES:
+            found.add(f"R001|{rel}")
+        found |= _oversized_functions(text, rel)
+        if _PRINT_RE.search(text):
+            found.add(f"R002|{rel}")
+        if _SWALLOW_RE.search(text):
+            found.add(f"R003|{rel}")
+        if _RAISE_EXC_RE.search(text):
+            found.add(f"R004|{rel}")
+    return found
+
+
+def _load_baseline(path: Path = BASELINE_PATH) -> set[str]:
     """Load grandfathered signatures from the baseline file (comments allowed)."""
-    if not BASELINE_PATH.exists():
+    if not path.exists():
         return set()
-    lines = _read(BASELINE_PATH).splitlines()
+    lines = _read(path).splitlines()
     return {ln.strip() for ln in lines if ln.strip() and not ln.startswith("#")}
 
 
-def _write_baseline(signatures: set[str]) -> None:
+def _write_baseline(signatures: set[str], path: Path = BASELINE_PATH) -> None:
     """Persist the baseline, sorted, with a header."""
     header = (
         "# Grandfathered CLAUDE.md rule violations - see scripts/check_rules.py.\n"
         "# The gate fails only on NEW violations. Shrink this file as debt is fixed\n"
-        "# (run `make check-rules-update`). Never add a line by hand to dodge the gate.\n"
+        "# (run the corresponding update target). Never add a line by hand to dodge the gate.\n"
     )
-    BASELINE_PATH.write_text(header + "\n".join(sorted(signatures)) + "\n", encoding="utf-8")
+    path.write_text(header + "\n".join(sorted(signatures)) + "\n", encoding="utf-8")
 
 
 _RULE_HELP = {
@@ -171,30 +199,50 @@ def _print_group(title: str, signatures: set[str]) -> None:
         print(f"  [{rule}] {rel}\n        -> {_RULE_HELP.get(rule, '')}")
 
 
-def main() -> int:
-    """Run the gate. Exit 1 on any new violation; 0 otherwise."""
-    parser = argparse.ArgumentParser(description="Enforce CLAUDE.md rules with a baseline ratchet.")
-    parser.add_argument("--update-baseline", action="store_true", help="Persist the current set as the baseline.")
-    args = parser.parse_args()
+def _run_check(current: set[str], baseline_path: Path, label: str, update_flag: bool) -> int:
+    """Run the ratchet check for a given set of violations against a baseline file.
 
-    current = _collect()
-    if args.update_baseline:
-        _write_baseline(current)
-        print(f"check-rules: baseline updated - {len(current)} grandfathered violation(s).")
+    Args:
+        current: Set of current violation signatures.
+        baseline_path: Path to the baseline file.
+        label: Human-readable label for the check (e.g. "check-rules", "check-evals-rules").
+        update_flag: If True, persist current as the new baseline and exit 0.
+    Returns:
+        Exit code: 0 on pass, 1 on new violations.
+    """
+    if update_flag:
+        _write_baseline(current, baseline_path)
+        print(f"{label}: baseline updated - {len(current)} grandfathered violation(s).")
         return 0
 
-    baseline = _load_baseline()
+    baseline = _load_baseline(baseline_path)
     new = current - baseline
     resolved = baseline - current
 
     if resolved:
-        print(f"check-rules: {len(resolved)} baselined violation(s) resolved - run `make check-rules-update` to ratchet down.")
+        print(f"{label}: {len(resolved)} baselined violation(s) resolved - run the update target to ratchet down.")
     if new:
-        _print_group(f"\ncheck-rules: FAIL - {len(new)} NEW rule violation(s):", new)
+        _print_group(f"\n{label}: FAIL - {len(new)} NEW rule violation(s):", new)
         print("\nFix them, or (only with justification) add a DECISIONS.md entry and re-baseline.")
         return 1
-    print(f"check-rules: OK - no new violations ({len(baseline)} grandfathered).")
+    print(f"{label}: OK - no new violations ({len(baseline)} grandfathered).")
     return 0
+
+
+def main() -> int:
+    """Run the gate. Exit 1 on any new violation; 0 otherwise."""
+    parser = argparse.ArgumentParser(description="Enforce CLAUDE.md rules with a baseline ratchet.")
+    parser.add_argument("--update-baseline", action="store_true", help="Persist the current set as the baseline.")
+    parser.add_argument("--evals", action="store_true", help="Check evals/ instead of src/+demo_game/.")
+    parser.add_argument("--update-evals-baseline", action="store_true", help="Persist the evals/ set as its baseline.")
+    args = parser.parse_args()
+
+    if args.evals or args.update_evals_baseline:
+        current = _collect_evals()
+        return _run_check(current, EVALS_BASELINE_PATH, "check-evals-rules", args.update_evals_baseline)
+
+    current = _collect()
+    return _run_check(current, BASELINE_PATH, "check-rules", args.update_baseline)
 
 
 if __name__ == "__main__":

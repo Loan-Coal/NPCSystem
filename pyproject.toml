@@ -76,3 +76,10 @@ required-imports = ["from __future__ import annotations"]
 mypy_path = "src"
 strict = true
 ignore_missing_imports = true
+
+# evals/ is checked separately via `make type-evals` (scripts/mypy_evals_ratchet.py)
+# to track its error count independently. Current baseline: 16 errors (.mypy_evals_baseline).
+
+[tool.coverage.run]
+# Explicit source list so `--cov=evals` measures evals/ correctly in make test-cov-evals.
+source = ["src/npc_engine", "evals"]

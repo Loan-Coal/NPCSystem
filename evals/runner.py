@@ -1,4 +1,8 @@
 """
+Module: runner
+Layer: evals (standalone eval harness, outside the npc_engine layer model)
+Purpose: Orchestrate execution of eval cases against a live engine and record pass/fail results.
+
 runner.py - Eval case runner.
 
 Usage:
