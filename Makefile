@@ -13,7 +13,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         test-v13-contracts test-v13-graph-admin test-v13-retrieval \
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
-        check-rules check-rules-update check-layers check-docstrings roadmap-verify check-human-gates check-conservation type-ratchet type-ratchet-update check-harness \
+        check-rules check-rules-update check-layers check-docstrings roadmap-verify check-human-gates check-conservation check-test-quality type-ratchet type-ratchet-update check-harness \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
@@ -139,6 +139,12 @@ check-human-gates:
 # Identity 4 is DEFERRED to EVAL-P17.4 (spans two different artifact producers).
 check-conservation:
 	$(PYTHON) scripts/check_conservation.py
+
+# check-test-quality: static scan of tests/** for anti-vacuous patterns (4 types).
+# Exits 0 always (report-only until EVAL-P15.4 wires it as a gate).
+# Each flagged item must be fixed or suppressed with '# quality-ok: <reason>'.
+check-test-quality:
+	$(PYTHON) scripts/check_test_quality.py
 
 # check-docstrings: fail when any src/ file lacks Layer:/Purpose: (+ Public surface: for __init__.py).
 check-docstrings:

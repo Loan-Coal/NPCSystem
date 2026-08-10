@@ -1716,7 +1716,7 @@ cannot fail is not evidence.
       The script must also pass cleanly on a synthetic *fixed* fixture, so it is proven to go green as well
       as red — a detector that only ever reports failure is not distinguishable from one that is broken. ✅ AUTO (EVAL-P15.2, 2026-08-10)
 
-- [ ] **EVAL-P15.3** Anti-vacuous-test gate. Files: `create scripts/check_test_quality.py`,
+- [x] **EVAL-P15.3** Anti-vacuous-test gate. Files: `create scripts/check_test_quality.py`,
       `create tests/unit/scripts/test_check_test_quality.py`, `edit Makefile` (`check-test-quality`).
       Static scan of `tests/**` flagging the patterns the audit found load-bearing: assertions comparing a
       value to itself (`x == x` via a property defined as that expression); `pytest.raises(Exception)` where
@@ -1727,7 +1727,7 @@ cannot fail is not evidence.
       `test_four_cells_sum_to_annotated_count` (asserts a property against its own definition),
       `test_deterministic_pass.py::test_scores_every_record_without_llm` (asserts a mock is uncalled by a
       module that cannot call it), and the 7 `pytest.raises(Exception)` frozen-model checks. Each flagged
-      item is either fixed or given an inline `# quality-ok: <reason>` waiver — never bulk-suppressed.
+      item is either fixed or given an inline `# quality-ok: <reason>` waiver — never bulk-suppressed. ✅ AUTO (EVAL-P15.3, 2026-08-10)
 
 - [ ] **EVAL-P15.4** Bring `evals/` under the gates (**closes ISSUE-124**). Files: `edit Makefile`,
       `edit scripts/check_rules.py`, `edit scripts/docstring_audit.py`, `edit pyproject.toml`.
