@@ -4,7 +4,7 @@ Layer: evals (eval harness — not part of src/)
 Purpose: Run one promoted scenario k times with world reset before each repetition,
          recording per-repetition outcome, wall-clock duration, and reset cost.
          Aggregates into CaseStat so flakiness classification comes free.
-Dependencies: time (stdlib), typing, pydantic, case_stats, statistics (evals/)
+Dependencies: time (stdlib), typing, pydantic, case_stats, rate_stats (evals/)
 Used by: evals/sequence_rates.py (EVAL-P12.4)
 Does NOT: import from src/npc_engine/, call the NPC engine directly.
 """
@@ -17,7 +17,7 @@ from typing import Callable
 from pydantic import BaseModel, ConfigDict
 
 from case_stats import CaseStat, classify
-from statistics import pass_rate, wilson_interval
+from rate_stats import pass_rate, wilson_interval
 
 # ---------------------------------------------------------------------------
 # Types

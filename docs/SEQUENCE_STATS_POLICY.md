@@ -179,7 +179,7 @@ in the report; a missing CI is a visible absence that prompts the reader to ask 
 
 ## 6. Relationship to the single-turn eval harness (v1)
 
-The v1 harness (`evals/summary.py`, `evals/statistics.py`, `evals/paired_stats.py`)
+The v1 harness (`evals/summary.py`, `evals/rate_stats.py`, `evals/paired_stats.py`)
 computes Wilson CIs and McNemar on single-turn cases. The v1 harness has no reset
 concept — each case is a fresh, stateless invocation by construction.
 
@@ -221,7 +221,7 @@ v1 headline rates.
 | Claim | Source |
 |---|---|
 | Fidelity determined from `reset_receipt.surviving` | `evals/sequence_records.py:ResetReceipt` |
-| Wilson CI implementation | `evals/statistics.py:wilson_interval` |
+| Wilson CI implementation | `evals/rate_stats.py:wilson_interval` |
 | McNemar implementation (reused for first-vs-last) | `evals/paired_stats.py:mcnemar_exact` |
 | Cochran's Q (to be implemented in future runner) | Not yet shipped — EVAL-P14 implementation phase |
 | Order-effect check output format | §4.3 above |

@@ -3,7 +3,7 @@ Module: case_stats
 Layer: evals (utility)
 Purpose: Per-case statistics: CaseStat model, stability classification, and aggregation
          of JudgedRecords by eval slot (record_id) across repetitions.
-Dependencies: pydantic, statistics (evals/), eval_records (evals/)
+Dependencies: pydantic, rate_stats (evals/), eval_records (evals/)
 Used by: report generation (EVAL-P2.x onward)
 """
 
@@ -15,7 +15,7 @@ from typing import Literal, Sequence
 from pydantic import BaseModel, ConfigDict
 
 from eval_records import JudgedRecord
-from statistics import pass_rate, wilson_interval
+from rate_stats import pass_rate, wilson_interval
 
 # ---------------------------------------------------------------------------
 # Types

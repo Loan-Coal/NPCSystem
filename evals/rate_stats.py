@@ -1,10 +1,14 @@
 """
-Module: statistics
+Module: rate_stats
 Layer: evals (utility)
 Purpose: Hand-implemented Wilson score confidence interval and pass-rate helpers.
          Uses only `math` — no scipy, sklearn, or statsmodels dependency.
+         Named `rate_stats`, not `statistics`: `pyproject.toml` puts `evals/` on
+         `pythonpath`, so a module named `statistics` shadows the stdlib module of
+         that name for every importer in the process (DEC-162).
 Dependencies: math
-Used by: evals/case_stats.py (EVAL-P2.2), report generation.
+Used by: evals/case_stats.py, evals/compare.py, evals/refusal_rate.py,
+         evals/sequence_runner.py, evals/summary.py.
 """
 
 from __future__ import annotations

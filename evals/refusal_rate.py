@@ -4,7 +4,7 @@ Layer: evals (eval harness — not part of src/)
 Purpose: Score grounded NPC responses for over-refusal — detecting when an NPC
          refuses to share knowledge it holds in the knowledge graph. Reports the
          over-refusal rate with Wilson CI for display alongside guard/capability rates.
-Dependencies: matchers (judge_refusal, JudgeResult), statistics (pass_rate, wilson_interval)
+Dependencies: matchers (judge_refusal, JudgeResult), rate_stats (pass_rate, wilson_interval)
 Used by: tests/unit/evals/test_refusal_rate.py; format_summary_lines integration (future)
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Callable, Sequence
 
 from matchers import JudgeResult, judge_refusal
-from statistics import pass_rate, wilson_interval
+from rate_stats import pass_rate, wilson_interval
 
 # Format string matching the guard/capability rate display in summary.py.
 _RATE_FMT: str = "{k}/{n}  {rate:.3f}  95% CI [{ci_low:.3f}–{ci_high:.3f}]"

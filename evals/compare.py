@@ -7,7 +7,7 @@ Purpose: compare verb — load two generation directories, aggregate judged reco
          other are named explicitly — a silently shrunken denominator is the failure mode
          this module is designed to catch.
 Dependencies: argparse, json, pathlib, sys, collections; pydantic; case_stats (classify),
-              statistics (pass_rate, wilson_interval), paired_stats (paired_compare, PairedResult)
+              rate_stats (pass_rate, wilson_interval), paired_stats (paired_compare, PairedResult)
 Used by: Makefile eval-compare target; tests/unit/evals/test_compare.py; evals/__main__.py
 """
 
@@ -24,7 +24,7 @@ from pydantic import BaseModel, ConfigDict
 
 from case_stats import CaseStat, classify, classify_battery
 from paired_stats import PairedResult, paired_compare
-from statistics import pass_rate, wilson_interval
+from rate_stats import pass_rate, wilson_interval
 
 # ---------------------------------------------------------------------------
 # Constants

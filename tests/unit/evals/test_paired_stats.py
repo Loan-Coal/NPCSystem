@@ -2,7 +2,7 @@
 Module: test_paired_stats
 Layer: test (unit)
 Purpose: Tests for evals/paired_stats.py — mcnemar_exact and paired_compare.
-Dependencies: pytest, paired_stats (evals/), case_stats (evals/), statistics (evals/)
+Dependencies: pytest, paired_stats (evals/), case_stats (evals/), rate_stats (evals/)
 Used by: pytest (make test / make check)
 """
 
@@ -22,7 +22,7 @@ from paired_stats import PairedResult, mcnemar_exact, paired_compare
 def _make_stat(case_id: str, passes: int, k: int) -> CaseStat:
     """Build a minimal CaseStat for paired_compare fixture construction."""
     from case_stats import classify
-    from statistics import pass_rate, wilson_interval
+    from rate_stats import pass_rate, wilson_interval
 
     rate = pass_rate(passes, k)
     ci_low, ci_high = wilson_interval(passes, k)

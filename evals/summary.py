@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from statistics import pass_rate, wilson_interval
+from rate_stats import pass_rate, wilson_interval
 
 # Guard battery = the cases that prove "NPCs never invent lore or break character".
 # Adversarial cases (case_adv_*) and negative knowledge-guard cases (case_neg_*).

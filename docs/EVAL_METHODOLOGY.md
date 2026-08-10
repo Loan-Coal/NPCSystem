@@ -14,8 +14,8 @@ any figure without running the suite.
 
 **What it measures:** Uncertainty around a binary pass rate.
 
-**Where it is computed:** `evals/statistics.py` — `wilson_interval(successes, trials)`  
-**Pinned by:** `tests/unit/evals/test_statistics.py::test_wilson_3_of_3` and
+**Where it is computed:** `evals/rate_stats.py` — `wilson_interval(successes, trials)`  
+**Pinned by:** `tests/unit/evals/test_rate_stats.py::test_wilson_3_of_3` and
 `test_wilson_table_driven`
 
 **Why not the normal approximation?**
@@ -43,7 +43,7 @@ margin = z * sqrt(p̂(1-p̂)/n + z²/(4n²)) / (1 + z²/n)
 
 This always stays in [0, 1], has better coverage at both tails, and matches hand-worked
 arithmetic to three decimal places for the test fixtures (see the worked table in
-`test_statistics.py`).
+`test_rate_stats.py`).
 
 **Concrete check:** For 3/3 passes the Wilson interval is [0.438, 1.000] — *not* [1.0,
 1.0]. That 44 % lower bound is the honest price of having only three data points.
@@ -242,7 +242,7 @@ Every number in any published report or README must trace to one of these:
 |-------|--------|------|
 | Guard rate + CI | `evals/summary.py:EvalSummary` | `test_case_stats.py` |
 | Capability rate + CI | `evals/summary.py:EvalSummary` | `test_case_stats.py` |
-| Wilson CI bounds | `evals/statistics.py:wilson_interval` | `test_statistics.py::test_wilson_table_driven` |
+| Wilson CI bounds | `evals/rate_stats.py:wilson_interval` | `test_rate_stats.py::test_wilson_table_driven` |
 | McNemar p-value | `evals/paired_stats.py:mcnemar_exact` | `test_paired_stats.py::test_mcnemar_exact_matches_worked_example` |
 | Scorer κ + CI | `evals/calibration.py:kappa_interval` | `test_calibration.py` |
 | Trust tier | `evals/scorer_trust_policy.py:check_publication` | `test_trust_policy.py` |

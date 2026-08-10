@@ -1,9 +1,9 @@
 """
-Module: test_statistics
+Module: test_rate_stats
 Layer: test (unit)
-Purpose: Table-driven tests for evals/statistics.py — wilson_interval and pass_rate.
+Purpose: Table-driven tests for evals/rate_stats.py — wilson_interval and pass_rate.
          Hand-worked arithmetic is documented inline so every digit is traceable.
-Dependencies: math, pytest, statistics (evals/)
+Dependencies: math, pytest, rate_stats (evals/)
 Used by: pytest (make test / make check)
 """
 
@@ -13,7 +13,7 @@ import math
 
 import pytest
 
-from statistics import pass_rate, wilson_interval
+from rate_stats import pass_rate, wilson_interval
 
 # ---------------------------------------------------------------------------
 # Hand-worked Wilson score arithmetic (z=1.96, z²=3.8416)
