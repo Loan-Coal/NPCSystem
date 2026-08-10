@@ -1288,13 +1288,13 @@ worth more. Every headline carries n, k, judge and an interval; every known limi
 omitted.
 **Depends on:** EVAL-P7.3, EVAL-P9.4, EVAL-P10.1, EVAL-P12.4.
 
-- [ ] **EVAL-P13.1** Methodology writeup. Files: `create docs/EVAL_METHODOLOGY.md`.
+- [x] **EVAL-P13.1** Methodology writeup. Files: `create docs/EVAL_METHODOLOGY.md`.
       One page per technique, each with *why the naive alternative is wrong*: Wilson over normal approximation
       at small n; exact McNemar over chi-squared at 53 cases; kappa with a bootstrap CI over a bare kappa;
       `evaluated_cases` over `total_cases`; capability paired with guard. Include the anti-metric section —
       what this suite cannot see (pronouns, unnamed fabrications, single-turn only, one judge).
       Validation: every claim links to the module that computes it and the test that pins it; a reader can
-      check any number without running anything.
+      check any number without running anything. ✅ AUTO (EVAL-P13.1, 2026-08-10)
 
 - [ ] **EVAL-P13.2** ⏸️ *(blocked: needs a real run artifact to render)* Dashboard headline card. Files: `edit evals/dashboard/templates/run_detail.html`,
       `edit evals/dashboard/app.py`, `edit tests/unit/evals/test_dashboard_detail.py`.
