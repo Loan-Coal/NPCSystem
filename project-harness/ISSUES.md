@@ -478,3 +478,18 @@ labelled rows contain U+FFFD. The corruption was in the Windows cp1252 **console
 when it was printed during diagnosis — not in any file. `evals/__main__._force_utf8_streams()` already
 exists for precisely this. Recorded rather than deleted, because a plausible-looking false repair
 instruction that reaches a future session is more dangerous than the bug it describes.
+
+## ISSUE-144: `scripts/check_human_gates.py` has 7 lines of headroom under the 300-line cap
+**Found:** 2026-08-10, during DEC-164 (interleaving the HUMAN GATE blocks)
+**Severity:** P3 (nice-to-fix)
+**Where:** `scripts/check_human_gates.py` (293 lines of non-test code)
+**Description:** The file is compliant today (293 < 300, longest function 28 < 40) but has almost no
+room. The next feature — a `--why <task>` explainer, or gate-state caching — pushes it over, and
+whoever hits the cap will be mid-task and inclined to shave a docstring rather than split.
+**Why deferred:** Splitting a cohesive 293-line tool now would be the "artificial split" the code-style
+rule warns against, and DEC-164's scope was the gates, not their file layout. Single-task focus.
+**To fix:** Follow the precedent already sitting in the same directory — `roadmap_cursor.py` (CLI) over
+`_roadmap_cursor_core.py` (pure logic, frozen models, no I/O). Split into
+`check_human_gates.py` (argparse, `_read`, `_force_utf8_streams`, report rendering) and
+`_human_gates_core.py` (`HumanGate`, `parse_gates`, `task_states`, `blocked_tasks`, `verify_gates`).
+The test module already imports only the pure names plus `main`, so the split is import-path-only.

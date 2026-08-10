@@ -2820,3 +2820,73 @@ The asymmetry is the whole argument.
 (`range(25)` -> `range(20)`), which is the behaviour DEC-161 built it for — the tripwire proving it fires.
 `EXPECTED_FLAGS` is asserted by containment, so its now-out-of-fence P20..P24 entries go inert rather than
 stale. `tests/unit/harness` 72 passed. ROADMAP.md remains 100% CRLF.
+
+## DEC-164: HUMAN GATEs — interleave the loop-impossible work into the roadmap and make the loop halt at it
+**Date:** 2026-08-10 · **Status:** ✅ ACCEPTED (human, during the EVAL-P15 pre-flight)
+· **Extends:** DEC-163 (the fence says *where* the loop stops; gates say *when*)
+· **Drives:** `scripts/check_human_gates.py`, `scripts/expand_loop.sh`, `Makefile` (`check-human-gates`),
+`project-harness/ROADMAP.md` (12 `#### 🔴 HUMAN GATE` blocks + index), `project-harness/HUMAN_TASKS.md`
+
+**Context.** `HUMAN_TASKS.md` is an ordered runbook for the 13 pieces of work the overnight loop cannot do.
+It had no mechanical connection to anything. The roadmap marks those tasks `(live` / `⏸️`, and
+`_roadmap_cursor_core.compute_next` skips them — but skipping is all it does. Verified 2026-08-10 by
+reading it: `compute_next` iterates phases in file order and returns the first task that is
+`not done and not skippable`. It never reads a phase's `Depends on:` line. **The roadmap's dependency
+graph is documentation; nothing enforces it.**
+
+The consequence is precise and was about to happen. Released tonight, the loop drains EVAL-P15.2 → P19.3
+across ~18 h and stops with `EVAL-P15.1`, `EVAL-P17.5` and `EVAL-P19.4` still open — the oracle labeller
+that proves the arithmetic, the retraction of the wrong headline, and the κ repair. A green queue would
+read as a finished programme. The flags say *"not you"*; nothing in the repo said *"not yet"*.
+
+**Decision.** Interleave twelve gates through ROADMAP.md at the points where the work must stop, and make
+them executable. Grammar — three id lists and nothing else, because a gate needing prose to evaluate is a
+gate no script can enforce:
+
+    #### 🔴 HUMAN GATE H2 — `EVAL-P19.4` re-judge, merge, re-measure κ
+    **Ready when:** `EVAL-P15.1`, `EVAL-P19.0`, `EVAL-P19.0b`, `EVAL-P19.1`
+    **Clears when:** `EVAL-P19.4`
+    **Blocks:** `EVAL-P22.2`, `EVAL-P22.3`, `EVAL-P22.4`
+
+`Ready when` ∪ `Clears when` are the gate's requirements; it is **open** when all are ticked and **closed**
+otherwise, and a closed gate's `Blocks` list may not be started by anyone. `Ready when` alone answers the
+separate question *"is the ball in my court?"*, which is what the report's `WAITING` / `READY` labels show.
+A **barrier** gate (H3, the fence reopen) has an empty `Clears when` because moving the marker is a human
+act, not a task — the union rule makes that fall out rather than needing a special case.
+
+**Enforcement, three layers:**
+1. `expand_loop.sh` calls `check_human_gates.py --check <task>` after the cursor and before `run_one_task`,
+   and **halts** on a closed gate, writing it to the human-verification file.
+2. `make check` runs `--verify`: grammar only. A *closed* gate is normal and exits 0; red means a gate
+   references a task id that does not exist, is missing a field, or blocks its own requirement (can never
+   open). This cannot go red on progress, which is the ISSUE-136 lesson applied.
+3. `tests/unit/scripts/test_check_human_gates.py` (22 tests) pins the semantics, plus two properties
+   against the live file: the gates are invisible to `parse_roadmap`, and the loop's actual next task is
+   not behind a closed gate.
+
+**Halt, not skip-the-phase.** `expand_loop.sh` §6.4 skips a phase on a blocked prerequisite rather than
+halting the night. Gates are the exception: every gate's blocked set is downstream of a *measurement*, so
+continuing past one means building on a number nobody has taken. That is the EVAL-P8.2 failure exactly.
+
+**Why not a new `### Phase`.** `test_real_roadmap_parses_and_verifies_clean` requires the in-fence phases to
+be a contiguous `EVAL-P0..EVAL-Pn` prefix, so any new in-fence phase would have to be named `EVAL-P20`,
+which exists. `#### ` is matched by `BLOCK_END_RE` and not by `PHASE_HEADING_RE`, so a gate terminates the
+preceding task's block and is otherwise invisible to the cursor — verified, `--verify` still reports
+`20 phases` and `--next` is unchanged at `EVAL-P15.2`.
+
+**Scope: gates cover HUMAN_TASKS tasks 2, 4 and 6–12 only.** Tasks 0, 1, 3 and 5 are executable on
+2026-08-10 and a gate on work you can already do only ever reads green. **The live risk this leaves is
+task 3 (`EVAL-P15.1`, the oracle labeller):** human-only, ungated, and present in H2's and H9's ready sets.
+If it slips, both gates are ready in name only. It is also, on measurement, doable *now* — Phase EVAL-P15's
+header says "Depends on: nothing", and P15.1 touches only `scripts/oracle_labeller.py`, `label_import.py`
+and the Makefile. HUMAN_TASKS orders it "after the loop ticks EVAL-P15.2" for tree-cleanliness (ISSUE-139),
+not correctness, and the loop reaches `EVAL-P16.2`/`P16.3` — the κ changes the oracle exists to check — on
+night 1. Recorded here rather than acted on, because reordering the runbook was out of this task's scope.
+
+**Numbering is execution order, not file order.** H11 (`EVAL-P8.3`, Program 1) sits near the top of the file
+and is the last thing run. The contiguity test therefore asserts the id *set* has no hole, and the report
+sorts by gate number — a report in file order would read as a queue starting with the task you must not run.
+
+**Validation:** `check_human_gates.py --verify` → `HUMAN GATES OK (12 gates)`; the report shows all twelve
+`WAITING` with 21 blocked task ids; `--check EVAL-P15.2` exits 0 and `--check EVAL-P22.3` exits 1 naming H2;
+`roadmap_cursor.py --verify` unchanged at `20 phases`; ROADMAP.md still 100% CRLF (0 LF-only lines).

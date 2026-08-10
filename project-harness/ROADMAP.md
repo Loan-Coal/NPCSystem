@@ -1057,6 +1057,17 @@ case-level** test is the fix — n = 53 cases, not n = 3 repeats — and it dete
       the k of **both** runs adjacent to every rate, and the four-way delta table; comparing a run against
       itself yields `no_detectable_change` with p = 1.0 and zero discordant pairs. ✅ AUTO (EVAL-P8.2, 2026-08-08)
 
+#### 🔴 HUMAN GATE H11 — `EVAL-P8.3` second measured run
+**Ready when:** `EVAL-P16.4`, `EVAL-P17.1`, `EVAL-P18.3`
+**Clears when:** `EVAL-P8.3`
+**Blocks:** —
+**Runbook:** `project-harness/HUMAN_TASKS.md` task 12 · ~62 min + a judge pass
+**Why not the loop:** a live generation against a `FROZEN_PATH_PREFIXES` directory.
+**Do not run this early.** Verified 2026-08-10: `compare` reads 115 of 307 slots, groups by
+expectation slot rather than case, and returns `NO_DETECTABLE_CHANGE p=1.0000` with **exit 0**
+over an empty intersection. All three fixes are in the ready set above. **Cheaper still:**
+fold it into H7's regeneration instead of spending a separate generation on a prompt bump.
+
 - [ ] **EVAL-P8.3** *(live; requires the full stack)* **Second measured run and the first real comparison.**
       EVAL-P8.2's unit tests are fixture-driven, so `compare` can be green while never having compared two
       real generations. Generate a second k=3 run at a different commit (any change worth measuring — a
@@ -1334,6 +1345,16 @@ real work and is EVAL-P12.2, not a footnote.
       Validation: with k=3 against a mock, reset is invoked exactly 3 times and never *after* the last
       repetition; a scenario that throws mid-run records a failed repetition rather than aborting the set. ✅ AUTO (EVAL-P12.3, 2026-08-09)
 
+#### 🔴 HUMAN GATE H5 — `EVAL-P12.4` measured multi-turn
+**Ready when:** `EVAL-P12.1`
+**Clears when:** `EVAL-P12.4`
+**Blocks:** `EVAL-P13.2`, `EVAL-P13.3`, `EVAL-P14.3`
+**Runbook:** `project-harness/HUMAN_TASKS.md` task 7 · budget comes from `EVAL-P12.1`
+**Why not the loop:** it needs a live seeded stack, and its wall-clock budget is
+`6 × k × (turns + reset_cost)` — a number only `EVAL-P12.1`'s measurement supplies.
+**Fidelity-conditional:** under PARTIAL it must print the order-effect check *in place of*
+the Wilson interval. A run that prints neither has reported nothing and does not clear this.
+
 - [ ] **EVAL-P12.4** *(live; wall-clock budget comes from EVAL-P12.1's measurement)*
       Promote 6 scenarios and report their rates. Files: `edit evals/sequence_runner.py`,
       `create evals/sequence_fidelity.py`, `edit Makefile`,
@@ -1505,6 +1526,43 @@ already on disk (`k3_73e6c36`), so the loop can prove its work. P20–P24 assume
 that does not exist, so the loop could only build them against fixtures — which is precisely how EVAL-P8.2's
 `compare` shipped green while emitting `Intersection: 0 cases / NO_DETECTABLE_CHANGE / p=1.0000 / exit 0`
 against the two real generation dirs. The reopen conditions are recorded at the marker itself.
+
+**Human gates (DEC-164) — the schedule for the work the loop cannot do.** Twelve
+`#### 🔴 HUMAN GATE Hn` blocks are interleaved through this roadmap at the points where an
+unattended session must stop and you must act. Each names the ids it waits on
+(`Ready when`), the ids that open it (`Clears when`), and the ids it holds back (`Blocks`).
+`scripts/check_human_gates.py` is the authority; this table is only the map.
+
+**Why they exist:** `compute_next` enforces **no dependency at all** — it skips a flagged
+task and walks on. The flags say *"not you"*; nothing said *"not yet"*. So the loop ran
+straight past every `(live` / ⏸️ task and would finish the fence with the measurements
+still unmade. `expand_loop.sh` now calls `check_human_gates.py --check <task>` before every
+task and **halts** on a closed gate, naming it. `make check` audits the grammar.
+
+| Gate | Clears when | Runbook (HUMAN_TASKS.md) | Sits in |
+|---|---|---|---|
+| H1 | `EVAL-P17.5` | task 2 | Phase EVAL-P17 |
+| H2 | `EVAL-P19.4` | task 4 | Phase EVAL-P19 |
+| H3 | — *(barrier: the fence reopen)* | Week-2 boundary row | above Phase EVAL-P20 |
+| H4 | `EVAL-P20.0` | task 6 | Phase EVAL-P20 |
+| H5 | `EVAL-P12.4` | task 7 | Phase EVAL-P12 |
+| H6 | `EVAL-P20.1` + `EVAL-P20.2` | tasks 8 + 5, one commit | Phase EVAL-P20 |
+| H7 | `EVAL-P20.4` | task 9 | Phase EVAL-P20 |
+| H8 | `EVAL-P21.1` … `EVAL-P21.3` | task 10 | Phase EVAL-P21 |
+| H9 | `EVAL-P22.2` | task 11, first half | Phase EVAL-P22 |
+| H10 | `EVAL-P22.3` + `EVAL-P22.4` | task 11, second half | Phase EVAL-P22 |
+| H11 | `EVAL-P8.3` | task 12 | Phase EVAL-P8 |
+| H12 | `EVAL-P24.3` | task 12 | Phase EVAL-P24 |
+
+Numbered in **execution** order, not file order — H11 sits near the top of this file
+(Program 1) and is the last thing you run, which is exactly why it needs a gate.
+`python scripts/check_human_gates.py` prints the current state of all twelve in schedule
+order, with the outstanding ids for each.
+
+**No gate exists for HUMAN_TASKS tasks 0, 1, 3 and 5**, deliberately: all four are
+executable on 2026-08-10, and a gate on work you can already do is a gate that only ever
+reads green. Task 3 (`EVAL-P15.1`) is the one to watch — it is human-only, ungated, and
+sits in H2's and H9's ready sets, so if it slips, both gates are ready in name only.
 
 Three guards from DEC-160 still hold and are unchanged by the narrowing:
 `loop_gates.FROZEN_PATH_PREFIXES` covers `evals/calibration/` and `evals/generations/`, so no unattended
@@ -1838,6 +1896,16 @@ returns `False` instead.
       denominator; a run with any skipped case prints the skip reason from `skip_detail`
       (**closes ISSUE-130**, whose hardcoded "NPC not found" string misdirected a prior session).
 
+#### 🔴 HUMAN GATE H1 — `EVAL-P17.5` re-measure and retract
+**Ready when:** `EVAL-P17.1`, `EVAL-P17.2`, `EVAL-P17.3`, `EVAL-P17.4`
+**Clears when:** `EVAL-P17.5`
+**Blocks:** `EVAL-P13.3`
+**Runbook:** `project-harness/HUMAN_TASKS.md` task 2 · ~30 min · no regeneration
+**Why not the loop:** it edits the Session Log and ISSUES — the files the loop's own
+commit step touches — and it retracts a published number, which is a human's signature.
+**Also a fence-reopen condition** (H3, condition 2). The loop does *not* stall here:
+`EVAL-P17.6` needs `P17.1`/`P17.2`, not `P17.5`, so it may land first.
+
 - [ ] **EVAL-P17.5** ⏸️ *(edits the Session Log and ISSUES -- the files the loop's own commit step
       touches)* Re-measure and retract. Files: `edit project-harness/ROADMAP.md` (Session Log),
       `edit project-harness/ISSUES.md`.
@@ -1995,6 +2063,17 @@ relabelling. Nothing else on the board buys that much publishability that cheapl
       output is a work-list for EVAL-P20.1, not an automatic edit — deciding what a case *should* forbid is
       a human call.
 
+#### 🔴 HUMAN GATE H2 — `EVAL-P19.4` re-judge, merge, re-measure κ
+**Ready when:** `EVAL-P15.1`, `EVAL-P19.0`, `EVAL-P19.0b`, `EVAL-P19.1`
+**Clears when:** `EVAL-P19.4`
+**Blocks:** `EVAL-P22.2`, `EVAL-P22.3`, `EVAL-P22.4`
+**Runbook:** `project-harness/HUMAN_TASKS.md` task 4 · ~90 min · zero relabelling
+**Why not the loop:** the first `--merge` against the real 393-row human label file.
+`loop_gates.FROZEN_PATH_PREFIXES` covers `evals/calibration/` precisely so it cannot.
+**`EVAL-P15.1` is the trap in the ready set** — it is human-only too (HUMAN_TASKS task 3)
+and is *not* gated here, because it is executable today. Do it before the loop reaches
+`EVAL-P19`, or this gate is ready in name only.
+
 - [ ] **EVAL-P19.4** *(live; human session)* Re-judge, merge, re-measure (**the durability proof**).
       Files: none (operational). Runs a full judge pass and `label-import --merge` against the real
       393-row label file.
@@ -2027,6 +2106,23 @@ relabelling. Nothing else on the board buys that much publishability that cheapl
      Then move this marker down to below EVAL-P24.3 and record the move in DECISIONS.
      Never delete the fence; move it. -->
 
+#### 🔴 HUMAN GATE H3 — the Week-2 boundary: reopen the loop fence
+**Ready when:** `EVAL-P17.5`, `EVAL-P17.6`, `EVAL-P20.0`
+**Clears when:** — *(a barrier: moving the marker is a human act, not a task)*
+**Blocks:** `EVAL-P20.1`, `EVAL-P20.2`, `EVAL-P20.3`, `EVAL-P20.4`, `EVAL-P21.0`,
+`EVAL-P21.1`, `EVAL-P21.2`, `EVAL-P21.3`, `EVAL-P22.1`, `EVAL-P22.2`, `EVAL-P22.3`,
+`EVAL-P22.4`, `EVAL-P23.1`, `EVAL-P23.2`, `EVAL-P23.3`, `EVAL-P24.1`, `EVAL-P24.2`,
+`EVAL-P24.3`
+**Runbook:** `project-harness/HUMAN_TASKS.md` — the Week-2 boundary row
+**Why not the loop:** DEC-163 narrowed the fence because P20+ can only be validated
+against a post-regeneration artifact that does not exist. This gate is what makes
+reopening it safe: until the three conditions above are ticked, no session — loop or
+human — starts anything below. `EVAL-P20.0` is deliberately **absent** from `Blocks`:
+it is a reopen condition, not a consequence of one.
+**When it opens:** move `<!-- LOOP:QUEUE end -->` down to below `EVAL-P24.3`, record the
+move in DECISIONS, and update `test_real_roadmap_fence_state_tripwire`'s `range(20)`
+deliberately. That tripwire going red on the move is it working.
+
 ### Phase EVAL-P20 — Case-set repair + capability battery → REGENERATION #1
 **Goal:** One coherent case set worth measuring, landed in exactly one commit, then the first of two
 regenerations.
@@ -2058,6 +2154,17 @@ Three consequences, all of which must be handled before EVAL-P20.4 runs:
    `LLMGenerateProtocol.generate()` has no `seed` parameter). See EVAL-P20.0.
 **Depends on:** EVAL-P17, EVAL-P19, EVAL-P9.1 (capability contract, already done).
 
+#### 🔴 HUMAN GATE H4 — `EVAL-P20.0` deterministic generation
+**Ready when:** `EVAL-P17.5`, `EVAL-P19.4`
+**Clears when:** `EVAL-P20.0`
+**Blocks:** `EVAL-P20.4`, `EVAL-P22.4`
+**Runbook:** `project-harness/HUMAN_TASKS.md` task 6 · ~60 min
+**Why not the loop:** it changes `LLMGenerateProtocol`, a public interface with callers
+outside its module, and its gate is a *measured* ≥95% reproduction rate, not a passing test.
+**This is the highest-leverage hour in Program 3 and the easiest to skip by accident.**
+Without a seed, ~81% of the 393 labels die at every regeneration (~660 re-adjudications
+across the two budgeted ones). That is why it blocks both regenerations and nothing else does.
+
 - [ ] **EVAL-P20.0** *(live; human session — ask-gate CLEARED by explicit human approval 2026-08-09)*
       **Deterministic generation.** Changes `LLMGenerateProtocol` (a public interface with callers outside
       its module) and reverses the `seed`-absent half of DEC-146; both approved. Files: `edit src/npc_engine/engines/llm/protocols.py`,
@@ -2080,6 +2187,16 @@ Three consequences, all of which must be handled before EVAL-P20.4 runs:
       quantisation or driver versions), do **not** proceed on hope: amend EVAL-P20.4's Notes with the
       measured re-adjudication cost in rows before the regeneration runs, and make EVAL-P22's labelling
       budget absorb it. Approval covers adding the seed, not assuming it worked.
+
+#### 🔴 HUMAN GATE H6 — `EVAL-P20.1` case-set contradictions
+**Ready when:** `EVAL-P19.3`
+**Clears when:** `EVAL-P20.1`, `EVAL-P20.2`
+**Blocks:** `EVAL-P20.4`
+**Runbook:** `project-harness/HUMAN_TASKS.md` task 8 (+ task 5) · ~60 min + 2–3 h authoring
+**Why not the loop:** what a case forbids is a product decision.
+**Both ids clear this gate together, deliberately.** `EVAL-P20.1` and `EVAL-P20.2` must land
+in **one commit** before regeneration #1 — the 2-regeneration budget buys exactly one
+comparability discontinuity, and two commits would spend it twice.
 
 - [ ] **EVAL-P20.1** ⏸️ *(human authoring: what a case forbids is a product decision)* Resolve the
       case-set contradictions. Files: `edit evals/cases/*.yaml`,
@@ -2132,6 +2249,17 @@ Three consequences, all of which must be handled before EVAL-P20.4 runs:
       Validation: the report prints the over-refusal rate with its interval and its excluded count next to
       the guard and capability rates; the EVAL-P10.3 fixture still reproduces **4/15**.
 
+#### 🔴 HUMAN GATE H7 — `EVAL-P20.4` regeneration #1
+**Ready when:** `EVAL-P20.0`, `EVAL-P20.1`, `EVAL-P20.2`, `EVAL-P20.3`
+**Clears when:** `EVAL-P20.4`
+**Blocks:** `EVAL-P21.1`, `EVAL-P21.2`, `EVAL-P21.3`, `EVAL-P22.1`, `EVAL-P22.2`, `EVAL-P22.4`
+**Runbook:** `project-harness/HUMAN_TASKS.md` task 9 · ~85 min + ~2.5 h judge
+**Why not the loop:** it writes `evals/generations/`, a `FROZEN_PATH_PREFIXES` path, and
+spends one of only two regenerations.
+**Every precondition here has silently produced a worthless artifact before:** all three
+worlds seeded, `JUDGE_TIMEOUT_SECONDS=300`, panel models pre-warmed, tree clean.
+Fold `EVAL-P8.3` (H11) into this comparison rather than spending a separate 62-min generation.
+
 - [ ] **EVAL-P20.4** *(live; human session)* **Regeneration #1.** Files: none (operational).
       Preconditions, each of which has silently produced a worthless artifact before: all three worlds
       seeded; `JUDGE_TIMEOUT_SECONDS=300`; every panel model pre-warmed; working tree clean and committed.
@@ -2162,6 +2290,17 @@ model on 8-12 GB VRAM (PERF-06). Budget model load/unload per pass.
       Validation: the roster is `mixtral:8x7b` + `qwen2.5:14b` + one out-of-family model, none equal to any
       generation model; the DECISIONS entry records the independence argument, and states that two
       same-family judges would have been a 2-judge panel wearing a third hat.
+
+#### 🔴 HUMAN GATE H8 — `EVAL-P21.1`/`P21.3` panel execution and settling the judge
+**Ready when:** `EVAL-P20.4`, `EVAL-P21.0`
+**Clears when:** `EVAL-P21.1`, `EVAL-P21.2`, `EVAL-P21.3`
+**Blocks:** `EVAL-P22.4`, `EVAL-P24.1`
+**Runbook:** `project-harness/HUMAN_TASKS.md` task 10 · ~90 min + ~2.5 h per judge pass
+**Why not the loop:** `P21.1` changes `matchers._run_binary_judge`, a public surface, and
+`P21.3` records a DECISIONS entry settling a judge — an evidence call a human signs.
+**Sequential, not parallel:** `mixtral:8x7b` is ~27 GB and cannot co-reside on 8–12 GB VRAM
+(PERF-06). The third seat must be **out-of-family** (`llama3.1:8b` / `gemma2:9b`) — two
+qwen judges are one vote with a veto, not two raters.
 
 - [ ] **EVAL-P21.1** ⏸️ *(changes `matchers._run_binary_judge`, a public surface with callers outside
       its module)* Multi-judge execution and per-judge persistence. Files: `edit evals/judge_runner.py`,
@@ -2216,6 +2355,16 @@ machinery was built and never run.
       verdicts wherever both exist; the export names what was **not** sampled, so the coverage gap is
       explicit rather than implied.
 
+#### 🔴 HUMAN GATE H9 — `EVAL-P22.2` prove the chain before any Opus token
+**Ready when:** `EVAL-P15.1`, `EVAL-P19.4`, `EVAL-P20.4`, `EVAL-P22.1`
+**Clears when:** `EVAL-P22.2`
+**Blocks:** `EVAL-P22.3`
+**Runbook:** `project-harness/HUMAN_TASKS.md` task 11 (first half)
+**Why not the loop:** it merges against the real labels file, on an oracle-only output path.
+**This is the locked hard gate, not a guideline.** Opus is never run against an unproven
+chain (human decision, 2026-08-09). It is the narrowest gate on the board on purpose:
+one requirement, one consequence, no discretion.
+
 - [ ] **EVAL-P22.2** *(live; human session)* Dry-run the whole chain on the oracle labeller.
       Files: `edit Makefile`. Touches the real labels file via merge; must run against an oracle-only
       output path (see EVAL-P15.1).
@@ -2224,6 +2373,18 @@ machinery was built and never run.
       Validation: reported κ equals the closed-form value to 3 dp for every scorer; human verdicts from the
       previous rounds are preserved; drift flags fire exactly on the rows whose content changed. **This
       passing is the precondition for spending a single Opus token.**
+
+#### 🔴 HUMAN GATE H10 — `EVAL-P22.3`/`P22.4` the Opus spend and regeneration #2
+**Ready when:** `EVAL-P22.2`
+**Clears when:** `EVAL-P22.3`, `EVAL-P22.4`
+**Blocks:** `EVAL-P23.1`, `EVAL-P23.2`, `EVAL-P23.3`, `EVAL-P24.1`, `EVAL-P24.2`, `EVAL-P24.3`
+**Runbook:** `project-harness/HUMAN_TASKS.md` task 11 (second half) · ~3 h + Opus credits
+**Why not the loop:** it spends Anthropic credits and produces the final measured baseline —
+the artifact every published number is quoted from.
+**`P22.3` restores the inter-rater axis this project does not currently have.** The legacy
+393 rows are two sittings of **one** rater; `calibrate` must print `N/A (single rater)` for
+them, never the tautological κ = 1.000. Opus must be the pre-labeller **distinct from** the
+adjudicator, or the second axis is a variable compared with itself again.
 
 - [ ] **EVAL-P22.3** ⏸️ *(blocked on EVAL-P22.2 passing; spends Anthropic credits -- human session only)*
       Opus pre-labelling pass. Files: `edit evals/calibration/README.md`.
@@ -2301,6 +2462,16 @@ is its verdict.
       audit as a worked example of the harness catching its own errors.
       Validation: an expert reader can reconstruct every published number from the doc plus the committed
       artifacts; every claim names its n and its interval.
+
+#### 🔴 HUMAN GATE H12 — `EVAL-P24.3` README numbers
+**Ready when:** `EVAL-P21.3`, `EVAL-P22.3`, `EVAL-P23.3`, `EVAL-P24.1`, `EVAL-P24.2`
+**Clears when:** `EVAL-P24.3`
+**Blocks:** —
+**Runbook:** `project-harness/HUMAN_TASKS.md` task 12 · ~60 min
+**Why not the loop:** it edits published numbers. Every figure must be *copied* from a
+committed artifact with its `gen_id`, n and interval — never typed.
+**Grep before you finish:** `grep -rn "across 111" README.md docs/ project-harness/` —
+every prior quotation of `3 lore hallucinations across 111 adversarial turns` is retracted.
 
 - [ ] **EVAL-P24.3** ⏸️ *(edits published README numbers -- human call)* README numbers copied from a
       committed artifact only. Files: `edit README.md`,

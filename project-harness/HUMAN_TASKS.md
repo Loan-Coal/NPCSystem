@@ -13,26 +13,41 @@
 **The one rule:** the ROADMAP task is the source of truth for *what*. This file is the source of
 truth for *when* and *how*. If they disagree, the ROADMAP wins on content and you should fix this file.
 
+**Mechanically enforced since 2026-08-10 (DEC-164).** Tasks 2, 4 and 6–12 now have a
+`#### 🔴 HUMAN GATE` block sitting at their point in `ROADMAP.md`. `expand_loop.sh` checks every
+task against them and **halts** rather than building past an unmade measurement — before this,
+`compute_next` skipped a flagged task and walked straight on, so the loop would have drained the
+whole fence with `EVAL-P15.1`, `P17.5` and `P19.4` still open and the queue reading green.
+
+```bash
+python scripts/check_human_gates.py            # all 12 gates, schedule order, what is outstanding
+python scripts/check_human_gates.py --check EVAL-P20.4   # exit 1 + the gate id if it is blocked
+```
+
+Tasks **0, 1, 3 and 5 have no gate on purpose** — they are executable today, and a gate on work you
+can already do only ever reads green. ⚠️ **Task 3 is the one to watch:** it is human-only, ungated,
+and sits in H2's and H9's ready sets, so if it slips both gates are ready in name only.
+
 ---
 
 ## Status board
 
-| # | Task | When it unblocks | Your time | Blocks |
-|---|---|---|---|---|
-| **0** | Release the loop | **now** | 10 min | everything |
-| **1** | `EVAL-P12.1` — reset fidelity | **now** (independent of the loop) | ~45 min | P12.4, P14.3, ISSUE-143 |
-| **2** | `EVAL-P17.5` — re-measure and retract | after loop ticks **P17.4** | ~30 min | P13.3, fence reopen |
-| **3** | `EVAL-P15.1` — oracle labeller | after loop ticks **P15.2** | ~75 min | P19.4, P22.2, P22.3 |
-| **4** | `EVAL-P19.4` — re-judge, merge, re-measure κ | after loop ticks **P19.1** + task 3 | ~90 min | publication of any guard rate |
-| **5** | `EVAL-P20.2` — capability cases | any time after task 0 | 2–3 h (of ~4–5 h) | a non-gameable headline |
-| — | **Week-2 boundary** — everything below needs the fence reopened | | | |
-| 6 | `EVAL-P20.0` — deterministic seed | after tasks 2 + 4 | ~60 min | **every** regeneration |
-| 7 | `EVAL-P12.4` — measured multi-turn | after task 1 | budget from P12.1 | P13.2, P14.3 |
-| 8 | `EVAL-P20.1` — case-set contradictions | after loop ticks P19.3 | ~60 min | regen #1 |
-| 9 | `EVAL-P20.4` — regeneration #1 | after tasks 5, 6, 8 | ~85 min + 2.5 h judge | P21, P22 |
-| 10 | `EVAL-P21.1`, `P21.3` — panel + settle the judge | after task 9 | ~90 min | P22.4 |
-| 11 | `EVAL-P22.2` → `P22.3` → `P22.4` | after task 10 | ~3 h + Opus credits | P23, P24 |
-| 12 | `EVAL-P24.3`, `EVAL-P8.3` | last | ~60 min | README |
+| # | Task | Gate | When it unblocks | Your time | Blocks |
+|---|---|---|---|---|---|
+| **0** | Release the loop | — | **now** | 10 min | everything |
+| **1** | `EVAL-P12.1` — reset fidelity | — | **now** (independent of the loop) | ~45 min | P12.4, P14.3, ISSUE-143 |
+| **2** | `EVAL-P17.5` — re-measure and retract | **H1** | after loop ticks **P17.4** | ~30 min | P13.3, fence reopen |
+| **3** | `EVAL-P15.1` — oracle labeller | — | after loop ticks **P15.2** | ~75 min | P19.4, P22.2, P22.3 |
+| **4** | `EVAL-P19.4` — re-judge, merge, re-measure κ | **H2** | after loop ticks **P19.1** + task 3 | ~90 min | publication of any guard rate |
+| **5** | `EVAL-P20.2` — capability cases | — *(clears **H6** with task 8)* | any time after task 0 | 2–3 h (of ~4–5 h) | a non-gameable headline |
+| — | **Week-2 boundary** — everything below needs the fence reopened | **H3** | | | |
+| 6 | `EVAL-P20.0` — deterministic seed | **H4** | after tasks 2 + 4 | ~60 min | **every** regeneration |
+| 7 | `EVAL-P12.4` — measured multi-turn | **H5** | after task 1 | budget from P12.1 | P13.2, P14.3 |
+| 8 | `EVAL-P20.1` — case-set contradictions | **H6** | after loop ticks P19.3 | ~60 min | regen #1 |
+| 9 | `EVAL-P20.4` — regeneration #1 | **H7** | after tasks 5, 6, 8 | ~85 min + 2.5 h judge | P21, P22 |
+| 10 | `EVAL-P21.1`, `P21.3` — panel + settle the judge | **H8** | after task 9 | ~90 min | P22.4 |
+| 11 | `EVAL-P22.2` → `P22.3` → `P22.4` | **H9** → **H10** | after task 10 | ~3 h + Opus credits | P23, P24 |
+| 12 | `EVAL-P24.3`, `EVAL-P8.3` | **H12**, **H11** | last | ~60 min | README |
 
 **This week's budget (4–6 h stated):** tasks 0–4 total **~4 h**. Task 5 is the overflow —
 take it as far as it goes and use the ratchet (see task 5).
@@ -354,6 +369,11 @@ Each is specified in full in the ROADMAP; the sequencing constraints that are ea
 
 ## Standing hazards
 
+- **A gate halts the night; it does not skip the phase.** `expand_loop.sh` §6.4 skips a phase on a
+  blocked prerequisite so one bad task cannot forfeit the run. Gates are the deliberate exception
+  (DEC-164): every gate's blocked set is downstream of a *measurement*, so continuing past one means
+  building on a number nobody has taken. If you find the loop stopped with
+  `HALT: task X is behind a closed HUMAN GATE`, that is the mechanism working — do the gate's task.
 - **ISSUE-139 is open.** The loop stages the whole working tree. Start it only from a clean tree,
   ideally in a dedicated worktree, or your interactive edits land in its commits.
 - **`label-import --out` defaults to the real labels file.** Always pass `MERGE=1` after the first

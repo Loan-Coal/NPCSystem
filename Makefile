@@ -13,7 +13,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         test-v13-contracts test-v13-graph-admin test-v13-retrieval \
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
-        check-rules check-rules-update check-layers check-docstrings roadmap-verify type-ratchet type-ratchet-update check-harness \
+        check-rules check-rules-update check-layers check-docstrings roadmap-verify check-human-gates type-ratchet type-ratchet-update check-harness \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts mock-calibrate label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
@@ -128,13 +128,19 @@ check-layers:
 roadmap-verify:
 	$(PYTHON) scripts/roadmap_cursor.py --verify
 
+# check-human-gates: audit the `#### HUMAN GATE` grammar in ROADMAP.md (DEC-164).
+# Grammar only — a closed gate is normal and exits 0. Red means a gate references a
+# task id that does not exist, is missing a field, or can never open.
+check-human-gates:
+	$(PYTHON) scripts/check_human_gates.py --verify
+
 # check-docstrings: fail when any src/ file lacks Layer:/Purpose: (+ Public surface: for __init__.py).
 check-docstrings:
 	$(PYTHON) scripts/docstring_audit.py
 
 # check: the single canonical health gate. Same command locally and in CI.
 # mypy is at 0 (SEV-14 done) so 'type' is now a hard gate here.
-check: lint check-rules check-layers check-docstrings type check-harness test-cov
+check: lint check-rules check-layers check-docstrings type check-harness check-human-gates test-cov
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 

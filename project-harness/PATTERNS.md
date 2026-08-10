@@ -72,3 +72,34 @@ shows the wrong pattern and the correct replacement.
 | Files > 300 lines | Extract to helper files immediately — see CLAUDE.md § "Files" |
 | `print(f"Prompt: {prompt}")` | `if settings.LOG_LLM_PROMPTS and settings.ENV == "dev": logger.debug(...)` |
 | Relative imports beyond one level (`from ..x import y`) | `from npc_engine.x import y` — one level max (`from .x import y` is fine) |
+
+---
+
+## Pattern: Force UTF-8 on stdout/stderr in any CLI that prints report glyphs
+**When to use:** Every `scripts/` or `evals/` entry point whose output can contain non-ASCII —
+κ, ≥, →, ✓, ⚠️, an em-dash. On this project that is most of them, because the reports quote
+statistics.
+**Why:** A Windows console defaults to cp1252. Printing `κ` raises `UnicodeEncodeError` *at print
+time*, i.e. after the work is done — `calibration.py` crashed this way after a completed
+adjudication pass and lost the summary. The failure is worse than cosmetic in a gate: a checker
+that exits non-zero because of a glyph reports a red gate for a reason that has nothing to do
+with what it checks, and in the overnight loop that counts toward `MAX_CONSECUTIVE_RED_GATES`.
+`errors="replace"` keeps output flowing on a terminal that still cannot render the character.
+Call it first thing in `main()`, before argument parsing, so even a usage error is printable.
+**Example:**
+```python
+def _force_utf8_streams() -> None:
+    """Reconfigure stdout/stderr to UTF-8 so a report glyph cannot crash the run."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass  # Non-reconfigurable stream (pipe/pytest capture) — leave as-is.
+```
+**Related trap:** the reverse mistake has also been made here — a cp1252 *console* rendering of a
+correct UTF-8 file (`topic �`) was diagnosed as file corruption and nearly "fixed", which would
+have corrupted `prompts/eval/refusal_judge.yaml`. See ISSUE-141's correction. Verify with
+`python -c "open(p,'rb').read().decode('utf-8')"` before believing your terminal.
+**First applied in:** `evals/__main__.py`; reused in `scripts/check_human_gates.py` (DEC-164).
