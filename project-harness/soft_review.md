@@ -211,3 +211,7 @@ The doc writes `evaluated_cases = total_cases - skipped_cases` in pseudocode, bu
 ---
 
 **Assessment:** Documentation is thorough and cross-linked correctly to existing shipping code. No correctness failures, but 2–3 ambiguities in presentation and 1 data claim that requires periodic re-verification (judge model). All cited tests pass.
+
+## 2026-08-10 10:35:57 — phase EVAL-P14
+
+API Error: Connection closed mid-response. The response above may be incomplete.
