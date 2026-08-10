@@ -1825,3 +1825,30 @@ its flag (catches an accidental unflag). A flagged task that a human *ticks* sim
 and its stale entry is inert, which is the single case set-equality got wrong and the cause of all
 five false-positive HALTs. Verified by mutation: an added flag, a changed flag, and a ticked flagged
 task produce fail / fail / pass respectively.
+
+---
+
+## [FIXED] ISSUE-142: the calibration artifact is gitignored — κ numbers cannot be reproduced or audited
+**Fixed:** 2026-08-09, by DEC-158 (the `.gitignore` narrowing shipped but the issue was never marked). Confirmed 2026-08-10 during EVAL-P15 pre-flight: `.gitignore` now excludes only `evals/calibration/mock_*.jsonl` and `evals/calibration/*.bak`; `labels_v1.jsonl` (393 rows), `raw_labels.jsonl` (393 rows) and all 16 `batches_handlabel/` files are git-tracked, as are `evals/generations/k3_73e6c36/{meta,outputs,judged,deterministic_judged}`. Both halves of the pair the entry called for are recoverable from a fresh clone. The residual question the entry raised -- whether `calibrate` should also stamp the artifact's SHA-256 into its output so a quoted kappa is traceable to a specific file -- is **not** covered by DEC-158 and is carried forward by EVAL-P18.2 (provenance) rather than left implicit here.
+**Found:** 2026-08-09, while committing the first real calibration pass
+**Severity:** P1 (blocking for any published metric — the evidence for every κ claim is untracked)
+**Where:** `.gitignore:29` (`evals/calibration/*.jsonl`)
+**Description:** EVAL-P5's stated goal is "a **versioned, reproducible** calibration artifact". The
+pattern at `.gitignore:29` excludes `evals/calibration/*.jsonl`, which covers both
+`raw_labels.jsonl` (393 hand-labelled rows — hours of maintainer judgment) and `labels_v1.jsonl`
+(the joined artifact every κ in ISSUE-129/ISSUE-141 is computed from). Neither is tracked. So the
+headline claims "`tone_judge` κ=0.919", "`refusal_judge` κ=0.247" rest on files that exist only on
+one machine, are one `git clean -fdx` from gone, and cannot be diffed when a scorer is later
+remediated (EVAL-P11.2 explicitly requires showing κ *moved*, which needs the before-artifact).
+The `.gitignore` rule is defensible in origin — it was presumably written to keep mock/scratch
+labelling output (`mock_*.jsonl`) out of history — but it does not distinguish those from the real
+artifact. `evals/calibration/batches_handlabel/` (the 16-batch export the labels were made against)
+is untracked-but-not-ignored, so it is currently the only recoverable half of the pair.
+**Why deferred:** Changing `.gitignore` is a shared-config change; and there is a real question
+underneath it (do 393 rows of labels belong in git, or in an artifact store / release asset?) that
+should be answered deliberately rather than by whoever commits next.
+**To fix:** Narrow the rule to the mock artifacts only (`evals/calibration/mock_*.jsonl`) and commit
+`raw_labels.jsonl` + `labels_v1.jsonl` + `batches_handlabel/`, recording the choice in DECISIONS —
+or, if they are deemed too large/PII-adjacent for git, define where they *are* stored and have
+`calibrate` record the artifact's SHA-256 in its output so a quoted κ is at least traceable to a
+specific file.

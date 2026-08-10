@@ -141,11 +141,17 @@ EVAL-B4 is its own session (4 steps, one commit each). EVAL-FINAL is superseded 
 
      REOPENED 2026-08-06 — the condition above FIRED and was executed. P0.4 (live baseline)
      and P0.3 (ask-gate, lint scope) were both ticked in human sessions on 2026-08-06, so the
-     `end` marker now sits immediately BELOW Program 3 and the queue spans
-     EVAL-P0..EVAL-P24 (released 2026-08-09, DEC-160 -- see the Loop fence state note near
-     the end of this file). The narrowing did its job: the baseline exists (Session Log, 2026-08-06)
-     before a single judge call was spent on P1..P8. The fence itself was NOT deleted — it
-     still holds back the 19 open tasks elsewhere in this file. -->
+     `end` marker moved below Program 3 and the queue spanned EVAL-P0..EVAL-P24
+     (released 2026-08-09, DEC-160). The narrowing did its job: the baseline exists
+     (Session Log, 2026-08-06) before a single judge call was spent on P1..P8. The fence
+     itself was NOT deleted — it still holds back the 19 open tasks elsewhere in this file.
+
+     NARROWED AGAIN 2026-08-10 (DEC-163) — CURRENT STATE: the `end` marker sits immediately
+     ABOVE "### Phase EVAL-P20", so the queue spans EVAL-P0..EVAL-P19 only. EVAL-P20..P24
+     assume a post-regeneration artifact that does not exist, so the loop could only build
+     them against fixtures — the defect that shipped EVAL-P8.2's `compare`. Reopen conditions
+     are recorded at the marker itself; human-side ordering is in HUMAN_TASKS.md.
+     Do not trust any prose in this file over `python scripts/roadmap_cursor.py --verify`. -->
 
 
 > **Origin:** an externally-written proposal (`project-harness/npc_system_eval_plan_idea`) reviewed
@@ -609,6 +615,9 @@ headline until EVAL-P6 folds it in. Wilson at the k you can afford is wide and t
       RED anchor: `tests/unit/evals/test_statistics.py::test_wilson_3_of_3` fails — module absent.
       Validation: a table-driven test pins (0,3)→[0.000, 0.562], (3,3)→[0.438, 1.000], (3,5)→[0.231, 0.882]
       to 3 dp, with the hand-worked arithmetic in the test docstring; `trials == 0` raises, never returns [0,1]. ✅ AUTO (EVAL-P2.1, 2026-08-06)
+      📍 **RENAMED 2026-08-10 (DEC-162):** `evals/statistics.py` → `evals/rate_stats.py`,
+      `tests/unit/evals/test_statistics.py` → `test_rate_stats.py`. The original name shadowed the stdlib
+      `statistics` module for every importer, because `evals/` is on `pythonpath`.
 
 - [x] **EVAL-P2.2** Per-case statistics. Files: `create evals/case_stats.py`, `create tests/unit/evals/test_case_stats.py`.
       Frozen Pydantic `CaseStat(case_id, k, passes, pass_rate, ci_low, ci_high, classification)` with
@@ -1053,12 +1062,39 @@ case-level** test is the fix — n = 53 cases, not n = 3 repeats — and it dete
       real generations. Generate a second k=3 run at a different commit (any change worth measuring — a
       prompt-version bump is the cheapest honest one), then run `compare` against EVAL-P6.4's `gen_id`.
       Expected wall clock ≈ **62 min**, plus the judge pass.
-      Validation: the comparison names the intersection size and every case present in one run and not the
-      other; the verdict is one of `better` / `worse` / `no_detectable_change` with its exact McNemar
-      p-value; and the k of both runs is printed next to every rate. Sanity check first by comparing
-      EVAL-P6.4's run against itself — that must yield p = 1.0 with zero discordant pairs before any
-      cross-run number is believed.
+
+      ⛔ **HARD RE-SEQUENCED 2026-08-10 (pre-flight review). DO NOT RUN THIS BEFORE EVAL-P16.4, EVAL-P17.1
+      AND EVAL-P18.3 HAVE LANDED.** The premise of the task — "`compare` can be green while never having
+      compared two real generations" — was right, and the 2026-08-09 audit then established *how* wrong
+      `compare` is. Re-verified by hand 2026-08-10 against the committed artifacts:
+
+          $ python -m evals compare --before evals/generations/baseline --after evals/generations/k3_73e6c36
+          Intersection: 0 cases
+          Verdict: NO_DETECTABLE_CHANGE  p=1.0000  improved=0  regressed=0
+          EXIT=0
+
+      Three separate defects, each independently sufficient to void this task's output: `compare` reads
+      **only `judged.jsonl`**, i.e. **115 of 307 slots — 62.5% of every run is never compared** (EVAL-P17.1);
+      it groups by `record_id`, an expectation *slot* rather than a case, so 37 of 70 cases contribute 2-3
+      correlated pairs and a 2-case break reports **p=0.031 "worse"** where the honest test gives p=0.5
+      (EVAL-P16.4); and it returns a confident verdict with **exit 0** over an empty intersection
+      (EVAL-P18.3). Running EVAL-P8.3 now spends ~62 min of generation plus a full judge pass to obtain a
+      number that all three fixes will invalidate, and — worse — a plausible-looking `p`-value is exactly
+      the kind of artifact that gets quoted before it gets retracted.
+      **Note the sanity check written below is the one thing here that already works and proves nothing:**
+      comparing a run against itself yields p=1.0 with zero discordant pairs *whether or not* `compare` is
+      correct, because a self-comparison has no discordant pairs by construction. It is not a validation
+      of `compare`; treat it as a smoke test only.
+
+      Validation (unchanged in substance, but only meaningful post-P18.3): the comparison names the
+      intersection size and every case present in one run and not the other; the verdict is one of
+      `better` / `worse` / `no_detectable_change` with its exact McNemar p-value; the k of both runs is
+      printed next to every rate; and — added — the intersection covers **307 slots / 94 cases**, not 115,
+      and `compare` **exits non-zero** if the two runs' `harness_version`, `judge_model` or `k` differ.
       **This task is for a human session. The unattended loop must not start it.**
+      **Cheaper alternative worth considering first:** EVAL-P20.4's regeneration #1 produces a second real
+      run anyway. If EVAL-P8.3 has not been run by then, fold it into that comparison rather than spending
+      a separate 62-minute generation on a prompt-version bump nobody wanted.
 
 ## Program 2 — Metric validity and the portfolio artifact (EVAL-P9..P14)
 
@@ -1157,7 +1193,15 @@ there is exactly one discontinuity, and record the pre-battery baseline `gen_id`
       point is that they move in opposite directions under evasion.
       RED anchor: `tests/unit/engines/test_eval_summary.py::test_capability_and_guard_rates_are_reported_separately` fails.
       Validation: a fixture with 40 guard and 42 capability cases reports two rates, two n's and two
-      intervals; a case that matches neither classifier raises rather than being silently dropped into either. ✅ AUTO ⚠️ UNVERIFIED (EVAL-P9.4, confirmed regression: tests/unit/evals/test_capability_coverage.py::test_every_grounded_npc_has_a_capability_case (pre-existing from EVAL-P9.1 [66be773], not introduced by this task), 2026-08-08)
+      intervals; a case that matches neither classifier raises rather than being silently dropped into either. ✅ AUTO (EVAL-P9.4, 2026-08-08)
+      ~~⚠️ UNVERIFIED (confirmed regression: `test_capability_coverage.py::test_every_grounded_npc_has_a_capability_case`)~~
+      ✅ **UNVERIFIED FLAG CLEARED 2026-08-10 (pre-flight review).** The named test **no longer exists** —
+      DEC-161 replaced the un-turn-greenable `test_every_grounded_npc_has_a_capability_case` with the
+      ratchet pair `test_capability_coverage_never_regresses` + `test_uncovered_baseline_has_no_stale_entries`,
+      both green (verified by running them, not by reading the commit). The regression this flag recorded
+      was repaired two days after it was written and the flag was never cleared, so the task has been
+      reading as suspect ever since. **This does not mean coverage improved** — 9 grounded NPCs still have
+      no capability case; that work is EVAL-P20.2 and the ratchet is what tracks it.
 
 ### Phase EVAL-P10 — Paired headline and the evasion gate
 **Goal:** Make the trade visible and mechanical: no guard number is ever printed without its capability
@@ -1211,22 +1255,26 @@ an expensive way to feel rigorous. The P0.4 run already produced one confirmed j
       Validation: a scorer at kappa 0.35 is refused publication by the policy function and the refusal names
       the scorer, its kappa and its interval. ✅ AUTO (EVAL-P11.1, 2026-08-09)
 
-- [ ] **EVAL-P11.2** ⏸️ *(blocked: needs adjudicated kappa — no calibration labels exist yet)*
-      Remediate the failing scorers. Files: `edit src/npc_engine/prompts/eval/*.yaml`,
-      `edit tests/unit/evals/test_calibration.py`.
-      For each scorer below threshold, rewrite its criteria (prompt-only change, versioned in `prompts/`),
-      then re-label and re-adjudicate a ~30-row sample for that scorer alone and confirm kappa moved.
-      Validation: the re-adjudicated sample shows a higher kappa with a non-overlapping lower bound, or the
-      change is reverted and the scorer is recorded as unfixed rather than quietly kept.
+- [x] **EVAL-P11.2 — SUPERSEDED 2026-08-10 by `EVAL-P19.1` + `EVAL-P19.4`.** Not run as written.
+      **Its stated blocker was factually wrong and must not be re-copied:** the task read
+      *"blocked: needs adjudicated kappa — no calibration labels exist yet"*, but 393 labels have existed
+      at `evals/calibration/labels_v1.jsonl` since 2026-08-09, are git-tracked (ISSUE-142 resolved), and
+      `make eval-calibrate` reports four measured kappas off them today. The blocker survived because
+      nothing re-reads a `⏸️` reason once written. Scope is unchanged and lives in EVAL-P19: P19.1 rewrites
+      the `refusal_judge` criteria (the one scorer below threshold, kappa 0.247), P19.0b replays criteria
+      without a regeneration, and P19.4 re-judges + `--merge`s + re-measures at **zero relabelling cost**.
+      Original text preserved below.
 
-- [ ] **EVAL-P11.3** ⏸️ *(blocked: needs two judged transcripts adjudicated against your verdicts)*
-      Settle the judge on evidence (**closes ISSUE-129**). Files: `edit evals/judge_config.py`,
-      `edit project-harness/DECISIONS.md`.
-      Judge one adjudicated transcript with both `mixtral:8x7b` and `qwen2.5:14b`, compute each judge's kappa
-      against your verdicts, and pick the winner in a DECISIONS entry naming both numbers.
-      Validation: the decision cites two kappas with intervals and n; ISSUE-129 moves to the archive; the
-      chosen judge becomes the documented default and every prior headline is annotated with which judge
-      produced it.
+  > **EVAL-P11.2 (original)** Remediate the failing scorers. Files: `edit src/npc_engine/prompts/eval/*.yaml`, `edit tests/unit/evals/test_calibration.py`. For each scorer below threshold, rewrite its criteria (prompt-only change, versioned in `prompts/`), then re-label and re-adjudicate a ~30-row sample for that scorer alone and confirm kappa moved. Validation: the re-adjudicated sample shows a higher kappa with a non-overlapping lower bound, or the change is reverted and the scorer is recorded as unfixed rather than quietly kept.
+
+- [x] **EVAL-P11.3 — SUPERSEDED 2026-08-09 by `EVAL-P21.3`.** Not run as written. EVAL-P21.3 states the
+      supersession from its own side ("supersedes EVAL-P11.3"); this marker closes the loop so the task
+      is not counted as open work in two places. P21.3 is strictly wider: a **three**-judge panel with an
+      out-of-family third seat (EVAL-P21.0) rather than the two-judge `mixtral` vs `qwen2.5:14b` comparison
+      here, which EVAL-P21.0 shows would not have been an independent pair. ISSUE-129 closes there.
+      Original text preserved below.
+
+  > **EVAL-P11.3 (original)** Settle the judge on evidence (**closes ISSUE-129**). Files: `edit evals/judge_config.py`, `edit project-harness/DECISIONS.md`. Judge one adjudicated transcript with both `mixtral:8x7b` and `qwen2.5:14b`, compute each judge's kappa against your verdicts, and pick the winner in a DECISIONS entry naming both numbers. Validation: the decision cites two kappas with intervals and n; ISSUE-129 moves to the archive; the chosen judge becomes the documented default and every prior headline is annotated with which judge produced it.
 
 ### Phase EVAL-P12 — Measured multi-turn: promote the differentiator
 **Goal:** Turn 6-8 binary e2e scenarios into rates with intervals, so gossip propagation, grief persistence
@@ -1243,13 +1291,31 @@ real work and is EVAL-P12.2, not a footnote.
 **Depends on:** EVAL-P2.2 (`CaseStat`), EVAL-P1.6 (judged records), EVAL-P6.4.
 
 - [ ] **EVAL-P12.1** *(live; requires the seeded stack)* Measure what `reset_world` actually clears.
-      Files: `create e2e/scripts/measure_reset_fidelity.py`, `create docs/RESET_FIDELITY.md`.
+      Files: `create e2e/scripts/measure_reset_fidelity.py`, `create docs/RESET_FIDELITY.md`,
+      `create evals/reset_fidelity.json` (**machine-readable — new 2026-08-10, see below**).
       Run a mutating scenario, reset, and diff the full graph plus every in-process store the API exposes.
       Enumerate exactly what survives, and time the reset.
-      Validation: a table of surviving state with a verdict per item (acceptable / correlates repeats), and a
-      measured per-reset cost feeding the EVAL-P12.4 budget. **If anything material survives, EVAL-P12.4
-      reports sequences and no Wilson intervals** — computing intervals over correlated trials is precisely
-      the error this whole programme exists to stop.
+
+      ⚠️ **STRENGTHENED 2026-08-10 (pre-flight review; ISSUE-143).** As written this task produced a
+      **prose table only**, and prose cannot gate a code path. `evals/sequence_runner.py:160` already
+      computes `wilson_interval(passes, k)` **unconditionally**, with `reset_fn` returning a bare cost and
+      no evidence of what was cleared — so the interval the whole programme exists to make honest is
+      currently published on an assumption nobody has measured. A doc would not have stopped that; an
+      artifact the runner reads will. Emit **both**: the human-readable table *and*
+      `evals/reset_fidelity.json` carrying `{fidelity: "FULL"|"PARTIAL", surviving: [...],
+      reset_cost_ms: N, measured_at, git_sha}`, matching `ResetReceipt`'s field names in
+      `evals/sequence_records.py` so the v2 schema (EVAL-P14.1) consumes it without a translation layer.
+      **Do not invent a third tier** — `docs/SEQUENCE_STATS_POLICY.md` §2 says there is none, and
+      "mostly full" is how a correlated run acquires an interval.
+      Validation: a table of surviving state with a verdict per item (acceptable / correlates repeats), a
+      measured per-reset cost feeding the EVAL-P12.4 budget, **and** `evals/reset_fidelity.json` parsing
+      into `ResetReceipt` with no field renaming. **If anything material survives, fidelity is PARTIAL and
+      EVAL-P12.4 reports sequences and no Wilson intervals** — computing intervals over correlated trials
+      is precisely the error this whole programme exists to stop.
+      **Report the tier honestly even if it is inconvenient.** PARTIAL is the *expected* outcome, not a
+      failure of this task: it costs EVAL-P12.4 its intervals, and the order-effect check
+      (SEQUENCE_STATS_POLICY §4) becomes the primary statistic instead. A tier chosen to keep a metric
+      alive is the single worst outcome available here.
       **This task is for a human session. The unattended loop must not start it.**
 
 - [x] **EVAL-P12.2** Reconcile the two world vocabularies. Files: `create evals/world_map.py`,
@@ -1270,12 +1336,43 @@ real work and is EVAL-P12.2, not a footnote.
 
 - [ ] **EVAL-P12.4** *(live; wall-clock budget comes from EVAL-P12.1's measurement)*
       Promote 6 scenarios and report their rates. Files: `edit evals/sequence_runner.py`,
-      `edit Makefile`, `create tests/unit/evals/test_sequence_rates.py`.
+      `create evals/sequence_fidelity.py`, `edit Makefile`,
+      `create tests/unit/evals/test_sequence_rates.py`, `create tests/unit/evals/test_sequence_fidelity.py`.
       Start with `gossip_chain`, `grief_persistence`, `reputation_drift`, `memory_consolidation`,
       `time_passage`, `mood_contagion` — chosen because each maps to a claim a studio would ask about.
-      RED anchor: `tests/unit/evals/test_sequence_rates.py::test_scenario_rate_carries_k_and_interval` fails.
-      Validation: output reads like `gossip reaches the 2-hop target 13/15 (k=3) [0.621, 0.963]`, with k
-      adjacent to every rate, and the run fits the remaining wall-clock budget measured in EVAL-P12.1.
+
+      ⚠️ **REWRITTEN 2026-08-10 (pre-flight review; ISSUE-143). The previous validation mandated the
+      defect.** It required output reading `gossip reaches the 2-hop target 13/15 (k=3) [0.621, 0.963]` —
+      an interval, unconditionally. `docs/SEQUENCE_STATS_POLICY.md` §3 (EVAL-P14.2) **suppresses** the
+      Wilson CI under PARTIAL fidelity, and PARTIAL is the expected measurement. Satisfying the old
+      validation would have *forced* a session to publish an interval over correlated trials — the
+      programme's own headline error, written into a task's exit criterion. The old string is struck.
+
+      **Part A — gate the interval at the runner (do this first; it is the fix for ISSUE-143).**
+      `sequence_runner.run_sequence` computes `wilson_interval(passes, k)` at `:160` with no fidelity
+      input. Change `reset_fn`'s contract to return a **`ResetReceipt`** (already defined in
+      `evals/sequence_records.py`) instead of a bare cost, derive the run's tier in
+      `evals/sequence_fidelity.py` from the receipts, and **withhold the interval at the runner level**
+      when the tier is PARTIAL. Per SEQUENCE_STATS_POLICY §3's enforcement contract the formatter must
+      have **no** visibility into receipts — it renders what it is given — so a PARTIAL run cannot
+      re-acquire a CI through a formatting change later.
+      RED anchor: `tests/unit/evals/test_sequence_fidelity.py::test_partial_fidelity_run_has_no_interval` fails.
+
+      **Part B — promote the six scenarios and report.**
+      RED anchor: `tests/unit/evals/test_sequence_rates.py::test_scenario_rate_carries_k_and_fidelity_tier` fails.
+
+      Validation (fidelity-conditional — record which branch was taken, by name):
+      - **Always:** every rate carries `k` and the run's fidelity tier adjacent to it; the run fits the
+        wall-clock budget measured in EVAL-P12.1; `evals/reset_fidelity.json` was read, not assumed.
+      - **If FULL:** output reads `gossip reaches the 2-hop target 13/15 (k=3, FULL) [0.621, 0.963]`.
+      - **If PARTIAL:** output reads `gossip reaches the 2-hop target 13/15 (k=3, PARTIAL — CI withheld,
+        repetitions not independent: <surviving items>)`, and the **order-effect check**
+        (SEQUENCE_STATS_POLICY §4: Cochran's Q across repetition indices, first-vs-last McNemar) is
+        rendered as the primary statistic in the CI's place. A run that prints neither an interval nor an
+        order-effect check has silently reported nothing and does **not** tick this task.
+      - **Negative test, both branches:** a unit test asserts that forcing `fidelity="PARTIAL"` on a
+        fixture removes the interval from the rendered output. Without it, Part A is unfalsifiable —
+        which is EVAL-P15.6's whole argument applied here.
 
 ### Phase EVAL-P13 — The portfolio artifact
 **Goal:** Make the rigour legible in five minutes to someone who will never run the suite.
@@ -1360,9 +1457,26 @@ wrong in a *pattern*: every aggregation silently drops what it does not recognis
 computed on the wrong unit. Those two defects account for most of the P1 list.
 
 **The binding constraint is that no human label may ever be re-made.** 393 rows have been hand-labelled
-twice. EVAL-P15 exists so that everything after it is provably correct *before* it consumes labelling
-effort or Opus credits, because the stated failure mode of this project is infra that was built several
-times and was wrong every time.
+across **two sittings** — real, expensive, unrepeatable effort. EVAL-P15 exists so that everything after
+it is provably correct *before* it consumes labelling effort or Opus credits, because the stated failure
+mode of this project is infra that was built several times and was wrong every time.
+
+⚠️ **CORRECTED 2026-08-10 (human confirmation during pre-flight review). Two sittings is not two raters,
+and the distinction decides what may be published.** An earlier wording read "hand-labelled twice", which
+reads as an independent second opinion. It was not: the second pass **copied `pre_label` into
+`human_verdict`** rather than re-deciding it (maintainer decision 2026-08-09, recorded in ISSUE-141's
+caveat). The measurement says so unambiguously — `make eval-calibrate` reports the secondary axis
+`pre_label vs human_verdict` at κ = **1.000, CI [1.000, 1.000], agreement 1.000 for every one of the four
+scorers**, which is the arithmetic signature of a variable compared with itself, not of two agreeing
+raters. Consequences, all binding:
+- The **headline** axis (`scorer_verdict vs human_verdict`) is **unaffected and remains valid** — κ never
+  compares a labeller to itself there, it compares the scorer to the human. `refusal_judge` κ=0.247 and
+  `tone_judge` κ=0.919 stand.
+- There is currently **no inter-rater number at all.** Nothing may quote the 1.000 as agreement.
+  `calibrate` must print `N/A (single rater)` for these 393 rows — that requirement lives in EVAL-P22.3
+  and is the reason it exists.
+- The effort claim is still true and still binding: two sittings of a human's time is exactly why
+  EVAL-P20.0's seed and the `--merge` durability work are non-negotiable.
 
 **Locked decisions (human, 2026-08-09):**
 
@@ -1381,10 +1495,18 @@ times and was wrong every time.
 3. Run-to-run McNemar with a comparability guard that refuses incomparable runs.
 4. Trend across runs plus a regression alert that exits non-zero on a drop.
 
-**Fence policy (superseded 2026-08-09 by DEC-160 — read this before trusting any older copy):** these
-phases *sat* **below** the `LOOP:QUEUE` end marker and were unreachable by the overnight loop while the plan
-was under adversarial review. That marker now sits immediately **below** Program 3, so EVAL-P15..P24 **are**
-in the queue. The fence was not simply widened — it was replaced by three narrower guards:
+**Fence policy (current as of 2026-08-10, DEC-163 — this supersedes DEC-160's wording; do not trust any
+older copy):** the `LOOP:QUEUE` end marker sits **immediately above `### Phase EVAL-P20`**. So
+**EVAL-P15..P19 are in the loop's queue; EVAL-P20..P24 are not.** `roadmap_cursor.py --verify` reports
+`queue lines 125-1856, 20 phases` — that is the check, not this sentence.
+
+The split is by *what the task can be validated against*. P15–P19 recompute and repair over the artifact
+already on disk (`k3_73e6c36`), so the loop can prove its work. P20–P24 assume a post-regeneration artifact
+that does not exist, so the loop could only build them against fixtures — which is precisely how EVAL-P8.2's
+`compare` shipped green while emitting `Intersection: 0 cases / NO_DETECTABLE_CHANGE / p=1.0000 / exit 0`
+against the two real generation dirs. The reopen conditions are recorded at the marker itself.
+
+Three guards from DEC-160 still hold and are unchanged by the narrowing:
 `loop_gates.FROZEN_PATH_PREFIXES` covers `evals/calibration/` and `evals/generations/`, so no unattended
 session can write the 393 human labels or a run transcript; every task that spends labels, Opus credits, a
 live run, human authoring or a judge decision carries `(live` / ⏸️ and is skipped by `compute_next`; and the
@@ -1467,6 +1589,21 @@ cannot fail is not evidence.
       3. `capability_battery_cases == capability_cases_actually_run`
       4. `sum(battery turn counts) == the report's "All cases: N evaluated"` line
 
+      ⚠️ **Identity 4 spans two different producers — name the artifact for each side or it is unfalsifiable
+      (note 2026-08-10).** Identities 1-3 are computed over the **transcript** (`evals/generations/<id>/`),
+      and their literals below were re-verified by hand on 2026-08-10 and are **correct**: 94 unique cases,
+      307 unique `record_id`s, 921 rows, `judged` 115 slots and `deterministic_judged` 192 slots, disjoint.
+      Identity 4's right-hand side is `evals/summary.py:316`/`:354`, whose `evaluated_cases` / `total_cases`
+      come from a **live `make eval` YAML-suite run** over a different case population — the source of the
+      `194/210` figure quoted in EVAL-P17.4, which cannot reconcile with 94 because it is not measuring the
+      same thing. Written as-is, identity 4 either compares two unrelated populations (permanently red for
+      a reason no fix addresses) or gets quietly dropped. **Required:** state in the script which artifact
+      each side reads, and either re-express identity 4 wholly within the transcript
+      (`sum(battery case counts) == unique cases in outputs.jsonl`) or mark it explicitly
+      `DEFERRED to EVAL-P17.4` with the reason recorded. **Do not report a residual computed across two
+      artifacts as a conservation violation** — a detector that cries wolf on a definitional mismatch is
+      how the other three identities get ignored, and EVAL-P17.6 later gates `make check` on all four.
+
       **Report-only, NOT wired into `make check` in this phase** (human decision 2026-08-09; same ratchet
       logic as DEC-159 §4). All four identities **fail today by design** — that is the evidence the detector
       works — and gating on them here would fire `loop_gates.AUTOFIX_CHECK_SPECS`, hit
@@ -1507,10 +1644,16 @@ cannot fail is not evidence.
       every task in Program 2** — a program unrelated to this one. Coverage: note the measured figure is
       already **~78%**, ~2 points from the 80% floor, not the near-zero the phase's framing implied; add it
       as its own gate at the measured baseline and ratchet upward.
-      **Blocker to handle first:** `evals/statistics.py` **shadows the stdlib `statistics` module**
-      (`pyproject.toml` puts `evals` on `pythonpath`), which produces 8 of the 24 current mypy errors.
-      Renaming it touches 4 importers (`summary`, `compare`, `case_stats`, `refusal_rate`) and changes
-      `harness_version` inputs under EVAL-P18.1 — sequence it before, not during.
+      ~~**Blocker to handle first:** `evals/statistics.py` **shadows the stdlib `statistics` module**~~
+      ✅ **CLEARED 2026-08-10 (pre-flight, DEC-162).** `evals/statistics.py` → **`evals/rate_stats.py`**
+      (named for its siblings `paired_stats.py` / `case_stats.py`). It touched **5** importers, not the 4
+      predicted — `sequence_runner.py` was added by EVAL-P12.3 after this note was written — plus
+      `tests/unit/evals/test_paired_stats.py`, and the test module moved to `test_rate_stats.py`.
+      Measured effect: `mypy evals/` **26 → 16** errors (the note's "8 of 24" was itself stale; the true
+      count was 10 of 26). Done **before** EVAL-P18.1 so the rename never enters a `harness_version` hash.
+      **The remaining 16 mypy errors are the real baseline for this task** — mostly `no-any-return` on
+      Pydantic accessors plus two `npc_engine.config.get_settings` attr-defined errors in
+      `engine_adapter.py`; do not re-derive the count, measure it.
       Validation: `make check` reports the real violation set — the audit counted **7 files over the
       300-line cap** (`matchers.py` 482, `calibration.py` 451, `anti_hallucination_runner.py` 441,
       `compare.py` 412, `runner.py` 403, `summary.py` 366, `case_drafts.py` 359), **30 functions over 40
@@ -1578,6 +1721,15 @@ independent. Measured: guard `108/111 → [0.9235, 0.9908]` published vs `36/37 
       interval widens from the published `[0.9235, 0.9908]` toward the `n_eff≈37` width `[0.8618, 0.9952]`;
       `n_eff` is reported and never exceeds `n_records`; at rho=0 the interval equals plain Wilson (a
       regression test that the correction is inert when there is no clustering).
+      📌 **The literals above are a PRE-EVAL-P17 snapshot — do not "repair" them later (note 2026-08-10).**
+      `108/111` and `n_eff≈37` describe the guard battery *as `summary.py` currently mis-classifies it*.
+      EVAL-P17.2 raises the guard battery to **78 cases / ~234 case-repetitions** by admitting the 41
+      `ah_demo_*` cases, at which point every number in this validation is expected to change and a session
+      re-running it will see red. That is correct behaviour, not a regression: P16.1 lands **before** P17,
+      and its job is to widen the interval on the *then-current* denominator. Pin these values in the test
+      with a comment naming EVAL-P17.2 as the sanctioned reason they will move, and update them **in the
+      P17.2 commit**, never in a later "fix the failing test" commit — that is how a corrected number gets
+      silently reverted.
 
 - [ ] **EVAL-P16.2** Cluster bootstrap for κ. Files: `edit evals/calibration.py`,
       `edit tests/unit/evals/test_calibration.py`.
@@ -1763,7 +1915,19 @@ label-durability work and closing ISSUE-141 at zero labelling cost.
 flag those rows `needs_review` — that flag is the phase's main output, not an error.
 **Notes:** This is the first real exercise of `label-import --merge` (commit `107e547`) against a genuine
 criteria change. If human verdicts do not survive it, stop the program and fix durability first.
-**Depends on:** EVAL-P15.1, EVAL-P18.1.
+**Depends on (corrected 2026-08-10 — the dependency is per-task, not per-phase):**
+- `EVAL-P19.0`, `P19.0b`, `P19.2`, `P19.3` depend on **EVAL-P18.1 only**. They are pure code and prompt
+  edits and are in the loop's queue. The earlier phase-level "Depends on: EVAL-P15.1" wrongly implied all
+  of P19 was blocked behind a ⏸️ human-only task, which would have left the cheapest κ repair in the
+  programme sitting idle behind an unrelated gate.
+- `EVAL-P19.1` additionally depends on **EVAL-P19.0b** — its gate is a replay over all 75 rows and there is
+  no verb that can do that until P19.0b exists.
+- `EVAL-P19.4` (live) depends on **EVAL-P15.1** and **EVAL-P19.0**: it is the first `--merge` against the
+  real 393-row file, so the oracle labeller must have proven the chain and `needs_review` must already be
+  load-bearing, or a drifted row silently enters κ.
+**Why this phase is the best hour in the programme:** the transcript text does not change, so all 393
+human labels survive whole and the fix to `refusal_judge` (κ=0.247, CI crossing zero) costs **zero**
+relabelling. Nothing else on the board buys that much publishability that cheaply.
 
 - [ ] **EVAL-P19.0** Make `needs_review` load-bearing (**prerequisite for every later merge**). Files:
       `edit evals/calibration.py`, `edit evals/adjudicate.py`, `edit evals/label_merge.py`,
@@ -1841,9 +2005,33 @@ criteria change. If human verdicts do not survive it, stop the program and fix d
       clears the EVAL-P11.1 threshold, ISSUE-141 closes; if not, the scorer is recorded as unfixed and its
       rate is refused publication — **never quietly kept**.
 
+<!-- LOOP:QUEUE end -->
+<!-- ^ MOVED HERE 2026-08-10 (DEC-163): narrowed from below EVAL-P24.3 to below EVAL-P19.4.
+     DEC-160 released EVAL-P15..P24 to the loop. That was right for P15-P19 and wrong for P20-P24,
+     for one reason: EVAL-P15..P19 are arithmetic and scorer repair over the artifact ALREADY on
+     disk (k3_73e6c36), and can be validated against it. EVAL-P20..P24 assume a POST-regeneration
+     artifact that does not exist yet, so the loop can only build them against fixtures.
+
+     That is not a hypothetical risk — it is the exact defect that shipped EVAL-P8.2. `compare`
+     landed green on fixture tests and, run against the two real generation dirs, prints
+     "Intersection: 0 cases / NO_DETECTABLE_CHANGE / p=1.0000" and exits 0. Fifteen more tasks of
+     that, unattended, is a third harness that is confidently wrong. EVAL-P21.2 (panel consensus)
+     and EVAL-P23.3 (the preflight entry point) are the two clearest repeats in waiting.
+
+     REOPEN CONDITION (all three, checked by a human, not inferred):
+       1. EVAL-P17.6 green — `make check-conservation` exits 0, all four identities satisfied.
+          This is the phase's real exit criterion and the proof the aggregators read their input.
+       2. EVAL-P17.5 ticked — the corrected headline is recorded next to the retracted one.
+       3. EVAL-P20.0 landed and its >=95% seed-reproduction gate MET by measurement, so a
+          regeneration cannot silently invalidate ~81% of the 393 labels.
+     Then move this marker down to below EVAL-P24.3 and record the move in DECISIONS.
+     Never delete the fence; move it. -->
+
 ### Phase EVAL-P20 — Case-set repair + capability battery → REGENERATION #1
 **Goal:** One coherent case set worth measuring, landed in exactly one commit, then the first of two
 regenerations.
+**⚠️ OUTSIDE THE LOOP FENCE as of 2026-08-10 (DEC-163).** This phase and everything after it is
+human-driven until the three reopen conditions above are met. See `project-harness/HUMAN_TASKS.md`.
 **Effort:** ~2 h harness + **4-5 h human authoring** (the real cost) + ~85 min generation + ~2.5 h panel judge
 **Constraint:** **Every case change lands in ONE commit before the regeneration.** This is the whole point
 of the 2-regeneration budget: one comparability discontinuity, recorded, with the pre-change `gen_id` named
@@ -1909,7 +2097,12 @@ Three consequences, all of which must be handled before EVAL-P20.4 runs:
 - [ ] **EVAL-P20.2** ⏸️ *(human authoring: only a human can say what an NPC should say)* Capability
       battery to ~35 cases (**completes EVAL-P9.3**). Files:
       `create evals/cases/case_pos_*.yaml`, `edit tests/unit/evals/test_capability_coverage.py`.
-      `test_capability_coverage.py` currently **fails**, naming 9 grounded NPCs with no capability case
+      ⚠️ **CORRECTED 2026-08-10.** An earlier draft said `test_capability_coverage.py` *"currently fails"*.
+      **It passes** — DEC-161 converted it to a ratchet against `UNCOVERED_BASELINE`, a hardcoded
+      9-NPC frozenset, precisely so a gate the loop could not turn green would stop halting the phase gate.
+      "The test passes" therefore carries **no** information about coverage, and a validation reading
+      `test_capability_coverage passes` would be satisfied by changing nothing. The real state, verified
+      2026-08-10: **7** `case_pos_*` files exist against **14** grounded demo NPCs; 9 have no case
       (`bren_smith`, `dorn_dockmaster`, `garrick_deserter`, `harwick_guard`, `nel_pickpocket`,
       `nessa_priestess`, `sera_barmaid`, `tilda_herbalist`, `vex_spymaster`). Author against the EVAL-P9.1
       contract; use `make draft-cases` (EVAL-P9.2) for the mechanical 80%.
@@ -1917,9 +2110,17 @@ Three consequences, all of which must be handled before EVAL-P20.4 runs:
       **37/37 guard and 6/7 capability** cases, because `keyword_any` lists are drawn from the same
       vocabulary as the player prompt (`case_pos_aldric_trade_disruption` asks about *war* and *trade* and
       forbids nothing). New cases must fail an echo of their own prompt.
-      Validation: `test_capability_coverage` passes; a scripted always-hedge responder scores **< 0.30**
-      capability (currently 0.857); every new case has a `relevant_node_ids` annotation so the retrieval
-      cross-tab stops covering only guard cases.
+      **Partial completion is expected and is the designed exit** — see the *Ratchet* note below.
+      Validation (all three, not just the first): (1) `UNCOVERED_BASELINE` has **shrunk by the number of
+      cases authored** in the same commit, which `test_uncovered_baseline_has_no_stale_entries` enforces;
+      (2) a scripted always-hedge responder scores **< 0.30** capability (currently 0.857) — this is the
+      real gate, and it is the one a ratchet cannot fake; (3) every new case carries a `relevant_node_ids`
+      annotation so the EVAL-P4.2 retrieval cross-tab stops covering only guard cases.
+      **Ratchet:** this task may be ticked at **≥ 9 authored cases** (one per uncovered NPC, capability
+      n: 7 → 16) provided validations (2) and (3) hold for the authored set, with the remainder tracked as
+      an ISSUE naming the target of ~35. Rationale: a 4–5 h authoring block that must complete in one
+      sitting or count for nothing is the shape of task that never gets started. Record the achieved count
+      here by number.
 
 - [ ] **EVAL-P20.3** Wire `refusal_rate` into the report. Files: `edit evals/summary.py`,
       `edit evals/refusal_rate.py`, `edit tests/unit/evals/test_refusal_rate.py`.
@@ -2111,18 +2312,18 @@ is its verdict.
       that makes a stale published claim impossible rather than merely discouraged.
 
 
-<!-- LOOP:QUEUE end -->
-<!-- ^ MOVED HERE 2026-08-09 (DEC-160): Program 3 (EVAL-P15..P24) released to the overnight loop.
-     This marker sat ABOVE Program 3 from 2026-08-09 until this move, deliberately, while the plan
-     was adversarially reviewed. It is released only now that three guards are in place:
-       1. loop_gates.FROZEN_PATH_PREFIXES now contains evals/calibration/ and evals/generations/,
+<!-- ^ The LOOP:QUEUE end marker USED TO SIT HERE (DEC-160, 2026-08-09), releasing all of
+     Program 3 to the loop. It was narrowed on 2026-08-10 (DEC-163) to sit below EVAL-P19.4
+     instead; the reopen conditions are recorded at the marker's new location, immediately
+     above "### Phase EVAL-P20". DEC-160's three original guards all still hold and are not
+     reversed by the narrowing:
+       1. loop_gates.FROZEN_PATH_PREFIXES contains evals/calibration/ and evals/generations/,
           so NO unattended session can write the 393 human labels or any run transcript.
-       2. Twelve Program-3 tasks carry (live / ⏸️ so the loop skips them: everything that spends
-          labels, Opus credits, live runs, human authoring, or settles a judge.
-       3. The plan was corrected after review — see DEC-159 for the four method decisions and the
-          five factual errors that would otherwise have been executed unattended.
-     Everything below this marker (Parked, Post-program milestones, PR-9, Next/Next+1) stays
-     unreachable, which is the point of keeping the fence rather than deleting it. -->
+       2. Program-3 tasks that spend labels, Opus credits, live runs, human authoring or a
+          judge decision carry (live / ⏸️ and are skipped by compute_next.
+       3. The plan was corrected after review — see DEC-159.
+     Everything below (Parked, Post-program milestones, PR-9, Next/Next+1) stays unreachable,
+     which is the point of keeping the fence rather than deleting it. -->
 ### Parked (out of budget)
 
 Not compressed into optimistic estimates — genuinely out of scope for this program. Each line says why.
@@ -2176,8 +2377,14 @@ EVAL-P3 is its own session. EVAL-P5 is one session **plus** 4–6 h of offline a
 session. EVAL-P7 is one session — and is the cut if anything before it overruns. EVAL-P8 is one session and
 is **not** a cut candidate.
 
-**Loop fence state (DEC-160, 2026-08-09):** the `<!-- LOOP:QUEUE end -->` marker sits **immediately below
-Program 3**, so the queue spans **EVAL-P0..EVAL-P24** — 37 open tasks, 22 flagged.
+**Loop fence state (DEC-163, 2026-08-10 — supersedes the DEC-160 state described below):** the
+`<!-- LOOP:QUEUE end -->` marker sits **immediately above `### Phase EVAL-P20`**, so the queue spans
+**EVAL-P0..EVAL-P19**. `roadmap_cursor.py --verify` is the authority on the span, not this paragraph.
+EVAL-P20..P24 are human-driven until the reopen conditions at the marker are met; the ordered breakdown
+lives in `project-harness/HUMAN_TASKS.md`.
+
+Prior state, retained for the guard list which still applies (DEC-160, 2026-08-09): the marker sat
+**immediately below Program 3**, so the queue spanned **EVAL-P0..EVAL-P24** — 37 open tasks, 22 flagged.
 It was held *above* Program 3 for the duration of the adversarial review and released deliberately once
 three guards existed: `loop_gates.FROZEN_PATH_PREFIXES` now contains `evals/calibration/` and
 `evals/generations/` so no unattended session can write the 393 human labels or a run transcript; 13 of

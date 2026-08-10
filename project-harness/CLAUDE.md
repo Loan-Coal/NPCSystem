@@ -53,7 +53,8 @@ make demo-snapshot            # snapshot current demo state to cache
 | `demo_game/seeds/seed.py` | Demo world seeder (5 NPCs, 3 locations, 3 factions) |
 | `seeds/worlds/seed_village_world.py` | Village eval world (vw_ prefix) |
 | `seeds/worlds/seed_tavern_world.py` | Tavern eval world (tw_ prefix) |
-| `src/npc_engine/prompts/` | All runtime LLM prompt YAML files (no prompt strings in Python). Eval-judge prompts live under `src/npc_engine/prompts/eval/`. |
+| `src/npc_engine/prompts/` | All **runtime** LLM prompt YAML files (no prompt strings in Python). |
+| `prompts/eval/` | **Eval-judge** prompt YAML (`tone_judge.yaml`, `refusal_judge.yaml`). ⚠️ Repo **root**, not under `src/`. Corrected 2026-08-10: this table previously said `src/npc_engine/prompts/eval/`, which does not exist — `evals/matchers.py:62-63` resolves `parents[1] / "prompts" / "eval"`. |
 | `src/npc_engine/engines/` | Domain engines (dialogue, gossip, emotion, quest) |
 | `docs/DEMO_SCRIPT.md` | Scripted 5-minute demo scenario |
 | `project-harness/ROADMAP.md` | Two-week hackathon plan |

@@ -229,7 +229,18 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     finishing the program having measured nothing. That narrowing worked: the
     baseline was measured on 2026-08-06 before a judge call was spent on P1..P8.
 
-    Current state (2026-08-09, DEC-160): the fence spans EVAL-P0..EVAL-P24 — Program 1
+    Current state (2026-08-10, DEC-163): the fence spans **EVAL-P0..EVAL-P19**. The end
+    marker was narrowed from below EVAL-P24.3 to immediately above "### Phase EVAL-P20",
+    on the same principle as the DEC-153 §3 narrowing described above: EVAL-P15..P19
+    recompute and repair over the artifact already on disk and can be validated against
+    it, while EVAL-P20..P24 assume a post-regeneration artifact that does not exist, so
+    the loop could only build them against fixtures. That is not hypothetical — it is how
+    EVAL-P8.2's ``compare`` shipped green and then printed "Intersection: 0 cases /
+    NO_DETECTABLE_CHANGE / p=1.0000" with exit 0 against the two real generation dirs.
+    Reopen conditions are recorded at the marker in ROADMAP.md; the ordered human-side
+    sequence is in project-harness/HUMAN_TASKS.md.
+
+    Prior state (2026-08-09, DEC-160): the fence spanned EVAL-P0..EVAL-P24 — Program 1
     (P0..P8, precision), Program 2 (P9..P14, validity + the portfolio artifact, released
     2026-08-07), and Program 3 (P15..P24, the measurement apparatus, released 2026-08-09
     once `loop_gates.FROZEN_PATH_PREFIXES` covered `evals/calibration/` and
@@ -282,7 +293,10 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     assertion below exists to catch.
     """
     phases, _ = _real_roadmap_phases()
-    assert [p.id for p in phases] == [f"EVAL-P{n}" for n in range(25)]
+    # 2026-08-10 (DEC-163): narrowed 25 -> 20. The fence end marker moved from below
+    # EVAL-P24.3 to immediately above "### Phase EVAL-P20", so EVAL-P20..P24 are out of
+    # the queue. This assertion firing on that move is the tripwire working as designed.
+    assert [p.id for p in phases] == [f"EVAL-P{n}" for n in range(20)]
 
     # Program 1's foundation phases are complete: nothing actionable, nothing held back.
     # Monotonic — a done phase never reopens, so this cannot fire on progress.

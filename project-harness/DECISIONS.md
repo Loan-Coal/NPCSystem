@@ -2730,3 +2730,93 @@ in the file for anyone deciding whether the loop can reach a task that spends hu
 were mutation-tested rather than assumed: a deleted case file, a stale baseline entry, an added flag,
 and a changed flag each produce a red; a *ticked* flagged task produces a green. `roadmap-verify` reports
 25 phases over queue lines 125-2107, and `ROADMAP.md` remains 100% CRLF (2768/2768) after editing.
+
+## DEC-162: `evals/statistics.py` renamed to `evals/rate_stats.py` — stdlib shadowing
+**Date:** 2026-08-10 · **Status:** ✅ ACCEPTED (pre-flight before releasing the loop into EVAL-P15)
+· **Gates:** `EVAL-P15.4` (which named this as its own "blocker to handle first"), `EVAL-P18.1`
+· **Drives:** `evals/rate_stats.py`, `evals/case_stats.py`, `evals/compare.py`, `evals/refusal_rate.py`,
+`evals/sequence_runner.py`, `evals/summary.py`, `tests/unit/evals/test_rate_stats.py`,
+`tests/unit/evals/test_paired_stats.py`
+
+**Context:** `pyproject.toml:60` puts `evals` on `pythonpath`. A module named `statistics` inside it
+therefore shadows the **stdlib** `statistics` module for every importer in the process. Measured:
+`mypy evals/` reported 26 errors, 10 of them `Module "statistics" has no attribute "wilson_interval"`
+across five files. EVAL-P15.4 flagged this and said explicitly to *sequence the rename before, not
+during* the task that brings `evals/` under the gates.
+
+**Decision:** Rename to **`rate_stats`**, matching the sibling naming already in use
+(`paired_stats.py`, `case_stats.py`) and describing the contents accurately — `wilson_interval` and
+`pass_rate` are both rate statistics. Alternatives considered and rejected: `eval_statistics` (still
+invites the stdlib confusion at a glance), `wilson_stats` (`pass_rate` is not a Wilson quantity),
+and leaving it with a `# type: ignore` (suppresses the symptom, keeps the live shadowing hazard for
+any future module that legitimately wants the stdlib `statistics`).
+
+**Why now rather than inside EVAL-P15.4:**
+1. **`harness_version` contamination.** EVAL-P18.1 replaces `golden_set_version` with a
+   `harness_version` that hashes `evals/matchers.py` and friends. Renaming a module *after* that
+   lands makes a pure refactor look like a substantive harness change, and every run either side of
+   it becomes formally incomparable for no real reason. Doing it now costs nothing.
+2. **A diff that changes a number must never be mixed with a diff that renames a file.** This is
+   EVAL-P15's own constraint, applied to EVAL-P15 itself.
+
+**Corrections to the ROADMAP text this rename supersedes** (recorded because a stale count is what
+made the original note under-scope the work): the note said "8 of the 24 current mypy errors" and
+"touches 4 importers". Measured: **10 of 26** errors, **5** importers — `sequence_runner.py` was
+added by EVAL-P12.3 after the note was written. Post-rename `mypy evals/` is at **16** errors, and
+that is the baseline EVAL-P15.4 ratchets against.
+
+**Verification:** `mypy evals/` 26 → 16 errors, all 10 shadowing errors gone; `pytest tests/unit/evals`
+328 passed; `make check` green. `git mv` used for both files so history follows the rename.
+
+## DEC-163: Narrow the loop fence to EVAL-P0..P19 — a phase the loop can only fixture-test does not belong in the queue
+**Date:** 2026-08-10 · **Status:** ✅ ACCEPTED (human, pre-flight before releasing the loop into EVAL-P15)
+· **Supersedes:** DEC-160's fence *placement* (its three guards are unchanged and still apply)
+· **Drives:** `project-harness/ROADMAP.md` (`LOOP:QUEUE end` marker),
+`tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_fence_state_tripwire`,
+`project-harness/HUMAN_TASKS.md`
+
+**Context:** DEC-160 released all of Program 3 (EVAL-P15..P24) to the overnight loop, guarded by frozen
+label/generation paths and per-task `(live` / `⏸️` flags. Those guards prevent the loop from *destroying*
+anything. They do not prevent it from *building something unverifiable*, which is a different failure and
+the one this project has already shipped twice.
+
+**The evidence, re-measured 2026-08-10 rather than recalled:** `EVAL-P8.2` landed `compare` green on
+fixture tests. Run against the two real generation directories it prints:
+
+    Comparing baseline -> k3_73e6c36
+    Intersection: 0 cases
+    Verdict: NO_DETECTABLE_CHANGE  p=1.0000  improved=0  regressed=0
+    EXIT=0
+
+A confident verdict over an empty intersection, exit 0, and `tests/unit/evals/test_compare.py:176`
+enshrining it as correct. Nothing in the fixture suite could have caught it, because no fixture was a real
+artifact.
+
+**Decision:** Move the `<!-- LOOP:QUEUE end -->` marker from below `EVAL-P24.3` to immediately above
+`### Phase EVAL-P20`. Queue span becomes **EVAL-P0..EVAL-P19** (`roadmap_cursor.py --verify`:
+`queue lines 125-1870, 20 phases`).
+
+**The line is drawn by what a task can be validated against, not by how risky it looks:**
+
+| | Validated against | In queue |
+|---|---|---|
+| EVAL-P15..P19 | `evals/generations/k3_73e6c36`, already on disk and git-tracked. Conservation identities, case-level intervals, both-source aggregation, scorer criteria — all are arithmetic or prompt edits over existing data. | **Yes** |
+| EVAL-P20..P24 | A post-regeneration artifact that does not exist. Panel consensus (P21.2), the preflight entry point (P23.3) and the trend/regression gate (P23.1-2) can only be fixture-tested until it does. | **No** |
+
+**Reopen conditions (all three, checked by a human — not inferred from a green suite):**
+1. `EVAL-P17.6` green: `make check-conservation` exits 0 with all four identities satisfied. This is
+   EVAL-P17's real exit criterion, and it is the proof that the aggregators consume their whole input.
+2. `EVAL-P17.5` ticked: the corrected headline recorded next to the retracted `3 across 111`.
+3. `EVAL-P20.0` landed **and its >=95% seed-reproduction gate met by measurement**, so a regeneration
+   cannot silently invalidate ~81% of the 393 human labels.
+
+**Cost of being wrong in each direction.** Too narrow: the loop idles for a night or two and a human moves
+the marker — recoverable in one edit. Too wide: fifteen tasks of fixture-green apparatus, and the harness
+built to catch the project's measurement errors becomes the third thing that was confidently wrong.
+The asymmetry is the whole argument.
+
+**Verification:** `roadmap_cursor.py --verify` OK, 20 phases, cursor still `EVAL-P15 / EVAL-P15.2`.
+`test_real_roadmap_fence_state_tripwire` **failed on the move and was updated deliberately**
+(`range(25)` -> `range(20)`), which is the behaviour DEC-161 built it for — the tripwire proving it fires.
+`EXPECTED_FLAGS` is asserted by containment, so its now-out-of-fence P20..P24 entries go inert rather than
+stale. `tests/unit/harness` 72 passed. ROADMAP.md remains 100% CRLF.
