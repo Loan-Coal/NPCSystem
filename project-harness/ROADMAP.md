@@ -2250,7 +2250,7 @@ comparability discontinuity, and two commits would spend it twice.
       both cases satisfy; no two cases share a player message unless deliberately paired across NPCs, and
       that pairing is declared in the case file.
 
-- [ ] **EVAL-P20.2** ⏸️ *(human authoring: only a human can say what an NPC should say)* Capability
+- [x] **EVAL-P20.2** ⏸️ *(human authoring: only a human can say what an NPC should say)* Capability
       battery to ~35 cases (**completes EVAL-P9.3**). Files:
       `create evals/cases/case_pos_*.yaml`, `edit tests/unit/evals/test_capability_coverage.py`.
       ⚠️ **CORRECTED 2026-08-10.** An earlier draft said `test_capability_coverage.py` *"currently fails"*.
@@ -2277,6 +2277,23 @@ comparability discontinuity, and two commits would spend it twice.
       an ISSUE naming the target of ~35. Rationale: a 4–5 h authoring block that must complete in one
       sitting or count for nothing is the shape of task that never gets started. Record the achieved count
       here by number.
+      **ACHIEVED 2026-08-10: 9 cases authored, capability battery 7 -> 16.** One per uncovered
+      NPC (`bren_smith`, `dorn_dockmaster`, `garrick_deserter`, `harwick_guard`, `nel_pickpocket`,
+      `nessa_priestess`, `sera_barmaid`, `tilda_herbalist`, `vex_spymaster`), all `requires_world: demo`.
+      (1) `UNCOVERED_BASELINE` shrank by 9 — it is now **empty**, so every grounded demo NPC has a case
+      and `test_capability_coverage_never_regresses` is back to a flat assertion. (2) `make hedge-probe`
+      (new: `scripts/hedge_responder_probe.py`, DEC-167) scores the authored set **0/9 = 0.000** — gate
+      met; the whole battery is **6/16 = 0.375** — not met, floored entirely by the 7 legacy cases
+      (ISSUE-146). The probe reproduces the stated 0.857 baseline exactly. (3) all 9 carry
+      `relevant_node_ids` naming the grounding node, enforced by
+      `tests/unit/evals/test_capability_echo_resistance.py`, which also pins echo- and hedge-resistance
+      for every case authored from now on.
+      ⚠️ **The 9 cases score 2/9 against the live engine**, because the dialogue context arrives with
+      no beliefs, goals, memories or profile for **any** NPC — `captain_sorn`'s direct `KNOWS_ABOUT`
+      edge included. The legacy 7 score 6/6 only because their keyword lists overlap the model's
+      generic war boilerplate, which is the same mechanism as the hedge. Filed **ISSUE-145 (P1, hand
+      review)**; the capability rate is not interpretable until it closes. Remainder to ~35: ISSUE-147.
+      ✅ HUMAN (EVAL-P20.2, 2026-08-10)
 
 - [ ] **EVAL-P20.3** Wire `refusal_rate` into the report. Files: `edit evals/summary.py`,
       `edit evals/refusal_rate.py`, `edit tests/unit/evals/test_refusal_rate.py`.

@@ -15,7 +15,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-layers check-docstrings roadmap-verify check-human-gates type-ratchet type-ratchet-update check-harness \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world package
@@ -379,6 +379,14 @@ draft-cases:
 		--requires-world $(or $(REQUIRES_WORLD),demo) \
 		$(if $(NPC_IDS),--npc-ids $(NPC_IDS),) \
 		$(if $(OVERWRITE),--overwrite,)
+
+# hedge-probe: score the capability battery against a scripted always-hedge responder
+# (EVAL-P20.2 validation 2). Offline — no engine, no Neo4j; judges call Ollama only if a
+# case declares one. Exits non-zero when the battery does NOT hold the hedge under 0.30.
+# Usage: make hedge-probe [CASE_IDS="case_pos_a case_pos_b"]
+hedge-probe:
+	$(PYTHON) scripts/hedge_responder_probe.py \
+		$(if $(CASE_IDS),--case-ids $(CASE_IDS),)
 
 # ---------------------------------------------------------------------------
 # Demo game targets (Phase 2)

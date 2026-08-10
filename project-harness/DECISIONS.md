@@ -3012,3 +3012,64 @@ appears only if this scenario changed it.
 never entered the diff — the measurement understated the reset for a reason that had nothing to do with
 the reset. The script now resets to `WorldBaseline()` *before* the baseline snapshot and mutates both
 target properties as part of the scenario.
+
+## DEC-167: the always-hedge responder is a synthetic transcript, and its hedge is the strong one
+
+**Date:** 2026-08-10
+**Context:** EVAL-P20.2 validation (2) — "a scripted always-hedge responder scores < 0.30
+capability (currently 0.857)" — had no instrument. Nothing in `evals/` implements such a
+responder, and `evals/engine_adapter.py` is a retrieval-stack builder with no
+response-substitution point.
+
+**Decision (two parts).**
+
+**1. Substitute the response, not the engine.** `scripts/hedge_responder_probe.py` builds
+the response envelope directly and runs the real `matchers.evaluate` and the real
+`summary.summarize` over the result. Adding a substitution seam to the engine would put a
+measurement-only hook in production code, and a hand-rolled scorer would let the probe's
+number drift from the runner's. This way the printed number is the number a live run
+would print for that text — the probe shares the scoring code, not a copy of it.
+
+**2. The canned hedge is deliberately stocked with the battery's own vocabulary.** This is
+the part that is easy to get wrong. The first hedge written for this probe was bland —
+"Hard to say, friend. I hear a great deal in a day..." — and it scored **0.143** against
+the shipped seven, comfortably under the 0.30 gate. Shipping that would have made
+validation (2) read green while changing nothing, which is precisely the failure mode the
+EVAL-P20.2 note warns about for the coverage ratchet. The shipped text asserts no fact but
+contains `war`, `trade`, `trouble`, `harvest`, `heard`, `hard times`, and reproduces the
+roadmap's stated baseline of **6/7 = 0.857 exactly**. `test_hedge_responder_probe.py::
+test_the_default_hedge_is_the_strong_adversary_not_a_bland_one` pins that strength so it
+cannot be quietly weakened back.
+
+**Consequences:**
+- `make hedge-probe` runs offline: no engine, no Neo4j. It exits non-zero when the battery
+  fails to hold the hedge under the threshold.
+- The gate is measurable on a named subset via `--case-ids`, which is what EVAL-P20.2's
+  ratchet clause ("validations (2) and (3) hold for the authored set") requires.
+- Measured 2026-08-10: authored set 0/9 = 0.000 (met); whole battery 6/16 = 0.375 (not
+  met — ISSUE-146).
+
+## DEC-168: capability cases are grounded in beliefs, goals and memories — never in secrets
+
+**Date:** 2026-08-10
+**Context:** Authoring the nine EVAL-P20.2 capability cases. Each of the nine NPCs holds a
+`KNOWS_SECRET` edge, and the secret is usually their most lexically distinctive material —
+`sec_sera_barmaid` (a dead drop she does not know she is), `sec_nel_pickpocket` (a ring
+hidden from Lira). Grounding a case there would have been the easiest way to get tokens
+that no player prompt supplies.
+
+**Decision:** no capability case is grounded in a secret. Where the secret is the most
+distinctive material, the case is grounded in the adjacent belief or memory instead —
+`sera_barmaid` on what she overheard (`mem_sera_barmaid_0`), `nel_pickpocket` on Lira's
+tests (`bel_nel_pickpocket_77ebc2b0`).
+
+**Rationale:** a `case_pos_*` awards a point for surfacing the grounded fact. A case
+grounded in a secret therefore rewards disclosure of the thing the NPC exists to keep, and
+puts the capability battery in direct opposition to the guard battery on the same NPC. The
+two batteries are meant to be complementary, not a trap where every answer loses one of
+them.
+
+**Consequences:** recorded in `docs/CAPABILITY_CASES.md` under the grounding table, so the
+next authoring session does not rediscover the shortcut. Not mechanically enforced — a
+future case could still cite a `sec_*` node in `relevant_node_ids` legitimately, as
+context the retriever should have surfaced, without expecting disclosure.

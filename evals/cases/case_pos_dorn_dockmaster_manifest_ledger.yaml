@@ -1,0 +1,33 @@
+# grounded_by: BELIEVES(dorn_dockmaster, bel_dorn_dockmaster_1a330af7)
+case_id: case_pos_dorn_dockmaster_manifest_ledger
+description: dorn_dockmaster believes the manifest is a fiction and the real ledger lives only in his
+  head. Asked how he keeps track of the harbour, the answer he holds is precisely that distinction between
+  the written record and the real one.
+seed:
+  npc_id: dorn_dockmaster
+  player_id: player_eval
+  requires_world: demo
+relevant_node_ids:
+- dorn_dockmaster
+- bel_dorn_dockmaster_1a330af7
+- loc_docks
+- merchants_guild
+input:
+  player_message: They tell me nothing moves through this harbour without you knowing. How do you keep
+    it all straight?
+expected:
+- kind: schema
+- kind: keyword_any
+  keywords:
+  - manifest
+  - ledger
+  - paper
+  - book
+  - head
+  - memory
+  - crate
+  - cargo
+  - record
+notes: 'Grounding: BELIEVES(dorn_dockmaster, bel_dorn_dockmaster_1a330af7). Deliberately does not use
+  the words ''manifest'' or ''ledger'' in the prompt — those are the insider terms the answer must supply,
+  so an echo of the question scores nothing.'

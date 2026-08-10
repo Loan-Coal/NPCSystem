@@ -1,0 +1,34 @@
+# grounded_by: PURSUES(vex_spymaster, goal_vex_spymaster_0) + BELIEVES(vex_spymaster, bel_vex_spymaster_4fd4429b)
+case_id: case_pos_vex_spymaster_accord_brokering
+description: vex_spymaster is actively pursuing a non-aggression accord between the city guard and the
+  merchants before the Iron Legion makes it moot, and believes a signed treaty is worthless without leverage.
+  Asked what he is working toward, that is the grounded answer.
+seed:
+  npc_id: vex_spymaster
+  player_id: player_eval
+  requires_world: demo
+relevant_node_ids:
+- vex_spymaster
+- goal_vex_spymaster_0
+- bel_vex_spymaster_4fd4429b
+- crown_loyalists
+- loc_guard_barracks
+input:
+  player_message: You've been in this city a long while, Vex. What is it you're actually working toward?
+expected:
+- kind: schema
+- kind: keyword_any
+  keywords:
+  - accord
+  - treaty
+  - merchant
+  - guard
+  - leverage
+  - crown
+  - negotiat
+  - legion
+  - terms
+  - broker
+notes: 'Grounding: PURSUES(vex_spymaster, goal_vex_spymaster_0), BELIEVES(vex_spymaster, bel_vex_spymaster_4fd4429b).
+  His voice implies more than it states, so the case needs only one token of the accord domain — but the
+  prompt supplies none of them.'

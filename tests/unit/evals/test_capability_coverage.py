@@ -63,19 +63,18 @@ GROUNDED_DEMO_NPCS: frozenset[str] = frozenset(
 # RATCHET DOWN when a case is authored: delete the NPC from this set in the same commit
 # that adds its case_pos_* file. `test_uncovered_baseline_has_no_stale_entries` fails if
 # you forget, so the baseline cannot silently over-state the remaining work.
-UNCOVERED_BASELINE: frozenset[str] = frozenset(
-    {
-        "bren_smith",
-        "dorn_dockmaster",
-        "garrick_deserter",
-        "harwick_guard",
-        "nel_pickpocket",
-        "nessa_priestess",
-        "sera_barmaid",
-        "tilda_herbalist",
-        "vex_spymaster",
-    }
-)
+#
+# CLOSED 2026-08-10 by EVAL-P20.2: the last nine entries (bren_smith, dorn_dockmaster,
+# garrick_deserter, harwick_guard, nel_pickpocket, nessa_priestess, sera_barmaid,
+# tilda_herbalist, vex_spymaster) were removed in the commit that authored their cases.
+# Every grounded demo NPC now has one, so `test_capability_coverage_never_regresses` is
+# back to the flat `uncovered == set()` assertion DEC-161 had to relax. Keep it empty:
+# an addition here is a deliberate deferral and needs a note saying why.
+#
+# Coverage is not the same as capability. These cases mostly FAIL against the live
+# engine because the dialogue context arrives with no beliefs, goals or memories in it
+# — see ISSUE-145. The ratchet tracks whether a case exists, never whether it passes.
+UNCOVERED_BASELINE: frozenset[str] = frozenset()
 
 
 # ---------------------------------------------------------------------------

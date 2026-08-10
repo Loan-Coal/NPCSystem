@@ -16,6 +16,117 @@ Rules:
 
 ## Open
 
+## ISSUE-145: dialogue retrieval returns an empty NPC profile for every NPC
+**Found:** 2026-08-10, during EVAL-P20.2 (capability case authoring)
+**Severity:** P1 (blocking) — FOR HAND REVIEW. The data exists; the reader does not return it.
+**Where:** retrieval context assembly; observed via `GET /v1/admin/debug/retrieval`
+**Description:** The `npc` context item is empty for **every** NPC tested — the five core
+demo NPCs and all nine H2.2/EXP-223 NPCs alike:
+
+```
+GET /v1/admin/debug/retrieval?npc_id=bren_smith&query=Is+the+forge+doing+all+right
+  {"beliefs": [], "emotion": {...}, "goals": [], "memories": [], "profile": {}, "top_need": null}
+  npc_known_events: []
+```
+
+Identical for `mira_innkeeper`, `captain_sorn`, `aldric_merchant`, `vex_spymaster`,
+`sera_barmaid`: `beliefs=0 goals=0 memories=0 profile_keys=[] events=0`. `captain_sorn`
+holds a *direct* `KNOWS_ABOUT northern_war_begins` edge and it does not reach the prompt.
+
+**The data is present.** The typed admin readers return it correctly:
+`GET /v1/admin/beliefs/bren_smith` returns 2 beliefs, `/goals/` returns 1, `/memories/`
+returns 2, `/secrets/` returns 1, all with the stable seeded ids. So this is a defect in
+the retrieval path or in the debug endpoint's stack, not in the seed and not in the graph.
+
+**Consequences, both measured 2026-08-10:**
+- The nine EVAL-P20.2 capability cases score **2/9** live. Every failing response is
+  generic boilerplate — `bren_smith`, asked about his own forge, answers "I've heard the
+  blacksmiths are struggling a bit this spring", speaking of blacksmiths in the third
+  person because his profile never reached the prompt.
+- The seven shipped capability cases score **6/6** live, but for the wrong reason: every
+  response is a variant of "Word travels fast around here, stranger... the northern war
+  rages on" and passes only because its `keyword_any` list contains `war`/`north`/`heard`.
+  `captain_sorn`, whose case exists to prove he answers *without* hedging, replies
+  "I've heard word of skirmishes, but nothing too serious" — hedged gossip — and passes.
+  **The current capability rate is an artifact of keyword overlap, not evidence of grounding.**
+
+**Why deferred:** EVAL-P20.2 is a case-authoring task; this is an engine/retrieval defect
+of unknown depth, and the human who owns the roadmap asked to review it by hand rather
+than have it fixed inside this commit.
+**To fix:** Determine whether the fault is in the retrieval reader, the context builder,
+or only in `/v1/admin/debug/retrieval`'s stack — the live dialogue responses corroborate
+the debug output, so a debug-only fault is unlikely but is the cheapest thing to rule out.
+Then re-run `make hedge-probe` and the nine cases live; the capability rate is not
+interpretable until this is closed.
+
+## ISSUE-146: the legacy capability cases floor the hedge gate at 0.375
+**Found:** 2026-08-10, during EVAL-P20.2
+**Severity:** P2 (annoying)
+**Where:** the seven pre-EVAL-P20.2 `evals/cases/case_pos_*.yaml` files
+**Description:** EVAL-P20.2 validation (2) wants the whole capability battery to hold a
+scripted always-hedge responder below 0.30. Measured with `make hedge-probe`:
+
+| Set | Rate | Verdict |
+|---|---|---|
+| the 9 cases authored by EVAL-P20.2 | **0/9 = 0.000** | GATE MET |
+| whole battery (16 cases) | **6/16 = 0.375** | GATE NOT MET |
+
+The six legacy cases the hedge beats are the entire remainder — the authored set
+contributes zero. A seventh, `case_pos_lira_fence_trade`, resists the hedge but is beaten
+by an echo of its own prompt: its `tone_judge` asks whether the speaker engages with the
+player's illicit request, and the player's own request trivially does. All seven are named
+in `GAMEABLE_BASELINE` in `tests/unit/evals/test_capability_echo_resistance.py`.
+**Why deferred:** repairing them changes what existing cases measure, which breaks
+comparability with prior generations. That trade belongs to EVAL-P20.1, which already owns
+the case-set contradictions, and to the EVAL-P20.4 regeneration that follows it.
+**To fix:** strip prompt-echo and hedging tokens from the six keyword lists, replace
+`case_pos_lira_fence_trade`'s judge with one that cannot be satisfied by the prompt, then
+delete each repaired id from `GAMEABLE_BASELINE` and confirm `make hedge-probe` exits 0.
+
+## ISSUE-147: capability battery is 16 cases against a target of ~35
+**Found:** 2026-08-10, during EVAL-P20.2
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/cases/case_pos_*.yaml`
+**Description:** EVAL-P20.2 targets ~35 capability cases and was ticked under its own
+ratchet clause at 9 authored (7 to 16). The remaining ~19 are unwritten. Coverage of
+*demo-world NPCs* is complete — `UNCOVERED_BASELINE` is empty and every grounded demo NPC
+has one case — so the remainder is depth (a second and third fact per NPC) plus the
+village and tavern eval worlds, which have no capability coverage at all.
+**Why deferred:** the ratchet clause exists precisely so this does not have to land in one
+sitting; 9 cases clear the gate's authored-set requirement.
+**To fix:** author against `docs/CAPABILITY_CASES.md`, one case per remaining grounded
+fact. Each must resist the echo and the hedge —
+`tests/unit/evals/test_capability_echo_resistance.py` enforces both for any new case.
+
+## ISSUE-148: `make draft-cases` cannot reach the grounded edges it exists to read
+**Found:** 2026-08-10, during EVAL-P20.2
+**Severity:** P2 (annoying)
+**Where:** `evals/case_drafts.py:27-33` (`GROUNDED_EDGE_TYPES`), `:342` (`httpx.Client()`), `Makefile` `draft-cases`
+**Description:** Three independent faults, each sufficient on its own to make the tool
+return nothing:
+1. **No auth.** `case_drafts.py:342` builds `httpx.Client()` with no `Authorization`
+   header and the CLI exposes no `--api-key`, so every request 401s at
+   `_fetch_grounded_edges`'s `raise_for_status()`. The Makefile target has `$(API_KEY)`
+   available and does not pass it.
+2. **Two-thirds of the edge types do not exist.** `GROUNDED_EDGE_TYPES` names
+   `HAS_MEMORY`, `HAS_GOAL` and `HAS_SECRET`. The registry
+   (`GET /v1/admin/schema/registry`) has `REMEMBERS`, `PURSUES` and `KNOWS_SECRET`;
+   the three wrong names return HTTP 422.
+3. **The generic graph reader is blind to inner life even for the correct names.**
+   `GET /v1/graph/edges/BELIEVES?src_id=bren_smith` returns `[]` and
+   `GET /v1/graph/nodes/Belief` returns a single unrelated node, while
+   `GET /v1/admin/beliefs/bren_smith` returns the two seeded beliefs. Same for goals,
+   memories and secrets. This may share a root cause with ISSUE-145.
+
+EVAL-P20.2 was authored against the typed admin endpoints instead; the tool produced no
+usable draft.
+**Why deferred:** `make draft-cases` is EVAL-P9.2's deliverable, and (3) is likely the
+same defect as ISSUE-145 — fixing the tool before the reader would be repairing a symptom.
+**To fix:** settle ISSUE-145 first, then add `--api-key` (defaulting to `$API_KEY_SECRET`)
+and wire `--api-key $(API_KEY)` into the Makefile target, correct `GROUNDED_EDGE_TYPES` to
+the registry names, and add a test that fails when a name in it is absent from
+`GET /v1/admin/schema/registry`.
+
 ## ISSUE-143: `sequence_runner` publishes a Wilson CI with no evidence the repetitions are independent
 **Found:** 2026-08-10, during the EVAL-P15 pre-flight adversarial review of the open roadmap tasks
 **Severity:** P1 (blocking for EVAL-P12.4 — it is the exact defect class Program 3 exists to remove,

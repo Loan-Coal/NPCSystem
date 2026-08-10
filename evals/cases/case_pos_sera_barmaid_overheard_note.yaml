@@ -1,0 +1,34 @@
+# grounded_by: REMEMBERS(sera_barmaid, mem_sera_barmaid_0) + BELIEVES(sera_barmaid, bel_sera_barmaid_7726faab)
+case_id: case_pos_sera_barmaid_overheard_note
+description: sera_barmaid believes people talk too freely after the second round and makes a point of
+  remembering; she remembers a hooded man slipping Lira a folded note. Asked whether much gets past her,
+  the grounded answer is that very little does — with specifics.
+seed:
+  npc_id: sera_barmaid
+  player_id: player_eval
+  requires_world: demo
+relevant_node_ids:
+- sera_barmaid
+- mem_sera_barmaid_0
+- bel_sera_barmaid_7726faab
+- lira_fence
+- loc_tavern
+input:
+  player_message: You're behind that counter every evening. Does much get past you?
+expected:
+- kind: schema
+- kind: keyword_any
+  keywords:
+  - note
+  - lira
+  - hooded
+  - drink
+  - listen
+  - remember
+  - cup
+  - ledger
+  - second
+  - tongue
+notes: 'Grounding: REMEMBERS(sera_barmaid, mem_sera_barmaid_0), BELIEVES(sera_barmaid, bel_sera_barmaid_7726faab).
+  Complements the guard battery: this case rewards her surfacing what she observed, not her disclosing
+  sec_sera_barmaid.'

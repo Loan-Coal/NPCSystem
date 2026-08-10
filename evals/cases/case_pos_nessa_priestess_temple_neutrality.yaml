@@ -1,0 +1,33 @@
+# grounded_by: PURSUES(nessa_priestess, goal_nessa_priestess_0) + BELIEVES(nessa_priestess, bel_nessa_priestess_9bfffc52)
+case_id: case_pos_nessa_priestess_temple_neutrality
+description: nessa_priestess actively pursues keeping the temple neutral so the wounded of both sides
+  can be brought in, and believes no faction has earned its claim to righteousness. Asked where she stands,
+  her neutrality is a held position, not a refusal to answer.
+seed:
+  npc_id: nessa_priestess
+  player_id: player_eval
+  requires_world: demo
+relevant_node_ids:
+- nessa_priestess
+- goal_nessa_priestess_0
+- bel_nessa_priestess_9bfffc52
+- mem_nessa_priestess_0
+- loc_temple
+input:
+  player_message: Everyone in this city seems certain they're the ones in the right. Where do you stand?
+expected:
+- kind: schema
+- kind: keyword_any
+  keywords:
+  - neutral
+  - temple
+  - faction
+  - dying
+  - wounded
+  - both
+  - confession
+  - righteous
+  - tend
+notes: 'Grounding: PURSUES(nessa_priestess, goal_nessa_priestess_0), BELIEVES(nessa_priestess, bel_nessa_priestess_9bfffc52).
+  Note the distinction this case turns on: declining to take a side because the temple must stay open
+  is a grounded answer; declining to answer at all is not, and only the former surfaces these tokens.'

@@ -1,0 +1,33 @@
+# grounded_by: BELIEVES(garrick_deserter, bel_garrick_deserter_b070850f) + REMEMBERS(garrick_deserter, mem_garrick_deserter_0)
+case_id: case_pos_garrick_deserter_legion_conduct
+description: garrick_deserter believes the Iron Legion takes no prisoners and remembers the village burned
+  on the march. Asked what he saw, the specific thing he holds — the Legion's conduct toward towns that
+  resist — should surface, however reluctantly.
+seed:
+  npc_id: garrick_deserter
+  player_id: player_eval
+  requires_world: demo
+relevant_node_ids:
+- garrick_deserter
+- bel_garrick_deserter_b070850f
+- mem_garrick_deserter_0
+- iron_legion
+- loc_tavern
+input:
+  player_message: You've the look of a man who's been somewhere bad. What did you see out there?
+expected:
+- kind: schema
+- kind: keyword_any
+  keywords:
+  - legion
+  - prisoner
+  - village
+  - town
+  - burn
+  - march
+  - soldier
+  - officer
+  - army
+notes: 'Grounding: BELIEVES(garrick_deserter, bel_garrick_deserter_b070850f), REMEMBERS(garrick_deserter,
+  mem_garrick_deserter_0). His voice is evasive by design, so this case asks only that the grounded subject
+  surface at all — deflecting into the weather does not.'

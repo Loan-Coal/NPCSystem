@@ -39,7 +39,7 @@ and sits in H2's and H9's ready sets, so if it slips both gates are ready in nam
 | **2** | `EVAL-P17.5` — re-measure and retract | **H1** | after loop ticks **P17.4** | ~30 min | P13.3, fence reopen |
 | ~~**3**~~ | `EVAL-P15.1` — oracle labeller | — | ✅ **DONE 2026-08-10** | ~75 min | P19.4, P22.2, P22.3 |
 | **4** | `EVAL-P19.4` — re-judge, merge, re-measure κ | **H2** | after loop ticks **P19.1** + task 3 | ~90 min | publication of any guard rate |
-| **5** | `EVAL-P20.2` — capability cases | — *(clears **H6** with task 8)* | any time after task 0 | 2–3 h (of ~4–5 h) | a non-gameable headline |
+| ~~**5**~~ | `EVAL-P20.2` — capability cases | — *(clears **H6** with task 8)* | ✅ **DONE 2026-08-10 — 9 authored, battery 7→16** | 2–3 h (of ~4–5 h) | a non-gameable headline |
 | — | **Week-2 boundary** — everything below needs the fence reopened | **H3** | | | |
 | 6 | `EVAL-P20.0` — deterministic seed | **H4** | after tasks 2 + 4 | ~60 min | **every** regeneration |
 | 7 | `EVAL-P12.4` — measured multi-turn | **H5** | after task 1 | budget from P12.1 | P13.2, P14.3 |
@@ -346,6 +346,41 @@ green would stop halting the phase. "The test passes" would be satisfied by chan
 gate and the `relevant_node_ids` requirement hold for the authored set, with the remainder tracked as
 an ISSUE naming the ~35 target. A 4–5 h block that must complete in one sitting or count for nothing
 is the shape of task that never gets started. **Record the achieved count by number.**
+
+### ✅ Done 2026-08-10 — achieved count, and the defect it uncovered
+
+**9 cases authored. Capability battery 7 → 16.** One per uncovered NPC, all `requires_world: demo`.
+`UNCOVERED_BASELINE` is now **empty** — every grounded demo NPC has a case.
+
+| Validation | Result |
+|---|---|
+| (1) baseline shrank by the number authored | 9 → 0, in the same commit |
+| (2) always-hedge responder < 0.30 — **authored set** | **0/9 = 0.000** ✅ |
+| (2) always-hedge responder < 0.30 — whole battery | **6/16 = 0.375** ❌ — floored by the 7 legacy cases (ISSUE-146) |
+| (3) `relevant_node_ids` on every new case | 9/9, naming the grounding node |
+
+**Step 1 of this runbook does not work.** `make draft-cases` fails three ways — no auth header
+(401), two-thirds of `GROUNDED_EDGE_TYPES` name relationship types that do not exist
+(`HAS_MEMORY`/`HAS_GOAL`/`HAS_SECRET`; the registry says `REMEMBERS`/`PURSUES`/`KNOWS_SECRET`), and
+the generic graph reader returns nothing for inner life even under the correct names. Filed as
+ISSUE-148. The cases were authored against the typed admin endpoints
+(`GET /v1/admin/{beliefs,goals,memories,secrets}/{npc_id}`), which return the seeded data correctly.
+
+**The instrument for validation (2) had to be built:** `scripts/hedge_responder_probe.py`
+(`make hedge-probe`), a synthetic-transcript responder that runs the real matchers and the real
+summary over a substituted response. Its canned hedge is deliberately the *strong* one — a bland
+"I could not say" scores 0.143 and would have made the gate green for free. See DEC-167.
+
+🔴 **The finding that matters is ISSUE-145.** The 9 cases score **2/9 against the live engine**,
+because the dialogue context arrives with **no beliefs, goals, memories or profile for any NPC** —
+`captain_sorn`'s direct `KNOWS_ABOUT` edge included. Asked about his own forge, `bren_smith` replies
+*"I've heard the blacksmiths are struggling a bit this spring"*: third person, about himself. The
+legacy 7 score 6/6 live only because their keyword lists overlap the model's generic
+*"the northern war rages on"* boilerplate — the same mechanism as the hedge. **The capability rate
+published today is an artifact of keyword overlap, not evidence of grounding.** The seed data is
+present and readable; this is a retrieval-path defect, filed P1 for hand review.
+
+Remainder toward the ~35 target: ISSUE-147. Review sheet: `evals/cases/_drafts/REVIEW.md`.
 
 ---
 

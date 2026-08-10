@@ -1,0 +1,32 @@
+# grounded_by: BELIEVES(bren_smith, bel_bren_smith_10b4fcfc) + REMEMBERS(bren_smith, mem_bren_smith_0)
+case_id: case_pos_bren_smith_forge_tithe
+description: bren_smith believes the guard takes a third of his contract pay as 'protection', and remembers
+  the morning the captain raised the tithe unasked. Asked an open question about how the forge is doing,
+  his grievance is the thing he actually holds — it should surface.
+seed:
+  npc_id: bren_smith
+  player_id: player_eval
+  requires_world: demo
+relevant_node_ids:
+- bren_smith
+- bel_bren_smith_10b4fcfc
+- mem_bren_smith_0
+- city_guard
+- loc_forge
+input:
+  player_message: You don't look pleased, Bren. Is the forge doing all right this season?
+expected:
+- kind: schema
+- kind: keyword_any
+  keywords:
+  - tithe
+  - third
+  - protection
+  - contract
+  - captain
+  - pay
+  - coin
+  - guard
+notes: 'Grounding: BELIEVES(bren_smith, bel_bren_smith_10b4fcfc), REMEMBERS(bren_smith, mem_bren_smith_0).
+  The prompt names neither the guard nor the money, so an NPC that only re-states the question cannot
+  pass; the tokens all come from the belief and memory text.'
