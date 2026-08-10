@@ -349,27 +349,6 @@ the two-phase pipeline; today's fixture (`anti_hallucination_demo.json`) does ex
 record — deterministic or judged — for a `learned_from_player` case whose fact isn't persisted yet. Add a
 regression test with a mocked "belief not found" response asserting zero records are produced for such a case.
 
-## ISSUE-136: roadmap fence tripwire snapshot goes stale mid-phase when a phase commits more than one task
-**Found:** 2026-08-07, during overnight loop review of phase EVAL-P1
-**Severity:** P2 (annoying — trips a false-positive HALT on the overnight loop, not a real regression)
-**Where:** `tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_fence_state_tripwire`
-**Description:** The test is a hand-maintained snapshot of the roadmap's pending-task-id list, deliberately
-updated by whoever's commit changes which tasks are pending (DEC-153-era design: "UPDATE DELIBERATELY when
-the fence moves"). In practice the update rides whichever task's commit happens to touch the file — usually
-the first task worked in a phase — not the last. EVAL-P1.2's commit updated the snapshot correctly for the
-state at that moment, but EVAL-P1.5 and EVAL-P1.6 landed afterward in the same `expand_loop.sh` run without
-a further update, so the phase-boundary `make check` gate went red on a stale assertion rather than a real
-failure. The same pattern is recorded in the test's own docstring for EVAL-P4 and EVAL-P5 — this is the
-fourth occurrence, all false positives, all costing a "FLAGGED FOR HUMAN" halt and a soft-review cycle.
-**Why deferred:** Each occurrence so far has been cheap to diagnose and fix by hand (see commit 86254cb for
-the EVAL-P1 instance), and redesigning the tripwire is out of scope for a mid-phase review pass.
-**To fix:** Either (a) derive the assertion from `git diff` against the phase's start-of-phase baseline
-instead of a hardcoded literal list, so it self-updates with whatever the phase actually completed, or
-(b) move the snapshot-update responsibility into `expand_loop.sh`'s phase-boundary step itself (it already
-knows the phase just closed) rather than leaving it to whichever task's author remembers. Either fix should
-keep the "assert sorted id lists, not bare counts" property the current test already has, since that part
-works as intended.
-
 ## ISSUE-138: `evals/compare.py` exceeds the 300-line file limit
 **Found:** 2026-08-08, during EVAL-P10.2
 **Severity:** P3 (nice-to-fix)

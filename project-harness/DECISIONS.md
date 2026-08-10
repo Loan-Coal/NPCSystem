@@ -2661,3 +2661,72 @@ Fixing it properly means changing the loop's commit step, which is CI-adjacent a
 phases); `--list-flagged` returns the 13 tasks above; `--next` returns EVAL-P11.1, i.e. the loop
 drains Program 2's trust-policy task first — which is the correct order, since EVAL-P19.4 and
 EVAL-P24.1 both need that threshold to exist; `pytest -k "loop_gates or scan_fix_diff"` 20 passed.
+
+---
+
+## DEC-161: A gate the loop cannot turn green is not a gate — three red gates repaired
+
+**Date:** 2026-08-10
+**Status:** ✅ ACCEPTED
+
+**Context:** `make check` was red at both phase boundaries of the 2026-08-09 night run (after EVAL-P11
+and after EVAL-P12), tripping `MAX_CONSECUTIVE_RED_GATES=2` and halting the loop with 35 tasks still
+open. All three failures were **stale assertions, not regressions** — 3007 tests pass and no
+production behaviour was involved in any of them. They share one root cause worth naming: each gate
+asserted a quantity that *the loop's own correct operation changes*, so the gate fired on success.
+
+**The three, and what each actually was:**
+
+1. **`test_real_roadmap_fence_state_tripwire`** pinned the fence at EVAL-P0..P14. DEC-160 deliberately
+   moved the marker below Program 3 the previous day, so the queue is P0..P24. The tripwire fired
+   exactly as designed — its docstring says "UPDATE DELIBERATELY when the fence moves" — but DEC-160
+   verified the *cursor* (`roadmap-verify` OK, 25 phases) and not the tests that snapshot it. Span
+   updated to P0..P24.
+
+2. **`test_real_roadmap_end_marker_is_not_repeated_inside_the_queue`** asserted the literal
+   `LOOP:QUEUE end` appears nowhere in the fenced body. Moving the marker brought Program 3's own
+   "Fence policy" paragraph inside the fence, and that paragraph quotes the marker to explain itself.
+   **This was never the hazard it claimed to guard:** `fence_bounds` matches `line.startswith(FENCE_END)`,
+   so a quoted token mid-line cannot truncate anything, and a genuine duplicate marker *line* raises
+   `RoadmapCursorError` rather than silently cutting the queue. The test now asserts the real invariant
+   (no line inside the fence *starts with* the marker), and a new sibling test pins the raise-not-truncate
+   behaviour that makes the weaker check sufficient.
+
+3. **`test_every_grounded_npc_has_a_capability_case`** asserted zero uncovered NPCs while the session
+   that produces the missing cases — EVAL-P9.3 — is `live`-flagged and therefore permanently unreachable
+   to the loop. It was authored knowingly red (EVAL-P9.1's roadmap line reads "deliberate work-list test:
+   9 demo NPCs uncovered until EVAL-P9.3") and had been failing every gate since 2026-08-08. This
+   directly contradicts **DEC-159 §4** — a new `evals/` gate lands against a ratchet baseline and keeps
+   `make check` green — which was written for Program 3 but states a rule that applies here.
+
+**Decisions:**
+
+1. **Capability coverage becomes a ratchet, not a target.** `UNCOVERED_BASELINE` records the 9 NPCs
+   EVAL-P9.3 still owes, following the `rules_baseline.txt` grandfathering pattern. Two tests replace
+   the one: coverage may not regress (a deleted `case_pos_*` file, or a newly-grounded NPC seeded without
+   a case, is red), and the baseline may not rot (an NPC that gains a case must leave the baseline in the
+   same commit). The work-list survives as the failure message; only the false red is gone.
+
+2. **The flagged-set tripwire is asserted by containment in both directions, not set equality**
+   (closes **ISSUE-136**, five false-positive HALTs). ISSUE-136 proposed deriving the assertion from a
+   git diff or moving snapshot maintenance into `expand_loop.sh`; both keep a progress-sensitive
+   quantity and add machinery to chase it. The cheaper fix is to stop asserting one. A flagged task is
+   skipped by the loop but still *ticked by a human*, and equality went stale the moment it was —
+   EVAL-P6.4 did exactly this. Containment catches both real failures (accidental flag → ISSUE-134's
+   negated-prose match; accidental unflag → a human decision handed to a 3am session) and is inert
+   when a flagged task is completed.
+
+3. **A test that cannot pass under the loop's own operation does not land.** Generalising DEC-159 §4
+   past `evals/`: if the work that would turn a new gate green is flagged `(live` / ⏸️, the gate lands
+   as a ratchet against current state. A permanently-red gate does not preserve the finding — it
+   destroys the signal from every *other* gate, which is what happened here: four phases were committed
+   under "pre-existing red gate" where a genuine regression would have looked identical.
+
+**Also corrected:** Program 3's "Fence policy" paragraph in `ROADMAP.md` still asserted its phases sat
+*below* the end marker and were unreachable — false since DEC-160, and the most load-bearing sentence
+in the file for anyone deciding whether the loop can reach a task that spends human labels.
+
+**Verification:** `make check` exits 0 (3007 passed, 29 skipped, coverage 87.14%). The new assertions
+were mutation-tested rather than assumed: a deleted case file, a stale baseline entry, an added flag,
+and a changed flag each produce a red; a *ticked* flagged task produces a green. `roadmap-verify` reports
+25 phases over queue lines 125-2107, and `ROADMAP.md` remains 100% CRLF (2768/2768) after editing.

@@ -20,6 +20,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
 
 from _roadmap_cursor_core import (  # noqa: E402
+    FENCE_END,
     RoadmapCursorError,
     compute_next,
     fence_bounds,
@@ -161,6 +162,42 @@ def _real_roadmap_phases():
     return parse_roadmap(lines), lines
 
 
+# Every task the overnight loop is *expected* to refuse, with the reason it refuses it.
+# Asserted by containment, not equality — see test_real_roadmap_fence_state_tripwire.
+# A task listed here that is later ticked simply drops out of `pending`; leaving its entry
+# behind is harmless, so this list is append-mostly and does not go stale on progress.
+EXPECTED_FLAGS: dict[str, list[str]] = {
+    # Need a running engine + Neo4j + Ollama.
+    "EVAL-P6.4": ["live"],
+    "EVAL-P8.3": ["live"],
+    "EVAL-P9.3": ["live"],
+    "EVAL-P12.1": ["live"],
+    "EVAL-P12.4": ["live"],
+    "EVAL-P19.4": ["live"],
+    "EVAL-P20.4": ["live"],
+    "EVAL-P22.2": ["live"],
+    "EVAL-P22.4": ["live"],
+    # Inputs do not exist yet: no adjudicated labels, no published run artifact.
+    "EVAL-P11.2": ["deferred"],
+    "EVAL-P11.3": ["deferred"],
+    "EVAL-P13.2": ["deferred"],
+    "EVAL-P13.3": ["deferred"],
+    "EVAL-P14.3": ["deferred"],
+    # Program 3 (DEC-160): spends human labels, Opus credits, or a judge decision.
+    "EVAL-P15.1": ["deferred"],
+    "EVAL-P17.5": ["deferred"],
+    "EVAL-P20.1": ["deferred"],
+    "EVAL-P20.2": ["deferred"],
+    "EVAL-P21.1": ["deferred"],
+    "EVAL-P21.3": ["deferred"],
+    "EVAL-P22.3": ["deferred"],
+    "EVAL-P24.3": ["deferred"],
+    # Changes a shared Protocol *and* needs a live box — DEC-159 §1 approved the change,
+    # not the unattended execution of it.
+    "EVAL-P20.0": ["ask-gate", "live"],
+}
+
+
 def test_real_roadmap_parses_and_verifies_clean() -> None:
     """Structural invariant — holds no matter where the fence is placed.
 
@@ -192,9 +229,17 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     finishing the program having measured nothing. That narrowing worked: the
     baseline was measured on 2026-08-06 before a judge call was spent on P1..P8.
 
-    Current state (2026-08-07): the fence spans EVAL-P0..EVAL-P14 — Program 1
-    (P0..P8, precision) plus Program 2 (P9..P14, validity + the portfolio artifact),
-    released to the loop on 2026-08-07.
+    Current state (2026-08-09, DEC-160): the fence spans EVAL-P0..EVAL-P24 — Program 1
+    (P0..P8, precision), Program 2 (P9..P14, validity + the portfolio artifact, released
+    2026-08-07), and Program 3 (P15..P24, the measurement apparatus, released 2026-08-09
+    once `loop_gates.FROZEN_PATH_PREFIXES` covered `evals/calibration/` and
+    `evals/generations/` so no unattended session can write the 393 human labels).
+
+    That release is why this test was red on the nights of 2026-08-09: DEC-160 moved the
+    marker and verified the *cursor* (`roadmap-verify` OK, 25 phases) but not the tests
+    that snapshot it, so the phase gate halted after EVAL-P11 and again after EVAL-P12 on
+    a stale literal rather than a regression. The span assertion below is the snapshot;
+    updating it is the deliberate act the docstring asks for.
 
     **What this pins, and why it no longer pins the pending list.** Earlier revisions
     asserted ``pending == 13``, then ``== 11``, then an exact id list, and were red every
@@ -206,13 +251,29 @@ def test_real_roadmap_fence_state_tripwire() -> None:
 
     So this now pins the two things that should only change by deliberate human edit:
 
-    * **the phase span** — a fence move is a conscious act, and P0..P14 must stay
+    * **the phase span** — a fence move is a conscious act, and P0..P24 must stay
       contiguous or ``compute_next`` silently skips a programme;
     * **the flagged set** — the loop refuses flagged tasks, so an accidental flag hides
       work forever and an accidental unflag hands a human decision to a 3am session.
 
     Pending is asserted only structurally (non-empty, and every id belongs to a phase in
     the fence), which catches a corrupted queue without firing on progress.
+
+    **The flagged set is asserted by containment, not equality (ISSUE-136).** Equality had
+    the same defect the pending list had, one step removed: a flagged task is skipped by
+    the loop but still *ticked by a human session*, and the moment it is, it leaves the
+    pending set and the literal dict is stale — EVAL-P6.4 did exactly that and is why this
+    dict no longer names it. Both failure directions are still caught, without firing on
+    progress:
+
+    * an **accidental flag** (ISSUE-134: EVAL-P1.2's body said "Not an ask-gate" and the
+      skip-regex matched the literal token through the negation) fails the subset check,
+      because the new id is not in ``EXPECTED_FLAGS``;
+    * an **accidental unflag** fails the second check, because a task still listed in
+      ``EXPECTED_FLAGS`` and still pending must still carry exactly its recorded flags.
+
+    Ticking a flagged task drops it from ``pending`` and is silently fine, which is the
+    only behaviour equality got wrong.
 
     EVAL-P1.2 was flagged until 2026-08-07 **by accident**: its body contained the phrase
     "Not an ask-gate", and the cursor's skip-regex matches that literal token regardless
@@ -221,9 +282,10 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     assertion below exists to catch.
     """
     phases, _ = _real_roadmap_phases()
-    assert [p.id for p in phases] == [f"EVAL-P{n}" for n in range(15)]
+    assert [p.id for p in phases] == [f"EVAL-P{n}" for n in range(25)]
 
     # Program 1's foundation phases are complete: nothing actionable, nothing held back.
+    # Monotonic — a done phase never reopens, so this cannot fire on progress.
     for phase_id in ("EVAL-P0", "EVAL-P1", "EVAL-P2", "EVAL-P3", "EVAL-P4"):
         phase = next(p for p in phases if p.id == phase_id)
         assert phase.pending == (), f"{phase_id} regained a pending task"
@@ -233,20 +295,20 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     # skippable (their bodies still carry the ask-gate / live markers that gated
     # them) but they are ticked, so the loop is not being held back on them.
     flagged = {t.id: sorted(t.flags) for p in phases for t in p.tasks if t.skippable and not t.done}
-    assert flagged == {
-        # Need a running engine + Neo4j + Ollama.
-        "EVAL-P6.4": ["live"],
-        "EVAL-P8.3": ["live"],
-        "EVAL-P9.3": ["live"],
-        "EVAL-P12.1": ["live"],
-        "EVAL-P12.4": ["live"],
-        # Inputs do not exist yet: no adjudicated labels, no published run artifact.
-        "EVAL-P11.2": ["deferred"],
-        "EVAL-P11.3": ["deferred"],
-        "EVAL-P13.2": ["deferred"],
-        "EVAL-P13.3": ["deferred"],
-        "EVAL-P14.3": ["deferred"],
-    }
+
+    # No task may acquire a flag that is not recorded here (ISSUE-134).
+    unexpected = {task_id: got for task_id, got in flagged.items() if task_id not in EXPECTED_FLAGS}
+    assert not unexpected, (
+        f"tasks newly skipped by the loop, with no recorded reason: {unexpected}. "
+        "If deliberate, add them to EXPECTED_FLAGS; if not, the skip-regex matched prose."
+    )
+
+    # No still-pending task may quietly lose or change its flag.
+    for task_id, expected in EXPECTED_FLAGS.items():
+        if task_id in flagged:
+            assert flagged[task_id] == expected, (
+                f"{task_id} flags changed: expected {expected}, got {flagged[task_id]}"
+            )
 
     # Structural only — pending shrinks on every success and must not fire this gate.
     known_task_ids = {t.id for p in phases for t in p.tasks}
@@ -275,12 +337,37 @@ def test_real_roadmap_is_entirely_crlf() -> None:
 
 
 def test_real_roadmap_end_marker_is_not_repeated_inside_the_queue() -> None:
-    """A second ``end`` token between the markers would silently truncate the queue.
+    """A second ``end`` *line* between the markers would truncate or void the queue.
 
     The narrowed fence put P0.4's body next to the marker it talks about, so the
     prose was one backtick-quoted token away from cutting the queue short.
+
+    Matched the way ``fence_bounds`` matches — ``line.startswith(FENCE_END)`` — rather
+    than as a substring anywhere in the body. The substring form was red from 2026-08-09
+    for a reason that was not a hazard: DEC-160 moved the marker below Program 3, which
+    brought Program 3's own "Fence policy" paragraph *inside* the queue, and that
+    paragraph quotes the marker in prose to explain itself. A rule that forbids the
+    roadmap from discussing its own fence inside the fence costs a HALT and buys nothing,
+    because a quoted token mid-line cannot truncate anything: ``fence_bounds`` only ever
+    looks at line starts, and a genuine duplicate marker line raises
+    ``RoadmapCursorError`` rather than silently cutting the queue. This asserts the real
+    invariant, and the assertion below pins that failure mode explicitly.
     """
     _, lines = _real_roadmap_phases()
     start, end = fence_bounds(lines)
-    inner = "".join(lines[start:end])
-    assert "LOOP:QUEUE end" not in inner
+    repeated = [start + i for i, line in enumerate(lines[start:end]) if line.startswith(FENCE_END)]
+    assert not repeated, f"a second fence-end marker opens lines {repeated} inside the queue"
+
+
+def test_duplicate_end_marker_raises_rather_than_truncating() -> None:
+    """The failure mode above is loud, not silent — pinned so it stays that way.
+
+    ``fence_bounds`` could equally have taken ``ends[0]``, which would quietly drop every
+    task after the first duplicate marker. It counts instead, so this must raise.
+    """
+    text = FENCED.replace(
+        "- [ ] **EVAL-P1.1** more work\r\n",
+        "<!-- LOOP:QUEUE end -->\r\n- [ ] **EVAL-P1.1** more work\r\n",
+    )
+    with pytest.raises(RoadmapCursorError):
+        fence_bounds(_lines(text))

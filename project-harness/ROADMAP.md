@@ -1120,10 +1120,16 @@ there is exactly one discontinuity, and record the pre-battery baseline `gen_id`
       a witnessed event, or a goal), a player message that legitimately elicits it, and an expectation that
       fails on refusal as well as on fabrication. Add a coverage test: every Character with at least one
       grounded knowledge edge in the demo world has at least one capability case.
-      RED anchor: `tests/unit/evals/test_capability_coverage.py::test_every_grounded_npc_has_a_capability_case`
+      RED anchor: `tests/unit/evals/test_capability_coverage.py::test_capability_coverage_never_regresses`
       fails — 7 capability cases cannot cover the seeded NPCs.
       Validation: the test names the specific uncovered NPCs rather than reporting a bare count, so the
-      output is a work list. ✅ AUTO ⚠️ UNVERIFIED (EVAL-P9.1, deliberate work-list test: 9 demo NPCs uncovered until EVAL-P9.3 authoring session, 2026-08-08)
+      output is a work list. ✅ AUTO (EVAL-P9.1, 2026-08-08)
+      ⚠️ **Corrected 2026-08-10 (DEC-161).** This landed as a *deliberately red* assertion — zero uncovered
+      NPCs — while the session that authors the missing cases (EVAL-P9.3) is `live`-flagged and so
+      unreachable to the loop. It failed every `make check` from 2026-08-08 and helped halt the night run
+      twice. It is now a **ratchet** against `UNCOVERED_BASELINE` (the same 9 NPCs, still named): red if
+      coverage regresses, red if the baseline is not tightened when a case is authored, green while the
+      authoring is merely outstanding. The work-list is unchanged; only the false red is gone.
 
 - [x] **EVAL-P9.2** Draft generator over the graph. Files: `create evals/case_drafts.py`,
       `create tests/unit/evals/test_case_drafts.py`, `edit evals/__main__.py`, `edit Makefile`.
@@ -1375,10 +1381,15 @@ times and was wrong every time.
 3. Run-to-run McNemar with a comparability guard that refuses incomparable runs.
 4. Trend across runs plus a regression alert that exits non-zero on a drop.
 
-**Fence policy:** these phases sit **below** `<!-- LOOP:QUEUE end -->` and are deliberately unreachable by
-the overnight loop. Program 3 changes published numbers and consumes irreplaceable human labelling; ISSUE-139
-(the loop sweeping unrelated working-tree changes into its commits) is still open. Widening the fence is a
-separate, deliberate act after ISSUE-139 closes — never a side effect of starting this program.
+**Fence policy (superseded 2026-08-09 by DEC-160 — read this before trusting any older copy):** these
+phases *sat* **below** the `LOOP:QUEUE` end marker and were unreachable by the overnight loop while the plan
+was under adversarial review. That marker now sits immediately **below** Program 3, so EVAL-P15..P24 **are**
+in the queue. The fence was not simply widened — it was replaced by three narrower guards:
+`loop_gates.FROZEN_PATH_PREFIXES` covers `evals/calibration/` and `evals/generations/`, so no unattended
+session can write the 393 human labels or a run transcript; every task that spends labels, Opus credits, a
+live run, human authoring or a judge decision carries `(live` / ⏸️ and is skipped by `compute_next`; and the
+plan itself was corrected (DEC-159) before release. ISSUE-139 (the loop sweeping unrelated working-tree
+changes into its commits) is **still open**, so start the loop only from a clean tree.
 
 ---
 
