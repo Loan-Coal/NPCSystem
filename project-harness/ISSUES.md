@@ -16,6 +16,42 @@ Rules:
 
 ## Open
 
+## ISSUE-143: `sequence_runner` publishes a Wilson CI with no evidence the repetitions are independent
+**Found:** 2026-08-10, during the EVAL-P15 pre-flight adversarial review of the open roadmap tasks
+**Severity:** P1 (blocking for EVAL-P12.4 — it is the exact defect class Program 3 exists to remove,
+shipped *inside* Program 3)
+**Where:** `evals/sequence_runner.py:160` (`wilson_interval(passes, k)`), reached from `run_sequence`
+**Description:** `run_sequence` calls `reset_fn` between repetitions, times it, and then computes an
+unconditional Wilson interval over the k outcomes. The reset function returns a **cost only** — no
+evidence of what it actually cleared. So the interval assumes i.i.d. Bernoulli trials on the strength of
+an assumption nobody has measured: **EVAL-P12.1, the task that measures what `reset_world` clears, has
+never been run.**
+Three facts make this concrete rather than theoretical:
+1. `docs/SEQUENCE_STATS_POLICY.md` (EVAL-P14.2, written 2026-08-10, one day after the runner) states
+   that under **PARTIAL** fidelity the *"Wilson CI on per-scenario pass rate"* is **suppressed (✗)**,
+   because "correlated observations inflate the effective sample size and produce intervals that are too
+   narrow". The runner has no code path that can suppress it.
+2. `ResetReceipt` — the model that carries `surviving: tuple[str, ...]`, i.e. the independence evidence —
+   exists in `evals/sequence_records.py` (EVAL-P14.1) but is part of the **v2 design schema**.
+   `sequence_runner.py` (v1, EVAL-P12.3) neither imports nor produces one.
+3. EVAL-P12.4's own validation string requires an interval in the output
+   (`gossip reaches the 2-hop target 13/15 (k=3) [0.621, 0.963]`), so satisfying EVAL-P12.4 as written
+   **forces** the violation.
+This is the same error as EVAL-P16.1's finding (per-slot Wilson pooled across cases as though
+independent), one layer up: there, the unit of analysis was wrong; here, the independence assumption is
+simply unverified. Program 3's stated purpose is that "no published interval overstates its own evidence".
+**Why deferred:** The fix has a hard prerequisite that is a live human session — EVAL-P12.1 must measure
+the reset before any fidelity tier can be computed. Writing the gate before knowing which tier the real
+stack lands in would be guessing at the very number the gate exists to respect.
+**To fix:** (1) Run EVAL-P12.1 and have it emit a **machine-readable** fidelity artifact, not only
+`docs/RESET_FIDELITY.md`. (2) Change `reset_fn`'s contract to return a `ResetReceipt` rather than a bare
+cost, so every repetition carries its own evidence — this is exactly what EVAL-P14.1's schema already
+specifies for v2 and it should be back-ported rather than re-invented. (3) Gate the interval at the
+**runner** level per SEQUENCE_STATS_POLICY §3's enforcement contract ("the formatter has no visibility
+into the receipts"), so a PARTIAL run cannot render a CI even if a later formatter asks for one.
+(4) Re-word EVAL-P12.4's validation so it does not mandate an interval unconditionally. Steps 2-4 are
+folded into EVAL-P12.4 as of 2026-08-10; step 1 is EVAL-P12.1 and is listed in `HUMAN_TASKS.md`.
+
 ## ISSUE-127: No gate catches Makefile `-m <module>` targets that rot after a package move
 **Found:** 2026-08-05, during EVAL-P0.4 setup
 **Severity:** P2 (annoying)
@@ -442,27 +478,3 @@ labelled rows contain U+FFFD. The corruption was in the Windows cp1252 **console
 when it was printed during diagnosis — not in any file. `evals/__main__._force_utf8_streams()` already
 exists for precisely this. Recorded rather than deleted, because a plausible-looking false repair
 instruction that reaches a future session is more dangerous than the bug it describes.
-
-## ISSUE-142: the calibration artifact is gitignored — κ numbers cannot be reproduced or audited
-**Found:** 2026-08-09, while committing the first real calibration pass
-**Severity:** P1 (blocking for any published metric — the evidence for every κ claim is untracked)
-**Where:** `.gitignore:29` (`evals/calibration/*.jsonl`)
-**Description:** EVAL-P5's stated goal is "a **versioned, reproducible** calibration artifact". The
-pattern at `.gitignore:29` excludes `evals/calibration/*.jsonl`, which covers both
-`raw_labels.jsonl` (393 hand-labelled rows — hours of maintainer judgment) and `labels_v1.jsonl`
-(the joined artifact every κ in ISSUE-129/ISSUE-141 is computed from). Neither is tracked. So the
-headline claims "`tone_judge` κ=0.919", "`refusal_judge` κ=0.247" rest on files that exist only on
-one machine, are one `git clean -fdx` from gone, and cannot be diffed when a scorer is later
-remediated (EVAL-P11.2 explicitly requires showing κ *moved*, which needs the before-artifact).
-The `.gitignore` rule is defensible in origin — it was presumably written to keep mock/scratch
-labelling output (`mock_*.jsonl`) out of history — but it does not distinguish those from the real
-artifact. `evals/calibration/batches_handlabel/` (the 16-batch export the labels were made against)
-is untracked-but-not-ignored, so it is currently the only recoverable half of the pair.
-**Why deferred:** Changing `.gitignore` is a shared-config change; and there is a real question
-underneath it (do 393 rows of labels belong in git, or in an artifact store / release asset?) that
-should be answered deliberately rather than by whoever commits next.
-**To fix:** Narrow the rule to the mock artifacts only (`evals/calibration/mock_*.jsonl`) and commit
-`raw_labels.jsonl` + `labels_v1.jsonl` + `batches_handlabel/`, recording the choice in DECISIONS —
-or, if they are deemed too large/PII-adjacent for git, define where they *are* stored and have
-`calibrate` record the artifact's SHA-256 in its output so a quoted κ is at least traceable to a
-specific file.
