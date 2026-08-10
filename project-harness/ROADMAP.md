@@ -1655,7 +1655,7 @@ cannot fail is not evidence.
       (68 `scorer_verdict=True` + 7 `False` = 75), so it has **zero slack** — any change to the
       committed artifact's verdict counts makes it unsatisfiable and the labeller will say so. ✅ AUTO (EVAL-P15.1, 2026-08-10)
 
-- [ ] **EVAL-P15.2** Real-artifact invariants **+ conservation report**. Files:
+- [x] **EVAL-P15.2** Real-artifact invariants **+ conservation report**. Files:
       `create tests/integration/evals/test_real_artifact_invariants.py`,
       `create tests/integration/evals/conftest.py`, `create scripts/check_conservation.py`,
       `create tests/unit/scripts/test_check_conservation.py`, `edit Makefile` (`check-conservation`).
@@ -1714,7 +1714,7 @@ cannot fail is not evidence.
           repetitions) — **62.5% never read**
         - identity 3 → **FAIL**: capability battery sees **2**, while **7** capability cases ran
       The script must also pass cleanly on a synthetic *fixed* fixture, so it is proven to go green as well
-      as red — a detector that only ever reports failure is not distinguishable from one that is broken.
+      as red — a detector that only ever reports failure is not distinguishable from one that is broken. ✅ AUTO (EVAL-P15.2, 2026-08-10)
 
 - [ ] **EVAL-P15.3** Anti-vacuous-test gate. Files: `create scripts/check_test_quality.py`,
       `create tests/unit/scripts/test_check_test_quality.py`, `edit Makefile` (`check-test-quality`).
