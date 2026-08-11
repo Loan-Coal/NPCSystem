@@ -575,6 +575,25 @@ when it was printed during diagnosis — not in any file. `evals/__main__._force
 exists for precisely this. Recorded rather than deleted, because a plausible-looking false repair
 instruction that reaches a future session is more dangerous than the bug it describes.
 
+## ISSUE-149: `judge_runner._apply_polarity` has zero direct test coverage — survives mutation
+**Found:** 2026-08-11, during EVAL-P15.6 (mutation survival gate)
+**Severity:** P2 (annoying)
+**Where:** `evals/judge_runner.py:90-105` (`_apply_polarity`)
+**Description:** `make check-mutations` (new in EVAL-P15.6) applies
+`_apply_polarity → return score is True` and the full unit suite still passes — the mutation
+survives. The mutated body is behaviorally identical to the original for `score is None` and for
+`polarity == pass_on_yes`, but inverts every `pass_on_no` verdict (`score is False` → PASS becomes
+`score is True` → PASS). `grep -rl _apply_polarity tests/ evals/` finds no test file that calls the
+function directly — its only coverage is incidental, through whatever end-to-end fixtures happen to
+route a `pass_on_no` record through `judge_one`/`judge_transcript`, and apparently none of those do.
+**Why deferred:** EVAL-P15.6's task was building the mutation-probe mechanism itself, not fixing
+every gap it finds on first run — same pattern as EVAL-P20.2 exposing ISSUE-145. Fixing this is a
+separate, scoped task (single-task-focus).
+**To fix:** Add a direct unit test for `_apply_polarity` in `tests/unit/evals/test_judge_runner.py`
+(or create it if it doesn't exist) covering all 5 cases: `score=None`, `pass_on_yes`+True,
+`pass_on_yes`+False, `pass_on_no`+True, `pass_on_no`+False. Re-run `make check-mutations` and
+confirm zero survivors.
+
 ## ISSUE-144: `scripts/check_human_gates.py` has 7 lines of headroom under the 300-line cap
 **Found:** 2026-08-10, during DEC-164 (interleaving the HUMAN GATE blocks)
 **Severity:** P3 (nice-to-fix)

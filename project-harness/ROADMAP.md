@@ -1771,7 +1771,7 @@ cannot fail is not evidence.
       dropped item's identity; a fixture with one corrupt line produces a **loud** failure, not a quietly
       smaller n. ✅ AUTO (EVAL-P15.5, 2026-08-11)
 
-- [ ] **EVAL-P15.6** Mutation survival gate (**the only task that proves P15 worked**). Files:
+- [x] **EVAL-P15.6** Mutation survival gate (**the only task that proves P15 worked**). Files:
       `create scripts/mutation_probe.py`, `create tests/unit/scripts/test_mutation_probe.py`,
       `edit Makefile` (`check-mutations`).
       This phase's entire argument is mutation-based -- `matchers.evaluate` replaced with `return (True, "")`
@@ -1786,6 +1786,16 @@ cannot fail is not evidence.
       Validation: against current `main` it reports **>=2 survivors**; after EVAL-P15.1-15.5 it reports
       **zero**. Note `tests/unit/scripts/` does not exist yet and needs an `__init__.py` per the PR-7
       convention -- EVAL-P15.3 and EVAL-P19.3 both target it too.
+      ⚠️ **VALIDATION CORRECTED 2026-08-11 (during implementation).** The line above predicted zero
+      survivors after EVAL-P15.1-15.5. **Measured: 1 survivor** -- `judge_runner._apply_polarity ->
+      return score is True`, the exact mutation named in this task's own description four lines up.
+      The other 4 seed mutations (`matchers.evaluate`, `case_stats.classify_battery`,
+      `_kappa_from_matrix`, `wilson_interval`) are killed. Root cause: `_apply_polarity` has zero
+      direct unit coverage anywhere in the suite (confirmed by grep) -- P15.1-15.5 never targeted it.
+      The gate finding this is the mechanism working as designed, not a defect in the probe; logged as
+      ISSUE-149 rather than fixed inline (single-task-focus -- same pattern as EVAL-P20.2/ISSUE-145).
+      `_force_utf8_streams()` added to `mutation_probe.main()` (mirrors `check_human_gates.py`) after
+      the `→` glyph in mutation names crashed on Windows cp1252 console. ✅ AUTO (EVAL-P15.6, 2026-08-11)
 
 ### Phase EVAL-P16 — The unit of analysis (every interval is currently too narrow)
 **Goal:** Statistics computed on **cases**, not on k-inflated records, so no published interval overstates

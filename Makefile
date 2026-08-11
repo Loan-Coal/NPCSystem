@@ -14,7 +14,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-evals-rules check-evals-rules-update \
-        check-layers check-docstrings roadmap-verify check-human-gates check-conservation check-test-quality \
+        check-layers check-docstrings roadmap-verify check-human-gates check-conservation check-test-quality check-mutations \
         type-ratchet type-ratchet-update type-evals type-evals-update check-harness \
         test-cov-evals \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
@@ -173,6 +173,12 @@ check-test-quality:
 # check-docstrings: fail when any src/ or evals/ file lacks Layer:/Purpose: (+ Public surface: for __init__.py).
 check-docstrings:
 	$(PYTHON) scripts/docstring_audit.py
+
+# check-mutations: apply named mutations to evals/ code one at a time and fail if any
+# survives the unit suite. Proves EVAL-P15.1-P15.5 actually catch the structural
+# failures they were built to detect (EVAL-P15.6).
+check-mutations:
+	$(PYTHON) scripts/mutation_probe.py
 
 # check: the single canonical health gate. Same command locally and in CI.
 # mypy is at 0 (SEV-14 done) so 'type' is now a hard gate here.
