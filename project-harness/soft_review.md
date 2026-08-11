@@ -215,3 +215,29 @@ The doc writes `evaluated_cases = total_cases - skipped_cases` in pseudocode, bu
 ## 2026-08-10 10:35:57 — phase EVAL-P14
 
 API Error: Connection closed mid-response. The response above may be incomplete.
+
+## 2026-08-12 00:46:44 — phase EVAL-P16
+
+**Finding 1: Boundary CI `is_boundary_ci` logic may be too loose with 1e-9 epsilon**
+
+In `paired_stats.py:73`, the boundary check uses `_BOUNDARY_CI_EPSILON = 1e-9`. For κ values that cluster near 1.0 (perfect agreement), consecutive bootstrap percentiles could round within 1e-9 of each other by floating-point accident. Test `test_bootstrap_resamples_cases_not_rows` expects the CI to cover κ=0 at n_clusters=4, but if the bootstrap fails to generate variance and returns [0.999999999, 1.0], the interval would be misclassified as "at boundary" rather than genuinely wide. **Verdict: Latent edge case** — unlikely with 2000 resamples, but not impossible with fewer.
+
+**Finding 2: `_pick_rate_str` silent fallback on None battery_rate masks data quality**
+
+In `summary.py:166-173`, when `battery_rate is None`, the function silently falls back to simple Wilson CI calculated from `passes/turns`. But `BatteryRate` can be None only when `_group_results_by_case` returns an empty dict (line 207-209 in `battery_rates.py`). This occurs when all result dicts are skipped *or* the battery is empty. The fallback **never logs or warns** that design-effect correction was unavailable, so a report showing "17/20 (85%)" could mean either "20 non-repeated cases" or "Rao-Scott failed silently." **Verdict: Missing observability** — not a correctness bug but a reporting blind spot.
+
+**Finding 3: McNemar test rejects *all* concordant pairs without explanation in PairedResult.verdict**
+
+In `paired_stats.py:212-228`, when `improved + regressed == 0`, the function returns `verdict="no_detectable_change"` with `p_value=1.0`. However, this covers two distinct situations: (a) all matched pairs stayed passing, and (b) all matched pairs stayed failing. The verdict "no_detectable_change" conflates regression-evasion (the run is worse but all regressions are in the discard pile) with stability. Test `test_paired_compare_all_concordant_returns_p1` at line 232 confirms this is intentional, but it means the string verdict alone cannot distinguish "no change + all cases improved" from "no change + all cases regressed." **Verdict: Verdict ambiguity** — not a bug if the caller inspects the full result, but the Literal type should document this fusion.
+
+**Finding 4: UndefinedKappaError.__init__ should freeze its attributes**
+
+`calibration.py:142-151`: The exception stores `pe`, `tp`, `fp`, `fn`, `tn` as instance attributes but does not make them read-only. A caller could mutate `err.tp = 999` after catching. **Verdict: Violates immutability rule** (common/coding-style.md) — should use `@dataclass(frozen=True)` or slots-based exception with properties.
+
+**Finding 5: `_extract_case_clusters` uses `dict.setdefault` but does not preserve insertion order across Python versions**
+
+`calibration.py:298-304`: The function uses `dict.fromkeys(groups.values())` to preserve first-occurrence order, but `groups` is built via `setdefault`, which relies on dict insertion-order guarantee (Python 3.7+). The code is correct for modern Python but the comment only says "Preserves insertion order of first occurrence" without naming the version contract. The test `test_bootstrap_resamples_cases_not_rows` assumes stable ordering; if the code ever ran on Python 3.6 it would silently produce different cluster orderings and hence different bootstrap intervals. **Verdict: Undocumented version contract** — not a bug in this project but fragile.
+
+---
+
+**Summary:** 5 findings (1 latent edge case, 1 observability gap, 1 verdict ambiguity, 1 immutability violation, 1 undocumented version dependency). Most are low-severity but the immutability violation (Finding 4) is a rules violation per CLAUDE.md §Coding principles.
