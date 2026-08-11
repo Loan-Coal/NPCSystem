@@ -241,3 +241,75 @@ def test_summary_without_capability_rate_raises() -> None:
     assert s.capability_rate is None
     with pytest.raises(ValueError, match="capability"):
         summary.format_summary_lines(s)
+
+
+def test_interval_is_widened_by_the_design_effect() -> None:
+    """Guard CI widens when cases are repeated (DEFF > 1).
+
+    36 all-pass × k=3 + 1 all-fail × k=3 → 108 passes / 111 records, 37 unique cases.
+    At rho≈1.0 (all repetitions agree), DEFF≈3, n_eff≈37.
+
+    Published-but-wrong plain Wilson at n=111: [0.9235, 0.9908].
+    Correct design-effect interval at n_eff≈37: [0.8618, 0.9952].
+
+    Pin: EVAL-P17.2 updates these literals when it admits 41 ah_demo_* cases (raising
+    the guard battery to 78 cases / ~234 records). Update them in the P17.2 commit —
+    never in a later "fix the failing test" commit. That is how a corrected number is
+    preserved rather than silently reverted.
+    """
+    from rate_stats import wilson_interval
+
+    guard_results: list[dict] = []
+    for i in range(36):
+        for _ in range(3):  # k=3 repetitions of the same case
+            guard_results.append(_case(f"case_adv_{i:02d}", [_exp("keyword_none", True)]))
+    for _ in range(3):
+        guard_results.append(_case("case_neg_failing", [_exp("keyword_none", False)]))
+
+    cap_results = [_case("case_pos_x", [_exp("affirms_judge", True)])]
+    results = guard_results + cap_results
+
+    s = summary.summarize(results)
+
+    # Point estimate unchanged: 108/111 = 0.9730…
+    assert s.guard_passes == 108
+    assert s.guard_turns == 111
+    assert abs(s.guard_rate - 108 / 111) < 1e-6
+
+    # Plain Wilson (published-but-wrong) interval at n=111
+    plain_low, plain_high = wilson_interval(108, 111)
+
+    # Design-effect-corrected interval must be strictly wider
+    assert s.guard_ci_low < plain_low, (
+        f"Expected ci_low {s.guard_ci_low:.4f} < plain {plain_low:.4f} — "
+        "DEFF correction not applied"
+    )
+    assert s.guard_ci_high > plain_high, (
+        f"Expected ci_high {s.guard_ci_high:.4f} > plain {plain_high:.4f} — "
+        "DEFF correction not applied"
+    )
+
+
+def test_rho_zero_interval_equals_plain_wilson() -> None:
+    """At rho=0 (MSB=0 → ICC clamped to 0), n_eff = n_records and CI = plain Wilson.
+
+    Build k=2 cases where every case has mean_i = grand_mean (1 pass, 1 fail each).
+    This forces SS_between=0, MSB=0, raw ICC<0, clamped to 0, DEFF=1.
+    """
+    import battery_rates
+    from rate_stats import wilson_interval
+
+    # 10 cases, each with exactly 1 pass and 1 fail (k=2)
+    results = []
+    for i in range(10):
+        results.append(_case(f"case_adv_{i:02d}", [_exp("keyword_none", True)]))
+        results.append(_case(f"case_adv_{i:02d}", [_exp("keyword_none", False)]))
+
+    br = battery_rates.compute_battery_rate(results)
+    assert br is not None
+    assert br.rho == 0.0
+    assert abs(br.n_eff - br.n_records) < 1e-6
+
+    plain_low, plain_high = wilson_interval(br.passes, br.n_records)
+    assert abs(br.ci_low - plain_low) < 1e-9
+    assert abs(br.ci_high - plain_high) < 1e-9

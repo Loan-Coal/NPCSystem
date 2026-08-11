@@ -1809,7 +1809,7 @@ independent. Measured: guard `108/111 → [0.9235, 0.9908]` published vs `36/37 
 **6.2 points of invented confidence**, interval exactly half the honest width.
 **Depends on:** EVAL-P15.1, EVAL-P15.2.
 
-- [ ] **EVAL-P16.1** Case-level battery rates. Files: `edit evals/summary.py`,
+- [x] **EVAL-P16.1** Case-level battery rates. Files: `edit evals/summary.py`,
       `create evals/battery_rates.py`, `edit tests/unit/engines/test_eval_summary.py`.
       **Method decided 2026-08-09 (human): Rao-Scott design effect, NOT majority-vote collapse.** Collapsing
       k=3 by majority estimates `p^3 + 3p^2(1-p)`, not `p` — an extremising transform (p=0.6 -> 0.648) that
@@ -1836,7 +1836,7 @@ independent. Measured: guard `108/111 → [0.9235, 0.9908]` published vs `36/37 
       and its job is to widen the interval on the *then-current* denominator. Pin these values in the test
       with a comment naming EVAL-P17.2 as the sanctioned reason they will move, and update them **in the
       P17.2 commit**, never in a later "fix the failing test" commit — that is how a corrected number gets
-      silently reverted.
+      silently reverted. ✅ AUTO (EVAL-P16.1, 2026-08-11)
 
 - [ ] **EVAL-P16.2** Cluster bootstrap for κ. Files: `edit evals/calibration.py`,
       `edit tests/unit/evals/test_calibration.py`.

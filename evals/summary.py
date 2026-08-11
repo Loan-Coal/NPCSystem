@@ -3,7 +3,7 @@ Module: summary
 Layer: eval harness (standalone — not part of the npc_engine layer model)
 Purpose: Compute the published anti-hallucination headline metric and a
          categorized failure breakdown from a completed eval run's results.
-Dependencies: stdlib only (dataclasses).
+Dependencies: stdlib (dataclasses), battery_rates (design-effect CI correction).
 Used by: runner.py (console output), report.py (markdown summary section).
 """
 
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from rate_stats import pass_rate, wilson_interval
+from battery_rates import BatteryRate, compute_battery_rate
 
 # Guard battery = the cases that prove "NPCs never invent lore or break character".
 # Adversarial cases (case_adv_*) and negative knowledge-guard cases (case_neg_*).
@@ -61,6 +61,8 @@ class EvalSummary:
         capability_rate: Pass rate over capability turns; None when capability_turns == 0.
         capability_ci_low: Lower bound of the 95 % Wilson CI; None when no turns.
         capability_ci_high: Upper bound of the 95 % Wilson CI; None when no turns.
+        guard_battery_rate: Full design-effect data for the guard battery; None when no turns.
+        capability_battery_rate: Full design-effect data for the capability battery; None when no turns.
         hallucination_failures: keyword_none + affirms_judge failures within guard cases.
         schema_failures: Failed schema expectations across all cases.
         keyword_none_failures: Failed keyword_none expectations across all cases.
@@ -92,6 +94,8 @@ class EvalSummary:
     capability_rate: float | None = None
     capability_ci_low: float | None = None
     capability_ci_high: float | None = None
+    guard_battery_rate: BatteryRate | None = None
+    capability_battery_rate: BatteryRate | None = None
 
     @property
     def guarantee_demonstrated(self) -> bool:
@@ -136,26 +140,6 @@ def _is_capability_case(case_id: str) -> bool:
     return case_id.startswith(_CAPABILITY_PREFIX)
 
 
-def _battery_rate_stats(
-    battery: list[dict],
-) -> tuple[int, int, float | None, float | None, float | None]:
-    """Compute pass rate, passes, and Wilson CI for a pre-filtered battery list.
-
-    Args:
-        battery: Result dicts already filtered to one battery type.
-    Returns:
-        (turns, passes, rate, ci_low, ci_high) — rate/ci fields are None when turns == 0.
-    """
-    evaluated = [r for r in battery if not _is_skipped_case(r)]
-    n_turns = len(evaluated)
-    n_passes = sum(1 for r in evaluated if r.get("passed"))
-    if n_turns == 0:
-        return n_turns, n_passes, None, None, None
-    rate = pass_rate(n_passes, n_turns)
-    ci_low, ci_high = wilson_interval(n_passes, n_turns)
-    return n_turns, n_passes, rate, ci_low, ci_high
-
-
 def _failed_expectations(result: dict) -> list[dict]:
     """Return non-skipped, failing expectations for a case."""
     return [
@@ -181,8 +165,8 @@ def summarize(results: list[dict]) -> EvalSummary:
     guard_results = [r for r in results if _is_guard_case(r.get("case_id", ""))]
     cap_results = [r for r in results if _is_capability_case(r.get("case_id", ""))]
 
-    g_turns, g_passes, g_rate, g_ci_low, g_ci_high = _battery_rate_stats(guard_results)
-    c_turns, c_passes, c_rate, c_ci_low, c_ci_high = _battery_rate_stats(cap_results)
+    g_br = compute_battery_rate(guard_results)
+    c_br = compute_battery_rate(cap_results)
 
     tally = _tally_failures(results)
 
@@ -191,7 +175,7 @@ def summarize(results: list[dict]) -> EvalSummary:
         evaluated_cases=evaluated_cases,
         total_turns=evaluated_cases,
         guard_cases=len(guard_results),
-        guard_turns=g_turns,
+        guard_turns=g_br.n_records if g_br else 0,
         hallucination_failures=tally["hallucination"],
         schema_failures=tally["schema"],
         keyword_none_failures=tally["keyword_none"],
@@ -199,16 +183,18 @@ def summarize(results: list[dict]) -> EvalSummary:
         affirms_judge_failures=tally["affirms_judge"],
         other_failures=tally["other"],
         skipped_cases=skipped_cases,
-        guard_passes=g_passes,
-        guard_rate=g_rate,
-        guard_ci_low=g_ci_low,
-        guard_ci_high=g_ci_high,
+        guard_passes=g_br.passes if g_br else 0,
+        guard_rate=g_br.pass_rate if g_br else None,
+        guard_ci_low=g_br.ci_low if g_br else None,
+        guard_ci_high=g_br.ci_high if g_br else None,
         capability_cases=len(cap_results),
-        capability_turns=c_turns,
-        capability_passes=c_passes,
-        capability_rate=c_rate,
-        capability_ci_low=c_ci_low,
-        capability_ci_high=c_ci_high,
+        capability_turns=c_br.n_records if c_br else 0,
+        capability_passes=c_br.passes if c_br else 0,
+        capability_rate=c_br.pass_rate if c_br else None,
+        capability_ci_low=c_br.ci_low if c_br else None,
+        capability_ci_high=c_br.ci_high if c_br else None,
+        guard_battery_rate=g_br,
+        capability_battery_rate=c_br,
     )
 
 
@@ -265,6 +251,59 @@ def _fmt_rate(k: int, n: int, rate: float | None, ci_low: float | None, ci_high:
     return f"{k}/{n}  {rate:.3f}  95% CI [{ci_low:.3f}–{ci_high:.3f}]"
 
 
+def _fmt_battery_rate(br: BatteryRate) -> str:
+    """Format a BatteryRate including design-effect metadata and corrected CI.
+
+    Args:
+        br: Rao-Scott corrected battery rate.
+    Returns:
+        'passes/records (n_cases=N, k=K, n_eff=E, rho=R)  rate  95% CI [lo–hi]'
+    """
+    return (
+        f"{br.format_summary()}  {br.pass_rate:.3f}  "
+        f"95% CI [{br.ci_low:.4f}–{br.ci_high:.4f}]"
+    )
+
+
+def _pick_rate_str(
+    battery_rate: BatteryRate | None,
+    passes: int,
+    turns: int,
+    rate: float | None,
+    ci_low: float | None,
+    ci_high: float | None,
+) -> str:
+    """Return the design-effect rate string when available, else plain Wilson format."""
+    if battery_rate is not None:
+        return _fmt_battery_rate(battery_rate)
+    return _fmt_rate(passes, turns, rate, ci_low, ci_high)
+
+
+def _format_failure_breakdown_lines(s: EvalSummary) -> list[str]:
+    """Build the failure breakdown section for the console summary."""
+    return [
+        "  Failure breakdown:",
+        f"    schema failures:        {s.schema_failures}",
+        f"    keyword_none failures:  {s.keyword_none_failures}",
+        f"    tone_judge failures:    {s.tone_judge_failures}",
+        f"    affirms_judge failures: {s.affirms_judge_failures}",
+        f"    other failures:         {s.other_failures}",
+    ]
+
+
+def _format_failure_breakdown_md(s: EvalSummary) -> list[str]:
+    """Build the failure kind table rows for the markdown report."""
+    return [
+        "| Failure kind | Count |",
+        "|---|---|",
+        f"| schema | {s.schema_failures} |",
+        f"| keyword_none | {s.keyword_none_failures} |",
+        f"| tone_judge | {s.tone_judge_failures} |",
+        f"| affirms_judge | {s.affirms_judge_failures} |",
+        f"| other | {s.other_failures} |",
+    ]
+
+
 def _assert_paired_rates(s: EvalSummary) -> None:
     """Raise ValueError when exactly one of guard_rate / capability_rate is not None.
 
@@ -291,11 +330,13 @@ def format_summary_lines(summary: EvalSummary) -> list[str]:
         ValueError: When only one of guard_rate / capability_rate is present.
     """
     _assert_paired_rates(summary)
-    g_rate_str = _fmt_rate(
+    g_rate_str = _pick_rate_str(
+        summary.guard_battery_rate,
         summary.guard_passes, summary.guard_turns,
         summary.guard_rate, summary.guard_ci_low, summary.guard_ci_high,
     )
-    c_rate_str = _fmt_rate(
+    c_rate_str = _pick_rate_str(
+        summary.capability_battery_rate,
         summary.capability_passes, summary.capability_turns,
         summary.capability_rate, summary.capability_ci_low, summary.capability_ci_high,
     )
@@ -316,12 +357,7 @@ def format_summary_lines(summary: EvalSummary) -> list[str]:
         f"  All cases: {summary.evaluated_cases} evaluated / {summary.total_cases} total "
         f"({summary.skipped_cases} skipped)",
         "",
-        "  Failure breakdown:",
-        f"    schema failures:        {summary.schema_failures}",
-        f"    keyword_none failures:  {summary.keyword_none_failures}",
-        f"    tone_judge failures:    {summary.tone_judge_failures}",
-        f"    affirms_judge failures: {summary.affirms_judge_failures}",
-        f"    other failures:         {summary.other_failures}",
+        *_format_failure_breakdown_lines(summary),
         _SEPARATOR,
     ]
 
@@ -333,11 +369,13 @@ def format_summary_markdown(summary: EvalSummary) -> list[str]:
         ValueError: When only one of guard_rate / capability_rate is present.
     """
     _assert_paired_rates(summary)
-    g_rate_str = _fmt_rate(
+    g_rate_str = _pick_rate_str(
+        summary.guard_battery_rate,
         summary.guard_passes, summary.guard_turns,
         summary.guard_rate, summary.guard_ci_low, summary.guard_ci_high,
     )
-    c_rate_str = _fmt_rate(
+    c_rate_str = _pick_rate_str(
+        summary.capability_battery_rate,
         summary.capability_passes, summary.capability_turns,
         summary.capability_rate, summary.capability_ci_low, summary.capability_ci_high,
     )
@@ -353,13 +391,7 @@ def format_summary_markdown(summary: EvalSummary) -> list[str]:
         "",
         f"All cases: {summary.evaluated_cases} evaluated / {summary.total_cases} total ({summary.skipped_cases} skipped)",
         "",
-        "| Failure kind | Count |",
-        "|---|---|",
-        f"| schema | {summary.schema_failures} |",
-        f"| keyword_none | {summary.keyword_none_failures} |",
-        f"| tone_judge | {summary.tone_judge_failures} |",
-        f"| affirms_judge | {summary.affirms_judge_failures} |",
-        f"| other | {summary.other_failures} |",
+        *_format_failure_breakdown_md(summary),
         "",
         "---",
         "",
