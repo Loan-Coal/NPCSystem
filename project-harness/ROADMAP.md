@@ -1758,7 +1758,7 @@ cannot fail is not evidence.
       Landing this red is acceptable **only** with each violation logged to ISSUES with an owning phase;
       ISSUE-137/138 already cover two and understate the scope. ✅ AUTO (EVAL-P15.4, 2026-08-10)
 
-- [ ] **EVAL-P15.5** Silent-drop audit. Files: `create tests/unit/evals/test_no_silent_drops.py`,
+- [x] **EVAL-P15.5** Silent-drop audit. Files: `create tests/unit/evals/test_no_silent_drops.py`,
       `edit evals/*.py` (log-and-raise at 16 sites).
       The audit found 16 `except → return/pass/continue` sites that discard data with no log line, several
       load-bearing: `compare.py:131` drops malformed judged rows (shrinking the denominator the module's own
@@ -1769,7 +1769,7 @@ cannot fail is not evidence.
       RED anchor: `test_malformed_judged_row_raises_rather_than_shrinking_the_denominator` fails.
       Validation: every one of the 16 sites either re-raises, raises a domain error, or logs with the
       dropped item's identity; a fixture with one corrupt line produces a **loud** failure, not a quietly
-      smaller n.
+      smaller n. ✅ AUTO (EVAL-P15.5, 2026-08-11)
 
 - [ ] **EVAL-P15.6** Mutation survival gate (**the only task that proves P15 worked**). Files:
       `create scripts/mutation_probe.py`, `create tests/unit/scripts/test_mutation_probe.py`,

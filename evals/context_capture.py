@@ -3,7 +3,7 @@ Module: context_capture
 Layer: evals (eval harness — not part of src/)
 Purpose: HTTP helper that calls GET /v1/admin/debug/retrieval and returns a frozen
          tuple of RetrievedItem instances for embedding in GenerationRecords.
-Dependencies: httpx, retrieved_item
+Dependencies: httpx, logging, retrieved_item
 Used by: generate_runner
 
 Note: The debug retrieval endpoint re-runs retrieval with session_turns=[] — the
@@ -13,11 +13,14 @@ See retrieved_item module docstring for the full caveat.
 
 from __future__ import annotations
 
+import logging
+
 import httpx
 
 from retrieved_item import RetrievedItem
 
 _RETRIEVAL_ENDPOINT = "/v1/admin/debug/retrieval"
+_logger = logging.getLogger(__name__)
 
 
 def capture_retrieval_context(
@@ -28,8 +31,9 @@ def capture_retrieval_context(
 ) -> tuple[RetrievedItem, ...]:
     """Call GET /v1/admin/debug/retrieval and return context items as RetrievedItems.
 
-    Returns an empty tuple on any HTTP or parsing error so a failed capture does
-    not prevent the generation record from being written.
+    Returns an empty tuple on any HTTP or parsing error, but logs the failure with
+    the NPC identity so a retrieval failure is distinguishable from a genuine empty
+    context.  An empty return without a log entry is the bug this guards against.
 
     Args:
         client: Active httpx.Client with auth headers.
@@ -56,5 +60,6 @@ def capture_retrieval_context(
             )
             for item in data.get("context_items", [])
         )
-    except Exception:
+    except Exception as exc:
+        _logger.warning("retrieval_capture failed npc_id=%s query=%r: %s", npc_id, query[:40], exc)
         return ()

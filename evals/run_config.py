@@ -3,7 +3,7 @@ Module: run_config
 Layer: evals (eval harness — not part of src/)
 Purpose: Frozen Pydantic v2 run-config model capturing exact reproducibility metadata
          for one eval generation run: LLM config, judge model, git state, golden-set version.
-Dependencies: pydantic, subprocess, pathlib, yaml, judge_config (evals/).
+Dependencies: pydantic, subprocess, logging, pathlib, yaml, judge_config (evals/).
 Used by: evals/eval_records.py (EVAL-P1.3), evals/generate_runner.py (EVAL-P1.4).
 
 Note: No ``seed`` field — LLMGenerateProtocol.generate() has no seed parameter and
@@ -15,6 +15,7 @@ which re-runs retrieval with session_turns=[] — also noted per EVAL-P1 constra
 from __future__ import annotations
 
 import hashlib
+import logging
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,7 @@ from pydantic import BaseModel, ConfigDict
 import judge_config as _judge_config
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
+_logger = logging.getLogger(__name__)
 _DIALOGUE_LLM_CONFIG = (
     _REPO_ROOT / "src" / "npc_engine" / "engines" / "dialogue" / "llm_config.yaml"
 )
@@ -116,7 +118,8 @@ def resolve_golden_set_version(cases_dir: Path) -> str:
             (f for f in cases_dir.iterdir() if f.is_file()),
             key=lambda f: f.name,
         )
-    except (FileNotFoundError, NotADirectoryError, OSError):
+    except (FileNotFoundError, NotADirectoryError, OSError) as exc:
+        _logger.warning("golden_set_version: cannot list %s: %s", cases_dir, exc)
         files = []
 
     if not files:

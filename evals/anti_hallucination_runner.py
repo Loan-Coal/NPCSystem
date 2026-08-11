@@ -3,7 +3,7 @@ Module: anti_hallucination_runner
 Layer: evals (eval harness — not part of src/)
 Purpose: Run evals/cases/anti_hallucination_demo.json against the live engine
          and report grounded/refusal/hallucination metrics.
-Dependencies: httpx, json, pathlib, argparse, sys, pydantic
+Dependencies: httpx, json, logging, pathlib, argparse, sys, pydantic
 Used by: Makefile eval-anti-hallucination target, CI
 Does NOT: import from src/npc_engine/, modify graph state
 """
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Any
@@ -41,6 +42,8 @@ _BELIEFS_PATH_TEMPLATE = "/v1/admin/beliefs/{npc_id}"
 _BELIEF_PREFLIGHT_K = 25
 _BELIEF_PREFLIGHT_TIMEOUT_S = 10.0
 _BELIEF_NOT_PERSISTED_DETAIL = "skipped — player-taught fact not persisted (no prior session)"
+
+_logger = logging.getLogger(__name__)
 
 
 class AntiHallucinationSummary(BaseModel):
@@ -108,7 +111,8 @@ def _belief_fact_persisted(
         resp = client.get(url, params={"k": _BELIEF_PREFLIGHT_K}, timeout=_BELIEF_PREFLIGHT_TIMEOUT_S)
         resp.raise_for_status()
         beliefs: list[dict[str, Any]] = resp.json().get("data", {}).get("beliefs", [])
-    except Exception:
+    except Exception as exc:
+        _logger.warning("beliefs preflight failed npc_id=%s: %s — treating as not persisted", npc_id, exc)
         return False
     lowered = [sub.lower() for sub in substrings]
     return any(_content_matches(belief, lowered) for belief in beliefs)
@@ -142,7 +146,8 @@ def _response_reflects_planted_deception(
         resp = client.get(url, params={"k": _BELIEF_PREFLIGHT_K}, timeout=_BELIEF_PREFLIGHT_TIMEOUT_S)
         resp.raise_for_status()
         beliefs: list[dict[str, Any]] = resp.json().get("data", {}).get("beliefs", [])
-    except Exception:
+    except Exception as exc:
+        _logger.warning("deception preflight failed npc_id=%s: %s — scoring normally", npc_id, exc)
         return False
     for belief in beliefs:
         if classify_deception_belief(belief) != "intended":

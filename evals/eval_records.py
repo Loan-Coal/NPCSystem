@@ -4,7 +4,7 @@ Layer: evals (eval harness — not part of src/)
 Purpose: Pydantic v2 record models for the two-phase generate→judge eval pipeline.
          GenerationRecord holds one engine reply + judge metadata; JudgedRecord
          adds the verdict; TranscriptFile bundles records for persist/replay.
-Dependencies: pydantic, stdlib (pathlib, datetime, typing), run_config, retrieved_item
+Dependencies: pydantic, stdlib (json, logging, pathlib, datetime, typing), run_config, retrieved_item
 Used by: generate_runner, judge_runner, deterministic_records, e2e/scenarios/conftest
          (persist_scenario_records)
 """
@@ -12,6 +12,7 @@ Used by: generate_runner, judge_runner, deterministic_records, e2e/scenarios/con
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, Sequence
@@ -27,6 +28,7 @@ from run_config import RunConfig
 # ---------------------------------------------------------------------------
 
 _TRANSCRIPT_VERSION: int = 2
+_logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -260,7 +262,8 @@ def read_transcript(path: Path) -> TranscriptFile:
     try:
         header = json.loads(raw)
         found_version = header.get("version")
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
+        _logger.warning("transcript at %s: JSON parse failed, treating as version-mismatch: %s", path, exc)
         found_version = None
     if found_version != _TRANSCRIPT_VERSION:
         raise TranscriptVersionError(

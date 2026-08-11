@@ -51,5 +51,5 @@ def split_item_id(item_id: str) -> tuple[str, int]:
         return item_id, 0
     try:
         return base, int(suffix)
-    except ValueError:
+    except ValueError:  # quality-ok: non-integer suffix → treat whole id as case 0, correct default
         return item_id, 0

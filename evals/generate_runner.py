@@ -6,7 +6,7 @@ Purpose: Generation pass of the two-phase eval pipeline. Calls /v1/dialogue for 
          and writes gen-dir output {meta.json,outputs.jsonl} or a legacy TranscriptFile
          for the judge pass. Record construction (judge, deterministic, AH) lives in
          generation_records; this module owns the HTTP collection loop and CLI.
-Dependencies: httpx, argparse, pathlib, sys, time; runner, generation_records,
+Dependencies: httpx, argparse, logging, pathlib, sys, time; runner, generation_records,
          deterministic_records, anti_hallucination_runner, preconditions, eval_records,
          context_capture
 Used by: Makefile eval-generate target, judge_runner (reads transcript it writes)
@@ -16,6 +16,7 @@ Does NOT: call the LLM judge, modify graph state, import from src/npc_engine/
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import sys
 import time
@@ -43,6 +44,8 @@ _DEFAULT_PLAYER_ID: str = "player_eval"
 _DEFAULT_BASE_URL: str = "http://localhost:8000"
 _TRANSCRIPT_STEM: str = "eval_generation"
 
+_logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Core collection loop
@@ -51,6 +54,9 @@ _TRANSCRIPT_STEM: str = "eval_generation"
 
 def _post_dialogue(case_npc_id: str, player_id: str, message: str, client: httpx.Client, base_url: str) -> dict[str, Any]:
     """POST /v1/dialogue and return the full parsed response body (empty dict on error).
+
+    Logs the error with the NPC identity before returning so a request failure is
+    distinguishable from a genuine empty response.
 
     Deterministic matchers (in_set, range, schema) check fields beyond npc_response
     (facial_expression.type, action.type, relation_deltas.*), so the whole body must
@@ -64,7 +70,8 @@ def _post_dialogue(case_npc_id: str, player_id: str, message: str, client: httpx
         )
         resp.raise_for_status()
         return dict(resp.json())
-    except Exception:
+    except Exception as exc:
+        _logger.warning("_post_dialogue failed npc_id=%s player_id=%s: %s", case_npc_id, player_id, exc)
         return {}
 
 

@@ -68,7 +68,8 @@ def _read_model(config_path: Path) -> str | None:
     try:
         with config_path.open(encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
-    except OSError:
+    except OSError as exc:
+        _logger.warning("_read_model: cannot read %s: %s", config_path, exc)
         return None
     model = data.get(_LLM_KEY, {}).get(_MODEL_KEY)
     return str(model) if model else None

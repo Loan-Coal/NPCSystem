@@ -6,7 +6,7 @@ Purpose: compare verb — load two generation directories, aggregate judged reco
          verdict with per-case delta table. Cases present in one run but absent from the
          other are named explicitly — a silently shrunken denominator is the failure mode
          this module is designed to catch.
-Dependencies: argparse, json, pathlib, sys, collections; pydantic; case_stats (classify),
+Dependencies: argparse, json, logging, pathlib, sys, collections; pydantic; case_stats (classify),
               rate_stats (pass_rate, wilson_interval), paired_stats (paired_compare, PairedResult)
 Used by: Makefile eval-compare target; tests/unit/evals/test_compare.py; evals/__main__.py
 """
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -34,6 +35,8 @@ _JUDGED_FILE: str = "judged.jsonl"
 _META_FILE: str = "meta.json"
 _ENCODING: str = "utf-8"
 _SORT_ORDER: dict[str, int] = {"regressed": 0, "improved": 1, "unchanged": 2}
+
+_logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Models
@@ -113,12 +116,15 @@ class CompareResult(BaseModel):
 
 
 def _read_judged_rows(gen_dir: Path) -> list[_JudgedRow]:
-    """Parse judged.jsonl from a generation directory, skipping malformed lines.
+    """Parse judged.jsonl from a generation directory, raising on malformed lines.
 
     Args:
         gen_dir: Directory containing judged.jsonl (created by eval-judge pass).
     Returns:
         Parsed _JudgedRow list; empty list if file absent or unreadable.
+    Raises:
+        ValueError: If any line fails pydantic validation — a corrupt row must not
+            silently shrink the denominator compare relies on.
     """
     path = gen_dir / _JUDGED_FILE
     if not path.exists():
@@ -130,8 +136,10 @@ def _read_judged_rows(gen_dir: Path) -> list[_JudgedRow]:
             continue
         try:
             rows.append(_JudgedRow.model_validate_json(stripped))
-        except Exception:
-            pass
+        except Exception as exc:
+            raise ValueError(
+                f"malformed judged row in {path}: {stripped[:80]!r}"
+            ) from exc
     return rows
 
 
@@ -180,8 +188,8 @@ def _read_gen_id(gen_dir: Path) -> str:
         try:
             meta = json.loads(meta_path.read_text(encoding=_ENCODING))
             return str(meta.get("gen_id", gen_dir.name))
-        except (json.JSONDecodeError, OSError):
-            pass
+        except (json.JSONDecodeError, OSError) as exc:
+            _logger.warning("meta.json unreadable in %s: %s — using directory name as gen_id", gen_dir, exc)
     return gen_dir.name
 
 
@@ -263,7 +271,8 @@ def _detect_evasion(case_deltas: tuple[CaseDelta, ...]) -> bool:
     for d in case_deltas:
         try:
             battery = classify_battery(d.case_id)
-        except ValueError:
+        except ValueError as exc:
+            _logger.warning("classify_battery(%r) failed: %s — excluded from evasion analysis", d.case_id, exc)
             continue
         if battery == "capability":
             if d.change == "regressed":

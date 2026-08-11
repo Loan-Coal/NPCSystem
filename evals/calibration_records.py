@@ -6,12 +6,13 @@ Purpose: Pydantic v2 model for calibration labels and JSONL persistence.
          the reference model, an optional human verdict for EVAL-P5, and
          (criteria, player_message, observed) display passthrough so a human
          adjudicator can actually see what they are adjudicating against.
-Dependencies: pydantic, stdlib (pathlib, typing)
+Dependencies: pydantic, stdlib (logging, pathlib, typing)
 Used by: label_runner, adjudicate, calibration (EVAL-P5.2–P5.5)
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 from datetime import datetime, timezone
@@ -19,6 +20,8 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from pydantic import BaseModel, ConfigDict
+
+_logger = logging.getLogger(__name__)
 
 
 class DuplicateLabelKeyError(ValueError):
@@ -143,7 +146,8 @@ def _holds_human_work(path: Path) -> bool:
     """
     try:
         return any(row.human_verdict is not None for row in read_calibration_labels(path))
-    except Exception:
+    except Exception as exc:
+        _logger.warning("_holds_human_work: treating %s as human work — unreadable: %s", path, exc)
         return True
 
 

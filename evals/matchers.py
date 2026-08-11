@@ -459,7 +459,7 @@ def _eval_range(exp: dict, resp: dict) -> tuple[bool, str]:
     value = _get_nested(resp, field)
     try:
         numeric = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError):  # quality-ok: non-numeric field is returned as informative failure, not swallowed
         return False, f"{field}={value!r} is not numeric"
     if min_val is not None and numeric < min_val:
         return False, f"{field}={numeric} < min {min_val}"

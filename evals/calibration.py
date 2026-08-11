@@ -5,18 +5,19 @@ Purpose: Per-scorer calibration reports with two confusion matrices each: a head
          (scorer_verdict vs human_verdict) and a secondary (pre_label vs human_verdict),
          each with Cohen's κ and a seeded bootstrap CI. Prints one pair of matrices per
          scorer — never a single aggregate. Called by `make eval-calibrate`.
-Dependencies: calibration_records, dataclasses, math, random, pathlib, sys, typing
+Dependencies: calibration_records, dataclasses, logging, math, random, pathlib, sys, typing
 Used by: make eval-calibrate (CLI), tests/unit/evals/test_calibration.py
 """
 
 from __future__ import annotations
 
+import logging
 import math
 import random
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Sequence
 
 from calibration_records import LABELS_FILE, CalibrationLabel, read_calibration_labels
 
@@ -28,6 +29,8 @@ BOOTSTRAP_RESAMPLES: int = 2000
 BOOTSTRAP_SEED: int = 42
 CI_LO_PERCENTILE: float = 0.025
 CI_HI_PERCENTILE: float = 0.975
+
+_logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Data types
@@ -199,6 +202,48 @@ def pre_label_kappa(rows: Sequence[CalibrationLabel]) -> float:
     return _kappa_from_matrix(tp, fp, fn, tn)
 
 
+def _bootstrap_percentile_ci(
+    adj: list[CalibrationLabel],
+    kappa_fn: Callable[[list[CalibrationLabel]], float],
+    resamples: int,
+    seed: int,
+    caller: str,
+) -> tuple[float, float]:
+    """Run a seeded bootstrap CI over adj rows using kappa_fn, logging any dropped samples.
+
+    Args:
+        adj: Adjudicated CalibrationLabel rows (human_verdict is not None for all).
+        kappa_fn: Function that computes κ from a list of CalibrationLabel; raises
+            ValueError for degenerate (Pe=1) samples.
+        resamples: Number of bootstrap samples to draw.
+        seed: RNG seed for reproducibility.
+        caller: Name of the calling function, used in log/error messages.
+    Returns:
+        (lo, hi) — 2.5th and 97.5th percentile κ values.
+    Raises:
+        ValueError: If all bootstrap samples were degenerate.
+    """
+    n = len(adj)
+    rng = random.Random(seed)
+    kappas: list[float] = []
+    dropped = 0
+    for _ in range(resamples):
+        sample = [adj[rng.randrange(n)] for _ in range(n)]
+        try:
+            kappas.append(kappa_fn(sample))
+        except ValueError:
+            dropped += 1
+    if dropped:
+        _logger.warning("%s: dropped %d of %d degenerate bootstrap samples (Pe=1) from CI", caller, dropped, resamples)
+    if not kappas:
+        raise ValueError(f"{caller}: all {resamples} bootstrap samples were degenerate (Pe=1)")
+    kappas.sort()
+    total = len(kappas)
+    lo_idx = math.floor(total * CI_LO_PERCENTILE)
+    hi_idx = max(min(math.ceil(total * CI_HI_PERCENTILE) - 1, total - 1), lo_idx)
+    return kappas[lo_idx], kappas[hi_idx]
+
+
 def kappa_interval(
     rows: Sequence[CalibrationLabel],
     resamples: int,
@@ -217,26 +262,12 @@ def kappa_interval(
     Returns:
         (lo, hi) — 95% bootstrap CI bounds.
     Raises:
-        ValueError: If fewer than 2 adjudicated rows are available.
+        ValueError: If fewer than 2 adjudicated rows or all samples degenerate.
     """
     adj = [r for r in rows if r.human_verdict is not None]
-    n = len(adj)
-    if n < 2:
-        raise ValueError(f"kappa_interval requires ≥2 adjudicated rows; got {n}")
-    rng = random.Random(seed)
-    kappas: list[float] = []
-    for _ in range(resamples):
-        sample = [adj[rng.randrange(n)] for _ in range(n)]
-        try:
-            kappas.append(cohens_kappa(sample))
-        except ValueError:
-            pass
-    kappas.sort()
-    total = len(kappas)
-    lo_idx = math.floor(total * CI_LO_PERCENTILE)
-    hi_idx = min(math.ceil(total * CI_HI_PERCENTILE) - 1, total - 1)
-    hi_idx = max(hi_idx, lo_idx)
-    return kappas[lo_idx], kappas[hi_idx]
+    if len(adj) < 2:
+        raise ValueError(f"kappa_interval requires ≥2 adjudicated rows; got {len(adj)}")
+    return _bootstrap_percentile_ci(adj, cohens_kappa, resamples, seed, "kappa_interval")
 
 
 def pre_label_kappa_interval(
@@ -253,26 +284,12 @@ def pre_label_kappa_interval(
     Returns:
         (lo, hi) — 95% bootstrap CI bounds.
     Raises:
-        ValueError: If fewer than 2 adjudicated rows are available.
+        ValueError: If fewer than 2 adjudicated rows or all samples degenerate.
     """
     adj = [r for r in rows if r.human_verdict is not None]
-    n = len(adj)
-    if n < 2:
-        raise ValueError(f"pre_label_kappa_interval requires ≥2 adjudicated rows; got {n}")
-    rng = random.Random(seed)
-    kappas: list[float] = []
-    for _ in range(resamples):
-        sample = [adj[rng.randrange(n)] for _ in range(n)]
-        try:
-            kappas.append(pre_label_kappa(sample))
-        except ValueError:
-            pass
-    kappas.sort()
-    total = len(kappas)
-    lo_idx = math.floor(total * CI_LO_PERCENTILE)
-    hi_idx = min(math.ceil(total * CI_HI_PERCENTILE) - 1, total - 1)
-    hi_idx = max(hi_idx, lo_idx)
-    return kappas[lo_idx], kappas[hi_idx]
+    if len(adj) < 2:
+        raise ValueError(f"pre_label_kappa_interval requires ≥2 adjudicated rows; got {len(adj)}")
+    return _bootstrap_percentile_ci(adj, pre_label_kappa, resamples, seed, "pre_label_kappa_interval")
 
 
 def agreement_rate(rows: Sequence[CalibrationLabel]) -> float:
