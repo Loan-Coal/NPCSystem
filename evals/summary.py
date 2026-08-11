@@ -13,13 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from battery_rates import BatteryRate, compute_battery_rate
+import case_stats
 import verdict_sources
-
-# Guard battery = the cases that prove "NPCs never invent lore or break character".
-# Adversarial cases (case_adv_*) and negative knowledge-guard cases (case_neg_*).
-_GUARD_PREFIXES: tuple[str, ...] = ("case_adv_", "case_neg_")
-# Capability battery = positive cases proving the NPC can demonstrate grounded knowledge.
-_CAPABILITY_PREFIX: str = "case_pos_"
 
 # Matcher kinds tracked individually in the failure breakdown.
 _KIND_SCHEMA: str = "schema"
@@ -49,15 +44,15 @@ class EvalSummary:
 
     Attributes:
         total_cases: Number of eval cases in the run.
-        evaluated_cases: Cases that were not fully skipped (canonical pass-rate denominator).
-        total_turns: Cases that actually invoked the NPC (not fully skipped).
-        guard_cases: Adversarial + negative cases (the anti-hallucination battery).
+        evaluated_cases: Non-skipped cases (guard + capability + excluded).
+        total_turns: Cases that actually invoked the NPC (equals evaluated_cases).
+        guard_cases: Non-skipped guard battery cases (adv + neg + ah_demo_*).
         guard_turns: Guard cases that actually ran (denominator of the headline).
         guard_passes: Guard cases that both ran and passed.
         guard_rate: Pass rate over guard turns; None when guard_turns == 0.
         guard_ci_low: Lower bound of the 95 % Wilson CI for guard_rate; None when no turns.
         guard_ci_high: Upper bound of the 95 % Wilson CI for guard_rate; None when no turns.
-        capability_cases: Positive (case_pos_*) cases in the run.
+        capability_cases: Non-skipped positive (case_pos_*) cases in the run.
         capability_turns: Capability cases that actually ran (non-skipped denominator).
         capability_passes: Capability cases that both ran and passed.
         capability_rate: Pass rate over capability turns; None when capability_turns == 0.
@@ -71,7 +66,8 @@ class EvalSummary:
         tone_judge_failures: Failed tone_judge expectations across all cases.
         affirms_judge_failures: Failed affirms_judge expectations across all cases.
         other_failures: Failed expectations of any other kind.
-        skipped_cases: Cases where every expectation was skipped.
+        skipped_cases: Cases where every expectation was skipped (bypass battery classification).
+        excluded_cases: Non-skipped cases belonging to no published battery.
     """
 
     total_cases: int
@@ -86,6 +82,7 @@ class EvalSummary:
     affirms_judge_failures: int
     other_failures: int
     skipped_cases: int
+    excluded_cases: int = 0
     guard_passes: int = 0
     guard_rate: float | None = None
     guard_ci_low: float | None = None
@@ -132,16 +129,6 @@ def _is_skipped_case(result: dict) -> bool:
     return all(exp.get("skipped") for exp in expectations)
 
 
-def _is_guard_case(case_id: str) -> bool:
-    """True if the case belongs to the adversarial/negative anti-hallucination battery."""
-    return case_id.startswith(_GUARD_PREFIXES)
-
-
-def _is_capability_case(case_id: str) -> bool:
-    """True if the case belongs to the positive capability battery (case_pos_*)."""
-    return case_id.startswith(_CAPABILITY_PREFIX)
-
-
 def _failed_expectations(result: dict) -> list[dict]:
     """Return non-skipped, failing expectations for a case."""
     return [
@@ -154,18 +141,38 @@ def _failed_expectations(result: dict) -> list[dict]:
 def summarize(results: list[dict]) -> EvalSummary:
     """Compute the headline metric and failure breakdown for an eval run.
 
+    Skipped cases bypass battery classification (they have no expectations to evaluate).
+    Non-skipped cases are classified via case_stats.classify_battery, which raises
+    ValueError for any case_id matching no known prefix.
+
     Args:
         results: Per-case result dicts as produced by runner._run_case
                  (keys: case_id, expectations, ...).
     Returns:
         An EvalSummary capturing the guarantee number and failure tallies.
+    Raises:
+        ValueError: When any non-skipped case_id matches no known battery prefix.
     """
     total_cases = len(results)
-    skipped_cases = sum(1 for result in results if _is_skipped_case(result))
-    evaluated_cases = total_cases - skipped_cases
 
-    guard_results = [r for r in results if _is_guard_case(r.get("case_id", ""))]
-    cap_results = [r for r in results if _is_capability_case(r.get("case_id", ""))]
+    guard_results: list[dict] = []
+    cap_results: list[dict] = []
+    excluded_results: list[dict] = []
+    skipped_count = 0
+
+    for r in results:
+        if _is_skipped_case(r):
+            skipped_count += 1
+            continue
+        battery = case_stats.classify_battery(r.get("case_id", ""))
+        if battery == "guard":
+            guard_results.append(r)
+        elif battery == "capability":
+            cap_results.append(r)
+        else:
+            excluded_results.append(r)
+
+    evaluated_cases = len(guard_results) + len(cap_results) + len(excluded_results)
 
     g_br = compute_battery_rate(guard_results)
     c_br = compute_battery_rate(cap_results)
@@ -177,6 +184,7 @@ def summarize(results: list[dict]) -> EvalSummary:
         evaluated_cases=evaluated_cases,
         total_turns=evaluated_cases,
         guard_cases=len(guard_results),
+        excluded_cases=len(excluded_results),
         guard_turns=g_br.n_records if g_br else 0,
         hallucination_failures=tally["hallucination"],
         schema_failures=tally["schema"],
@@ -184,7 +192,7 @@ def summarize(results: list[dict]) -> EvalSummary:
         tone_judge_failures=tally["tone_judge"],
         affirms_judge_failures=tally["affirms_judge"],
         other_failures=tally["other"],
-        skipped_cases=skipped_cases,
+        skipped_cases=skipped_count,
         guard_passes=g_br.passes if g_br else 0,
         guard_rate=g_br.pass_rate if g_br else None,
         guard_ci_low=g_br.ci_low if g_br else None,
@@ -226,6 +234,8 @@ def _tally_failures(results: list[dict]) -> dict[str, int]:
     Both keyword_none and affirms_judge failures inside a guard case count as
     lore hallucinations, so the headline metric reflects every caught false-claim
     affirmation — not just literal forbidden-substring hits.
+    Cases with no failed expectations are skipped without consulting classify_battery,
+    so fully-skipped cases never trigger a ValueError for unclassifiable IDs.
     """
     tally = {
         "schema": 0,
@@ -236,8 +246,12 @@ def _tally_failures(results: list[dict]) -> dict[str, int]:
         "hallucination": 0,
     }
     for result in results:
-        is_guard = _is_guard_case(result.get("case_id", ""))
-        for exp in _failed_expectations(result):
+        failed = _failed_expectations(result)
+        if not failed:
+            continue
+        battery = case_stats.classify_battery(result.get("case_id", ""))
+        is_guard = battery == "guard"
+        for exp in failed:
             kind = exp.get("kind", "")
             if kind == _KIND_SCHEMA:
                 tally["schema"] += 1
@@ -372,10 +386,11 @@ def format_summary_lines(summary: EvalSummary) -> list[str]:
         f"    Guard rate:       {g_rate_str}",
         f"    Capability rate:  {c_rate_str}",
         "",
-        f"  Guard battery (adversarial + negative): {summary.guard_cases} cases, "
+        f"  Guard battery (adv + neg + ah_demo_*): {summary.guard_cases} cases, "
         f"{summary.guard_turns} turns evaluated",
         f"  Capability battery (case_pos_*): {summary.capability_cases} cases, "
         f"{summary.capability_turns} turns evaluated",
+        f"  Excluded (not in any battery): {summary.excluded_cases} cases",
         f"  All cases: {summary.evaluated_cases} evaluated / {summary.total_cases} total "
         f"({summary.skipped_cases} skipped)",
         "",
@@ -408,10 +423,12 @@ def format_summary_markdown(summary: EvalSummary) -> list[str]:
         "",
         "| Battery | k/n | Rate · 95% CI |",
         "|---|---|---|",
-        f"| Guard (adv + neg) | {summary.guard_passes}/{summary.guard_turns} | {g_rate_str} |",
+        f"| Guard (adv + neg + ah_demo_*) | {summary.guard_passes}/{summary.guard_turns} | {g_rate_str} |",
         f"| Capability (case_pos_*) | {summary.capability_passes}/{summary.capability_turns} | {c_rate_str} |",
         "",
-        f"All cases: {summary.evaluated_cases} evaluated / {summary.total_cases} total ({summary.skipped_cases} skipped)",
+        f"All cases: {summary.evaluated_cases} evaluated / {summary.total_cases} total "
+        f"({summary.guard_cases} guard, {summary.capability_cases} capability, "
+        f"{summary.excluded_cases} excluded, {summary.skipped_cases} skipped)",
         "",
         *_format_failure_breakdown_md(summary),
         "",

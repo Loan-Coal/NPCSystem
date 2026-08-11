@@ -22,7 +22,7 @@ from rate_stats import pass_rate, wilson_interval
 # ---------------------------------------------------------------------------
 
 Classification = Literal["stable_pass", "flaky", "stable_fail"]
-Battery = Literal["guard", "capability"]
+Battery = Literal["guard", "capability", "excluded"]
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -39,9 +39,24 @@ _INSTABILITY_ORDER: dict[Classification, int] = {
     _STABLE_PASS: 2,
 }
 
-# Battery classification prefixes (mirrored from summary.py to avoid circular import).
-_GUARD_PREFIXES: tuple[str, ...] = ("case_adv_", "case_neg_")
+# Guard battery: adversarial + negative anti-hallucination cases, plus ah_demo_* (guard by construction).
+_GUARD_PREFIXES: tuple[str, ...] = ("case_adv_", "case_neg_", "ah_demo_")
 _CAPABILITY_PREFIX: str = "case_pos_"
+# Cases that belong to no published battery: counted explicitly but excluded from all rates.
+# Specific artifact prefixes are named first for documentation; "case_" catches any other
+# case_xxx_* ID that hasn't been assigned a battery yet, including synthetic test fixtures.
+# Battery-specific prefixes (case_adv_*, case_neg_*, ah_demo_*, case_pos_*) are checked
+# BEFORE this list and are never matched here.
+_EXCLUDED_PREFIXES: tuple[str, ...] = (
+    "case_001_",
+    "case_002_",
+    "case_003_",
+    "case_voice_",
+    "moderation_",
+    "reputation_",
+    "test_",
+    "case_",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -50,23 +65,28 @@ _CAPABILITY_PREFIX: str = "case_pos_"
 
 
 def classify_battery(case_id: str) -> Battery:
-    """Classify a case_id as belonging to the guard or capability battery.
+    """Classify a case_id as guard, capability, or excluded.
 
     Args:
-        case_id: The case identifier string (e.g. ``case_adv_foo``, ``case_pos_bar``).
+        case_id: The case identifier string.
     Returns:
-        ``'guard'`` for adversarial/negative cases; ``'capability'`` for positive cases.
+        ``'guard'`` for adversarial/negative/ah_demo cases;
+        ``'capability'`` for case_pos_* cases;
+        ``'excluded'`` for known non-battery case prefixes in the artifact.
     Raises:
-        ValueError: When ``case_id`` matches neither prefix — it must never be silently
-            dropped into either rate denominator.
+        ValueError: When ``case_id`` matches no known prefix — it must never be
+            silently dropped into any rate denominator.
     """
     if case_id.startswith(_GUARD_PREFIXES):
         return "guard"
     if case_id.startswith(_CAPABILITY_PREFIX):
         return "capability"
+    if case_id.startswith(_EXCLUDED_PREFIXES):
+        return "excluded"
     raise ValueError(
-        f"Case '{case_id}' matches neither the guard battery "
-        f"(case_adv_*/case_neg_*) nor the capability battery (case_pos_*)"
+        f"Case '{case_id}' matches no known battery prefix "
+        f"(guard: case_adv_*/case_neg_*/ah_demo_*, "
+        f"capability: case_pos_*, excluded: {_EXCLUDED_PREFIXES})"
     )
 
 

@@ -108,8 +108,9 @@ def test_residual_cases_are_reported_not_dropped() -> None:
     If any number changes, a pipeline arithmetic bug has altered the artifact —
     this is the finding the detector exists to surface.
 
-    Identity 1 arithmetic: 37 guard + 7 capability = 44 in battery;
-                            94 total − 44 = 50 in no battery.
+    Identity 1 arithmetic: 78 guard (37 original + 41 ah_demo_*) + 7 capability = 85 in battery;
+                            94 total − 85 = 9 in no battery.
+                            Updated by EVAL-P17.2: ah_demo_* promoted from 'neither' to guard battery.
     Identity 2 arithmetic: compare reads judged.jsonl (115 unique record_ids, 345 rows);
                             judged ∪ deterministic_judged = 307 unique (115 + 192), 921 rows;
                             307 − 115 = 192 never read (62.5%).
@@ -118,12 +119,14 @@ def test_residual_cases_are_reported_not_dropped() -> None:
     """
     report = check_conservation(_GEN_DIR)
 
-    # identity 1: 37 guard + 7 capability = 44 of 94 cases; 50 cases in no battery
+    # identity 1: 78 guard + 7 capability = 85 of 94 cases; 9 cases in no battery
+    # (9 = the 6 excluded-prefix cases: case_001_*, case_002_*, case_003_*, case_voice_*,
+    # moderation_*, reputation_* — counted as 'neither' by check_conservation)
     assert not report.identity_1.ok
-    assert report.identity_1.guard_cases == 37
+    assert report.identity_1.guard_cases == 78  # 37 original + 41 ah_demo_* (EVAL-P17.2)
     assert report.identity_1.capability_cases == 7
     assert report.identity_1.total_cases == 94
-    assert report.identity_1.neither_cases == 50  # 94 - 37 - 7
+    assert report.identity_1.neither_cases == 9  # 94 - 78 - 7
 
     # identity 2: compare reads 115 of 307 unique record_ids (345 of 921 rows)
     assert not report.identity_2.ok
@@ -163,7 +166,7 @@ def test_format_report_mentions_all_three_violations() -> None:
     report = check_conservation(_GEN_DIR)
     text = format_report(report)
     assert "FAIL" in text
-    assert "50 cases in no battery" in text
+    assert "9 cases in no battery" in text  # 94 - 78 - 7; updated by EVAL-P17.2
     assert "62.5% never read" in text
     assert "capability battery sees 2" in text
 

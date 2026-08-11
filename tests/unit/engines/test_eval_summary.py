@@ -208,11 +208,25 @@ def test_capability_and_guard_rates_are_reported_separately() -> None:
 
 
 def test_unclassifiable_case_raises() -> None:
-    """A case_id matching neither battery must raise in classify_battery, not be silently dropped."""
+    """A case_id matching no battery and no excluded list raises in classify_battery."""
     import case_stats
 
-    with pytest.raises(ValueError, match="case_voice_"):
-        case_stats.classify_battery("case_voice_mira")
+    with pytest.raises(ValueError, match="totally_unknown_prefix_123"):
+        case_stats.classify_battery("totally_unknown_prefix_123")
+
+
+def test_unclassified_case_id_raises_in_summarize() -> None:
+    """summarize() must raise ValueError for a case_id matching no known prefix.
+
+    The existing test_unclassifiable_case_raises verifies classify_battery raises
+    in isolation; this test verifies the production path (summarize) actually calls it.
+    RED anchor: fails before the fix because summarize never calls classify_battery.
+    """
+    results = [
+        _case("totally_unknown_prefix_123", [_exp("schema", False)]),
+    ]
+    with pytest.raises(ValueError, match="totally_unknown_prefix_123"):
+        summary.summarize(results)
 
 
 def test_write_report_embeds_guarantee_section(tmp_path) -> None:
