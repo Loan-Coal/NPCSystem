@@ -20,7 +20,7 @@ import httpx
 import pytest
 
 from calibration_records import CalibrationLabel
-from compare import _read_judged_rows
+from verdict_sources import load_unified_rows
 
 
 # ---------------------------------------------------------------------------
@@ -53,21 +53,29 @@ def test_malformed_judged_row_raises_rather_than_shrinking_the_denominator(
 ) -> None:
     """A malformed line in judged.jsonl must raise rather than silently shrink the row count.
 
-    Previously, compare._read_judged_rows swallowed pydantic ValidationError and returned
-    a shorter list, making compare's denominator smaller with no observable signal.  This
-    test ensures any malformed row surfaces immediately so callers know the artifact is
-    inconsistent.
+    verdict_sources.load_unified_rows delegates to _read_judged_file which raises ValueError
+    on any row missing required fields — a corrupt row must never silently shrink the
+    denominator that compare and summarize rely on.
     """
     gen_dir = tmp_path / "gen"
     gen_dir.mkdir()
-    valid_row = json.dumps({"record_id": "case_001:tone_judge:0", "passed": True})
+    valid_row = json.dumps({
+        "record_id": "case_001:tone_judge:0",
+        "case_id": "case_001",
+        "judge_kind": "tone_judge",
+        "passed": True,
+        "score": True,
+        "detail": "",
+        "judge_model": "m",
+        "repetition": 0,
+    })
     malformed_row = '{"x": 1}'  # missing required fields record_id and passed
     (gen_dir / "judged.jsonl").write_text(
         f"{valid_row}\n{malformed_row}\n", encoding="utf-8"
     )
 
     with pytest.raises(ValueError):
-        _read_judged_rows(gen_dir)
+        load_unified_rows(gen_dir)
 
 
 # ---------------------------------------------------------------------------

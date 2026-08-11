@@ -313,3 +313,60 @@ def test_rho_zero_interval_equals_plain_wilson() -> None:
     plain_low, plain_high = wilson_interval(br.passes, br.n_records)
     assert abs(br.ci_low - plain_low) < 1e-9
     assert abs(br.ci_high - plain_high) < 1e-9
+
+
+def test_capability_battery_counts_deterministic_only_cases(tmp_path) -> None:
+    """summarize_from_dir sees all 7 capability cases, not just the 2 with judge rows.
+
+    2 case_pos_* cases have judge rows only (judged.jsonl).
+    5 more case_pos_* cases have deterministic rows only (deterministic_judged.jsonl).
+    Reading both sources must raise capability_turns from 2 to 7.
+
+    RED anchor: fails with AttributeError (summarize_from_dir not yet defined) or
+    AssertionError (capability_turns == 2, not 7) before the fix.
+    """
+    import json
+
+    judged_rows = [
+        {
+            "record_id": "case_pos_a:tone_judge:0",
+            "case_id": "case_pos_a",
+            "judge_kind": "tone_judge",
+            "passed": True,
+            "score": True,
+            "detail": "",
+            "judge_model": "m",
+            "repetition": 0,
+        },
+        {
+            "record_id": "case_pos_b:tone_judge:0",
+            "case_id": "case_pos_b",
+            "judge_kind": "tone_judge",
+            "passed": True,
+            "score": True,
+            "detail": "",
+            "judge_model": "m",
+            "repetition": 0,
+        },
+    ]
+    (tmp_path / "judged.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in judged_rows), encoding="utf-8"
+    )
+
+    det_rows = [
+        {
+            "record_id": f"case_pos_{c}:schema:0",
+            "repetition": 0,
+            "matcher_kind": "schema",
+            "passed": True,
+            "score": True,
+            "reasoning": "ok",
+        }
+        for c in ["c", "d", "e", "f", "g"]
+    ]
+    (tmp_path / "deterministic_judged.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in det_rows), encoding="utf-8"
+    )
+
+    s = summary.summarize_from_dir(tmp_path)
+    assert s.capability_turns == 7

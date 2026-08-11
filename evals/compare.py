@@ -26,12 +26,12 @@ from pydantic import BaseModel, ConfigDict
 from case_stats import CaseStat, classify, classify_battery
 from paired_stats import PairedResult, paired_compare
 from rate_stats import pass_rate, wilson_interval
+from verdict_sources import VerdictRow, load_unified_rows, source_counts
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-_JUDGED_FILE: str = "judged.jsonl"
 _META_FILE: str = "meta.json"
 _ENCODING: str = "utf-8"
 _SORT_ORDER: dict[str, int] = {"regressed": 0, "improved": 1, "unchanged": 2}
@@ -41,29 +41,6 @@ _logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
-
-
-class _JudgedRow(BaseModel):
-    """Minimal model for one row of judged.jsonl — only fields compare needs.
-
-    Both record_id and case_id are present in judged.jsonl. case_id is the
-    case-level grouping key; record_id identifies the expectation slot
-    (case_id:kind:index) and is retained for tracing.
-
-    Extra fields (judge_kind, score, detail, judge_model, repetition)
-    are present in the file but ignored here.
-
-    Attributes:
-        record_id: Stable slot ID, e.g. 'case_001:tone_judge:0'.
-        case_id: The case this slot belongs to, e.g. 'case_001'.
-        passed: Whether the eval slot passed after polarity was applied.
-    """
-
-    model_config = ConfigDict(frozen=True, extra="ignore")
-
-    record_id: str
-    case_id: str
-    passed: bool
 
 
 class CaseDelta(BaseModel):
@@ -114,6 +91,10 @@ class CompareResult(BaseModel):
     only_in_after: tuple[str, ...]
     case_deltas: tuple[CaseDelta, ...]
     paired_result: PairedResult
+    before_judged_slots: int = 0
+    before_det_slots: int = 0
+    after_judged_slots: int = 0
+    after_det_slots: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -121,44 +102,16 @@ class CompareResult(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _read_judged_rows(gen_dir: Path) -> list[_JudgedRow]:
-    """Parse judged.jsonl from a generation directory, raising on malformed lines.
-
-    Args:
-        gen_dir: Directory containing judged.jsonl (created by eval-judge pass).
-    Returns:
-        Parsed _JudgedRow list; empty list if file absent or unreadable.
-    Raises:
-        ValueError: If any line fails pydantic validation — a corrupt row must not
-            silently shrink the denominator compare relies on.
-    """
-    path = gen_dir / _JUDGED_FILE
-    if not path.exists():
-        return []
-    rows: list[_JudgedRow] = []
-    for line in path.read_text(encoding=_ENCODING).splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        try:
-            rows.append(_JudgedRow.model_validate_json(stripped))
-        except Exception as exc:
-            raise ValueError(
-                f"malformed judged row in {path}: {stripped[:80]!r}"
-            ) from exc
-    return rows
-
-
-def _build_case_stats(rows: Sequence[_JudgedRow]) -> tuple[CaseStat, ...]:
-    """Group _JudgedRow objects by case_id and compute per-case CaseStat.
+def _build_case_stats(rows: Sequence[VerdictRow]) -> tuple[CaseStat, ...]:
+    """Group VerdictRow objects by case_id and compute per-case CaseStat.
 
     Groups by case_id (not record_id / expectation slot) so that all k records
-    for a case — across all judge kinds and repetitions — contribute to one
-    CaseStat. Grouping by record_id (the old behaviour) created one CaseStat
-    per slot, inflating the McNemar denominator with correlated pairs.
+    for a case — across all judge kinds, matcher kinds, and repetitions — contribute
+    to one CaseStat. Both judged.jsonl and deterministic_judged.jsonl rows are
+    included via load_unified_rows before this function is called.
 
     Args:
-        rows: Parsed judged.jsonl rows for one generation run.
+        rows: Unified VerdictRow list from load_unified_rows (both verdict sources).
     Returns:
         Tuple of CaseStat, one per unique case_id, unsorted.
     """
@@ -303,21 +256,28 @@ def _detect_evasion(case_deltas: tuple[CaseDelta, ...]) -> bool:
 def compare_runs(before_dir: Path, after_dir: Path) -> CompareResult:
     """Compare two eval generation directories using a McNemar paired test.
 
-    Loads judged.jsonl from each directory, aggregates into CaseStat tuples,
-    inner-joins on case_id, and runs paired_compare. Cases in only one run
-    appear in only_in_before or only_in_after — never silently dropped.
+    Loads both judged.jsonl and deterministic_judged.jsonl from each directory,
+    aggregates into CaseStat tuples, inner-joins on case_id, and runs paired_compare.
+    Cases present in only one run appear in only_in_before or only_in_after — never
+    silently dropped.
 
     Args:
         before_dir: Reference generation directory.
         after_dir: Candidate generation directory.
     Returns:
-        CompareResult with intersection stats, missing cases, delta table, and verdict.
+        CompareResult with intersection stats, per-source slot counts, missing cases,
+        delta table, and verdict.
     """
     before_gen_id = _read_gen_id(before_dir)
     after_gen_id = _read_gen_id(after_dir)
 
-    before_stats = _build_case_stats(_read_judged_rows(before_dir))
-    after_stats = _build_case_stats(_read_judged_rows(after_dir))
+    before_rows = load_unified_rows(before_dir)
+    after_rows = load_unified_rows(after_dir)
+    before_sc = source_counts(before_rows)
+    after_sc = source_counts(after_rows)
+
+    before_stats = _build_case_stats(before_rows)
+    after_stats = _build_case_stats(after_rows)
 
     before_map: dict[str, CaseStat] = {s.case_id: s for s in before_stats}
     after_map: dict[str, CaseStat] = {s.case_id: s for s in after_stats}
@@ -348,6 +308,10 @@ def compare_runs(before_dir: Path, after_dir: Path) -> CompareResult:
         only_in_after=only_in_after,
         case_deltas=case_deltas,
         paired_result=paired_result,
+        before_judged_slots=before_sc.get("judged", 0),
+        before_det_slots=before_sc.get("deterministic", 0),
+        after_judged_slots=after_sc.get("judged", 0),
+        after_det_slots=after_sc.get("deterministic", 0),
     )
 
 
@@ -356,22 +320,27 @@ def compare_runs(before_dir: Path, after_dir: Path) -> CompareResult:
 # ---------------------------------------------------------------------------
 
 
-def format_report(result: CompareResult) -> list[str]:
-    """Format a CompareResult as human-readable report lines.
-
-    Prints: header with gen_ids, intersection size, missing-case lists, verdict
-    with p-value, discordant counts, and per-case delta table (k of both runs
-    adjacent to every rate, regressions first).
+def _format_header(result: CompareResult) -> list[str]:
+    """Build the report header lines: gen_ids, source counts, missing cases.
 
     Args:
         result: CompareResult from compare_runs.
     Returns:
-        List of output lines (no trailing newline per line).
+        Header lines including per-source slot counts for both runs.
     """
-    pr = result.paired_result
     lines: list[str] = [
         f"Comparing {result.before_gen_id} → {result.after_gen_id}",
         f"Intersection: {result.intersection_size} cases",
+        (
+            f"Sources (before): {result.before_judged_slots} judged"
+            f" + {result.before_det_slots} deterministic"
+            f" = {result.before_judged_slots + result.before_det_slots} slots"
+        ),
+        (
+            f"Sources (after):  {result.after_judged_slots} judged"
+            f" + {result.after_det_slots} deterministic"
+            f" = {result.after_judged_slots + result.after_det_slots} slots"
+        ),
     ]
     if result.only_in_before:
         lines.append(
@@ -381,15 +350,32 @@ def format_report(result: CompareResult) -> list[str]:
         lines.append(
             f"Only in after ({len(result.only_in_after)}): {', '.join(result.only_in_after)}"
         )
+    return lines
+
+
+def format_report(result: CompareResult) -> list[str]:
+    """Format a CompareResult as human-readable report lines.
+
+    Prints: header with gen_ids, per-source slot counts, intersection size,
+    missing-case lists, verdict with p-value, discordant counts, and per-case
+    delta table (k of both runs adjacent to every rate, regressions first).
+
+    Args:
+        result: CompareResult from compare_runs.
+    Returns:
+        List of output lines (no trailing newline per line).
+    """
+    pr = result.paired_result
+    lines = _format_header(result)
     lines.append("")
     lines.append(
         f"Verdict: {pr.verdict.upper()}  p={pr.p_value:.4f}"
         f"  improved={pr.improved}  regressed={pr.regressed}  unchanged={pr.unchanged}"
     )
     lines.append("")
-    header = f"{'case_id':<50} {'before':>14} {'after':>14}  change"
-    lines.append(header)
-    lines.append("-" * len(header))
+    col_header = f"{'case_id':<50} {'before':>14} {'after':>14}  change"
+    lines.append(col_header)
+    lines.append("-" * len(col_header))
     for d in result.case_deltas:
         bef = f"{d.before_passes}/{d.before_k} ({d.before_rate:.2f})"
         aft = f"{d.after_passes}/{d.after_k} ({d.after_rate:.2f})"

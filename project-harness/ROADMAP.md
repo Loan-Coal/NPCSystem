@@ -1891,7 +1891,7 @@ already **raises** on an unmatched prefix precisely to prevent this; `summary.py
 returns `False` instead.
 **Depends on:** EVAL-P15.2, EVAL-P16.1.
 
-- [ ] **EVAL-P17.1** Aggregate over **both** verdict sources (**one fix, three symptoms**). Files:
+- [x] **EVAL-P17.1** Aggregate over **both** verdict sources (**one fix, three symptoms**). Files:
       `edit evals/summary.py`, `edit evals/compare.py`, `create evals/verdict_sources.py`,
       `edit tests/unit/engines/test_eval_summary.py`, `edit tests/unit/evals/test_compare.py`.
       `summarize` and `compare` both read `judged.jsonl` only. Measured consequences: (a) `compare` ignores
@@ -1901,7 +1901,7 @@ returns `False` instead.
       deterministic-only, so the pre-fix count of 25 is itself an artefact of reading one file).
       RED anchor: `test_capability_battery_counts_deterministic_only_cases` fails (reports 2, expects 7).
       Validation: capability turns rise 2 → 7 cases with no new authoring; `compare`'s intersection covers
-      307 slots and prints per-source counts in its header.
+      307 slots and prints per-source counts in its header. ✅ AUTO (EVAL-P17.1, 2026-08-12)
 
 - [ ] **EVAL-P17.2** Unclassifiable cases raise (**delegate to `classify_battery`**). Files:
       `edit evals/summary.py`, `edit evals/case_stats.py`, `edit tests/unit/engines/test_eval_summary.py`.

@@ -28,6 +28,25 @@ def _write_judged_jsonl(gen_dir: Path, rows: list[dict]) -> None:
     (gen_dir / "judged.jsonl").write_text("\n".join(lines), encoding="utf-8")
 
 
+def _write_det_judged_jsonl(gen_dir: Path, rows: list[dict]) -> None:
+    """Write a minimal deterministic_judged.jsonl fixture file to gen_dir."""
+    gen_dir.mkdir(parents=True, exist_ok=True)
+    lines = [json.dumps(row) for row in rows]
+    (gen_dir / "deterministic_judged.jsonl").write_text("\n".join(lines), encoding="utf-8")
+
+
+def _det_row(record_id: str, passed: bool, repetition: int = 0) -> dict:
+    """Return a minimal deterministic_judged.jsonl row dict."""
+    return {
+        "record_id": record_id,
+        "repetition": repetition,
+        "matcher_kind": "schema",
+        "passed": passed,
+        "score": passed,
+        "reasoning": "",
+    }
+
+
 def _row(record_id: str, passed: bool, repetition: int = 0) -> dict:
     """Return a minimal judged.jsonl row dict."""
     return {
@@ -222,3 +241,43 @@ def test_capability_down_guard_up_is_called_evasion(tmp_path: Path) -> None:
     result = compare_runs(before_dir, after_dir)
 
     assert result.paired_result.verdict == "regression_evasion"
+
+
+# ---------------------------------------------------------------------------
+# Per-source slot counts in header (EVAL-P17.1)
+# ---------------------------------------------------------------------------
+
+
+def test_per_source_counts_in_compare_result_and_report(tmp_path: Path) -> None:
+    """CompareResult carries per-source slot counts; format_report prints them in header.
+
+    before: 1 judged slot + 2 deterministic slots
+    after:  1 judged slot + 2 deterministic slots
+    """
+    before_dir = tmp_path / "before"
+    after_dir = tmp_path / "after"
+
+    _write_judged_jsonl(before_dir, [_row("case_001:tone_judge:0", passed=True)])
+    _write_det_judged_jsonl(before_dir, [
+        _det_row("case_001:schema:0", passed=True),
+        _det_row("case_002:schema:0", passed=False),
+    ])
+    _write_judged_jsonl(after_dir, [_row("case_001:tone_judge:0", passed=True)])
+    _write_det_judged_jsonl(after_dir, [
+        _det_row("case_001:schema:0", passed=True),
+        _det_row("case_002:schema:0", passed=True),
+    ])
+
+    result = compare_runs(before_dir, after_dir)
+
+    assert result.before_judged_slots == 1
+    assert result.before_det_slots == 2
+    assert result.after_judged_slots == 1
+    assert result.after_det_slots == 2
+
+    lines = format_report(result)
+    header = "\n".join(lines[:6])
+    assert "judged" in header
+    assert "deterministic" in header
+    assert "1" in header   # judged slot count
+    assert "2" in header   # deterministic slot count

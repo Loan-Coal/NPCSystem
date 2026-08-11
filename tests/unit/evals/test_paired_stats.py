@@ -11,8 +11,9 @@ from __future__ import annotations
 import pytest
 
 from case_stats import CaseStat
-from compare import _JudgedRow, _build_case_stats
+from compare import _build_case_stats
 from paired_stats import PairedResult, boundary_ci_note, is_boundary_ci, mcnemar_exact, paired_compare
+from verdict_sources import VerdictRow
 
 
 # ---------------------------------------------------------------------------
@@ -146,20 +147,20 @@ def test_mcnemar_pairs_cases_not_expectation_slots():
     The correct (case-level) result is p=0.5 / no_detectable_change.
     """
     before_rows = [
-        _JudgedRow(record_id="case_a:tone_judge:0", case_id="case_a", passed=True),
-        _JudgedRow(record_id="case_a:tone_judge:1", case_id="case_a", passed=True),
-        _JudgedRow(record_id="case_a:refusal_judge:0", case_id="case_a", passed=True),
-        _JudgedRow(record_id="case_b:tone_judge:0", case_id="case_b", passed=True),
-        _JudgedRow(record_id="case_b:tone_judge:1", case_id="case_b", passed=True),
-        _JudgedRow(record_id="case_b:refusal_judge:0", case_id="case_b", passed=True),
+        VerdictRow(record_id="case_a:tone_judge:0", case_id="case_a", kind="tone_judge", passed=True, source="judged"),
+        VerdictRow(record_id="case_a:tone_judge:1", case_id="case_a", kind="tone_judge", passed=True, source="judged"),
+        VerdictRow(record_id="case_a:refusal_judge:0", case_id="case_a", kind="refusal_judge", passed=True, source="judged"),
+        VerdictRow(record_id="case_b:tone_judge:0", case_id="case_b", kind="tone_judge", passed=True, source="judged"),
+        VerdictRow(record_id="case_b:tone_judge:1", case_id="case_b", kind="tone_judge", passed=True, source="judged"),
+        VerdictRow(record_id="case_b:refusal_judge:0", case_id="case_b", kind="refusal_judge", passed=True, source="judged"),
     ]
     after_rows = [
-        _JudgedRow(record_id="case_a:tone_judge:0", case_id="case_a", passed=False),
-        _JudgedRow(record_id="case_a:tone_judge:1", case_id="case_a", passed=False),
-        _JudgedRow(record_id="case_a:refusal_judge:0", case_id="case_a", passed=False),
-        _JudgedRow(record_id="case_b:tone_judge:0", case_id="case_b", passed=False),
-        _JudgedRow(record_id="case_b:tone_judge:1", case_id="case_b", passed=False),
-        _JudgedRow(record_id="case_b:refusal_judge:0", case_id="case_b", passed=False),
+        VerdictRow(record_id="case_a:tone_judge:0", case_id="case_a", kind="tone_judge", passed=False, source="judged"),
+        VerdictRow(record_id="case_a:tone_judge:1", case_id="case_a", kind="tone_judge", passed=False, source="judged"),
+        VerdictRow(record_id="case_a:refusal_judge:0", case_id="case_a", kind="refusal_judge", passed=False, source="judged"),
+        VerdictRow(record_id="case_b:tone_judge:0", case_id="case_b", kind="tone_judge", passed=False, source="judged"),
+        VerdictRow(record_id="case_b:tone_judge:1", case_id="case_b", kind="tone_judge", passed=False, source="judged"),
+        VerdictRow(record_id="case_b:refusal_judge:0", case_id="case_b", kind="refusal_judge", passed=False, source="judged"),
     ]
 
     before_stats = _build_case_stats(before_rows)

@@ -10,8 +10,10 @@ Used by: runner.py (console output), report.py (markdown summary section).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from battery_rates import BatteryRate, compute_battery_rate
+import verdict_sources
 
 # Guard battery = the cases that prove "NPCs never invent lore or break character".
 # Adversarial cases (case_adv_*) and negative knowledge-guard cases (case_neg_*).
@@ -196,6 +198,26 @@ def summarize(results: list[dict]) -> EvalSummary:
         guard_battery_rate=g_br,
         capability_battery_rate=c_br,
     )
+
+
+def summarize_from_dir(gen_dir: Path) -> EvalSummary:
+    """Load verdicts from gen_dir (both sources) and return a summary.
+
+    Reads judged.jsonl and deterministic_judged.jsonl from gen_dir, merges them
+    via verdict_sources.load_unified_rows, and feeds the unified per-case results
+    into summarize() so capability and guard turns from deterministic-only cases
+    (those with no LLM judge expectations) are included in the headline metric.
+
+    Args:
+        gen_dir: Generation directory produced by a judge/deterministic-verdicts pass.
+    Returns:
+        EvalSummary aggregated across both verdict sources.
+    Raises:
+        ValueError: If either verdict file contains malformed rows.
+    """
+    rows = verdict_sources.load_unified_rows(gen_dir)
+    results = verdict_sources.to_summarize_results(rows)
+    return summarize(results)
 
 
 def _tally_failures(results: list[dict]) -> dict[str, int]:
