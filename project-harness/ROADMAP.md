@@ -1903,7 +1903,7 @@ returns `False` instead.
       Validation: capability turns rise 2 → 7 cases with no new authoring; `compare`'s intersection covers
       307 slots and prints per-source counts in its header. ✅ AUTO (EVAL-P17.1, 2026-08-12)
 
-- [ ] **EVAL-P17.2** Unclassifiable cases raise (**delegate to `classify_battery`**). Files:
+- [x] **EVAL-P17.2** Unclassifiable cases raise (**delegate to `classify_battery`**). Files:
       `edit evals/summary.py`, `edit evals/case_stats.py`, `edit tests/unit/engines/test_eval_summary.py`.
       Replace `_is_guard_case`/`_is_capability_case` with `case_stats.classify_battery`. **50 of 94 cases
       (53%) currently fall through into neither battery** — 41 `ah_demo_*` plus **9 others**
@@ -1921,7 +1921,7 @@ returns `False` instead.
       Validation: guard turns rise from 37 to **78** cases (37 + 41 `ah_demo_*`; the earlier "62" came from
       the stale 25); the 7 previously-invisible `ah_demo_*` refusal
       failures enter the failure tally; `All cases: N evaluated / M total` reconciles exactly with the sum
-      of the batteries, which it currently does not (210 evaluated vs 111+6 batteried, 93 unexplained).
+      of the batteries, which it currently does not (210 evaluated vs 111+6 batteried, 93 unexplained). ✅ AUTO (EVAL-P17.2, 2026-08-12)
 
 - [ ] **EVAL-P17.3** Separate infra failure from content failure. Files: `edit evals/summary.py`,
       `edit evals/runner.py`, `edit tests/unit/engines/test_eval_summary.py`.
