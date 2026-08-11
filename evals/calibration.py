@@ -89,14 +89,46 @@ class ScorerReport:
     kappa_lo: float
     kappa_hi: float
     kappa_n_clusters: int
-    prec: float
-    rec: float
+    prec: float | None
+    rec: float | None
     pre_label_agreement: float
     pre_label_counts: ConfusionCounts
     pre_label_kappa: float
     pre_label_kappa_lo: float
     pre_label_kappa_hi: float
     pre_label_n_clusters: int
+
+
+# ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
+
+
+class UndefinedKappaError(ValueError):
+    """Raised when Pe≈1 makes κ = (Po−Pe)/(1−Pe) a 0/0 form.
+
+    This occurs when both raters agree so completely that there is no variance
+    in their outputs — Pe=1 means chance agreement equals observed agreement,
+    making κ undefined rather than 1.0.
+
+    Attributes:
+        pe: Expected agreement probability that triggered the error.
+        tp: True positive cell count.
+        fp: False positive cell count.
+        fn: False negative cell count.
+        tn: True negative cell count.
+    """
+
+    def __init__(self, pe: float, tp: int, fp: int, fn: int, tn: int) -> None:
+        self.pe = pe
+        self.tp = tp
+        self.fp = fp
+        self.fn = fn
+        self.tn = tn
+        super().__init__(
+            f"κ undefined: Pe={pe:.6f} ≈ 1 "
+            f"(tp={tp}, fp={fp}, fn={fn}, tn={tn})"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -142,32 +174,43 @@ def pre_label_confusion_counts(rows: Sequence[CalibrationLabel]) -> ConfusionCou
     return ConfusionCounts(tp=tp, fp=fp, fn=fn, tn=tn)
 
 
-def precision(counts: ConfusionCounts) -> float:
-    """TP / (TP + FP). Returns 1.0 when no positives were predicted.
+def precision(counts: ConfusionCounts) -> float | None:
+    """TP / (TP + FP). Returns None when no positives were predicted (TP+FP=0).
 
     Args:
         counts: ConfusionCounts from confusion_counts().
     Returns:
-        Precision in [0, 1].
+        Precision in [0, 1], or None when the denominator is zero.
     """
     denom = counts.tp + counts.fp
-    return counts.tp / denom if denom > 0 else 1.0
+    return counts.tp / denom if denom > 0 else None
 
 
-def recall(counts: ConfusionCounts) -> float:
-    """TP / (TP + FN). Returns 1.0 when no ground-truth positives exist.
+def recall(counts: ConfusionCounts) -> float | None:
+    """TP / (TP + FN). Returns None when no ground-truth positives exist (TP+FN=0).
 
     Args:
         counts: ConfusionCounts from confusion_counts().
     Returns:
-        Recall in [0, 1].
+        Recall in [0, 1], or None when the denominator is zero.
     """
     denom = counts.tp + counts.fn
-    return counts.tp / denom if denom > 0 else 1.0
+    return counts.tp / denom if denom > 0 else None
 
 
 def _kappa_from_matrix(tp: int, fp: int, fn: int, tn: int) -> float:
-    """Compute Cohen's κ from a 2×2 confusion matrix. Returns 1.0 when Pe==1."""
+    """Compute Cohen's κ from a 2×2 confusion matrix.
+
+    Args:
+        tp: True positives.
+        fp: False positives.
+        fn: False negatives.
+        tn: True negatives.
+    Returns:
+        κ in [-1, 1].
+    Raises:
+        UndefinedKappaError: When Pe≈1, making κ = (Po−Pe)/(1−Pe) a 0/0 form.
+    """
     n = tp + fp + fn + tn
     po = (tp + tn) / n
     p_yes_a = (tp + fp) / n
@@ -176,7 +219,7 @@ def _kappa_from_matrix(tp: int, fp: int, fn: int, tn: int) -> float:
     p_no_b = (fp + tn) / n
     pe = p_yes_a * p_yes_b + p_no_a * p_no_b
     if abs(1.0 - pe) < 1e-12:
-        return 1.0
+        raise UndefinedKappaError(pe=pe, tp=tp, fp=fp, fn=fn, tn=tn)
     return (po - pe) / (1.0 - pe)
 
 
@@ -456,7 +499,9 @@ def _print_scorer_report(report: ScorerReport, print_fn=print) -> None:
         f"  ← FP: dangerous (scorer said pass, human said fail)"
     )
     print_fn(f"    scorer=F             {c.fn:6d}    {c.tn:6d}")
-    print_fn(f"  Precision : {report.prec:.3f}   Recall : {report.rec:.3f}")
+    prec_str = f"{report.prec:.3f}" if report.prec is not None else "undefined"
+    rec_str = f"{report.rec:.3f}" if report.rec is not None else "undefined"
+    print_fn(f"  Precision : {prec_str}   Recall : {rec_str}")
     print_fn(
         f"  Headline κ : {report.kappa:.3f}  "
         f"95% CI [{report.kappa_lo:.3f}, {report.kappa_hi:.3f}]  "

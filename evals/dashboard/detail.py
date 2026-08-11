@@ -15,6 +15,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from calibration import UndefinedKappaError, _kappa_from_matrix
+
 # Instability sort order: flaky surfaces first, stable_pass last.
 _INSTABILITY_ORDER: dict[str, int] = {"flaky": 0, "stable_fail": 1, "stable_pass": 2}
 
@@ -195,8 +197,9 @@ def _compute_kappa_parts(rows_by_scorer: dict[str, list[dict[str, Any]]]) -> lis
         n = tp + fp + fn + tn
         if n == 0:
             continue
-        po = (tp + tn) / n
-        pe = ((tp + fp) / n) * ((tp + fn) / n) + ((fn + tn) / n) * ((fp + tn) / n)
-        kappa = (po - pe) / (1.0 - pe) if abs(1.0 - pe) > 1e-12 else 1.0
-        parts.append(f"{scorer}: κ={kappa:.3f} (n={n})")
+        try:
+            kappa = _kappa_from_matrix(tp=tp, fp=fp, fn=fn, tn=tn)
+            parts.append(f"{scorer}: κ={kappa:.3f} (n={n})")
+        except UndefinedKappaError:
+            parts.append(f"{scorer}: κ undefined (no variance in scorer output) (n={n})")
     return parts

@@ -166,16 +166,16 @@ def test_precision_and_recall() -> None:
     assert round(recall(counts), 3) == round(4 / 6, 3)
 
 
-def test_precision_no_predicted_positives_returns_one() -> None:
-    """precision returns 1.0 when no positives are predicted (avoid ZeroDivisionError)."""
+def test_precision_no_predicted_positives_returns_none() -> None:
+    """precision returns None when no positives are predicted (TP+FP=0)."""
     counts = ConfusionCounts(tp=0, fp=0, fn=3, tn=2)
-    assert precision(counts) == 1.0
+    assert precision(counts) is None
 
 
-def test_recall_no_ground_truth_positives_returns_one() -> None:
-    """recall returns 1.0 when no ground-truth positives exist."""
+def test_recall_no_ground_truth_positives_returns_none() -> None:
+    """recall returns None when no ground-truth positives exist (TP+FN=0)."""
     counts = ConfusionCounts(tp=0, fp=2, fn=0, tn=3)
-    assert recall(counts) == 1.0
+    assert recall(counts) is None
 
 
 def test_agreement_rate_pre_label_vs_human() -> None:
@@ -355,3 +355,42 @@ def test_bootstrap_resamples_cases_not_rows() -> None:
     assert result.lo <= 0.0, (
         f"Expected CI to include chance (κ=0) with only 4 clusters, got lo={result.lo:.3f}"
     )
+
+
+# ---------------------------------------------------------------------------
+# EVAL-P16.3 RED anchor
+# ---------------------------------------------------------------------------
+
+
+def test_degenerate_single_class_matrix_raises_rather_than_returning_one() -> None:
+    """_kappa_from_matrix raises UndefinedKappaError when Pe=1 (all-agree matrix).
+
+    A 60-row all-TP matrix: Pe = (60/60)*(60/60) + 0 = 1.0.
+    κ = (Po - Pe) / (1 - Pe) = 0/0 — undefined, not 1.0.
+    The error must name Pe and cell counts so callers can diagnose the state.
+    """
+    from calibration import UndefinedKappaError, _kappa_from_matrix
+
+    with pytest.raises(UndefinedKappaError) as exc_info:
+        _kappa_from_matrix(tp=60, fp=0, fn=0, tn=0)
+
+    err_str = str(exc_info.value)
+    assert "Pe" in err_str, f"Error must name Pe; got: {err_str}"
+    assert "tp" in err_str or "60" in err_str, f"Error must name cell counts; got: {err_str}"
+
+    # cohens_kappa propagates the error for a 60-row all-TP population
+    rows = _make_rows_from_matrix(tp=60, fp=0, fn=0, tn=0)
+    with pytest.raises(UndefinedKappaError):
+        cohens_kappa(rows)
+
+
+def test_precision_returns_none_on_empty_denominator() -> None:
+    """precision returns None (not 1.0) when no positives are predicted (TP+FP=0)."""
+    counts = ConfusionCounts(tp=0, fp=0, fn=3, tn=2)
+    assert precision(counts) is None
+
+
+def test_recall_returns_none_on_empty_denominator() -> None:
+    """recall returns None (not 1.0) when no ground-truth positives exist (TP+FN=0)."""
+    counts = ConfusionCounts(tp=0, fp=2, fn=0, tn=3)
+    assert recall(counts) is None

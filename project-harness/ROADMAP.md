@@ -1848,7 +1848,7 @@ independent. Measured: guard `108/111 → [0.9235, 0.9908]` published vs `36/37 
       as a regression: `tone_judge`'s entire κ rests on **3 clusters** (6 negative rows from 3 cases, the FP
       cell holding 1 case), and 36% of the current resamples contain zero FP rows and return κ=1.0. ✅ AUTO (EVAL-P16.2, 2026-08-11)
 
-- [ ] **EVAL-P16.3** κ must refuse when undefined. Files: `edit evals/calibration.py`,
+- [x] **EVAL-P16.3** κ must refuse when undefined. Files: `edit evals/calibration.py`,
       `edit evals/dashboard/detail.py`, `edit tests/unit/evals/test_calibration.py`.
       `_kappa_from_matrix` returns **1.0** when Pe=1, i.e. when κ=(Po−Pe)/(1−Pe)=0/0. A `return True` scorer
       therefore publishes κ=1.000, CI [1.000, 1.000], precision 1.000, recall 1.000 — the exact signature of
@@ -1857,7 +1857,7 @@ independent. Measured: guard `108/111 → [0.9235, 0.9908]` published vs `36/37 
       RED anchor: `test_degenerate_single_class_matrix_raises_rather_than_returning_one` fails.
       Validation: a 60-row all-agree matrix raises `UndefinedKappaError` naming Pe and the cell counts;
       the report renders `κ undefined (no variance in scorer output)`, never a number. Also make
-      precision/recall return `None` on an empty denominator instead of 1.000.
+      precision/recall return `None` on an empty denominator instead of 1.000. ✅ AUTO (EVAL-P16.3, 2026-08-11)
 
 - [ ] **EVAL-P16.4** McNemar on cases; boundary-aware intervals. Files: `edit evals/compare.py`,
       `edit evals/paired_stats.py`, `edit tests/unit/evals/test_paired_stats.py`.
