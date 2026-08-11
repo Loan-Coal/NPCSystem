@@ -11,7 +11,8 @@ from __future__ import annotations
 import pytest
 
 from case_stats import CaseStat
-from paired_stats import PairedResult, mcnemar_exact, paired_compare
+from compare import _JudgedRow, _build_case_stats
+from paired_stats import PairedResult, boundary_ci_note, is_boundary_ci, mcnemar_exact, paired_compare
 
 
 # ---------------------------------------------------------------------------
@@ -126,3 +127,73 @@ def test_paired_compare_no_detectable_change_symmetric():
     assert result.improved == 3
     assert result.regressed == 3
     assert result.verdict == "no_detectable_change"
+
+
+# ---------------------------------------------------------------------------
+# EVAL-P16.4: McNemar on cases, not expectation slots
+# ---------------------------------------------------------------------------
+
+
+def test_mcnemar_pairs_cases_not_expectation_slots():
+    """Two cases with 3 expectation slots each; both regress.
+
+    Scenario: case_a and case_b each have 3 slots (tone:0, tone:1, refusal:0).
+    Before: all slots pass. After: all slots fail.
+
+    At slot level: b=6 regressed, c=0 improved → mcnemar_exact(6,0) = 0.031 "worse".
+    At case level: b=2 regressed, c=0 improved → mcnemar_exact(2,0) = 0.5 no_detectable_change.
+
+    The correct (case-level) result is p=0.5 / no_detectable_change.
+    """
+    before_rows = [
+        _JudgedRow(record_id="case_a:tone_judge:0", case_id="case_a", passed=True),
+        _JudgedRow(record_id="case_a:tone_judge:1", case_id="case_a", passed=True),
+        _JudgedRow(record_id="case_a:refusal_judge:0", case_id="case_a", passed=True),
+        _JudgedRow(record_id="case_b:tone_judge:0", case_id="case_b", passed=True),
+        _JudgedRow(record_id="case_b:tone_judge:1", case_id="case_b", passed=True),
+        _JudgedRow(record_id="case_b:refusal_judge:0", case_id="case_b", passed=True),
+    ]
+    after_rows = [
+        _JudgedRow(record_id="case_a:tone_judge:0", case_id="case_a", passed=False),
+        _JudgedRow(record_id="case_a:tone_judge:1", case_id="case_a", passed=False),
+        _JudgedRow(record_id="case_a:refusal_judge:0", case_id="case_a", passed=False),
+        _JudgedRow(record_id="case_b:tone_judge:0", case_id="case_b", passed=False),
+        _JudgedRow(record_id="case_b:tone_judge:1", case_id="case_b", passed=False),
+        _JudgedRow(record_id="case_b:refusal_judge:0", case_id="case_b", passed=False),
+    ]
+
+    before_stats = _build_case_stats(before_rows)
+    after_stats = _build_case_stats(after_rows)
+
+    # Case-level: b=2 (case_a and case_b both regress), c=0
+    result = paired_compare(before_stats, after_stats)
+    assert result.regressed == 2
+    assert result.improved == 0
+    assert result.p_value == pytest.approx(0.5)
+    assert result.verdict == "no_detectable_change"
+
+
+# ---------------------------------------------------------------------------
+# EVAL-P16.4: Boundary-aware CI utilities
+# ---------------------------------------------------------------------------
+
+
+def test_is_boundary_ci_detects_degenerate_interval():
+    """A CI where lo == hi is at the boundary (zero uncertainty)."""
+    assert is_boundary_ci(1.0, 1.0) is True
+    assert is_boundary_ci(0.0, 0.0) is True
+    assert is_boundary_ci(0.663, 0.663) is True
+
+
+def test_is_boundary_ci_passes_valid_interval():
+    """A CI with lo < hi is not at the boundary."""
+    assert is_boundary_ci(0.0, 1.0) is False
+    assert is_boundary_ci(0.663, 1.000) is False
+    assert is_boundary_ci(0.999, 1.000) is False
+
+
+def test_boundary_ci_note_names_cluster_count():
+    """boundary_ci_note includes n_clusters in the formatted message."""
+    note = boundary_ci_note(3)
+    assert "boundary" in note
+    assert "3" in note

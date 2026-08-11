@@ -50,13 +50,14 @@ def _row(record_id: str, passed: bool, repetition: int = 0) -> dict:
 def test_cases_missing_from_one_run_are_named_not_dropped(tmp_path: Path) -> None:
     """Cases present in one run but absent from the other are named, not dropped.
 
-    before run: case_alpha:tone_judge:0, case_shared:tone_judge:0
-    after  run: case_beta:tone_judge:0,  case_shared:tone_judge:0
+    before run: case_alpha (1 slot), case_shared (1 slot)
+    after  run: case_beta  (1 slot), case_shared (1 slot)
 
+    Groups by case_id, so only_in_before/after track cases — not expectation slots.
     Expected:
-      intersection_size = 1
-      only_in_before contains 'case_alpha:tone_judge:0'
-      only_in_after  contains 'case_beta:tone_judge:0'
+      intersection_size = 1 (case_shared)
+      only_in_before = ('case_alpha',)
+      only_in_after  = ('case_beta',)
     """
     before_dir = tmp_path / "before"
     after_dir = tmp_path / "after"
@@ -73,10 +74,10 @@ def test_cases_missing_from_one_run_are_named_not_dropped(tmp_path: Path) -> Non
     result = compare_runs(before_dir, after_dir)
 
     assert result.intersection_size == 1
-    assert "case_alpha:tone_judge:0" in result.only_in_before
-    assert "case_beta:tone_judge:0" in result.only_in_after
-    assert "case_shared:tone_judge:0" not in result.only_in_before
-    assert "case_shared:tone_judge:0" not in result.only_in_after
+    assert "case_alpha" in result.only_in_before
+    assert "case_beta" in result.only_in_after
+    assert "case_shared" not in result.only_in_before
+    assert "case_shared" not in result.only_in_after
 
 
 # ---------------------------------------------------------------------------

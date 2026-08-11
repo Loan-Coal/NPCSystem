@@ -46,17 +46,23 @@ _logger = logging.getLogger(__name__)
 class _JudgedRow(BaseModel):
     """Minimal model for one row of judged.jsonl — only fields compare needs.
 
-    Extra fields (case_id, judge_kind, score, detail, judge_model, repetition)
+    Both record_id and case_id are present in judged.jsonl. case_id is the
+    case-level grouping key; record_id identifies the expectation slot
+    (case_id:kind:index) and is retained for tracing.
+
+    Extra fields (judge_kind, score, detail, judge_model, repetition)
     are present in the file but ignored here.
 
     Attributes:
         record_id: Stable slot ID, e.g. 'case_001:tone_judge:0'.
+        case_id: The case this slot belongs to, e.g. 'case_001'.
         passed: Whether the eval slot passed after polarity was applied.
     """
 
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     record_id: str
+    case_id: str
     passed: bool
 
 
@@ -144,16 +150,21 @@ def _read_judged_rows(gen_dir: Path) -> list[_JudgedRow]:
 
 
 def _build_case_stats(rows: Sequence[_JudgedRow]) -> tuple[CaseStat, ...]:
-    """Group _JudgedRow objects by record_id and compute per-slot CaseStat.
+    """Group _JudgedRow objects by case_id and compute per-case CaseStat.
+
+    Groups by case_id (not record_id / expectation slot) so that all k records
+    for a case — across all judge kinds and repetitions — contribute to one
+    CaseStat. Grouping by record_id (the old behaviour) created one CaseStat
+    per slot, inflating the McNemar denominator with correlated pairs.
 
     Args:
         rows: Parsed judged.jsonl rows for one generation run.
     Returns:
-        Tuple of CaseStat, one per unique record_id, unsorted.
+        Tuple of CaseStat, one per unique case_id, unsorted.
     """
     groups: dict[str, list[bool]] = defaultdict(list)
     for row in rows:
-        groups[row.record_id].append(row.passed)
+        groups[row.case_id].append(row.passed)
 
     stats: list[CaseStat] = []
     for case_id, passed_list in groups.items():

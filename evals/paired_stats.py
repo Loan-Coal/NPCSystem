@@ -22,6 +22,7 @@ from case_stats import CaseStat
 # ---------------------------------------------------------------------------
 
 _SIGNIFICANCE_THRESHOLD: float = 0.05
+_BOUNDARY_CI_EPSILON: float = 1e-9
 
 # ---------------------------------------------------------------------------
 # Models
@@ -48,6 +49,39 @@ class PairedResult(BaseModel):
     unchanged: int
     p_value: float
     verdict: Literal["better", "worse", "no_detectable_change", "regression_evasion"]
+
+
+# ---------------------------------------------------------------------------
+# Boundary CI utilities
+# ---------------------------------------------------------------------------
+
+
+def is_boundary_ci(lo: float, hi: float) -> bool:
+    """Return True when a bootstrap CI is degenerate at a boundary.
+
+    A percentile bootstrap returns [v, v] when every resample reaches the same
+    value. This signals the estimator is at a natural boundary (e.g. κ=1.0 when
+    all samples agree) and the interval conveys zero uncertainty rather than the
+    true sampling variance.
+
+    Args:
+        lo: Lower bound of the CI.
+        hi: Upper bound of the CI.
+    Returns:
+        True if lo and hi are within _BOUNDARY_CI_EPSILON of each other.
+    """
+    return abs(hi - lo) < _BOUNDARY_CI_EPSILON
+
+
+def boundary_ci_note(n_clusters: int) -> str:
+    """Format the standard note for a degenerate bootstrap CI at its boundary.
+
+    Args:
+        n_clusters: Number of case clusters in the resampling pool.
+    Returns:
+        Display string suitable for calibration reports.
+    """
+    return f"interval undefined at boundary (n_clusters={n_clusters})"
 
 
 # ---------------------------------------------------------------------------

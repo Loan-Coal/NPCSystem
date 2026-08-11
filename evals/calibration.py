@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Callable, NamedTuple, Sequence
 
 from calibration_records import LABELS_FILE, CalibrationLabel, read_calibration_labels
+from paired_stats import boundary_ci_note, is_boundary_ci
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -485,6 +486,22 @@ def calibrate_scorer(scorer: str, rows: Sequence[CalibrationLabel]) -> ScorerRep
 # ---------------------------------------------------------------------------
 
 
+def _kappa_ci_str(lo: float, hi: float, n_clusters: int) -> str:
+    """Return the CI display string, substituting a boundary note when lo==hi.
+
+    Args:
+        lo: Lower bound of the bootstrap CI.
+        hi: Upper bound of the bootstrap CI.
+        n_clusters: Number of clusters used in the bootstrap.
+    Returns:
+        Formatted string for the calibration report.
+    """
+    if is_boundary_ci(lo, hi):
+        note: str = boundary_ci_note(n_clusters)
+        return note
+    return f"95% CI [{lo:.3f}, {hi:.3f}]"
+
+
 def _print_scorer_report(report: ScorerReport, print_fn=print) -> None:
     """Print one scorer's two confusion matrices and κ values with bootstrap CIs."""
     c = report.counts
@@ -502,11 +519,8 @@ def _print_scorer_report(report: ScorerReport, print_fn=print) -> None:
     prec_str = f"{report.prec:.3f}" if report.prec is not None else "undefined"
     rec_str = f"{report.rec:.3f}" if report.rec is not None else "undefined"
     print_fn(f"  Precision : {prec_str}   Recall : {rec_str}")
-    print_fn(
-        f"  Headline κ : {report.kappa:.3f}  "
-        f"95% CI [{report.kappa_lo:.3f}, {report.kappa_hi:.3f}]  "
-        f"n_rows={c.n}  n_clusters={report.kappa_n_clusters}"
-    )
+    headline_ci = _kappa_ci_str(report.kappa_lo, report.kappa_hi, report.kappa_n_clusters)
+    print_fn(f"  Headline κ : {report.kappa:.3f}  {headline_ci}  n_rows={c.n}  n_clusters={report.kappa_n_clusters}")
     print_fn("\n  SECONDARY — pre_label vs human_verdict:")
     print_fn("                       human=T   human=F")
     print_fn(
@@ -515,11 +529,8 @@ def _print_scorer_report(report: ScorerReport, print_fn=print) -> None:
     )
     print_fn(f"    pre=F                {p.fn:6d}    {p.tn:6d}")
     print_fn(f"  Pre-label agreement : {report.pre_label_agreement:.3f}")
-    print_fn(
-        f"  Secondary κ : {report.pre_label_kappa:.3f}  "
-        f"95% CI [{report.pre_label_kappa_lo:.3f}, {report.pre_label_kappa_hi:.3f}]  "
-        f"n_rows={p.n}  n_clusters={report.pre_label_n_clusters}"
-    )
+    secondary_ci = _kappa_ci_str(report.pre_label_kappa_lo, report.pre_label_kappa_hi, report.pre_label_n_clusters)
+    print_fn(f"  Secondary κ : {report.pre_label_kappa:.3f}  {secondary_ci}  n_rows={p.n}  n_clusters={report.pre_label_n_clusters}")
 
 
 def run_calibration(

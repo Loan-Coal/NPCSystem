@@ -1859,7 +1859,7 @@ independent. Measured: guard `108/111 → [0.9235, 0.9908]` published vs `36/37 
       the report renders `κ undefined (no variance in scorer output)`, never a number. Also make
       precision/recall return `None` on an empty denominator instead of 1.000. ✅ AUTO (EVAL-P16.3, 2026-08-11)
 
-- [ ] **EVAL-P16.4** McNemar on cases; boundary-aware intervals. Files: `edit evals/compare.py`,
+- [x] **EVAL-P16.4** McNemar on cases; boundary-aware intervals. Files: `edit evals/compare.py`,
       `edit evals/paired_stats.py`, `edit tests/unit/evals/test_paired_stats.py`.
       `compare` groups by `record_id` (`<case>:<kind>:<index>`) — an expectation **slot**, not a case — so
       37 of 70 cases contribute 2-3 correlated pairs. Measured: a change breaking 2 cases carrying 3 slots
@@ -1869,7 +1869,7 @@ independent. Measured: guard `108/111 → [0.9235, 0.9908]` published vs `36/37 
       rather than zero uncertainty.
       RED anchor: `test_mcnemar_pairs_cases_not_expectation_slots` fails.
       Validation: the 2-case fixture reports p=0.5 / `no_detectable_change`; comparing the committed run
-      against itself still yields p=1.0 with zero discordant pairs.
+      against itself still yields p=1.0 with zero discordant pairs. ✅ AUTO (EVAL-P16.4, 2026-08-12)
 
 - [ ] **EVAL-P16.5** Family-wise error disclosure. Files: `edit evals/calibration.py`,
       `create docs/STATISTICS_POLICY.md`.
