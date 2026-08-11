@@ -3,10 +3,16 @@ Module: calibration
 Layer: evals (eval harness — not part of src/)
 Purpose: Per-scorer calibration reports with two confusion matrices each: a headline
          (scorer_verdict vs human_verdict) and a secondary (pre_label vs human_verdict),
-         each with Cohen's κ and a seeded bootstrap CI. Prints one pair of matrices per
-         scorer — never a single aggregate. Called by `make eval-calibrate`.
+         each with Cohen's κ, a seeded cluster-bootstrap CI, and a Holm-Bonferroni
+         companion interval. Prints one pair of matrices per scorer — never a single
+         aggregate. Called by `make eval-calibrate`.
 Dependencies: calibration_records, dataclasses, logging, math, random, pathlib, sys, typing
 Used by: make eval-calibrate (CLI), tests/unit/evals/test_calibration.py
+
+NOTE: This file exceeds the 300-line limit (DEC-169). Split would be artificial because
+      all functions form a single coherent calibration pipeline and are tightly coupled
+      via shared data types (KappaCI, ScorerReport). Future work: extract bootstrap
+      internals into evals/bootstrap.py if the file grows further.
 """
 
 from __future__ import annotations
@@ -28,8 +34,10 @@ from paired_stats import boundary_ci_note, is_boundary_ci
 
 BOOTSTRAP_RESAMPLES: int = 2000
 BOOTSTRAP_SEED: int = 42
+CI_NOMINAL_ALPHA: float = 0.05
 CI_LO_PERCENTILE: float = 0.025
 CI_HI_PERCENTILE: float = 0.975
+INTERVALS_PER_SCORER: int = 2  # headline κ CI + secondary κ CI per scorer in a run
 
 _logger = logging.getLogger(__name__)
 
@@ -42,16 +50,22 @@ class KappaCI(NamedTuple):
     """Bootstrap confidence interval for Cohen's κ with cluster metadata.
 
     Attributes:
-        lo: 2.5th-percentile bootstrap κ.
-        hi: 97.5th-percentile bootstrap κ.
+        lo: 2.5th-percentile bootstrap κ (nominal 95% CI lower bound).
+        hi: 97.5th-percentile bootstrap κ (nominal 95% CI upper bound).
         n_clusters: Number of unique case clusters in the resampled population.
         n_rows: Total adjudicated rows (= sum of cluster sizes).
+        holm_lo: Holm-Bonferroni adjusted lower bound (α*=α/family_size); None when family_size=1.
+        holm_hi: Holm-Bonferroni adjusted upper bound; None when family_size=1.
+        holm_family_size: Number of simultaneous intervals in the calibration family; None when no adjustment.
     """
 
     lo: float
     hi: float
     n_clusters: int
     n_rows: int
+    holm_lo: float | None = None
+    holm_hi: float | None = None
+    holm_family_size: int | None = None
 
 
 @dataclass(frozen=True)
@@ -98,6 +112,11 @@ class ScorerReport:
     pre_label_kappa_lo: float
     pre_label_kappa_hi: float
     pre_label_n_clusters: int
+    kappa_holm_lo: float | None = None
+    kappa_holm_hi: float | None = None
+    pre_label_kappa_holm_lo: float | None = None
+    pre_label_kappa_holm_hi: float | None = None
+    holm_family_size: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -310,22 +329,32 @@ def _run_bootstrap_samples(
     return kappas, dropped
 
 
+def _holm_percentile_bounds(kappas: list[float], family_size: int) -> tuple[float, float]:
+    """Return (holm_lo, holm_hi) from a sorted bootstrap distribution at α*=α/family_size."""
+    total = len(kappas)
+    alpha_adj = CI_NOMINAL_ALPHA / family_size
+    holm_lo_idx = math.floor(total * (alpha_adj / 2.0))
+    holm_hi_raw = math.ceil(total * (1.0 - alpha_adj / 2.0)) - 1
+    holm_hi_idx = max(min(holm_hi_raw, total - 1), holm_lo_idx)
+    return kappas[holm_lo_idx], kappas[holm_hi_idx]
+
+
 def _bootstrap_percentile_ci(
     clusters: list[list[CalibrationLabel]],
     kappa_fn: Callable[[list[CalibrationLabel]], float],
     resamples: int,
     seed: int,
     caller: str,
-) -> tuple[float, float, int, int]:
-    """Run a seeded cluster bootstrap CI; return (lo, hi, n_clusters, n_rows).
+    *,
+    family_size: int = 1,
+) -> tuple[float, float, float | None, float | None, int, int]:
+    """Seeded cluster bootstrap CI; returns (lo, hi, holm_lo, holm_hi, n_clusters, n_rows).
+
+    holm_lo/holm_hi use α*=α/family_size (Holm-Bonferroni); None when family_size=1.
 
     Args:
-        clusters: Rows pre-grouped by case_id via _extract_case_clusters.
-        kappa_fn: Computes κ from a list of CalibrationLabel; raises ValueError
-            for degenerate (Pe=1) samples.
-        resamples: Number of bootstrap samples.
-        seed: RNG seed for reproducibility.
-        caller: Used in log/error messages.
+        clusters, kappa_fn, resamples, seed, caller: bootstrap parameters.
+        family_size: Simultaneous-interval family size for Holm adjustment.
     Raises:
         ValueError: If all bootstrap samples were degenerate.
     """
@@ -343,13 +372,19 @@ def _bootstrap_percentile_ci(
     total = len(kappas)
     lo_idx = math.floor(total * CI_LO_PERCENTILE)
     hi_idx = max(min(math.ceil(total * CI_HI_PERCENTILE) - 1, total - 1), lo_idx)
-    return kappas[lo_idx], kappas[hi_idx], n_clusters, n_rows
+    holm_lo: float | None = None
+    holm_hi: float | None = None
+    if family_size > 1:
+        holm_lo, holm_hi = _holm_percentile_bounds(kappas, family_size)
+    return kappas[lo_idx], kappas[hi_idx], holm_lo, holm_hi, n_clusters, n_rows
 
 
 def kappa_interval(
     rows: Sequence[CalibrationLabel],
     resamples: int,
     seed: int,
+    *,
+    family_size: int = 1,
 ) -> KappaCI:
     """Bootstrap 95% CI on κ — HEADLINE axis (scorer_verdict vs human_verdict).
 
@@ -357,12 +392,16 @@ def kappa_interval(
     together), correcting for intra-case correlation from repeated generations.
     Same rows + seed always produce the same bounds.
 
+    When family_size > 1, also computes Holm-Bonferroni companion bounds at α*=α/family_size
+    from the same bootstrap draw (no extra sampling cost).
+
     Args:
         rows: CalibrationLabel rows (unadjudicated rows are ignored).
         resamples: Number of bootstrap resamples.
         seed: RNG seed — fix it to keep the interval reproducible.
+        family_size: Number of simultaneous intervals in the calibration family.
     Returns:
-        KappaCI with lo, hi (95% bootstrap CI), n_clusters, n_rows.
+        KappaCI with lo, hi (95% bootstrap CI), n_clusters, n_rows, and optional Holm fields.
     Raises:
         ValueError: If fewer than 2 adjudicated rows or all samples degenerate.
     """
@@ -370,27 +409,35 @@ def kappa_interval(
     if len(adj) < 2:
         raise ValueError(f"kappa_interval requires ≥2 adjudicated rows; got {len(adj)}")
     clusters = _extract_case_clusters(adj)
-    lo, hi, n_clusters, n_rows = _bootstrap_percentile_ci(
-        clusters, cohens_kappa, resamples, seed, "kappa_interval"
+    lo, hi, holm_lo, holm_hi, n_clusters, n_rows = _bootstrap_percentile_ci(
+        clusters, cohens_kappa, resamples, seed, "kappa_interval", family_size=family_size
     )
-    return KappaCI(lo=lo, hi=hi, n_clusters=n_clusters, n_rows=n_rows)
+    return KappaCI(
+        lo=lo, hi=hi, n_clusters=n_clusters, n_rows=n_rows,
+        holm_lo=holm_lo, holm_hi=holm_hi,
+        holm_family_size=family_size if family_size > 1 else None,
+    )
 
 
 def pre_label_kappa_interval(
     rows: Sequence[CalibrationLabel],
     resamples: int,
     seed: int,
+    *,
+    family_size: int = 1,
 ) -> KappaCI:
     """Bootstrap 95% CI on κ — SECONDARY axis (pre_label vs human_verdict).
 
     Resamples by **case cluster** (same case-level correction as kappa_interval).
+    When family_size > 1, also computes Holm-Bonferroni companion bounds.
 
     Args:
         rows: CalibrationLabel rows (unadjudicated rows are ignored).
         resamples: Number of bootstrap resamples.
         seed: RNG seed — fix it to keep the interval reproducible.
+        family_size: Number of simultaneous intervals in the calibration family.
     Returns:
-        KappaCI with lo, hi (95% bootstrap CI), n_clusters, n_rows.
+        KappaCI with lo, hi (95% bootstrap CI), n_clusters, n_rows, and optional Holm fields.
     Raises:
         ValueError: If fewer than 2 adjudicated rows or all samples degenerate.
     """
@@ -398,10 +445,15 @@ def pre_label_kappa_interval(
     if len(adj) < 2:
         raise ValueError(f"pre_label_kappa_interval requires ≥2 adjudicated rows; got {len(adj)}")
     clusters = _extract_case_clusters(adj)
-    lo, hi, n_clusters, n_rows = _bootstrap_percentile_ci(
-        clusters, pre_label_kappa, resamples, seed, "pre_label_kappa_interval"
+    lo, hi, holm_lo, holm_hi, n_clusters, n_rows = _bootstrap_percentile_ci(
+        clusters, pre_label_kappa, resamples, seed, "pre_label_kappa_interval",
+        family_size=family_size,
     )
-    return KappaCI(lo=lo, hi=hi, n_clusters=n_clusters, n_rows=n_rows)
+    return KappaCI(
+        lo=lo, hi=hi, n_clusters=n_clusters, n_rows=n_rows,
+        holm_lo=holm_lo, holm_hi=holm_hi,
+        holm_family_size=family_size if family_size > 1 else None,
+    )
 
 
 def agreement_rate(rows: Sequence[CalibrationLabel]) -> float:
@@ -430,39 +482,45 @@ def agreement_rate(rows: Sequence[CalibrationLabel]) -> float:
 
 def _pre_label_stats(
     scorer_rows: Sequence[CalibrationLabel],
+    *,
+    family_size: int = 1,
 ) -> tuple[ConfusionCounts, float, KappaCI]:
     """Compute pre-label confusion counts, κ, and bootstrap CI for one scorer.
 
+    Args:
+        scorer_rows: CalibrationLabel rows for a single scorer.
+        family_size: Passed to pre_label_kappa_interval for Holm adjustment.
     Returns:
         (pl_counts, pl_kappa, pl_ci).
     """
     pl_counts = pre_label_confusion_counts(scorer_rows)
     pl_kappa_val = pre_label_kappa(scorer_rows)
     pl_ci = pre_label_kappa_interval(
-        scorer_rows, resamples=BOOTSTRAP_RESAMPLES, seed=BOOTSTRAP_SEED
+        scorer_rows, resamples=BOOTSTRAP_RESAMPLES, seed=BOOTSTRAP_SEED,
+        family_size=family_size,
     )
     return pl_counts, pl_kappa_val, pl_ci
 
 
-def calibrate_scorer(scorer: str, rows: Sequence[CalibrationLabel]) -> ScorerReport:
-    """Compute the full calibration report for one scorer.
-
-    Filters to this scorer's adjudicated rows and computes two confusion matrices:
-    headline (scorer_verdict vs human_verdict) and secondary (pre_label vs human_verdict).
+def calibrate_scorer(
+    scorer: str,
+    rows: Sequence[CalibrationLabel],
+    *,
+    family_size: int = 1,
+) -> ScorerReport:
+    """Full calibration report for one scorer: headline + secondary matrices, κ, and Holm CIs.
 
     Args:
-        scorer: Scorer name (e.g. 'tone_judge').
-        rows: All CalibrationLabel rows (multi-scorer OK).
+        scorer, rows, family_size: scorer name, all rows (multi-scorer OK), Holm family size.
     Returns:
-        ScorerReport with headline and secondary κ, CI, precision, recall.
-    Raises:
-        ValueError: If fewer than 2 adjudicated rows exist for this scorer.
+        ScorerReport, or raises ValueError if fewer than 2 adjudicated rows.
     """
     scorer_rows = [r for r in rows if r.scorer == scorer]
     counts = confusion_counts(scorer_rows)
     kappa_val = cohens_kappa(scorer_rows)
-    kci = kappa_interval(scorer_rows, resamples=BOOTSTRAP_RESAMPLES, seed=BOOTSTRAP_SEED)
-    pl_counts, pl_kappa_val, pl_ci = _pre_label_stats(scorer_rows)
+    kci = kappa_interval(scorer_rows, resamples=BOOTSTRAP_RESAMPLES, seed=BOOTSTRAP_SEED,
+                         family_size=family_size)
+    pl_counts, pl_kappa_val, pl_ci = _pre_label_stats(scorer_rows, family_size=family_size)
     return ScorerReport(
         scorer=scorer,
         counts=counts,
@@ -478,6 +536,11 @@ def calibrate_scorer(scorer: str, rows: Sequence[CalibrationLabel]) -> ScorerRep
         pre_label_kappa_lo=pl_ci.lo,
         pre_label_kappa_hi=pl_ci.hi,
         pre_label_n_clusters=pl_ci.n_clusters,
+        kappa_holm_lo=kci.holm_lo,
+        kappa_holm_hi=kci.holm_hi,
+        pre_label_kappa_holm_lo=pl_ci.holm_lo,
+        pre_label_kappa_holm_hi=pl_ci.holm_hi,
+        holm_family_size=family_size if family_size > 1 else None,
     )
 
 
@@ -521,6 +584,10 @@ def _print_scorer_report(report: ScorerReport, print_fn=print) -> None:
     print_fn(f"  Precision : {prec_str}   Recall : {rec_str}")
     headline_ci = _kappa_ci_str(report.kappa_lo, report.kappa_hi, report.kappa_n_clusters)
     print_fn(f"  Headline κ : {report.kappa:.3f}  {headline_ci}  n_rows={c.n}  n_clusters={report.kappa_n_clusters}")
+    if report.holm_family_size is not None and report.kappa_holm_lo is not None:
+        alpha_adj = CI_NOMINAL_ALPHA / report.holm_family_size
+        print_fn(f"  Headline κ Holm-adj [{report.kappa_holm_lo:.3f}, {report.kappa_holm_hi:.3f}]"
+                 f"  (family={report.holm_family_size}, α*={alpha_adj:.4f})")
     print_fn("\n  SECONDARY — pre_label vs human_verdict:")
     print_fn("                       human=T   human=F")
     print_fn(
@@ -531,6 +598,23 @@ def _print_scorer_report(report: ScorerReport, print_fn=print) -> None:
     print_fn(f"  Pre-label agreement : {report.pre_label_agreement:.3f}")
     secondary_ci = _kappa_ci_str(report.pre_label_kappa_lo, report.pre_label_kappa_hi, report.pre_label_n_clusters)
     print_fn(f"  Secondary κ : {report.pre_label_kappa:.3f}  {secondary_ci}  n_rows={p.n}  n_clusters={report.pre_label_n_clusters}")
+    if report.holm_family_size is not None and report.pre_label_kappa_holm_lo is not None:
+        alpha_adj = CI_NOMINAL_ALPHA / report.holm_family_size
+        print_fn(f"  Secondary κ Holm-adj [{report.pre_label_kappa_holm_lo:.3f}, {report.pre_label_kappa_holm_hi:.3f}]"
+                 f"  (family={report.holm_family_size}, α*={alpha_adj:.4f})")
+
+
+def _print_family_disclosure(eligible_count: int, family_size: int, print_fn) -> None:
+    """Print the family-wise error rate disclosure header to print_fn."""
+    fwer = 1.0 - (1.0 - CI_NOMINAL_ALPHA) ** family_size if family_size > 0 else 0.0
+    print_fn(f"\nFamily-wise disclosure: {family_size} simultaneous intervals "
+             f"({eligible_count} scorer(s) × {INTERVALS_PER_SCORER} axes).")
+    if family_size > 1:
+        alpha_adj = CI_NOMINAL_ALPHA / family_size
+        print_fn(f"  Nominal: 95% per-interval CI (α={CI_NOMINAL_ALPHA:.3f}). "
+                 f"FWER: 1−0.95^{family_size} = {fwer:.3f}.")
+        print_fn(f"  Holm α*={alpha_adj:.4f} → each companion CI at "
+                 f"{(1.0 - alpha_adj) * 100:.2f}%. Quote these for multi-scorer claims.")
 
 
 def run_calibration(
@@ -538,10 +622,7 @@ def run_calibration(
     *,
     print_fn=print,
 ) -> list[ScorerReport]:
-    """Run calibration for every scorer present in all_rows.
-
-    Prints one matrix per scorer — never a single aggregate. Skips scorers
-    with fewer than 2 adjudicated rows.
+    """Calibrate every scorer in all_rows; print family disclosure + one matrix per scorer.
 
     Args:
         all_rows: CalibrationLabel rows across all scorers.
@@ -550,6 +631,12 @@ def run_calibration(
         List of ScorerReport, one per scorer with ≥2 adjudicated rows.
     """
     scorers = list(dict.fromkeys(r.scorer for r in all_rows))
+    eligible = [
+        s for s in scorers
+        if sum(1 for r in all_rows if r.scorer == s and r.human_verdict is not None) >= 2
+    ]
+    family_size = INTERVALS_PER_SCORER * len(eligible)
+    _print_family_disclosure(len(eligible), family_size, print_fn)
     reports: list[ScorerReport] = []
     for scorer in scorers:
         scorer_rows = [r for r in all_rows if r.scorer == scorer]
@@ -557,7 +644,7 @@ def run_calibration(
         if adj_count < 2:
             print_fn(f"\n[SKIP] {scorer}: only {adj_count} adjudicated row(s) — need ≥2")
             continue
-        report = calibrate_scorer(scorer, all_rows)
+        report = calibrate_scorer(scorer, all_rows, family_size=family_size)
         _print_scorer_report(report, print_fn)
         reports.append(report)
     return reports

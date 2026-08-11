@@ -394,3 +394,46 @@ def test_recall_returns_none_on_empty_denominator() -> None:
     """recall returns None (not 1.0) when no ground-truth positives exist (TP+FN=0)."""
     counts = ConfusionCounts(tp=0, fp=2, fn=0, tn=3)
     assert recall(counts) is None
+
+
+# ---------------------------------------------------------------------------
+# EVAL-P16.5 RED anchors
+# ---------------------------------------------------------------------------
+
+
+def test_calibration_report_names_family_size_and_holm_ci() -> None:
+    """run_calibration output names the family size and Holm-adjusted companion CIs.
+
+    One scorer → family_size = 2 (headline κ CI + secondary κ CI).
+    Output must include 'family' and 'holm' (case-insensitive).
+    """
+    from calibration import run_calibration
+
+    rows = _make_rows_from_matrix(tp=4, fp=1, fn=2, tn=3)
+    lines: list[str] = []
+    run_calibration(rows, print_fn=lines.append)
+    full_output = "\n".join(lines)
+    assert "family" in full_output.lower(), (
+        f"Expected 'family' in calibration output; got:\n{full_output}"
+    )
+    assert "holm" in full_output.lower(), (
+        f"Expected 'holm' in calibration output; got:\n{full_output}"
+    )
+
+
+def test_holm_ci_is_wider_than_nominal() -> None:
+    """kappa_interval with family_size=8 returns Holm-adjusted CI wider than nominal.
+
+    At family_size=8 α*=0.05/8=0.00625. The Holm bounds must satisfy
+    holm_lo ≤ lo and holm_hi ≥ hi; both must be non-None.
+    """
+    rows = _make_rows_from_matrix(tp=4, fp=1, fn=2, tn=3)
+    ci = kappa_interval(rows, resamples=2000, seed=42, family_size=8)
+    assert ci.holm_lo is not None, "holm_lo should be set when family_size=8"
+    assert ci.holm_hi is not None, "holm_hi should be set when family_size=8"
+    assert ci.holm_lo <= ci.lo, (
+        f"holm_lo ({ci.holm_lo:.3f}) must be ≤ nominal lo ({ci.lo:.3f})"
+    )
+    assert ci.holm_hi >= ci.hi, (
+        f"holm_hi ({ci.holm_hi:.3f}) must be ≥ nominal hi ({ci.hi:.3f})"
+    )

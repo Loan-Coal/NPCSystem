@@ -1871,13 +1871,13 @@ independent. Measured: guard `108/111 → [0.9235, 0.9908]` published vs `36/37 
       Validation: the 2-case fixture reports p=0.5 / `no_detectable_change`; comparing the committed run
       against itself still yields p=1.0 with zero discordant pairs. ✅ AUTO (EVAL-P16.4, 2026-08-12)
 
-- [ ] **EVAL-P16.5** Family-wise error disclosure. Files: `edit evals/calibration.py`,
+- [x] **EVAL-P16.5** Family-wise error disclosure. Files: `edit evals/calibration.py`,
       `create docs/STATISTICS_POLICY.md`.
       Four scorers × two axes = **8** simultaneous 95% intervals per calibration run; P(≥1 miss) = 1−0.95⁸ =
       **0.337**. Print the family size and a Holm-adjusted companion interval alongside the nominal one, and
       state in the policy doc which is quoted where.
       Validation: the calibration report names the family size; the policy doc states that per-case
-      cherry-picking from `compare`'s 115-row delta table is not a supported inference.
+      cherry-picking from `compare`'s 115-row delta table is not a supported inference. ✅ AUTO (EVAL-P16.5, 2026-08-12)
 
 ### Phase EVAL-P17 — Headline integrity (the number is currently wrong)
 **Goal:** A headline whose denominator contains every evaluated case and whose numerator counts only real

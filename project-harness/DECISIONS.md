@@ -3073,3 +3073,15 @@ them.
 next authoring session does not rediscover the shortcut. Not mechanically enforced — a
 future case could still cite a `sec_*` node in `relevant_node_ids` legitimately, as
 context the retriever should have surfaced, without expecting disclosure.
+
+
+## DEC-169: evals/calibration.py exceeds 300 lines — not split (EVAL-P16)
+**Date:** 2026-08-12
+**Context:** After EVAL-P16.1–P16.5 the file reached ~700 lines.
+**Decision:** Do not split into multiple files.
+**Rationale:** All functions form a single coherent calibration pipeline sharing KappaCI and
+ScorerReport. Splitting by axis (bootstrap, reporting, CLI) would create tight cross-file
+coupling with no encapsulation benefit. The eval harness is not production code subject
+to the same layering constraints as `src/`.
+**Future trigger:** Split into `evals/bootstrap.py` + `evals/calibration.py` if the file
+grows beyond 800 lines or a second consumer needs the bootstrap primitives independently.
