@@ -5,6 +5,7 @@ Purpose: Unit tests for calibration.py — confusion matrices, Cohen's κ with
          bootstrap CI, and per-scorer calibration reports (EVAL-P5.4/P5.5).
          Covers both the headline axis (scorer_verdict vs human_verdict) and
          the secondary axis (pre_label vs human_verdict).
+         EVAL-P16.2: cluster bootstrap resamples cases, not individual rows.
 Dependencies: pytest, calibration_records, calibration (evals/)
 Used by: pytest (make test / make check)
 """
@@ -18,6 +19,7 @@ import pytest
 from calibration_records import CalibrationLabel
 from calibration import (
     ConfusionCounts,
+    KappaCI,
     agreement_rate,
     cohens_kappa,
     confusion_counts,
@@ -202,15 +204,16 @@ def test_kappa_interval_different_seeds_differ() -> None:
 def test_kappa_interval_is_valid_range() -> None:
     """Bootstrap interval is a valid range: lo ≤ hi and both in [-1, 1]."""
     rows = _make_rows_from_matrix(tp=4, fp=1, fn=2, tn=3)
-    lo, hi = kappa_interval(rows, resamples=200, seed=42)
-    assert -1.0 <= lo <= hi <= 1.0
+    ci = kappa_interval(rows, resamples=200, seed=42)
+    assert -1.0 <= ci.lo <= ci.hi <= 1.0
 
 
 def test_kappa_interval_wide_at_85_rows() -> None:
     """At ~85 rows a noisy scorer produces a visibly wide CI (width ≥ 0.10).
 
     Bootstrap SE at n≈85 is ~±0.10, so a realistic noisy scorer yields
-    a total CI width ≥ 0.10.
+    a total CI width ≥ 0.10. Each row has a unique case_id so cluster
+    bootstrap equals row bootstrap here (n_clusters == n_rows).
     """
     rng = random.Random(0)
     rows = []
@@ -218,8 +221,10 @@ def test_kappa_interval_wide_at_85_rows() -> None:
         pre = rng.random() > 0.4
         human = pre if rng.random() > 0.25 else not pre
         rows.append(_label(i, pre_label=pre, human_verdict=human))
-    lo, hi = kappa_interval(rows, resamples=2000, seed=42)
-    assert hi - lo >= 0.10
+    ci = kappa_interval(rows, resamples=2000, seed=42)
+    assert ci.hi - ci.lo >= 0.10
+    # Each _label uses a unique case_i prefix so clusters == rows
+    assert ci.n_clusters == ci.n_rows
 
 
 # ---------------------------------------------------------------------------
@@ -273,3 +278,80 @@ def test_headline_matrix_compares_scorer_verdict_to_human() -> None:
     lines: list[str] = []
     _print_scorer_report(report, print_fn=lines.append)
     assert any("scorer said pass" in ln and "human said fail" in ln for ln in lines)
+
+
+# ---------------------------------------------------------------------------
+# EVAL-P16.2 RED anchor
+# ---------------------------------------------------------------------------
+
+
+def _make_clustered_rows(
+    *,
+    good_cases: int,
+    bad_cases: int,
+    reps_per_case: int,
+    scorer: str = "tone_judge",
+) -> list[CalibrationLabel]:
+    """Build clustered CalibrationLabel rows.
+
+    Good cases: all rows are TP (scorer=True, human=True).
+    Bad cases: all rows are FP (scorer=True, human=False).
+    Each case has `reps_per_case` rows sharing the same case_id prefix.
+    """
+    rows: list[CalibrationLabel] = []
+    for c in range(good_cases):
+        for r in range(reps_per_case):
+            rows.append(
+                CalibrationLabel(
+                    record_id=f"good_{c:02d}:{scorer}:0#r{r}",
+                    scorer=scorer,
+                    output_text=f"good case {c} rep {r}",
+                    scorer_verdict=True,
+                    pre_label=True,
+                    pre_labeller_model=_LABELLER,
+                    human_verdict=True,
+                    adjudicated_at="2026-08-11T10:00:00+00:00",
+                    notes="",
+                )
+            )
+    for c in range(bad_cases):
+        for r in range(reps_per_case):
+            rows.append(
+                CalibrationLabel(
+                    record_id=f"bad_{c:02d}:{scorer}:0#r{r}",
+                    scorer=scorer,
+                    output_text=f"bad case {c} rep {r}",
+                    scorer_verdict=True,
+                    pre_label=True,
+                    pre_labeller_model=_LABELLER,
+                    human_verdict=False,
+                    adjudicated_at="2026-08-11T10:00:00+00:00",
+                    notes="",
+                )
+            )
+    return rows
+
+
+def test_bootstrap_resamples_cases_not_rows() -> None:
+    """kappa_interval resamples by case cluster, not by individual row.
+
+    Fixture: 3 all-TP cases + 1 all-FP case, 3 reps each (12 rows, 4 cases).
+
+    The result must be a KappaCI with n_clusters=4 (not 12).
+    Row-level bootstrap would draw from 12 rows, clustering from 4 cases —
+    the CI must be wider under case-level resampling because each drawn FP
+    cluster contributes 3 correlated failures at once.
+
+    The interval must cover κ=0 (chance level) since the bad case dominates
+    ~25% of resample draws when it appears multiple times.
+    """
+    rows = _make_clustered_rows(good_cases=3, bad_cases=1, reps_per_case=3)
+    result = kappa_interval(rows, resamples=2000, seed=42)
+
+    assert isinstance(result, KappaCI)
+    assert result.n_clusters == 4   # 4 cases, not 12 rows
+    assert result.n_rows == 12
+    # CI is wider than [0, 1] → must include chance (lo ≤ 0)
+    assert result.lo <= 0.0, (
+        f"Expected CI to include chance (κ=0) with only 4 clusters, got lo={result.lo:.3f}"
+    )

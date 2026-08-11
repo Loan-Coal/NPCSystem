@@ -1838,7 +1838,7 @@ independent. Measured: guard `108/111 → [0.9235, 0.9908]` published vs `36/37 
       P17.2 commit**, never in a later "fix the failing test" commit — that is how a corrected number gets
       silently reverted. ✅ AUTO (EVAL-P16.1, 2026-08-11)
 
-- [ ] **EVAL-P16.2** Cluster bootstrap for κ. Files: `edit evals/calibration.py`,
+- [x] **EVAL-P16.2** Cluster bootstrap for κ. Files: `edit evals/calibration.py`,
       `edit tests/unit/evals/test_calibration.py`.
       `kappa_interval` resamples **rows**, but rows are clustered ~3-per-case by repetition. Resample
       **cases** (all rows of a drawn case move together) and report `n_clusters` next to `n_rows`.
@@ -1846,7 +1846,7 @@ independent. Measured: guard `108/111 → [0.9235, 0.9908]` published vs `36/37 
       Validation: on the committed labels `tone_judge` moves from the published `[0.663, 1.000]` to
       `[0.000, 1.000]` — the honest interval **includes chance**. This is expected and must not be treated
       as a regression: `tone_judge`'s entire κ rests on **3 clusters** (6 negative rows from 3 cases, the FP
-      cell holding 1 case), and 36% of the current resamples contain zero FP rows and return κ=1.0.
+      cell holding 1 case), and 36% of the current resamples contain zero FP rows and return κ=1.0. ✅ AUTO (EVAL-P16.2, 2026-08-11)
 
 - [ ] **EVAL-P16.3** κ must refuse when undefined. Files: `edit evals/calibration.py`,
       `edit evals/dashboard/detail.py`, `edit tests/unit/evals/test_calibration.py`.

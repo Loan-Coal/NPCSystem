@@ -17,7 +17,7 @@ import random
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Callable, NamedTuple, Sequence
 
 from calibration_records import LABELS_FILE, CalibrationLabel, read_calibration_labels
 
@@ -35,6 +35,22 @@ _logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Data types
 # ---------------------------------------------------------------------------
+
+
+class KappaCI(NamedTuple):
+    """Bootstrap confidence interval for Cohen's κ with cluster metadata.
+
+    Attributes:
+        lo: 2.5th-percentile bootstrap κ.
+        hi: 97.5th-percentile bootstrap κ.
+        n_clusters: Number of unique case clusters in the resampled population.
+        n_rows: Total adjudicated rows (= sum of cluster sizes).
+    """
+
+    lo: float
+    hi: float
+    n_clusters: int
+    n_rows: int
 
 
 @dataclass(frozen=True)
@@ -63,6 +79,8 @@ class ScorerReport:
         scorer_verdict vs human_verdict (can I trust this scorer?).
     pre_label_counts / pre_label_kappa / … are the SECONDARY axis:
         pre_label vs human_verdict (free reference-labeller agreement).
+    kappa_n_clusters: case clusters used in the headline bootstrap CI.
+    pre_label_n_clusters: case clusters used in the secondary bootstrap CI.
     """
 
     scorer: str
@@ -70,6 +88,7 @@ class ScorerReport:
     kappa: float
     kappa_lo: float
     kappa_hi: float
+    kappa_n_clusters: int
     prec: float
     rec: float
     pre_label_agreement: float
@@ -77,6 +96,7 @@ class ScorerReport:
     pre_label_kappa: float
     pre_label_kappa_lo: float
     pre_label_kappa_hi: float
+    pre_label_n_clusters: int
 
 
 # ---------------------------------------------------------------------------
@@ -202,57 +222,95 @@ def pre_label_kappa(rows: Sequence[CalibrationLabel]) -> float:
     return _kappa_from_matrix(tp, fp, fn, tn)
 
 
-def _bootstrap_percentile_ci(
-    adj: list[CalibrationLabel],
-    kappa_fn: Callable[[list[CalibrationLabel]], float],
-    resamples: int,
-    seed: int,
-    caller: str,
-) -> tuple[float, float]:
-    """Run a seeded bootstrap CI over adj rows using kappa_fn, logging any dropped samples.
+def _extract_case_clusters(rows: list[CalibrationLabel]) -> list[list[CalibrationLabel]]:
+    """Group rows by case_id (first ':'-delimited component of record_id).
+
+    Preserves insertion order of first occurrence for stable iteration.
 
     Args:
-        adj: Adjudicated CalibrationLabel rows (human_verdict is not None for all).
-        kappa_fn: Function that computes κ from a list of CalibrationLabel; raises
-            ValueError for degenerate (Pe=1) samples.
-        resamples: Number of bootstrap samples to draw.
-        seed: RNG seed for reproducibility.
-        caller: Name of the calling function, used in log/error messages.
+        rows: Adjudicated CalibrationLabel rows.
     Returns:
-        (lo, hi) — 2.5th and 97.5th percentile κ values.
-    Raises:
-        ValueError: If all bootstrap samples were degenerate.
+        List of clusters; each cluster is all rows sharing the same case_id.
     """
-    n = len(adj)
-    rng = random.Random(seed)
+    groups: dict[str, list[CalibrationLabel]] = {}
+    for row in rows:
+        case_id = row.record_id.split(":")[0]
+        if case_id not in groups:
+            groups[case_id] = []
+        groups[case_id].append(row)
+    return list(groups.values())
+
+
+def _run_bootstrap_samples(
+    clusters: list[list[CalibrationLabel]],
+    kappa_fn: Callable[[list[CalibrationLabel]], float],
+    resamples: int,
+    rng: random.Random,
+) -> tuple[list[float], int]:
+    """Draw cluster bootstrap resamples; return (kappas, dropped_count).
+
+    Each resample draws len(clusters) clusters with replacement, flattens to
+    a row list, and calls kappa_fn. ValueError (degenerate Pe=1) increments
+    dropped rather than aborting.
+    """
+    n = len(clusters)
     kappas: list[float] = []
     dropped = 0
     for _ in range(resamples):
-        sample = [adj[rng.randrange(n)] for _ in range(n)]
+        drawn = [clusters[rng.randrange(n)] for _ in range(n)]
+        sample = [row for cluster in drawn for row in cluster]
         try:
             kappas.append(kappa_fn(sample))
         except ValueError:
             dropped += 1
+    return kappas, dropped
+
+
+def _bootstrap_percentile_ci(
+    clusters: list[list[CalibrationLabel]],
+    kappa_fn: Callable[[list[CalibrationLabel]], float],
+    resamples: int,
+    seed: int,
+    caller: str,
+) -> tuple[float, float, int, int]:
+    """Run a seeded cluster bootstrap CI; return (lo, hi, n_clusters, n_rows).
+
+    Args:
+        clusters: Rows pre-grouped by case_id via _extract_case_clusters.
+        kappa_fn: Computes κ from a list of CalibrationLabel; raises ValueError
+            for degenerate (Pe=1) samples.
+        resamples: Number of bootstrap samples.
+        seed: RNG seed for reproducibility.
+        caller: Used in log/error messages.
+    Raises:
+        ValueError: If all bootstrap samples were degenerate.
+    """
+    n_clusters = len(clusters)
+    n_rows = sum(len(c) for c in clusters)
+    kappas, dropped = _run_bootstrap_samples(clusters, kappa_fn, resamples, random.Random(seed))
     if dropped:
-        _logger.warning("%s: dropped %d of %d degenerate bootstrap samples (Pe=1) from CI", caller, dropped, resamples)
+        _logger.warning(
+            "%s: dropped %d of %d degenerate bootstrap samples (Pe=1) from CI",
+            caller, dropped, resamples,
+        )
     if not kappas:
         raise ValueError(f"{caller}: all {resamples} bootstrap samples were degenerate (Pe=1)")
     kappas.sort()
     total = len(kappas)
     lo_idx = math.floor(total * CI_LO_PERCENTILE)
     hi_idx = max(min(math.ceil(total * CI_HI_PERCENTILE) - 1, total - 1), lo_idx)
-    return kappas[lo_idx], kappas[hi_idx]
+    return kappas[lo_idx], kappas[hi_idx], n_clusters, n_rows
 
 
 def kappa_interval(
     rows: Sequence[CalibrationLabel],
     resamples: int,
     seed: int,
-) -> tuple[float, float]:
+) -> KappaCI:
     """Bootstrap 95% CI on κ — HEADLINE axis (scorer_verdict vs human_verdict).
 
-    Draws `resamples` bootstrap samples of adjudicated rows with replacement,
-    computes κ on each, returns the 2.5th and 97.5th percentiles.
+    Resamples by **case cluster** (all rows sharing the same case_id prefix move
+    together), correcting for intra-case correlation from repeated generations.
     Same rows + seed always produce the same bounds.
 
     Args:
@@ -260,36 +318,46 @@ def kappa_interval(
         resamples: Number of bootstrap resamples.
         seed: RNG seed — fix it to keep the interval reproducible.
     Returns:
-        (lo, hi) — 95% bootstrap CI bounds.
+        KappaCI with lo, hi (95% bootstrap CI), n_clusters, n_rows.
     Raises:
         ValueError: If fewer than 2 adjudicated rows or all samples degenerate.
     """
     adj = [r for r in rows if r.human_verdict is not None]
     if len(adj) < 2:
         raise ValueError(f"kappa_interval requires ≥2 adjudicated rows; got {len(adj)}")
-    return _bootstrap_percentile_ci(adj, cohens_kappa, resamples, seed, "kappa_interval")
+    clusters = _extract_case_clusters(adj)
+    lo, hi, n_clusters, n_rows = _bootstrap_percentile_ci(
+        clusters, cohens_kappa, resamples, seed, "kappa_interval"
+    )
+    return KappaCI(lo=lo, hi=hi, n_clusters=n_clusters, n_rows=n_rows)
 
 
 def pre_label_kappa_interval(
     rows: Sequence[CalibrationLabel],
     resamples: int,
     seed: int,
-) -> tuple[float, float]:
+) -> KappaCI:
     """Bootstrap 95% CI on κ — SECONDARY axis (pre_label vs human_verdict).
+
+    Resamples by **case cluster** (same case-level correction as kappa_interval).
 
     Args:
         rows: CalibrationLabel rows (unadjudicated rows are ignored).
         resamples: Number of bootstrap resamples.
         seed: RNG seed — fix it to keep the interval reproducible.
     Returns:
-        (lo, hi) — 95% bootstrap CI bounds.
+        KappaCI with lo, hi (95% bootstrap CI), n_clusters, n_rows.
     Raises:
         ValueError: If fewer than 2 adjudicated rows or all samples degenerate.
     """
     adj = [r for r in rows if r.human_verdict is not None]
     if len(adj) < 2:
         raise ValueError(f"pre_label_kappa_interval requires ≥2 adjudicated rows; got {len(adj)}")
-    return _bootstrap_percentile_ci(adj, pre_label_kappa, resamples, seed, "pre_label_kappa_interval")
+    clusters = _extract_case_clusters(adj)
+    lo, hi, n_clusters, n_rows = _bootstrap_percentile_ci(
+        clusters, pre_label_kappa, resamples, seed, "pre_label_kappa_interval"
+    )
+    return KappaCI(lo=lo, hi=hi, n_clusters=n_clusters, n_rows=n_rows)
 
 
 def agreement_rate(rows: Sequence[CalibrationLabel]) -> float:
@@ -316,6 +384,22 @@ def agreement_rate(rows: Sequence[CalibrationLabel]) -> float:
 # ---------------------------------------------------------------------------
 
 
+def _pre_label_stats(
+    scorer_rows: Sequence[CalibrationLabel],
+) -> tuple[ConfusionCounts, float, KappaCI]:
+    """Compute pre-label confusion counts, κ, and bootstrap CI for one scorer.
+
+    Returns:
+        (pl_counts, pl_kappa, pl_ci).
+    """
+    pl_counts = pre_label_confusion_counts(scorer_rows)
+    pl_kappa_val = pre_label_kappa(scorer_rows)
+    pl_ci = pre_label_kappa_interval(
+        scorer_rows, resamples=BOOTSTRAP_RESAMPLES, seed=BOOTSTRAP_SEED
+    )
+    return pl_counts, pl_kappa_val, pl_ci
+
+
 def calibrate_scorer(scorer: str, rows: Sequence[CalibrationLabel]) -> ScorerReport:
     """Compute the full calibration report for one scorer.
 
@@ -333,28 +417,23 @@ def calibrate_scorer(scorer: str, rows: Sequence[CalibrationLabel]) -> ScorerRep
     scorer_rows = [r for r in rows if r.scorer == scorer]
     counts = confusion_counts(scorer_rows)
     kappa_val = cohens_kappa(scorer_rows)
-    lo, hi = kappa_interval(scorer_rows, resamples=BOOTSTRAP_RESAMPLES, seed=BOOTSTRAP_SEED)
-    prec = precision(counts)
-    rec = recall(counts)
-    rate = agreement_rate(scorer_rows)
-    pl_counts = pre_label_confusion_counts(scorer_rows)
-    pl_kappa = pre_label_kappa(scorer_rows)
-    pl_lo, pl_hi = pre_label_kappa_interval(
-        scorer_rows, resamples=BOOTSTRAP_RESAMPLES, seed=BOOTSTRAP_SEED
-    )
+    kci = kappa_interval(scorer_rows, resamples=BOOTSTRAP_RESAMPLES, seed=BOOTSTRAP_SEED)
+    pl_counts, pl_kappa_val, pl_ci = _pre_label_stats(scorer_rows)
     return ScorerReport(
         scorer=scorer,
         counts=counts,
         kappa=kappa_val,
-        kappa_lo=lo,
-        kappa_hi=hi,
-        prec=prec,
-        rec=rec,
-        pre_label_agreement=rate,
+        kappa_lo=kci.lo,
+        kappa_hi=kci.hi,
+        kappa_n_clusters=kci.n_clusters,
+        prec=precision(counts),
+        rec=recall(counts),
+        pre_label_agreement=agreement_rate(scorer_rows),
         pre_label_counts=pl_counts,
-        pre_label_kappa=pl_kappa,
-        pre_label_kappa_lo=pl_lo,
-        pre_label_kappa_hi=pl_hi,
+        pre_label_kappa=pl_kappa_val,
+        pre_label_kappa_lo=pl_ci.lo,
+        pre_label_kappa_hi=pl_ci.hi,
+        pre_label_n_clusters=pl_ci.n_clusters,
     )
 
 
@@ -380,7 +459,8 @@ def _print_scorer_report(report: ScorerReport, print_fn=print) -> None:
     print_fn(f"  Precision : {report.prec:.3f}   Recall : {report.rec:.3f}")
     print_fn(
         f"  Headline κ : {report.kappa:.3f}  "
-        f"95% CI [{report.kappa_lo:.3f}, {report.kappa_hi:.3f}]  n={c.n}"
+        f"95% CI [{report.kappa_lo:.3f}, {report.kappa_hi:.3f}]  "
+        f"n_rows={c.n}  n_clusters={report.kappa_n_clusters}"
     )
     print_fn("\n  SECONDARY — pre_label vs human_verdict:")
     print_fn("                       human=T   human=F")
@@ -392,7 +472,8 @@ def _print_scorer_report(report: ScorerReport, print_fn=print) -> None:
     print_fn(f"  Pre-label agreement : {report.pre_label_agreement:.3f}")
     print_fn(
         f"  Secondary κ : {report.pre_label_kappa:.3f}  "
-        f"95% CI [{report.pre_label_kappa_lo:.3f}, {report.pre_label_kappa_hi:.3f}]  n={p.n}"
+        f"95% CI [{report.pre_label_kappa_lo:.3f}, {report.pre_label_kappa_hi:.3f}]  "
+        f"n_rows={p.n}  n_clusters={report.pre_label_n_clusters}"
     )
 
 
