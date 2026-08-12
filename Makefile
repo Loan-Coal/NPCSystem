@@ -18,7 +18,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         type-ratchet type-ratchet-update type-evals type-evals-update check-harness \
         test-cov-evals \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts eval-replay-criteria mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts eval-replay-criteria check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world package
@@ -163,6 +163,12 @@ check-human-gates:
 # Identity 4 is DEFERRED (spans two different artifact producers).
 check-conservation:
 	$(PYTHON) scripts/check_conservation.py
+
+# check-dead-keywords: work-list of keyword_none terms with zero hits in the committed
+# corpus (EVAL-P19.3). Informational only — always exits 0, never edits a case file.
+# Deciding what a case should forbid is a human call (EVAL-P20.1).
+check-dead-keywords:
+	$(PYTHON) scripts/check_dead_keywords.py
 
 # check-test-quality: static scan of tests/** for anti-vacuous patterns (4 types).
 # Exits 0 always (items are fixed or suppressed inline with '# quality-ok: <reason>').
