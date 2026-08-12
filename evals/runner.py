@@ -137,16 +137,22 @@ def _run_case(case: dict, client: httpx.Client, base_url: str) -> dict:
     inp: dict | None = case.get("input")
 
     if inp is None:
+        _no_input_detail = (
+            "SKIP: no 'input' field — case targets a non-dialogue endpoint, "
+            "not supported by this runner"
+        )
         return {
             "case_id": case_id,
             "description": case.get("description", ""),
             "passed": True,
+            "skipped": True,
+            "skip_detail": _no_input_detail,
             "expectations": [
                 {
                     "kind": "runner",
                     "passed": True,
                     "skipped": True,
-                    "detail": "SKIP: no 'input' field — case targets a non-dialogue endpoint, not supported by this runner",
+                    "detail": _no_input_detail,
                 }
             ],
             "response": None,
@@ -170,6 +176,8 @@ def _run_case(case: dict, client: httpx.Client, base_url: str) -> dict:
             "case_id": case_id,
             "description": case.get("description", ""),
             "passed": True,
+            "skipped": True,
+            "skip_detail": skip_detail,
             "expectations": [
                 {
                     "kind": "runner",
@@ -375,22 +383,27 @@ def main(argv: list[str] | None = None) -> int:
                 detail = f": {exp_result['detail']}" if not exp_result["passed"] else ""
                 print(f"    [{mark}] {exp_result['kind']}{detail}")
 
-            status = "PASS" if result["passed"] else "FAIL"
-            print(f"  {status}")
+            if result.get("skipped"):
+                print(f"  SKIP: {result.get('skip_detail', 'case skipped')}")
+            else:
+                status = "PASS" if result["passed"] else "FAIL"
+                print(f"  {status}")
             results.append(result)
 
     report_path = write_report(results=results, output_dir=args.reports)
     if args.json_out is not None:
         verdicts_path = write_verdicts(results, args.json_out, source="runner")
         print(f"Verdicts: {verdicts_path}")
-    passed = sum(1 for r in results if r["passed"])
-    total = len(results)
+    non_skipped = [r for r in results if not r.get("skipped")]
+    skipped_count = len(results) - len(non_skipped)
+    passed = sum(1 for r in non_skipped if r["passed"])
+    total = len(non_skipped)
 
     run_summary = summarize(results)
     print()
     for line in format_summary_lines(run_summary):
         print(line)
-    print(f"\n{passed}/{total} cases passed. Report: {report_path}")
+    print(f"\n{passed}/{total} cases passed, {skipped_count} skipped. Report: {report_path}")
 
     if not run_summary.guarantee_demonstrated:
         print(

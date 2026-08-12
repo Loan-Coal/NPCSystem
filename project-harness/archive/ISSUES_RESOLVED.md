@@ -1867,3 +1867,17 @@ specific file.
 (3) `scripts/mypy_evals_ratchet.py` + `.mypy_evals_baseline` (16 errors) added; (4) `test-cov-evals`
 gates evals coverage at 75% floor; all wired into `make check`.
 **Why deferred:** `EVAL-P0.3` brings `evals/` under `ruff` only, deliberately time-boxed to 30 minutes.
+
+## [FIXED] ISSUE-130: Anti-hallucination runner prints "SKIP (NPC not found)" for every skip cause
+**Found:** 2026-08-06, during EVAL-P0.4 measured baseline
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/anti_hallucination_runner.py` (the `outcome == "skipped"` console branch, ~line 380)
+**Description:** `ah_demo_mira_player_taught` printed `SKIP (NPC not found)`, but `mira_innkeeper`
+exists and answered 8 other cases in the same run. The real cause is the `learned_from_player`
+belief pre-flight (ISSUE-090 / DEC-095) finding no persisted player-taught fact. The console prints
+one hardcoded reason for every skip, so the message actively misdirects — it sent this session
+looking for an unseeded world that was already seeded.
+**Why deferred:** Cosmetic; it cost diagnosis time but not correctness, and EVAL-P0.4 was mid-run.
+**To fix:** Print the `skip_detail` already present on the result dict instead of the hardcoded
+string. The correct text is already computed — it is simply not the one displayed.
+**Fixed:** 2026-08-12, in EVAL-P17.4 — `evals/runner.py` now sets `skipped: True` and `skip_detail` at case level; `main()` prints `skip_detail` instead of a hardcoded string.

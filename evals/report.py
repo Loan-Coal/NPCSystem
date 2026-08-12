@@ -34,14 +34,16 @@ def write_report(
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     report_path = output_dir / f"{timestamp}.md"
 
-    total = len(results)
-    passed = sum(1 for r in results if r["passed"])
+    skipped = sum(1 for r in results if r.get("skipped"))
+    non_skipped = [r for r in results if not r.get("skipped")]
+    total = len(non_skipped)
+    passed = sum(1 for r in non_skipped if r["passed"])
     failed = total - passed
 
     lines: list[str] = [
         f"# Eval Report — {timestamp}",
         "",
-        f"**{passed}/{total} cases passed** ({failed} failed)",
+        f"**{passed}/{total} cases passed, {skipped} skipped** ({failed} failed)",
         "",
         "---",
         "",
@@ -51,7 +53,12 @@ def write_report(
         lines.extend(format_retrieval_summary_markdown(retrieval_summary))
 
     for result in results:
-        status = "PASS" if result["passed"] else "FAIL"
+        if result.get("skipped"):
+            status = "SKIP"
+        elif result["passed"]:
+            status = "PASS"
+        else:
+            status = "FAIL"
         lines.append(f"## [{status}] {result['case_id']}")
         lines.append("")
         lines.append(f"_{result.get('description', '')}_")

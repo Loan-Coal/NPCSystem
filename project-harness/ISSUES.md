@@ -232,18 +232,13 @@ exists yet) — it just replaces "the judges disagreed once" with a real confide
 caveat as ISSUE-141: `human_verdict` here is a single hand-labelling pass, not independently
 adjudicated.
 
-## ISSUE-130: Anti-hallucination runner prints "SKIP (NPC not found)" for every skip cause
-**Found:** 2026-08-06, during EVAL-P0.4 measured baseline
+## ISSUE-150: `evals/runner.py` and `evals/report.py` have functions exceeding 40 lines
+**Found:** 2026-08-12, during EVAL-P17.4
 **Severity:** P3 (nice-to-fix)
-**Where:** `evals/anti_hallucination_runner.py` (the `outcome == "skipped"` console branch, ~line 380)
-**Description:** `ah_demo_mira_player_taught` printed `SKIP (NPC not found)`, but `mira_innkeeper`
-exists and answered 8 other cases in the same run. The real cause is the `learned_from_player`
-belief pre-flight (ISSUE-090 / DEC-095) finding no persisted player-taught fact. The console prints
-one hardcoded reason for every skip, so the message actively misdirects — it sent this session
-looking for an unseeded world that was already seeded.
-**Why deferred:** Cosmetic; it cost diagnosis time but not correctness, and EVAL-P0.4 was mid-run.
-**To fix:** Print the `skip_detail` already present on the result dict instead of the hardcoded
-string. The correct text is already computed — it is simply not the one displayed.
+**Where:** `evals/runner.py` (`_run_case` ~164 lines, `main` ~93 lines); `evals/report.py` (`write_report` ~71 lines)
+**Description:** Pre-existing violations of the 40-line function limit. EVAL-P17.4 slightly extended each by adding skip-handling logic, but did not introduce the violation.
+**Why deferred:** Splitting these functions was out of scope for EVAL-P17.4 (single-task focus). The functions are cohesive orchestrators; splitting would require a DECISIONS.md entry.
+**To fix:** Extract sub-helpers (e.g. `_format_case_header`, `_count_results`, `_write_case_section` for report.py; `_print_skip_console`, `_count_non_skipped` for runner.py) to bring each function under 40 lines.
 
 ## ISSUE-131: compose publishes Neo4j's 7687 but the `internal: true` network silently voids it
 **Found:** 2026-08-06, during EVAL-P0.4 measured baseline

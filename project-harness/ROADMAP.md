@@ -1934,7 +1934,7 @@ returns `False` instead.
       `3 inconclusive (judge unavailable)` line; the headline never counts an outage as a defect, and an
       inconclusive rate above a threshold makes the run **invalid** rather than quietly optimistic. ✅ AUTO (EVAL-P17.3, 2026-08-12)
 
-- [ ] **EVAL-P17.4** Skips leave the numerator. Files: `edit evals/runner.py`, `edit evals/report.py`,
+- [x] **EVAL-P17.4** Skips leave the numerator. Files: `edit evals/runner.py`, `edit evals/report.py`,
       `edit tests/unit/evals/test_runner_skips.py`.
       `_run_case` returns `passed: True` for both skip paths (no `input` field; NPC 404), so `report.py:38`
       counts a skip as a **pass** in `194/210` while `summary._is_skipped_case` drops it from the rate
@@ -1943,7 +1943,7 @@ returns `False` instead.
       RED anchor: `test_skipped_case_is_not_counted_as_passed` fails.
       Validation: the top line reads `X/Y passed, Z skipped` with skips in neither numerator nor
       denominator; a run with any skipped case prints the skip reason from `skip_detail`
-      (**closes ISSUE-130**, whose hardcoded "NPC not found" string misdirected a prior session).
+      (**closes ISSUE-130**, whose hardcoded "NPC not found" string misdirected a prior session). ✅ AUTO (EVAL-P17.4, 2026-08-12)
 
 #### 🔴 HUMAN GATE H1 — `EVAL-P17.5` re-measure and retract
 **Ready when:** `EVAL-P17.1`, `EVAL-P17.2`, `EVAL-P17.3`, `EVAL-P17.4`
