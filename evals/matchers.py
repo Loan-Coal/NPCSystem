@@ -20,6 +20,11 @@ SEV-38 changes:
 - keyword_any raises EvalConfigError when fewer than 2 keywords (near-tautological guard).
 - context_block_expected raises EvalConfigError when no runner context is provided.
 - Shared judge-prompt template loaded from prompts/eval/tone_judge.yaml (no inline string).
+
+EVAL-P19.2: keyword_any/keyword_all/keyword_none now match single-word keywords on a
+word boundary (via keyword_matching.contains_keyword) instead of bare substring — fixes
+false positives like 'graphic' matching inside 'geographic'. Multi-word phrases are
+unaffected (substring semantics; they cannot spuriously match inside one longer word).
 """
 
 from __future__ import annotations
@@ -35,6 +40,7 @@ import httpx
 import yaml
 
 import judge_config
+from keyword_matching import contains_keyword
 
 
 # ---------------------------------------------------------------------------
@@ -418,27 +424,36 @@ def _eval_keyword_any(exp: dict, resp: dict) -> tuple[bool, str]:
         )
     text: str = (_get_nested(resp, "npc_response") or "").lower()
     lowered = [kw.lower() for kw in keywords]
-    matched = [kw for kw in lowered if kw in text]
+    matched = [kw for kw in lowered if contains_keyword(text, kw)]
     if matched:
         return True, f"keyword_any matched: {matched}"
     return False, f"none of {lowered!r} found in response: {text[:120]!r}"
 
 
 def _eval_keyword_all(exp: dict, resp: dict) -> tuple[bool, str]:
-    """All keywords must appear in npc_response (case-insensitive)."""
+    """All keywords must appear in npc_response (case-insensitive).
+
+    Single-word keywords require a word boundary; multi-word phrases keep
+    substring semantics (EVAL-P19.2).
+    """
     text: str = (_get_nested(resp, "npc_response") or "").lower()
     keywords: list[str] = [kw.lower() for kw in exp.get("keywords", [])]
-    missing = [kw for kw in keywords if kw not in text]
+    missing = [kw for kw in keywords if not contains_keyword(text, kw)]
     if not missing:
         return True, f"keyword_all matched all: {keywords}"
     return False, f"missing keywords {missing!r} in response: {text[:120]!r}"
 
 
 def _eval_keyword_none(exp: dict, resp: dict) -> tuple[bool, str]:
-    """None of the keywords may appear in npc_response (case-insensitive)."""
+    """None of the keywords may appear in npc_response (case-insensitive).
+
+    Single-word keywords require a word boundary — 'graphic' no longer
+    matches inside 'geographic'; multi-word phrases keep substring semantics
+    (EVAL-P19.2).
+    """
     text: str = (_get_nested(resp, "npc_response") or "").lower()
     keywords: list[str] = [kw.lower() for kw in exp.get("keywords", [])]
-    found = [kw for kw in keywords if kw in text]
+    found = [kw for kw in keywords if contains_keyword(text, kw)]
     if not found:
         return True, f"keyword_none: none of {keywords!r} found"
     return False, f"keyword_none: forbidden keywords found: {found!r} in: {text[:120]!r}"
