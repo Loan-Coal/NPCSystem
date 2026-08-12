@@ -35,6 +35,7 @@ _MINIMAL_RUN_CONFIG = RunConfig(
     retrieval_profile="default",
     git_sha="abc1234",
     golden_set_version="v1",
+    harness_version="test_harness_v1",
 )
 
 _BASE_FIELDS: dict = {

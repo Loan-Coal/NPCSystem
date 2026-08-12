@@ -1881,3 +1881,50 @@ looking for an unseeded world that was already seeded.
 **To fix:** Print the `skip_detail` already present on the result dict instead of the hardcoded
 string. The correct text is already computed — it is simply not the one displayed.
 **Fixed:** 2026-08-12, in EVAL-P17.4 — `evals/runner.py` now sets `skipped: True` and `skip_detail` at case level; `main()` prints `skip_detail` instead of a hardcoded string.
+
+## [FIXED] ISSUE-152: `test_eval_records_v2.py` fails to collect — `RunConfig` now requires `harness_version` with no default
+**Found:** 2026-08-12, during EVAL-P18.3 gate run
+**Fixed:** 2026-08-12, during EVAL-P19 blocking-fix pass (single-line mechanical fix)
+**Severity:** P1 (blocking — a collection error aborts the entire `pytest tests/unit/evals/` run,
+so `make test-cov-evals` — part of `make check` — cannot execute for **any** eval test, not just
+this file)
+**Where:** `tests/unit/evals/test_eval_records_v2.py:28` (`_MINIMAL_RUN_CONFIG = RunConfig(...)`,
+module-level fixture, no `harness_version` kwarg); `evals/run_config.py` `RunConfig.harness_version: str`
+(added by EVAL-P18.1, no default — contrast `dialogue_prompt_hash: str = ""` two lines below it,
+which does have one)
+**Description:** EVAL-P18.1 added `harness_version: str` to `RunConfig` as a required field.
+`test_eval_records_v2.py`'s module-level `_MINIMAL_RUN_CONFIG` fixture predates that change and was
+not updated, so `pydantic.ValidationError: harness_version Field required` fires at **import time**,
+which pytest reports as a collection error and aborts the whole session — every other file under
+`tests/unit/evals/` (94 test modules) never runs. Confirmed present on clean `metrics` HEAD (`c6e1ae2`)
+before this task's changes — not caused by EVAL-P18.3.
+**Why deferred:** Out of scope for EVAL-P18.3 (compare.py comparability refusal); the fixture belongs
+to a different test module than the one this task touches, and single-task-focus applies.
+**To fix:** Added `harness_version="test_harness_v1"` to `_MINIMAL_RUN_CONFIG`'s constructor call.
+Left `RunConfig.harness_version` required (no default) — comparability is the whole point of the
+field (EVAL-P18.1); a silent default would let two incomparable runs compare cleanly by accident.
+
+## [FIXED] ISSUE-151: `check_conservation.py` crashes on Windows console encoding, taking `make check` down with it
+**Found:** 2026-08-12, during EVAL-P18.3 gate run
+**Fixed:** 2026-08-12, during EVAL-P19 blocking-fix pass — `check_conservation.main()` now calls a
+`_force_utf8_streams()` mirroring `check_human_gates.py`'s. Regression test
+`test_main_does_not_crash_on_cp1252_stdout` patches `sys.stdout` to a strict-cp1252 stream and asserts
+`main()` does not raise; confirmed RED before the fix (reproduced the exact `UnicodeEncodeError` on
+U+222A) and GREEN after.
+**Severity:** P1 (blocking — `make check` cannot complete on a Windows dev box; every later target in
+the `check` dependency chain, including `test-cov`/`test-cov-evals`, never runs)
+**Where:** `scripts/check_conservation.py` `main()` (`print(format_report(report))`, line ~283)
+**Description:** `main()` never called `_force_utf8_streams()` (the fix `evals/__main__.py` and
+`check_human_gates.py` already apply — see ISSUE-141's correction and ISSUE-144's `to fix` note for
+the same pattern). The report contains `∪` (U+222A, Identity 2's `judged ∪ deterministic_judged`).
+On a Windows console defaulting to cp1252, `print()` raised `UnicodeEncodeError: 'charmap' codec
+can't encode character '∪'` and the script exited via an unhandled traceback — `make` then aborted
+the whole `check` chain (`test-cov`/`test-cov-evals` never executed). The underlying audit logic was
+unaffected: `PYTHONIOENCODING=utf-8 python scripts/check_conservation.py` ran to completion and
+reported its real result (3 of 4 identities failing against the committed `k3_73e6c36` artifact —
+expected pending EVAL-P17.5's re-measurement, tracked separately by HUMAN GATE H1, not a new defect).
+**Why deferred:** Out of scope for EVAL-P18.3 (compare.py comparability refusal); this was a
+pre-existing defect in a sibling script, confirmed present on a clean `metrics` HEAD before that
+task's changes.
+**To fix:** Called `_force_utf8_streams()` (already defined in `evals/__main__.py`) at the top of
+`scripts/check_conservation.py`'s `main()`, mirroring `check_human_gates.py`'s pattern.

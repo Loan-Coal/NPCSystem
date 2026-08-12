@@ -10,6 +10,7 @@ Used by: make test (pytest discovery)
 
 from __future__ import annotations
 
+import io
 import json
 import sys
 from pathlib import Path
@@ -200,3 +201,23 @@ def test_no_violation_exits_zero(tmp_path: Path) -> None:
     gen_dir = _make_fixed_fixture(tmp_path)
     exit_code = main(["--gen-dir", str(gen_dir)])
     assert exit_code == 0, "expected zero exit when all identities pass"
+
+
+# ---------------------------------------------------------------------------
+# ISSUE-151 regression — main() must not crash on a cp1252 console
+# ---------------------------------------------------------------------------
+
+
+def test_main_does_not_crash_on_cp1252_stdout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """main() survives a cp1252 stdout, which the real report's '∪' glyph would break.
+
+    Reproduces ISSUE-151: a Windows console defaults to cp1252 and `print()` on the
+    unreconfigured stream raises UnicodeEncodeError on the U+222A in Identity 2's
+    label, taking `make check` down with it.
+    """
+    from check_conservation import main  # noqa: E402
+
+    cp1252_stdout = io.TextIOWrapper(io.BytesIO(), encoding="cp1252", errors="strict")
+    monkeypatch.setattr(sys, "stdout", cp1252_stdout)
+
+    main(["--gen-dir", str(_GEN_DIR)])  # must not raise UnicodeEncodeError

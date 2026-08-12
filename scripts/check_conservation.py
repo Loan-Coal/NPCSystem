@@ -261,6 +261,23 @@ def format_report(report: ConservationReport) -> str:
     return "\n".join(lines)
 
 
+def _force_utf8_streams() -> None:
+    """Reconfigure stdout/stderr to UTF-8 so a report glyph cannot crash the check.
+
+    The report contains `∪` (Identity 2's `judged ∪ deterministic_judged`). On a
+    Windows console defaulting to cp1252 that raises UnicodeEncodeError, which would
+    turn a green conservation check into a hard crash for a reason that has nothing
+    to do with conservation. Mirrors `evals/__main__` and `check_human_gates.py`.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass  # Non-reconfigurable stream (pipe/pytest capture) — leave as-is.
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Parse args, run audit, print report, exit non-zero on any violation.
 
@@ -269,6 +286,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns:
         Number of failing identities (0 when all pass).
     """
+    _force_utf8_streams()
     parser = argparse.ArgumentParser(
         description="Conservation audit — exits non-zero when any identity fails."
     )
