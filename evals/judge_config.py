@@ -1,10 +1,12 @@
 """
 Module: judge_config
 Layer: evals (eval harness — not part of src/)
-Purpose: Resolve the LLM-judge model/URL/timeout and enforce the judge != generation
-         model separation invariant (no self-evaluation).
+Purpose: Resolve the LLM-judge model/URL/timeout/temperature and enforce the judge !=
+         generation model separation invariant (no self-evaluation).
 Dependencies: os, glob, pathlib, logging, yaml.
-Used by: evals/matchers.py and e2e/helpers/judge_client.py (single source of truth).
+Used by: evals/matchers.py, evals/run_config.py, and e2e/helpers/judge_client.py
+         (single source of truth — matchers.py's judge call and run_config.py's
+         provenance record read the same resolve_judge_temperature() value).
 Does NOT: import from src/npc_engine/ (keeps evals/ src-free), call any LLM.
 
 The judge model MUST differ from every engine generation model. The generation
@@ -27,6 +29,7 @@ import yaml
 DEFAULT_JUDGE_MODEL = "mixtral:8x7b"
 DEFAULT_JUDGE_URL = "http://localhost:11434"
 DEFAULT_JUDGE_TIMEOUT_S = 30.0
+DEFAULT_JUDGE_TEMPERATURE = 0.0
 
 _ENGINES_GLOB = "src/npc_engine/engines/*/llm_config.yaml"
 _LLM_KEY = "llm"
@@ -36,6 +39,7 @@ _FAMILY_SEPARATOR = ":"
 _ENV_JUDGE_MODEL = "JUDGE_MODEL"
 _ENV_JUDGE_URL = "JUDGE_OLLAMA_URL"
 _ENV_JUDGE_TIMEOUT = "JUDGE_TIMEOUT_SECONDS"
+_ENV_JUDGE_TEMPERATURE = "JUDGE_TEMPERATURE"
 
 _logger = logging.getLogger(__name__)
 
@@ -135,3 +139,13 @@ def resolve_judge_url() -> str:
 def resolve_judge_timeout() -> float:
     """Return the judge request timeout in seconds (env JUDGE_TIMEOUT_SECONDS or default)."""
     return float(os.getenv(_ENV_JUDGE_TIMEOUT, str(DEFAULT_JUDGE_TIMEOUT_S)))
+
+
+def resolve_judge_temperature() -> float:
+    """Return the judge sampling temperature (env JUDGE_TEMPERATURE or default).
+
+    Single source of truth for the binary judge's temperature — matchers.py uses
+    this value in its Ollama request options, and run_config.py records the same
+    value as provenance, so the two can never drift apart (EVAL-P18.2).
+    """
+    return float(os.getenv(_ENV_JUDGE_TEMPERATURE, str(DEFAULT_JUDGE_TEMPERATURE)))

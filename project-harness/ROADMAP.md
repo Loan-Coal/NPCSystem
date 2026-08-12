@@ -1998,7 +1998,7 @@ traceable to the exact inputs that produced it.
       Validation: editing one character of `refusal_judge.yaml` changes `harness_version`; adding a stray
       `README.md` to `evals/cases/` does **not** (the current implementation hashes it). ✅ AUTO (EVAL-P18.1, 2026-08-12)
 
-- [ ] **EVAL-P18.2** Record model identity, not model names. Files: `edit evals/run_config.py`,
+- [x] **EVAL-P18.2** Record model identity, not model names. Files: `edit evals/run_config.py`,
       `edit evals/engine_adapter.py`, `edit tests/unit/evals/test_run_config.py`.
       `meta.json` records `qwen2.5:7b` — a **mutable tag**. A re-pull silently changes the model while the
       artifact still claims the same string. Capture `generation_model_digest` and `judge_model_digest`

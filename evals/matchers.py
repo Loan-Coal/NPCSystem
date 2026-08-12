@@ -114,13 +114,16 @@ _logger = _logging.getLogger(__name__)
 # can never demonstrate the anti-hallucination guarantee. Override via env for tuning.
 MIN_GUARD_RESPONSE_CHARS = int(os.getenv("MIN_GUARD_RESPONSE_CHARS", "20"))
 
-# The judge model/URL/timeout come from judge_config, which enforces the
-# judge != generation-model separation invariant (default judge: mixtral:8x7b,
+# The judge model/URL/timeout/temperature come from judge_config, which enforces
+# the judge != generation-model separation invariant (default judge: mixtral:8x7b,
 # DEC-143). resolve_judge_model() raises JudgeModelCollisionError at import if
-# JUDGE_MODEL is set to an engine generation model.
+# JUDGE_MODEL is set to an engine generation model. _JUDGE_TEMPERATURE is the sole
+# source run_config.py reads for its judge_temperature provenance field
+# (EVAL-P18.2) — changing it here changes what gets recorded, by construction.
 _JUDGE_URL = judge_config.resolve_judge_url()
 _JUDGE_MODEL = judge_config.resolve_judge_model()
 _JUDGE_TIMEOUT = judge_config.resolve_judge_timeout()
+_JUDGE_TEMPERATURE = judge_config.resolve_judge_temperature()
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +234,7 @@ def _run_binary_judge(criteria: str, content: str) -> JudgeResult:
         "model": _JUDGE_MODEL,
         "prompt": prompt,
         "stream": False,
-        "options": {"num_predict": 80, "temperature": 0.0},
+        "options": {"num_predict": 80, "temperature": _JUDGE_TEMPERATURE},
     }
 
     try:

@@ -4,16 +4,22 @@ Layer: evals (evaluation harness — standalone, outside npc_engine layer model)
 Purpose: The single sanctioned gateway between the evals harness and src/npc_engine.
          All npc_engine imports live here. Every other evals module imports from this
          module instead of touching npc_engine directly (enforced by test_src_free.py).
-Dependencies: npc_engine.config, npc_engine.graph, npc_engine.retrieval.embedding
-Used by: evals.retrieval_runner
+         Also provides synchronous Ollama probe helpers (fetch_model_digest,
+         fetch_ollama_version) used by run_config to capture model identity.
+Dependencies: npc_engine.config, npc_engine.graph, npc_engine.retrieval.embedding,
+              httpx (for Ollama probes — no npc_engine import needed)
+Used by: evals.retrieval_runner, evals.run_config
 
 DEC-147 §2: engine_adapter is the sole point of contact between evals/ and npc_engine.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
+
+_logger = logging.getLogger(__name__)
 
 
 async def build_retrieval_stack() -> tuple[Any, Any]:
@@ -56,6 +62,56 @@ def neo4j_uri() -> str:
 
     os.environ.setdefault("API_KEY_SECRET", "eval-key-placeholder")
     return str(get_settings().NEO4J_URI)
+
+
+def fetch_model_digest(model: str, ollama_url: str) -> str | None:
+    """Fetch the model's content digest from Ollama /api/show.
+
+    Returns None if Ollama is unavailable — callers treat None as "digest unknown"
+    and the omission is explicit in the RunConfig rather than silently missing.
+
+    Args:
+        model: Ollama model tag (e.g. 'qwen2.5:7b').
+        ollama_url: Ollama base URL (e.g. 'http://localhost:11434').
+    Returns:
+        Digest string from the /api/show response, or None on any failure.
+    """
+    import httpx
+
+    try:
+        r = httpx.post(
+            f"{ollama_url}/api/show",
+            json={"name": model},
+            timeout=10.0,
+        )
+        r.raise_for_status()
+        value = r.json().get("digest")
+        return str(value) if value is not None else None
+    except Exception as exc:
+        _logger.warning("fetch_model_digest model=%s error=%r", model, exc)
+        return None
+
+
+def fetch_ollama_version(ollama_url: str) -> str | None:
+    """Fetch the Ollama server version string from /api/version.
+
+    Returns None if Ollama is unavailable.
+
+    Args:
+        ollama_url: Ollama base URL (e.g. 'http://localhost:11434').
+    Returns:
+        Version string (e.g. '0.1.47'), or None on any failure.
+    """
+    import httpx
+
+    try:
+        r = httpx.get(f"{ollama_url}/api/version", timeout=10.0)
+        r.raise_for_status()
+        value = r.json().get("version")
+        return str(value) if value is not None else None
+    except Exception as exc:
+        _logger.warning("fetch_ollama_version url=%s error=%r", ollama_url, exc)
+        return None
 
 
 async def known_event_ids(session: Any, npc_id: str) -> set[str]:

@@ -2,8 +2,10 @@
 Module: run_config
 Layer: evals (eval harness — not part of src/)
 Purpose: Frozen Pydantic v2 run-config model capturing exact reproducibility metadata
-         for one eval generation run: LLM config, judge model, git state, golden-set version.
-Dependencies: pydantic, subprocess, logging, pathlib, yaml, judge_config (evals/).
+         for one eval generation run: LLM config, judge model, model digests, git state,
+         golden-set version, harness version, and dialogue prompt hash.
+Dependencies: pydantic, subprocess, logging, pathlib, yaml, judge_config, engine_adapter,
+              _run_config_hashing (evals/).
 Used by: evals/eval_records.py (EVAL-P1.3), evals/generate_runner.py (EVAL-P1.4).
 
 Note: No ``seed`` field — LLMGenerateProtocol.generate() has no seed parameter and
@@ -14,16 +16,21 @@ which re-runs retrieval with session_turns=[] — also noted per EVAL-P1 constra
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 from pydantic import BaseModel, ConfigDict
 
 import judge_config as _judge_config
+from _run_config_hashing import (
+    GoldenSetVersionError,
+    hash_dialogue_prompts as _hash_dialogue_prompts,
+    resolve_golden_set_version,
+    resolve_harness_version,
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _logger = logging.getLogger(__name__)
@@ -40,24 +47,18 @@ _TOP_P_KEY = "top_p"
 _MAX_TOKENS_KEY = "max_tokens"
 _VERSION_KEY = "version"
 
-_GOLDEN_SET_HEX_CHARS = 12
-_HARNESS_VERSION_HEX_CHARS = 12
 _DEFAULT_RETRIEVAL_PROFILE = "default"
-_CASE_YAML_GLOB = "*.yaml"
 _EVAL_PROMPTS_DIR = _REPO_ROOT / "prompts" / "eval"
 _MATCHERS_FILE = _REPO_ROOT / "evals" / "matchers.py"
+_DIALOGUE_PROMPTS_DIR = _REPO_ROOT / "src" / "npc_engine" / "prompts"
 
-
-class GoldenSetVersionError(ValueError):
-    """Raised when golden_set_version cannot be computed due to an empty or missing cases dir."""
-
-    def __init__(self, cases_dir: Path) -> None:
-        """Initialise with the offending directory path."""
-        super().__init__(
-            f"Cannot compute golden_set_version: no case files found in {cases_dir!r}. "
-            "Provide a directory containing at least one case file."
-        )
-        self.cases_dir = cases_dir
+# Re-export for callers that import from run_config (e.g. test_run_config.py).
+__all__ = [
+    "GoldenSetVersionError",
+    "RunConfig",
+    "resolve_golden_set_version",
+    "resolve_run_config",
+]
 
 
 class RunConfig(BaseModel):
@@ -68,12 +69,22 @@ class RunConfig(BaseModel):
     Attributes:
         prompt_version: Dialogue prompt version from engines/dialogue/llm_config.yaml
             (string-coerced so it remains stable when the YAML value is non-integer).
-        generation_model: LLM model name used for generation (e.g. 'qwen2.5:7b').
+        generation_model: LLM model tag used for generation (e.g. 'qwen2.5:7b').
+        generation_model_digest: Ollama content digest for generation_model (from
+            /api/show). None when Ollama is unreachable at config resolution time.
         temperature: Sampling temperature from llm_config.yaml.
         top_p: Top-p nucleus sampling parameter from llm_config.yaml.
         max_tokens: Maximum token budget per generation from llm_config.yaml.
-        judge_model: LLM model used for judging (must differ from generation_model,
+        judge_model: LLM model tag used for judging (must differ from generation_model,
             enforced by judge_config.resolve_judge_model()).
+        judge_model_digest: Ollama content digest for judge_model (from /api/show).
+            None when Ollama is unreachable at config resolution time.
+        judge_temperature: Sampling temperature used by the binary judge, read from
+            judge_config.resolve_judge_temperature() — the same call matchers.py
+            makes for its Ollama request options, so this field can never drift from
+            what the judge actually ran with.
+        ollama_version: Ollama server version string (from /api/version).
+            None when Ollama is unreachable at config resolution time.
         retrieval_profile: Named retrieval configuration applied during generation.
             Not yet wired to any retrieval configuration — the value is recorded for
             future use but does not currently select a retrieval strategy.
@@ -85,6 +96,8 @@ class RunConfig(BaseModel):
             evals/matchers.py (which encodes judge sampling options). Replaces
             golden_set_version as the comparability key — two runs are comparable only
             when their harness_version values match.
+        dialogue_prompt_hash: First 12 hex chars of a SHA-256 digest over all YAML files
+            under src/npc_engine/prompts/ — changes when any runtime LLM prompt changes.
 
     No ``seed`` field: LLMGenerateProtocol.generate() has no seed parameter and
     ollama_adapter.py never sets options.seed — claiming seed reproducibility would
@@ -95,102 +108,19 @@ class RunConfig(BaseModel):
 
     prompt_version: str
     generation_model: str
+    generation_model_digest: str | None = None
     temperature: float
     top_p: float
     max_tokens: int
     judge_model: str
+    judge_model_digest: str | None = None
+    judge_temperature: float = _judge_config.DEFAULT_JUDGE_TEMPERATURE
+    ollama_version: str | None = None
     retrieval_profile: str
     git_sha: str
     golden_set_version: str
     harness_version: str
-
-
-def resolve_golden_set_version(cases_dir: Path) -> str:
-    """Compute a content-stable version hash from case file names and bytes.
-
-    Hashes each file's name and byte content in sorted-name order with SHA-256.
-    Returns the first 12 hex characters — stable across mtime changes, unstable
-    across any content or naming edit.
-
-    The retrieved context recorded in each GenerationRecord is an approximation
-    (re-run from GET /v1/admin/debug/retrieval with session_turns=[]) — this hash
-    describes what was in the case files, not what retrieval returned.
-
-    Args:
-        cases_dir: Directory containing eval case files.
-    Returns:
-        12-hex-char content hash string.
-    Raises:
-        GoldenSetVersionError: If cases_dir has no files (including missing dir).
-    """
-    try:
-        files = sorted(
-            (f for f in cases_dir.iterdir() if f.is_file()),
-            key=lambda f: f.name,
-        )
-    except (FileNotFoundError, NotADirectoryError, OSError) as exc:
-        _logger.warning("golden_set_version: cannot list %s: %s", cases_dir, exc)
-        files = []
-
-    if not files:
-        raise GoldenSetVersionError(cases_dir)
-
-    digest = hashlib.sha256()
-    for f in files:
-        digest.update(f.name.encode())
-        digest.update(f.read_bytes())
-
-    return digest.hexdigest()[:_GOLDEN_SET_HEX_CHARS]
-
-
-def _feed_case_files(digest: "hashlib._Hash", cases_dir: Path) -> None:
-    for f in sorted(
-        (f for f in cases_dir.rglob(_CASE_YAML_GLOB) if f.is_file()),
-        key=lambda p: str(p.relative_to(cases_dir)),
-    ):
-        digest.update(str(f.relative_to(cases_dir)).encode())
-        digest.update(f.read_bytes())
-
-
-def _feed_prompt_yamls(digest: "hashlib._Hash", prompts_eval_dir: Path) -> None:
-    try:
-        prompt_files = sorted(
-            (f for f in prompts_eval_dir.glob(_CASE_YAML_GLOB) if f.is_file()),
-            key=lambda f: f.name,
-        )
-    except (FileNotFoundError, OSError) as exc:
-        _logger.warning("harness_version: cannot list %s: %s", prompts_eval_dir, exc)
-        return
-    for f in prompt_files:
-        digest.update(f.name.encode())
-        digest.update(f.read_bytes())
-
-
-def resolve_harness_version(
-    *,
-    cases_dir: Path,
-    prompts_eval_dir: Path,
-    matchers_path: Path,
-) -> str:
-    """Compute a content-stable harness version covering all comparability inputs.
-
-    Hashes recursive .yaml case files, judge prompt .yaml files, and matchers.py.
-    Non-yaml files (e.g. README.md) in cases_dir are excluded intentionally.
-
-    Args:
-        cases_dir: Root directory of eval cases; .yaml files discovered recursively.
-        prompts_eval_dir: Directory containing judge criteria .yaml files.
-        matchers_path: Path to evals/matchers.py (encodes judge sampling options).
-    Returns:
-        12-hex-char content hash string.
-    Raises:
-        FileNotFoundError: If matchers_path does not exist.
-    """
-    digest = hashlib.sha256()
-    _feed_case_files(digest, cases_dir)
-    _feed_prompt_yamls(digest, prompts_eval_dir)
-    digest.update(matchers_path.read_bytes())
-    return digest.hexdigest()[:_HARNESS_VERSION_HEX_CHARS]
+    dialogue_prompt_hash: str = ""
 
 
 def _read_llm_config(config_path: Path) -> dict[str, Any]:
@@ -231,6 +161,11 @@ def resolve_run_config(
     config_path: Path | None = None,
     prompts_eval_dir: Path | None = None,
     matchers_path: Path | None = None,
+    dialogue_prompts_dir: Path | None = None,
+    fetch_generation_digest: Callable[[str, str], str | None] | None = None,
+    fetch_judge_digest: Callable[[str, str], str | None] | None = None,
+    fetch_ollama_version_fn: Callable[[str], str | None] | None = None,
+    judge_temperature: float | None = None,
 ) -> RunConfig:
     """Build a RunConfig from live engine config, git state, and judge resolution.
 
@@ -238,7 +173,8 @@ def resolve_run_config(
     max_tokens, prompt version); calls git for the commit SHA; calls
     judge_config.resolve_judge_model() for the judge model; computes
     golden_set_version from case file content and harness_version from all
-    comparability inputs (cases, judge prompts, matchers).
+    comparability inputs (cases, judge prompts, matchers); probes Ollama for model
+    digests and server version.
 
     Args:
         retrieval_profile: Named retrieval configuration; defaults to 'default'.
@@ -247,6 +183,18 @@ def resolve_run_config(
         prompts_eval_dir: Override path to judge prompt .yaml directory (for testing);
             defaults to prompts/eval/ relative to the repo root.
         matchers_path: Override path to evals/matchers.py (for testing).
+        dialogue_prompts_dir: Override path to runtime prompt tree (for testing);
+            defaults to src/npc_engine/prompts/.
+        fetch_generation_digest: Callable(model, url) -> digest; defaults to
+            engine_adapter.fetch_model_digest. Injectable for tests.
+        fetch_judge_digest: Callable(model, url) -> digest; defaults to
+            engine_adapter.fetch_model_digest. Injectable for tests.
+        fetch_ollama_version_fn: Callable(url) -> version; defaults to
+            engine_adapter.fetch_ollama_version. Injectable for tests.
+        judge_temperature: Sampling temperature used by the binary judge; defaults to
+            judge_config.resolve_judge_temperature() — the same value matchers.py
+            uses for its Ollama request options, so the two can never drift apart.
+            Injectable for tests.
     Returns:
         Frozen RunConfig instance.
     Raises:
@@ -256,6 +204,8 @@ def resolve_run_config(
         FileNotFoundError: If llm_config.yaml or matchers_path cannot be found.
         KeyError: If llm_config.yaml is missing required keys (llm.model, etc.).
     """
+    import engine_adapter as _engine_adapter
+
     path = config_path or _DIALOGUE_LLM_CONFIG
     data = _read_llm_config(path)
     llm = data[_LLM_KEY]
@@ -263,15 +213,31 @@ def resolve_run_config(
 
     generation_model = str(llm[_MODEL_KEY])
     judge_model = _judge_config.resolve_judge_model()
+    ollama_url = _judge_config.resolve_judge_url()
+    resolved_judge_temperature = (
+        judge_temperature
+        if judge_temperature is not None
+        else _judge_config.resolve_judge_temperature()
+    )
+
+    gen_digest_fn = fetch_generation_digest or _engine_adapter.fetch_model_digest
+    judge_digest_fn = fetch_judge_digest or _engine_adapter.fetch_model_digest
+    version_fn = fetch_ollama_version_fn or _engine_adapter.fetch_ollama_version
 
     resolved_cases_dir = cases_dir or _CASES_DIR
+    resolved_prompts_dir = dialogue_prompts_dir or _DIALOGUE_PROMPTS_DIR
+
     return RunConfig(
         prompt_version=str(prompt[_VERSION_KEY]),
         generation_model=generation_model,
+        generation_model_digest=gen_digest_fn(generation_model, ollama_url),
         temperature=float(llm[_TEMPERATURE_KEY]),
         top_p=float(llm[_TOP_P_KEY]),
         max_tokens=int(llm[_MAX_TOKENS_KEY]),
         judge_model=judge_model,
+        judge_model_digest=judge_digest_fn(judge_model, ollama_url),
+        judge_temperature=resolved_judge_temperature,
+        ollama_version=version_fn(ollama_url),
         retrieval_profile=retrieval_profile,
         git_sha=_resolve_git_sha(),
         golden_set_version=resolve_golden_set_version(resolved_cases_dir),
@@ -280,4 +246,5 @@ def resolve_run_config(
             prompts_eval_dir=prompts_eval_dir or _EVAL_PROMPTS_DIR,
             matchers_path=matchers_path or _MATCHERS_FILE,
         ),
+        dialogue_prompt_hash=_hash_dialogue_prompts(resolved_prompts_dir),
     )

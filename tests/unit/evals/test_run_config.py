@@ -229,3 +229,57 @@ def test_readme_in_cases_does_not_change_harness_version(
     )
 
     assert config_before.harness_version == config_after.harness_version
+
+
+# ---------------------------------------------------------------------------
+# EVAL-P18.2: Record model identity, not model names
+# ---------------------------------------------------------------------------
+
+
+def test_meta_records_model_digest_not_just_tag(
+    tmp_path: Path, tmp_llm_config: Path
+) -> None:
+    """Same model tag but different digest produces detectably different RunConfig instances."""
+    cases_dir = tmp_path / "cases"
+    cases_dir.mkdir()
+    (cases_dir / "case.yaml").write_text("prompt: hi", encoding="utf-8")
+
+    prompts_eval_dir = tmp_path / "prompts_eval"
+    prompts_eval_dir.mkdir()
+    (prompts_eval_dir / "judge.yaml").write_text("criteria: t", encoding="utf-8")
+
+    matchers_path = tmp_path / "matchers.py"
+    matchers_path.write_text("# stub", encoding="utf-8")
+
+    dialogue_prompts_dir = tmp_path / "prompts"
+    dialogue_prompts_dir.mkdir()
+    (dialogue_prompts_dir / "d.yaml").write_text("p: x", encoding="utf-8")
+
+    config_a = resolve_run_config(
+        config_path=tmp_llm_config,
+        cases_dir=cases_dir,
+        prompts_eval_dir=prompts_eval_dir,
+        matchers_path=matchers_path,
+        dialogue_prompts_dir=dialogue_prompts_dir,
+        fetch_generation_digest=lambda _m, _u: "digest-v1",
+        fetch_judge_digest=lambda _m, _u: "digest-jv1",
+        fetch_ollama_version_fn=lambda _u: "0.1.0",
+    )
+    config_b = resolve_run_config(
+        config_path=tmp_llm_config,
+        cases_dir=cases_dir,
+        prompts_eval_dir=prompts_eval_dir,
+        matchers_path=matchers_path,
+        dialogue_prompts_dir=dialogue_prompts_dir,
+        fetch_generation_digest=lambda _m, _u: "digest-v2",
+        fetch_judge_digest=lambda _m, _u: "digest-jv2",
+        fetch_ollama_version_fn=lambda _u: "0.1.0",
+    )
+
+    assert config_a.generation_model == config_b.generation_model  # same tag
+    assert config_a.generation_model_digest != config_b.generation_model_digest
+    assert config_a.judge_model_digest != config_b.judge_model_digest
+    assert config_a.ollama_version == "0.1.0"
+    assert isinstance(config_a.judge_temperature, float)
+    assert isinstance(config_a.dialogue_prompt_hash, str)
+    assert len(config_a.dialogue_prompt_hash) == 12

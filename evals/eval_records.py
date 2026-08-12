@@ -100,7 +100,6 @@ class GenerationRecord(BaseModel):
             (e.g. 'min_length', 'schema'). None for judge-based records and for
             records written before EVAL-P6.1.
         expected_polarity: How to map the YES/NO judge verdict to pass/fail.
-        world_epoch: World epoch at the time of generation (default age_of_peace).
         active_conditions: Active world conditions at the time of generation.
         metadata: Arbitrary extra data. Deterministic records (matcher_kind set)
             store {"expectation": <raw expectation dict>, "response": <raw API
@@ -125,7 +124,6 @@ class GenerationRecord(BaseModel):
     judge_kind: Literal["tone_judge", "affirms_judge", "refusal_judge"] | None
     matcher_kind: DeterministicMatcherKind | None = None
     expected_polarity: Literal["pass_on_yes", "pass_on_no"]
-    world_epoch: str = "age_of_peace"
     active_conditions: tuple[str, ...] = ()
     metadata: dict[str, Any] = Field(default_factory=dict)
     repetition: int = 0
