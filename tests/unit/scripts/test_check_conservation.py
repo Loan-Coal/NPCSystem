@@ -177,3 +177,26 @@ def test_format_report_all_ok_on_fixed_fixture(tmp_path: Path) -> None:
     text = format_report(check_conservation(gen_dir))
     assert "All identities satisfied" in text
     assert "violation" not in text
+
+
+# ---------------------------------------------------------------------------
+# RED anchor — main() exit code
+# ---------------------------------------------------------------------------
+
+
+def test_violation_exits_nonzero() -> None:
+    """main() exits non-zero when any identity fails; exits 0 on a clean fixture."""
+    from check_conservation import main  # noqa: E402
+
+    # Real artifact has violations — must exit non-zero
+    exit_code = main(["--gen-dir", str(_GEN_DIR)])
+    assert exit_code != 0, "expected non-zero exit when violations present"
+
+
+def test_no_violation_exits_zero(tmp_path: Path) -> None:
+    """main() exits 0 when all identities pass."""
+    from check_conservation import main  # noqa: E402
+
+    gen_dir = _make_fixed_fixture(tmp_path)
+    exit_code = main(["--gen-dir", str(gen_dir)])
+    assert exit_code == 0, "expected zero exit when all identities pass"

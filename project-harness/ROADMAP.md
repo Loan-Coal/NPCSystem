@@ -1969,7 +1969,7 @@ commit step touches — and it retracts a published number, which is a human's s
       not-met as a binary. "Either met or explained" is an escape hatch, not a gate: if the count differs,
       the phase does not tick until the difference is traced to a **named** case_id or line of code.
 
-- [ ] **EVAL-P17.6** Flip the conservation report to a gate (**closes the P15.2 loop**). Files:
+- [x] **EVAL-P17.6** Flip the conservation report to a gate (**closes the P15.2 loop**). Files:
       `edit Makefile` (`check` depends on `check-conservation`), `edit scripts/check_conservation.py`.
       EVAL-P15.2 ships the conservation identities report-only precisely because all four fail before this
       phase. EVAL-P17.1/17.2 are what make them pass. This task is the other half of that bargain: without
@@ -1980,7 +1980,7 @@ commit step touches — and it retracts a published number, which is a human's s
       Validation: `make check-conservation` exits **0** against the post-P17 artifact with all four
       identities satisfied; re-introducing the single-source read in `summary.py` (a one-line local revert,
       not committed) makes it exit non-zero and name the residual cases. **If any identity still fails
-      here, EVAL-P17 is not done** — that is the phase's real exit criterion, not the headline number.
+      here, EVAL-P17 is not done** — that is the phase's real exit criterion, not the headline number. ✅ AUTO (EVAL-P17.6, 2026-08-12)
 
 ### Phase EVAL-P18 — Provenance and comparability (a run must be identifiable)
 **Goal:** Two runs can be compared only when they are actually comparable, and any published number is

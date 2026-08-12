@@ -1,10 +1,10 @@
 """
 Module: check_conservation
 Layer: scripts (dev tooling)
-Purpose: Verify each aggregator's output accounts for its whole input. Exits 0 always
-         (report-only) until EVAL-P17.6 wires it as a gate. Identity 4 is DEFERRED to
-         EVAL-P17.4 — it spans two different artifact producers and comparing them as-is
-         creates a definitional mismatch, not a real conservation violation.
+Purpose: Verify each aggregator's output accounts for its whole input. Exits non-zero on
+         any identity violation (gate wired by EVAL-P17.6). Identity 4 is DEFERRED —
+         it spans two different artifact producers and comparing them as-is creates a
+         definitional mismatch, not a real conservation violation.
 Dependencies: argparse, json, pathlib, sys, pydantic; evals/case_stats (classify_battery)
 Used by: make check-conservation, tests/unit/scripts/test_check_conservation.py
 """
@@ -254,7 +254,7 @@ def format_report(report: ConservationReport) -> str:
     lines.append("")
     failed = sum(1 for r in [report.identity_1, report.identity_2, report.identity_3] if not r.ok)
     lines.append(
-        f"{failed} violation(s) found (report-only until EVAL-P17.6)."
+        f"{failed} violation(s) found."
         if failed
         else "All identities satisfied."
     )
@@ -262,15 +262,15 @@ def format_report(report: ConservationReport) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Parse args, run audit, print report, exit 0 (report-only until EVAL-P17.6).
+    """Parse args, run audit, print report, exit non-zero on any violation.
 
     Args:
         argv: Argument list (defaults to sys.argv[1:]).
     Returns:
-        Always 0.
+        Number of failing identities (0 when all pass).
     """
     parser = argparse.ArgumentParser(
-        description="Conservation audit — reports violations, exits 0 until EVAL-P17.6."
+        description="Conservation audit — exits non-zero when any identity fails."
     )
     parser.add_argument(
         "--gen-dir",
@@ -279,8 +279,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Generation directory to audit (default: evals/generations/k3_73e6c36)",
     )
     args = parser.parse_args(argv)
-    print(format_report(check_conservation(args.gen_dir)))
-    return 0
+    report = check_conservation(args.gen_dir)
+    print(format_report(report))
+    return sum(
+        1 for r in [report.identity_1, report.identity_2, report.identity_3] if not r.ok
+    )
 
 
 if __name__ == "__main__":

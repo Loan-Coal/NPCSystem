@@ -158,9 +158,9 @@ roadmap-verify:
 check-human-gates:
 	$(PYTHON) scripts/check_human_gates.py --verify
 
-# check-conservation: report conservation identity violations over the committed artifact.
-# Exits 0 always (report-only until EVAL-P17.6 wires it as a gate).
-# Identity 4 is DEFERRED to EVAL-P17.4 (spans two different artifact producers).
+# check-conservation: gate on conservation identity violations over the committed artifact.
+# Exits non-zero when any identity fails (wired as a gate by EVAL-P17.6).
+# Identity 4 is DEFERRED (spans two different artifact producers).
 check-conservation:
 	$(PYTHON) scripts/check_conservation.py
 
@@ -183,7 +183,8 @@ check-mutations:
 # check: the single canonical health gate. Same command locally and in CI.
 # mypy is at 0 (SEV-14 done) so 'type' is now a hard gate here.
 # EVAL-P15.4 added: check-evals-rules type-evals check-test-quality test-cov-evals
-check: lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-harness check-human-gates check-test-quality test-cov test-cov-evals
+# EVAL-P17.6 added: check-conservation (exits non-zero on any identity violation)
+check: lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-harness check-human-gates check-test-quality check-conservation test-cov test-cov-evals
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 
