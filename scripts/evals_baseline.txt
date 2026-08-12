@@ -14,6 +14,7 @@ R002|evals/anti_hallucination_runner.py
 R002|evals/calibration.py
 R002|evals/case_drafts.py
 R002|evals/compare.py
+R002|evals/criteria_replay.py
 R002|evals/deterministic_pass.py
 R002|evals/deterministic_verdicts.py
 R002|evals/generate_runner.py

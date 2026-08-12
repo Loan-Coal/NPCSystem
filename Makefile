@@ -18,7 +18,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         type-ratchet type-ratchet-update type-evals type-evals-update check-harness \
         test-cov-evals \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts eval-replay-criteria mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world package
@@ -297,6 +297,16 @@ eval-calibrate:
 # Usage: make eval-adjudicate [LABELS=evals/calibration/labels_v1.jsonl]
 eval-adjudicate:
 	$(PYTHON) -m evals adjudicate $(if $(LABELS),--file $(LABELS),)
+
+# eval-replay-criteria: re-score selected calibration rows against a new criteria file,
+# without a full judge pass (EVAL-P19.0b).
+# Usage: make eval-replay-criteria CRITERIA=prompts/eval/refusal_judge.yaml SCORER=refusal_judge [RECORD_IDS=id1,id2] [LABELS=evals/calibration/labels_v1.jsonl]
+eval-replay-criteria:
+	$(PYTHON) -m evals replay-criteria \
+		--criteria-file $(CRITERIA) \
+		--scorer $(SCORER) \
+		$(if $(RECORD_IDS),--record-ids $(RECORD_IDS),) \
+		$(if $(LABELS),--labels-file $(LABELS),)
 
 # eval-compare: McNemar paired comparison of two generation directories (EVAL-P8.2).
 # Usage: make eval-compare BEFORE=<gen_id> AFTER=<gen_id>

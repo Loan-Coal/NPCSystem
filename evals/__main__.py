@@ -113,6 +113,11 @@ VERBS: dict[str, VerbTarget] = {
     "draft-cases": VerbTarget(
         "case_drafts", "main", "Generate draft capability cases from the live graph into evals/cases/_drafts/."
     ),
+    "replay-criteria": VerbTarget(
+        "criteria_replay",
+        "main",
+        "Re-score selected calibration rows against a new criteria file (no full judge pass).",
+    ),
 }
 
 

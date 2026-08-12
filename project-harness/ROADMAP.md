@@ -2079,7 +2079,7 @@ relabelling. Nothing else on the board buys that much publishability that cheapl
       correct on disk (commit `107e547`) — pinned with a test, no functional edit needed. Logged
       ISSUE-153 (pre_label staleness on drift, deferred — needs a live re-label, out of scope here).
 
-- [ ] **EVAL-P19.0b** Criteria replay verb (**prerequisite: P19.1 cannot be validated without it**).
+- [x] **EVAL-P19.0b** Criteria replay verb (**prerequisite: P19.1 cannot be validated without it**).
       Files: `create evals/criteria_replay.py`, `create tests/unit/evals/test_criteria_replay.py`,
       `edit evals/__main__.py` (verb `replay-criteria`), `edit Makefile`.
       No verb re-scores stored label rows against a *new* criteria file without a full judge pass, so
@@ -2092,6 +2092,15 @@ relabelling. Nothing else on the board buys that much publishability that cheapl
       Validation: replaying the unchanged criteria over the 393 committed rows reproduces the stored
       `scorer_verdict` exactly (a no-op replay must be a no-op); selecting 12 rows issues 12 judge calls,
       not 393.
+      ✅ AUTO (EVAL-P19.0b, 2026-08-12) — built over `CalibrationLabel` rows (`read_calibration_labels`),
+      not `ExportItem`: the labels file already carries `scorer_verdict`/`output_text`/`human_verdict`
+      per row, which `ExportItem` (built from `GenerationRecord`, no verdicts) does not, so replaying
+      directly off the labels file is the more direct fit for "given a labels file and a criteria YAML."
+      `select_rows(rows, scorer=..., record_ids=...)` filters before any judge call — proven by a unit
+      test issuing exactly 12 `matchers._run_binary_judge` calls (mocked; no live Ollama) from a 393-row
+      fixture. `replay_criteria` calls `matchers._run_binary_judge` directly (module-attribute call, same
+      pattern as `judge_runner.py`) so tests patch `criteria_replay.matchers._run_binary_judge`. Wired as
+      `python -m evals replay-criteria` and `make eval-replay-criteria`.
 
 - [ ] **EVAL-P19.1** Rewrite `refusal_judge` criteria (**root cause of ISSUE-141, κ=0.247**). Files:
       `edit prompts/eval/refusal_judge.yaml`, `edit tests/unit/evals/test_refusal_criteria.py`.
