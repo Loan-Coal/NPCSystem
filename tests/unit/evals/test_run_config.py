@@ -155,3 +155,77 @@ def test_golden_set_version_is_12_hex_chars(tmp_path: Path) -> None:
     version = resolve_golden_set_version(tmp_path)
     assert len(version) == 12
     assert all(c in "0123456789abcdef" for c in version)
+
+
+# ---------------------------------------------------------------------------
+# EVAL-P18.1: harness_version replaces golden_set_version as comparability key
+# ---------------------------------------------------------------------------
+
+
+def test_editing_a_judge_criteria_changes_harness_version(
+    tmp_path: Path, tmp_llm_config: Path
+) -> None:
+    """harness_version changes when a judge criteria yaml file is edited."""
+    cases_dir = tmp_path / "cases"
+    cases_dir.mkdir()
+    (cases_dir / "case_001.yaml").write_text("prompt: hello", encoding="utf-8")
+
+    prompts_eval_dir = tmp_path / "prompts_eval"
+    prompts_eval_dir.mkdir()
+    judge_file = prompts_eval_dir / "refusal_judge.yaml"
+    judge_file.write_text("criteria: do not hallucinate", encoding="utf-8")
+
+    matchers_path = tmp_path / "matchers.py"
+    matchers_path.write_text("# matchers stub", encoding="utf-8")
+
+    config_before = resolve_run_config(
+        config_path=tmp_llm_config,
+        cases_dir=cases_dir,
+        prompts_eval_dir=prompts_eval_dir,
+        matchers_path=matchers_path,
+    )
+
+    judge_file.write_text("criteria: hallucination is acceptable", encoding="utf-8")
+
+    config_after = resolve_run_config(
+        config_path=tmp_llm_config,
+        cases_dir=cases_dir,
+        prompts_eval_dir=prompts_eval_dir,
+        matchers_path=matchers_path,
+    )
+
+    assert config_before.harness_version != config_after.harness_version
+
+
+def test_readme_in_cases_does_not_change_harness_version(
+    tmp_path: Path, tmp_llm_config: Path
+) -> None:
+    """harness_version is stable when a non-yaml file is added to cases_dir."""
+    cases_dir = tmp_path / "cases"
+    cases_dir.mkdir()
+    (cases_dir / "case_001.yaml").write_text("prompt: hello", encoding="utf-8")
+
+    prompts_eval_dir = tmp_path / "prompts_eval"
+    prompts_eval_dir.mkdir()
+    (prompts_eval_dir / "refusal_judge.yaml").write_text("criteria: test", encoding="utf-8")
+
+    matchers_path = tmp_path / "matchers.py"
+    matchers_path.write_text("# matchers stub", encoding="utf-8")
+
+    config_before = resolve_run_config(
+        config_path=tmp_llm_config,
+        cases_dir=cases_dir,
+        prompts_eval_dir=prompts_eval_dir,
+        matchers_path=matchers_path,
+    )
+
+    (cases_dir / "README.md").write_text("# Cases documentation", encoding="utf-8")
+
+    config_after = resolve_run_config(
+        config_path=tmp_llm_config,
+        cases_dir=cases_dir,
+        prompts_eval_dir=prompts_eval_dir,
+        matchers_path=matchers_path,
+    )
+
+    assert config_before.harness_version == config_after.harness_version

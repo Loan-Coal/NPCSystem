@@ -1988,7 +1988,7 @@ traceable to the exact inputs that produced it.
 **Effort:** ~2.5 h
 **Depends on:** EVAL-P15.2.
 
-- [ ] **EVAL-P18.1** `harness_version` replaces `golden_set_version` as the comparability key. Files:
+- [x] **EVAL-P18.1** `harness_version` replaces `golden_set_version` as the comparability key. Files:
       `edit evals/run_config.py`, `edit tests/unit/evals/test_run_config.py`.
       `golden_set_version` hashes `evals/cases/` **non-recursively** and nothing else. So editing
       `prompts/eval/refusal_judge.yaml` — the exact fix EVAL-P19.1 makes — leaves the version **unchanged**
@@ -1996,7 +1996,7 @@ traceable to the exact inputs that produced it.
       `evals/matchers.py`, and the judge sampling options.
       RED anchor: `test_editing_a_judge_criteria_changes_harness_version` fails.
       Validation: editing one character of `refusal_judge.yaml` changes `harness_version`; adding a stray
-      `README.md` to `evals/cases/` does **not** (the current implementation hashes it).
+      `README.md` to `evals/cases/` does **not** (the current implementation hashes it). ✅ AUTO (EVAL-P18.1, 2026-08-12)
 
 - [ ] **EVAL-P18.2** Record model identity, not model names. Files: `edit evals/run_config.py`,
       `edit evals/engine_adapter.py`, `edit tests/unit/evals/test_run_config.py`.

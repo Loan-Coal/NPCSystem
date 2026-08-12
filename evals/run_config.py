@@ -41,7 +41,11 @@ _MAX_TOKENS_KEY = "max_tokens"
 _VERSION_KEY = "version"
 
 _GOLDEN_SET_HEX_CHARS = 12
+_HARNESS_VERSION_HEX_CHARS = 12
 _DEFAULT_RETRIEVAL_PROFILE = "default"
+_CASE_YAML_GLOB = "*.yaml"
+_EVAL_PROMPTS_DIR = _REPO_ROOT / "prompts" / "eval"
+_MATCHERS_FILE = _REPO_ROOT / "evals" / "matchers.py"
 
 
 class GoldenSetVersionError(ValueError):
@@ -76,6 +80,11 @@ class RunConfig(BaseModel):
         git_sha: Short (7-char) git commit hash at the time resolve_run_config() ran.
         golden_set_version: First 12 hex chars of a SHA-256 digest over sorted case file
             names and bytes — changes on any content edit, stable across mtime-only changes.
+        harness_version: First 12 hex chars of a SHA-256 digest covering all comparability
+            inputs: recursive .yaml case files, prompts/eval/*.yaml judge criteria, and
+            evals/matchers.py (which encodes judge sampling options). Replaces
+            golden_set_version as the comparability key — two runs are comparable only
+            when their harness_version values match.
 
     No ``seed`` field: LLMGenerateProtocol.generate() has no seed parameter and
     ollama_adapter.py never sets options.seed — claiming seed reproducibility would
@@ -93,6 +102,7 @@ class RunConfig(BaseModel):
     retrieval_profile: str
     git_sha: str
     golden_set_version: str
+    harness_version: str
 
 
 def resolve_golden_set_version(cases_dir: Path) -> str:
@@ -133,6 +143,56 @@ def resolve_golden_set_version(cases_dir: Path) -> str:
     return digest.hexdigest()[:_GOLDEN_SET_HEX_CHARS]
 
 
+def _feed_case_files(digest: "hashlib._Hash", cases_dir: Path) -> None:
+    for f in sorted(
+        (f for f in cases_dir.rglob(_CASE_YAML_GLOB) if f.is_file()),
+        key=lambda p: str(p.relative_to(cases_dir)),
+    ):
+        digest.update(str(f.relative_to(cases_dir)).encode())
+        digest.update(f.read_bytes())
+
+
+def _feed_prompt_yamls(digest: "hashlib._Hash", prompts_eval_dir: Path) -> None:
+    try:
+        prompt_files = sorted(
+            (f for f in prompts_eval_dir.glob(_CASE_YAML_GLOB) if f.is_file()),
+            key=lambda f: f.name,
+        )
+    except (FileNotFoundError, OSError) as exc:
+        _logger.warning("harness_version: cannot list %s: %s", prompts_eval_dir, exc)
+        return
+    for f in prompt_files:
+        digest.update(f.name.encode())
+        digest.update(f.read_bytes())
+
+
+def resolve_harness_version(
+    *,
+    cases_dir: Path,
+    prompts_eval_dir: Path,
+    matchers_path: Path,
+) -> str:
+    """Compute a content-stable harness version covering all comparability inputs.
+
+    Hashes recursive .yaml case files, judge prompt .yaml files, and matchers.py.
+    Non-yaml files (e.g. README.md) in cases_dir are excluded intentionally.
+
+    Args:
+        cases_dir: Root directory of eval cases; .yaml files discovered recursively.
+        prompts_eval_dir: Directory containing judge criteria .yaml files.
+        matchers_path: Path to evals/matchers.py (encodes judge sampling options).
+    Returns:
+        12-hex-char content hash string.
+    Raises:
+        FileNotFoundError: If matchers_path does not exist.
+    """
+    digest = hashlib.sha256()
+    _feed_case_files(digest, cases_dir)
+    _feed_prompt_yamls(digest, prompts_eval_dir)
+    digest.update(matchers_path.read_bytes())
+    return digest.hexdigest()[:_HARNESS_VERSION_HEX_CHARS]
+
+
 def _read_llm_config(config_path: Path) -> dict[str, Any]:
     """Parse an engine llm_config.yaml and return its raw dict.
 
@@ -169,26 +229,31 @@ def resolve_run_config(
     retrieval_profile: str = _DEFAULT_RETRIEVAL_PROFILE,
     cases_dir: Path | None = None,
     config_path: Path | None = None,
+    prompts_eval_dir: Path | None = None,
+    matchers_path: Path | None = None,
 ) -> RunConfig:
     """Build a RunConfig from live engine config, git state, and judge resolution.
 
     Reads llm_config.yaml for generation parameters (model, temperature, top_p,
     max_tokens, prompt version); calls git for the commit SHA; calls
     judge_config.resolve_judge_model() for the judge model; computes
-    golden_set_version from case file content via resolve_golden_set_version().
+    golden_set_version from case file content and harness_version from all
+    comparability inputs (cases, judge prompts, matchers).
 
     Args:
         retrieval_profile: Named retrieval configuration; defaults to 'default'.
-        cases_dir: Directory of eval case files used to compute golden_set_version;
-            defaults to evals/cases/ relative to the repo root.
+        cases_dir: Directory of eval case files; defaults to evals/cases/.
         config_path: Override path to the dialogue llm_config.yaml (for testing).
+        prompts_eval_dir: Override path to judge prompt .yaml directory (for testing);
+            defaults to prompts/eval/ relative to the repo root.
+        matchers_path: Override path to evals/matchers.py (for testing).
     Returns:
         Frozen RunConfig instance.
     Raises:
         JudgeModelCollisionError: If the resolved judge model equals the generation model.
         GoldenSetVersionError: If cases_dir is empty or missing.
         RuntimeError: If git rev-parse fails.
-        FileNotFoundError: If llm_config.yaml cannot be found at config_path.
+        FileNotFoundError: If llm_config.yaml or matchers_path cannot be found.
         KeyError: If llm_config.yaml is missing required keys (llm.model, etc.).
     """
     path = config_path or _DIALOGUE_LLM_CONFIG
@@ -199,6 +264,7 @@ def resolve_run_config(
     generation_model = str(llm[_MODEL_KEY])
     judge_model = _judge_config.resolve_judge_model()
 
+    resolved_cases_dir = cases_dir or _CASES_DIR
     return RunConfig(
         prompt_version=str(prompt[_VERSION_KEY]),
         generation_model=generation_model,
@@ -208,5 +274,10 @@ def resolve_run_config(
         judge_model=judge_model,
         retrieval_profile=retrieval_profile,
         git_sha=_resolve_git_sha(),
-        golden_set_version=resolve_golden_set_version(cases_dir or _CASES_DIR),
+        golden_set_version=resolve_golden_set_version(resolved_cases_dir),
+        harness_version=resolve_harness_version(
+            cases_dir=resolved_cases_dir,
+            prompts_eval_dir=prompts_eval_dir or _EVAL_PROMPTS_DIR,
+            matchers_path=matchers_path or _MATCHERS_FILE,
+        ),
     )
