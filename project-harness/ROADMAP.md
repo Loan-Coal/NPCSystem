@@ -1982,7 +1982,7 @@ commit step touches — and it retracts a published number, which is a human's s
       not committed) makes it exit non-zero and name the residual cases. **If any identity still fails
       here, EVAL-P17 is not done** — that is the phase's real exit criterion, not the headline number. ✅ AUTO (EVAL-P17.6, 2026-08-12)
 
-### Phase EVAL-P18 — Provenance and comparability (a run must be identifiable)
+### Phase EVAL-P18 — Provenance and comparability (a run must be identifiable) ✅ 2026-08-12
 **Goal:** Two runs can be compared only when they are actually comparable, and any published number is
 traceable to the exact inputs that produced it.
 **Effort:** ~2.5 h
@@ -2011,7 +2011,7 @@ traceable to the exact inputs that produced it.
       Validation: two runs at the same tag but different digests are detectably different;
       `world_epoch` either reflects the seeded world or is gone.
 
-- [ ] **EVAL-P18.3** `compare` refuses the incomparable. Files: `edit evals/compare.py`,
+- [x] **EVAL-P18.3** `compare` refuses the incomparable. Files: `edit evals/compare.py`,
       `edit tests/unit/evals/test_compare.py`.
       Measured against the committed baseline: `compare --before baseline --after k3_73e6c36` prints
       `Intersection: 0 cases / Verdict: NO_DETECTABLE_CHANGE / p=1.0000` and **exits 0** — a confident
@@ -2021,7 +2021,16 @@ traceable to the exact inputs that produced it.
       it via `extra="ignore"`.
       RED anchor: `test_empty_intersection_exits_nonzero` fails (currently asserts the opposite).
       Validation: the real `baseline` vs `k3_73e6c36` invocation exits non-zero naming the mismatch;
-      a run compared against itself still yields p=1.0.
+      a run compared against itself still yields p=1.0. ✅ AUTO (EVAL-P18.3, 2026-08-12) — added
+      `RunMeta`/`_read_run_meta`/`_comparability_error` and a `refusal_reason` field on `CompareResult`;
+      `main()` exits 1 and prints `ERROR: refusing incomparable runs — ...` when refused. Verified live:
+      `python -m evals compare --before evals/generations/baseline --after evals/generations/k3_73e6c36`
+      → `REFUSED: empty intersection...`, exit 1. Self-comparison still yields p=1.0, exit 0. File grew
+      to ~520 lines; **DEC-170** decided not to split (mirrors DEC-169's same-day precedent), superseding
+      ISSUE-138's split recommendation (closed WONTFIX). Found and logged two pre-existing, unrelated
+      defects blocking a full green `make check` on this Windows box: ISSUE-151 (`check_conservation.py`
+      crashes on cp1252 console) and ISSUE-152 (`test_eval_records_v2.py` fails to collect since
+      EVAL-P18.1 made `harness_version` required with no default) — both confirmed present on clean HEAD.
 
 ### Phase EVAL-P19 — Scorer repair (no relabelling required)
 **Goal:** Fix the scorers the calibration condemned, then re-measure κ using `--merge` — proving the

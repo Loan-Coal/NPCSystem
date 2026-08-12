@@ -5,7 +5,9 @@ Purpose: compare verb — load two generation directories, aggregate judged reco
          CaseStat tuples, inner-join on case_id, run McNemar paired test, and print the
          verdict with per-case delta table. Cases present in one run but absent from the
          other are named explicitly — a silently shrunken denominator is the failure mode
-         this module is designed to catch.
+         this module is designed to catch. Refuses (non-zero exit) rather than reporting a
+         confident verdict when the two runs are not actually comparable: empty
+         intersection, or a mismatched harness_version / judge_model / k (EVAL-P18.3).
 Dependencies: argparse, json, logging, pathlib, sys, collections; pydantic; case_stats (classify),
               rate_stats (pass_rate, wilson_interval), paired_stats (paired_compare, PairedResult)
 Used by: Makefile eval-compare target; tests/unit/evals/test_compare.py; evals/__main__.py
@@ -35,6 +37,11 @@ from verdict_sources import VerdictRow, load_unified_rows, source_counts
 _META_FILE: str = "meta.json"
 _ENCODING: str = "utf-8"
 _SORT_ORDER: dict[str, int] = {"regressed": 0, "improved": 1, "unchanged": 2}
+_CONFIG_KEY: str = "config"
+_GEN_ID_KEY: str = "gen_id"
+_K_KEY: str = "k"
+_HARNESS_VERSION_KEY: str = "harness_version"
+_JUDGE_MODEL_KEY: str = "judge_model"
 
 _logger = logging.getLogger(__name__)
 
@@ -69,6 +76,27 @@ class CaseDelta(BaseModel):
     change: Literal["improved", "regressed", "unchanged"]
 
 
+class RunMeta(BaseModel):
+    """Comparability-relevant identity read from one generation directory's meta.json.
+
+    Attributes:
+        gen_id: Identifier of the run (from meta.json, falling back to the directory name).
+        harness_version: Comparability hash from EVAL-P18.1 (edits to case files, judge
+            criteria, or matchers.py change it). None when meta.json predates that field
+            or is absent entirely — treated as a value like any other for equality, so two
+            runs that both lack it are not silently assumed comparable on that basis alone.
+        judge_model: LLM model tag used for judging this run. None when unrecorded.
+        k: Repetition count this run was generated at. None when unrecorded.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    gen_id: str
+    harness_version: str | None = None
+    judge_model: str | None = None
+    k: int | None = None
+
+
 class CompareResult(BaseModel):
     """Full comparison result between two eval generation runs.
 
@@ -80,6 +108,13 @@ class CompareResult(BaseModel):
         only_in_after: Sorted tuple of case_ids present only in the candidate run.
         case_deltas: Per-case delta table sorted regressions first.
         paired_result: McNemar test result over the matched cases.
+        before_meta: Comparability identity (harness_version, judge_model, k) of the
+            reference run.
+        after_meta: Comparability identity of the candidate run.
+        refusal_reason: None when the two runs are comparable. Otherwise, a human-readable
+            reason `main()` uses to exit non-zero instead of printing a confident verdict
+            (EVAL-P18.3): empty intersection, or a mismatched harness_version, judge_model,
+            or k.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -95,6 +130,9 @@ class CompareResult(BaseModel):
     before_det_slots: int = 0
     after_judged_slots: int = 0
     after_det_slots: int = 0
+    before_meta: RunMeta
+    after_meta: RunMeta
+    refusal_reason: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -139,22 +177,58 @@ def _build_case_stats(rows: Sequence[VerdictRow]) -> tuple[CaseStat, ...]:
     return tuple(stats)
 
 
-def _read_gen_id(gen_dir: Path) -> str:
-    """Read gen_id from meta.json, falling back to the directory name.
+def _read_run_meta(gen_dir: Path) -> RunMeta:
+    """Read comparability identity from a generation directory's meta.json.
 
     Args:
         gen_dir: Generation directory (may or may not contain meta.json).
     Returns:
-        gen_id string.
+        RunMeta with gen_id falling back to the directory name, and harness_version /
+        judge_model / k as None when meta.json is absent, unreadable, or predates
+        EVAL-P18.1/P18.2 (no config.harness_version / config.judge_model / top-level k).
     """
     meta_path = gen_dir / _META_FILE
-    if meta_path.exists():
-        try:
-            meta = json.loads(meta_path.read_text(encoding=_ENCODING))
-            return str(meta.get("gen_id", gen_dir.name))
-        except (json.JSONDecodeError, OSError) as exc:
-            _logger.warning("meta.json unreadable in %s: %s — using directory name as gen_id", gen_dir, exc)
-    return gen_dir.name
+    if not meta_path.exists():
+        return RunMeta(gen_id=gen_dir.name)
+    try:
+        meta = json.loads(meta_path.read_text(encoding=_ENCODING))
+    except (json.JSONDecodeError, OSError) as exc:
+        _logger.warning("meta.json unreadable in %s: %s — comparability fields unknown", gen_dir, exc)
+        return RunMeta(gen_id=gen_dir.name)
+    config = meta.get(_CONFIG_KEY, {})
+    return RunMeta(
+        gen_id=str(meta.get(_GEN_ID_KEY, gen_dir.name)),
+        harness_version=config.get(_HARNESS_VERSION_KEY),
+        judge_model=config.get(_JUDGE_MODEL_KEY),
+        k=meta.get(_K_KEY),
+    )
+
+
+def _comparability_error(before: RunMeta, after: RunMeta, intersection_size: int) -> str | None:
+    """Return a refusal reason when two runs are not safely comparable, else None.
+
+    Checked in order: empty intersection first (the cheapest and most severe defect —
+    a verdict over zero shared cases), then harness_version, judge_model, and k mismatch.
+
+    Args:
+        before: Reference run's comparability identity.
+        after: Candidate run's comparability identity.
+        intersection_size: Number of case_ids present in both runs.
+    Returns:
+        A human-readable refusal reason, or None when the runs are comparable.
+    """
+    if intersection_size == 0:
+        return "empty intersection — no case_ids are shared between the two runs"
+    if before.harness_version != after.harness_version:
+        return (
+            f"harness_version mismatch: before={before.harness_version!r} "
+            f"after={after.harness_version!r}"
+        )
+    if before.judge_model != after.judge_model:
+        return f"judge_model mismatch: before={before.judge_model!r} after={after.judge_model!r}"
+    if before.k != after.k:
+        return f"k mismatch: before={before.k!r} after={after.k!r}"
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -266,10 +340,11 @@ def compare_runs(before_dir: Path, after_dir: Path) -> CompareResult:
         after_dir: Candidate generation directory.
     Returns:
         CompareResult with intersection stats, per-source slot counts, missing cases,
-        delta table, and verdict.
+        delta table, verdict, run identities, and a refusal_reason (EVAL-P18.3) that is
+        non-None when the two runs are not safely comparable.
     """
-    before_gen_id = _read_gen_id(before_dir)
-    after_gen_id = _read_gen_id(after_dir)
+    before_meta = _read_run_meta(before_dir)
+    after_meta = _read_run_meta(after_dir)
 
     before_rows = load_unified_rows(before_dir)
     after_rows = load_unified_rows(after_dir)
@@ -301,8 +376,8 @@ def compare_runs(before_dir: Path, after_dir: Path) -> CompareResult:
         )
 
     return CompareResult(
-        before_gen_id=before_gen_id,
-        after_gen_id=after_gen_id,
+        before_gen_id=before_meta.gen_id,
+        after_gen_id=after_meta.gen_id,
         intersection_size=intersection_size,
         only_in_before=only_in_before,
         only_in_after=only_in_after,
@@ -312,6 +387,9 @@ def compare_runs(before_dir: Path, after_dir: Path) -> CompareResult:
         before_det_slots=before_sc.get("deterministic", 0),
         after_judged_slots=after_sc.get("judged", 0),
         after_det_slots=after_sc.get("deterministic", 0),
+        before_meta=before_meta,
+        after_meta=after_meta,
+        refusal_reason=_comparability_error(before_meta, after_meta, intersection_size),
     )
 
 
@@ -350,7 +428,26 @@ def _format_header(result: CompareResult) -> list[str]:
         lines.append(
             f"Only in after ({len(result.only_in_after)}): {', '.join(result.only_in_after)}"
         )
+    lines.append(_format_run_meta("before", result.before_meta))
+    lines.append(_format_run_meta("after", result.after_meta))
+    if result.refusal_reason is not None:
+        lines.append(f"REFUSED: {result.refusal_reason}")
     return lines
+
+
+def _format_run_meta(label: str, meta: RunMeta) -> str:
+    """Format one run's comparability identity as a single header line.
+
+    Args:
+        label: 'before' or 'after'.
+        meta: The run's RunMeta.
+    Returns:
+        A single formatted line, e.g. 'Config (before): harness_version=... judge_model=... k=...'.
+    """
+    return (
+        f"Config ({label}): harness_version={meta.harness_version!r} "
+        f"judge_model={meta.judge_model!r} k={meta.k!r}"
+    )
 
 
 def format_report(result: CompareResult) -> list[str]:
@@ -394,7 +491,9 @@ def main(argv: list[str] | None = None) -> int:
     Args:
         argv: CLI arguments; defaults to sys.argv[1:].
     Returns:
-        0 on success, 1 on error.
+        0 on success. 1 if a directory is missing, or if the two runs are not comparable
+        (empty intersection, or a mismatched harness_version / judge_model / k — EVAL-P18.3):
+        refusing beats printing a confident verdict over nothing.
     """
     parser = argparse.ArgumentParser(
         description="Compare two eval generation directories with McNemar paired test."
@@ -411,6 +510,9 @@ def main(argv: list[str] | None = None) -> int:
     result = compare_runs(args.before, args.after)
     for line in format_report(result):
         print(line)
+    if result.refusal_reason is not None:
+        print(f"ERROR: refusing incomparable runs — {result.refusal_reason}", file=sys.stderr)
+        return 1
     return 0
 
 

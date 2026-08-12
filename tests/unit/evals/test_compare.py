@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from compare import CompareResult, compare_runs, format_report
+from compare import compare_runs, format_report, main
 
 
 # ---------------------------------------------------------------------------
@@ -45,6 +45,24 @@ def _det_row(record_id: str, passed: bool, repetition: int = 0) -> dict:
         "score": passed,
         "reasoning": "",
     }
+
+
+def _write_meta(
+    gen_dir: Path,
+    *,
+    gen_id: str = "gen",
+    k: int = 3,
+    harness_version: str | None = "hv_abc123",
+    judge_model: str | None = "mixtral:8x7b",
+) -> None:
+    """Write a minimal meta.json fixture with comparability config fields."""
+    gen_dir.mkdir(parents=True, exist_ok=True)
+    meta = {
+        "gen_id": gen_id,
+        "k": k,
+        "config": {"harness_version": harness_version, "judge_model": judge_model},
+    }
+    (gen_dir / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
 
 
 def _row(record_id: str, passed: bool, repetition: int = 0) -> dict:
@@ -281,3 +299,79 @@ def test_per_source_counts_in_compare_result_and_report(tmp_path: Path) -> None:
     assert "deterministic" in header
     assert "1" in header   # judged slot count
     assert "2" in header   # deterministic slot count
+
+
+# ---------------------------------------------------------------------------
+# Comparability refusal (EVAL-P18.3)
+# ---------------------------------------------------------------------------
+
+
+def test_empty_intersection_exits_nonzero(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Two runs sharing zero case_ids: main() exits non-zero, not a confident verdict."""
+    before_dir = tmp_path / "before"
+    after_dir = tmp_path / "after"
+    _write_judged_jsonl(before_dir, [_row("case_alpha:tone_judge:0", passed=True)])
+    _write_meta(before_dir)
+    _write_judged_jsonl(after_dir, [_row("case_beta:tone_judge:0", passed=True)])
+    _write_meta(after_dir)
+
+    exit_code = main(["--before", str(before_dir), "--after", str(after_dir)])
+
+    assert exit_code != 0
+    captured = capsys.readouterr()
+    assert "empty intersection" in (captured.out + captured.err).lower()
+
+
+def test_harness_version_mismatch_exits_nonzero(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Same cases, different harness_version: refuse rather than report a verdict."""
+    before_dir = tmp_path / "before"
+    after_dir = tmp_path / "after"
+    _write_judged_jsonl(before_dir, [_row("case_shared:tone_judge:0", passed=True)])
+    _write_meta(before_dir, harness_version="hv_before")
+    _write_judged_jsonl(after_dir, [_row("case_shared:tone_judge:0", passed=True)])
+    _write_meta(after_dir, harness_version="hv_after")
+
+    exit_code = main(["--before", str(before_dir), "--after", str(after_dir)])
+
+    assert exit_code != 0
+    captured = capsys.readouterr()
+    assert "harness_version" in (captured.out + captured.err).lower()
+
+
+def test_judge_model_or_k_mismatch_exits_nonzero(tmp_path: Path) -> None:
+    """Same cases and harness_version, different k: refuse via the comparability check."""
+    before_dir = tmp_path / "before"
+    after_dir = tmp_path / "after"
+    _write_judged_jsonl(before_dir, [_row("case_shared:tone_judge:0", passed=True)])
+    _write_meta(before_dir, k=3)
+    _write_judged_jsonl(after_dir, [_row("case_shared:tone_judge:0", passed=True)])
+    _write_meta(after_dir, k=1)
+
+    result = compare_runs(before_dir, after_dir)
+
+    assert result.refusal_reason is not None
+    assert "k" in result.refusal_reason.lower()
+
+
+def test_matching_meta_and_nonempty_intersection_is_comparable(tmp_path: Path) -> None:
+    """Same harness_version, judge_model, and k: main() exits 0, no refusal."""
+    before_dir = tmp_path / "before"
+    after_dir = tmp_path / "after"
+    _write_judged_jsonl(before_dir, [_row("case_shared:tone_judge:0", passed=True)])
+    _write_meta(before_dir)
+    _write_judged_jsonl(after_dir, [_row("case_shared:tone_judge:0", passed=True)])
+    _write_meta(after_dir)
+
+    exit_code = main(["--before", str(before_dir), "--after", str(after_dir)])
+
+    assert exit_code == 0
+
+
+def test_self_comparison_without_meta_json_still_succeeds(tmp_path: Path) -> None:
+    """Two runs missing meta.json entirely are still comparable to each other (both None == None)."""
+    gen_dir = tmp_path / "run"
+    _write_judged_jsonl(gen_dir, [_row("case_001:tone_judge:0", passed=True)])
+
+    result = compare_runs(gen_dir, gen_dir)
+
+    assert result.refusal_reason is None

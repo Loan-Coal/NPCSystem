@@ -16,6 +16,49 @@ Rules:
 
 ## Open
 
+## ISSUE-152: `test_eval_records_v2.py` fails to collect — `RunConfig` now requires `harness_version` with no default
+**Found:** 2026-08-12, during EVAL-P18.3 gate run
+**Severity:** P1 (blocking — a collection error aborts the entire `pytest tests/unit/evals/` run,
+so `make test-cov-evals` — part of `make check` — cannot execute for **any** eval test, not just
+this file)
+**Where:** `tests/unit/evals/test_eval_records_v2.py:28` (`_MINIMAL_RUN_CONFIG = RunConfig(...)`,
+module-level fixture, no `harness_version` kwarg); `evals/run_config.py` `RunConfig.harness_version: str`
+(added by EVAL-P18.1, no default — contrast `dialogue_prompt_hash: str = ""` two lines below it,
+which does have one)
+**Description:** EVAL-P18.1 added `harness_version: str` to `RunConfig` as a required field.
+`test_eval_records_v2.py`'s module-level `_MINIMAL_RUN_CONFIG` fixture predates that change and was
+not updated, so `pydantic.ValidationError: harness_version Field required` fires at **import time**,
+which pytest reports as a collection error and aborts the whole session — every other file under
+`tests/unit/evals/` (94 test modules) never runs. Confirmed present on clean `metrics` HEAD (`c6e1ae2`)
+before this task's changes — not caused by EVAL-P18.3.
+**Why deferred:** Out of scope for EVAL-P18.3 (compare.py comparability refusal); the fixture belongs
+to a different test module than the one this task touches, and single-task-focus applies.
+**To fix:** Add `harness_version="test_harness_v1"` (or similar) to `_MINIMAL_RUN_CONFIG`'s constructor
+call in `test_eval_records_v2.py:28`. Consider whether `RunConfig.harness_version` should carry a
+default the way `dialogue_prompt_hash` does, versus staying required — that's a design call for
+whoever owns EVAL-P18.1's follow-through, not a mechanical fix.
+
+## ISSUE-151: `check_conservation.py` crashes on Windows console encoding, taking `make check` down with it
+**Found:** 2026-08-12, during EVAL-P18.3 gate run
+**Severity:** P1 (blocking — `make check` cannot complete on a Windows dev box; every later target in
+the `check` dependency chain, including `test-cov`/`test-cov-evals`, never runs)
+**Where:** `scripts/check_conservation.py` `main()` (`print(format_report(report))`, line ~283)
+**Description:** `main()` never calls `_force_utf8_streams()` (the fix `evals/__main__.py` and
+`check_human_gates.py` already apply — see ISSUE-141's correction and ISSUE-144's `to fix` note for
+the same pattern). The report contains `∪` (U+222A, Identity 2's `judged ∪ deterministic_judged`).
+On a Windows console defaulting to cp1252, `print()` raises `UnicodeEncodeError: 'charmap' codec
+can't encode character '∪'` and the script exits via an unhandled traceback — `make` then aborts
+the whole `check` chain (`test-cov`/`test-cov-evals` never execute). Confirmed the underlying audit
+logic is unaffected: `PYTHONIOENCODING=utf-8 python scripts/check_conservation.py` runs to completion
+and reports its real result (3 of 4 identities failing against the committed `k3_73e6c36` artifact —
+expected pending EVAL-P17.5's re-measurement, tracked separately by HUMAN GATE H1, not a new defect).
+**Why deferred:** Out of scope for EVAL-P18.3 (compare.py comparability refusal); this is a pre-existing
+defect in a sibling script, confirmed present on a clean `metrics` HEAD before this task's changes.
+**To fix:** Call `_force_utf8_streams()` (already defined in `evals/__main__.py`) at the top of
+`scripts/check_conservation.py`'s `main()`, mirroring `check_human_gates.py`'s pattern. Add a regression
+test that renders a report containing `∪` through `format_report` and asserts `main()` does not raise
+when stdout is a non-UTF-8 stream (e.g. patch `sys.stdout` with a cp1252 `io.TextIOWrapper`).
+
 ## ISSUE-145: dialogue retrieval returns an empty NPC profile for every NPC
 **Found:** 2026-08-10, during EVAL-P20.2 (capability case authoring)
 **Severity:** P1 (blocking) — FOR HAND REVIEW. The data exists; the reader does not return it.
@@ -476,13 +519,14 @@ the two-phase pipeline; today's fixture (`anti_hallucination_demo.json`) does ex
 record — deterministic or judged — for a `learned_from_player` case whose fact isn't persisted yet. Add a
 regression test with a mocked "belief not found" response asserting zero records are produced for such a case.
 
-## ISSUE-138: `evals/compare.py` exceeds the 300-line file limit
+## [WONTFIX] ISSUE-138: `evals/compare.py` exceeds the 300-line file limit
 **Found:** 2026-08-08, during EVAL-P10.2
 **Severity:** P3 (nice-to-fix)
-**Where:** `evals/compare.py` (412 lines after EVAL-P10.2; was 366 before)
+**Where:** `evals/compare.py` (412 lines after EVAL-P10.2; was 366 before; ~520 after EVAL-P18.3)
 **Description:** `compare.py` pre-existed the 300-line hard limit. EVAL-P10.2 added `_detect_evasion` (~35 lines), pushing it to 412. A split would be natural: extract evasion detection + `_build_delta_table` into `evals/evasion.py`, leaving compare.py as an orchestration-only module.
 **Why deferred:** Pre-existing violation aggravated by this task; split is out of scope for EVAL-P10.2.
 **To fix:** Extract `_detect_evasion`, `_change_direction`, and `_build_delta_table` into `evals/evasion.py`; import them from `compare.py`.
+**Closed:** 2026-08-12, EVAL-P18.3 — **DEC-170** decided not to split (mirrors DEC-169's same-day precedent for `evals/calibration.py`): one coherent pipeline, no external consumer of `CompareResult`/`RunMeta` beyond this module and its test file, eval harness not held to `src/`'s layering constraints. Reopen if the file passes 800 lines or a second consumer needs evasion/comparability logic independently — see DEC-170's Future trigger.
 
 ## ISSUE-137: `evals/summary.py::summarize` exceeds the 40-line function limit
 **Found:** 2026-08-08, during EVAL-P10.1

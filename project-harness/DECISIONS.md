@@ -3085,3 +3085,22 @@ coupling with no encapsulation benefit. The eval harness is not production code 
 to the same layering constraints as `src/`.
 **Future trigger:** Split into `evals/bootstrap.py` + `evals/calibration.py` if the file
 grows beyond 800 lines or a second consumer needs the bootstrap primitives independently.
+
+## DEC-170: evals/compare.py exceeds 300 lines — not split (EVAL-P18.3)
+**Date:** 2026-08-12
+**Context:** ISSUE-138 (2026-08-08, 366→412 lines after EVAL-P10.2) already recommended
+extracting `_detect_evasion`/`_change_direction`/`_build_delta_table` into `evals/evasion.py`.
+EVAL-P18.3 added `RunMeta`, `_read_run_meta`, `_comparability_error`, and the refusal path
+through `format_report`/`main`, taking the file to ~520 lines — further past the limit, not
+past it for the first time.
+**Decision:** Do not split into multiple files. Supersedes ISSUE-138's split recommendation.
+**Rationale:** Same reasoning as DEC-169, applied to a sibling file in the same directory:
+`compare.py` is one coherent pipeline (load → aggregate → join → paired test → comparability
+check → format → CLI), all consumers of `CompareResult`/`RunMeta` live in this module and its
+test file only (verified by grep — no external importer), and a mechanical extraction now
+would fragment that pipeline across files for no encapsulation benefit, inconsistent with the
+precedent just set for `evals/calibration.py` on the same day. The eval harness is not
+production code subject to `src/`'s layering constraints.
+**Future trigger:** Split into `evals/evasion.py` (delta computation + evasion detection) and
+`evals/comparability.py` (`RunMeta` + refusal check) if the file grows beyond 800 lines, or a
+second consumer needs either concern independently.
