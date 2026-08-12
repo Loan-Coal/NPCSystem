@@ -3104,3 +3104,24 @@ production code subject to `src/`'s layering constraints.
 **Future trigger:** Split into `evals/evasion.py` (delta computation + evasion detection) and
 `evals/comparability.py` (`RunMeta` + refusal check) if the file grows beyond 800 lines, or a
 second consumer needs either concern independently.
+
+## DEC-171: `prior_human_verdict` clears on re-adjudication rather than persisting (EVAL-P19.0)
+**Date:** 2026-08-12
+**Context:** EVAL-P19.0 made `needs_review` load-bearing: `adjudicate.collect_pending` now
+re-surfaces a drifted row (content changed under an existing human verdict) and needed a way
+to show the adjudicator what they decided last time. Two options: (a) a new
+`prior_human_verdict` field set transiently by `collect_pending` and cleared by
+`apply_verdict` once the row is re-judged, or (b) leave it set permanently as an audit trail
+of the row's adjudication history.
+**Decision:** (a) — `apply_verdict` resets both `needs_review` and `prior_human_verdict` to
+their clean state (`False` / `None`) on `keep`/`flip`; `skip` leaves both untouched so the row
+stays pending.
+**Rationale:** `prior_human_verdict` exists to answer one question — "what did I say about
+the text I'm looking at before it changed?" — for exactly as long as that question is live.
+Once re-adjudicated, the row carries a fresh verdict against its current content; a
+permanently-set `prior_human_verdict` would leave every historically-drifted row visually
+flagged forever with no way to tell "still needs review" from "resolved, FYI it drifted
+once," which is the ambiguity `needs_review` exists to remove.
+**Consequences:** No adjudication-history audit trail beyond the labels file's own git
+history. If a later phase wants one, add it as an explicit `drift_history` list rather than
+overloading this field again.

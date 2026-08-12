@@ -89,6 +89,16 @@ class CalibrationLabel(BaseModel):
             otherwise absent from output_text and makes those rows unlabelable
             without it. Empty for text-only scorers. Same passthrough/
             backward-compat contract as criteria.
+        needs_review: True when a merge (label_merge.merge_labels) detected the
+            output or criteria changed under an existing human_verdict — that
+            verdict now judges text a human never actually saw. Rows flagged
+            here are excluded from every calibration statistic
+            (calibration.py) and re-surfaced by adjudicate.collect_pending
+            until a human re-judges them (EVAL-P19.0).
+        prior_human_verdict: Set by adjudicate.collect_pending when it
+            re-presents a needs_review row — the verdict recorded before the
+            content drifted, so the adjudicator sees what they decided last
+            time. Cleared back to None once the row is re-adjudicated.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -116,6 +126,7 @@ class CalibrationLabel(BaseModel):
     criteria_sha256: str = ""
     human_labeller: str = ""
     needs_review: bool = False
+    prior_human_verdict: bool | None = None
 
     @property
     def key(self) -> tuple[str, str]:

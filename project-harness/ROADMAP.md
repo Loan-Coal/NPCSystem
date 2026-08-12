@@ -2055,7 +2055,7 @@ criteria change. If human verdicts do not survive it, stop the program and fix d
 human labels survive whole and the fix to `refusal_judge` (κ=0.247, CI crossing zero) costs **zero**
 relabelling. Nothing else on the board buys that much publishability that cheaply.
 
-- [ ] **EVAL-P19.0** Make `needs_review` load-bearing (**prerequisite for every later merge**). Files:
+- [x] **EVAL-P19.0** Make `needs_review` load-bearing (**prerequisite for every later merge**). Files:
       `edit evals/calibration.py`, `edit evals/adjudicate.py`, `edit evals/label_merge.py`,
       `create tests/unit/evals/test_drift_is_load_bearing.py`.
       Verified: `needs_review` is written at `label_merge.py:153` and **read by nothing**. So a drifted row
@@ -2068,6 +2068,16 @@ relabelling. Nothing else on the board buys that much publishability that cheapl
       RED anchor: `test_drifted_rows_are_excluded_from_kappa` fails.
       Validation: a fixture with 10 clean and 3 drifted rows reports `n=10, n_excluded_drifted=3`;
       the 3 drifted rows appear in `collect_pending`; no kappa anywhere is computed over a drifted row.
+      ✅ AUTO (EVAL-P19.0, 2026-08-12) — added a shared `_adjudicated_rows` helper excluding
+      `needs_review` rows, applied to both the headline and secondary axis (confusion_counts,
+      pre_label_confusion_counts, cohens_kappa, pre_label_kappa, kappa_interval,
+      pre_label_kappa_interval — the roadmap text named only the headline three, but the secondary
+      axis has the identical staleness problem). `ConfusionCounts.n_excluded_drifted` added.
+      `collect_pending` now includes `needs_review` rows with a new `prior_human_verdict` field
+      (DEC-171); `apply_verdict` clears `needs_review`/`prior_human_verdict` on keep/flip, leaves
+      them on skip. `format_merge_report`'s WARNING-for-drift / NOTE-for-orphan split was already
+      correct on disk (commit `107e547`) — pinned with a test, no functional edit needed. Logged
+      ISSUE-153 (pre_label staleness on drift, deferred — needs a live re-label, out of scope here).
 
 - [ ] **EVAL-P19.0b** Criteria replay verb (**prerequisite: P19.1 cannot be validated without it**).
       Files: `create evals/criteria_replay.py`, `create tests/unit/evals/test_criteria_replay.py`,

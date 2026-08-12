@@ -37,14 +37,27 @@ SHORTCUTS: dict[str, str] = {"k": "keep", "f": "flip", "s": "skip"}
 
 
 def collect_pending(rows: Sequence[CalibrationLabel]) -> list[CalibrationLabel]:
-    """Return rows that have not yet been adjudicated (human_verdict is None).
+    """Return rows needing adjudication: never-judged rows plus drifted rows.
+
+    A drifted row (needs_review=True, written by label_merge.merge_labels)
+    already carries a human_verdict, but for content the scorer no longer
+    produces — it must be re-presented, not silently trusted. Its previous
+    verdict is copied into prior_human_verdict so the adjudicator sees what
+    they decided last time (EVAL-P19.0).
 
     Args:
         rows: All calibration label rows.
     Returns:
-        Subset of rows in original order with human_verdict=None.
+        Subset of rows in original order: human_verdict=None rows unchanged,
+        plus needs_review rows with prior_human_verdict populated.
     """
-    return [row for row in rows if row.human_verdict is None]
+    pending: list[CalibrationLabel] = []
+    for row in rows:
+        if row.human_verdict is None:
+            pending.append(row)
+        elif row.needs_review:
+            pending.append(row.model_copy(update={"prior_human_verdict": row.human_verdict}))
+    return pending
 
 
 def apply_verdict(
@@ -55,7 +68,11 @@ def apply_verdict(
     """Apply a human verdict to a calibration label row.
 
     Returns a new CalibrationLabel with human_verdict and adjudicated_at set.
-    On 'skip', returns the original row unchanged.
+    On 'skip', returns the original row unchanged — including needs_review,
+    so a drifted row that was skipped stays excluded and pending next time.
+    A 'keep'/'flip' verdict resolves drift: needs_review clears and
+    prior_human_verdict is cleared back to None, since the row now carries a
+    fresh verdict against its current content.
 
     Args:
         row: The original CalibrationLabel (frozen; never mutated).
@@ -73,7 +90,12 @@ def apply_verdict(
     if verdict == "skip":
         return row
     human_verdict = row.pre_label if verdict == "keep" else not row.pre_label
-    return row.model_copy(update={"human_verdict": human_verdict, "adjudicated_at": timestamp})
+    return row.model_copy(update={
+        "human_verdict": human_verdict,
+        "adjudicated_at": timestamp,
+        "needs_review": False,
+        "prior_human_verdict": None,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +118,12 @@ def _format_row_prompt(row: CalibrationLabel, index: int, total: int) -> str:
     """
     label_str = "PASS" if row.pre_label else "FAIL"
     lines = [f"\n[{index}/{total}] scorer={row.scorer}  record_id={row.record_id}"]
+    if row.needs_review and row.prior_human_verdict is not None:
+        prior_str = "PASS" if row.prior_human_verdict else "FAIL"
+        lines.append(
+            f"⚠ DRIFTED: content changed since last adjudication "
+            f"(prior human verdict: {prior_str})"
+        )
     if row.player_message:
         lines.append(f"player_message:\n  {row.player_message}")
     lines.append(f"criteria:\n  {row.criteria or '(none recorded)'}")

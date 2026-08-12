@@ -16,6 +16,27 @@ Rules:
 
 ## Open
 
+## ISSUE-153: `label_merge._refresh` never refreshes `pre_label` on drift, so a re-adjudicated
+row can carry a stale reference-labeller opinion
+**Found:** 2026-08-12, during EVAL-P19.0 (making `needs_review` load-bearing)
+**Severity:** P3 (nice-to-fix — the secondary/pre_label axis can silently compare a fresh
+human verdict against a pre_label computed from text that no longer exists)
+**Where:** `evals/label_merge.py` `_MACHINE_FIELDS` (does not list `pre_label` or
+`pre_labeller_model`); `_refresh`
+**Description:** `_MACHINE_FIELDS` refreshes `output_text`, `scorer_verdict`, `criteria`, etc.
+on every merge, but `pre_label`/`pre_labeller_model` are preserved unchanged from the
+existing row — even when `output_text` drifted underneath it. After EVAL-P19.0,
+`adjudicate.apply_verdict` clears `needs_review` on re-adjudication and the row re-enters the
+secondary (pre_label vs human_verdict) calibration axis, but `pre_label` still reflects the
+reference labeller's opinion of the **old** text, not the new one it was merged against.
+**Why deferred:** Refreshing `pre_label` correctly requires re-running the reference-labeller
+model against the new `output_text` — a live/expensive operation, not a pure merge, and out
+of scope for EVAL-P19.0 (calibration.py / adjudicate.py / label_merge.py's WARNING path).
+**To fix:** Either (a) clear `pre_label` to `None`-like/absent on drift so the secondary axis
+excludes the row until a live re-label happens, or (b) add a `pre_label_needs_review` flag
+mirroring `needs_review` and have `calibration.py`'s secondary-axis functions exclude on that
+flag specifically. Needs a design call — not mechanical.
+
 ## ISSUE-145: dialogue retrieval returns an empty NPC profile for every NPC
 **Found:** 2026-08-10, during EVAL-P20.2 (capability case authoring)
 **Severity:** P1 (blocking) — FOR HAND REVIEW. The data exists; the reader does not return it.

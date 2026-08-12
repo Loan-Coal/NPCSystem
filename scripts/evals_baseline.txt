@@ -1,6 +1,6 @@
-# Grandfathered CLAUDE.md rule violations in evals/ - see scripts/check_rules.py.
+# Grandfathered CLAUDE.md rule violations - see scripts/check_rules.py.
 # The gate fails only on NEW violations. Shrink this file as debt is fixed
-# (run `make check-evals-rules-update`). Never add a line by hand to dodge the gate.
+# (run the corresponding update target). Never add a line by hand to dodge the gate.
 R001|evals/anti_hallucination_runner.py
 R001|evals/calibration.py
 R001|evals/case_drafts.py
@@ -23,8 +23,6 @@ R002|evals/label_import.py
 R002|evals/retrieval_runner.py
 R002|evals/runner.py
 R003|evals/__main__.py
-R003|evals/calibration.py
-R003|evals/compare.py
 R003|evals/dashboard/app.py
 R003|evals/dashboard/detail.py
 R006|evals/adjudicate.py::run_adjudication

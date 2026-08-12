@@ -73,16 +73,23 @@ class ConfusionCounts:
     """TP/FP/FN/TN for one scorer against human verdicts.
 
     FP is the dangerous cell: the scorer said "pass" but the human said "fail".
+
+    Attributes:
+        n_excluded_drifted: Adjudicated rows left out of this matrix because
+            needs_review is set — the content changed under the stored human
+            verdict, so scoring it here would judge the machine's new output
+            against the human's old verdict (EVAL-P19.0).
     """
 
     tp: int
     fp: int
     fn: int
     tn: int
+    n_excluded_drifted: int = 0
 
     @property
     def n(self) -> int:
-        """Total adjudicated rows included in the matrix."""
+        """Total adjudicated rows included in the matrix (excludes drifted)."""
         return self.tp + self.fp + self.fn + self.tn
 
 
@@ -156,6 +163,29 @@ class UndefinedKappaError(ValueError):
 # ---------------------------------------------------------------------------
 
 
+def _adjudicated_rows(
+    rows: Sequence[CalibrationLabel],
+) -> tuple[list[CalibrationLabel], int]:
+    """Split rows into (clean adjudicated rows, count excluded as drifted).
+
+    A drifted row (needs_review=True) carries a human verdict recorded
+    against text the scorer no longer produces — label_merge flags it rather
+    than silently re-pointing the verdict at new content. Every calibration
+    statistic must exclude it, on both the headline and secondary axis, or
+    the human's old judgement gets scored against the machine's new output.
+
+    Args:
+        rows: CalibrationLabel rows (any adjudication state).
+    Returns:
+        (clean, n_excluded_drifted) — clean rows have human_verdict set and
+        needs_review False; n_excluded_drifted counts adjudicated rows left
+        out because needs_review was True.
+    """
+    adjudicated = [r for r in rows if r.human_verdict is not None]
+    clean = [r for r in adjudicated if not r.needs_review]
+    return clean, len(adjudicated) - len(clean)
+
+
 def confusion_counts(rows: Sequence[CalibrationLabel]) -> ConfusionCounts:
     """Tally TP/FP/FN/TN — HEADLINE axis: scorer_verdict vs human_verdict.
 
@@ -163,16 +193,16 @@ def confusion_counts(rows: Sequence[CalibrationLabel]) -> ConfusionCounts:
     (scorer said pass, human said fail).
 
     Args:
-        rows: CalibrationLabel rows (unadjudicated rows are skipped).
+        rows: CalibrationLabel rows (unadjudicated and drifted rows are skipped).
     Returns:
-        ConfusionCounts from adjudicated rows only.
+        ConfusionCounts from clean adjudicated rows, with n_excluded_drifted set.
     """
-    adj = [r for r in rows if r.human_verdict is not None]
+    adj, n_excluded_drifted = _adjudicated_rows(rows)
     tp = sum(1 for r in adj if r.scorer_verdict is True and r.human_verdict is True)
     fp = sum(1 for r in adj if r.scorer_verdict is True and r.human_verdict is False)
     fn = sum(1 for r in adj if r.scorer_verdict is False and r.human_verdict is True)
     tn = sum(1 for r in adj if r.scorer_verdict is False and r.human_verdict is False)
-    return ConfusionCounts(tp=tp, fp=fp, fn=fn, tn=tn)
+    return ConfusionCounts(tp=tp, fp=fp, fn=fn, tn=tn, n_excluded_drifted=n_excluded_drifted)
 
 
 def pre_label_confusion_counts(rows: Sequence[CalibrationLabel]) -> ConfusionCounts:
@@ -182,16 +212,16 @@ def pre_label_confusion_counts(rows: Sequence[CalibrationLabel]) -> ConfusionCou
     human said fail).
 
     Args:
-        rows: CalibrationLabel rows (unadjudicated rows are skipped).
+        rows: CalibrationLabel rows (unadjudicated and drifted rows are skipped).
     Returns:
-        ConfusionCounts from adjudicated rows only.
+        ConfusionCounts from clean adjudicated rows, with n_excluded_drifted set.
     """
-    adj = [r for r in rows if r.human_verdict is not None]
+    adj, n_excluded_drifted = _adjudicated_rows(rows)
     tp = sum(1 for r in adj if r.pre_label is True and r.human_verdict is True)
     fp = sum(1 for r in adj if r.pre_label is True and r.human_verdict is False)
     fn = sum(1 for r in adj if r.pre_label is False and r.human_verdict is True)
     tn = sum(1 for r in adj if r.pre_label is False and r.human_verdict is False)
-    return ConfusionCounts(tp=tp, fp=fp, fn=fn, tn=tn)
+    return ConfusionCounts(tp=tp, fp=fp, fn=fn, tn=tn, n_excluded_drifted=n_excluded_drifted)
 
 
 def precision(counts: ConfusionCounts) -> float | None:
@@ -253,9 +283,10 @@ def cohens_kappa(rows: Sequence[CalibrationLabel]) -> float:
     Returns:
         κ in [-1, 1].
     Raises:
-        ValueError: If fewer than 2 adjudicated rows are available.
+        ValueError: If fewer than 2 clean adjudicated rows are available
+            (drifted rows do not count — see _adjudicated_rows).
     """
-    adj = [r for r in rows if r.human_verdict is not None]
+    adj, _ = _adjudicated_rows(rows)
     if len(adj) < 2:
         raise ValueError(f"cohens_kappa requires ≥2 adjudicated rows; got {len(adj)}")
     tp = sum(1 for r in adj if r.scorer_verdict is True and r.human_verdict is True)
@@ -273,9 +304,10 @@ def pre_label_kappa(rows: Sequence[CalibrationLabel]) -> float:
     Returns:
         κ in [-1, 1].
     Raises:
-        ValueError: If fewer than 2 adjudicated rows are available.
+        ValueError: If fewer than 2 clean adjudicated rows are available
+            (drifted rows do not count — see _adjudicated_rows).
     """
-    adj = [r for r in rows if r.human_verdict is not None]
+    adj, _ = _adjudicated_rows(rows)
     if len(adj) < 2:
         raise ValueError(f"pre_label_kappa requires ≥2 adjudicated rows; got {len(adj)}")
     tp = sum(1 for r in adj if r.pre_label is True and r.human_verdict is True)
@@ -403,9 +435,10 @@ def kappa_interval(
     Returns:
         KappaCI with lo, hi (95% bootstrap CI), n_clusters, n_rows, and optional Holm fields.
     Raises:
-        ValueError: If fewer than 2 adjudicated rows or all samples degenerate.
+        ValueError: If fewer than 2 clean adjudicated rows (drifted rows
+            excluded — see _adjudicated_rows) or all bootstrap samples degenerate.
     """
-    adj = [r for r in rows if r.human_verdict is not None]
+    adj, _ = _adjudicated_rows(rows)
     if len(adj) < 2:
         raise ValueError(f"kappa_interval requires ≥2 adjudicated rows; got {len(adj)}")
     clusters = _extract_case_clusters(adj)
@@ -439,9 +472,10 @@ def pre_label_kappa_interval(
     Returns:
         KappaCI with lo, hi (95% bootstrap CI), n_clusters, n_rows, and optional Holm fields.
     Raises:
-        ValueError: If fewer than 2 adjudicated rows or all samples degenerate.
+        ValueError: If fewer than 2 clean adjudicated rows (drifted rows
+            excluded — see _adjudicated_rows) or all bootstrap samples degenerate.
     """
-    adj = [r for r in rows if r.human_verdict is not None]
+    adj, _ = _adjudicated_rows(rows)
     if len(adj) < 2:
         raise ValueError(f"pre_label_kappa_interval requires ≥2 adjudicated rows; got {len(adj)}")
     clusters = _extract_case_clusters(adj)
@@ -565,13 +599,9 @@ def _kappa_ci_str(lo: float, hi: float, n_clusters: int) -> str:
     return f"95% CI [{lo:.3f}, {hi:.3f}]"
 
 
-def _print_scorer_report(report: ScorerReport, print_fn=print) -> None:
-    """Print one scorer's two confusion matrices and κ values with bootstrap CIs."""
+def _print_headline_matrix(report: ScorerReport, print_fn) -> None:
+    """Print the HEADLINE confusion matrix (scorer_verdict vs human_verdict)."""
     c = report.counts
-    p = report.pre_label_counts
-    print_fn(f"\n{'=' * 62}")
-    print_fn(f"Scorer: {report.scorer}  (n={c.n})")
-    print_fn(f"{'=' * 62}")
     print_fn("  HEADLINE — scorer_verdict vs human_verdict:")
     print_fn("                       human=T   human=F")
     print_fn(
@@ -588,6 +618,11 @@ def _print_scorer_report(report: ScorerReport, print_fn=print) -> None:
         alpha_adj = CI_NOMINAL_ALPHA / report.holm_family_size
         print_fn(f"  Headline κ Holm-adj [{report.kappa_holm_lo:.3f}, {report.kappa_holm_hi:.3f}]"
                  f"  (family={report.holm_family_size}, α*={alpha_adj:.4f})")
+
+
+def _print_secondary_matrix(report: ScorerReport, print_fn) -> None:
+    """Print the SECONDARY confusion matrix (pre_label vs human_verdict)."""
+    p = report.pre_label_counts
     print_fn("\n  SECONDARY — pre_label vs human_verdict:")
     print_fn("                       human=T   human=F")
     print_fn(
@@ -602,6 +637,20 @@ def _print_scorer_report(report: ScorerReport, print_fn=print) -> None:
         alpha_adj = CI_NOMINAL_ALPHA / report.holm_family_size
         print_fn(f"  Secondary κ Holm-adj [{report.pre_label_kappa_holm_lo:.3f}, {report.pre_label_kappa_holm_hi:.3f}]"
                  f"  (family={report.holm_family_size}, α*={alpha_adj:.4f})")
+
+
+def _print_scorer_report(report: ScorerReport, print_fn=print) -> None:
+    """Print one scorer's two confusion matrices and κ values with bootstrap CIs."""
+    print_fn(f"\n{'=' * 62}")
+    print_fn(f"Scorer: {report.scorer}  (n={report.counts.n})")
+    print_fn(f"{'=' * 62}")
+    if report.counts.n_excluded_drifted:
+        print_fn(
+            f"  ⚠ {report.counts.n_excluded_drifted} row(s) excluded: needs_review is "
+            f"set — content drifted since adjudication (see label_merge)"
+        )
+    _print_headline_matrix(report, print_fn)
+    _print_secondary_matrix(report, print_fn)
 
 
 def _print_family_disclosure(eligible_count: int, family_size: int, print_fn) -> None:
