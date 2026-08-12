@@ -480,3 +480,48 @@ The session ended without a bare AUTO_STATUS line. Log: C:/Users/lohan/Documents
 ## 2026-08-11 17:08:04 — no status token from task EVAL-P15.6
 
 The session ended without a bare AUTO_STATUS line. Log: C:/Users/lohan/Documents/hackathons/NPCSystem/project-harness/.loop-logs/task-EVAL-P15.6-1786436860.log
+
+## 2026-08-12 02:44:07 — phase gate red after EVAL-P17
+
+CLASSIFICATION=UNATTRIBUTED FAILED_CHECK=coverage-or-unknown
+
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\evals\test_sequence_records.py::test_turn_is_frozen:152  pytest.raises(Exception) — use a specific exception type
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\evals\test_sequence_records.py::test_reset_receipt_is_frozen:158  pytest.raises(Exception) — use a specific exception type
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\evals\test_sequence_runner.py::test_sequence_result_is_immutable:164  pytest.raises(Exception) — use a specific exception type
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\graph\test_quest_phase4.py::test_frozen:97  pytest.raises(Exception) — use a specific exception type
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\graph\test_transfer_validators.py::test_currency_command_is_frozen:71  pytest.raises(Exception) — use a specific exception type
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\graph\test_transfer_validators.py::test_item_command_is_frozen:168  pytest.raises(Exception) — use a specific exception type
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\llm\test_llm_config.py::test_relevance_weights_is_frozen:67  pytest.raises(Exception) — use a specific exception type
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\llm\test_llm_config.py::test_llm_config_rejects_extra_fields:84  pytest.raises(Exception) — use a specific exception type
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\llm\test_tts_voice_params.py::test_voice_params_is_frozen:41  pytest.raises(Exception) — use a specific exception type
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\retrieval\test_context_scoring.py::test_relevance_weights_explicit_causes_sum_to_exceed_one:389  pytest.raises(Exception) — use a specific exception type
+
+  SELF_REFERENTIAL_SUM (1):
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\evals\test_retrieval_join.py::test_four_cells_sum_to_annotated_count:150  sum-of-parts == total where total is derived from the same parts
+
+  VACUOUS_MOCK_NOT_CALLED (8):
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\config\test_seed_chain_quests.py::test_seed_chain_quests_non_fatal_on_exception:78  assert mock_edge.call_count == 0 — verify the patched symbol is reachable by the SUT
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\config\test_seed_chain_quests.py::test_seed_source_chain_quests_non_fatal_on_exception:136  assert mock_edge.call_count == 0 — verify the patched symbol is reachable by the SUT
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\engines\test_intent_queue_writer.py::test_enqueue_drops_new_when_at_cap_and_new_score_lower:115  assert mock_delete.call_count == 0 — verify the patched symbol is reachable by the SUT
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\engines\test_intent_queue_writer.py::test_enqueue_drops_new_when_at_cap_and_new_score_lower:116  assert mock_merge.call_count == 0 — verify the patched symbol is reachable by the SUT
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\evals\test_deterministic_pass.py::test_scores_every_record_without_llm:89  assert mock_judge.call_count == 0 — verify the patched symbol is reachable by the SUT
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\graph\test_event_reputation_wiring.py::test_emit_skips_reputation_when_no_faction:130  assert mock_rep.call_count == 0 — verify the patched symbol is reachable by the SUT
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\graph\test_gossip_repository.py::test_log_gossip_skips_missing_edge:261  assert mock_update.call_count == 0 — verify the patched symbol is reachable by the SUT
+    C:\Users\lohan\Documents\hackathons\NPCSystem\tests\unit\test_judge_runner.py::test_judge_kind_none_is_skipped:163  assert mock_judge.call_count == 0 — verify the patched symbol is reachable by the SUT
+
+Each item must be fixed or suppressed with '# quality-ok: <reason>'.
+.venv/Scripts/python.exe scripts/check_conservation.py
+Conservation audit: C:\Users\lohan\Documents\hackathons\NPCSystem\evals\generations\k3_73e6c36
+
+  Identity 1 [FAIL]: guard_cases + capability_cases == total_cases
+    78 guard + 7 capability = 85 of 94 cases; 9 cases in no battery
+  Identity 2 [FAIL]: slots_read_by_compare == |judged ∪ deterministic_judged|
+    compare reads 115 of 307 unique record_ids (345 of 921 rows with repetitions) — 62.5% never read
+  Identity 3 [FAIL]: capability_battery_cases == capability_cases_actually_run
+    capability battery sees 2, while 7 capability cases ran
+
+  Identity 4 [DEFERRED to EVAL-P17.4]: sum(battery case counts) == unique cases in outputs
+    Deferred: right-hand side measures a different population from a live eval run.
+
+3 violation(s) found.
+make: *** [Makefile:165: check-conservation] Error 3

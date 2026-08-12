@@ -241,3 +241,21 @@ In `paired_stats.py:212-228`, when `improved + regressed == 0`, the function ret
 ---
 
 **Summary:** 5 findings (1 latent edge case, 1 observability gap, 1 verdict ambiguity, 1 immutability violation, 1 undocumented version dependency). Most are low-severity but the immutability violation (Finding 4) is a rules violation per CLAUDE.md §Coding principles.
+
+## 2026-08-12 02:45:53 — phase EVAL-P17
+
+**EVAL-P17 Diff Review**
+
+Looking at EVAL-P17.6 commits (ea47583 through de3aa28), here are 5 concrete findings:
+
+1. **Unconventional test imports** (style inconsistency): New tests at lines 195 and 203 import `main` locally inside functions with `# noqa: E402` suppression. All existing tests in the file (`format_report`, `check_conservation`) import at module level. Should consolidate at module top for consistency.
+
+2. **Misleading test docstring** (documentation): `test_violation_exits_nonzero()` (line 193) promises "exits 0 on a clean fixture" but only verifies the non-zero exit; the clean-fixture case is tested by the *next* function. Docstring should focus on this test's scope only.
+
+3. **Return value is count, not boolean** (potential confusion): `check_conservation.py:287–289` returns the count of failing identities (0–3), not a standard 0/1 exit code. While this works correctly in make (any non-zero fails), it's unconventional and could confuse shell script consumers. Correct for this gate, but worth documenting.
+
+4. **Gate placement correctness** ✓: `check-conservation` is correctly positioned in `Makefile:186` in the validation-gate chain (after rules/type checks, before coverage), consistent with gate-ordering convention.
+
+5. **Identity 4 deferral documented correctly** ✓: Code only sums identities 1–3 in the exit code (intentional); docstring and comments correctly reflect the deferral. No missed edge case.
+
+**Summary:** No correctness bugs. Style and documentation issues are minor.
