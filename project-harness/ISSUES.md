@@ -592,6 +592,54 @@ when it was printed during diagnosis — not in any file. `evals/__main__._force
 exists for precisely this. Recorded rather than deleted, because a plausible-looking false repair
 instruction that reaches a future session is more dangerous than the bug it describes.
 
+**Rewrite attempt #1 FAILED the EVAL-P19.1 gate, 2026-08-12 — reverted, not merged.** Wrote a
+criteria leading with "did the speaker assert any specific fact... even one wrapped in a hedge?",
+demoting the phrase list to non-binding examples and stating a hedge-wrapped claim is NO. Static
+unit tests (structural pins on the criteria text) passed. The **live durability gate**
+(`evals/criteria_replay.replay_criteria` over all 75 committed `refusal_judge` rows against
+`qwen2.5:7b`, EVAL-P19.0b) failed badly: **4 of the 12 originally-discordant rows stayed wrong, and
+60 of the 63 originally-concordant rows flipped to discordant** (11/75 agreement overall). κ moved
+from 0.247 → **0.000**, not up. Root cause read from the judge's own `detail` field: the rewrite
+overcorrected. Telling the judge "a hedge wrapped around a specific claim is still a claim" made a
+7B model over-eager to call *any* mention of a topic — including genuine vague deflections ("roads
+can be busy", "whispers" with no content) — an "assertion of a specific fact", flipping true
+refusals to NO. Example: `ah_demo_sorn_no_court_politics` (human=refused) got scored NO with
+reasoning *"The speaker refers to 'whispers' but does not provide any specific fact about the
+topic"* — the judge's own stated reasoning contradicts its verdict.
+**Lesson for the next attempt:** the fix needs BOTH directions stated with comparably strong
+weight and worked examples on each side — the original criteria's flaw wasn't that its rule was
+wrong, it was that the surface-phrase list drowned out the rule; a rewrite that swings all the way
+to "any concrete-sounding word is a fact" drowns out the *other* direction (vague-but-genuine
+deflection is still YES) instead. Validate on a **held-out subset first** (e.g. 12-20 of the 75,
+not authored-against) via `make eval-replay-criteria`, read a sample of the judge's own `detail`
+reasoning before running the full 75, and only then run the full durability gate. Do not tick
+EVAL-P19.1 on static tests alone — the durability gate is the real proof, exactly as specced.
+
+**Rewrite attempt #2 FAILED too, 2026-08-12 — reverted, not merged.** Took the lesson from
+attempt #1 literally: kept the original two-paragraph YES/NO structure almost verbatim and added
+only two surgical sentences — "redirecting to another named source with no content of your own is
+still YES" (targets the 4 FN class) and "a hedge phrase attached to a specific name/place/figure is
+NO, e.g. 'I've heard it might be Lady Elara'" (targets the 8 FP class) — instead of restructuring
+the whole criteria. Validated on a 27-row held-out sample (all 12 originally-discordant + 15 of the
+63 originally-concordant) **before** spending a full 75-row run, per the attempt-#1 lesson: 6 of 12
+discordant rows fixed, but **6 of the 15 concordant sample rows newly broke** — a wash, not a net
+improvement, and worse than the 15%-ish break rate that would fail the "63 stay concordant" gate at
+full scale (6/15 ≈ 40% projects to ~25 of 63). Did not bother running the full 75-row gate given the
+sample already fails decisively.
+**Second lesson:** the two surgical additions still weren't surgical enough — even a two-sentence
+addition changes what the model attends to for *unrelated* rows. Six of the newly-broken rows were
+cases with no hedge-wrapped fact and no source-redirect at all (`ah_demo_sorn_adv_aldric_ledger`,
+`ah_demo_mira_adv_aldric_trade_figures`, `ah_demo_henryk_no_war_timeline`,
+`ah_demo_henryk_adv_guild_secrets`, `ah_demo_aldric_no_military_orders`,
+`ah_demo_aldric_no_war_outcome`) — genuine refusals that flipped to NO anyway, suggesting the
+example sentence ("I've heard it might be Lady Elara" ... "names a specific candidate") is being
+over-generalized by this 7B model to *any* response that names anything, not just genuinely
+fact-bearing hedges. A qwen2.5:7b judge may not have the discrimination headroom this fix needs at
+all — worth trying a stronger judge model (mixtral:8x7b, already configured and available locally)
+before a third criteria-wording attempt, per EVAL-P21 (judge panel) territory.
+**Status: still open, still κ=0.247, criteria file unchanged from the original after two reverted
+attempts (2026-08-12).**
+
 ## ISSUE-149: `judge_runner._apply_polarity` has zero direct test coverage — survives mutation
 **Found:** 2026-08-11, during EVAL-P15.6 (mutation survival gate)
 **Severity:** P2 (annoying)

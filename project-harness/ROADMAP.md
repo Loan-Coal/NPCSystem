@@ -2120,16 +2120,36 @@ relabelling. Nothing else on the board buys that much publishability that cheapl
       non-refusals, (b) **the 63 currently-concordant rows stay concordant** — a rewrite that fixes 12 and
       breaks 15 must fail — and (c) κ over the full 75 improves with its cluster-corrected CI reported.
       **If the gate fails, the rewrite is reverted and ISSUE-141 stays open**; the task does not tick.
+      ⛔ **NOT TICKED, 2026-08-12 — two rewrite attempts both failed the gate, both reverted.**
+      Attempt #1 (full restructure, lead with "did they assert a specific fact") over-corrected: 11/75
+      agreement, κ 0.247→0.000. Attempt #2 (two surgical sentences added to the original wording,
+      validated on a 27-row held-out sample before spending the full 75) still broke 6 of 15 sampled
+      concordant rows while only fixing 6 of 12 discordant — projects to failing gate (b) at full scale.
+      Full diagnosis, judge `detail` excerpts and a lesson for the next attempt (try `mixtral:8x7b`
+      instead of `qwen2.5:7b`, or an EVAL-P21 panel) are in ISSUE-141. `prompts/eval/refusal_judge.yaml`
+      is unchanged from its original committed content; `evals/criteria_replay.py` (EVAL-P19.0b) is the
+      reusable tool for the next attempt to validate on a sample before spending a full run.
 
-- [ ] **EVAL-P19.2** Word-boundary and dead-keyword matching. Files: `edit evals/matchers.py`,
+- [x] **EVAL-P19.2** Word-boundary and dead-keyword matching. Files: `edit evals/matchers.py`,
       `create evals/keyword_matching.py`, `edit tests/unit/evals/test_matchers_keywords.py`.
       `_eval_keyword_none` uses bare lowercased `in`, so `'gore'`⊂`gorge`, `'graphic'`⊂**`geographic`**,
       `'lira'`⊂`Lira's`, `'rumor'`⊂`rumors`. Add opt-in word-boundary matching and make it the default for
       single-word terms.
       RED anchor: `test_single_word_keyword_does_not_match_inside_a_longer_word` fails.
       Validation: `geographic` no longer trips `graphic`; multi-word phrases keep substring semantics.
+      ✅ AUTO (EVAL-P19.2, 2026-08-12) — `keyword_matching.contains_keyword(text, keyword)`: standard
+      `\bkeyword\b` regex (cached via `lru_cache`) for single-word terms, plain substring for phrases
+      containing whitespace. Wired into `_eval_keyword_any`/`_eval_keyword_all`/`_eval_keyword_none`.
+      `'graphic'` no longer trips inside `'geographic'`; `'rumor'` no longer trips inside `'rumors'`
+      (both verified). Note on the roadmap's own two other examples: `'gore'` was never actually a
+      substring of `'gorge'` (g-o-r-g-e has no contiguous g-o-r-e run) — a pre-existing inaccuracy in
+      this task's text, not something to act on. `'lira'` still matches inside `Lira's` under standard
+      `\b` semantics (apostrophe is a non-word character, so a boundary exists there) — left as-is:
+      matching a name's possessive form is a correct catch for a case forbidding that name, not a false
+      positive, so no apostrophe-specific extension was added. 71 tests pass (new file + full existing
+      `test_eval_matchers.py` + `test_eval_matchers_sev38.py`, zero regressions).
 
-- [ ] **EVAL-P19.3** Dead-keyword detector. Files: `create scripts/check_dead_keywords.py`,
+- [x] **EVAL-P19.3** Dead-keyword detector. Files: `create scripts/check_dead_keywords.py`,
       `create tests/unit/scripts/test_check_dead_keywords.py`, `edit Makefile`.
       A forbidden keyword that the engine's idiom can never emit is a guaranteed pass inflating the guard
       denominator. Measured: `case_neg_lira_no_trust_disclosure` forbids `'thieves guild'` while the corpus
@@ -2139,6 +2159,19 @@ relabelling. Nothing else on the board buys that much publishability that cheapl
       Validation: run over the committed transcript it flags both, plus any keyword with zero corpus hits;
       output is a work-list for EVAL-P20.1, not an automatic edit — deciding what a case *should* forbid is
       a human call.
+      ✅ AUTO (EVAL-P19.3, 2026-08-12) — `find_dead_keywords(cases, corpus)` over every `keyword_none`
+      expectation in `evals/cases/*.yaml`, using the same `keyword_matching.contains_keyword` word-boundary
+      rule as the runner (so a flagged keyword really is unfireable, not just superficially rare). Run live
+      against the committed `k3_73e6c36` corpus: **203 dead keywords across ~35 cases**, including both
+      named examples verbatim (`case_neg_lira_no_trust_disclosure: 'thieves guild'`,
+      `case_neg_captain_sorn_no_hedging: 'i heard'`). Most of the 203 are working as intended, not bugs —
+      e.g. `bjorn`/`ironfist`/`500 northmen` are invented-warlord/quantity keywords that *should* have zero
+      hits in a well-behaved corpus; distinguishing "dead because of a wording mismatch" (fix the case) from
+      "dead because the engine correctly never says this" (leave it) is exactly the human call EVAL-P20.1
+      exists for — this tool deliberately does not attempt that judgment itself, matching the phase's
+      validation text ("flags... plus any keyword with zero corpus hits"). Wired as `make
+      check-dead-keywords`, informational only (`main()` always exits 0), not added to `make check`'s
+      prerequisite chain — this is a work-list generator, not a gate.
 
 #### 🔴 HUMAN GATE H2 — `EVAL-P19.4` re-judge, merge, re-measure κ
 **Ready when:** `EVAL-P15.1`, `EVAL-P19.0`, `EVAL-P19.0b`, `EVAL-P19.1`
