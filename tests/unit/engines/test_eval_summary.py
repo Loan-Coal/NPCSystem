@@ -329,6 +329,37 @@ def test_rho_zero_interval_equals_plain_wilson() -> None:
     assert abs(br.ci_high - plain_high) < 1e-9
 
 
+def test_infra_failure_is_excluded_from_hallucination_count() -> None:
+    """Judge infra failures (inconclusive: True) must not count as lore hallucinations.
+
+    3 judge timeouts across 3 guard cases → 0 hallucinations, 3 inconclusive.
+    An inconclusive rate of 100% also marks the run invalid.
+
+    RED anchor for EVAL-P17.3: fails before fix because _tally_failures buckets by
+    kind alone (affirms_judge timeout → hallucination) and EvalSummary has no
+    inconclusive_failures field.
+    """
+
+    def _inconclusive(kind: str) -> dict:
+        return {
+            "kind": kind,
+            "passed": False,
+            "skipped": False,
+            "inconclusive": True,
+            "detail": "judge_infra_failure: timeout",
+        }
+
+    results = [
+        _case("case_adv_x", [_inconclusive("affirms_judge")]),
+        _case("case_adv_y", [_inconclusive("affirms_judge")]),
+        _case("case_neg_z", [_inconclusive("tone_judge")]),
+    ]
+    s = summary.summarize(results)
+    assert s.hallucination_failures == 0
+    assert s.inconclusive_failures == 3
+    assert not s.is_run_valid
+
+
 def test_capability_battery_counts_deterministic_only_cases(tmp_path) -> None:
     """summarize_from_dir sees all 7 capability cases, not just the 2 with judge rows.
 

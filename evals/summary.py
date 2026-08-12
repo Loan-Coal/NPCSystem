@@ -27,6 +27,10 @@ _SEPARATOR: str = "=" * 60
 # Emitted when no guard case actually ran: the guarantee is undemonstrated, not green.
 _NO_GUARD_TURNS_MESSAGE: str = "NO GUARD TURNS EVALUATED — guarantee not demonstrated"
 
+# A run where this fraction of evaluated cases have inconclusive judge calls provides
+# false confidence — the guarantee was not properly measured.
+_MAX_INCONCLUSIVE_RATE: float = 0.20
+
 # Raised when exactly one of the paired rates is present (guard without capability or vice-versa).
 _UNPAIRED_GUARD_ONLY: str = (
     "capability rate is required alongside the guard rate; "
@@ -68,6 +72,10 @@ class EvalSummary:
         other_failures: Failed expectations of any other kind.
         skipped_cases: Cases where every expectation was skipped (bypass battery classification).
         excluded_cases: Non-skipped cases belonging to no published battery.
+        inconclusive_failures: Judge expectations that returned score=None (infra failure).
+            These are NOT counted in hallucination_failures — an Ollama timeout is not a
+            content defect. An inconclusive rate above _MAX_INCONCLUSIVE_RATE marks the
+            run invalid via the is_run_valid property.
     """
 
     total_cases: int
@@ -83,6 +91,7 @@ class EvalSummary:
     other_failures: int
     skipped_cases: int
     excluded_cases: int = 0
+    inconclusive_failures: int = 0
     guard_passes: int = 0
     guard_rate: float | None = None
     guard_ci_low: float | None = None
@@ -104,6 +113,18 @@ class EvalSummary:
         undemonstrated, not satisfied.
         """
         return self.guard_turns > 0 and self.hallucination_failures == 0
+
+    @property
+    def is_run_valid(self) -> bool:
+        """False when the inconclusive rate (inconclusive / evaluated) exceeds the threshold.
+
+        A run where too many judge calls timed out provides false confidence: the
+        guarantee rate is understated and the run must be flagged as invalid rather
+        than quietly optimistic.
+        """
+        if self.evaluated_cases == 0:
+            return True
+        return (self.inconclusive_failures / self.evaluated_cases) < _MAX_INCONCLUSIVE_RATE
 
     @property
     def headline(self) -> str:
@@ -192,6 +213,7 @@ def summarize(results: list[dict]) -> EvalSummary:
         tone_judge_failures=tally["tone_judge"],
         affirms_judge_failures=tally["affirms_judge"],
         other_failures=tally["other"],
+        inconclusive_failures=tally["inconclusive"],
         skipped_cases=skipped_count,
         guard_passes=g_br.passes if g_br else 0,
         guard_rate=g_br.pass_rate if g_br else None,
@@ -228,22 +250,44 @@ def summarize_from_dir(gen_dir: Path) -> EvalSummary:
     return summarize(results)
 
 
+def _bucket_expectation(exp: dict, is_guard: bool, tally: dict[str, int]) -> None:
+    """Update tally in-place for one failed expectation.
+
+    Inconclusive expectations (judge infra failure) go to the 'inconclusive' bucket
+    and are excluded from all content-failure counts, including 'hallucination'.
+    """
+    if exp.get("inconclusive"):
+        tally["inconclusive"] += 1
+        return
+    kind = exp.get("kind", "")
+    if kind == _KIND_SCHEMA:
+        tally["schema"] += 1
+    elif kind == _KIND_KEYWORD_NONE:
+        tally["keyword_none"] += 1
+        if is_guard:
+            tally["hallucination"] += 1
+    elif kind == _KIND_TONE_JUDGE:
+        tally["tone_judge"] += 1
+    elif kind == _KIND_AFFIRMS_JUDGE:
+        tally["affirms_judge"] += 1
+        if is_guard:
+            tally["hallucination"] += 1
+    else:
+        tally["other"] += 1
+
+
 def _tally_failures(results: list[dict]) -> dict[str, int]:
     """Bucket failing expectations by matcher kind and lore-hallucination scope.
 
     Both keyword_none and affirms_judge failures inside a guard case count as
-    lore hallucinations, so the headline metric reflects every caught false-claim
-    affirmation — not just literal forbidden-substring hits.
+    lore hallucinations. Inconclusive expectations (judge unavailable) are tallied
+    separately and excluded from all content failure counts.
     Cases with no failed expectations are skipped without consulting classify_battery,
     so fully-skipped cases never trigger a ValueError for unclassifiable IDs.
     """
     tally = {
-        "schema": 0,
-        "keyword_none": 0,
-        "tone_judge": 0,
-        "affirms_judge": 0,
-        "other": 0,
-        "hallucination": 0,
+        "schema": 0, "keyword_none": 0, "tone_judge": 0,
+        "affirms_judge": 0, "other": 0, "hallucination": 0, "inconclusive": 0,
     }
     for result in results:
         failed = _failed_expectations(result)
@@ -252,21 +296,7 @@ def _tally_failures(results: list[dict]) -> dict[str, int]:
         battery = case_stats.classify_battery(result.get("case_id", ""))
         is_guard = battery == "guard"
         for exp in failed:
-            kind = exp.get("kind", "")
-            if kind == _KIND_SCHEMA:
-                tally["schema"] += 1
-            elif kind == _KIND_KEYWORD_NONE:
-                tally["keyword_none"] += 1
-                if is_guard:
-                    tally["hallucination"] += 1
-            elif kind == _KIND_TONE_JUDGE:
-                tally["tone_judge"] += 1
-            elif kind == _KIND_AFFIRMS_JUDGE:
-                tally["affirms_judge"] += 1
-                if is_guard:
-                    tally["hallucination"] += 1
-            else:
-                tally["other"] += 1
+            _bucket_expectation(exp, is_guard, tally)
     return tally
 
 
@@ -324,6 +354,7 @@ def _format_failure_breakdown_lines(s: EvalSummary) -> list[str]:
         f"    tone_judge failures:    {s.tone_judge_failures}",
         f"    affirms_judge failures: {s.affirms_judge_failures}",
         f"    other failures:         {s.other_failures}",
+        f"    inconclusive (judge unavailable): {s.inconclusive_failures}",
     ]
 
 
@@ -337,6 +368,30 @@ def _format_failure_breakdown_md(s: EvalSummary) -> list[str]:
         f"| tone_judge | {s.tone_judge_failures} |",
         f"| affirms_judge | {s.affirms_judge_failures} |",
         f"| other | {s.other_failures} |",
+        f"| inconclusive (judge unavailable) | {s.inconclusive_failures} |",
+    ]
+
+
+def _format_battery_counts_lines(s: EvalSummary) -> list[str]:
+    """Build the per-battery case/turn count lines for the console summary."""
+    return [
+        f"  Guard battery (adv + neg + ah_demo_*): {s.guard_cases} cases, "
+        f"{s.guard_turns} turns evaluated",
+        f"  Capability battery (case_pos_*): {s.capability_cases} cases, "
+        f"{s.capability_turns} turns evaluated",
+        f"  Excluded (not in any battery): {s.excluded_cases} cases",
+        f"  All cases: {s.evaluated_cases} evaluated / {s.total_cases} total "
+        f"({s.skipped_cases} skipped)",
+    ]
+
+
+def _format_validity_warning(s: EvalSummary) -> list[str]:
+    """Return an [INVALID RUN] warning line when the inconclusive rate exceeds the threshold."""
+    if s.is_run_valid:
+        return []
+    return [
+        f"  [INVALID RUN] inconclusive rate too high: "
+        f"{s.inconclusive_failures}/{s.evaluated_cases} judge calls timed out"
     ]
 
 
@@ -386,15 +441,10 @@ def format_summary_lines(summary: EvalSummary) -> list[str]:
         f"    Guard rate:       {g_rate_str}",
         f"    Capability rate:  {c_rate_str}",
         "",
-        f"  Guard battery (adv + neg + ah_demo_*): {summary.guard_cases} cases, "
-        f"{summary.guard_turns} turns evaluated",
-        f"  Capability battery (case_pos_*): {summary.capability_cases} cases, "
-        f"{summary.capability_turns} turns evaluated",
-        f"  Excluded (not in any battery): {summary.excluded_cases} cases",
-        f"  All cases: {summary.evaluated_cases} evaluated / {summary.total_cases} total "
-        f"({summary.skipped_cases} skipped)",
+        *_format_battery_counts_lines(summary),
         "",
         *_format_failure_breakdown_lines(summary),
+        *_format_validity_warning(summary),
         _SEPARATOR,
     ]
 

@@ -241,8 +241,9 @@ def _run_case(case: dict, client: httpx.Client, base_url: str) -> dict:
             continue
 
         if isinstance(result, JudgeResult):
-            # tone_judge: score=None means infra failure — treat as inconclusive
-            # (not a passing guard turn; log but do not count as content failure).
+            # score=None means the LLM judge was unavailable (timeout / Ollama down).
+            # Mark as inconclusive so summary._tally_failures excludes it from content
+            # failure counts — an infra outage must never inflate the hallucination tally.
             if result.score is None:
                 exp_results.append(
                     {
@@ -250,7 +251,7 @@ def _run_case(case: dict, client: httpx.Client, base_url: str) -> dict:
                         "passed": False,
                         "skipped": False,
                         "inconclusive": True,
-                        "detail": f"tone_judge_infra_failure: {result.error}",
+                        "detail": f"judge_infra_failure: {result.error}",
                     }
                 )
                 case_passed = False

@@ -1923,7 +1923,7 @@ returns `False` instead.
       failures enter the failure tally; `All cases: N evaluated / M total` reconciles exactly with the sum
       of the batteries, which it currently does not (210 evaluated vs 111+6 batteried, 93 unexplained). ✅ AUTO (EVAL-P17.2, 2026-08-12)
 
-- [ ] **EVAL-P17.3** Separate infra failure from content failure. Files: `edit evals/summary.py`,
+- [x] **EVAL-P17.3** Separate infra failure from content failure. Files: `edit evals/summary.py`,
       `edit evals/runner.py`, `edit tests/unit/engines/test_eval_summary.py`.
       `runner.py:248` writes `inconclusive: True` for a `score=None` judge result and **nothing ever reads
       it**. `_tally_failures` buckets by kind alone, so an Ollama timeout on `affirms_judge` in a guard case
@@ -1932,7 +1932,7 @@ returns `False` instead.
       RED anchor: `test_infra_failure_is_excluded_from_hallucination_count` fails.
       Validation: a fixture with 3 judge timeouts reports `0 hallucinations` and a separate
       `3 inconclusive (judge unavailable)` line; the headline never counts an outage as a defect, and an
-      inconclusive rate above a threshold makes the run **invalid** rather than quietly optimistic.
+      inconclusive rate above a threshold makes the run **invalid** rather than quietly optimistic. ✅ AUTO (EVAL-P17.3, 2026-08-12)
 
 - [ ] **EVAL-P17.4** Skips leave the numerator. Files: `edit evals/runner.py`, `edit evals/report.py`,
       `edit tests/unit/evals/test_runner_skips.py`.
