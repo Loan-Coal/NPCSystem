@@ -187,6 +187,9 @@ EXPECTED_FLAGS: dict[str, list[str]] = {
     "EVAL-P15.1": ["deferred"],
     "EVAL-P17.5": ["deferred"],
     "EVAL-P20.1": ["deferred"],
+    # DEC-172: wording lever exhausted at n=3 reverted attempts (ISSUE-141) — deferred to
+    # EVAL-P21's judge panel rather than retried by the loop.
+    "EVAL-P19.1": ["deferred"],
     "EVAL-P20.2": ["deferred"],
     "EVAL-P21.1": ["deferred"],
     "EVAL-P21.3": ["deferred"],
@@ -327,7 +330,18 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     # Structural only — pending shrinks on every success and must not fire this gate.
     known_task_ids = {t.id for p in phases for t in p.tasks}
     pending = [task_id for p in phases for task_id in p.pending]
-    assert pending, "queue drained — move the fence or the programme is over"
+    # 2026-08-13 (DEC-172): the fenced queue is legitimately drained, not a parsing bug.
+    # EVAL-P19.1 was the last unflagged task in EVAL-P0..P19 (three wording-rewrite attempts
+    # failed, ISSUE-141) and is now `deferred`; everything else left in the fence is `(live`
+    # or `deferred` — human-only. This *is* the "programme is over" branch this assertion
+    # used to warn about: HUMAN GATE H2 is READY (HUMAN_TASKS.md task 4) and is the real next
+    # step, not the loop. If a new unflagged task ever lands in the fence, `pending` stops
+    # being empty and this assertion should flip back to `assert pending, ...` — same
+    # deliberate-update discipline DEC-163 used on the `range(20)` assertion above.
+    assert pending == [], (
+        f"queue no longer drained ({pending}) — if this is a real new task, that's good news: "
+        "revert this assertion to `assert pending, ...` per DEC-172's note."
+    )
     assert set(pending) <= known_task_ids
 
 

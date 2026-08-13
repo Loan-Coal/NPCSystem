@@ -2144,7 +2144,9 @@ relabelling. Nothing else on the board buys that much publishability that cheapl
       pattern as `judge_runner.py`) so tests patch `criteria_replay.matchers._run_binary_judge`. Wired as
       `python -m evals replay-criteria` and `make eval-replay-criteria`.
 
-- [ ] **EVAL-P19.1** Rewrite `refusal_judge` criteria (**root cause of ISSUE-141, κ=0.247**). Files:
+- [ ] **EVAL-P19.1** ⏸️ *(DEC-172, 2026-08-13: wording lever exhausted at n=3 structurally distinct
+      attempts, all reverted — deferred to EVAL-P21's judge panel. Do not attempt a fourth rewrite;
+      loop must skip this task.)* Rewrite `refusal_judge` criteria (**root cause of ISSUE-141, κ=0.247**). Files:
       `edit prompts/eval/refusal_judge.yaml`, `edit tests/unit/evals/test_refusal_criteria.py`.
       Diagnosed 2026-08-09 from all 12 discordant rows: lines 15-21 enumerate *surface phrases* and only
       lines 22-23 state the substantive rule, so the phrase list dominates — and it contains
@@ -2225,7 +2227,7 @@ relabelling. Nothing else on the board buys that much publishability that cheapl
       prerequisite chain — this is a work-list generator, not a gate.
 
 #### 🔴 HUMAN GATE H2 — `EVAL-P19.4` re-judge, merge, re-measure κ
-**Ready when:** `EVAL-P15.1`, `EVAL-P19.0`, `EVAL-P19.0b`, `EVAL-P19.1`
+**Ready when:** `EVAL-P15.1`, `EVAL-P19.0`, `EVAL-P19.0b`, `EVAL-P19.2`
 **Clears when:** `EVAL-P19.4`
 **Blocks:** `EVAL-P22.2`, `EVAL-P22.3`, `EVAL-P22.4`
 **Runbook:** `project-harness/HUMAN_TASKS.md` task 4 · ~90 min · zero relabelling
@@ -2234,16 +2236,24 @@ relabelling. Nothing else on the board buys that much publishability that cheapl
 **`EVAL-P15.1` is the trap in the ready set** — it is human-only too (HUMAN_TASKS task 3)
 and is *not* gated here, because it is executable today. Do it before the loop reaches
 `EVAL-P19`, or this gate is ready in name only.
+**Corrected 2026-08-13 (DEC-172):** originally read `EVAL-P19.1` in place of `EVAL-P19.2`.
+Three wording-rewrite attempts at `refusal_judge` failed the durability gate and the lever is
+exhausted (ISSUE-141) — requiring `EVAL-P19.1` ticked made this gate unreachable, since its
+own downstream fix (EVAL-P21) depends on `EVAL-P20.4`, which depends on this gate opening.
+`EVAL-P19.2` (word-boundary keyword matching, already shipped) is the real criteria change
+this gate actually needs to prove `--merge` durability against.
 
 - [ ] **EVAL-P19.4** *(live; human session)* Re-judge, merge, re-measure (**the durability proof**).
       Files: none (operational). Runs a full judge pass and `label-import --merge` against the real
       393-row label file.
-      Re-run the judge pass over the **unchanged** transcript with the fixed criteria, then
+      Re-run the judge pass over the **unchanged** transcript with current criteria (`refusal_judge`'s
+      wording is unchanged — DEC-172 — but `EVAL-P19.2`'s word-boundary matcher fix is real), then
       `make label-import ... MERGE=1` and `make eval-calibrate`.
       Validation: `human verdicts preserved: 393`; the rows whose criteria changed are flagged
-      `needs_review` and **named**; `refusal_judge` κ is re-reported with its cluster-corrected CI. If κ
-      clears the EVAL-P11.1 threshold, ISSUE-141 closes; if not, the scorer is recorded as unfixed and its
-      rate is refused publication — **never quietly kept**.
+      `needs_review` and **named**; `refusal_judge` κ is re-reported with its cluster-corrected CI.
+      **Expected result (DEC-172): κ is unchanged from 0.247 — that is not a failure of this task.**
+      ISSUE-141 stays open and `refusal_judge`'s rate stays refused for publication until EVAL-P21's
+      judge panel lands; this task's job is proving the merge mechanics, not fixing the scorer.
 
 <!-- LOOP:QUEUE end -->
 <!-- ^ MOVED HERE 2026-08-10 (DEC-163): narrowed from below EVAL-P24.3 to below EVAL-P19.4.

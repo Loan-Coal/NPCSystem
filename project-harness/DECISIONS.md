@@ -3125,3 +3125,39 @@ once," which is the ambiguity `needs_review` exists to remove.
 **Consequences:** No adjudication-history audit trail beyond the labels file's own git
 history. If a later phase wants one, add it as an explicit `drift_history` list rather than
 overloading this field again.
+
+## DEC-172: EVAL-P19.1 wording-rewrite path closed; H2/EVAL-P19.4 decoupled from the refusal_judge fix (deferred to EVAL-P21)
+**Date:** 2026-08-13
+**Context:** Three structurally-distinct rewrite attempts at `refusal_judge`'s criteria (full
+restructure leading with the substantive test; a two-sentence surgical patch; a balanced
+parallel-worked-examples restructure) all failed the EVAL-P19.1 durability gate — best result
+fixed 8/12 discordant rows while breaking 11/15 previously-concordant ones, worse than a coin
+flip on the trade. ISSUE-141 itself concludes the wording lever is exhausted at n=3 attempts
+and recommends EVAL-P21's judge panel instead. Meanwhile `HUMAN GATE H2`'s `Ready when` hard-
+required `EVAL-P19.1` ticked before `EVAL-P19.4` — and therefore H4, the Week-2 fence
+reopening, and all of Program 3 — could proceed. That requirement cannot be satisfied by
+another wording attempt, and re-pointing H2 at the panel directly is circular:
+`EVAL-P21.0 Depends on: EVAL-P20.4`, which is itself downstream of H4/H3, which are downstream
+of H2.
+**Decision:** Decouple the `--merge` durability proof (EVAL-P19.4's actual job) from fixing
+`refusal_judge` specifically. `EVAL-P19.2` (word-boundary keyword matching, already shipped)
+is a real criteria/matcher change against the live 393-row label file — sufficient to exercise
+`--merge` durability. H2's `Ready when` changes from `EVAL-P19.1` to `EVAL-P19.2`. `EVAL-P19.1`
+is flagged `⏸️ deferred` (left unticked — it is not fixed) pointing at this decision and
+ISSUE-141, so the automated loop skips it instead of attempting a fourth rewrite.
+`EVAL-P19.4` now runs and reports `refusal_judge` honestly as **unfixed** (κ unchanged,
+ISSUE-141 stays open) — the roadmap's own EVAL-P19.4 validation text already named "the scorer
+is recorded as unfixed and its rate is refused publication" as a valid, non-blocking outcome;
+only the gate wiring was preventing that branch from ever being reached.
+**Rationale:** Waiting for EVAL-P21 before H2 opens is unreachable by construction (P21.0 needs
+P20.4, P20.4 needs H4/H3, H3 needs H4, H4 needs H2) — re-scoping what H2 requires is the only
+non-circular path. This does not weaken the honesty discipline enforced elsewhere in this
+program: `refusal_judge`'s rate is still refused for publication, nothing is quietly kept, and
+the eventual fix is still EVAL-P21 — this decision only removes a false precondition, not the
+requirement that the scorer be trustworthy before its number ships.
+**Consequences:** `refusal_judge` outputs stay excluded from any published guard-rate headline
+until EVAL-P21 lands (2-of-3 panel, out-of-family third judge). EVAL-P19.4's first two
+validations ("human verdicts preserved: 393", "rows whose criteria changed are flagged
+`needs_review` and named") now exercise the P19.2 matcher change instead of a refusal_judge
+prompt change; the third ("`refusal_judge` κ re-reported with its cluster-corrected CI") is
+retained, with "unchanged, still open" as its expected and accepted result.

@@ -38,7 +38,7 @@ and sits in H2's and H9's ready sets, so if it slips both gates are ready in nam
 | ~~**1**~~ | `EVAL-P12.1` — reset fidelity | — | ✅ **DONE 2026-08-10 — PARTIAL, 54 ms** | ~45 min | P12.4, P14.3, ISSUE-143 |
 | **2** | `EVAL-P17.5` — re-measure and retract | **H1** | after loop ticks **P17.4** | ~30 min | P13.3, fence reopen |
 | ~~**3**~~ | `EVAL-P15.1` — oracle labeller | — | ✅ **DONE 2026-08-10** | ~75 min | P19.4, P22.2, P22.3 |
-| **4** | `EVAL-P19.4` — re-judge, merge, re-measure κ | **H2** | after loop ticks **P19.1** + task 3 | ~90 min | publication of any guard rate |
+| **4** | `EVAL-P19.4` — re-judge, merge, re-measure κ | **H2** | after loop ticks **P19.2** + task 3 (⚠️ DEC-172: no longer waits on P19.1 — deferred to P21) | ~90 min | publication of any guard rate |
 | ~~**5**~~ | `EVAL-P20.2` — capability cases | — *(clears **H6** with task 8)* | ✅ **DONE 2026-08-10 — 9 authored, battery 7→16** | 2–3 h (of ~4–5 h) | a non-gameable headline |
 | — | **Week-2 boundary** — everything below needs the fence reopened | **H3** | | | |
 | 6 | `EVAL-P20.0` — deterministic seed | **H4** | after tasks 2 + 4 | ~60 min | **every** regeneration |
@@ -246,11 +246,18 @@ the declared rule, and inside a `FROZEN_PATH_PREFIXES` dir the loop would otherw
 
 ---
 
-## Task 4 — `EVAL-P19.4`: re-judge, merge, re-measure κ *(~90 min; the highest-value hour on the board)*
+## Task 4 — `EVAL-P19.4`: re-judge, merge, re-measure κ *(~90 min)*
 
-**Wait for:** loop has ticked `EVAL-P19.0`, `P19.0b`, `P19.1`. Task 3 done.
+**Wait for:** loop has ticked `EVAL-P19.0`, `P19.0b`, `P19.2`. Task 3 done.
 
-**Why this is the best hour you have:** `refusal_judge` κ = **0.247, 95% CI [−0.068, 0.541], n=75** —
+⚠️ **Corrected 2026-08-13 (DEC-172).** This task no longer waits on `EVAL-P19.1` — three
+wording-rewrite attempts at `refusal_judge` all failed the durability gate (ISSUE-141) and the
+lever is exhausted; `EVAL-P19.1` is deferred to EVAL-P21's judge panel instead. Run this task
+against `EVAL-P19.2`'s already-shipped word-boundary matcher change. **Expect `refusal_judge`
+κ to come back unchanged, ~0.247 — that is the correct, honest result, not a sign to retry the
+rewrite.** ISSUE-141 stays open until EVAL-P21 lands.
+
+**Why this is still worth the hour:** `refusal_judge` κ = **0.247, 95% CI [−0.068, 0.541], n=75** —
 the interval crosses zero, i.e. statistically indistinguishable from chance. It is the scorer that
 produces your anti-hallucination headline, and its 8 false positives assert invented entities
 ("House of Ravenwood", "Lady Elara", "young Elian") that exist nowhere in seed data. It is scoring
@@ -266,7 +273,9 @@ this costs zero relabelling.**
    git status --porcelain evals/calibration/     # must be clean, so a bad merge is one checkout away
    ```
 
-2. **Re-run the judge pass over the unchanged transcript** with the fixed criteria:
+2. **Re-run the judge pass over the unchanged transcript** with current criteria (`refusal_judge`'s
+   own wording is unchanged, DEC-172 — the real criteria change under test here is EVAL-P19.2's
+   word-boundary matcher fix, not a refusal_judge rewrite):
    ```bash
    export JUDGE_MODEL=mixtral:8x7b
    export JUDGE_TIMEOUT_SECONDS=300        # the 30 s default times out under load
@@ -293,11 +302,17 @@ this costs zero relabelling.**
 
 ### The branch that matters
 
+**Expected (DEC-172): κ comes back ~unchanged, still ≈0.247.** `refusal_judge`'s criteria did not
+change, so this is the correct result, not a sign anything went wrong — record it as ISSUE-141
+staying open, deferred to EVAL-P21. Only if κ moved anyway (e.g. from the P19.2 matcher change
+touching a `keyword_*` expectation shared with a `refusal_judge` case) does the clears-threshold
+branch below apply.
+
 **If κ clears the EVAL-P11.1 threshold:** ISSUE-141 closes. Record the before/after with both
 intervals and n.
 
-**If it does not:** the scorer is recorded as **unfixed** and its rate is **refused publication** —
-never quietly kept. And per EVAL-P19.1, if the replay gate fails (the 8 FPs not fixed, *or* any of
+**If it does not (the expected outcome):** the scorer is recorded as **unfixed** and its rate is
+**refused publication** — never quietly kept. And per EVAL-P19.1, if the replay gate fails (the 8 FPs not fixed, *or* any of
 the 63 currently-concordant rows broken), **the rewrite is reverted**. A rewrite that fixes 12 rows
 and breaks 15 must fail, and the ≥10-of-12 figure is a diagnostic, not the gate — those 12 rows were
 read in order to write the fix, so scoring the fix on them is fitting and testing on the same points.

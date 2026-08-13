@@ -801,6 +801,13 @@ strategies (full restructure, surgical patch, balanced-parallel-examples restruc
 the same (correctly-configured, already-strongest-available) judge model.
 **Status: still open, still κ=0.247, criteria file unchanged from the original after three reverted
 attempts (2026-08-12).**
+**Formally deferred to EVAL-P21, 2026-08-13 (DEC-172).** `EVAL-P19.1` is flagged `⏸️ deferred` in
+ROADMAP.md rather than retried a fourth time. `HUMAN GATE H2`'s `Ready when` no longer requires
+`EVAL-P19.1` ticked (was unreachable — its own fix, EVAL-P21, depends on EVAL-P20.4, which is
+downstream of H2) — it now requires `EVAL-P19.2` instead, a real criteria change already shipped.
+`EVAL-P19.4` proceeds and is expected to report `refusal_judge` unchanged at κ≈0.247; that is not
+a new failure, it is this issue staying open on schedule. `refusal_judge`'s rate remains refused
+for publication until EVAL-P21's judge panel (2-of-3, out-of-family third judge) lands.
 
 ## ISSUE-149: `judge_runner._apply_polarity` has zero direct test coverage — survives mutation
 **Found:** 2026-08-11, during EVAL-P15.6 (mutation survival gate)
