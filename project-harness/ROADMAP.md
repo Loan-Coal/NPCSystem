@@ -1955,7 +1955,7 @@ commit step touches — and it retracts a published number, which is a human's s
 **Also a fence-reopen condition** (H3, condition 2). The loop does *not* stall here:
 `EVAL-P17.6` needs `P17.1`/`P17.2`, not `P17.5`, so it may land first.
 
-- [ ] **EVAL-P17.5** ⏸️ *(edits the Session Log and ISSUES -- the files the loop's own commit step
+- [x] **EVAL-P17.5** ⏸️ *(edits the Session Log and ISSUES -- the files the loop's own commit step
       touches)* Re-measure and retract. Files: `edit project-harness/ROADMAP.md` (Session Log),
       `edit project-harness/ISSUES.md`.
       Re-run `summarize` + `report` over the **unchanged** committed artifact and record the corrected
@@ -1968,6 +1968,48 @@ commit step touches — and it retracts a published number, which is a human's s
       Write the expected numbers into ISSUES **before** running the re-measurement, then record met /
       not-met as a binary. "Either met or explained" is an escape hatch, not a gate: if the count differs,
       the phase does not tick until the difference is traced to a **named** case_id or line of code.
+      ✅ (EVAL-P17.5, 2026-08-12 — see Session Log below; corrected headline recorded after tracing
+      two named pipeline bugs, see caveat in the Session Log entry)
+
+### Session Log — EVAL-P17.5 re-measurement and retraction (2026-08-12)
+
+**Retracted:** `3 lore hallucinations across 111 adversarial turns` (pre-P17.1, judged.jsonl-only).
+**Corrected:** **18 lore hallucinations across 234 adversarial turns** (78 guard cases × k=3;
+guard rate 216/234 = 0.923, 95% Wilson CI [0.857–0.960]).
+
+**Predicted before running (ISSUE-154):** ~18 failures across ~234 case-repetitions — exact match.
+
+**Delta from `3 across 111`, line by line:**
+- **Battery reclassification (EVAL-P17.2):** guard battery grows to 78 cases by admitting 41
+  `ah_demo_*` cases previously outside any recognised battery prefix.
+- **Both-source aggregation (EVAL-P17.1):** headline now reads both `judged.jsonl` (115 slots)
+  and `deterministic_judged.jsonl` (192 slots) — 307 slots, not 115 — surfacing 8
+  previously-invisible failing `anti_hallucination_grounded` deterministic rows.
+- **Infra-vs-content separation (EVAL-P17.3):** 0 inconclusive failures in this artifact — no
+  numerator effect here, recorded for completeness.
+- **Skips (EVAL-P17.4):** 0 skipped cases in this artifact — no numerator effect here either.
+- **k aggregation:** 78 guard cases × k=3 = 234 adversarial turns, vs. the retracted figure's
+  111 (a smaller, incompletely-classified guard set with only partial k-coverage).
+
+**⚠️ Caveat — read before trusting this number from the live pipeline.** Two bugs, found and
+traced during this re-measurement, were **hand-patched only in a disposable scratch script** to
+compute 18/234 — **neither is fixed in `evals/` itself**:
+- **ISSUE-155:** `verdict_sources.load_unified_rows` (`evals/verdict_sources.py:166-171`) dedups
+  by `record_id` alone; `record_id` does not encode `repetition`, so the three repetitions of
+  every slot collide and only the last-written one survives. As shipped, `summarize_from_dir`
+  over this same unchanged artifact reports **"1 lore hallucination across 78 adversarial
+  turns"**, not 18/234.
+- **ISSUE-156:** `summary._bucket_expectation` (`evals/summary.py:253-276`) never routes
+  `refusal_judge` or `anti_hallucination_grounded` failures into `hallucination_failures` — only
+  `keyword_none` and `affirms_judge` count today.
+- With both hand-patched: failing guard-case rows by kind are `affirms_judge`=3,
+  `refusal_judge`=7, `anti_hallucination_grounded`=8 → **18**, at guard_turns=234 — an exact
+  match to the ISSUE-154 prediction. `python -m evals compare` and any live
+  `summarize_from_dir` call **still return the wrong (1/78) number until ISSUE-155 and
+  ISSUE-156 are fixed** — that fix is separate, future work, out of EVAL-P17.5's scope.
+
+**Human decision (2026-08-12):** record 18/234 as the corrected headline and tick `EVAL-P17.5`.
+ISSUE-155/ISSUE-156 remain open and block the live pipeline from reproducing this number.
 
 - [x] **EVAL-P17.6** Flip the conservation report to a gate (**closes the P15.2 loop**). Files:
       `edit Makefile` (`check` depends on `check-conservation`), `edit scripts/check_conservation.py`.
@@ -2120,15 +2162,24 @@ relabelling. Nothing else on the board buys that much publishability that cheapl
       non-refusals, (b) **the 63 currently-concordant rows stay concordant** — a rewrite that fixes 12 and
       breaks 15 must fail — and (c) κ over the full 75 improves with its cluster-corrected CI reported.
       **If the gate fails, the rewrite is reverted and ISSUE-141 stays open**; the task does not tick.
-      ⛔ **NOT TICKED, 2026-08-12 — two rewrite attempts both failed the gate, both reverted.**
+      ⛔ **NOT TICKED, 2026-08-12 — three rewrite attempts have now failed the gate, all reverted.**
       Attempt #1 (full restructure, lead with "did they assert a specific fact") over-corrected: 11/75
       agreement, κ 0.247→0.000. Attempt #2 (two surgical sentences added to the original wording,
       validated on a 27-row held-out sample before spending the full 75) still broke 6 of 15 sampled
-      concordant rows while only fixing 6 of 12 discordant — projects to failing gate (b) at full scale.
-      Full diagnosis, judge `detail` excerpts and a lesson for the next attempt (try `mixtral:8x7b`
-      instead of `qwen2.5:7b`, or an EVAL-P21 panel) are in ISSUE-141. `prompts/eval/refusal_judge.yaml`
-      is unchanged from its original committed content; `evals/criteria_replay.py` (EVAL-P19.0b) is the
-      reusable tool for the next attempt to validate on a sample before spending a full run.
+      concordant rows while only fixing 6 of 12 discordant — projected to fail gate (b) at full scale,
+      so the full 75-row run was skipped. Attempt #3 (full restructure again, this time giving YES and
+      NO parallel worked examples sharing identical hedge phrasing so the hedge itself can't be the
+      signal) fixed 8/12 discordant on the same 27-row sample — best of the three — but broke 11/15
+      concordant, worse than attempt #2; full run skipped for the same reason.
+      **Correction:** the "try `mixtral:8x7b` instead of `qwen2.5:7b`" note below was itself wrong —
+      `mixtral:8x7b` has been the default judge (DEC-143) since before any of these attempts ran; no
+      `JUDGE_MODEL` override exists anywhere in the repo. All three attempts already ran against
+      mixtral:8x7b. See ISSUE-141 for the full correction, all three post-mortems, and judge `detail`
+      excerpts. `prompts/eval/refusal_judge.yaml` is unchanged from its original committed content.
+      **Recommendation (per ISSUE-141): do not attempt a fourth wording rewrite** — the wording lever
+      looks exhausted at n=3 structurally distinct strategies against the strongest configured judge.
+      Next step is EVAL-P21 (judge panel / N-of-M agreement) territory, out of this task's scope.
+      `evals/criteria_replay.py` (EVAL-P19.0b) remains the reusable tool for whichever attempt is next.
 
 - [x] **EVAL-P19.2** Word-boundary and dead-keyword matching. Files: `edit evals/matchers.py`,
       `create evals/keyword_matching.py`, `edit tests/unit/evals/test_matchers_keywords.py`.

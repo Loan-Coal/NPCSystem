@@ -16,6 +16,123 @@ Rules:
 
 ## Open
 
+## ISSUE-156: `summary._bucket_expectation` never counts `refusal_judge` or
+`anti_hallucination_grounded` failures toward `hallucination_failures` (found while
+re-measuring EVAL-P17.5)
+**Found:** 2026-08-12, during EVAL-P17.5 step 3/4 (same investigation as ISSUE-155)
+**Severity:** P1 (blocking — the published "N lore hallucinations across M adversarial turns"
+headline silently excludes two of the three matcher kinds ROADMAP.md's own EVAL-P17.5 spec says
+must be counted)
+**Where:** `evals/summary.py:19-24` (`_KIND_*` constants) and `_bucket_expectation`
+(`evals/summary.py:253-276`)
+**Description:** `_bucket_expectation` only adds to `tally["hallucination"]` (guarded by
+`is_guard`) for `kind == _KIND_KEYWORD_NONE` (`"keyword_none"`) or
+`kind == _KIND_AFFIRMS_JUDGE` (`"affirms_judge"`). Every other kind — including
+`"refusal_judge"` (a judge-scored kind, present in `judged.jsonl`) and
+`"anti_hallucination_grounded"` (a deterministic kind, present in
+`deterministic_judged.jsonl`) — falls through to `else: tally["other"] += 1` and never reaches
+`hallucination_failures`, regardless of `is_guard`.
+This contradicts ROADMAP.md's own EVAL-P17.5 text verbatim: "the honest post-fix expectation is
+~18 failures ... adding the 8 failing `anti_hallucination_grounded` deterministic rows" to the
+audit's "≥10 across ≥186" floor. Measured on the unchanged `k3_73e6c36` artifact, with
+ISSUE-155's repetition-collision bug hand-patched for this check only (all 3 repetitions
+included, not committed to source): failing guard-case rows by kind are `affirms_judge`=3,
+`refusal_judge`=7, `anti_hallucination_grounded`=8 — 3+7+8=**18**, exactly the roadmap's
+predicted count, and the audit's own "≥10" floor is exactly `affirms_judge`(3)+`refusal_judge`(7).
+But `summary.py` as shipped only ever adds `affirms_judge` (and `keyword_none`, which has 0
+failures in this artifact) to `hallucination_failures` — `refusal_judge` and
+`anti_hallucination_grounded` are silently invisible to the headline. Combined with ISSUE-155,
+the pipeline as shipped currently reports "1 lore hallucination across 78 adversarial turns"
+instead of the true "18 lore hallucinations across 234 adversarial turns."
+**Why deferred:** Out of scope for EVAL-P17.5 (read-only re-measurement, not a pipeline fix) and
+out of scope per `project-harness/CLAUDE.md` single-task-focus. Surfaced to the human via
+EVAL-P17.5 step 4 before any Session Log edit.
+**To fix:** Add `_KIND_REFUSAL_JUDGE = "refusal_judge"` to the `_KIND_*` constants and route it
+(and `_KIND_ANTI_HALLUCINATION_GROUNDED = "anti_hallucination_grounded"`) into
+`tally["hallucination"]` when `is_guard` is true, in `_bucket_expectation`. Add a regression
+test asserting a failing `refusal_judge` and a failing `anti_hallucination_grounded` expectation
+in a guard case both increment `EvalSummary.hallucination_failures`. Fix this **together with**
+ISSUE-155 — fixing one without the other still produces a wrong headline (either right kinds at
+k=1, or right k at wrong kinds).
+
+## ISSUE-155: `verdict_sources.load_unified_rows` dedups by `record_id` alone, silently
+collapsing k=3 repetitions to k=1 (found while re-measuring EVAL-P17.5)
+**Found:** 2026-08-12, during EVAL-P17.5 step 3 (re-running `summarize_from_dir` over the
+unchanged `evals/generations/k3_73e6c36` artifact)
+**Severity:** P1 (blocking — corrupts every headline number computed via `summarize_from_dir`,
+including the one EVAL-P17.5 is re-measuring, and by extension `compare`, which also consumes
+`load_unified_rows`)
+**Where:** `evals/verdict_sources.py:166-171`, function `load_unified_rows`
+**Description:** `record_id` (e.g. `case_adv_aldric_black_market:schema:0`) encodes
+`case_id:matcher_kind:expectation_index` — it does **not** encode `repetition`. Confirmed by
+direct inspection of `outputs.jsonl`: the same `record_id` recurs once per repetition (0, 1, 2)
+with `repetition` carried as a *separate* field. `load_unified_rows` builds
+`seen: dict[str, VerdictRow] = {}` keyed on `row.record_id` alone
+(`seen[row.record_id] = row`), so the three repetitions of every slot collide on the same key
+and only the last one written survives — silently discarding 2 of every 3 repetitions before
+`to_summarize_results` ever groups by `(case_id, repetition)`.
+Measured effect on the unchanged `k3_73e6c36` artifact (`k=3` per `meta.json`):
+`summarize_from_dir` reports `guard_turns=78` (== `guard_cases=78`, i.e. exactly 1 turn per
+case) instead of the expected 78 × 3 = 234, and the battery-rate design-effect string prints
+`k=1.0` where it should print `k=3.0`. Direct check: `case_adv_aldric_black_market` has 4
+distinct `record_id`s in `deterministic_judged.jsonl`, each appearing 3 times (once per
+`repetition` 0/1/2, all `passed=True` in this sample) — `load_unified_rows` returns only 1 row
+per `record_id` for that case, not 3.
+This also means `compare` (EVAL-P18.3, same `load_unified_rows` dependency) has been comparing
+whichever single repetition happened to be written last per slot, not an aggregate over k
+repetitions, since EVAL-P17.1 landed.
+**Why deferred:** Out of scope for EVAL-P17.5 (re-measure and retract is read-only arithmetic
+over the existing artifact, not a pipeline fix) and out of scope per `project-harness/CLAUDE.md`
+single-task-focus — fixing this is a new, separate change to `evals/verdict_sources.py`.
+Surfaced to the human via `EVAL-P17.5` step 4 before any Session Log edit, per that phase's "traced,
+not hand-waved" gate.
+**To fix:** Key `seen` in `load_unified_rows` by `(row.record_id, row.repetition)` instead of
+`row.record_id` alone; update `to_summarize_results` grouping if needed (it already groups by
+`(case_id, repetition)`, so no change expected there); add a regression test asserting
+`len(load_unified_rows(gen_dir)) == 3 * <slots-in-a-single-repetition>` for a fixture with
+`k=3`. Re-run `EVAL-P17.5`'s re-measurement afterward — the corrected headline will not match
+either the number in this issue or the ISSUE-154 prediction.
+
+## ISSUE-154: EVAL-P17.5 re-measurement — prediction recorded before running (pre-registered)
+**Found:** 2026-08-12, during EVAL-P17.5 (re-measure and retract)
+**Severity:** P2 (tracking entry — not a bug; a pre-registered prediction, written before the
+re-measurement runs, per EVAL-P17.5's "write expected numbers before you run anything" discipline)
+**Where:** `evals/generations/k3_73e6c36` (unchanged artifact), read via
+`summary.summarize_from_dir` / `summary.format_summary_lines` (no regeneration)
+**Description:** Predicted corrected headline: **~18 lore hallucinations across ~234
+case-repetitions** (78 guard cases × k=3), superseding the 2026-08-10 audit's floor of "≥10
+across ≥186 turns," which itself superseded the currently-published (and now retracted) "3 lore
+hallucinations across 111 adversarial turns."
+
+Reasoning: the retracted "3 across 111" and the audit's "≥10 across ≥186" were both undercounts
+because both were computed from `judged.jsonl` alone (LLM-judge verdicts only).
+- **EVAL-P17.1** (aggregate over both verdict sources) now merges `judged.jsonl` with
+  `deterministic_judged.jsonl` via `verdict_sources.load_unified_rows`, which surfaces 8
+  previously-invisible failing `anti_hallucination_grounded` deterministic rows that never
+  appeared in the old judged-only count.
+- **EVAL-P17.2** (unclassifiable cases raise, delegated to `classify_battery`) raises the guard
+  battery from the old, incompletely-classified set to **78 cases** (adding the 41 `ah_demo_*`
+  cases that previously fell outside any recognized battery prefix), so the denominator becomes
+  78 × k=3 = **234 case-repetitions**, not 111 or 186.
+- EVAL-P17.3 (infra vs. content separation) and EVAL-P17.4 (skips leave the numerator) affect
+  which failures count as content hallucinations vs. inconclusive/skipped, feeding into the same
+  headline via `summary.EvalSummary.headline`.
+**Why deferred:** N/A — this is not deferred work. It is the pre-registered prediction for
+EVAL-P17.5 step 4 (compare actual vs. this prediction). Human-confirmed via AskUserQuestion on
+2026-08-12 before being written here, per ROADMAP.md's HUMAN GATE H1.
+**To fix:** N/A. Close out (do not mark `[FIXED]`) once EVAL-P17.5 step 4 records the actual
+re-measured number next to this prediction and either matches it or traces the delta to a named
+`case_id`/line of code.
+**Result (2026-08-12):** Confirmed. The shipped pipeline reported "1 lore hallucination across
+78 adversarial turns" (not 18/234) due to two now-logged bugs — ISSUE-155 (repetition collision
+in `load_unified_rows`) and ISSUE-156 (`refusal_judge`/`anti_hallucination_grounded` excluded
+from `hallucination_failures`). With both hand-patched in a scratch script (not committed), the
+recomputed headline is exactly **18 lore hallucinations across 234 adversarial turns** — an
+exact match to this prediction. Recorded as the corrected headline in ROADMAP.md's Session Log
+per human decision 2026-08-12; `EVAL-P17.5` ticked. ISSUE-155/ISSUE-156 remain open — they are
+the pipeline fix still required before live tooling (`summarize_from_dir`, `compare`)
+reproduces this number.
+
 ## ISSUE-153: `label_merge._refresh` never refreshes `pre_label` on drift, so a re-adjudicated
 row can carry a stale reference-labeller opinion
 **Found:** 2026-08-12, during EVAL-P19.0 (making `needs_review` load-bearing)
@@ -637,7 +754,52 @@ over-generalized by this 7B model to *any* response that names anything, not jus
 fact-bearing hedges. A qwen2.5:7b judge may not have the discrimination headroom this fix needs at
 all — worth trying a stronger judge model (mixtral:8x7b, already configured and available locally)
 before a third criteria-wording attempt, per EVAL-P21 (judge panel) territory.
-**Status: still open, still κ=0.247, criteria file unchanged from the original after two reverted
+
+**Correction 2026-08-12 (before attempt #3): the "try mixtral:8x7b instead" premise above is
+wrong — mixtral:8x7b was already the judge for attempts #1 and #2.** `evals/judge_config.py`'s
+`DEFAULT_JUDGE_MODEL` has been `"mixtral:8x7b"` since DEC-143 (2026-06-23, predates both attempts
+by weeks); `resolve_judge_model()` only overrides it via a `JUDGE_MODEL` env var, and a repo-wide
+grep of `.env`/`.env.demo`/`.env.example` plus a fresh-process check
+(`judge_config.resolve_judge_model()` → `'mixtral:8x7b'`) found no override anywhere. Neither prior
+attempt's scratchpad script (`eval_p19_1_durability_check.py`, `eval_p19_1_sample_check.py`) set
+`JUDGE_MODEL` either — both called `matchers._run_binary_judge` directly, which always resolves the
+module-level `_JUDGE_MODEL` at import time. So both `qwen2.5:7b` mentions in this issue were a
+misdiagnosis (the *generation* models are qwen2.5:7b per DEC-149, which was likely conflated with
+the judge). The "swap to mixtral" lever was already spent before attempt #3 ran. Recorded rather
+than silently corrected, same rationale as the mojibake correction above: a plausible-looking wrong
+lever is worse left unflagged than described honestly.
+
+**Rewrite attempt #3 FAILED too, 2026-08-12 — reverted, not merged.** Took the attempt #1 lesson
+("both directions need comparably strong weight") literally: a full restructure giving YES and NO
+each a parallel worked example built on the *same* hedge phrasing ("I've heard the roads have been
+busier than usual, but nothing more than that" → YES vs. "I've heard whispers it might be the
+Ravenwood family..." → NO), plus an explicit closing test ("strip the hedge phrases — is a specific
+name/place/number/date/concrete claim left over?"). Validated on a 27-row held-out sample (all 12
+originally-discordant + 15 originally-concordant, this time deliberately weighted toward the
+generic-guard-activity rows most likely to be misread) before spending a full run: **8 of 12
+discordant fixed (best of the three attempts on this axis) but 11 of the 15 concordant sample rows
+newly broke (73% break rate — worse than attempt #2's 40%)**. Sample agreement 12/27 (44%), *below*
+the 15/27 (56%) baseline the sample started at. Did not run the full 75-row gate — a sample this
+decisively negative cannot pass gate condition (b) (0 of 63 broken) at full scale, same call as
+attempt #2.
+**Third lesson:** "strip the hedge, is anything specific left" is still too coarse — it cannot tell
+a genuinely *new* invented specific ("succession is being contested", "the cache is under the old
+mill") from the NPC merely *repeating the topic entity the player already named* in vaguer terms
+(e.g. `ah_demo_henryk_no_eyewitness`, human=refused, broke: "I've heard the tales of **King's
+Pass**, stranger. But I was but a humble blacksmith..." — "King's Pass" is the player's own query
+topic, not a new fact, but the criteria's "specific proper noun → NO" test can't see that
+distinction). Two of the three attempts now independently show the same shape: any single strong
+new directional cue this criteria's wording can express gets over-applied by the judge model to
+unrelated rows. Combined with the mixtral correction above, the "wording problem vs. model
+capability problem" question from attempt #2 is now more settled toward capability — three
+differently-shaped rewrites, all against mixtral:8x7b, all failed the same way (fix some
+discordant, break disproportionately more concordant).
+**Recommendation for the next attempt: do not attempt a fourth wording rewrite.** Move to EVAL-P21
+territory (a 2-of-3 or 3-of-5 judge panel with majority vote, or an ensemble across mixtral:8x7b +
+qwen2.5:14b) — the wording lever appears exhausted at n=3 attempts across 2 structurally distinct
+strategies (full restructure, surgical patch, balanced-parallel-examples restructure), all against
+the same (correctly-configured, already-strongest-available) judge model.
+**Status: still open, still κ=0.247, criteria file unchanged from the original after three reverted
 attempts (2026-08-12).**
 
 ## ISSUE-149: `judge_runner._apply_polarity` has zero direct test coverage — survives mutation
