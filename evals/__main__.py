@@ -118,6 +118,11 @@ VERBS: dict[str, VerbTarget] = {
         "main",
         "Re-score selected calibration rows against a new criteria file (no full judge pass).",
     ),
+    "sequence": VerbTarget(
+        "sequence_rates",
+        "main",
+        "Run the 6 promoted multi-turn scenarios live and print the fidelity-conditional report (EVAL-P12.4).",
+    ),
 }
 
 

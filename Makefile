@@ -18,7 +18,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         type-ratchet type-ratchet-update type-evals type-evals-update check-harness \
         test-cov-evals \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts eval-replay-criteria check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world package
@@ -366,6 +366,17 @@ measure-reset-fidelity:
 	$(PYTHON) e2e/scripts/measure_reset_fidelity.py \
 		--base-url $(BASE_URL) --api-key $(API_KEY) \
 		$(if $(REPEATS),--repeats $(REPEATS),)
+
+# eval-sequence: run the 6 EVAL-P12.4 promoted multi-turn scenarios live and print
+# the fidelity-conditional report. Requires the stack up, all three worlds seeded,
+# and evals/reset_fidelity.json present (EVAL-P12.1). Wall-clock budget comes from
+# EVAL-P12.1's measured per-reset cost: 6 scenarios x k x (turns + reset_cost).
+# Usage: make eval-sequence [K=3]
+eval-sequence:
+	@echo "Running the 6 promoted multi-turn scenarios against $(BASE_URL) (k=$(or $(K),3)) ..."
+	$(PYTHON) -m evals sequence \
+		--base-url $(BASE_URL) --api-key "$(API_KEY)" \
+		--k $(or $(K),3)
 
 # mock-calibrate-oracle: exercise export -> import -> adjudicate -> calibrate with
 # RULE-BASED labels whose confusion matrix is known BEFORE the run (EVAL-P15.1).

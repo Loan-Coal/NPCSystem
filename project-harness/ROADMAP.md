@@ -1381,7 +1381,7 @@ real work and is EVAL-P12.2, not a footnote.
 **Fidelity-conditional:** under PARTIAL it must print the order-effect check *in place of*
 the Wilson interval. A run that prints neither has reported nothing and does not clear this.
 
-- [ ] **EVAL-P12.4** *(live; wall-clock budget comes from EVAL-P12.1's measurement)*
+- [x] **EVAL-P12.4** *(live; wall-clock budget comes from EVAL-P12.1's measurement)*
       Promote 6 scenarios and report their rates. Files: `edit evals/sequence_runner.py`,
       `create evals/sequence_fidelity.py`, `edit Makefile`,
       `create tests/unit/evals/test_sequence_rates.py`, `create tests/unit/evals/test_sequence_fidelity.py`.
@@ -1420,6 +1420,68 @@ the Wilson interval. A run that prints neither has reported nothing and does not
       - **Negative test, both branches:** a unit test asserts that forcing `fidelity="PARTIAL"` on a
         fixture removes the interval from the rendered output. Without it, Part A is unfalsifiable —
         which is EVAL-P15.6's whole argument applied here.
+
+      ✅ **DONE 2026-08-13** (`make eval-sequence` / `python -m evals sequence --k 3`, stack up, all
+      three worlds seeded). **Part A**: `reset_fn`'s contract now returns a `ResetReceipt`
+      (`evals/sequence_reset.py` reads `evals/reset_fidelity.json` once per run, not per repetition —
+      see DEC-174 point 2 for why re-diffing every repetition was rejected); `evals/sequence_fidelity.py`
+      derives the run's tier from the receipts and withholds the interval at the runner level.
+      RED anchor confirmed red (`ModuleNotFoundError: sequence_fidelity`) before implementation, green
+      after. **Part B**: `evals/sequence_order_effect.py` implements Cochran's Q + first-vs-last McNemar
+      pooled across the 6 scenarios' repetition-indexed outcomes (design rationale for the pooling —
+      the v1 runner records one bool per repetition per scenario, not per turn — in DEC-174 point 1).
+      RED anchor confirmed red before implementation, green after.
+
+      **Fidelity: PARTIAL** (read from `evals/reset_fidelity.json`, not assumed). All 6 rates:
+      | Scenario | Result | k | Fidelity |
+      |---|---|---|---|
+      | `scenario_gossip_chain` | 3/3 | 3 | PARTIAL |
+      | `scenario_grief_persistence` | 3/3 | 3 | PARTIAL |
+      | `scenario_memory_consolidation` | 3/3 | 3 | PARTIAL |
+      | `scenario_mood_contagion` | 3/3 | 3 | PARTIAL |
+      | `scenario_reputation_drift` | 3/3 | 3 | PARTIAL |
+      | `scenario_time_passage` | 3/3 | 3 | PARTIAL |
+
+      No Wilson interval on any line, per PARTIAL fidelity. **Order-effect check: not computable** —
+      every scenario produced a uniform outcome across its 3 repetitions (all-pass), which makes
+      Cochran's Q's denominator `Σ Cⱼ(k−Cⱼ)` zero (SEQUENCE_STATS_POLICY §7's documented degenerate
+      case). Reported as such, with the reason named and pooled rates-by-repetition `[1.000, 1.000,
+      1.000]` shown — not silently substituted with a different statistic. Both branches (interval /
+      order-effect) were exercised during the session: an earlier run (before a bug fix below) had
+      `scenario_time_passage` at 0/3 with the other five uniform at 3/3, which is *also* a degenerate
+      Cochran's Q case (every scenario still uniform, just not all the same value) — the "not
+      computable" path is exercised by both a mixed-result run and an all-pass run.
+
+      **Wall-clock:** the first live pass measured a real, unbudgeted cost EVAL-P12.1 did not capture —
+      `POST /v1/clock/advance` cascades through ~25 tick engines and measured ~63s/call under load,
+      against which `scenario_time_passage`'s up to 33 calls/repetition would have cost ~104 of a
+      total ~121 measured minutes at k=3. Reported to the human via AskUserQuestion (computed total,
+      dominated by one scenario); the human chose to run all 6 scenarios in one sitting rather than
+      split. The corrected re-run (below) completed in ~15 minutes total — the 63s/call figure was
+      transient load, not a structural per-call floor; both numbers are recorded since the transient
+      one is what actually gated the go/no-go decision.
+
+      **Scope note:** the human separately confirmed via AskUserQuestion that fixing forward all 6
+      scenarios (rather than deferring the harder ones as named gaps) was in scope for this task.
+      Doing so surfaced 5 real, pre-existing defects, all fixed in this task's commit and recorded in
+      DECISIONS.md DEC-174: (1) `scenario_gossip_chain`/`scenario_grief_persistence` never routed their
+      hardcoded scenario-vocabulary ids through `evals/world_map.py`'s `WORLD_MAP.resolve()`, and
+      neither had an actual pass/fail predicate; (2) `/v1/npc/{id}/state` and `/v1/npc/{id}/emotion`
+      return their Pydantic model directly (no `OkEnvelope` "data" wrapper) — the first adapter draft
+      read a nonexistent nested key and always got `[]`/`0.0`; (3) two adapters never created the
+      player Character node before calling `/v1/dialogue` (strict-player policy, ISSUE-118); (4)
+      `scenario_mood_contagion`'s original script posted to `POST /v1/admin/advance`, a route that does
+      not exist in this codebase (confirmed via `grep` against `src/npc_engine/api/routes/`) — rewritten
+      against the real `POST /v1/clock/advance` (mood contagion is one of `TickScheduler`'s
+      unconditional per-tick engines, no interval gate to satisfy); (5) `scenario_time_passage`'s
+      "5 advances lands on morning" assertion is structurally impossible to fail-safe — 5 advances of a
+      5-slot rotation is *always* one full cycle back to the starting slot, so the correct assertion
+      reads the starting slot first and checks the run returns to it, not a hardcoded value. Point 5 is
+      what produced the 0/3 result in the first live pass; fixed and reconfirmed 3/3 in the second.
+
+      `docs/SEQUENCE_STATS_POLICY.md` §3's enforcement contract holds: `render_report` in
+      `evals/sequence_rates.py` never receives a `ResetReceipt`, only the `SequenceStat` the runner
+      already decided to hand it — verified by `test_forcing_partial_fidelity_removes_interval_from_rendered_output`.
 
 ### Phase EVAL-P13 — The portfolio artifact
 **Goal:** Make the rigour legible in five minutes to someone who will never run the suite.

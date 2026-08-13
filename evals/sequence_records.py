@@ -5,7 +5,9 @@ Purpose: Frozen Pydantic v2 schema for multi-turn sequence transcripts.
          Defines SequenceRun, Repetition, Turn, ResetReceipt, and SequenceRunConfig
          — the v2 transcript record shape for multi-turn scenario evaluation.
 Dependencies: pydantic, retrieved_item (evals/)
-Used by: evals/sequence_runner_v2 (EVAL-P14 implementation, future)
+Used by: evals/sequence_runner.py (ResetReceipt, EVAL-P12.4), evals/sequence_fidelity.py
+         (ResetReceipt), evals/sequence_runner_v2 (Turn/Repetition/SequenceRun,
+         EVAL-P14 implementation, future)
 """
 
 from __future__ import annotations

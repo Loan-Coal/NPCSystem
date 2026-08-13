@@ -3161,3 +3161,117 @@ validations ("human verdicts preserved: 393", "rows whose criteria changed are f
 `needs_review` and named") now exercise the P19.2 matcher change instead of a refusal_judge
 prompt change; the third ("`refusal_judge` κ re-reported with its cluster-corrected CI") is
 retained, with "unchanged, still open" as its expected and accepted result.
+
+## DEC-173: Hedging pass/fail follows knowledge provenance, not response content (EVAL-P20.1)
+**Date:** 2026-08-13
+**Context:** `case_neg_captain_sorn_no_hedging` failed hedging while `case_pos_mira_gossip_hedging`
+passed it, on a player prompt measured 0.71 similar — the battery scored one mechanism as both
+the failure mode and the success mode. Human decision requested via AskUserQuestion; two other
+candidate rules were considered and rejected — see below.
+**Decision:** the case set's hedging rule is knowledge-provenance-based: an NPC answering from a
+**direct** `KNOWS_ABOUT` edge (captain_sorn) must not hedge; an NPC answering from
+**gossip-propagated** knowledge (mira, old_henryk) should hedge, and hedging there is a pass.
+Written up in `docs/CASE_SET_POLICY.md`, which both previously-contradicting cases now cite.
+This was already the *implicit* rule in three other cases' `notes:`
+(`case_pos_mira_war_gossip_tokens`, `case_pos_old_henryk_war_rumor_tokens`,
+`case_pos_captain_sorn_war_knowledge`) — this decision makes it explicit and load-bearing rather
+than leaving it to be re-derived per case.
+**Rejected alternative 1 (content-specificity rule):** hedging is neutral for every NPC; a
+response fails only when a hedge carries a specific invented fact (name/place/figure) stated as
+certain. Rejected as the *sole* rule because it would pass captain_sorn hedging about the war he
+commands as long as he invents nothing while doing it — a voice failure this case set exists to
+catch independent of factual content.
+**Rejected alternative 2 (hybrid):** provenance sets the expected register, content-specificity
+independently catches invented facts under any register. Rejected for this pass as unneeded
+duplication of policy surface — no case currently exists where provenance alone would let a
+hallucinated specific fact through under cover of a hedge. Revisit if one does.
+**Also decided (same gate):** the 3 cases sharing the byte-identical player message "What is
+happening in the north?" stay identical, declared paired in-file under two named categories
+(same-NPC dual-lens; cross-NPC register-contrast) — see `docs/CASE_SET_POLICY.md` for the
+full rule going forward. Two `make check-dead-keywords` wording-mismatch findings
+(`case_neg_captain_sorn_no_hedging`'s `"i heard"`, `case_neg_lira_no_trust_disclosure`'s
+`"thieves guild"`) were fixed in the same commit; ~200 remaining dead-keyword entries are
+untriaged (ISSUE-157).
+**Consequences:** `EVAL-P20.2` had already shipped in a separate, earlier commit before this
+decision — the roadmap's "both ids land in one commit" constraint (H6) could not be
+retroactively satisfied. Recorded rather than silently ignored.
+
+## DEC-174: EVAL-P12.4 measured multi-turn — order-effect check pooling, reset-receipt sourcing, and scenario fix-forward
+**Date:** 2026-08-13
+**Context:** `HUMAN GATE H5` / `EVAL-P12.4`. Four design points came up while wiring the six promoted
+scenarios into `sequence_runner`/`sequence_rates` that the ROADMAP spec did not fully settle. All four
+were resolved as engineering judgment per `project-harness/CLAUDE.md`'s "make a choice, note it here"
+clause rather than blocking on a question — none is irreversible. Scope was confirmed via AskUserQuestion
+("fix-forward all six" chosen over deferring memory_consolidation/mood_contagion or gossip_chain/
+grief_persistence as named gaps).
+
+**1. Cochran's Q / McNemar pooled across the 6 scenarios, not per-scenario.**
+`docs/SEQUENCE_STATS_POLICY.md` §4.2 states the order-effect formula over a per-turn block design
+(`Lᵢ` = passes at repetition `i` summed across *evaluated turns*, `Cⱼ` = passes for turn `j` summed
+across repetitions). The v1 `sequence_runner` (this task's scope) records one pass/fail boolean per
+repetition per *scenario* — not per turn; that finer Turn-level record is the v2 schema
+(`sequence_records.py`), reserved for the future EVAL-P14 runner. Computing Q per-scenario-in-isolation
+with a single-column matrix degenerates: with one "turn", `Cⱼ` collapses to the scenario's own total
+pass count and `Q` reduces algebraically to the constant `k−1` whenever the outcome isn't uniform —
+informative of nothing but "there is variance". Resolved: `evals/sequence_order_effect.py` substitutes
+"scenario" for "turn" as the block-design column, building a `[scenario][repetition]` matrix across all
+6 promoted scenarios sharing one `k`. This is non-degenerate (6 columns) and tests exactly what the
+check exists to test here — whether repetition position predicts outcome, pooled over the measured
+battery — using only data the v1 runner actually produces.
+
+**2. `evals/sequence_reset.py` reads `evals/reset_fidelity.json` once per run, not once per repetition.**
+The ROADMAP validation says "`evals/reset_fidelity.json` was read, not assumed." Read literally as
+"re-diff the graph every repetition," this would mean `k × 6` full graph-plus-store diffs, which would
+dominate the wall-clock budget for no new evidence: EVAL-P12.1 already established that
+`preconditions.reset_world` PATCHes exactly two `world_state` properties and nothing else — a
+structural property of the endpoint, not something that varies call to call. Resolved: the JSON is read
+once to build a `cleared`/`surviving` template; each repetition's `ResetReceipt` reuses that template
+and measures only its own live `duration_ms`. Satisfies the letter (the file is read, never assumed —
+`sequence_reset.load_reset_fidelity_report` raises if the artifact is missing) without paying for a
+re-measurement the task never asked for.
+
+**3. `mood_contagion` rewritten off a dead route and off direct Neo4j access.**
+`e2e/scenarios/scenario_mood_contagion.py` posts to `POST /v1/admin/advance`. `grep` against
+`src/npc_engine/api/routes/` confirms no such route exists in this codebase — a dead reference, not a
+live-but-obscure one. The scenario also reads mood state via a direct `neo4j.AsyncGraphDatabase` driver
+connection, unlike every other promoted scenario. `evals/scenario_adapters_extra.py`'s
+`make_mood_contagion` drives ticks through the real `POST /v1/clock/advance` (mood contagion is one of
+`TickScheduler`'s unconditional per-tick engines — `_ordered_tick_engines()`, no interval gate to
+satisfy) and reads state back through `GET /v1/graph/nodes/Character/{id}`, matching every other
+adapter's HTTP-only access pattern. This is a bug fix inside the scenario's own tick-triggering
+mechanism (CLAUDE.md: "you may proceed without asking on: bug fixes inside a single module"), not a
+change to what the scenario measures — the success predicate (`current_mood is not None` on both NPCs
+after 3 ticks) is unchanged from the original script.
+
+**4. `gossip_chain` / `grief_persistence` wired through `evals/world_map.py` with authored predicates.**
+Both scenarios hardcoded scenario-vocabulary ids (`npc_1`, `npc_6`, `elder_1`, `loc_market`) directly in
+API calls, never routed through `WORLD_MAP.resolve()` despite the map already covering exactly these
+ids — running them unmodified against the seeded eval world would 404. Neither had an actual pass/fail
+assertion (both are observational-only in their original form). `evals/scenario_adapters.py` resolves
+every entity id through `WORLD_MAP` and authors one predicate each: gossip_chain passes when the
+distant NPC's `/state` events list contains the created event's id after two gossip ticks;
+grief_persistence passes when the NPC's post-turn-2 emotion valence is negative. Every adapter also
+uses a fresh uuid-suffixed entity id per repetition, since none of the create endpoints they call are
+guaranteed upserts and PARTIAL fidelity means created graph nodes survive `reset_world` into the next
+repetition.
+**5. `time_passage`'s "5 advances -> morning" assertion was structurally wrong; fixed during the live run.**
+The first full k=3x6 live run (before this fix) reported `scenario_time_passage` 0/3 while the other five
+scenarios stable-passed 3/3. Root cause: `time_of_day` rotates through exactly 5 fixed slots, so 5
+advances is *always* one full cycle back to whatever slot the run started at — landing on "morning"
+specifically only holds if the shared `world_state` (which survives `reset_world` under PARTIAL
+fidelity — `world_state.other_properties`) happened to already be at "morning" before the first advance.
+It was not; the observed sequence started at "night", not "midday". This is a pre-existing defect in
+`e2e/scenarios/scenario_time_passage.py` itself, not something introduced by this task's adapter —
+under FULL fidelity (a fresh world every run) it would coincidentally pass whenever the fixture happened
+to initialize at "morning", which is presumably why it was never caught. Fixed in
+`evals/scenario_adapters_extra.py`'s `make_time_passage` by reading the starting slot via
+`GET /v1/graph/nodes/world_state/world` before advancing and asserting the run returns to *that* slot,
+the actual invariant "5 advances is a full cycle" guarantees. This is a bug fix inside a single module
+(CLAUDE.md: proceed without asking), and cheap to re-verify: `/v1/clock/advance` calls that measured
+~63s during the first run measured ~0.2–1s during the second (transient load, not a per-call floor —
+see EVAL-P12.4's roadmap entry for both measurements). The full k=3x6 sequence was re-run clean rather
+than splicing the fixed scenario's result into the first run's artifact, for one reproducible number.
+**Consequences:** none of these five are behavior changes to already-shipped, tested code — all five
+land inside this task's new files. If EVAL-P14's v2 runner ships real per-turn records, point 1's
+pooling choice should be revisited: a per-turn Cochran's Q would then be strictly more informative than
+the pooled-scenario approximation used here.

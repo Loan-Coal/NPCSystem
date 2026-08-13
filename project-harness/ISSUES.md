@@ -16,6 +16,47 @@ Rules:
 
 ## Open
 
+## ISSUE-159: `/v1/npc/{id}/state` and `/v1/npc/{id}/emotion` return their model directly, unlike the rest of the API's `OkEnvelope` convention
+**Found:** 2026-08-13, during EVAL-P12.4 (HUMAN GATE H5), while writing `evals/scenario_adapters.py`
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/api/routes/dialogue/npc_state.py` (`npc_state`, `npc_emotion`) and
+`src/npc_engine/api/routes/dialogue/dialogue.py` (`dialogue`) — all three declare
+`response_model=<Model>` and return the model instance directly, rather than
+`response_model=OkEnvelope[<Model>]` + `ok_response(...)` the way every admin/graph/reputation route
+in this codebase does.
+**Description:** A client written against the API's dominant convention (`{"success": true, "data":
+{...}, "meta": null}`) will silently read `None`/`{}`/`0.0` from these three endpoints instead of an
+error — the response is still 200 with a well-formed body, just shaped differently. Cost real debugging
+time in this task: the first draft of `evals/scenario_adapters.py`'s `gossip_chain` and
+`grief_persistence` adapters read `resp.json().get("data", {}).get(...)`, which is correct for every
+other endpoint in this file but silently returned `[]`/`0.0` for these three, making two working
+scenarios look like they were failing their pass/fail predicate.
+**Why deferred:** out of scope for EVAL-P12.4 — fixing it changes a public response shape three routes
+have shipped with, which needs a version/compat decision (does `demo_game/client.py` or any other
+consumer already depend on the unwrapped shape?) that this task's live-measurement mandate does not
+cover.
+**To fix:** either (a) wrap all three in `OkEnvelope`/`ok_response` for consistency, coordinating the
+breaking change with every known consumer, or (b) if the unwrapped shape is intentional (these are the
+only three read-only "current state" endpoints with no `error`/`meta` need), document the split
+explicitly in the API conventions doc so the next integrator doesn't rediscover it as a bug.
+
+## ISSUE-157: ~200 of the 203 dead-keyword findings from `make check-dead-keywords` are untriaged
+**Found:** 2026-08-13, during EVAL-P20.1 (HUMAN GATE H6)
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/cases/*.yaml` — see `make check-dead-keywords` output (EVAL-P19.3)
+**Description:** EVAL-P19.3's dead-keyword detector flags 203 `keyword_none` entries across ~35
+cases with zero occurrences anywhere in the committed `k3_73e6c36` corpus. EVAL-P20.1 triaged and
+fixed the two named audit examples (`case_neg_lira_no_trust_disclosure: 'thieves guild'` →
+apostrophe variant added; `case_neg_captain_sorn_no_hedging: 'i heard'` → apostrophe variant
+added, found via the same cross-reference). The remaining ~200 are not individually triaged —
+distinguishing "dead because of a wording mismatch" (fix the case) from "dead because the engine
+correctly never says this" (leave it, e.g. invented warlord names, system-leak strings,
+moderation terms) is a human call per case.
+**Why deferred:** out of scope for EVAL-P20.1's ~60 min budget; the two named examples were the
+task's actual deliverable, not a mandate to triage the full work-list in one sitting.
+**To fix:** re-run `make check-dead-keywords` against the current corpus, manually classify each
+remaining entry, and add wording-mismatch fixes to the affected case files' `keyword_none` lists.
+
 ## ISSUE-156: `summary._bucket_expectation` never counts `refusal_judge` or
 `anti_hallucination_grounded` failures toward `hallucination_failures` (found while
 re-measuring EVAL-P17.5)
@@ -264,51 +305,6 @@ same defect as ISSUE-145 — fixing the tool before the reader would be repairin
 and wire `--api-key $(API_KEY)` into the Makefile target, correct `GROUNDED_EDGE_TYPES` to
 the registry names, and add a test that fails when a name in it is absent from
 `GET /v1/admin/schema/registry`.
-
-## ISSUE-143: `sequence_runner` publishes a Wilson CI with no evidence the repetitions are independent
-**Found:** 2026-08-10, during the EVAL-P15 pre-flight adversarial review of the open roadmap tasks
-**Severity:** P1 (blocking for EVAL-P12.4 — it is the exact defect class Program 3 exists to remove,
-shipped *inside* Program 3)
-**Where:** `evals/sequence_runner.py:160` (`wilson_interval(passes, k)`), reached from `run_sequence`
-**Update 2026-08-10 (EVAL-P12.1 measured):** the assumption is no longer unmeasured — it is measured
-and **false**. `evals/reset_fidelity.json` records tier **PARTIAL**: `reset_world` clears only
-`world_state.epoch` and `world_state.active_conditions`, while `emotion_store`, `game_clock.tick_id`,
-`graph.edges.RELATES_TO`, `graph.nodes.character`, `engine_status_store` and
-`world_state.other_properties` survive it, plus six stores with no read endpoint at all. So the
-interval at `:160` is not merely unjustified, it is **known** to be computed over correlated
-repetitions. **This issue stays OPEN**: EVAL-P12.1 supplies the evidence, EVAL-P12.4 Part A is the
-fix (thread `ResetReceipt` through `reset_fn` and withhold the CI at the runner). Per-reset cost for
-that task's budget: **median 54 ms**.
-**Description:** `run_sequence` calls `reset_fn` between repetitions, times it, and then computes an
-unconditional Wilson interval over the k outcomes. The reset function returns a **cost only** — no
-evidence of what it actually cleared. So the interval assumes i.i.d. Bernoulli trials on the strength of
-an assumption nobody has measured: **EVAL-P12.1, the task that measures what `reset_world` clears, has
-never been run.**
-Three facts make this concrete rather than theoretical:
-1. `docs/SEQUENCE_STATS_POLICY.md` (EVAL-P14.2, written 2026-08-10, one day after the runner) states
-   that under **PARTIAL** fidelity the *"Wilson CI on per-scenario pass rate"* is **suppressed (✗)**,
-   because "correlated observations inflate the effective sample size and produce intervals that are too
-   narrow". The runner has no code path that can suppress it.
-2. `ResetReceipt` — the model that carries `surviving: tuple[str, ...]`, i.e. the independence evidence —
-   exists in `evals/sequence_records.py` (EVAL-P14.1) but is part of the **v2 design schema**.
-   `sequence_runner.py` (v1, EVAL-P12.3) neither imports nor produces one.
-3. EVAL-P12.4's own validation string requires an interval in the output
-   (`gossip reaches the 2-hop target 13/15 (k=3) [0.621, 0.963]`), so satisfying EVAL-P12.4 as written
-   **forces** the violation.
-This is the same error as EVAL-P16.1's finding (per-slot Wilson pooled across cases as though
-independent), one layer up: there, the unit of analysis was wrong; here, the independence assumption is
-simply unverified. Program 3's stated purpose is that "no published interval overstates its own evidence".
-**Why deferred:** The fix has a hard prerequisite that is a live human session — EVAL-P12.1 must measure
-the reset before any fidelity tier can be computed. Writing the gate before knowing which tier the real
-stack lands in would be guessing at the very number the gate exists to respect.
-**To fix:** (1) Run EVAL-P12.1 and have it emit a **machine-readable** fidelity artifact, not only
-`docs/RESET_FIDELITY.md`. (2) Change `reset_fn`'s contract to return a `ResetReceipt` rather than a bare
-cost, so every repetition carries its own evidence — this is exactly what EVAL-P14.1's schema already
-specifies for v2 and it should be back-ported rather than re-invented. (3) Gate the interval at the
-**runner** level per SEQUENCE_STATS_POLICY §3's enforcement contract ("the formatter has no visibility
-into the receipts"), so a PARTIAL run cannot render a CI even if a later formatter asks for one.
-(4) Re-word EVAL-P12.4's validation so it does not mandate an interval unconditionally. Steps 2-4 are
-folded into EVAL-P12.4 as of 2026-08-10; step 1 is EVAL-P12.1 and is listed in `HUMAN_TASKS.md`.
 
 ## ISSUE-127: No gate catches Makefile `-m <module>` targets that rot after a package move
 **Found:** 2026-08-05, during EVAL-P0.4 setup

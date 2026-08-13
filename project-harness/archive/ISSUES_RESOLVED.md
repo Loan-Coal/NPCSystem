@@ -1928,3 +1928,95 @@ pre-existing defect in a sibling script, confirmed present on a clean `metrics` 
 task's changes.
 **To fix:** Called `_force_utf8_streams()` (already defined in `evals/__main__.py`) at the top of
 `scripts/check_conservation.py`'s `main()`, mirroring `check_human_gates.py`'s pattern.
+
+## [FIXED] ISSUE-158: `read_transcript` rejects the committed `k3_73e6c36` baseline outright — `RunConfig.harness_version` required field has no legacy fallback
+**Found:** 2026-08-13, during `EVAL-P19.4` / `HUMAN GATE H2` execution (this task)
+**Fixed:** 2026-08-13, same task — `read_transcript`'s gen-dir loader now stamps a
+`LEGACY_HARNESS_VERSION` sentinel (`"legacy_pre_p18_1"`) onto pre-EVAL-P18.1 `meta.json` configs
+missing `harness_version`, instead of failing validation. `RunConfig` itself keeps `harness_version`
+required with no default (ISSUE-152's rationale unchanged: a default there would let two
+incomparable runs compare cleanly by accident) — only the read boundary for legacy artifacts
+tolerates the gap, and it does so via a sentinel that can never equal a real
+`resolve_harness_version()` hash, so a legacy run can never accidentally read as comparable to a
+current one. Regression test `test_read_transcript_reads_gen_dir_predating_harness_version`
+(`tests/unit/evals/test_eval_records_v2.py`) confirmed RED (`ImportError` then
+`pydantic.ValidationError: harness_version Field required`) before the fix, GREEN after; full
+`test_eval_records_v2.py` + `test_eval_records.py` suites (20 tests) still pass. Verified against
+the real artifact: `read_transcript(Path('evals/generations/k3_73e6c36/outputs.jsonl'))` loads all
+921 records with `config.harness_version == "legacy_pre_p18_1"`.
+**Severity:** P1 (blocking — `make eval-judge` and `make label-import` both call `read_transcript`
+transitively (`judge_runner.py`, `transcript_index.read_transcript_provenance`) and both raised
+`ValidationError` on the one committed baseline artifact `EVAL-P19.4`'s runbook specifies re-judging;
+undiscovered until this task because ISSUE-152's fix only patched a test fixture, not the real
+`evals/generations/k3_73e6c36/meta.json`, and nobody had run `evals judge` against it since
+`EVAL-P18.1` landed 2026-08-12 (`judged.jsonl` mtime predates that date))
+**Where:** `evals/eval_records.py` `_read_generation_dir` (called by `read_transcript`, used by
+`judge_runner.py`, `evals/transcript_index.py`, `evals/label_import.py`)
+**Description:** `EVAL-P18.1` (2026-08-12) added `RunConfig.harness_version: str` as a required
+field, deliberately with no default. `evals/generations/k3_73e6c36/meta.json` was written
+2026-08-08 — its `config` dict has every other `RunConfig` field but not `harness_version`.
+`_read_generation_dir` passes that dict straight to `TranscriptFile.model_validate`, which
+Pydantic rejects with `harness_version Field required`. Confirmed on clean `metrics` HEAD before
+this task's changes.
+**Why not deferred:** Blocking exception under the project's single-task-focus rule — `EVAL-P19.4`
+cannot run its judge pass or its `label-import` merge without a way to load this transcript, and the
+runbook explicitly requires the **unchanged** transcript (regenerating a fresh one would defeat the
+zero-relabelling-cost point of the task). Confirmed with the user (`AskUserQuestion`) before fixing,
+given it's an interface change on a function used well outside this module: chose the
+loader-tolerance option over backfilling `meta.json` with a freshly-computed hash (would misrepresent
+history — `EVAL-P19.2` already changed `evals/matchers.py`, one of `resolve_harness_version`'s
+hash inputs, after this artifact was generated, so a "fresh" hash would not describe the state that
+actually produced it) or stopping the task entirely.
+
+## [FIXED] ISSUE-143: `sequence_runner` publishes a Wilson CI with no evidence the repetitions are independent
+**Found:** 2026-08-10, during the EVAL-P15 pre-flight adversarial review of the open roadmap tasks
+**Fixed:** 2026-08-13, in EVAL-P12.4 (`eval-p12.4-measured-multiturn` branch)
+**Severity:** P1 (blocking for EVAL-P12.4 — it is the exact defect class Program 3 exists to remove,
+shipped *inside* Program 3)
+**Where:** `evals/sequence_runner.py:160` (`wilson_interval(passes, k)`), reached from `run_sequence`
+**Update 2026-08-10 (EVAL-P12.1 measured):** the assumption is no longer unmeasured — it is measured
+and **false**. `evals/reset_fidelity.json` records tier **PARTIAL**: `reset_world` clears only
+`world_state.epoch` and `world_state.active_conditions`, while `emotion_store`, `game_clock.tick_id`,
+`graph.edges.RELATES_TO`, `graph.nodes.character`, `engine_status_store` and
+`world_state.other_properties` survive it, plus six stores with no read endpoint at all. So the
+interval at `:160` is not merely unjustified, it is **known** to be computed over correlated
+repetitions. **This issue stays OPEN**: EVAL-P12.1 supplies the evidence, EVAL-P12.4 Part A is the
+fix (thread `ResetReceipt` through `reset_fn` and withhold the CI at the runner). Per-reset cost for
+that task's budget: **median 54 ms**.
+**Description:** `run_sequence` calls `reset_fn` between repetitions, times it, and then computes an
+unconditional Wilson interval over the k outcomes. The reset function returns a **cost only** — no
+evidence of what it actually cleared. So the interval assumes i.i.d. Bernoulli trials on the strength of
+an assumption nobody has measured: **EVAL-P12.1, the task that measures what `reset_world` clears, has
+never been run.**
+Three facts make this concrete rather than theoretical:
+1. `docs/SEQUENCE_STATS_POLICY.md` (EVAL-P14.2, written 2026-08-10, one day after the runner) states
+   that under **PARTIAL** fidelity the *"Wilson CI on per-scenario pass rate"* is **suppressed (✗)**,
+   because "correlated observations inflate the effective sample size and produce intervals that are too
+   narrow". The runner has no code path that can suppress it.
+2. `ResetReceipt` — the model that carries `surviving: tuple[str, ...]`, i.e. the independence evidence —
+   exists in `evals/sequence_records.py` (EVAL-P14.1) but is part of the **v2 design schema**.
+   `sequence_runner.py` (v1, EVAL-P12.3) neither imports nor produces one.
+3. EVAL-P12.4's own validation string requires an interval in the output
+   (`gossip reaches the 2-hop target 13/15 (k=3) [0.621, 0.963]`), so satisfying EVAL-P12.4 as written
+   **forces** the violation.
+This is the same error as EVAL-P16.1's finding (per-slot Wilson pooled across cases as though
+independent), one layer up: there, the unit of analysis was wrong; here, the independence assumption is
+simply unverified. Program 3's stated purpose is that "no published interval overstates its own evidence".
+**Why deferred:** The fix has a hard prerequisite that is a live human session — EVAL-P12.1 must measure
+the reset before any fidelity tier can be computed. Writing the gate before knowing which tier the real
+stack lands in would be guessing at the very number the gate exists to respect.
+**To fix:** (1) Run EVAL-P12.1 and have it emit a **machine-readable** fidelity artifact, not only
+`docs/RESET_FIDELITY.md`. (2) Change `reset_fn`'s contract to return a `ResetReceipt` rather than a bare
+cost, so every repetition carries its own evidence — this is exactly what EVAL-P14.1's schema already
+specifies for v2 and it should be back-ported rather than re-invented. (3) Gate the interval at the
+**runner** level per SEQUENCE_STATS_POLICY §3's enforcement contract ("the formatter has no visibility
+into the receipts"), so a PARTIAL run cannot render a CI even if a later formatter asks for one.
+(4) Re-word EVAL-P12.4's validation so it does not mandate an interval unconditionally. Steps 2-4 are
+folded into EVAL-P12.4 as of 2026-08-10; step 1 is EVAL-P12.1 and is listed in `HUMAN_TASKS.md`.
+**How fixed:** `evals/sequence_runner.reset_fn` now returns a `ResetReceipt` (`evals/sequence_reset.py`
+builds one per repetition from `evals/reset_fidelity.json` plus a live-measured `duration_ms`).
+`evals/sequence_fidelity.py` derives the run's tier from the receipts and withholds the interval — the
+report formatter (`evals/sequence_rates.py:render_report`) never receives a receipt, only the
+already-gated `SequenceStat`. Live-verified: the EVAL-P12.4 k=3x6 run reported PARTIAL fidelity on
+every scenario, no Wilson interval anywhere in the output, and the order-effect check
+(Cochran's Q + first-vs-last McNemar, pooled across the 6 scenarios) printed in its place.
