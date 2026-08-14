@@ -32,3 +32,8 @@ notes: >
   (negative) and case_voice_mira_innkeeper (tone_judge). Together these
   three form the full mira epistemic contract: positive hedging / no authority
   claims / warm gossip tone.
+  Hedging rule (docs/CASE_SET_POLICY.md): mira's knowledge here is gossip-propagated
+  (a distorted_summary with explicit third-party attribution), so hedging is a PASS —
+  contrast case_neg_captain_sorn_no_hedging, where hedging is a failure because
+  captain_sorn's knowledge is a direct KNOWS_ABOUT edge. Same rule, opposite verdict,
+  because the knowledge provenance differs.

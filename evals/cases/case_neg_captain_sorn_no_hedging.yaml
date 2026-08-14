@@ -15,8 +15,17 @@ input:
 expected:
   - kind: schema
   - kind: keyword_none
-    keywords: ["i heard", "they say", "perhaps", "rumor", "apparently", "word is", "i think"]
+    keywords: ["i've heard", "they say", "perhaps", "rumor", "apparently", "word is", "i think"]
 
 notes: >
-  Requires demo world seed (make demo-seed). Pair with case_voice_captain_sorn_001
-  to verify both positive (direct tone) and negative (no hedging) simultaneously.
+  Requires demo world seed (make demo-seed). Hedging rule (docs/CASE_SET_POLICY.md):
+  captain_sorn holds a DIRECT KNOWS_ABOUT edge, so hedging is a failure here — contrast
+  case_pos_mira_gossip_hedging, where hedging is a pass because mira's knowledge is
+  gossip-propagated. "i heard" replaced with "i've heard": the committed corpus writes
+  the contraction 612 times and the uncontracted form zero times, so "i heard" alone
+  never fired (EVAL-P19.3 dead-keyword finding).
+  Deliberately paired, byte-identical player_message, two ways (see docs/CASE_SET_POLICY.md):
+  (1) same-NPC dual-lens with case_voice_captain_sorn_001 (this case's keyword_none vs.
+  that case's tone_judge, two independent checks of the same no-hedging property);
+  (2) cross-NPC register-contrast with case_neg_mira_no_military_authority (same stimulus,
+  opposite expected register).

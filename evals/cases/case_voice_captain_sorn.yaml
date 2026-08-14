@@ -30,3 +30,8 @@ notes: >
   Requires demo world seed (make demo-seed). captain_sorn is seeded with
   KNOWS_ABOUT northern_war_begins. Pair with case_voice_mira_innkeeper to
   verify the two voices are distinctly different.
+  Deliberately paired (docs/CASE_SET_POLICY.md): byte-identical player_message with
+  case_neg_captain_sorn_no_hedging — a same-NPC dual-lens pair. Both test captain_sorn's
+  no-hedging property, via two independent measurement mechanisms (a literal keyword
+  blocklist there, an LLM tone judge here), as a cross-check against either mechanism's
+  individual blind spots.

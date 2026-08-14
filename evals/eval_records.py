@@ -30,6 +30,13 @@ from run_config import RunConfig
 _TRANSCRIPT_VERSION: int = 2
 _logger = logging.getLogger(__name__)
 
+# Sentinel harness_version for gen-dirs written before EVAL-P18.1 (2026-08-12)
+# made the field required on RunConfig. Explicit and visibly non-comparable
+# (never matches a real resolve_harness_version() hash) rather than a silent
+# default on RunConfig itself — see ISSUE-152: a default there would let two
+# incomparable runs compare cleanly by accident.
+LEGACY_HARNESS_VERSION: str = "legacy_pre_p18_1"
+
 
 # ---------------------------------------------------------------------------
 # Exceptions
@@ -290,6 +297,15 @@ def _read_generation_dir(outputs_path: Path, meta_path: Path) -> TranscriptFile:
             found=int(found_version) if isinstance(found_version, int) else 0,
             expected=_TRANSCRIPT_VERSION,
         )
+    config = meta.get("config")
+    if isinstance(config, dict) and "harness_version" not in config:
+        _logger.warning(
+            "gen-dir %s predates EVAL-P18.1's harness_version field; "
+            "stamping %s (not comparable to any real run)",
+            meta_path.parent,
+            LEGACY_HARNESS_VERSION,
+        )
+        meta["config"] = {**config, "harness_version": LEGACY_HARNESS_VERSION}
     lines = [line for line in outputs_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     meta["records"] = [json.loads(line) for line in lines]
     return TranscriptFile.model_validate(meta)

@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from eval_records import (
+    LEGACY_HARNESS_VERSION,
     GenerationRecord,
     TranscriptFile,
     TranscriptVersionError,
@@ -161,3 +162,41 @@ def test_transcript_version_error_names_both_versions() -> None:
     msg = str(err)
     assert "1" in msg
     assert "2" in msg
+
+
+def test_read_transcript_reads_gen_dir_predating_harness_version(tmp_path: Path) -> None:
+    """read_transcript loads a gen-dir meta.json written before EVAL-P18.1.
+
+    Regression test: EVAL-P18.1 (2026-08-12) made RunConfig.harness_version a
+    required field with no default. The committed baseline artifact
+    evals/generations/k3_73e6c36/ was generated 2026-08-08, before that field
+    existed — its meta.json's config dict has every RunConfig field except
+    harness_version. Before this fix, read_transcript raised
+    pydantic.ValidationError("harness_version Field required") on that gen-dir,
+    breaking `evals judge` and `label_import.read_transcript_provenance` for the
+    one artifact EVAL-P19.4 is specced to re-judge. RunConfig itself keeps no
+    default (ISSUE-152's rationale: a silent default would let two incomparable
+    runs compare cleanly by accident) — only the legacy-read boundary tolerates
+    the gap, and it does so visibly via the LEGACY_HARNESS_VERSION sentinel
+    rather than inventing a real-looking hash.
+    """
+    gen_dir = tmp_path / "pre_p18_1_run"
+    gen_dir.mkdir()
+    legacy_config = _MINIMAL_RUN_CONFIG.model_dump()
+    del legacy_config["harness_version"]
+    meta = {
+        "version": 2,
+        "generated_at": "2026-08-08T11:18:15+00:00",
+        "gen_id": "k3_73e6c36",
+        "k": 3,
+        "config": legacy_config,
+    }
+    (gen_dir / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    record = GenerationRecord(**_BASE_FIELDS)
+    (gen_dir / "outputs.jsonl").write_text(record.model_dump_json() + "\n", encoding="utf-8")
+
+    loaded = read_transcript(gen_dir / "outputs.jsonl")
+
+    assert loaded.config is not None
+    assert loaded.config.harness_version == LEGACY_HARNESS_VERSION
+    assert loaded.gen_id == "k3_73e6c36"

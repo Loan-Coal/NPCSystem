@@ -19,3 +19,8 @@ expected:
 
 notes: >
   Requires demo world seed (make demo-seed). Complements case_neg_mira_no_certainty_on_war.
+  Deliberately paired (docs/CASE_SET_POLICY.md): byte-identical player_message with
+  case_neg_captain_sorn_no_hedging — a cross-NPC register-contrast pair. Same stimulus
+  sent to two NPCs with opposite expected registers (captain_sorn: authoritative, no
+  hedging; mira: warm gossip, no military authority), to prove the engine produces two
+  distinctly different voices from one prompt rather than one generic NPC-shaped response.

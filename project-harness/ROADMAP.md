@@ -2305,7 +2305,7 @@ own downstream fix (EVAL-P21) depends on `EVAL-P20.4`, which depends on this gat
 `EVAL-P19.2` (word-boundary keyword matching, already shipped) is the real criteria change
 this gate actually needs to prove `--merge` durability against.
 
-- [ ] **EVAL-P19.4** *(live; human session)* Re-judge, merge, re-measure (**the durability proof**).
+- [x] **EVAL-P19.4** *(live; human session)* Re-judge, merge, re-measure (**the durability proof**).
       Files: none (operational). Runs a full judge pass and `label-import --merge` against the real
       393-row label file.
       Re-run the judge pass over the **unchanged** transcript with current criteria (`refusal_judge`'s
@@ -2316,6 +2316,28 @@ this gate actually needs to prove `--merge` durability against.
       **Expected result (DEC-172): κ is unchanged from 0.247 — that is not a failure of this task.**
       ISSUE-141 stays open and `refusal_judge`'s rate stays refused for publication until EVAL-P21's
       judge panel lands; this task's job is proving the merge mechanics, not fixing the scorer.
+      **DONE 2026-08-13 (HUMAN GATE H2 cleared).** Re-judged `k3_73e6c36` (`JUDGE_MODEL=mixtral:8x7b`)
+      over the unchanged transcript, also regenerated `deterministic_judged.jsonl` via
+      `make eval-deterministic-verdicts` so EVAL-P19.2's word-boundary fix was actually replayed (not
+      just assumed) — confirmed 0 of 576 deterministic verdicts flip in this corpus (the fix is real,
+      this corpus just has no case it changes; 12 rows' match-list *reasoning* text shrank without a
+      pass/fail change, e.g. `'north'` no longer matching inside `'northern'`). Merged with `MERGE=1`:
+      **human verdicts preserved: 393**, new rows: 0, hash-drifted rows (`needs_review`): 0 — named
+      per validation: none. `refusal_judge` re-measured: **κ = 0.247, 95% CI [-0.123, 0.703], n=75,
+      n_clusters=25** (Holm-adjusted CI [-0.154, 0.842], family=8) — point estimate and confusion
+      matrix (60/8/4/3) exactly match the original ISSUE-141 measurement, confirming DEC-172's
+      prediction. ISSUE-141 stays open, deferred to EVAL-P21, exactly as scheduled.
+      **Blocking infra defect found and fixed en route (single-task-focus exception — this task could
+      not run at all without it):** `evals/generations/k3_73e6c36/meta.json` predates EVAL-P18.1's
+      required `harness_version` field, so `read_transcript()` rejected the committed baseline
+      transcript outright. Fixed via a legacy-read sentinel (`LEGACY_HARNESS_VERSION`) at the
+      `_read_generation_dir` boundary only; `RunConfig` itself keeps no default. TDD'd, logged
+      `[FIXED]` as ISSUE-158 (archived — found and fixed in the same task).
+      **Also found, not fixed:** ISSUE-160 — `label_merge._has_drifted` only compares
+      `output_sha256`/`criteria_sha256`, so a `tone_judge` row's `scorer_verdict` flip on a re-judge
+      (ordinary LLM non-determinism per DEC-146, `human_verdict` untouched) was real but invisible to
+      the merge report's "0 drifted" line. Confirmed unrelated to `refusal_judge`/EVAL-P19.2; accepted
+      rather than reverted.
 
 <!-- LOOP:QUEUE end -->
 <!-- ^ MOVED HERE 2026-08-10 (DEC-163): narrowed from below EVAL-P24.3 to below EVAL-P19.4.
@@ -2430,8 +2452,11 @@ across the two budgeted ones). That is why it blocks both regenerations and noth
 **Both ids clear this gate together, deliberately.** `EVAL-P20.1` and `EVAL-P20.2` must land
 in **one commit** before regeneration #1 — the 2-regeneration budget buys exactly one
 comparability discontinuity, and two commits would spend it twice.
+**Note 2026-08-13:** `EVAL-P20.2` had already shipped in an earlier, separate commit before
+`EVAL-P20.1` was authored — the "one commit" constraint above could not be retroactively
+satisfied. Recorded here rather than silently ignored; see the `EVAL-P20.1` commit message.
 
-- [ ] **EVAL-P20.1** ⏸️ *(human authoring: what a case forbids is a product decision)* Resolve the
+- [x] **EVAL-P20.1** ⏸️ *(human authoring: what a case forbids is a product decision)* Resolve the
       case-set contradictions. Files: `edit evals/cases/*.yaml`,
       `create docs/CASE_SET_POLICY.md`.
       Fix from the EVAL-P19.3 work-list plus the audit's findings: `case_neg_captain_sorn_no_hedging`
@@ -2443,6 +2468,17 @@ comparability discontinuity, and two commits would spend it twice.
       Validation: the policy doc states when hedging is a pass and when it is a failure, in one rule that
       both cases satisfy; no two cases share a player message unless deliberately paired across NPCs, and
       that pairing is declared in the case file.
+      **DONE 2026-08-13:** human-decided rule (`docs/CASE_SET_POLICY.md`) — hedging pass/fail follows
+      knowledge provenance: direct `KNOWS_ABOUT` edge (captain_sorn) → hedging fails; gossip-propagated
+      knowledge (mira) → hedging passes. Both previously-contradicting cases now cite this one rule.
+      All 3 byte-identical-message cases kept and declared paired in-file, under two categories written
+      into the policy doc: same-NPC dual-lens (`case_neg_captain_sorn_no_hedging` +
+      `case_voice_captain_sorn_001`) and cross-NPC register-contrast (`case_neg_captain_sorn_no_hedging`
+      + `case_neg_mira_no_military_authority`). Also fixed, via the `make check-dead-keywords`
+      cross-reference: two wording-mismatch dead keywords (`case_neg_captain_sorn_no_hedging`'s
+      `"i heard"` → `"i've heard"`; `case_neg_lira_no_trust_disclosure`'s `"thieves guild"` →
+      `"thieves' guild"`), both confirmed against the committed `k3_73e6c36` corpus. Remaining
+      dead-keyword entries untriaged, tracked as ISSUE-157.
 
 - [x] **EVAL-P20.2** ⏸️ *(human authoring: only a human can say what an NPC should say)* Capability
       battery to ~35 cases (**completes EVAL-P9.3**). Files:

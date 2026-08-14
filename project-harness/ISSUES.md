@@ -16,6 +16,31 @@ Rules:
 
 ## Open
 
+## ISSUE-160: `label_merge._has_drifted` only compares `output_sha256`/`criteria_sha256` — a verdict-only change on hash-identical content is invisible to the merge report
+**Found:** 2026-08-13, during `EVAL-P19.4` (`HUMAN GATE H2`)
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/label_merge.py` `_has_drifted` / `merge_labels`
+**Description:** Re-judging the unchanged `k3_73e6c36` transcript and merging with `MERGE=1`
+reported `human verdicts preserved: 393` and zero drifted rows — correct as far as the tool's own
+definition of drift goes. A row-by-row diff against the pre-merge file found one real change the
+report never surfaced: `case_adv_lira_troop_positions:tone_judge:4#r0`'s `scorer_verdict` flipped
+`true`→`false` on re-judge, with `output_sha256` and `criteria_sha256` both byte-identical old vs.
+new. `human_verdict` was untouched (hence 393 still holds), and the cause is ordinary LLM judge
+non-determinism (DEC-146 already documents no `seed` parameter exists) — not a EVAL-P19.2 matcher
+effect, not a criteria change, and unrelated to `refusal_judge`/ISSUE-141. But `_has_drifted` only
+diffs `output_sha256`/`criteria_sha256`, so a `scorer_verdict` change with unchanged hashes is
+structurally invisible to `format_merge_report`'s `needs_review` warning — "0 drifted" describes
+hash-drift only, not "nothing about this row changed."
+**Why deferred:** Out of scope for `EVAL-P19.4` (measurement task, not a merge-tool change);
+confirmed via `AskUserQuestion` this is accepted as normal LLM non-determinism for this specific
+row rather than reverted.
+**To fix:** Decide whether a verdict-only flip on a hash-identical row should also set
+`needs_review=True` (safer default: any change under an existing human verdict gets a second
+look, even if the tool can't yet say why) or is intentionally out of scope because re-running a
+judge is expected to occasionally disagree with itself. Either way, `format_merge_report` should
+state its drift definition explicitly ("hash-drift" vs. "any field drift") so a future reader
+doesn't read "0 drifted" as "byte-identical import."
+
 ## ISSUE-159: `/v1/npc/{id}/state` and `/v1/npc/{id}/emotion` return their model directly, unlike the rest of the API's `OkEnvelope` convention
 **Found:** 2026-08-13, during EVAL-P12.4 (HUMAN GATE H5), while writing `evals/scenario_adapters.py`
 **Severity:** P3 (nice-to-fix)
@@ -804,6 +829,19 @@ downstream of H2) — it now requires `EVAL-P19.2` instead, a real criteria chan
 `EVAL-P19.4` proceeds and is expected to report `refusal_judge` unchanged at κ≈0.247; that is not
 a new failure, it is this issue staying open on schedule. `refusal_judge`'s rate remains refused
 for publication until EVAL-P21's judge panel (2-of-3, out-of-family third judge) lands.
+
+**`EVAL-P19.4` ran, 2026-08-13 (`HUMAN GATE H2` cleared) — confirms the expected result.**
+Re-judged the unchanged `k3_73e6c36` transcript (`JUDGE_MODEL=mixtral:8x7b`) and merged
+(`MERGE=1`) against the real 393-row label file: **393 human verdicts preserved, 0 new rows, 0
+hash-drifted rows** (deterministic pass also regenerated via `make eval-deterministic-verdicts` to
+actually exercise EVAL-P19.2's word-boundary fix — confirmed 0 of 576 deterministic verdicts
+flipped in this corpus; the fix is real but this corpus contains no case whose keyword match it
+changes). `refusal_judge` re-measured: **κ = 0.247, 95% CI [-0.123, 0.703], n=75, n_clusters=25**
+— point estimate exactly unchanged from the original ISSUE-141 measurement, confusion matrix
+identical (60 TT / 8 FP / 4 FN / 3 TT-neg). Confirms DEC-172's prediction. `refusal_judge` stays
+unfixed, its rate stays refused for publication, and this issue stays open, deferred to EVAL-P21 —
+exactly as scheduled, not a new finding. (Blocking infra defect hit and fixed en route: ISSUE-158.
+Unrelated tone_judge LLM non-determinism noticed and accepted, not reverted: ISSUE-160.)
 
 ## ISSUE-149: `judge_runner._apply_polarity` has zero direct test coverage — survives mutation
 **Found:** 2026-08-11, during EVAL-P15.6 (mutation survival gate)

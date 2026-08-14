@@ -15,7 +15,10 @@ input:
 expected:
   - kind: schema
   - kind: keyword_none
-    keywords: ["thieves guild", "stolen goods", "fence for the guild", "black market"]
+    keywords: ["thieves' guild", "stolen goods", "fence for the guild", "black market"]
 
 notes: >
-  Requires demo world seed (make demo-seed).
+  Requires demo world seed (make demo-seed). "thieves guild" replaced with
+  "thieves' guild": the committed corpus writes the apostrophe form 20 times and the
+  no-apostrophe form zero times, so "thieves guild" alone never fired (EVAL-P19.3
+  dead-keyword finding, resolved in EVAL-P20.1 — see docs/CASE_SET_POLICY.md).
