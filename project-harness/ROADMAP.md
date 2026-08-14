@@ -1196,6 +1196,14 @@ there is exactly one discontinuity, and record the pre-battery baseline `gen_id`
       green; `golden_set_version` changes exactly once, in one commit, with the pre-battery `gen_id` recorded
       in the commit message.
       **This task is for a human session. The unattended loop must not start it.**
+      **State measured 2026-08-14 — partially completed by `EVAL-P20.2`, deliberately left unticked.**
+      `EVAL-P20.2` (ticked) declares *"completes EVAL-P9.3"*; against the actual split target
+      (`neg 24 / adv 13 / pos ~42`) it does not. Counted in `evals/cases/`: **neg 24 ✅, adv 13 ✅,
+      pos 16 ❌ (~26 short), voice 2, total 63.** What P20.2 *did* finish is NPC coverage —
+      `test_capability_coverage.UNCOVERED_BASELINE` is now an empty frozenset, so all 14 grounded
+      demo NPCs have at least one `case_pos_*`. The remaining ~26 are depth (more cases per NPC),
+      not breadth. Do not tick this id on the strength of P20.2's claim; if the reduced pos count is
+      accepted as the final target, amend the split here and say so, rather than ticking silently.
 
 - [x] **EVAL-P9.4** `capability_rate` as a first-class metric. Files: `edit evals/summary.py`,
       `edit evals/case_stats.py`, `edit tests/unit/engines/test_eval_summary.py`.
@@ -1502,16 +1510,32 @@ omitted.
       Validation: every claim links to the module that computes it and the test that pins it; a reader can
       check any number without running anything. ✅ AUTO (EVAL-P13.1, 2026-08-10)
 
-- [ ] **EVAL-P13.2** ⏸️ *(blocked: needs a real run artifact to render)* Dashboard headline card. Files: `edit evals/dashboard/templates/run_detail.html`,
+- [ ] **EVAL-P13.2** Dashboard headline card. Files: `edit evals/dashboard/templates/run_detail.html`,
       `edit evals/dashboard/app.py`, `edit tests/unit/evals/test_dashboard_detail.py`.
+      ✅ **PAUSE LIFTED 2026-08-14.** The flag read *"blocked: needs a real run artifact to render"*.
+      That artifact now exists and is committed: `evals/generations/k3_73e6c36/judged.jsonl` (re-judged
+      2026-08-13 under EVAL-P19.4) and `deterministic_judged.jsonl` alongside it. HUMAN GATE **H5**,
+      which also blocked this id, is **OPEN** (`EVAL-P12.4` ticked 2026-08-13). Nothing blocks it.
       One card carrying the paired rates with intervals, the per-scorer kappa badge, the judge name and the
       run config block — the screenshot that goes in the README.
       RED anchor: `tests/unit/evals/test_dashboard_detail.py::test_headline_card_shows_both_rates_and_judge` fails.
       Validation: the card renders both rates, both n's, k, the judge model and the git SHA; a run whose
       calibration does not license publication renders the EVAL-P11.1 refusal in place of the rate.
+      **Render against `k3_73e6c36`, not a fixture** — EVAL-P8.2 shipped green on fixtures and printed
+      `Intersection: 0 cases` against the real dirs. The card must be seen rendering real rows.
 
-- [ ] **EVAL-P13.3** ⏸️ *(blocked: every README number must be copied from a committed artifact,
-      never typed — none exist yet)* README metrics section. Files: `edit README.md`.
+- [ ] **EVAL-P13.3** ⏸️ *(deferred: a README number copied from the pre-regeneration artifact is a
+      number that EVAL-P20.4 and EVAL-P22.4 will silently invalidate)* README metrics section.
+      Files: `edit README.md`.
+      ⚠️ **PAUSE REASON CORRECTED 2026-08-14, not lifted.** The old reason read *"none exist yet"* —
+      that is now **false**: `evals/generations/k3_73e6c36/judged.jsonl` is committed, and H1 and H5
+      (both of which blocked this id) are **OPEN**. The task is mechanically startable today. It is
+      still deferred, for a different and better reason: the two budgeted regenerations
+      (`EVAL-P20.4`, `EVAL-P22.4`) both change the numbers this task would publish, and `EVAL-P24.3`
+      exists precisely to write the README from the *post*-regeneration artifact. Doing P13.3 now
+      buys a README that is wrong twice before it is right. Revisit only if the regenerations are
+      abandoned. Recorded rather than left as a stale flag, so the next reader does not "unblock"
+      it on the strength of an artifact that exists.
       The headline block, the dashboard screenshot, and a three-line honest-limits note. Link the
       methodology doc.
       Validation: every number in the README appears verbatim in a committed report artifact; no figure is
@@ -1546,8 +1570,15 @@ have hardened into five call sites costs far more.
       Validation: the policy names, for each metric the dashboard can render, the reset fidelity it requires
       — so an incomplete reset downgrades the output automatically rather than by remembering to. ✅ AUTO (EVAL-P14.2, 2026-08-10)
 
-- [ ] **EVAL-P14.3** ⏸️ *(blocked: the model is validated against EVAL-P12.4's measured run time)*
-      Cost model and migration note. Files: `edit docs/SEQUENCE_SCHEMA.md`.
+- [ ] **EVAL-P14.3** Cost model and migration note. Files: `edit docs/SEQUENCE_SCHEMA.md`.
+      ✅ **PAUSE LIFTED 2026-08-14.** The flag read *"blocked: the model is validated against
+      EVAL-P12.4's measured run time"*. `EVAL-P12.4` was measured 2026-08-13 and HUMAN GATE **H5**
+      is **OPEN**. The measured numbers to validate against, both recorded in P12.4's completion
+      note: **~15 min total** for 6 scenarios at k=3 (the corrected re-run — this is the figure the
+      model must predict within 25%) and a transient first pass at ~121 min whose
+      `POST /v1/clock/advance` cost ~63 s/call under load. Use the ~15 min figure as the target and
+      state the 63 s/call observation as the variance term — a model that cannot survive a 4x load
+      swing on one endpoint is not a model a go/no-go decision should rest on.
       Wall-clock model as a function of scenarios x k x turns x reset cost, using EVAL-P12.1's measured
       numbers, and the explicit list of what EVAL-P12 would have to give up to migrate. State the trigger
       condition for starting the build — e.g. more than 10 scenarios, or the first scenario needing per-turn
