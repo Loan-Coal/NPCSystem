@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "generated_at": "2026-08-14T14:16:05.546303+00:00",
+  "gen_id": "seedrepro_a_1742e8f",
+  "k": 1,
+  "config": {
+    "prompt_version": "stage_b_v2.13",
+    "generation_model": "qwen2.5:7b",
+    "generation_model_digest": null,
+    "temperature": 0.15,
+    "top_p": 0.95,
+    "max_tokens": 512,
+    "seed": 20260814,
+    "judge_model": "mixtral:8x7b",
+    "judge_model_digest": null,
+    "judge_temperature": 0.0,
+    "ollama_version": "0.32.9",
+    "retrieval_profile": "default",
+    "git_sha": "1742e8f",
+    "golden_set_version": "f9ff0bac0f1b",
+    "harness_version": "a288ae97d46d",
+    "dialogue_prompt_hash": "dc8acfb5e069"
+  }
+}

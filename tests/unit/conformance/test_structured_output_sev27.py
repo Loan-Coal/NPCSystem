@@ -36,7 +36,7 @@ _VALID_STRUCTURED_RESPONSE: dict[str, Any] = {
 }
 
 
-def _make_client(adapter: MockLLMAdapter) -> DialogueLLMClient:
+def _make_client(adapter: MockLLMAdapter, seed: int | None = None) -> DialogueLLMClient:
     """Construct a DialogueLLMClient wired to the given adapter."""
     return DialogueLLMClient(
         llm_client=adapter,
@@ -46,7 +46,40 @@ def _make_client(adapter: MockLLMAdapter) -> DialogueLLMClient:
         top_p=0.95,
         stop_sequences=[],
         log_prompts=False,
+        seed=seed,
     )
+
+
+# ---------------------------------------------------------------------------
+# Test: seed is perturbed by attempt index (EVAL-P20.0 / DEC-176)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_retry_perturbs_seed_by_attempt_index() -> None:
+    """A fixed seed would make the repair retry replay the identical invalid output.
+
+    seed + attempt keeps the retry useful while both attempts stay reproducible.
+    """
+    adapter = MockLLMAdapter(response=_VALID_STRUCTURED_RESPONSE, fail_first_call=True)
+    client = _make_client(adapter, seed=1000)
+
+    with patch("npc_engine.engines.dialogue.llm_client.logger"):
+        await client.generate_response(prompt="Hello")
+
+    assert adapter.seeds_seen == (1000, 1001)
+
+
+@pytest.mark.asyncio
+async def test_unseeded_client_forwards_none_on_every_attempt() -> None:
+    """No configured seed means no seed on the wire — never a synthesised default."""
+    adapter = MockLLMAdapter(response=_VALID_STRUCTURED_RESPONSE, fail_first_call=True)
+    client = _make_client(adapter)
+
+    with patch("npc_engine.engines.dialogue.llm_client.logger"):
+        await client.generate_response(prompt="Hello")
+
+    assert adapter.seeds_seen == (None, None)
 
 
 # ---------------------------------------------------------------------------

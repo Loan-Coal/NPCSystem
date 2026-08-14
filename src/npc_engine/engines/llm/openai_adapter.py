@@ -91,8 +91,14 @@ class OpenAICompatibleAdapter(LLMClientProtocol):
         top_p: float | None,
         stop_sequences: list[str] | None,
         system: str | None,
+        *,
+        seed: int | None = None,
     ) -> dict[str, Any]:
-        """Assemble the shared request body, omitting None-valued optional fields."""
+        """Assemble the shared request body, omitting None-valued optional fields.
+
+        ``seed`` is keyword-only so the three existing positional call sites stay valid
+        byte-for-byte and a new argument can never land in the ``system`` slot.
+        """
         body: dict[str, Any] = {
             "model": self._model_name,
             "messages": self._messages(prompt, system),
@@ -103,6 +109,8 @@ class OpenAICompatibleAdapter(LLMClientProtocol):
             body["top_p"] = top_p
         if stop_sequences is not None:
             body["stop"] = stop_sequences
+        if seed is not None:
+            body["seed"] = seed
         return body
 
     async def _post_json(self, body: dict[str, Any]) -> dict[str, Any]:
@@ -157,6 +165,7 @@ class OpenAICompatibleAdapter(LLMClientProtocol):
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
         system: str | None = None,
+        seed: int | None = None,
     ) -> str:
         """Send a plain-text chat-completion request.
 
@@ -167,7 +176,7 @@ class OpenAICompatibleAdapter(LLMClientProtocol):
             LLMTimeoutError: If the request times out.
             LLMRequestError: On HTTP error, invalid response, or backend error field.
         """
-        body = self._base_body(prompt, max_tokens, temperature, top_p, stop_sequences, system)
+        body = self._base_body(prompt, max_tokens, temperature, top_p, stop_sequences, system, seed=seed)
         data = await self._post_json(body)
         return self._first_content(data)
 
@@ -179,6 +188,7 @@ class OpenAICompatibleAdapter(LLMClientProtocol):
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
         system: str | None = None,
+        seed: int | None = None,
     ) -> dict[str, Any]:
         """Send a JSON-mode chat-completion request and parse the content as JSON.
 
@@ -194,7 +204,7 @@ class OpenAICompatibleAdapter(LLMClientProtocol):
         """
         body = self._base_body(
             prompt, max_tokens, get_settings().STRUCTURED_OUTPUT_TEMPERATURE,
-            top_p, stop_sequences, system,
+            top_p, stop_sequences, system, seed=seed,
         )
         body["response_format"] = _JSON_OBJECT_RESPONSE_FORMAT
         data = await self._post_json(body)
@@ -215,6 +225,7 @@ class OpenAICompatibleAdapter(LLMClientProtocol):
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
         system: str | None = None,
+        seed: int | None = None,
     ) -> AsyncIterator[str]:
         """Stream assistant token deltas via Server-Sent Events.
 
@@ -225,7 +236,7 @@ class OpenAICompatibleAdapter(LLMClientProtocol):
             LLMTimeoutError: If the stream connection times out.
             LLMRequestError: On HTTP stream error.
         """
-        body = self._base_body(prompt, max_tokens, temperature, top_p, stop_sequences, system)
+        body = self._base_body(prompt, max_tokens, temperature, top_p, stop_sequences, system, seed=seed)
         body["stream"] = True
         try:
             async with self._client.stream(

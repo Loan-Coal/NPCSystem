@@ -6,6 +6,9 @@ llm:
   max_tokens: 512
   top_p: 0.95
   stop_sequences: []
+  # EVAL-P20.0 / DEC-176: fixed generation seed so a regeneration reproduces text and the
+  # 393 hand labels survive. Changing this value invalidates label reuse across runs.
+  seed: 20260814
 prompt:
   name: dialogue_main
   version: stage_b_v2.13

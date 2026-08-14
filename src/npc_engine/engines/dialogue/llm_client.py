@@ -42,6 +42,7 @@ class DialogueLLMClient:
         top_p: float,
         stop_sequences: list[str],
         log_prompts: bool = False,
+        seed: int | None = None,
     ) -> None:
         """Initialise the dialogue LLM client wrapper.
 
@@ -53,6 +54,9 @@ class DialogueLLMClient:
             top_p: Nucleus sampling probability mass forwarded to all generation calls.
             stop_sequences: Token sequences that halt generation, forwarded to all calls.
             log_prompts: When True, log the full prompt and system prompt at DEBUG level.
+            seed: Deterministic sampling seed from llm_config.yaml, forwarded to every
+                generation call. None means backend default (non-deterministic).
+                See DEC-176 and _generate_with_retry for the per-attempt perturbation.
         """
 
         self._llm_client = llm_client
@@ -62,6 +66,7 @@ class DialogueLLMClient:
         self._top_p = top_p
         self._stop_sequences = stop_sequences
         self._log_prompts = log_prompts
+        self._seed = seed
 
     async def generate_response(self, prompt: str, system: str | None = None, archetype: str = "default") -> dict[str, Any]:
         """Request a structured dialogue response, falling back on timeout or errors.
@@ -111,6 +116,10 @@ class DialogueLLMClient:
     ) -> dict[str, Any]:
         """Attempt structured generation up to two times before serving the canned fallback.
 
+        The seed is perturbed by the attempt index. With a single fixed seed the repair
+        retry would replay the identical invalid output, making the retry dead code;
+        ``seed + attempt`` keeps the retry useful and both attempts reproducible (DEC-176).
+
         Args:
             prompt: Full dialogue prompt string.
             schema: JSON schema dict[str, Any] for the DialogueResponse model.
@@ -121,6 +130,7 @@ class DialogueLLMClient:
             Validated dialogue response dict.
         """
         for attempt in range(2):
+            attempt_seed = None if self._seed is None else self._seed + attempt
             try:
                 raw = await self._llm_client.generate_structured(
                     prompt=prompt,
@@ -129,6 +139,7 @@ class DialogueLLMClient:
                     top_p=self._top_p,
                     stop_sequences=self._stop_sequences,
                     system=system,
+                    seed=attempt_seed,
                 )
                 normalized_response = DialogueResponse.model_validate(raw).model_dump(mode="python")
                 self._emit_tokens_out(
@@ -227,6 +238,7 @@ class DialogueLLMClient:
                     top_p=self._top_p,
                     stop_sequences=self._stop_sequences,
                     system=system,
+                    seed=self._seed,
                 )
             ]
             self._emit_tokens_out(text="".join(chunks), labels=labels)

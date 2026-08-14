@@ -26,6 +26,16 @@ DEFAULT_RESPONSE: dict[str, Any] = {
 _GARBAGE_RESPONSE: dict[str, Any] = {"__garbage__": True}
 
 
+def _raise_validation_error() -> None:
+    """Raise a pydantic ValidationError for the ``fail_first_call`` fault-injection mode."""
+    from pydantic import BaseModel
+
+    class _Stub(BaseModel):
+        x: int
+
+    _Stub.model_validate({"x": "not-an-int"})  # always raises ValidationError
+
+
 class MockLLMAdapter(LLMClientProtocol):
     """Deterministic adapter that always returns configured payload.
 
@@ -88,6 +98,17 @@ class MockLLMAdapter(LLMClientProtocol):
         self._fail_first_call = fail_first_call
         self._return_garbage = return_garbage
         self._call_count = 0
+        self._seeds_seen: list[int | None] = []
+
+    @property
+    def seeds_seen(self) -> tuple[int | None, ...]:
+        """Seeds received by every generation call so far, in call order."""
+        return tuple(self._seeds_seen)
+
+    @property
+    def last_seed(self) -> int | None:
+        """Seed received by the most recent generation call, or None if never seeded."""
+        return self._seeds_seen[-1] if self._seeds_seen else None
 
     async def close(self) -> None:
         """No-op — mock adapter has no external resources to release."""
@@ -108,6 +129,7 @@ class MockLLMAdapter(LLMClientProtocol):
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
         system: str | None = None,
+        seed: int | None = None,
     ) -> str:
         """Return the npc_response string from the configured payload.
 
@@ -118,6 +140,9 @@ class MockLLMAdapter(LLMClientProtocol):
             top_p: Ignored in mock mode.
             stop_sequences: Ignored in mock mode.
             system: Ignored in mock mode.
+            seed: Recorded on ``seeds_seen``/``last_seed``. Output is already a pure
+                function of the configured payload, so equal seeds yield byte-equal
+                output by construction — matching the real adapters' contract (DEC-176).
 
         Returns:
             str representation of _response["npc_response"], or "" if absent.
@@ -125,6 +150,7 @@ class MockLLMAdapter(LLMClientProtocol):
         Raises:
             raise_on_generate: If that flag was set at construction.
         """
+        self._seeds_seen.append(seed)
         if self._raise_on_generate is not None:
             exc = self._raise_on_generate
             if isinstance(exc, type):
@@ -140,6 +166,7 @@ class MockLLMAdapter(LLMClientProtocol):
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
         system: str | None = None,
+        seed: int | None = None,
     ) -> dict[str, Any]:
         """Return a shallow copy of the configured structured response dict.
 
@@ -154,6 +181,8 @@ class MockLLMAdapter(LLMClientProtocol):
             top_p: Ignored in mock mode.
             stop_sequences: Ignored in mock mode.
             system: Ignored in mock mode.
+            seed: Recorded on ``seeds_seen``/``last_seed`` before any fault injection,
+                so a caller's retry perturbation stays observable (DEC-176).
 
         Returns:
             Shallow copy of the internal structured_response dict (or garbage dict).
@@ -161,16 +190,12 @@ class MockLLMAdapter(LLMClientProtocol):
         Raises:
             ValidationError: On the first call when fail_first_call=True.
         """
+        self._seeds_seen.append(seed)
         self._call_count += 1
         if self._return_garbage:
             return dict(_GARBAGE_RESPONSE)
         if self._fail_first_call and self._call_count == 1:
-            from pydantic import BaseModel
-
-            class _Stub(BaseModel):
-                x: int
-
-            _Stub.model_validate({"x": "not-an-int"})  # always raises ValidationError
+            _raise_validation_error()
         return dict(self._structured_response)
 
     async def stream(
@@ -181,6 +206,7 @@ class MockLLMAdapter(LLMClientProtocol):
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
         system: str | None = None,
+        seed: int | None = None,
     ) -> AsyncIterator[str]:
         """Yield whitespace-delimited tokens from the configured npc_response.
 
@@ -191,10 +217,13 @@ class MockLLMAdapter(LLMClientProtocol):
             top_p: Ignored in mock mode.
             stop_sequences: Ignored in mock mode.
             system: Ignored in mock mode.
+            seed: Recorded on ``seeds_seen``/``last_seed``; token sequence is a pure
+                function of the configured payload (DEC-176).
 
         Returns:
             Async iterator yielding each word from the npc_response with a trailing space.
         """
+        self._seeds_seen.append(seed)
         text = str(self._response.get("npc_response", ""))
         for token in text.split():
             yield token + " "

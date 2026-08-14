@@ -58,21 +58,36 @@ def _make_engine_config(max_tokens: int, temperature: float) -> EngineModelConfi
 
 
 class _CapturingLLMClient:
-    """Fake adapter that captures max_tokens and temperature passed by the handler."""
+    """Fake adapter that captures max_tokens, temperature and seed passed by the handler.
+
+    Carries the full LLMClientProtocol signature (DEC-176). It previously omitted
+    top_p/stop_sequences/system, which was only survivable because these tests assert on
+    the handler's stored config rather than invoking the client — an invalid mock per
+    CLAUDE.md's LSP rule.
+    """
 
     def __init__(self) -> None:
         self.captured_max_tokens: list[int] = []
         self.captured_temperature: list[float] = []
+        self.captured_seed: list[int | None] = []
 
-    async def generate(self, prompt: str, max_tokens: int, temperature: float) -> str:
+    async def generate(
+        self, prompt: str, max_tokens: int, temperature: float, top_p: float | None = None,
+        stop_sequences: list[str] | None = None, system: str | None = None,
+        seed: int | None = None,
+    ) -> str:
         self.captured_max_tokens.append(max_tokens)
         self.captured_temperature.append(temperature)
+        self.captured_seed.append(seed)
         return "ok"
 
     async def generate_structured(
-        self, prompt: str, schema: dict[str, Any], max_tokens: int
+        self, prompt: str, schema: dict[str, Any], max_tokens: int, top_p: float | None = None,
+        stop_sequences: list[str] | None = None, system: str | None = None,
+        seed: int | None = None,
     ) -> dict[str, Any]:
         self.captured_max_tokens.append(max_tokens)
+        self.captured_seed.append(seed)
         return {
             "npc_response": "ok",
             "relation_deltas": {"trust": 0, "fear": 0, "affection": 0},
@@ -81,9 +96,14 @@ class _CapturingLLMClient:
             "facial_expression": {"type": "neutral", "intensity": 20},
         }
 
-    async def stream(self, prompt: str, max_tokens: int, temperature: float) -> AsyncIterator[str]:
+    async def stream(
+        self, prompt: str, max_tokens: int, temperature: float, top_p: float | None = None,
+        stop_sequences: list[str] | None = None, system: str | None = None,
+        seed: int | None = None,
+    ) -> AsyncIterator[str]:
         self.captured_max_tokens.append(max_tokens)
         self.captured_temperature.append(temperature)
+        self.captured_seed.append(seed)
         if False:
             yield ""
 

@@ -2532,6 +2532,45 @@ across the two budgeted ones). That is why it blocks both regenerations and noth
       measured re-adjudication cost in rows before the regeneration runs, and make EVAL-P22's labelling
       budget absorb it. Approval covers adding the seed, not assuming it worked.
 
+      **⛔ MEASURED 2026-08-14 — GATE NOT MET. Achieved `rate_calls` = 62.5% (15/24 draws), `rate_records`
+      = 62.8% (91/145), against the ≥95% gate. Left deliberately unticked; H4 stays closed.** The seed and
+      the prompt-determinism fixes are LANDED and kept — this is the fallback branch above being taken, not
+      the task being abandoned. Full causal analysis in **DEC-176**. Measure with
+      `make seed-probe A=<gen_a> B=<gen_b>`; record at `evals/seed_reproduction.json`.
+
+      | Stage | `rate_calls` |
+      |---|---|
+      | No seed, no fix (pre-existing baseline) | 19.0% |
+      | Seed only | 25.0% |
+      | Seed + wall-clock stripped from prompts + state reset | **62.5%** |
+      | Gate | ≥95% |
+
+      Three things the measurement established, none of which were assumed going in:
+      1. **The seed works** — 12.5% → 91.7% at short outputs, sequence-vs-sequence. An early isolation test
+         said otherwise; it was comparing a cold call against an immediately-repeated one and measuring
+         Ollama's KV prefix cache. Any re-measurement must compare like-for-like sequences.
+      2. **The engine was injecting wall-clock values into prompt content** (`world.last_updated_at`,
+         `emotion_updated_at_tick`) — 145/145 records, and 36/36 of the records whose *only* difference was
+         those two fields produced different text. Fixed; `retrieved_context` drift is now **0/145**. This
+         violated CLAUDE.md's strict "Idempotent assembly" rule. Root cause of the *values* is ISSUE-165.
+      3. **The residual is irreducible on this runtime.** Reproduction decays with generated token count
+         (91.7% at ~60 tokens · 45.8% structured · **4.2%** at the shipped `max_tokens=512`), consistent
+         with per-token floating-point flips compounding. A seed fixes the sampling draw; it cannot make
+         inference bitwise deterministic. **The ≥95% gate is unreachable at dialogue output lengths here.**
+
+      Consequence: label survival rises ~19% → ~62.5%, cutting re-adjudication from ~620 to **~295 rows**
+      across the two budgeted regenerations (recorded in EVAL-P20.4's Notes). The deeper problem — labels
+      joined on exact output text, so they die on any single token flip — is **ISSUE-168**, and it, not the
+      sampler, decides whether the two-regeneration budget is affordable.
+      Also logged: ISSUE-164 (CLAUDE.md OpenAI-adapter drift), ISSUE-166 (173/228 Cypher `RETURN`s lack
+      `ORDER BY`), ISSUE-167 (no eval world-reset path).
+      **RED anchor path deviation:** the anchor lives at `tests/unit/llm/test_ollama_seed.py` (the roadmap's
+      `tests/unit/engines/llm/` does not exist and every LLM adapter test is under `tests/unit/llm/`); the
+      test name `test_same_seed_reproduces_identical_text` is unchanged. Scope also extended beyond the file
+      list above — `mock_adapter.py` and `openai_adapter.py` also define `generate()` (ISSUE-164), and the
+      eval path reaches the LLM via `generate_structured()` over HTTP, never `generate()`, so seeding only
+      `generate()` would have left `RunConfig.seed` describing a parameter the generation path never received.
+
 #### 🔴 HUMAN GATE H6 — `EVAL-P20.1` case-set contradictions
 **Ready when:** `EVAL-P19.3`
 **Clears when:** `EVAL-P20.1`, `EVAL-P20.2`
@@ -2642,6 +2681,23 @@ Fold `EVAL-P8.3` (H11) into this comparison rather than spending a separate 62-m
       Validation: new `gen_id` recorded here **by name**; `make label-import ... MERGE=1` reports how many
       of the 393 labels survived and names every drifted row; the survivor count is recorded as the true
       cost of a regeneration — the number that makes the second one predictable.
+      **⚠️ Notes amended 2026-08-14 per `EVAL-P20.0`'s fallback branch — read before running this.**
+      `EVAL-P20.0` **did not** meet its ≥95% gate. Measured reproduction is **62.5%** (DEC-176), so this
+      regeneration will invalidate roughly **37.5% of the 393 labels ≈ 147 rows**, and the two budgeted
+      regenerations together ≈ **295 rows** of re-adjudication. That is the cost to plan for; `EVAL-P22`'s
+      labelling budget must absorb it. It is a little under half the ~620 rows the no-seed path would have
+      cost, which is what the seed and prompt-determinism fixes bought.
+      Two preconditions this phase inherits, neither optional:
+      - **ISSUE-167** — there is currently no reproducible way to reset world state between runs, and
+        without it run-to-run drift is *worse* than the 62.5% measured here (that figure was obtained with
+        a per-NPC emotion reset applied by hand). Land a committed reset path before generating.
+      - **ISSUE-168** — labels are joined on exact `sha256(output_text)`, which is why drift destroys them
+        at all. If that join is re-scoped to tolerate drift, this entire cost line changes and the numbers
+        above must be re-derived rather than reused.
+      Do **not** treat the 62.5% as a prediction of label survival for the *full* case set: it was measured
+      on 24 `case_neg_*` guard cases, whose responses are shorter than average, and reproduction falls
+      sharply with output length (4.2% at `max_tokens=512`). Expect the realised survivor count to be
+      **lower**, and record the actual number here when it lands.
 
 ### Phase EVAL-P21 — The judge panel (closes ISSUE-129)
 **Goal:** A headline that does not change when the judge changes, with published agreement.
@@ -2886,9 +2942,11 @@ Not compressed into optimistic estimates — genuinely out of scope for this pro
   off once `compare` exists". `compare` now exists (EVAL-P8), so **this is the first thing to pick up if
   budget frees** — EVAL-P8.2 handles a changed case set by naming the difference, which is correct but manual;
   versioning makes it automatic.
-- **LLM `seed` support (~1 h).** `LLMGenerateProtocol.generate()` has no `seed` and `ollama_adapter.py` never
-  sets `options.seed`. Adding it changes a Protocol shared by three adapters → ask-gate. Until then `RunConfig`
-  **honestly omits seed** and the report says runs are `temperature=0.15`, not deterministic.
+- ~~**LLM `seed` support (~1 h).**~~ **LANDED 2026-08-14 in `EVAL-P20.0` (DEC-176).** All three adapters
+  and all three protocol methods carry an optional `seed`; `ollama_adapter` sets `options.seed`;
+  `RunConfig.seed` is real. **But it does not make runs deterministic** — measured reproduction is 62.5%,
+  not the ≥95% gate, and falls to 4.2% at `max_tokens=512`. The report must still **not** call runs
+  deterministic; say `temperature=0.15, seed=20260814, ~62.5% reproduction` and cite DEC-176.
 - **Judge-noise vs system-noise split (~1 h).** Genuinely uncommon and cheap to code once the loop exists —
   but each measurement costs another ~115 `mixtral` calls, which the budget cannot absorb.
 - **Deleting the seven legacy make targets (~0.5 h).** Deliberately after EVAL-P6, once nothing references them.
@@ -3156,10 +3214,12 @@ sessions. `EVAL-03` folds into the Parked LLM-`seed` work, which is its real pre
   behavior-altering change fails a test. **Still live** — `EVAL-P1`'s transcript schema and `EVAL-P3`'s
   LLM-free scoring pass are *inputs* to this, not replacements: a scoring pipeline is not a regression net.
   Build it on the v2 transcript rather than inventing a second format.
-- [ ] ~~**EVAL-03**~~ — content-determinism pin (same seed ⇒ same distortion/quest content). **Folded into the
-  Parked "LLM `seed` support" item** (DEC-153 §8): `LLMGenerateProtocol.generate()` has no `seed` and
-  `ollama_adapter.py` never sets `options.seed`, so the pin is unbuildable for LLM-generated content until
-  that lands. The non-LLM half already exists as the SEV-22 RNG test.
+- [ ] ~~**EVAL-03**~~ — content-determinism pin (same seed ⇒ same distortion/quest content). The seed now
+  exists (EVAL-P20.0 / DEC-176), but the pin as originally conceived — *same seed ⇒ byte-identical LLM
+  content* — is **unbuildable in principle on this runtime**, not merely unimplemented: reproduction decays
+  with output length (91.7% short · 45.8% structured · 4.2% at 512 tokens) because inference is not bitwise
+  deterministic. A test asserting byte equality would be flaky by construction. If revived, it must assert a
+  *rate* over a sample, not equality of one pair. The non-LLM half already exists as the SEV-22 RNG test.
 - [ ] **EVAL-04** — memory-recall-over-time eval (tick-N retention of tick-M facts). **Still live, and the
   highest-value item in this block** — it is the only planned measurement of the engine's headline claim
   (persistent memory) and the pipeline program explicitly does not cover it.

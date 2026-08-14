@@ -432,6 +432,24 @@ quantisation or driver versions. Two generations of ≥20 records at the same se
 the seed did not solve the problem: amend EVAL-P20.4's notes with the measured re-adjudication cost
 in rows *before* the regeneration runs, and make EVAL-P22's labelling budget absorb it.
 
+> **⛔ DONE AND MEASURED 2026-08-14 — the gate was NOT met. `EVAL-P20.0` stays unticked.**
+> Achieved **62.5%** (15/24 draws) against the ≥95% gate. The fallback branch above **has been taken**:
+> `EVAL-P20.4`'s Notes now carry the ~295-row re-adjudication cost. Full analysis in **DEC-176**.
+> The code shipped and is worth keeping — label survival went ~19% → ~62.5% — but three things came out
+> of it that change what is left to do:
+> 1. **The seed works** (12.5% → 91.7% at short outputs). It was the prompt, not the sampler.
+> 2. **The engine was putting wall-clock values into prompts** (`world.last_updated_at`,
+>    `emotion_updated_at_tick`) — fixed; context drift went 145/145 → 0/145. The underlying cause,
+>    `dialogue_handler` using `datetime.now()` as a tick id instead of `GameClock`, is **ISSUE-165**.
+> 3. **≥95% is unreachable on this runtime.** Reproduction decays with output length (4.2% at the
+>    shipped `max_tokens=512`) because inference is not bitwise deterministic. No seed fixes that.
+>
+> **What this means for you:** re-running this task will not open H4. The decision that actually
+> matters now is **ISSUE-168** — human labels are joined on exact `sha256(output_text)`, so they die on
+> any single token flip. If byte-identity is unattainable, the join key is the thing to change, not the
+> sampler. Also blocking a clean regeneration: **ISSUE-167** (no reproducible world reset between runs).
+> Re-measure any time with `make seed-probe A=<gen_a> B=<gen_b>`.
+
 ### Tasks 7–12
 
 Each is specified in full in the ROADMAP; the sequencing constraints that are easy to get wrong:

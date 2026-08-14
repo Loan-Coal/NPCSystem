@@ -104,9 +104,10 @@ def test_v2_roundtrip(tmp_path: Path) -> None:
     assert r.retrieved_context[0].text == "Mira runs the inn."
 
 
-def test_run_config_has_no_seed_field() -> None:
-    """RunConfig must not have a seed field — claiming seed reproducibility would be dishonest (DEC-146)."""
-    assert "seed" not in RunConfig.model_fields
+def test_run_config_seed_field_defaults_to_none() -> None:
+    """RunConfig carries a real seed (DEC-176), defaulting to None so pre-seed artifacts still load."""
+    assert "seed" in RunConfig.model_fields
+    assert RunConfig.model_fields["seed"].default is None
 
 
 def test_retrieved_item_is_frozen() -> None:

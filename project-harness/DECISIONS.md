@@ -3303,3 +3303,125 @@ than splicing the fixed scenario's result into the first run's artifact, for one
 land inside this task's new files. If EVAL-P14's v2 runner ships real per-turn records, point 1's
 pooling choice should be revisited: a per-turn Cochran's Q would then be strictly more informative than
 the pooled-scenario approximation used here.
+
+## DEC-176: Deterministic generation — seed landed, prompt wall-clock leakage fixed, ≥95% gate NOT MET at 62.5% (EVAL-P20.0)
+
+**Date:** 2026-08-14
+**Status:** Accepted. `EVAL-P20.0` remains **unticked**; HUMAN GATE H4 stays closed.
+**Supersedes:** the `seed`-absent half of **DEC-146** only. DEC-146's hard-break/v2 decision stands.
+
+### What DEC-146 said, and why this is not a contradiction
+
+DEC-146 refused a `seed` field in the eval config block on the correct grounds that *claiming a
+seed the adapter never sets is a lie*. That objection was right and is not being overturned. This
+task makes the claim **true** rather than removing it: `LLMGenerateProtocol.generate()`,
+`generate_structured()` and `stream()` now carry an optional `seed`; `ollama_adapter` sets
+`options.seed` and `openai_adapter` sets `body["seed"]`; the dialogue engine forwards the value
+from `engines/dialogue/llm_config.yaml`, which is the same file `RunConfig` already reads
+`temperature`/`top_p`/`max_tokens` from. The recorded seed is therefore exactly as trustworthy as
+the temperature that has been recorded next to it all along.
+
+Ask-gate for changing `LLMGenerateProtocol` (a public interface with callers outside its module)
+was cleared by explicit human approval 2026-08-09.
+
+### Design choices
+
+- **Config-carried, not request-carried.** The seed lives in `llm_config.yaml` →
+  `EngineModelParams.seed` → `DialogueHandler._build_llm_client` → `DialogueLLMClient.__init__`,
+  forwarded per call. The public `DialogueRequest`/HTTP schema is **unchanged**; a per-request seed
+  would have been a second ask-gate the 2026-08-09 approval does not cover.
+- **Fixed constant `20260814`**, committed. Both budgeted regenerations must use it or labels do
+  not survive. `EngineModelParams.seed` is optional because four other engine YAMLs carry no seed
+  and the model is `extra="forbid"`.
+- **Retry perturbs the seed by attempt index** (`seed + attempt` in `_generate_with_retry`). With a
+  single fixed seed the repair retry replays the identical invalid output, making the retry dead
+  code; `+attempt` keeps it useful and both attempts reproducible.
+- **`stream()` is seeded but not covered by the measured gate** — the eval runner POSTs
+  non-streaming. Its forwarding is proven by unit test only. Do not cite the gate as evidence for
+  the streaming path.
+- **RED anchor path deviation.** The roadmap names
+  `tests/unit/engines/llm/test_ollama_seed.py`; that directory does not exist and every LLM adapter
+  test lives in `tests/unit/llm/`. The file is `tests/unit/llm/test_ollama_seed.py`; the anchor
+  test name is unchanged.
+
+### The measurement, and what it found
+
+Gate: two generations of ≥20 records at the same seed reproducing ≥95% byte-identical
+`npc_response`. Measured with `scripts/seed_reproduction_probe.py` (`make seed-probe`) over 24
+`case_neg_*` cases (145 records / 24 independent draws), app container restarted between runs.
+`rate_calls` (per independent LLM draw) is the gated number; `rate_records` over-counts ~6x because
+guard cases emit ~6 records per draw.
+
+| Stage | rate_calls |
+|---|---|
+| No seed, no fix (pre-existing baseline) | 19.0% |
+| Seed only | **25.0%** |
+| Seed + wall-clock stripped from prompts + state reset | **62.5%** (15/24) |
+| Gate | ≥95% — **NOT MET** |
+
+**Two findings, and the first one nearly went unrecorded because a bad experiment said the opposite.**
+
+**1. The seed works. An early isolation test said it did not; that test was wrong.** Comparing a
+cold call against an immediately-repeated identical call measures Ollama's KV prefix cache, not the
+seed — 12 identical requests give "first differs, 11 match". The correct comparison is
+sequence-vs-sequence, which is what a regeneration actually does:
+
+| Same prompt sequence, run twice | Reproduction |
+|---|---|
+| temp 0.15, **with** seed | **91.7%** |
+| temp 0.15, **without** seed | **12.5%** |
+| temp 0.0 greedy, with seed | 95.8% |
+
+The seed is worth roughly 7x. Any future re-measurement must compare like-for-like sequences.
+
+**2. The engine was injecting wall-clock values into prompt content**, violating CLAUDE.md's strict
+*"Idempotent assembly: no timestamps, UUIDs, or randomness injected into prompt content"*. Measured:
+**145/145** records differed between runs on `world.last_updated_at` and
+`npc.profile.emotion_updated_at_tick`, and of the 36 records whose *only* difference was those two
+fields, **36 of 36 produced different text**. Two fields carrying no dialogue signal were on their
+own sufficient to destroy reproducibility.
+
+Causes, all fixed or logged:
+- `context_builder._build_tier0_items` dumped the entire world state via raw `model_dump_json()`
+  with **no field stripping**, into a pinned Tier-0 item present in every prompt. **Fixed** — all
+  three Tier-0 items now serialize through `NON_PROMPT_NODE_FIELDS`.
+- `NON_PROMPT_NODE_FIELDS` existed for exactly this purpose ("wall-clock timestamps the NPC cannot
+  reason about") but was applied only in `subgraph_retriever` to the character payload, and omitted
+  `last_updated_at`, `emotion_updated_at_tick` and `expires_at_tick`. **Fixed** — added; `_clean`
+  strips by key name at any depth, so `routine_override.location_id` survives while its nested
+  `expires_at_tick` does not.
+- `dialogue_handler.py:224` stamps state writes with `int(datetime.now(timezone.utc).timestamp())`
+  while a deterministic `GameClock` (starts at 0, advances explicitly) exists and is bypassed.
+  **Logged as ISSUE-165**, not fixed here — it is a behaviour change to the tick contract.
+
+After both fixes, `retrieved_context` drift went from **145/145 records to 0/145**. Prompts are now
+byte-identical between runs.
+
+### Why the gate still fails, and why no configuration will fix it
+
+The residual is not the seed and no longer the prompt. Reproduction decays with the number of
+generated tokens, consistent with per-token floating-point flips compounding — once one token
+diverges, every later token does. Measured on identical prompts at the same seed:
+
+| Output length | Reproduction |
+|---|---|
+| Short (~60 tokens) | 91.7% |
+| Structured `DialogueResponse` | 45.8% |
+| `max_tokens=512` (the shipped dialogue config) | **4.2%** |
+
+P(identical) ≈ (1−p)^N. A seed fixes the *sampling* draw; it cannot make the underlying inference
+bitwise deterministic. **Byte-identical reproduction at dialogue output lengths is not achievable on
+this runtime** (qwen2.5:7b Q4_K_M, Ollama 0.32.9, GPU). This is precisely the failure mode the
+roadmap warned about — "Ollama's `seed` does not guarantee bit-identical output" — confirmed by
+measurement rather than assumed in either direction.
+
+### Consequences
+
+- `EVAL-P20.0` is **not ticked**. H4 stays closed, H3's third reopen condition is unmet, and the
+  `LOOP:QUEUE` fence does **not** move. 18 downstream tasks remain blocked.
+- The work is kept anyway: label survival rises from ~19% to ~62.5%, cutting re-adjudication from
+  ~620 rows to **~295 rows** across the two budgeted regenerations. `EVAL-P20.4`'s Notes carry that
+  number, per the roadmap's own fallback instruction, before any regeneration runs.
+- The deeper issue is recorded for the program to decide on: labels are joined to an exact
+  `sha256(output_text)`, so they die on any single token flip. If bitwise determinism is
+  unattainable, the join key — not the sampler — is the thing that needs to change. See ISSUE-168.

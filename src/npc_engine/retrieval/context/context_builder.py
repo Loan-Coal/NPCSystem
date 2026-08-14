@@ -65,7 +65,7 @@ from .context_scoring import rank_tier_items
 from npc_engine.retrieval.graph_rag.graph_rag import graph_rag_retrieve
 from npc_engine.retrieval.embedding.topic_classifier import detect_dialogue_profile
 from npc_engine.world.time_utils import TimePoint
-from .context_utils import serialize_json
+from .context_utils import NON_PROMPT_NODE_FIELDS, serialize_json
 from npc_engine.retrieval.dialogue_context.dialogue_context_cache import DialogueContextCache, PartialDialogueContextCache
 from npc_engine.retrieval.graph_rag.subgraph_retriever import assemble_tier_a_context
 from npc_engine.retrieval.embedding.vector_store_protocol import VectorSearchResult
@@ -340,26 +340,40 @@ def _build_tier0_items(
 ) -> list[ContextItem]:
     """Build pinned Tier 0 context items: world state, current emotion, and system state.
 
+    Every item here is pinned into every prompt, so each is serialized through
+    NON_PROMPT_NODE_FIELDS. These previously used raw model_dump_json(), which put
+    `world.last_updated_at` — a wall-clock value — into every prompt the engine built
+    (EVAL-P20.0 / DEC-176).
+
     Args:
         world_state: Authoritative world state from the graph.
         emotion_snapshot: Current NPC emotion snapshot dict.
         system_state_context: Optional engine-resolved SystemStateContext (ISSUE-071).
     """
     items = [
-        ContextItem(key="world", text=world_state.model_dump_json(), tier="tier0", priority=100, pinned=True),
-        ContextItem(key="emotion", text=serialize_json(emotion_snapshot), tier="tier0", priority=95, pinned=True),
+        _pinned_tier0_item(key="world", payload=world_state.model_dump(mode="json"), priority=100),
+        _pinned_tier0_item(key="emotion", payload=emotion_snapshot, priority=95),
     ]
     if system_state_context is not None:
         items.append(
-            ContextItem(
+            _pinned_tier0_item(
                 key="system_state",
-                text=system_state_context.model_dump_json(),
-                tier="tier0",
+                payload=system_state_context.model_dump(mode="json"),
                 priority=97,
-                pinned=True,
             )
         )
     return items
+
+
+def _pinned_tier0_item(*, key: str, payload: Any, priority: int) -> ContextItem:
+    """Serialize a Tier 0 payload with wall-clock fields stripped (DEC-176)."""
+    return ContextItem(
+        key=key,
+        text=serialize_json(payload, strip_fields=NON_PROMPT_NODE_FIELDS),
+        tier="tier0",
+        priority=priority,
+        pinned=True,
+    )
 
 
 def _build_tier_a_base(

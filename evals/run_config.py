@@ -8,10 +8,17 @@ Dependencies: pydantic, subprocess, logging, pathlib, yaml, judge_config, engine
               _run_config_hashing (evals/).
 Used by: evals/eval_records.py (EVAL-P1.3), evals/generate_runner.py (EVAL-P1.4).
 
-Note: No ``seed`` field — LLMGenerateProtocol.generate() has no seed parameter and
-ollama_adapter.py never sets options.seed. Claiming reproducibility via seed would be
-dishonest (DEC-146). Retrieved context is an approximation from GET /v1/admin/debug/retrieval
-which re-runs retrieval with session_turns=[] — also noted per EVAL-P1 constraint.
+Note: ``seed`` is recorded and is real (EVAL-P20.0 / DEC-176, reversing the ``seed``-absent
+half of DEC-146). LLMGenerateProtocol now carries an optional ``seed`` on generate/
+generate_structured/stream; ollama_adapter.py sets ``options.seed``; and the dialogue engine
+forwards the value from its llm_config.yaml — the same file this module reads temperature,
+top_p and max_tokens from, so the recorded seed is exactly as trustworthy as those. DEC-146
+was right that claiming a seed the adapter never sets is dishonest; this makes the claim true
+rather than removing it. A seed is not a bit-identical guarantee across differing
+model/quantisation/driver, which is why ``generation_model_digest`` and ``ollama_version``
+are recorded alongside it. Retrieved context is an approximation from
+GET /v1/admin/debug/retrieval which re-runs retrieval with session_turns=[] — also noted per
+EVAL-P1 constraint.
 """
 
 from __future__ import annotations
@@ -45,6 +52,7 @@ _MODEL_KEY = "model"
 _TEMPERATURE_KEY = "temperature"
 _TOP_P_KEY = "top_p"
 _MAX_TOKENS_KEY = "max_tokens"
+_SEED_KEY = "seed"
 _VERSION_KEY = "version"
 
 _DEFAULT_RETRIEVAL_PROFILE = "default"
@@ -75,6 +83,10 @@ class RunConfig(BaseModel):
         temperature: Sampling temperature from llm_config.yaml.
         top_p: Top-p nucleus sampling parameter from llm_config.yaml.
         max_tokens: Maximum token budget per generation from llm_config.yaml.
+        seed: Deterministic sampling seed from llm_config.yaml, forwarded by the dialogue
+            engine to the adapter's options.seed. None for runs generated before EVAL-P20.0
+            (and for any engine that does not set one), which is why it defaults — the
+            committed pre-seed artifact k3_73e6c36 must keep loading.
         judge_model: LLM model tag used for judging (must differ from generation_model,
             enforced by judge_config.resolve_judge_model()).
         judge_model_digest: Ollama content digest for judge_model (from /api/show).
@@ -99,9 +111,13 @@ class RunConfig(BaseModel):
         dialogue_prompt_hash: First 12 hex chars of a SHA-256 digest over all YAML files
             under src/npc_engine/prompts/ — changes when any runtime LLM prompt changes.
 
-    No ``seed`` field: LLMGenerateProtocol.generate() has no seed parameter and
-    ollama_adapter.py never sets options.seed — claiming seed reproducibility would
-    be dishonest (DEC-146).
+    The ``seed`` field is honest as of EVAL-P20.0 (DEC-176): the protocol carries an
+    optional seed, ollama_adapter.py sets ``options.seed``, and the dialogue engine forwards
+    the llm_config.yaml value on every structured call. Two runs at the same seed with the
+    same harness_version reproduce text, which is what lets human labels survive a
+    regeneration. This reverses only the ``seed``-absent half of DEC-146; DEC-146's
+    objection — that a recorded seed the adapter never sets is a lie — stands, and is
+    answered by making the seed real rather than by dropping the field.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -112,6 +128,7 @@ class RunConfig(BaseModel):
     temperature: float
     top_p: float
     max_tokens: int
+    seed: int | None = None
     judge_model: str
     judge_model_digest: str | None = None
     judge_temperature: float = _judge_config.DEFAULT_JUDGE_TEMPERATURE
@@ -234,6 +251,7 @@ def resolve_run_config(
         temperature=float(llm[_TEMPERATURE_KEY]),
         top_p=float(llm[_TOP_P_KEY]),
         max_tokens=int(llm[_MAX_TOKENS_KEY]),
+        seed=llm.get(_SEED_KEY),
         judge_model=judge_model,
         judge_model_digest=judge_digest_fn(judge_model, ollama_url),
         judge_temperature=resolved_judge_temperature,

@@ -16,6 +16,151 @@ Rules:
 
 ## Open
 
+## ISSUE-170: the loop-fence tripwire is already red, so it can no longer guard the fence
+**Found:** 2026-08-14, during `EVAL-P20.0`
+**Severity:** P1 (blocking — it silently disarms the H3 safety mechanism)
+**Where:** `tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_fence_state_tripwire` and
+`::test_real_roadmap_parses_and_verifies_clean`
+**Description:** Both tests fail on a clean tree: `At index 20 diff: 'RET-P0' != 'EVAL-P20'`. The
+`RET-P0` commit (`9cb09c9`) inserted a new phase inside the fenced range without updating the
+tripwire's phase-list snapshot. **Verified pre-existing** — both fail identically with this task's
+changes stashed. Note `make roadmap-verify` still passes (`ROADMAP OK (queue lines 125-2430,
+21 phases)`); only the pytest snapshot is stale.
+**Why this is P1 rather than cosmetic:** the tripwire exists precisely so that moving
+`<!-- LOOP:QUEUE end -->` is a conscious act — ROADMAP H3 and HUMAN_TASKS both say "that tripwire
+going red on the move is it working". A tripwire that is *already* red cannot signal anything: the
+next fence move produces no state change in the gate, and the `range(20)` that is supposed to be
+updated deliberately would be updated to silence a failure that has two unrelated causes mixed
+together. This did not bite in this session only because `EVAL-P20.0` failed its gate and the fence
+was therefore not moved.
+**Why deferred:** not caused by `EVAL-P20.0`; single-task focus, and re-snapshotting the phase list
+while the fence question is live would be exactly the conflation described above.
+**To fix:** update the expected phase list to include `RET-P0` at its real index and re-assert the
+current fence position, in a commit that does *nothing else*, so the snapshot means something again
+before H3 is next considered.
+
+## ISSUE-169: `make check-evals-rules` AND `make type-evals` are both red on main
+**Found:** 2026-08-14, during `EVAL-P20.0` (running `make check` before committing)
+**Severity:** P2 (annoying — two red gates that are not this task's fault mask real regressions)
+**Where:** `scripts/evals_baseline.txt` and `scripts/mypy_evals_ratchet.py` vs
+`evals/eval_records.py`, `evals/sequence_rates.py`, `evals/scenario_adapters_extra.py`,
+`evals/sequence_order_effect.py`, `evals/scenario_adapters.py`
+**Description:** Two independent gates are red before this task touches anything. **Both verified
+pre-existing** by stashing this task's changes and re-running: identical output either way. They
+share a cause — the `EVAL-P12.4` commit (`efbe7ce`) added new evals modules without updating either
+baseline.
+1. `check-evals-rules`: **6 NEW violations** — R001 `eval_records.py` >300 lines; R002 `print()` in
+   `sequence_rates.py`; R006 >40 lines on `make_memory_consolidation`, `make_mood_contagion`,
+   `make_time_passage`, `order_effect_check`.
+2. `type-evals`: **23 type errors > baseline 16** (+7), concentrated in `scenario_adapters_extra.py`
+   (`union-attr` / `operator` on a `dict | None`), plus pre-existing `no-any-return` and two
+   `npc_engine.config has no attribute "get_settings"` in `engine_adapter.py`.
+Distinct from ISSUE-162, which is the `make lint` E741 in `sequence_order_effect.py` — that is a
+third gate. As of this session `make check` therefore has **three** independent pre-existing reds.
+**Why deferred:** none of it is caused by or related to `EVAL-P20.0`; single-task focus. Fixing it
+means splitting `eval_records.py`, extracting four helpers, and tightening `dict | None` handling —
+judgement calls belonging to whoever owns EVAL-P12.4's code.
+**To fix:** decide per violation whether to split/extract or waive; fix the `union-attr` errors
+properly (they are real latent `None` dereferences, not noise). Do **not** blanket-run
+`make check-evals-rules-update` or re-baseline the mypy ratchet: both baseline headers forbid
+re-baselining without justification, and doing so would silently absorb whatever else has drifted.
+
+## ISSUE-164: CLAUDE.md stack table claims "no OpenAI adapter ships today" but one exists
+**Found:** 2026-08-14, during `EVAL-P20.0`
+**Severity:** P3 (nice-to-fix)
+**Where:** `project-harness/CLAUDE.md` stack table (LLM row) vs
+`src/npc_engine/engines/llm/openai_adapter.py`
+**Description:** The stack table says the LLM is "pluggable via `LLMClientProtocol` + factory
+registry (add a local or API backend by registering an adapter — **no OpenAI adapter ships
+today**)". `OpenAICompatibleAdapter` does ship (SHIP-02 / DEC-126), is registered in the factory,
+subclasses `LLMClientProtocol`, and has its own test module. The roadmap's `EVAL-P20.0` file list
+inherited this error: it named only `protocols.py` and `ollama_adapter.py`, omitting both
+`openai_adapter.py` and `mock_adapter.py`, each of which also defines `generate()`.
+**Why deferred:** documentation drift found while doing `EVAL-P20.0`; single-task focus. Correcting
+CLAUDE.md is not part of adding a seed.
+**To fix:** amend the stack table's LLM row to name `OpenAICompatibleAdapter` as shipped, and audit
+the table for other claims that have since gone stale (the `prompts/eval/` path row was corrected
+the same way on 2026-08-10).
+
+## ISSUE-165: dialogue_handler stamps state writes with wall-clock time, bypassing GameClock
+**Found:** 2026-08-14, during `EVAL-P20.0`
+**Severity:** P1 (blocking — it is one of two causes of non-reproducible prompts)
+**Where:** `src/npc_engine/engines/dialogue/dialogue_handler.py:224`
+**Description:** `tick_id = int(datetime.now(timezone.utc).timestamp())` — the dialogue handler
+uses a unix wall-clock timestamp as the tick id, while `scheduler/game_clock.py` provides a
+deterministic `GameClock` that starts at 0 and advances only via explicit `advance()` calls, and
+`docker-compose.yml` runs the app with `CLOCK_MODE: game_driven`. That wall-clock value is
+persisted into `emotion_updated_at_tick` (`graph/emotion/emotion_writer.py:21`) and
+`routine_override.expires_at_tick` (`dialogue_handler.py:292-293`), both read back into later
+prompts — so dialogue is self-perturbing across runs. Measured: these fields differed on 145/145
+records between two eval generations. DEC-176 mitigates the *symptom* by stripping both fields from
+prompt content, but the underlying values are still wrong: a "tick" that is really a wall clock
+makes tick arithmetic (`expires_at_tick = tick_id + 5`, oath/pledge expiry, decay rates expressed
+in units-per-tick) meaningless, since 5 "ticks" is 5 seconds of real time regardless of game time.
+**Why deferred:** changing the tick contract is a behaviour change affecting emotion decay, routine
+overrides, pledge/treaty expiry and the oath engine — far outside `EVAL-P20.0`'s scope, and it
+needs its own regression tests. The prompt-determinism symptom is fixed independently.
+**To fix:** route `tick_id` through the injected `GameClock` (or the world-state tick) rather than
+`datetime.now()`, and add a test asserting two dialogue calls at the same game tick write the same
+`emotion_updated_at_tick`. Audit for other `datetime.now()`-as-tick uses at the same time.
+
+## ISSUE-166: 173 of 228 Cypher queries with RETURN have no ORDER BY
+**Found:** 2026-08-14, during `EVAL-P20.0` determinism investigation
+**Severity:** P2 (annoying — latent prompt non-determinism)
+**Where:** `src/npc_engine/graph/**` (static scan: 228 Cypher blocks containing `RETURN`, 173
+without `ORDER BY`)
+**Description:** Neo4j does not guarantee row order without `ORDER BY`. Any such query whose rows
+are serialized into prompt content can reorder between runs, changing prompt bytes and therefore
+the generated text. This was **not** the dominant term in the EVAL-P20.0 measurement — after the
+DEC-176 prompt fix, `retrieved_context` drift was 0/145 — but it is unbounded risk that grows with
+graph size, and it silently defeats reproducibility when it does bite.
+**Why deferred:** not the measured cause of the EVAL-P20.0 gate failure; single-task focus. Fixing
+173 queries blind would be churn.
+**To fix:** identify the subset whose results reach prompt content (memories, beliefs, goals,
+rumors, secrets, items, traits, reputation) and add a deterministic `ORDER BY` — id or an explicit
+score then id as a tiebreak — to those first. Add a check-rules rule for new prompt-feeding queries.
+
+## ISSUE-167: no way to reset eval world state between generation runs
+**Found:** 2026-08-14, during `EVAL-P20.0`
+**Severity:** P2 (annoying — blocks clean re-measurement)
+**Where:** `evals/preconditions.py` `reset_world`, `docker-compose.yml` (neo4j ports),
+`demo_game/snapshot.py`
+**Description:** Two generation runs cannot be started from identical graph state. `reset_world`
+only PATCHes `world_state` (fidelity PARTIAL — `evals/reset_fidelity.json` lists
+`graph.edges.RELATES_TO`, `emotion_store` and the caches under `surviving`), there is no
+graph-wide reset endpoint, `make demo-restore` needs a snapshot that requires a host bolt
+connection, and Neo4j's 7687 is not published to the host in `docker-compose.yml`. Measured
+consequence: run B started from run A's end state, and emotion/routine drift affected 109/145
+records. The EVAL-P20.0 measurement had to reset per-NPC emotion via
+`PATCH /v1/graph/nodes/character/{id}` from a throwaway script, which is not reproducible tooling.
+**Why deferred:** out of scope for adding a seed. It is infrastructure for the regeneration
+protocol, and `EVAL-P20.4` will need it.
+**To fix:** either publish 7687 so `make demo-snapshot`/`demo-restore` work, or add a committed
+`make eval-world-reset` that restores the seeded baseline through the admin API. Then update
+`evals/reset_fidelity.json` with the achieved fidelity.
+
+## ISSUE-168: human labels are joined on exact output text, so they die on any single token flip
+**Found:** 2026-08-14, during `EVAL-P20.0`
+**Severity:** P1 (blocking the premise of the two-regeneration budget)
+**Where:** `evals/content_hash.py:18` `sha256_text`, consumed by `calibration_records`,
+`label_import`, `label_merge`
+**Description:** A human verdict is bound to `sha256(output_text + criteria)`. EVAL-P20.0 measured
+that byte-identical reproduction is unattainable at dialogue output lengths on this runtime:
+reproduction decays with generated token count (91.7% at ~60 tokens, 45.8% for the structured
+`DialogueResponse`, **4.2%** at the shipped `max_tokens=512`), consistent with per-token
+floating-point flips compounding. A seed fixes the sampling draw but cannot make inference bitwise
+deterministic. So an exact-text join guarantees mass label loss at every regeneration *by design*,
+independent of any seed work. DEC-176 raised survival from ~19% to ~62.5%; the remaining ~37.5% is
+not addressable by configuration.
+**Why deferred:** re-scoping the label join is a much larger change than `EVAL-P20.0`, and the
+human explicitly chose (2026-08-14) to land the seed + prompt fixes and record the gate as NOT MET
+rather than re-scope in the same session.
+**To fix:** decide whether the join should tolerate drift — e.g. normalised-text hash, or binding
+the label to `(record_id, repetition, criteria)` with the text kept as evidence rather than as the
+key — and whether `needs_review` should finally be *read* by the scorers (it is written by
+`label_merge` and read by nothing; see the EVAL-P20 phase Notes). This determines whether the
+two-regeneration budget is affordable at all.
+
 ## ISSUE-163: NPC memories are fetched from the graph but never reach the prompt
 **Found:** 2026-08-14, during `RET-P0` (verifying the ISSUE-145 fix end to end)
 **Severity:** P2 (annoying)

@@ -55,13 +55,13 @@ def _make_engine_model_config() -> EngineModelConfig:
 class MinimalLLMClient:
     """Minimal fake client for DialogueHandler construction in tests."""
 
-    async def generate(self, prompt: str, max_tokens: int, temperature: float, top_p=None, stop_sequences=None, system=None) -> str:
+    async def generate(self, prompt: str, max_tokens: int, temperature: float, top_p=None, stop_sequences=None, system=None, seed=None) -> str:
         return "ok"
 
-    async def generate_structured(self, prompt: str, schema: dict[str, Any], max_tokens: int, top_p=None, stop_sequences=None, system=None) -> dict[str, Any]:
+    async def generate_structured(self, prompt: str, schema: dict[str, Any], max_tokens: int, top_p=None, stop_sequences=None, system=None, seed=None) -> dict[str, Any]:
         return {"bad": "payload"}
 
-    async def stream(self, prompt: str, max_tokens: int, temperature: float, top_p=None, stop_sequences=None, system=None) -> AsyncIterator[str]:
+    async def stream(self, prompt: str, max_tokens: int, temperature: float, top_p=None, stop_sequences=None, system=None, seed=None) -> AsyncIterator[str]:
         if False:
             yield ""
 

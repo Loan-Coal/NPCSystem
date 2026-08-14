@@ -26,6 +26,14 @@ class EngineModelParams(BaseModel):
     max_tokens: int = Field(gt=0)
     top_p: float = Field(ge=0.0, le=1.0)
     stop_sequences: list[str]
+    seed: int | None = Field(
+        default=None,
+        description=(
+            "Deterministic sampling seed forwarded to the backend. None means backend "
+            "default (non-deterministic). Optional because only the dialogue engine "
+            "sets it today (EVAL-P20.0 / DEC-176)."
+        ),
+    )
 
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 

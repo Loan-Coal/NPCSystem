@@ -18,7 +18,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         type-ratchet type-ratchet-update type-evals type-evals-update check-harness \
         test-cov-evals \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore \
         seed-tavern-world seed-village-world package
@@ -458,6 +458,14 @@ draft-cases:
 hedge-probe:
 	$(PYTHON) scripts/hedge_responder_probe.py \
 		$(if $(CASE_IDS),--case-ids $(CASE_IDS),)
+
+# seed-probe: measure byte-identical npc_response reproduction between two same-seed
+# generation runs (EVAL-P20.0 / HUMAN GATE H4). Offline — reads two committed gen dirs.
+# Exits 1 when rate_calls < 0.95, 2 when the two runs are not comparable.
+# Usage: make seed-probe A=seedrepro_a_<sha> B=seedrepro_b_<sha>
+seed-probe:
+	$(PYTHON) scripts/seed_reproduction_probe.py --a $(A) --b $(B) \
+		$(if $(JSON_OUT),--json-out $(JSON_OUT),)
 
 # ---------------------------------------------------------------------------
 # Demo game targets (Phase 2)

@@ -1,0 +1,18 @@
+{
+  "rate_records": 0.6275862068965518,
+  "rate_calls": 0.625,
+  "n_records": 145,
+  "n_calls": 24,
+  "identical_records": 91,
+  "identical_calls": 15,
+  "seed": 20260814,
+  "gen_id_a": "seedrepro_a_1742e8f",
+  "gen_id_b": "seedrepro_b_1742e8f",
+  "generation_model": "qwen2.5:7b",
+  "generation_model_digest": null,
+  "ollama_version": "0.32.9",
+  "git_sha": "1742e8f",
+  "gate": 0.95,
+  "verdict": "NOT_MET",
+  "measured_at": "2026-08-14T16:52:34.618567+00:00"
+}

@@ -107,7 +107,10 @@ codifies which statistics are permitted under which reset fidelity.
 ## What this schema does NOT contain
 
 - No scenario script or expected-output fields — those live in case files, not transcripts.
-- No `seed` field — the generation model has no seed parameter (DEC-146).
+- No `seed` field *on a `Turn`* — the run seed is recorded once in `RunConfig.seed` and every
+  `Repetition` inherits it. As of EVAL-P20.0 / DEC-176 that seed is real: the protocol carries it,
+  `ollama_adapter` sets `options.seed`, and the dialogue engine forwards it. It reproduces text only
+  partially (62.5% measured, not the ≥95% hoped for) — see DEC-176 before relying on it.
 - No judge verdict — that is a separate record bound to a `Turn` in the judging phase.
 - No migration path from EVAL-P12 — the trigger condition and migration cost are specified
   in EVAL-P14.3 (blocked on EVAL-P12.4's measured run time).

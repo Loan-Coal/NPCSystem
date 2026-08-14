@@ -59,6 +59,7 @@ class OllamaAdapter(LLMClientProtocol):
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
         system: str | None = None,
+        seed: int | None = None,
     ) -> str:
         """Send a plain-text generation request to the Ollama backend.
 
@@ -68,6 +69,7 @@ class OllamaAdapter(LLMClientProtocol):
             temperature: Sampling temperature.
             top_p: Nucleus sampling probability mass. None means backend default.
             stop_sequences: Token sequences that halt generation (mapped to stop). None means backend default.
+            seed: Deterministic sampling seed (mapped to options.seed). None means backend default.
 
         Returns:
             Generated text from the backend "response" field.
@@ -85,6 +87,8 @@ class OllamaAdapter(LLMClientProtocol):
             options["top_p"] = top_p
         if stop_sequences is not None:
             options["stop"] = stop_sequences
+        if seed is not None:
+            options["seed"] = seed
         payload: dict[str, Any] = {
             "model": self._model_name,
             "prompt": prompt,
@@ -120,6 +124,7 @@ class OllamaAdapter(LLMClientProtocol):
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
         system: str | None = None,
+        seed: int | None = None,
     ) -> dict[str, Any]:
         """Send a schema-constrained JSON generation request to the Ollama backend.
 
@@ -129,6 +134,7 @@ class OllamaAdapter(LLMClientProtocol):
             max_tokens: Maximum tokens to generate (mapped to num_predict).
             top_p: Nucleus sampling probability mass. None means backend default.
             stop_sequences: Token sequences that halt generation (mapped to stop). None means backend default.
+            seed: Deterministic sampling seed (mapped to options.seed). None means backend default.
 
         Returns:
             Parsed dict from the "response" field of the Ollama reply.
@@ -147,6 +153,8 @@ class OllamaAdapter(LLMClientProtocol):
             options["top_p"] = top_p
         if stop_sequences is not None:
             options["stop"] = stop_sequences
+        if seed is not None:
+            options["seed"] = seed
         payload: dict[str, Any] = {
             "model": self._model_name,
             "prompt": prompt,
@@ -186,6 +194,7 @@ class OllamaAdapter(LLMClientProtocol):
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
         system: str | None = None,
+        seed: int | None = None,
     ) -> AsyncIterator[str]:
         """Stream tokens from the Ollama backend line by line.
 
@@ -195,6 +204,7 @@ class OllamaAdapter(LLMClientProtocol):
             temperature: Sampling temperature.
             top_p: Nucleus sampling probability mass. None means backend default.
             stop_sequences: Token sequences that halt generation (mapped to stop). None means backend default.
+            seed: Deterministic sampling seed (mapped to options.seed). None means backend default.
 
         Returns:
             Async iterator yielding non-empty token strings from each streamed JSON line.
@@ -212,6 +222,8 @@ class OllamaAdapter(LLMClientProtocol):
             options["top_p"] = top_p
         if stop_sequences is not None:
             options["stop"] = stop_sequences
+        if seed is not None:
+            options["seed"] = seed
         payload: dict[str, Any] = {
             "model": self._model_name,
             "prompt": prompt,

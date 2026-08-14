@@ -27,9 +27,17 @@ NON_PROMPT_NODE_FIELDS: frozenset[str] = frozenset({
     # Graph bookkeeping — wall-clock timestamps the NPC cannot reason about.
     "created_at",
     "updated_at",
+    "last_updated_at",
     "last_graph_updated_at",
     "last_embedding_indexed_at",
     "schema_version",
+    # Wall-clock-derived ticks. dialogue_handler stamps writes with
+    # int(datetime.now().timestamp()), so these change on every call and are the
+    # single largest source of prompt non-determinism (EVAL-P20.0 / DEC-176).
+    # `expires_at_tick` nests inside routine_override; _clean strips by key name at
+    # any depth, so the sibling `location_id` survives.
+    "emotion_updated_at_tick",
+    "expires_at_tick",
     # Lifecycle flags used by readers, not by dialogue.
     "is_active",
     "is_player",
@@ -40,6 +48,14 @@ Measured on the live stack 2026-08-14: the 384-float `embedding` vector alone re
 as 2,014 tokens inside a single pinned character profile — 90% of that profile and
 3.9x the entire 512-token PROMPT_TOKEN_BUDGET. Graph readers return `properties(n)`
 wholesale, so anything not stripped here is paid for in prompt tokens.
+
+The wall-clock entries carry a second cost, measured 2026-08-14 during EVAL-P20.0: of
+145 eval records whose only between-run difference was `world.last_updated_at` plus
+`emotion_updated_at_tick`, **36 of 36 produced different npc_response text**. Fields
+that carry no dialogue signal were on their own sufficient to destroy reproducibility —
+and with it ~81% of the 393 human labels at every regeneration. This set is the
+enforcement point for CLAUDE.md's strict "Idempotent assembly" rule; apply it to
+*every* payload serialized into prompt content, not only character nodes.
 """
 
 

@@ -73,9 +73,24 @@ def test_run_config_is_frozen(tmp_llm_config: Path) -> None:
         setattr(config, "generation_model", "other")
 
 
-def test_seed_field_absent() -> None:
-    """RunConfig has no seed field — LLMGenerateProtocol.generate() has no seed param."""
-    assert "seed" not in RunConfig.model_fields
+def test_seed_field_present_defaults_to_none() -> None:
+    """RunConfig has a seed field (DEC-176); it defaults to None for pre-EVAL-P20.0 artifacts."""
+    assert "seed" in RunConfig.model_fields
+    assert RunConfig.model_fields["seed"].default is None
+
+
+def test_resolve_reads_seed_from_dialogue_llm_config() -> None:
+    """The committed dialogue llm_config.yaml seed reaches RunConfig — guards silent removal."""
+    config = resolve_run_config(config_path=_DIALOGUE_LLM_CONFIG)
+    expected_data = yaml.safe_load(_DIALOGUE_LLM_CONFIG.read_text(encoding="utf-8"))
+    assert isinstance(expected_data["llm"]["seed"], int)
+    assert config.seed == expected_data["llm"]["seed"]
+
+
+def test_resolve_seed_is_none_when_config_omits_it(tmp_llm_config: Path) -> None:
+    """An engine config without a seed key resolves to None, not a KeyError."""
+    config = resolve_run_config(config_path=tmp_llm_config)
+    assert config.seed is None
 
 
 def test_resolve_with_custom_retrieval_profile(tmp_path: Path, tmp_llm_config: Path) -> None:

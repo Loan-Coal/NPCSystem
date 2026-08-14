@@ -150,6 +150,7 @@ class DialogueHandler:
             top_p=cfg.top_p,
             stop_sequences=list(cfg.stop_sequences),
             log_prompts=resolve_log_prompts(self._settings),
+            seed=cfg.seed,
         )
 
     def _apply_output_ceiling(

@@ -161,10 +161,13 @@ class _FakeStreamResponse:
 
 
 class _FakeStreamingClient:
+    last_payload: dict = {}
+
     def __init__(self, *args, **kwargs):
         pass
 
     def stream(self, method: str, url: str, json: dict):
+        type(self).last_payload = json
         return _FakeStreamResponse()
 
     async def aclose(self) -> None:
@@ -181,6 +184,52 @@ async def test_stream_yields_delta_content_and_stops_on_done(monkeypatch) -> Non
     async for token in _adapter().stream(prompt="p", max_tokens=10, temperature=0.2):
         chunks.append(token)
     assert chunks == ["hel", "lo"]
+
+
+# ---------------------------------------------------------------------------
+# seed forwarding (EVAL-P20.0 / DEC-176)
+#
+# One test per _base_body() call site, deliberately. seed defaults to None, so a
+# forgotten `seed=seed` at any one call site compiles, type-checks and silently
+# produces non-deterministic output — only a per-site assertion catches it.
+# ---------------------------------------------------------------------------
+
+_SEED = 4242
+
+
+@pytest.mark.asyncio
+async def test_generate_forwards_seed(monkeypatch) -> None:
+    client_cls = _make_capturing_client({"choices": [{"message": {"content": "ok"}}]})
+    monkeypatch.setattr("npc_engine.engines.llm.openai_adapter.httpx.AsyncClient", client_cls)
+    await _adapter().generate(prompt="p", max_tokens=10, temperature=0.2, seed=_SEED)
+    assert client_cls.last_payload["seed"] == _SEED
+
+
+@pytest.mark.asyncio
+async def test_generate_structured_forwards_seed(monkeypatch) -> None:
+    client_cls = _make_capturing_client({"choices": [{"message": {"content": '{"ok": true}'}}]})
+    monkeypatch.setattr("npc_engine.engines.llm.openai_adapter.httpx.AsyncClient", client_cls)
+    await _adapter().generate_structured(prompt="p", schema={}, max_tokens=10, seed=_SEED)
+    assert client_cls.last_payload["seed"] == _SEED
+
+
+@pytest.mark.asyncio
+async def test_stream_forwards_seed(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "npc_engine.engines.llm.openai_adapter.httpx.AsyncClient",
+        _FakeStreamingClient,
+    )
+    async for _ in _adapter().stream(prompt="p", max_tokens=10, temperature=0.2, seed=_SEED):
+        pass
+    assert _FakeStreamingClient.last_payload["seed"] == _SEED
+
+
+@pytest.mark.asyncio
+async def test_generate_omits_seed_when_none(monkeypatch) -> None:
+    client_cls = _make_capturing_client({"choices": [{"message": {"content": "ok"}}]})
+    monkeypatch.setattr("npc_engine.engines.llm.openai_adapter.httpx.AsyncClient", client_cls)
+    await _adapter().generate(prompt="p", max_tokens=10, temperature=0.2)
+    assert "seed" not in client_cls.last_payload
 
 
 @pytest.mark.asyncio

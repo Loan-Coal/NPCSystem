@@ -27,6 +27,7 @@ class LLMGenerateProtocol(Protocol):
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
         system: str | None = None,
+        seed: int | None = None,
     ) -> str:
         """Generate plain text output.
 
@@ -37,6 +38,10 @@ class LLMGenerateProtocol(Protocol):
             top_p: Nucleus sampling probability mass. None means backend default.
             stop_sequences: Token sequences that halt generation. None means backend default.
             system: Optional system prompt injected via the backend's system channel.
+            seed: Deterministic sampling seed. None means backend default (non-deterministic).
+                Equal seeds with equal inputs reproduce equal output on a given
+                model/quantisation/driver; a seed is not a bit-identical guarantee
+                across those (EVAL-P20.0 / DEC-176).
 
         Returns:
             Generated text string from the backend.
@@ -73,6 +78,7 @@ class LLMStructuredProtocol(LLMGenerateProtocol, Protocol):
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
         system: str | None = None,
+        seed: int | None = None,
     ) -> dict[str, Any]:
         """Generate schema-constrained JSON output.
 
@@ -83,6 +89,9 @@ class LLMStructuredProtocol(LLMGenerateProtocol, Protocol):
             top_p: Nucleus sampling probability mass. None means backend default.
             stop_sequences: Token sequences that halt generation. None means backend default.
             system: Optional system prompt injected via the backend's system channel.
+            seed: Deterministic sampling seed. None means backend default (non-deterministic).
+                This is the surface the eval harness seeds — the dialogue path is structured,
+                so RunConfig.seed reproducibility rides on this method (EVAL-P20.0 / DEC-176).
 
         Returns:
             Parsed dict conforming to the provided schema.
@@ -110,6 +119,7 @@ class LLMStreamProtocol(LLMGenerateProtocol, Protocol):
         top_p: float | None = None,
         stop_sequences: list[str] | None = None,
         system: str | None = None,
+        seed: int | None = None,
     ) -> AsyncIterator[str]:
         """Yield streamed tokens for low-latency UX.
 
@@ -120,6 +130,9 @@ class LLMStreamProtocol(LLMGenerateProtocol, Protocol):
             top_p: Nucleus sampling probability mass. None means backend default.
             stop_sequences: Token sequences that halt generation. None means backend default.
             system: Optional system prompt injected via the backend's system channel.
+            seed: Deterministic sampling seed. None means backend default (non-deterministic).
+                Forwarding is proven by unit test only — the eval runner POSTs non-streaming,
+                so the measured >=95% reproduction gate does not cover this method (DEC-176).
 
         Returns:
             Async iterator yielding token strings as they arrive.
