@@ -3196,6 +3196,34 @@ untriaged (ISSUE-157).
 decision — the roadmap's "both ids land in one commit" constraint (H6) could not be
 retroactively satisfied. Recorded rather than silently ignored.
 
+## DEC-175: RET-P0.3 prompt-window check lives at `config_prompt_window.py`, not inside `config/`
+**Date:** 2026-08-14
+**Context:** The approved RET-P0 plan specified creating
+`src/npc_engine/config/prompt_window_check.py`. That path is not viable: `src/npc_engine/config/`
+is a *data* directory holding only `llm_config.yaml` with no `__init__.py`, while the settings
+module is the sibling *file* `src/npc_engine/config.py`. Adding a Python module under `config/`
+would require an `__init__.py`, which would turn `config/` into a package that shadows `config.py`
+and break every `from npc_engine.config import ...` in the codebase.
+
+**Decision:** The module ships as `src/npc_engine/config_prompt_window.py`, matching the existing
+sibling convention already established by `config_validators.py` and `config_logging_validators.py`.
+No `__init__.py` is added to `config/`, which stays a pure asset directory.
+
+**Consequence:** The plan's other references to "`config/prompt_window_check.py`" should be read as
+`config_prompt_window.py`. `PromptWindowError` was added to `utils/errors.py` as a frozen
+`StructuredNPCSystemError` dataclass, consistent with the rest of the hierarchy.
+
+**Also settled here:** the check is *not yet* wired into `Settings` as a `model_validator`. RET-P0
+ships it as a tested pure function only. Wiring it to hard-fail at startup is RET-P6's job, since
+today's shipped defaults are provably incoherent (system prompt 5,426 tokens vs a 4,096-token
+window) and a hard-fail validator would refuse to boot the current configuration. Landing the
+validator before the window is raised would brick local dev — the reason the plan called for
+"warning-only in dev" — and a warning nobody reads is not worth a startup-path change on its own.
+`tests/unit/config/test_config_prompt_window.py::test_shipped_defaults_do_not_fit_the_default_window`
+pins the incoherence so RET-P6 has a measurable target.
+
+---
+
 ## DEC-174: EVAL-P12.4 measured multi-turn — order-effect check pooling, reset-receipt sourcing, and scenario fix-forward
 **Date:** 2026-08-13
 **Context:** `HUMAN GATE H5` / `EVAL-P12.4`. Four design points came up while wiring the six promoted

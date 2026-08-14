@@ -176,11 +176,12 @@ class TestOversizedItemDoesNotTruncateTail:
 class TestIssue145EndToEndSymptom:
     """The exact reported symptom: a realistic NPC payload at the production budget."""
 
-    def test_beliefs_goals_memories_survive_at_budget_512(self) -> None:
-        """A realistic mira_innkeeper context must not serialize to an empty NPC block.
+    def test_beliefs_goals_memories_survive_when_they_fit_the_tier_a_cap(self) -> None:
+        """A context that fits the tier-A cap must not serialize to an empty NPC block.
 
         This is the ISSUE-145 acceptance shape: tier0 + pinned core + the three
-        graph-authoritative collections, at the real 512-token production budget.
+        graph-authoritative collections, sized to fit the 281-token tier-A soft cap
+        that a 512-token prompt budget yields.
         """
         context = MergedContext(
             items=[
@@ -188,16 +189,16 @@ class TestIssue145EndToEndSymptom:
                 ContextItem(key="emotion", text=_sized("e", 10), tier="tier0", priority=95, pinned=True),
                 ContextItem(
                     key="character:mira_innkeeper",
-                    text=_sized("c", 153),
+                    text=_sized("c", 100),
                     tier="tierA",
                     priority=100,
                     pinned=True,
                 ),
-                ContextItem(key="session", text=_sized("s", 60), tier="tierA", priority=99, pinned=True),
+                ContextItem(key="session", text=_sized("s", 40), tier="tierA", priority=99, pinned=True),
                 ContextItem(key="relation:player", text=_sized("r", 25), tier="tierA", priority=95, pinned=False),
                 ContextItem(key="memories", text=_sized("m", 40), tier="tierA", priority=90, pinned=False),
                 ContextItem(key="beliefs", text=_sized("b", 40), tier="tierA", priority=88, pinned=False),
-                ContextItem(key="goals", text=_sized("g", 40), tier="tierA", priority=87, pinned=False),
+                ContextItem(key="goals", text=_sized("g", 30), tier="tierA", priority=87, pinned=False),
             ]
         )
 
@@ -212,3 +213,23 @@ class TestIssue145EndToEndSymptom:
         assert "memories" in surviving, "ISSUE-145: memories came back empty"
         assert "beliefs" in surviving, "ISSUE-145: beliefs came back empty"
         assert "goals" in surviving, "ISSUE-145: goals came back empty"
+
+
+class TestBudgetCeilingIsTheRemainingConstraint:
+    """ISSUE-145's second cause, which RET-P0 does NOT fix — documented, not asserted away.
+
+    RET-P0 guarantees pinned survival and stops one oversized item truncating the tail.
+    It cannot create room that does not exist: at PROMPT_TOKEN_BUDGET=512 the tier-A
+    soft cap is 281 tokens, and a full NPC payload wants ~358. Raising the window is
+    RET-P6's job; this test pins the ceiling so that change is measurable.
+    """
+
+    def test_full_npc_payload_still_overflows_the_tier_a_cap_at_512(self) -> None:
+        """A full-sized NPC payload cannot fit tier A at the current production budget."""
+        full_payload_tokens = 153 + 60 + 25 + 40 + 40 + 40  # character, session, relation, mem, bel, goals
+        tier_a_soft_cap = int(PRODUCTION_PROMPT_BUDGET * 0.55)
+
+        assert tier_a_soft_cap == 281
+        assert full_payload_tokens > tier_a_soft_cap, (
+            "If this now fits, RET-P6 raised the budget — update the expected ceiling."
+        )

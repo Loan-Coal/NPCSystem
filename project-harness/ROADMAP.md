@@ -2339,6 +2339,64 @@ this gate actually needs to prove `--merge` durability against.
       the merge report's "0 drifted" line. Confirmed unrelated to `refusal_judge`/EVAL-P19.2; accepted
       rather than reverted.
 
+---
+
+### Phase RET-P0 — Context budget starvation fix + instrumentation ✅
+
+Opening phase of the Retrieval Quality Program (RET-P0…P6). Closes the P1 half of ISSUE-145.
+
+- [x] **RET-P0.1** — Pinned context items survive budget enforcement.
+      Two defects in `retrieval/context/context_budget_enforcer.py`, both reproduced in pure unit
+      tests before fixing: (1) the tier-A fill loop applied `prompt_token_budget` to **pinned**
+      items, so at `tier0=360` with a 512 budget the pinned `character:` node was silently dropped;
+      (2) both that loop and `_fit_tier_a_pinned_pool` used `break`, so one oversized item truncated
+      every smaller item behind it. Extracted `_fill_tier_a` / `_fill_capped_tier` helpers, replaced
+      the inline drop-order dict with `TIER_DROP_ORDER`, and removed the duplicate `TIER0_MAX_TOKENS`
+      (was defined at both module scope and inside `enforce_context_budget`).
+- [x] **RET-P0.2** — `context_items_dropped_total{tier,reason}` metric (`record_drop_metrics`),
+      `reason: Literal["tier_soft_cap","prompt_budget","final_trim"]`. Budget starvation was
+      previously silent — no exception, no log, no metric — which is why ISSUE-145 survived so long.
+- [x] **RET-P0.3** — `config_prompt_window.py` + `PromptWindowError`. Pure, tested, **not yet wired
+      into `Settings`** — see DEC-175: today's defaults are provably incoherent (system prompt 5,426
+      tokens vs a 4,096-token window), so a hard-fail validator would refuse to boot. RET-P6 wires it.
+- [x] **RET-P0.4** — Logged ISSUE-161 (circular import in `retrieval.context`, blocking for RET-P1.3),
+      ISSUE-162 (pre-existing `make lint` E741 failure), ISSUE-163 (memories fetched but not served).
+- [x] **RET-P0.5** — **Unplanned, blocking.** Verifying P0.1 on the live stack showed the pinned
+      character profile now reaching the prompt carrying a raw **384-float `embedding` vector: 2,014
+      tokens, 90% of the profile, 3.9x the entire 512-token budget**. `_character_item` serialized
+      `properties(c)` wholesale with no `strip_fields`, unlike `_event_items`. Added
+      `NON_PROMPT_NODE_FIELDS` (embedding + bookkeeping timestamps + lifecycle flags) and applied it.
+      Without this, P0.1 was net-harmful: it made the prompt 2,458 tokens against a 512 budget.
+
+**Measured end to end against the live stack (7 demo NPCs, `GET /v1/admin/debug/retrieval`):**
+
+| | before RET-P0 | after P0.1 only | after P0.1 + P0.5 |
+|---|---|---|---|
+| NPCs with a non-empty `profile` | **0 / 7** | 7 / 7 | **7 / 7** (14-16 fields) |
+| total serialized context | — | 2,458 tok | **396 tok** (budget 512) |
+| `npc_known_events` reaching prompt | 0 | 0 | **1-3 for 6 of 7** |
+| `embedding` in prompt | — | 2,014 tok | none |
+
+`captain_sorn`'s direct `KNOWS_ABOUT northern_war_begins` edge — the case ISSUE-145 named
+explicitly as not reaching the prompt — now arrives as
+`"The northern armies have crossed the border. We are at war."`
+
+**ISSUE-145 is half closed, deliberately not marked `[FIXED]`.** The `profile: {}` and empty
+`npc_known_events` symptoms are fixed and verified. The remaining `beliefs`/`goals`/`memories`
+emptiness has two *different* causes, neither of them this one: for the demo NPCs beliefs and goals
+are legitimately absent from the seed (no `HOLDS_BELIEF`/`HAS_GOAL` edges exist), and memories are
+a separate defect logged as ISSUE-163 (the production query returns 2 rows for `captain_sorn`, and
+there is 116 tokens of headroom, yet they do not reach the skeleton).
+
+**Also pinned, not fixed:** `test_context_budget_starvation.py::test_full_npc_payload_still_overflows_the_tier_a_cap_at_512`
+records that a full NPC payload (~358 tok) still exceeds the tier-A soft cap (281 tok at a 512
+budget). RET-P0 cannot create room that does not exist; raising the window is RET-P6's job, and this
+test makes that change measurable.
+
+**Gate:** 3,308 passed / 30 skipped · `check-rules`, `check-layers`, `check-docstrings` OK ·
+new-module coverage: `config_prompt_window` 100%, `context_budget_enforcer` 91%, `context_metrics` 97%.
+`make lint` red for one pre-existing unrelated reason (ISSUE-162).
+
 <!-- LOOP:QUEUE end -->
 <!-- ^ MOVED HERE 2026-08-10 (DEC-163): narrowed from below EVAL-P24.3 to below EVAL-P19.4.
      DEC-160 released EVAL-P15..P24 to the loop. That was right for P15-P19 and wrong for P20-P24,

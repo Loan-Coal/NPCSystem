@@ -10,6 +10,8 @@ Dependencies injected: None.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from .context_compression import COMPRESSION_SUFFIX
 from .context_merger import MergedContext
 from .context_utils import estimate_tokens
@@ -19,9 +21,20 @@ from npc_engine.utils.metrics import increment_metric
 CONTEXT_ITEMS_SELECTED_METRIC = "context_items_selected_total"
 CONTEXT_TIER_TOKENS_METRIC = "context_tier_tokens"
 CONTEXT_BUDGET_ERRORS_METRIC = "context_budget_errors_total"
+CONTEXT_ITEMS_DROPPED_METRIC = "context_items_dropped_total"
 LLM_COMPRESSIONS_METRIC = "llm_compressions_total"
 CONTEXT_CACHE_HITS_METRIC = "dialogue_context_cache_hits_total"
 CONTEXT_CACHE_MISSES_METRIC = "dialogue_context_cache_misses_total"
+
+ContextDropReason = Literal["tier_soft_cap", "prompt_budget", "final_trim"]
+"""Why a context item did not reach the prompt.
+
+tier_soft_cap: excluded by a per-tier budget before the global fill.
+prompt_budget: excluded by the total prompt token budget during the greedy fill.
+final_trim: dropped after serialization when the real JSON exceeded the budget.
+"""
+
+_NEVER_DROPPED_TIER = "tier0"
 
 
 def record_context_metrics(context: MergedContext) -> None:
@@ -45,6 +58,38 @@ def record_context_metrics(context: MergedContext) -> None:
             metric=CONTEXT_TIER_TOKENS_METRIC,
             amount=float(tier_tokens),
             labels={"tier": tier.lower()},
+        )
+
+
+def record_drop_metrics(
+    *,
+    pre_budget_context: MergedContext,
+    post_budget_context: MergedContext,
+    reason: ContextDropReason,
+) -> None:
+    """Emit a per-tier counter for every context item that did not reach the prompt.
+
+    Without this, budget starvation is silent — the failure mode behind ISSUE-145,
+    where pinned items were dropped with no exception, log, or metric.
+
+    Args:
+        pre_budget_context: Merged context before budget enforcement.
+        post_budget_context: Merged context after budget enforcement.
+        reason: Which stage of budget enforcement removed the items.
+    """
+
+    surviving_keys = {item.key for item in post_budget_context.items}
+    dropped_by_tier: dict[str, int] = {}
+    for item in pre_budget_context.items:
+        if item.key in surviving_keys or item.tier == _NEVER_DROPPED_TIER:
+            continue
+        dropped_by_tier[item.tier] = dropped_by_tier.get(item.tier, 0) + 1
+
+    for tier, count in dropped_by_tier.items():
+        increment_metric(
+            metric=CONTEXT_ITEMS_DROPPED_METRIC,
+            amount=float(count),
+            labels={"tier": tier.lower(), "reason": reason},
         )
 
 

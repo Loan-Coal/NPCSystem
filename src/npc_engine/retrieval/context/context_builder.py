@@ -59,6 +59,7 @@ from .context_metrics import (
     CONTEXT_CACHE_MISSES_METRIC,
     record_compression_metrics,
     record_context_metrics,
+    record_drop_metrics,
 )
 from .context_scoring import rank_tier_items
 from npc_engine.retrieval.graph_rag.graph_rag import graph_rag_retrieve
@@ -464,6 +465,11 @@ def _rank_and_serialize_tiers(
     )
     record_context_metrics(context=final_context)
     record_compression_metrics(pre_budget_context=merged, post_budget_context=final_context)
+    record_drop_metrics(
+        pre_budget_context=merged,
+        post_budget_context=final_context,
+        reason="prompt_budget",
+    )
     return str(serialized)
 
 

@@ -302,6 +302,27 @@ class TokenBudgetExceededError(Exception):
     """Raised when mandatory tier0 context alone exceeds the token budget."""
 
 
+@dataclass(frozen=True)
+class PromptWindowError(StructuredNPCSystemError):
+    """Raised when the configured LLM context window cannot hold the prompt it must serve.
+
+    A window smaller than system prompt + context budget + output reserve + headers is
+    a promise the model cannot keep: the backend silently truncates instead of failing,
+    so the overflow is invisible at runtime.
+
+    Attributes:
+        context_length: The configured model context window, in tokens.
+        required_tokens: Total tokens the configuration commits to.
+        overflow_tokens: How far required_tokens exceeds context_length.
+        detail: Human-readable breakdown of the contributing components.
+    """
+
+    context_length: int
+    required_tokens: int
+    overflow_tokens: int
+    detail: str
+
+
 @dataclass
 class ContextBudgetError(Exception):
     """Raised for tier-specific context budget overflow during prompt assembly."""

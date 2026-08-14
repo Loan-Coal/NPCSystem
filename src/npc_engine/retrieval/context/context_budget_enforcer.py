@@ -29,6 +29,12 @@ __all__ = [
     "fill_to_budget",
 ]
 
+TIER0_MAX_TOKENS = 380
+"""Fixed tier0 ceiling. Exceeding it is a data error, not a budget-pressure condition."""
+
+TIER_DROP_ORDER: dict[str, int] = {"tierA": 2, "tierB": 1, "tierC": 0}
+"""Post-serialization drop precedence: lower value is dropped first (tier C before A)."""
+
 
 def enforce_context_budget(
     *,
@@ -56,7 +62,6 @@ def enforce_context_budget(
             their sub-budget (both are data errors, not pool-overflow conditions).
     """
 
-    TIER0_MAX_TOKENS = 380  # fixed tier0 ceiling (the canonical budget enforcer)
 
     cache = compression_cache or ContextCompressionCache()
 
@@ -180,13 +185,76 @@ def _fit_tier_a_pinned_pool(
     for item in non_pinned:
         tok = estimate_tokens(item.text)
         if remaining - tok < 0:
-            break
+            # Skip, do not stop: smaller lower-priority items behind this one may fit.
+            continue
         selected_non_pinned.append(item)
         remaining -= tok
     return [*pinned, *selected_non_pinned]
 
 
-TIER0_MAX_TOKENS = 380
+def _fill_tier_a(
+    *,
+    items: list[ContextItem],
+    running_tokens: int,
+    prompt_token_budget: int,
+) -> tuple[list[ContextItem], int]:
+    """Select tier-A items against the total prompt budget.
+
+    Pinned items are appended unconditionally — the pinned-core contract guarantees
+    they reach the prompt regardless of budget pressure (ISSUE-145). Non-pinned items
+    that do not fit are skipped rather than terminating the scan, so smaller
+    lower-priority items behind them are still considered.
+
+    Args:
+        items: Tier-A items in selection order (pinned first, then priority descending).
+        running_tokens: Tokens already committed by preceding tiers.
+        prompt_token_budget: Total token budget for the serialized prompt.
+    Returns:
+        Tuple of (selected items, updated running token count).
+    """
+    selected: list[ContextItem] = []
+    running = running_tokens
+    for item in items:
+        tokens = estimate_tokens(item.text)
+        if not item.pinned and running + tokens > prompt_token_budget:
+            continue
+        selected.append(item)
+        running += tokens
+    return selected, running
+
+
+def _fill_capped_tier(
+    *,
+    items: list[ContextItem],
+    running_tokens: int,
+    prompt_token_budget: int,
+    tier_cap: int | None,
+) -> tuple[list[ContextItem], int]:
+    """Select compressible-tier items within both the tier soft cap and the prompt budget.
+
+    Items that do not fit are skipped rather than terminating the scan.
+
+    Args:
+        items: Tier items in priority-descending order.
+        running_tokens: Tokens already committed by preceding tiers.
+        prompt_token_budget: Total token budget for the serialized prompt.
+        tier_cap: Per-tier soft cap, or None for no tier-level cap.
+    Returns:
+        Tuple of (selected items, updated running token count).
+    """
+    selected: list[ContextItem] = []
+    running = running_tokens
+    tier_running = 0
+    for item in items:
+        tokens = estimate_tokens(item.text)
+        if tier_cap is not None and tier_running + tokens > tier_cap:
+            continue
+        if running + tokens > prompt_token_budget:
+            continue
+        selected.append(item)
+        tier_running += tokens
+        running += tokens
+    return selected, running
 
 
 def fill_to_budget(
@@ -279,32 +347,27 @@ def fill_to_budget(
         items=tier_a_items_raw,
         budget_tokens=tier_a_soft_cap,
     )
-    for item in tier_a_fitted:
-        tok = estimate_tokens(item.text)
-        if running + tok > prompt_token_budget:
-            break
-        selected.append(item)
-        running += tok
+    tier_a_selected, running = _fill_tier_a(
+        items=tier_a_fitted,
+        running_tokens=running,
+        prompt_token_budget=prompt_token_budget,
+    )
+    tier_b_selected, running = _fill_capped_tier(
+        items=compressed_b_sorted,
+        running_tokens=running,
+        prompt_token_budget=prompt_token_budget,
+        tier_cap=tier_b_soft_cap,
+    )
+    tier_c_selected, running = _fill_capped_tier(
+        items=compressed_c_sorted,
+        running_tokens=running,
+        prompt_token_budget=prompt_token_budget,
+        tier_cap=None,
+    )
 
-    tier_b_running = 0
-    for item in compressed_b_sorted:
-        tok = estimate_tokens(item.text)
-        if tier_b_running + tok > tier_b_soft_cap:
-            break
-        if running + tok > prompt_token_budget:
-            break
-        selected.append(item)
-        tier_b_running += tok
-        running += tok
-
-    for item in compressed_c_sorted:
-        tok = estimate_tokens(item.text)
-        if running + tok > prompt_token_budget:
-            break
-        selected.append(item)
-        running += tok
-
-    filled = MergedContext(items=selected)
+    filled = MergedContext(
+        items=[*selected, *tier_a_selected, *tier_b_selected, *tier_c_selected]
+    )
 
     # Verify actual serialized size (corrects for JSON skeleton overhead) and trim if needed.
     serialized = serialize_context(filled)
@@ -315,7 +378,7 @@ def fill_to_budget(
         # Drop from tier_c first, then tier_b, then tier_a — lowest priority first within each.
         to_drop = sorted(
             droppable,
-            key=lambda i: ({"tierA": 2, "tierB": 1, "tierC": 0}[i.tier], i.priority),
+            key=lambda i: (TIER_DROP_ORDER[i.tier], i.priority),
         )[0]
         filled = filled.model_copy(
             update={"items": [i for i in filled.items if i.key != to_drop.key]}

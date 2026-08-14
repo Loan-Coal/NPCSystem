@@ -14,7 +14,11 @@ from neo4j import AsyncSession
 
 from npc_engine.graph.graph_reader import get_character_with_relations, get_events_for_npc, get_location_context, get_npc_location_id
 from npc_engine.retrieval.context.context_merger import ContextItem
-from npc_engine.retrieval.context.context_utils import serialize_json, _LOW_VALUE_FIELDS
+from npc_engine.retrieval.context.context_utils import (
+    NON_PROMPT_NODE_FIELDS,
+    serialize_json,
+    _LOW_VALUE_FIELDS,
+)
 
 _NPC_NEARBY_FIELDS = ("id", "name", "archetype", "faction")
 
@@ -50,10 +54,23 @@ def _flatten_event_row(event_row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _character_item(npc_id: str, character_payload: dict[str, Any] | None) -> list[ContextItem]:
-    """Return character profile ContextItem, or [] if payload is absent."""
+    """Return character profile ContextItem, or [] if payload is absent.
+
+    Strips NON_PROMPT_NODE_FIELDS: graph readers return `properties(c)` wholesale, which
+    includes the 384-float `embedding` vector. Measured unstripped at 2,014 tokens —
+    3.9x the entire prompt budget — inside this single pinned item (RET-P0.5).
+    """
     if character_payload is None:
         return []
-    return [ContextItem(key=f"character:{npc_id}", text=serialize_json(character_payload), tier="tierA", priority=100, pinned=True)]
+    return [
+        ContextItem(
+            key=f"character:{npc_id}",
+            text=serialize_json(character_payload, strip_fields=NON_PROMPT_NODE_FIELDS),
+            tier="tierA",
+            priority=100,
+            pinned=True,
+        )
+    ]
 
 
 def _relation_item(relation_entries: list[dict[str, Any]]) -> list[ContextItem]:

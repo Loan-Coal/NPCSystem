@@ -16,6 +16,65 @@ Rules:
 
 ## Open
 
+## ISSUE-163: NPC memories are fetched from the graph but never reach the prompt
+**Found:** 2026-08-14, during `RET-P0` (verifying the ISSUE-145 fix end to end)
+**Severity:** P2 (annoying)
+**Where:** between `graph/memory/memory_queries.py` `CYPHER_GET_MEMORIES_FOR_CHARACTER` and
+`retrieval/context/context_builder.py:398-400` (`_build_tier_a_extended`) / `context_serializer.py`
+**Description:** After the RET-P0 budget and prompt-hygiene fixes, `captain_sorn`'s context is
+396 tokens against a 512 budget — there is headroom — yet `npc.memories` is `[]` in
+`GET /v1/admin/debug/retrieval`. The data exists and the production query returns it: running
+`CYPHER_GET_MEMORIES_FOR_CHARACTER` verbatim against the live graph returns 2 rows
+(`mem_captain_sorn_0`, `mem_captain_sorn_1`), both correctly labelled `:Memory` with real
+`content`. So this is **not** the ISSUE-145 budget cause and **not** missing seed data — the rows
+are dropped somewhere between the reader and the serialized skeleton. Note both rows have
+`vividness = 0`, so a truthiness filter on vividness, `annotate_memory_ages` returning empty, or
+the `PartialDialogueContextCache` profile slot are the three candidates.
+Distinguish from beliefs/goals, which are legitimately `[]` — `captain_sorn` has no
+`HOLDS_BELIEF`/`HAS_GOAL` edges in the seed at all.
+**Why deferred:** RET-P0 is scoped to budget starvation; single-task focus. The ISSUE-145
+acceptance criterion for profile and known-events is met and verified independently of this.
+**To fix:** Trace `get_memories_for_character` → `_fetch_npc_profile_data` →
+`_build_tier_a_extended` → `serialize_context` with a live `captain_sorn` payload; add a unit test
+asserting a `vividness=0` memory survives to the serialized `npc.memories` slot. Fold into RET-P2,
+which already touches this serialization path.
+
+## ISSUE-162: `make lint` is red on `main` — E741 ambiguous variable name in `sequence_order_effect.py`
+**Found:** 2026-08-14, during `RET-P0` (retrieval quality program)
+**Severity:** P2 (annoying)
+**Where:** `evals/sequence_order_effect.py:81:46`
+**Description:** `make lint` fails with `E741 Ambiguous variable name: 'l'`, which fails the whole
+`make check` gate (`lint` is its first target). Pre-existing and unrelated to RET-P0: the file is
+untouched by that task (`git diff HEAD -- evals/sequence_order_effect.py` is empty) and was last
+modified in `efbe7ce` (EVAL-P12.4). Confirmed the only lint error in the repo.
+**Why deferred:** Single-task focus — RET-P0 is scoped to context budget starvation, and this is
+stats code owned by the EVAL-P12 line. The variable `l` is deliberate notation for `Lᵢ` from the
+Cochran's Q block design documented in DEC-174, so the rename should be made by someone confirming
+it stays faithful to `docs/SEQUENCE_STATS_POLICY.md` §4.2 rather than blind-renamed to satisfy ruff.
+**To fix:** Rename `l` to a non-ambiguous name that preserves the `Lᵢ` meaning (e.g. `l_i` or
+`rep_passes`) and re-run `make lint`. One-line change; the only reason it is not done here is diff
+hygiene.
+
+## ISSUE-161: `import npc_engine.retrieval.context` fails standalone with a circular `ImportError`
+**Found:** 2026-08-14, during `RET-P0` (retrieval quality program)
+**Severity:** P2 (annoying)
+**Where:** `src/npc_engine/retrieval/context/__init__.py` → `context_builder.py:68` → `retrieval/dialogue_context/__init__.py:13` → `dialogue_context_adapter.py:20`
+**Description:** Importing the context package on its own raises
+`ImportError: cannot import name 'build_serialized_context' from partially initialized module
+'npc_engine.retrieval.context.context_builder' (most likely due to a circular import)`.
+Verified directly: `python -c "import npc_engine.retrieval.context"` fails, while
+`import npc_engine.retrieval.dialogue_context` followed by `import npc_engine.retrieval.context`
+succeeds. The cycle is `context` → `dialogue_context` → `context`. It is invisible today only
+because every production entry point happens to import `dialogue_context` first, so import order
+is load-bearing but undocumented and unenforced.
+**Why deferred:** RET-P0 is scoped to budget starvation (ISSUE-145); single-task focus. The cycle
+predates this task and breaks nothing currently shipping.
+**To fix:** Break the cycle by having `dialogue_context_adapter` import `build_serialized_context`
+lazily inside the calling method, or move the shared entry point into a module both packages can
+depend on downward. Add a regression test that imports `npc_engine.retrieval.context` in a fresh
+interpreter. **Blocking for RET-P1.3**, whose in-process eval fallback imports the context package
+directly and will hit this.
+
 ## ISSUE-160: `label_merge._has_drifted` only compares `output_sha256`/`criteria_sha256` — a verdict-only change on hash-identical content is invisible to the merge report
 **Found:** 2026-08-13, during `EVAL-P19.4` (`HUMAN GATE H2`)
 **Severity:** P3 (nice-to-fix)
