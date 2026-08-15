@@ -16,6 +16,79 @@ Rules:
 
 ## Open
 
+## ISSUE-174: `EVAL-P21.0`'s judge-roster choice has no `AskUserQuestion` marker despite being a real human decision
+**Found:** 2026-08-15, during the EVAL-P20-P24 unblock planning session
+**Severity:** P3 (nice-to-fix — a documentation/wording gap, not a blocker)
+**Where:** `project-harness/ROADMAP.md`, Phase `EVAL-P21`, subtask `EVAL-P21.0`
+**Description:** `EVAL-P21.0` ("panel roster and independence") requires a real human pick between
+an out-of-family third judge model (`llama3.1:8b` or `gemma2:9b` — `qwen2.5:14b` is banned as
+same-family as the generation model) but carries no `⏸️`/`(live` flag and no `AskUserQuestion`
+marker in ROADMAP.md — it's phrased as a plain task that "requires a DECISIONS entry," not a
+formal question round. `EVAL-P21.3` is the flagged task ("records a DECISIONS entry settling a
+judge"), which reads as covering the *outcome* but not necessarily prompting the *choice* via the
+same `AskUserQuestion` discipline used elsewhere in `EVAL-P20.3a`/`P20.3b`.
+**Why deferred:** cosmetic/consistency issue found while auditing P20-P24 for `AskUserQuestion`
+markers (see `project-harness/EVAL_P20_TO_P24_UNBLOCK_PLAN.md` Section 3); not this session's task
+to fix, and the decision itself is not blocked — it just lacks the formal ritual other P20 human
+decisions use.
+**To fix:** either add an explicit `AskUserQuestion, before any implementation` marker to
+`EVAL-P21.0` matching the `EVAL-P20.3a`/`P20.3b` pattern, or note in `EVAL-P21.0`'s text that the
+model pick is made informally and recorded via `EVAL-P21.3`'s DECISIONS entry — pick one
+convention and make it consistent across Program 3's human-decision tasks.
+
+## ISSUE-173: no mechanical enforcement of phase-level `Depends on:` lines
+**Found:** 2026-08-15, during the EVAL-P20-P24 unblock planning session
+**Severity:** P2 (annoying — a real gap in loop safety, same family as ISSUE-171 but scoped to
+task dependencies rather than the fence marker)
+**Where:** `scripts/roadmap_cursor.py` / `_roadmap_cursor_core.compute_next`
+**Description:** `compute_next` iterates phases in file order and returns the first task that is
+`not done and not skippable` (`⏸️`/`(live` flagged). It never reads a phase's `Depends on:` line —
+this was already established by DEC-164 for the *task-flag* mechanism, but its converse was not
+separately logged: **a phase-level `Depends on:` is documentation only, not enforced.**
+`EVAL-P21`'s own header states `**Depends on:** EVAL-P16.2, EVAL-P18.2, EVAL-P20.4.` but
+`EVAL-P21.0` itself carries no `⏸️`/`(live` flag. If `EVAL-P20.3`, `EVAL-P20.3a`, `EVAL-P20.3b` all
+land (clearing everything ahead of `EVAL-P21.0` in file order) before `EVAL-P20.4` (regeneration
+#1) actually runs — which is entirely possible, since nothing currently stops it — an unattended
+loop run would pick up `EVAL-P21.0` and attempt panel-roster work before the artifact its own
+phase declares a dependency on exists. Low real-world severity right now (P21.0 is a config/roster
+decision that doesn't need the artifact to draft), but the same pattern could bite a future task
+whose work *does* require an undelivered dependency.
+**Why deferred:** out of scope for a planning session; this is a harness-mechanism gap, not a
+single-module bug fix — same class of fix as ISSUE-171 (a `HARNESS-P`-adjacent task), and possibly
+worth solving together with it since both are "the roadmap's stated intent isn't mechanically
+checked" gaps.
+**To fix:** either have `compute_next` refuse a task whose phase's `Depends on:` phases/tasks are
+not all done (would need a phase-to-task resolution helper), or extend `check_human_gates.py` to
+also validate phase-level `Depends on:` lines against real task-done state, not just the 12
+explicit `HUMAN GATE` blocks.
+
+## ISSUE-172: `EVAL-P17.1`/`EVAL-P17.6` checked done, but `make check-conservation` still fails live
+**Found:** 2026-08-15, during the EVAL-P20-P24 unblock planning session
+**Severity:** P1 (blocking — this is the program's own named failure mode, checkbox vs.
+measurement, recurring inside a phase (`EVAL-P17`) that `roadmap_cursor.py --status` reports fully
+`DONE`)
+**Where:** `scripts/check_conservation.py`; `project-harness/ROADMAP.md` `EVAL-P17.1`, `EVAL-P17.6`
+**Description:** `EVAL-P17.6` is `[x]` `✅ AUTO (EVAL-P17.6, 2026-08-12)` with its own validation
+text stating *"`make check-conservation` exits 0... If any identity still fails here, EVAL-P17 is
+not done."* `EVAL-P17.1` is likewise `[x]` `✅ AUTO`, its validation claiming to fix Identities 2/3
+specifically ("capability turns rise 2 → 7 cases... `compare`'s intersection covers 307 slots").
+Ran `python scripts/check_conservation.py` live this session (2026-08-15, well after both commits):
+exit code 3, 3 of 4 identities still fail, with the **exact pre-fix numbers named in the tasks'
+own text** — capability battery still "sees 2" (not 7), `compare` still reads 115 of 307 (62.5%
+never read), and Identity 1 still finds 9 of 94 cases in no battery. Nothing about `DEC-178`'s
+fence-reopen touched this — it was already broken before and after. `H3`'s condition 1
+(`EVAL-P17.6` green) is therefore not actually met even though `DEC-178` already explicitly
+accepted overriding H3 regardless.
+**Why deferred:** out of scope for a planning session (this session's task is inventory + plan,
+not implementation); root-causing why two `[x]`-checked, `✅ AUTO`-tagged tasks don't hold against
+the live artifact needs its own investigation, not a same-session fix.
+**To fix:** re-open `EVAL-P17.1` and `EVAL-P17.6` for a real fix (not just re-ticking), tracing why
+`summarize`/`compare` still read `judged.jsonl` only (or whatever the actual regression is —
+`ISSUE-155`'s repetition-collapse bug in `verdict_sources.load_unified_rows` is a plausible
+contributor, adjacent but not confirmed as the root cause) despite the committed fix. Do this
+before or alongside `EVAL-P20.4` (regeneration #1) — measuring a regeneration against a
+conservation-broken aggregator produces numbers of unverified trustworthiness.
+
 ## ISSUE-171: nothing enforced that a `LOOP:QUEUE end` move needs a DECISIONS.md entry
 **Found:** 2026-08-15, during the H3-fence-position repair session
 **Severity:** P1 (blocking — the exact mechanism HUMAN GATE H3 exists to stop failed silently once)

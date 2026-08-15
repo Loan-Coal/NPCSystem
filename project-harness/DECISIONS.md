@@ -3613,3 +3613,34 @@ check-docstrings check-human-gates` → all green.
   condition 1 stays substantively unmet even though the gate is now mechanically open.
 - If a future session finds `EVAL-P20.0` unticked again, that is a regression from this decision and
   should cite this entry, not re-derive the override from scratch.
+
+## DEC-179: EVAL-P20-P24 unblock plan written — the real remaining blocker is H7, not H3/H4
+**Date:** 2026-08-15 · **Status:** ✅ ACCEPTED (planning session, no roadmap/fence/regeneration changes)
+**Context:** Commissioned to inventory every blocker from `HUMAN GATE H4` through `H12` covering
+`EVAL-P20`-`EVAL-P24`, with live-measured (not checkbox-trusted) status for each. Mid-session, a
+concurrent Claude Code session landed `DEC-178` (reopening `H3`/`H4` by explicit human override),
+changing the premises this session started against. Re-verified live post-commit (`c183492`)
+rather than re-derived from the stale prompt.
+**Findings:** `H3`/`H4` are mechanically open now (DEC-178). `H6` was already cleared. **`H7` is
+the real remaining blocker** — gated on three concrete subtasks: `EVAL-P20.3` (no decision needed,
+loop-executable now), `EVAL-P20.3a` (2 `AskUserQuestion` rounds — docker-network topology,
+`pre_label` staleness), `EVAL-P20.3b` (1 `AskUserQuestion` round, 4 options — label-drift trust
+policy). `H8`-`H12` are all transitively closed behind `H7`/regeneration #1 and #2. Three new
+issues logged (not fixed): `ISSUE-172` (`EVAL-P17.1`/`EVAL-P17.6` checked done but
+`check-conservation` still exits 3 live — the program's own named failure mode recurring),
+`ISSUE-173` (no mechanical enforcement of phase-level `Depends on:` lines), `ISSUE-174` (a
+ROADMAP.md wording gap — `EVAL-P21.0`'s judge pick has no formal `AskUserQuestion` marker).
+**Decision:** full inventory, dependency graph (topological layers), verbatim unresolved
+`AskUserQuestion` options, and an ordered remediation plan are recorded in
+`project-harness/EVAL_P20_TO_P24_UNBLOCK_PLAN.md`. This entry is the pointer; that file is the
+source of truth going forward for "what's left before `EVAL-P24.3`."
+**Top-line conclusion:** ~4-5 human sessions, ~15-20 hours of human time, plus two LLM generation
+runs and Opus API time that don't block a human's clock. **Single next action:** run
+`EVAL-P20.3` (free, no decision needed), then hold one sitting for the `EVAL-P20.3a`/`P20.3b`
+`AskUserQuestion` rounds — that sitting is the highest-leverage single human action on the board,
+since it's the only thing standing between "today" and regeneration #1.
+**Consequences:** `check-conservation`'s 3 live failures (`ISSUE-172`) should be decided on — fix
+before regen #1, or explicitly accept as residual risk — in the same sitting as `EVAL-P20.3a`/
+`P20.3b`, per the unblock plan's Section 5. Neither regeneration should fire without re-running
+`check_human_gates.py --check <task>` at the moment of decision, not by trusting this entry or the
+plan file's snapshot.
