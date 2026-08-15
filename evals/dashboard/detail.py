@@ -47,6 +47,29 @@ def classify_case(passes: int, k: int) -> str:
 # ---------------------------------------------------------------------------
 
 
+def read_deterministic_rows(gen_dir: Path) -> list[dict[str, Any]]:
+    """Read deterministic_judged.jsonl from gen_dir, skipping malformed lines.
+
+    Args:
+        gen_dir: Generation directory containing deterministic_judged.jsonl.
+    Returns:
+        List of parsed row dicts; empty list if file absent.
+    """
+    path = gen_dir / "deterministic_judged.jsonl"
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            rows.append(json.loads(stripped))
+        except json.JSONDecodeError:
+            pass
+    return rows
+
+
 def read_judged_rows(gen_dir: Path) -> list[dict[str, Any]]:
     """Read judged.jsonl from gen_dir, skipping malformed lines.
 

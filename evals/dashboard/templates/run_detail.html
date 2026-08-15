@@ -7,8 +7,12 @@
     body { font-family: monospace; padding: 1.5rem; }
     h1 { margin-bottom: 0.5rem; }
     h2 { margin: 1.5rem 0 0.5rem; border-bottom: 1px solid #ddd; padding-bottom: 0.25rem; }
-    .headline { font-size: 1.25rem; margin-bottom: 1.5rem; }
+    .headline { font-size: 1.25rem; margin-bottom: 1rem; }
     .headline .k-label { font-weight: bold; border: 1px solid #555; padding: 0.1rem 0.4rem; margin-left: 0.4rem; border-radius: 3px; }
+    .headline-card { background: #f9f9f9; border: 1px solid #ddd; padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: 4px; }
+    .headline-card h2 { border: none; margin: 0 0 0.5rem; padding: 0; font-size: 1rem; }
+    .card-meta { color: #555; margin-top: 0.4rem; }
+    .refusal { color: #c0392b; font-weight: bold; }
     table { border-collapse: collapse; width: 100%; }
     th, td { border: 1px solid #ccc; padding: 0.4rem 0.8rem; text-align: left; }
     th { background: #f0f0f0; }
@@ -29,6 +33,8 @@
   <a class="back-link" href="/">&#8592; All runs</a>
   <h1>${gen_id}</h1>
   <p class="headline">Pass rate: ${pass_rate_pct}&nbsp;<span class="k-label">k=${k}</span>&nbsp;(${passes}/${total} records)</p>
+
+  ${headline_card}
 
   <h2>Calibration</h2>
   ${calibration_badge}

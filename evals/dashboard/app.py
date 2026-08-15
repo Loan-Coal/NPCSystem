@@ -23,10 +23,12 @@ from fastapi.responses import HTMLResponse
 
 from evals.dashboard.detail import (
     compute_case_stats,
+    read_deterministic_rows,
     read_judged_rows,
     render_calibration_badge,
     render_flaky_table,
 )
+from evals.dashboard.headline import render_headline_card
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 _DEFAULT_GENERATIONS_DIR = Path(__file__).parent.parent / "generations"
@@ -239,11 +241,13 @@ def make_app(
         k = int(meta.get("k", 0))
         config = meta.get("config", {})
         judged_rows = read_judged_rows(gen_dir)
+        det_rows = read_deterministic_rows(gen_dir)
 
         total = len(judged_rows)
         passes = sum(1 for r in judged_rows if r.get("passed", False))
         pass_rate_pct = f"{passes / total:.0%}" if total > 0 else "N/A"
 
+        headline_card = render_headline_card(judged_rows, det_rows, meta, resolved_cal)
         flaky_table = render_flaky_table(compute_case_stats(judged_rows))
         cal_badge = render_calibration_badge(resolved_cal)
         config_block = _html.escape(json.dumps(config, indent=2))
@@ -256,6 +260,7 @@ def make_app(
             pass_rate_pct=pass_rate_pct,
             passes=passes,
             total=total,
+            headline_card=headline_card,
             calibration_badge=cal_badge,
             deterministic_rates=_DET_RATES_NA,
             config_block=config_block,

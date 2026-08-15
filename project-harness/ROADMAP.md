@@ -1510,7 +1510,7 @@ omitted.
       Validation: every claim links to the module that computes it and the test that pins it; a reader can
       check any number without running anything. ✅ AUTO (EVAL-P13.1, 2026-08-10)
 
-- [ ] **EVAL-P13.2** Dashboard headline card. Files: `edit evals/dashboard/templates/run_detail.html`,
+- [x] **EVAL-P13.2** Dashboard headline card. Files: `edit evals/dashboard/templates/run_detail.html`,
       `edit evals/dashboard/app.py`, `edit tests/unit/evals/test_dashboard_detail.py`.
       ✅ **PAUSE LIFTED 2026-08-14.** The flag read *"blocked: needs a real run artifact to render"*.
       That artifact now exists and is committed: `evals/generations/k3_73e6c36/judged.jsonl` (re-judged
@@ -1522,7 +1522,7 @@ omitted.
       Validation: the card renders both rates, both n's, k, the judge model and the git SHA; a run whose
       calibration does not license publication renders the EVAL-P11.1 refusal in place of the rate.
       **Render against `k3_73e6c36`, not a fixture** — EVAL-P8.2 shipped green on fixtures and printed
-      `Intersection: 0 cases` against the real dirs. The card must be seen rendering real rows.
+      `Intersection: 0 cases` against the real dirs. The card must be seen rendering real rows. ✅ AUTO (EVAL-P13.2, 2026-08-15)
 
 - [ ] **EVAL-P13.3** ⏸️ *(deferred: a README number copied from the pre-regeneration artifact is a
       number that EVAL-P20.4 and EVAL-P22.4 will silently invalidate)* README metrics section.
