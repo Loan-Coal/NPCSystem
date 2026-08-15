@@ -44,7 +44,7 @@ and sits in H2's and H9's ready sets, so if it slips both gates are ready in nam
 | 6 | `EVAL-P20.0` — deterministic seed | **H4** | after tasks 2 + 4 | ~60 min | **every** regeneration |
 | 7 | `EVAL-P12.4` — measured multi-turn | **H5** | after task 1 | budget from P12.1 | P13.2, P14.3 |
 | 8 | `EVAL-P20.1` — case-set contradictions | **H6** | after loop ticks P19.3 | ~60 min | regen #1 |
-| 9 | `EVAL-P20.4` — regeneration #1 | **H7** | after tasks 5, 6, 8 | ~85 min + 2.5 h judge | P21, P22 |
+| 9 | `EVAL-P20.4` — regeneration #1 | **H7** | after tasks 5, 6, 8 + `EVAL-P20.3a`/`EVAL-P20.3b` | ~85 min + 2.5 h judge | P21, P22 |
 | 10 | `EVAL-P21.1`, `P21.3` — panel + settle the judge | **H8** | after task 9 | ~90 min | P22.4 |
 | 11 | `EVAL-P22.2` → `P22.3` → `P22.4` | **H9** → **H10** | after task 10 | ~3 h + Opus credits | P23, P24 |
 | 12 | `EVAL-P24.3`, `EVAL-P8.3` | **H12**, **H11** | last | ~60 min | README |
@@ -454,6 +454,14 @@ in rows *before* the regeneration runs, and make EVAL-P22's labelling budget abs
 
 Each is specified in full in the ROADMAP; the sequencing constraints that are easy to get wrong:
 
+- **`EVAL-P20.3a`/`EVAL-P20.3b`** must land before task 9 — they're H7's other two `Ready when`
+  entries alongside `EVAL-P20.1`–`.3`, added 2026-08-15. `EVAL-P20.3a` closes ISSUE-167 (eval-world
+  reset — root cause is ISSUE-131's docker network topology, not missing tooling), ISSUE-160
+  (verdict-only drift invisible to `needs_review`) and ISSUE-153 (`pre_label` staleness on drift).
+  `EVAL-P20.3b` is the ISSUE-168 rescope — a drift-*trust*-policy decision, not a lookup-key fix
+  (the lookup key is already `(record_id, scorer)`); it requires an `AskUserQuestion` round before
+  any code, since it redefines what a stored `human_verdict` still applies to. Both are fully
+  specified in `ROADMAP.md` next to `EVAL-P20.3`, immediately before HUMAN GATE H7.
 - **`EVAL-P12.4`** needs task 1's `evals/reset_fidelity.json`. Its validation is now
   **fidelity-conditional** — under PARTIAL it must print the order-effect check *in place of* the
   interval, and a run that prints neither has reported nothing.

@@ -2428,27 +2428,7 @@ test makes that change measurable.
 new-module coverage: `config_prompt_window` 100%, `context_budget_enforcer` 91%, `context_metrics` 97%.
 `make lint` red for one pre-existing unrelated reason (ISSUE-162).
 
-<!-- LOOP:QUEUE end -->
-<!-- ^ MOVED HERE 2026-08-10 (DEC-163): narrowed from below EVAL-P24.3 to below EVAL-P19.4.
-     DEC-160 released EVAL-P15..P24 to the loop. That was right for P15-P19 and wrong for P20-P24,
-     for one reason: EVAL-P15..P19 are arithmetic and scorer repair over the artifact ALREADY on
-     disk (k3_73e6c36), and can be validated against it. EVAL-P20..P24 assume a POST-regeneration
-     artifact that does not exist yet, so the loop can only build them against fixtures.
 
-     That is not a hypothetical risk — it is the exact defect that shipped EVAL-P8.2. `compare`
-     landed green on fixture tests and, run against the two real generation dirs, prints
-     "Intersection: 0 cases / NO_DETECTABLE_CHANGE / p=1.0000" and exits 0. Fifteen more tasks of
-     that, unattended, is a third harness that is confidently wrong. EVAL-P21.2 (panel consensus)
-     and EVAL-P23.3 (the preflight entry point) are the two clearest repeats in waiting.
-
-     REOPEN CONDITION (all three, checked by a human, not inferred):
-       1. EVAL-P17.6 green — `make check-conservation` exits 0, all four identities satisfied.
-          This is the phase's real exit criterion and the proof the aggregators read their input.
-       2. EVAL-P17.5 ticked — the corrected headline is recorded next to the retracted one.
-       3. EVAL-P20.0 landed and its >=95% seed-reproduction gate MET by measurement, so a
-          regeneration cannot silently invalidate ~81% of the 393 labels.
-     Then move this marker down to below EVAL-P24.3 and record the move in DECISIONS.
-     Never delete the fence; move it. -->
 
 #### 🔴 HUMAN GATE H3 — the Week-2 boundary: reopen the loop fence
 **Ready when:** `EVAL-P17.5`, `EVAL-P17.6`, `EVAL-P20.0`
@@ -2484,18 +2464,23 @@ committed artifact: of 921 repetition-pairs sharing a `record_id`, only **175 (1
 regeneration at `temperature=0.15` with **no seed** is exactly such a draw, so **~81% of the 393 labels are
 invalidated by each regeneration** — ~660 re-adjudications across the two budgeted regenerations, which is
 more hand-labelling than this project has ever done, and precisely the outcome the program exists to avoid.
-Three consequences, all of which must be handled before EVAL-P20.4 runs:
-1. `needs_review` is written by `label_merge` and **read by nothing** — `confusion_counts`, `cohens_kappa`
-   and `kappa_interval` filter on `human_verdict is not None` only, so drifted rows are **counted in κ**;
-   `adjudicate.collect_pending` filters on `human_verdict is None` only, so a drifted row is **never
-   re-presented to a human**. A drifted row is therefore a human verdict on text A silently scored against
-   the machine's verdict on text B.
+Three consequences identified here, two since resolved:
+1. ⚠️ **CORRECTED 2026-08-15 — resolved by EVAL-P19.0 (2026-08-12).** This point originally read
+   *"`needs_review` is written by `label_merge` and read by nothing — drifted rows are counted in κ and
+   never re-presented to a human."* That is no longer true: `confusion_counts`, `cohens_kappa` and
+   `kappa_interval` now exclude `needs_review` rows on both the headline and secondary axis, and
+   `adjudicate.collect_pending` re-presents them with `prior_human_verdict` (DEC-171). Left here,
+   struck rather than deleted, because ISSUE-168 was filed 2026-08-14 quoting this exact stale claim —
+   see EVAL-P20.3a/EVAL-P20.3b for what is genuinely still open (a verdict-only-drift gap, ISSUE-160;
+   `pre_label` staleness, ISSUE-153; and the drift-*trust*-policy question, ISSUE-168).
 2. `format_merge_report` prints `human verdicts preserved: N` where N counts key matches **regardless of
    drift** — it is 393 by construction. EVAL-P20.4's original validation read exactly that field, so the
-   gate written to measure the damage was blind to it.
+   gate written to measure the damage was blind to it. `format_merge_report` does separately print a
+   WARNING line naming drifted rows (pinned by test since EVAL-P19.0); the `N` figure itself is unchanged.
 3. The only change that makes labels actually survive a regeneration is **deterministic generation**, which
    DEC-146 explicitly forbids today (`seed` must not appear in the config block, because
-   `LLMGenerateProtocol.generate()` has no `seed` parameter). See EVAL-P20.0.
+   `LLMGenerateProtocol.generate()` has no `seed` parameter). See EVAL-P20.0 — landed 2026-08-14, gate not
+   met (DEC-176).
 **Depends on:** EVAL-P17, EVAL-P19, EVAL-P9.1 (capability contract, already done).
 
 #### 🔴 HUMAN GATE H4 — `EVAL-P20.0` deterministic generation
@@ -2663,11 +2648,107 @@ satisfied. Recorded here rather than silently ignored; see the `EVAL-P20.1` comm
       Validation: the report prints the over-refusal rate with its interval and its excluded count next to
       the guard and capability rates; the EVAL-P10.3 fixture still reproduces **4/15**.
 
+- [ ] **EVAL-P20.3a** ⏸️ *(human session: a docker-network topology call plus two
+      drift-detection design calls — not loop-executable)* Eval world reset + drift-detection
+      loose ends (closes ISSUE-167, ISSUE-160, ISSUE-153). Files: `edit docker-compose.yml` or
+      `create docker-compose.override.yml`, `edit Makefile`, `edit evals/label_merge.py`,
+      `edit evals/calibration_records.py`, `edit evals/calibration.py`,
+      `create tests/unit/evals/test_verdict_only_drift.py`,
+      `create tests/unit/evals/test_pre_label_drift.py`, `edit evals/reset_fidelity.json`,
+      `edit docs/RESET_FIDELITY.md`.
+      **Root cause of ISSUE-167 is ISSUE-131, not missing tooling.** `demo_game/snapshot.py`
+      already has a full graph snapshot/restore (`do_snapshot`/`do_restore`,
+      `make demo-snapshot`/`make demo-restore`) — but `docker-compose.yml`'s `neo4j` service
+      publishes `7687:7687` while attached only to the `internal: true` network
+      (`docker-compose.yml:81-84`), and Docker **silently voids host port publishing** on an
+      `internal: true` network. That is why no reproducible eval-world reset exists, not any
+      gap in the reset tool itself. Reuse `demo_game/snapshot.py`; do not write a second reset
+      mechanism.
+      **Step 1 — AskUserQuestion, before touching `docker-compose.yml`:** ISSUE-131 names two
+      candidate fixes, both shared-infra changes: (a) drop the misleading `ports:` block, shell
+      eval Makefile targets into the app container instead
+      (`docker compose run --rm -v "$PWD:/work" -w /work app python -m ...`, verified working
+      2026-08-06); (b) add a dev-only compose override attaching `neo4j` to `public`, which
+      weakens the route-security posture documented in the compose file's own header comment.
+      Get the human's choice before editing.
+      **Step 2:** land the chosen fix; add an eval-world-reset path calling
+      `demo_game/snapshot.py --mode restore` against a checked-in baseline snapshot of the
+      seeded eval world(s); re-run `e2e/scripts/measure_reset_fidelity.py` (EVAL-P12.1) against
+      the new path and regenerate `evals/reset_fidelity.json` / `docs/RESET_FIDELITY.md` with
+      the measured verdict — report what's actually measured, including any `unknown:*`
+      in-process singleton that a graph wipe still cannot reach.
+      **Step 3 — ISSUE-160 (mechanical):** `evals/label_merge.py:135-146` `_has_drifted` only
+      diffs `output_sha256`/`criteria_sha256`; a `scorer_verdict` flip on byte-identical text
+      (measured real case: `case_adv_lira_troop_positions:tone_judge:4#r0`, ordinary LLM judge
+      non-determinism, DEC-146) is invisible to `needs_review`. Widen `_has_drifted` to also
+      compare `scorer_verdict`; state the drift definition explicitly in
+      `format_merge_report`'s output.
+      RED anchor: `test_verdict_only_drift_flags_needs_review` fails.
+      **Step 4 — AskUserQuestion for ISSUE-153:** `_MACHINE_FIELDS`
+      (`evals/label_merge.py:28-38`) never refreshes `pre_label`/`pre_labeller_model` on drift,
+      so a re-adjudicated row re-enters the secondary calibration axis
+      (`pre_label_confusion_counts`/`pre_label_kappa`/`pre_label_kappa_interval`, EVAL-P19.0)
+      carrying a stale reference-labeller opinion. Options: (a) widen
+      `CalibrationLabel.pre_label` to `bool | None`, clear on drift (schema ripple, most
+      direct); (b) add `pre_label_needs_review: bool = False` mirroring `needs_review`, exclude
+      on that flag in the three secondary-axis functions (zero schema change, reuses the
+      EVAL-P19.0 pattern). State this asymmetry in the question.
+      RED anchor: `test_drifted_pre_label_excluded_from_secondary_kappa` fails.
+      **Correction to carry in:** `needs_review` itself is already load-bearing (`EVAL-P19.0`,
+      2026-08-12) — `confusion_counts`/`cohens_kappa`/`kappa_interval` already exclude it and
+      `adjudicate.collect_pending` already re-queues it. Do not rebuild that; this task is only
+      the two narrower gaps above plus the reset path.
+      Validation: `evals/reset_fidelity.json` carries a fresh `measured_at`/`git_sha` and an
+      honestly-measured verdict; the verdict-only-drift fixture (built from the named real case,
+      not a synthetic string) lands in `MergeResult.drifted`; the secondary-axis fixture with 10
+      clean + 3 pre_label-stale rows reports the stale rows excluded. Update this file's own
+      Phase EVAL-P20 Notes (~line 1613-1619, which still says `needs_review` "is read by
+      nothing" — false since EVAL-P19.0) with a `⚠️ CORRECTED` tag. Close ISSUE-167/160/153
+      (and ISSUE-131 if resolved as a side effect) in `ISSUES.md`, archived; record both
+      AskUserQuestion decisions in `DECISIONS.md`.
+
+- [ ] **EVAL-P20.3b** ⏸️ *(human session: redefines what a human verdict means — mandatory
+      AskUserQuestion before any code)* ISSUE-168 rescope — label-drift trust policy. Files:
+      `edit evals/content_hash.py`, `edit evals/label_merge.py`,
+      `edit evals/calibration_records.py`, `create tests/unit/evals/test_drift_trust_policy.py`,
+      `edit docs/EVAL_METHODOLOGY.md` or `docs/SEQUENCE_STATS_POLICY.md`.
+      **Correction to ISSUE-168's own filed text:** its title ("labels are joined on exact
+      output text") is imprecise — `CalibrationLabel.key` (`evals/calibration_records.py:131-138`)
+      is already `(record_id, scorer)`, and `record_id` already encodes repetition via
+      `evals/record_identity.py`'s `#r<n>` suffix. What is actually gated on exact text is
+      *trust*, not lookup: `_has_drifted` (`evals/label_merge.py:135-146`) decides whether an
+      existing `human_verdict` still applies, via unnormalised `output_sha256` equality only
+      (`evals/content_hash.py:18`). And ISSUE-168's second "To fix" suggestion — "whether
+      `needs_review` should finally be read by the scorers" — is **already done**
+      (`EVAL-P19.0`); it quoted stale Notes text. Do not re-implement that half.
+      **Measured stakes (DEC-176):** at the shipped `max_tokens=512`, reproduction is **4.2%**,
+      so ~295 rows across the two budgeted regenerations will flip to `needs_review` and stop
+      counting toward any headline until re-adjudicated — already budgeted in this phase's
+      Notes, not a defect by itself.
+      **AskUserQuestion, before any implementation** — four options, present with these
+      tradeoffs: (a) keep exact-hash (status quo, zero code, cost already budgeted); (b)
+      normalised-text hash used only inside `_has_drifted` (whitespace/casing/punctuation
+      only — DEC-176 attributes the residual gap to per-token sampling flips across ~512
+      tokens, i.e. real word-level differences, so this option's yield against the *measured*
+      failure mode is unproven — check `evals/generations/k3_73e6c36`'s repetition-pairs for
+      an actual estimate before presenting it); (c) similarity threshold (edit distance /
+      embedding similarity) — a second uncalibrated free parameter, exactly the
+      silent-guess-dressed-as-measurement Program 3 exists to prevent; if chosen, this task
+      stops at a design doc, no implementation; (d) drop the output-text arm from
+      `_has_drifted` entirely, gate trust on `criteria_sha256` only — redefines what
+      `human_verdict` means, document the new definition before touching code.
+      Validation: whichever option, `_has_drifted`'s docstring states the drift definition in
+      plain language (also satisfies ISSUE-160's ask if EVAL-P20.3a already landed); a
+      RED-anchor test against real `k3_73e6c36` data (not synthetic strings) pins the chosen
+      behavior; `DECISIONS.md` records the choice **and** the rejected alternatives with why;
+      if the chosen option changes what "surviving" means, this task's own Notes and
+      `EVAL-P22`'s labelling-budget numbers are re-derived, not left stale.
+
 #### 🔴 HUMAN GATE H7 — `EVAL-P20.4` regeneration #1
-**Ready when:** `EVAL-P20.0`, `EVAL-P20.1`, `EVAL-P20.2`, `EVAL-P20.3`
+**Ready when:** `EVAL-P20.0`, `EVAL-P20.1`, `EVAL-P20.2`, `EVAL-P20.3`, `EVAL-P20.3a`, `EVAL-P20.3b`
 **Clears when:** `EVAL-P20.4`
 **Blocks:** `EVAL-P21.1`, `EVAL-P21.2`, `EVAL-P21.3`, `EVAL-P22.1`, `EVAL-P22.2`, `EVAL-P22.4`
-**Runbook:** `project-harness/HUMAN_TASKS.md` task 9 · ~85 min + ~2.5 h judge
+**Runbook:** `project-harness/HUMAN_TASKS.md` task 9 · ~85 min + ~2.5 h judge (after EVAL-P20.3a/b land)
 **Why not the loop:** it writes `evals/generations/`, a `FROZEN_PATH_PREFIXES` path, and
 spends one of only two regenerations.
 **Every precondition here has silently produced a worthless artifact before:** all three
@@ -2687,13 +2768,15 @@ Fold `EVAL-P8.3` (H11) into this comparison rather than spending a separate 62-m
       regenerations together ≈ **295 rows** of re-adjudication. That is the cost to plan for; `EVAL-P22`'s
       labelling budget must absorb it. It is a little under half the ~620 rows the no-seed path would have
       cost, which is what the seed and prompt-determinism fixes bought.
-      Two preconditions this phase inherits, neither optional:
-      - **ISSUE-167** — there is currently no reproducible way to reset world state between runs, and
-        without it run-to-run drift is *worse* than the 62.5% measured here (that figure was obtained with
-        a per-NPC emotion reset applied by hand). Land a committed reset path before generating.
-      - **ISSUE-168** — labels are joined on exact `sha256(output_text)`, which is why drift destroys them
-        at all. If that join is re-scoped to tolerate drift, this entire cost line changes and the numbers
-        above must be re-derived rather than reused.
+      Two preconditions this phase inherits, neither optional — now tracked as formal tasks
+      rather than bare issue numbers (see H7's `Ready when`):
+      - **EVAL-P20.3a** (ISSUE-167) — there is currently no reproducible way to reset world
+        state between runs, and without it run-to-run drift is *worse* than the 62.5% measured
+        here (that figure was obtained with a per-NPC emotion reset applied by hand). Land a
+        committed reset path before generating.
+      - **EVAL-P20.3b** (ISSUE-168) — labels are joined on exact `sha256(output_text)`, which is
+        why drift destroys them at all. If that join is re-scoped to tolerate drift, this entire
+        cost line changes and the numbers above must be re-derived rather than reused.
       Do **not** treat the 62.5% as a prediction of label survival for the *full* case set: it was measured
       on 24 `case_neg_*` guard cases, whose responses are shorter than average, and reproduction falls
       sharply with output length (4.2% at `max_tokens=512`). Expect the realised survivor count to be
@@ -2913,7 +2996,27 @@ every prior quotation of `3 lore hallucinations across 111 adversarial turns` is
       Validation: editing a README number without updating the artifact **fails the build** — the mechanism
       that makes a stale published claim impossible rather than merely discouraged.
 
+<!-- LOOP:QUEUE end -->
+<!-- ^ MOVED HERE 2026-08-10 (DEC-163): narrowed from below EVAL-P24.3 to below EVAL-P19.4.
+     DEC-160 released EVAL-P15..P24 to the loop. That was right for P15-P19 and wrong for P20-P24,
+     for one reason: EVAL-P15..P19 are arithmetic and scorer repair over the artifact ALREADY on
+     disk (k3_73e6c36), and can be validated against it. EVAL-P20..P24 assume a POST-regeneration
+     artifact that does not exist yet, so the loop can only build them against fixtures.
 
+     That is not a hypothetical risk — it is the exact defect that shipped EVAL-P8.2. `compare`
+     landed green on fixture tests and, run against the two real generation dirs, prints
+     "Intersection: 0 cases / NO_DETECTABLE_CHANGE / p=1.0000" and exits 0. Fifteen more tasks of
+     that, unattended, is a third harness that is confidently wrong. EVAL-P21.2 (panel consensus)
+     and EVAL-P23.3 (the preflight entry point) are the two clearest repeats in waiting.
+
+     REOPEN CONDITION (all three, checked by a human, not inferred):
+       1. EVAL-P17.6 green — `make check-conservation` exits 0, all four identities satisfied.
+          This is the phase's real exit criterion and the proof the aggregators read their input.
+       2. EVAL-P17.5 ticked — the corrected headline is recorded next to the retracted one.
+       3. EVAL-P20.0 landed and its >=95% seed-reproduction gate MET by measurement, so a
+          regeneration cannot silently invalidate ~81% of the 393 labels.
+     Then move this marker down to below EVAL-P24.3 and record the move in DECISIONS.
+     Never delete the fence; move it. -->
 <!-- ^ The LOOP:QUEUE end marker USED TO SIT HERE (DEC-160, 2026-08-09), releasing all of
      Program 3 to the loop. It was narrowed on 2026-08-10 (DEC-163) to sit below EVAL-P19.4
      instead; the reopen conditions are recorded at the marker's new location, immediately
