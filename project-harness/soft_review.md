@@ -259,3 +259,47 @@ Looking at EVAL-P17.6 commits (ea47583 through de3aa28), here are 5 concrete fin
 5. **Identity 4 deferral documented correctly** ✓: Code only sums identities 1–3 in the exit code (intentional); docstring and comments correctly reflect the deferral. No missed edge case.
 
 **Summary:** No correctness bugs. Style and documentation issues are minor.
+
+## 2026-08-15 09:27:40 — phase EVAL-P13
+
+Reviewing EVAL-P13.2 (dashboard headline card). Found **3 concrete issues**:
+
+---
+
+## Findings
+
+**1. CRITICAL — Broken imports in `headline.py` (lines 19-21)**  
+```python
+from calibration import UndefinedKappaError, _kappa_from_matrix
+from rate_stats import wilson_interval
+from scorer_trust_policy import check_publication
+```
+These are bare module names. `app.py` uses absolute imports (`from evals.dashboard.detail import ...`). These should be:
+```python
+from evals.calibration import UndefinedKappaError, _kappa_from_matrix
+from evals.rate_stats import wilson_interval
+from evals.scorer_trust_policy import check_publication
+```
+Will fail at runtime with `ModuleNotFoundError`.
+
+---
+
+**2. MEDIUM — Private API import (`headline.py` line 20)**  
+`_kappa_from_matrix` has a leading underscore (private). Importing private functions creates brittleness. Either import the public API or duplicate the logic into `headline.py` if it's genuinely independent.
+
+---
+
+**3. MEDIUM — Missing validation in `_rate_html()` (lines 128–134)**  
+No check that `0 <= passes <= total` before calling `wilson_interval()`. If data is corrupted (e.g., `passes > total`), `wilson_interval()` may return nonsense or crash silently. Add:
+```python
+if not (0 <= passes <= total):
+    return _NA_RATE
+```
+
+---
+
+**Other notes:**  
+- File length (191 lines) ✅ within 300-line limit.  
+- Module/function docstrings present ✅.  
+- Layer compliance ✅ (evals layer, no LLM calls).  
+- Tests look structurally sound; both fixtures and assertions are clear.
