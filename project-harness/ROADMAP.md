@@ -1570,7 +1570,7 @@ have hardened into five call sites costs far more.
       Validation: the policy names, for each metric the dashboard can render, the reset fidelity it requires
       — so an incomplete reset downgrades the output automatically rather than by remembering to. ✅ AUTO (EVAL-P14.2, 2026-08-10)
 
-- [ ] **EVAL-P14.3** Cost model and migration note. Files: `edit docs/SEQUENCE_SCHEMA.md`.
+- [x] **EVAL-P14.3** Cost model and migration note. Files: `edit docs/SEQUENCE_SCHEMA.md`.
       ✅ **PAUSE LIFTED 2026-08-14.** The flag read *"blocked: the model is validated against
       EVAL-P12.4's measured run time"*. `EVAL-P12.4` was measured 2026-08-13 and HUMAN GATE **H5**
       is **OPEN**. The measured numbers to validate against, both recorded in P12.4's completion
@@ -1584,7 +1584,7 @@ have hardened into five call sites costs far more.
       condition for starting the build — e.g. more than 10 scenarios, or the first scenario needing per-turn
       judging — so the decision is made by a condition rather than by enthusiasm.
       Validation: the model predicts EVAL-P12.4's measured run time within 25%; if it cannot, the model is
-      wrong and the schema built on it is suspect.
+      wrong and the schema built on it is suspect. ✅ AUTO (EVAL-P14.3, 2026-08-15)
 
 
 ## Program 3 — Audit remediation and the regression harness (EVAL-P15..P24)
