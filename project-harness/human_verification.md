@@ -525,3 +525,7 @@ Conservation audit: C:\Users\lohan\Documents\hackathons\NPCSystem\evals\generati
 
 3 violation(s) found.
 make: *** [Makefile:165: check-conservation] Error 3
+
+## 2026-08-15 09:20:17 — task EVAL-P13.2 committed with a pre-existing red gate
+
+Every failure pre-dated this task (baseline attribution). Nothing new broke.
