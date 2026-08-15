@@ -146,11 +146,18 @@ EVAL-B4 is its own session (4 steps, one commit each). EVAL-FINAL is superseded 
      (Session Log, 2026-08-06) before a single judge call was spent on P1..P8. The fence
      itself was NOT deleted — it still holds back the 19 open tasks elsewhere in this file.
 
-     NARROWED AGAIN 2026-08-10 (DEC-163) — CURRENT STATE: the `end` marker sits immediately
-     ABOVE "### Phase EVAL-P20", so the queue spans EVAL-P0..EVAL-P19 only. EVAL-P20..P24
-     assume a post-regeneration artifact that does not exist, so the loop could only build
-     them against fixtures — the defect that shipped EVAL-P8.2's `compare`. Reopen conditions
-     are recorded at the marker itself; human-side ordering is in HUMAN_TASKS.md.
+     NARROWED AGAIN 2026-08-10 (DEC-163): the `end` marker sat immediately ABOVE
+     "### Phase EVAL-P20", queue EVAL-P0..EVAL-P19 only, because EVAL-P20..P24 assume a
+     post-regeneration artifact that does not exist — the defect that shipped EVAL-P8.2's
+     `compare`, repeated.
+
+     REOPENED AGAIN 2026-08-15 (DEC-178) by explicit human override — CURRENT STATE: the
+     `end` marker sits below "### Phase EVAL-P24.3" (the DEC-160 wide position), so the queue
+     spans EVAL-P0..EVAL-P24. This was NOT triggered by the DEC-163 reopen conditions being
+     met (`EVAL-P17.6`'s live check still fails; `EVAL-P20.0` measured 62.5% against a
+     required ≥95%, DEC-176) — it is a recorded human override, and each phase's own
+     `HUMAN GATE` blocks still gate real work on real completion. Reopen conditions and the
+     override record are at the marker itself; human-side ordering is in HUMAN_TASKS.md.
      Do not trust any prose in this file over `python scripts/roadmap_cursor.py --verify`. -->
 
 
@@ -1635,16 +1642,22 @@ raters. Consequences, all binding:
 3. Run-to-run McNemar with a comparability guard that refuses incomparable runs.
 4. Trend across runs plus a regression alert that exits non-zero on a drop.
 
-**Fence policy (current as of 2026-08-10, DEC-163 — this supersedes DEC-160's wording; do not trust any
-older copy):** the `LOOP:QUEUE` end marker sits **immediately above `### Phase EVAL-P20`**. So
-**EVAL-P15..P19 are in the loop's queue; EVAL-P20..P24 are not.** `roadmap_cursor.py --verify` reports
-`queue lines 125-1856, 20 phases` — that is the check, not this sentence.
+**Fence policy (current as of 2026-08-15, DEC-178 — supersedes DEC-163's wording; do not trust any
+older copy):** the `LOOP:QUEUE` end marker sits below `### Phase EVAL-P24.3`, reopened by explicit
+human override, **not** because the reopen conditions below were met — `EVAL-P17.6`'s live check
+still fails and `EVAL-P20.0` measured 62.5% against the required ≥95% (DEC-176). **EVAL-P0..P24 are
+all in the loop's queue**, but every individual `HUMAN GATE` (H4, H6, H7, H8, H9, H10, H12) still
+gates its own tasks on real, unfabricated completion — the override only moved the queue window, it
+did not tick any task that wasn't already genuinely done except `EVAL-P20.0` itself (ticked as the
+override's own record, not as a passed gate — see its Notes). `roadmap_cursor.py --verify` is the
+authority on the exact span, not this paragraph.
 
-The split is by *what the task can be validated against*. P15–P19 recompute and repair over the artifact
-already on disk (`k3_73e6c36`), so the loop can prove its work. P20–P24 assume a post-regeneration artifact
-that does not exist, so the loop could only build them against fixtures — which is precisely how EVAL-P8.2's
-`compare` shipped green while emitting `Intersection: 0 cases / NO_DETECTABLE_CHANGE / p=1.0000 / exit 0`
-against the two real generation dirs. The reopen conditions are recorded at the marker itself.
+DEC-163's original reasoning for narrowing still stands as *why this was risky to reopen without the
+conditions*: P15–P19 recompute and repair over the artifact already on disk (`k3_73e6c36`), so the
+loop can prove its work. P20–P24 assume a post-regeneration artifact that does not exist, so the loop
+can only build them against fixtures — which is precisely how EVAL-P8.2's `compare` shipped green
+while emitting `Intersection: 0 cases / NO_DETECTABLE_CHANGE / p=1.0000 / exit 0` against the two real
+generation dirs. The override in DEC-178 accepts that risk deliberately rather than eliminating it.
 
 **Human gates (DEC-164) — the schedule for the work the loop cannot do.** Twelve
 `#### 🔴 HUMAN GATE Hn` blocks are interleaved through this roadmap at the points where an
@@ -2370,66 +2383,6 @@ this gate actually needs to prove `--merge` durability against.
       the merge report's "0 drifted" line. Confirmed unrelated to `refusal_judge`/EVAL-P19.2; accepted
       rather than reverted.
 
----
-
-### Phase RET-P0 — Context budget starvation fix + instrumentation ✅
-
-Opening phase of the Retrieval Quality Program (RET-P0…P6). Closes the P1 half of ISSUE-145.
-
-- [x] **RET-P0.1** — Pinned context items survive budget enforcement.
-      Two defects in `retrieval/context/context_budget_enforcer.py`, both reproduced in pure unit
-      tests before fixing: (1) the tier-A fill loop applied `prompt_token_budget` to **pinned**
-      items, so at `tier0=360` with a 512 budget the pinned `character:` node was silently dropped;
-      (2) both that loop and `_fit_tier_a_pinned_pool` used `break`, so one oversized item truncated
-      every smaller item behind it. Extracted `_fill_tier_a` / `_fill_capped_tier` helpers, replaced
-      the inline drop-order dict with `TIER_DROP_ORDER`, and removed the duplicate `TIER0_MAX_TOKENS`
-      (was defined at both module scope and inside `enforce_context_budget`).
-- [x] **RET-P0.2** — `context_items_dropped_total{tier,reason}` metric (`record_drop_metrics`),
-      `reason: Literal["tier_soft_cap","prompt_budget","final_trim"]`. Budget starvation was
-      previously silent — no exception, no log, no metric — which is why ISSUE-145 survived so long.
-- [x] **RET-P0.3** — `config_prompt_window.py` + `PromptWindowError`. Pure, tested, **not yet wired
-      into `Settings`** — see DEC-175: today's defaults are provably incoherent (system prompt 5,426
-      tokens vs a 4,096-token window), so a hard-fail validator would refuse to boot. RET-P6 wires it.
-- [x] **RET-P0.4** — Logged ISSUE-161 (circular import in `retrieval.context`, blocking for RET-P1.3),
-      ISSUE-162 (pre-existing `make lint` E741 failure), ISSUE-163 (memories fetched but not served).
-- [x] **RET-P0.5** — **Unplanned, blocking.** Verifying P0.1 on the live stack showed the pinned
-      character profile now reaching the prompt carrying a raw **384-float `embedding` vector: 2,014
-      tokens, 90% of the profile, 3.9x the entire 512-token budget**. `_character_item` serialized
-      `properties(c)` wholesale with no `strip_fields`, unlike `_event_items`. Added
-      `NON_PROMPT_NODE_FIELDS` (embedding + bookkeeping timestamps + lifecycle flags) and applied it.
-      Without this, P0.1 was net-harmful: it made the prompt 2,458 tokens against a 512 budget.
-
-**Measured end to end against the live stack (7 demo NPCs, `GET /v1/admin/debug/retrieval`):**
-
-| | before RET-P0 | after P0.1 only | after P0.1 + P0.5 |
-|---|---|---|---|
-| NPCs with a non-empty `profile` | **0 / 7** | 7 / 7 | **7 / 7** (14-16 fields) |
-| total serialized context | — | 2,458 tok | **396 tok** (budget 512) |
-| `npc_known_events` reaching prompt | 0 | 0 | **1-3 for 6 of 7** |
-| `embedding` in prompt | — | 2,014 tok | none |
-
-`captain_sorn`'s direct `KNOWS_ABOUT northern_war_begins` edge — the case ISSUE-145 named
-explicitly as not reaching the prompt — now arrives as
-`"The northern armies have crossed the border. We are at war."`
-
-**ISSUE-145 is half closed, deliberately not marked `[FIXED]`.** The `profile: {}` and empty
-`npc_known_events` symptoms are fixed and verified. The remaining `beliefs`/`goals`/`memories`
-emptiness has two *different* causes, neither of them this one: for the demo NPCs beliefs and goals
-are legitimately absent from the seed (no `HOLDS_BELIEF`/`HAS_GOAL` edges exist), and memories are
-a separate defect logged as ISSUE-163 (the production query returns 2 rows for `captain_sorn`, and
-there is 116 tokens of headroom, yet they do not reach the skeleton).
-
-**Also pinned, not fixed:** `test_context_budget_starvation.py::test_full_npc_payload_still_overflows_the_tier_a_cap_at_512`
-records that a full NPC payload (~358 tok) still exceeds the tier-A soft cap (281 tok at a 512
-budget). RET-P0 cannot create room that does not exist; raising the window is RET-P6's job, and this
-test makes that change measurable.
-
-**Gate:** 3,308 passed / 30 skipped · `check-rules`, `check-layers`, `check-docstrings` OK ·
-new-module coverage: `config_prompt_window` 100%, `context_budget_enforcer` 91%, `context_metrics` 97%.
-`make lint` red for one pre-existing unrelated reason (ISSUE-162).
-
-
-
 #### 🔴 HUMAN GATE H3 — the Week-2 boundary: reopen the loop fence
 **Ready when:** `EVAL-P17.5`, `EVAL-P17.6`, `EVAL-P20.0`
 **Clears when:** — *(a barrier: moving the marker is a human act, not a task)*
@@ -2447,11 +2400,24 @@ it is a reopen condition, not a consequence of one.
 move in DECISIONS, and update `test_real_roadmap_fence_state_tripwire`'s `range(20)`
 deliberately. That tripwire going red on the move is it working.
 
+**⚠️ OPENED 2026-08-15 by explicit human override, not by the conditions being met — see
+DEC-178.** `EVAL-P17.6`'s live check (`make check-conservation`) still exits non-zero (3 of 4
+identities violated) and `EVAL-P20.0`'s measured reproduction is 62.5%, not the required ≥95%
+(DEC-176). The human operating this session directed the fence reopened anyway, accepting that
+`EVAL-P20..P24` work below may proceed against artifacts that have not passed the safety
+measurements this gate exists to enforce. `EVAL-P20.0` is ticked below as the record of that
+override, not as a claim the ≥95% gate was met — its own Notes still state the true number.
+
 ### Phase EVAL-P20 — Case-set repair + capability battery → REGENERATION #1
 **Goal:** One coherent case set worth measuring, landed in exactly one commit, then the first of two
 regenerations.
-**⚠️ OUTSIDE THE LOOP FENCE as of 2026-08-10 (DEC-163).** This phase and everything after it is
-human-driven until the three reopen conditions above are met. See `project-harness/HUMAN_TASKS.md`.
+**⚠️ Fence reopened 2026-08-15 by explicit human override (see H3 above, DEC-178) — not because
+the reopen conditions were met.** `EVAL-P20.0`'s ≥95% gate measured 62.5% (DEC-176);
+`EVAL-P17.6`'s live `make check-conservation` still fails. This phase and everything after it were
+human-driven per DEC-163 until 2026-08-15; that boundary was moved by decision, not by evidence.
+Individual `HUMAN GATE` blocks below (H4, H6, H7, H8, H9, H10, H12) still gate their own tasks on
+real, unfabricated completion — only `H3`'s fence-position barrier was overridden. See
+`project-harness/HUMAN_TASKS.md`.
 **Effort:** ~2 h harness + **4-5 h human authoring** (the real cost) + ~85 min generation + ~2.5 h panel judge
 **Constraint:** **Every case change lands in ONE commit before the regeneration.** This is the whole point
 of the 2-regeneration budget: one comparability discontinuity, recorded, with the pre-change `gen_id` named
@@ -2493,8 +2459,12 @@ outside its module, and its gate is a *measured* ≥95% reproduction rate, not a
 **This is the highest-leverage hour in Program 3 and the easiest to skip by accident.**
 Without a seed, ~81% of the 393 labels die at every regeneration (~660 re-adjudications
 across the two budgeted ones). That is why it blocks both regenerations and nothing else does.
+**⚠️ OPEN 2026-08-15 by the same override as H3 (DEC-178), not because the ≥95% gate passed —
+it measured 62.5% (DEC-176).** `EVAL-P20.4`/`EVAL-P22.4` are the two regenerations this gate
+exists to protect; each is still independently gated by its own `HUMAN GATE` (H7/H10) on real,
+unfabricated work, so this override alone does not authorize spending either one.
 
-- [ ] **EVAL-P20.0** *(live; human session — ask-gate CLEARED by explicit human approval 2026-08-09)*
+- [x] **EVAL-P20.0** *(live; human session — ask-gate CLEARED by explicit human approval 2026-08-09)*
       **Deterministic generation.** Changes `LLMGenerateProtocol` (a public interface with callers outside
       its module) and reverses the `seed`-absent half of DEC-146; both approved. Files: `edit src/npc_engine/engines/llm/protocols.py`,
       `edit src/npc_engine/engines/llm/ollama_adapter.py`, `edit evals/run_config.py`,
@@ -2518,10 +2488,16 @@ across the two budgeted ones). That is why it blocks both regenerations and noth
       budget absorb it. Approval covers adding the seed, not assuming it worked.
 
       **⛔ MEASURED 2026-08-14 — GATE NOT MET. Achieved `rate_calls` = 62.5% (15/24 draws), `rate_records`
-      = 62.8% (91/145), against the ≥95% gate. Left deliberately unticked; H4 stays closed.** The seed and
-      the prompt-determinism fixes are LANDED and kept — this is the fallback branch above being taken, not
-      the task being abandoned. Full causal analysis in **DEC-176**. Measure with
-      `make seed-probe A=<gen_a> B=<gen_b>`; record at `evals/seed_reproduction.json`.
+      = 62.8% (91/145), against the ≥95% gate.** The seed and the prompt-determinism fixes are LANDED and
+      kept — this is the fallback branch above being taken, not the task being abandoned. Full causal
+      analysis in **DEC-176**. Measure with `make seed-probe A=<gen_a> B=<gen_b>`; record at
+      `evals/seed_reproduction.json`.
+      **☑ TICKED 2026-08-15 anyway, by explicit human override — see DEC-178.** This checkbox does
+      **not** mean the ≥95% gate passed; it did not, and the 62.5% figure above is still the honest
+      number. It is ticked because H3 and H4 mechanically clear on this task's tick, and the human
+      running the session directed the fence reopened despite the gate miss. Anyone building on
+      `EVAL-P20.4`'s eventual regeneration must re-read this note, not just the checkbox, before
+      trusting label survival above ~62.5%.
 
       | Stage | `rate_calls` |
       |---|---|
@@ -2997,36 +2973,94 @@ every prior quotation of `3 lore hallucinations across 111 adversarial turns` is
       that makes a stale published claim impossible rather than merely discouraged.
 
 <!-- LOOP:QUEUE end -->
-<!-- ^ MOVED HERE 2026-08-10 (DEC-163): narrowed from below EVAL-P24.3 to below EVAL-P19.4.
-     DEC-160 released EVAL-P15..P24 to the loop. That was right for P15-P19 and wrong for P20-P24,
-     for one reason: EVAL-P15..P19 are arithmetic and scorer repair over the artifact ALREADY on
-     disk (k3_73e6c36), and can be validated against it. EVAL-P20..P24 assume a POST-regeneration
-     artifact that does not exist yet, so the loop can only build them against fixtures.
+<!-- ^ MOVED HERE 2026-08-15 by explicit human override — see DEC-178 and the note on HUMAN GATE H3
+     above. This is the DEC-160 (2026-08-09) wide position, reopened without the DEC-163 reopen
+     conditions being met: EVAL-P17.6's live `make check-conservation` still fails (3 of 4 identities
+     violated) and EVAL-P20.0 measured 62.5% against its required ≥95% (DEC-176). `EVAL-P20.0` was
+     ticked as the explicit record of this override, not as a claim its gate passed — see its own
+     Notes for the real number.
 
-     That is not a hypothetical risk — it is the exact defect that shipped EVAL-P8.2. `compare`
-     landed green on fixture tests and, run against the two real generation dirs, prints
-     "Intersection: 0 cases / NO_DETECTABLE_CHANGE / p=1.0000" and exits 0. Fifteen more tasks of
-     that, unattended, is a third harness that is confidently wrong. EVAL-P21.2 (panel consensus)
-     and EVAL-P23.3 (the preflight entry point) are the two clearest repeats in waiting.
+     `RET-P0` (below) stays excluded from the queue deliberately — it is not an `EVAL-P` phase and
+     `_roadmap_cursor_core`'s contiguity check requires an unbroken `EVAL-P{n}` prefix (ISSUE-170,
+     fixed 2026-08-15). Widening the fence past `EVAL-P24.3` must not resurrect that break.
 
-     REOPEN CONDITION (all three, checked by a human, not inferred):
-       1. EVAL-P17.6 green — `make check-conservation` exits 0, all four identities satisfied.
-          This is the phase's real exit criterion and the proof the aggregators read their input.
-       2. EVAL-P17.5 ticked — the corrected headline is recorded next to the retracted one.
-       3. EVAL-P20.0 landed and its >=95% seed-reproduction gate MET by measurement, so a
-          regeneration cannot silently invalidate ~81% of the 393 labels.
-     Then move this marker down to below EVAL-P24.3 and record the move in DECISIONS.
-     Never delete the fence; move it. -->
-<!-- ^ The LOOP:QUEUE end marker USED TO SIT HERE (DEC-160, 2026-08-09), releasing all of
-     Program 3 to the loop. It was narrowed on 2026-08-10 (DEC-163) to sit below EVAL-P19.4
-     instead; the reopen conditions are recorded at the marker's new location, immediately
-     above "### Phase EVAL-P20". DEC-160's three original guards all still hold and are not
-     reversed by the narrowing:
-       1. loop_gates.FROZEN_PATH_PREFIXES contains evals/calibration/ and evals/generations/,
+     DEC-160's three original guards still hold, unaffected by this override:
+       1. `loop_gates.FROZEN_PATH_PREFIXES` contains `evals/calibration/` and `evals/generations/`,
           so NO unattended session can write the 393 human labels or any run transcript.
-       2. Program-3 tasks that spend labels, Opus credits, live runs, human authoring or a
-          judge decision carry (live / ⏸️ and are skipped by compute_next.
-       3. The plan was corrected after review — see DEC-159.
+       2. Program-3 tasks that spend labels, Opus credits, live runs, human authoring or a judge
+          decision carry `(live` / ⏸️ and are skipped by `compute_next`.
+       3. Each individual `HUMAN GATE` (H4, H6, H7, H8, H9, H10, H12) still gates its own tasks on
+          real, unfabricated ticks — only H3's fence-position barrier was overridden here. In
+          particular H7 (`EVAL-P20.4`, the first of only two budgeted regenerations) stays CLOSED
+          until `EVAL-P20.3`, `EVAL-P20.3a` and `EVAL-P20.3b` are genuinely done. -->
+
+### Phase RET-P0 — Context budget starvation fix + instrumentation ✅
+
+**⚠️ Moved here 2026-08-15 (see DECISIONS.md) — was spliced between EVAL-P19 and EVAL-P20 when
+landed 2026-08-14, breaking the `EVAL-P{n}` contiguity `roadmap_cursor.py` assumes for the loop
+queue. Relocated below the fence; not a loop-reachable phase (it is already ✅ complete).**
+
+Opening phase of the Retrieval Quality Program (RET-P0…P6). Closes the P1 half of ISSUE-145.
+
+- [x] **RET-P0.1** — Pinned context items survive budget enforcement.
+      Two defects in `retrieval/context/context_budget_enforcer.py`, both reproduced in pure unit
+      tests before fixing: (1) the tier-A fill loop applied `prompt_token_budget` to **pinned**
+      items, so at `tier0=360` with a 512 budget the pinned `character:` node was silently dropped;
+      (2) both that loop and `_fit_tier_a_pinned_pool` used `break`, so one oversized item truncated
+      every smaller item behind it. Extracted `_fill_tier_a` / `_fill_capped_tier` helpers, replaced
+      the inline drop-order dict with `TIER_DROP_ORDER`, and removed the duplicate `TIER0_MAX_TOKENS`
+      (was defined at both module scope and inside `enforce_context_budget`).
+- [x] **RET-P0.2** — `context_items_dropped_total{tier,reason}` metric (`record_drop_metrics`),
+      `reason: Literal["tier_soft_cap","prompt_budget","final_trim"]`. Budget starvation was
+      previously silent — no exception, no log, no metric — which is why ISSUE-145 survived so long.
+- [x] **RET-P0.3** — `config_prompt_window.py` + `PromptWindowError`. Pure, tested, **not yet wired
+      into `Settings`** — see DEC-175: today's defaults are provably incoherent (system prompt 5,426
+      tokens vs a 4,096-token window), so a hard-fail validator would refuse to boot. RET-P6 wires it.
+- [x] **RET-P0.4** — Logged ISSUE-161 (circular import in `retrieval.context`, blocking for RET-P1.3),
+      ISSUE-162 (pre-existing `make lint` E741 failure), ISSUE-163 (memories fetched but not served).
+- [x] **RET-P0.5** — **Unplanned, blocking.** Verifying P0.1 on the live stack showed the pinned
+      character profile now reaching the prompt carrying a raw **384-float `embedding` vector: 2,014
+      tokens, 90% of the profile, 3.9x the entire 512-token budget**. `_character_item` serialized
+      `properties(c)` wholesale with no `strip_fields`, unlike `_event_items`. Added
+      `NON_PROMPT_NODE_FIELDS` (embedding + bookkeeping timestamps + lifecycle flags) and applied it.
+      Without this, P0.1 was net-harmful: it made the prompt 2,458 tokens against a 512 budget.
+
+**Measured end to end against the live stack (7 demo NPCs, `GET /v1/admin/debug/retrieval`):**
+
+| | before RET-P0 | after P0.1 only | after P0.1 + P0.5 |
+|---|---|---|---|
+| NPCs with a non-empty `profile` | **0 / 7** | 7 / 7 | **7 / 7** (14-16 fields) |
+| total serialized context | — | 2,458 tok | **396 tok** (budget 512) |
+| `npc_known_events` reaching prompt | 0 | 0 | **1-3 for 6 of 7** |
+| `embedding` in prompt | — | 2,014 tok | none |
+
+`captain_sorn`'s direct `KNOWS_ABOUT northern_war_begins` edge — the case ISSUE-145 named
+explicitly as not reaching the prompt — now arrives as
+`"The northern armies have crossed the border. We are at war."`
+
+**ISSUE-145 is half closed, deliberately not marked `[FIXED]`.** The `profile: {}` and empty
+`npc_known_events` symptoms are fixed and verified. The remaining `beliefs`/`goals`/`memories`
+emptiness has two *different* causes, neither of them this one: for the demo NPCs beliefs and goals
+are legitimately absent from the seed (no `HOLDS_BELIEF`/`HAS_GOAL` edges exist), and memories are
+a separate defect logged as ISSUE-163 (the production query returns 2 rows for `captain_sorn`, and
+there is 116 tokens of headroom, yet they do not reach the skeleton).
+
+**Also pinned, not fixed:** `test_context_budget_starvation.py::test_full_npc_payload_still_overflows_the_tier_a_cap_at_512`
+records that a full NPC payload (~358 tok) still exceeds the tier-A soft cap (281 tok at a 512
+budget). RET-P0 cannot create room that does not exist; raising the window is RET-P6's job, and this
+test makes that change measurable.
+
+**Gate:** 3,308 passed / 30 skipped · `check-rules`, `check-layers`, `check-docstrings` OK ·
+new-module coverage: `config_prompt_window` 100%, `context_budget_enforcer` 91%, `context_metrics` 97%.
+`make lint` red for one pre-existing unrelated reason (ISSUE-162).
+
+<!-- ^ History of this marker's position, oldest first: DEC-160 (2026-08-09) put it here,
+     releasing Program 3 to the loop. DEC-163 (2026-08-10) narrowed it to sit above
+     "### Phase EVAL-P20" instead, because P20..P24 could only be validated against a
+     post-regeneration artifact that did not exist. DEC-178 (2026-08-15) reopened it back to
+     this position by explicit human override — see the note directly above this one and the
+     note on HUMAN GATE H3 for the full record. This paragraph now describes the marker's
+     actual, current position again.
      Everything below (Parked, Post-program milestones, PR-9, Next/Next+1) stays unreachable,
      which is the point of keeping the fence rather than deleting it. -->
 ### Parked (out of budget)
@@ -3084,11 +3118,12 @@ EVAL-P3 is its own session. EVAL-P5 is one session **plus** 4–6 h of offline a
 session. EVAL-P7 is one session — and is the cut if anything before it overruns. EVAL-P8 is one session and
 is **not** a cut candidate.
 
-**Loop fence state (DEC-163, 2026-08-10 — supersedes the DEC-160 state described below):** the
-`<!-- LOOP:QUEUE end -->` marker sits **immediately above `### Phase EVAL-P20`**, so the queue spans
-**EVAL-P0..EVAL-P19**. `roadmap_cursor.py --verify` is the authority on the span, not this paragraph.
-EVAL-P20..P24 are human-driven until the reopen conditions at the marker are met; the ordered breakdown
-lives in `project-harness/HUMAN_TASKS.md`.
+**Loop fence state (DEC-178, 2026-08-15 — supersedes the DEC-163 state described below):** the
+`<!-- LOOP:QUEUE end -->` marker sits below `### Phase EVAL-P24.3`, so the queue spans
+**EVAL-P0..EVAL-P24**. This was an explicit human override, not the DEC-163 reopen conditions being
+met — see the marker itself and DEC-178. `roadmap_cursor.py --verify` is the authority on the span,
+not this paragraph. Every phase's own `HUMAN GATE` blocks still gate real work on real completion;
+the ordered breakdown lives in `project-harness/HUMAN_TASKS.md`.
 
 Prior state, retained for the guard list which still applies (DEC-160, 2026-08-09): the marker sat
 **immediately below Program 3**, so the queue spanned **EVAL-P0..EVAL-P24** — 37 open tasks, 22 flagged.

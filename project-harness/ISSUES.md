@@ -16,28 +16,31 @@ Rules:
 
 ## Open
 
-## ISSUE-170: the loop-fence tripwire is already red, so it can no longer guard the fence
-**Found:** 2026-08-14, during `EVAL-P20.0`
-**Severity:** P1 (blocking — it silently disarms the H3 safety mechanism)
-**Where:** `tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_fence_state_tripwire` and
-`::test_real_roadmap_parses_and_verifies_clean`
-**Description:** Both tests fail on a clean tree: `At index 20 diff: 'RET-P0' != 'EVAL-P20'`. The
-`RET-P0` commit (`9cb09c9`) inserted a new phase inside the fenced range without updating the
-tripwire's phase-list snapshot. **Verified pre-existing** — both fail identically with this task's
-changes stashed. Note `make roadmap-verify` still passes (`ROADMAP OK (queue lines 125-2430,
-21 phases)`); only the pytest snapshot is stale.
-**Why this is P1 rather than cosmetic:** the tripwire exists precisely so that moving
-`<!-- LOOP:QUEUE end -->` is a conscious act — ROADMAP H3 and HUMAN_TASKS both say "that tripwire
-going red on the move is it working". A tripwire that is *already* red cannot signal anything: the
-next fence move produces no state change in the gate, and the `range(20)` that is supposed to be
-updated deliberately would be updated to silence a failure that has two unrelated causes mixed
-together. This did not bite in this session only because `EVAL-P20.0` failed its gate and the fence
-was therefore not moved.
-**Why deferred:** not caused by `EVAL-P20.0`; single-task focus, and re-snapshotting the phase list
-while the fence question is live would be exactly the conflation described above.
-**To fix:** update the expected phase list to include `RET-P0` at its real index and re-assert the
-current fence position, in a commit that does *nothing else*, so the snapshot means something again
-before H3 is next considered.
+## ISSUE-171: nothing enforced that a `LOOP:QUEUE end` move needs a DECISIONS.md entry
+**Found:** 2026-08-15, during the H3-fence-position repair session
+**Severity:** P1 (blocking — the exact mechanism HUMAN GATE H3 exists to stop failed silently once)
+**Where:** `scripts/expand_loop.sh`, `scripts/roadmap_cursor.py --verify`, `Makefile:check-human-gates`
+**Description:** Commit `84ff0f9` ("new task", 2026-08-15 08:43:09 — one second before the
+`expand_loop.sh` run named in the day's session log started at 08:43:13) moved
+`<!-- LOOP:QUEUE end -->` from the DEC-163 position (above `EVAL-P20`) down to below `EVAL-P24.3`,
+reopening `EVAL-P20..P24`, with none of H3's three reopen conditions met (two of three, re-verified
+live: `EVAL-P17.6`/`make check-conservation` still exits 3, and `EVAL-P20.0`'s gate measured 62.5%
+per DEC-176, landed the day before). No DECISIONS.md entry recorded or justified the move, despite
+the marker's own inline text saying to. Nothing mechanical caught this: `roadmap_cursor.py --verify`
+only checks grammar (a moved marker is still valid grammar), `check_human_gates.py --verify` only
+checks gate *grammar* not fence *position* vs the gates' own stated conditions, and the pytest
+tripwire (`test_real_roadmap_fence_state_tripwire`) was itself already red for an unrelated reason
+(ISSUE-170, now fixed) and so could not have caught this move even if someone had run it before
+committing — see DEC-177 for the full repair. **Reverted** in DEC-177; this issue is about the
+missing enforcement, not the one-time move.
+**Why deferred:** fixing this means either (a) a new `make` check that diffs the fence marker's line
+position against the last position recorded in DECISIONS.md (needs a machine-readable pointer, e.g.
+a line in DECISIONS.md itself or a small state file), or (b) having `expand_loop.sh` refuse to
+commit any diff touching the `LOOP:QUEUE end` line without a paired DECISIONS.md diff in the same
+commit. Either is a new harness mechanism, not a bug fix in the current one, and is out of scope for
+a session whose task is restoring the fence position, not redesigning how it's guarded.
+**To fix:** design and land one of the two mechanisms above (or a better one), with its own tests,
+as a dedicated task — likely a `RET-P0`-adjacent or fresh `HARNESS-P` phase.
 
 ## ISSUE-169: `make check-evals-rules` AND `make type-evals` are both red on main
 **Found:** 2026-08-14, during `EVAL-P20.0` (running `make check` before committing)

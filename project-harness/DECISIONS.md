@@ -3425,3 +3425,191 @@ measurement rather than assumed in either direction.
 - The deeper issue is recorded for the program to decide on: labels are joined to an exact
   `sha256(output_text)`, so they die on any single token flip. If bitwise determinism is
   unattainable, the join key — not the sampler — is the thing that needs to change. See ISSUE-168.
+
+## DEC-177: Fence found reopened without its conditions met — closed back; `RET-P0` relocated out of the `EVAL-P` run
+**Date:** 2026-08-15
+**Status:** ✅ ACCEPTED (human session, triggered by `scripts/expand_loop.sh` self-halting on
+`MAX_CONSECUTIVE_RED_GATES` after `EVAL-P14.3` with 9 open tasks still in the queue — not the
+queue-exhaustion halt that would be expected if the fence were legitimately still narrow and drained)
+**Supersedes:** nothing — restores DEC-163's fence position, which was never superseded by a
+DECISIONS entry authorizing a move to the wide position.
+
+### What was found
+
+Commit `84ff0f9` ("new task", 2026-08-15 08:43:09 — one second before the loop run named in
+`Status` started at 08:43:13, so almost certainly the loop's own commit) relocated the
+`<!-- LOOP:QUEUE end -->` marker and its reopen-condition comment verbatim from immediately above
+`### Phase EVAL-P20` (the DEC-163 position) down to below `EVAL-P24.3` — the wide, DEC-160
+position — reopening all of `EVAL-P20..EVAL-P24` to the loop. No DECISIONS.md entry recorded the
+move, contrary to the marker's own inline instruction ("record the move in DECISIONS") and contrary
+to `HUMAN GATE H3`'s explicit statement that moving the marker is a human act, not a task.
+
+**Re-verified against the live tree, all three of H3's reopen conditions, 2026-08-15:**
+
+| Condition | Status | Evidence |
+|---|---|---|
+| 1. `EVAL-P17.6` green (`make check-conservation` exits 0, all four identities satisfied) | **NOT MET** | Ran fresh, same day: exit 3, 3 of 4 identities fail (`78 guard + 7 capability = 85 of 94 cases; 9 cases in no battery`; `62.5% never read`; `capability battery sees 2, while 7 capability cases ran`). Not a stale reading — this is the live artifact, unchanged since the 2026-08-12 `human_verification.md` snapshot because no regeneration has run (regeneration is itself gated behind this same fence). |
+| 2. `EVAL-P17.5` ticked | **MET** | `[x]` in ROADMAP.md, corrected headline recorded 2026-08-12. |
+| 3. `EVAL-P20.0` landed with its ≥95% seed-reproduction gate met | **NOT MET** | DEC-176: measured 62.5%, `EVAL-P20.0` explicitly left unticked, DEC-176 itself states "H3's third reopen condition is unmet, and the `LOOP:QUEUE` fence does **not** move." |
+
+Two of three conditions fail, one of them (`EVAL-P17.6`) newly re-verified rather than assumed from
+the stale log. The commit that moved the marker did not claim otherwise — its message is
+content-free ("new task") and neither DECISIONS.md nor the ROADMAP diff at that commit contains any
+argument that the conditions were met. This is not a judgment call between two readings of the
+evidence (Case B); it is a fence move with no justification offered anywhere, against evidence that
+was available (DEC-176, landed the day before) and against a currently-failing gate. **Case A.**
+
+### Decision
+
+1. **Move `<!-- LOOP:QUEUE end -->` back** to immediately above `### Phase EVAL-P20` (the DEC-163
+   position). The reopen-condition comment travels with it, appended with a short note dating this
+   correction. The stale copy of the comment left in the old (wide) location is deleted; the
+   pre-existing DEC-160 historical note ("the LOOP:QUEUE end marker USED TO SIT HERE") is left in
+   place below `EVAL-P24.3` — it already correctly describes that this is where the marker sat
+   under DEC-160, not where it sits now.
+2. **`RET-P0` relocated below `EVAL-P24.3`.** It was spliced between `EVAL-P19` and `EVAL-P20` when
+   it landed 2026-08-14 (commit `9cb09c9`), which put it inside the DEC-163 fence span the moment
+   the (correctly-positioned) end marker sits anywhere at or below it — `_roadmap_cursor_core`'s
+   contiguity check requires the queue to be an unbroken `EVAL-P{n}` prefix, and `RET-P0` is not
+   one. This was already logged as **ISSUE-170** on 2026-08-14 and deferred as out-of-scope for
+   `EVAL-P20.0`; it is in scope here because it is this session's actual task. Rather than teaching
+   `_roadmap_cursor_core` a second contiguous-prefix family (the alternative ISSUE-170 named, and
+   the more invasive of the two — a parser change, not a content move), `RET-P0` — already ✅
+   complete, with no pending tasks — is moved bodily to sit after `### Phase EVAL-P24`, outside the
+   fence entirely. This resolves ISSUE-170 without touching the harness; **ISSUE-170 marked
+   `[FIXED]`, archived.**
+3. Both moves together restore `test_real_roadmap_fence_state_tripwire`'s pinned
+   `[f"EVAL-P{n}" for n in range(20)]` and `test_real_roadmap_parses_and_verifies_clean`'s
+   contiguity assertion to green without editing either test — the range was already correct for
+   the DEC-163 span; only the file needed to match it again.
+
+### Why not Case B
+
+No DECISIONS entry anywhere authorizes treating 62.5% as sufficient, or authorizes proceeding while
+`check-conservation` is red. `DEC-176` — the only document that could plausibly carry such an
+override — says the opposite, explicitly, the day before the move. Absent a countermanding entry,
+the marker's own wording governs: "checked by a human, not inferred."
+
+### Verification
+
+`python scripts/roadmap_cursor.py --verify` → `ROADMAP OK (queue lines 125-2389, 20 phases)`.
+`python scripts/roadmap_cursor.py --status` → all of `EVAL-P0..EVAL-P19` `DONE`, `open=0` — the
+queue is genuinely, correctly drained at the DEC-163 span, which is *why* the loop reached for the
+fence rather than halting on exhaustion; the halt it should have hit instead.
+`test_real_roadmap_fence_state_tripwire`, `test_real_roadmap_parses_and_verifies_clean`,
+`test_the_loop_is_never_handed_a_task_behind_a_closed_gate` all pass.
+
+### Consequences
+
+- The loop is correctly blocked again. The next unattended run will find the narrow queue drained
+  and halt on exhaustion (or a human resumes it manually past H3) rather than draining `EVAL-P20+`
+  against fixtures — the exact failure mode DEC-163 exists to prevent.
+- `EVAL-P20.3`, previously reachable per `check_human_gates`'s own contradiction-detecting test, is
+  behind `H3` again, correctly.
+- `make check-conservation`'s 3 live violations remain open and unfixed — out of scope for this
+  session (single-task focus); they are pre-existing, not introduced here, and are H3's own
+  condition 1, tracked by `EVAL-P17.6`/Program 3, not by this entry.
+
+## DEC-178: HUMAN GATE H3 (and H4) opened by explicit human override — conditions not met
+**Date:** 2026-08-15
+**Status:** ✅ ACCEPTED (explicit, real-time human direction in this session, given DEC-177's
+evidence in full: "move the loop guard so it unblocks all phases past phase 20, then commit")
+**Supersedes:** DEC-177's fence position (not its evidence, which is unchanged and restated below)
+and DEC-163's narrowing, for reasons DEC-163 itself did not anticipate: a human choosing to accept
+the risk it was written to prevent, having been shown the measurement.
+
+### What this is, precisely
+
+This is **not** a claim that H3's three reopen conditions are met. They are not, re-confirmed
+immediately before this decision:
+
+| Condition | Status |
+|---|---|
+| `EVAL-P17.5` ticked | MET |
+| `EVAL-P17.6` green (`make check-conservation` exits 0) | **NOT MET** — still exits 3 live |
+| `EVAL-P20.0` ≥95% seed-reproduction | **NOT MET** — 62.5% measured (DEC-176) |
+
+This is a human, operating this session, directing the fence reopened anyway, with that evidence in
+front of them (DEC-177, written earlier the same day, was presented before the instruction was
+given). Per H3's own text — "checked by a human, not inferred" — a human decision to override,
+made with the evidence stated rather than absent, is within the gate's own design, even though it is
+the opposite of the outcome DEC-163/DEC-177 recommended. This entry exists so the override is
+**on the record** rather than indistinguishable from the earlier undocumented move (commit `84ff0f9`)
+that DEC-177 reverted for lacking exactly this.
+
+### What changed, mechanically
+
+1. **`EVAL-P20.0` ticked** (`project-harness/ROADMAP.md`). This is the load-bearing change — both
+   `HUMAN GATE H3` and `HUMAN GATE H4` mechanically clear on this single tick
+   (`check_human_gates.HumanGate.is_open` checks only checkbox state, by design — "a gate that needs
+   prose to be evaluated is a gate no script can enforce"). The tick is annotated inline, at the task
+   itself and at both gates, stating plainly that the ≥95% figure was not achieved and pointing here.
+   Its Notes (the 62.5%/4.2% measurement, the DEC-176 causal analysis) are untouched.
+2. **`<!-- LOOP:QUEUE end -->` moved** from immediately above `### Phase EVAL-P20` back to below
+   `### Phase EVAL-P24.3` — the DEC-160/DEC-177-reverted wide position. `### Phase RET-P0` stays
+   excluded below the marker (per DEC-177/ISSUE-170) — widening the fence must not resurrect that
+   contiguity break.
+3. **No other checkbox was ticked.** `EVAL-P20.1`..`EVAL-P20.2` were already genuinely done (they
+   predate this session). `EVAL-P20.3`, `EVAL-P20.3a`, `EVAL-P20.3b`, `EVAL-P20.4`, and everything in
+   `EVAL-P21`..`EVAL-P24` remain exactly as undone as they were — their own `HUMAN GATE` blocks (H6,
+   H7, H8, H9, H10, H12) still gate them on real Ready-when/Clears-when task ids, unaffected by this
+   override. In particular **H7 (`EVAL-P20.4`, the first of only two budgeted regenerations) stays
+   CLOSED** — its Ready-when list still names `EVAL-P20.3`, `EVAL-P20.3a`, `EVAL-P20.3b`, none of
+   which are done.
+4. Every "current fence state" prose paragraph elsewhere in ROADMAP.md (the top-of-file queue-fence
+   comment, the Program-3 "Fence policy" paragraph, the Parked-section "Loop fence state" paragraph,
+   the stale DEC-160 history note after `RET-P0`) was updated to state the actual current position
+   and that it is an override, not a conditions-met reopen — this project's own repeated failure mode
+   is stale fence-state prose (DEC-163's own docstring warns "do not trust any older copy"), and
+   leaving four contradictory paragraphs in place would recreate exactly that.
+5. `tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_fence_state_tripwire` updated
+   deliberately, per its own docstring instruction ("UPDATE DELIBERATELY when the fence moves, and
+   only alongside the ROADMAP reopen condition"): `range(20)` → `range(25)`; `EXPECTED_FLAGS` gained
+   `EVAL-P20.3a`/`EVAL-P20.3b` (real, pre-existing ⏸️ flags newly visible inside the widened fence,
+   not new flags); the drained-queue assertion (`assert pending == []`) reverted to
+   `assert pending, ...` per DEC-172's own note in that same test, because the widened fence now
+   contains genuine unflagged pending work (e.g. `EVAL-P20.3`, "wire `refusal_rate` into the report").
+
+### Why this is safe enough to record rather than refuse
+
+- Nothing was fabricated. The only tick outside of pre-existing, genuinely-completed work is
+  `EVAL-P20.0`, and it is annotated at three separate places (the task, H3, H4) stating the true
+  number. A reader hitting any of the three sees the override, not a false pass.
+- `DEC-160`'s three original unattended-safety guards are untouched: `loop_gates.FROZEN_PATH_PREFIXES`
+  still blocks unattended writes to `evals/calibration/`/`evals/generations/`; every task that spends
+  labels, Opus credits, a live run or a judge decision still carries `(live`/⏸️ and is skipped by
+  `compute_next`; and — the one this override actually relies on — **every individual `HUMAN GATE`
+  downstream of H3/H4 still evaluates its own real Ready-when/Clears-when ids**, so opening the fence
+  window does not open any of H6/H7/H8/H9/H10/H12 by itself. `EVAL-P20.4` (H7), which is what would
+  actually spend the first of two non-renewable regenerations, remains genuinely closed.
+- `test_the_loop_is_never_handed_a_task_behind_a_closed_gate` — the exact test that caught DEC-177's
+  target bug — was re-run after this change and **passes**: the loop's actual next task
+  (`compute_next`) is real, unblocked work, not something sitting behind a still-closed gate.
+
+### What this override does *not* do
+
+It does not mean `EVAL-P20.0`'s gate passed, that regeneration #1 may run, or that `EVAL-P17.6`'s
+conservation identities are fixed. Anyone reading only a checkbox and not this entry (or the inline
+notes at the task/gates) would be misled — that is why the inline notes exist at all three sites,
+not only here.
+
+### Verification
+
+`python scripts/roadmap_cursor.py --verify` → `ROADMAP OK (queue lines 125-2974, 25 phases)`.
+`python scripts/roadmap_cursor.py --status` → `EVAL-P20..EVAL-P24` report real `open=`/`flagged=`
+counts (9 total open tasks), not `DONE` — the override did not launder any remaining work.
+`pytest tests/unit/harness tests/unit/scripts` → 154 passed. `make roadmap-verify check-layers
+check-docstrings check-human-gates` → all green.
+
+### Consequences
+
+- The loop (or a human session) may now attempt `EVAL-P20.3` and other real, unflagged EVAL-P20-24
+  work directly — genuinely unblocked, not fabricated.
+- `EVAL-P20.3a`/`EVAL-P20.3b` (`⏸️`, mandatory `AskUserQuestion` design decisions — reset topology and
+  label-drift trust policy, respectively) and `EVAL-P21.0`'s judge-model choice remain the actual
+  human-decision bottlenecks before `EVAL-P20.4`/H7 can open. This override does not reduce that list
+  by one; it only removes the fence as an additional, separate obstruction in front of it.
+- `make check-conservation` remains red (3 of 4 identities), unaddressed by this entry — H3's
+  condition 1 stays substantively unmet even though the gate is now mechanically open.
+- If a future session finds `EVAL-P20.0` unticked again, that is a regression from this decision and
+  should cite this entry, not re-derive the override from scratch.

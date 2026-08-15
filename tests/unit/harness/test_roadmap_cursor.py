@@ -191,6 +191,10 @@ EXPECTED_FLAGS: dict[str, list[str]] = {
     # EVAL-P21's judge panel rather than retried by the loop.
     "EVAL-P19.1": ["deferred"],
     "EVAL-P20.2": ["deferred"],
+    # 2026-08-15 (DEC-178): human-authoring/design-decision tasks, real and unfabricated —
+    # the fence override did not tick these.
+    "EVAL-P20.3a": ["deferred"],
+    "EVAL-P20.3b": ["deferred"],
     "EVAL-P21.1": ["deferred"],
     "EVAL-P21.3": ["deferred"],
     "EVAL-P22.3": ["deferred"],
@@ -232,22 +236,34 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     finishing the program having measured nothing. That narrowing worked: the
     baseline was measured on 2026-08-06 before a judge call was spent on P1..P8.
 
-    Current state (2026-08-10, DEC-163): the fence spans **EVAL-P0..EVAL-P19**. The end
-    marker was narrowed from below EVAL-P24.3 to immediately above "### Phase EVAL-P20",
-    on the same principle as the DEC-153 §3 narrowing described above: EVAL-P15..P19
-    recompute and repair over the artifact already on disk and can be validated against
-    it, while EVAL-P20..P24 assume a post-regeneration artifact that does not exist, so
-    the loop could only build them against fixtures. That is not hypothetical — it is how
+    State 2026-08-10 (DEC-163): the fence was narrowed to **EVAL-P0..EVAL-P19**. The end
+    marker moved from below EVAL-P24.3 to immediately above "### Phase EVAL-P20", on the
+    same principle as the DEC-153 §3 narrowing described above: EVAL-P15..P19 recompute
+    and repair over the artifact already on disk and can be validated against it, while
+    EVAL-P20..P24 assume a post-regeneration artifact that does not exist, so the loop
+    could only build them against fixtures. That is not hypothetical — it is how
     EVAL-P8.2's ``compare`` shipped green and then printed "Intersection: 0 cases /
     NO_DETECTABLE_CHANGE / p=1.0000" with exit 0 against the two real generation dirs.
-    Reopen conditions are recorded at the marker in ROADMAP.md; the ordered human-side
-    sequence is in project-harness/HUMAN_TASKS.md.
+
+    Current state (2026-08-15, DEC-178): the fence spans **EVAL-P0..EVAL-P24** again —
+    reopened by **explicit human override**, not because DEC-163's three reopen
+    conditions were met. They were not: ``EVAL-P17.6``'s live ``make check-conservation``
+    still exits non-zero, and ``EVAL-P20.0`` measured 62.5% reproduction against the
+    required ≥95% (DEC-176). ``EVAL-P20.0`` is ticked in ROADMAP.md as the record of that
+    override, not as a claim its gate passed. This override does **not** fabricate
+    completion of any other task — every phase's own ``HUMAN GATE`` blocks (H4, H6, H7,
+    H8, H9, H10, H12) still gate their tasks on real, unticked-until-genuinely-done work,
+    so ``compute_next`` below still returns real pending tasks, not free passes. Reopen
+    conditions and the override record are at the marker in ROADMAP.md; the ordered
+    human-side sequence is in project-harness/HUMAN_TASKS.md.
 
     Prior state (2026-08-09, DEC-160): the fence spanned EVAL-P0..EVAL-P24 — Program 1
     (P0..P8, precision), Program 2 (P9..P14, validity + the portfolio artifact, released
     2026-08-07), and Program 3 (P15..P24, the measurement apparatus, released 2026-08-09
     once `loop_gates.FROZEN_PATH_PREFIXES` covered `evals/calibration/` and
-    `evals/generations/` so no unattended session can write the 393 human labels).
+    `evals/generations/` so no unattended session can write the 393 human labels). The
+    2026-08-15 reopening lands at the same span for a different reason (override, not
+    conditions met) — see DEC-178, not DEC-160, for why.
 
     That release is why this test was red on the nights of 2026-08-09: DEC-160 moved the
     marker and verified the *cursor* (`roadmap-verify` OK, 25 phases) but not the tests
@@ -296,10 +312,11 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     assertion below exists to catch.
     """
     phases, _ = _real_roadmap_phases()
-    # 2026-08-10 (DEC-163): narrowed 25 -> 20. The fence end marker moved from below
-    # EVAL-P24.3 to immediately above "### Phase EVAL-P20", so EVAL-P20..P24 are out of
-    # the queue. This assertion firing on that move is the tripwire working as designed.
-    assert [p.id for p in phases] == [f"EVAL-P{n}" for n in range(20)]
+    # 2026-08-15 (DEC-178): widened 20 -> 25 again. The fence end marker moved back below
+    # EVAL-P24.3 by explicit human override — not because DEC-163's reopen conditions were
+    # met (they were not; see the docstring above and DEC-178). This assertion firing on
+    # that move is the tripwire working as designed.
+    assert [p.id for p in phases] == [f"EVAL-P{n}" for n in range(25)]
 
     # Program 1's foundation phases are complete: nothing actionable, nothing held back.
     # Monotonic — a done phase never reopens, so this cannot fire on progress.
@@ -330,18 +347,12 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     # Structural only — pending shrinks on every success and must not fire this gate.
     known_task_ids = {t.id for p in phases for t in p.tasks}
     pending = [task_id for p in phases for task_id in p.pending]
-    # 2026-08-13 (DEC-172): the fenced queue is legitimately drained, not a parsing bug.
-    # EVAL-P19.1 was the last unflagged task in EVAL-P0..P19 (three wording-rewrite attempts
-    # failed, ISSUE-141) and is now `deferred`; everything else left in the fence is `(live`
-    # or `deferred` — human-only. This *is* the "programme is over" branch this assertion
-    # used to warn about: HUMAN GATE H2 is READY (HUMAN_TASKS.md task 4) and is the real next
-    # step, not the loop. If a new unflagged task ever lands in the fence, `pending` stops
-    # being empty and this assertion should flip back to `assert pending, ...` — same
-    # deliberate-update discipline DEC-163 used on the `range(20)` assertion above.
-    assert pending == [], (
-        f"queue no longer drained ({pending}) — if this is a real new task, that's good news: "
-        "revert this assertion to `assert pending, ...` per DEC-172's note."
-    )
+    # 2026-08-15 (DEC-178): reverted from `assert pending == []` per DEC-172's own note above
+    # — the fence override reopened EVAL-P20..P24, which carry real unflagged work
+    # (e.g. EVAL-P20.3, "wire refusal_rate into the report") that the DEC-172-era drained
+    # queue did not have. A non-empty pending list here is expected, not a regression;
+    # `set(pending) <= known_task_ids` is what still catches a corrupted queue.
+    assert pending, "queue unexpectedly drained — HUMAN GATE H2/H3-era logic may be stale"
     assert set(pending) <= known_task_ids
 
 

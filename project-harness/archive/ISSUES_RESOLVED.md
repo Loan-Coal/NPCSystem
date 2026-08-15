@@ -2020,3 +2020,34 @@ report formatter (`evals/sequence_rates.py:render_report`) never receives a rece
 already-gated `SequenceStat`. Live-verified: the EVAL-P12.4 k=3x6 run reported PARTIAL fidelity on
 every scenario, no Wilson interval anywhere in the output, and the order-effect check
 (Cochran's Q + first-vs-last McNemar, pooled across the 6 scenarios) printed in its place.
+
+## [FIXED] ISSUE-170: the loop-fence tripwire is already red, so it can no longer guard the fence
+**Found:** 2026-08-14, during `EVAL-P20.0`
+**Fixed:** 2026-08-15, in the H3-fence-position repair session (see DEC-177)
+**Severity:** P1 (blocking — it silently disarms the H3 safety mechanism)
+**Where:** `tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_fence_state_tripwire` and
+`::test_real_roadmap_parses_and_verifies_clean`
+**Description:** Both tests fail on a clean tree: `At index 20 diff: 'RET-P0' != 'EVAL-P20'`. The
+`RET-P0` commit (`9cb09c9`) inserted a new phase inside the fenced range without updating the
+tripwire's phase-list snapshot. **Verified pre-existing** — both fail identically with this task's
+changes stashed. Note `make roadmap-verify` still passes (`ROADMAP OK (queue lines 125-2430,
+21 phases)`); only the pytest snapshot is stale.
+**Why this is P1 rather than cosmetic:** the tripwire exists precisely so that moving
+`<!-- LOOP:QUEUE end -->` is a conscious act — ROADMAP H3 and HUMAN_TASKS both say "that tripwire
+going red on the move is it working". A tripwire that is *already* red cannot signal anything: the
+next fence move produces no state change in the gate, and the `range(20)` that is supposed to be
+updated deliberately would be updated to silence a failure that has two unrelated causes mixed
+together. This did not bite in this session only because `EVAL-P20.0` failed its gate and the fence
+was therefore not moved.
+**Why deferred:** not caused by `EVAL-P20.0`; single-task focus, and re-snapshotting the phase list
+while the fence question is live would be exactly the conflation described above.
+**To fix:** update the expected phase list to include `RET-P0` at its real index and re-assert the
+current fence position, in a commit that does *nothing else*, so the snapshot means something again
+before H3 is next considered.
+**How fixed:** the predicted conflation happened one day later exactly as warned — commit `84ff0f9`
+moved the fence marker to the wide (DEC-160) position with neither reopen condition met nor a
+DECISIONS entry (see **DEC-177**), and this tripwire, already red, caught none of it. Rather than
+teaching the tripwire's phase list about `RET-P0`, `RET-P0` was relocated bodily to below
+`EVAL-P24.3` (outside the fence entirely — it is ✅ complete with no pending tasks, so it does not
+need to be loop-reachable), and the fence marker was moved back to the DEC-163 position. The
+pinned `range(20)` needed no edit: it was already correct for that span. Both tests pass again.
