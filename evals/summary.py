@@ -3,7 +3,8 @@ Module: summary
 Layer: eval harness (standalone — not part of the npc_engine layer model)
 Purpose: Compute the published anti-hallucination headline metric and a
          categorized failure breakdown from a completed eval run's results.
-Dependencies: stdlib (dataclasses), battery_rates (design-effect CI correction).
+Dependencies: stdlib (dataclasses), battery_rates (design-effect CI correction),
+              refusal_rate (over-refusal rate display, EVAL-P20.3).
 Used by: runner.py (console output), report.py (markdown summary section).
 """
 
@@ -14,6 +15,7 @@ from pathlib import Path
 
 from battery_rates import BatteryRate, compute_battery_rate
 import case_stats
+from refusal_rate import RefusalRateResult, fmt_refusal_rate
 import verdict_sources
 
 # Matcher kinds tracked individually in the failure breakdown.
@@ -414,9 +416,36 @@ def _assert_paired_rates(s: EvalSummary) -> None:
         raise ValueError(_UNPAIRED_CAPABILITY_ONLY)
 
 
-def format_summary_lines(summary: EvalSummary) -> list[str]:
+def _format_refusal_rate_line(refusal_result: RefusalRateResult | None) -> list[str]:
+    """Build the over-refusal rate console line, or [] when no result was supplied.
+
+    Kept separate from the guard/capability rates because over-refusal is scored
+    over grounded responses independently of the guard/capability battery split —
+    see refusal_rate.score_refusal_rate.
+    """
+    if refusal_result is None:
+        return []
+    return [f"    Over-refusal rate: {fmt_refusal_rate(refusal_result)}"]
+
+
+def _format_refusal_rate_row(refusal_result: RefusalRateResult | None) -> list[str]:
+    """Build the over-refusal rate markdown table row, or [] when no result was supplied."""
+    if refusal_result is None:
+        return []
+    return [f"| Over-refusal (grounded, excludes infra failures) | {fmt_refusal_rate(refusal_result)} |"]
+
+
+def format_summary_lines(
+    summary: EvalSummary, *, refusal_result: RefusalRateResult | None = None
+) -> list[str]:
     """Render as plain-text console lines; guard and capability rates adjacent.
 
+    Args:
+        summary: The EvalSummary to render.
+        refusal_result: Optional over-refusal rate (evals/refusal_rate.py); when
+            supplied, an "Over-refusal rate" line is printed next to the guard and
+            capability rates. Omitted entirely when None — over-refusal scoring is
+            a separate, optional measurement, not every caller runs it.
     Raises:
         ValueError: When only one of guard_rate / capability_rate is present.
     """
@@ -440,6 +469,7 @@ def format_summary_lines(summary: EvalSummary) -> list[str]:
         "  Rates (guard vs capability — k/n  rate  95% CI):",
         f"    Guard rate:       {g_rate_str}",
         f"    Capability rate:  {c_rate_str}",
+        *_format_refusal_rate_line(refusal_result),
         "",
         *_format_battery_counts_lines(summary),
         "",
@@ -449,9 +479,15 @@ def format_summary_lines(summary: EvalSummary) -> list[str]:
     ]
 
 
-def format_summary_markdown(summary: EvalSummary) -> list[str]:
+def format_summary_markdown(
+    summary: EvalSummary, *, refusal_result: RefusalRateResult | None = None
+) -> list[str]:
     """Render as markdown lines for the report; guard and capability rates adjacent.
 
+    Args:
+        summary: The EvalSummary to render.
+        refusal_result: Optional over-refusal rate; when supplied, adds a row to
+            the rate table. See format_summary_lines for why this is optional.
     Raises:
         ValueError: When only one of guard_rate / capability_rate is present.
     """
@@ -475,6 +511,7 @@ def format_summary_markdown(summary: EvalSummary) -> list[str]:
         "|---|---|---|",
         f"| Guard (adv + neg + ah_demo_*) | {summary.guard_passes}/{summary.guard_turns} | {g_rate_str} |",
         f"| Capability (case_pos_*) | {summary.capability_passes}/{summary.capability_turns} | {c_rate_str} |",
+        *_format_refusal_rate_row(refusal_result),
         "",
         f"All cases: {summary.evaluated_cases} evaluated / {summary.total_cases} total "
         f"({summary.guard_cases} guard, {summary.capability_cases} capability, "

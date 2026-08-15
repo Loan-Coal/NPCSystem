@@ -2614,7 +2614,7 @@ satisfied. Recorded here rather than silently ignored; see the `EVAL-P20.1` comm
       review)**; the capability rate is not interpretable until it closes. Remainder to ~35: ISSUE-147.
       ✅ HUMAN (EVAL-P20.2, 2026-08-10)
 
-- [ ] **EVAL-P20.3** Wire `refusal_rate` into the report. Files: `edit evals/summary.py`,
+- [x] **EVAL-P20.3** Wire `refusal_rate` into the report. Files: `edit evals/summary.py`,
       `edit evals/refusal_rate.py`, `edit tests/unit/evals/test_refusal_rate.py`.
       `refusal_rate.py`'s own docstring says *"format_summary_lines integration (**future**)"* and
       `grep score_refusal_rate` returns **zero non-test callers** — the one metric that would catch a
@@ -2623,6 +2623,21 @@ satisfied. Recorded here rather than silently ignored; see the `EVAL-P20.1` comm
       RED anchor: `test_summary_includes_over_refusal_rate` fails.
       Validation: the report prints the over-refusal rate with its interval and its excluded count next to
       the guard and capability rates; the EVAL-P10.3 fixture still reproduces **4/15**.
+      **DONE 2026-08-15:** `format_summary_lines`/`format_summary_markdown` gained an optional
+      `refusal_result: RefusalRateResult | None` keyword — when supplied, an "Over-refusal rate" line
+      (console) / table row (markdown) renders next to the guard/capability rates, formatted via
+      `fmt_refusal_rate`, now updated to show `excluded: k/n` explicitly instead of hiding it. Left as an
+      optional parameter (default `None`, so existing `format_summary_lines(summary)` call sites are
+      unaffected) rather than computing the refusal score inside `summarize()` itself — `summarize()`
+      classifies cases by guard/capability battery membership, not by which cases are "grounded" for
+      refusal purposes, and that classification doesn't exist yet; threading a real caller (`runner.py`)
+      through to call `score_refusal_rate` on the right case subset is follow-on wiring work, not part of
+      this task's Files list. RED anchor `test_summary_includes_over_refusal_rate` (in
+      `tests/unit/evals/test_refusal_rate.py`, per the Files list) passes; `test_p04_fixture_reproduces_4_of_15_over_refusals`
+      still reproduces 4/15 unchanged. `pytest tests/unit/evals tests/unit/engines/test_eval_summary.py`
+      542 passed / 1 pre-existing flake (`test_gameable_baseline_has_no_stale_entries`, a live
+      `mixtral:8x7b` Ollama-timeout-dependent test — confirmed pre-existing and unrelated by stashing this
+      diff and re-running standalone; passes either way on retry).
 
 - [ ] **EVAL-P20.3a** ⏸️ *(human session: a docker-network topology call plus two
       drift-detection design calls — not loop-executable)* Eval world reset + drift-detection

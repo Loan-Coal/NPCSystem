@@ -149,6 +149,51 @@ def test_fmt_refusal_rate_no_data() -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_summary_includes_over_refusal_rate() -> None:
+    """format_summary_lines renders the over-refusal rate when one is supplied.
+
+    RED anchor for EVAL-P20.3: fails today because format_summary_lines has no
+    parameter to receive a RefusalRateResult — refusal_rate.py's own docstring
+    says the summary integration is 'future', and `grep score_refusal_rate`
+    finds zero non-test callers. Also pins that the excluded (infra-failure)
+    count is visible, not hidden the way plain 'k/n' would hide it.
+    """
+    import summary  # noqa: PLC0415  (evals/ path — deferred import, matches sibling tests)
+
+    guard_case = {
+        "case_id": "case_adv_x",
+        "description": "",
+        "passed": True,
+        "expectations": [{"kind": "keyword_none", "passed": True, "skipped": False, "detail": ""}],
+        "response": {"npc_response": "x"},
+        "error": None,
+    }
+    cap_case = {
+        "case_id": "case_pos_x",
+        "description": "",
+        "passed": True,
+        "expectations": [{"kind": "affirms_judge", "passed": True, "skipped": False, "detail": ""}],
+        "response": {"npc_response": "y"},
+        "error": None,
+    }
+    s = summary.summarize([guard_case, cap_case])
+    refusal = RefusalRateResult(
+        total_grounded=10,
+        evaluated=8,
+        over_refusals=2,
+        rate=0.25,
+        ci_low=0.07,
+        ci_high=0.59,
+    )
+
+    lines = summary.format_summary_lines(s, refusal_result=refusal)
+    blob = "\n".join(lines)
+
+    assert "over-refusal" in blob.lower()
+    assert "2/8" in blob
+    assert "excluded: 2/10" in blob.lower()
+
+
 def test_p04_fixture_reproduces_4_of_15_over_refusals() -> None:
     """Replaying the P0.4 grounded set with recorded verdicts reproduces 4/15 over-refusals.
 

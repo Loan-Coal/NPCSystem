@@ -5,7 +5,8 @@ Purpose: Score grounded NPC responses for over-refusal — detecting when an NPC
          refuses to share knowledge it holds in the knowledge graph. Reports the
          over-refusal rate with Wilson CI for display alongside guard/capability rates.
 Dependencies: matchers (judge_refusal, JudgeResult), rate_stats (pass_rate, wilson_interval)
-Used by: tests/unit/evals/test_refusal_rate.py; format_summary_lines integration (future)
+Used by: tests/unit/evals/test_refusal_rate.py; summary.format_summary_lines /
+         summary.format_summary_markdown (EVAL-P20.3)
 """
 from __future__ import annotations
 
@@ -15,9 +16,17 @@ from typing import Callable, Sequence
 from matchers import JudgeResult, judge_refusal
 from rate_stats import pass_rate, wilson_interval
 
-# Format string matching the guard/capability rate display in summary.py.
-_RATE_FMT: str = "{k}/{n}  {rate:.3f}  95% CI [{ci_low:.3f}–{ci_high:.3f}]"
+# Format string matching the guard/capability rate display in summary.py, extended
+# with the excluded (infra-failure) count so a run where most of the battery got no
+# verdict cannot silently read as a clean "2/10".
+_RATE_FMT: str = (
+    "{k}/{n}  {rate:.3f}  95% CI [{ci_low:.3f}–{ci_high:.3f}]"
+    "  (excluded: {excluded}/{total})"
+)
 _NO_DATA: str = "N/A (no evaluated turns)"
+_NO_DATA_WITH_EXCLUDED_FMT: str = (
+    "N/A (no evaluated turns; excluded: {excluded}/{total} — infra failures)"
+)
 
 
 @dataclass(frozen=True)
@@ -99,19 +108,29 @@ def score_refusal_rate(
 def fmt_refusal_rate(result: RefusalRateResult) -> str:
     """Format the over-refusal rate as a compact string for report display.
 
-    Format matches the guard/capability rate lines in summary.py.
+    Format matches the guard/capability rate lines in summary.py, plus an explicit
+    excluded (infra-failure) count — without it, a run where most of the battery
+    got no verdict (e.g. Ollama timeouts) would print a clean-looking 'k/n' that
+    hides how much of the battery was actually silently dropped.
 
     Args:
         result: RefusalRateResult from score_refusal_rate.
     Returns:
-        Formatted rate string, or 'N/A (no evaluated turns)' when rate is None.
+        Formatted rate string, or an 'N/A' notice when rate is None.
     """
+    excluded = result.total_grounded - result.evaluated
     if result.rate is None:
-        return _NO_DATA
+        if result.total_grounded == 0:
+            return _NO_DATA
+        return _NO_DATA_WITH_EXCLUDED_FMT.format(
+            excluded=excluded, total=result.total_grounded
+        )
     return _RATE_FMT.format(
         k=result.over_refusals,
         n=result.evaluated,
         rate=result.rate,
         ci_low=result.ci_low,
         ci_high=result.ci_high,
+        excluded=excluded,
+        total=result.total_grounded,
     )
