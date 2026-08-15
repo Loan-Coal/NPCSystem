@@ -550,3 +550,25 @@ E741 Ambiguous variable name: `l`
 
 Found 1 error.
 make: *** [Makefile:99: lint] Error 1
+
+## 2026-08-15 10:06:22 — phase gate red after EVAL-P14
+
+CLASSIFICATION=HALT FAILED_CHECK=tests
+FAILING tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_fence_state_tripwire
+FAILING tests/unit/harness/test_roadmap_cursor.py::test_real_roadmap_parses_and_verifies_clean
+FAILING tests/unit/scripts/test_check_human_gates.py::test_the_loop_is_never_handed_a_task_behind_a_closed_gate
+
+.venv/Scripts/python.exe -m ruff check src/ evals/
+E741 Ambiguous variable name: `l`
+  --> evals\sequence_order_effect.py:81:46
+   |
+79 |         return None  # every scenario is uniformly all-pass or all-fail: Q is undefined
+80 |
+81 |     numerator = (k - 1) * (k * sum(l * l for l in col_sums) - sum(col_sums) ** 2)
+   |                                              ^
+82 |     q = numerator / denominator
+83 |     p = chi2_sf(q, df=k - 1)
+   |
+
+Found 1 error.
+make: *** [Makefile:99: lint] Error 1
