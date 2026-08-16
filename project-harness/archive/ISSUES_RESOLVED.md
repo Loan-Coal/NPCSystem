@@ -2195,3 +2195,41 @@ now compares `criteria_sha256` only — a `human_verdict` is trusted as long as 
 is unchanged, regardless of `output_text`. `needs_review` was already read by the scorers
 (EVAL-P19.0, 2026-08-12) — that half of this issue's own "To fix" was stale by the time this was
 resolved. Full writeup, rejected alternatives, and the residual risk named explicitly: DEC-181.
+
+## [FIXED] ISSUE-172: `EVAL-P17.1`/`EVAL-P17.6` checked done, but `make check-conservation` still fails live
+**Found:** 2026-08-15, during the EVAL-P20-P24 unblock planning session
+**Severity:** P1 (blocking — this is the program's own named failure mode, checkbox vs.
+measurement, recurring inside a phase (`EVAL-P17`) that `roadmap_cursor.py --status` reports fully
+`DONE`)
+**Where:** `scripts/check_conservation.py`; `project-harness/ROADMAP.md` `EVAL-P17.1`, `EVAL-P17.6`
+**Description:** `EVAL-P17.6` is `[x]` `✅ AUTO (EVAL-P17.6, 2026-08-12)` with its own validation
+text stating *"`make check-conservation` exits 0... If any identity still fails here, EVAL-P17 is
+not done."* `EVAL-P17.1` is likewise `[x]` `✅ AUTO`, its validation claiming to fix Identities 2/3
+specifically ("capability turns rise 2 → 7 cases... `compare`'s intersection covers 307 slots").
+Ran `python scripts/check_conservation.py` live this session (2026-08-15, well after both commits):
+exit code 3, 3 of 4 identities still fail, with the **exact pre-fix numbers named in the tasks'
+own text** — capability battery still "sees 2" (not 7), `compare` still reads 115 of 307 (62.5%
+never read), and Identity 1 still finds 9 of 94 cases in no battery. Nothing about `DEC-178`'s
+fence-reopen touched this — it was already broken before and after. `H3`'s condition 1
+(`EVAL-P17.6` green) is therefore not actually met even though `DEC-178` already explicitly
+accepted overriding H3 regardless.
+**Why deferred:** out of scope for a planning session (this session's task is inventory + plan,
+not implementation); root-causing why two `[x]`-checked, `✅ AUTO`-tagged tasks don't hold against
+the live artifact needs its own investigation, not a same-session fix.
+**To fix:** re-open `EVAL-P17.1` and `EVAL-P17.6` for a real fix (not just re-ticking), tracing why
+`summarize`/`compare` still read `judged.jsonl` only (or whatever the actual regression is —
+`ISSUE-155`'s repetition-collapse bug in `verdict_sources.load_unified_rows` is a plausible
+contributor, adjacent but not confirmed as the root cause) despite the committed fix. Do this
+before or alongside `EVAL-P20.4` (regeneration #1) — measuring a regeneration against a
+conservation-broken aggregator produces numbers of unverified trustworthiness.
+**Fixed:** 2026-08-16, before `EVAL-P20.4` (DEC-182)
+**How fixed:** `summarize`/`compare` were never the regression — `EVAL-P17.1` had already fixed
+them to read both verdict files via `verdict_sources.load_unified_rows`. The bugs were in
+`scripts/check_conservation.py` itself: Identity 1 hardcoded `excluded = 0` instead of counting
+`classify_battery`'s real `"excluded"` verdict (9 legitimately-excluded cases misread as a
+coverage gap); Identities 2/3 hand-read `judged.jsonl` only, modelling `compare.py`'s
+**pre-EVAL-P17.1** behavior instead of calling the same `load_unified_rows` unifier `compare.py`
+and `summary.py` already used correctly. `ISSUE-155` was not the contributor. Fixed via
+`AskUserQuestion` (chosen over deferring as accepted risk, given the root cause was confirmed
+small and well-scoped before presenting the choice). `make check-conservation` now genuinely
+exits 0. Full writeup: DEC-182.

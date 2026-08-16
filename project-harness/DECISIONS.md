@@ -3810,3 +3810,63 @@ should cite DEC-181, not re-derive the tradeoff from scratch. `EVAL-P22`'s label
 estimates, which assumed the exact-hash cost, should be re-derived against this policy when
 `EVAL-P22` is reached — the ~295-row figure no longer applies to the output-text axis (only a
 genuine criteria change would trigger it, expected to be rare).
+
+## DEC-182: ISSUE-172 fixed — `check_conservation.py`'s own bugs, not the aggregators it audits
+**Date:** 2026-08-16 · **Status:** ✅ ACCEPTED (fixed before regen #1, per explicit human choice —
+see the H7-gate-check judgment call in the same session; chosen over deferring as accepted risk)
+**Context:** `make check-conservation` had failed 3 of 4 identities live since at least
+2026-08-12, despite `EVAL-P17.1`/`EVAL-P17.6` being checked `[x]` `✅ AUTO` with validation text
+claiming exactly these identities were fixed. Logged as `ISSUE-172` during the EVAL-P20-P24
+unblock planning session (DEC-179) as the program's own named failure mode (checkbox vs.
+measurement) recurring.
+
+**Root-cause finding, made before presenting the fix-now-or-defer choice:** the bugs were in
+`scripts/check_conservation.py` itself, not in the aggregators it was auditing
+(`evals/compare.py`, `evals/summary.py`) — those were already correctly fixed by `EVAL-P17.1`.
+- **Identity 1** hardcoded `excluded = 0` instead of counting `case_stats.classify_battery`'s real
+  `"excluded"` verdict. 9 cases (`case_001_grieving_elder`, `case_002_suspicious_guard`,
+  `case_003_trade_offer`, `case_voice_captain_sorn_001`, `case_voice_mira_innkeeper_001`,
+  `moderation_everyone_01/02/03`, `reputation_dialogue_tone_001`) are legitimately excluded from
+  both batteries by design, not uncategorized — the hardcoded zero routed them all into
+  `neither_cases`, reading a working classification as a coverage gap.
+- **Identities 2 and 3** hand-read `judged.jsonl` only, modelling `compare.py`'s **pre-EVAL-P17.1**
+  behavior. `compare.py` and `summary.summarize_from_dir` have called
+  `verdict_sources.load_unified_rows` (reading both `judged.jsonl` and
+  `deterministic_judged.jsonl`) since `EVAL-P17.1` landed — the checker script was simply never
+  updated to match, so it kept reporting the pre-fix gap as if it still existed.
+
+Verified before implementing: manually ran `load_unified_rows` against `k3_73e6c36` and confirmed
+it sees all 307 unique record_ids and all 7 capability cases — exactly Identity 2/3's target
+numbers — establishing this was a small, well-understood fix (~30-45 min, confined to
+`check_conservation.py`) rather than an open-ended investigation, before the human was asked to
+choose fix-now vs. defer.
+
+**Fix:** `_check_identity_1` now counts `classify_battery`'s `"excluded"` result explicitly.
+`_check_identity_2`/`_check_identity_3` now call `verdict_sources.load_unified_rows` directly —
+the same shared unifier `compare.py`/`summary.py` already use — instead of re-implementing a
+narrower, stale version of the same logic. `python -m evals` and `check_conservation.py` now
+audit via the identical code path, so they cannot drift apart the way they did here (residual
+risk: both would need to diverge from `load_unified_rows` for the check to blind-spot again —
+logged as acceptable, not tracked separately).
+
+**Test changes, deliberate not silent:** `tests/unit/scripts/test_check_conservation.py`'s
+`test_residual_cases_are_reported_not_dropped` (pinned the pre-fix violation counts as *expected*)
+renamed to `test_all_identities_hold_against_the_committed_artifact`, now pinning all-OK counts
+(94 = 78 guard + 7 capability + 9 excluded; 307 = 307; 7 = 7). `test_violation_exits_nonzero`
+switched from the real `k3_73e6c36` artifact (which no longer has a violation to detect) to a new
+synthetic `_make_broken_fixture` — a capability case present in `outputs.jsonl` with no verdict
+row in either file — proving the detector still catches a genuine violation. Module docstring
+updated to explain the supersession for a future reader.
+
+**Verification:** `make check-conservation` — live, exits 0, "All identities satisfied."
+`pytest tests/unit/scripts tests/unit/evals tests/unit/harness` — 685 passed. `make
+check-docstrings check-layers` — both green.
+
+**Consequences:** `HUMAN GATE H3`'s condition 1 (`EVAL-P17.6`'s live check green) is now genuinely
+met — only condition 3 (`EVAL-P20.0`'s ≥95% reproduction gate, still 62.5% per DEC-176) remains
+unmet of the three DEC-163 reopen conditions. All prose paragraphs in `ROADMAP.md` asserting
+"`EVAL-P17.6`'s live check still fails" (the top-of-file queue-fence comment, the Program-3
+"Fence policy" paragraph, `HUMAN GATE H3`'s own override note, `EVAL-P20`'s phase header, the
+`LOOP:QUEUE end` marker's inline note) were updated in this same commit — this project's own
+repeated failure mode is stale fence-state prose, and leaving five contradictory paragraphs after
+fixing the underlying fact would recreate it. `ISSUE-172` closed, archived.

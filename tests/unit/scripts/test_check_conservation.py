@@ -1,9 +1,20 @@
 """
 Module: tests.unit.scripts.test_check_conservation
 Layer: tests
-Purpose: Unit tests for scripts/check_conservation.py — pins the exact violation counts
-         for the committed k3_73e6c36 artifact and proves the detector goes green on a
-         synthetic fixed fixture (a detector that only ever reports failure is broken).
+Purpose: Unit tests for scripts/check_conservation.py — pins the exact counts for the
+         committed k3_73e6c36 artifact and proves the detector goes green on a synthetic
+         fixed fixture (a detector that only ever reports failure is broken).
+
+ISSUE-172 fix (2026-08-16): the three "violations" this file used to pin as expected
+were bugs in this SCRIPT, not in the aggregators it audits. Identity 1 hardcoded
+`excluded = 0` instead of counting case_stats.classify_battery's real "excluded"
+verdict — 9 cases (case_001-003, case_voice_*, moderation_everyone_*,
+reputation_dialogue_tone_001) are legitimately excluded by design, not uncategorized.
+Identities 2/3 hand-read judged.jsonl only instead of reusing
+verdict_sources.load_unified_rows, which compare.py and summary.py already use
+correctly (EVAL-P17.1). Fixed here: all three identities now hold against the real
+k3_73e6c36 artifact — see the updated test below, and a new broken-fixture test that
+proves the detector still catches a genuine violation.
 Dependencies: json, pathlib, sys, pytest, check_conservation
 Used by: make test (pytest discovery)
 """
@@ -98,47 +109,89 @@ def _make_fixed_fixture(tmp_path: Path) -> Path:
     return gen_dir
 
 
+def _make_broken_fixture(tmp_path: Path) -> Path:
+    """Create a synthetic generation directory with a genuine Identity 3 violation.
+
+    Same as _make_fixed_fixture, but case_pos_z ran (present in outputs.jsonl)
+    and has no verdict row in either judged.jsonl or deterministic_judged.jsonl
+    — a capability case that was never actually scored. Identity 1/2 still hold
+    (case_pos_z is a real capability case, and Identity 2 only compares slots
+    that exist in the verdict files, which don't reference case_pos_z at all).
+    """
+    gen_dir = tmp_path / "broken_gen"
+    gen_dir.mkdir()
+
+    outputs = [
+        {
+            "record_id": "case_adv_x:schema:0",
+            "npc_response": "hello",
+            "repetition": 0,
+            "duration_ms": 50,
+            "retrieved_context": ["ctx"],
+            "judge_kind": None,
+            "matcher_kind": "schema",
+        },
+        {
+            "record_id": "case_pos_z:schema:0",
+            "npc_response": "ok",
+            "repetition": 0,
+            "duration_ms": 50,
+            "retrieved_context": ["ctx"],
+            "judge_kind": None,
+            "matcher_kind": "schema",
+        },
+    ]
+    _write_jsonl(gen_dir / "outputs.jsonl", outputs)
+
+    judged = [
+        {"record_id": "case_adv_x:schema:0", "case_id": "case_adv_x", "passed": True, "repetition": 0},
+        # case_pos_z: no row here and none in deterministic_judged either.
+    ]
+    _write_jsonl(gen_dir / "judged.jsonl", judged)
+    (gen_dir / "deterministic_judged.jsonl").write_text("", encoding="utf-8")
+    (gen_dir / "meta.json").write_text(
+        json.dumps({"gen_id": "broken", "k": 1}), encoding="utf-8"
+    )
+    return gen_dir
+
+
 # ---------------------------------------------------------------------------
-# RED anchor — pins exact violation counts for committed artifact
+# RED anchor — all three identities hold against the committed artifact (ISSUE-172)
 # ---------------------------------------------------------------------------
 
 
-def test_residual_cases_are_reported_not_dropped() -> None:
-    """Exact violation counts for the committed k3_73e6c36 artifact (pinned literals).
+def test_all_identities_hold_against_the_committed_artifact() -> None:
+    """Exact counts for the committed k3_73e6c36 artifact (pinned literals).
 
     If any number changes, a pipeline arithmetic bug has altered the artifact —
-    this is the finding the detector exists to surface.
+    this is the finding the detector exists to surface. Before the ISSUE-172 fix,
+    this test pinned the SCRIPT's own bugs as if they were real conservation
+    violations (see the module docstring); this is the corrected pin.
 
-    Identity 1 arithmetic: 78 guard (37 original + 41 ah_demo_*) + 7 capability = 85 in battery;
-                            94 total − 85 = 9 in no battery.
-                            Updated by EVAL-P17.2: ah_demo_* promoted from 'neither' to guard battery.
-    Identity 2 arithmetic: compare reads judged.jsonl (115 unique record_ids, 345 rows);
-                            judged ∪ deterministic_judged = 307 unique (115 + 192), 921 rows;
-                            307 − 115 = 192 never read (62.5%).
-    Identity 3 arithmetic: only 2 of 7 capability case_ids appear in judged.jsonl;
-                            the other 5 route to deterministic_judged, invisible to compare.
+    Identity 1 arithmetic: 78 guard + 7 capability + 9 excluded (case_001-003,
+                            case_voice_*, moderation_everyone_*,
+                            reputation_dialogue_tone_001 — legitimately excluded
+                            by classify_battery, not uncategorized) == 94 total.
+    Identity 2 arithmetic: judged ∪ deterministic_judged (via verdict_sources.
+                            load_unified_rows, same unifier compare.py/summary.py
+                            already use) covers all 307 unique record_ids.
+    Identity 3 arithmetic: all 7 capability case_ids appear in the unified rows
+                            (2 via judged.jsonl, 5 via deterministic_judged.jsonl).
     """
     report = check_conservation(_GEN_DIR)
 
-    # identity 1: 78 guard + 7 capability = 85 of 94 cases; 9 cases in no battery
-    # (9 = the 6 excluded-prefix cases: case_001_*, case_002_*, case_003_*, case_voice_*,
-    # moderation_*, reputation_* — counted as 'neither' by check_conservation)
-    assert not report.identity_1.ok
-    assert report.identity_1.guard_cases == 78  # 37 original + 41 ah_demo_* (EVAL-P17.2)
+    assert report.identity_1.ok, f"identity 1 unexpectedly failed: {report.identity_1}"
+    assert report.identity_1.guard_cases == 78
     assert report.identity_1.capability_cases == 7
+    assert report.identity_1.explicitly_excluded_cases == 9
     assert report.identity_1.total_cases == 94
-    assert report.identity_1.neither_cases == 9  # 94 - 78 - 7
 
-    # identity 2: compare reads 115 of 307 unique record_ids (345 of 921 rows)
-    assert not report.identity_2.ok
-    assert report.identity_2.compare_slots == 115
+    assert report.identity_2.ok, f"identity 2 unexpectedly failed: {report.identity_2}"
+    assert report.identity_2.compare_slots == 307
     assert report.identity_2.all_slots == 307
-    assert report.identity_2.compare_rows == 345
-    assert report.identity_2.all_rows == 921  # 345 + 576
 
-    # identity 3: capability battery sees 2, while 7 capability cases ran
-    assert not report.identity_3.ok
-    assert report.identity_3.cap_in_judged == 2
+    assert report.identity_3.ok, f"identity 3 unexpectedly failed: {report.identity_3}"
+    assert report.identity_3.cap_in_judged == 7
     assert report.identity_3.cap_ran == 7
 
 
@@ -162,14 +215,16 @@ def test_all_violations_cleared_on_fixed_fixture(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_format_report_mentions_all_three_violations() -> None:
-    """format_report names every failing identity for the real artifact."""
+def test_format_report_says_all_satisfied_for_the_real_artifact() -> None:
+    """format_report reports all identities OK for the real k3_73e6c36 artifact.
+
+    Superseded test_format_report_mentions_all_three_violations, which pinned
+    the pre-ISSUE-172-fix script bugs as expected FAIL output.
+    """
     report = check_conservation(_GEN_DIR)
     text = format_report(report)
-    assert "FAIL" in text
-    assert "9 cases in no battery" in text  # 94 - 78 - 7; updated by EVAL-P17.2
-    assert "62.5% never read" in text
-    assert "capability battery sees 2" in text
+    assert "FAIL" not in text
+    assert "All identities satisfied" in text
 
 
 def test_format_report_all_ok_on_fixed_fixture(tmp_path: Path) -> None:
@@ -185,12 +240,17 @@ def test_format_report_all_ok_on_fixed_fixture(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_violation_exits_nonzero() -> None:
-    """main() exits non-zero when any identity fails; exits 0 on a clean fixture."""
+def test_violation_exits_nonzero(tmp_path: Path) -> None:
+    """main() exits non-zero when any identity fails; exits 0 on a clean fixture.
+
+    Uses a synthetic broken fixture rather than the real k3_73e6c36 artifact —
+    the real artifact no longer has a violation to detect (ISSUE-172 fix); this
+    test instead proves the detector still catches a genuine one.
+    """
     from check_conservation import main  # noqa: E402
 
-    # Real artifact has violations — must exit non-zero
-    exit_code = main(["--gen-dir", str(_GEN_DIR)])
+    gen_dir = _make_broken_fixture(tmp_path)
+    exit_code = main(["--gen-dir", str(gen_dir)])
     assert exit_code != 0, "expected non-zero exit when violations present"
 
 

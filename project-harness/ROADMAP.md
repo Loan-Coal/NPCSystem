@@ -154,10 +154,13 @@ EVAL-B4 is its own session (4 steps, one commit each). EVAL-FINAL is superseded 
      REOPENED AGAIN 2026-08-15 (DEC-178) by explicit human override — CURRENT STATE: the
      `end` marker sits below "### Phase EVAL-P24.3" (the DEC-160 wide position), so the queue
      spans EVAL-P0..EVAL-P24. This was NOT triggered by the DEC-163 reopen conditions being
-     met (`EVAL-P17.6`'s live check still fails; `EVAL-P20.0` measured 62.5% against a
-     required ≥95%, DEC-176) — it is a recorded human override, and each phase's own
-     `HUMAN GATE` blocks still gate real work on real completion. Reopen conditions and the
-     override record are at the marker itself; human-side ordering is in HUMAN_TASKS.md.
+     met (`EVAL-P20.0` measured 62.5% against a required ≥95%, DEC-176) — it is a recorded
+     human override, and each phase's own `HUMAN GATE` blocks still gate real work on real
+     completion. **Updated 2026-08-16 (ISSUE-172, DEC-182):** `EVAL-P17.6`'s live
+     `make check-conservation` check now genuinely passes (it did not, from 2026-08-12 until
+     this fix, despite being ticked — see DEC-182); condition 3 (`EVAL-P20.0` ≥95%) remains the
+     sole unmet reopen condition. Reopen conditions and the override record are at the marker
+     itself; human-side ordering is in HUMAN_TASKS.md.
      Do not trust any prose in this file over `python scripts/roadmap_cursor.py --verify`. -->
 
 
@@ -1642,10 +1645,12 @@ raters. Consequences, all binding:
 3. Run-to-run McNemar with a comparability guard that refuses incomparable runs.
 4. Trend across runs plus a regression alert that exits non-zero on a drop.
 
-**Fence policy (current as of 2026-08-15, DEC-178 — supersedes DEC-163's wording; do not trust any
-older copy):** the `LOOP:QUEUE` end marker sits below `### Phase EVAL-P24.3`, reopened by explicit
-human override, **not** because the reopen conditions below were met — `EVAL-P17.6`'s live check
-still fails and `EVAL-P20.0` measured 62.5% against the required ≥95% (DEC-176). **EVAL-P0..P24 are
+**Fence policy (current as of 2026-08-16, DEC-182 — supersedes DEC-163's/DEC-178's wording; do not
+trust any older copy):** the `LOOP:QUEUE` end marker sits below `### Phase EVAL-P24.3`, reopened by
+explicit human override, **not** because the reopen conditions below were met — `EVAL-P20.0`
+measured 62.5% against the required ≥95% (DEC-176) and remains the sole unmet condition.
+`EVAL-P17.6`'s live `make check-conservation` check, previously also failing despite being ticked,
+now genuinely passes (fixed 2026-08-16, ISSUE-172/DEC-182). **EVAL-P0..P24 are
 all in the loop's queue**, but every individual `HUMAN GATE` (H4, H6, H7, H8, H9, H10, H12) still
 gates its own tasks on real, unfabricated completion — the override only moved the queue window, it
 did not tick any task that wasn't already genuinely done except `EVAL-P20.0` itself (ticked as the
@@ -1813,6 +1818,11 @@ cannot fail is not evidence.
       `MAX_CONSECUTIVE_RED_GATES=2`, and halt the loop on a finding no repair session can legitimately fix.
       `make check-conservation` prints violations and exits 0 until **EVAL-P17.6** flips it to a gate.
       RED anchor: `tests/unit/scripts/test_check_conservation.py::test_residual_cases_are_reported_not_dropped` fails.
+      **⚠️ Test renamed 2026-08-16 (ISSUE-172, DEC-182):** now
+      `test_all_identities_hold_against_the_committed_artifact` — it pins the *fixed* expected
+      counts (all identities OK) rather than the three script bugs this task's era mistook for
+      real violations. The RED-anchor role at the time this task ran is unchanged; only the
+      test's current name and assertions differ from what's quoted here.
       Validation (Part B): run against the committed artifact it reports **exactly these**, and the unit
       test pins each number as a literal:
         - identity 1 → **FAIL**: 37 guard + 7 capability = 44 of **94** cases; **50 cases in no battery**
@@ -2129,6 +2139,19 @@ ISSUE-155/ISSUE-156 remain open and block the live pipeline from reproducing thi
       identities satisfied; re-introducing the single-source read in `summary.py` (a one-line local revert,
       not committed) makes it exit non-zero and name the residual cases. **If any identity still fails
       here, EVAL-P17 is not done** — that is the phase's real exit criterion, not the headline number. ✅ AUTO (EVAL-P17.6, 2026-08-12)
+      ⚠️ **CORRECTED 2026-08-16 (ISSUE-172, DEC-182) — this checkbox's own Validation claim was false
+      from 2026-08-12 until today.** `make check-conservation` did **not** actually exit 0 against the
+      post-P17 artifact — it exited 3, unchanged, for the entire span this task sat ticked. The bug was
+      never in `EVAL-P17.1`/`P17.2`'s actual deliverables (`summary.py`/`compare.py` were correctly using
+      `verdict_sources.load_unified_rows` the whole time) — it was in `check_conservation.py` itself:
+      Identity 1 hardcoded `excluded = 0` instead of counting `classify_battery`'s real "excluded" verdict
+      (9 legitimately-excluded cases were miscounted as a coverage gap); Identities 2/3 hand-read
+      `judged.jsonl` only, modelling stale pre-`EVAL-P17.1` behavior instead of reusing the same
+      `load_unified_rows` unifier `compare.py`/`summary.py` already called correctly. Fixed 2026-08-16 —
+      `make check-conservation` now genuinely exits 0, live-verified, not assumed from this checkbox. Full
+      writeup: DEC-182. This is the exact failure mode this task's own Validation text warned about
+      ("if any identity still fails here, EVAL-P17 is not done") recurring one level up, in the checker
+      rather than the checked — logged and fixed, not silently re-ticked.
 
 ### Phase EVAL-P18 — Provenance and comparability (a run must be identifiable) ✅ 2026-08-12
 **Goal:** Two runs can be compared only when they are actually comparable, and any published number is
@@ -2401,19 +2424,23 @@ move in DECISIONS, and update `test_real_roadmap_fence_state_tripwire`'s `range(
 deliberately. That tripwire going red on the move is it working.
 
 **⚠️ OPENED 2026-08-15 by explicit human override, not by the conditions being met — see
-DEC-178.** `EVAL-P17.6`'s live check (`make check-conservation`) still exits non-zero (3 of 4
-identities violated) and `EVAL-P20.0`'s measured reproduction is 62.5%, not the required ≥95%
-(DEC-176). The human operating this session directed the fence reopened anyway, accepting that
-`EVAL-P20..P24` work below may proceed against artifacts that have not passed the safety
-measurements this gate exists to enforce. `EVAL-P20.0` is ticked below as the record of that
-override, not as a claim the ≥95% gate was met — its own Notes still state the true number.
+DEC-178.** At the time of the override, `EVAL-P17.6`'s live check (`make check-conservation`)
+still exited non-zero (3 of 4 identities violated) and `EVAL-P20.0`'s measured reproduction was
+62.5%, not the required ≥95% (DEC-176). The human operating this session directed the fence
+reopened anyway, accepting that `EVAL-P20..P24` work below may proceed against artifacts that had
+not passed the safety measurements this gate exists to enforce. `EVAL-P20.0` is ticked below as
+the record of that override, not as a claim the ≥95% gate was met — its own Notes still state the
+true number. **Updated 2026-08-16 (ISSUE-172, DEC-182):** `make check-conservation` now genuinely
+exits 0 — that condition is met as of this date, live-verified, leaving `EVAL-P20.0`'s ≥95% gate
+as the sole condition this override still overrides.
 
 ### Phase EVAL-P20 — Case-set repair + capability battery → REGENERATION #1
 **Goal:** One coherent case set worth measuring, landed in exactly one commit, then the first of two
 regenerations.
 **⚠️ Fence reopened 2026-08-15 by explicit human override (see H3 above, DEC-178) — not because
-the reopen conditions were met.** `EVAL-P20.0`'s ≥95% gate measured 62.5% (DEC-176);
-`EVAL-P17.6`'s live `make check-conservation` still fails. This phase and everything after it were
+the reopen conditions were met.** `EVAL-P20.0`'s ≥95% gate measured 62.5% (DEC-176) and remains
+the sole unmet condition; `EVAL-P17.6`'s live `make check-conservation`, previously also failing,
+now genuinely passes (fixed 2026-08-16, ISSUE-172/DEC-182). This phase and everything after it were
 human-driven per DEC-163 until 2026-08-15; that boundary was moved by decision, not by evidence.
 Individual `HUMAN GATE` blocks below (H4, H6, H7, H8, H9, H10, H12) still gate their own tasks on
 real, unfabricated completion — only `H3`'s fence-position barrier was overridden. See
@@ -3031,10 +3058,12 @@ every prior quotation of `3 lore hallucinations across 111 adversarial turns` is
 <!-- LOOP:QUEUE end -->
 <!-- ^ MOVED HERE 2026-08-15 by explicit human override — see DEC-178 and the note on HUMAN GATE H3
      above. This is the DEC-160 (2026-08-09) wide position, reopened without the DEC-163 reopen
-     conditions being met: EVAL-P17.6's live `make check-conservation` still fails (3 of 4 identities
-     violated) and EVAL-P20.0 measured 62.5% against its required ≥95% (DEC-176). `EVAL-P20.0` was
-     ticked as the explicit record of this override, not as a claim its gate passed — see its own
-     Notes for the real number.
+     conditions being met: at the time, EVAL-P17.6's live `make check-conservation` still failed
+     (3 of 4 identities violated) and EVAL-P20.0 measured 62.5% against its required ≥95% (DEC-176).
+     `EVAL-P20.0` was ticked as the explicit record of this override, not as a claim its gate
+     passed — see its own Notes for the real number. UPDATED 2026-08-16 (ISSUE-172, DEC-182):
+     `make check-conservation` now genuinely exits 0; EVAL-P20.0's ≥95% gate is the sole condition
+     still unmet.
 
      `RET-P0` (below) stays excluded from the queue deliberately — it is not an `EVAL-P` phase and
      `_roadmap_cursor_core`'s contiguity check requires an unbroken `EVAL-P{n}` prefix (ISSUE-170,

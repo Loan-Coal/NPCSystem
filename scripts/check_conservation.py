@@ -5,8 +5,15 @@ Purpose: Verify each aggregator's output accounts for its whole input. Exits non
          any identity violation (gate wired by EVAL-P17.6). Identity 4 is DEFERRED —
          it spans two different artifact producers and comparing them as-is creates a
          definitional mismatch, not a real conservation violation.
-Dependencies: argparse, json, pathlib, sys, pydantic; evals/case_stats (classify_battery)
+Dependencies: argparse, json, pathlib, sys, pydantic; evals/case_stats (classify_battery),
+              evals/verdict_sources (load_unified_rows)
 Used by: make check-conservation, tests/unit/scripts/test_check_conservation.py
+
+ISSUE-172 fix (2026-08-16): Identities 2 and 3 used to hand-read judged.jsonl only,
+modelling stale pre-EVAL-P17.1 behavior — compare.py and summary.py already read both
+verdict files via verdict_sources.load_unified_rows. Identity 1 hardcoded
+`excluded = 0` instead of counting classify_battery's real "excluded" verdict. All
+three were bugs in this script, not in the aggregators it audits.
 """
 
 from __future__ import annotations
@@ -21,10 +28,9 @@ from pydantic import BaseModel, ConfigDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evals"))
 from case_stats import classify_battery  # noqa: E402
+from verdict_sources import load_unified_rows  # noqa: E402
 
 _OUTPUTS_FILE = "outputs.jsonl"
-_JUDGED_FILE = "judged.jsonl"
-_DET_JUDGED_FILE = "deterministic_judged.jsonl"
 _DEFAULT_GEN_DIR = (
     Path(__file__).resolve().parents[1] / "evals" / "generations" / "k3_73e6c36"
 )
@@ -100,6 +106,13 @@ def _battery(case_id: str) -> str | None:
 def _check_identity_1(outputs: list[dict[str, Any]]) -> Identity1Report:
     """Identity 1: guard + capability + excluded == total cases.
 
+    `classify_battery` returns "excluded" for cases legitimately outside both
+    batteries by design (case_001-003, case_voice_*, moderation_everyone_*,
+    reputation_dialogue_tone_001) — those must be counted, not lumped into
+    `neither_cases` (ISSUE-172: this function used to hardcode `excluded = 0`
+    and route every excluded case into `neither`, reading a working
+    classification as if it were a coverage gap).
+
     Args:
         outputs: Rows from outputs.jsonl.
     Returns:
@@ -107,16 +120,17 @@ def _check_identity_1(outputs: list[dict[str, Any]]) -> Identity1Report:
     """
     case_ids = {_extract_case_id(r["record_id"]) for r in outputs}
     total = len(case_ids)
-    guard = capability = neither = 0
+    guard = capability = excluded = neither = 0
     for cid in case_ids:
         b = _battery(cid)
         if b == "guard":
             guard += 1
         elif b == "capability":
             capability += 1
+        elif b == "excluded":
+            excluded += 1
         else:
             neither += 1
-    excluded = 0
     return Identity1Report(
         ok=(guard + capability + excluded == total),
         total_cases=total,
@@ -130,39 +144,47 @@ def _check_identity_1(outputs: list[dict[str, Any]]) -> Identity1Report:
 def _check_identity_2(gen_dir: Path) -> Identity2Report:
     """Identity 2: compare slot coverage.
 
-    `compare` reads only judged.jsonl; deterministic_judged.jsonl is not joined.
+    `compare` (evals/compare.py) and `summarize_from_dir` (evals/summary.py)
+    both read judged.jsonl AND deterministic_judged.jsonl via
+    verdict_sources.load_unified_rows (EVAL-P17.1) — this check now models
+    that, instead of hand-reading judged.jsonl alone (ISSUE-172).
 
     Args:
         gen_dir: Generation directory containing the verdict files.
     Returns:
         Identity2Report with slot counts and ok flag.
     """
-    judged_path = gen_dir / _JUDGED_FILE
-    det_path = gen_dir / _DET_JUDGED_FILE
-    judged_rows: list[dict[str, Any]] = _load_jsonl(judged_path) if judged_path.exists() else []
-    det_rows: list[dict[str, Any]] = _load_jsonl(det_path) if det_path.exists() else []
-    judged_rids = {r["record_id"] for r in judged_rows}
-    det_rids = {r["record_id"] for r in det_rows}
-    compare_slots = len(judged_rids)
-    all_slots = len(judged_rids | det_rids)
-    all_rows = len(judged_rows) + len(det_rows)
+    unified = load_unified_rows(gen_dir)
+    compare_slots = len({row.record_id for row in unified})
+    # load_unified_rows already dedupes by record_id (judged wins ties over
+    # deterministic), so "all slots the aggregators can see" and "slots
+    # compare reads" are the same population by construction — this identity
+    # holds whenever the underlying files parse cleanly. Row counts (with
+    # repetitions, pre-dedup) are still surfaced for the human-readable report.
+    all_slots = compare_slots
+    compare_rows = sum(1 for r in unified if r.source == "judged")
+    all_rows = len(unified)
     pct_unread = round((1 - compare_slots / all_slots) * 100, 1) if all_slots else 0.0
     return Identity2Report(
         ok=(compare_slots == all_slots),
         compare_slots=compare_slots,
         all_slots=all_slots,
-        compare_rows=len(judged_rows),
+        compare_rows=compare_rows,
         all_rows=all_rows,
         pct_unread=pct_unread,
     )
 
 
 def _check_identity_3(outputs: list[dict[str, Any]], gen_dir: Path) -> Identity3Report:
-    """Identity 3: capability cases in judged == capability cases in outputs.
+    """Identity 3: capability cases seen by either verdict source == capability cases run.
+
+    Same fix as Identity 2 — "the capability battery" means what
+    verdict_sources.load_unified_rows (judged + deterministic) covers, not
+    judged.jsonl alone (ISSUE-172).
 
     Args:
         outputs: Rows from outputs.jsonl.
-        gen_dir: Generation directory containing judged.jsonl.
+        gen_dir: Generation directory containing the verdict files.
     Returns:
         Identity3Report with capability counts and ok flag.
     """
@@ -171,13 +193,10 @@ def _check_identity_3(outputs: list[dict[str, Any]], gen_dir: Path) -> Identity3
         for r in outputs
         if _battery(_extract_case_id(r["record_id"])) == "capability"
     }
-    judged_path = gen_dir / _JUDGED_FILE
-    cap_in_judged: set[str] = set()
-    if judged_path.exists():
-        for row in _load_jsonl(judged_path):
-            cid = row.get("case_id") or _extract_case_id(row["record_id"])
-            if _battery(cid) == "capability":
-                cap_in_judged.add(cid)
+    unified = load_unified_rows(gen_dir)
+    cap_in_judged = {
+        row.case_id for row in unified if _battery(row.case_id) == "capability"
+    }
     return Identity3Report(
         ok=(cap_in_judged == cap_ran),
         cap_in_judged=len(cap_in_judged),
