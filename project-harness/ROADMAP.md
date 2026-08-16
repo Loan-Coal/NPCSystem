@@ -2904,8 +2904,20 @@ qwen judges are one vote with a veto, not two raters.
       RED anchor: `test_panel_persists_one_verdict_row_per_judge_per_record` fails.
       Validation: `judged.jsonl` carries `judge_model` per row for all three; a record judged by 3 models
       yields 3 rows; a judge that errors yields an explicit inconclusive, never a silent pass.
+      **SCAFFOLDED, NOT DONE 2026-08-16 (DEC-184) — checkbox intentionally left unticked.**
+      `evals/judge_panel.py` created (`PanelVerdict`, `run_panel()`, `to_judged_rows()`);
+      `matchers._run_binary_judge` gained an optional `model` keyword (backward-compatible).
+      RED anchor + fixture tests pass, including one against real `k3_73e6c36` case data
+      (stubbed verdicts, no live Ollama). **Not wired into `judge_runner.py`** — that live wiring
+      is the actual task, blocked by `HUMAN GATE H7` (closed until `EVAL-P20.4` actually runs;
+      regen #1 was explicitly declined this session, see its own Notes). Tick this only after the
+      live 3-model panel run actually persists real `judged.jsonl` rows.
 
-- [ ] **EVAL-P21.2** Consensus rule and agreement metric. Files: `edit evals/judge_panel.py`,
+- [ ] **EVAL-P21.2** ⏸️ *(needs EVAL-P21.1's live panel output to validate against — the
+      case_neg_injection_001 check requires real per-judge votes, not a fixture; also behind
+      HUMAN GATE H7 like P21.1 — flag added 2026-08-16 after EVAL-P21.0's tick exposed that
+      compute_next would otherwise hand this to an unattended loop despite H7 being closed,
+      same class of gap as ISSUE-173)* Consensus rule and agreement metric. Files: `edit evals/judge_panel.py`,
       `edit evals/summary.py`, `edit tests/unit/evals/test_judge_panel.py`.
       Require **≥2-of-3 to fail** before a record counts as a hallucination (ISSUE-129 fix (2)), and publish
       inter-judge agreement (Fleiss' κ or pairwise) next to the headline (fix (1)).
@@ -2913,6 +2925,16 @@ qwen judges are one vote with a veto, not two raters.
       Validation: the `case_neg_injection_001` false positive the audit identified (mixtral failed it
       reasoning the NPC "claims to be an AI by saying 'I am Captain Sorn'" — the NPC did the opposite)
       is **outvoted**; the report prints inter-judge agreement with its interval.
+      **SCAFFOLDED, NOT DONE 2026-08-16 (DEC-184) — checkbox intentionally left unticked.**
+      `consensus_verdict()` (≥2-of-3) and `pairwise_agreement()` implemented in
+      `evals/judge_panel.py`; `summary.format_summary_lines`/`format_summary_markdown` gained an
+      optional `panel_agreement` keyword (same pattern as `EVAL-P20.3`'s `refusal_result`). Scope
+      choice, noted: implemented **pairwise agreement**, not Fleiss' κ — the chance-agreement
+      correction needs real vote-distribution data from a live run to be meaningful; revisit once
+      one exists. RED anchor `test_single_dissenting_judge_does_not_create_a_hallucination`
+      reproduces the named `case_neg_injection_001` false positive and confirms it's outvoted.
+      **Not validated against a live panel run** — same H7 block as `EVAL-P21.1`. Tick only after
+      the real panel run's actual votes confirm this behavior, not the fixture.
 
 - [ ] **EVAL-P21.3** ⏸️ *(records a DECISIONS entry settling a judge -- human call)* Settle the judge
       on evidence (**closes ISSUE-129**; supersedes EVAL-P11.3). Files:
@@ -2933,7 +2955,9 @@ rate of exactly zero and a measured accuracy of *unknown*. DEC-156 §1 decided t
 machinery was built and never run.
 **Depends on:** EVAL-P15.1, EVAL-P19.4, EVAL-P20.4.
 
-- [ ] **EVAL-P22.1** Stratified sampling for label export. Files: `edit evals/label_export.py`,
+- [ ] **EVAL-P22.1** ⏸️ *(behind HUMAN GATE H7, closed until EVAL-P20.4 actually runs — flag
+      added 2026-08-16, same ISSUE-173-class gap as EVAL-P21.2 above)* Stratified sampling for
+      label export. Files: `edit evals/label_export.py`,
       `create evals/label_sampling.py`, `create tests/unit/evals/test_label_sampling.py`.
       Draw ~25-30 rows per uncalibrated matcher (~150 total), stratified by matcher kind **and** by verdict
       so the sample is not all passes — a sample drawn from 525 passes and 3 failures would measure nothing.
@@ -3004,7 +3028,9 @@ without modification — so it takes no interactive input, writes machine-readab
 is its verdict.
 **Depends on:** EVAL-P16, EVAL-P17, EVAL-P18.3, EVAL-P22.4.
 
-- [ ] **EVAL-P23.1** Trend storage. Files: `create evals/trend_store.py`,
+- [ ] **EVAL-P23.1** ⏸️ *(behind HUMAN GATE H10, closed until regen #2 (EVAL-P22.4) actually
+      runs — flag added 2026-08-16, same ISSUE-173-class gap as EVAL-P21.2 above)* Trend
+      storage. Files: `create evals/trend_store.py`,
       `create tests/unit/evals/test_trend_store.py`.
       Append-only JSONL of one row per run: `gen_id`, `harness_version`, timestamp, every headline rate with
       its CI and n, per-scorer κ, and the inconclusive rate. `compare` is strictly A-vs-B and nothing
@@ -3013,7 +3039,8 @@ is its verdict.
       Validation: re-recording an existing `gen_id` raises rather than duplicating; the store survives a
       schema addition (unknown fields load).
 
-- [ ] **EVAL-P23.2** Regression thresholds. Files: `create evals/regression_gate.py`,
+- [ ] **EVAL-P23.2** ⏸️ *(behind HUMAN GATE H10 — flag added 2026-08-16, same ISSUE-173-class
+      gap as EVAL-P21.2 above)* Regression thresholds. Files: `create evals/regression_gate.py`,
       `create docs/REGRESSION_POLICY.md`, `create tests/unit/evals/test_regression_gate.py`.
       Encode what counts as a regression: a rate whose CI lower bound falls below the baseline's **point
       estimate**, or a McNemar `worse` verdict, or an inconclusive rate above the validity threshold. Use
@@ -3022,7 +3049,8 @@ is its verdict.
       Validation: a fixture where the rate drops but intervals overlap does **not** fire; a fixture with a
       real drop does, and the message names the metric, both intervals, and n.
 
-- [ ] **EVAL-P23.3** The single entry point. Files: `create scripts/Run-EvalHarness.ps1`,
+- [ ] **EVAL-P23.3** ⏸️ *(behind HUMAN GATE H10 — flag added 2026-08-16, same ISSUE-173-class
+      gap as EVAL-P21.2 above)* The single entry point. Files: `create scripts/Run-EvalHarness.ps1`,
       `create tests/unit/scripts/test_run_eval_harness.py`, `edit Makefile`, `edit README.md`.
       One PowerShell command: preflight (services up, models present, worlds seeded, tree clean) → generate →
       panel judge → deterministic verdicts → score → calibrate → compare vs baseline → record trend → gate.
@@ -3039,7 +3067,9 @@ is its verdict.
 **Effort:** ~2 h
 **Depends on:** EVAL-P21.3, EVAL-P22.3, EVAL-P23.
 
-- [ ] **EVAL-P24.1** Trust policy as a function (**completes EVAL-P11.1**). Files:
+- [ ] **EVAL-P24.1** ⏸️ *(behind HUMAN GATE H8, closed until EVAL-P21.1-P21.3 AND EVAL-P20.4
+      land — flag added 2026-08-16, same ISSUE-173-class gap as EVAL-P21.2 above)* Trust policy
+      as a function (**completes EVAL-P11.1**). Files:
       `create docs/SCORER_TRUST_POLICY.md`, `create tests/unit/evals/test_trust_policy.py`.
       EVAL-P11.1 says to write the threshold **before** seeing the numbers. That is no longer possible — the
       κ are known (0.919 / 0.530 / 1.000 / 0.247). **State that plainly in the doc** and anchor thresholds to
@@ -3049,7 +3079,8 @@ is its verdict.
       Validation: a scorer at κ=0.35 is refused publication, the refusal naming the scorer, its κ and its
       interval; the doc explicitly records the after-the-fact sequencing as a known weakness.
 
-- [ ] **EVAL-P24.2** Methodology writeup (**completes EVAL-P13.1**). Files:
+- [ ] **EVAL-P24.2** ⏸️ *(behind HUMAN GATE H10 — flag added 2026-08-16, same ISSUE-173-class
+      gap as EVAL-P21.2 above)* Methodology writeup (**completes EVAL-P13.1**). Files:
       `create docs/EVAL_METHODOLOGY.md`.
       What is measured, on what denominator, with which judge, calibrated how, and — the section that makes
       it credible — **an anti-metric section**: what these numbers do *not* show. Include the 2026-08-09

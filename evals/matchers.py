@@ -219,7 +219,7 @@ _AFFIRMATION_CRITERIA_TMPL: str = (
 )
 
 
-def _run_binary_judge(criteria: str, content: str) -> JudgeResult:
+def _run_binary_judge(criteria: str, content: str, *, model: str | None = None) -> JudgeResult:
     """Call the Ollama YES/NO judge and return a JudgeResult (YES → score=True).
 
     Shared transport+parse for every LLM matcher. Infra failures (network errors,
@@ -230,14 +230,19 @@ def _run_binary_judge(criteria: str, content: str) -> JudgeResult:
     Args:
         criteria: The YES/NO criterion embedded in the judge prompt.
         content: The text being judged (the NPC response).
+        model: Judge model to call; defaults to the single-judge
+            `judge_config.resolve_judge_model()` value. Panel callers
+            (evals/judge_panel.py, EVAL-P21.1) pass each panel seat explicitly
+            so all three models can be queried from the same shared transport.
 
     Returns:
         JudgeResult(score=True) on a YES verdict, score=False on NO, score=None
         on infra failure.
     """
+    judge_model = model or _JUDGE_MODEL
     prompt = _JUDGE_PROMPT_TMPL.format(criteria=criteria.strip(), content=content)
     payload: dict = {
-        "model": _JUDGE_MODEL,
+        "model": judge_model,
         "prompt": prompt,
         "stream": False,
         "options": {"num_predict": 80, "temperature": _JUDGE_TEMPERATURE},
@@ -254,7 +259,7 @@ def _run_binary_judge(criteria: str, content: str) -> JudgeResult:
         # cause — a 30s timeout and a dead Ollama looked identical.
         _logger.warning(
             "binary_judge_infra_failure model=%s timeout_s=%s error=%r",
-            _JUDGE_MODEL,
+            judge_model,
             _JUDGE_TIMEOUT,
             exc,
         )

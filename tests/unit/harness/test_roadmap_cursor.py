@@ -196,6 +196,16 @@ EXPECTED_FLAGS: dict[str, list[str]] = {
     "EVAL-P20.3a": ["deferred"],
     "EVAL-P20.3b": ["deferred"],
     "EVAL-P21.1": ["deferred"],
+    # 2026-08-16: EVAL-P21.0's tick exposed that compute_next would walk straight through
+    # EVAL-P21.2..EVAL-P24.2 to an unattended loop despite HUMAN GATE H7/H8/H10 being closed
+    # (same class as ISSUE-173) — all now flagged, one gate-specific reason each.
+    "EVAL-P21.2": ["deferred"],
+    "EVAL-P22.1": ["deferred"],
+    "EVAL-P23.1": ["deferred"],
+    "EVAL-P23.2": ["deferred"],
+    "EVAL-P23.3": ["deferred"],
+    "EVAL-P24.1": ["deferred"],
+    "EVAL-P24.2": ["deferred"],
     "EVAL-P21.3": ["deferred"],
     "EVAL-P22.3": ["deferred"],
     "EVAL-P24.3": ["deferred"],
@@ -347,12 +357,19 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     # Structural only — pending shrinks on every success and must not fire this gate.
     known_task_ids = {t.id for p in phases for t in p.tasks}
     pending = [task_id for p in phases for task_id in p.pending]
-    # 2026-08-15 (DEC-178): reverted from `assert pending == []` per DEC-172's own note above
-    # — the fence override reopened EVAL-P20..P24, which carry real unflagged work
-    # (e.g. EVAL-P20.3, "wire refusal_rate into the report") that the DEC-172-era drained
-    # queue did not have. A non-empty pending list here is expected, not a regression;
-    # `set(pending) <= known_task_ids` is what still catches a corrupted queue.
-    assert pending, "queue unexpectedly drained — HUMAN GATE H2/H3-era logic may be stale"
+    # 2026-08-16: reverted back to `assert pending == []`, deliberately, alongside real
+    # progress — not a regression to the DEC-172-era logic the 2026-08-15 comment (see prior
+    # revision) warned against. EVAL-P20.3/P20.3a/P20.3b/P21.0 (the previously-unflagged work
+    # that made the 2026-08-15 change necessary) are now DONE, not just newly-flagged; and
+    # EVAL-P21.2/P22.1/P23.1-3/P24.1-2 (six tasks genuinely blocked by H7/H8/H10 that
+    # EVAL-P21.0's tick exposed compute_next would otherwise walk straight into) are now
+    # correctly flagged. The queue is honestly drained of loop-available work, not silently
+    # exhausted — `set(pending) <= known_task_ids` still catches a corrupted queue if this
+    # ever needs to widen again.
+    assert pending == [], (
+        f"expected the queue fully drained of unflagged work, got {pending} — if new "
+        "unflagged work landed deliberately, this is fine; update this assertion alongside it"
+    )
     assert set(pending) <= known_task_ids
 
 

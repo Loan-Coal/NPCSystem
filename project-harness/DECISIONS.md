@@ -3911,3 +3911,72 @@ own Ready-when items being satisfied — see `ROADMAP.md`'s `EVAL-P20.4` Notes) 
 its roster-resolution code are real, unblocked scaffolding, not a claim that the live panel run has
 happened. `ISSUE-174` closed: `EVAL-P21.0`'s roadmap text now carries an explicit `AskUserQuestion`
 marker matching the `EVAL-P20.3a`/`P20.3b` convention.
+
+## DEC-184: EVAL-P21.1/P21.2 mechanism code written and fixture-tested, checkboxes intentionally NOT ticked
+**Date:** 2026-08-16 · **Status:** ✅ ACCEPTED (implementation session; no gate override)
+**Context:** Per this session's own instructions: "implement `EVAL-P21.1`/`P21.2` (judge execution
++ consensus rule) as code, fixture-tested against the committed `k3_73e6c36` — this doesn't need
+the new regen artifact to exist. `⏸️` only blocks the automated loop, not you." Regeneration #1
+(`EVAL-P20.4`) was **not** fired this session (explicit human decline, see its own Notes) — `HUMAN
+GATE H7` therefore stays closed (`check_human_gates.py --check EVAL-P21.1` exits 1: "HUMAN GATE H7
+is closed").
+
+**What was built, real and tested, not a stub:**
+- `evals/matchers.py::_run_binary_judge` gained an optional `model: str | None = None` keyword
+  (backward-compatible — every existing caller is unaffected) so the shared judge transport can be
+  called per panel seat.
+- `evals/judge_panel.py` (new): `PanelVerdict` + `run_panel()` (EVAL-P21.1 — runs a record through
+  every panel seat via an injectable `judge_fn`, so tests never need a live 3-model Ollama panel),
+  `to_judged_rows()` (one row per judge per record, `inconclusive=True` on infra failure, never a
+  silent pass), `consensus_verdict()` (EVAL-P21.2 — ≥2-of-3 failure votes required; an inconclusive
+  vote never itself counts toward the threshold), `pairwise_agreement()` (inter-judge agreement
+  rate with a Wilson CI).
+- `evals/summary.py` gained an optional `panel_agreement: AgreementResult | None` keyword on
+  `format_summary_lines`/`format_summary_markdown`, same optional-injection pattern already used
+  for `refusal_result` (`EVAL-P20.3`).
+- **Scope choice, noted per "make a choice and note it":** implemented pairwise agreement, not
+  Fleiss' κ, for the published inter-judge metric. Fleiss' κ additionally corrects for
+  chance-agreement given each category's base rate — that correction needs the live panel's actual
+  vote distribution to compute meaningfully, which doesn't exist without a live run. Pairwise
+  agreement is the simpler, already-available metric; documented in `AgreementResult`'s own
+  docstring as revisit-with-real-data-later, not silently substituted.
+
+**Fixture-tested against real `k3_73e6c36` data:**
+`test_panel_runs_against_a_real_k3_case_with_stubbed_verdicts` runs the mechanism against a real
+case's `criteria`/`npc_response` (not synthetic strings) with stubbed judge verdicts — proves the
+mechanism works against real case shape without requiring the live post-regen artifact.
+`test_single_dissenting_judge_does_not_create_a_hallucination` reproduces the exact audit false
+positive named in `EVAL-P21.2`'s own validation text (`case_neg_injection_001`, mixtral alone
+failing it) and confirms it is outvoted.
+
+**Deliberately NOT ticked:** `EVAL-P21.1`'s and `EVAL-P21.2`'s ROADMAP checkboxes remain `[ ]`.
+Ticking them would falsely claim `HUMAN GATE H8`/`H7` cleared — the actual roadmap task is the
+**live** 3-model panel execution against the **post-regeneration** artifact (`judge_runner.py`
+actually calling `evals/judge_panel.py` against real `mixtral:8x7b`/`qwen2.5:14b`/`llama3.1:8b`
+Ollama calls over `EVAL-P20.4`'s output), which cannot happen without regen #1 first. This code is
+real, tested scaffolding that shortens the wall-clock once H7 opens — not a claim the task is done.
+
+**A live gap this session's own edit exposed, fixed in the same commit:** ticking `EVAL-P21.0`
+(the first genuinely-completable task in file order inside `EVAL-P21`) moved
+`_roadmap_cursor_core.compute_next`'s file-order scan past it, and it turned out
+**`EVAL-P21.2`, `EVAL-P22.1`, `EVAL-P23.1`-`P23.3`, `EVAL-P24.1`-`P24.2`** (six further tasks) were
+genuinely blocked by `H7`/`H8`/`H10` but carried **no** `⏸️`/`(live` skip flag in `ROADMAP.md` —
+an unattended loop run right now would have walked straight into each of them, one after another,
+the exact failure mode `HUMAN GATE` flags exist to prevent (same class as `ISSUE-173`, but live
+and reproducible, not hypothetical). Caught by
+`test_the_loop_is_never_handed_a_task_behind_a_closed_gate` failing after the `EVAL-P21.0` tick.
+Fixed: all six tasks flagged `⏸️` with their specific blocking gate named;
+`test_real_roadmap_fence_state_tripwire`'s `EXPECTED_FLAGS` updated to match (deliberately, per
+that test's own instruction); its `assert pending` reverted to `assert pending == []` — the queue
+is now honestly, fully drained of loop-available work in the widened fence, not silently exhausted.
+
+**Verification:** `pytest tests/unit/evals tests/unit/harness tests/unit/scripts` — 700 passed, 1
+skipped (the drained-queue skip branch, now correctly reached).
+`make check-docstrings check-layers` — both green. `check_human_gates.py --check EVAL-P21.1`
+exits 1 (correctly still blocked, confirming the checkbox-vs-code distinction is real, not just
+asserted).
+
+**Consequences:** Once `EVAL-P20.4` lands (a future session), `EVAL-P21.1`/`P21.2`'s remaining
+work is wiring `judge_runner.py` to call `evals/judge_panel.py`'s already-tested functions against
+live Ollama calls, persisting real rows, and re-validating `case_neg_injection_001` against the
+actual panel's actual verdict (not a stub) before ticking either checkbox.
