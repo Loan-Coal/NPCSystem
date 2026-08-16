@@ -2840,6 +2840,16 @@ Fold `EVAL-P8.3` (H11) into this comparison rather than spending a separate 62-m
       on 24 `case_neg_*` guard cases, whose responses are shorter than average, and reproduction falls
       sharply with output length (4.2% at `max_tokens=512`). Expect the realised survivor count to be
       **lower**, and record the actual number here when it lands.
+      **NOT FIRED 2026-08-16 — explicit human decline, not a block.** `HUMAN GATE H7` is live-verified
+      **open** as of this date (`check_human_gates.py --check EVAL-P20.4` exits 0 — all Ready-when items
+      ticked: `EVAL-P20.0` override, `P20.1`, `P20.2`, `P20.3`, `P20.3a`, `P20.3b`). `ISSUE-172`
+      (conservation) is fixed this session. Presented via `AskUserQuestion`, stating plainly that
+      `ISSUE-165` (wall-clock tick leak, `dialogue_handler.py:224`, still open) and `EVAL-P20.0`'s
+      structural ≥95% miss (62.5%, DEC-176, already accepted via DEC-178) are the live risk factors — the
+      human chose **not** to fire this session. Everything downstream (`EVAL-P21.1`-`P21.3`, `EVAL-P22.1`,
+      `EVAL-P22.2`, `EVAL-P22.4`, and transitively `H8`-`H12`) remains genuinely blocked, not fabricated.
+      Re-run `check_human_gates.py --check EVAL-P20.4` at the moment of any future decision — do not trust
+      this note as a substitute.
 
 ### Phase EVAL-P21 — The judge panel (closes ISSUE-129)
 **Goal:** A headline that does not change when the judge changes, with published agreement.
