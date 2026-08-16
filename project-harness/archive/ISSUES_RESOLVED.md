@@ -2051,3 +2051,116 @@ teaching the tripwire's phase list about `RET-P0`, `RET-P0` was relocated bodily
 `EVAL-P24.3` (outside the fence entirely — it is ✅ complete with no pending tasks, so it does not
 need to be loop-reachable), and the fence marker was moved back to the DEC-163 position. The
 pinned `range(20)` needed no edit: it was already correct for that span. Both tests pass again.
+
+## [FIXED] ISSUE-131: compose publishes Neo4j's 7687 but the `internal: true` network silently voids it
+**Found:** 2026-08-06, during EVAL-P0.4 measured baseline
+**Fixed:** 2026-08-16, in EVAL-P20.3a (DEC-180)
+**Severity:** P2 (annoying)
+**Where:** `docker-compose.yml` (neo4j `ports:` + `networks: [internal]`); `Makefile` `eval-retrieval`
+**Description:** The neo4j service declares `"7474:7474"` and `"7687:7687"`, but it is attached only
+to the `internal` network, which is `internal: true`. Docker **silently ignores** port publishing in
+that case — `docker ps` shows bare `7687/tcp` with no host binding. So `make eval-retrieval`, which
+runs `python -m evals.retrieval_runner` on the host, can never connect and dies with
+`ServiceUnavailable` on `localhost:7687`. The declared ports read as an intent that the network
+config cancels, so the file looks correct while being inoperative. Note `evals/` is in
+`.dockerignore`, so `docker compose exec app` cannot run it either — the repo must be bind-mounted.
+**Why deferred:** Both candidate fixes are shared-config changes needing a call: attaching neo4j to
+the `public` network weakens the documented route-security posture at the top of the compose file,
+and rewriting the Makefile target to shell into a container changes a target every contributor uses.
+**To fix:** Pick one and record it in DECISIONS: (a) delete the misleading `ports:` block and change
+`eval-retrieval` to `docker compose run --rm -v "$$PWD:/work" -w /work app python -m evals.retrieval_runner`
+(the invocation verified working on 2026-08-06), or (b) add a dev-only compose override that puts
+neo4j on `public` so host tooling works, leaving the base file's posture intact.
+**How fixed:** Chose (a) via `AskUserQuestion` (EVAL-P20.3a Step 1). Dropped the `ports:` block from
+`docker-compose.yml`'s `neo4j` service entirely. `demo-snapshot`, `demo-restore`, the new
+`eval-world-reset`, and `eval-retrieval` Makefile targets all now run via
+`docker compose run --rm -v "$PWD:/work" -w /work app python -m <module> ...`, verified working live
+(demo-snapshot/restore/eval-world-reset confirmed against the running stack; eval-retrieval shares
+the identical command shape but could not be re-verified live after Docker Desktop's daemon went
+unreachable mid-session — see DEC-180).
+
+## [FIXED] ISSUE-153: `label_merge._refresh` never refreshes `pre_label` on drift, so a re-adjudicated row can carry a stale reference-labeller opinion
+**Found:** 2026-08-12, during EVAL-P19.0 (making `needs_review` load-bearing)
+**Fixed:** 2026-08-16, in EVAL-P20.3a (DEC-180)
+**Severity:** P3 (nice-to-fix — the secondary/pre_label axis can silently compare a fresh
+human verdict against a pre_label computed from text that no longer exists)
+**Where:** `evals/label_merge.py` `_MACHINE_FIELDS` (does not list `pre_label` or
+`pre_labeller_model`); `_refresh`
+**Description:** `_MACHINE_FIELDS` refreshes `output_text`, `scorer_verdict`, `criteria`, etc.
+on every merge, but `pre_label`/`pre_labeller_model` are preserved unchanged from the
+existing row — even when `output_text` drifted underneath it. After EVAL-P19.0,
+`adjudicate.apply_verdict` clears `needs_review` on re-adjudication and the row re-enters the
+secondary (pre_label vs human_verdict) calibration axis, but `pre_label` still reflects the
+reference labeller's opinion of the **old** text, not the new one it was merged against.
+**Why deferred:** Refreshing `pre_label` correctly requires re-running the reference-labeller
+model against the new `output_text` — a live/expensive operation, not a pure merge, and out
+of scope for EVAL-P19.0 (calibration.py / adjudicate.py / label_merge.py's WARNING path).
+**To fix:** Either (a) clear `pre_label` to `None`-like/absent on drift so the secondary axis
+excludes the row until a live re-label happens, or (b) add a `pre_label_needs_review` flag
+mirroring `needs_review` and have `calibration.py`'s secondary-axis functions exclude on that
+flag specifically. Needs a design call — not mechanical.
+**How fixed:** Chose (a) via `AskUserQuestion` (EVAL-P20.3a Step 4). Widened
+`CalibrationLabel.pre_label` to `bool | None`; `label_merge._refresh` clears `pre_label`/
+`pre_labeller_model` to `None`/`""` on any detected drift. `calibration.py`'s
+`pre_label_confusion_counts`/`pre_label_kappa`/`pre_label_kappa_interval`/`agreement_rate` now
+exclude `pre_label is None` rows via a new `_secondary_axis_rows` helper, surfacing the exclusion
+count rather than silently miscounting. Required a follow-on fix in `evals/adjudicate.py`
+(`keep`/`flip` read `pre_label` directly; added `pass`/`fail` direct-verdict commands for rows with
+no `pre_label`) — see DEC-180.
+
+## [FIXED] ISSUE-160: `label_merge._has_drifted` only compares `output_sha256`/`criteria_sha256` — a verdict-only change on hash-identical content is invisible to the merge report
+**Found:** 2026-08-13, during `EVAL-P19.4` (`HUMAN GATE H2`)
+**Fixed:** 2026-08-16, in EVAL-P20.3a (DEC-180)
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/label_merge.py` `_has_drifted` / `merge_labels`
+**Description:** Re-judging the unchanged `k3_73e6c36` transcript and merging with `MERGE=1`
+reported `human verdicts preserved: 393` and zero drifted rows — correct as far as the tool's own
+definition of drift goes. A row-by-row diff against the pre-merge file found one real change the
+report never surfaced: `case_adv_lira_troop_positions:tone_judge:4#r0`'s `scorer_verdict` flipped
+`true`→`false` on re-judge, with `output_sha256` and `criteria_sha256` both byte-identical old vs.
+new. `human_verdict` was untouched (hence 393 still holds), and the cause is ordinary LLM judge
+non-determinism (DEC-146 already documents no `seed` parameter exists) — not a EVAL-P19.2 matcher
+effect, not a criteria change, and unrelated to `refusal_judge`/ISSUE-141. But `_has_drifted` only
+diffs `output_sha256`/`criteria_sha256`, so a `scorer_verdict` change with unchanged hashes is
+structurally invisible to `format_merge_report`'s `needs_review` warning — "0 drifted" describes
+hash-drift only, not "nothing about this row changed."
+**Why deferred:** Out of scope for `EVAL-P19.4` (measurement task, not a merge-tool change);
+confirmed via `AskUserQuestion` this is accepted as normal LLM non-determinism for this specific
+row rather than reverted.
+**To fix:** Decide whether a verdict-only flip on a hash-identical row should also set
+`needs_review=True` (safer default: any change under an existing human verdict gets a second
+look, even if the tool can't yet say why) or is intentionally out of scope because re-running a
+judge is expected to occasionally disagree with itself. Either way, `format_merge_report` should
+state its drift definition explicitly ("hash-drift" vs. "any field drift") so a future reader
+doesn't read "0 drifted" as "byte-identical import."
+**How fixed:** `_has_drifted` (EVAL-P20.3a Step 3, mechanical, no design call needed) now also
+flags a `scorer_verdict` change on hash-identical `output_sha256`/`criteria_sha256` as drift, pinned
+by a RED-anchor test built from the real named case. `format_merge_report`'s WARNING line now
+states the drift definition explicitly.
+
+## [FIXED] ISSUE-167: no way to reset eval world state between generation runs
+**Found:** 2026-08-14, during `EVAL-P20.0`
+**Fixed:** 2026-08-16, in EVAL-P20.3a (DEC-180)
+**Severity:** P2 (annoying — blocks clean re-measurement)
+**Where:** `evals/preconditions.py` `reset_world`, `docker-compose.yml` (neo4j ports),
+`demo_game/snapshot.py`
+**Description:** Two generation runs cannot be started from identical graph state. `reset_world`
+only PATCHes `world_state` (fidelity PARTIAL — `evals/reset_fidelity.json` lists
+`graph.edges.RELATES_TO`, `emotion_store` and the caches under `surviving`), there is no
+graph-wide reset endpoint, `make demo-restore` needs a snapshot that requires a host bolt
+connection, and Neo4j's 7687 is not published to the host in `docker-compose.yml`. Measured
+consequence: run B started from run A's end state, and emotion/routine drift affected 109/145
+records. The EVAL-P20.0 measurement had to reset per-NPC emotion via
+`PATCH /v1/graph/nodes/character/{id}` from a throwaway script, which is not reproducible tooling.
+**Why deferred:** out of scope for adding a seed. It is infrastructure for the regeneration
+protocol, and `EVAL-P20.4` will need it.
+**To fix:** either publish 7687 so `make demo-snapshot`/`demo-restore` work, or add a committed
+`make eval-world-reset` that restores the seeded baseline through the admin API. Then update
+`evals/reset_fidelity.json` with the achieved fidelity.
+**How fixed:** Root cause was ISSUE-131 (the port publish never worked), not missing tooling —
+`demo_game/snapshot.py` already had `do_snapshot`/`do_restore`. Fixed the network topology (see
+ISSUE-131), wiped the (junk-accumulated, 31,215-`Quest`-node) live graph, reseeded fresh (demo +
+village + tavern), and snapshotted that clean state to the checked-in
+`evals/fixtures/eval_world_baseline.json`. New `make eval-world-reset` target restores it. Re-ran
+`e2e/scripts/measure_reset_fidelity.py` fresh — `evals/reset_fidelity.json`/`docs/RESET_FIDELITY.md`
+now carry a current `measured_at`/`git_sha`.

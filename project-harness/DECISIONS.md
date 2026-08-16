@@ -3644,3 +3644,79 @@ before regen #1, or explicitly accept as residual risk — in the same sitting a
 `P20.3b`, per the unblock plan's Section 5. Neither regeneration should fire without re-running
 `check_human_gates.py --check <task>` at the moment of decision, not by trusting this entry or the
 plan file's snapshot.
+
+## DEC-180: EVAL-P20.3a — docker-network topology (option a) and pre_label staleness (option a)
+**Date:** 2026-08-16 · **Status:** ✅ ACCEPTED (`AskUserQuestion`, human session)
+**Context:** `EVAL-P20.3a`'s two design calls, batched in one sitting per the unblock plan.
+
+**Step 1 (ISSUE-131/167 — docker-network topology).** Chose **(a) drop the misleading `ports:`
+block, shell eval/demo Makefile targets into the app container instead**, over (b) attaching
+`neo4j` to the `public` network (which would have weakened the route-security posture the compose
+file's own header comment documents). `docker-compose.yml`'s `neo4j` service no longer publishes
+`7474`/`7687` — live-verified those mappings never worked anyway (`docker ps` showed no host
+binding despite the `ports:` block; Docker silently voids host publishing on an `internal: true`-
+only network). `demo-snapshot`/`demo-restore`/new `eval-world-reset` Makefile targets now run via
+`docker compose run --rm -v "$PWD:/work" -w /work app python -m demo_game.snapshot ...`, verified
+working live against the running stack (`npcsystem-app-1`, `npcsystem-neo4j-1`). `eval-retrieval`
+(also named in ISSUE-131's own "Where" — `evals.engine_adapter` connects to Neo4j directly via
+bolt, same host-unreachable problem) got the identical treatment. ⚠️ Docker Desktop's daemon went
+unreachable partway through this session (environment issue, not caused by this change) before
+`eval-retrieval` specifically could be re-run live — the other three targets sharing the exact
+same command shape were live-verified minutes earlier. If a future session finds `eval-retrieval`
+broken, re-check this first, not the topology fix.
+
+**Step 2 (ISSUE-167 — eval-world reset path).** The live Neo4j graph held 31,215 `Quest` nodes,
+3,486 `TickLease` nodes, 886 `Memory` nodes, etc. — accumulated eval-run state, not a usable
+baseline. With explicit human confirmation (the wipe was blocked by the sandbox classifier as
+destructive; re-confirmed via `AskUserQuestion` before overriding), wiped the graph
+(`MATCH (n) DETACH DELETE n`) and reseeded fresh via `make demo-seed seed-village-world
+seed-tavern-world` (all three idempotent). Snapshotted that clean state (281 nodes, 241
+relationships) to `evals/fixtures/eval_world_baseline.json`, checked in as the reset target.
+`make eval-world-reset` restores it. Re-ran `e2e/scripts/measure_reset_fidelity.py` fresh:
+`fidelity=PARTIAL cleared=2 surviving=10 unobservable=6`, unchanged verdict from the prior
+measurement, freshly stamped (`git_sha=694fa74`, `measured_at=2026-08-16T09:04:41Z`) in
+`evals/reset_fidelity.json`/`docs/RESET_FIDELITY.md`.
+
+**Step 4 (ISSUE-153 — pre_label staleness).** Chose **(a) widen `CalibrationLabel.pre_label` to
+`bool | None`, clear on drift** over (b) a `pre_label_needs_review` mirror flag — most direct,
+self-documents the invariant via the type. Rejected (b) because two fields (`pre_label` +
+a review flag) must stay conceptually paired, which is exactly ISSUE-153's bug shape one level
+down. `label_merge._refresh` now clears `pre_label`/`pre_labeller_model` on any detected drift
+(not gated on `human_verdict is not None` — a stale opinion is invalid regardless of adjudication
+state), since `pre_label`'s source (a separate, not-necessarily-fresh reference-labelling file,
+`label_import.py`) means `incoming`'s value isn't trustworthy either. `calibration.py`'s three
+secondary-axis functions (`pre_label_confusion_counts`, `pre_label_kappa`,
+`pre_label_kappa_interval`) and `agreement_rate` now exclude `pre_label is None` rows via a new
+`_secondary_axis_rows` helper, with the exclusion count surfaced in both `ConfusionCounts` (new
+`n_excluded_pre_label_cleared` field) and the printed report — the same "don't silently shrink a
+denominator" discipline the pre-existing `n_excluded_drifted` field already followed.
+
+**Follow-on fix required by Step 4, same commit:** `evals/adjudicate.py`'s `keep`/`flip` commands
+read `row.pre_label` directly — with `pre_label` now legitimately `None` on exactly the drifted
+rows `collect_pending` re-surfaces (the primary re-adjudication workflow ISSUE-153 exists to
+serve), `keep` would have silently set `human_verdict=None` (un-adjudicating the row) and `flip`
+would have fabricated `human_verdict=True` from nothing (`not None is True` in Python). Added
+`pass`/`fail` as direct-verdict commands for a row with no `pre_label` to compare against;
+`apply_verdict` now raises `ValueError` if `keep`/`flip` is attempted on a `pre_label=None` row;
+`_read_command` is now context-aware (only offers `pass`/`fail`/`skip` for such a row) so a
+mismatched command re-prompts rather than crashing the interactive session.
+
+**Step 3 (ISSUE-160, mechanical, no `AskUserQuestion` needed per the roadmap text).**
+`label_merge._has_drifted` now also flags a `scorer_verdict` change on hash-identical
+`output_sha256`/`criteria_sha256` as drift (real case:
+`case_adv_lira_troop_positions:tone_judge:4#r0`, ordinary LLM judge non-determinism, DEC-146).
+`format_merge_report`'s WARNING line now states the drift definition explicitly ("output/criteria
+hash changed, or scorer_verdict changed on identical content") instead of leaving "N drifted"
+ambiguous between "byte-identical" and "nothing about this row changed".
+
+**Verification:** RED anchors `test_verdict_only_drift_flags_needs_review`,
+`test_drifted_pre_label_excluded_from_secondary_kappa` both pass. `pytest tests/unit/evals
+tests/unit/harness tests/unit/scripts` — 681 passed, 0 failed. `make check-docstrings
+check-layers` — both green. Closes ISSUE-131, ISSUE-160, ISSUE-153, ISSUE-167.
+
+**Consequences:** `evals/fixtures/eval_world_baseline.json` is now the canonical eval-world reset
+target — regenerate it (`make eval-world-reset`'s snapshot half) only via a deliberate, logged
+re-seed, never by hand-editing. A labels file written before this change may contain rows whose
+`pre_label` is a stale `bool` the merge never had a chance to clear (rows that haven't been
+re-merged since); this is expected — the clearing is a merge-time behavior, not a retroactive
+migration.

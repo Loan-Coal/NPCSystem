@@ -79,6 +79,10 @@ class ConfusionCounts:
             needs_review is set — the content changed under the stored human
             verdict, so scoring it here would judge the machine's new output
             against the human's old verdict (EVAL-P19.0).
+        n_excluded_pre_label_cleared: SECONDARY axis only — clean adjudicated
+            rows further excluded because pre_label is None (label_merge
+            cleared it on drift, EVAL-P20.3a / ISSUE-153). Always 0 on the
+            headline (scorer_verdict) matrix.
     """
 
     tp: int
@@ -86,6 +90,7 @@ class ConfusionCounts:
     fn: int
     tn: int
     n_excluded_drifted: int = 0
+    n_excluded_pre_label_cleared: int = 0
 
     @property
     def n(self) -> int:
@@ -186,6 +191,30 @@ def _adjudicated_rows(
     return clean, len(adjudicated) - len(clean)
 
 
+def _secondary_axis_rows(
+    rows: Sequence[CalibrationLabel],
+) -> tuple[list[CalibrationLabel], int, int]:
+    """Clean adjudicated rows with a valid pre_label — SECONDARY axis population.
+
+    Applies the same needs_review exclusion as _adjudicated_rows, then further
+    excludes rows whose pre_label is None — label_merge clears pre_label to
+    None on content drift (EVAL-P20.3a / ISSUE-153) because the reference-
+    labeller opinion attached to the old content is not valid for the new
+    content. A cleared pre_label means "no current opinion", not "opinion:
+    False" — silently tallying it as False would misrepresent the reference
+    labeller's agreement rate.
+
+    Args:
+        rows: CalibrationLabel rows (any adjudication state).
+    Returns:
+        (clean, n_excluded_drifted, n_excluded_pre_label_cleared).
+    """
+    clean, n_excluded_drifted = _adjudicated_rows(rows)
+    with_pre_label = [r for r in clean if r.pre_label is not None]
+    n_excluded_pre_label_cleared = len(clean) - len(with_pre_label)
+    return with_pre_label, n_excluded_drifted, n_excluded_pre_label_cleared
+
+
 def confusion_counts(rows: Sequence[CalibrationLabel]) -> ConfusionCounts:
     """Tally TP/FP/FN/TN — HEADLINE axis: scorer_verdict vs human_verdict.
 
@@ -212,16 +241,22 @@ def pre_label_confusion_counts(rows: Sequence[CalibrationLabel]) -> ConfusionCou
     human said fail).
 
     Args:
-        rows: CalibrationLabel rows (unadjudicated and drifted rows are skipped).
+        rows: CalibrationLabel rows (unadjudicated, drifted, and pre_label=None
+            rows are skipped — see _secondary_axis_rows).
     Returns:
-        ConfusionCounts from clean adjudicated rows, with n_excluded_drifted set.
+        ConfusionCounts from clean rows with a real pre_label, with both
+        n_excluded_drifted and n_excluded_pre_label_cleared set.
     """
-    adj, n_excluded_drifted = _adjudicated_rows(rows)
+    adj, n_excluded_drifted, n_excluded_pre_label_cleared = _secondary_axis_rows(rows)
     tp = sum(1 for r in adj if r.pre_label is True and r.human_verdict is True)
     fp = sum(1 for r in adj if r.pre_label is True and r.human_verdict is False)
     fn = sum(1 for r in adj if r.pre_label is False and r.human_verdict is True)
     tn = sum(1 for r in adj if r.pre_label is False and r.human_verdict is False)
-    return ConfusionCounts(tp=tp, fp=fp, fn=fn, tn=tn, n_excluded_drifted=n_excluded_drifted)
+    return ConfusionCounts(
+        tp=tp, fp=fp, fn=fn, tn=tn,
+        n_excluded_drifted=n_excluded_drifted,
+        n_excluded_pre_label_cleared=n_excluded_pre_label_cleared,
+    )
 
 
 def precision(counts: ConfusionCounts) -> float | None:
@@ -304,12 +339,13 @@ def pre_label_kappa(rows: Sequence[CalibrationLabel]) -> float:
     Returns:
         κ in [-1, 1].
     Raises:
-        ValueError: If fewer than 2 clean adjudicated rows are available
-            (drifted rows do not count — see _adjudicated_rows).
+        ValueError: If fewer than 2 rows with a real pre_label are available
+            (drifted rows, and rows whose pre_label was cleared to None on
+            drift, do not count — see _secondary_axis_rows).
     """
-    adj, _ = _adjudicated_rows(rows)
+    adj, _, _ = _secondary_axis_rows(rows)
     if len(adj) < 2:
-        raise ValueError(f"pre_label_kappa requires ≥2 adjudicated rows; got {len(adj)}")
+        raise ValueError(f"pre_label_kappa requires ≥2 rows with a pre_label; got {len(adj)}")
     tp = sum(1 for r in adj if r.pre_label is True and r.human_verdict is True)
     fp = sum(1 for r in adj if r.pre_label is True and r.human_verdict is False)
     fn = sum(1 for r in adj if r.pre_label is False and r.human_verdict is True)
@@ -472,12 +508,15 @@ def pre_label_kappa_interval(
     Returns:
         KappaCI with lo, hi (95% bootstrap CI), n_clusters, n_rows, and optional Holm fields.
     Raises:
-        ValueError: If fewer than 2 clean adjudicated rows (drifted rows
-            excluded — see _adjudicated_rows) or all bootstrap samples degenerate.
+        ValueError: If fewer than 2 rows with a real pre_label (drifted rows,
+            and rows whose pre_label was cleared to None on drift, excluded —
+            see _secondary_axis_rows) or all bootstrap samples degenerate.
     """
-    adj, _ = _adjudicated_rows(rows)
+    adj, _, _ = _secondary_axis_rows(rows)
     if len(adj) < 2:
-        raise ValueError(f"pre_label_kappa_interval requires ≥2 adjudicated rows; got {len(adj)}")
+        raise ValueError(
+            f"pre_label_kappa_interval requires ≥2 rows with a pre_label; got {len(adj)}"
+        )
     clusters = _extract_case_clusters(adj)
     lo, hi, holm_lo, holm_hi, n_clusters, n_rows = _bootstrap_percentile_ci(
         clusters, pre_label_kappa, resamples, seed, "pre_label_kappa_interval",
@@ -491,20 +530,23 @@ def pre_label_kappa_interval(
 
 
 def agreement_rate(rows: Sequence[CalibrationLabel]) -> float:
-    """Fraction of adjudicated rows where pre_label == human_verdict.
+    """Fraction of adjudicated rows (with a real pre_label) where pre_label == human_verdict.
 
-    This is the free pre-label-vs-human agreement metric (DEC-153 §7).
+    This is the free pre-label-vs-human agreement metric (DEC-153 §7). Rows
+    whose pre_label was cleared to None on drift (ISSUE-153) are excluded —
+    otherwise `None == human_verdict` is always False and silently counts as
+    disagreement rather than "no opinion to compare".
 
     Args:
         rows: CalibrationLabel rows.
     Returns:
         Agreement fraction in [0, 1].
     Raises:
-        ValueError: If no adjudicated rows exist.
+        ValueError: If no adjudicated rows with a real pre_label exist.
     """
-    adj = [r for r in rows if r.human_verdict is not None]
+    adj = [r for r in rows if r.human_verdict is not None and r.pre_label is not None]
     if not adj:
-        raise ValueError("agreement_rate requires at least 1 adjudicated row")
+        raise ValueError("agreement_rate requires at least 1 adjudicated row with a pre_label")
     agree = sum(1 for r in adj if r.pre_label == r.human_verdict)
     return agree / len(adj)
 
@@ -623,6 +665,11 @@ def _print_headline_matrix(report: ScorerReport, print_fn) -> None:
 def _print_secondary_matrix(report: ScorerReport, print_fn) -> None:
     """Print the SECONDARY confusion matrix (pre_label vs human_verdict)."""
     p = report.pre_label_counts
+    if p.n_excluded_pre_label_cleared:
+        print_fn(
+            f"  ⚠ {p.n_excluded_pre_label_cleared} row(s) additionally excluded from this axis: "
+            f"pre_label cleared to None on drift (see label_merge)"
+        )
     print_fn("\n  SECONDARY — pre_label vs human_verdict:")
     print_fn("                       human=T   human=F")
     print_fn(

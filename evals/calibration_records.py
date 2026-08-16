@@ -71,8 +71,14 @@ class CalibrationLabel(BaseModel):
         scorer_verdict: The automated scorer's own output for this row
             (True = pass, False = fail). Headline confusion axis.
         pre_label: Reference-model-proposed label (True = pass, False = fail).
-            Secondary confusion axis.
+            Secondary confusion axis. None means no current reference-labeller
+            opinion exists for this row's content — label_merge clears it to
+            None (alongside pre_labeller_model) whenever drift is detected
+            (EVAL-P20.3a / ISSUE-153), rather than silently carrying forward an
+            opinion that described different (pre-drift) content. calibration.py's
+            secondary-axis functions exclude None rows rather than miscounting them.
         pre_labeller_model: Model that produced pre_label (e.g. 'claude-opus-5').
+            "" when pre_label is None — no labeller produced the current opinion.
         human_verdict: Maintainer's verdict after adjudication; None = not yet done.
         adjudicated_at: ISO-8601 timestamp of adjudication, or None if pending.
         notes: Free-text annotation from the adjudicator (empty string when absent).
@@ -107,7 +113,7 @@ class CalibrationLabel(BaseModel):
     scorer: str
     output_text: str
     scorer_verdict: bool
-    pre_label: bool
+    pre_label: bool | None
     pre_labeller_model: str
     human_verdict: bool | None
     adjudicated_at: str | None

@@ -111,8 +111,9 @@ def format_merge_report(result: MergeResult, out_path: Path, imported: int) -> s
         shown = ", ".join(result.drifted[:5])
         more = " ..." if len(result.drifted) > 5 else ""
         lines.append(
-            f"  WARNING: {len(result.drifted)} row(s) flagged needs_review — the "
-            f"output or criteria changed under an existing human verdict: {shown}{more}"
+            f"  WARNING: {len(result.drifted)} row(s) flagged needs_review — drifted "
+            f"(output/criteria hash changed, or scorer_verdict changed on identical "
+            f"content) under an existing human verdict: {shown}{more}"
         )
     if result.orphaned:
         lines.append(
@@ -133,7 +134,15 @@ def _index(rows: Sequence[CalibrationLabel]) -> dict[tuple[str, str], Calibratio
 
 
 def _has_drifted(existing: CalibrationLabel, incoming: CalibrationLabel) -> bool:
-    """True if the content the human judged differs from the incoming content.
+    """True if the content or verdict the human judged differs from the incoming row.
+
+    Drift is either of two things (ISSUE-160):
+      1. output_sha256 or criteria_sha256 changed — the human judged different text.
+      2. scorer_verdict changed on hash-identical content — ordinary LLM judge
+         non-determinism (no seed exists for judge calls, DEC-146) still means the
+         automated verdict a human's judgment is being compared against has moved,
+         even though the text itself has not. A verdict-only flip was previously
+         invisible here (real case: case_adv_lira_troop_positions:tone_judge:4#r0).
 
     Compares hashes only when both sides carry one — rows written before content
     addressing existed have empty hashes and must not be reported as drifted.
@@ -143,14 +152,23 @@ def _has_drifted(existing: CalibrationLabel, incoming: CalibrationLabel) -> bool
         new = getattr(incoming, field)
         if old and new and old != new:
             return True
-    return False
+    return existing.scorer_verdict != incoming.scorer_verdict
 
 
 def _refresh(existing: CalibrationLabel, incoming: CalibrationLabel) -> CalibrationLabel:
     """Return existing with machine fields taken from incoming, human fields kept."""
     update: dict[str, object] = {f: getattr(incoming, f) for f in _MACHINE_FIELDS}
-    if _has_drifted(existing, incoming) and existing.human_verdict is not None:
-        update["needs_review"] = True
+    if _has_drifted(existing, incoming):
+        # pre_label/pre_labeller_model are not in _MACHINE_FIELDS (label_import
+        # sources them from a separate, not-necessarily-fresh reference-labelling
+        # file — incoming's value is not trustworthy either), so drift clears
+        # them explicitly rather than leaving existing's now-stale opinion in
+        # place forever (ISSUE-153). calibration.py's secondary-axis functions
+        # treat pre_label=None as "no current opinion", not "opinion: False".
+        update["pre_label"] = None
+        update["pre_labeller_model"] = ""
+        if existing.human_verdict is not None:
+            update["needs_review"] = True
     return existing.model_copy(update=update)
 
 

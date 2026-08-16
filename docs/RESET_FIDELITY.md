@@ -1,7 +1,7 @@
 # Reset fidelity — what `preconditions.reset_world` actually clears
 
-**Measured:** 2026-08-10T13:02:13.036302+00:00
-**Commit:** `c0c3836`
+**Measured:** 2026-08-16T09:04:41.439067+00:00
+**Commit:** `694fa74`
 **Verdict:** **PARTIAL**
 **Machine-readable artifact:** [`evals/reset_fidelity.json`](../evals/reset_fidelity.json)
 
@@ -10,7 +10,7 @@
 ## Verdict
 
 `reset_world` is **PARTIAL**. Under `docs/SEQUENCE_STATS_POLICY.md` §2 there are
-exactly two tiers and **FULL requires that nothing survives**. **6 observed component(s) survived it**, and **6 store(s) could not be observed at all**. Either alone is sufficient to rule out FULL.
+exactly two tiers and **FULL requires that nothing survives**. **10 observed component(s) survived it**, and **6 store(s) could not be observed at all**. Either alone is sufficient to rule out FULL.
 
 The tier is not a judgement call in this pipeline: `evals/reset_fidelity_record.py` derives it
 from `surviving` and refuses to construct a report whose declared tier contradicts the evidence,
@@ -44,8 +44,12 @@ proves it for the ones it exercised. Read the rows below as "at least these".
 | `emotion_store` | observed | **correlates repeats** |
 | `engine_status_store` | observed | **correlates repeats** |
 | `game_clock.tick_id` | observed | **correlates repeats** |
+| `graph.edges.HAS_QUEST` | observed | **correlates repeats** |
+| `graph.edges.KNOWS_ABOUT` | observed | **correlates repeats** |
 | `graph.edges.RELATES_TO` | observed | **correlates repeats** |
+| `graph.edges.STANDS_WITH` | observed | **correlates repeats** |
 | `graph.nodes.character` | observed | **correlates repeats** |
+| `graph.nodes.quest` | observed | **correlates repeats** |
 | `world_state.other_properties` | observed | **correlates repeats** |
 | `session_store` | **not observable** | **correlates repeats (unproven)** |
 | `dialogue_context_cache` | **not observable** | **correlates repeats (unproven)** |
@@ -79,10 +83,10 @@ gets written up as a FULL one.
 
 ## Per-reset cost
 
-Measured over **5** consecutive resets: `[57, 55, 54, 53, 51]` ms.
+Measured over **5** consecutive resets: `[58, 56, 55, 56, 56]` ms.
 
-- **median 54 ms** ← the number `evals/reset_fidelity.json` publishes
-- min 51 ms, max 57 ms
+- **median 56 ms** ← the number `evals/reset_fidelity.json` publishes
+- min 55 ms, max 58 ms
 
 EVAL-P12.4's wall-clock budget is `6 scenarios x k x (turns + reset_cost)`, computed from the
 median above.

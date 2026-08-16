@@ -27,8 +27,14 @@ from calibration_records import (
 # Constants
 # ---------------------------------------------------------------------------
 
-VALID_COMMANDS: frozenset[str] = frozenset({"keep", "flip", "skip"})
-SHORTCUTS: dict[str, str] = {"k": "keep", "f": "flip", "s": "skip"}
+VALID_COMMANDS: frozenset[str] = frozenset({"keep", "flip", "pass", "fail", "skip"})
+SHORTCUTS: dict[str, str] = {
+    "k": "keep", "f": "flip", "s": "skip",
+    # pass/fail: the direct-verdict commands for a row with no pre_label to
+    # compare against (EVAL-P20.3a / ISSUE-153 — drift clears pre_label to
+    # None). "p" for pass; "n" ("no") for fail, since "f" is already flip.
+    "p": "pass", "n": "fail",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -70,18 +76,24 @@ def apply_verdict(
     Returns a new CalibrationLabel with human_verdict and adjudicated_at set.
     On 'skip', returns the original row unchanged — including needs_review,
     so a drifted row that was skipped stays excluded and pending next time.
-    A 'keep'/'flip' verdict resolves drift: needs_review clears and
-    prior_human_verdict is cleared back to None, since the row now carries a
-    fresh verdict against its current content.
+    A 'keep'/'flip'/'pass'/'fail' verdict resolves drift: needs_review clears
+    and prior_human_verdict is cleared back to None, since the row now
+    carries a fresh verdict against its current content.
+
+    'keep'/'flip' compare against row.pre_label and require it to be set.
+    'pass'/'fail' set human_verdict directly, for a row whose pre_label was
+    cleared to None on drift (EVAL-P20.3a / ISSUE-153) — there is no reference
+    opinion left to keep or flip.
 
     Args:
         row: The original CalibrationLabel (frozen; never mutated).
-        verdict: One of 'keep', 'flip', or 'skip'.
+        verdict: One of 'keep', 'flip', 'pass', 'fail', or 'skip'.
         timestamp: ISO-8601 adjudication timestamp.
     Returns:
         Updated CalibrationLabel, or the original row on 'skip'.
     Raises:
-        ValueError: If verdict is not one of the valid commands.
+        ValueError: If verdict is not one of the valid commands, or if
+            'keep'/'flip' is used on a row whose pre_label is None.
     """
     if verdict not in VALID_COMMANDS:
         raise ValueError(
@@ -89,7 +101,17 @@ def apply_verdict(
         )
     if verdict == "skip":
         return row
-    human_verdict = row.pre_label if verdict == "keep" else not row.pre_label
+    if verdict in ("keep", "flip") and row.pre_label is None:
+        raise ValueError(
+            f"cannot {verdict} record_id={row.record_id!r}: pre_label is None "
+            "(cleared on drift) — use 'pass' or 'fail' for a direct verdict"
+        )
+    if verdict == "pass":
+        human_verdict = True
+    elif verdict == "fail":
+        human_verdict = False
+    else:
+        human_verdict = row.pre_label if verdict == "keep" else not row.pre_label
     return row.model_copy(update={
         "human_verdict": human_verdict,
         "adjudicated_at": timestamp,
@@ -116,7 +138,6 @@ def _format_row_prompt(row: CalibrationLabel, index: int, total: int) -> str:
     response field the scorer actually inspects, since that field is absent
     from output_text entirely.
     """
-    label_str = "PASS" if row.pre_label else "FAIL"
     lines = [f"\n[{index}/{total}] scorer={row.scorer}  record_id={row.record_id}"]
     if row.needs_review and row.prior_human_verdict is not None:
         prior_str = "PASS" if row.prior_human_verdict else "FAIL"
@@ -127,31 +148,54 @@ def _format_row_prompt(row: CalibrationLabel, index: int, total: int) -> str:
     if row.player_message:
         lines.append(f"player_message:\n  {row.player_message}")
     lines.append(f"criteria:\n  {row.criteria or '(none recorded)'}")
-    lines.append(f"pre_label : {label_str}")
+    if row.pre_label is None:
+        lines.append("pre_label : none (cleared on drift — no current reference opinion)")
+    else:
+        label_str = "PASS" if row.pre_label else "FAIL"
+        lines.append(f"pre_label : {label_str}")
     lines.append(f"output_text:\n  {row.output_text}")
     if row.observed:
         lines.append(f"observed:\n  {row.observed}")
     lines.append("")
-    lines.append("  keep(k) / flip(f) / skip(s): ")
+    if row.pre_label is None:
+        lines.append("  pass(p) / fail(n) / skip(s): ")
+    else:
+        lines.append("  keep(k) / flip(f) / skip(s): ")
     return "\n".join(lines)
 
 
-def _read_command(read_line: Callable[[], str], print_fn: Callable[[str], None]) -> str:
+def _read_command(
+    read_line: Callable[[], str],
+    print_fn: Callable[[str], None],
+    *,
+    has_pre_label: bool = True,
+) -> str:
     """Read a valid adjudication command, looping until valid input received.
+
+    The accepted command set depends on whether the row has a pre_label:
+    'keep'/'flip' compare against it and are only offered when it is set;
+    'pass'/'fail' are the direct-verdict commands for a row whose pre_label
+    was cleared to None on drift (EVAL-P20.3a / ISSUE-153). 'skip' is always
+    accepted. Restricting the accepted set here (rather than relying on
+    apply_verdict's ValueError) keeps a mismatched command a re-prompt, not a
+    crash, mid-session.
 
     Args:
         read_line: Callable that returns one line of user input.
         print_fn: Callable for printing retry prompts.
+        has_pre_label: Whether the current row's pre_label is set.
     Returns:
-        Canonical command name: 'keep', 'flip', or 'skip'.
+        Canonical command name: 'keep', 'flip', 'pass', 'fail', or 'skip'.
     """
+    accepted = {"keep", "flip"} if has_pre_label else {"pass", "fail"}
+    accepted.add("skip")
+    hint = "keep/flip/skip or k/f/s" if has_pre_label else "pass/fail/skip or p/n/s"
     while True:
         raw = read_line().strip().lower()
-        if raw in SHORTCUTS:
-            return SHORTCUTS[raw]
-        if raw in VALID_COMMANDS:
-            return raw
-        print_fn(f"  Invalid input {raw!r}. Enter keep/flip/skip or k/f/s.")
+        command = SHORTCUTS.get(raw, raw)
+        if command in accepted:
+            return command
+        print_fn(f"  Invalid input {raw!r}. Enter {hint}.")
 
 
 def _replace_row(
@@ -217,7 +261,7 @@ def run_adjudication(
 
     for idx, row in enumerate(pending, start=1):
         _print(_format_row_prompt(row, idx, total))
-        verdict = _read_command(_read, _print)
+        verdict = _read_command(_read, _print, has_pre_label=row.pre_label is not None)
         if verdict == "skip":
             continue
         updated = apply_verdict(row, verdict, _now_iso())

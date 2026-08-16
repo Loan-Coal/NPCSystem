@@ -7,6 +7,15 @@
 #               by default.
 #   public    — the app container only. Port 8000 is mapped here.
 #
+# Neo4j has no host port mapping (EVAL-P20.3a / ISSUE-131, 2026-08-15). It
+# previously published `7687:7687`, but Docker silently voids host port
+# publishing for a service attached only to an `internal: true` network — the
+# mapping never worked and looked like a live escape hatch that wasn't one.
+# Anything that needs bolt access (Makefile eval/demo-snapshot targets,
+# demo_game/snapshot.py) runs *inside* the app container instead, which shares
+# the `internal` network with neo4j:
+#   docker compose run --rm -v "$PWD:/work" -w /work app python -m <module> ...
+#
 # Route security posture
 # ──────────────────────
 # The app exposes both game-engine (/v1/) and admin (/v1/admin/) routes on
@@ -25,9 +34,6 @@
 services:
   neo4j:
     image: neo4j:5
-    ports:
-      - "7474:7474"
-      - "7687:7687"
     environment:
       NEO4J_AUTH: neo4j/password
     volumes:

@@ -28,7 +28,7 @@ def _make_label(
     *,
     scorer: str = "tone_judge",
     scorer_verdict: bool = True,
-    pre_label: bool = True,
+    pre_label: bool | None = True,
     human_verdict: bool | None = None,
     adjudicated_at: str | None = None,
     criteria: str = "",
@@ -182,3 +182,47 @@ def test_format_row_prompt_includes_player_message_when_present() -> None:
     row = _make_label(0, player_message="What did you see, guard?")
     rendered = _format_row_prompt(row, 1, 1)
     assert "What did you see, guard?" in rendered
+
+
+# ---------------------------------------------------------------------------
+# pre_label=None (EVAL-P20.3a / ISSUE-153) — drift clears pre_label, so
+# keep/flip (which read pre_label) must not silently misbehave on a row that
+# no longer has one. This is exactly the row shape collect_pending re-surfaces.
+# ---------------------------------------------------------------------------
+
+
+def test_keep_rejects_a_row_with_no_pre_label() -> None:
+    """'keep' has nothing to keep when pre_label was cleared on drift — must raise loudly."""
+    row = _make_label(0, pre_label=None)
+    with pytest.raises(ValueError, match="pre_label"):
+        apply_verdict(row, "keep", "2026-08-07T12:00:00+00:00")
+
+
+def test_flip_rejects_a_row_with_no_pre_label() -> None:
+    """'flip' has nothing to flip when pre_label was cleared on drift — must raise loudly."""
+    row = _make_label(0, pre_label=None)
+    with pytest.raises(ValueError, match="pre_label"):
+        apply_verdict(row, "flip", "2026-08-07T12:00:00+00:00")
+
+
+def test_pass_sets_human_verdict_true_regardless_of_pre_label() -> None:
+    """'pass' is the direct-verdict command for a row with no pre_label to compare against."""
+    row = _make_label(0, pre_label=None)
+    updated = apply_verdict(row, "pass", "2026-08-07T12:00:00+00:00")
+    assert updated.human_verdict is True
+
+
+def test_fail_sets_human_verdict_false_regardless_of_pre_label() -> None:
+    """'fail' is the direct-verdict command for a row with no pre_label to compare against."""
+    row = _make_label(0, pre_label=None)
+    updated = apply_verdict(row, "fail", "2026-08-07T12:00:00+00:00")
+    assert updated.human_verdict is False
+
+
+def test_format_row_prompt_shows_no_pre_label_notice_when_cleared() -> None:
+    """A cleared pre_label must read as 'no opinion', never render as FAIL."""
+    row = _make_label(0, pre_label=None)
+    rendered = _format_row_prompt(row, 1, 1)
+    assert "none" in rendered.lower()
+    assert "pass(p) / fail(n) / skip(s)" in rendered
+    assert "FAIL" not in rendered

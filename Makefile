@@ -20,7 +20,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
-        demo-snapshot demo-restore \
+        demo-snapshot demo-restore eval-world-reset \
         seed-tavern-world seed-village-world package
 
 install:
@@ -258,9 +258,12 @@ eval-llm:
 eval-llm-demo:
 	$(PYTHON) -m pytest e2e/scenarios/scenario_demo_game_judge.py -v -s -m llm_eval --scenarios-only -p no:cacheprovider
 
-# eval-retrieval: measure retrieval precision@k/recall@k/MRR against demo world labels
+# eval-retrieval: measure retrieval precision@k/recall@k/MRR against demo world labels.
+# evals.engine_adapter connects to Neo4j directly (bolt), which needs the app
+# container's network (EVAL-P20.3a / ISSUE-131 — see the demo-snapshot comment above).
 eval-retrieval:
-	$(PYTHON) -m evals retrieval
+	MSYS_NO_PATHCONV=1 docker compose run --rm -v "$$PWD:/work" -w /work app \
+		python -m evals retrieval
 
 # eval-generate: two-phase pipeline — generation pass (writes to evals/generations/<gen-id>/ or legacy transcript)
 # Pass ARGS="--k 2 --gen-id smoke" to enable k-repeat output.
@@ -501,15 +504,33 @@ demo-run:
 test-demo:
 	$(PYTHON) -m pytest demo_game/tests/ -q
 
+# demo-snapshot / demo-restore / eval-world-reset all need a raw bolt connection to
+# Neo4j. neo4j has no host port mapping (EVAL-P20.3a / ISSUE-131) — Docker silently
+# voids host port publishing for a service on an `internal: true` network only, so
+# these run *inside* the app container instead, which shares that network.
+# MSYS_NO_PATHCONV avoids Git Bash mangling the `/work` container path into a
+# Windows path on Windows hosts; it is a no-op on Linux/Mac.
+
 # demo-snapshot: export current Neo4j graph to .cache/demo/snapshot.json
 # Run once before the demo to capture the clean seeded state.
 demo-snapshot:
-	$(PYTHON) -m demo_game.snapshot --mode snapshot
+	MSYS_NO_PATHCONV=1 docker compose run --rm -v "$$PWD:/work" -w /work app \
+		python -m demo_game.snapshot --mode snapshot --path /work/.cache/demo/snapshot.json
 
 # demo-restore: wipe Neo4j graph and reimport from .cache/demo/snapshot.json
 # Use between demo takes to reset the world to the snapshot state.
 demo-restore:
-	$(PYTHON) -m demo_game.snapshot --mode restore
+	MSYS_NO_PATHCONV=1 docker compose run --rm -v "$$PWD:/work" -w /work app \
+		python -m demo_game.snapshot --mode restore --path /work/.cache/demo/snapshot.json
+
+# eval-world-reset: wipe Neo4j and restore the checked-in clean eval-world baseline
+# (demo + village + tavern, freshly seeded, none of the Quest/TickLease/Memory
+# state that accumulates from eval runs). Closes ISSUE-167 (EVAL-P20.3a): this is
+# what makes two generation runs comparable — both start from identical graph
+# state. Run before any regeneration or repeated eval measurement.
+eval-world-reset:
+	MSYS_NO_PATHCONV=1 docker compose run --rm -v "$$PWD:/work" -w /work app \
+		python -m demo_game.snapshot --mode restore --path /work/evals/fixtures/eval_world_baseline.json
 
 # ---------------------------------------------------------------------------
 # seed-tavern-world / seed-village-world: seed independent eval worlds (idempotent)

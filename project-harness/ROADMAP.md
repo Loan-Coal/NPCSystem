@@ -2639,7 +2639,7 @@ satisfied. Recorded here rather than silently ignored; see the `EVAL-P20.1` comm
       `mixtral:8x7b` Ollama-timeout-dependent test — confirmed pre-existing and unrelated by stashing this
       diff and re-running standalone; passes either way on retry).
 
-- [ ] **EVAL-P20.3a** ⏸️ *(human session: a docker-network topology call plus two
+- [x] **EVAL-P20.3a** ⏸️ *(human session: a docker-network topology call plus two
       drift-detection design calls — not loop-executable)* Eval world reset + drift-detection
       loose ends (closes ISSUE-167, ISSUE-160, ISSUE-153). Files: `edit docker-compose.yml` or
       `create docker-compose.override.yml`, `edit Makefile`, `edit evals/label_merge.py`,
@@ -2697,6 +2697,29 @@ satisfied. Recorded here rather than silently ignored; see the `EVAL-P20.1` comm
       nothing" — false since EVAL-P19.0) with a `⚠️ CORRECTED` tag. Close ISSUE-167/160/153
       (and ISSUE-131 if resolved as a side effect) in `ISSUES.md`, archived; record both
       AskUserQuestion decisions in `DECISIONS.md`.
+      **DONE 2026-08-16 (DEC-180):** Step 1 chose (a) shell-into-app-container (dropped `neo4j`'s
+      `ports:` block — confirmed live it never actually published anyway on the `internal: true`
+      network); `demo-snapshot`/`demo-restore`/new `eval-world-reset` Makefile targets now run via
+      `docker compose run --rm -v "$PWD:/work" -w /work app python -m demo_game.snapshot ...`.
+      Step 2: wiped the live graph (31,215 accumulated `Quest` nodes, not a usable baseline — human
+      confirmed via AskUserQuestion before the destructive op), reseeded fresh (demo + village +
+      tavern), snapshotted to the checked-in `evals/fixtures/eval_world_baseline.json` (281 nodes /
+      241 rels), `make eval-world-reset` restores it. Re-ran `measure_reset_fidelity.py`:
+      `fidelity=PARTIAL cleared=2 surviving=10 unobservable=6`, fresh `git_sha`/`measured_at` in
+      `evals/reset_fidelity.json`/`docs/RESET_FIDELITY.md` — verdict unchanged, honestly
+      re-measured. Step 3: `_has_drifted` now also flags a `scorer_verdict` flip on hash-identical
+      content; `format_merge_report` states the drift definition explicitly. Step 4 chose (a) widen
+      `pre_label` to `bool | None`, clear on drift, over (b) a mirror flag; `calibration.py`'s three
+      secondary-axis functions + `agreement_rate` now exclude `pre_label is None` rows via a new
+      `_secondary_axis_rows` helper with the exclusion count surfaced, not silently dropped.
+      **Follow-on fix required by Step 4 (same commit):** `adjudicate.py`'s `keep`/`flip` read
+      `pre_label` directly — with it now legitimately `None` on exactly the rows this feature
+      re-surfaces, `keep`/`flip` would have silently corrupted the verdict; added `pass`/`fail` as
+      direct-verdict commands and made `apply_verdict`/`_read_command` reject the mismatch loudly
+      instead. RED anchors `test_verdict_only_drift_flags_needs_review`,
+      `test_drifted_pre_label_excluded_from_secondary_kappa` pass. `pytest tests/unit/evals
+      tests/unit/harness tests/unit/scripts` — 681 passed. Full writeup: DEC-180. Closes
+      ISSUE-131, ISSUE-160, ISSUE-153, ISSUE-167.
 
 - [ ] **EVAL-P20.3b** ⏸️ *(human session: redefines what a human verdict means — mandatory
       AskUserQuestion before any code)* ISSUE-168 rescope — label-drift trust policy. Files:

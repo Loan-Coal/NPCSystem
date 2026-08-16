@@ -196,25 +196,6 @@ graph size, and it silently defeats reproducibility when it does bite.
 rumors, secrets, items, traits, reputation) and add a deterministic `ORDER BY` — id or an explicit
 score then id as a tiebreak — to those first. Add a check-rules rule for new prompt-feeding queries.
 
-## ISSUE-167: no way to reset eval world state between generation runs
-**Found:** 2026-08-14, during `EVAL-P20.0`
-**Severity:** P2 (annoying — blocks clean re-measurement)
-**Where:** `evals/preconditions.py` `reset_world`, `docker-compose.yml` (neo4j ports),
-`demo_game/snapshot.py`
-**Description:** Two generation runs cannot be started from identical graph state. `reset_world`
-only PATCHes `world_state` (fidelity PARTIAL — `evals/reset_fidelity.json` lists
-`graph.edges.RELATES_TO`, `emotion_store` and the caches under `surviving`), there is no
-graph-wide reset endpoint, `make demo-restore` needs a snapshot that requires a host bolt
-connection, and Neo4j's 7687 is not published to the host in `docker-compose.yml`. Measured
-consequence: run B started from run A's end state, and emotion/routine drift affected 109/145
-records. The EVAL-P20.0 measurement had to reset per-NPC emotion via
-`PATCH /v1/graph/nodes/character/{id}` from a throwaway script, which is not reproducible tooling.
-**Why deferred:** out of scope for adding a seed. It is infrastructure for the regeneration
-protocol, and `EVAL-P20.4` will need it.
-**To fix:** either publish 7687 so `make demo-snapshot`/`demo-restore` work, or add a committed
-`make eval-world-reset` that restores the seeded baseline through the admin API. Then update
-`evals/reset_fidelity.json` with the achieved fidelity.
-
 ## ISSUE-168: human labels are joined on exact output text, so they die on any single token flip
 **Found:** 2026-08-14, during `EVAL-P20.0`
 **Severity:** P1 (blocking the premise of the two-regeneration budget)
@@ -295,31 +276,6 @@ lazily inside the calling method, or move the shared entry point into a module b
 depend on downward. Add a regression test that imports `npc_engine.retrieval.context` in a fresh
 interpreter. **Blocking for RET-P1.3**, whose in-process eval fallback imports the context package
 directly and will hit this.
-
-## ISSUE-160: `label_merge._has_drifted` only compares `output_sha256`/`criteria_sha256` — a verdict-only change on hash-identical content is invisible to the merge report
-**Found:** 2026-08-13, during `EVAL-P19.4` (`HUMAN GATE H2`)
-**Severity:** P3 (nice-to-fix)
-**Where:** `evals/label_merge.py` `_has_drifted` / `merge_labels`
-**Description:** Re-judging the unchanged `k3_73e6c36` transcript and merging with `MERGE=1`
-reported `human verdicts preserved: 393` and zero drifted rows — correct as far as the tool's own
-definition of drift goes. A row-by-row diff against the pre-merge file found one real change the
-report never surfaced: `case_adv_lira_troop_positions:tone_judge:4#r0`'s `scorer_verdict` flipped
-`true`→`false` on re-judge, with `output_sha256` and `criteria_sha256` both byte-identical old vs.
-new. `human_verdict` was untouched (hence 393 still holds), and the cause is ordinary LLM judge
-non-determinism (DEC-146 already documents no `seed` parameter exists) — not a EVAL-P19.2 matcher
-effect, not a criteria change, and unrelated to `refusal_judge`/ISSUE-141. But `_has_drifted` only
-diffs `output_sha256`/`criteria_sha256`, so a `scorer_verdict` change with unchanged hashes is
-structurally invisible to `format_merge_report`'s `needs_review` warning — "0 drifted" describes
-hash-drift only, not "nothing about this row changed."
-**Why deferred:** Out of scope for `EVAL-P19.4` (measurement task, not a merge-tool change);
-confirmed via `AskUserQuestion` this is accepted as normal LLM non-determinism for this specific
-row rather than reverted.
-**To fix:** Decide whether a verdict-only flip on a hash-identical row should also set
-`needs_review=True` (safer default: any change under an existing human verdict gets a second
-look, even if the tool can't yet say why) or is intentionally out of scope because re-running a
-judge is expected to occasionally disagree with itself. Either way, `format_merge_report` should
-state its drift definition explicitly ("hash-drift" vs. "any field drift") so a future reader
-doesn't read "0 drifted" as "byte-identical import."
 
 ## ISSUE-159: `/v1/npc/{id}/state` and `/v1/npc/{id}/emotion` return their model directly, unlike the rest of the API's `OkEnvelope` convention
 **Found:** 2026-08-13, during EVAL-P12.4 (HUMAN GATE H5), while writing `evals/scenario_adapters.py`
@@ -478,27 +434,6 @@ exact match to this prediction. Recorded as the corrected headline in ROADMAP.md
 per human decision 2026-08-12; `EVAL-P17.5` ticked. ISSUE-155/ISSUE-156 remain open — they are
 the pipeline fix still required before live tooling (`summarize_from_dir`, `compare`)
 reproduces this number.
-
-## ISSUE-153: `label_merge._refresh` never refreshes `pre_label` on drift, so a re-adjudicated
-row can carry a stale reference-labeller opinion
-**Found:** 2026-08-12, during EVAL-P19.0 (making `needs_review` load-bearing)
-**Severity:** P3 (nice-to-fix — the secondary/pre_label axis can silently compare a fresh
-human verdict against a pre_label computed from text that no longer exists)
-**Where:** `evals/label_merge.py` `_MACHINE_FIELDS` (does not list `pre_label` or
-`pre_labeller_model`); `_refresh`
-**Description:** `_MACHINE_FIELDS` refreshes `output_text`, `scorer_verdict`, `criteria`, etc.
-on every merge, but `pre_label`/`pre_labeller_model` are preserved unchanged from the
-existing row — even when `output_text` drifted underneath it. After EVAL-P19.0,
-`adjudicate.apply_verdict` clears `needs_review` on re-adjudication and the row re-enters the
-secondary (pre_label vs human_verdict) calibration axis, but `pre_label` still reflects the
-reference labeller's opinion of the **old** text, not the new one it was merged against.
-**Why deferred:** Refreshing `pre_label` correctly requires re-running the reference-labeller
-model against the new `output_text` — a live/expensive operation, not a pure merge, and out
-of scope for EVAL-P19.0 (calibration.py / adjudicate.py / label_merge.py's WARNING path).
-**To fix:** Either (a) clear `pre_label` to `None`-like/absent on drift so the secondary axis
-excludes the row until a live re-label happens, or (b) add a `pre_label_needs_review` flag
-mirroring `needs_review` and have `calibration.py`'s secondary-axis functions exclude on that
-flag specifically. Needs a design call — not mechanical.
 
 ## ISSUE-145: dialogue retrieval returns an empty NPC profile for every NPC
 **Found:** 2026-08-10, during EVAL-P20.2 (capability case authoring)
@@ -678,25 +613,6 @@ adjudicated.
 **Description:** Pre-existing violations of the 40-line function limit. EVAL-P17.4 slightly extended each by adding skip-handling logic, but did not introduce the violation.
 **Why deferred:** Splitting these functions was out of scope for EVAL-P17.4 (single-task focus). The functions are cohesive orchestrators; splitting would require a DECISIONS.md entry.
 **To fix:** Extract sub-helpers (e.g. `_format_case_header`, `_count_results`, `_write_case_section` for report.py; `_print_skip_console`, `_count_non_skipped` for runner.py) to bring each function under 40 lines.
-
-## ISSUE-131: compose publishes Neo4j's 7687 but the `internal: true` network silently voids it
-**Found:** 2026-08-06, during EVAL-P0.4 measured baseline
-**Severity:** P2 (annoying)
-**Where:** `docker-compose.yml` (neo4j `ports:` + `networks: [internal]`); `Makefile` `eval-retrieval`
-**Description:** The neo4j service declares `"7474:7474"` and `"7687:7687"`, but it is attached only
-to the `internal` network, which is `internal: true`. Docker **silently ignores** port publishing in
-that case — `docker ps` shows bare `7687/tcp` with no host binding. So `make eval-retrieval`, which
-runs `python -m evals.retrieval_runner` on the host, can never connect and dies with
-`ServiceUnavailable` on `localhost:7687`. The declared ports read as an intent that the network
-config cancels, so the file looks correct while being inoperative. Note `evals/` is in
-`.dockerignore`, so `docker compose exec app` cannot run it either — the repo must be bind-mounted.
-**Why deferred:** Both candidate fixes are shared-config changes needing a call: attaching neo4j to
-the `public` network weakens the documented route-security posture at the top of the compose file,
-and rewriting the Makefile target to shell into a container changes a target every contributor uses.
-**To fix:** Pick one and record it in DECISIONS: (a) delete the misleading `ports:` block and change
-`eval-retrieval` to `docker compose run --rm -v "$$PWD:/work" -w /work app python -m evals.retrieval_runner`
-(the invocation verified working on 2026-08-06), or (b) add a dev-only compose override that puts
-neo4j on `public` so host tooling works, leaving the base file's posture intact.
 
 ---
 
