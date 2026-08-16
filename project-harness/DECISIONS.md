@@ -3870,3 +3870,44 @@ unmet of the three DEC-163 reopen conditions. All prose paragraphs in `ROADMAP.m
 `LOOP:QUEUE end` marker's inline note) were updated in this same commit — this project's own
 repeated failure mode is stale fence-state prose, and leaving five contradictory paragraphs after
 fixing the underlying fact would recreate it. `ISSUE-172` closed, archived.
+
+## DEC-183: EVAL-P21.0 — judge-panel roster chosen: mixtral:8x7b + qwen2.5:14b + llama3.1:8b
+**Date:** 2026-08-16 · **Status:** ✅ ACCEPTED (`AskUserQuestion`, human session)
+**Context:** `EVAL-P21.1`/`P21.2` need a 3-model judge panel; the roster pick has no formal
+`AskUserQuestion` marker in `ROADMAP.md` today (`ISSUE-174` — a documentation/wording gap, not a
+blocker, fixed in this same commit by adding the marker so future readers don't need this entry to
+know a real decision happened here).
+
+**The independence argument (verbatim from `EVAL-P21.0`'s own roadmap text, restated as the
+record):** (a) `qwen2.5:7b` is banned outright — it is the generation model in all five
+`src/npc_engine/engines/*/llm_config.yaml`; `judge_config.resolve_judge_model` already raises
+`JudgeModelCollisionError` on it, and DEC-143 exists precisely to keep the generator off its own
+jury. (b) `qwen2.5:14b` and `qwen2.5:7b` are **not** independent raters — shared tokenizer, corpus
+and tuning recipe mean correlated errors. Under `EVAL-P21.2`'s 2-of-3 consensus rule, a same-family
+pair effectively casts one vote with a veto: the out-of-family judge is outvoted whenever the pair
+agrees, which would lower the hallucination count for reasons unrelated to engine quality and
+misreport the artefact as an improvement. `qwen2.5:14b` is kept (it is a real, useful second
+opinion, and the panel needs 3 seats) but is not enough on its own — a genuinely independent third
+seat is required.
+
+**Decision: `llama3.1:8b`**, over `gemma2:9b`. Both are fully independent from Qwen (the
+generation family) and from Mixtral (the first judge seat) — architecture, training corpus, and
+tuning lineage all differ. Chosen for its smaller footprint (8B vs 9B); no other differentiator
+was identified between the two for this purpose.
+
+**Implementation:** `evals/judge_config.py` gains `DEFAULT_PANEL_MODELS = ("mixtral:8x7b",
+"qwen2.5:14b", "llama3.1:8b")` and `resolve_judge_panel()`, which applies the same
+collision/same-family-warning contract `resolve_judge_model` already enforces to every seat
+individually — a panel is not exempt from self-evaluation just because two of its three seats are
+clean. RED anchor `test_generation_model_cannot_be_seated_on_the_panel` (and 5 behaviour tests)
+pin the roster and the per-seat enforcement.
+
+**Verification:** `pytest tests/unit/evals/test_judge_panel_roster.py tests/unit/engines/test_judge_config.py`
+— 12 passed. `make check-docstrings check-layers` — both green.
+
+**Consequences:** `EVAL-P21.1`/`P21.2` (the actual multi-judge execution and consensus rule) remain
+genuinely blocked by `HUMAN GATE H7` (closed until `EVAL-P20.4` actually runs, regardless of H7's
+own Ready-when items being satisfied — see `ROADMAP.md`'s `EVAL-P20.4` Notes) — this decision and
+its roster-resolution code are real, unblocked scaffolding, not a claim that the live panel run has
+happened. `ISSUE-174` closed: `EVAL-P21.0`'s roadmap text now carries an explicit `AskUserQuestion`
+marker matching the `EVAL-P20.3a`/`P20.3b` convention.

@@ -2858,7 +2858,10 @@ Fold `EVAL-P8.3` (H11) into this comparison rather than spending a separate 62-m
 model on 8-12 GB VRAM (PERF-06). Budget model load/unload per pass.
 **Depends on:** EVAL-P16.2, EVAL-P18.2, EVAL-P20.4.
 
-- [ ] **EVAL-P21.0** Panel roster and independence. Files: `edit evals/judge_config.py`,
+- [x] **EVAL-P21.0** ⏸️ *(AskUserQuestion, before implementation — added 2026-08-16 per ISSUE-174:
+      this is a real human decision, the out-of-family third judge pick, and gets the same formal
+      marker `EVAL-P20.3a`/`P20.3b` use, not an informal choice recorded only via `EVAL-P21.3`'s
+      eventual DECISIONS entry)* Panel roster and independence. Files: `edit evals/judge_config.py`,
       `edit project-harness/DECISIONS.md`, `create tests/unit/evals/test_judge_panel_roster.py`.
       Two independent problems with the naive roster, both verified:
       (a) **`qwen2.5:7b` is banned and must stay banned** — it is the generation model in all five
@@ -2873,6 +2876,14 @@ model on 8-12 GB VRAM (PERF-06). Budget model load/unload per pass.
       Validation: the roster is `mixtral:8x7b` + `qwen2.5:14b` + one out-of-family model, none equal to any
       generation model; the DECISIONS entry records the independence argument, and states that two
       same-family judges would have been a 2-judge panel wearing a third hat.
+      **DONE 2026-08-16 (DEC-183):** Chose `llama3.1:8b` over `gemma2:9b` (both fully independent from
+      Qwen/Mixtral; picked for smaller footprint). `evals/judge_config.py` gains
+      `DEFAULT_PANEL_MODELS`/`resolve_judge_panel()`, applying the same per-seat
+      collision/same-family-warning contract `resolve_judge_model` already enforces. RED anchor +
+      5 behaviour tests pass; `pytest tests/unit/evals/test_judge_panel_roster.py
+      tests/unit/engines/test_judge_config.py` — 12 passed. This is real, unblocked scaffolding —
+      `EVAL-P21.1`/`P21.2` (the live panel execution) remain genuinely blocked by `HUMAN GATE H7`
+      (closed until `EVAL-P20.4` actually runs). Closes ISSUE-174.
 
 #### 🔴 HUMAN GATE H8 — `EVAL-P21.1`/`P21.3` panel execution and settling the judge
 **Ready when:** `EVAL-P20.4`, `EVAL-P21.0`

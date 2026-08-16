@@ -31,6 +31,16 @@ DEFAULT_JUDGE_URL = "http://localhost:11434"
 DEFAULT_JUDGE_TIMEOUT_S = 30.0
 DEFAULT_JUDGE_TEMPERATURE = 0.0
 
+# Three-model judge panel roster (EVAL-P21.0, DEC-183). mixtral:8x7b + qwen2.5:14b
+# (same-family-as-generation, allowed with a warning) + llama3.1:8b (the
+# out-of-family third seat, chosen via AskUserQuestion over gemma2:9b — both are
+# fully independent from Qwen/Mixtral; llama3.1:8b was picked for its smaller
+# footprint). qwen2.5:14b and qwen2.5:7b are NOT independent raters (shared
+# tokenizer/corpus/tuning recipe → correlated errors); under 2-of-3 consensus a
+# same-family pair would effectively cast one vote with a veto, outvoting the
+# out-of-family judge whenever the pair agrees — see EVAL-P21.0's roadmap text.
+DEFAULT_PANEL_MODELS: tuple[str, ...] = ("mixtral:8x7b", "qwen2.5:14b", "llama3.1:8b")
+
 _ENGINES_GLOB = "src/npc_engine/engines/*/llm_config.yaml"
 _LLM_KEY = "llm"
 _MODEL_KEY = "model"
@@ -129,6 +139,42 @@ def resolve_judge_model(
             gens,
         )
     return judge
+
+
+def resolve_judge_panel(
+    *,
+    requested: tuple[str, ...] | None = None,
+    generation_models: tuple[str, ...] | None = None,
+    logger: logging.Logger | None = None,
+) -> tuple[str, ...]:
+    """Resolve the 3-model judge panel roster, enforcing the separation invariant per seat.
+
+    Same collision/same-family rules as resolve_judge_model, applied to every
+    seat individually — a panel is not exempt from self-evaluation just because
+    two of its three seats are clean.
+
+    Args:
+        requested: Explicit panel roster; falls back to DEFAULT_PANEL_MODELS.
+        generation_models: Generation models to check against; discovered if None.
+        logger: Logger for same-family warnings; defaults to the module logger.
+    Returns:
+        The resolved panel roster, in the given/default order.
+    Raises:
+        JudgeModelCollisionError: If any seat equals a generation model.
+    """
+    panel = requested if requested is not None else DEFAULT_PANEL_MODELS
+    gens = generation_models if generation_models is not None else discover_generation_models()
+    gen_families = {_family(g) for g in gens}
+    for seat in panel:
+        if seat in gens:
+            raise JudgeModelCollisionError(seat, gens)
+        if _family(seat) in gen_families:
+            (logger or _logger).warning(
+                "judge_same_family_as_generation judge_model=%s generation_models=%s",
+                seat,
+                gens,
+            )
+    return panel
 
 
 def resolve_judge_url() -> str:

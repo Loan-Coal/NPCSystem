@@ -2233,3 +2233,27 @@ and `summary.py` already used correctly. `ISSUE-155` was not the contributor. Fi
 `AskUserQuestion` (chosen over deferring as accepted risk, given the root cause was confirmed
 small and well-scoped before presenting the choice). `make check-conservation` now genuinely
 exits 0. Full writeup: DEC-182.
+
+## [FIXED] ISSUE-174: `EVAL-P21.0`'s judge-roster choice has no `AskUserQuestion` marker despite being a real human decision
+**Found:** 2026-08-15, during the EVAL-P20-P24 unblock planning session
+**Severity:** P3 (nice-to-fix — a documentation/wording gap, not a blocker)
+**Where:** `project-harness/ROADMAP.md`, Phase `EVAL-P21`, subtask `EVAL-P21.0`
+**Description:** `EVAL-P21.0` ("panel roster and independence") requires a real human pick between
+an out-of-family third judge model (`llama3.1:8b` or `gemma2:9b` — `qwen2.5:14b` is banned as
+same-family as the generation model) but carries no `⏸️`/`(live` flag and no `AskUserQuestion`
+marker in ROADMAP.md — it's phrased as a plain task that "requires a DECISIONS entry," not a
+formal question round. `EVAL-P21.3` is the flagged task ("records a DECISIONS entry settling a
+judge"), which reads as covering the *outcome* but not necessarily prompting the *choice* via the
+same `AskUserQuestion` discipline used elsewhere in `EVAL-P20.3a`/`P20.3b`.
+**Why deferred:** cosmetic/consistency issue found while auditing P20-P24 for `AskUserQuestion`
+markers (see `project-harness/EVAL_P20_TO_P24_UNBLOCK_PLAN.md` Section 3); not this session's task
+to fix, and the decision itself is not blocked — it just lacks the formal ritual other P20 human
+decisions use.
+**To fix:** either add an explicit `AskUserQuestion, before any implementation` marker to
+`EVAL-P21.0` matching the `EVAL-P20.3a`/`P20.3b` pattern, or note in `EVAL-P21.0`'s text that the
+model pick is made informally and recorded via `EVAL-P21.3`'s DECISIONS entry — pick one
+convention and make it consistent across Program 3's human-decision tasks.
+**Fixed:** 2026-08-16, in EVAL-P21.0 (DEC-183)
+**How fixed:** Added the explicit `AskUserQuestion, before any implementation` marker to
+`EVAL-P21.0`, matching the `EVAL-P20.3a`/`P20.3b` convention. Asked the roster question in the
+same sitting; chose `llama3.1:8b`. Full writeup: DEC-183.
