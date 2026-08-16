@@ -96,14 +96,15 @@ class CalibrationLabel(BaseModel):
             without it. Empty for text-only scorers. Same passthrough/
             backward-compat contract as criteria.
         needs_review: True when a merge (label_merge.merge_labels) detected the
-            output or criteria changed under an existing human_verdict — that
-            verdict now judges text a human never actually saw. Rows flagged
-            here are excluded from every calibration statistic
-            (calibration.py) and re-surfaced by adjudicate.collect_pending
-            until a human re-judges them (EVAL-P19.0).
+            criteria changed under an existing human_verdict (EVAL-P20.3b /
+            DEC-181: criteria only — an output_text change alone is NOT
+            drift; see output_sha256/criteria_sha256 below and
+            docs/EVAL_METHODOLOGY.md §3). Rows flagged here are excluded from
+            every calibration statistic (calibration.py) and re-surfaced by
+            adjudicate.collect_pending until a human re-judges them (EVAL-P19.0).
         prior_human_verdict: Set by adjudicate.collect_pending when it
             re-presents a needs_review row — the verdict recorded before the
-            content drifted, so the adjudicator sees what they decided last
+            criteria changed, so the adjudicator sees what they decided last
             time. Cleared back to None once the row is re-adjudicated.
     """
 
@@ -125,6 +126,12 @@ class CalibrationLabel(BaseModel):
 
     # Provenance / content addressing. All default so the rows written before
     # these fields existed still load unchanged.
+    #
+    # output_sha256: fingerprint of output_text at import time. Audit/evidence
+    #   trail only (EVAL-P20.3b / DEC-181) — label_merge._has_drifted no longer
+    #   reads it; a changed output_text does not by itself invalidate trust.
+    # criteria_sha256: fingerprint of `criteria`. The ONLY hash _has_drifted
+    #   reads — a change here is what sets needs_review.
     label_schema_version: int = 1
     gen_id: str = ""
     golden_set_version: str = ""

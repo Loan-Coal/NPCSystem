@@ -196,28 +196,6 @@ graph size, and it silently defeats reproducibility when it does bite.
 rumors, secrets, items, traits, reputation) and add a deterministic `ORDER BY` — id or an explicit
 score then id as a tiebreak — to those first. Add a check-rules rule for new prompt-feeding queries.
 
-## ISSUE-168: human labels are joined on exact output text, so they die on any single token flip
-**Found:** 2026-08-14, during `EVAL-P20.0`
-**Severity:** P1 (blocking the premise of the two-regeneration budget)
-**Where:** `evals/content_hash.py:18` `sha256_text`, consumed by `calibration_records`,
-`label_import`, `label_merge`
-**Description:** A human verdict is bound to `sha256(output_text + criteria)`. EVAL-P20.0 measured
-that byte-identical reproduction is unattainable at dialogue output lengths on this runtime:
-reproduction decays with generated token count (91.7% at ~60 tokens, 45.8% for the structured
-`DialogueResponse`, **4.2%** at the shipped `max_tokens=512`), consistent with per-token
-floating-point flips compounding. A seed fixes the sampling draw but cannot make inference bitwise
-deterministic. So an exact-text join guarantees mass label loss at every regeneration *by design*,
-independent of any seed work. DEC-176 raised survival from ~19% to ~62.5%; the remaining ~37.5% is
-not addressable by configuration.
-**Why deferred:** re-scoping the label join is a much larger change than `EVAL-P20.0`, and the
-human explicitly chose (2026-08-14) to land the seed + prompt fixes and record the gate as NOT MET
-rather than re-scope in the same session.
-**To fix:** decide whether the join should tolerate drift — e.g. normalised-text hash, or binding
-the label to `(record_id, repetition, criteria)` with the text kept as evidence rather than as the
-key — and whether `needs_review` should finally be *read* by the scorers (it is written by
-`label_merge` and read by nothing; see the EVAL-P20 phase Notes). This determines whether the
-two-regeneration budget is affordable at all.
-
 ## ISSUE-163: NPC memories are fetched from the graph but never reach the prompt
 **Found:** 2026-08-14, during `RET-P0` (verifying the ISSUE-145 fix end to end)
 **Severity:** P2 (annoying)

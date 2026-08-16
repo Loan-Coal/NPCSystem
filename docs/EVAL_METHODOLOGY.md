@@ -122,6 +122,48 @@ Both carry κ and a bootstrap CI (`kappa_interval` and `pre_label_kappa_interval
 FP cell (scorer says pass, human says fail) is the dangerous cell and is highlighted
 explicitly in every printed report.
 
+### What a stored `human_verdict` means, and when it stops being trusted (EVAL-P20.3b)
+
+**Definition (as of EVAL-P20.3b, DEC-181):** a `human_verdict` records "a human judged how
+this scorer's `criteria` applies to this case" — **not** "a human read this exact response
+text." It stays trusted for calibration as long as the case's `criteria` is unchanged,
+regardless of what `output_text` a later regeneration produces or what the automated
+`scorer_verdict` currently says for that text.
+
+**Where it is computed:** `evals/label_merge.py` — `_has_drifted(existing, incoming)`
+compares `criteria_sha256` only.
+**Pinned by:** `tests/unit/evals/test_drift_trust_policy.py` (against real
+`evals/generations/k3_73e6c36` repetition pairs, not synthetic strings),
+`tests/unit/evals/test_verdict_only_drift.py`.
+
+**Why not exact output text?** DEC-176 measured byte-identical reproduction as low as
+**4.2%** at the shipped `max_tokens=512` — inference is not bitwise-deterministic even at a
+fixed seed, because per-token floating-point flips compound with output length. Trusting a
+verdict only against exact output text therefore invalidates the large majority of stored
+labels on *every* regeneration, independent of whether the NPC's answer changed in any way a
+human would call substantive. That guaranteed toil is what EVAL-P20.3b exists to remove.
+
+**Three options considered and rejected, for the record (see DEC-181 for full detail):**
+1. *Normalised-text hash* (whitespace/casing/punctuation-insensitive) — measured against
+   k3_73e6c36's 746 non-identical repetition-pairs: **0.0%** recover under normalization.
+   The residual gap is real word-level content differences from per-token sampling flips,
+   not formatting noise, so this option has zero measured yield against the actual failure
+   mode.
+2. *Similarity threshold* (edit distance / embedding) — a second uncalibrated free
+   parameter, which this whole measurement discipline exists to avoid introducing silently.
+3. *Status quo (exact-hash)* — zero code, but guarantees the ~295-row-per-regeneration
+   re-adjudication cost DEC-176 already measured, indefinitely, for every future
+   regeneration this project ever runs, not only the two currently budgeted.
+
+**What this does *not* weaken:** the live anti-hallucination guard/capability rate
+(`evals/summary.py`) is scored fresh from each run's *current* text by the judges in
+`matchers.py`, on every call — independent of any stored `human_verdict`. A `human_verdict`
+that stays trusted despite paraphrase can only degrade the **calibration** signal (is the
+automated judge trustworthy?), never let an actual hallucination through the safety gate
+unflagged. `output_sha256` is still computed and stored on every row (see
+`calibration_records.py`) as an audit/evidence trail — it is simply no longer read by
+`_has_drifted`.
+
 ---
 
 ## 4. `evaluated_cases` as the denominator (not `total_cases`)

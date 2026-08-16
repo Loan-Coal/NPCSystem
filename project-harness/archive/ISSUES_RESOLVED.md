@@ -2164,3 +2164,34 @@ village + tavern), and snapshotted that clean state to the checked-in
 `evals/fixtures/eval_world_baseline.json`. New `make eval-world-reset` target restores it. Re-ran
 `e2e/scripts/measure_reset_fidelity.py` fresh — `evals/reset_fidelity.json`/`docs/RESET_FIDELITY.md`
 now carry a current `measured_at`/`git_sha`.
+
+## [FIXED] ISSUE-168: human labels are joined on exact output text, so they die on any single token flip
+**Found:** 2026-08-14, during `EVAL-P20.0`
+**Severity:** P1 (blocking the premise of the two-regeneration budget)
+**Where:** `evals/content_hash.py:18` `sha256_text`, consumed by `calibration_records`,
+`label_import`, `label_merge`
+**Description:** A human verdict is bound to `sha256(output_text + criteria)`. EVAL-P20.0 measured
+that byte-identical reproduction is unattainable at dialogue output lengths on this runtime:
+reproduction decays with generated token count (91.7% at ~60 tokens, 45.8% for the structured
+`DialogueResponse`, **4.2%** at the shipped `max_tokens=512`), consistent with per-token
+floating-point flips compounding. A seed fixes the sampling draw but cannot make inference bitwise
+deterministic. So an exact-text join guarantees mass label loss at every regeneration *by design*,
+independent of any seed work. DEC-176 raised survival from ~19% to ~62.5%; the remaining ~37.5% is
+not addressable by configuration.
+**Why deferred:** re-scoping the label join is a much larger change than `EVAL-P20.0`, and the
+human explicitly chose (2026-08-14) to land the seed + prompt fixes and record the gate as NOT MET
+rather than re-scope in the same session.
+**To fix:** decide whether the join should tolerate drift — e.g. normalised-text hash, or binding
+the label to `(record_id, repetition, criteria)` with the text kept as evidence rather than as the
+key — and whether `needs_review` should finally be *read* by the scorers (it is written by
+`label_merge` and read by nothing; see the EVAL-P20 phase Notes). This determines whether the
+two-regeneration budget is affordable at all.
+**Fixed:** 2026-08-16, in EVAL-P20.3b (DEC-181)
+**How fixed:** Rescoped per the roadmap's own correction — the join key was already
+`(record_id, scorer)` with repetition encoded in `record_id`, not exact output text; what was
+actually gated on exact text was *trust*, not lookup. Via `AskUserQuestion` (four options, evidence
+gathered live against `k3_73e6c36` before presenting), chose option (d): `label_merge._has_drifted`
+now compares `criteria_sha256` only — a `human_verdict` is trusted as long as the scorer's criteria
+is unchanged, regardless of `output_text`. `needs_review` was already read by the scorers
+(EVAL-P19.0, 2026-08-12) — that half of this issue's own "To fix" was stale by the time this was
+resolved. Full writeup, rejected alternatives, and the residual risk named explicitly: DEC-181.

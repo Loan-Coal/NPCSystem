@@ -2721,7 +2721,7 @@ satisfied. Recorded here rather than silently ignored; see the `EVAL-P20.1` comm
       tests/unit/harness tests/unit/scripts` — 681 passed. Full writeup: DEC-180. Closes
       ISSUE-131, ISSUE-160, ISSUE-153, ISSUE-167.
 
-- [ ] **EVAL-P20.3b** ⏸️ *(human session: redefines what a human verdict means — mandatory
+- [x] **EVAL-P20.3b** ⏸️ *(human session: redefines what a human verdict means — mandatory
       AskUserQuestion before any code)* ISSUE-168 rescope — label-drift trust policy. Files:
       `edit evals/content_hash.py`, `edit evals/label_merge.py`,
       `edit evals/calibration_records.py`, `create tests/unit/evals/test_drift_trust_policy.py`,
@@ -2757,6 +2757,24 @@ satisfied. Recorded here rather than silently ignored; see the `EVAL-P20.1` comm
       behavior; `DECISIONS.md` records the choice **and** the rejected alternatives with why;
       if the chosen option changes what "surviving" means, this task's own Notes and
       `EVAL-P22`'s labelling-budget numbers are re-derived, not left stale.
+      **DONE 2026-08-16 (DEC-181):** Chose (d) — asked to reason from the human's stated
+      long-term-use frame (iterating on engines, re-measuring often), (d) best matches what
+      `human_verdict` is actually used for (calibration/kappa, not the live safety gate, which
+      scores every run's current text fresh regardless of any stored verdict). Option (b) was
+      measured against real `k3_73e6c36` repetition-pairs before presenting it, per this task's
+      own instruction: **0 of 746 non-identical pairs (0.0%) recover under normalization** —
+      zero yield, ruled out by evidence, not by assumption. `_has_drifted` now compares
+      `criteria_sha256` only, superseding EVAL-P20.3a Step 3's `scorer_verdict` check (same
+      "did the output change" axis this decision drops). RED anchor built from a real
+      repetition pair (`case_001_grieving_elder:tone_judge:5`), confirmed genuinely RED against
+      the pre-fix code by stashing the fix and re-running. Three pre-existing test files updated
+      **deliberately, not silently**, each with an inline note explaining the supersession:
+      `test_verdict_only_drift.py`, `test_pre_label_drift.py`,
+      `test_label_durability.py::test_merge_no_longer_flags_output_drift_alone_eval_p20_3b`
+      (the original "motivating incident" guarantee — its docstring names the accepted residual
+      risk explicitly). `docs/EVAL_METHODOLOGY.md` §3 documents the new definition and the three
+      rejected alternatives. `pytest tests/unit/evals tests/unit/harness tests/unit/scripts` —
+      685 passed. Full writeup: DEC-181. Rescopes and closes ISSUE-168.
 
 #### 🔴 HUMAN GATE H7 — `EVAL-P20.4` regeneration #1
 **Ready when:** `EVAL-P20.0`, `EVAL-P20.1`, `EVAL-P20.2`, `EVAL-P20.3`, `EVAL-P20.3a`, `EVAL-P20.3b`

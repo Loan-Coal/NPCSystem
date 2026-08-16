@@ -45,8 +45,9 @@ class MergeResult(BaseModel):
         rows: The merged label set, existing-file order first, then new rows.
         preserved: Count of rows whose existing human verdict was carried over.
         added: Count of incoming rows that had no existing counterpart.
-        drifted: Keys whose output or criteria hash changed under a stored human
-            verdict — the verdict is kept but flagged needs_review.
+        drifted: Keys whose criteria hash changed under a stored human verdict —
+            the verdict is kept but flagged needs_review (EVAL-P20.3b: output_text
+            is no longer part of the drift definition; see _has_drifted).
         orphaned: Keys present on disk but absent from the incoming set. Kept,
             never dropped: they represent human work whose record may simply be
             missing from this particular transcript.
@@ -111,9 +112,9 @@ def format_merge_report(result: MergeResult, out_path: Path, imported: int) -> s
         shown = ", ".join(result.drifted[:5])
         more = " ..." if len(result.drifted) > 5 else ""
         lines.append(
-            f"  WARNING: {len(result.drifted)} row(s) flagged needs_review — drifted "
-            f"(output/criteria hash changed, or scorer_verdict changed on identical "
-            f"content) under an existing human verdict: {shown}{more}"
+            f"  WARNING: {len(result.drifted)} row(s) flagged needs_review — the "
+            f"scorer's criteria changed (EVAL-P20.3b: output_text is no longer part "
+            f"of the drift definition) under an existing human verdict: {shown}{more}"
         )
     if result.orphaned:
         lines.append(
@@ -134,25 +135,38 @@ def _index(rows: Sequence[CalibrationLabel]) -> dict[tuple[str, str], Calibratio
 
 
 def _has_drifted(existing: CalibrationLabel, incoming: CalibrationLabel) -> bool:
-    """True if the content or verdict the human judged differs from the incoming row.
+    """True if the criteria the human judged against has changed.
 
-    Drift is either of two things (ISSUE-160):
-      1. output_sha256 or criteria_sha256 changed — the human judged different text.
-      2. scorer_verdict changed on hash-identical content — ordinary LLM judge
-         non-determinism (no seed exists for judge calls, DEC-146) still means the
-         automated verdict a human's judgment is being compared against has moved,
-         even though the text itself has not. A verdict-only flip was previously
-         invisible here (real case: case_adv_lira_troop_positions:tone_judge:4#r0).
+    DRIFT DEFINITION (EVAL-P20.3b / ISSUE-168 rescope, superseding EVAL-P20.3a
+    Step 3's ISSUE-160 fix — chosen via AskUserQuestion, DEC-181): a
+    `human_verdict` stays trusted as long as the scorer's `criteria` is
+    unchanged, regardless of the exact `output_text` the NPC produced or what
+    the automated `scorer_verdict` currently says. This redefines what a
+    stored `human_verdict` means: it is no longer "a human read *this exact
+    response* and judged it", it is "a human judged how this scorer's
+    criteria applies to this case, and that judgment survives paraphrase."
 
-    Compares hashes only when both sides carry one — rows written before content
-    addressing existed have empty hashes and must not be reported as drifted.
+    Why: DEC-176 measured byte-identical reproduction as low as 4.2% at the
+    shipped `max_tokens=512` — an exact-output-text trust policy invalidates
+    ~295 rows on every regeneration *by design*, regardless of whether the
+    NPC's answer actually changed in substance. `output_sha256` is still
+    computed and stored on every row (see calibration_records.py) as an
+    evidence/audit trail — it is simply no longer read here.
+
+    This does not weaken the live anti-hallucination safety gate: the guard/
+    capability rate in summary.py scores every run's *current* text fresh via
+    matchers.py's judges on every call, independent of any stored
+    `human_verdict`. A stale-trusted `human_verdict` can only degrade the
+    calibration/kappa signal (is the automated judge trustworthy?), never let
+    an actual hallucination through unflagged.
+
+    Compares the hash only when both sides carry one — rows written before
+    content addressing existed have empty hashes and must not be reported as
+    drifted.
     """
-    for field in ("output_sha256", "criteria_sha256"):
-        old = getattr(existing, field)
-        new = getattr(incoming, field)
-        if old and new and old != new:
-            return True
-    return existing.scorer_verdict != incoming.scorer_verdict
+    old = existing.criteria_sha256
+    new = incoming.criteria_sha256
+    return bool(old and new and old != new)
 
 
 def _refresh(existing: CalibrationLabel, incoming: CalibrationLabel) -> CalibrationLabel:

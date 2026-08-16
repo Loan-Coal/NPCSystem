@@ -51,9 +51,13 @@ def test_drifted_pre_label_excluded_from_secondary_kappa() -> None:
     never refreshes it, and a re-adjudicated row keeps whatever pre_label it had
     from its first import forever — a stale reference-labeller opinion silently
     re-enters pre_label_confusion_counts/pre_label_kappa/pre_label_kappa_interval.
+
+    Drift trigger uses criteria_sha256, not output_sha256 — EVAL-P20.3b
+    (DEC-181) redefined drift as criteria-only; an output_sha256 change alone
+    is no longer drift (see test_verdict_only_drift.py).
     """
-    existing = _label("case_x:tone_judge:0#r0", output_sha256="abc123", human_verdict=True)
-    incoming = _label("case_x:tone_judge:0#r0", output_sha256="changed-hash")
+    existing = _label("case_x:tone_judge:0#r0", criteria_sha256="def456", human_verdict=True)
+    incoming = _label("case_x:tone_judge:0#r0", criteria_sha256="changed-criteria-hash")
     result = merge_labels([existing], [incoming])
     merged = result.rows[0]
     assert merged.needs_review is True

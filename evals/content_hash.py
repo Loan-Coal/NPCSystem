@@ -18,9 +18,14 @@ _ENCODING: str = "utf-8"
 def sha256_text(text: str) -> str:
     """Return the hex SHA-256 of a text value.
 
-    Used to fingerprint the (output_text, criteria) pair a human labelled. A
-    changed fingerprint means the human judged different content, which must
-    invalidate — or at minimum flag — the stored verdict.
+    Used to fingerprint both `output_text` and `criteria` on a CalibrationLabel
+    row, but the two hashes now play different roles (EVAL-P20.3b / DEC-181):
+    `criteria_sha256` is what `label_merge._has_drifted` reads to decide
+    whether a stored `human_verdict` is still trusted — a `criteria` change
+    invalidates the verdict, an `output_text` change does not. `output_sha256`
+    is still computed and stored on every row as an audit/evidence trail (what
+    exact text a verdict was originally recorded against), it is simply no
+    longer consulted for trust. See docs/EVAL_METHODOLOGY.md §3 for why.
 
     Args:
         text: The text to fingerprint. Hashed verbatim; no normalisation is

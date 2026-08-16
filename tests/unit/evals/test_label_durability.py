@@ -1,13 +1,19 @@
 """
 Tests for calibration-label durability: a re-import must never destroy a human
-verdict, duplicate keys must be rejected, and content drift must be detected
-rather than silently re-pointing a human judgment at different text.
+verdict, duplicate keys must be rejected, and criteria drift must be detected
+rather than silently re-pointing a human judgment at a different question.
 
 Motivating incident (2026-08-09 audit): the documented `make label-import`
 command in evals/calibration/README.md overwrote labels_v1.jsonl with
 human_verdict=None on every row, destroying 393 hand-labelled verdicts, and
 `--append` produced duplicate keys whose re-adjudication silently overwrote the
 original row. Both paths were untested.
+
+Drift definition updated 2026-08-16 (EVAL-P20.3b / DEC-181): drift is now
+criteria-only, not output_text — see
+test_merge_no_longer_flags_output_drift_alone_eval_p20_3b's docstring and
+docs/EVAL_METHODOLOGY.md §3 for the full rationale and the risk this
+deliberately accepts.
 """
 
 from __future__ import annotations
@@ -103,11 +109,36 @@ def test_merge_adds_new_rows_and_reports_counts() -> None:
     assert result.preserved == 1
 
 
-def test_merge_flags_output_drift_instead_of_silently_rebinding() -> None:
-    """If the underlying output text changed, the human judged something else.
+def test_merge_no_longer_flags_output_drift_alone_eval_p20_3b() -> None:
+    """SUPERSEDED 2026-08-16 (EVAL-P20.3b / DEC-181, AskUserQuestion option (d)).
 
-    Silently keeping the verdict would report a judgment of text A as a
-    judgment of text B. The row must be flagged for review.
+    This test used to be named test_merge_flags_output_drift_instead_of_
+    silently_rebinding and asserted needs_review=True here — the original
+    "motivating incident" guarantee: an output_text change under an existing
+    human_verdict must never be silently re-pointed at different text.
+
+    DEC-176 measured byte-identical reproduction as low as 4.2% at the
+    shipped max_tokens=512 — that guarantee, applied literally, invalidated
+    ~295 rows on every regeneration regardless of whether the underlying
+    answer changed in any way a human would call substantive. A human,
+    presented with that tradeoff via AskUserQuestion and DEC-176's evidence,
+    chose to redefine trust as criteria-only (docs/EVAL_METHODOLOGY.md §3):
+    a human_verdict now means "a human judged how this criteria applies to
+    this case", not "a human read this exact text". This test intentionally
+    now asserts the opposite of what it asserted before that decision — this
+    is not a silent regression, it is the redefinition applied consistently.
+
+    The risk this test used to guard against is real and was named explicitly
+    to the human before the decision was made (Q3, EVAL-P20-P24 session):
+    an output_text that changes to something substantively different (not
+    just a paraphrase) under an unchanged criteria now keeps its old verdict
+    with no drift signal at all. What still bounds that risk: the live
+    anti-hallucination guard/capability rate (summary.py) scores every run's
+    *current* text fresh via matchers.py on every call, independent of any
+    stored human_verdict — a stale-trusted verdict can only degrade the
+    calibration/kappa signal, never let an actual hallucination through the
+    safety gate unflagged. See test_merge_flags_criteria_drift below for the
+    signal EVAL-P20.3b keeps.
     """
     adjudicated = _label(output_text="the war has ended", human_verdict=False)
     regenerated = _label(output_text="I could not say, stranger")
@@ -115,9 +146,9 @@ def test_merge_flags_output_drift_instead_of_silently_rebinding() -> None:
     result = merge_labels((adjudicated,), (regenerated,))
 
     merged = result.rows[0]
-    assert merged.needs_review is True
-    assert merged.human_verdict is False, "verdict is flagged, not discarded"
-    assert merged.record_id in result.drifted
+    assert merged.needs_review is False
+    assert merged.human_verdict is False, "verdict survives, now trusted by design"
+    assert merged.record_id not in result.drifted
 
 
 def test_merge_flags_criteria_drift() -> None:

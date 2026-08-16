@@ -3720,3 +3720,93 @@ re-seed, never by hand-editing. A labels file written before this change may con
 `pre_label` is a stale `bool` the merge never had a chance to clear (rows that haven't been
 re-merged since); this is expected — the clearing is a merge-time behavior, not a retroactive
 migration.
+
+## DEC-181: EVAL-P20.3b — label-drift trust policy redefined as criteria-only (ISSUE-168 rescope)
+**Date:** 2026-08-16 · **Status:** ✅ ACCEPTED (`AskUserQuestion`, human session)
+**Context:** ISSUE-168's original title ("labels are joined on exact output text") was already
+corrected by the roadmap's own text — `CalibrationLabel.key` is `(record_id, scorer)`, and
+`record_id` already encodes repetition. What was actually gated on exact text was **trust**, not
+lookup: `label_merge._has_drifted` decided whether an existing `human_verdict` still applied via
+`output_sha256` equality. DEC-176 measured byte-identical reproduction at the shipped
+`max_tokens=512` as low as **4.2%** — an exact-output-text trust policy invalidates the large
+majority of stored labels on every regeneration, by design, independent of whether the NPC's
+answer changed in any way a human would call substantive.
+
+**Options presented (verbatim, per the roadmap's own four-option list), with evidence gathered
+this session before presenting them:**
+- (a) keep exact-hash (status quo) — zero code, ~295-row cost per regeneration, indefinitely.
+- (b) normalised-text hash (whitespace/casing/punctuation-insensitive) inside `_has_drifted` only
+  — **measured against `evals/generations/k3_73e6c36`'s 746 non-identical repetition-pairs before
+  presenting it, per the roadmap's own instruction: 0 of 746 (0.0%) recover under normalization.**
+  The residual gap is real word-level content differences from per-token sampling flips (confirming
+  DEC-176's causal analysis), not formatting noise — this option has zero measured yield against
+  the actual failure mode.
+- (c) similarity threshold (edit distance / embedding) — a second uncalibrated free parameter,
+  exactly what this measurement discipline exists to prevent introducing silently; stops at a
+  design doc only if chosen, no implementation.
+- (d) drop the output-text arm from `_has_drifted` entirely, gate trust on `criteria_sha256` only
+  — redefines what `human_verdict` means.
+
+**Decision: (d).** Chosen after being asked to reason from the user's stated long-term-use frame
+(iterating on the engines and re-measuring often, not just the two currently-budgeted
+regenerations) — under that frame, (d) is the option best matched to what a `human_verdict` is
+actually used for: `evals/calibration.py`'s κ/confusion-matrix apparatus, which calibrates whether
+the *automated judge* is trustworthy for a given case+criteria, not the live anti-hallucination
+safety gate itself (that scores every run's current text fresh via `matchers.py`'s judges on every
+call, independent of any stored `human_verdict` — DEC-181 does not weaken it). (b) was ruled out by
+this session's own measurement; (c) was rejected as a second free parameter with no calibration
+data to tune it against; (a) remains the safer zero-risk default but was not chosen, given the
+recurring-toil framing.
+
+**Implementation:**
+- `evals/label_merge.py::_has_drifted` now compares `criteria_sha256` only. This **supersedes**
+  `EVAL-P20.3a` Step 3's `scorer_verdict`-flip check (ISSUE-160) — a verdict-only flip (ordinary
+  LLM judge non-determinism) is no longer drift either, by the same logic: it's a signal derived
+  from the same "did the output text change" axis this decision drops.
+- `_refresh`'s `pre_label`-clearing (EVAL-P20.3a Step 4 / ISSUE-153) is unaffected in code — it
+  already delegates to `_has_drifted`, so it now clears `pre_label` on criteria drift only,
+  consistently with the new definition.
+- `format_merge_report`'s WARNING line and `MergeResult.drifted`'s docstring restate the new
+  definition explicitly (also closes `ISSUE-160`'s original ask: "state its drift definition
+  explicitly", now doubly true since the definition itself changed).
+- `evals/content_hash.py` and `evals/calibration_records.py` docstrings updated: `output_sha256` is
+  still computed and stored on every row (audit/evidence trail — what exact text a verdict was
+  originally recorded against) but is no longer read for trust; `criteria_sha256` is the only hash
+  `_has_drifted` consults.
+- New `docs/EVAL_METHODOLOGY.md` §3 subsection documents the redefinition, the three rejected
+  alternatives with their evidence, and explicitly states what this does **not** weaken (the live
+  safety gate).
+
+**RED anchor:** `tests/unit/evals/test_drift_trust_policy.py::test_real_k3_repetition_pair_survives_as_not_drifted`
+— built from a **real** `k3_73e6c36` repetition pair (`case_001_grieving_elder:tone_judge:5`, same
+criteria, genuinely different `npc_response` text), not a synthetic string, per the roadmap's own
+instruction. Confirmed genuinely RED against the pre-fix `_has_drifted` (re-ran with the fix
+stashed) before being made GREEN.
+
+**Tests updated deliberately, not silently, to reflect the redefinition** (each carries an inline
+note explaining why, matching this project's established pattern for intentional behavior changes):
+`tests/unit/evals/test_verdict_only_drift.py` (EVAL-P20.3a Step 3's tests inverted — a
+`scorer_verdict`-only or `output_sha256`-only change is no longer drift); `test_pre_label_drift.py`
+(drift trigger switched from `output_sha256` to `criteria_sha256`);
+`test_label_durability.py::test_merge_no_longer_flags_output_drift_alone_eval_p20_3b` (renamed
+from `test_merge_flags_output_drift_instead_of_silently_rebinding` — the original "motivating
+incident" guarantee this file's own module docstring names; the docstring on the renamed test
+explains the tradeoff at length and points here).
+
+**The accepted residual risk, named explicitly, not discovered after the fact:** an `output_text`
+that changes to something *substantively* different (not a paraphrase, an actually different
+claim) under an unchanged `criteria` now keeps its old `human_verdict` with zero drift signal.
+Bounded by: the live guard/capability rate is scored fresh from current text every run regardless
+of any stored verdict, so this can only degrade the calibration/kappa signal, never let a real
+hallucination through the safety gate unflagged.
+
+**Verification:** `pytest tests/unit/evals tests/unit/harness tests/unit/scripts` — 685 passed, 0
+failed. `make check-docstrings check-layers` — both green.
+
+**Consequences:** Rescopes and closes ISSUE-168 as filed (its premise was already partially stale;
+the real question — trust policy — is answered here). If a future session finds
+`_has_drifted` compared to `output_sha256` again, that is a regression from this decision and
+should cite DEC-181, not re-derive the tradeoff from scratch. `EVAL-P22`'s labelling-budget
+estimates, which assumed the exact-hash cost, should be re-derived against this policy when
+`EVAL-P22` is reached — the ~295-row figure no longer applies to the output-text axis (only a
+genuine criteria change would trigger it, expected to be rare).
