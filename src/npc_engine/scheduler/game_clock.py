@@ -25,7 +25,12 @@ class ClockState(BaseModel):
 
 
 class GameClock:
-    """Mutable clock with async lock for safe concurrent access."""
+    """Mutable clock with async lock for safe concurrent access.
+
+    Structurally satisfies ``engines.ports.clock_port.ClockPort`` on its read side.
+    Engines depend on that Protocol, never on this class, so they can read the tick
+    but cannot advance it (ISSUE-165).
+    """
 
     def __init__(self, mode: str) -> None:
         """Initialise the clock at tick 0.
@@ -56,6 +61,12 @@ class GameClock:
             self._tick_id += max(0, tick_delta)
             self._game_time_seconds += max(0, time_delta_seconds)
             return self.state
+
+    @property
+    def current_tick(self) -> int:
+        """Return the current tick id (satisfies engines.ports.clock_port.ClockPort)."""
+
+        return self._tick_id
 
     @property
     def state(self) -> ClockState:
