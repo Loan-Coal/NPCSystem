@@ -20,10 +20,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.dependency_singletons import get_pricing_engine, get_trade_engine
-from npc_engine.api.helpers import OkEnvelope, ok_response
+from npc_engine.api.dependency_singletons import get_game_clock, get_pricing_engine, get_trade_engine
+from npc_engine.api.helpers import OkEnvelope, ok_response, resolve_tick
 from npc_engine.engines.economy.pricing_engine import PricingEngine
 from npc_engine.engines.economy.trade_engine import TradeEngine
+from npc_engine.engines.ports.clock_port import ClockPort
 from npc_engine.graph.economy.pricing_queries import (
     get_active_event_types_at_location,
     get_character_location_id,
@@ -47,7 +48,7 @@ class TradeOfferRequest(BaseModel):
     item_id: str = Field(..., min_length=1)
     item_type: str = Field(..., min_length=1)
     offered_price: int = Field(..., ge=0)
-    current_tick: int = Field(default=0, ge=0)
+    current_tick: int | None = Field(default=None, ge=0)
 
     model_config = ConfigDict(frozen=True)
 
@@ -111,12 +112,14 @@ async def get_item_price(
 async def evaluate_trade(
     body: TradeOfferRequest,
     trade_engine: TradeEngine = Depends(get_trade_engine),
+    clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
     """Evaluate a trade offer and execute transfers if accepted.
 
     Args:
         body: Buyer/seller/item/price details.
         trade_engine: Per-request trade engine (holds its own EconomyGraphPort; SEV-24).
+        clock: Read-only game clock; supplies the tick when body.current_tick is omitted.
 
     Returns:
         Envelope with TradeResult fields: accepted, fair_price, final_price, rejection_reason.
@@ -132,7 +135,7 @@ async def evaluate_trade(
             item_id=body.item_id,
             item_type=body.item_type,
             offered_price=body.offered_price,
-            current_tick=body.current_tick,
+            current_tick=resolve_tick(body.current_tick, clock),
         )
     except CurrencyInsufficientFundsError as exc:
         raise HTTPException(

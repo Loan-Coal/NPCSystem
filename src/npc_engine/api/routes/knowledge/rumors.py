@@ -18,6 +18,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
+from npc_engine.api.dependency_singletons import get_game_clock
+from npc_engine.api.helpers import resolve_tick
+from npc_engine.engines.ports.clock_port import ClockPort
 from npc_engine.graph.gossip.rumor_service import (
     believe_rumor,
     create_rumor,
@@ -36,7 +39,7 @@ class CreateRumorRequest(BaseModel):
 
     content: str = Field(..., min_length=1, max_length=2048)
     origin_event_id: str | None = Field(default=None)
-    created_at_tick: int = Field(..., ge=0)
+    created_at_tick: int | None = Field(default=None, ge=0)
     severity: int = Field(..., ge=0, le=100)
     is_fabricated: bool = Field(default=False)
 
@@ -48,7 +51,7 @@ class BelieveRumorRequest(BaseModel):
 
     character_id: str = Field(..., min_length=1)
     confidence: int = Field(..., ge=0, le=100)
-    tick: int = Field(..., ge=0)
+    tick: int | None = Field(default=None, ge=0)
     from_character_id: str | None = Field(default=None)
 
     model_config = ConfigDict(frozen=True)
@@ -65,6 +68,7 @@ router = APIRouter(prefix="/rumors", tags=["rumors"])
 async def create_rumor_route(
     body: CreateRumorRequest,
     session: AsyncSession = Depends(get_db_session),
+    clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
     """Create (or merge) a root Rumor node.
 
@@ -78,7 +82,7 @@ async def create_rumor_route(
         session,
         content=body.content,
         origin_event_id=body.origin_event_id,
-        created_at_tick=body.created_at_tick,
+        created_at_tick=resolve_tick(body.created_at_tick, clock),
         severity=body.severity,
         is_fabricated=body.is_fabricated,
     )
@@ -90,6 +94,7 @@ async def believe_rumor_route(
     rumor_id: str,
     body: BelieveRumorRequest,
     session: AsyncSession = Depends(get_db_session),
+    clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
     """Record a character's belief in a rumor.
 
@@ -105,7 +110,7 @@ async def believe_rumor_route(
         character_id=body.character_id,
         rumor_id=rumor_id,
         confidence=body.confidence,
-        tick=body.tick,
+        tick=resolve_tick(body.tick, clock),
         from_character_id=body.from_character_id,
     )
     return ok_response({"rumor_id": rumor_id, "character_id": body.character_id})

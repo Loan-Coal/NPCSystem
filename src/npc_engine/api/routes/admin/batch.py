@@ -17,13 +17,16 @@ from npc_engine.api.dependencies import get_event_handler, get_gossip_handler
 from npc_engine.api.helpers import OkEnvelope, ok_response
 from npc_engine.engines.events.event_handler import EventHandler
 from npc_engine.engines.gossip.gossip_handler import GossipHandler
+from npc_engine.api.dependency_singletons import get_game_clock
+from npc_engine.api.helpers import resolve_tick
+from npc_engine.engines.ports.clock_port import ClockPort
 
 
 class GossipTickRequest(BaseModel):
     """Request payload for direct gossip tick execution."""
 
     npc_ids: list[str] = Field(default_factory=list)
-    tick_override: int = Field(ge=0)
+    tick_override: int | None = Field(default=None, ge=0)
     max_pairs: int = Field(default=20, ge=1, le=500)
 
     model_config = ConfigDict(frozen=True)
@@ -33,7 +36,7 @@ class EventTickRequest(BaseModel):
     """Request payload for direct event tick execution."""
 
     location_ids: list[str] = Field(default_factory=list)
-    tick_override: int = Field(ge=0)
+    tick_override: int | None = Field(default=None, ge=0)
 
     model_config = ConfigDict(frozen=True)
 
@@ -47,10 +50,11 @@ router = APIRouter()
 async def run_gossip_tick(
     request: GossipTickRequest,
     gossip_handler: GossipHandler = Depends(get_gossip_handler),
+    clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
     """Execute one explicit gossip tick."""
 
-    tick_id = request.tick_override
+    tick_id = resolve_tick(request.tick_override, clock)
     result = await gossip_handler.run_tick(
         tick_id=tick_id,
         max_pairs=request.max_pairs,
@@ -64,9 +68,10 @@ async def run_gossip_tick(
 async def run_event_tick(
     request: EventTickRequest,
     event_handler: EventHandler = Depends(get_event_handler),
+    clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
     """Execute one explicit event tick."""
 
-    tick_id = request.tick_override
+    tick_id = resolve_tick(request.tick_override, clock)
     result = await event_handler.run_tick(tick_id=tick_id, location_ids=request.location_ids)
     return ok_response(result)

@@ -26,6 +26,9 @@ from npc_engine.graph.group.group_service import (
     get_members_svc,
 )
 from npc_engine.utils.logging import get_logger
+from npc_engine.api.dependency_singletons import get_game_clock
+from npc_engine.api.helpers import resolve_tick
+from npc_engine.engines.ports.clock_port import ClockPort
 
 logger = get_logger(__name__)
 
@@ -41,7 +44,7 @@ class CreateGroupRequest(BaseModel):
     kind: str = Field(..., pattern=r"^(clique|conspiracy|family|crew|fellowship|mob)$")
     cohesion: int = Field(..., ge=0, le=100)
     is_secret: bool = Field(default=False)
-    formed_at_tick: int = Field(..., ge=0)
+    formed_at_tick: int | None = Field(default=None, ge=0)
     home_location_id: str | None = Field(default=None)
 
     model_config = ConfigDict(frozen=True)
@@ -52,7 +55,7 @@ class AddMemberRequest(BaseModel):
 
     character_id: str = Field(..., min_length=1)
     role: str = Field(..., min_length=1, max_length=64)
-    joined_at_tick: int = Field(..., ge=0)
+    joined_at_tick: int | None = Field(default=None, ge=0)
     commitment: int = Field(..., ge=0, le=100)
 
     model_config = ConfigDict(frozen=True)
@@ -69,6 +72,7 @@ router = APIRouter(prefix="/groups", tags=["groups"])
 async def create_group_route(
     body: CreateGroupRequest,
     session: AsyncSession = Depends(get_db_session),
+    clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
     """Create a new Group node.
 
@@ -84,7 +88,7 @@ async def create_group_route(
         kind=body.kind,
         cohesion=body.cohesion,
         is_secret=body.is_secret,
-        formed_at_tick=body.formed_at_tick,
+        formed_at_tick=resolve_tick(body.formed_at_tick, clock),
         home_location_id=body.home_location_id,
     )
     return ok_response({"group_id": group_id})
@@ -133,6 +137,7 @@ async def add_member_to_group(
     group_id: str,
     body: AddMemberRequest,
     session: AsyncSession = Depends(get_db_session),
+    clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
     """Add a character to an existing group.
 
@@ -149,7 +154,7 @@ async def add_member_to_group(
             group_id=group_id,
             character_id=body.character_id,
             role=body.role,
-            joined_at_tick=body.joined_at_tick,
+            joined_at_tick=resolve_tick(body.joined_at_tick, clock),
             commitment=body.commitment,
         )
     except Exception as exc:

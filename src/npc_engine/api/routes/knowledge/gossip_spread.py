@@ -20,6 +20,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
 from npc_engine.graph.gossip.gossip_spread_service import inject_rumor_belief
+from npc_engine.api.dependency_singletons import get_game_clock
+from npc_engine.api.helpers import resolve_tick
+from npc_engine.engines.ports.clock_port import ClockPort
 
 _MAX_RUMOR_TEXT_LEN = 500
 _MIN_SEVERITY = 0
@@ -35,7 +38,7 @@ class SpreadRumorRequest(BaseModel):
     target_npc_id: str = Field(..., min_length=1)
     rumor_text: str = Field(..., min_length=1, max_length=_MAX_RUMOR_TEXT_LEN)
     severity: int = Field(default=_DEFAULT_SEVERITY, ge=_MIN_SEVERITY, le=_MAX_SEVERITY)
-    tick_id: int = Field(..., ge=0)
+    tick_id: int | None = Field(default=None, ge=0)
 
     model_config = ConfigDict(frozen=True)
 
@@ -53,6 +56,7 @@ class SpreadRumorPayload(BaseModel):
 async def spread_rumor_route(
     body: SpreadRumorRequest,
     session: AsyncSession = Depends(get_db_session),
+    clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
     """Inject a player-planted lie into a target NPC's KNOWS_ABOUT graph.
 
@@ -72,7 +76,7 @@ async def spread_rumor_route(
         target_npc_id=body.target_npc_id,
         rumor_text=body.rumor_text,
         severity=body.severity,
-        tick_id=body.tick_id,
+        tick_id=resolve_tick(body.tick_id, clock),
     )
     return ok_response(
         SpreadRumorPayload(event_id=event_id, npc_id=body.target_npc_id).model_dump()

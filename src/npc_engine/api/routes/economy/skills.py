@@ -17,7 +17,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
-from npc_engine.api.helpers import OkEnvelope, ok_response
+from npc_engine.api.dependency_singletons import get_game_clock
+from npc_engine.api.helpers import OkEnvelope, ok_response, resolve_tick
+from npc_engine.engines.ports.clock_port import ClockPort
 from npc_engine.graph.character.skill_service import (
     add_skill,
     check_skill_threshold_svc,
@@ -45,7 +47,7 @@ class IncrementXpRequest(BaseModel):
     """Request body for adding XP to a character skill."""
 
     xp_delta: int = Field(..., gt=0)
-    tick: int = Field(default=0, ge=0)
+    tick: int | None = Field(default=None, ge=0)
 
     model_config = ConfigDict(frozen=True)
 
@@ -123,6 +125,7 @@ async def award_xp_for_skill(
     skill_id: str,
     body: IncrementXpRequest,
     session: AsyncSession = Depends(get_db_session),
+    clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
     """Award XP to a specific skill for a character.
 
@@ -139,7 +142,7 @@ async def award_xp_for_skill(
         character_id=character_id,
         skill_id=skill_id,
         xp_delta=body.xp_delta,
-        tick=body.tick,
+        tick=resolve_tick(body.tick, clock),
     )
     return ok_response({"character_id": character_id, "skill_id": skill_id, "new_level": new_level})
 

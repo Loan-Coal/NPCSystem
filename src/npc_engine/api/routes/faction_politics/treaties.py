@@ -18,6 +18,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
+from npc_engine.api.dependency_singletons import get_game_clock
+from npc_engine.api.helpers import resolve_tick
+from npc_engine.engines.ports.clock_port import ClockPort
 from npc_engine.graph.political.treaty_service import (
     TreatyCondition,
     break_treaty,
@@ -37,7 +40,7 @@ class CreateTreatyRequest(BaseModel):
     parties: list[str] = Field(..., min_length=2)
     terms_narrative: str = Field(..., min_length=1)
     terms_conditions: list[TreatyCondition] = Field(default_factory=list)
-    signed_at_tick: int = Field(..., ge=0)
+    signed_at_tick: int | None = Field(default=None, ge=0)
     expires_at_tick: int | None = Field(default=None, ge=0)
     binding_event_id: str | None = Field(default=None)
 
@@ -47,7 +50,7 @@ class CreateTreatyRequest(BaseModel):
 class ExpireTreatyRequest(BaseModel):
     """Request body for manually expiring a treaty."""
 
-    tick: int = Field(..., ge=0)
+    tick: int | None = Field(default=None, ge=0)
 
     model_config = ConfigDict(frozen=True)
 
@@ -56,7 +59,7 @@ class BreakTreatyRequest(BaseModel):
     """Request body for breaking a treaty."""
 
     breaking_faction_id: str = Field(..., min_length=1)
-    tick: int = Field(..., ge=0)
+    tick: int | None = Field(default=None, ge=0)
 
     model_config = ConfigDict(frozen=True)
 
@@ -89,6 +92,7 @@ router = APIRouter(prefix="/treaties", tags=["treaties"])
 async def create_treaty_route(
     body: CreateTreatyRequest,
     session: AsyncSession = Depends(get_db_session),
+    clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
     """Create a new Treaty and BOUND_BY edges for each signatory faction.
 
@@ -103,7 +107,7 @@ async def create_treaty_route(
         parties=body.parties,
         terms_narrative=body.terms_narrative,
         terms_conditions=list(body.terms_conditions),
-        signed_at_tick=body.signed_at_tick,
+        signed_at_tick=resolve_tick(body.signed_at_tick, clock),
         expires_at_tick=body.expires_at_tick,
         binding_event_id=body.binding_event_id,
     )
@@ -132,6 +136,7 @@ async def expire_treaty_route(
     treaty_id: str,
     body: ExpireTreatyRequest,
     session: AsyncSession = Depends(get_db_session),
+    clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
     """Manually expire a treaty.
 
@@ -142,7 +147,7 @@ async def expire_treaty_route(
     Returns:
         Envelope confirming expiry.
     """
-    await expire_treaty(session, treaty_id, body.tick)
+    await expire_treaty(session, treaty_id, resolve_tick(body.tick, clock))
     return ok_response({"treaty_id": treaty_id, "status": "expired"})
 
 
@@ -151,6 +156,7 @@ async def break_treaty_route(
     treaty_id: str,
     body: BreakTreatyRequest,
     session: AsyncSession = Depends(get_db_session),
+    clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
     """Break a treaty.
 
@@ -165,6 +171,6 @@ async def break_treaty_route(
         session,
         treaty_id=treaty_id,
         breaking_faction_id=body.breaking_faction_id,
-        tick=body.tick,
+        tick=resolve_tick(body.tick, clock),
     )
     return ok_response({"treaty_id": treaty_id, "status": "broken", "broken_by": body.breaking_faction_id})

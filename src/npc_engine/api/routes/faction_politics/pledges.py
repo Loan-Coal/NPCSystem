@@ -18,6 +18,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.helpers import OkEnvelope, ok_response
+from npc_engine.api.dependency_singletons import get_game_clock
+from npc_engine.api.helpers import resolve_tick
+from npc_engine.engines.ports.clock_port import ClockPort
 from npc_engine.graph.political.pledge_service import (
     break_pledge,
     create_pledge,
@@ -37,7 +40,7 @@ class CreatePledgeRequest(BaseModel):
 
     pledgee_id: str = Field(..., min_length=1)
     pledge_type: PLEDGE_TYPES
-    tick: int = Field(..., ge=0)
+    tick: int | None = Field(default=None, ge=0)
     expires_at_tick: int | None = Field(default=None, ge=0)
     witness_id: str | None = Field(default=None)
     binding_event_id: str | None = Field(default=None)
@@ -51,7 +54,7 @@ class BreakPledgeRequest(BaseModel):
 
     pledgee_id: str = Field(..., min_length=1)
     pledge_type: PLEDGE_TYPES
-    tick: int = Field(..., ge=0)
+    tick: int | None = Field(default=None, ge=0)
 
     model_config = ConfigDict(frozen=True)
 
@@ -85,6 +88,7 @@ async def create_character_pledge(
     character_id: str,
     body: CreatePledgeRequest,
     session: AsyncSession = Depends(get_db_session),
+    clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
     """Create a new PLEDGE edge from a character to another.
 
@@ -100,7 +104,7 @@ async def create_character_pledge(
         pledger_id=character_id,
         pledgee_id=body.pledgee_id,
         pledge_type=body.pledge_type,
-        tick=body.tick,
+        tick=resolve_tick(body.tick, clock),
         expires_at_tick=body.expires_at_tick,
         witness_id=body.witness_id,
         binding_event_id=body.binding_event_id,
@@ -133,6 +137,7 @@ async def break_character_pledge(
     character_id: str,
     body: BreakPledgeRequest,
     session: AsyncSession = Depends(get_db_session),
+    clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
     """Break an active pledge and apply relationship consequences.
 
@@ -148,7 +153,7 @@ async def break_character_pledge(
         pledger_id=character_id,
         pledgee_id=body.pledgee_id,
         pledge_type=body.pledge_type,
-        tick=body.tick,
+        tick=resolve_tick(body.tick, clock),
     )
     return ok_response({
         "pledger_id": character_id,
