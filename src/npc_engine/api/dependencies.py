@@ -25,6 +25,7 @@ from npc_engine.api.dependency_singletons import (
     get_emotion_store as get_emotion_store,  # re-exported for api.routes.npc_state
     get_emotion_updater,
     get_event_handler as get_event_handler,  # re-exported for api.routes.batch
+    get_game_clock as get_game_clock,  # re-exported for api.routes.dialogue (ISSUE-165)
     get_game_schema as get_game_schema,  # re-exported for api.routes.system
     get_gossip_handler as get_gossip_handler,  # re-exported for api.routes.batch
     get_graph_db,
@@ -196,6 +197,7 @@ def build_dialogue_handler(
         context_cache=get_context_cache(),
         tts_client=tts_client,
         negotiation_store=get_negotiation_store(),
+        clock=get_game_clock(),
         **get_dialogue_graph_ports(),
     )
 

@@ -149,6 +149,7 @@ async def test_set_routine_override_writes_correct_json() -> None:
 def _make_dialogue_handler(valence_after_mood: int):
     """Build a DialogueHandler with a mocked EmotionUpdater returning the given valence."""
     from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
+    from npc_engine.scheduler.game_clock import GameClock
     from npc_engine.engines.emotion.emotion_state import EmotionState
     from npc_engine.engines.dialogue.session_store import SessionStore
 
@@ -194,6 +195,7 @@ def _make_dialogue_handler(valence_after_mood: int):
     from npc_engine.services.output_moderation import build_output_moderation_service
     handler._output_moderation = build_output_moderation_service("mature")
     handler._effective_rating = "mature"
+    handler._clock = GameClock(mode="game_driven")
     return handler
 
 

@@ -19,6 +19,7 @@ import pytest
 
 from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
 from npc_engine.engines.dialogue.session_store import SessionStore
+from npc_engine.scheduler.game_clock import GameClock
 from npc_engine.engines.llm_config_models import (
     EngineFallbackPolicy,
     EngineModelConfig,
@@ -141,6 +142,7 @@ def _build_handler(adapter: _CapturingLLMClient, config: EngineModelConfig) -> D
         emotion_updater=_FakeEmotionUpdater(),
         dialogue_repo=dialogue_repo,
         dialogue_context=dialogue_context,
+        clock=GameClock(mode="game_driven"),
         input_moderation=build_input_moderation_service("mature"),
         output_moderation=build_output_moderation_service("mature"),
     )

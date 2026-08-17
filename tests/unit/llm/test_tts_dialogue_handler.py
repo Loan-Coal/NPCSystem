@@ -9,6 +9,7 @@ import pytest
 from npc_engine.engines.dialogue.dialogue_models import DialogueResponse
 from npc_engine.engines.emotion.emotion_state import EmotionState
 from npc_engine.engines.tts.mock_adapter import MockTTSAdapter
+from npc_engine.scheduler.game_clock import GameClock
 from npc_engine.engines.tts.voice_params import VoiceParams
 from npc_engine.utils.errors import TTSSynthesisError
 
@@ -127,6 +128,7 @@ def minimal_handler_with_tts():
         emotion_updater=mock_emotion_updater,
         dialogue_repo=mock_dialogue_repo,
         dialogue_context=mock_dialogue_context,
+        clock=GameClock(mode="game_driven"),
         input_moderation=build_input_moderation_service("mature"),
         output_moderation=build_output_moderation_service("mature"),
         tts_client=tts,

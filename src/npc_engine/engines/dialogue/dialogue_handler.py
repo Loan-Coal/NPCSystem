@@ -19,7 +19,6 @@ Ref: DECISIONS.md (DEC-072 OCP note).
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -37,6 +36,7 @@ from npc_engine.engines.emotion.emotion_updater import EmotionUpdater
 from npc_engine.engines.emotion.emotion_state import EmotionState
 from npc_engine.engines.llm.protocols import LLMClientProtocol
 from npc_engine.engines.llm_config_models import EngineModelConfig
+from npc_engine.engines.ports.clock_port import ClockPort
 from npc_engine.engines.ports.dialogue_context_port import DialogueContextPort
 from npc_engine.engines.ports.dialogue_graph_port import DialogueGraphPort
 from npc_engine.engines.relationship.phase_transition_applier import apply_phase_transition
@@ -70,6 +70,11 @@ LLM_VALIDATION_FAILURES_METRIC = "llm_validation_failures_total"
 TTS_FAILURES_METRIC = "tts_failures_total"
 HIGH_AROUSAL_THRESHOLD = 70
 LOW_VALENCE_THRESHOLD = -60
+# Game ticks (not seconds) a withdrawn NPC stays at "home" after a low-valence turn.
+# Previously `tick_id + 5` against a wall-clock tick, i.e. 5 real seconds regardless of
+# game time, which routine_engine then compared against a game tick — so the override
+# never expired (ISSUE-165).
+LOW_VALENCE_ROUTINE_OVERRIDE_TICKS = 5
 
 
 def resolve_log_prompts(settings: Settings) -> bool:
@@ -101,6 +106,7 @@ class DialogueHandler:
         input_moderation: InputModerationService, output_moderation: OutputModerationService,
         dialogue_repo: DialogueGraphPort,
         dialogue_context: DialogueContextPort,
+        clock: ClockPort,
         effective_rating: ContentRating = "mature",
         context_cache: PartialDialogueContextCache | DialogueContextCache | None = None,
         tts_client: TTSClientProtocol | None = None,
@@ -115,6 +121,9 @@ class DialogueHandler:
         Args:
             dialogue_repo: Port for pure graph operations (archetype, voice, relation deltas, etc.).
             dialogue_context: Port for the serialized-context retrieval pipeline.
+            clock: Read-only game clock; the authoritative tick stamped on every write
+                this turn makes (relation deltas, phase, emotion, knowledge, routine
+                override). Replaces the wall-clock timestamp of ISSUE-165.
             input_moderation: Checks player input against the content ceiling (S16.2).
             output_moderation: Flags NPC responses that exceed the content ceiling (S16.3).
             effective_rating: The active content ceiling; informs the system prompt (S16.3).
@@ -135,6 +144,7 @@ class DialogueHandler:
         self._negotiation_store = negotiation_store
         self._dialogue_repo = dialogue_repo
         self._dialogue_context = dialogue_context
+        self._clock = clock
         self._relation_reader, self._relation_phase_writer, self._memory_engine = relation_reader, relation_phase_writer, memory_engine
         self._llm = self._build_llm_client(llm_client)
         self._system_prompt = build_system_prompt(content_rating=effective_rating)
@@ -221,7 +231,7 @@ class DialogueHandler:
             "cached": False, "degradation_level": level,
             "memories_recalled": tuple(memory_ids_captured),
         })
-        tick_id = int(datetime.now(timezone.utc).timestamp())
+        tick_id = self._clock.current_tick
         new_emotion = await self._apply_relation_and_emotion(
             request=request, response=final_response, level=level, tick_id=tick_id,
         )
@@ -290,7 +300,8 @@ class DialogueHandler:
             )
         if new_emotion.valence < LOW_VALENCE_THRESHOLD:
             await self._dialogue_repo.set_routine_override(
-                character_id=request.npc_id, location_id="home", expires_at_tick=tick_id + 5,
+                character_id=request.npc_id, location_id="home",
+                expires_at_tick=tick_id + LOW_VALENCE_ROUTINE_OVERRIDE_TICKS,
             )
         await self._session_store.append_turns(
             player_id=request.player_id, npc_id=request.npc_id,

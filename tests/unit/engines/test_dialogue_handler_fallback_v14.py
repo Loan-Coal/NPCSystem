@@ -24,6 +24,7 @@ from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler, LLM_VA
 from npc_engine.services.input_moderation import build_input_moderation_service
 from npc_engine.services.output_moderation import build_output_moderation_service
 from npc_engine.engines.dialogue.session_store import SessionStore
+from npc_engine.scheduler.game_clock import GameClock
 from npc_engine.engines.llm_config_models import (
     EngineModelConfig,
     EngineFallbackPolicy,
@@ -108,6 +109,7 @@ def _make_handler(
     mock_dialogue_repo=None,
     mock_dialogue_context=None,
     extra_settings=None,
+    clock=None,
 ) -> DialogueHandler:
     """Build a minimal DialogueHandler for tests."""
     settings_ns = {
@@ -128,6 +130,7 @@ def _make_handler(
         output_moderation=build_output_moderation_service("mature"),
         dialogue_repo=mock_dialogue_repo or AsyncMock(),
         dialogue_context=mock_dialogue_context or AsyncMock(build_context=AsyncMock(return_value=("{}", []))),
+        clock=clock or GameClock(mode="game_driven"),
     )
 
 
@@ -239,16 +242,19 @@ async def test_apply_relation_and_emotion_passes_tick(
     mock_dialogue_context,
     monkeypatch,
 ) -> None:
-    """DialogueHandler must pass tick to apply_dialogue_mood."""
+    """DialogueHandler must pass the authoritative game tick to apply_dialogue_mood."""
     monkeypatch.setattr(
         "npc_engine.engines.dialogue.dialogue_handler.build_dialogue_prompt",
         lambda request, serialized_context: "prompt",
     )
     fake_updater = FakeEmotionUpdater()
+    clock = GameClock(mode="game_driven")
+    await clock.advance(tick_delta=42, time_delta_seconds=0)
     handler = _make_handler(
         emotion_updater=fake_updater,
         mock_dialogue_repo=mock_dialogue_repo,
         mock_dialogue_context=mock_dialogue_context,
+        clock=clock,
     )
 
     await handler.handle(
@@ -261,6 +267,7 @@ async def test_apply_relation_and_emotion_passes_tick(
         )
     )
 
-    assert fake_updater.last_tick != 0, (
-        "apply_dialogue_mood must receive a non-zero tick_id"
+    assert fake_updater.last_tick == 42, (
+        "apply_dialogue_mood must receive the injected GameClock tick, not a wall-clock "
+        "timestamp (ISSUE-165)"
     )

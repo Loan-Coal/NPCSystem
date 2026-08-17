@@ -9,7 +9,6 @@ Dependencies injected: AsyncSession, Settings.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Literal, cast, Any
 
 from fastapi import APIRouter, Depends, Request
@@ -23,9 +22,10 @@ from npc_engine.api.helpers import (
     resolve_request_id,
     resolve_session_scope,
 )
-from npc_engine.api.dependencies import get_db_session
+from npc_engine.api.dependencies import get_db_session, get_game_clock
 from npc_engine.api.schemas import ActionReportRequest
 from npc_engine.config import Settings, get_settings
+from npc_engine.engines.ports.clock_port import ClockPort
 from npc_engine.graph.graph_writer import apply_buy_sell_currency_transfer, apply_relation_delta
 from npc_engine.utils.errors import CurrencyInsufficientFundsError, CurrencyValidationError, NodeNotFoundError, RelationEdgeNotFoundError
 
@@ -39,6 +39,7 @@ async def report_action(
     http_request: Request,
     session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
+    clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
     """Apply a conservative relation delta for a reported gameplay action."""
 
@@ -96,7 +97,7 @@ async def report_action(
             dst_id=payload.player_id,
             deltas=deltas,
             cause_id=f"action:{payload.action_type}",
-            tick_id=int(datetime.now(timezone.utc).timestamp()),
+            tick_id=clock.current_tick,
         )
     except RelationEdgeNotFoundError:
         return {"status": "ignored", "reason": "relation_missing"}

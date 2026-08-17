@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from npc_engine.api.dependencies import get_db_session
 from npc_engine.api.dependency_singletons import (
+    get_game_clock,
     get_interaction_graph_repo,
     get_negotiation_store,
     get_pricing_engine,
@@ -42,6 +43,7 @@ from npc_engine.engines.interaction.trade_handler import (
     handle_offer_at_asking_price,
     open_or_resume_trade,
 )
+from npc_engine.engines.ports.clock_port import ClockPort
 from npc_engine.engines.ports.interaction_port import InteractionGraphPort
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
 from npc_engine.graph.intent.interaction_queries import write_debt_edge
@@ -116,6 +118,7 @@ async def post_interaction(
     negotiation_store: NegotiationStore = Depends(get_negotiation_store),
     quest_engine: QuestLifecycleEngine = Depends(get_quest_lifecycle_engine),
     interaction_repo: InteractionGraphPort = Depends(get_interaction_graph_repo),
+    clock: ClockPort = Depends(get_game_clock),
 ) -> dict[str, Any]:
     """Dispatch an interaction proposal and return the resulting state.
 
@@ -217,7 +220,7 @@ async def post_interaction(
                         creditor_id=body.npc_id,
                         item_id=neg.item_id,
                         amount=neg.center_price,
-                        current_tick=0,
+                        current_tick=clock.current_tick,
                     )
                 except Exception as exc:
                     _logger.warning("debt edge write failed: %s", exc)

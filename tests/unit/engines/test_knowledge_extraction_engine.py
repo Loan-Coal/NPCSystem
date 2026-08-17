@@ -267,6 +267,7 @@ def _make_engine_model_config():  # type: ignore[return]
 def _make_handler(knowledge_engine=None, knowledge_learning_enabled: bool = False):
     from npc_engine.engines.dialogue.dialogue_handler import DialogueHandler
     from npc_engine.engines.dialogue.session_store import SessionStore
+    from npc_engine.scheduler.game_clock import GameClock
     from npc_engine.services.input_moderation import build_input_moderation_service
     from npc_engine.services.output_moderation import build_output_moderation_service
 
@@ -300,6 +301,7 @@ def _make_handler(knowledge_engine=None, knowledge_learning_enabled: bool = Fals
         output_moderation=build_output_moderation_service("mature"),
         dialogue_repo=dialogue_repo,
         dialogue_context=dialogue_context,
+        clock=GameClock(mode="game_driven"),
         knowledge_engine=knowledge_engine,
     )
 
