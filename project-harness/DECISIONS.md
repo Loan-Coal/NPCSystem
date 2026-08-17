@@ -4148,3 +4148,55 @@ alongside the pre-existing suite (one known pre-existing flake,
 confirmed pre-existing and unrelated — same flake `EVAL-P20.3`'s own DONE note already named).
 `python scripts/docstring_audit.py` and `python scripts/check_layers.py` green after every module.
 `make check` run in full at session close (see below).
+
+## DEC-186: the game clock is the single source of truth for time (ISSUE-165)
+**Date:** 2026-08-17
+**Context:** Three incompatible unit systems were being written into the *same* graph properties:
+real `GameClock` ticks (0,1,2…), Unix epoch seconds (~1.78e9) from four call sites that minted their
+own tick, and hardcoded `0` from ~13 `tick_id: int = 0` defaults. Properties affected:
+`emotion_updated_at_tick`, `expires_at_tick`, `learned_at_tick`, `phase_started_at_tick`,
+`Event.tick_id`. Any windowed query across them compared incommensurable numbers.
+
+**Decisions:**
+1. **`ClockPort` is read-only, enforced structurally.** `engines/ports/clock_port.py` exposes only
+   `current_tick`, declared as a `@property`. `advance()` and `restore()` are absent from the type,
+   so mypy rejects any engine trying to move the clock — no runtime guard needed. Exposing
+   `ClockState` was rejected: the port would have had to import the concrete module it exists to
+   abstract, and no call site needs `game_time_seconds` or `mode` (ISP).
+2. **`:WorldState` gains `tick_id` + `game_time_seconds`** — a graph node schema change, explicitly
+   human-approved per CLAUDE.md's "asking before doing". Declared `required: false` in the type
+   registry so existing admin PUTs still validate.
+3. **Clock writes carry a monotonic `CASE` guard.** `story_pacing_engine` and
+   `event_emission_service` read a `WorldState`, `model_copy` it, and write it back, so a snapshot
+   taken before a tick advance can land after one — and event emission is unordered w.r.t. finalize,
+   so ordering alone is insufficient. The guard mirrors `GameClock`'s existing "never moves
+   backwards" invariant into Cypher and protects writers that do not exist yet.
+4. **`persist_clock_state()` is a deliberately narrow 2-property writer.** `TickScheduler` holds a
+   `WorldState` read *before* the tick loop; writing it whole at finalize would clobber engines that
+   mutated world state during the loop.
+5. **`_finalize_advance` persists before advancing in memory.** A failed persist then leaves memory
+   and graph consistent at the pre-advance tick rather than torn. The exception propagates (HTTP 500;
+   `TickAutopilot` logs and retries), and the engines for that range re-run — the same replay window
+   that already existed when `advance()` raised mid-loop, covered by existing SchedulerState /
+   tick-lease dedup.
+6. **Scheming takes its tick on `SchemeStepInput`, not a `ClockPort`.** `SchemeInput` already worked
+   that way, the sibling `scheme_advance_tick.py` already passed a real tick into the same builder,
+   and `SchemingEngine` has no production construction site yet. A required field means the eventual
+   wiring cannot forget it.
+7. **Request ticks are optional and fall back to the clock** (`api/helpers/clock_helpers.resolve_tick`).
+   `None` means "now"; an explicit value is an intentional backdate so events can be backlogged at a
+   past tick. Fields that were `default=0` now do the right thing when omitted; fields that were
+   required become optional, which no existing client can notice. Deliberately **excluded**:
+   `expires_at_tick` (`None` means *never expires* — a clock fallback would expire every open-ended
+   treaty immediately), `reputation.py`'s `tick_id` (`None` gates event emission off), and the
+   `from_tick`/`to_tick`/`older_than_ticks` read-query windows.
+8. **`get_standing_trend(current_tick: int = 0)` keeps its default.** It is a read
+   (`min_tick = max(0, current_tick - window_ticks)`) where `0` means "absolute window" and the
+   docstring says so; it has no production caller, so nothing can silently write tick 0 through it.
+9. **No migration for existing epoch-sized ticks** — dev graphs are reseeded instead. No fixture
+   edits, no defensive read-side clamps (a clamp would mean a permanent magic threshold in hot read
+   paths, hiding bad data rather than fixing it).
+
+**Consequence:** ticks drop from ~1.7e9 to single digits. Any *stored* epoch tick now reads as
+infinitely in the future. **Reseeding is mandatory** before judging behaviour, and eval baselines
+captured with epoch ticks will diff — that is the fix working, not a regression.

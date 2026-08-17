@@ -111,28 +111,6 @@ CLAUDE.md is not part of adding a seed.
 the table for other claims that have since gone stale (the `prompts/eval/` path row was corrected
 the same way on 2026-08-10).
 
-## ISSUE-165: dialogue_handler stamps state writes with wall-clock time, bypassing GameClock
-**Found:** 2026-08-14, during `EVAL-P20.0`
-**Severity:** P1 (blocking — it is one of two causes of non-reproducible prompts)
-**Where:** `src/npc_engine/engines/dialogue/dialogue_handler.py:224`
-**Description:** `tick_id = int(datetime.now(timezone.utc).timestamp())` — the dialogue handler
-uses a unix wall-clock timestamp as the tick id, while `scheduler/game_clock.py` provides a
-deterministic `GameClock` that starts at 0 and advances only via explicit `advance()` calls, and
-`docker-compose.yml` runs the app with `CLOCK_MODE: game_driven`. That wall-clock value is
-persisted into `emotion_updated_at_tick` (`graph/emotion/emotion_writer.py:21`) and
-`routine_override.expires_at_tick` (`dialogue_handler.py:292-293`), both read back into later
-prompts — so dialogue is self-perturbing across runs. Measured: these fields differed on 145/145
-records between two eval generations. DEC-176 mitigates the *symptom* by stripping both fields from
-prompt content, but the underlying values are still wrong: a "tick" that is really a wall clock
-makes tick arithmetic (`expires_at_tick = tick_id + 5`, oath/pledge expiry, decay rates expressed
-in units-per-tick) meaningless, since 5 "ticks" is 5 seconds of real time regardless of game time.
-**Why deferred:** changing the tick contract is a behaviour change affecting emotion decay, routine
-overrides, pledge/treaty expiry and the oath engine — far outside `EVAL-P20.0`'s scope, and it
-needs its own regression tests. The prompt-determinism symptom is fixed independently.
-**To fix:** route `tick_id` through the injected `GameClock` (or the world-state tick) rather than
-`datetime.now()`, and add a test asserting two dialogue calls at the same game tick write the same
-`emotion_updated_at_tick`. Audit for other `datetime.now()`-as-tick uses at the same time.
-
 ## ISSUE-166: 173 of 228 Cypher queries with RETURN have no ORDER BY
 **Found:** 2026-08-14, during `EVAL-P20.0` determinism investigation
 **Severity:** P2 (annoying — latent prompt non-determinism)
@@ -1073,3 +1051,20 @@ select `npc_response` from those cases to call `score_refusal_rate`, or (b) deri
 (e.g. any case whose expectations include an `anti_hallucination_grounded` matcher). Once decided, thread
 the result into both `runner.py:404`'s and `judge_runner.py`'s `format_summary_lines` calls the same way
 `panel_agreement=` was threaded in Phase A4.
+
+## ISSUE-178: two prompt paths bypass NON_PROMPT_NODE_FIELDS and leak raw tick values
+**Found:** 2026-08-17, during ISSUE-165 (tick unification)
+**Severity:** P3 (nice-to-fix — no known behaviour impact now that tick values are correct)
+**Where:** `src/npc_engine/retrieval/graph_rag/subgraph_retriever.py:134` and `:140`
+**Description:** DEC-176 strips `emotion_updated_at_tick` and `expires_at_tick` from prompt content
+via `NON_PROMPT_NODE_FIELDS`, but two item builders bypass it. The active-pledges item at `:134`
+calls `serialize_json(...)` with no `strip_fields` at all *and* re-adds `"expires_at_tick"` to the
+dict explicitly. The event items at `:140` pass `strip_fields=_LOW_VALUE_FIELDS`, which does not
+include `tick_id`, so `Event.tick_id` reaches prompts. Both were leaking wall-clock-derived values
+before ISSUE-165; they now leak correct small game ticks, which is why this is P3 rather than P1.
+**Why deferred:** out of ISSUE-165's agreed scope (D1). Fixing `:134` also breaks
+`tests/unit/engines/test_pledge_service.py:270-285`, which pins the current pledge-item shape, so it
+needs its own test update and a prompt-determinism re-measurement.
+**To fix:** pass `strip_fields=NON_PROMPT_NODE_FIELDS` (or a union with `_LOW_VALUE_FIELDS`) at both
+sites, stop re-adding `expires_at_tick` in the pledge item, and update `test_pledge_service.py`.
+Re-run the retrieved_context drift measurement afterwards to confirm it stays at 0.

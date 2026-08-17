@@ -2257,3 +2257,39 @@ convention and make it consistent across Program 3's human-decision tasks.
 **How fixed:** Added the explicit `AskUserQuestion, before any implementation` marker to
 `EVAL-P21.0`, matching the `EVAL-P20.3a`/`P20.3b` convention. Asked the roster question in the
 same sitting; chose `llama3.1:8b`. Full writeup: DEC-183.
+
+## [FIXED] ISSUE-165: dialogue_handler stamps state writes with wall-clock time, bypassing GameClock
+**Found:** 2026-08-14, during `EVAL-P20.0`
+**Severity:** P1 (blocking — it is one of two causes of non-reproducible prompts)
+**Where:** `src/npc_engine/engines/dialogue/dialogue_handler.py:224`
+**Description:** `tick_id = int(datetime.now(timezone.utc).timestamp())` — the dialogue handler
+uses a unix wall-clock timestamp as the tick id, while `scheduler/game_clock.py` provides a
+deterministic `GameClock` that starts at 0 and advances only via explicit `advance()` calls, and
+`docker-compose.yml` runs the app with `CLOCK_MODE: game_driven`. That wall-clock value is
+persisted into `emotion_updated_at_tick` (`graph/emotion/emotion_writer.py:21`) and
+`routine_override.expires_at_tick` (`dialogue_handler.py:292-293`), both read back into later
+prompts — so dialogue is self-perturbing across runs. Measured: these fields differed on 145/145
+records between two eval generations. DEC-176 mitigates the *symptom* by stripping both fields from
+prompt content, but the underlying values are still wrong: a "tick" that is really a wall clock
+makes tick arithmetic (`expires_at_tick = tick_id + 5`, oath/pledge expiry, decay rates expressed
+in units-per-tick) meaningless, since 5 "ticks" is 5 seconds of real time regardless of game time.
+**Why deferred:** changing the tick contract is a behaviour change affecting emotion decay, routine
+overrides, pledge/treaty expiry and the oath engine — far outside `EVAL-P20.0`'s scope, and it
+needs its own regression tests. The prompt-determinism symptom is fixed independently.
+**To fix:** route `tick_id` through the injected `GameClock` (or the world-state tick) rather than
+`datetime.now()`, and add a test asserting two dialogue calls at the same game tick write the same
+`emotion_updated_at_tick`. Audit for other `datetime.now()`-as-tick uses at the same time.
+**Fixed:** 2026-08-17, in ISSUE-165a..f (commits `5ec0851`, `49f3df0`, `6313286`, `16bfa9c`, + Stage 5/6).
+The audit called for above found this was **four** wall-clock/hardcoded tick sources, not one:
+`dialogue_handler.py:224`, `api/routes/dialogue/action.py:99`, `quest/quest_engine_helpers.py:86`,
+and `scheming_engine.py:186` (hardcoded `tick_id=0`), plus `interaction.py:220` (`current_tick=0`)
+and ~13 `tick_id: int = 0` engine defaults. All now route through `GameClock` via a read-only
+`ClockPort` Protocol; the `tick=0` defaults are required parameters. The routine-override bug was
+worse than described: `routine_engine.py:138` compares `expires_at_tick` against a *game* tick, so
+dialogue-set overrides were never reachable and the NPC stayed home permanently.
+Also fixed a latent bug the required-tick change exposed: `gossip_handler.py:333` called
+`apply_event_shock` without a tick, stamping `emotion_updated_at_tick = 0`.
+The tick is now persisted on `:WorldState` and hydrated at startup (DEC-186), so it survives restart.
+**Migration:** none (DEC-186/D4). Dev graphs containing epoch-sized ticks (~1.78e9) must be
+**reseeded** — such values now read as unreachably far in the future. Eval baselines captured before
+this change will diff; that is the fix working, not a regression.
