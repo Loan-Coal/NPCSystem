@@ -37,6 +37,7 @@ from npc_engine.world.time_utils import TimePoint
 from npc_engine.world.world_state import WorldState
 from npc_engine.config import get_settings
 from npc_engine.graph.world_state.world_state_reader import get_world_state
+from npc_engine.graph.world_state.world_state_writer import persist_clock_state
 
 
 LOGGER = logging.getLogger(__name__)
@@ -470,6 +471,15 @@ class TickScheduler:
                     response[name].append(row)
         return gossip_unresolved or event_unresolved
 
+    async def _persist_clock(self, session: AsyncSession, *, tick_id: int, game_time_seconds: int) -> None:
+        """Write the post-advance clock state onto the singleton WorldState node."""
+        await persist_clock_state(
+            session,
+            world_id=get_settings().WORLD_ID,
+            tick_id=tick_id,
+            game_time_seconds=game_time_seconds,
+        )
+
     async def _finalize_advance(
         self,
         *,
@@ -482,27 +492,57 @@ class TickScheduler:
         response: dict[str, Any],
         time_delta_seconds: int,
     ) -> None:
-        """Advance clock state and conditionally run memory consolidation."""
+        """Persist and advance clock state, then conditionally run memory consolidation.
+
+        Persists the new clock state to the graph BEFORE advancing the in-memory clock,
+        so a failed persist leaves memory and graph consistent at the pre-advance tick
+        rather than torn. On persist failure the exception propagates out of advance():
+        the HTTP route returns 500 and TickAutopilot logs and retries next interval. The
+        engines for the failed tick range have already run and will re-run on retry — the
+        same replay window that already exists when advance() raises mid-loop, covered by
+        the existing SchedulerState / tick-lease dedup for gossip and event (ISSUE-165).
+        """
         advanced_seconds = 0 if tick_delta <= 0 else int((time_delta_seconds * advanced_ticks) / tick_delta)
+        await self._persist_clock(
+            session,
+            tick_id=start_tick + advanced_ticks,
+            game_time_seconds=self._clock.state.game_time_seconds + advanced_seconds,
+        )
         state = await self._clock.advance(tick_delta=advanced_ticks, time_delta_seconds=advanced_seconds)
         response["clock"] = state.model_dump()
         self._advance_count += 1
-        if (not skip_llm_engines and self._memory_consolidation_engine is not None
-                and self._advance_count % self._consolidation_advance_interval == 0):
-            game_time = TimePoint(
-                year=world_state.year,
-                season=world_state.season,
-                day=world_state.day,
-                time_of_day=world_state.time_of_day,
-            )
-            consolidation_tick = start_tick + advanced_ticks
-            consolidation_row = await self._run_engine_safe(
-                "memory_consolidation", consolidation_tick,
-                self._memory_consolidation_engine.run_tick(game_time=game_time),
-            )
-            response["consolidation"] = (
-                consolidation_row.get("consolidated", []) if consolidation_row is not None else []
-            )
+        await self._maybe_consolidate_memory(
+            skip_llm_engines=skip_llm_engines,
+            consolidation_tick=start_tick + advanced_ticks,
+            world_state=world_state,
+            response=response,
+        )
+
+    async def _maybe_consolidate_memory(
+        self,
+        *,
+        skip_llm_engines: bool,
+        consolidation_tick: int,
+        world_state: WorldState,
+        response: dict[str, Any],
+    ) -> None:
+        """Run memory consolidation when this advance lands on the consolidation interval."""
+        if (skip_llm_engines or self._memory_consolidation_engine is None
+                or self._advance_count % self._consolidation_advance_interval != 0):
+            return
+        game_time = TimePoint(
+            year=world_state.year,
+            season=world_state.season,
+            day=world_state.day,
+            time_of_day=world_state.time_of_day,
+        )
+        consolidation_row = await self._run_engine_safe(
+            "memory_consolidation", consolidation_tick,
+            self._memory_consolidation_engine.run_tick(game_time=game_time),
+        )
+        response["consolidation"] = (
+            consolidation_row.get("consolidated", []) if consolidation_row is not None else []
+        )
 
     async def advance(self, session: AsyncSession, tick_delta: int, time_delta_seconds: int, skip_llm_engines: bool = False) -> dict[str, Any]:
         """Advance the clock and run due handlers, returning per-engine result lists.

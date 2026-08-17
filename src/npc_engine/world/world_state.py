@@ -14,6 +14,13 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, ConfigDict, Field
 
 
+# Persisted game-clock seed (ISSUE-165). A world that has never ticked, and a graph
+# written before the clock was persisted, both resolve to these values; GameClock.restore
+# takes a max() so either case is a no-op rather than a rewind.
+DEFAULT_TICK_ID: int = 0
+DEFAULT_GAME_TIME_SECONDS: int = 0
+
+
 class WorldState(BaseModel):
     """Global world state shared across all engines."""
 
@@ -28,6 +35,8 @@ class WorldState(BaseModel):
     day: int = 1
     max_event_severity: int = 100
     quest_generation_rate: float = 1.0
+    tick_id: int = DEFAULT_TICK_ID
+    game_time_seconds: int = DEFAULT_GAME_TIME_SECONDS
     last_updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_graph_updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

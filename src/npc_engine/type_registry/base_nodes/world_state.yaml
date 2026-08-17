@@ -8,5 +8,7 @@ fields:
   time_of_day: { type: str, required: true }
   max_event_severity: { type: int, required: false }
   quest_generation_rate: { type: float, required: false }
+  tick_id: { type: int, required: false }
+  game_time_seconds: { type: int, required: false }
   last_updated_at: { type: str, required: true }
   last_graph_updated_at: { type: str, required: true }

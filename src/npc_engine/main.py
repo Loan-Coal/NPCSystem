@@ -28,6 +28,7 @@ from npc_engine.api.dependency_singletons import (
     get_embedding_index,
     get_emotion_store,
     get_faction_politics_engine,
+    get_game_clock,
     get_game_schema,
     get_graph_db,
     get_idempotency_service,
@@ -48,6 +49,7 @@ from npc_engine.api.dependency_singletons import (
 )
 from npc_engine.engines.emotion.emotion_bootstrap import EmotionBootstrapper
 from npc_engine.graph.character.character_reader import get_npc_ids
+from npc_engine.graph.world_state.world_state_reader import get_world_state
 from npc_engine.graph.repositories.emotion_bootstrap_repository import Neo4jEmotionBootstrapRepository
 from npc_engine.api.dependencies import get_sync_trade_handler
 from npc_engine.engines.interaction.dispatch import set_trade_handler
@@ -76,6 +78,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     autopilot_task: asyncio.Task[None] | None = None
     connected = False
     try:
+        # Clock before scheduler: get_tick_scheduler captures the clock singleton.
+        get_game_clock.cache_clear()
+        get_tick_scheduler.cache_clear()
         get_faction_politics_engine.cache_clear()
         get_clique_formation_engine.cache_clear()
         get_skill_progression_engine.cache_clear()
@@ -131,6 +136,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             )
             await get_session_store().load_from_graph(session=session)
             _logger.info("session_store.loaded_from_graph")
+            persisted_world = await get_world_state(session=session, world_id=settings.WORLD_ID)
+        # Hydrate the game clock before any engine or the autopilot can read it (ISSUE-165).
+        clock_state = await get_game_clock().restore(
+            tick_id=persisted_world.tick_id,
+            game_time_seconds=persisted_world.game_time_seconds,
+        )
+        _logger.info("game_clock.hydrated tick_id=%s", clock_state.tick_id)
         await redis_runtime.connect()
         _dialogue_probe_adapter = create_llm_client_for_engine(
             engine_config=dialogue_engine_config, settings=settings

@@ -16,11 +16,26 @@ from typing import Any, cast
 from neo4j import AsyncSession, AsyncTransaction
 
 from npc_engine.common.json_utils import dump_json, parse_json_list, parse_json_object
-from npc_engine.world.world_state import WorldState
+from npc_engine.world.world_state import (
+    DEFAULT_GAME_TIME_SECONDS,
+    DEFAULT_TICK_ID,
+    WorldState,
+)
 
 
-CYPHER_MERGE_WORLD_STATE = """
-MERGE (w:WorldState {id: $id})
+# Monotonic clock guard (ISSUE-165). Several callers read a WorldState, model_copy it,
+# and write it back (story_pacing_engine, event_emission_service), so a snapshot taken
+# before a tick advance can be written back after one. Mirroring GameClock's "never moves
+# backwards" invariant into Cypher makes that harmless, and protects writers not yet
+# written. Defaults arrive as bound params so no literal is inlined in the query.
+_CLOCK_MONOTONIC_SET = """    w.tick_id = CASE WHEN coalesce(w.tick_id, $default_tick_id) > $tick_id
+                     THEN w.tick_id ELSE $tick_id END,
+    w.game_time_seconds = CASE WHEN coalesce(w.game_time_seconds, $default_game_time_seconds) > $game_time_seconds
+                               THEN w.game_time_seconds ELSE $game_time_seconds END,"""
+
+
+CYPHER_MERGE_WORLD_STATE = f"""
+MERGE (w:WorldState {{id: $id}})
 SET w.epoch = $epoch,
     w.faction_standings = $faction_standings,
     w.active_conditions = $active_conditions,
@@ -31,8 +46,17 @@ SET w.epoch = $epoch,
     w.day = $day,
     w.max_event_severity = $max_event_severity,
     w.quest_generation_rate = $quest_generation_rate,
+{_CLOCK_MONOTONIC_SET}
     w.last_updated_at = datetime()
 RETURN properties(w) AS world
+"""
+
+
+CYPHER_SET_WORLD_CLOCK = f"""
+MERGE (w:WorldState {{id: $world_id}})
+SET
+{_CLOCK_MONOTONIC_SET}
+    w.last_updated_at = datetime()
 """
 
 
@@ -57,6 +81,10 @@ def _world_state_write_params(world_state: WorldState) -> dict[str, Any]:
         "day": world_state.day,
         "max_event_severity": world_state.max_event_severity,
         "quest_generation_rate": world_state.quest_generation_rate,
+        "tick_id": world_state.tick_id,
+        "game_time_seconds": world_state.game_time_seconds,
+        "default_tick_id": DEFAULT_TICK_ID,
+        "default_game_time_seconds": DEFAULT_GAME_TIME_SECONDS,
     }
 
 
@@ -82,7 +110,38 @@ def _world_state_from_record(payload: dict[str, Any], fallback: WorldState) -> W
         day=int(payload.get("day", fallback.day)),
         max_event_severity=int(payload.get("max_event_severity", fallback.max_event_severity)),
         quest_generation_rate=float(payload.get("quest_generation_rate", fallback.quest_generation_rate)),
+        tick_id=int(payload.get("tick_id", fallback.tick_id)),
+        game_time_seconds=int(payload.get("game_time_seconds", fallback.game_time_seconds)),
         last_updated_at=datetime.now(timezone.utc),
+    )
+
+
+async def persist_clock_state(
+    session: AsyncSession,
+    *,
+    world_id: str,
+    tick_id: int,
+    game_time_seconds: int,
+) -> None:
+    """Persist only the game-clock fields of the singleton WorldState node.
+
+    Deliberately narrow: TickScheduler holds a WorldState snapshot read *before* the
+    tick loop ran, so writing that whole snapshot back at finalize would clobber engines
+    that mutated world state during the loop. Monotonic — never lowers a stored tick.
+
+    Args:
+        session: Active Neo4j async session used to run the MERGE query.
+        world_id: Identifier of the singleton WorldState node.
+        tick_id: Tick id to persist.
+        game_time_seconds: Elapsed in-game seconds to persist.
+    """
+    await session.run(
+        CYPHER_SET_WORLD_CLOCK,
+        world_id=world_id,
+        tick_id=tick_id,
+        game_time_seconds=game_time_seconds,
+        default_tick_id=DEFAULT_TICK_ID,
+        default_game_time_seconds=DEFAULT_GAME_TIME_SECONDS,
     )
 
 

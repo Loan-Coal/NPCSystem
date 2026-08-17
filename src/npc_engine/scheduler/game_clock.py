@@ -62,6 +62,29 @@ class GameClock:
             self._game_time_seconds += max(0, time_delta_seconds)
             return self.state
 
+    async def restore(self, tick_id: int, game_time_seconds: int) -> ClockState:
+        """Seed the clock from persisted world state at startup.
+
+        Monotonic like advance(): takes the maximum of the current and persisted values,
+        so a late or duplicate restore can never rewind a running clock, and a world whose
+        node is absent (or predates ISSUE-165) hydrates to 0 as a no-op.
+
+        Called once from the api lifespan; never from an engine — ClockPort deliberately
+        does not expose it.
+
+        Args:
+            tick_id: Tick id read from the persisted WorldState.
+            game_time_seconds: Elapsed in-game seconds read from the persisted WorldState.
+
+        Returns:
+            Immutable ClockState snapshot after seeding.
+        """
+
+        async with self._lock:
+            self._tick_id = max(self._tick_id, tick_id)
+            self._game_time_seconds = max(self._game_time_seconds, game_time_seconds)
+            return self.state
+
     @property
     def current_tick(self) -> int:
         """Return the current tick id (satisfies engines.ports.clock_port.ClockPort)."""
