@@ -61,6 +61,7 @@ def build_lifecycle_event(
     event_type: str,
     summary: str,
     meta: QuestTransitionMeta,
+    tick_id: int,
 ) -> Any:
     """Construct a typed lifecycle event node using the registry event model.
 
@@ -71,6 +72,9 @@ def build_lifecycle_event(
         event_type: Lifecycle event type string (e.g. ``"quest_offered"``).
         summary: Human-readable event summary.
         meta: Transition metadata for provenance and idempotency fields.
+        tick_id: Authoritative game tick this event occurred at. Previously derived
+            from the wall clock, which made quest events unsortable against
+            scheduler-produced events (ISSUE-165).
 
     Returns:
         A typed event node instance from the registry model.
@@ -83,7 +87,7 @@ def build_lifecycle_event(
         "severity": 20,
         "location_id": "quest",
         "occurred_at": now.isoformat(),
-        "tick_id": int(now.timestamp()),
+        "tick_id": tick_id,
         "event_type": event_type,
         "is_public": True,
         "producer": "quest_lifecycle_engine",

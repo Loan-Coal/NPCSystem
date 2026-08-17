@@ -16,6 +16,7 @@ from pathlib import Path
 
 from npc_engine.api.dependencies_engines.core import get_memory_engine
 from npc_engine.api.dependencies_infra import _register_adapter, get_type_registry
+from npc_engine.api.dependencies_stores import get_game_clock
 from npc_engine.config import get_settings
 from npc_engine.engines.llm.factory import create_llm_client_for_engine
 from npc_engine.engines.llm_runtime_config import get_config as get_engine_model_config_for
@@ -66,6 +67,7 @@ def get_quest_lifecycle_engine() -> QuestLifecycleEngine:
         chain_resolver=get_quest_chain_resolver(),
         memory_engine=get_memory_engine(),
         quest_repo=Neo4jQuestLifecycleRepository(get_graph_db()),
+        clock=get_game_clock(),
     )
 
 
@@ -96,6 +98,7 @@ def get_quest_offer_service() -> QuestOfferService:
         settings=settings,
         registry=get_type_registry(),
         quest_offer_repo=Neo4jQuestOfferRepository(get_graph_db()),
+        clock=get_game_clock(),
     )
 
 
@@ -114,6 +117,7 @@ def get_quest_reward_router() -> QuestRewardRouter:
         settings=settings,
         registry=get_type_registry(),
         quest_reward_repo=Neo4jQuestRewardRepository(get_graph_db()),
+        clock=get_game_clock(),
     )
 
 

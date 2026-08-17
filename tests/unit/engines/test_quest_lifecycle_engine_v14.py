@@ -19,6 +19,7 @@ from npc_engine.engines.quest.quest_offer_service import QuestOfferService
 from npc_engine.engines.quest.quest_reward_router import QuestRewardRouter
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.utils.errors import QuestTransitionError
+from npc_engine.scheduler.game_clock import GameClock
 
 
 class _FakeEventModel(BaseModel):
@@ -128,6 +129,7 @@ def test_memory_engine_is_injected_when_provided() -> None:
     repo = _make_lifecycle_repo({})
     engine = QuestLifecycleEngine(
         settings=_settings(), registry=_fake_registry(), memory_engine=sentinel, quest_repo=repo,
+        clock=GameClock(mode="game_driven"),
     )
     assert engine._memory_engine is sentinel
 
@@ -137,6 +139,7 @@ def test_memory_engine_is_none_when_omitted() -> None:
     repo = _make_lifecycle_repo({})
     engine = QuestLifecycleEngine(
         settings=_settings(), registry=_fake_registry(), quest_repo=repo,
+        clock=GameClock(mode="game_driven"),
     )
     assert engine._memory_engine is None
 
@@ -156,12 +159,15 @@ async def test_offer_accept_update_evaluate_and_apply_rewards_happy_path() -> No
 
     offer_service = QuestOfferService(
         settings=_settings(), registry=_fake_registry(), quest_offer_repo=offer_repo,
+        clock=GameClock(mode="game_driven"),
     )
     engine = QuestLifecycleEngine(
         settings=_settings(), registry=_fake_registry(), quest_repo=lifecycle_repo,
+        clock=GameClock(mode="game_driven"),
     )
     reward_router = QuestRewardRouter(
         settings=_settings(), registry=_fake_registry(), quest_reward_repo=reward_repo,
+        clock=GameClock(mode="game_driven"),
     )
 
     offered = await offer_service.offer_quest(
@@ -212,6 +218,7 @@ async def test_accept_requires_offered_state() -> None:
     repo = _make_lifecycle_repo({})
     engine = QuestLifecycleEngine(
         settings=_settings(), registry=_fake_registry(), quest_repo=repo,
+        clock=GameClock(mode="game_driven"),
     )
     with pytest.raises(QuestTransitionError):
         await engine.accept_quest(
@@ -243,6 +250,7 @@ async def test_offer_rejects_existing_offered_state_with_empty_reward_source() -
 
     offer_service = QuestOfferService(
         settings=_settings(), registry=_fake_registry(), quest_offer_repo=offer_repo,
+        clock=GameClock(mode="game_driven"),
     )
     with pytest.raises(QuestTransitionError) as error:
         await offer_service.offer_quest(
@@ -293,6 +301,7 @@ async def test_apply_rewards_emits_provenance_event_with_transaction_support() -
 
     reward_router = QuestRewardRouter(
         settings=_settings(), registry=_fake_registry(), quest_reward_repo=reward_repo,
+        clock=GameClock(mode="game_driven"),
     )
     await reward_router.apply_rewards(
         quest_id="quest-6", player_id="player-1", meta=_meta(),
@@ -324,6 +333,7 @@ async def test_offer_rolls_back_state_when_event_write_fails() -> None:
 
     offer_service = QuestOfferService(
         settings=_settings(), registry=_fake_registry(), quest_offer_repo=offer_repo,
+        clock=GameClock(mode="game_driven"),
     )
     with pytest.raises(RuntimeError, match="event write failure"):
         await offer_service.offer_quest(
@@ -352,6 +362,7 @@ async def test_offer_draft_quest_happy_path() -> None:
 
     offer_service = QuestOfferService(
         settings=_settings(), registry=_fake_registry(), quest_offer_repo=offer_repo,
+        clock=GameClock(mode="game_driven"),
     )
     state = await offer_service.offer_draft_quest(
         quest_id="quest-draft-1",
@@ -377,6 +388,7 @@ async def test_offer_draft_quest_non_draft_raises() -> None:
 
     offer_service = QuestOfferService(
         settings=_settings(), registry=_fake_registry(), quest_offer_repo=offer_repo,
+        clock=GameClock(mode="game_driven"),
     )
     with pytest.raises(QuestTransitionError) as exc:
         await offer_service.offer_draft_quest(
@@ -399,6 +411,7 @@ async def test_offer_draft_quest_not_found_raises() -> None:
 
     offer_service = QuestOfferService(
         settings=_settings(), registry=_fake_registry(), quest_offer_repo=offer_repo,
+        clock=GameClock(mode="game_driven"),
     )
     with pytest.raises(QuestTransitionError) as exc:
         await offer_service.offer_draft_quest(
@@ -445,6 +458,7 @@ async def test_fail_quest_transitions_to_failed_and_calls_chain_resolver() -> No
         registry=_fake_registry(),
         chain_resolver=resolver,
         quest_repo=lifecycle_repo,
+        clock=GameClock(mode="game_driven"),
     )
     stored = await engine.fail_quest(
         quest_id="quest-f1", player_id="player-1", meta=_meta(),
@@ -478,6 +492,7 @@ async def test_fail_quest_raises_on_terminal_status() -> None:
     lifecycle_repo = _make_lifecycle_repo(state_store)
     engine = QuestLifecycleEngine(
         settings=_settings(), registry=_fake_registry(), quest_repo=lifecycle_repo,
+        clock=GameClock(mode="game_driven"),
     )
     with pytest.raises(QuestTransitionError) as exc:
         await engine.fail_quest(

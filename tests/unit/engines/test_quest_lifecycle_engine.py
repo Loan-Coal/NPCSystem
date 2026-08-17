@@ -19,6 +19,7 @@ from npc_engine.config import Settings
 from npc_engine.engines.quest.models import QuestTransitionMeta
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
 from npc_engine.type_registry.contracts import TypeRegistry
+from npc_engine.scheduler.game_clock import GameClock
 
 
 class _FakeEventModel(BaseModel):
@@ -119,6 +120,7 @@ async def test_quest_accept_forms_commitment_memory() -> None:
         registry=_fake_registry(),
         memory_engine=_FakeMemoryEngine(),  # type: ignore[arg-type]
         quest_repo=_make_lifecycle_repo(state_store),
+        clock=GameClock(mode="game_driven"),
     )
     stored = await engine.accept_quest(
         quest_id="quest-214",

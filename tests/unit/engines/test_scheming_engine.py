@@ -122,7 +122,7 @@ async def test_advance_step_uses_emit_scheme_step_atomic_when_registry_injected(
     await engine.advance_step(
         SchemeStepInput(
             scheme_id="s1", npc_id="aldric", goal="corner_grain",
-            location_id="loc_market", step_order=1, completed=False
+            location_id="loc_market", step_order=1, completed=False, tick=31
         )
     )
 
@@ -135,6 +135,37 @@ async def test_advance_step_uses_emit_scheme_step_atomic_when_registry_injected(
 
 
 @pytest.mark.asyncio
+async def test_advance_step_stamps_the_supplied_game_tick() -> None:
+    """ISSUE-165: the covert Event takes its tick from the input, not a hardcoded 0.
+
+    The sibling SchemeAdvanceTick already passed a real tick into the same builder, so
+    the two writers were stamping one node type with two different tick semantics.
+    """
+    import npc_engine.engines.scheming.scheming_engine as scheming_module
+
+    engine, _repo, _registry = _make_engine_with_registry()
+    captured: dict[str, int] = {}
+    original = scheming_module.build_covert_event_props
+
+    def _spy(**kwargs):
+        captured["tick_id"] = kwargs["tick_id"]
+        return original(**kwargs)
+
+    scheming_module.build_covert_event_props = _spy
+    try:
+        await engine.advance_step(
+            SchemeStepInput(
+                scheme_id="s3", npc_id="aldric", goal="corner_grain",
+                location_id="loc_market", step_order=2, completed=False, tick=31
+            )
+        )
+    finally:
+        scheming_module.build_covert_event_props = original
+
+    assert captured["tick_id"] == 31
+
+
+@pytest.mark.asyncio
 async def test_advance_step_marks_completed() -> None:
     """advance_step forwards completed=True via emit_scheme_step_atomic."""
     engine, repo, _ = _make_engine_with_registry()
@@ -142,7 +173,7 @@ async def test_advance_step_marks_completed() -> None:
     await engine.advance_step(
         SchemeStepInput(
             scheme_id="s2", npc_id="aldric", goal="corner_grain",
-            location_id="loc_market", step_order=3, completed=True
+            location_id="loc_market", step_order=3, completed=True, tick=31
         )
     )
 

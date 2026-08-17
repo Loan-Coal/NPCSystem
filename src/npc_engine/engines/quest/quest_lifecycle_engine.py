@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 from npc_engine.config import Settings
 from npc_engine.engines.memory.memory_engine import MemoryEngine
+from npc_engine.engines.ports.clock_port import ClockPort
 from npc_engine.engines.ports.quest_port import QuestLifecycleGraphPort
 from npc_engine.engines.quest.models import (
     QuestStateRecord,
@@ -55,6 +56,7 @@ class QuestLifecycleEngine:
         chain_resolver: QuestChainResolver | None = None,
         memory_engine: MemoryEngine | None = None,
         quest_repo: QuestLifecycleGraphPort | None = None,
+        clock: ClockPort | None = None,
     ) -> None:
         """Initialise the quest lifecycle engine.
 
@@ -64,16 +66,20 @@ class QuestLifecycleEngine:
             chain_resolver: Optional injected QuestChainResolver called after COMPLETED.
             memory_engine: Optional injected MemoryEngine for commitment memory on accept.
             quest_repo: Graph port for quest state reads/writes (DEC-122 / SEV-24); required.
+            clock: Read-only game clock stamping lifecycle events (ISSUE-165); required.
 
         Raises:
-            ValueError: If registry or quest_repo is None.
+            ValueError: If registry, quest_repo, or clock is None.
         """
         self._settings = settings
         if registry is None:
             raise ValueError("QuestLifecycleEngine requires a TypeRegistry injected via __init__")
         if quest_repo is None:
             raise ValueError("QuestLifecycleEngine requires a QuestLifecycleGraphPort injected via __init__")
+        if clock is None:
+            raise ValueError("QuestLifecycleEngine requires a ClockPort injected via __init__")
         self._registry = registry
+        self._clock = clock
         self._chain_resolver = chain_resolver
         self._memory_engine = memory_engine
         self._quest_repo = quest_repo
@@ -136,6 +142,7 @@ class QuestLifecycleEngine:
             event_type=event_type,
             summary=summary,
             meta=meta,
+            tick_id=self._clock.current_tick,
         )
         await self._quest_repo.emit_lifecycle_event(event_node=event)
 
@@ -156,6 +163,7 @@ class QuestLifecycleEngine:
             event_type=event_type,
             summary=summary,
             meta=meta,
+            tick_id=self._clock.current_tick,
         )
         return await self._quest_repo.persist_state_and_event(
             quest_id=quest_id,

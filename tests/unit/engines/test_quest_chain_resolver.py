@@ -25,6 +25,7 @@ from npc_engine.engines.quest.models import QuestTransitionMeta
 from npc_engine.engines.quest.quest_chain_resolver import QuestChainResolver
 from npc_engine.engines.quest.quest_lifecycle_engine import QuestLifecycleEngine
 from npc_engine.type_registry.contracts import TypeRegistry
+from npc_engine.scheduler.game_clock import GameClock
 
 
 class _FakeEventModel(BaseModel):
@@ -190,6 +191,7 @@ async def test_lifecycle_engine_calls_resolver_on_completion() -> None:
         registry=_fake_registry(),
         chain_resolver=mock_resolver,
         quest_repo=lifecycle_repo,
+        clock=GameClock(mode="game_driven"),
     )
 
     await engine.evaluate_completion(

@@ -17,6 +17,7 @@ from npc_engine.engines.quest.models import QuestTransitionMeta
 from npc_engine.engines.quest.quest_reward_router import QuestRewardRouter
 from npc_engine.type_registry.contracts import TypeRegistry
 from npc_engine.utils.errors import QuestTransitionError
+from npc_engine.scheduler.game_clock import GameClock
 
 
 class _FakeEventModel(BaseModel):
@@ -85,6 +86,7 @@ async def test_apply_rewards_routes_item_and_currency_through_graph_writer() -> 
         settings=_settings(),
         registry=_fake_registry(),
         quest_reward_repo=reward_repo,
+        clock=GameClock(mode="game_driven"),
     )
     result = await reward_router.apply_rewards(
         quest_id="quest-2",
@@ -117,6 +119,7 @@ async def test_apply_rewards_rejects_non_completed_quest() -> None:
         settings=_settings(),
         registry=_fake_registry(),
         quest_reward_repo=reward_repo,
+        clock=GameClock(mode="game_driven"),
     )
     with pytest.raises(QuestTransitionError):
         await reward_router.apply_rewards(
@@ -151,6 +154,7 @@ async def test_apply_rewards_aggregates_duplicate_item_rewards() -> None:
         settings=_settings(),
         registry=_fake_registry(),
         quest_reward_repo=reward_repo,
+        clock=GameClock(mode="game_driven"),
     )
     result = await reward_router.apply_rewards(
         quest_id="quest-4",
@@ -186,6 +190,7 @@ async def test_apply_rewards_rejects_empty_reward_source() -> None:
         settings=_settings(),
         registry=_fake_registry(),
         quest_reward_repo=reward_repo,
+        clock=GameClock(mode="game_driven"),
     )
     with pytest.raises(QuestTransitionError) as error:
         await reward_router.apply_rewards(

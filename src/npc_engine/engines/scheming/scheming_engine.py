@@ -61,6 +61,10 @@ class SchemeStepInput(BaseModel):
         location_id: Location where the covert event occurs.
         step_order: Ordinal position of this step in the scheme.
         completed: Whether the step has been completed.
+        tick: Authoritative game tick the step occurs at. Required — the covert Event
+            previously hardcoded tick_id=0 while the sibling SchemeAdvanceTick passed a
+            real tick into the same builder, so one node type carried two tick
+            semantics (ISSUE-165). Mirrors SchemeInput.tick.
     """
 
     scheme_id: str
@@ -69,6 +73,7 @@ class SchemeStepInput(BaseModel):
     location_id: str
     step_order: int
     completed: bool
+    tick: int
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +188,7 @@ class SchemingEngine:
             goal=inputs.goal,
             step_order=inputs.step_order,
             location_id=inputs.location_id,
-            tick_id=0,
+            tick_id=inputs.tick,
             now_iso=now_iso,
         )
         validated = validate_node_write(self._registry, _EVENT_NODE_TYPE, props.model_dump())

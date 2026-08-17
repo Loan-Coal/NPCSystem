@@ -21,6 +21,7 @@ from typing import Any
 import logging
 
 from npc_engine.config import Settings
+from npc_engine.engines.ports.clock_port import ClockPort
 from npc_engine.engines.ports.quest_port import QuestOfferGraphPort
 from npc_engine.engines.quest.models import (
     QuestObjectiveInput,
@@ -49,6 +50,7 @@ class QuestOfferService:
         settings: Settings,
         registry: TypeRegistry | None = None,
         quest_offer_repo: QuestOfferGraphPort | None = None,
+        clock: ClockPort | None = None,
     ) -> None:
         """Initialise the quest offer service.
 
@@ -56,16 +58,20 @@ class QuestOfferService:
             settings: Application settings.
             registry: Type registry providing event node model; required.
             quest_offer_repo: Graph port for quest offer writes (DEC-122 / SEV-24); required.
+            clock: Read-only game clock stamping lifecycle events (ISSUE-165); required.
 
         Raises:
-            ValueError: If registry or quest_offer_repo is None.
+            ValueError: If registry, quest_offer_repo, or clock is None.
         """
         self._settings = settings
         if registry is None:
             raise ValueError("QuestOfferService requires a TypeRegistry injected via __init__")
         if quest_offer_repo is None:
             raise ValueError("QuestOfferService requires a QuestOfferGraphPort injected via __init__")
+        if clock is None:
+            raise ValueError("QuestOfferService requires a ClockPort injected via __init__")
         self._registry = registry
+        self._clock = clock
         self._quest_offer_repo = quest_offer_repo
 
     async def offer_draft_quest(
@@ -178,6 +184,7 @@ class QuestOfferService:
             event_type="quest_offered",
             summary=f"Quest offered: {state.title}",
             meta=meta,
+            tick_id=self._clock.current_tick,
         )
         stored = await self._quest_offer_repo.offer_quest_atomic(
             quest_id=quest_id,

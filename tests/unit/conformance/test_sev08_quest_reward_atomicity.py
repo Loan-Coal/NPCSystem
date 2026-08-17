@@ -22,6 +22,7 @@ from npc_engine.engines.quest.quest_reward_router import QuestRewardRouter
 from npc_engine.utils.errors import QuestTransitionError
 from pydantic import BaseModel, ConfigDict
 from npc_engine.type_registry.contracts import TypeRegistry
+from npc_engine.scheduler.game_clock import GameClock
 
 
 class _FakeEventModel(BaseModel):
@@ -112,6 +113,7 @@ async def test_apply_rewards_raises_when_delivery_item_not_possessed() -> None:
 
     engine = QuestRewardRouter(
         settings=_settings(), registry=_fake_registry(), quest_reward_repo=reward_repo,
+        clock=GameClock(mode="game_driven"),
     )
     with pytest.raises(QuestTransitionError) as exc:
         await engine.apply_rewards(
@@ -140,6 +142,7 @@ async def test_apply_rewards_delivery_collected_before_reward_grants() -> None:
 
     engine = QuestRewardRouter(
         settings=_settings(), registry=_fake_registry(), quest_reward_repo=reward_repo,
+        clock=GameClock(mode="game_driven"),
     )
     result = await engine.apply_rewards(
         quest_id="quest-deliver-1",
@@ -166,6 +169,7 @@ async def test_apply_rewards_delivery_failure_not_swallowed() -> None:
 
     engine = QuestRewardRouter(
         settings=_settings(), registry=_fake_registry(), quest_reward_repo=reward_repo,
+        clock=GameClock(mode="game_driven"),
     )
     with pytest.raises(QuestTransitionError) as exc:
         await engine.apply_rewards(

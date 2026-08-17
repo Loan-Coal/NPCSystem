@@ -21,6 +21,7 @@ from typing import Any
 import logging
 
 from npc_engine.config import Settings
+from npc_engine.engines.ports.clock_port import ClockPort
 from npc_engine.engines.ports.quest_port import QuestRewardGraphPort
 from npc_engine.engines.quest.models import (
     QuestStateRecord,
@@ -46,6 +47,7 @@ class QuestRewardRouter:
         settings: Settings,
         registry: TypeRegistry | None = None,
         quest_reward_repo: QuestRewardGraphPort | None = None,
+        clock: ClockPort | None = None,
     ) -> None:
         """Initialise the quest reward router.
 
@@ -53,16 +55,20 @@ class QuestRewardRouter:
             settings: Application settings (used for currency transfer configuration).
             registry: Type registry providing event node model; required.
             quest_reward_repo: Graph port for reward delivery (DEC-122 / SEV-24); required.
+            clock: Read-only game clock stamping lifecycle events (ISSUE-165); required.
 
         Raises:
-            ValueError: If registry or quest_reward_repo is None.
+            ValueError: If registry, quest_reward_repo, or clock is None.
         """
         self._settings = settings
         if registry is None:
             raise ValueError("QuestRewardRouter requires a TypeRegistry injected via __init__")
         if quest_reward_repo is None:
             raise ValueError("QuestRewardRouter requires a QuestRewardGraphPort injected via __init__")
+        if clock is None:
+            raise ValueError("QuestRewardRouter requires a ClockPort injected via __init__")
         self._registry = registry
+        self._clock = clock
         self._quest_reward_repo = quest_reward_repo
 
     async def _require_state(self, *, quest_id: str, player_id: str) -> QuestStateRecord:
@@ -130,6 +136,7 @@ class QuestRewardRouter:
             event_type="quest_rewards_applied",
             summary=f"Quest rewards applied: {state.title}",
             meta=meta,
+            tick_id=self._clock.current_tick,
         )
         return await self._quest_reward_repo.apply_rewards_atomic(
             quest_id=quest_id,
@@ -156,5 +163,6 @@ class QuestRewardRouter:
             event_type="quest_rewards_applied",
             summary=f"Quest rewards applied: {state.title}",
             meta=meta,
+            tick_id=self._clock.current_tick,
         )
         await self._quest_reward_repo.emit_lifecycle_event(event_node=event)
