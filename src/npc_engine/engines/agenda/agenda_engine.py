@@ -46,7 +46,7 @@ class AgendaEngine:
     async def run_tick(
         self,
         *,
-        tick_id: int = 0,
+        tick_id: int,
     ) -> dict[str, Any]:
         """Resolve all open agendas whose deadline_tick <= tick_id.
 

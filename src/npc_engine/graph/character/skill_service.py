@@ -72,7 +72,7 @@ async def increment_xp(
     character_id: str,
     skill_id: str,
     xp_delta: int,
-    tick: int = 0,
+    tick: int,
 ) -> int:
     """Add XP to a skill and update the level accordingly.
 

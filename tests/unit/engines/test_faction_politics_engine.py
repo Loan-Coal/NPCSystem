@@ -150,7 +150,7 @@ async def test_run_tick_no_matching_rule_no_change() -> None:
     )
     engine = FactionPoliticsEngine(rules=rules, repo=port)
 
-    result = await engine.run_tick()
+    result = await engine.run_tick(tick_id=1)
     assert result["rule_applications"] == 0
     # No rule-caused commit (decay may still fire on the standing of 50).
     assert all(c["cause_rule_id"] == "decay" for c in port.commits)
@@ -167,7 +167,7 @@ async def test_run_tick_clamps_to_bounds() -> None:
     )
     engine = FactionPoliticsEngine(rules=rules, repo=port)
 
-    result = await engine.run_tick()
+    result = await engine.run_tick(tick_id=1)
     assert result["rule_applications"] >= 1
     assert port.commits[0]["new_standing"] <= 100
 
@@ -183,7 +183,7 @@ async def test_run_tick_clamps_negative_to_minus_100() -> None:
     )
     engine = FactionPoliticsEngine(rules=rules, repo=port)
 
-    result = await engine.run_tick()
+    result = await engine.run_tick(tick_id=1)
     assert result["rule_applications"] >= 1
     assert port.commits[0]["new_standing"] >= -100
 
@@ -198,7 +198,7 @@ async def test_run_tick_applies_decay() -> None:
     )
     engine = FactionPoliticsEngine(rules=rules, repo=port)
 
-    result = await engine.run_tick()
+    result = await engine.run_tick(tick_id=1)
     assert result["decay_applications"] >= 1
     assert port.commits[0]["cause_rule_id"] == "decay"
 
@@ -213,7 +213,7 @@ async def test_run_tick_skips_decay_below_min_magnitude() -> None:
     )
     engine = FactionPoliticsEngine(rules=rules, repo=port)
 
-    result = await engine.run_tick()
+    result = await engine.run_tick(tick_id=1)
     assert result["decay_applications"] == 0
     assert port.commits == []
 

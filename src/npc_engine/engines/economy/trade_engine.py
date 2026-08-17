@@ -45,7 +45,7 @@ class TradeEngine:
         item_id: str,
         item_type: str,
         offered_price: int,
-        current_tick: int = 0,
+        current_tick: int,
     ) -> TradeResult:
         """Evaluate a trade offer and execute transfers if accepted.
 

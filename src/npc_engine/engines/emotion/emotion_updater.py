@@ -79,7 +79,7 @@ class EmotionUpdater:
         self,
         npc_id: str,
         mood_update: str | None,
-        tick: int = 0,
+        tick: int,
     ) -> EmotionState:
         """Apply an optional mood label hint from dialogue output and persist the result.
 
@@ -123,7 +123,7 @@ class EmotionUpdater:
         self,
         npc_id: str,
         severity: int,
-        tick: int = 0,
+        tick: int,
     ) -> EmotionState:
         """Apply an emotional shock when an NPC receives a high-severity rumour or event.
 

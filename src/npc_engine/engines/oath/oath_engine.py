@@ -35,7 +35,7 @@ class OathEngine:
     async def run_tick(
         self,
         *,
-        tick_id: int = 0,
+        tick_id: int,
     ) -> dict[str, Any]:
         """Process pledge expiry and check all active pledges for violations.
 

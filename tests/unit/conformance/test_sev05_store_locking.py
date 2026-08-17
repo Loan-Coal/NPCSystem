@@ -57,7 +57,7 @@ async def test_emotion_updater_apply_event_shock_is_async():
     """EmotionUpdater.apply_event_shock must be awaitable."""
     store = EmotionStore()
     updater = EmotionUpdater(emotion_store=store)
-    result = await updater.apply_event_shock(npc_id="npc-1", severity=80)
+    result = await updater.apply_event_shock(npc_id="npc-1", severity=80, tick=1)
     assert result.valence < 0
 
 
@@ -74,8 +74,8 @@ async def test_emotion_updater_concurrent_shocks_cumulative():
     # under the lock (or at worst both read neutral and both persist, but valence
     # must be negative after either shock).
     await asyncio.gather(
-        updater.apply_event_shock(npc_id="npc-1", severity=60),
-        updater.apply_event_shock(npc_id="npc-1", severity=60),
+        updater.apply_event_shock(npc_id="npc-1", severity=60, tick=1),
+        updater.apply_event_shock(npc_id="npc-1", severity=60, tick=1),
     )
     final = await updater.get_state(npc_id="npc-1")
     assert final.valence < 0

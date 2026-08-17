@@ -108,7 +108,7 @@ async def test_emotion_updater_uses_protocol_method() -> None:
 
     updater = EmotionUpdater(emotion_store=store, model=mock_model)
 
-    await updater.apply_event_shock(npc_id="npc_test", severity=60)
+    await updater.apply_event_shock(npc_id="npc_test", severity=60, tick=1)
 
     mock_model.apply_shock.assert_called_once()
 
@@ -125,7 +125,7 @@ async def test_behavior_parity_shock() -> None:
     store = EmotionStore()
     updater = EmotionUpdater(emotion_store=store, model=VadEmotionModel())
 
-    result = await updater.apply_event_shock(npc_id="npc_test", severity=60)
+    result = await updater.apply_event_shock(npc_id="npc_test", severity=60, tick=1)
 
     assert result.valence == -20
     assert result.arousal == 30

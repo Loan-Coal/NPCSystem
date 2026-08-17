@@ -45,7 +45,7 @@ class SuccessionEngine:
     async def run_tick(
         self,
         *,
-        tick_id: int = 0,
+        tick_id: int,
     ) -> dict[str, Any]:
         """Scan for vacant titles and apply succession at the given tick.
 

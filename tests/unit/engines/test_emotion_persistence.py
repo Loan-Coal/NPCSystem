@@ -70,7 +70,7 @@ async def test_apply_dialogue_mood_no_writer_no_crash() -> None:
     updater = EmotionUpdater(emotion_store=store)  # no writer
 
     # Should complete without AttributeError or any exception
-    state = await updater.apply_dialogue_mood(npc_id="npc-1", mood_update="neutral")
+    state = await updater.apply_dialogue_mood(npc_id="npc-1", mood_update="neutral", tick=1)
     assert isinstance(state, EmotionState)
 
 

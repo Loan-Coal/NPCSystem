@@ -49,7 +49,7 @@ class FactionPoliticsEngine:
         self._lock = asyncio.Lock()
         self._rule_index: dict[str, int] = {r.event_type: r.standing_delta for r in rules.rules}
 
-    async def run_tick(self, *, tick_id: int = 0) -> dict[str, Any]:
+    async def run_tick(self, *, tick_id: int) -> dict[str, Any]:
         """Execute one faction politics tick: apply event rules then decay.
 
         Args:
@@ -69,7 +69,7 @@ class FactionPoliticsEngine:
             )
             return {"rule_applications": rule_apps, "decay_applications": decay_apps}
 
-    async def _apply_rules(self, *, tick_id: int = 0) -> tuple[int, set[tuple[str, str]]]:
+    async def _apply_rules(self, *, tick_id: int) -> tuple[int, set[tuple[str, str]]]:
         """Apply event-based standing rules and record each change as a FactionStandingEvent.
 
         Args:
@@ -165,7 +165,7 @@ class FactionPoliticsEngine:
         self,
         *,
         skip: set[tuple[str, str]] | None = None,
-        tick_id: int = 0,
+        tick_id: int,
     ) -> int:
         """Drift all faction standings toward zero by rate_per_tick.
 

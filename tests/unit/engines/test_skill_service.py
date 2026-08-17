@@ -106,7 +106,7 @@ async def test_increment_xp_returns_new_level() -> None:
     record = MagicMock()
     record.__getitem__ = MagicMock(side_effect=lambda k: 5 if k == "new_level" else None)
     session.run.return_value.single = AsyncMock(return_value=record)
-    result = await increment_xp(session, character_id="char-1", skill_id="skill-sword", xp_delta=50)
+    result = await increment_xp(session, character_id="char-1", skill_id="skill-sword", xp_delta=50, tick=1)
     assert result == 5
 
 
@@ -114,7 +114,7 @@ async def test_increment_xp_returns_new_level() -> None:
 async def test_increment_xp_returns_zero_when_no_record() -> None:
     session = AsyncMock()
     session.run.return_value.single = AsyncMock(return_value=None)
-    result = await increment_xp(session, character_id="char-1", skill_id="skill-missing", xp_delta=10)
+    result = await increment_xp(session, character_id="char-1", skill_id="skill-missing", xp_delta=10, tick=1)
     assert result == 0
 
 

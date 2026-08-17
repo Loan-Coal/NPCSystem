@@ -182,6 +182,7 @@ async def test_trade_engine_accepts_fair_offer() -> None:
         item_id="item-sword-1",
         item_type="sword",
         offered_price=50,
+        current_tick=1,
     )
 
     assert result.accepted is True
@@ -205,6 +206,7 @@ async def test_trade_engine_rejects_low_offer() -> None:
         item_id="item-sword-1",
         item_type="sword",
         offered_price=30,
+        current_tick=1,
     )
 
     assert result.accepted is False

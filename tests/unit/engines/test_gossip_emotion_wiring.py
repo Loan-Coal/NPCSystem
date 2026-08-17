@@ -85,7 +85,7 @@ async def test_emotion_shock_called_for_high_severity():
         handler = _make_handler(emotion_updater=emotion_updater, emotion_threshold=50, repo=repo)
         await handler.run_tick(tick_id=10)
 
-    emotion_updater.apply_event_shock.assert_called_once_with(npc_id="receiver-1", severity=75)
+    emotion_updater.apply_event_shock.assert_called_once_with(npc_id="receiver-1", severity=75, tick=10)
 
 
 @pytest.mark.asyncio
@@ -134,4 +134,4 @@ async def test_emotion_shock_at_exact_threshold():
         handler = _make_handler(emotion_updater=emotion_updater, emotion_threshold=50, repo=repo)
         await handler.run_tick(tick_id=10)
 
-    emotion_updater.apply_event_shock.assert_called_once_with(npc_id="receiver-1", severity=50)
+    emotion_updater.apply_event_shock.assert_called_once_with(npc_id="receiver-1", severity=50, tick=10)

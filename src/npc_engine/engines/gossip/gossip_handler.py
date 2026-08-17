@@ -333,6 +333,7 @@ class GossipHandler:
                 await self._emotion_updater.apply_event_shock(
                     npc_id=receiver["id"],
                     severity=severity_int,
+                    tick=tick_id,
                 )
                 LOGGER.info(
                     "emotion_shock npc_id=%s severity=%d tick=%d",

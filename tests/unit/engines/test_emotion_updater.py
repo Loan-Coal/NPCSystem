@@ -30,7 +30,7 @@ async def _make_updater(initial: EmotionState | None = None) -> EmotionUpdater:
 async def test_apply_event_shock_reduces_valence():
     """High-severity shock must decrease valence from neutral."""
     updater = await _make_updater()
-    state = await updater.apply_event_shock(npc_id="npc-1", severity=90)
+    state = await updater.apply_event_shock(npc_id="npc-1", severity=90, tick=1)
     assert state.valence < 0
 
 
@@ -38,7 +38,7 @@ async def test_apply_event_shock_reduces_valence():
 async def test_apply_event_shock_increases_arousal():
     """High-severity shock must increase arousal from resting state."""
     updater = await _make_updater()
-    state = await updater.apply_event_shock(npc_id="npc-1", severity=90)
+    state = await updater.apply_event_shock(npc_id="npc-1", severity=90, tick=1)
     assert state.arousal > 0
 
 
@@ -47,8 +47,8 @@ async def test_apply_event_shock_proportional_to_severity():
     """Higher severity must produce a more negative valence than lower severity."""
     updater_low = await _make_updater()
     updater_high = await _make_updater()
-    state_low = await updater_low.apply_event_shock(npc_id="npc-1", severity=50)
-    state_high = await updater_high.apply_event_shock(npc_id="npc-1", severity=90)
+    state_low = await updater_low.apply_event_shock(npc_id="npc-1", severity=50, tick=1)
+    state_high = await updater_high.apply_event_shock(npc_id="npc-1", severity=90, tick=1)
     assert state_high.valence < state_low.valence
 
 
@@ -57,7 +57,7 @@ async def test_apply_event_shock_capped_at_minus_100():
     """Valence must never drop below -100 even at maximum severity."""
     initial = EmotionState(valence=-90, arousal=0, label="melancholic")
     updater = await _make_updater(initial=initial)
-    state = await updater.apply_event_shock(npc_id="npc-1", severity=100)
+    state = await updater.apply_event_shock(npc_id="npc-1", severity=100, tick=1)
     assert state.valence >= -100
 
 
@@ -65,7 +65,7 @@ async def test_apply_event_shock_capped_at_minus_100():
 async def test_apply_event_shock_persists_state():
     """Shock state must be persisted so get_state returns the shocked value."""
     updater = await _make_updater()
-    shocked = await updater.apply_event_shock(npc_id="npc-1", severity=80)
+    shocked = await updater.apply_event_shock(npc_id="npc-1", severity=80, tick=1)
     retrieved = await updater.get_state(npc_id="npc-1")
     assert retrieved.valence == shocked.valence
     assert retrieved.arousal == shocked.arousal
@@ -75,7 +75,7 @@ async def test_apply_event_shock_persists_state():
 async def test_apply_event_shock_label_derived_correctly():
     """Label must be consistent with derive_label for the resulting valence/arousal."""
     updater = await _make_updater()
-    state = await updater.apply_event_shock(npc_id="npc-1", severity=80)
+    state = await updater.apply_event_shock(npc_id="npc-1", severity=80, tick=1)
     expected_label = derive_label(state.valence, state.arousal)
     assert state.label == expected_label
 
@@ -84,7 +84,7 @@ async def test_apply_event_shock_label_derived_correctly():
 async def test_apply_event_shock_zero_severity_no_change():
     """Zero severity must not change valence or arousal."""
     updater = await _make_updater()
-    state = await updater.apply_event_shock(npc_id="npc-1", severity=0)
+    state = await updater.apply_event_shock(npc_id="npc-1", severity=0, tick=1)
     assert state.valence == 0
     assert state.arousal == 0
 
@@ -116,8 +116,8 @@ async def test_trait_reader_amplifies_shock_for_fearful_npc() -> None:
     updater_fearful = EmotionUpdater(emotion_store=store_fearful, trait_reader=fearful_reader)
     updater_neutral = EmotionUpdater(emotion_store=store_neutral, trait_reader=neutral_reader)
 
-    state_fearful = await updater_fearful.apply_event_shock(npc_id="npc-fearful", severity=60)
-    state_neutral = await updater_neutral.apply_event_shock(npc_id="npc-neutral", severity=60)
+    state_fearful = await updater_fearful.apply_event_shock(npc_id="npc-fearful", severity=60, tick=1)
+    state_neutral = await updater_neutral.apply_event_shock(npc_id="npc-neutral", severity=60, tick=1)
 
     assert state_fearful.valence < state_neutral.valence, (
         f"Fearful NPC valence {state_fearful.valence} should be lower than "
@@ -135,8 +135,8 @@ async def test_different_npcs_use_their_own_traits() -> None:
     })
     updater = EmotionUpdater(emotion_store=store, trait_reader=reader)
 
-    state_a = await updater.apply_event_shock(npc_id="npc-a", severity=60)
-    state_b = await updater.apply_event_shock(npc_id="npc-b", severity=60)
+    state_a = await updater.apply_event_shock(npc_id="npc-a", severity=60, tick=1)
+    state_b = await updater.apply_event_shock(npc_id="npc-b", severity=60, tick=1)
 
     assert state_b.valence < state_a.valence, (
         f"High-fear NPC-B valence {state_b.valence} should be lower than "
@@ -148,6 +148,6 @@ async def test_different_npcs_use_their_own_traits() -> None:
 async def test_emotion_updater_unchanged_without_trait_reader() -> None:
     """ISSUE-096: existing behaviour (no trait_reader) is unchanged — backward compat."""
     updater = await _make_updater()
-    state = await updater.apply_event_shock(npc_id="npc-1", severity=60)
+    state = await updater.apply_event_shock(npc_id="npc-1", severity=60, tick=1)
     # Vad default: valence_delta = min(30, 60//3)=20, new_valence=-20
     assert state.valence == -20
