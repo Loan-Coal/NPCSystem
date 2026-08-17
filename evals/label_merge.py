@@ -169,18 +169,41 @@ def _has_drifted(existing: CalibrationLabel, incoming: CalibrationLabel) -> bool
     return bool(old and new and old != new)
 
 
-def _refresh(existing: CalibrationLabel, incoming: CalibrationLabel) -> CalibrationLabel:
-    """Return existing with machine fields taken from incoming, human fields kept."""
+def _refresh(
+    existing: CalibrationLabel,
+    incoming: CalibrationLabel,
+    *,
+    replace_pre_label: bool,
+) -> CalibrationLabel:
+    """Return existing with machine fields taken from incoming, human fields kept.
+
+    Args:
+        existing: Row currently on disk.
+        incoming: Freshly derived row for the same (record_id, scorer) key.
+        replace_pre_label: When True, incoming's pre_label/pre_labeller_model
+            overwrite existing's unconditionally (ISSUE-175) — the explicit
+            opt-in for importing a genuine second-rater pass (e.g. Opus,
+            EVAL-P22.3) over rows that already carry a pre_label. Default
+            False preserves the historical behaviour: pre_label is not in
+            _MACHINE_FIELDS because label_import normally sources it from a
+            not-necessarily-fresh reference-labelling file, so an incoming
+            value is not trustworthy by default and is only cleared (never
+            replaced) on drift.
+    """
     update: dict[str, object] = {f: getattr(incoming, f) for f in _MACHINE_FIELDS}
+    if replace_pre_label:
+        update["pre_label"] = incoming.pre_label
+        update["pre_labeller_model"] = incoming.pre_labeller_model
     if _has_drifted(existing, incoming):
-        # pre_label/pre_labeller_model are not in _MACHINE_FIELDS (label_import
-        # sources them from a separate, not-necessarily-fresh reference-labelling
-        # file — incoming's value is not trustworthy either), so drift clears
-        # them explicitly rather than leaving existing's now-stale opinion in
-        # place forever (ISSUE-153). calibration.py's secondary-axis functions
-        # treat pre_label=None as "no current opinion", not "opinion: False".
-        update["pre_label"] = None
-        update["pre_labeller_model"] = ""
+        if not replace_pre_label:
+            # pre_label/pre_labeller_model are not in _MACHINE_FIELDS (label_import
+            # sources them from a separate, not-necessarily-fresh reference-labelling
+            # file — incoming's value is not trustworthy either), so drift clears
+            # them explicitly rather than leaving existing's now-stale opinion in
+            # place forever (ISSUE-153). calibration.py's secondary-axis functions
+            # treat pre_label=None as "no current opinion", not "opinion: False".
+            update["pre_label"] = None
+            update["pre_labeller_model"] = ""
         if existing.human_verdict is not None:
             update["needs_review"] = True
     return existing.model_copy(update=update)
@@ -189,19 +212,25 @@ def _refresh(existing: CalibrationLabel, incoming: CalibrationLabel) -> Calibrat
 def merge_labels(
     existing: Sequence[CalibrationLabel],
     incoming: Sequence[CalibrationLabel],
+    *,
+    replace_pre_label: bool = False,
 ) -> MergeResult:
     """Merge incoming labels into existing ones, never losing a human verdict.
 
     For each incoming row that matches an existing (record_id, scorer):
     machine-derived fields are refreshed and human_verdict / adjudicated_at /
-    notes / pre_label / pre_labeller_model / human_labeller are preserved. If
-    the output or criteria hash changed under an adjudicated row, the row is
+    notes / human_labeller are preserved. pre_label / pre_labeller_model are
+    preserved by default (see _refresh) unless replace_pre_label=True. If
+    the criteria hash changed under an adjudicated row, the row is
     additionally flagged needs_review rather than silently re-pointed at
     different content.
 
     Args:
         existing: Rows currently on disk (may be empty).
         incoming: Freshly derived rows from label_import.
+        replace_pre_label: When True, incoming's pre_label/pre_labeller_model
+            overwrite existing's for every matched row — the explicit opt-in
+            for importing a genuine second-rater pass (ISSUE-175).
     Returns:
         MergeResult carrying the merged rows and a report of what happened.
     Raises:
@@ -221,7 +250,7 @@ def merge_labels(
             continue
         if _has_drifted(old, new):
             drifted.append(old.record_id)
-        merged.append(_refresh(old, new))
+        merged.append(_refresh(old, new, replace_pre_label=replace_pre_label))
         if old.human_verdict is not None:
             preserved += 1
 

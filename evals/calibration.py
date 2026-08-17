@@ -25,8 +25,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, NamedTuple, Sequence
 
-from calibration_records import LABELS_FILE, CalibrationLabel, read_calibration_labels
+from calibration_records import (
+    LABELS_FILE,
+    CalibrationLabel,
+    is_human_pre_labeller,
+    read_calibration_labels,
+)
 from paired_stats import boundary_ci_note, is_boundary_ci
+from scorer_trust_policy import PUBLISH_THRESHOLD, check_publication
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -108,6 +114,14 @@ class ScorerReport:
         pre_label vs human_verdict (free reference-labeller agreement).
     kappa_n_clusters: case clusters used in the headline bootstrap CI.
     pre_label_n_clusters: case clusters used in the secondary bootstrap CI.
+    pre_label_is_single_rater: True when every secondary-axis row's
+        pre_label was recorded by a human (calibration_records.
+        is_human_pre_labeller), not an independent model — the tautology
+        signature this axis exists to catch (pre_label vs human_verdict
+        comparing a variable to itself). pre_label_kappa/_lo/_hi and
+        pre_label_agreement are still computed and populated in this case
+        (the arithmetic is well-defined), but _print_secondary_matrix
+        refuses to render them as agreement and prints N/A instead.
     """
 
     scorer: str
@@ -129,6 +143,7 @@ class ScorerReport:
     pre_label_kappa_holm_lo: float | None = None
     pre_label_kappa_holm_hi: float | None = None
     holm_family_size: int | None = None
+    pre_label_is_single_rater: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +228,29 @@ def _secondary_axis_rows(
     with_pre_label = [r for r in clean if r.pre_label is not None]
     n_excluded_pre_label_cleared = len(clean) - len(with_pre_label)
     return with_pre_label, n_excluded_drifted, n_excluded_pre_label_cleared
+
+
+def is_single_rater(scorer_rows: Sequence[CalibrationLabel]) -> bool:
+    """True when the secondary axis compares a rater to itself, not two raters.
+
+    A row counts as human-pre-labelled when its pre_labeller_model carries
+    the `human-` convention prefix (calibration_records.is_human_pre_labeller).
+    If every secondary-axis-eligible row (see _secondary_axis_rows) is
+    human-pre-labelled, pre_label vs human_verdict is not measuring
+    inter-rater agreement — it is comparing the adjudicator's opinion against
+    itself, which is exactly what produces the tautological κ=1.000 / 100%
+    agreement signature. An axis with zero eligible rows is not "single
+    rater" — that is a different failure pre_label_kappa's own ValueError
+    already covers.
+
+    Args:
+        scorer_rows: CalibrationLabel rows for a single scorer.
+    Returns:
+        True iff at least one eligible row exists and none of them carry a
+        non-human (genuinely independent) pre_labeller_model.
+    """
+    eligible, _, _ = _secondary_axis_rows(scorer_rows)
+    return bool(eligible) and all(is_human_pre_labeller(r.pre_labeller_model) for r in eligible)
 
 
 def confusion_counts(rows: Sequence[CalibrationLabel]) -> ConfusionCounts:
@@ -578,25 +616,22 @@ def _pre_label_stats(
     return pl_counts, pl_kappa_val, pl_ci
 
 
-def calibrate_scorer(
+def _build_scorer_report(
     scorer: str,
-    rows: Sequence[CalibrationLabel],
-    *,
-    family_size: int = 1,
+    scorer_rows: Sequence[CalibrationLabel],
+    counts: ConfusionCounts,
+    kappa_val: float,
+    kci: KappaCI,
+    pl_counts: ConfusionCounts,
+    pl_kappa_val: float,
+    pl_ci: KappaCI,
+    family_size: int,
 ) -> ScorerReport:
-    """Full calibration report for one scorer: headline + secondary matrices, κ, and Holm CIs.
+    """Assemble a ScorerReport from calibrate_scorer's computed pieces.
 
-    Args:
-        scorer, rows, family_size: scorer name, all rows (multi-scorer OK), Holm family size.
-    Returns:
-        ScorerReport, or raises ValueError if fewer than 2 adjudicated rows.
+    Split out of calibrate_scorer purely to keep that function under the
+    40-line cap — this is a plain field assembly, no new computation.
     """
-    scorer_rows = [r for r in rows if r.scorer == scorer]
-    counts = confusion_counts(scorer_rows)
-    kappa_val = cohens_kappa(scorer_rows)
-    kci = kappa_interval(scorer_rows, resamples=BOOTSTRAP_RESAMPLES, seed=BOOTSTRAP_SEED,
-                         family_size=family_size)
-    pl_counts, pl_kappa_val, pl_ci = _pre_label_stats(scorer_rows, family_size=family_size)
     return ScorerReport(
         scorer=scorer,
         counts=counts,
@@ -617,6 +652,31 @@ def calibrate_scorer(
         pre_label_kappa_holm_lo=pl_ci.holm_lo,
         pre_label_kappa_holm_hi=pl_ci.holm_hi,
         holm_family_size=family_size if family_size > 1 else None,
+        pre_label_is_single_rater=is_single_rater(scorer_rows),
+    )
+
+
+def calibrate_scorer(
+    scorer: str,
+    rows: Sequence[CalibrationLabel],
+    *,
+    family_size: int = 1,
+) -> ScorerReport:
+    """Full calibration report for one scorer: headline + secondary matrices, κ, and Holm CIs.
+
+    Args:
+        scorer, rows, family_size: scorer name, all rows (multi-scorer OK), Holm family size.
+    Returns:
+        ScorerReport, or raises ValueError if fewer than 2 adjudicated rows.
+    """
+    scorer_rows = [r for r in rows if r.scorer == scorer]
+    counts = confusion_counts(scorer_rows)
+    kappa_val = cohens_kappa(scorer_rows)
+    kci = kappa_interval(scorer_rows, resamples=BOOTSTRAP_RESAMPLES, seed=BOOTSTRAP_SEED,
+                         family_size=family_size)
+    pl_counts, pl_kappa_val, pl_ci = _pre_label_stats(scorer_rows, family_size=family_size)
+    return _build_scorer_report(
+        scorer, scorer_rows, counts, kappa_val, kci, pl_counts, pl_kappa_val, pl_ci, family_size
     )
 
 
@@ -655,7 +715,16 @@ def _print_headline_matrix(report: ScorerReport, print_fn) -> None:
     rec_str = f"{report.rec:.3f}" if report.rec is not None else "undefined"
     print_fn(f"  Precision : {prec_str}   Recall : {rec_str}")
     headline_ci = _kappa_ci_str(report.kappa_lo, report.kappa_hi, report.kappa_n_clusters)
-    print_fn(f"  Headline κ : {report.kappa:.3f}  {headline_ci}  n_rows={c.n}  n_clusters={report.kappa_n_clusters}")
+    refusal = check_publication(report.scorer, report.kappa, (report.kappa_lo, report.kappa_hi))
+    if refusal is not None:
+        print_fn(
+            f"  Headline κ : REFUSED ({refusal.trust_level.value}) — {refusal.scorer} at "
+            f"κ={refusal.kappa:.3f} [{refusal.interval[0]:.3f}, {refusal.interval[1]:.3f}] "
+            f"does not meet docs/SCORER_TRUST_POLICY.md's publication threshold "
+            f"(κ>={PUBLISH_THRESHOLD:.2f}); this rate must not be quoted in any report"
+        )
+    else:
+        print_fn(f"  Headline κ : {report.kappa:.3f}  {headline_ci}  n_rows={c.n}  n_clusters={report.kappa_n_clusters}")
     if report.holm_family_size is not None and report.kappa_holm_lo is not None:
         alpha_adj = CI_NOMINAL_ALPHA / report.holm_family_size
         print_fn(f"  Headline κ Holm-adj [{report.kappa_holm_lo:.3f}, {report.kappa_holm_hi:.3f}]"
@@ -677,13 +746,31 @@ def _print_secondary_matrix(report: ScorerReport, print_fn) -> None:
         f"  ← FP: ref-labeller said pass, human said fail"
     )
     print_fn(f"    pre=F                {p.fn:6d}    {p.tn:6d}")
-    print_fn(f"  Pre-label agreement : {report.pre_label_agreement:.3f}")
-    secondary_ci = _kappa_ci_str(report.pre_label_kappa_lo, report.pre_label_kappa_hi, report.pre_label_n_clusters)
-    print_fn(f"  Secondary κ : {report.pre_label_kappa:.3f}  {secondary_ci}  n_rows={p.n}  n_clusters={report.pre_label_n_clusters}")
-    if report.holm_family_size is not None and report.pre_label_kappa_holm_lo is not None:
-        alpha_adj = CI_NOMINAL_ALPHA / report.holm_family_size
-        print_fn(f"  Secondary κ Holm-adj [{report.pre_label_kappa_holm_lo:.3f}, {report.pre_label_kappa_holm_hi:.3f}]"
-                 f"  (family={report.holm_family_size}, α*={alpha_adj:.4f})")
+    if report.pre_label_is_single_rater:
+        print_fn(
+            "  Pre-label agreement : N/A (single rater) — every pre_label on "
+            "this axis was recorded by a human, not an independent model; "
+            "this compares the adjudicator to themselves, not two raters."
+        )
+        print_fn("  Secondary κ : N/A (single rater)")
+    else:
+        print_fn(f"  Pre-label agreement : {report.pre_label_agreement:.3f}")
+        secondary_ci = _kappa_ci_str(report.pre_label_kappa_lo, report.pre_label_kappa_hi, report.pre_label_n_clusters)
+        secondary_refusal = check_publication(
+            report.scorer, report.pre_label_kappa, (report.pre_label_kappa_lo, report.pre_label_kappa_hi)
+        )
+        if secondary_refusal is not None:
+            print_fn(
+                f"  Secondary κ : REFUSED ({secondary_refusal.trust_level.value}) — "
+                f"κ={secondary_refusal.kappa:.3f} does not meet the publication threshold "
+                f"(κ>={PUBLISH_THRESHOLD:.2f}); this rate must not be quoted in any report"
+            )
+        else:
+            print_fn(f"  Secondary κ : {report.pre_label_kappa:.3f}  {secondary_ci}  n_rows={p.n}  n_clusters={report.pre_label_n_clusters}")
+        if report.holm_family_size is not None and report.pre_label_kappa_holm_lo is not None:
+            alpha_adj = CI_NOMINAL_ALPHA / report.holm_family_size
+            print_fn(f"  Secondary κ Holm-adj [{report.pre_label_kappa_holm_lo:.3f}, {report.pre_label_kappa_holm_hi:.3f}]"
+                     f"  (family={report.holm_family_size}, α*={alpha_adj:.4f})")
 
 
 def _print_scorer_report(report: ScorerReport, print_fn=print) -> None:

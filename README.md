@@ -53,6 +53,23 @@ make test
 make eval
 ```
 
+## Quoting eval metrics
+
+Any published rate or kappa in this file (guard rate, capability rate, per-scorer
+calibration kappa, ...) must carry a machine-checked citation immediately after it:
+
+```
+<value> of guard turns pass.
+<!-- metric gen_id="<gen_id>" field="guard_rate" value="<value>" n="<n>" -->
+```
+
+`field` is `guard_rate`, `capability_rate`, or `kappa:<scorer>`.
+`tests/unit/evals/test_readme_numbers_are_sourced.py` resolves every citation against the
+committed artifact it names and fails the build on any mismatch — see
+`docs/SCORER_TRUST_POLICY.md` for what kappa licenses publication in the first place, and
+`docs/EVAL_METHODOLOGY.md` for what each metric measures and does not measure. Never quote
+a number here without one of these comments.
+
 ## Key files
 
 | File | Purpose |

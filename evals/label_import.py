@@ -215,6 +215,19 @@ def _build_parser() -> argparse.ArgumentParser:
             "holds. Refused by default; a backup .bak is still written."
         ),
     )
+    p.add_argument(
+        "--replace-pre-label",
+        action="store_true",
+        help=(
+            "Overwrite existing rows' pre_label/pre_labeller_model with this "
+            "import's values, for every matched row (not just drifted ones). "
+            "Use this to import a genuine second-rater pass (e.g. Opus, "
+            "EVAL-P22.3) over rows that already carry a pre_label — the "
+            "default --merge behaviour preserves the existing pre_label "
+            "untouched, which would silently discard the new opinion. Never "
+            "affects human_verdict."
+        ),
+    )
     return p
 
 
@@ -256,7 +269,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if existing and args.merge:
-        result = merge_labels(existing, new_labels)
+        result = merge_labels(existing, new_labels, replace_pre_label=args.replace_pre_label)
         write_calibration_labels(args.out, result.rows)
         print(format_merge_report(result, args.out, len(new_labels)), file=sys.stderr)
         return 0

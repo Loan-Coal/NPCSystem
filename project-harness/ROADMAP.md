@@ -2972,6 +2972,13 @@ machinery was built and never run.
       Validation: the sample is reproducible under a recorded seed; each matcher's draw contains both
       verdicts wherever both exist; the export names what was **not** sampled, so the coverage gap is
       explicit rather than implied.
+      **SCAFFOLDED, NOT DONE 2026-08-17 (DEC-185) — checkbox intentionally left unticked.**
+      Rescoped: labelling is no longer hours of human time (an API pre-labeller does the volume),
+      so the cost-driven ~150-row *sample* cap no longer binds — rebuilt as `evals/label_sampling.py`,
+      a full-corpus deterministic *ordering* utility (`order_for_labelling`: rarest `(scorer, verdict)`
+      stratum first, seeded-reproducible; `coverage_report`: names every scorer with zero rows of one
+      verdict). `tests/unit/evals/test_label_sampling.py` reuses this task's own RED anchor name.
+      Still behind `HUMAN GATE H7` for the same reason as before — see DEC-185.
 
 #### 🔴 HUMAN GATE H9 — `EVAL-P22.2` prove the chain before any Opus token
 **Ready when:** `EVAL-P15.1`, `EVAL-P19.4`, `EVAL-P20.4`, `EVAL-P22.1`
@@ -3038,16 +3045,29 @@ is its verdict.
       RED anchor: `test_trend_rows_are_append_only_and_keyed_by_gen_id` fails.
       Validation: re-recording an existing `gen_id` raises rather than duplicating; the store survives a
       schema addition (unknown fields load).
+      **SCAFFOLDED, NOT DONE 2026-08-17 (DEC-185) — checkbox intentionally left unticked.** Built and
+      tested exactly as specified; `evals/trend_store.py`'s `TrendRow` uses `extra="allow"` +
+      per-field defaults so it is schema-tolerant in both directions. No trend rows exist yet — that
+      needs a real run, still behind `HUMAN GATE H10`.
 
 - [ ] **EVAL-P23.2** ⏸️ *(behind HUMAN GATE H10 — flag added 2026-08-16, same ISSUE-173-class
       gap as EVAL-P21.2 above)* Regression thresholds. Files: `create evals/regression_gate.py`,
       `create docs/REGRESSION_POLICY.md`, `create tests/unit/evals/test_regression_gate.py`.
-      Encode what counts as a regression: a rate whose CI lower bound falls below the baseline's **point
-      estimate**, or a McNemar `worse` verdict, or an inconclusive rate above the validity threshold. Use
-      the interval, not the point estimate — a point-estimate comparison at k=3 fires on noise.
+      Encode what counts as a regression: a rate whose entire CI (upper bound) falls below the baseline's
+      **point estimate**, or a McNemar `worse` verdict, or an inconclusive rate above the validity
+      threshold. Use the interval, not the point estimate — a point-estimate comparison at k=3 fires on
+      noise. *(Corrected 2026-08-17, DEC-185: the CI's **upper** bound, not lower — the lower bound is
+      always below the point estimate by construction, so comparing it fires on almost every pair of runs.)*
       RED anchor: `test_overlapping_intervals_do_not_trigger_a_regression` fails.
       Validation: a fixture where the rate drops but intervals overlap does **not** fire; a fixture with a
       real drop does, and the message names the metric, both intervals, and n.
+      **SCAFFOLDED, NOT DONE 2026-08-17 (DEC-185) — checkbox intentionally left unticked.**
+      Note this task's own text names the wrong bound: **CI upper bound**, not lower — a CI's lower
+      bound is always below its own point estimate, so comparing it against the baseline fires on
+      nearly every pair of runs, including a run against itself (caught empirically, see DEC-185).
+      `evals/regression_gate.py` uses `candidate.ci_high < baseline.rate`; `docs/REGRESSION_POLICY.md`
+      documents the wrong version explicitly so it can't be quietly reintroduced. Still behind
+      `HUMAN GATE H10` for a real regression decision.
 
 - [ ] **EVAL-P23.3** ⏸️ *(behind HUMAN GATE H10 — flag added 2026-08-16, same ISSUE-173-class
       gap as EVAL-P21.2 above)* The single entry point. Files: `create scripts/Run-EvalHarness.ps1`,
@@ -3061,6 +3081,14 @@ is its verdict.
       precondition; on a healthy stack it produces a run, a trend row, and a verdict; `--dry-run` prints the
       plan without executing (and **terminates** — ISSUE-126 is the standing reminder that a `--dry-run`
       which hangs is worse than none).
+      **SCAFFOLDED, NOT DONE 2026-08-17 (DEC-185) — checkbox intentionally left unticked.** Supersedes
+      and deletes `project-harness/scripts/run_eval_k3.ps1`. `-DryRun` and the precondition-failure
+      path are **live-verified against real ambient state** (this checkout's actually-down engine),
+      not fixtures — see `tests/unit/scripts/test_run_eval_harness.py`. Two live bugs caught and fixed
+      before shipping: a bad encoding round-trip silently corrupted the file to empty on first write,
+      and `Write-Error` under `$ErrorActionPreference = "Stop"` threw before the explicit `exit 2`
+      ran, collapsing every precondition failure into the same exit code as a regression. Still behind
+      `HUMAN GATE H10` for an actual full run.
 
 ### Phase EVAL-P24 — Publication gate
 **Goal:** The repo cannot state a number its own calibration does not support.
@@ -3078,6 +3106,18 @@ is its verdict.
       RED anchor: `test_low_kappa_scorer_cannot_be_published` fails.
       Validation: a scorer at κ=0.35 is refused publication, the refusal naming the scorer, its κ and its
       interval; the doc explicitly records the after-the-fact sequencing as a known weakness.
+      **Wiring done 2026-08-17 (DEC-185) — checkbox intentionally left unticked, pending the human
+      publication call this task's own text describes.** `check_publication` was already pure and
+      tested (`docs/SCORER_TRUST_POLICY.md`, `test_trust_policy.py` both pre-existed, unused).
+      **Actually wired into `evals/calibration.py`'s `_print_headline_matrix`/`_print_secondary_matrix`,
+      not `evals/report.py`** — `report.py` is the markdown case-report writer and never quotes a
+      per-scorer κ at all; `calibration.py` is where a κ number is actually printed/"published" today.
+      Live-verified against the real corpus: `affirms_judge` (κ=0.530) and `refusal_judge` (κ=0.247)
+      both now render `REFUSED (<trust_level>)` naming the scorer, κ, and interval, never a bare
+      number; `tone_judge` (κ=0.919) unaffected. The "1.000" this task's own text quotes for the
+      fourth scorer was the pre-DEC-185 single-rater tautology — that axis now prints
+      `N/A (single rater)` instead (see `calibration_records.is_human_pre_labeller`), so there is no
+      longer a fourth κ to quote at all for the secondary axis until a genuine second rater exists.
 
 - [ ] **EVAL-P24.2** ⏸️ *(behind HUMAN GATE H10 — flag added 2026-08-16, same ISSUE-173-class
       gap as EVAL-P21.2 above)* Methodology writeup (**completes EVAL-P13.1**). Files:
@@ -3106,6 +3146,15 @@ every prior quotation of `3 lore hallucinations across 111 adversarial turns` is
       RED anchor: `test_every_readme_metric_matches_its_cited_artifact` fails.
       Validation: editing a README number without updating the artifact **fails the build** — the mechanism
       that makes a stale published claim impossible rather than merely discouraged.
+      **SCAFFOLDED, NOT DONE 2026-08-17 (DEC-185) — checkbox intentionally left unticked.** The
+      mechanism (`<!-- metric gen_id="..." field="..." value="..." n="..." -->` citations, resolved
+      against the real artifact and checked for presence in the *visible* text) is built, tested, and
+      documented in a new README.md section. `README.md` cites nothing yet (confirmed: no
+      `"across 111"` or any other quoted rate currently exists in it), so the gate passes vacuously —
+      it starts enforcing the moment this task's real work (copying actual numbers in) happens. The
+      grep this task's own text implies (`grep -rn "across 111" README.md docs/ project-harness/`)
+      was run this session: zero hits in `README.md` itself; the phrase survives only in
+      `project-harness/` docs discussing the retraction, which is correct.
 
 <!-- LOOP:QUEUE end -->
 <!-- ^ MOVED HERE 2026-08-15 by explicit human override — see DEC-178 and the note on HUMAN GATE H3

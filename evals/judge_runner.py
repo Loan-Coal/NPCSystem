@@ -5,11 +5,19 @@ Purpose: Judge pass of the two-phase eval pipeline. Reads a TranscriptFile writt
          by generate_runner, scores each GenerationRecord via _run_binary_judge, and
          applies expected_polarity to derive pass/fail. Result-dict adaptation and
          per-case grouping (EVAL-P6.2 — closes ISSUE-123's guard-turn double count)
-         live in judge_case_grouping; this module owns scoring and the CLI.
+         live in judge_case_grouping; panel scoring lives in judge_panel_runner
+         (split out to stay under the 300-line cap); this module owns the
+         single-judge scoring path and the CLI.
+         --panel switches to the 3-model judge panel (EVAL-P21.1/P21.2, DEC-183/184):
+         every judge_kind record is scored by every panel seat, consensus requires
+         >=2-of-3 to fail, and every seat's verdict is persisted rather than only
+         the winning one — see judge_panel_runner for the implementation.
 Dependencies: argparse, pathlib, sys; matchers (_run_binary_judge), eval_records
          (read_transcript, JudgedRecord), judge_case_grouping (group_by_case,
-         case_id_from_record_id), summary (summarize, format_summary_lines),
-         report (write_report)
+         case_id_from_record_id), judge_panel_runner (judge_transcript_panel,
+         write_panel_judged_jsonl, panel_agreement_from_verdicts), judge_panel
+         (AgreementResult), judge_config (resolve_judge_panel),
+         summary (summarize, format_summary_lines), report (write_report)
 Used by: Makefile eval-judge target
 Does NOT: call /v1/dialogue, modify graph state, import from src/npc_engine/
 """
@@ -25,6 +33,12 @@ import judge_config
 import matchers
 from eval_records import GenerationRecord, JudgedRecord, read_transcript
 from judge_case_grouping import case_id_from_record_id, group_by_case
+from judge_panel import AgreementResult
+from judge_panel_runner import (
+    judge_transcript_panel,
+    panel_agreement_from_verdicts,
+    write_panel_judged_jsonl,
+)
 from report import write_report
 from summary import format_summary_lines, summarize
 
@@ -152,14 +166,8 @@ def judge_transcript(path: Path) -> list[JudgedRecord]:
 # ---------------------------------------------------------------------------
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Parse args, run the judge pass, write a report.
-
-    Args:
-        argv: CLI argument list (defaults to sys.argv[1:]).
-    Returns:
-        0 on success, 1 if any cases failed, 2 on error.
-    """
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser for the judge-runner CLI."""
     parser = argparse.ArgumentParser(description="NPC Engine eval judge pass")
     parser.add_argument(
         "--transcript",
@@ -178,30 +186,76 @@ def main(argv: list[str] | None = None) -> int:
             "Conventional location: evals/generations/<gen_id>/judged.jsonl."
         ),
     )
-    args = parser.parse_args(argv)
+    parser.add_argument(
+        "--panel",
+        action="store_true",
+        help=(
+            "Judge every record through the 3-model panel (>=2-of-3 to fail) "
+            "instead of a single judge. --json-out then carries one row per "
+            "judge per record (judge_panel.to_judged_rows), not one per record."
+        ),
+    )
+    parser.add_argument(
+        "--panel-models",
+        default=None,
+        metavar="MODEL,MODEL,MODEL",
+        help=(
+            "Comma-separated panel roster override; validated the same way as "
+            "the default (judge_config.resolve_judge_panel). Ignored without --panel."
+        ),
+    )
+    return parser
+
+
+def _run_judging(
+    args: argparse.Namespace,
+) -> tuple[list[JudgedRecord], AgreementResult | None]:
+    """Run either the single-judge or panel pass per CLI args, writing --json-out.
+
+    Args:
+        args: Parsed CLI namespace (transcript, json_out, panel, panel_models).
+    Returns:
+        (judged_records, panel_agreement — None outside --panel mode).
+    """
+    if not args.panel:
+        judged_records = judge_transcript(args.transcript)
+        if args.json_out is not None:
+            _write_judged_jsonl(judged_records, args.json_out, judge_config.resolve_judge_model())
+        return judged_records, None
+
+    requested = tuple(args.panel_models.split(",")) if args.panel_models else None
+    models = judge_config.resolve_judge_panel(requested=requested)
+    judged_records, all_verdicts = judge_transcript_panel(args.transcript, models)
+    if args.json_out is not None:
+        write_panel_judged_jsonl(all_verdicts, args.json_out)
+    return judged_records, panel_agreement_from_verdicts(all_verdicts)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Parse args, run the judge pass, write a report.
+
+    Args:
+        argv: CLI argument list (defaults to sys.argv[1:]).
+    Returns:
+        0 on success, 1 if any cases failed, 2 on error.
+    """
+    args = _build_parser().parse_args(argv)
 
     if not args.transcript.exists():
         print(f"Transcript not found: {args.transcript}", file=sys.stderr)
         return 2
 
     try:
-        judged_records = judge_transcript(args.transcript)
+        judged_records, panel_agreement = _run_judging(args)
     except Exception as exc:
         print(f"Failed to load transcript: {exc}", file=sys.stderr)
         return 2
-
-    if args.json_out is not None:
-        _write_judged_jsonl(
-            judged_records,
-            args.json_out,
-            judge_config.resolve_judge_model(),
-        )
 
     result_dicts = group_by_case(judged_records)
     report_path = write_report(results=result_dicts, output_dir=args.reports)
 
     run_summary = summarize(result_dicts)
-    for line in format_summary_lines(run_summary):
+    for line in format_summary_lines(run_summary, panel_agreement=panel_agreement):
         print(line)
 
     passed = sum(1 for r in result_dicts if r["passed"])

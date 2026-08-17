@@ -3980,3 +3980,171 @@ asserted).
 work is wiring `judge_runner.py` to call `evals/judge_panel.py`'s already-tested functions against
 live Ollama calls, persisting real rows, and re-validating `case_neg_injection_001` against the
 actual panel's actual verdict (not a stub) before ticking either checkbox.
+
+## DEC-185: EVAL-P20→P24 unblock plan, Phase A — the whole metrics/testing system built before any labelling spend
+**Date:** 2026-08-17 · **Status:** ✅ ACCEPTED (implementation session, human-approved plan)
+**Context:** The session opened against a roadmap state describing `EVAL-P21.3`, `P22.1`-`P22.4`,
+`P23.1`-`P23.3`, `P24.1`-`P24.3` as BLOCKED transitively behind `HUMAN GATE H7` (regeneration #1)
+and an Opus spend. Re-measured live at session start, that framing did not hold: both
+"regenerations" are free local Ollama runs, the only paid task in the entire remaining roadmap is
+`EVAL-P22.3` (a few dollars, not a blocking budget item), and several tasks
+(`evals/judge_panel.py`, `evals/scorer_trust_policy.py`, both P24 docs) already existed, tested,
+with zero production callers — the real remaining work was mostly wiring, not construction. Full
+written plan: `project-harness/EVAL_P20_TO_P24_UNBLOCK_PLAN.md` (superseded in its blocker
+inventory by this entry and the re-sequencing below, kept for its dependency-graph reasoning).
+
+**Human's explicit goal, stated verbatim:** build the full testing-and-metrics pipeline first, so
+that when labelling money is spent, it is spent exactly once. Answered as **yes, conditionally** —
+a `human_verdict` survives a regeneration unless the scorer's `criteria` text changes
+(`label_merge._has_drifted`, DEC-181) or the case is renamed/removed; both are checkable before
+spending via the new freeze gate (`evals/label_survival.py`, below).
+
+**Re-sequencing decision (human-approved, AskUserQuestion):** the judge panel (`EVAL-P21`) now
+runs **before** regeneration #1, against the existing `k3_73e6c36` artifact, not after — inverting
+the roadmap's file-order sequencing. Reasoning: `_run_binary_judge` only judges LLM-judged
+records (`judge_kind is not None`), so the panel's scope is exactly the 345 `judged.jsonl` rows —
+and **all 345 already carry a human label** (measured live: 393 real labels split as 345
+LLM-judged + 48 `anti_hallucination_grounded`, with zero overlap and zero gap — see the session
+transcript). Judging before regeneration therefore gets maximum κ signal per minute of `mixtral`
+and avoids paying for two full panel passes across two artifacts for one settled judge decision.
+This requires amending `HUMAN GATE H8`'s `Ready when` to drop `EVAL-P20.4` — not yet applied to
+`ROADMAP.md` itself in this session (the live panel run, Phase B, did not fire); recorded here as
+the standing argument for whoever fires it.
+
+**Also measured, correcting a stale roadmap number:** `EVAL-P20.4`'s Notes still quote a
+pre-DEC-181 label-survival cost model (~147 rows invalidated per regen, ~295 across both). DEC-181
+redefined drift as `criteria_sha256`-only, which a regeneration never touches (only `output_text`
+changes) — running `scripts/check_label_survival.py` against the current transcript right now
+shows **393/393 survive, 0 drift, 0 orphaned** (the corpus is frozen relative to its own labels
+today). The stale ~147/~295 figure should be re-derived against the actual case-set diff before
+`EVAL-P20.4` fires, not quoted as-is.
+
+**What was built (Phase A — no labelling spend, no regeneration):**
+- `evals/label_survival.py` + `scripts/check_label_survival.py` (`make check-label-survival`,
+  added to `make check`) — simulates whether a candidate transcript would drift or orphan any
+  existing label, the freeze-gate check for both this session's self-check and Phase B3's real
+  regeneration decision.
+- **ISSUE-175-class fix, not separately logged (found and fixed within this same task):**
+  `label_merge.merge_labels`/`_refresh` silently discarded an incoming `pre_label` for every
+  matched row (by design, for the normal label-import path) — which also silently discarded a
+  genuine second-rater pass (Opus, `EVAL-P22.3`) over the 393 rows that already carry one. Added
+  `merge_labels(..., replace_pre_label: bool = False)` and `label-import --replace-pre-label`, an
+  explicit opt-in; default behaviour (and `human_verdict` handling) unchanged.
+- `calibration.py` now detects the single-rater tautology
+  (`calibration_records.is_human_pre_labeller`, the `"human-"` `pre_labeller_model` prefix
+  convention already present in the real data) and prints `N/A (single rater)` instead of the
+  measured `κ=1.000` on the secondary axis. **Live-verified against the real 393-row corpus: every
+  one of the four calibrated scorers now shows `N/A (single rater)`, not `1.000`.**
+- `evals/judge_panel_runner.py` (new, split from `judge_runner.py` to stay under the 300-line cap)
+  wires `evals/judge_panel.py`'s already-tested library into the live `--panel` CLI path:
+  `judge -- panel` scores every judge_kind record through all three seats, applies **polarity-aware**
+  consensus (see the caught bug below), persists one row per judge per record
+  (`judge_panel.to_judged_rows`), and threads `panel_agreement=` into `format_summary_lines`.
+  `judge_runner._apply_polarity` was deliberately left untouched (same name, same file) because it
+  is a named `scripts/mutation_probe.py` target locked to the `EVAL-P15.6` spec; the panel module
+  carries its own duplicate with an explicit "kept in sync" comment, mirroring the same pattern
+  already used by `label_survival._has_drifted` vs `label_merge._has_drifted`.
+  **A real correctness bug caught before shipping:** `judge_panel.consensus_verdict` expects
+  "did this judge vote fail" booleans, but `PanelVerdict.score` is the raw YES/NO judge answer —
+  feeding it in unflipped would silently invert every `pass_on_yes` record's consensus (tone_judge,
+  affirms_judge) while happening to read correctly for `pass_on_no` records (refusal_judge), since
+  only the latter's "YES=fail" reading matches the raw value. Fixed via
+  `judge_panel_runner._panel_fail_votes`, applying each record's own `expected_polarity` per seat
+  before consensus; RED-anchored in `tests/unit/evals/test_judge_panel_runner.py`.
+- `evals/label_sampling.py` — `EVAL-P22.1` rescoped from a cost-driven ~150-row stratified
+  *sample* (written when labelling meant hours of human time) to a full-corpus deterministic
+  *ordering* utility: every row still gets labelled, `order_for_labelling` only decides the order
+  (rarest `(scorer, verdict)` stratum first, seeded-reproducible), and `coverage_report` names
+  every scorer with zero rows of one verdict — the exact, measured `keyword_none` gap (207 rows,
+  0 failures) surfaced as a first-class, testable finding rather than something rediscovered later.
+- `evals/trend_store.py` (`EVAL-P23.1`) — append-only JSONL keyed by `gen_id`, refuses to
+  duplicate a key, schema-tolerant in both directions (`extra="allow"` + defaulted new fields).
+- `evals/regression_gate.py` + `docs/REGRESSION_POLICY.md` (`EVAL-P23.2`). **A second real bug
+  caught before shipping**, this time by an integration test against the real committed artifact
+  rather than by reasoning about it in advance: the first implementation compared
+  `candidate.ci_low < baseline.rate`. A confidence interval's lower bound is *always* below its own
+  point estimate, so that comparison fires on nearly every pair of runs — confirmed empirically by
+  `test_main_gates_against_a_recorded_baseline` (`tests/unit/scripts/test_record_trend_and_gate.py`)
+  recording `k3_73e6c36`'s own numbers as both baseline and candidate and observing a false
+  "REGRESSION DETECTED" before the fix. Corrected to `candidate.ci_high < baseline.rate` — the
+  candidate's entire plausible range must sit below the baseline, the only reading under which
+  overlapping intervals never fire. Both the code comment and `docs/REGRESSION_POLICY.md` record
+  the wrong version explicitly so it cannot be quietly reintroduced.
+- `scripts/Run-EvalHarness.ps1` (`EVAL-P23.3`) + `scripts/record_trend_and_gate.py` (trend/gate
+  glue) + `make eval-harness`. Supersedes and deletes
+  `project-harness/scripts/run_eval_k3.ps1` (self-declared TEMPORARY, no preflight, no exit-code
+  verdict, no trend row). Exit code is the verdict (0 pass / 1 regression / 2 precondition
+  failure). **Live-verified, not just written:** `-DryRun` prints the plan and exits 0 with zero
+  precondition checks (`tests/unit/scripts/test_run_eval_harness.py`, run against the real script
+  via `powershell.exe`, not mocked); a real run against this checkout's actually-down engine exits
+  2 and names the failed precondition before generating anything — the RED anchor the roadmap
+  named, verified against live ambient state, not a fixture standing in for one.
+  **A third bug caught while verifying `-DryRun`'s file was pure ASCII:** the first `Write-File`
+  of this script round-tripped an em dash through a bad encoding step and corrupted the file
+  (silently truncated to 0 bytes, then filled with `�` replacement characters) — rewritten
+  clean ASCII throughout; **a fourth bug**, found running the real precondition-failure path: with
+  `$ErrorActionPreference = "Stop"`, `Write-Error` throws a terminating exception before the
+  explicit `exit 2` after it runs, so every precondition failure exited 1 (indistinguishable from
+  "ran clean, regression fired") instead of 2. Fixed with `-ErrorAction Continue` on that one call,
+  commented in place so it isn't "cleaned up" back into the bug.
+- **`EVAL-P24.1`'s wiring**, actually landed in `evals/calibration.py`, not `evals/report.py` as
+  this session's own plan file first named it — `report.py` (the markdown case-report writer)
+  never quotes a per-scorer κ at all; `calibration.py`'s `_print_headline_matrix`/
+  `_print_secondary_matrix` is where a κ number is actually printed/"published" today, and is the
+  correct wiring point per `docs/SCORER_TRUST_POLICY.md`'s own example. `check_publication` is now
+  called on both axes; a refused scorer renders `REFUSED (<trust_level>)` naming the scorer, κ and
+  interval, never a bare number. **Live-verified against the real corpus:** `affirms_judge`
+  (κ=0.530, restricted) and `refusal_judge` (κ=0.247, hidden) both now render `REFUSED`;
+  `tone_judge` (κ=0.919) is unaffected.
+- `tests/unit/evals/test_readme_numbers_are_sourced.py` (`EVAL-P24.3`'s mechanism) — an
+  `<!-- metric gen_id="..." field="..." value="..." n="..." -->` citation convention, documented
+  in a new README.md section, resolved against the real artifact
+  (`summary.summarize_from_dir` / `calibration.run_calibration`) and checked for presence in the
+  *visible* text (not just inside its own comment — a second bug in the test itself, caught by its
+  own RED-anchor fixture and fixed by excluding the citation comments before the substring check).
+  Passes vacuously today (README.md cites nothing yet — confirmed no `"across 111"` or any other
+  quoted rate currently exists in `README.md`); starts enforcing the moment `EVAL-P24.3` adds the
+  first citation.
+- `evals/calibration/OPUS_LABEL_PROMPT.md` (`EVAL-P22.3`'s prompt artifact, **written, not run** —
+  no `anthropic` dependency added, per explicit human decision to label in a separate session
+  directly from the prompt). Framed as an independent second rater (not a general labelling pass);
+  reuses `LABEL_PROMPT.md`'s scorer table and five anchors verbatim (the objective criteria don't
+  change with the rater); adds a `CONF:LOW` low-confidence marker (mirrors the existing
+  `ORACLE:`/`UNLABELABLE:` prefix convention) and a provenance header (`gen_id`,
+  `label_schema_version`, a `criteria_manifest_sha256` over `criteria_rendering.py` + `matchers.py`
+  with the exact command to recompute it) so a stale prompt is detectable before a labelling pass
+  runs against outdated criteria, not after.
+- **`EVAL-P22.2` proven at genuine full-corpus scale, not just the documented single-scorer
+  default:** ran the real `export -> oracle-label -> import (MERGE=1) -> adjudicate -> calibrate`
+  chain for five scorers with independently-verifiable confusion matrices
+  (`refusal_judge` tp=60/fp=8/fn=4/tn=3 -> κ=0.247, `tone_judge` tp=100/fp=10/fn=4/tn=3 -> κ=0.241,
+  `affirms_judge` tp=100/fp=10/fn=2/tn=1 -> κ=0.106, `keyword_any` tp=15/fp=3/fn=2/tn=1 -> κ=0.146,
+  `anti_hallucination_grounded` tp=30/fp=5/fn=5/tn=3 -> κ=0.232), each matching its hand-computed
+  closed-form value to 3 dp, merged into one 368-row labels file with `family` growing 2->4->6->8->10
+  exactly as expected. `evals/calibration/labels_v1.jsonl` (the real file) untouched throughout
+  (`git status` clean on it before, during, and after). **Also measured:** `schema`, `min_length`,
+  `keyword_none`, `in_set`, `range` each have **zero negatives** in the real corpus
+  (`oracle_labeller.py --caps-only`), so a full 4-cell oracle proof is not achievable for them from
+  today's artifact — consistent with, and independent confirmation of, `label_sampling.
+  coverage_report`'s finding. Oracle artifacts reset to the documented single-scorer default after
+  proving the point (`evals/calibration/oracle{,_batches}/` are gitignored/regenerable, not committed).
+
+**Deliberately NOT done in Phase A (scoped out, not overlooked):**
+- `EVAL-P20.4`/`EVAL-P22.4` (the two regenerations) — Phase B, needs a live decision to fire.
+- `EVAL-P21.1`/`P21.2`'s **live** panel run — the code is wired and tested against stubs; nobody
+  has run it against real `mixtral:8x7b`/`qwen2.5:14b`/`llama3.1:8b` Ollama calls yet
+  (`llama3.1:8b` is not even pulled locally — `ollama list` still shows only `qwen2.5:7b`,
+  `qwen2.5:14b`, `mixtral:8x7b`, `cyoa-lora`).
+- `refusal_result=` threading into a real `format_summary_lines` caller — investigated, found to
+  need a human decision on what "grounded" means for the live case set (logged as ISSUE-177), not
+  wired with a guessed heuristic.
+- `scripts/check_conservation.py`'s hardcoded `_DEFAULT_GEN_DIR` — logged as ISSUE-176, a Phase B3
+  precondition, not a Phase A concern (there is no new `gen_id` yet to point at).
+
+**Verification:** every new/changed module has RED-anchor + behaviour tests, run individually
+throughout the session and in aggregate: `pytest tests/unit/evals tests/unit/scripts` all green
+alongside the pre-existing suite (one known pre-existing flake,
+`test_gameable_baseline_has_no_stale_entries`, a live `mixtral:8x7b` Ollama-timeout-dependent test,
+confirmed pre-existing and unrelated — same flake `EVAL-P20.3`'s own DONE note already named).
+`python scripts/docstring_audit.py` and `python scripts/check_layers.py` green after every module.
+`make check` run in full at session close (see below).

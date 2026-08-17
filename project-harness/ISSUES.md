@@ -1003,3 +1003,73 @@ rule warns against, and DEC-164's scope was the gates, not their file layout. Si
 `check_human_gates.py` (argparse, `_read`, `_force_utf8_streams`, report rendering) and
 `_human_gates_core.py` (`HumanGate`, `parse_gates`, `task_states`, `blocked_tasks`, `verify_gates`).
 The test module already imports only the pure names plus `main`, so the split is import-path-only.
+
+## ISSUE-175: panel-mode `judged.jsonl` (one row per judge per record) breaks readers that assume one row per record_id
+**Found:** 2026-08-17, during EVAL-P21.1/P21.2 wiring (EVAL-P20→P24 unblock plan, Phase A4)
+**Severity:** P2 (annoying) — silently picks an arbitrary judge's verdict rather than the panel consensus
+**Where:** `evals/transcript_index.py:build_judged_index` (last-write-wins per composite item_id);
+consumed by `evals/label_import.py`, and any future caller of `judged.jsonl` that assumes 1 row/record
+**Description:** `judge_runner.py --panel` now persists via `judge_panel_runner.write_panel_judged_jsonl`
+(`judge_panel.to_judged_rows`), which writes `len(models)` rows per `record_id` — one per panel seat,
+by design (EVAL-P21.1's own validation clause: "a record judged by 3 models yields 3 rows"). This is
+correct for auditability but a **new schema for this file**: any reader still written against the
+single-judge shape (`build_judged_index`, which indexes into a plain `dict` and keeps whichever row
+happens to be read last) will silently select one arbitrary panel seat's `passed` value instead of the
+2-of-3 consensus already computed and written into the corresponding `outputs`/report path.
+**Why deferred:** Nothing in the current pipeline points `label_import` at a panel-mode `judged.jsonl`
+yet — HUMAN GATE H7/H8's live panel run (`EVAL-P21.1`/`P21.2`) hasn't fired, so this is not live-wrong
+today. Fixing `build_judged_index` to consensus-reduce multi-seat rows is real work that belongs to
+whichever task first wires panel-mode output into the labelling path, not to the panel-wiring task
+itself (single-task-focus).
+**To fix:** Before any labelling pass consumes a panel-run `judged.jsonl`, either (a) have
+`build_judged_index` detect multi-row-per-record_id input and apply `judge_panel.consensus_verdict`
+across the seats sharing a `record_id`, or (b) keep panel-mode output as a separate file
+(`judged_panel_votes.jsonl`) and have `judge_runner.py` also write the existing single-row-per-record
+consensus shape to `judged.jsonl` so every downstream reader keeps working unchanged. (b) is simpler
+and lower-risk; revisit at that point which is worth the file-layout change.
+
+## ISSUE-176: `scripts/check_conservation.py`'s `_DEFAULT_GEN_DIR` is hardcoded to `k3_73e6c36`
+**Found:** 2026-08-17, during the EVAL-P20→P24 unblock plan (Phase A, noted for Phase B3)
+**Severity:** P1 (blocking) — silently audits a stale corpus after regeneration
+**Where:** `scripts/check_conservation.py:34-36` (`_DEFAULT_GEN_DIR = .../evals/generations/k3_73e6c36`),
+wired as a `make check` gate (`check-conservation`)
+**Description:** `check_conservation.py` defaults to auditing `k3_73e6c36` when no `--gen-dir` is passed.
+`make check` (and therefore `make check-label-survival`'s sibling `make check` run, and any CI-style
+gate) calls it with no argument, so once `EVAL-P20.4` (regeneration #1) lands and the corpus moves to
+a new `gen_id`, `make check` keeps silently auditing the old, frozen `k3_73e6c36` directory — a green
+`check-conservation` after that point proves nothing about the corpus actually in use, which is exactly
+the "silently worthless artifact" failure mode Program 3 exists to eliminate.
+**Why deferred:** Parameterizing this is Phase B3's own precondition, not Phase A's — Phase A builds
+the mechanism (label survival, trend, regression, panel wiring) without touching the corpus at all, and
+fixing this before there is a new `gen_id` to point at would just swap one hardcoded default for
+another guess.
+**To fix:** Before firing `EVAL-P20.4`, either (a) add a small "current gen_id" pointer file (e.g.
+`evals/generations/CURRENT`) that `_DEFAULT_GEN_DIR` reads, updated by the generation step itself, or
+(b) drop the default entirely and require `--gen-dir` explicitly, forcing `make check`'s caller
+(`scripts/Run-EvalHarness.ps1`, once it calls this rather than the standalone `check-conservation`
+target) to pass the real corpus by name. (a) keeps `make check` working with no argument for the common
+case; (b) is more explicit and harder to get silently wrong. Whichever is chosen, add a regression test
+asserting `check_conservation.main()` refuses to default silently once the flag exists.
+
+## ISSUE-177: no case-level metadata marks which cases are "grounded" for refusal-rate purposes
+**Found:** 2026-08-17, during EVAL-P20.3's follow-on wiring (EVAL-P20→P24 unblock plan, Phase A4)
+**Severity:** P2 (annoying) — blocks threading `refusal_result=` into a real `format_summary_lines` caller
+**Where:** `evals/refusal_rate.py` (`score_refusal_rate` needs `npc_responses` from "grounded" cases);
+no `evals/cases/*.yaml` case carries a `grounded: true`-style marker; the only existing artifact of this
+shape is `evals/calibration/p04_grounded_responses.json`, a static test fixture recorded once for
+`EVAL-P10.3`, not a live selection mechanism a runner could re-derive from the current case set.
+**Description:** `EVAL-P20.3`'s own DONE note (2026-08-15) says threading a real caller through to
+`score_refusal_rate` "is follow-on wiring work, not part of this task's Files list," because
+`summarize()` classifies cases by guard/capability battery membership, not by "is this case grounded" —
+that classification does not exist yet. Investigated for Phase A4 (which wired the judge panel's
+`panel_agreement=` into the same `format_summary_lines` call) on the assumption it was the same shape
+of task; it is not — the panel wiring needed no new classification, this one does.
+**Why deferred:** Guessing at a case-subset heuristic (e.g. "all `case_pos_*` cases are grounded") risks
+silently producing a wrong refusal-rate number — exactly the failure mode this whole harness exists to
+prevent — without a human decision on what "grounded" means for the live case set today.
+**To fix:** A human call: either (a) add a `grounded: true` field to the relevant case YAMLs (the ones
+`p04_grounded_responses.json` was recorded from are a starting point) and have `runner.py`/`judge_runner.py`
+select `npc_response` from those cases to call `score_refusal_rate`, or (b) derive "grounded" structurally
+(e.g. any case whose expectations include an `anti_hallucination_grounded` matcher). Once decided, thread
+the result into both `runner.py:404`'s and `judge_runner.py`'s `format_summary_lines` calls the same way
+`panel_agreement=` was threaded in Phase A4.

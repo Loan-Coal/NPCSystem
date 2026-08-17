@@ -14,11 +14,11 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         test-v14-p0 test-v14-p1 test-v14-p2 test-v14-p3 test-v14-p4 test-v14-p5 \
         check-contracts check-contract-sync lint type check \
         check-rules check-rules-update check-evals-rules check-evals-rules-update \
-        check-layers check-docstrings roadmap-verify check-human-gates check-conservation check-test-quality check-mutations \
+        check-layers check-docstrings roadmap-verify check-human-gates check-conservation check-label-survival check-test-quality check-mutations \
         type-ratchet type-ratchet-update type-evals type-evals-update check-harness \
         test-cov-evals \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset \
         seed-tavern-world seed-village-world package
@@ -170,6 +170,12 @@ check-conservation:
 check-dead-keywords:
 	$(PYTHON) scripts/check_dead_keywords.py
 
+# check-label-survival: freeze-gate check — does the labels file survive the
+# committed transcript unchanged (no drift, no orphaning)? Run before spending a
+# regeneration or a labelling pass (EVAL-P20→P24 unblock plan, Phase A1/B3).
+check-label-survival:
+	$(PYTHON) scripts/check_label_survival.py
+
 # check-test-quality: static scan of tests/** for anti-vacuous patterns (4 types).
 # Exits 0 always (items are fixed or suppressed inline with '# quality-ok: <reason>').
 # Wired into make check as of EVAL-P15.4.
@@ -190,7 +196,8 @@ check-mutations:
 # mypy is at 0 (SEV-14 done) so 'type' is now a hard gate here.
 # EVAL-P15.4 added: check-evals-rules type-evals check-test-quality test-cov-evals
 # EVAL-P17.6 added: check-conservation (exits non-zero on any identity violation)
-check: lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-harness check-human-gates check-test-quality check-conservation test-cov test-cov-evals
+# EVAL-P20→P24 unblock plan Phase A1 added: check-label-survival
+check: lint check-rules check-evals-rules check-layers check-docstrings type type-evals check-harness check-human-gates check-test-quality check-conservation check-label-survival test-cov test-cov-evals
 
 verify-v13: lint type test-v13-contracts test-v13-graph-admin test-v13-retrieval test-cov-v13 test-cov-full-report
 
@@ -469,6 +476,15 @@ hedge-probe:
 seed-probe:
 	$(PYTHON) scripts/seed_reproduction_probe.py --a $(A) --b $(B) \
 		$(if $(JSON_OUT),--json-out $(JSON_OUT),)
+
+# eval-harness: the single entry point (EVAL-P23.3). Preflight (services up, ollama
+# panel models present, worlds seeded, tree clean) -> generate -> panel judge ->
+# deterministic verdicts -> score -> calibrate -> compare -> record trend -> gate.
+# Exit code is the verdict: 0 pass, 1 regression, 2 a precondition failed.
+# Usage: make eval-harness ARGS=-DryRun   (prints the plan, exits 0, checks nothing)
+#        make eval-harness ARGS="-K 3"
+eval-harness:
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Run-EvalHarness.ps1 $(ARGS)
 
 # ---------------------------------------------------------------------------
 # Demo game targets (Phase 2)

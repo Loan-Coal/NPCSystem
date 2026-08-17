@@ -47,6 +47,26 @@ class DuplicateLabelKeyError(ValueError):
 
 LABELS_FILE: Path = Path(__file__).parent / "calibration" / "labels_v1.jsonl"
 
+# Convention marking a pre_label as recorded directly by a human, not an
+# independent model — the value written when the "secondary" rating pass was
+# actually the adjudicator's own earlier opinion (e.g. "human-lohann"), not a
+# genuine second rater. calibration.py uses this to detect the single-rater
+# tautology (pre_label vs human_verdict comparing a variable to itself,
+# EVAL-P22.3 / the "two sittings, one rater" finding) and refuse to print a
+# fabricated agreement number for it.
+HUMAN_PRE_LABELLER_PREFIX: str = "human-"
+
+
+def is_human_pre_labeller(pre_labeller_model: str) -> bool:
+    """True when a pre_labeller_model identifier denotes a human, not a model.
+
+    Args:
+        pre_labeller_model: A CalibrationLabel.pre_labeller_model value.
+    Returns:
+        True if the identifier carries the human- convention prefix.
+    """
+    return pre_labeller_model.startswith(HUMAN_PRE_LABELLER_PREFIX)
+
 
 # ---------------------------------------------------------------------------
 # Model
