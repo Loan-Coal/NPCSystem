@@ -81,3 +81,59 @@ def test_harness_accepts_a_custom_base_url_and_still_fails_loudly() -> None:
     result = _run("-BaseUrl", "http://localhost:1", timeout=15)
     assert result.returncode == 2
     assert "Precondition failed" in (result.stdout + result.stderr)
+
+
+# ---------------------------------------------------------------------------
+# One baseline, used by both steps — EVAL-P23 Defect A
+# ---------------------------------------------------------------------------
+
+
+def test_the_compare_step_does_not_hardcode_a_baseline_gen_id() -> None:
+    """RED anchor for Defect A: step 7 hardcoded BEFORE=k3_73e6c36 while step 8
+    gated against the trend store, so the per-case delta table and the
+    authoritative verdict described DIFFERENT comparisons — and k3_73e6c36 can
+    never compare at all (ISSUE-186: harness_version None), which made step 7
+    permanently inert. The baseline must be resolved once and passed to both."""
+    source = _SCRIPT.read_text(encoding="utf-8")
+    compare_lines = [ln for ln in source.splitlines() if "eval-compare" in ln and not ln.strip().startswith("#")]
+    assert compare_lines, "step 7 must still call eval-compare"
+    for line in compare_lines:
+        assert "k3_73e6c36" not in line
+        assert "$Baseline" in line  # the resolved baseline, not a literal
+
+
+def test_dry_run_plan_names_the_baseline_resolution_step() -> None:
+    """The plan a human reads before a real run must say that the baseline is
+    resolved once and shared, and that step 7 is skipped when there is none."""
+    result = _run("-DryRun", timeout=15)
+    assert result.returncode == 0
+    plan = result.stdout.lower()
+    assert "baseline" in plan
+    assert "skip" in plan  # the empty-trend-store path is explicit, not silent
+
+
+def test_dry_run_accepts_an_explicit_baseline_parameter() -> None:
+    """-Baseline is a real parameter, not an ignored extra argument: an unknown
+    parameter makes PowerShell fail the binding and exit non-zero."""
+    result = _run("-DryRun", "-Baseline", "some_prior_gen", timeout=15)
+    assert result.returncode == 0
+
+
+# ---------------------------------------------------------------------------
+# Four distinct verdicts — EVAL-P23 Defect E
+# ---------------------------------------------------------------------------
+
+
+def test_harness_reports_instrument_degraded_as_its_own_state() -> None:
+    """Defect E: exit 3 (judge agreement fell — the rate comparison is not
+    trustworthy and the engine is not necessarily at fault) must be reported
+    distinctly from exit 1 (engine regression) and exit 2 (setup error).
+    Verified statically because reaching exit 3 needs a full live run, which
+    this suite must never trigger (the generation paths are frozen)."""
+    source = _SCRIPT.read_text(encoding="utf-8")
+    assert "$gateExit -eq 3" in source
+    assert "INSTRUMENT DEGRADED" in source
+    assert "REGRESSION" in source
+    assert "SETUP ERROR" in source
+    # the exit-code contract in .DESCRIPTION must document the new state too
+    assert "3 = " in source

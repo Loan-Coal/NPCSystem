@@ -33,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evals"))
 from eval_records import JudgedRecord, read_transcript  # noqa: E402
 from judge_panel import PanelScoredRecord, PanelVerdict, consensus_verdict  # noqa: E402
 from judge_panel_runner import _panel_fail_votes  # noqa: E402
+from judge_run_artifacts import with_panel_metrics  # noqa: E402
 from judged_persistence import write_consensus_jsonl, write_seat_votes_jsonl  # noqa: E402
 from panel_metrics import compute_panel_metrics  # noqa: E402
 from panel_metrics_format import console_lines  # noqa: E402
@@ -170,20 +171,21 @@ def migrate(gen_dir: Path, *, panel_size: int, dry_run: bool) -> int:
     write_seat_votes_jsonl(scored, gen_dir / _VOTES_FILENAME)
     passed = sum(1 for r in consensus if r.passed)
     write_run_status(
-        RunStatus(
-            status="gate_failed" if passed < len(consensus) else "ok",
-            cases_passed=passed,
-            cases_total=len(consensus),
-            judge_panel=tuple(dict.fromkeys(v.judge_model for v in scored[0].verdicts)),
-            fleiss_kappa=metrics.kappa.kappa,
-            raw_agreement=metrics.agreement.rate,
-            votes_path=str(gen_dir / _VOTES_FILENAME),
-            provenance=(
-                "re-derived from a legacy 6-field panel artifact by "
-                "scripts/migrate_panel_judged.py — raw judge scores are the original "
-                "2026-08-17 run; passed/repetition/case_id/judge_kind were recovered "
-                "by transcript join, not re-judged"
+        with_panel_metrics(
+            RunStatus(
+                status="gate_failed" if passed < len(consensus) else "ok",
+                cases_passed=passed,
+                cases_total=len(consensus),
+                judge_panel=tuple(dict.fromkeys(v.judge_model for v in scored[0].verdicts)),
+                votes_path=str(gen_dir / _VOTES_FILENAME),
+                provenance=(
+                    "re-derived from a legacy 6-field panel artifact by "
+                    "scripts/migrate_panel_judged.py — raw judge scores are the original "
+                    "2026-08-17 run; passed/repetition/case_id/judge_kind were recovered "
+                    "by transcript join, not re-judged"
+                ),
             ),
+            metrics,
         ),
         gen_dir / _STATUS_FILENAME,
     )

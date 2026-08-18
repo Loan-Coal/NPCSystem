@@ -5,9 +5,12 @@ Purpose: Decide where a judge pass's side artifacts go and assemble the RunStatu
          it records. Split out of judge_runner.py to keep that module under the
          300-line cap; judge_runner keeps the scoring flow, this keeps the
          file-layout and status-reporting conventions in one place.
-Dependencies: argparse, pathlib; panel_metrics (PanelMetrics), run_status
+Dependencies: argparse, pathlib; panel_metrics (PanelMetrics),
+         panel_metric_records (CriterionKappa, RepeatFlips), run_status
          (RunStatus, default_status_path, status_for, write_run_status)
-Used by: judge_runner (main and _run_judging)
+Used by: judge_runner (main and _run_judging), scripts/migrate_panel_judged.py
+         (with_panel_metrics — so a re-derived status records the same agreement
+         fields a live pass does)
 Does NOT: score records, read transcripts, import from src/npc_engine/
 """
 
@@ -17,6 +20,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from panel_metric_records import CriterionKappa, RepeatFlips
 from panel_metrics import PanelMetrics
 from run_status import RunStatus, default_status_path, status_for, write_run_status
 
@@ -50,6 +54,59 @@ def status_path_for(args: argparse.Namespace) -> Path | None:
     return None
 
 
+def _criterion_kappas(metrics: PanelMetrics) -> tuple[CriterionKappa, ...]:
+    """Map the per-judge_kind breakdown onto its persisted shape."""
+    return tuple(
+        CriterionKappa(
+            judge_kind=c.judge_kind, kappa=c.kappa,
+            n_items=c.n_items, unanimous=c.unanimous,
+        )
+        for c in metrics.by_criterion
+    )
+
+
+def _repeat_flips(metrics: PanelMetrics) -> RepeatFlips:
+    """Map the engine-vs-judge flip decomposition onto its persisted shape."""
+    flips = metrics.repeat_flips
+    return RepeatFlips(
+        records_with_flips=flips.records_with_flips,
+        unanimous_flips=flips.unanimous_flips,
+        solo_flips=flips.solo_flips,
+        n_records=flips.n_records,
+    )
+
+
+def with_panel_metrics(status: RunStatus, metrics: PanelMetrics | None) -> RunStatus:
+    """Return `status` carrying the panel's agreement statistics.
+
+    The trend store reads these off run_status.json rather than re-joining the
+    transcript with the votes file (DEC-189 frames this file as the per-run
+    metrics record, and the judge pass already holds the PanelMetrics object).
+    Kappa is recorded WITH its bootstrap interval: the instrument check needs
+    the interval, and a point estimate alone cannot be gated on (DEC-185).
+
+    Args:
+        status: The status to extend.
+        metrics: Panel statistics, or None for a single-judge pass.
+    Returns:
+        A new RunStatus (the model is frozen); `status` unchanged when metrics
+        is None.
+    """
+    if metrics is None:
+        return status
+    return status.model_copy(
+        update={
+            "fleiss_kappa": metrics.kappa.kappa,
+            "kappa_ci_low": metrics.kappa.ci_low,
+            "kappa_ci_high": metrics.kappa.ci_high,
+            "kappa_n_items": metrics.kappa.n_items,
+            "kappa_by_criterion": _criterion_kappas(metrics),
+            "repeat_flips": _repeat_flips(metrics),
+            "raw_agreement": metrics.agreement.rate,
+        }
+    )
+
+
 def build_status(
     exit_code: int,
     passed: int,
@@ -66,7 +123,8 @@ def build_status(
         exit_code: 0 (gate met) or 1 (gate not met) — never the error code here.
         passed: Cases meeting their expectations.
         total: Cases evaluated.
-        panel_metrics: Panel statistics, None for a single-judge pass.
+        panel_metrics: Panel statistics, None for a single-judge pass; when
+            present, every agreement field is filled in by with_panel_metrics.
         panel_models: Panel roster, empty for a single-judge pass.
         judge_model: Single-judge model name, empty for a panel pass.
         report_path: Markdown report this pass wrote.
@@ -74,16 +132,17 @@ def build_status(
     Returns:
         A RunStatus ready to write.
     """
-    return RunStatus(
-        status=status_for(exit_code),
-        cases_passed=passed,
-        cases_total=total,
-        judge_panel=panel_models,
-        judge_model=judge_model,
-        fleiss_kappa=panel_metrics.kappa.kappa if panel_metrics else None,
-        raw_agreement=panel_metrics.agreement.rate if panel_metrics else None,
-        report_path=str(report_path),
-        votes_path=str(panel_votes_path(json_out)) if (panel_models and json_out) else "",
+    return with_panel_metrics(
+        RunStatus(
+            status=status_for(exit_code),
+            cases_passed=passed,
+            cases_total=total,
+            judge_panel=panel_models,
+            judge_model=judge_model,
+            report_path=str(report_path),
+            votes_path=str(panel_votes_path(json_out)) if (panel_models and json_out) else "",
+        ),
+        panel_metrics,
     )
 
 

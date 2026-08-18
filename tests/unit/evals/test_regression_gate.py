@@ -2,10 +2,14 @@
 Module: test_regression_gate
 Layer: test (unit)
 Purpose: RED anchor + behaviour tests for evals/regression_gate.py — the
-         EVAL-P23.2 threshold logic. A rate regresses only when its CI lower
+         EVAL-P23.2 threshold logic. A rate regresses only when its CI UPPER
          bound falls below the baseline's point estimate; a point-estimate
          comparison at k=3 fires on sampling noise, so overlapping intervals
-         must never trigger.
+         must never trigger. (This docstring said "lower bound" until
+         2026-08-18 — the same inverted statement Defect C found in
+         check_regression's own docstring. The code was always correct;
+         the prose was the trap, and this file is where someone reads the
+         rule before touching the gate.)
 Dependencies: pytest; trend_store, paired_stats, regression_gate (evals/)
 Used by: pytest (make test / make check)
 """
@@ -158,3 +162,21 @@ def test_format_lists_every_finding() -> None:
     text = format_regression_report(report)
     assert "REGRESSION DETECTED" in text
     assert "[guard]" in text
+
+
+# ---------------------------------------------------------------------------
+# The stated rule must match the implemented one — EVAL-P23 Defect C
+# ---------------------------------------------------------------------------
+
+
+def test_check_regression_docstring_states_the_implemented_rule() -> None:
+    """regression_gate.py exists partly to document the WRONG version of this
+    rule so it cannot be quietly reintroduced (DEC-185: the ci_low comparison
+    fires on a run compared against itself). A docstring asserting that wrong
+    version is therefore an active trap, not a typo: the next person to "fix"
+    the code to match the prose reintroduces the bug the module was written to
+    prevent. check_regression's own docstring must state the upper-bound rule
+    the code implements."""
+    doc = (check_regression.__doc__ or "").lower()
+    assert "upper bound" in doc
+    assert "lower bound" not in doc  # the inverted rule must not be restated as the policy

@@ -4332,3 +4332,87 @@ mid-rewrite).
 constraint on the A/B workflow and an intentional one — it is cheaper to re-judge an arm than to
 act on a confounded regression verdict. It does not protect against a deliberate roster change
 between arms; nothing can, short of refusing to compare anything ever judged differently.
+
+
+---
+
+## DEC-191: the A/B pipeline gets one resolved baseline, a comparability check, and a third verdict
+**Date:** 2026-08-18
+**Decided by:** the maintainer, before this session started — recorded here as *implemented*, not as
+proposed. The five decisions below were handed down in `project-harness/PROMPT_P23_UNBLOCK.md`
+("DECIDED:" blocks); this session's contribution is the implementation and its tests, and it
+re-opened none of them.
+
+**Context:** every component of `EVAL-P23` already existed and was tested, but five defects made the
+harness unusable as an engine A/B loop:
+- **A.** `Run-EvalHarness.ps1:163` hardcoded `BEFORE=k3_73e6c36` for the compare step while step 8
+  gated against `trend_store.latest_row()` — the informational per-case delta table and the
+  authoritative verdict described *different comparisons*, and `k3_73e6c36` can never compare at all
+  (ISSUE-186), so step 7 was permanently inert.
+- **B.** `latest_row()` returns the newest row regardless of `harness_version`, and
+  `check_regression` never read it. `harness_version` hashes `evals/cases/`, `prompts/eval/` and
+  `matchers.py`, so a case or judge-criterion edit makes older rows incomparable — `compare.py`
+  refuses that pair, while the trend gate returned a confident verdict on it.
+- **C.** `check_regression`'s docstring stated the *inverted* rule ("only a CI **lower** bound
+  strictly below the baseline's point estimate counts"). The code was right; the prose was a trap in
+  the one module written to stop that exact bug being reintroduced (DEC-185).
+- **D.** `TrendRow` recorded `panel_agreement_rate` (raw pairwise) and no kappa — trending the
+  number DEC-188 demoted, inflated by a 0.951 pass base rate.
+- **E.** A kappa drop and an engine regression were indistinguishable: both would have to read as
+  exit 1.
+
+**Decision:**
+1. **One baseline, resolved once, used by both steps.** `evals/baseline_selection.py` owns the
+   choice; `record_trend_and_gate.py --print-baseline` prints it as a bare gen_id;
+   `Run-EvalHarness.ps1` gains `-Baseline`, defaulting to that resolution, and passes the same value
+   to its compare step and to `--baseline-gen-id` on the gate. With no comparable baseline, step 7
+   is **skipped with an explicit message**, never silently.
+2. **Walk back to the latest comparable row.** `trend_store.latest_comparable_row(harness_version)`
+   scans back for the most recent matching row; refusal is reserved for there being none.
+   `latest_row()` keeps its meaning and its callers. The gate's output **names the chosen baseline's
+   gen_id, how many rows back it sits, how many incomparable rows were skipped and how much older it
+   is** — comparing against a much older run must be visible, not silent.
+3. **The docstring now states the implemented rule** (CI **upper** bound below the baseline's point
+   estimate), and `test_check_regression_docstring_states_the_implemented_rule` fails if the
+   inverted version is ever restated as policy. No behaviour change.
+4. **The trend records kappa, per criterion, and the repeat-flip counts.** `RunStatus` carries
+   `kappa_ci_low/high`, `kappa_n_items`, `kappa_by_criterion` and `repeat_flips`;
+   `build_trend_row` reads them off `run_status.json` rather than re-joining `outputs.jsonl` with
+   `judged_panel_votes.jsonl` — DEC-189 already frames that file as the per-run metrics record, and
+   the judge pass holds the `PanelMetrics` object when it writes it. `evals/panel_metric_records.py`
+   is the single owner of those persisted shapes, so the status writer and the trend reader cannot
+   drift apart the way `judged.jsonl`'s two writers did (DEC-187). `panel_agreement_rate` is kept.
+5. **Exit 3 = instrument degraded.** `evals/instrument_gate.py` applies the same one-sided CI rule as
+   the rate check (`candidate.ci_high < baseline.kappa`), so overlapping intervals never fire, and
+   reports three states — DEGRADED / STABLE / **SKIPPED** — so a run whose agreement was never
+   measured cannot read as one whose agreement held. `Run-EvalHarness.ps1` reports all four states
+   distinctly.
+
+**Implementer's judgements inside those decisions (not re-openings, but choices the prompt left
+open):**
+- Exit 3 **takes precedence over** exit 1 when both fire, and both reports still print. When the
+  ruler moved, the rate finding beside it cannot be read as an engine result; suppressing neither
+  report keeps the evidence visible.
+- An explicit `--baseline-gen-id` is **refused** when it names a row from another `harness_version`
+  (exit 2), rather than honoured with a warning. Naming a baseline cannot make it comparable — that
+  is Defect B restated with a human in the loop.
+- `--allow-no-baseline` now also covers "the store is non-empty but nothing in it is comparable",
+  which is the same situation from the gate's point of view (and is what a `harness_version` change
+  produces).
+- Per-criterion kappa is recorded **without** an interval and is *not* gated on: `panel_metrics`
+  computes no CI per criterion, and a per-criterion point comparison would reintroduce exactly the
+  noise-driven gate DEC-185 records. It localises a drop for a human; the overall kappa fires.
+
+**Alternatives rejected:** recomputing the panel metrics inside `record_trend_and_gate` from
+`outputs.jsonl` + `judged_panel_votes.jsonl` as `scripts/migrate_panel_judged.py` does (works, but
+duplicates a join the judge pass already performed and gives the metric two independent producers —
+the shape of DEC-187's bug); making the kappa check a fourth `RegressionFinding` (it would label a
+judge problem an engine problem, which is the one thing this verdict exists to prevent); refusing
+outright whenever the newest row is incomparable (a slightly older comparable baseline is a real
+baseline, and refusing would make any case edit block gating until a fresh baseline run is paid for).
+
+**Consequence:** `Run-EvalHarness.ps1` can now serve as the engine A/B loop — one command, one
+baseline both steps agree on, a gated verdict, a trend row carrying the honest agreement numbers.
+Not yet exercised live: `EVAL-P22B.1`/`P22B.2` are the human sessions that record the first trend row
+and run the harness end to end. With `refusal_judge` at kappa 0.225 (ISSUE-184), exit 3 is expected
+to fire in practice rather than being a theoretical state.

@@ -14,12 +14,14 @@ from pathlib import Path
 
 import pytest
 
+from panel_metric_records import CriterionKappa, PanelKappa, RepeatFlips
 from trend_store import (
     DuplicateGenIdError,
     RateWithCI,
     ScorerKappa,
     TrendRow,
     append_trend_row,
+    latest_comparable_row,
     latest_row,
     read_trend_rows,
     rows_for_scorer,
@@ -133,3 +135,76 @@ def test_rows_for_scorer_filters_across_runs(tmp_path: Path) -> None:
     assert [k.kappa for k in tone_history] == [0.9, 0.88]
     refusal_history = rows_for_scorer("refusal_judge", rows)
     assert len(refusal_history) == 1  # gen_b never calibrated it — silently absent
+
+
+# ---------------------------------------------------------------------------
+# latest_comparable_row — EVAL-P23 Defect B
+# ---------------------------------------------------------------------------
+
+
+def test_latest_comparable_row_skips_rows_from_another_harness_version(tmp_path: Path) -> None:
+    """harness_version hashes evals/cases/, prompts/eval/ and matchers.py, so a
+    case or judge-criterion edit changes it. The most recent row under a
+    different version is not a baseline — walk back to one that is."""
+    path = tmp_path / "trend.jsonl"
+    append_trend_row(_row("gen_a", harness_version="v1"), path)
+    append_trend_row(_row("gen_b", harness_version="v2"), path)
+    chosen = latest_comparable_row("v1", path)
+    assert chosen is not None
+    assert chosen.gen_id == "gen_a"
+    assert latest_row(path).gen_id == "gen_b"  # latest_row keeps its meaning
+
+
+def test_latest_comparable_row_is_none_when_nothing_matches(tmp_path: Path) -> None:
+    path = tmp_path / "trend.jsonl"
+    append_trend_row(_row("gen_a", harness_version="v1"), path)
+    assert latest_comparable_row("v3", path) is None
+
+
+def test_latest_comparable_row_on_an_empty_store_is_none(tmp_path: Path) -> None:
+    assert latest_comparable_row("v1", tmp_path / "does_not_exist.jsonl") is None
+
+
+# ---------------------------------------------------------------------------
+# Panel kappa on the row — EVAL-P23 Defect D
+# ---------------------------------------------------------------------------
+
+
+def test_trend_row_records_kappa_and_per_criterion_breakdown(tmp_path: Path) -> None:
+    """A trend built on raw pairwise agreement tracks a number inflated by the
+    pass base rate (0.956 raw vs 0.526 kappa on the real corpus, DEC-188). The
+    row must carry the chance-corrected number, its per-criterion breakdown and
+    the repeat-flip counts, and survive a round trip through the store."""
+    path = tmp_path / "trend.jsonl"
+    row = _row(
+        "gen_panel",
+        panel_agreement_rate=0.9556,
+        panel_kappa=PanelKappa(kappa=0.5256, ci_low=0.227, ci_high=0.730, n_items=345),
+        kappa_by_criterion=(
+            CriterionKappa(judge_kind="tone_judge", kappa=1.0, n_items=135, unanimous=135),
+            CriterionKappa(judge_kind="refusal_judge", kappa=0.225, n_items=75, unanimous=60),
+        ),
+        repeat_flips=RepeatFlips(records_with_flips=12, unanimous_flips=4, solo_flips=8, n_records=115),
+    )
+    append_trend_row(row, path)
+
+    loaded = read_trend_rows(path)[0]
+    assert loaded.panel_agreement_rate == 0.9556  # kept — existing rows must not break
+    assert loaded.panel_kappa is not None
+    assert loaded.panel_kappa.kappa == 0.5256
+    assert loaded.panel_kappa.ci_low == 0.227
+    assert {c.judge_kind: c.kappa for c in loaded.kappa_by_criterion} == {
+        "tone_judge": 1.0, "refusal_judge": 0.225,
+    }
+    assert loaded.repeat_flips is not None
+    assert loaded.repeat_flips.solo_flips == 8  # judge-driven flips, distinct from engine ones
+
+
+def test_a_row_without_panel_kappa_still_loads(tmp_path: Path) -> None:
+    """A single-judge run records no panel kappa; that is a valid state."""
+    path = tmp_path / "trend.jsonl"
+    append_trend_row(_row("gen_single"), path)
+    loaded = read_trend_rows(path)[0]
+    assert loaded.panel_kappa is None
+    assert loaded.kappa_by_criterion == ()
+    assert loaded.repeat_flips is None

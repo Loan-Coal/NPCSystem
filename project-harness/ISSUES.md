@@ -16,6 +16,28 @@ Rules:
 
 ## Open
 
+## ISSUE-187: two roadmap-cursor tests are red — `EVAL-P22B` breaks the contiguous-id invariant
+**Found:** 2026-08-18, during the EVAL-P23 defect-repair session (`PROMPT_P23_UNBLOCK.md`)
+**Severity:** P2 (annoying — two permanently red tests in `make test` mask a real cursor regression)
+**Where:** `tests/unit/harness/test_roadmap_cursor.py:231` and `:329`, against
+`project-harness/ROADMAP.md`'s `Phase EVAL-P22B` (added 2026-08-18 in commit `bdaa55b`)
+**Description:** Both tests assert the queue's phase ids are exactly `[f"EVAL-P{n}" for n in
+range(...)]` — a contiguous integer sequence. `EVAL-P22B` is a deliberate non-integer id (a phase
+inserted *between* `EVAL-P22` and `EVAL-P23` without renumbering everything after it), so the
+assertions fail at index 23: `'EVAL-P22B' != 'EVAL-P23'`. Verified pre-existing and unrelated to this
+session's changes by stashing them and re-running: identical failures. The rest of the suite is green
+(3536 passed, 1 skipped).
+**Why deferred:** single-task focus — this session's task is the five `EVAL-P23` defect repairs, and
+this is a harness-invariant question, not a bug in the code under repair. It also needs a real
+decision rather than a mechanical fix: either suffixed phase ids are legitimate (and both assertions
+must be taught to accept `EVAL-P<n><suffix>` while still catching a genuinely corrupted or reordered
+queue), or they are not (and `EVAL-P22B` should be renumbered) — that is the roadmap owner's call.
+**To fix:** decide whether suffixed ids are legal. If yes, relax both assertions to a
+"non-decreasing, no-gaps in the integer part" check (keeping the tripwire's ability to catch a
+reordered or truncated queue) and update the fence-state snapshot at `:329` deliberately, per that
+test's own docstring. If no, renumber `EVAL-P22B` and update every reference to it (`ROADMAP.md`,
+`PROMPT_P23_UNBLOCK.md`, DEC entries).
+
 ## ISSUE-173: no mechanical enforcement of phase-level `Depends on:` lines
 **Found:** 2026-08-15, during the EVAL-P20-P24 unblock planning session
 **Severity:** P2 (annoying — a real gap in loop safety, same family as ISSUE-171 but scoped to

@@ -8,7 +8,8 @@ Purpose: Append-only JSONL trend storage — one row per run, keyed by gen_id.
          engine improving over six weeks" is currently unanswerable. This
          module is the append-only history regression_gate.py (EVAL-P23.2)
          and Run-EvalHarness.ps1 (EVAL-P23.3) read from.
-Dependencies: pydantic, pathlib, typing
+Dependencies: pydantic, pathlib, typing; panel_metric_records (PanelKappa,
+         CriterionKappa, RepeatFlips)
 Used by: tests/unit/evals/test_trend_store.py; scripts/Run-EvalHarness.ps1
          (records a row after every harness run, EVAL-P23.3)
 """
@@ -19,6 +20,8 @@ from pathlib import Path
 from typing import Sequence
 
 from pydantic import BaseModel, ConfigDict
+
+from panel_metric_records import CriterionKappa, PanelKappa, RepeatFlips
 
 TREND_STORE_FILE: Path = Path(__file__).parent / "trend" / "trend_v1.jsonl"
 
@@ -102,7 +105,18 @@ class TrendRow(BaseModel):
             score=None (infra failure) rather than a real verdict.
         scorer_kappas: Every calibrated scorer's kappa for this run.
         panel_agreement_rate: Inter-judge pairwise agreement rate, when the
-            panel judge ran (EVAL-P21.2); None otherwise.
+            panel judge ran (EVAL-P21.2); None otherwise. Kept for continuity
+            with rows already written — it is NOT the number to trend on, being
+            inflated by the pass base rate (0.956 raw against 0.526 kappa on the
+            2026-08-17 corpus, DEC-188).
+        panel_kappa: Chance-corrected agreement with its bootstrap interval —
+            the honest headline, and the only agreement figure the instrument
+            check gates on.
+        kappa_by_criterion: Per-judge_kind kappa, for localising a drop
+            (tone_judge 1.000 against refusal_judge 0.225, ISSUE-184).
+        repeat_flips: Unanimous-vs-solo verdict flips across the k repetitions —
+            the engine-noise / judge-noise split that bounds what an A/B
+            comparison can resolve.
     """
 
     model_config = ConfigDict(frozen=True, extra="allow")
@@ -115,6 +129,9 @@ class TrendRow(BaseModel):
     inconclusive_rate: float | None = None
     scorer_kappas: tuple[ScorerKappa, ...] = ()
     panel_agreement_rate: float | None = None
+    panel_kappa: PanelKappa | None = None
+    kappa_by_criterion: tuple[CriterionKappa, ...] = ()
+    repeat_flips: RepeatFlips | None = None
 
 
 def read_trend_rows(path: Path = TREND_STORE_FILE) -> list[TrendRow]:
@@ -163,6 +180,34 @@ def latest_row(path: Path = TREND_STORE_FILE) -> TrendRow | None:
     """
     rows = read_trend_rows(path)
     return rows[-1] if rows else None
+
+
+def latest_comparable_row(
+    harness_version: str, path: Path = TREND_STORE_FILE
+) -> TrendRow | None:
+    """Return the most recent row recorded under `harness_version`.
+
+    `harness_version` hashes evals/cases/, prompts/eval/ and matchers.py, so
+    editing a case or a judge criterion changes it and makes older rows
+    incomparable — compare.py refuses exactly that pair. latest_row() cannot
+    make that distinction: it returns whatever was appended last, which let the
+    trend gate publish a confident verdict on a pair compare.py had already
+    declined to judge. This walks BACK past incomparable rows rather than
+    refusing outright, because a slightly older comparable baseline is a real
+    baseline; refusal is reserved for there being none at all.
+
+    Args:
+        harness_version: The candidate run's harness_version.
+        path: Trend store JSONL path.
+    Returns:
+        The last row whose harness_version matches, or None when no row does
+        (including an empty store). Callers must report which row was chosen
+        and how old it is — see baseline_selection.format_baseline_choice.
+    """
+    for row in reversed(read_trend_rows(path)):
+        if row.harness_version == harness_version:
+            return row
+    return None
 
 
 def rows_for_scorer(scorer: str, rows: Sequence[TrendRow]) -> list[ScorerKappa]:

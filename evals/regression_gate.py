@@ -142,16 +142,17 @@ def check_regression(
 
     Args:
         candidate: The new run's trend row.
-        baseline: The comparability-checked prior run to compare against
-            (typically trend_store.latest_row()).
+        baseline: The comparable prior run to gate against —
+            baseline_selection.select_baseline's choice, NOT
+            trend_store.latest_row(), which ignores harness_version.
         paired: Case-level McNemar comparison, when available (compare.py);
             None skips this check rather than treating it as a pass.
         max_inconclusive_rate: Threshold above which the inconclusive rate
             itself is a regression, regardless of the published rates.
     Returns:
-        RegressionReport naming every finding that fired. Overlapping CIs
-        never fire — only a CI lower bound strictly below the baseline's
-        point estimate counts.
+        RegressionReport naming every finding that fired. Overlapping CIs never
+        fire: a rate regresses only when its CI UPPER bound (candidate.ci_high)
+        sits below the baseline's point estimate (see _rate_regressed, DEC-185).
     """
     findings: list[RegressionFinding] = []
 
