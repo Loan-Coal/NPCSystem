@@ -1,7 +1,7 @@
 {
   "status": "gate_failed",
-  "cases_passed": 329,
-  "cases_total": 345,
+  "cases_passed": 194,
+  "cases_total": 210,
   "judge_panel": [
     "mixtral:8x7b",
     "qwen2.5:14b",
@@ -9,10 +9,39 @@
   ],
   "judge_model": "",
   "fleiss_kappa": 0.5256456241033006,
+  "kappa_ci_low": 0.22685334456208117,
+  "kappa_ci_high": 0.7295384287699486,
+  "kappa_n_items": 345,
+  "kappa_by_criterion": [
+    {
+      "judge_kind": "affirms_judge",
+      "kappa": 0.28227848101266,
+      "n_items": 135,
+      "unanimous": 128
+    },
+    {
+      "judge_kind": "refusal_judge",
+      "kappa": 0.22513990529487748,
+      "n_items": 75,
+      "unanimous": 59
+    },
+    {
+      "judge_kind": "tone_judge",
+      "kappa": 1.0,
+      "n_items": 135,
+      "unanimous": 135
+    }
+  ],
+  "repeat_flips": {
+    "records_with_flips": 12,
+    "unanimous_flips": 1,
+    "solo_flips": 7,
+    "n_records": 115
+  },
   "raw_agreement": 0.9555555555555556,
-  "report_path": "",
+  "report_path": "evals\\reports\\20260818T231644Z.md",
   "votes_path": "evals\\generations\\k3_73e6c36\\judged_panel_votes.jsonl",
   "duration_s": null,
-  "provenance": "re-derived from a legacy 6-field panel artifact by scripts/migrate_panel_judged.py \u2014 raw judge scores are the original 2026-08-17 run; passed/repetition/case_id/judge_kind were recovered by transcript join, not re-judged",
+  "provenance": "",
   "error": ""
 }

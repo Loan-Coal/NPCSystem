@@ -7,6 +7,10 @@
 # Usage:
 #   powershell -NoProfile -ExecutionPolicy Bypass -File project-harness\Run-OvernightCombined.ps1 -IUnderstand
 #
+# -SkipPhase1 skips the k3_73e6c36 panel re-judge (step 2). Use it when that step has already
+# succeeded and a later step failed -- step 2 writes only k3_73e6c36/ and evals/reports/, and
+# nothing in steps 3-8 reads either, so repeating it buys nothing.
+#
 # ~10 HOURS. Starting 22:00 finishes around 08:00. There is no slack; if you need slack,
 # drop Step 2 (the k3_73e6c36 panel re-run) — it is confirmation of the rewritten
 # persistence layer, not a prerequisite for anything downstream.
@@ -32,7 +36,8 @@
 # is a paid, human-run session and is deliberately outside any automated pipeline.
 
 param(
-    [switch]$IUnderstand
+    [switch]$IUnderstand,
+    [switch]$SkipPhase1
 )
 
 if (-not $IUnderstand) {
@@ -115,6 +120,19 @@ $OldGenDir = Join-Path $RepoRoot "evals\generations\k3_73e6c36"
 # --- Step 2: Phase 1 -- panel over k3_73e6c36 (~4h) --------------------------
 # Confirmation that the rewritten persistence layer reproduces the re-derived baseline
 # (kappa 0.526, raw agreement 0.956, 329/345). Not a prerequisite for Step 4 onward.
+if ($SkipPhase1) {
+    # Step 2 is an isolated island: it writes only k3_73e6c36/ and evals/reports/, and nothing
+    # in steps 3-8 reads either. Skipping it after a successful run costs nothing downstream.
+    Write-Log "STEP 2/8: SKIPPED (-SkipPhase1). Reading the existing k3_73e6c36 run_status.json instead."
+    $P1Status = Read-RunStatus (Join-Path $OldGenDir "run_status.json")
+    $P1Duration = New-TimeSpan -Seconds 0
+    $P1Out = "(skipped)"; $P1Err = "(skipped)"
+    if (Test-MeasurementValid $P1Status) {
+        Write-Log "Existing Phase 1 measurement: kappa=$($P1Status.fleiss_kappa) agreement=$($P1Status.raw_agreement) cases=$($P1Status.cases_passed)/$($P1Status.cases_total)"
+    } else {
+        Write-Log "No valid existing Phase 1 measurement found -- continuing; nothing downstream depends on it."
+    }
+} else {
 Write-Log "STEP 2/8: panel judge over k3_73e6c36 (~4h) ..."
 foreach ($artifact in @("judged.jsonl", "judged_panel_votes.jsonl", "run_status.json")) {
     $p = Join-Path $OldGenDir $artifact
@@ -140,9 +158,28 @@ if (Test-MeasurementValid $P1Status) {
 } else {
     Write-Log "Phase 1 measurement INVALID -- continuing anyway: nothing downstream depends on it (see $P1Err)."
 }
+}
 
 # --- Step 3: world reset + seeds (B4) ----------------------------------------
 Write-Log "STEP 3/8: docker up, eval-world-reset, seed all three worlds ..."
+
+# Docker Desktop's Resource Saver -- and host sleep -- PAUSE idle containers during a long
+# GPU-bound step. `docker-compose up -d` cannot start a paused container: it fails with
+# "Error response from daemon: cannot start a paused container, try unpause instead".
+# That is exactly what killed the 2026-08-18 run at this line, AFTER step 2 had already
+# spent 4h09m. Unpause first, then give the healthcheck time to clear the failures it
+# accumulated while paused (the container reports `unhealthy` from stale probes for a
+# while after resuming, which `up -d` also treats as a dependency failure).
+$paused = @(docker ps -a --filter "status=paused" --format "{{.Names}}" 2>$null | Where-Object { $_.Trim() })
+if ($paused.Count -gt 0) {
+    Write-Log "Paused container(s) detected: $($paused -join ', ') -- unpausing ..."
+    foreach ($c in $paused) {
+        & docker unpause $c.Trim() 2>&1 | Out-String | ForEach-Object { Write-Log $_.Trim() }
+    }
+    Write-Log "Waiting 45s for healthchecks to clear stale failures from the paused period ..."
+    Start-Sleep -Seconds 45
+}
+
 $dc = docker-compose up -d 2>&1 | Out-String
 Write-Log $dc
 if ($LASTEXITCODE -ne 0) { Write-Log "FATAL: docker-compose up -d failed."; exit 3 }
