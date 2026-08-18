@@ -3061,6 +3061,75 @@ adjudicator, or the second axis is a variable compared with itself again.
       Validation: `gen_id` recorded by name; all four metrics-contract items render; the run is stored as
       the trend baseline for EVAL-P23.
 
+### Phase EVAL-P22B — A/B pipeline unblocking (engine track)
+**Goal:** Make `Run-EvalHarness.ps1` a trustworthy engine A/B loop: one command, a real baseline,
+a gated verdict, a trend row. This phase is the **engine-iteration** track; `EVAL-P22.3`/`P22.4`
+(Opus pre-labelling, regeneration #2) and `EVAL-P24` are the **publication-credibility** track and
+are deliberately not prerequisites for anything here.
+**Effort:** ~1 h harness + one live run
+**Added:** 2026-08-18, after tracing the A/B path end to end (see the analysis in DEC-190's session).
+The finding that motivated it: every component of `EVAL-P23` already exists and is tested, and
+`EVAL-P23`'s stated dependency on `EVAL-P22.4` is about having *the final published baseline*, not
+a technical requirement for the trend store to function. Arm 1 (regeneration #1) can serve as the
+baseline for engine iteration immediately.
+
+**Depends on:** `EVAL-P20.4` (regeneration #1 — the first valid A/B arm), and the four defect
+repairs specified in `project-harness/PROMPT_P23_UNBLOCK.md`.
+
+**The defect repairs are deliberately NOT tasks in this phase** (human decision, 2026-08-18): they
+are defect fixes to already-built code, handed to a dedicated session via that prompt, not new
+program scope. This phase covers only the sequencing work that follows them.
+
+**Why `k3_73e6c36` cannot be the baseline:** its `meta.json` has `harness_version: None` and
+`seed: None`, so `compare.py` refuses it against any post-EVAL-P18.1 run (ISSUE-186). It is a
+labelled calibration corpus, not a performance baseline. Regeneration #1 is the first arm that
+can hold that role.
+
+- [ ] **EVAL-P22B.1** ⏸️ *(live; writes the trend store, which is a real measurement record --
+      human session)* Record regeneration #1 as the trend baseline. Files: none (runs
+      `scripts/record_trend_and_gate.py --allow-no-baseline`).
+      The first trend row must be written by the **repaired** pipeline, so it carries Fleiss kappa,
+      the per-criterion breakdown and the repeat-flip counts from row one — retrofitting a baseline
+      row later loses kappa continuity from the very first measurement.
+      Validation: `evals/trend_store.jsonl` holds exactly one row; its `gen_id` names regeneration
+      #1; `harness_version` is a real hash, never the `legacy_pre_p18_1` sentinel; `fleiss_kappa`
+      and `kappa_by_criterion` are populated.
+
+- [ ] **EVAL-P22B.2** ⏸️ *(live; full engine run -- human session)* First real
+      `Run-EvalHarness.ps1` run end to end. Files: none.
+      Run it against an unchanged engine to establish that a no-op change reads as PASS, not as a
+      regression. **This is the false-positive check**: if the harness fires on a run whose engine
+      did not change, its threshold is wrong and every later verdict is noise. That failure mode is
+      exactly what DEC-185 caught in `regression_gate` once already (the CI lower-bound comparison
+      fired on a run against itself).
+      Validation: exit 0 on an unchanged engine; a second trend row appended; the per-case delta
+      table renders and names the same baseline the gate used (Defect A's fix); the run's
+      `run_status.json` and trend row agree on kappa.
+
+- [ ] **EVAL-P22B.3** ⏸️ *(must follow `EVAL-P22B.2` — a sequencing dependency the cursor cannot
+      infer, since this task is a pure doc edit with no flags of its own. Re-pointing `EVAL-P23`'s
+      dependency before the baseline run has actually happened would assert a prerequisite that is
+      not yet true. Flag added 2026-08-18 immediately after inserting this phase, when
+      `roadmap_cursor.py --next` went from `ALL_DONE` to selecting this task for an unattended
+      session.)* Re-point `EVAL-P23`'s dependency line. Files: `edit project-harness/ROADMAP.md`.
+      `EVAL-P23` currently reads **Depends on:** `EVAL-P16`, `EVAL-P17`, `EVAL-P18.3`, `EVAL-P22.4`.
+      Replace `EVAL-P22.4` with `EVAL-P22B.2`, and record in `EVAL-P23`'s Notes that the trend
+      baseline is regeneration #1 rather than regeneration #2 — the publication track can re-baseline
+      onto regeneration #2 later without invalidating any engine comparison made in between, because
+      `harness_version` comparability is what governs, not run recency.
+      Validation: `EVAL-P23` no longer transitively depends on an Opus spend; `HUMAN GATE H10`'s
+      **Blocks:** list drops `EVAL-P23.1`/`P23.2`/`P23.3`.
+
+**Known limits this phase does NOT address, recorded so they are not rediscovered:**
+- `retrieval_profile` is recorded in `RunConfig` but inert — its own docstring says it "does not
+  currently select a retrieval strategy". Until it is wired, A/B-ing context management requires a
+  commit per variant, with `git_sha` distinguishing the arms. That is workable but cannot sweep
+  configurations.
+- `refusal_judge` (kappa 0.225) and `affirms_judge` (kappa 0.282) are too noisy to resolve small
+  engine effects on those criteria (ISSUE-184). `tone_judge` (kappa 1.000) is sound, so engine A/B
+  on tone is trustworthy today. Sharpening the other two is not judge vanity work — it sets the
+  resolution floor of every engine measurement that touches them.
+
 ### Phase EVAL-P23 — The regression harness
 **Goal:** One PowerShell command that runs the suite, stores the result, compares to baseline, and exits
 non-zero on a regression.
