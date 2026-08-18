@@ -188,15 +188,11 @@ if ($LASTEXITCODE -ne 0) {
 Write-Log "Regeneration complete."
 
 # --- Step 5: deterministic verdicts + conservation ---------------------------
-Write-Log "STEP 5/8: deterministic verdicts + conservation on $GenId ..."
+Write-Log "STEP 5/8: deterministic verdicts on $GenId (conservation runs at 7b, after the judge pass) ..."
 & $Python -m evals deterministic-verdicts `
     --transcript "$GenDir\outputs.jsonl" `
     --json-out "$GenDir\deterministic_judged.jsonl" 2>&1 | ForEach-Object { Write-Log $_ }
 if ($LASTEXITCODE -ne 0) { Write-Log "FATAL: deterministic-verdicts failed."; exit 4 }
-
-$ConservationLog = Join-Path $StampDir "conservation_$Stamp.log"
-& $Python "scripts\check_conservation.py" --gen-dir $GenDir *>&1 | Tee-Object -FilePath $ConservationLog
-Write-Log "check_conservation.py exit $LASTEXITCODE (output: $ConservationLog). Non-zero is a finding to review, not automatically fatal."
 
 # --- Step 6: label survival against the NEW transcript (read-only) -----------
 # This is the empirical answer to "do I need to relabel". DEC-181 made drift criteria-only,
@@ -229,6 +225,15 @@ if (Test-MeasurementValid $Arm1Status) {
 } else {
     Write-Log "Arm 1 measurement INVALID -- EVAL-P22.1 below will refuse to build a partial ordering. See $P2Err."
 }
+
+# --- Step 7b: conservation, now that BOTH verdict sources exist --------------
+# verdict_sources.load_unified_rows silently skips a missing file, so running this
+# before the judge pass would have checked conservation over the deterministic rows
+# only and reported a clean result from half the corpus. Ordered here deliberately.
+Write-Log "STEP 7b: check_conservation over the complete verdict set ..."
+$ConservationLog = Join-Path $StampDir "conservation_$Stamp.log"
+& $Python "scripts\check_conservation.py" --gen-dir $GenDir *>&1 | Tee-Object -FilePath $ConservationLog
+Write-Log "check_conservation.py exit $LASTEXITCODE (output: $ConservationLog). Non-zero is a finding to review, not automatically fatal."
 
 # --- Step 8: EVAL-P22.1 label order + EVAL-P22.2 oracle dry run --------------
 Write-Log "STEP 8/8: EVAL-P22.1 labelling order (--require-both) and EVAL-P22.2 oracle dry-run ..."
