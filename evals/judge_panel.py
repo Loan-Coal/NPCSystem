@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
+from eval_records import GenerationRecord
 from judge_config import DEFAULT_PANEL_MODELS
 from matchers import JudgeResult, _run_binary_judge
 from rate_stats import wilson_interval
@@ -93,29 +94,29 @@ def run_panel(
     ]
 
 
-def to_judged_rows(verdicts: Sequence[PanelVerdict]) -> list[dict]:
-    """Convert PanelVerdicts into judged.jsonl-shaped rows, one per judge per record.
+@dataclass(frozen=True)
+class PanelScoredRecord:
+    """One transcript record paired with every panel seat's verdict on it.
 
-    An inconclusive verdict (score=None) is written with passed=False and
-    inconclusive=True — never a silent pass (mirrors summary.py's existing
-    inconclusive-vs-content-failure convention, EVAL-P17.3).
+    This type exists because the flat `list[PanelVerdict]` it replaces lost the
+    association between a verdict and the record it judged. Downstream code then
+    had to *reconstruct* that association from `record_id` alone — and did it
+    wrongly: a k>1 run emits k records sharing one record_id, so grouping by
+    record_id pooled every repetition into a single item, inflating the pair
+    count 4x and comparing each judge against itself on a different generation
+    (ISSUE-181). Carrying the record alongside its verdicts makes the grouping
+    structural rather than inferred, so that class of bug cannot recur.
 
-    Args:
-        verdicts: PanelVerdict list from run_panel.
-    Returns:
-        List of row dicts: record_id, judge_model, score, passed, inconclusive, error.
+    Attributes:
+        record: The GenerationRecord that was judged — carries repetition,
+            judge_kind and expected_polarity, all of which the persistence and
+            metrics layers need and none of which are recoverable from a
+            PanelVerdict alone.
+        verdicts: One PanelVerdict per panel seat, in roster order.
     """
-    return [
-        {
-            "record_id": v.record_id,
-            "judge_model": v.judge_model,
-            "score": v.score,
-            "passed": bool(v.score),
-            "inconclusive": v.score is None,
-            "error": v.error,
-        }
-        for v in verdicts
-    ]
+
+    record: GenerationRecord
+    verdicts: tuple[PanelVerdict, ...]
 
 
 # ---------------------------------------------------------------------------

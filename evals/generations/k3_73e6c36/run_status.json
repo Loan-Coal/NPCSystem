@@ -1,0 +1,18 @@
+{
+  "status": "gate_failed",
+  "cases_passed": 329,
+  "cases_total": 345,
+  "judge_panel": [
+    "mixtral:8x7b",
+    "qwen2.5:14b",
+    "llama3.1:8b"
+  ],
+  "judge_model": "",
+  "fleiss_kappa": 0.5256456241033006,
+  "raw_agreement": 0.9555555555555556,
+  "report_path": "",
+  "votes_path": "evals\\generations\\k3_73e6c36\\judged_panel_votes.jsonl",
+  "duration_s": null,
+  "provenance": "re-derived from a legacy 6-field panel artifact by scripts/migrate_panel_judged.py \u2014 raw judge scores are the original 2026-08-17 run; passed/repetition/case_id/judge_kind were recovered by transcript join, not re-judged",
+  "error": ""
+}

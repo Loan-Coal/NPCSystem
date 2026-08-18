@@ -15,7 +15,8 @@ from pathlib import Path
 
 from battery_rates import BatteryRate, compute_battery_rate
 import case_stats
-from judge_panel import AgreementResult
+from panel_metrics import PanelMetrics
+from panel_metrics_format import console_lines, markdown_rows
 from refusal_rate import RefusalRateResult, fmt_refusal_rate
 import verdict_sources
 
@@ -417,36 +418,6 @@ def _assert_paired_rates(s: EvalSummary) -> None:
         raise ValueError(_UNPAIRED_CAPABILITY_ONLY)
 
 
-def _fmt_agreement(result: AgreementResult) -> str:
-    """Format the inter-judge pairwise agreement rate with its Wilson CI (EVAL-P21.2).
-
-    Args:
-        result: AgreementResult from judge_panel.pairwise_agreement.
-    Returns:
-        Formatted rate string, or an 'N/A' notice when no pairs were available.
-    """
-    if result.rate is None:
-        return "N/A (no comparable judge pairs)"
-    return (
-        f"{result.agreeing_pairs}/{result.total_pairs}  {result.rate:.3f}  "
-        f"95% CI [{result.ci_low:.3f}–{result.ci_high:.3f}]"
-    )
-
-
-def _format_panel_agreement_line(agreement: AgreementResult | None) -> list[str]:
-    """Build the inter-judge agreement console line, or [] when not supplied."""
-    if agreement is None:
-        return []
-    return [f"    Inter-judge agreement: {_fmt_agreement(agreement)}"]
-
-
-def _format_panel_agreement_row(agreement: AgreementResult | None) -> list[str]:
-    """Build the inter-judge agreement markdown table row, or [] when not supplied."""
-    if agreement is None:
-        return []
-    return [f"| Inter-judge agreement (pairwise) | {_fmt_agreement(agreement)} |"]
-
-
 def _format_refusal_rate_line(refusal_result: RefusalRateResult | None) -> list[str]:
     """Build the over-refusal rate console line, or [] when no result was supplied.
 
@@ -470,7 +441,7 @@ def format_summary_lines(
     summary: EvalSummary,
     *,
     refusal_result: RefusalRateResult | None = None,
-    panel_agreement: AgreementResult | None = None,
+    panel_metrics: PanelMetrics | None = None,
 ) -> list[str]:
     """Render as plain-text console lines; guard and capability rates adjacent.
 
@@ -480,9 +451,11 @@ def format_summary_lines(
             supplied, an "Over-refusal rate" line is printed next to the guard and
             capability rates. Omitted entirely when None — over-refusal scoring is
             a separate, optional measurement, not every caller runs it.
-        panel_agreement: Optional inter-judge agreement (evals/judge_panel.py,
-            EVAL-P21.2); when supplied, an "Inter-judge agreement" line is printed.
-            Omitted when None — single-judge runs have no panel to agree within.
+        panel_metrics: Optional panel agreement statistics
+            (evals/panel_metrics.py, EVAL-P21.2); when supplied, the Fleiss-kappa
+            headline, raw pairwise agreement, the per-criterion breakdown and the
+            repeat-flip decomposition are printed. Omitted when None — single-judge
+            runs have no panel to agree within.
     Raises:
         ValueError: When only one of guard_rate / capability_rate is present.
     """
@@ -507,7 +480,7 @@ def format_summary_lines(
         f"    Guard rate:       {g_rate_str}",
         f"    Capability rate:  {c_rate_str}",
         *_format_refusal_rate_line(refusal_result),
-        *_format_panel_agreement_line(panel_agreement),
+        *console_lines(panel_metrics),
         "",
         *_format_battery_counts_lines(summary),
         "",
@@ -521,7 +494,7 @@ def format_summary_markdown(
     summary: EvalSummary,
     *,
     refusal_result: RefusalRateResult | None = None,
-    panel_agreement: AgreementResult | None = None,
+    panel_metrics: PanelMetrics | None = None,
 ) -> list[str]:
     """Render as markdown lines for the report; guard and capability rates adjacent.
 
@@ -529,7 +502,7 @@ def format_summary_markdown(
         summary: The EvalSummary to render.
         refusal_result: Optional over-refusal rate; when supplied, adds a row to
             the rate table. See format_summary_lines for why this is optional.
-        panel_agreement: Optional inter-judge agreement; when supplied, adds a row.
+        panel_metrics: Optional panel agreement statistics; when supplied, adds rows.
             See format_summary_lines for why this is optional.
     Raises:
         ValueError: When only one of guard_rate / capability_rate is present.
@@ -555,7 +528,7 @@ def format_summary_markdown(
         f"| Guard (adv + neg + ah_demo_*) | {summary.guard_passes}/{summary.guard_turns} | {g_rate_str} |",
         f"| Capability (case_pos_*) | {summary.capability_passes}/{summary.capability_turns} | {c_rate_str} |",
         *_format_refusal_rate_row(refusal_result),
-        *_format_panel_agreement_row(panel_agreement),
+        *markdown_rows(panel_metrics),
         "",
         f"All cases: {summary.evaluated_cases} evaluated / {summary.total_cases} total "
         f"({summary.guard_cases} guard, {summary.capability_cases} capability, "

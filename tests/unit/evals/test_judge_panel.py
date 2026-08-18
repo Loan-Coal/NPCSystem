@@ -22,10 +22,29 @@ from judge_panel import (
     consensus_verdict,
     pairwise_agreement,
     run_panel,
-    to_judged_rows,
 )
+from eval_records import GenerationRecord
+from judge_panel import PanelScoredRecord
+from judged_persistence import seat_rows
 
 _PANEL = ("mixtral:8x7b", "qwen2.5:14b", "llama3.1:8b")
+
+
+def scored_from(record_id, judge_kind, polarity, verdicts, repetition=0):
+    """Wrap verdicts with a minimal GenerationRecord carrying the given identity."""
+    record = GenerationRecord(
+        record_id=record_id,
+        source="anti_hallucination",
+        npc_id="npc",
+        player_id="p",
+        player_message="m",
+        npc_response="r",
+        criteria="c",
+        judge_kind=judge_kind,
+        expected_polarity=polarity,
+        repetition=repetition,
+    )
+    return PanelScoredRecord(record=record, verdicts=tuple(verdicts))
 
 
 def _stub_judge_fn(verdict_by_model: dict[str, bool | None]):
@@ -50,7 +69,7 @@ def test_panel_persists_one_verdict_row_per_judge_per_record() -> None:
         "case_adv_x:tone_judge:0#r0", "be gruff", "some response",
         models=_PANEL, judge_fn=judge_fn,
     )
-    rows = to_judged_rows(verdicts)
+    rows = seat_rows([scored_from("case_adv_x:tone_judge:0#r0", "tone_judge", "pass_on_yes", verdicts)])
 
     assert len(rows) == 3
     judge_models = {r["judge_model"] for r in rows}
@@ -65,7 +84,7 @@ def test_panel_errors_yield_explicit_inconclusive_never_silent_pass() -> None:
         "case_adv_x:tone_judge:0#r0", "be gruff", "some response",
         models=_PANEL, judge_fn=judge_fn,
     )
-    rows = to_judged_rows(verdicts)
+    rows = seat_rows([scored_from("case_adv_x:tone_judge:0#r0", "tone_judge", "pass_on_yes", verdicts)])
     inconclusive_row = next(r for r in rows if r["judge_model"] == "qwen2.5:14b")
     assert inconclusive_row["score"] is None
     assert inconclusive_row["passed"] is False  # never a silent pass
@@ -197,11 +216,25 @@ def test_summary_includes_inter_judge_agreement() -> None:
         "response": {"npc_response": "y"},
         "error": None,
     }
-    s = summary.summarize([guard_case, cap_case])
-    agreement = pairwise_agreement([[True, True, False], [False, False, False]])
+    from panel_metrics import compute_panel_metrics  # noqa: PLC0415 (evals/ path)
 
-    lines = summary.format_summary_lines(s, panel_agreement=agreement)
+    s = summary.summarize([guard_case, cap_case])
+    split = _stub_judge_fn({"mixtral:8x7b": True, "qwen2.5:14b": True, "llama3.1:8b": False})
+    agreed = _stub_judge_fn({m: True for m in _PANEL})
+    metrics = compute_panel_metrics([
+        scored_from(
+            "case_adv_x:tone_judge:0", "tone_judge", "pass_on_yes",
+            run_panel("case_adv_x:tone_judge:0", "c", "r", models=_PANEL, judge_fn=split),
+        ),
+        scored_from(
+            "case_pos_x:tone_judge:0", "tone_judge", "pass_on_yes",
+            run_panel("case_pos_x:tone_judge:0", "c", "r", models=_PANEL, judge_fn=agreed),
+        ),
+    ])
+
+    lines = summary.format_summary_lines(s, panel_metrics=metrics)
     blob = "\n".join(lines)
 
     assert "inter-judge agreement" in blob.lower()
-    assert f"{agreement.agreeing_pairs}/{agreement.total_pairs}" in blob
+    assert "fleiss kappa" in blob.lower()
+    assert f"{metrics.agreement.agreeing_pairs}/{metrics.agreement.total_pairs}" in blob

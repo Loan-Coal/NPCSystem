@@ -26,6 +26,7 @@ from typing import Literal, Sequence
 from pydantic import BaseModel, ConfigDict
 
 from case_stats import CaseStat, classify, classify_battery
+from judge_identity import resolve_judge_identity
 from paired_stats import PairedResult, paired_compare
 from rate_stats import pass_rate, wilson_interval
 from verdict_sources import VerdictRow, load_unified_rows, source_counts
@@ -85,7 +86,13 @@ class RunMeta(BaseModel):
             criteria, or matchers.py change it). None when meta.json predates that field
             or is absent entirely — treated as a value like any other for equality, so two
             runs that both lack it are not silently assumed comparable on that basis alone.
-        judge_model: LLM model tag used for judging this run. None when unrecorded.
+        judge_model: The judge identity that ACTUALLY scored this run, resolved by
+            judge_identity.resolve_judge_identity — 'panel:<sorted roster>' for a
+            panel pass, a model tag for a single-judge pass. Falls back to
+            meta.json's generation-time config.judge_model for directories written
+            before run_status.json existed (DEC-189). None when unrecorded.
+            Reading the real pass rather than the configured model is what lets the
+            gate see a panel-vs-single-judge mismatch at all (ISSUE-185).
         k: Repetition count this run was generated at. None when unrecorded.
     """
 
@@ -186,10 +193,11 @@ def _read_run_meta(gen_dir: Path) -> RunMeta:
         RunMeta with gen_id falling back to the directory name, and harness_version /
         judge_model / k as None when meta.json is absent, unreadable, or predates
         EVAL-P18.1/P18.2 (no config.harness_version / config.judge_model / top-level k).
+        judge_model is resolved from run_status.json when present (ISSUE-185).
     """
     meta_path = gen_dir / _META_FILE
     if not meta_path.exists():
-        return RunMeta(gen_id=gen_dir.name)
+        return RunMeta(gen_id=gen_dir.name, judge_model=resolve_judge_identity(gen_dir, None))
     try:
         meta = json.loads(meta_path.read_text(encoding=_ENCODING))
     except (json.JSONDecodeError, OSError) as exc:
@@ -199,7 +207,7 @@ def _read_run_meta(gen_dir: Path) -> RunMeta:
     return RunMeta(
         gen_id=str(meta.get(_GEN_ID_KEY, gen_dir.name)),
         harness_version=config.get(_HARNESS_VERSION_KEY),
-        judge_model=config.get(_JUDGE_MODEL_KEY),
+        judge_model=resolve_judge_identity(gen_dir, config.get(_JUDGE_MODEL_KEY)),
         k=meta.get(_K_KEY),
     )
 
@@ -208,7 +216,9 @@ def _comparability_error(before: RunMeta, after: RunMeta, intersection_size: int
     """Return a refusal reason when two runs are not safely comparable, else None.
 
     Checked in order: empty intersection first (the cheapest and most severe defect —
-    a verdict over zero shared cases), then harness_version, judge_model, and k mismatch.
+    a verdict over zero shared cases), then harness_version, judge identity, and k
+    mismatch. The judge identity is the pass that actually ran (panel roster or single
+    model), not the generation-time configured model — see judge_identity (ISSUE-185).
 
     Args:
         before: Reference run's comparability identity.
@@ -225,7 +235,11 @@ def _comparability_error(before: RunMeta, after: RunMeta, intersection_size: int
             f"after={after.harness_version!r}"
         )
     if before.judge_model != after.judge_model:
-        return f"judge_model mismatch: before={before.judge_model!r} after={after.judge_model!r}"
+        return (
+            f"judge mismatch: before={before.judge_model!r} after={after.judge_model!r} — "
+            "the two arms were scored by different judge passes, so any delta between "
+            "them is partly the measuring instrument changing, not the engine (ISSUE-185)"
+        )
     if before.k != after.k:
         return f"k mismatch: before={before.k!r} after={after.k!r}"
     return None

@@ -982,30 +982,6 @@ rule warns against, and DEC-164's scope was the gates, not their file layout. Si
 `_human_gates_core.py` (`HumanGate`, `parse_gates`, `task_states`, `blocked_tasks`, `verify_gates`).
 The test module already imports only the pure names plus `main`, so the split is import-path-only.
 
-## ISSUE-175: panel-mode `judged.jsonl` (one row per judge per record) breaks readers that assume one row per record_id
-**Found:** 2026-08-17, during EVAL-P21.1/P21.2 wiring (EVAL-P20→P24 unblock plan, Phase A4)
-**Severity:** P2 (annoying) — silently picks an arbitrary judge's verdict rather than the panel consensus
-**Where:** `evals/transcript_index.py:build_judged_index` (last-write-wins per composite item_id);
-consumed by `evals/label_import.py`, and any future caller of `judged.jsonl` that assumes 1 row/record
-**Description:** `judge_runner.py --panel` now persists via `judge_panel_runner.write_panel_judged_jsonl`
-(`judge_panel.to_judged_rows`), which writes `len(models)` rows per `record_id` — one per panel seat,
-by design (EVAL-P21.1's own validation clause: "a record judged by 3 models yields 3 rows"). This is
-correct for auditability but a **new schema for this file**: any reader still written against the
-single-judge shape (`build_judged_index`, which indexes into a plain `dict` and keeps whichever row
-happens to be read last) will silently select one arbitrary panel seat's `passed` value instead of the
-2-of-3 consensus already computed and written into the corresponding `outputs`/report path.
-**Why deferred:** Nothing in the current pipeline points `label_import` at a panel-mode `judged.jsonl`
-yet — HUMAN GATE H7/H8's live panel run (`EVAL-P21.1`/`P21.2`) hasn't fired, so this is not live-wrong
-today. Fixing `build_judged_index` to consensus-reduce multi-seat rows is real work that belongs to
-whichever task first wires panel-mode output into the labelling path, not to the panel-wiring task
-itself (single-task-focus).
-**To fix:** Before any labelling pass consumes a panel-run `judged.jsonl`, either (a) have
-`build_judged_index` detect multi-row-per-record_id input and apply `judge_panel.consensus_verdict`
-across the seats sharing a `record_id`, or (b) keep panel-mode output as a separate file
-(`judged_panel_votes.jsonl`) and have `judge_runner.py` also write the existing single-row-per-record
-consensus shape to `judged.jsonl` so every downstream reader keeps working unchanged. (b) is simpler
-and lower-risk; revisit at that point which is worth the file-layout change.
-
 ## ISSUE-176: `scripts/check_conservation.py`'s `_DEFAULT_GEN_DIR` is hardcoded to `k3_73e6c36`
 **Found:** 2026-08-17, during the EVAL-P20→P24 unblock plan (Phase A, noted for Phase B3)
 **Severity:** P1 (blocking) — silently audits a stale corpus after regeneration
@@ -1068,3 +1044,68 @@ needs its own test update and a prompt-determinism re-measurement.
 **To fix:** pass `strip_fields=NON_PROMPT_NODE_FIELDS` (or a union with `_LOW_VALUE_FIELDS`) at both
 sites, stop re-adding `expires_at_tick` in the pledge item, and update `test_pledge_service.py`.
 Re-run the retrieved_context drift measurement afterwards to confirm it stays at 0.
+
+
+## ISSUE-183: EVAL-P21.1/P21.2's named acceptance clauses were never exercised by the live panel run
+**Found:** 2026-08-18, verifying the 2026-08-17 overnight panel run against the roadmap
+**Severity:** P2 (annoying) - blocks an honest tick of two roadmap items; no wrong data
+**Where:** `ROADMAP.md` EVAL-P21.1 and EVAL-P21.2 validation clauses;
+`tests/unit/evals/test_judge_panel.py`
+**Description:** Both clauses require behaviour the live run happened not to produce.
+(1) EVAL-P21.2 requires the audited `case_neg_injection_001` false positive - mixtral alone voting
+FAIL - to be **outvoted** by the panel. In the live run mixtral voted *with* the other two seats
+3-0 on all three repetitions; the false positive did not reproduce. The case passes, but by
+unanimity, not by the consensus rule the clause exists to test.
+(2) EVAL-P21.1 requires "a judge that errors yields an explicit inconclusive, never a silent pass".
+Zero of 1035 verdicts errored (0 inconclusive, no timeouts), so that path got no live evidence.
+Both mechanisms are covered by fixture tests; what is missing is evidence from a real run.
+**Why deferred:** neither is fixable by re-running. You cannot make a model reproduce a specific
+past false positive on demand, and deliberately breaking Ollama mid-run to force an infra failure is
+a fault-injection test, not an overnight pass. Re-running the panel will very likely produce the
+same clean result again.
+**To fix:** add a fault-injection integration test pointing one panel seat at an unreachable judge
+endpoint and asserting the persisted row is `inconclusive: true, passed: false`; then either
+(a) reword EVAL-P21.2's clause to accept fixture evidence for the consensus mechanism plus live
+evidence that consensus ran at all, or (b) record explicitly that the clause was satisfied by
+`test_single_dissenting_judge_does_not_create_a_hallucination` and note the live non-reproduction.
+That is a human wording call on the roadmap, which is why this is logged rather than decided.
+
+## ISSUE-184: `refusal_judge` and `affirms_judge` have poor chance-corrected agreement (kappa 0.23 / 0.28)
+**Found:** 2026-08-18, from the corrected panel metrics of the 2026-08-17 run
+**Severity:** P2 (annoying) - bounds what any A/B comparison on these criteria can resolve
+**Where:** `prompts/eval/refusal_judge.yaml`, the `affirms_judge` criterion set
+**Description:** With polarity applied and repetitions no longer pooled, per-criterion Fleiss kappa
+over 345 records is: `tone_judge` 1.000 (unanimous 135/135), `affirms_judge` 0.282 (unanimous
+128/135), `refusal_judge` 0.225 (unanimous 59/75). Overall kappa is 0.526 with a wide clustered
+bootstrap 95% CI of [0.227, 0.730]. The raw agreement headline of 0.956 conceals this entirely,
+because the pass base rate is 0.951. This is independent empirical confirmation of ISSUE-141's
+diagnosis (two `refusal_judge` prompt rewrites already attempted and reverted) and extends it:
+`affirms_judge` is nearly as weak. Practical consequence for the A/B pipeline - an effect smaller
+than the judge noise floor on these two criteria is not measurable with this panel, whatever the
+sample size.
+**Why deferred:** fixing it means prompt work on two judge criteria plus a re-run to measure the
+effect, which is its own task; the measurement that establishes the problem is the current task.
+Supersedes nothing - ISSUE-141 stays open and is now better evidenced.
+**To fix:** treat per-criterion kappa as the target metric for the next `refusal_judge` /
+`affirms_judge` prompt iteration (ISSUE-141), and judge progress on the per-criterion breakdown
+rather than the raw-agreement headline.
+
+
+## ISSUE-186: `k3_73e6c36` cannot serve as an A/B baseline arm (`harness_version` and `seed` are null)
+**Found:** 2026-08-18, tracing the A/B path while scoping the combined run
+**Severity:** P2 (annoying) - not a defect, but a widely-held wrong assumption worth recording
+**Where:** `evals/generations/k3_73e6c36/meta.json`
+**Description:** The committed artifact has `config.harness_version = None` and `config.seed =
+None`; it predates both EVAL-P18.1 (comparability hash) and EVAL-P20.0 (seeded generation). Any
+new run carries a real `harness_version`, and `compare._comparability_error` treats a missing
+value "as a value like any other for equality" (its own docstring), so `compare.py` **refuses**
+every pairing of `k3_73e6c36` with a post-P18.1 run. Independently, it was generated before the
+ISSUE-165 tick unification, so per DEC-186 its behaviour baseline differs from current `main` by
+construction. Net: there is currently **zero** valid A/B arm on disk, and `k3_73e6c36`'s value is
+as a *labelled calibration corpus* (393 human verdicts, the panel's judge-agreement evidence), not
+as a performance baseline.
+**Why deferred:** nothing to fix - the artifact is what it is, and EVAL-P20.4 (regeneration #1)
+already exists to produce the first valid arm. Logged so the distinction between "calibration
+corpus" and "A/B baseline" is written down rather than rediscovered.
+**To fix:** no code change. When regeneration #1 lands, record its gen_id in ROADMAP as the
+baseline arm, and stop referring to `k3_73e6c36` as a baseline.

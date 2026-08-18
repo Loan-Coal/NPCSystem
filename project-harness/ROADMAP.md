@@ -2886,7 +2886,10 @@ model on 8-12 GB VRAM (PERF-06). Budget model load/unload per pass.
       (closed until `EVAL-P20.4` actually runs). Closes ISSUE-174.
 
 #### 🔴 HUMAN GATE H8 — `EVAL-P21.1`/`P21.3` panel execution and settling the judge
-**Ready when:** `EVAL-P20.4`, `EVAL-P21.0`
+**Ready when:** `EVAL-P21.0`
+**Re-sequenced 2026-08-17 (DEC-185):** dropped `EVAL-P20.4` from Ready-when — the panel now
+judges `k3_73e6c36` directly (all 345 judge_kind rows already carry a human label), running
+*before* regeneration #1 rather than after. See DEC-185 for the full reasoning.
 **Clears when:** `EVAL-P21.1`, `EVAL-P21.2`, `EVAL-P21.3`
 **Blocks:** `EVAL-P22.4`, `EVAL-P24.1`
 **Runbook:** `project-harness/HUMAN_TASKS.md` task 10 · ~90 min + ~2.5 h per judge pass
@@ -2913,6 +2916,20 @@ qwen judges are one vote with a veto, not two raters.
       regen #1 was explicitly declined this session, see its own Notes). Tick this only after the
       live 3-model panel run actually persists real `judged.jsonl` rows.
 
+      **LIVE RUN HAPPENED 2026-08-17; PERSISTENCE REWRITTEN 2026-08-18 — still unticked.**
+      The panel ran end to end against `k3_73e6c36`: 345 judge_kind records x 3 seats = 1035
+      verdicts in 4h09m (not the budgeted ~2.5h), 0 infra failures, 0 timeouts. So the *execution*
+      half of this task is done and proven. The *persistence* half was wrong and has been rewritten:
+      the rows it wrote dropped `case_id`/`judge_kind`/`repetition` and computed `passed` without
+      `expected_polarity`, inverting 135 of every judge's 345 rows (ISSUE-179, ISSUE-180, both now
+      archived; DEC-187). Persistence now lives in `evals/judged_persistence.py` and panel mode
+      writes `judged.jsonl` (consensus) + `judged_panel_votes.jsonl` (per seat).
+      **What still blocks the tick:** this item's own validation clause says "a judge that errors
+      yields an explicit inconclusive, never a silent pass". Zero of the 1035 verdicts errored, so
+      that clause has fixture evidence only — see ISSUE-183 for the fault-injection test that would
+      close it. The 2026-08-17 artifact was migrated in place by `scripts/migrate_panel_judged.py`;
+      re-running the panel with the fixed writer is the confirmation step.
+
 - [ ] **EVAL-P21.2** ⏸️ *(needs EVAL-P21.1's live panel output to validate against — the
       case_neg_injection_001 check requires real per-judge votes, not a fixture; also behind
       HUMAN GATE H7 like P21.1 — flag added 2026-08-16 after EVAL-P21.0's tick exposed that
@@ -2935,6 +2952,24 @@ qwen judges are one vote with a veto, not two raters.
       reproduces the named `case_neg_injection_001` false positive and confirms it's outvoted.
       **Not validated against a live panel run** — same H7 block as `EVAL-P21.1`. Tick only after
       the real panel run's actual votes confirm this behavior, not the fixture.
+
+      **LIVE RUN HAPPENED 2026-08-17; METRICS REWRITTEN 2026-08-18 — still unticked.**
+      Two findings, one good and one blocking.
+      *Good:* the agreement metric is now correct and chance-corrected. The published
+      3954/4140 = 0.955 was wrong — agreement was grouped by `record_id` alone, pooling the k=3
+      repetitions into one 9-vote item, so it counted C(9,2)=36 pairs where the truth is 9, and
+      1 in 4 of those "inter-judge" pairs compared a judge against **itself** on a different
+      generation (ISSUE-181, archived). Corrected: 989/1035 = 0.956 — and, chance-corrected for a
+      0.951 pass base rate, **Fleiss kappa 0.526**, 95% CI [0.227, 0.730] (DEC-188). Per criterion:
+      `tone_judge` 1.000, `affirms_judge` 0.282, `refusal_judge` 0.225 (ISSUE-184 — corroborates
+      ISSUE-141 and extends it to `affirms_judge`). Pairwise agreement, Fleiss kappa, the
+      per-criterion breakdown and a repeat-flip decomposition are all published next to the
+      headline, which is what this item asked for.
+      *Blocking:* this item's named validation clause requires the `case_neg_injection_001` false
+      positive to be **outvoted**. In the live run mixtral voted *with* the panel 3-0 across all
+      three repetitions — the false positive did not reproduce, so the case passes by unanimity
+      rather than by the consensus rule the clause exists to test. That cannot be forced by
+      re-running; it needs a human wording call on the clause. See ISSUE-183.
 
 - [ ] **EVAL-P21.3** ⏸️ *(records a DECISIONS entry settling a judge -- human call)* Settle the judge
       on evidence (**closes ISSUE-129**; supersedes EVAL-P11.3). Files:

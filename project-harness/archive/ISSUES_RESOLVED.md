@@ -2293,3 +2293,129 @@ The tick is now persisted on `:WorldState` and hydrated at startup (DEC-186), so
 **Migration:** none (DEC-186/D4). Dev graphs containing epoch-sized ticks (~1.78e9) must be
 **reseeded** — such values now read as unreachably far in the future. Eval baselines captured before
 this change will diff; that is the fix working, not a regression.
+
+## [FIXED] ISSUE-175: panel-mode `judged.jsonl` (one row per judge per record) breaks readers that assume one row per record_id
+**Fixed:** 2026-08-18, in the post-overnight panel-persistence rewrite (DEC-187).
+Resolved via option (b), as the entry itself recommended: `judge_runner --panel` now writes
+`judged.jsonl` in the historical one-row-per-record consensus shape (every existing reader
+unchanged) plus a sibling `judged_panel_votes.jsonl` carrying one row per seat. Both are built
+by `evals/judged_persistence.py`, which is now the single owner of the row schema.
+**Went live before it was fixed:** the 2026-08-17 overnight run produced exactly the artifact
+this entry said did not yet exist, and wrote it to the path `build_judged_index` reads. The
+'not live-wrong today' deferral rationale was correct when written and stale within a day.
+**Found:** 2026-08-17, during EVAL-P21.1/P21.2 wiring (EVAL-P20→P24 unblock plan, Phase A4)
+**Severity:** P2 (annoying) — silently picks an arbitrary judge's verdict rather than the panel consensus
+**Where:** `evals/transcript_index.py:build_judged_index` (last-write-wins per composite item_id);
+consumed by `evals/label_import.py`, and any future caller of `judged.jsonl` that assumes 1 row/record
+**Description:** `judge_runner.py --panel` now persists via `judge_panel_runner.write_panel_judged_jsonl`
+(`judge_panel.to_judged_rows`), which writes `len(models)` rows per `record_id` — one per panel seat,
+by design (EVAL-P21.1's own validation clause: "a record judged by 3 models yields 3 rows"). This is
+correct for auditability but a **new schema for this file**: any reader still written against the
+single-judge shape (`build_judged_index`, which indexes into a plain `dict` and keeps whichever row
+happens to be read last) will silently select one arbitrary panel seat's `passed` value instead of the
+2-of-3 consensus already computed and written into the corresponding `outputs`/report path.
+**Why deferred:** Nothing in the current pipeline points `label_import` at a panel-mode `judged.jsonl`
+yet — HUMAN GATE H7/H8's live panel run (`EVAL-P21.1`/`P21.2`) hasn't fired, so this is not live-wrong
+today. Fixing `build_judged_index` to consensus-reduce multi-seat rows is real work that belongs to
+whichever task first wires panel-mode output into the labelling path, not to the panel-wiring task
+itself (single-task-focus).
+**To fix:** Before any labelling pass consumes a panel-run `judged.jsonl`, either (a) have
+`build_judged_index` detect multi-row-per-record_id input and apply `judge_panel.consensus_verdict`
+across the seats sharing a `record_id`, or (b) keep panel-mode output as a separate file
+(`judged_panel_votes.jsonl`) and have `judge_runner.py` also write the existing single-row-per-record
+consensus shape to `judged.jsonl` so every downstream reader keeps working unchanged. (b) is simpler
+and lower-risk; revisit at that point which is worth the file-layout change.
+
+## [FIXED] ISSUE-179: panel `judged.jsonl` rows ignored `expected_polarity`, inverting 39% of them
+**Found:** 2026-08-18, analysing the 2026-08-17 overnight panel run
+**Fixed:** 2026-08-18, in the panel-persistence rewrite (DEC-187)
+**Severity:** P1 — silently wrong data feeding EVAL-P21.3's judge decision
+**Where:** `evals/judge_panel.py:113` (`"passed": bool(v.score)`)
+**Description:** The panel writer derived `passed` from the raw YES/NO score without consulting
+`expected_polarity`. For `pass_on_no` criteria (`affirms_judge` — 135 of every judge's 345 rows,
+39%) a NO verdict means the NPC did **not** affirm the lie, i.e. a PASS; the file recorded FAIL.
+Stored per-judge pass rates read 0.580/0.565/0.591; the true rates are 0.954/0.928/0.971.
+The consensus path was unaffected (`judge_panel_runner._panel_fail_votes` applies polarity), so the
+markdown report was correct — only the persisted per-seat rows were wrong. EVAL-P21.3 reads exactly
+those rows, so kappa computed from them would have been wrong for 39% of records.
+**To fix:** done — `judged_persistence.apply_polarity` is applied when building every row, and
+`test_seat_rows_apply_expected_polarity` is the regression guard.
+
+## [FIXED] ISSUE-180: panel `judged.jsonl` rows dropped `repetition`, collapsing k repeats
+**Found:** 2026-08-18, analysing the 2026-08-17 overnight panel run
+**Fixed:** 2026-08-18, in the panel-persistence rewrite (DEC-187)
+**Severity:** P1 — two of every three repetitions became unreachable to the labelling path
+**Where:** `evals/judge_panel.py:108` (`to_judged_rows` emitted 6 fields; the single-judge writer
+emitted 8, including `repetition`)
+**Description:** `transcript_index.build_judged_index` keys on
+`composite_item_id(record_id, obj.get("repetition", 0))`. With `repetition` absent, every panel row
+defaulted to 0, so all 9 rows sharing a `record_id` (3 repeats x 3 seats) collapsed onto one key
+under last-write-wins — and repeats 1 and 2 got no verdict at all. Measured on the real artifact:
+the index returned 115 entries where it should return 345.
+**To fix:** done — `repetition` (with `case_id` and `judge_kind`) is carried on every row;
+`test_seat_rows_carry_repetition` and `test_seat_rows_are_a_superset_of_single_judge_rows` guard it.
+
+## [FIXED] ISSUE-181: inter-judge agreement pooled repetitions, inflating n 4x and self-comparing judges
+**Found:** 2026-08-18, analysing the 2026-08-17 overnight panel run
+**Fixed:** 2026-08-18, in the panel-metrics rewrite (DEC-188)
+**Severity:** P1 — a published headline statistic was measuring partly the wrong thing
+**Where:** `evals/judge_panel_runner.py:188` (`votes_by_record.setdefault(v.record_id, ...)`)
+**Description:** Agreement grouped verdicts by `record_id` alone. At k=3 three distinct generations
+share one `record_id`, so 9 verdicts were pooled into a single item, yielding C(9,2)=36 pairs where
+the truth is 3 items x C(3,2) = 9. The run reported 3954/4140; the correct figure is 989/1035.
+The point estimate barely moved (0.9551 -> 0.9556) but the CI was ~2x too narrow, and **9 of every
+36 pairs compared a judge against itself** on a different generation — intra-judge test-retest noise
+silently mixed into an inter-judge statistic.
+**Root cause:** the interface, not the arithmetic. `judge_transcript_panel` returned a flat
+`list[PanelVerdict]`, forcing downstream code to *re-derive* grouping from `record_id`.
+**To fix:** done — it now returns `PanelScoredRecord` (record paired with its seats' verdicts), so
+grouping is structural and cannot be re-derived wrongly.
+`test_agreement_does_not_pool_repetitions_of_one_record_id` is the guard.
+
+## [FIXED] ISSUE-182: overnight ops script read judge exit code 1 as an infra failure
+**Found:** 2026-08-18, analysing the 2026-08-17 overnight panel run
+**Fixed:** 2026-08-18, via `evals/run_status.py` (DEC-189)
+**Severity:** P2 — cost a night of Phase 2 work; would have recurred every run
+**Where:** the Phase 1 ops script's `if ($PanelExit -ne 0)` branch
+**Description:** `judge_runner.main` returns 0 (gate met), 1 (pass completed, some cases missed
+expectations) or 2 (pass could not complete). The script treated any non-zero as failure, wrote
+"Panel judge pass FAILED" into the morning handoff and halted Phase 2 — over a completed run that
+scored 194/210. The three-way convention existed only inside `main`'s docstring.
+**To fix:** done — every pass now writes `run_status.json` (`ok` / `gate_failed` / `error`, with
+`measurement_valid` true for the first two). `project-harness/Run-OvernightPhase1.ps1` branches on
+that file, never on the exit code.
+
+## [FIXED] ISSUE-185: `compare.py`'s comparability gate cannot detect a judge-pass mismatch between A/B arms
+**Fixed:** 2026-08-18, in the pre-combined-run hardening (DEC-190).
+`evals/judge_identity.resolve_judge_identity` reads `run_status.json` for the judge that
+actually scored a directory and falls back to `meta.json` for pre-DEC-189 runs;
+`compare._read_run_meta` uses it, so a panel arm and a single-judge arm no longer compare
+clean. Panel identity renders as `panel:<sorted roster>` — sorted because consensus is a
+count and indifferent to seat order, so order alone must not trigger a spurious refusal.
+RED anchors in `tests/unit/evals/test_compare_judge_identity.py`.
+**Found:** 2026-08-18, tracing the A/B path while scoping the Phase 1 + Phase 2 combined run
+**Severity:** P1 (blocking for trustworthy A/B) - produces a confident McNemar verdict from two
+arms measured with different instruments
+**Where:** `evals/compare.py:_read_run_meta` / `_comparability_error`
+**Description:** `compare.py` refuses to compare two generation directories when
+`harness_version`, `judge_model` or `k` differ (EVAL-P18.3). But `judge_model` is read from
+`meta.json`'s `config` block, which is a `RunConfig` snapshot captured at **generation** time
+(`judge_config.resolve_judge_model()`), not a record of which judge pass actually scored the
+directory. Since `--panel` landed, the same generation config can be scored either by a single
+judge or by the 3-model panel, producing materially different `judged.jsonl` verdicts under an
+identical `meta.json`. The gate therefore passes and `compare_runs` reports a confident paired
+verdict whose delta is partly the *instrument* changing, not the engine. This is the same class
+of defect as ISSUE-181 (a statistic silently measuring something other than what it claims), one
+layer up.
+**Consequence for the A/B goal:** the intended use of this harness is A/B-testing engines, agents
+and context management across regenerations. An undetected instrument mismatch is precisely the
+confound that makes such a comparison worthless, and nothing currently catches it.
+**Why deferred:** the fix belongs with whichever task first compares two arms for real; today
+there is not yet a single valid arm to compare (see below), so it is not live-wrong *yet* - the
+same shape of deferral rationale ISSUE-175 carried, which went stale within a day, so this should
+be fixed before the second regeneration exists rather than after.
+**To fix:** record what actually judged a directory - `run_status.json` already carries
+`judge_panel` / `judge_model` per pass (DEC-189). Have `_read_run_meta` prefer `run_status.json`
+over `meta.json` for the judge identity (falling back to `meta.json` for pre-DEC-189 runs), and
+include the panel roster in the equality check so `panel:3` never compares clean against a single
+judge. Consensus rows already stamp `judge_model: "panel:N"`, so the data needed is on disk.

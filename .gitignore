@@ -76,3 +76,8 @@ project-harness/archive/review-2026-06-03/review-evidence/
 
 # Overnight loop run state (baseline snapshots, locks) - never tracked
 project-harness/.loop-state/
+
+# Overnight-run artifact backups (timestamped, recoverable via git history)
+evals/generations/*/judged.jsonl.*.bak
+evals/generations/*/*.pre-panel-*.bak
+evals/generations/*/*.pre-combined-*.bak

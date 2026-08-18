@@ -4200,3 +4200,135 @@ own tick, and hardcoded `0` from ~13 `tick_id: int = 0` defaults. Properties aff
 **Consequence:** ticks drop from ~1.7e9 to single digits. Any *stored* epoch tick now reads as
 infinitely in the future. **Reseeding is mandatory** before judging behaviour, and eval baselines
 captured with epoch ticks will diff — that is the fix working, not a regression.
+
+
+---
+
+## DEC-187: one module owns the `judged.jsonl` row schema; panel mode writes two files
+**Date:** 2026-08-18
+**Context:** The 2026-08-17 overnight panel run persisted a *different, poorer* row shape than the
+single-judge writer - 6 fields against 8. It dropped `case_id`, `judge_kind` and `repetition`,
+renamed `detail` to `error`, and derived `passed` as `bool(score)` without consulting
+`expected_polarity`. Four separate defects (ISSUE-179, ISSUE-180, ISSUE-181, and ISSUE-175 going
+live) all trace back to that single divergence, which was possible because two modules
+independently built rows for the same file.
+
+**Decision:**
+1. `evals/judged_persistence.py` is the sole builder of judged rows for **both** paths -
+   single-judge (`judged_rows`), panel consensus (`consensus_rows`) and panel seats (`seat_rows`)
+   all route through one `_base_row`. `test_seat_rows_are_a_superset_of_single_judge_rows` fails if
+   the two shapes ever drift apart again.
+2. Panel mode writes **two files** (ISSUE-175's own option (b)): `judged.jsonl` keeps the historical
+   one-row-per-record consensus shape, so `transcript_index.build_judged_index`, `label_import`,
+   `compare` and `summary` all keep working unchanged; `judged_panel_votes.jsonl` carries one row
+   per seat per record for auditability. Consensus rows are stamped `judge_model: "panel:N"`.
+3. `judge_transcript_panel` returns `PanelScoredRecord` (a record paired with its seats' verdicts)
+   instead of a flat `list[PanelVerdict]`. This is the structural half of the fix: the flat list
+   forced callers to *re-derive* which verdicts belonged together from `record_id`, and that
+   inference is what produced ISSUE-181.
+
+**Alternatives rejected:** one tidy long-format file with consensus derived on read (cleanest data
+model, but every existing reader needs a consensus-reduce step and byte-compatibility with
+single-judge runs is lost - a poor trade while the A/B pipeline is still being built); one file with
+a `row_kind` discriminator (mixed row types in one stream, and consensus rows would still duplicate
+information derivable from the seats).
+
+**Consequence:** a panel run and a single-judge run now produce interchangeable `judged.jsonl`
+files, so A/B comparisons across judge configurations need no special-casing. Legacy 6-field
+artifacts are converted by `scripts/migrate_panel_judged.py`, which refuses to write unless it can
+*prove* the row-to-record mapping.
+
+---
+
+## DEC-188: Fleiss kappa is the headline agreement number, not raw agreement
+**Date:** 2026-08-18
+**Context:** The 2026-08-17 run headlined pairwise agreement 0.956. The pass base rate in that data
+is 0.951, so two judges rubber-stamping everything would have agreed 0.906 by chance alone.
+Chance-corrected, the panel scores **kappa 0.526** - "moderate" - with a clustered bootstrap 95% CI
+of [0.227, 0.730]. Settling EVAL-P21.3 on 0.956 would have meant declaring the instrument sound
+when it is in fact noisy.
+
+**Decision:**
+1. `evals/kappa_stats.py` computes Fleiss kappa with a case-clustered bootstrap CI (seeded, so
+   re-runs reproduce). Raw pairwise agreement stays, printed *below* kappa and annotated with the
+   pass base rate that explains the gap.
+2. **Polarity is applied before any statistic.** Kappa is computed on pass/fail decisions, never on
+   raw YES/NO. Pooling raw scores across `pass_on_yes` and `pass_on_no` criteria artificially
+   balances the marginals and inflates kappa - on this data from 0.53 to roughly 0.91. Agreement
+   *rates* are invariant under polarity; kappa is not.
+3. The report breaks kappa down **per criterion**, and adds a repeat-flip decomposition across the
+   k repetitions splitting unanimous flips (engine variability) from solo flips (judge
+   instability). At k=3 this comes free from the existing design and is the only way to tell
+   "variant B is worse" from "the judge wobbled".
+4. Undefined kappa is reported as undefined with its reason, never as 1.0 - an all-one-category
+   criterion has no variance to chance-correct.
+
+**Alternatives rejected:** keeping raw agreement as the headline and adding kappa later (this is the
+number the judge decision rests on - deferring it means deciding on the wrong one); skipping the
+repeat-flip axis (it is the noise floor an A/B effect must clear, and it costs almost nothing).
+
+**Consequence:** the per-criterion numbers immediately localised the weakness - `tone_judge` 1.000,
+`affirms_judge` 0.282, `refusal_judge` 0.225 - logged as ISSUE-184 and corroborating ISSUE-141.
+
+---
+
+## DEC-189: eval passes publish `run_status.json`; exit codes are a three-way distinction
+**Date:** 2026-08-18
+**Context:** `judge_runner.main` has always returned 0 (gate met), 1 (pass completed, some cases
+missed expectations) or 2 (pass could not complete). That convention lived only in `main`'s
+docstring. On 2026-08-17 the overnight ops script read exit 1 - from a run that completed fully and
+scored 194/210 - as an infra failure, wrote "Panel judge pass FAILED" into the morning handoff, and
+halted Phase 2 for nothing.
+
+**Decision:**
+1. Every judge pass writes `run_status.json` beside its artifacts: `status`
+   (`ok` / `gate_failed` / `error`), case counts, panel roster, kappa, raw agreement, report and
+   votes paths, and `provenance` for artifacts re-derived rather than freshly judged.
+   `measurement_valid` is true for `ok` and `gate_failed` - **a failed gate is a real measurement**.
+2. Ops scripts branch on that file, never on the exit code. `project-harness/Run-OvernightPhase1.ps1`
+   now does, and only `status == "error"` stops the run.
+3. Exit codes keep their current meaning for backward compatibility; the status file is additive.
+
+**Alternatives rejected:** teaching the one PowerShell script the 0/1/2 convention (correct today,
+but leaves it as tribal knowledge every future runner must relearn - exactly how this happened);
+adding a `--no-gate` flag so measurement passes always exit 0 (attractive for A/B, where
+re-measuring is constant, but it is a new CLI surface and the status file already separates the two
+concerns - revisit if gating thresholds start changing independently of runs).
+
+**Consequence:** `run_status.json` doubles as the per-run record for tracking metrics across A/B
+runs, which the trend work (EVAL-P22.x) needs anyway.
+
+
+---
+
+## DEC-190: comparability is decided by the judge pass that ran, not the configured judge
+**Date:** 2026-08-18
+**Context:** Scoping a combined Phase 1 + Phase 2 overnight run surfaced that `compare.py` —
+the McNemar A/B tool this harness exists to feed — could not detect that two arms had been
+scored by different instruments. Its gate read `judge_model` from `meta.json`, a `RunConfig`
+snapshot taken at *generation* time. Since `--panel` landed, one generation config can be
+scored either by a single judge or by the 3-model panel, producing materially different
+`judged.jsonl` verdicts under a byte-identical `meta.json`. The gate passed, and the tool
+reported a confident paired verdict whose delta was partly the measuring instrument changing
+rather than the engine (ISSUE-185).
+
+**Decision:**
+1. `evals/judge_identity.py` resolves the judge identity of a generation directory from
+   `run_status.json` (written by every pass since DEC-189, a record of what actually ran),
+   falling back to `meta.json`'s configured `judge_model` for older directories.
+2. A panel pass renders as `panel:<roster joined by +, sorted>`. Sorted deliberately:
+   `consensus_verdict` is a >=2-of-3 count and indifferent to seat order, so order alone must
+   not cause a spurious refusal — while a changed *seat* still must.
+3. `compare._comparability_error`'s refusal message now says why it matters, rather than
+   printing two opaque model strings.
+
+**Alternatives rejected:** stamping the judge identity into `meta.json` at judge time (mutating
+a file whose whole contract is "generation-time snapshot" — the confusion that caused this bug);
+comparing the `judge_model` column inside `judged.jsonl` rows (works, but re-derives from bulk
+data what a small status file already states, and would break on a directory whose rows are
+mid-rewrite).
+
+**Consequence:** two arms must be judged the same way to be compared at all. This is a real
+constraint on the A/B workflow and an intentional one — it is cheaper to re-judge an arm than to
+act on a confounded regression verdict. It does not protect against a deliberate roster change
+between arms; nothing can, short of refusing to compare anything ever judged differently.
