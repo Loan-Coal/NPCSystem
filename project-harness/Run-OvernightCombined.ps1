@@ -294,7 +294,7 @@ Full log: ``$LogFile``
 3. **Oracle kappas.** Confirm the five values match DEC-185's closed forms: refusal_judge=0.247,
    tone_judge=0.241, affirms_judge=0.106, keyword_any=0.146, anti_hallucination_grounded=0.232.
    This closes HUMAN GATE H9. The script does not judge this for you.
-4. **Coverage gaps.** Read ``$OrderPrefix.coverage_gaps.txt`` — every scorer listed there has
+4. **Coverage gaps.** Read ``$($OrderPrefix).coverage_gaps.txt`` — every scorer listed there has
    zero rows of one verdict and cannot have that class measured however much you label.
 
 ## What you now have that you did not before
