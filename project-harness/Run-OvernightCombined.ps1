@@ -79,6 +79,19 @@ function Test-MeasurementValid {
     return ($Status.status -eq "ok") -or ($Status.status -eq "gate_failed")
 }
 
+function Wait-ApiHealthy {
+    param([int]$TimeoutSeconds = 120)
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $r = Invoke-WebRequest -Uri "http://localhost:8000/health" -TimeoutSec 5 -UseBasicParsing
+            if ($r.StatusCode -eq 200) { return $true }
+        } catch { }
+        Start-Sleep -Seconds 3
+    }
+    return $false
+}
+
 $Python = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path $Python)) { $Python = "python" }
 
@@ -196,12 +209,34 @@ if ($LASTEXITCODE -ne 0) { Write-Log "FATAL: docker-compose up -d failed."; exit
 # Bash, which is its documented path (ISSUE-187). The other four make targets this script uses
 # (demo-seed, seed-village-world, seed-tavern-world, mock-calibrate-oracle) are $(PYTHON)-based
 # and were verified working from PowerShell on 2026-08-19.
+# The app's tick scheduler PERSISTS the game tick to :WorldState (DEC-186), so the running app
+# writes to Neo4j continuously. do_restore wipes the graph then CREATEs each snapshot node; if
+# the scheduler recreates :WorldState inside that window the CREATE collides:
+#   ConstraintValidationFailed: Node already exists with label `WorldState` and property id='world'
+# That killed the 2026-08-19 22:19 run and left the graph PARTIALLY restored (139 of 248 nodes) --
+# worse than not running at all. Stop the app for the duration. `docker compose run app` starts its
+# own one-off container, so the restore still works while the service is stopped. Verified
+# 2026-08-19: with the app stopped the restore completes cleanly (248 nodes, 233 relationships).
+Write-Log "Stopping the app service for the restore (its tick scheduler writes :WorldState -- DEC-186) ..."
+& docker compose stop app 2>&1 | Out-String | ForEach-Object { Write-Log $_.Trim() }
+
 Write-Log "Restoring the checked-in eval-world baseline (direct docker; bypasses the POSIX-only make target) ..."
 $reset = & docker compose run --rm -v "${RepoRoot}:/work" -w /work app `
     python -m demo_game.snapshot --mode restore `
     --path /work/evals/fixtures/eval_world_baseline.json 2>&1 | Out-String
 Write-Log $reset
 if ($LASTEXITCODE -ne 0) { Write-Log "FATAL: eval-world-reset failed -- refusing to regenerate against a possibly stale-tick graph."; exit 3 }
+
+# The seeds below hit the engine over HTTP, so the app must be back up AND answering before they
+# run -- and the regen in step 4 needs it too. Wait on /health rather than assuming.
+Write-Log "Restarting the app service ..."
+$dcUp = docker-compose up -d 2>&1 | Out-String
+Write-Log $dcUp
+if (-not (Wait-ApiHealthy -TimeoutSeconds 180)) {
+    Write-Log "FATAL: engine did not answer /health within 180s after the restore -- refusing to seed or regenerate."
+    exit 3
+}
+Write-Log "Engine healthy again after the restore."
 
 foreach ($seedTarget in @("demo-seed", "seed-village-world", "seed-tavern-world")) {
     $seedOutput = & make $seedTarget 2>&1 | Out-String
