@@ -186,9 +186,22 @@ if ($LASTEXITCODE -ne 0) { Write-Log "FATAL: docker-compose up -d failed."; exit
 
 # DEC-186: stored epoch-sized ticks read as unreachably far in the future, which silently
 # disables routine overrides. The MERGE-idempotent seed targets do not clear them; this does.
-$reset = & make eval-world-reset 2>&1 | Out-String
+# `make eval-world-reset` is NOT usable from PowerShell/cmd. Its recipe is
+#     MSYS_NO_PATHCONV=1 docker compose run --rm -v "$$PWD:/work" ...
+# a POSIX inline env-var prefix. The Makefile sets no `SHELL :=`, so make uses cmd.exe here,
+# which cannot parse it: "'MSYS_NO_PATHCONV' is not recognized as an internal or external
+# command". This killed the 2026-08-19 01:57 relaunch at exactly this line. MSYS_NO_PATHCONV
+# exists only to stop Git Bash mangling the /work path, so it is unnecessary under PowerShell
+# -- invoke docker directly. The Makefile target is deliberately left alone: it works from Git
+# Bash, which is its documented path (ISSUE-187). The other four make targets this script uses
+# (demo-seed, seed-village-world, seed-tavern-world, mock-calibrate-oracle) are $(PYTHON)-based
+# and were verified working from PowerShell on 2026-08-19.
+Write-Log "Restoring the checked-in eval-world baseline (direct docker; bypasses the POSIX-only make target) ..."
+$reset = & docker compose run --rm -v "${RepoRoot}:/work" -w /work app `
+    python -m demo_game.snapshot --mode restore `
+    --path /work/evals/fixtures/eval_world_baseline.json 2>&1 | Out-String
 Write-Log $reset
-if ($LASTEXITCODE -ne 0) { Write-Log "FATAL: make eval-world-reset failed -- refusing to regenerate against a possibly stale-tick graph."; exit 3 }
+if ($LASTEXITCODE -ne 0) { Write-Log "FATAL: eval-world-reset failed -- refusing to regenerate against a possibly stale-tick graph."; exit 3 }
 
 foreach ($seedTarget in @("demo-seed", "seed-village-world", "seed-tavern-world")) {
     $seedOutput = & make $seedTarget 2>&1 | Out-String
