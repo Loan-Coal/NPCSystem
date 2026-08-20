@@ -20,7 +20,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
-        demo-snapshot demo-restore eval-world-reset \
+        demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
         seed-tavern-world seed-village-world package
 
 install:
@@ -536,8 +536,7 @@ demo-snapshot:
 # demo-restore: wipe Neo4j graph and reimport from .cache/demo/snapshot.json
 # Use between demo takes to reset the world to the snapshot state.
 demo-restore:
-	MSYS_NO_PATHCONV=1 docker compose run --rm -v "$$PWD:/work" -w /work app \
-		python -m demo_game.snapshot --mode restore --path /work/.cache/demo/snapshot.json
+	$(MAKE) --no-print-directory restore-with-app-stopped SNAPSHOT_PATH=/work/.cache/demo/snapshot.json
 
 # eval-world-reset: wipe Neo4j and restore the checked-in clean eval-world baseline
 # (demo + village + tavern, freshly seeded, none of the Quest/TickLease/Memory
@@ -545,8 +544,32 @@ demo-restore:
 # what makes two generation runs comparable — both start from identical graph
 # state. Run before any regeneration or repeated eval measurement.
 eval-world-reset:
+	$(MAKE) --no-print-directory restore-with-app-stopped SNAPSHOT_PATH=/work/evals/fixtures/eval_world_baseline.json
+
+# restore-with-app-stopped: shared body of demo-restore and eval-world-reset.
+# The engine's tick autopilot writes :WorldState every TICK_INTERVAL_SECONDS (10s), so a
+# restore racing a running app used to leave the graph HALF-WIPED (ISSUE-188). The app is
+# stopped for the duration here, matching what project-harness/Run-OvernightCombined.ps1
+# already does; demo_game/restore_guard.py additionally refuses the restore if anything is
+# still writing, so neither path can corrupt the graph. `docker compose run app` starts its
+# own one-off container, so the restore works fine while the service is down. The app is
+# always brought back up, even when the restore fails, and the restore's status is preserved.
+restore-with-app-stopped:
+	docker compose stop app
 	MSYS_NO_PATHCONV=1 docker compose run --rm -v "$$PWD:/work" -w /work app \
-		python -m demo_game.snapshot --mode restore --path /work/evals/fixtures/eval_world_baseline.json
+		python -m demo_game.snapshot --mode restore --path $(SNAPSHOT_PATH); \
+	status=$$?; \
+	docker compose up -d; \
+	echo "[make] waiting for the engine to answer /health ..."; \
+	healthy=0; \
+	for i in $$(seq 1 60); do \
+		if curl -sf http://localhost:8000/health >/dev/null 2>&1; then healthy=1; break; fi; \
+		sleep 3; \
+	done; \
+	if [ $$healthy -eq 0 ]; then echo "[make] FATAL: engine did not answer /health within 180s."; exit 1; fi; \
+	echo "[make] engine healthy."; \
+	exit $$status
+
 
 # ---------------------------------------------------------------------------
 # seed-tavern-world / seed-village-world: seed independent eval worlds (idempotent)

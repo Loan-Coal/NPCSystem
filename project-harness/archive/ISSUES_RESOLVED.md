@@ -2419,3 +2419,67 @@ be fixed before the second regeneration exists rather than after.
 over `meta.json` for the judge identity (falling back to `meta.json` for pre-DEC-189 runs), and
 include the panel roster in the equality check so `panel:3` never compares clean against a single
 judge. Consensus rows already stamp `judge_model: "panel:N"`, so the data needed is on disk.
+
+---
+
+## [FIXED] ISSUE-188: `snapshot.do_restore` is not safe against a live writer and fails PARTWAY, leaving a half-restored graph
+**Found:** 2026-08-19, when the combined overnight run died at step 3 for the third time
+**Fixed:** 2026-08-20, in the ISSUE-188 task (atomic restore + live-writer probe)
+**Severity:** P1 (blocking) - it corrupts the graph rather than failing cleanly, and `make
+eval-world-reset` is documented as the way to establish a known-good world before a regeneration
+**Where:** `demo_game/snapshot.py:139-170` (`do_restore`), reached via `make eval-world-reset`
+**Description:** `do_restore` runs `MATCH (n) DETACH DELETE n` and then `CREATE`s each snapshot node
+in a separate auto-commit transaction per node. The app's tick scheduler persists the game tick to
+`:WorldState` (DEC-186), so a running engine writes to Neo4j continuously. If the scheduler
+recreates `:WorldState {id:'world'}` between the wipe and that node's `CREATE`, the create violates
+the uniqueness constraint:
+
+    neo4j.exceptions.ConstraintError: {code: Neo.ClientError.Schema.ConstraintValidationFailed}
+    {message: Node(70) already exists with label `WorldState` and property `id` = 'world'}
+
+**The dangerous part is not the error, it is where it stops.** Because each node is its own
+transaction, the wipe has already committed and 139 of the snapshot's 248 nodes have been created.
+The process exits non-zero with the graph in a state that is neither the old world nor the baseline
+- and nothing marks it as such. A caller that retried, or an operator who did not read the
+traceback, would regenerate against a silently half-populated world. Measured directly after the
+2026-08-19 22:19 failure: 139 nodes present, `WorldState.tick_id = 41`.
+
+Not reproducible on demand: it depends on whether a scheduler tick lands inside the restore window
+(~9 s). The same command succeeded earlier the same night when the app had been idle for 15 hours,
+and failed once the app had just been restarted by `docker-compose up -d` in the same step.
+**Ruled out:** the snapshot itself is fine - it holds two `:WorldState` nodes but with *distinct*
+ids (`world`, `world_village`), so it does not self-collide.
+
+**Why deferred:** the overnight run is unblocked by stopping the app around the restore, which
+`project-harness/Run-OvernightCombined.ps1` now does (verified: 248 nodes, 233 relationships, exit
+0, with the app stopped). Making `do_restore` itself safe is a change to shared demo tooling with
+its own callers and tests, not an ops-script edit, and it should not be made at 22:00 in front of a
+regeneration.
+**To fix:** two things, and the second matters more than the first.
+1. Run the wipe and all creates in ONE explicit transaction so a failure rolls back to the
+   pre-restore graph instead of leaving a partial one. `session.execute_write` with a single work
+   function; the per-node auto-commit loop is what makes the failure destructive.
+2. Have `do_restore` refuse to run at all when a writer could be live - either take an explicit
+   `--i-know-the-app-is-stopped` acknowledgement, or check for a recent `:WorldState.tick_id`
+   advance and abort with a message naming the app container. A restore that can be silently
+   corrupted by a background scheduler is a footgun regardless of transaction scope.
+Consider also whether `make eval-world-reset` should stop and restart the app itself, so the
+Makefile path and the ops-script path cannot diverge again.
+
+**How it was fixed:**
+1. `do_restore` now runs the wipe, every node create, every relationship create and the
+   sentinel strip inside ONE `session.execute_write` work function, so any failure rolls the
+   graph back to its pre-restore state. The per-node auto-commit loop is gone.
+2. New `demo_game/restore_guard.py` fingerprints the graph (node count, relationship count,
+   every `:WorldState` id/tick_id/last_updated_at), waits `SNAPSHOT_PROBE_SECONDS` (default 12,
+   longer than the 10 s `TICK_INTERVAL_SECONDS`, so a live autopilot is caught with certainty,
+   not by luck), and fingerprints again. Any difference aborts BEFORE the wipe with exit code 2
+   and a message naming `docker compose stop app`. The probe was chosen over an
+   `--i-know-the-app-is-stopped` flag because the flag is a checkbox anyone can tick while the
+   app runs, and because `snapshot.py` executes inside the app image with no docker socket, so
+   it can never stop the app itself - only detect and refuse (DEC-192).
+3. `make demo-restore` and `make eval-world-reset` now delegate to a shared
+   `restore-with-app-stopped` target that stops the app, restores, brings the app back up and
+   waits on `/health` - matching what `Run-OvernightCombined.ps1` already does. The two paths
+   can still be invoked separately, but the guard in shared Python is what makes divergence
+   non-destructive.

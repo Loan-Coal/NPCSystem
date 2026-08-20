@@ -217,6 +217,9 @@ if ($LASTEXITCODE -ne 0) { Write-Log "FATAL: docker-compose up -d failed."; exit
 # worse than not running at all. Stop the app for the duration. `docker compose run app` starts its
 # own one-off container, so the restore still works while the service is stopped. Verified
 # 2026-08-19: with the app stopped the restore completes cleanly (248 nodes, 233 relationships).
+# Since 2026-08-20 (ISSUE-188 / DEC-192) do_restore is also ONE transaction and probes for a live
+# writer for 12s before touching anything, so if this stop is ever removed the restore refuses
+# cleanly (exit 2) instead of half-wiping the graph. The stop stays: it is what makes it pass.
 Write-Log "Stopping the app service for the restore (its tick scheduler writes :WorldState -- DEC-186) ..."
 & docker compose stop app 2>&1 | Out-String | ForEach-Object { Write-Log $_.Trim() }
 

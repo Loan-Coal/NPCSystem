@@ -2,7 +2,7 @@
 Module: snapshot
 Layer: demo_game (standalone CLI tool — no engine layer imports)
 Purpose: Export and restore Neo4j graph state for demo resets between takes.
-Dependencies: neo4j (sync driver), json, pathlib, argparse, os
+Dependencies: neo4j (sync driver), json, pathlib, argparse, os, demo_game.restore_guard
 Used by: Makefile targets demo-snapshot and demo-restore
 """
 
@@ -17,6 +17,13 @@ from typing import Any
 
 from neo4j import GraphDatabase, Driver
 
+from demo_game.restore_guard import (
+    REMEDY_HINT,
+    LiveWriterDetectedError,
+    assert_no_live_writer,
+    probe_seconds,
+)
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -28,6 +35,9 @@ NEO4J_USER_DEFAULT = "neo4j"
 NEO4J_PASSWORD_DEFAULT = "password"
 
 _SNAP_EID_PROP = "_snap_eid"
+
+EXIT_SNAPSHOT_MISSING = 1
+EXIT_LIVE_WRITER = 2
 
 CYPHER_EXPORT_NODES = (
     "MATCH (n) RETURN elementId(n) AS eid, labels(n) AS labels, properties(n) AS props"
@@ -137,18 +147,31 @@ def do_snapshot(path: Path) -> None:
 
 
 def do_restore(path: Path) -> None:
-    """Wipe the graph and restore it from *path*.
+    """Wipe the graph and restore it from *path*, atomically.
 
     Steps:
-    1. Wipe all nodes and relationships.
-    2. Recreate each node, tagging it with a temporary ``_snap_eid`` property
-       that mirrors the original Neo4j element-id so relationships can be matched.
-    3. Recreate each relationship by matching on ``_snap_eid``.
-    4. Strip the ``_snap_eid`` sentinel from every node.
+    1. Probe for a live writer and abort (touching nothing) if one is found.
+    2. In ONE transaction: wipe, recreate each node tagged with a temporary
+       ``_snap_eid`` mirroring its original element-id, recreate each relationship
+       by matching on that sentinel, then strip the sentinel.
+
+    Everything after the probe runs inside a single ``execute_write``, so any
+    failure rolls the graph back to its pre-restore state instead of leaving it
+    half-populated (ISSUE-188). ``CREATE`` after ``DETACH DELETE`` cannot
+    self-collide: uncommitted deletes are invisible to the constraint check. The
+    driver may retry the work function on transient errors, which is safe because
+    the wipe is its first statement. With a writer still live the restore now
+    blocks on locks and raises rather than writing a partial world.
+
+    Args:
+        path: Snapshot JSON file written by do_snapshot.
+    Raises:
+        SystemExit: EXIT_SNAPSHOT_MISSING if *path* does not exist,
+            EXIT_LIVE_WRITER if another process is writing to the graph.
     """
     if not path.exists():
         print(f"[restore] snapshot file not found: {path}", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(EXIT_SNAPSHOT_MISSING)
 
     payload = json.loads(path.read_text(encoding="utf-8"))
     nodes: list[dict[str, Any]] = payload["nodes"]
@@ -157,10 +180,8 @@ def do_restore(path: Path) -> None:
     driver = _open_driver()
     try:
         with driver.session() as session:
-            session.run(CYPHER_WIPE)
-            _restore_nodes(session, nodes)
-            _restore_rels(session, rels)
-            session.run(CYPHER_REMOVE_SNAP_PROP)
+            _abort_if_writer_is_live(session)
+            session.execute_write(_restore_all, nodes, rels)
     finally:
         driver.close()
 
@@ -170,17 +191,45 @@ def do_restore(path: Path) -> None:
     )
 
 
-def _restore_nodes(session: Any, nodes: list[dict[str, Any]]) -> None:
+def _abort_if_writer_is_live(session: Any) -> None:
+    """Exit with EXIT_LIVE_WRITER, having changed nothing, if the graph is moving."""
+    window = probe_seconds()
+    if window > 0:
+        print(f"[restore] probing for live writers ({window}s) ...", file=sys.stderr)
+    try:
+        assert_no_live_writer(session, probe_seconds=window)
+    except LiveWriterDetectedError as exc:
+        print(
+            f"[restore] ABORT: the graph changed during the {window}s probe"
+            " -- a writer is live.",
+            file=sys.stderr,
+        )
+        for change in exc.changes:
+            print(f"  {change}", file=sys.stderr)
+        print(REMEDY_HINT, file=sys.stderr)
+        print("Nothing was modified.", file=sys.stderr)
+        raise SystemExit(EXIT_LIVE_WRITER) from exc
+
+
+def _restore_all(tx: Any, nodes: list[dict[str, Any]], rels: list[dict[str, Any]]) -> None:
+    """Wipe and rebuild the whole graph inside one managed transaction."""
+    tx.run(CYPHER_WIPE)
+    _restore_nodes(tx, nodes)
+    _restore_rels(tx, rels)
+    tx.run(CYPHER_REMOVE_SNAP_PROP)
+
+
+def _restore_nodes(tx: Any, nodes: list[dict[str, Any]]) -> None:
     """Create all nodes from the snapshot, each tagged with _snap_eid."""
     for node in nodes:
         labels_cypher = ":".join(f"`{lbl}`" for lbl in node["labels"]) or "Node"
         props = _deserialize_props(node["props"])
         props[_SNAP_EID_PROP] = node["eid"]
         cypher = f"CREATE (n:{labels_cypher}) SET n = $props"
-        session.run(cypher, props=props)
+        tx.run(cypher, props=props)
 
 
-def _restore_rels(session: Any, rels: list[dict[str, Any]]) -> None:
+def _restore_rels(tx: Any, rels: list[dict[str, Any]]) -> None:
     """Create all relationships from the snapshot, matched by _snap_eid."""
     for rel in rels:
         rel_type = rel["rel_type"]
@@ -190,7 +239,7 @@ def _restore_rels(session: Any, rels: list[dict[str, Any]]) -> None:
             f" MATCH (b) WHERE b.`{_SNAP_EID_PROP}` = $dst"
             f" CREATE (a)-[r:`{rel_type}`]->(b) SET r = $props"
         )
-        session.run(cypher, src=rel["src_eid"], dst=rel["dst_eid"], props=props)
+        tx.run(cypher, src=rel["src_eid"], dst=rel["dst_eid"], props=props)
 
 
 # ---------------------------------------------------------------------------

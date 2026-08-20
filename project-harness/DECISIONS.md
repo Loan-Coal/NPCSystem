@@ -4416,3 +4416,53 @@ baseline both steps agree on, a gated verdict, a trend row carrying the honest a
 Not yet exercised live: `EVAL-P22B.1`/`P22B.2` are the human sessions that record the first trend row
 and run the harness end to end. With `refusal_judge` at kappa 0.225 (ISSUE-184), exit 3 is expected
 to fire in practice rather than being a theoretical state.
+
+## DEC-192: a destructive graph restore is one transaction, and it detects the live writer
+rather than asking the operator to promise there isn't one
+**Date:** 2026-08-20
+**Decided by:** the maintainer, this session, choosing between the two options ISSUE-188 left
+open.
+
+**Context.** `demo_game/snapshot.py --mode restore` backs `make demo-restore` and
+`make eval-world-reset`, and `eval-world-reset` is what makes two generation runs comparable
+(ISSUE-167). It wiped the graph and then created each snapshot node in its own auto-commit
+transaction. The engine's tick autopilot is on by default (`config.py:177-178`,
+`TICK_INTERVAL_SECONDS = 10`) and MERGEs `:WorldState` on every tick, so a tick landing inside
+the restore window collided with the `:WorldState.id` uniqueness constraint. The wipe had
+already committed: the 2026-08-19 22:19 run left 139 of 248 nodes and exited non-zero, with
+nothing marking the graph as half-restored.
+
+**Decision 1 - one transaction.** The wipe, every create and the sentinel strip run inside a
+single `session.execute_write` work function. Any failure rolls back to the pre-restore graph.
+`CREATE` after `DETACH DELETE` in the same transaction does not self-collide, because
+uncommitted deletes are invisible to the constraint check. The driver may retry the work
+function on transient errors, which is safe only because the wipe is its first statement - if
+that ordering ever changes, the retry semantics change with it. The trade accepted: against a
+live writer the restore now blocks on locks and raises, instead of writing a partial world.
+
+**Decision 2 - probe, not an acknowledgement flag.** ISSUE-188 offered either an explicit
+`--i-know-the-app-is-stopped` flag or a live-writer check. The probe was chosen for two reasons.
+First, the flag is a checkbox an operator can tick while the app is running, and it would have
+broken all three existing call sites. Second, `snapshot.py` executes *inside* the app image via
+`docker compose run` (Neo4j has no host port - ISSUE-131) and has no docker socket, so it can
+never stop the app itself; detect-and-refuse is the strongest thing it can do from where it
+runs. `demo_game/restore_guard.py` fingerprints node count, relationship count and every
+`:WorldState` id/tick_id/last_updated_at, waits `SNAPSHOT_PROBE_SECONDS` (default 12), and
+fingerprints again; a difference aborts before the wipe with exit code 2. The default is
+deliberately *longer* than `TICK_INTERVAL_SECONDS`: any 12-second window contains a tick
+boundary, so a running autopilot is caught with certainty rather than probabilistically. Raising
+`TICK_INTERVAL_SECONDS` without raising this constant silently weakens the guard.
+
+**Decision 3 - the Makefile owns app lifecycle, the guard owns safety.** `demo-restore` and
+`eval-world-reset` now delegate to a shared `restore-with-app-stopped` target that stops the
+app, restores, brings it back up and waits on `/health`, mirroring
+`project-harness/Run-OvernightCombined.ps1`. The ops script keeps its own inline copy because
+the make recipes are POSIX/Git-Bash-only (ISSUE-187) and unusable from PowerShell. That
+duplication is accepted: the convergence ISSUE-188 asked for is delivered by the guard living in
+the shared Python both paths call, not by either wrapper. A future wrapper that forgets to stop
+the app now gets a clean refusal instead of a corrupted graph.
+
+**Rejected:** `SNAPSHOT_PROBE_SECONDS=0` exists as an escape hatch for tests and for a Neo4j
+instance known to be isolated. It is not wired to any target and is not a supported operator
+workflow; the 12 s cost of the probe is negligible against a restore that precedes a 10-hour
+regeneration.
