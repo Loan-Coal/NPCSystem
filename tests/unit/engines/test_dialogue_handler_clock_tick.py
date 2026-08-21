@@ -117,7 +117,7 @@ def _make_handler(*, clock: GameClock, emotion_updater, repo) -> DialogueHandler
         input_moderation=build_input_moderation_service("mature"),
         output_moderation=build_output_moderation_service("mature"),
         dialogue_repo=repo,
-        dialogue_context=AsyncMock(build_context=AsyncMock(return_value=("{}", []))),
+        dialogue_context=AsyncMock(build_context=AsyncMock(return_value=("{}", [], None))),
         clock=clock,
     )
 

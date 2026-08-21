@@ -3123,10 +3123,12 @@ can hold that role.
       **Blocks:** list drops `EVAL-P23.1`/`P23.2`/`P23.3`.
 
 **Known limits this phase does NOT address, recorded so they are not rediscovered:**
-- `retrieval_profile` is recorded in `RunConfig` but inert — its own docstring says it "does not
-  currently select a retrieval strategy". Until it is wired, A/B-ing context management requires a
-  commit per variant, with `git_sha` distinguishing the arms. That is workable but cannot sweep
-  configurations.
+- ~~`retrieval_profile` is recorded in `RunConfig` but inert~~ **RESOLVED 2026-08-21 (DEC-194,
+  DEC-195).** It is now sent per turn on `/v1/dialogue`, resolved strictly engine-side, and
+  `evals generate --profiles a,b` runs paired arms inside one generation (one gen dir per arm,
+  `<gen-id>__<profile>`). A/B-ing context management no longer needs a commit per variant, and a
+  sweep is a comma-separated list. What each arm actually assembled is on the response
+  (`context_receipt`) and on every transcript record.
 - `refusal_judge` (kappa 0.225) and `affirms_judge` (kappa 0.282) are too noisy to resolve small
   engine effects on those criteria (ISSUE-184). `tone_judge` (kappa 1.000) is sound, so engine A/B
   on tone is trustworthy today. Sharpening the other two is not judge vanity work — it sets the

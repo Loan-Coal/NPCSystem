@@ -103,3 +103,37 @@ correct UTF-8 file (`topic �`) was diagnosed as file corruption and nearly "fi
 have corrupted `prompts/eval/refusal_judge.yaml`. See ISSUE-141's correction. Verify with
 `python -c "open(p,'rb').read().decode('utf-8')"` before believing your terminal.
 **First applied in:** `evals/__main__.py`; reused in `scripts/check_human_gates.py` (DEC-164).
+
+---
+
+## Pattern: Out-collector list for per-tier observations across a degradation ladder
+**When to use:** A handler that may run the same inner step more than once (the dialogue
+degradation ladder runs `full`, then `graph_only`, then canned) and needs to report something
+the inner step observed, when that something is not part of the inner step's return contract.
+Applied twice in `DialogueHandler.handle`: `memory_ids_out` (ISSUE-107) and `receipt_out`
+(DEC-195).
+**Why:** The inner step's return type is the response the ladder selects between, and
+`execute_with_degradation` picks exactly one of them — so anything appended to that return
+type would have to be threaded through the fallback machinery and would still be lost when the
+canned tier answers. A caller-owned list, passed down and appended to, survives every tier and
+records *how many times the step ran*, which is itself the information you need: for
+`memory_ids_out` the union is wanted, for `receipt_out` only the **last** entry is, because
+that is the assembly that produced the served reply. Keep the "which entry" decision in a named
+helper next to the response assembly (`_selected_receipt`), never inline — the two collectors
+above want different answers from the same shape, and inlining hides that.
+**Example:**
+```python
+receipts_captured: list[ContextReceipt] = []
+
+async def _full() -> DialogueResponse:
+    return await self._run_llm_pipeline(..., receipt_out=receipts_captured)
+
+# inside _run_llm_pipeline, after the inner step observes it:
+if receipt_out is not None and receipt is not None:
+    receipt_out.append(receipt)
+
+# at response assembly:
+final = parsed.model_copy(update={
+    "context_receipt": _selected_receipt(request, receipts_captured),
+})
+```

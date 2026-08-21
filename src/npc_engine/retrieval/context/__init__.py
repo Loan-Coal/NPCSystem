@@ -2,7 +2,8 @@
 Package: context
 Layer: retrieval
 Purpose: Context assembly, scoring, compression, serialisation, and budget enforcement for LLM prompts.
-Public surface: ContextItem, MergedContext, merge_context, estimate_tokens, serialize_json, parse_node_identity, CHARS_PER_TOKEN_ESTIMATE, _LOW_VALUE_FIELDS, COMPRESSION_SUFFIX, log_context_metrics, ContextMetrics, ContextRelevanceCandidate, rank_context_candidates, rank_tier_items, serialize_context, enforce_final_serialized_budget_with_context, ContextCompressionCache, fill_to_budget, EmbeddingIndexProtocol, build_serialized_context.
+Public surface: ContextItem, MergedContext, merge_context, estimate_tokens, serialize_json, parse_node_identity, CHARS_PER_TOKEN_ESTIMATE, _LOW_VALUE_FIELDS, COMPRESSION_SUFFIX, log_context_metrics, ContextMetrics, ContextRelevanceCandidate, rank_context_candidates, rank_tier_items, serialize_context, enforce_final_serialized_budget_with_context, ContextCompressionCache, fill_to_budget, EmbeddingIndexProtocol, build_serialized_context, build_serialized_context_with_receipt,
+ContextReceipt, TierSpend, build_context_receipt.
 Does NOT: access Neo4j directly or call LLMs.
 Dependencies injected: None (re-export hub).
 """
@@ -34,7 +35,9 @@ from .context_scoring import (
 from .context_serializer import serialize_context
 from .context_builder_helpers import enforce_final_serialized_budget_with_context, expand_query, keyword_overlap, rerank_by_keyword
 from .context_protocols import EmbeddingIndexProtocol
-from .context_builder import build_serialized_context, _enforce_final_serialized_budget, _estimate_tokens
+from .context_builder import build_serialized_context, build_serialized_context_with_receipt
+from .context_builder import _enforce_final_serialized_budget, _estimate_tokens
+from .context_receipt import ContextReceipt, TierSpend, build_context_receipt
 
 __all__ = [
     'ContextItem',
@@ -82,6 +85,10 @@ __all__ = [
     'rerank_by_keyword',
     'EmbeddingIndexProtocol',
     'build_serialized_context',
+    'build_serialized_context_with_receipt',
+    'ContextReceipt',
+    'TierSpend',
+    'build_context_receipt',
     # context_builder internals re-exported for backward compat
     '_enforce_final_serialized_budget',
     '_estimate_tokens',

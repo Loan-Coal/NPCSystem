@@ -6,10 +6,16 @@ Purpose: Frozen Pydantic v2 model representing one context item captured from
 Dependencies: pydantic
 Used by: eval_records (evals/)
 
-Note: This is an *approximation* of the context that produced each engine reply.
-The debug endpoint re-runs retrieval with session_turns=[] and flattens tier/priority
-metadata to sentinel values (admin/debug_retrieval.py:80-108). That caveat is
-documented here rather than deferred.
+DEPRECATED as of the context receipt (item C3); kept for one release while
+retrieval_join and the dashboard move over. Use GenerationRecord.context_receipt
+(evals/context_receipt_record.py) instead.
+
+Why: this is an *approximation* of the context that produced each engine reply. It
+comes from a SECOND request — the debug endpoint re-runs retrieval with
+session_turns=[] and flattens tier/priority metadata to sentinel values
+(admin/debug_retrieval.py:80-108) — so precision computed over it is precision over
+what the retriever RANKED, not over what reached the model. context_receipt is
+produced by the assembly that actually served the turn and needs no second call.
 """
 
 from __future__ import annotations
@@ -18,7 +24,9 @@ from pydantic import BaseModel, ConfigDict
 
 
 class RetrievedItem(BaseModel):
-    """One context item from the retrieval pipeline, captured at generation time.
+    """DEPRECATED: one context item from a second, session_turns=[] retrieval call.
+
+    Superseded by ContextReceiptRecord; see this module's docstring.
 
     Mirrors ContextItemView from admin/debug_retrieval.py. Tier and priority default
     to sentinel values when not recoverable from the serialized prompt blob.

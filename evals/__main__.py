@@ -73,7 +73,8 @@ class VerbTarget:
 
 VERBS: dict[str, VerbTarget] = {
     "generate": VerbTarget(
-        "generate_runner", "main", "Run the generation pass; write a v2 transcript."
+        "generate_runner", "main",
+        "Run the generation pass (--profiles a,b for paired A/B arms in one run).",
     ),
     "judge": VerbTarget(
         "judge_runner", "main", "Score a cached transcript with the LLM judge."

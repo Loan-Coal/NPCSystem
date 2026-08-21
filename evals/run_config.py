@@ -97,9 +97,12 @@ class RunConfig(BaseModel):
             what the judge actually ran with.
         ollama_version: Ollama server version string (from /api/version).
             None when Ollama is unreachable at config resolution time.
-        retrieval_profile: Named retrieval configuration applied during generation.
-            Not yet wired to any retrieval configuration — the value is recorded for
-            future use but does not currently select a retrieval strategy.
+        retrieval_profile: Named retrieval configuration applied during generation, and
+            the arm identity of a paired run. Wired as of DEC-194: it is sent per turn
+            on /v1/dialogue and resolved strictly engine-side, so a run cannot record a
+            profile it did not use. Identical across every other field between the arms
+            of one paired run (paired_arms._arm_config), which is what lets compare.py
+            attribute a delta to it.
         git_sha: Short (7-char) git commit hash at the time resolve_run_config() ran.
         golden_set_version: First 12 hex chars of a SHA-256 digest over sorted case file
             names and bytes — changes on any content edit, stable across mtime-only changes.

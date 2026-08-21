@@ -1,10 +1,11 @@
 """
 Module: dialogue_context_adapter
 Layer: retrieval
-Purpose: Neo4j-backed adapter for DialogueContextPort — wraps build_serialized_context,
+Purpose: Neo4j-backed adapter for DialogueContextPort — wraps build_serialized_context_with_receipt,
          opening a session per call so DialogueHandler holds no AsyncSession.
 Does NOT: implement tier logic; import from engines layer.
-Dependencies: retrieval.context_builder, retrieval.context_protocols, retrieval.dialogue_context_cache,
+Dependencies: retrieval.context_builder, retrieval.context_receipt, retrieval.context_protocols,
+              retrieval.dialogue_context_cache,
               graph.db, config.Settings, schema.context_config_models
 Used by: api.dependencies_stores (composition root)
 Dependencies injected: GraphDB, Settings, LLMConfig, EmbeddingIndexProtocol
@@ -17,7 +18,8 @@ from typing import TYPE_CHECKING, Any
 
 from npc_engine.config import Settings
 from npc_engine.graph.infra.db import GraphDB
-from npc_engine.retrieval.context.context_builder import build_serialized_context
+from npc_engine.retrieval.context.context_builder import build_serialized_context_with_receipt
+from npc_engine.retrieval.context.context_receipt import ContextReceipt
 from npc_engine.retrieval.context.context_protocols import EmbeddingIndexProtocol
 from npc_engine.schema.context_config_models import LLMConfig
 
@@ -35,7 +37,7 @@ def _extract_used_memory_ids(context_str: str) -> list[str]:
     Returns an empty list when the context is missing or malformed.
 
     Args:
-        context_str: Serialized JSON context string from build_serialized_context.
+        context_str: Serialized JSON context string from the context builder.
 
     Returns:
         List of memory node ID strings found under the "memories" and
@@ -99,8 +101,8 @@ class Neo4jDialogueContextAdapter:
         explicit_node_ids: frozenset[str],
         system_state_context: Any | None = None,
         retrieval_profile: str | None = None,
-    ) -> tuple[str, list[str]]:
-        """Build the serialized prompt context and used memory IDs, opening a session internally.
+    ) -> tuple[str, list[str], ContextReceipt | None]:
+        """Build the serialized context, used memory IDs and receipt, opening a session internally.
 
         Args:
             npc_id: NPC identifier for context assembly.
@@ -115,13 +117,14 @@ class Neo4jDialogueContextAdapter:
             system_state_context: Optional engine-resolved live state; typed Any to avoid
                 upward layer import (SystemStateContext lives in engines layer).
         Returns:
-            Tuple of (serialized_context_str, used_memory_ids).
+            (serialized_context_str, used_memory_ids, receipt). receipt is None on a
+            cached-context turn, which performed no assembly to report.
         Raises:
             ValueError: If RAG_TOP_K <= 0.
         """
         await self._graph_db.connect()
         async with self._graph_db.get_session() as session:
-            context_str = await build_serialized_context(
+            context_str, receipt = await build_serialized_context_with_receipt(
                 session=session,
                 settings=self._settings,
                 llm_config=self._llm_config,
@@ -139,4 +142,4 @@ class Neo4jDialogueContextAdapter:
                 retrieval_profile=retrieval_profile,
             )
         memory_ids = _extract_used_memory_ids(context_str)
-        return context_str, memory_ids
+        return context_str, memory_ids, receipt

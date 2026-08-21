@@ -1,0 +1,128 @@
+"""
+Module: context_receipt
+Layer: retrieval
+Purpose: The receipt of one context assembly — which items actually REACHED the model,
+         what each tier spent, and whether the prompt budget trimmed anything. Retrieval
+         precision measured over what the retriever RANKED and precision measured over
+         what SURVIVED the budget are different numbers; without this record only the
+         first is observable.
+Dependencies: pydantic; context_merger (MergedContext), context_utils (estimate_tokens)
+Used by: context_builder (produces one per assembly), engines.dialogue (carries it on the
+         response), evals/generate_runner (stores it on every transcript record)
+
+Does NOT: retrieve, rank, serialize, or mutate context — it only describes an assembly
+that already happened. Lives in its own module because context_builder.py is past the
+300-line cap and must not grow.
+
+Dependencies injected: None — every input is passed per call; nothing is read from
+module-level state, Settings, or the graph.
+"""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from .context_merger import ContextTier, MergedContext
+from .context_utils import estimate_tokens
+
+__all__ = ["REPORTED_TIERS", "ContextReceipt", "TierSpend", "build_context_receipt"]
+
+REPORTED_TIERS: tuple[ContextTier, ...] = ("tier0", "tierA", "tierB", "tierC")
+"""Every tier is reported, including empty ones.
+
+An omitted tier reads as "not measured"; a tier reported at zero is a measurement. The
+distinction matters because "tier B got no budget" is precisely the finding this record
+exists to surface.
+"""
+
+
+class TierSpend(BaseModel):
+    """What one context tier actually spent in the assembled prompt.
+
+    Attributes:
+        tier: The context tier this row describes.
+        items: Number of items from this tier that reached the model.
+        tokens: Estimated token count those items occupied.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    tier: ContextTier
+    items: int
+    tokens: int
+
+
+class ContextReceipt(BaseModel):
+    """Evidence of what one dialogue turn's context assembly actually produced.
+
+    Frozen: a receipt describes a completed assembly, so it must not be editable after
+    the fact by anything that later reads it.
+
+    Attributes:
+        retrieval_profile: Resolved profile NAME this turn ran under — the A/B arm.
+        item_keys: Keys of the context items that reached the model, in assembly order.
+        dropped_keys: Keys that were assembled and ranked but did not survive the prompt
+            token budget. The gap between this and item_keys is the whole point.
+        tier_spend: Per-tier item and token spend, one row per REPORTED_TIERS entry.
+        total_tokens: Estimated tokens across every tier that reached the model.
+        prompt_token_budget: The budget the assembly was held to, recorded so a receipt
+            read later is interpretable without the Settings that produced it.
+        budget_trimmed: Whether any assembled item failed to reach the model.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    retrieval_profile: str
+    item_keys: tuple[str, ...] = Field(default=())
+    dropped_keys: tuple[str, ...] = Field(default=())
+    tier_spend: tuple[TierSpend, ...] = Field(default=())
+    total_tokens: int = 0
+    prompt_token_budget: int = 0
+    budget_trimmed: bool = False
+
+
+def _tier_spend(post_budget: MergedContext) -> tuple[TierSpend, ...]:
+    """Sum items and estimated tokens per tier over the context that reached the model."""
+    rows: list[TierSpend] = []
+    for tier in REPORTED_TIERS:
+        items = [item for item in post_budget.items if item.tier == tier]
+        rows.append(
+            TierSpend(
+                tier=tier,
+                items=len(items),
+                tokens=sum(estimate_tokens(item.text) for item in items),
+            )
+        )
+    return tuple(rows)
+
+
+def build_context_receipt(
+    *,
+    profile_name: str,
+    pre_budget: MergedContext,
+    post_budget: MergedContext,
+    prompt_token_budget: int,
+) -> ContextReceipt:
+    """Describe one completed context assembly.
+
+    Args:
+        profile_name: Resolved retrieval-profile name for this turn.
+        pre_budget: Merged, ranked context before budget enforcement.
+        post_budget: The context that actually reached the model.
+        prompt_token_budget: Budget the enforcement was held to.
+    Returns:
+        A frozen ContextReceipt. Never raises: a receipt that fails to be produced would
+        make the turn it describes unattributable, which is worse than a coarse receipt.
+    """
+    surviving = {item.key for item in post_budget.items}
+    dropped = tuple(item.key for item in pre_budget.items if item.key not in surviving)
+    spend = _tier_spend(post_budget)
+    return ContextReceipt(
+        retrieval_profile=profile_name,
+        item_keys=tuple(item.key for item in post_budget.items),
+        dropped_keys=dropped,
+        tier_spend=spend,
+        total_tokens=sum(row.tokens for row in spend),
+        prompt_token_budget=prompt_token_budget,
+        budget_trimmed=bool(dropped),
+    )

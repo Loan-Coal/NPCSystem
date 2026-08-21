@@ -1,5 +1,6 @@
 """
-test_generate_runner.py - Unit tests for evals/generate_runner.py.
+test_generate_runner.py - Unit tests for evals/generate_runner.py and its
+generation_collection collection loop.
 
 Covers:
 - One GenerationRecord is emitted per LLM-judge expectation (tone_judge/affirms_judge)
@@ -20,7 +21,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 # evals/ is on pytest pythonpath
-from generate_runner import collect_records, run
+from generate_runner import run
+from generation_collection import collect_records
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +198,7 @@ def test_ah_grounded_case_produces_deterministic_record() -> None:
 
 def test_ensure_player_node_called_per_yaml_case() -> None:
     client = _make_mock_client()
-    with patch("generate_runner.preconditions.ensure_player_node") as mock_ensure:
+    with patch("generation_collection.preconditions.ensure_player_node") as mock_ensure:
         collect_records(
             yaml_cases=[_TONE_CASE, _AFFIRMS_CASE],
             ah_cases=[],
@@ -226,7 +228,7 @@ def test_mixed_case_produces_deterministic_and_judged_records() -> None:
 
 def test_transcript_written(tmp_path: Path) -> None:
     client = _make_mock_client("Hello!")
-    with patch("generate_runner.preconditions.ensure_player_node"):
+    with patch("generation_collection.preconditions.ensure_player_node"):
         with patch("generate_runner.write_transcript") as mock_write:
             run(
                 yaml_cases=[_TONE_CASE],

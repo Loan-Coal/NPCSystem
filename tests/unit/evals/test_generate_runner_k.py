@@ -1,8 +1,10 @@
 """
 Module: test_generate_runner_k
 Layer: test (unit)
-Purpose: Tests for k-repeat and retrieved-context capture in generate_runner.collect_records.
-Dependencies: unittest.mock, generate_runner (evals/, on pytest pythonpath).
+Purpose: Tests for k-repeat and retrieved-context capture in
+         generation_collection.collect_records, plus generate_runner.run's gen-dir output.
+Dependencies: unittest.mock, generate_runner, generation_collection (evals/, on pytest
+              pythonpath).
 Used by: pytest (make test / make check).
 """
 
@@ -14,7 +16,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from generate_runner import collect_records, run
+from generate_runner import run
+from generation_collection import collect_records
 
 
 def _make_yaml_case(case_id: str = "tc001") -> dict:
@@ -50,7 +53,7 @@ def _make_mock_client(*, with_context: bool = True) -> MagicMock:
     return client
 
 
-@patch("generate_runner.preconditions.ensure_player_node")
+@patch("generation_collection.preconditions.ensure_player_node")
 def test_k_repeats_produce_k_records_per_case(mock_ensure: MagicMock) -> None:
     """collect_records with k=2 produces twice the records of k=1.
 
@@ -72,7 +75,7 @@ def test_k_repeats_produce_k_records_per_case(mock_ensure: MagicMock) -> None:
     )
 
 
-@patch("generate_runner.preconditions.ensure_player_node")
+@patch("generation_collection.preconditions.ensure_player_node")
 def test_k_equals_one_is_default(mock_ensure: MagicMock) -> None:
     """collect_records with no k argument defaults to k=1 (backward compatible)."""
     case = _make_yaml_case()
@@ -87,7 +90,7 @@ def test_k_equals_one_is_default(mock_ensure: MagicMock) -> None:
     assert records_explicit[0].repetition == 0
 
 
-@patch("generate_runner.preconditions.ensure_player_node")
+@patch("generation_collection.preconditions.ensure_player_node")
 def test_gen_dir_run_records_a_non_null_run_config(
     mock_ensure: MagicMock, tmp_path: Path
 ) -> None:
@@ -125,7 +128,7 @@ def test_gen_dir_run_records_a_non_null_run_config(
     assert meta["config"]["golden_set_version"] != "unversioned"
 
 
-@patch("generate_runner.preconditions.ensure_player_node")
+@patch("generation_collection.preconditions.ensure_player_node")
 def test_gen_dir_run_resolves_config_before_generating(
     mock_ensure: MagicMock, tmp_path: Path
 ) -> None:

@@ -7,8 +7,8 @@ Purpose: The Pydantic v2 record models and shared constants of the two-phase
          harness_version handling; that module keeps the persistence functions
          and re-exports every name here, so `from eval_records import ...`
          is unchanged for all existing callers.
-Dependencies: pydantic, stdlib (logging, typing); retrieved_item (RetrievedItem),
-         run_config (RunConfig)
+Dependencies: pydantic, stdlib (logging, typing); context_receipt_record
+         (ContextReceiptRecord), retrieved_item (RetrievedItem), run_config (RunConfig)
 Used by: eval_records (re-export); anything importing the record models
 Does NOT: read or write files — persistence lives in eval_records
 """
@@ -20,6 +20,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from context_receipt_record import ContextReceiptRecord
 from retrieved_item import RetrievedItem
 from run_config import RunConfig
 
@@ -116,8 +117,15 @@ class GenerationRecord(BaseModel):
             records store {"expected_fact_substrings": [...], "response": {...}}.
         repetition: Zero-based repeat index within a k-repeat run (default 0).
         duration_ms: Wall-clock milliseconds taken to generate npc_response (default 0).
-        retrieved_context: Context items captured from GET /v1/admin/debug/retrieval at
-            generation time. An approximation — see RetrievedItem module docstring.
+        retrieved_context: DEPRECATED (kept for one release). Context items captured
+            from a SECOND call to GET /v1/admin/debug/retrieval with session_turns=[],
+            so it describes a different assembly than the one that produced
+            npc_response. Use context_receipt instead — see RetrievedItem's docstring.
+        context_receipt: What the engine reports ACTUALLY reached the model for this
+            turn: resolved retrieval profile, the context keys assembled, per-tier token
+            spend, and whether the prompt budget trimmed anything. Defaults to None so
+            corpora written before this field (evals/generations/k3_73e6c36/) still load,
+            and None is also the honest value for a cached-context turn.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -137,6 +145,7 @@ class GenerationRecord(BaseModel):
     repetition: int = 0
     duration_ms: int = 0
     retrieved_context: tuple[RetrievedItem, ...] = ()
+    context_receipt: ContextReceiptRecord | None = None
 
 
 class JudgedRecord(GenerationRecord):

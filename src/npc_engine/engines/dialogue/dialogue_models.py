@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from pydantic import StringConstraints
 
 from npc_engine.config import MAX_PLAYER_MESSAGE_CHARS
+from npc_engine.retrieval.context.context_receipt import ContextReceipt
 
 # Strips transcript-style echo the LLM sometimes prefixes to npc_response.
 # Matches: "player: <anything>\nnpc: " or "player: <anything>\n" (when no npc: label)
@@ -58,6 +59,14 @@ class DialogueRequest(FrozenDialogueModel):
             "deployment default, Settings.RETRIEVAL_PROFILE. An undeclared name is a 4xx, "
             "never a silent fallback — a run must not be able to record a profile it did "
             "not use."
+        ),
+    )
+    include_context_receipt: bool = Field(
+        default=False,
+        description=(
+            "Return the assembled-context receipt on the response. Off by default so an "
+            "ordinary reply is unchanged. Purely a reporting switch: it is never read by "
+            "context assembly or prompt building, so it cannot alter generated text."
         ),
     )
 
@@ -120,6 +129,16 @@ class DialogueResponse(FrozenDialogueModel):
     cached: bool = False
     degradation_level: str = "full"
     audio_bytes: bytes | None = None
+    context_receipt: ContextReceipt | None = Field(
+        default=None,
+        description=(
+            "What actually reached the model this turn: resolved retrieval profile, the "
+            "context item keys assembled, per-tier token spend, and whether the prompt "
+            "budget trimmed anything. Populated only when the request set "
+            "include_context_receipt; None also on a cached-context turn, which has no "
+            "assembly to report."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod

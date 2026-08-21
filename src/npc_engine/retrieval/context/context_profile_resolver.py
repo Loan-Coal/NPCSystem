@@ -5,7 +5,7 @@ Purpose: Resolve the RetrievalProfile a dialogue turn runs under, from the per-r
          override, the deployment default, and the engine's declared registry.
 Dependencies: npc_engine.config (Settings), npc_engine.schema.context_config_models
               (LLMConfig), npc_engine.schema.retrieval_profile_models
-Used by: context_builder.build_serialized_context
+Used by: context_builder (profile resolution and the receipt's profile name)
 
 Does NOT: perform retrieval or touch the graph. Lives in its own module because
 context_builder.py is already past the 300-line cap and must not grow.
@@ -49,5 +49,22 @@ def resolve_profile_for_turn(
         rag_top_k=settings.RAG_TOP_K,
         cross_encoder_enabled=settings.CROSS_ENCODER_ENABLED,
     )
-    name = requested if requested is not None else settings.RETRIEVAL_PROFILE
+    name = resolved_profile_name(settings=settings, requested=requested)
     return llm_config.resolve_retrieval_profile(name, fallback=fallback)
+
+
+def resolved_profile_name(*, settings: Settings, requested: str | None) -> str:
+    """Return the profile NAME this turn resolves to, without resolving the profile itself.
+
+    Kept beside resolve_profile_for_turn and derived from the same precedence rule so the
+    two cannot disagree: a receipt naming one arm while the assembly used another would be
+    worse than no receipt at all.
+
+    Args:
+        settings: Engine settings, supplying the deployment default.
+        requested: Per-request override; None falls back to settings.RETRIEVAL_PROFILE.
+    Returns:
+        The resolved profile name. No validation — resolve_profile_for_turn owns the
+        strict check and raises for both callers.
+    """
+    return requested if requested is not None else settings.RETRIEVAL_PROFILE

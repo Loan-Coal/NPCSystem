@@ -100,7 +100,7 @@ def mock_dialogue_repo() -> MagicMock:
 def mock_dialogue_context() -> MagicMock:
     """Mock DialogueContextPort returning empty context string."""
     ctx = AsyncMock()
-    ctx.build_context = AsyncMock(return_value=("{}", []))
+    ctx.build_context = AsyncMock(return_value=("{}", [], None))
     return ctx
 
 
@@ -129,7 +129,7 @@ def _make_handler(
         input_moderation=build_input_moderation_service("mature"),
         output_moderation=build_output_moderation_service("mature"),
         dialogue_repo=mock_dialogue_repo or AsyncMock(),
-        dialogue_context=mock_dialogue_context or AsyncMock(build_context=AsyncMock(return_value=("{}", []))),
+        dialogue_context=mock_dialogue_context or AsyncMock(build_context=AsyncMock(return_value=("{}", [], None))),
         clock=clock or GameClock(mode="game_driven"),
     )
 
@@ -209,7 +209,9 @@ async def test_stream_passes_emotion_state_to_context_builder(
 
     async def fake_build_context(**kwargs):
         captured_kwargs.update(kwargs)
-        return "{}"
+        # Must match DialogueContextPort's real 3-tuple: the previous bare "{}" only
+        # "worked" because a 2-char string unpacks into two names (LSP mock-fidelity).
+        return "{}", [], None
 
     mock_dialogue_context.build_context = fake_build_context
     monkeypatch.setattr(

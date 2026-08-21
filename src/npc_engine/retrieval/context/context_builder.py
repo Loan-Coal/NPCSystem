@@ -48,7 +48,8 @@ from npc_engine.graph.quest.quest_queries import get_active_quest_for_player
 from npc_engine.schema.retrieval_profile_models import RetrievalProfile
 
 from .context_budget_enforcer import ContextCompressionCache, fill_to_budget
-from .context_profile_resolver import resolve_profile_for_turn
+from .context_profile_resolver import resolve_profile_for_turn, resolved_profile_name
+from .context_receipt import ContextReceipt, build_context_receipt
 from .context_builder_helpers import (
     expand_query,
     normalize_ratio,
@@ -477,9 +478,14 @@ def _rank_and_serialize_tiers(
     tier_c_raw: list[ContextItem],
     vector_scores: dict[str, float], event_key_trust: dict[str, float], llm_config: LLMConfig,
     settings: Settings, compression_cache: Any, weight_profile: str, active_quest: Any,
-    game_time: TimePoint | None, explicit_node_ids: frozenset[str],
-) -> str:
-    """Rank all tiers, merge, enforce budget, record metrics, and serialize to JSON string."""
+    game_time: TimePoint | None, explicit_node_ids: frozenset[str], profile_name: str,
+) -> tuple[str, ContextReceipt]:
+    """Rank, merge, enforce budget, record metrics, and serialize — with the assembly receipt.
+
+    `merged` and `final_context` are the pre- and post-budget contexts the drop and
+    compression metrics already consume; the receipt is the same pair reported as data
+    rather than as counters.
+    """
     tier_a = rank_tier_items(items=tier_a_raw, llm_config=llm_config, vector_scores=vector_scores,
                              trust_scores=event_key_trust, active_quest=active_quest, game_time=game_time,
                              weight_profile=weight_profile, explicit_node_ids=explicit_node_ids)
@@ -499,7 +505,11 @@ def _rank_and_serialize_tiers(
         post_budget_context=final_context,
         reason="prompt_budget",
     )
-    return str(serialized)
+    receipt = build_context_receipt(
+        profile_name=profile_name, pre_budget=merged, post_budget=final_context,
+        prompt_token_budget=settings.PROMPT_TOKEN_BUDGET,
+    )
+    return str(serialized), receipt
 
 
 # ---------------------------------------------------------------------------
@@ -576,7 +586,7 @@ def _validated_profile_for_turn(
     return resolve_profile_for_turn(settings=settings, llm_config=llm_config, requested=requested)
 
 
-async def build_serialized_context(
+async def build_serialized_context_with_receipt(
     session: AsyncSession, settings: Settings, llm_config: LLMConfig, embedding_index: EmbeddingIndexProtocol,
     npc_id: str, player_message: str, session_turns: list[str], emotion_state: dict[str, Any] | None = None,
     compression_cache: ContextCompressionCache | None = None,
@@ -584,14 +594,14 @@ async def build_serialized_context(
     session_id: str | None = None, skip_rag: bool = False, player_id: str | None = None,
     weight_profile: str | None = None, explicit_node_ids: frozenset[str] = frozenset(),
     system_state_context: Any | None = None, retrieval_profile: str | None = None,
-) -> str:
-    """Build the serialized prompt context for one dialogue turn (`retrieval_profile` selects the A/B arm; see _validated_profile_for_turn)."""
+) -> tuple[str, ContextReceipt | None]:
+    """Build one turn's serialized context plus its receipt (None only on a legacy cache hit)."""
     active_profile = _validated_profile_for_turn(settings, llm_config, retrieval_profile)
     character_bundle, world_state, known_event_ids = await _fetch_base_graph_data(session, npc_id)
     emotion_snapshot, current_game_time, npc_ts, world_ts = _resolve_initial_state(character_bundle, emotion_state, world_state)
     cache_hit, legacy_cache, legacy_key = _check_legacy_cache(context_cache, session_id, npc_id, player_id, emotion_snapshot, npc_ts, world_ts)
     if cache_hit is not None:
-        return str(cache_hit)
+        return str(cache_hit), None
     partial_cache, profile_key, bg_key, cached_profile, cached_bg = _get_partial_cache_state(context_cache, npc_id, npc_ts)
     location_id = await get_npc_location_id(session=session, npc_id=npc_id)
     tier_b_results = await _fetch_rag_results(session, embedding_index, settings, player_message, session_turns, known_event_ids, npc_id, current_game_time, skip_rag, active_profile)
@@ -606,14 +616,41 @@ async def build_serialized_context(
     tier_b_raw, tier_c_raw, vector_scores = _build_tier_b_c_items(tier_b_results)
     tier_b_raw = await _maybe_append_top_need(session, npc_id, tier_b_raw)
     event_key_trust = _build_event_trust_map(events, trust_scores, npc_id)
-    serialized = _rank_and_serialize_tiers(
+    serialized, receipt = _rank_and_serialize_tiers(
         tier0=tier0, tier_a_raw=tier_a_raw, tier_b_raw=tier_b_raw, tier_c_raw=tier_c_raw,
         vector_scores=vector_scores, event_key_trust=event_key_trust, llm_config=llm_config,
         settings=settings, compression_cache=compression_cache, weight_profile=weight_profile or active_profile.weight_profile or detect_dialogue_profile(player_message),
         active_quest=active_quest, game_time=current_game_time, explicit_node_ids=explicit_node_ids,
+        profile_name=resolved_profile_name(settings=settings, requested=retrieval_profile),
     )
     if legacy_cache is not None and legacy_key is not None:
         legacy_cache.set(legacy_key, serialized)
+    return serialized, receipt
+
+
+async def build_serialized_context(
+    session: AsyncSession, settings: Settings, llm_config: LLMConfig, embedding_index: EmbeddingIndexProtocol,
+    npc_id: str, player_message: str, session_turns: list[str], emotion_state: dict[str, Any] | None = None,
+    compression_cache: ContextCompressionCache | None = None,
+    context_cache: PartialDialogueContextCache | DialogueContextCache | None = None,
+    session_id: str | None = None, skip_rag: bool = False, player_id: str | None = None,
+    weight_profile: str | None = None, explicit_node_ids: frozenset[str] = frozenset(),
+    system_state_context: Any | None = None, retrieval_profile: str | None = None,
+) -> str:
+    """Build the serialized prompt context for one dialogue turn, discarding the receipt.
+
+    The receipt-free entry point every caller that only needs prompt text keeps using;
+    `retrieval_profile` selects the A/B arm (see _validated_profile_for_turn). Every
+    argument is forwarded by keyword, so mypy fails the build if the two signatures drift.
+    """
+    serialized, _receipt = await build_serialized_context_with_receipt(
+        session=session, settings=settings, llm_config=llm_config, embedding_index=embedding_index,
+        npc_id=npc_id, player_message=player_message, session_turns=session_turns,
+        emotion_state=emotion_state, compression_cache=compression_cache, context_cache=context_cache,
+        session_id=session_id, skip_rag=skip_rag, player_id=player_id, weight_profile=weight_profile,
+        explicit_node_ids=explicit_node_ids, system_state_context=system_state_context,
+        retrieval_profile=retrieval_profile,
+    )
     return serialized
 
 

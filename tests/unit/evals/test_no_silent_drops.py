@@ -142,22 +142,22 @@ def test_pre_label_degenerate_bootstrap_sample_drop_is_logged(
 
 
 # ---------------------------------------------------------------------------
-# generate_runner.py:67
+# generation_collection.post_dialogue (was generate_runner._post_dialogue)
 # ---------------------------------------------------------------------------
 
 
 def test_post_dialogue_failure_is_logged(caplog: pytest.LogCaptureFixture) -> None:
-    """A network failure in _post_dialogue must produce a log entry, not a silent empty dict."""
-    from generate_runner import _post_dialogue
+    """A network failure in post_dialogue must produce a log entry, not a silent empty dict."""
+    from generation_collection import post_dialogue
 
     mock_client: MagicMock = MagicMock(spec=httpx.Client)
     mock_client.post.side_effect = ConnectionError("refused")
 
-    with caplog.at_level(logging.WARNING, logger="generate_runner"):
-        result = _post_dialogue("npc_a", "player_1", "hi", mock_client, "http://nowhere")
+    with caplog.at_level(logging.WARNING, logger="generation_collection"):
+        result = post_dialogue("npc_a", "player_1", "hi", mock_client, "http://nowhere")
 
     assert result == {}
-    assert caplog.records, "expected a log entry on _post_dialogue failure"
+    assert caplog.records, "expected a log entry on post_dialogue failure"
 
 
 # ---------------------------------------------------------------------------

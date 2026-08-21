@@ -4622,3 +4622,130 @@ its own"), and `test_shipped_defaults_do_not_fit_the_default_window` already pin
 The issue was rewritten in place to track the one genuinely new fact: **`RET-P1`..`RET-P6` are
 named by `RET-P0`'s header, by `RET-P0.3` and by DEC-175, but no such phase exists in
 `ROADMAP.md`** — so the window raise everything defers to has no tasks and no owner.
+
+---
+
+## DEC-195: the context receipt is a response-model field, and paired arms write one
+## generation directory each
+**Date:** 2026-08-21
+**Decided by:** the maintainer (items B, C3, C2 — deferred at the end of DEC-194's session
+and landed here), plus one design choice delegated to this session and recorded below.
+
+**Context.** DEC-194 made `retrieval_profile` a real per-request switch and taught every
+artifact to record which arm produced it. Three gaps were named in that commit as *not
+included*: the response did not report the context that actually reached the model,
+transcripts still stored the approximation from a second debug-endpoint call, and a paired
+A/B still meant two separate `evals generate` invocations.
+
+**Decision 1 — the receipt is a `DialogueResponse` field, opt-in per request.** Not a
+header, not a debug-endpoint parity exercise. `DialogueRequest.include_context_receipt`
+(default `False`) turns it on; `DialogueResponse.context_receipt` carries it. Off by
+default an ordinary response is byte-for-byte what it was, and the flag is never read by
+context assembly or prompt building, so it cannot alter generated text —
+`test_asking_for_a_receipt_does_not_change_the_prompt` pins that by comparing the two
+assembled prompts directly. This matters more than it looks: regeneration #1 has not run,
+and each labelled regeneration costs ~147 re-adjudicated human labels against a budget of 2.
+
+**What the receipt contains, and why each field.** The resolved profile NAME (the arm's own
+claim about itself), `item_keys` (what reached the model), `dropped_keys` (what was
+assembled and ranked but trimmed), per-tier item and token spend, the total, and the
+`prompt_token_budget` the assembly was held to. The last is recorded so a receipt read
+months later is interpretable without the `Settings` that produced it.
+
+`dropped_keys` is the point of the whole exercise. Retrieval precision was measured at ~0.3,
+but over what the retriever **ranked**. Precision over what **reached the model** is a
+different number, and the two may diverge sharply, because `PROMPT_TOKEN_BUDGET` currently
+derives to its 512 clamp floor while the system prompt alone is ~5,426 tokens against a
+4,096 window (RET-P0.3, DEC-175, ISSUE-194). That engine defect stays parked; this makes its
+consequence *visible* rather than fixing it.
+
+**A cached-context turn reports `None`, not an empty receipt.** The legacy dialogue-context
+cache short-circuits assembly entirely, so there is nothing to report. An empty receipt would
+read as "nothing reached the model", which is false. The degradation ladder can assemble
+context twice (full, then graph_only); the **last** receipt is published, because it is the
+assembly that produced the served reply.
+
+**Decision 2 — `build_serialized_context` keeps its `str` return; the receipt gets a sibling
+entry point.** `build_serialized_context_with_receipt` holds the pipeline body and returns
+`(str, ContextReceipt | None)`; `build_serialized_context` forwards every argument by keyword
+and drops the receipt. The alternative — changing the return type — touches the package's
+public surface, the admin debug route (which does not want a receipt), and six test modules,
+for no benefit to any of them. The duplicated signature is the cost, and it is guarded: the
+wrapper passes every argument by keyword, so any drift is a mypy error rather than a silent
+divergence. `ContextReceipt` itself lives in a new `context_receipt.py` because
+`context_builder.py` is past the 300-line cap.
+
+`DialogueContextPort.build_context` grows from a 2-tuple to a 3-tuple rather than gaining an
+out-parameter: a Protocol with an out-parameter is worse than an honest return type, and the
+seven mock stubs that had to change were violating the LSP mock-fidelity rule anyway — one of
+them returned the bare string `"{}"`, which "worked" only because a two-character string
+unpacks into two names.
+
+**Decision 3 — `retrieved_context` is deprecated in place, not deleted.** It stays for one
+release, marked `DEPRECATED` in `evals/retrieved_item.py` and in `GenerationRecord`'s
+docstring, because `retrieval_join` computes recall@k from it and removing both at once would
+silently zero that metric rather than break it. `GenerationRecord.context_receipt` defaults to
+`None` so `evals/generations/k3_73e6c36/` keeps loading.
+
+**Decision 4 — paired arms write ONE GENERATION DIRECTORY PER ARM.** This is the design
+question DEC-194 left open. Three options were considered:
+
+  (a) one run writes two gen dirs;
+  (b) one dir holding both arms, plus a within-run compare path;
+  (c) something else.
+
+**(a), and the argument is mechanical rather than aesthetic.** Everything downstream of
+generation groups by `case_id` — `compare._build_case_stats`, `summary`, `report`, the
+regression gate. `record_id` is `<case>:<kind>:<index>` and the labelled unit is
+`record_id#r<rep>` (`record_identity.py`); neither carries an arm. Two arms in one directory
+would therefore collapse into a single `CaseStat` and a single labelled item, **silently
+averaging the treatment away** — the same class of quiet collapse `record_identity.py` was
+written to prevent one level down. Making them distinct means changing record identity, which
+invalidates every existing human label. One directory per arm keeps identity untouched, keeps
+every `case_id` grouping correct, lets `evals compare <a> <b>` work with no new code path, and
+costs a directory name: `<gen_id>__<profile>`.
+
+**What (a) gives up, and why it does not decide it.** Option (b) would have put both arms
+inside one judge pass, so judge sampling drift would be shared rather than sitting between the
+arms. That is a real advantage and it is forgone. It is second-order against what (a) already
+secures — one world state, one engine build, one process, and cases interleaved — and it costs
+the identity rewrite above.
+
+**Pairing is preserved by INTERLEAVING, not by co-location.** `collect_paired_records` loops
+`rep -> case -> profile`, so each case is generated under every profile back to back. All of
+arm A followed by all of arm B would satisfy the same CLI and put world drift inside the
+treatment effect; `test_arms_are_interleaved_per_case_not_run_one_after_the_other` asserts the
+exact call order, and reversing the loop nesting turns three tests red.
+
+**`--k 3` with two profiles is 3 repetitions PER ARM (6 dialogue calls per case).** An arm is
+the unit `compare.py` intersects, `_comparability_error` refuses a `k` mismatch, and each arm's
+`meta.json` records that same `k`. Splitting `k` across arms would make the arms uncomparable
+by the harness's own rule.
+
+**`harness_version` is identical across arms by construction.** `resolve_run_config` is called
+**once** and each arm's config is a `model_copy` with only `retrieval_profile` replaced — so
+`git_sha`, both model digests, `ollama_version`, `judge_model` and `harness_version` cannot
+drift mid-run. `test_arms_differ_only_by_retrieval_profile` asserts the two `meta.json` config
+blocks differ in exactly one key, which is also what makes `compare.py`'s `Differs:` line name
+the independent variable and nothing else.
+
+**`--profiles` refuses more than it accepts.** A single name is refused (that is
+`--retrieval-profile` with a surprising output path, and admitting it would give the flag two
+meanings); a repeated name is refused rather than de-duplicated (two identical names resolve to
+one directory, so the second arm would overwrite the first and the "comparison" would be a run
+against itself); combining it with `--retrieval-profile` is refused (two ways to name the arm is
+one way for them to disagree); and it requires `--gen-id`, because the legacy transcript format
+has nowhere to put a second arm.
+
+**Also here — `generate_runner.py` was split.** Adding the paired-arm path pushed it over the
+300-line cap, and its own docstring already admitted two responsibilities ("owns the HTTP
+collection loop and CLI"). The collection loop moved to `generation_collection.py`;
+`generate_runner.py` keeps the CLI and the decision of what gets written where. `paired_arms.py`
+takes its per-case collectors as injected callables, so it orchestrates without importing
+`generation_collection` in a cycle.
+
+**Verification that none of this is an engine change.** The assembled context digest is
+unchanged before and after, on the same fixture: `699b3146276691bf`, length 545 — the same
+value DEC-194 recorded. `test_no_profile_and_explicit_default_profile_are_byte_identical` still
+passes, and `test_receipt_variant_serializes_identically_to_the_plain_builder` adds the second
+half of the same guarantee: asking for a receipt does not move a byte of assembled context.

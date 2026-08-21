@@ -4,11 +4,12 @@ Layer: evals (eval harness — not part of src/)
 Purpose: Generation pass of the two-phase eval pipeline. Calls /v1/dialogue for every
          expectation (LLM-judge and deterministic alike), captures retrieval context,
          and writes gen-dir output {meta.json,outputs.jsonl} or a legacy TranscriptFile
-         for the judge pass. Record construction (judge, deterministic, AH) lives in
-         generation_records; this module owns the HTTP collection loop and CLI.
-Dependencies: httpx, argparse, logging, pathlib, sys, time; runner, generation_records,
-         deterministic_records, anti_hallucination_runner, preconditions, eval_records,
-         context_capture
+         for the judge pass. Record construction lives in generation_records and the
+         HTTP collection loop in generation_collection; this module owns the CLI and
+         the decision of what gets written where.
+Dependencies: httpx, argparse, logging, os, pathlib, sys; runner,
+         anti_hallucination_runner, generation_collection, paired_arms, eval_records,
+         run_config
 Used by: Makefile eval-generate target, judge_runner (reads transcript it writes)
 Does NOT: call the LLM judge, modify graph state, import from src/npc_engine/
 """
@@ -19,20 +20,16 @@ import argparse
 import logging
 import os
 import sys
-import time
 from pathlib import Path
-from typing import Any
+
 import httpx
 
-import deterministic_records
-import generation_records
-import preconditions
-from context_capture import capture_retrieval_context
-from eval_records import GenerationRecord, write_generation_dir, write_transcript
+from eval_records import write_generation_dir, write_transcript
+from generation_collection import collect_records
+from paired_arms import PairedArmsError, parse_profiles, run_paired
 from run_config import _DEFAULT_RETRIEVAL_PROFILE, RunConfig, resolve_run_config
 
 # Stable private helpers from sibling runners; generate_runner is sole two-phase consumer.
-from anti_hallucination_runner import _PLAYER_ID as _AH_PLAYER_ID
 from anti_hallucination_runner import _load_fixture
 from runner import _load_cases
 
@@ -40,133 +37,10 @@ from runner import _load_cases
 # Constants
 # ---------------------------------------------------------------------------
 
-_DEFAULT_PLAYER_ID: str = "player_eval"
 _DEFAULT_BASE_URL: str = "http://localhost:8000"
 _TRANSCRIPT_STEM: str = "eval_generation"
 
 _logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Core collection loop
-# ---------------------------------------------------------------------------
-
-
-def _post_dialogue(
-    case_npc_id: str, player_id: str, message: str, client: httpx.Client, base_url: str,
-    retrieval_profile: str | None = None,
-) -> dict[str, Any]:
-    """POST /v1/dialogue and return the full parsed response body (empty dict on error).
-
-    Logs the error with the NPC identity before returning so a request failure is
-    distinguishable from a genuine empty response.
-
-    Deterministic matchers (in_set, range, schema) check fields beyond npc_response
-    (facial_expression.type, action.type, relation_deltas.*), so the whole body must
-    be preserved for EVAL-P6.1's deterministic records to replay faithfully.
-    """
-    try:
-        resp = client.post(
-            f"{base_url}/v1/dialogue",
-            json={
-                "player_id": player_id,
-                "npc_id": case_npc_id,
-                "player_message": message,
-                # Omitted entirely when None so the request stays byte-identical to what
-                # pre-profile runs sent, and the engine applies its declared default.
-                **({"retrieval_profile": retrieval_profile} if retrieval_profile else {}),
-            },
-            timeout=60.0,
-        )
-        resp.raise_for_status()
-        return dict(resp.json())
-    except Exception as exc:
-        _logger.warning("_post_dialogue failed npc_id=%s player_id=%s: %s", case_npc_id, player_id, exc)
-        return {}
-
-
-def _stamp(records: list[GenerationRecord], *, rep: int, duration_ms: int, retrieved: tuple) -> list[GenerationRecord]:
-    """Copy each record with the per-repetition fields filled in (records are frozen)."""
-    update = {"repetition": rep, "duration_ms": duration_ms, "retrieved_context": retrieved}
-    return [r.model_copy(update=update) for r in records]
-
-
-def _collect_yaml_case_records(
-    case: dict, client: httpx.Client, base_url: str, rep: int, retrieval_profile: str | None = None,
-) -> list[GenerationRecord]:
-    """Call /v1/dialogue for one YAML case and build its judge + deterministic records."""
-    inp = case.get("input")
-    if inp is None:
-        return []
-    player_id = case.get("seed", {}).get("player_id", _DEFAULT_PLAYER_ID)
-    preconditions.ensure_player_node(client, base_url, player_id)
-    npc_id = case.get("seed", {}).get("npc_id", "")
-    player_message = inp["player_message"]
-
-    t0 = time.perf_counter()
-    response = _post_dialogue(npc_id, player_id, player_message, client, base_url, retrieval_profile)
-    duration_ms = int((time.perf_counter() - t0) * 1000)
-    retrieved = capture_retrieval_context(client, base_url, npc_id, player_message)
-
-    records = generation_records.build_yaml_case_records(case, response, default_player_id=_DEFAULT_PLAYER_ID)
-    return _stamp(records, rep=rep, duration_ms=duration_ms, retrieved=retrieved)
-
-
-def _collect_ah_case_records(
-    case: dict, client: httpx.Client, base_url: str, rep: int, retrieval_profile: str | None = None,
-) -> list[GenerationRecord]:
-    """Call /v1/dialogue for one AH fixture case and build its refusal/grounded record."""
-    t0 = time.perf_counter()
-    response = _post_dialogue(case["npc_id"], _AH_PLAYER_ID, case["question"], client, base_url, retrieval_profile)
-    duration_ms = int((time.perf_counter() - t0) * 1000)
-    retrieved = capture_retrieval_context(client, base_url, case["npc_id"], case["question"])
-    npc_response = response.get("npc_response", "") or ""
-
-    records = [
-        r
-        for r in (
-            generation_records.build_ah_refusal_record(case, npc_response, player_id=_AH_PLAYER_ID),
-            deterministic_records.build_ah_grounded_record(case, response, player_id=_AH_PLAYER_ID),
-        )
-        if r is not None
-    ]
-    return _stamp(records, rep=rep, duration_ms=duration_ms, retrieved=retrieved)
-
-
-def collect_records(
-    yaml_cases: list[dict],
-    ah_cases: list[dict],
-    client: httpx.Client,
-    base_url: str,
-    k: int = 1,
-    retrieval_profile: str | None = None,
-) -> list[GenerationRecord]:
-    """Generate dialogue responses and build records for every covered expectation.
-
-    Each case runs k times; each repetition captures duration_ms and a retrieval
-    context approximation from GET /v1/admin/debug/retrieval. YAML cases first
-    (judge + deterministic records, EVAL-P6.1), then AH cases (refusal cases get a
-    refusal_judge record; grounded cases get a deterministic anti_hallucination_grounded
-    record — no case type is dropped from the transcript).
-
-    Args:
-        yaml_cases: Loaded YAML eval cases.
-        ah_cases: Loaded anti-hallucination fixture cases.
-        client: Active httpx.Client with auth headers.
-        base_url: NPC engine base URL.
-        k: Number of repetitions per case (default 1).
-        retrieval_profile: Profile every turn is generated under; None applies the
-            engine's declared default and sends no field at all.
-    Returns:
-        List of GenerationRecords for every judge and deterministic expectation.
-    """
-    records: list[GenerationRecord] = []
-    for rep in range(k):
-        for case in yaml_cases:
-            records.extend(_collect_yaml_case_records(case, client, base_url, rep, retrieval_profile))
-        for case in ah_cases:
-            records.extend(_collect_ah_case_records(case, client, base_url, rep, retrieval_profile))
-    return records
 
 
 def run(
@@ -232,6 +106,39 @@ def run(
 # ---------------------------------------------------------------------------
 
 
+def _validated_profiles(args: argparse.Namespace) -> tuple[str, ...] | None:
+    """Resolve --profiles into arm names, or None for an ordinary single-arm run.
+
+    Args:
+        args: Parsed CLI namespace.
+    Returns:
+        Arm names, or None when --profiles was not given.
+    Raises:
+        PairedArmsError: When --profiles is combined with --retrieval-profile (two ways
+            to name the arm is one way for them to disagree), when --gen-id is missing
+            (the legacy transcript format has nowhere to put a second arm), or when the
+            list itself is not a paired design.
+    """
+    if args.profiles is None:
+        return None
+    if args.retrieval_profile is not None:
+        raise PairedArmsError("--profiles and --retrieval-profile are mutually exclusive.")
+    if not args.gen_id:
+        raise PairedArmsError("--profiles requires --gen-id: each arm needs its own gen dir.")
+    # Annotated local: evals/ is not on mypy_path, so sibling imports type as Any
+    # (pyproject mypy_path = "src"). The annotation restores the checked type here.
+    names: tuple[str, ...] = parse_profiles(str(args.profiles))
+    return names
+
+
+def _report_arms(arms: tuple[Path, ...]) -> None:
+    """Print each arm's directory plus the compare command that pairs them."""
+    for arm in arms:
+        print(f"Arm written: {arm}")
+    if len(arms) == 2:
+        print(f"Compare with: python -m evals compare {arms[0]} {arms[1]}")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Parse args and run the generation pass.
 
@@ -257,7 +164,18 @@ def main(argv: list[str] | None = None) -> int:
             "Omitted by default so the request is byte-identical to a pre-profile run."
         ),
     )
+    parser.add_argument(
+        "--profiles",
+        default=None,
+        help=(
+            "Comma-separated profiles to run as PAIRED ARMS inside one generation, e.g. "
+            "'default,aggressive'. Every case runs under every profile back to back, and "
+            "each arm is written to <gen-id>__<profile>/. --k is repetitions per arm. "
+            "Requires --gen-id; mutually exclusive with --retrieval-profile."
+        ),
+    )
     args = parser.parse_args(argv)
+    profiles = _validated_profiles(args)
 
     headers = {"Authorization": f"Bearer {args.api_key}"}
     with httpx.Client(headers=headers) as client:
@@ -269,6 +187,14 @@ def main(argv: list[str] | None = None) -> int:
 
         yaml_cases = _load_cases(args.cases)
         ah_cases = _load_fixture(args.fixture) if args.fixture.exists() else []
+        if profiles is not None:
+            arms = run_paired(
+                yaml_cases=yaml_cases, ah_cases=ah_cases, client=client,
+                base_url=args.base_url, out_dir=args.out, gen_id=args.gen_id, k=args.k,
+                profiles=profiles, cases_dir=args.cases,
+            )
+            _report_arms(arms)
+            return 0
         path = run(
             yaml_cases=yaml_cases,
             ah_cases=ah_cases,
