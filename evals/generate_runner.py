@@ -29,7 +29,7 @@ import generation_records
 import preconditions
 from context_capture import capture_retrieval_context
 from eval_records import GenerationRecord, write_generation_dir, write_transcript
-from run_config import RunConfig, resolve_run_config
+from run_config import _DEFAULT_RETRIEVAL_PROFILE, RunConfig, resolve_run_config
 
 # Stable private helpers from sibling runners; generate_runner is sole two-phase consumer.
 from anti_hallucination_runner import _PLAYER_ID as _AH_PLAYER_ID
@@ -52,7 +52,10 @@ _logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _post_dialogue(case_npc_id: str, player_id: str, message: str, client: httpx.Client, base_url: str) -> dict[str, Any]:
+def _post_dialogue(
+    case_npc_id: str, player_id: str, message: str, client: httpx.Client, base_url: str,
+    retrieval_profile: str | None = None,
+) -> dict[str, Any]:
     """POST /v1/dialogue and return the full parsed response body (empty dict on error).
 
     Logs the error with the NPC identity before returning so a request failure is
@@ -65,7 +68,14 @@ def _post_dialogue(case_npc_id: str, player_id: str, message: str, client: httpx
     try:
         resp = client.post(
             f"{base_url}/v1/dialogue",
-            json={"player_id": player_id, "npc_id": case_npc_id, "player_message": message},
+            json={
+                "player_id": player_id,
+                "npc_id": case_npc_id,
+                "player_message": message,
+                # Omitted entirely when None so the request stays byte-identical to what
+                # pre-profile runs sent, and the engine applies its declared default.
+                **({"retrieval_profile": retrieval_profile} if retrieval_profile else {}),
+            },
             timeout=60.0,
         )
         resp.raise_for_status()
@@ -82,7 +92,7 @@ def _stamp(records: list[GenerationRecord], *, rep: int, duration_ms: int, retri
 
 
 def _collect_yaml_case_records(
-    case: dict, client: httpx.Client, base_url: str, rep: int
+    case: dict, client: httpx.Client, base_url: str, rep: int, retrieval_profile: str | None = None,
 ) -> list[GenerationRecord]:
     """Call /v1/dialogue for one YAML case and build its judge + deterministic records."""
     inp = case.get("input")
@@ -94,7 +104,7 @@ def _collect_yaml_case_records(
     player_message = inp["player_message"]
 
     t0 = time.perf_counter()
-    response = _post_dialogue(npc_id, player_id, player_message, client, base_url)
+    response = _post_dialogue(npc_id, player_id, player_message, client, base_url, retrieval_profile)
     duration_ms = int((time.perf_counter() - t0) * 1000)
     retrieved = capture_retrieval_context(client, base_url, npc_id, player_message)
 
@@ -102,10 +112,12 @@ def _collect_yaml_case_records(
     return _stamp(records, rep=rep, duration_ms=duration_ms, retrieved=retrieved)
 
 
-def _collect_ah_case_records(case: dict, client: httpx.Client, base_url: str, rep: int) -> list[GenerationRecord]:
+def _collect_ah_case_records(
+    case: dict, client: httpx.Client, base_url: str, rep: int, retrieval_profile: str | None = None,
+) -> list[GenerationRecord]:
     """Call /v1/dialogue for one AH fixture case and build its refusal/grounded record."""
     t0 = time.perf_counter()
-    response = _post_dialogue(case["npc_id"], _AH_PLAYER_ID, case["question"], client, base_url)
+    response = _post_dialogue(case["npc_id"], _AH_PLAYER_ID, case["question"], client, base_url, retrieval_profile)
     duration_ms = int((time.perf_counter() - t0) * 1000)
     retrieved = capture_retrieval_context(client, base_url, case["npc_id"], case["question"])
     npc_response = response.get("npc_response", "") or ""
@@ -127,6 +139,7 @@ def collect_records(
     client: httpx.Client,
     base_url: str,
     k: int = 1,
+    retrieval_profile: str | None = None,
 ) -> list[GenerationRecord]:
     """Generate dialogue responses and build records for every covered expectation.
 
@@ -142,15 +155,17 @@ def collect_records(
         client: Active httpx.Client with auth headers.
         base_url: NPC engine base URL.
         k: Number of repetitions per case (default 1).
+        retrieval_profile: Profile every turn is generated under; None applies the
+            engine's declared default and sends no field at all.
     Returns:
         List of GenerationRecords for every judge and deterministic expectation.
     """
     records: list[GenerationRecord] = []
     for rep in range(k):
         for case in yaml_cases:
-            records.extend(_collect_yaml_case_records(case, client, base_url, rep))
+            records.extend(_collect_yaml_case_records(case, client, base_url, rep, retrieval_profile))
         for case in ah_cases:
-            records.extend(_collect_ah_case_records(case, client, base_url, rep))
+            records.extend(_collect_ah_case_records(case, client, base_url, rep, retrieval_profile))
     return records
 
 
@@ -166,6 +181,7 @@ def run(
     k: int = 1,
     cases_dir: Path | None = None,
     config: RunConfig | None = None,
+    retrieval_profile: str | None = None,
 ) -> Path:
     """Collect records and write output to either gen-dir or legacy transcript.
 
@@ -197,8 +213,11 @@ def run(
     """
     resolved_config = config
     if gen_id and resolved_config is None:
-        resolved_config = resolve_run_config(cases_dir=cases_dir)
-    records = collect_records(yaml_cases, ah_cases, client, base_url, k=k)
+        resolved_config = resolve_run_config(
+            cases_dir=cases_dir,
+            retrieval_profile=retrieval_profile or _DEFAULT_RETRIEVAL_PROFILE,
+        )
+    records = collect_records(yaml_cases, ah_cases, client, base_url, k=k, retrieval_profile=retrieval_profile)
     if gen_id:
         gen_dir = out_dir / gen_id
         write_generation_dir(gen_dir, records, gen_id=gen_id, k=k, config=resolved_config)
@@ -230,6 +249,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run-id", default="latest")
     parser.add_argument("--gen-id", default="", dest="gen_id")
     parser.add_argument("--k", default=1, type=int)
+    parser.add_argument(
+        "--retrieval-profile",
+        default=None,
+        help=(
+            "Named retrieval configuration every turn is generated under (the A/B arm). "
+            "Omitted by default so the request is byte-identical to a pre-profile run."
+        ),
+    )
     args = parser.parse_args(argv)
 
     headers = {"Authorization": f"Bearer {args.api_key}"}
@@ -252,6 +279,7 @@ def main(argv: list[str] | None = None) -> int:
             gen_id=args.gen_id,
             k=args.k,
             cases_dir=args.cases,
+            retrieval_profile=args.retrieval_profile,
         )
 
     print(f"Transcript written: {path}")

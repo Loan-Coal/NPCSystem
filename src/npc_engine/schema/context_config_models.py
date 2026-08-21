@@ -11,6 +11,11 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from npc_engine.schema.retrieval_profile_models import (
+    RetrievalProfile,
+    resolve_retrieval_profile,
+)
+
 # Built-in weight profiles. Engines declare which profile to use via
 # relevance_weight_profile in their YAML config.
 DEFAULT_WEIGHT_PROFILES: dict[str, dict[str, float]] = {
@@ -94,6 +99,9 @@ class LLMConfig(BaseModel):
     recency_game_day_horizon: int = Field(gt=0, default=365)
     default_weight_profile: str = Field(default="default")
     weight_profiles: dict[str, RelevanceWeights] = Field(default_factory=dict)
+    # Named retrieval configurations for A/B experiments. Unlike weight_profiles, an
+    # unknown name here RAISES rather than falling back — see resolve_retrieval_profile.
+    retrieval_profiles: dict[str, RetrievalProfile] = Field(default_factory=dict)
     # Fraction of PROMPT_TOKEN_BUDGET allocated to each tier (soft caps).
     # tier_c receives the remainder: 1.0 - tier_a_fraction - tier_b_fraction.
     # Override per-engine in the engine's llm_config.yaml for tuning.
@@ -111,6 +119,25 @@ class LLMConfig(BaseModel):
                 "must not exceed 1.0"
             )
         return self
+
+    def resolve_retrieval_profile(
+        self, name: str | None, *, fallback: RetrievalProfile
+    ) -> RetrievalProfile:
+        """Resolve a retrieval profile name strictly against this config's registry.
+
+        Deliberately NOT modelled on resolve_weights() below, which returns defaults for
+        an unrecognised name. Falling back here would let a run record a profile it never
+        used, so an unknown name is an error the API surfaces as 4xx.
+
+        Args:
+            name: Requested profile name; None or "default" yield the fallback.
+            fallback: The profile representing the default (no-override) path.
+        Returns:
+            The resolved RetrievalProfile.
+        Raises:
+            RetrievalProfileNotFoundError: When name is neither default nor declared.
+        """
+        return resolve_retrieval_profile(name, profiles=self.retrieval_profiles, fallback=fallback)
 
     def resolve_weights(self, profile: str | None = None) -> RelevanceWeights:
         """Return the RelevanceWeights for the given profile name.

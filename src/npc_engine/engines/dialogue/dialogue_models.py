@@ -51,6 +51,15 @@ class DialogueRequest(FrozenDialogueModel):
     location_id: str | None = None
     session_id: str | None = None
     explicit_node_ids: tuple[str, ...] = Field(default_factory=tuple)
+    retrieval_profile: str | None = Field(
+        default=None,
+        description=(
+            "Named retrieval configuration for this turn (the A/B switch). None uses the "
+            "deployment default, Settings.RETRIEVAL_PROFILE. An undeclared name is a 4xx, "
+            "never a silent fallback — a run must not be able to record a profile it did "
+            "not use."
+        ),
+    )
 
 
 class RelationDeltas(FrozenDialogueModel):

@@ -45,7 +45,10 @@ from npc_engine.graph.memory.memory_queries import (
 from npc_engine.graph.reputation.reputation_queries import get_reputation_context_for_npc
 from npc_engine.graph.relations.trust_queries import get_second_hop_events, get_trust_scores_for_events
 from npc_engine.graph.quest.quest_queries import get_active_quest_for_player
+from npc_engine.schema.retrieval_profile_models import RetrievalProfile
+
 from .context_budget_enforcer import ContextCompressionCache, fill_to_budget
+from .context_profile_resolver import resolve_profile_for_turn
 from .context_builder_helpers import (
     expand_query,
     normalize_ratio,
@@ -228,28 +231,38 @@ def _get_partial_cache_state(context_cache: Any, npc_id: str, npc_ts: str) -> tu
 async def _fetch_rag_results(
     session: AsyncSession, embedding_index: EmbeddingIndexProtocol, settings: Settings,
     player_message: str, session_turns: list[str], known_event_ids: set[str] | None,
-    npc_id: str, game_time: TimePoint | None, skip_rag: bool,
+    npc_id: str, game_time: TimePoint | None, skip_rag: bool, profile: RetrievalProfile,
 ) -> list[Any]:
-    """Run vector-only or GraphRAG retrieval for Tier B/C items; return empty list when skip_rag."""
-    if skip_rag:
+    """Run vector-only or GraphRAG retrieval for Tier B/C items; return empty list when skip_rag.
+
+    Graph and vector top-k come from the profile as SEPARATE fields. They were one
+    Settings.RAG_TOP_K, which also governed event fetching, so a top-k experiment silently
+    changed three things at once and no effect could be attributed to any of them.
+    """
+    if skip_rag or profile.skip_rag:
         return []
     rag_query = expand_query(player_message, session_turns)
     rag_filter = known_event_ids if known_event_ids else None
     if settings.GRAPH_RAG_ENABLED:
         return await graph_rag_retrieve(
             session=session, embedding_index=embedding_index, query=rag_query,
-            npc_id=npc_id, known_event_ids=known_event_ids or set(), top_k=settings.RAG_TOP_K, game_time=game_time,
+            npc_id=npc_id, known_event_ids=known_event_ids or set(),
+            top_k=profile.graph_rag_top_k, game_time=game_time,
         )
-    return await embedding_index.search(query=rag_query, top_k=settings.RAG_TOP_K, filter_ids=rag_filter)
+    return await embedding_index.search(query=rag_query, top_k=profile.rag_top_k, filter_ids=rag_filter)
 
 
 async def _fetch_npc_profile_data(
     session: AsyncSession, npc_id: str, settings: Settings,
-    player_id: str | None, location_id: str | None,
+    player_id: str | None, location_id: str | None, profile: RetrievalProfile,
 ) -> tuple[Any, ...]:
-    """Fetch NPC profile: location, events, reputation, memories, items, groups, rumors, traits, pledges."""
+    """Fetch NPC profile: location, events, reputation, memories, items, groups, rumors, traits, pledges.
+
+    `events_limit` is a distinct profile field, not a RAG top-k, despite having shared
+    Settings.RAG_TOP_K with vector and graph retrieval until this split.
+    """
     location_context = await get_location_context(session=session, location_id=location_id or "")
-    events = await get_events_for_npc(session=session, npc_id=npc_id, limit=settings.RAG_TOP_K)
+    events = await get_events_for_npc(session=session, npc_id=npc_id, limit=profile.events_limit)
     reputation_items = await get_reputation_context_for_npc(
         session, npc_id=npc_id, player_id=player_id or "", threshold=settings.REPUTATION_CONTEXT_THRESHOLD,
     )
@@ -275,16 +288,16 @@ async def _resolve_npc_context_with_cache(
     session: AsyncSession, npc_id: str, settings: Settings, player_id: str | None,
     location_id: str | None, partial_cache: Any, profile_key: Any, bg_key: Any,
     cached_profile: Any, cached_bg: Any,
-    player_message: str,
+    player_message: str, retrieval_profile: RetrievalProfile,
 ) -> tuple[Any, Any, Any, Any, Any]:
     """Fetch or restore profile+beliefs/goals with partial cache; return (profile_data, beliefs, goals, secrets, obligations)."""
     profile_miss = cached_profile is None
     bg_miss = cached_bg is None
     if profile_miss and bg_miss:
-        new_profile = await _fetch_npc_profile_data(session, npc_id, settings, player_id, location_id)
+        new_profile = await _fetch_npc_profile_data(session, npc_id, settings, player_id, location_id, retrieval_profile)
         new_bg = await _fetch_beliefs_goals_data(session, npc_id)
     elif profile_miss:
-        new_profile = await _fetch_npc_profile_data(session, npc_id, settings, player_id, location_id)
+        new_profile = await _fetch_npc_profile_data(session, npc_id, settings, player_id, location_id, retrieval_profile)
         new_bg = None
     elif bg_miss:
         new_profile = None
@@ -319,14 +332,16 @@ async def _fetch_player_data(
     return trust_scores, second_hop_events, active_quest, player_relation_edge
 
 
-async def _maybe_cross_encode(settings: Settings, player_message: str, tier_b_results: list[Any]) -> list[Any]:
-    """Apply cross-encoder reranking if CROSS_ENCODER_ENABLED and results are non-empty.
+async def _maybe_cross_encode(
+    settings: Settings, player_message: str, tier_b_results: list[Any], profile: RetrievalProfile,
+) -> list[Any]:
+    """Apply cross-encoder reranking if the profile enables it and results are non-empty.
 
     The rerank does synchronous sentence-transformers inference, so it is offloaded
     to a worker thread (asyncio.to_thread) to keep the event loop unblocked (ISSUE-064,
     mirroring the ISSUE-063 embedding-index fix).
     """
-    if not (settings.CROSS_ENCODER_ENABLED and tier_b_results):
+    if not (profile.cross_encoder_enabled and tier_b_results):
         return tier_b_results
     from npc_engine.retrieval.embedding import cross_encoder_reranker
     reranked = await asyncio.to_thread(cross_encoder_reranker.rerank, player_message, tier_b_results)
@@ -543,6 +558,24 @@ async def _maybe_append_player_memory(session: AsyncSession, npc_id: str, player
         tier_a_raw.append(item)
 
 
+def _validated_profile_for_turn(
+    settings: Settings, llm_config: LLMConfig, requested: str | None
+) -> RetrievalProfile:
+    """Validate retrieval settings and resolve the profile for this turn.
+
+    Extracted from build_serialized_context purely to keep that function inside the
+    40-line limit; it carries no logic of its own beyond the RAG_TOP_K guard that has
+    always run first.
+
+    Raises:
+        ValueError: If RAG_TOP_K <= 0.
+        RetrievalProfileNotFoundError: If the resolved profile name is not declared.
+    """
+    if settings.RAG_TOP_K <= 0:
+        raise ValueError("RAG_TOP_K must be greater than 0")
+    return resolve_profile_for_turn(settings=settings, llm_config=llm_config, requested=requested)
+
+
 async def build_serialized_context(
     session: AsyncSession, settings: Settings, llm_config: LLMConfig, embedding_index: EmbeddingIndexProtocol,
     npc_id: str, player_message: str, session_turns: list[str], emotion_state: dict[str, Any] | None = None,
@@ -550,11 +583,10 @@ async def build_serialized_context(
     context_cache: PartialDialogueContextCache | DialogueContextCache | None = None,
     session_id: str | None = None, skip_rag: bool = False, player_id: str | None = None,
     weight_profile: str | None = None, explicit_node_ids: frozenset[str] = frozenset(),
-    system_state_context: Any | None = None,
+    system_state_context: Any | None = None, retrieval_profile: str | None = None,
 ) -> str:
-    """Build the final serialized prompt context string for one dialogue turn (raises ValueError if RAG_TOP_K <= 0)."""
-    if settings.RAG_TOP_K <= 0:
-        raise ValueError("RAG_TOP_K must be greater than 0")
+    """Build the serialized prompt context for one dialogue turn (`retrieval_profile` selects the A/B arm; see _validated_profile_for_turn)."""
+    active_profile = _validated_profile_for_turn(settings, llm_config, retrieval_profile)
     character_bundle, world_state, known_event_ids = await _fetch_base_graph_data(session, npc_id)
     emotion_snapshot, current_game_time, npc_ts, world_ts = _resolve_initial_state(character_bundle, emotion_state, world_state)
     cache_hit, legacy_cache, legacy_key = _check_legacy_cache(context_cache, session_id, npc_id, player_id, emotion_snapshot, npc_ts, world_ts)
@@ -562,11 +594,11 @@ async def build_serialized_context(
         return str(cache_hit)
     partial_cache, profile_key, bg_key, cached_profile, cached_bg = _get_partial_cache_state(context_cache, npc_id, npc_ts)
     location_id = await get_npc_location_id(session=session, npc_id=npc_id)
-    tier_b_results = await _fetch_rag_results(session, embedding_index, settings, player_message, session_turns, known_event_ids, npc_id, current_game_time, skip_rag)
-    profile_data, beliefs, goals, secrets, obligations = await _resolve_npc_context_with_cache(session, npc_id, settings, player_id, location_id, partial_cache, profile_key, bg_key, cached_profile, cached_bg, player_message)
+    tier_b_results = await _fetch_rag_results(session, embedding_index, settings, player_message, session_turns, known_event_ids, npc_id, current_game_time, skip_rag, active_profile)
+    profile_data, beliefs, goals, secrets, obligations = await _resolve_npc_context_with_cache(session, npc_id, settings, player_id, location_id, partial_cache, profile_key, bg_key, cached_profile, cached_bg, player_message, active_profile)
     location_context, events, reputation_items, memories, owned_items, group_memberships, believed_rumors, traits, active_pledges = profile_data
     trust_scores, second_hop_events, active_quest, player_relation_edge = await _fetch_player_data(session, npc_id, player_id, events)
-    tier_b_results = await _maybe_cross_encode(settings, player_message, tier_b_results)
+    tier_b_results = await _maybe_cross_encode(settings, player_message, tier_b_results, active_profile)
     tier0 = _build_tier0_items(world_state, emotion_snapshot, system_state_context)
     tier_a_raw = _build_tier_a_base(npc_id, character_bundle, events, location_id, location_context, group_memberships, believed_rumors, traits, active_pledges, session_turns)
     tier_a_raw.extend(_build_tier_a_extended(player_id, reputation_items, active_quest, player_relation_edge, memories, beliefs, goals, owned_items, secrets, obligations, second_hop_events, settings, npc_id, current_game_time))
@@ -577,7 +609,7 @@ async def build_serialized_context(
     serialized = _rank_and_serialize_tiers(
         tier0=tier0, tier_a_raw=tier_a_raw, tier_b_raw=tier_b_raw, tier_c_raw=tier_c_raw,
         vector_scores=vector_scores, event_key_trust=event_key_trust, llm_config=llm_config,
-        settings=settings, compression_cache=compression_cache, weight_profile=weight_profile or detect_dialogue_profile(player_message),
+        settings=settings, compression_cache=compression_cache, weight_profile=weight_profile or active_profile.weight_profile or detect_dialogue_profile(player_message),
         active_quest=active_quest, game_time=current_game_time, explicit_node_ids=explicit_node_ids,
     )
     if legacy_cache is not None and legacy_key is not None:

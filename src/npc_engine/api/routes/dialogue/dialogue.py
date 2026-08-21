@@ -22,7 +22,7 @@ from npc_engine.engines.dialogue.system_state_context import resolve_system_stat
 from npc_engine.engines.director.director_beat_log import DirectorBeatLog, DirectorBeatRecord
 from npc_engine.graph.intent.intent_queue_reader import get_pending_intents as get_pending_intents_from_queue
 from npc_engine.graph.intent.intent_queue_writer import mark_delivered as mark_intent_delivered
-from npc_engine.utils.errors import NodeNotFoundError
+from npc_engine.utils.errors import NodeNotFoundError, RetrievalProfileNotFoundError
 from npc_engine.utils.logging import get_logger
 
 # Default number of recent director beats returned by the director-beats read route.
@@ -33,7 +33,43 @@ _logger = get_logger(__name__)
 # HTTP status for a dialogue referencing a Character node that does not exist (ISSUE-118).
 _CHARACTER_NOT_FOUND_STATUS: int = 422
 
+# HTTP status for a request naming a retrieval profile nobody declared. 400, not 422:
+# the value is well-formed, it just does not exist in this deployment's registry.
+_RETRIEVAL_PROFILE_NOT_FOUND_STATUS: int = 400
+
 router = APIRouter()
+
+
+def _character_not_found(exc: NodeNotFoundError) -> HTTPException:
+    """Map a missing Character node to 422, without echoing the internal node id.
+
+    Redacted per L8-02: the id is logged server-side, never returned to the caller.
+    """
+    _logger.info("dialogue_character_not_found", extra={"node_id": exc.node_id})
+    return HTTPException(
+        status_code=_CHARACTER_NOT_FOUND_STATUS,
+        detail={"code": "CHARACTER_NOT_FOUND", "message": "Character not found."},
+    )
+
+
+def _retrieval_profile_not_found(exc: RetrievalProfileNotFoundError) -> HTTPException:
+    """Map an undeclared retrieval profile to 400, echoing the valid names.
+
+    The available names ARE returned, unlike the redacted node id above: profile names are
+    deployment configuration the caller is entitled to know, and an eval harness that gets
+    a bare 400 cannot tell a typo from a missing config file.
+    """
+    _logger.info(
+        "dialogue_retrieval_profile_not_found",
+        extra={"requested": exc.requested, "available": exc.available},
+    )
+    return HTTPException(
+        status_code=_RETRIEVAL_PROFILE_NOT_FOUND_STATUS,
+        detail={
+            "code": "RETRIEVAL_PROFILE_NOT_FOUND",
+            "message": f"Unknown retrieval_profile {exc.requested!r}. Available: {exc.available}.",
+        },
+    )
 
 
 @router.post("/dialogue", response_model=DialogueResponse)
@@ -57,12 +93,9 @@ async def dialogue(
     try:
         return await handler.handle(request=request, system_state_context=system_ctx)
     except NodeNotFoundError as exc:
-        # Redacted (L8-02): never echo the internal node id to the client; log it server-side.
-        _logger.info("dialogue_character_not_found", extra={"node_id": exc.node_id})
-        raise HTTPException(
-            status_code=_CHARACTER_NOT_FOUND_STATUS,
-            detail={"code": "CHARACTER_NOT_FOUND", "message": "Character not found."},
-        ) from exc
+        raise _character_not_found(exc) from exc
+    except RetrievalProfileNotFoundError as exc:
+        raise _retrieval_profile_not_found(exc) from exc
 
 
 @router.get("/dialogue/pending", response_model=list[ConversationIntentResponse])

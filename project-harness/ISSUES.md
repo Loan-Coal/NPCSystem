@@ -90,6 +90,102 @@ a session whose task is restoring the fence position, not redesigning how it's g
 **To fix:** design and land one of the two mechanisms above (or a better one), with its own tests,
 as a dedicated task — likely a `RET-P0`-adjacent or fresh `HARNESS-P` phase.
 
+## ISSUE-194: the Retrieval Quality Program (RET-P1..P6) is referenced everywhere but exists nowhere
+**Found:** 2026-08-21. **CORRECTED the same day — see the correction note below.**
+**Severity:** P2 (annoying) — the highest-leverage retrieval fix has no owner and no roadmap entry
+**Where:** `project-harness/ROADMAP.md:3289-3342` (`### Phase RET-P0` is the only RET phase)
+
+**⚠️ CORRECTION.** This issue was originally filed as "the dialogue system prompt exceeds
+OLLAMA_CONTEXT_LENGTH and PROMPT_TOKEN_BUDGET is silently the clamp floor". **That was a duplicate
+of already-recorded work and it is retracted.** The prior art, which the original filing failed to
+check for:
+- `RET-P0.3` shipped `src/npc_engine/config_prompt_window.py` + `PromptWindowError`, which detect
+  exactly this and are fully tested.
+- `MEASURED_SYSTEM_PROMPT_TOKENS = 5426` is already recorded as a named constant with its derivation.
+- **DEC-175** explicitly decided *not* to wire the check into `Settings`, and gave the reason: today's
+  defaults are provably incoherent, so a hard-fail validator would refuse to boot, and "a warning
+  nobody reads is not worth a startup-path change on its own". Both hard-fail AND warning-only were
+  considered and rejected.
+- `tests/unit/config/test_config_prompt_window.py::test_shipped_defaults_do_not_fit_the_default_window`
+  already pins the incoherence so the fix has a measurable target.
+
+So the engine defect is known, measured, instrumented and deliberately parked. Nothing about it needed
+a new issue.
+
+**What is genuinely new, and is what this issue now tracks:** `RET-P0`'s own header calls it the
+"Opening phase of the Retrieval Quality Program (RET-P0...P6)", and both `RET-P0.3` and DEC-175 name
+**RET-P6** as the phase that will wire the validator and raise the context window. Grepping
+`ROADMAP.md` for `### Phase RET-`, the only entry that exists is `RET-P0`. **RET-P1 through RET-P6
+have never been written down.** The consequence: the single largest known retrieval defect — a system
+prompt that does not fit its own context window, which plausibly bounds the ~0.3 retrieval precision —
+is assigned to a phase with no tasks, no gate, no effort estimate and no owner. It cannot be scheduled,
+and `roadmap_cursor.py` cannot see it.
+
+**Why deferred:** writing the RET-P1..P6 phase entries is roadmap authoring — a product-shaping call
+about what the retrieval program contains and in what order, which is the maintainer's to make, not a
+drive-by edit during metrics work.
+**To fix:** author `### Phase RET-P6` (at minimum) in `ROADMAP.md` with the window raise and the
+validator wiring as explicit tasks, carrying DEC-175's constraint that the window must be raised
+*before* the validator is wired. Decide whether RET-P1..P5 are still wanted or whether the program
+should be renumbered. Then the ISSUE-163/ISSUE-145 retrieval defects have somewhere to sit.
+
+## ISSUE-190: `src/npc_engine/config/` (data-only) shadows `config.py` as a namespace package
+**Found:** 2026-08-20, during the metrics-pipeline closeout (DEC-193)
+**Severity:** P3 (nice-to-fix)
+**Where:** `src/npc_engine/config/` (holds only `llm_config.yaml`) vs `src/npc_engine/config.py`; surfaces at `evals/engine_adapter.py:37,61`
+**Description:** the data-only directory wins import RESOLUTION over the module when mypy is
+invoked as `mypy evals/`, so `from npc_engine.config import get_settings` reports
+`attr-defined` even though `get_settings` exists at runtime (verified: it is in
+`dir(npc_engine.config)`). `mypy.ini` excludes the directory from CHECKING, which does not
+stop it shadowing. Two narrow `# type: ignore[attr-defined]` suppressions with an explanatory
+comment are in place; `make type` over `src/` is unaffected and green.
+**Why deferred:** the real fix is renaming the data directory, which touches runtime import
+paths across the engine and needs an ask-gate. Not something to do in the hour before a
+10-hour regeneration.
+**To fix:** rename `src/npc_engine/config/` (e.g. to `config_data/`), update the loader that
+reads `llm_config.yaml`, drop the two suppressions, and confirm `warn_unused_ignores` stays quiet.
+
+## ISSUE-191: `check_rules.py` is a regex scanner, so it flags patterns inside comments and docstrings
+**Found:** 2026-08-20, during the metrics-pipeline closeout (DEC-193)
+**Severity:** P3 (nice-to-fix)
+**Where:** `scripts/check_rules.py:48-50` (`_SWALLOW_RE`, `_PRINT_RE`)
+**Description:** the R002/R003 detectors match raw file text, not an AST. Writing the words
+`print(` or `` `except: pass` `` inside a comment or docstring — including a comment explaining
+why the pattern was removed — re-introduces the violation. Hit twice while fixing R003 this
+session: a docstring quoting the anti-pattern, and a comment saying no stdout write happens here.
+Both had to be reworded rather than the code changed.
+**Why deferred:** cosmetic; the workaround (reword) is trivial and the detector is otherwise
+doing its job. `_oversized_functions` already uses `ast`, so the machinery exists.
+**To fix:** move R002/R003 onto the `ast` walk that `_oversized_functions` already performs, so
+only real `Call`/`ExceptHandler` nodes count.
+
+## ISSUE-192: `evals/dashboard/headline.py` silently skips malformed calibration rows without counting them
+**Found:** 2026-08-20, during the metrics-pipeline closeout (DEC-193)
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/dashboard/headline.py::_adjudicated_row_or_none`
+**Description:** a malformed line in `labels_v1.jsonl` is skipped so one bad row cannot blank the
+whole kappa badge. The skip is now an explicit sentinel rather than a swallowed exception, but
+the COUNT of skipped rows is not surfaced anywhere — so silent data loss in a metrics dashboard
+is still possible, which is the failure mode this programme exists to catch.
+**Why deferred:** out of scope for the gate-greening task; needs a UI decision about where the
+count belongs on the card.
+**To fix:** return the skip count alongside the kappas and render it on the badge
+(e.g. "3 rows unparseable"), so a degraded input is visible rather than inferred.
+
+## ISSUE-193: 28 frozen-model tests assert `pytest.raises(Exception)` rather than the specific type
+**Found:** 2026-08-20, during the metrics-pipeline closeout (DEC-193)
+**Severity:** P3 (nice-to-fix)
+**Where:** 28 sites across `tests/unit/` (evals, graph, llm, api, config, engines, retrieval)
+**Description:** immutability tests assert that any exception is raised on mutation. The specific
+type is knowable per site — pydantic v2 frozen models raise `ValidationError`, frozen dataclasses
+raise `FrozenInstanceError` — so a test would still pass if the object raised for an unrelated
+reason (a typo'd attribute name, say). All 28 now carry a `# quality-ok:` waiver naming this.
+**Why deferred:** maintainer decision (DEC-193 decision A): re-baseline/waive the purely
+structural findings rather than make a large mechanical diff across the test suite immediately
+before regeneration #1.
+**To fix:** narrow each to `ValidationError` or `FrozenInstanceError` per the model family and
+delete the waiver comment in the same edit.
+
 ## ISSUE-169: `make check-evals-rules` AND `make type-evals` are both red on main
 **Found:** 2026-08-14, during `EVAL-P20.0` (running `make check` before committing)
 **Severity:** P2 (annoying — two red gates that are not this task's fault mask real regressions)
@@ -1132,27 +1228,3 @@ corpus" and "A/B baseline" is written down rather than rediscovered.
 **To fix:** no code change. When regeneration #1 lands, record its gen_id in ROADMAP as the
 baseline arm, and stop referring to `k3_73e6c36` as a baseline.
 
-## ISSUE-189: `make check` is red at HEAD on four gates, all in `evals/` and `tests/unit/`
-**Found:** 2026-08-20, while verifying the ISSUE-188 fix
-**Severity:** P2 (annoying) - it hides regressions, because `make check` cannot be used as a
-pass/fail gate until it is green again
-**Where:** `evals/sequence_order_effect.py:81`, `evals/` (15 rule violations), `evals/` type
-errors, `tests/unit/test_judge_runner.py` and 36 others
-**Description:** on a clean tree at `bc6fe36`, before any change in the ISSUE-188 task, four of
-`make check`'s gates already fail:
-- `lint`: `E741 Ambiguous variable name: l` at `evals/sequence_order_effect.py:81`
-- `check-evals-rules`: 15 NEW violations (R001 file length, R002 print(), R003, R006 function
-  length) across `evals/adjudicate.py`, `evals/eval_records.py`, `evals/judge_run_artifacts.py`,
-  `evals/sequence_rates.py`, `evals/summary.py` and others
-- `type-evals`: 28 mypy errors against a baseline of 16
-- `check-test-quality`: 37 issues
-`lint` fails first, so the rest of `make check` never runs and the breakage is easy to miss.
-The ISSUE-188 change touches only `Makefile` and `demo_game/`, none of which these gates scan;
-`lint` covers `src/ evals/`, `type` covers `src/` (green, 610 files), and `check-test-quality`
-reports zero `demo_game` items.
-**Why deferred:** single-task focus - this is `evals/` debt accumulated across EVAL-P12.4 and
-later phases, unrelated to the restore bug, and re-baselining or refactoring `evals/` in the
-hour before a 10-hour regeneration run is exactly the wrong time.
-**To fix:** fix `E741` (rename `l`), then work the `check-evals-rules` and `type-evals` deltas
-down or re-baseline them with a DECISIONS.md justification, then the 37 `check-test-quality`
-items. Do it as its own task, before the next phase that claims `make check` as its gate.

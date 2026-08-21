@@ -98,6 +98,7 @@ class Neo4jDialogueContextAdapter:
         player_id: str | None,
         explicit_node_ids: frozenset[str],
         system_state_context: Any | None = None,
+        retrieval_profile: str | None = None,
     ) -> tuple[str, list[str]]:
         """Build the serialized prompt context and used memory IDs, opening a session internally.
 
@@ -135,6 +136,7 @@ class Neo4jDialogueContextAdapter:
                 player_id=player_id,
                 explicit_node_ids=explicit_node_ids,
                 system_state_context=system_state_context,
+                retrieval_profile=retrieval_profile,
             )
         memory_ids = _extract_used_memory_ids(context_str)
         return context_str, memory_ids

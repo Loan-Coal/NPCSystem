@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict
 
 from case_stats import CaseStat, classify, classify_battery
 from judge_identity import resolve_judge_identity
+from run_variance import VARIANT_FIELDS, describe_variant_delta
 from paired_stats import PairedResult, paired_compare
 from rate_stats import pass_rate, wilson_interval
 from verdict_sources import VerdictRow, load_unified_rows, source_counts
@@ -102,6 +103,10 @@ class RunMeta(BaseModel):
     harness_version: str | None = None
     judge_model: str | None = None
     k: int | None = None
+    # Variant fields — EXPECTED to differ between arms, so deliberately NOT part of
+    # _comparability_error. They are the independent variable; reporting them is what
+    # keeps a McNemar verdict attached to the right cause.
+    variant: dict[str, object] = {}
 
 
 class CompareResult(BaseModel):
@@ -209,6 +214,7 @@ def _read_run_meta(gen_dir: Path) -> RunMeta:
         harness_version=config.get(_HARNESS_VERSION_KEY),
         judge_model=resolve_judge_identity(gen_dir, config.get(_JUDGE_MODEL_KEY)),
         k=meta.get(_K_KEY),
+        variant={field: config[field] for field in VARIANT_FIELDS if field in config},
     )
 
 
@@ -458,9 +464,11 @@ def _format_run_meta(label: str, meta: RunMeta) -> str:
     Returns:
         A single formatted line, e.g. 'Config (before): harness_version=... judge_model=... k=...'.
     """
+    variant = " ".join(f"{k}={v!r}" for k, v in sorted(meta.variant.items()))
     return (
         f"Config ({label}): harness_version={meta.harness_version!r} "
         f"judge_model={meta.judge_model!r} k={meta.k!r}"
+        + (f" {variant}" if variant else "")
     )
 
 
@@ -478,6 +486,12 @@ def format_report(result: CompareResult) -> list[str]:
     """
     pr = result.paired_result
     lines = _format_header(result)
+    lines.append("")
+    # What was deliberately varied. Stated even when nothing differs: a blank reads as
+    # "not checked", and two arms that turn out identical is itself a finding.
+    lines.append(
+        f"Differs: {describe_variant_delta(result.before_meta.variant, result.after_meta.variant)}"
+    )
     lines.append("")
     lines.append(
         f"Verdict: {pr.verdict.upper()}  p={pr.p_value:.4f}"

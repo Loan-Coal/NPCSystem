@@ -4466,3 +4466,159 @@ the app now gets a clean refusal instead of a corrupted graph.
 instance known to be isolated. It is not wired to any target and is not a supported operator
 workflow; the 12 s cost of the probe is negligible against a restore that precedes a 10-hour
 regeneration.
+
+---
+
+## DEC-193: the metrics harness entry point is repaired, and its clean-tree precondition
+excludes the artifacts the pipeline itself writes
+**Date:** 2026-08-20
+**Decided by:** the maintainer, this session (two explicit choices, recorded below as taken by
+them, not by the implementer).
+
+**Context.** A review of the metrics pipeline against the Program 3 metrics contract
+(ROADMAP.md, "the harness is done when one command prints all four") found the code ~90% built
+and never once executed end to end. The reason was a single line:
+`scripts/Run-EvalHarness.ps1` resolved its repo root with two `Split-Path -Parent` calls —
+correct while the script lived in `project-harness/scripts/`, and one level too high after the
+move to `scripts/`. It landed on the parent of the repository. Two consequences, the second
+worse than the first:
+
+1. Every `make` invocation ran where there is no Makefile, so a real run died at step 2.
+2. `git status --porcelain` outside a work tree writes to stderr and returns nothing on stdout,
+   so `[string]::IsNullOrWhiteSpace($status)` read `$true` and the "working tree clean"
+   precondition reported **OK against a dirty tree**. Verified empirically before the fix.
+
+No test caught it: `-DryRun` exits before the `make` calls, and every precondition test fails at
+check 1 (engine unreachable) long before reaching check 4. This is precisely the failure class
+the script's own `.DESCRIPTION` exists to prevent — "every silently-worthless artifact in this
+project's history came from a precondition that was false and unchecked".
+
+**Decision 1 — resolve the root by search, and assert.** `$RepoRoot` now walks upward until it
+finds the `Makefile` it shells out to, and exits 2 if it finds none. Counting directory levels
+is what broke; a wrong root is now loud rather than silent. The script also echoes
+`Repo root: <path>` before the `-DryRun` exit, which is what the new tests assert against.
+
+**Decision 2 — "clean" means clean of SOURCE changes.** The precondition scopes out
+`evals/generations/`, `evals/reports/` and `project-harness/overnight_logs/`, and separately
+asserts `git rev-parse --is-inside-work-tree`, so an empty status can never again be read as
+clean when it actually means "no repository".
+
+This is not a loosening. The precondition's purpose is attributing a run to a known engine SHA,
+and artifacts the run writes do not change the engine. Without the exclusion, EVAL-P22B.2 — the
+no-op false-positive check, which runs this harness *after* a regeneration has already written
+the tracked `judged.jsonl` — could never pass its own preflight;
+`Run-OvernightCombined.ps1` already documents the tree as dirty-by-design from its step 1
+onward. Today that conflict is invisible only because the check is inert. Fixing the root makes
+it real, so the two had to be settled together.
+
+**Maintainer decision A — `make check` remediation strategy.** Fix substantive findings
+properly; re-baseline purely structural ones with a written justification. Applied as:
+- *Fixed properly:* the `E741` lint error; two `except: pass` sites in
+  `evals/dashboard/headline.py` (converted to explicit sentinel returns); the `R001` overages on
+  `evals/eval_records.py` and `evals/adjudicate.py` (split into `evals/transcript_models.py` and
+  `evals/adjudicate_console.py`, both by re-export so no caller changed); every substantive mypy
+  error, including a real `None`-handling bug in `evals/scenario_adapters_extra.py` and a
+  `str | None` slipping into the anti-hallucination summary's denominator; the
+  `SELF_REFERENTIAL_SUM` in `test_retrieval_join.py`.
+- *Re-baselined:* 10 `R006` over-length functions and 2 `R002` `print()` sites. The `print()`
+  calls are CLI output from a harness that is deliberately src-free (EVAL-P0.2) and therefore
+  cannot import `npc_engine.utils.logging`; 15 identical entries were already grandfathered.
+  Refactoring ten functions across `evals/` immediately before a 10-hour regeneration is the
+  sequencing ISSUE-189's own "Why deferred" warns against.
+- *Better than planned:* `type-evals` was expected to be re-baselined upward. Instead every
+  error was fixed and the baseline **ratcheted down from 16 to 0**.
+
+**Maintainer decision B — phases 6-7 extend the existing overnight script.**
+`project-harness/Run-OvernightCombined.ps1` gains steps 9 (EVAL-P22B.1, trend baseline) and 10
+(EVAL-P22B.2, false-positive check) rather than getting a separate driver. Because that makes a
+single unattended pass 11-15 hours, and this script's history is of runs dying midway, it also
+gains `-ResumeGenId` and `-Through` so the two halves can run on separate nights.
+EVAL-P22B.3 is a documentation edit and is **printed, never performed**: re-pointing EVAL-P23's
+dependency before step 10 has actually passed would assert a prerequisite that is not yet true.
+
+**Decision 3 — the gameability ratchet goes offline, and judge-decided cases are excluded
+rather than silently counted.** `tests/unit/evals/test_capability_echo_resistance.py` called
+`score_case`, which evaluates `tone_judge` expectations by calling Ollama over HTTP at non-zero
+temperature. Two of its seven baselined cases are judge-decided, so on a box with Ollama running
+it flipped between green and red run to run, and on a box without Ollama every judge expectation
+returned `infra_failure` and those two cases read as **"repaired"** — a false ratchet-down
+against cases nobody had repaired. The judge is now stubbed to matchers' own infra-failure
+contract, and judge-decided cases are excluded from the ratchet, because offline their
+gameability is *unmeasured*, not measured-as-clean. `test_judge_decided_cases_are_named_and_few`
+keeps that exclusion visible and countable so the hole cannot quietly widen. Runtime fell from
+110s to 0.5s, which is the network I/O leaving.
+
+---
+
+## DEC-194: the retrieval profile is a per-request, strictly-resolved A/B switch, and every
+metric artifact now names the variant that produced it
+**Date:** 2026-08-21
+**Decided by:** the maintainer, this session, across five explicit choices recorded below.
+
+**Context.** The metrics harness could produce numbers but could not attribute them.
+`retrieval_profile` was declared in `evals/run_config.py`, written into every `meta.json`, and
+read by **nothing** — a decorative field. `/v1/dialogue` took no variant argument, so every arm
+meant a rebuild, a restart, an ~85-minute regeneration and a ~4-hour judge pass. Nothing in
+`compare.py`'s report or in `TrendRow` recorded what differed between two arms, and
+`evals retrieval` printed precision@k to stdout and persisted nothing at all.
+
+**Decision 1 — per-request override on top of a deployment default.** `Settings.RETRIEVAL_PROFILE`
+declares what production runs; `DialogueRequest.retrieval_profile` overrides it per turn. The
+public-interface change was approved via the CLAUDE.md ask-gate.
+
+The decisive argument was statistical rather than ergonomic. A deployment-scoped switch forces a
+**between-run** design: arm A tonight, arm B tomorrow, with world drift, model-load
+nondeterminism and judge sampling drift across a 4-hour pass all landing inside the treatment
+effect — exactly the noise `eval-world-reset` and the EVAL-P20.0 seed work exist to suppress. A
+per-request switch permits a **within-run paired** design against one world state, one engine
+build and one judge pass, which is worth more at k=3 than any single retrieval tweak it would be
+used to measure.
+
+**Decision 2 — resolution is STRICT, unlike `resolve_weights`.**
+`LLMConfig.resolve_weights()` falls back to defaults on an unknown profile name, which is correct
+for weights. `resolve_retrieval_profile` raises `RetrievalProfileNotFoundError` instead, surfaced
+as HTTP 400. A silent fallback would let a run record `retrieval_profile="aggressive"` in its
+`meta.json` while having produced default-profile text — an arm claiming a variant it never ran,
+which is the precise class of silent divergence this programme exists to catch. The 400 echoes the
+available names (unlike the redacted node id on the neighbouring 422): profile names are
+deployment configuration the caller is entitled to know, and a bare 400 leaves an eval harness
+unable to distinguish a typo from a missing config file.
+
+**Decision 3 — `RAG_TOP_K`'s three meanings are split.** One constant drove
+`graph_rag_retrieve(top_k=)`, `embedding_index.search(top_k=)` **and** `get_events_for_npc(limit=)`
+— the last of which is event fetching, not a RAG top-k at all. A top-k experiment therefore
+changed three things at once and no effect could be attributed to any of them. The profile carries
+`rag_top_k`, `graph_rag_top_k` and `events_limit` separately; `build_default_profile` maps one
+`Settings.RAG_TOP_K` onto all three so the default path is unchanged.
+
+**Decision 4 — serving-tier properties stay OUT of the profile.** `PROMPT_TOKEN_BUDGET` is derived
+once at `Settings` construction and `num_ctx` changes force a KV-cache reallocation, so context
+length cannot vary per request cheaply. More importantly it is a model-serving property, not a
+retrieval one; mixing tiers in one config object is how a profile stops being reasonable about. It
+varies by restart and is recorded in `RunConfig` instead.
+
+**Decision 5 — attribution is a correctness property.** `TrendRow` gains `retrieval_profile`,
+`dialogue_prompt_hash`, `git_sha`, `prompt_token_budget` and `mean_precision_at_k` (all optional —
+the store is append-only). `compare.py` prints a **`Differs:`** line from the new
+`evals/run_variance.py`. These fields are deliberately **not** comparability conditions: they are
+the independent variable, and `_comparability_error` still refuses only on `harness_version`,
+`judge_model` and `k`. `NO_VARIANT_DELTA` is stated explicitly when two arms match, because a blank
+line reads as "not checked" and two arms that turn out identical is itself a finding.
+
+**Verification that this is not itself an engine change.** The assembled context string is
+**byte-identical** with no profile set, before and after: digest `699b3146276691bf`, length 545,
+measured on the same fixture on both sides. Pinned permanently by
+`test_no_profile_and_explicit_default_profile_are_byte_identical`, which asserts the no-profile and
+explicit-`default` paths agree byte for byte. Had this moved, every arm generated after the change
+would be incomparable with every arm before it and the A/B machinery would be measuring its own
+plumbing.
+
+**Also settled here — ISSUE-194 was retracted as a duplicate.** It was filed claiming the system
+prompt exceeds the context window and `PROMPT_TOKEN_BUDGET` is silently clamped. All of that was
+already known: `RET-P0.3` shipped `config_prompt_window.py` and `PromptWindowError`,
+`MEASURED_SYSTEM_PROMPT_TOKENS = 5426` was already recorded, `DEC-175` explicitly rejected wiring
+the validator (hard-fail would refuse to boot; warning-only "is not worth a startup-path change on
+its own"), and `test_shipped_defaults_do_not_fit_the_default_window` already pins the incoherence.
+The issue was rewritten in place to track the one genuinely new fact: **`RET-P1`..`RET-P6` are
+named by `RET-P0`'s header, by `RET-P0.3` and by DEC-175, but no such phase exists in
+`ROADMAP.md`** — so the window raise everything defers to has no tasks and no owner.

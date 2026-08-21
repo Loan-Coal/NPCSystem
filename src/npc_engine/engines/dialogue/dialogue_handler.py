@@ -423,6 +423,7 @@ class DialogueHandler:
             player_id=request.player_id,
             explicit_node_ids=frozenset(request.explicit_node_ids),
             system_state_context=system_state_context,
+            retrieval_profile=request.retrieval_profile,
         )
         serialized_context = self._with_active_negotiation(serialized_context, request)
         return build_dialogue_prompt(request=request, serialized_context=serialized_context), memory_ids

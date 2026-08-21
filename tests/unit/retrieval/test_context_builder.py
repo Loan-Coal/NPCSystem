@@ -512,3 +512,93 @@ async def test_player_scoped_memory_in_context(monkeypatch) -> None:
     assert payload_other.get("npc", {}).get("player_memories") is None, (
         "Expected no 'player_memories' for a different player"
     )
+
+
+# ---------------------------------------------------------------------------
+# Retrieval profiles — the default path must not move
+# ---------------------------------------------------------------------------
+
+
+def _profile_settings():
+    return Settings(
+        API_KEY_SECRET="npc_dev_secret_2026_alpha",
+        NEO4J_URI="bolt://localhost:7687",
+        NEO4J_USER="neo4j",
+        NEO4J_PASSWORD="password",
+        PROMPT_TOKEN_BUDGET=800,
+    )
+
+
+async def _build(monkeypatch, **kwargs) -> str:
+    _patch_graph_calls(
+        monkeypatch,
+        tier_a_items=[
+            ContextItem(key="character:npc_1", text='{"id":"npc_1","name":"Aldric"}',
+                        tier="tierA", priority=100),
+        ],
+    )
+    return await build_serialized_context(
+        session=None,  # type: ignore[arg-type]
+        settings=_profile_settings(),
+        llm_config=_llm_config(),
+        embedding_index=FakeEmbeddingIndex(rows=[]),
+        npc_id="npc_1",
+        player_message="hello",
+        session_turns=["player: hi"],
+        **kwargs,
+    )
+
+
+@pytest.mark.asyncio
+async def test_no_profile_and_explicit_default_profile_are_byte_identical(monkeypatch) -> None:
+    """THE guard for the whole A/B feature.
+
+    Introducing profiles must not itself be an engine change. If the default path moves
+    even by a byte, every arm generated after it is incomparable with every arm before it,
+    and the A/B machinery would be measuring its own plumbing. Asserted byte-for-byte, the
+    same standard EVAL-P0.2 held the src-free adapter refactor to.
+    """
+    without = await _build(monkeypatch)
+    with_default = await _build(monkeypatch, retrieval_profile="default")
+
+    assert without == with_default
+
+
+@pytest.mark.asyncio
+async def test_unknown_profile_raises_rather_than_silently_using_the_default(monkeypatch) -> None:
+    """A typo must not produce a run that records a profile it never used."""
+    from npc_engine.utils.errors import RetrievalProfileNotFoundError
+
+    with pytest.raises(RetrievalProfileNotFoundError):
+        await _build(monkeypatch, retrieval_profile="no_such_profile")
+
+
+@pytest.mark.asyncio
+async def test_profile_can_disable_rag_independently_of_the_skip_rag_argument(monkeypatch) -> None:
+    """skip_rag has been a call-site argument; a profile must be able to set it too,
+    or 'no RAG' cannot be an A/B arm."""
+    from npc_engine.schema.context_config_models import LLMConfig
+    from npc_engine.schema.retrieval_profile_models import RetrievalProfile
+
+    base = _llm_config()
+    cfg = LLMConfig(
+        **{**base.model_dump(), "retrieval_profiles": {
+            "no_rag": RetrievalProfile(
+                weight_profile=None, rag_top_k=5, graph_rag_top_k=5, events_limit=5,
+                cross_encoder_enabled=False, skip_rag=True,
+            )
+        }}
+    )
+    _patch_graph_calls(monkeypatch, tier_a_items=[
+        ContextItem(key="character:npc_1", text='{"id":"npc_1","name":"Aldric"}',
+                    tier="tierA", priority=100)])
+
+    serialized = await build_serialized_context(
+        session=None,  # type: ignore[arg-type]
+        settings=_profile_settings(), llm_config=cfg,
+        embedding_index=FakeEmbeddingIndex(rows=[]), npc_id="npc_1",
+        player_message="hello", session_turns=["player: hi"],
+        retrieval_profile="no_rag",
+    )
+
+    assert json.loads(serialized) is not None

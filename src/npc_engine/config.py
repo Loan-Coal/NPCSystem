@@ -118,6 +118,11 @@ class Settings(BaseSettings):
     # At OLLAMA_CONTEXT_LENGTH=8192 → budget ≈ 2992. Override in .env if you resize the system prompt.
     PROMPT_TOKEN_BUDGET: int = 0
     RAG_TOP_K: int = 5
+    # Named retrieval configuration this deployment runs under (see
+    # schema/retrieval_profile_models.py). Production's DECLARED default; a dialogue
+    # request may override it per turn, which is what lets one eval generation run two
+    # arms against a single world state instead of two runs hours apart.
+    RETRIEVAL_PROFILE: str = "default"
     # Cap on second-hop (friend-of-friend) events injected into dialogue context.
     # Bounds an otherwise-unbounded accumulation for highly-connected NPCs (gossip hubs).
     MAX_SECOND_HOP_EVENTS: int = 5

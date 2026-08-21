@@ -114,6 +114,14 @@ class TrendRow(BaseModel):
             check gates on.
         kappa_by_criterion: Per-judge_kind kappa, for localising a drop
             (tone_judge 1.000 against refusal_judge 0.225, ISSUE-184).
+        retrieval_profile: Named retrieval configuration the run was generated under.
+        dialogue_prompt_hash: Digest over src/npc_engine/prompts/ — identifies the runtime
+            prompt variant. Changing it does NOT change harness_version, so two runs on
+            different prompts stay comparable; this field is what names the difference.
+        git_sha: Short commit hash the run was generated at.
+        prompt_token_budget: Serving-tier context budget in effect (see the retrieval- vs
+            serving-tier split: this varies by restart, not per request).
+        mean_precision_at_k: Retrieval precision@k for the run, when measured.
         repeat_flips: Unanimous-vs-solo verdict flips across the k repetitions —
             the engine-noise / judge-noise split that bounds what an A/B
             comparison can resolve.
@@ -132,6 +140,15 @@ class TrendRow(BaseModel):
     panel_kappa: PanelKappa | None = None
     kappa_by_criterion: tuple[CriterionKappa, ...] = ()
     repeat_flips: RepeatFlips | None = None
+    # --- Attribution (EVAL-P22B): WHICH VARIANT produced this row ---------------
+    # Without these a trend is a sequence of numbers with no causes attached: six weeks
+    # of rows cannot answer "which prompt version produced which result". All default to
+    # None because the store is append-only and holds rows written before they existed.
+    retrieval_profile: str | None = None
+    dialogue_prompt_hash: str | None = None
+    git_sha: str | None = None
+    prompt_token_budget: int | None = None
+    mean_precision_at_k: float | None = None
 
 
 def read_trend_rows(path: Path = TREND_STORE_FILE) -> list[TrendRow]:

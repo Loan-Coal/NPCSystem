@@ -30,6 +30,7 @@ cannot be read as an engine result. Both reports are still printed.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,6 +48,7 @@ from eval_records import read_transcript  # noqa: E402
 from instrument_gate import check_instrument, format_instrument_report  # noqa: E402
 from regression_gate import check_regression, format_regression_report  # noqa: E402
 from run_status import RunStatus, read_run_status  # noqa: E402
+from retrieval_summary import RETRIEVAL_METRICS_FILE  # noqa: E402
 from summary import summarize_from_dir  # noqa: E402
 from trend_store import (  # noqa: E402
     TREND_STORE_FILE,
@@ -148,7 +150,41 @@ def build_trend_row(
         panel_kappa=status.panel_kappa if status else None,
         kappa_by_criterion=status.kappa_by_criterion if status else (),
         repeat_flips=status.repeat_flips if status else None,
+        **_variant_fields(gen_dir),
     )
+
+
+def _variant_fields(gen_dir: Path) -> dict[str, object]:
+    """Read the run's variant identity from meta.json, plus retrieval precision if measured.
+
+    Every value is optional: the store is append-only and holds rows written before these
+    fields existed, and a run generated without a retrieval pass simply has no precision.
+    Missing is recorded as None rather than skipped, so a gap is visible in the trend
+    rather than looking like continuity.
+    """
+    config: dict[str, object] = {}
+    meta_path = gen_dir / "meta.json"
+    if meta_path.exists():
+        try:
+            config = json.loads(meta_path.read_text(encoding="utf-8")).get("config", {})
+        except (json.JSONDecodeError, OSError):
+            config = {}
+
+    precision: float | None = None
+    metrics_path = gen_dir / RETRIEVAL_METRICS_FILE
+    if metrics_path.exists():
+        try:
+            precision = json.loads(metrics_path.read_text(encoding="utf-8")).get("mean_precision_at_k")
+        except (json.JSONDecodeError, OSError):
+            precision = None
+
+    return {
+        "retrieval_profile": config.get("retrieval_profile"),
+        "dialogue_prompt_hash": config.get("dialogue_prompt_hash"),
+        "git_sha": config.get("git_sha"),
+        "prompt_token_budget": config.get("prompt_token_budget"),
+        "mean_precision_at_k": precision,
+    }
 
 
 def _build_parser() -> argparse.ArgumentParser:

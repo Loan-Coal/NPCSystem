@@ -15,6 +15,7 @@ NOTE: This runner hits Neo4j and the embedding index when invoked from make eval
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 import logging
@@ -26,7 +27,12 @@ from pydantic import BaseModel
 
 from evals import engine_adapter
 from evals.retrieval_matchers import mrr, precision_at_k, recall_at_k
-from evals.retrieval_summary import format_retrieval_summary_lines, summarize_retrieval
+from evals.retrieval_summary import (
+    RetrievalSummary,
+    format_retrieval_summary_lines,
+    summarize_retrieval,
+    write_retrieval_metrics,
+)
 
 _CASES_PATH = Path(__file__).parent / "cases" / "retrieval_demo.json"
 _LOG_FORMAT = "%(levelname)s %(name)s %(message)s"
@@ -197,7 +203,7 @@ def _print_summary(results: list[dict]) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def _main() -> int:
+async def _main(gen_dir: Path | None = None, retrieval_profile: str = "default") -> int:
     """Load cases, build retrieval stack, run eval, print summary.
 
     Returns:
@@ -235,7 +241,25 @@ async def _main() -> int:
     retrieval_summary = summarize_retrieval(results)
     for line in format_retrieval_summary_lines(retrieval_summary):
         print(line)
+    _persist_metrics(retrieval_summary, gen_dir, retrieval_profile)
     return 0
+
+
+def _persist_metrics(
+    retrieval_summary: RetrievalSummary, gen_dir: Path | None, retrieval_profile: str
+) -> None:
+    """Write retrieval_metrics.json when a generation dir was given, and say so.
+
+    A no-op without --gen-dir, which keeps the old print-only behaviour available; the
+    message is printed on success so a run never leaves the operator guessing whether the
+    numbers were persisted or only displayed.
+    """
+    if gen_dir is None:
+        return
+    written = write_retrieval_metrics(
+        retrieval_summary, gen_dir=gen_dir, retrieval_profile=retrieval_profile
+    )
+    print(f"Wrote {written}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -250,14 +274,16 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         0 on success, 1 on connectivity/setup failure, 2 on unexpected arguments.
     """
-    args = sys.argv[1:] if argv is None else argv
-    if args:
-        print(
-            f"retrieval takes no arguments; got: {' '.join(args)}",
-            file=sys.stderr,
-        )
-        return 2
-    return asyncio.run(_main())
+    parser = argparse.ArgumentParser(
+        prog="python -m evals retrieval",
+        description="Retrieval precision@k / recall@k / MRR over the annotated cases.",
+    )
+    # Without --gen-dir the numbers are printed and lost, which is why retrieval quality
+    # could not be trended or A/B'd before this flag existed.
+    parser.add_argument("--gen-dir", type=Path, default=None, help="Dir to write retrieval_metrics.json into.")
+    parser.add_argument("--retrieval-profile", default="default", help="Profile measured under; recorded for attribution.")
+    parsed = parser.parse_args(sys.argv[1:] if argv is None else argv)
+    return asyncio.run(_main(parsed.gen_dir, parsed.retrieval_profile))
 
 
 if __name__ == "__main__":

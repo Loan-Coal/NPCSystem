@@ -10,6 +10,19 @@ Does NOT: load a real cross-encoder model (the rerank call is spied/patched).
 
 from __future__ import annotations
 
+def _profile(*, enabled: bool):
+    """Build a RetrievalProfile toggling only the cross-encoder.
+
+    The rerank switch moved from Settings.CROSS_ENCODER_ENABLED onto the retrieval
+    profile so it can be an A/B arm, so these tests now vary the profile rather than
+    the settings object. Everything else is held at the default.
+    """
+    from npc_engine.schema.retrieval_profile_models import build_default_profile
+
+    return build_default_profile(rag_top_k=5, cross_encoder_enabled=enabled)
+
+
+
 import threading
 from types import SimpleNamespace
 
@@ -37,7 +50,7 @@ async def test_rerank_offloads_off_event_loop_thread(monkeypatch) -> None:
     )
     results = [VectorSearchResult(id="ev_1", score=0.9, payload={})]
 
-    out = await context_builder._maybe_cross_encode(_settings(enabled=True), "q", results)
+    out = await context_builder._maybe_cross_encode(_settings(enabled=True), "q", results, _profile(enabled=True))
 
     assert out == results
     assert captured["thread"] != threading.main_thread().name
@@ -57,7 +70,7 @@ async def test_rerank_skipped_when_disabled(monkeypatch) -> None:
     )
     results = [VectorSearchResult(id="ev_1", score=0.9, payload={})]
 
-    out = await context_builder._maybe_cross_encode(_settings(enabled=False), "q", results)
+    out = await context_builder._maybe_cross_encode(_settings(enabled=False), "q", results, _profile(enabled=False))
 
     assert out == results
     assert called["n"] == 0
@@ -76,7 +89,7 @@ async def test_rerank_skipped_when_empty(monkeypatch) -> None:
         "npc_engine.retrieval.embedding.cross_encoder_reranker.rerank", _spy_rerank
     )
 
-    out = await context_builder._maybe_cross_encode(_settings(enabled=True), "q", [])
+    out = await context_builder._maybe_cross_encode(_settings(enabled=True), "q", [], _profile(enabled=True))
 
     assert out == []
     assert called["n"] == 0

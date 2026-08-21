@@ -41,6 +41,7 @@ class DialogueContextPort(Protocol):
         player_id: str | None,
         explicit_node_ids: frozenset[str],
         system_state_context: SystemStateContext | None = None,
+        retrieval_profile: str | None = None,
     ) -> tuple[str, list[str]]:
         """Build and return the serialized prompt context and used memory IDs.
 
@@ -55,11 +56,14 @@ class DialogueContextPort(Protocol):
             player_id: Player identifier for player-relation context.
             explicit_node_ids: Additional node IDs to force-include in context.
             system_state_context: Optional engine-resolved live state (ISSUE-071).
+            retrieval_profile: Named retrieval config for this turn (the A/B switch).
         Returns:
             Tuple of (serialized_context_str, used_memory_ids) where
             used_memory_ids is the list of Memory node IDs that made it into
             the final context (ISSUE-107).
         Raises:
             ValueError: If RAG_TOP_K <= 0.
+            RetrievalProfileNotFoundError: If retrieval_profile is not declared. Never a
+                fallback — a run must not record a profile it did not use.
         """
         ...

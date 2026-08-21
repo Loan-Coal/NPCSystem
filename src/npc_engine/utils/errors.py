@@ -303,6 +303,24 @@ class TokenBudgetExceededError(Exception):
 
 
 @dataclass(frozen=True)
+class RetrievalProfileNotFoundError(StructuredNPCSystemError):
+    """Raised when a requested retrieval profile name is not declared anywhere.
+
+    Deliberately an error rather than a fallback to the default profile. A run that
+    silently fell back would record a `retrieval_profile` it never actually used, so an
+    A/B arm would claim a variant that never ran — the class of silent divergence the
+    eval programme exists to catch. Surfaced as 4xx at the API boundary.
+
+    Attributes:
+        requested: The profile name the caller asked for.
+        available: Comma-separated names that would have resolved.
+    """
+
+    requested: str
+    available: str
+
+
+@dataclass(frozen=True)
 class PromptWindowError(StructuredNPCSystemError):
     """Raised when the configured LLM context window cannot hold the prompt it must serve.
 
