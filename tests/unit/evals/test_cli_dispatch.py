@@ -43,13 +43,18 @@ def test_no_verb_exits_2_with_verb_list(capsys: pytest.CaptureFixture[str]) -> N
         assert verb in captured.err
 
 
-def test_help_lists_all_six_specced_verbs(capsys: pytest.CaptureFixture[str]) -> None:
-    """The six verbs named in EVAL-P6.3 must all appear in --help."""
+def test_help_lists_the_specced_verbs(capsys: pytest.CaptureFixture[str]) -> None:
+    """The six verbs named in EVAL-P6.3, plus `dashboard`, must appear in --help.
+
+    `dashboard` is here because DECISIONS.md:73 and ROADMAP.md:997 both document
+    `python -m evals dashboard` as the eval dashboard's invocation, and it was
+    absent from VERBS -- the EVAL-P7 app was built, tested and unreachable.
+    """
     exit_code = main(["--help"])
     captured = capsys.readouterr()
 
     assert exit_code == 0
-    for verb in ("generate", "score", "judge", "calibrate", "report", "retrieval"):
+    for verb in ("generate", "score", "judge", "calibrate", "report", "retrieval", "dashboard"):
         assert verb in captured.out
 
 
@@ -107,3 +112,32 @@ def test_every_verb_maps_to_a_real_module_and_callable() -> None:
     for verb, target in VERBS.items():
         module = importlib.import_module(target.module)
         assert callable(getattr(module, target.attr)), f"{verb} -> {target.module}.{target.attr}"
+
+
+def test_dashboard_verb_resolves_inside_evals_not_the_repo_root_package() -> None:
+    """The repo root holds its own `dashboard/` directory (the demo designer
+    dashboard, static assets only). The eval dashboard verb must resolve to
+    evals/dashboard/, which it does because __main__ prepends _EVALS_DIR to
+    sys.path -- assert it rather than trust the ordering."""
+    import importlib
+
+    target = VERBS["dashboard"]
+    module = importlib.import_module(target.module)
+    resolved = Path(module.__file__).resolve()
+    evals_dir = Path(__file__).resolve().parents[3] / "evals"
+
+    assert evals_dir in resolved.parents, f"{resolved} did not resolve under evals/"
+
+
+def test_dashboard_help_does_not_start_a_server(capsys: pytest.CaptureFixture[str]) -> None:
+    """`--help` must print usage and return, never bind a port. argparse exits
+    with SystemExit(0) on --help; the dispatcher's caller treats that normally."""
+    import importlib
+
+    module = importlib.import_module(VERBS["dashboard"].module)
+
+    with pytest.raises(SystemExit) as excinfo:
+        module.main(["--help"])
+
+    assert excinfo.value.code == 0
+    assert "--port" in capsys.readouterr().out

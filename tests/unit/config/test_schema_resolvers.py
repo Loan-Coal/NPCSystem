@@ -201,6 +201,7 @@ def test_build_enum_values_result_is_frozen_dataclass() -> None:
     schema = _make_schema()
     result = build_enum_values(schema=schema)
 
+    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
     with pytest.raises(Exception):
         result.event_type = frozenset()  # type: ignore[misc]
 

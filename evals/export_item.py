@@ -91,9 +91,9 @@ def _scorer_for_record(record: GenerationRecord) -> str:
         the matcher_kind string, otherwise 'unknown'.
     """
     if record.judge_kind is not None:
-        return record.judge_kind
+        return str(record.judge_kind)
     if record.matcher_kind is not None:
-        return record.matcher_kind
+        return str(record.matcher_kind)
     return "unknown"
 
 

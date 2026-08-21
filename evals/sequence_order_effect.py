@@ -78,7 +78,7 @@ def _cochrans_q(outcomes: Sequence[Sequence[bool]], k: int) -> tuple[float, floa
     if denominator == 0:
         return None  # every scenario is uniformly all-pass or all-fail: Q is undefined
 
-    numerator = (k - 1) * (k * sum(l * l for l in col_sums) - sum(col_sums) ** 2)
+    numerator = (k - 1) * (k * sum(col * col for col in col_sums) - sum(col_sums) ** 2)
     q = numerator / denominator
     p = chi2_sf(q, df=k - 1)
     return (q, p)
@@ -90,7 +90,7 @@ def _mcnemar_first_vs_last(outcomes: Sequence[Sequence[bool]]) -> float | None:
     improved = sum(1 for row in outcomes if not row[0] and row[-1])  # c: failed then passed
     if regressed == 0 and improved == 0:
         return None
-    return mcnemar_exact(regressed, improved)
+    return float(mcnemar_exact(regressed, improved))
 
 
 def order_effect_check(outcomes: Sequence[Sequence[bool]]) -> OrderEffectResult:

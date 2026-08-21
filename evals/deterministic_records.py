@@ -182,4 +182,4 @@ def score_record(record: GenerationRecord) -> tuple[bool, str]:
             f"deterministic record {record.record_id!r} (matcher_kind={record.matcher_kind!r}) "
             f"replayed to a JudgeResult — this matcher kind must not be recorded here"
         )
-    return result
+    return (bool(result[0]), str(result[1]))

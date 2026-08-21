@@ -94,6 +94,7 @@ def test_sequence_stat_fields_present_at_partial_fidelity() -> None:
 def test_sequence_stat_is_immutable() -> None:
     """SequenceStat is frozen — attribute assignment raises."""
     stat = sequence_stat("scenario_x", passes=1, receipts=(_FULL_RECEIPT,))
+    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
     with pytest.raises(Exception):
         stat.passes = 99  # type: ignore[misc]
 

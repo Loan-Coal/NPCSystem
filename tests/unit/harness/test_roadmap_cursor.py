@@ -212,7 +212,28 @@ EXPECTED_FLAGS: dict[str, list[str]] = {
     # Changes a shared Protocol *and* needs a live box — DEC-159 §1 approved the change,
     # not the unattended execution of it.
     "EVAL-P20.0": ["ask-gate", "live"],
+    # Phase EVAL-P22B (added 2026-08-18, the engine-iteration A/B track). Registered here
+    # 2026-08-20: the phase landed without updating this map, so all three read as "newly
+    # skipped with no recorded reason". Each flag is genuine — .1 writes the trend store
+    # (a real measurement record), .2 is a full live engine run, and .3 must follow .2, a
+    # sequencing dependency the cursor cannot infer from a pure doc edit.
+    "EVAL-P22B.1": ["deferred", "live"],
+    "EVAL-P22B.2": ["deferred", "live"],
+    "EVAL-P22B.3": ["deferred"],
 }
+
+
+# The fence's phase ids, in file order. EVAL-P22B is a real phase, not a typo: it was
+# inserted 2026-08-18 between EVAL-P22 and EVAL-P23 as the engine-iteration track
+# (A/B pipeline unblocking), deliberately lettered so it could be added without
+# renumbering P23/P24 and invalidating every cross-reference in the programme.
+# Both assertions below were left pinning a bare contiguous P0..P24 when it landed,
+# so they were red from that date until 2026-08-20 — hidden the whole time behind the
+# `lint` failure that short-circuits `make check` before test-cov (ISSUE-189). Update
+# this list deliberately, exactly as the tripwire docstring below asks.
+_EXPECTED_PHASE_IDS: list[str] = (
+    [f"EVAL-P{n}" for n in range(23)] + ["EVAL-P22B"] + [f"EVAL-P{n}" for n in (23, 24)]
+)
 
 
 def test_real_roadmap_parses_and_verifies_clean() -> None:
@@ -228,8 +249,8 @@ def test_real_roadmap_parses_and_verifies_clean() -> None:
     assert verify(phases, lines) == []
     assert phases, "queue fence parsed to zero phases"
     ids = [p.id for p in phases]
-    assert ids == [f"EVAL-P{n}" for n in range(len(ids))], (
-        f"queue must be a contiguous EVAL-P prefix starting at P0, got {ids}"
+    assert ids == _EXPECTED_PHASE_IDS, (
+        f"queue must be the EVAL-P sequence starting at P0 (P22B included), got {ids}"
     )
 
 
@@ -326,7 +347,7 @@ def test_real_roadmap_fence_state_tripwire() -> None:
     # EVAL-P24.3 by explicit human override — not because DEC-163's reopen conditions were
     # met (they were not; see the docstring above and DEC-178). This assertion firing on
     # that move is the tripwire working as designed.
-    assert [p.id for p in phases] == [f"EVAL-P{n}" for n in range(25)]
+    assert [p.id for p in phases] == _EXPECTED_PHASE_IDS
 
     # Program 1's foundation phases are complete: nothing actionable, nothing held back.
     # Monotonic — a done phase never reopens, so this cannot fire on progress.

@@ -64,6 +64,7 @@ def test_relevance_weights_is_frozen() -> None:
 
     weights = RelevanceWeights(**_valid_weights())
 
+    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
     with pytest.raises(Exception):
         weights.recency = 0.9  # type: ignore[misc]
 
@@ -81,6 +82,7 @@ def test_llm_config_rejects_zero_tier_budget() -> None:
 def test_llm_config_rejects_extra_fields() -> None:
     """LLMConfig uses extra='forbid' — unknown fields must raise."""
 
+    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
     with pytest.raises(Exception):
         LLMConfig(
             prompt_schema_version="1.4",

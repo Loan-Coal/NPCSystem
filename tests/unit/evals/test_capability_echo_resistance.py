@@ -6,8 +6,20 @@ Purpose: Ratchet the gameability of the capability battery (EVAL-P20.2). A capab
          an echo of the case's own player_message nor a canned hedge. The audit found a
          single hedge string passing 6 of 7 capability cases, because `keyword_any` lists
          were drawn from the same vocabulary as the prompt.
-Dependencies: pytest, yaml, pathlib, sys, hedge_responder_probe (scripts/)
+Dependencies: pytest, yaml, pathlib, sys, hedge_responder_probe (scripts/), matchers
 Used by: pytest (make test / make check)
+
+Why the judge is stubbed here. `score_case` evaluates every expectation on a case,
+and a `tone_judge` expectation calls Ollama over HTTP at a non-zero temperature. Two
+of the seven baselined cases (`case_pos_lira_fence_trade`, `case_pos_mira_gossip_hedging`)
+are judge-decided, so before the stub this module made real, non-deterministic network
+calls: on a box with Ollama up it flipped between green and red run to run, and on a box
+without Ollama every judge expectation failed as infra_failure and the two cases read as
+"repaired" — a false ratchet-down against cases nobody had repaired. CLAUDE.md's rule
+that unit tests do no network I/O is exactly what was being broken. The stub returns the
+already-defined infra-failure contract, and the judge-decided cases are then EXCLUDED
+from the ratchet rather than silently counted, because offline their gameability is
+unmeasured, not measured-as-clean. Ratcheting them down is a live judge pass's call.
 
 Why a baseline rather than a flat assertion. All seven shipped cases are gameable and
 repairing them changes what they measure, which makes prior generations incomparable —
@@ -28,11 +40,37 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(REPO_ROOT / "evals"))
 
+import matchers  # noqa: E402
 from hedge_responder_probe import (  # noqa: E402
     CANNED_HEDGE,
     score_case,
     synthetic_response,
 )
+from matchers import JudgeResult  # noqa: E402
+
+# Expectation kinds whose verdict comes from an LLM, not from the response text alone.
+JUDGE_KINDS: frozenset[str] = frozenset({"tone_judge", "refusal_judge", "affirms_judge"})
+
+
+@pytest.fixture(autouse=True)
+def _no_live_judge(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stub the LLM judge so this module does no network I/O and cannot flake.
+
+    Returns matchers' own infra-failure result (score=None), which every caller
+    already handles as "not a pass". Judge-decided cases are excluded from the
+    assertions below, so this stub decides nothing it should not.
+    """
+    monkeypatch.setattr(
+        matchers,
+        "_run_binary_judge",
+        lambda *args, **kwargs: JudgeResult(score=None, error="unit_test_no_judge"),
+    )
+
+
+def _is_judge_decided(case: dict) -> bool:
+    """True when any of the case's expectations is settled by an LLM judge."""
+    return any(exp.get("kind") in JUDGE_KINDS for exp in case.get("expected", []))
+
 
 CASES_DIR = REPO_ROOT / "evals" / "cases"
 
@@ -68,11 +106,17 @@ def _capability_cases() -> list[dict]:
 
 
 def _beaten_by(response_text_for: object) -> list[str]:
-    """Case ids passed by a knowledge-free response, ignoring the baselined ones."""
+    """Case ids passed by a knowledge-free response, ignoring the baselined ones.
+
+    Judge-decided cases are skipped, not scored: with the judge stubbed they could
+    never register as beaten, so including them would read as a clean result from a
+    check that never ran. `test_judge_decided_cases_are_named_and_few` keeps that
+    exclusion visible and countable.
+    """
     beaten: list[str] = []
     for case in _capability_cases():
         case_id = case["case_id"]
-        if case_id in GAMEABLE_BASELINE:
+        if case_id in GAMEABLE_BASELINE or _is_judge_decided(case):
             continue
         text = response_text_for(case)  # type: ignore[operator]
         if score_case(case, synthetic_response(text))["passed"]:
@@ -111,12 +155,17 @@ def test_gameable_baseline_has_no_stale_entries() -> None:
     assert not unknown, "GAMEABLE_BASELINE names cases that no longer exist: " + ", ".join(unknown)
 
     still_gameable: set[str] = set()
+    judge_decided: set[str] = set()
     for case_id in GAMEABLE_BASELINE:
         case = cases[case_id]
+        if _is_judge_decided(case):
+            judge_decided.add(case_id)
+            continue
         for text in (case["input"]["player_message"], CANNED_HEDGE):
             if score_case(case, synthetic_response(text))["passed"]:
                 still_gameable.add(case_id)
-    repaired = sorted(GAMEABLE_BASELINE - still_gameable)
+    # Offline, a judge-decided case is UNMEASURED — never "repaired".
+    repaired = sorted(GAMEABLE_BASELINE - still_gameable - judge_decided)
     assert not repaired, (
         "these cases now resist both the echo and the hedge but are still baselined: "
         + ", ".join(repaired)
@@ -141,3 +190,23 @@ def test_every_capability_case_declares_a_content_judge(case: dict) -> None:
     only expectation on a capability case."""
     kinds = {exp.get("kind") for exp in case.get("expected", [])}
     assert kinds - {"schema"}, f"{case['case_id']} has no content judge beyond schema"
+
+
+def test_judge_decided_cases_are_named_and_few() -> None:
+    """The set excluded from the ratchet must stay small, visible and countable.
+
+    Every capability case settled by an LLM judge is one this offline gate cannot
+    ratchet. That is a real coverage hole, so it is asserted rather than left to be
+    rediscovered: if this number grows, the gameability gate is quietly shrinking.
+    """
+    judge_decided = sorted(c["case_id"] for c in _capability_cases() if _is_judge_decided(c))
+
+    assert judge_decided == [
+        "case_pos_lira_fence_trade",
+        "case_pos_mira_gossip_hedging",
+    ], (
+        "the set of judge-decided capability cases changed: "
+        + ", ".join(judge_decided)
+        + " — these are invisible to the offline gameability ratchet, so a live judge "
+        "pass must cover them. Update this list deliberately."
+    )

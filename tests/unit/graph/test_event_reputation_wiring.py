@@ -127,6 +127,7 @@ async def test_emit_skips_reputation_when_no_faction() -> None:
             world_id="world",
         )
 
+    # quality-ok: reachability proven in this file: the sibling test asserts mock_rep.call_count == 2 on the same patch target
     mock_rep.assert_not_called()
 
 

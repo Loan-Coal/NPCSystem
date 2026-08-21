@@ -226,12 +226,12 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
 
     if not args.transcript.exists():
-        return record_error(args, f"Transcript not found: {args.transcript}")
+        return int(record_error(args, f"Transcript not found: {args.transcript}"))
 
     try:
         judged_records, panel_metrics, panel_models, judge_model = _run_judging(args)
     except Exception as exc:  # quality-ok: boundary — any failure here is an infra error
-        return record_error(args, f"Judge pass failed: {exc}")
+        return int(record_error(args, f"Judge pass failed: {exc}"))
 
     result_dicts = group_by_case(judged_records)
     report_path = write_report(results=result_dicts, output_dir=args.reports)

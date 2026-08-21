@@ -3,7 +3,8 @@ Module: tests.unit.scripts.test_check_test_quality
 Layer: tests
 Purpose: Unit tests for scripts/check_test_quality.py — verifies all 4 anti-vacuous
          patterns are detected and that '# quality-ok: <reason>' waivers suppress findings.
-         Also pins that the real test suite flags at least the three known bad tests.
+         Also pins that the real test tree stays clean AND that its cleanliness comes from
+         deliberate waivers rather than from a scanner that has stopped detecting.
 Dependencies: pathlib, sys, pytest, check_test_quality
 Used by: make test (pytest discovery)
 """
@@ -11,6 +12,7 @@ Used by: make test (pytest discovery)
 from __future__ import annotations
 
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -19,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
 
 from check_test_quality import (  # noqa: E402
     BARE_EXCEPTION_RAISES,
+    format_findings,
     PARAMETRIZE_NO_SUT_CALL,
     SELF_REFERENTIAL_SUM,
     VACUOUS_MOCK_NOT_CALLED,
@@ -221,42 +224,47 @@ def test_clean_file_has_no_findings(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Validation pins — real suite flags the known-bad tests
+# Validation pins — the real tree is clean, and provably so
 # ---------------------------------------------------------------------------
 
 
-def test_real_suite_flags_self_referential_retrieval_join() -> None:
-    """test_retrieval_join.py::test_four_cells_sum_to_annotated_count is flagged."""
-    target = _TESTS_ROOT / "unit" / "evals" / "test_retrieval_join.py"
-    findings = scan_file(target)
-    matching = [
-        f for f in findings
-        if f.pattern == SELF_REFERENTIAL_SUM
-        and f.test == "test_four_cells_sum_to_annotated_count"
-    ]
-    assert matching, (
-        "Expected SELF_REFERENTIAL_SUM finding for test_four_cells_sum_to_annotated_count"
-    )
+def test_real_suite_is_clean() -> None:
+    """The real suite carries no unaddressed anti-vacuous findings.
 
-
-def test_real_suite_flags_vacuous_mock_deterministic_pass() -> None:
-    """test_deterministic_pass.py::test_scores_every_record_without_llm is flagged."""
-    target = _TESTS_ROOT / "unit" / "evals" / "test_deterministic_pass.py"
-    findings = scan_file(target)
-    matching = [
-        f for f in findings
-        if f.pattern == VACUOUS_MOCK_NOT_CALLED
-        and f.test == "test_scores_every_record_without_llm"
-    ]
-    assert matching, (
-        "Expected VACUOUS_MOCK_NOT_CALLED finding for test_scores_every_record_without_llm"
-    )
-
-
-def test_real_suite_flags_bare_exception_frozen_model_tests() -> None:
-    """The real test suite has at least 7 pytest.raises(Exception) frozen-model tests."""
+    Replaces three earlier tests that asserted specific findings were STILL PRESENT
+    (a self-referential sum in test_retrieval_join, a vacuous mock in
+    test_deterministic_pass, and >=7 bare-Exception frozen-model raises). Those pinned
+    the unfixed state, so they went red the moment the findings were addressed on
+    2026-08-20 — a snapshot of debt cannot double as a gate. Every pattern the scanner
+    detects already has synthetic coverage above; what the real tree adds is this, which
+    is exactly what `make check-test-quality` enforces.
+    """
     findings = scan_directory(_TESTS_ROOT)
-    bare_exception = [f for f in findings if f.pattern == BARE_EXCEPTION_RAISES]
-    assert len(bare_exception) >= 7, (
-        f"Expected at least 7 BARE_EXCEPTION_RAISES findings, got {len(bare_exception)}"
+
+    assert findings == [], "unaddressed test-quality findings:\n" + format_findings(findings)
+
+
+def test_real_suite_waivers_are_load_bearing() -> None:
+    """Strip the waivers from a real file and the finding must come back.
+
+    Without this, `test_real_suite_is_clean` would also pass if the scanner silently
+    stopped detecting anything — a green gate from a broken instrument, which is the
+    precise failure class this whole harness exists to catch. Proving the clean result
+    is produced by deliberate waivers rather than by a no-op scanner keeps it honest.
+    """
+    target = _TESTS_ROOT / "unit" / "evals" / "test_deterministic_pass.py"
+    assert not scan_file(target), "precondition: this file is expected to be waived clean"
+
+    without_waivers = "\n".join(
+        line for line in target.read_text(encoding="utf-8").splitlines()
+        if "# quality-ok:" not in line
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        probe = Path(tmp) / target.name  # same basename so reported test ids match
+        probe.write_text(without_waivers, encoding="utf-8")
+        findings = scan_file(probe)
+
+    assert any(f.pattern == VACUOUS_MOCK_NOT_CALLED for f in findings), (
+        "removing the quality-ok waivers did not re-surface the VACUOUS_MOCK_NOT_CALLED "
+        "finding — the scanner, not the suite, may be what is clean"
     )

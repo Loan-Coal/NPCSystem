@@ -45,7 +45,7 @@ def _apply_polarity(score: bool | None, polarity: str) -> bool:
     is a locked mutation-probe target and the two must stay separately addressable
     (see module docstring). score=None (infra failure) always yields False.
     """
-    return apply_polarity(score, polarity)
+    return bool(apply_polarity(score, polarity))
 
 
 def _panel_fail_votes(verdicts: Sequence[PanelVerdict], polarity: str) -> list[bool | None]:

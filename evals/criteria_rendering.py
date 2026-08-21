@@ -191,7 +191,7 @@ def render_criteria(scorer: str, expectation: Mapping[str, Any]) -> str:
     renderer = _RENDERERS.get(scorer)
     if renderer is None:
         raise UnknownMatcherKindError(scorer)
-    return renderer(expectation)
+    return str(renderer(expectation))
 
 
 def observed_fields(

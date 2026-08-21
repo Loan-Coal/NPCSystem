@@ -1,4 +1,4 @@
-# Combined overnight run: Phase 1 (judge panel over k3_73e6c36) + Phase 2 (regeneration #1
+﻿# Combined overnight run: Phase 1 (judge panel over k3_73e6c36) + Phase 2 (regeneration #1
 # and the EVAL-P22 chain), with the new arm ALSO panel-judged.
 #
 # Ops script, not repo tooling: deliberately outside the TDD/300-line/docstring discipline
@@ -11,9 +11,33 @@
 # succeeded and a later step failed -- step 2 writes only k3_73e6c36/ and evals/reports/, and
 # nothing in steps 3-8 reads either, so repeating it buys nothing.
 #
-# ~10 HOURS. Starting 22:00 finishes around 08:00. There is no slack; if you need slack,
+# STEPS 9-10 (added 2026-08-20) close out Phase EVAL-P22B, the engine-iteration A/B track:
+#   9.  EVAL-P22B.1 -- record arm 1 as the trend baseline (seconds).
+#   10. EVAL-P22B.2 -- the false-positive check: run scripts/Run-EvalHarness.ps1 end to end
+#       against an UNCHANGED engine and require exit 0 (~5h). If the gate fires on a run whose
+#       engine did not change, its threshold is wrong and every later verdict is noise.
+# EVAL-P22B.3 is a documentation edit and is PRINTED at the end, never performed -- re-pointing
+# EVAL-P23's dependency before step 10 has passed would assert a prerequisite that is not true.
+#
+# ~10 HOURS for steps 1-8 (~6h with -SkipPhase1); steps 9-10 add ~5h, so a full pass is 11-15h.
+# Starting 22:00 finishes around 08:00 for steps 1-8 alone. There is no slack; if you need slack,
 # drop Step 2 (the k3_73e6c36 panel re-run) — it is confirmation of the rewritten
 # persistence layer, not a prerequisite for anything downstream.
+#
+# SPLITTING ACROSS TWO NIGHTS is the expected mode at that length, and this script's own history
+# is of runs dying midway. Two switches make it resumable:
+#   -Through 9              stop after the trend baseline, skipping the ~5h step 10.
+#   -ResumeGenId <gen_id>   skip steps 1-8 entirely and run 9-10 against an arm already generated
+#                           and judged. Deliberately does NOT re-check the clean tree: by then it
+#                           is dirty by design (see B1 below), so re-asserting it would abort 100%
+#                           of the time. The engine and panel roster ARE re-checked.
+#
+# Night 1:  ... -IUnderstand -SkipPhase1 -Through 9
+# Night 2:  ... -IUnderstand -ResumeGenId k3_<sha>_regen1
+#
+# ENCODING: this file is UTF-8 WITH BOM and must stay that way. It contains non-ASCII (em dashes),
+# and PowerShell 5.1 reads a BOM-less .ps1 as ANSI -- which turned an em dash inside a string
+# literal into a stray quote and made the whole script a parse error on 2026-08-20.
 #
 # WHY EACH FIX IS HERE (all four blockers found 2026-08-18 while scoping the combination):
 #   B1  The clean-tree gate is checked ONCE, up front, and the SHA captured there. Phase 2's
@@ -37,7 +61,17 @@
 
 param(
     [switch]$IUnderstand,
-    [switch]$SkipPhase1
+    [switch]$SkipPhase1,
+    # Skip steps 1-8 entirely and run only steps 9-10 against an arm that already
+    # exists. Steps 1-8 are ~6h with -SkipPhase1 (~10h without) and steps 9-10 add
+    # ~5h, so a single unattended pass is now 11-15h -- and this script's own history
+    # is of runs dying midway (paused containers, the POSIX-only make target, the
+    # restore/tick-scheduler race). Splitting across two nights is the expected mode,
+    # not the exception.
+    [string]$ResumeGenId = "",
+    # Stop after this step. Default 10 (the whole run). -Through 9 records the trend
+    # baseline without spending the ~5h false-positive check.
+    [int]$Through = 10
 )
 
 if (-not $IUnderstand) {
@@ -95,8 +129,147 @@ function Wait-ApiHealthy {
 $Python = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path $Python)) { $Python = "python" }
 
+# ---------------------------------------------------------------------------
+# Steps 9 and 10 (EVAL-P22B) -- defined as functions because -ResumeGenId runs
+# them without steps 1-8.
+# ---------------------------------------------------------------------------
+
+function Invoke-TrendBaseline {
+    <#  STEP 9 -- EVAL-P22B.1: record this arm as the trend baseline (seconds).
+
+        Must run through the REPAIRED pipeline so row one carries fleiss_kappa,
+        kappa_by_criterion and repeat_flips from the very first measurement --
+        retrofitting a baseline row later loses kappa continuity from the start.
+        --allow-no-baseline is correct here and only here: this IS the first row,
+        so there is nothing comparable to gate against yet.
+    #>
+    param([string]$GenId, [string]$GenDir, [string]$StampDir)
+
+    Write-Log "STEP 9/10: EVAL-P22B.1 -- recording $GenId as the trend baseline ..."
+    $TrendLog = Join-Path $StampDir "trend_baseline_$GenId.log"
+    & $Python (Join-Path $RepoRoot "scripts\record_trend_and_gate.py") `
+        --gen-id $GenId --gen-dir $GenDir --allow-no-baseline *>&1 |
+        Tee-Object -FilePath $TrendLog
+    $exit = $LASTEXITCODE
+    Write-Log "record_trend_and_gate.py exit $exit (output: $TrendLog)."
+
+    # EVAL-P22B.1's stated validation, asserted here rather than left to the morning.
+    $TrendFile = Join-Path $RepoRoot "evals\trend\trend_v1.jsonl"
+    if (-not (Test-Path $TrendFile)) {
+        Write-Log "STEP 9 FAILED: $TrendFile was not written."
+        return @{ Exit = 9; Rows = 0; Kappa = $null }
+    }
+    $rows = @(Get-Content $TrendFile | Where-Object { $_.Trim() })
+    $last = $null
+    if ($rows.Count -gt 0) { try { $last = $rows[-1] | ConvertFrom-Json } catch { $last = $null } }
+    if ($null -ne $last) {
+        Write-Log "  rows=$($rows.Count) gen_id=$($last.gen_id) harness_version=$($last.harness_version) fleiss_kappa=$($last.fleiss_kappa)"
+        if ($last.harness_version -eq "legacy_pre_p18_1") {
+            Write-Log "  WARNING: harness_version is the legacy sentinel -- this row can never compare (ISSUE-186)."
+        }
+        if ($null -eq $last.fleiss_kappa) {
+            Write-Log "  WARNING: fleiss_kappa is null -- the judge pass did not record panel metrics."
+        }
+    }
+    return @{ Exit = $exit; Rows = $rows.Count; Kappa = $(if ($last) { $last.fleiss_kappa } else { $null }) }
+}
+
+function Invoke-FalsePositiveCheck {
+    <#  STEP 10 -- EVAL-P22B.2: the false-positive check (~85 min gen + ~4h judge).
+
+        Runs the harness end to end against an UNCHANGED engine. Exit 0 is the pass
+        condition: if the gate fires on a run whose engine did not change, its
+        threshold is wrong and every later verdict is noise. Exit 3 (instrument
+        degraded) is a distinct and genuinely expected outcome with refusal_judge at
+        kappa 0.225 (ISSUE-184) -- it is NOT an engine finding and must not send
+        anyone debugging the engine.
+
+        This depends on Run-EvalHarness.ps1's clean-tree precondition excluding the
+        artifact directories: by now step 7 has written the tracked judged.jsonl, and
+        this script's own step 1 documents the tree as dirty-by-design from there on.
+    #>
+    param([string]$StampDir)
+
+    Write-Log "STEP 10/10: EVAL-P22B.2 -- false-positive check against an unchanged engine (~5h) ..."
+    $HarnessLog = Join-Path $StampDir "false_positive_check_$Stamp.log"
+    & powershell -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $RepoRoot "scripts\Run-EvalHarness.ps1") -K 3 *>&1 |
+        Tee-Object -FilePath $HarnessLog
+    $exit = $LASTEXITCODE
+
+    switch ($exit) {
+        0 { Write-Log "STEP 10 PASS: unchanged engine read as no-regression. The gate does not fire on noise." }
+        1 { Write-Log "STEP 10 FAIL: the gate fired on an UNCHANGED engine. Its threshold is wrong -- every later verdict is noise until this is fixed. Do NOT treat this as an engine regression." }
+        2 { Write-Log "STEP 10 SETUP ERROR: a precondition failed or there was no comparable baseline. Nothing was measured." }
+        3 { Write-Log "STEP 10 INSTRUMENT DEGRADED: inter-judge agreement fell. Expected with refusal_judge at kappa 0.225 (ISSUE-184). Investigate the judge panel, not the engine." }
+        default { Write-Log "STEP 10 UNKNOWN exit $exit." }
+    }
+    Write-Log "Run-EvalHarness.ps1 exit $exit (output: $HarnessLog)."
+    return @{ Exit = $exit; Log = $HarnessLog }
+}
+
+function Write-CloseoutChecklist {
+    <#  Phase EVAL-P22B.3 is a documentation edit, so it is PRINTED, never performed:
+        re-pointing a dependency before the run it depends on has actually passed would
+        assert a prerequisite that is not yet true. #>
+    param([string]$GenId, [int]$HarnessExit)
+
+    Write-Log ""
+    Write-Log "=== EVAL-P22B.3 -- do these by hand, after reading the results above ==="
+    Write-Log "  1. Tick EVAL-P20.4 / EVAL-P22.1 / EVAL-P22.2 / EVAL-P22B.1 in ROADMAP.md, naming gen_id $GenId."
+    if ($HarnessExit -eq 0) {
+        Write-Log "  2. Tick EVAL-P22B.2 (step 10 exited 0 -- the no-op check genuinely passed)."
+        Write-Log "  3. EVAL-P23's 'Depends on:' line: replace EVAL-P22.4 with EVAL-P22B.2."
+        Write-Log "     Note in EVAL-P23's Notes that the trend baseline is regeneration #1, not #2."
+        Write-Log "     Drop EVAL-P23.1/.2/.3 from HUMAN GATE H10's 'Blocks:' list."
+        Write-Log "     Effect: EVAL-P23 no longer transitively depends on an Opus spend."
+    } else {
+        Write-Log "  2. Do NOT tick EVAL-P22B.2 and do NOT re-point EVAL-P23 -- step 10 exited $HarnessExit."
+        Write-Log "     Re-pointing the dependency now would assert a prerequisite that is not true."
+    }
+    Write-Log "  4. Update tests/unit/harness/test_roadmap_cursor.py's EXPECTED_FLAGS if any tick changes a flag."
+}
+
+
 Write-Log "=== Combined overnight run starting ==="
 Write-Log "Log file: $LogFile"
+
+# --- Resume path: steps 9-10 only, against an arm that already exists ---------
+# Deliberately does NOT re-check the clean tree. By the time steps 1-8 have run,
+# the tree is dirty by design (step 1 says so), so re-asserting it here would
+# abort 100% of the time -- the same B1 defect a naive Phase1-then-Phase2
+# concatenation had. The engine and the panel roster ARE re-checked: those are
+# preconditions of the work about to happen, not of the work already done.
+if ($ResumeGenId) {
+    Write-Log "RESUME MODE: skipping steps 1-8, running steps 9-10 against $ResumeGenId."
+    $GenId = $ResumeGenId
+    $GenDir = Join-Path $RepoRoot "evals\generations\$GenId"
+    if (-not (Test-Path $GenDir)) {
+        Write-Log "FATAL: $GenDir does not exist. -ResumeGenId must name an arm that has already been generated and judged."
+        exit 2
+    }
+    if (-not (Test-Path (Join-Path $GenDir "judged.jsonl"))) {
+        Write-Log "FATAL: $GenDir holds no judged.jsonl -- the arm was generated but never judged, so it has no metrics to record."
+        exit 2
+    }
+    if (-not (Wait-ApiHealthy -TimeoutSeconds 120)) {
+        Write-Log "FATAL: engine is not answering /health. Step 10 regenerates against it."
+        exit 2
+    }
+    $env:JUDGE_TIMEOUT_SECONDS = "600"
+
+    $trend = Invoke-TrendBaseline -GenId $GenId -GenDir $GenDir -StampDir $StampDir
+    $harnessExit = -1
+    if ($Through -ge 10) {
+        $fp = Invoke-FalsePositiveCheck -StampDir $StampDir
+        $harnessExit = $fp.Exit
+    } else {
+        Write-Log "STEP 10/10: SKIPPED (-Through $Through)."
+    }
+    Write-CloseoutChecklist -GenId $GenId -HarnessExit $harnessExit
+    Write-Log ("=== Resume run complete in {0:hh\:mm\:ss} ===" -f (New-TimeSpan -Start $RunStart -End (Get-Date)))
+    exit $(if ($trend.Exit -ne 0) { $trend.Exit } elseif ($harnessExit -gt 0) { $harnessExit } else { 0 })
+}
 
 # --- Step 1: preflight, ONCE (B1) --------------------------------------------
 Write-Log "Preflight: git tree must be clean and committed (checked once, here, not again later) ..."
@@ -136,7 +309,7 @@ $OldGenDir = Join-Path $RepoRoot "evals\generations\k3_73e6c36"
 if ($SkipPhase1) {
     # Step 2 is an isolated island: it writes only k3_73e6c36/ and evals/reports/, and nothing
     # in steps 3-8 reads either. Skipping it after a successful run costs nothing downstream.
-    Write-Log "STEP 2/8: SKIPPED (-SkipPhase1). Reading the existing k3_73e6c36 run_status.json instead."
+    Write-Log "STEP 2/10: SKIPPED (-SkipPhase1). Reading the existing k3_73e6c36 run_status.json instead."
     $P1Status = Read-RunStatus (Join-Path $OldGenDir "run_status.json")
     $P1Duration = New-TimeSpan -Seconds 0
     $P1Out = "(skipped)"; $P1Err = "(skipped)"
@@ -146,7 +319,7 @@ if ($SkipPhase1) {
         Write-Log "No valid existing Phase 1 measurement found -- continuing; nothing downstream depends on it."
     }
 } else {
-Write-Log "STEP 2/8: panel judge over k3_73e6c36 (~4h) ..."
+Write-Log "STEP 2/10: panel judge over k3_73e6c36 (~4h) ..."
 foreach ($artifact in @("judged.jsonl", "judged_panel_votes.jsonl", "run_status.json")) {
     $p = Join-Path $OldGenDir $artifact
     if (Test-Path $p) { Copy-Item $p "$p.pre-combined-$Stamp.bak" }
@@ -174,7 +347,7 @@ if (Test-MeasurementValid $P1Status) {
 }
 
 # --- Step 3: world reset + seeds (B4) ----------------------------------------
-Write-Log "STEP 3/8: docker up, eval-world-reset, seed all three worlds ..."
+Write-Log "STEP 3/10: docker up, eval-world-reset, seed all three worlds ..."
 
 # Docker Desktop's Resource Saver -- and host sleep -- PAUSE idle containers during a long
 # GPU-bound step. `docker-compose up -d` cannot start a paused container: it fails with
@@ -263,7 +436,7 @@ if (Test-Path $GenDir) {
 }
 
 # --- Step 4: EVAL-P20.4 regeneration #1 (~85 min) ----------------------------
-Write-Log "STEP 4/8: EVAL-P20.4 regeneration #1 (95 cases x k=3, ~85 min) ..."
+Write-Log "STEP 4/10: EVAL-P20.4 regeneration #1 (95 cases x k=3, ~85 min) ..."
 $GenLog = Join-Path $StampDir "regen1_generate_$Stamp.log"
 & $Python -m evals generate `
     --base-url "http://localhost:8000" --api-key $ApiKey `
@@ -276,7 +449,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Log "Regeneration complete."
 
 # --- Step 5: deterministic verdicts + conservation ---------------------------
-Write-Log "STEP 5/8: deterministic verdicts on $GenId (conservation runs at 7b, after the judge pass) ..."
+Write-Log "STEP 5/10: deterministic verdicts on $GenId (conservation runs at 7b, after the judge pass) ..."
 & $Python -m evals deterministic-verdicts `
     --transcript "$GenDir\outputs.jsonl" `
     --json-out "$GenDir\deterministic_judged.jsonl" 2>&1 | ForEach-Object { Write-Log $_ }
@@ -285,7 +458,7 @@ if ($LASTEXITCODE -ne 0) { Write-Log "FATAL: deterministic-verdicts failed."; ex
 # --- Step 6: label survival against the NEW transcript (read-only) -----------
 # This is the empirical answer to "do I need to relabel". DEC-181 made drift criteria-only,
 # so a regeneration should not drift anything by construction -- verify, do not assume.
-Write-Log "STEP 6/8: label survival against the new transcript (READ-ONLY; never writes labels_v1.jsonl) ..."
+Write-Log "STEP 6/10: label survival against the new transcript (READ-ONLY; never writes labels_v1.jsonl) ..."
 $SurvivalLog = Join-Path $StampDir "label_survival_postregen_$Stamp.log"
 & $Python "scripts\check_label_survival.py" --transcript "$GenDir\outputs.jsonl" *>&1 | Tee-Object -FilePath $SurvivalLog
 Write-Log "check_label_survival.py exit $LASTEXITCODE (output: $SurvivalLog). Expect 393 survive / 0 drift / 0 orphaned."
@@ -293,7 +466,7 @@ Write-Log "check_label_survival.py exit $LASTEXITCODE (output: $SurvivalLog). Ex
 # --- Step 7: panel judge the NEW arm (~4h) (B3) ------------------------------
 # Arm 1 is measured on the SAME instrument as k3_73e6c36, so the two are on one ruler and
 # compare.py's judge-identity gate (ISSUE-185) will not refuse a future comparison.
-Write-Log "STEP 7/8: panel judge over the NEW arm $GenId (~4h) ..."
+Write-Log "STEP 7/10: panel judge over the NEW arm $GenId (~4h) ..."
 $P2Out = Join-Path $StampDir "arm1_panel_$Stamp.stdout.log"
 $P2Err = Join-Path $StampDir "arm1_panel_$Stamp.stderr.log"
 $p2Start = Get-Date
@@ -324,7 +497,7 @@ $ConservationLog = Join-Path $StampDir "conservation_$Stamp.log"
 Write-Log "check_conservation.py exit $LASTEXITCODE (output: $ConservationLog). Non-zero is a finding to review, not automatically fatal."
 
 # --- Step 8: EVAL-P22.1 label order + EVAL-P22.2 oracle dry run --------------
-Write-Log "STEP 8/8: EVAL-P22.1 labelling order (--require-both) and EVAL-P22.2 oracle dry-run ..."
+Write-Log "STEP 8/10: EVAL-P22.1 labelling order (--require-both) and EVAL-P22.2 oracle dry-run ..."
 $OrderLog = Join-Path $StampDir "label_order_$Stamp.log"
 $OrderPrefix = Join-Path $RepoRoot "evals\calibration\label_order_$GenId"
 & $Python "scripts\build_label_order.py" $GenDir $OrderPrefix --require-both *>&1 | Tee-Object -FilePath $OrderLog
@@ -346,6 +519,22 @@ foreach ($s in $Scorers) {
 }
 Write-Log "Oracle dry-run complete (output: $OracleLog)."
 
+# --- Steps 9-10: EVAL-P22B (the engine A/B track) ----------------------------
+$trend = @{ Exit = -1; Rows = 0; Kappa = $null }
+$harnessExit = -1
+if ($Through -ge 9) {
+    $trend = Invoke-TrendBaseline -GenId $GenId -GenDir $GenDir -StampDir $StampDir
+} else {
+    Write-Log "STEP 9/10: SKIPPED (-Through $Through)."
+}
+if ($Through -ge 10) {
+    $fp = Invoke-FalsePositiveCheck -StampDir $StampDir
+    $harnessExit = $fp.Exit
+} else {
+    Write-Log "STEP 10/10: SKIPPED (-Through $Through). Re-enter later with:"
+    Write-Log "  powershell -NoProfile -ExecutionPolicy Bypass -File project-harness\Run-OvernightCombined.ps1 -IUnderstand -ResumeGenId $GenId"
+}
+
 # --- Handoff -----------------------------------------------------------------
 $TotalDuration = New-TimeSpan -Start $RunStart -End (Get-Date)
 $Handoff = Join-Path $RepoRoot "project-harness\MORNING_HANDOFF_COMBINED.md"
@@ -355,6 +544,17 @@ $P1Line = if (Test-MeasurementValid $P1Status) {
 $A1Line = if (Test-MeasurementValid $Arm1Status) {
     "kappa **$($Arm1Status.fleiss_kappa)**, agreement $($Arm1Status.raw_agreement), $($Arm1Status.cases_passed)/$($Arm1Status.cases_total) cases (status $($Arm1Status.status))"
 } else { "**INVALID** -- see ``$P2Err``" }
+$TrendLine = if ($trend.Exit -eq 0) {
+    "``evals/trend/trend_v1.jsonl`` now holds **$($trend.Rows)** row(s); this arm's fleiss_kappa = **$($trend.Kappa)**"
+} elseif ($trend.Exit -eq -1) { "SKIPPED (-Through)" } else { "**FAILED** (exit $($trend.Exit)) -- no usable baseline row" }
+$HarnessLine = switch ($harnessExit) {
+    0  { "**PASS** — an unchanged engine read as no-regression. The gate does not fire on noise, so later verdicts mean something." }
+    1  { "**FAIL** — the gate fired on an UNCHANGED engine. Its threshold is wrong; every later verdict is noise until fixed. NOT an engine regression." }
+    2  { "**SETUP ERROR** — a precondition failed or no comparable baseline existed. Nothing was measured." }
+    3  { "**INSTRUMENT DEGRADED** — inter-judge agreement fell. Expected with refusal_judge at kappa 0.225 (ISSUE-184). Investigate the panel, not the engine." }
+    -1 { "SKIPPED (-Through)" }
+    default { "unknown exit $harnessExit" }
+}
 
 @"
 # Overnight combined run — handoff
@@ -375,6 +575,8 @@ Full log: ``$LogFile``
 | Arm 1 panel ($GenId) | $A1Line |
 | EVAL-P22.1 labelling order | exit $OrderExit — see ``$OrderLog`` |
 | EVAL-P22.2 oracle dry-run | see ``$OracleLog`` |
+| EVAL-P22B.1 trend baseline | $TrendLine |
+| EVAL-P22B.2 false-positive check | $HarnessLine |
 
 ## What to check, in order
 
@@ -418,11 +620,28 @@ deliberately.
 
 ## Tick these by hand after reviewing
 
-``EVAL-P20.4``, ``EVAL-P22.1``, ``EVAL-P22.2`` in ROADMAP.md, naming this gen_id.
+``EVAL-P20.4``, ``EVAL-P22.1``, ``EVAL-P22.2``, ``EVAL-P22B.1`` in ROADMAP.md, naming this gen_id.
+Tick ``EVAL-P22B.2`` **only if the false-positive check above exited 0** — an exit 1 means the
+gate's threshold is wrong, and an exit 3 means the instrument moved; neither is a passed no-op check.
 ``EVAL-P21.1``/``P21.2`` remain blocked on ISSUE-183 (their named acceptance clauses were never
 exercised by a live run) — that is a wording call, not a re-run.
+
+## EVAL-P22B.3 — the dependency re-point (do this LAST, and only after a green step 10)
+
+Editing ``EVAL-P23``'s ``Depends on:`` line before step 10 has actually passed would assert a
+prerequisite that is not yet true, which is exactly the flag EVAL-P22B.3 carries. When it is green:
+
+1. In ``EVAL-P23``'s **Depends on:** line, replace ``EVAL-P22.4`` with ``EVAL-P22B.2``.
+2. Record in ``EVAL-P23``'s Notes that the trend baseline is regeneration #1, not #2 — the
+   publication track can re-baseline onto regeneration #2 later without invalidating any engine
+   comparison made in between, because ``harness_version`` comparability governs, not run recency.
+3. Drop ``EVAL-P23.1``/``.2``/``.3`` from ``HUMAN GATE H10``'s **Blocks:** list.
+
+Effect: ``EVAL-P23`` no longer transitively depends on an Opus spend, and engine iteration is
+unblocked independently of the publication-credibility track.
 "@ | Set-Content -Path $Handoff -Encoding utf8
 
 Write-Log "Wrote handoff: $Handoff"
+Write-CloseoutChecklist -GenId $GenId -HarnessExit $harnessExit
 Write-Log ("=== Combined overnight run complete in {0:hh\:mm\:ss} ===" -f $TotalDuration)
-exit 0
+exit $(if ($harnessExit -gt 0) { $harnessExit } else { 0 })

@@ -21,7 +21,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
-        seed-tavern-world seed-village-world package
+        seed-tavern-world seed-village-world package eval-dashboard
 
 install:
 	pip install -e .[dev]
@@ -501,6 +501,14 @@ demo:
 # (docker-compose up -d). Paste an API key in the top bar to connect.
 dashboard:
 	@echo "Designer dashboard: http://localhost:8000/dashboard/  (start backend first: docker-compose up -d)"
+
+# eval-dashboard: the ENGINE-DEVELOPER eval dashboard (EVAL-P7) — run list, run detail
+# with the headline card, per-case drill-down. Distinct from `dashboard` above, which is
+# the designer-facing demo UI served by the engine on :8000. Reads artifacts off disk, so
+# it needs no stack running.
+# Usage: make eval-dashboard [ARGS="--port 8051"]
+eval-dashboard:
+	$(PYTHON) -m evals dashboard $(ARGS)
 
 # hello: integrator hello-world — seed one NPC, send one dialogue turn, print reply
 hello:

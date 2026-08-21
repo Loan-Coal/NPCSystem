@@ -104,7 +104,7 @@ def _guard_expectations(requires_world: str | None) -> list[dict]:
     Args:
         requires_world: The case's seed.requires_world (gates the lore judge).
     """
-    expectations = [
+    expectations: list[dict] = [
         {"kind": "min_length"},
         {"kind": "keyword_none", "keywords": list(_FALLBACK_LINES)},
         {"kind": "tone_judge", "description": _GUARD_TONE_RUBRIC},

@@ -115,7 +115,7 @@ def mcnemar_exact(b: int, c: int) -> float:
         )
     tail_sum = sum(math.comb(n, k) for k in range(min(b, c) + 1))
     p = 2.0 * tail_sum / (2**n)
-    return min(p, 1.0)
+    return float(min(p, 1.0))
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +135,7 @@ def _binary_pass(stat: CaseStat) -> bool:
     Returns:
         True if the case is majority-passing, False otherwise.
     """
-    return stat.passes * 2 > stat.k
+    return bool(stat.passes * 2 > stat.k)
 
 
 def _verdict(

@@ -73,11 +73,30 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+# The repo root is the directory holding the Makefile this script shells out to.
+# It is NOT derivable by counting Split-Path calls: an earlier version used two,
+# correct while this script lived in project-harness/scripts/, and after the move
+# to scripts/ it silently resolved to the PARENT of the repo. Every `make` then ran
+# where there is no Makefile -- and worse, `git status --porcelain` outside a work
+# tree returns nothing on stdout, so the clean-tree precondition read
+# IsNullOrWhiteSpace($null) = $true and reported OK against a dirty tree. Walk up
+# and assert, so a wrong root is a loud exit instead of a false green.
+$RepoRoot = $PSScriptRoot
+while ($RepoRoot -and -not (Test-Path (Join-Path $RepoRoot "Makefile"))) {
+    $parent = Split-Path -Parent $RepoRoot
+    if ($parent -eq $RepoRoot) { $RepoRoot = $null; break }
+    $RepoRoot = $parent
+}
+if (-not $RepoRoot) {
+    Write-Output "FATAL: no Makefile found at or above $PSScriptRoot -- cannot locate the repo root. Nothing was generated."
+    exit 2
+}
 Set-Location $RepoRoot
+Write-Output "Repo root: $RepoRoot"
 
 $Plan = @(
-    "1. Preflight: engine reachable, ollama panel models present, eval worlds seeded, tree clean"
+    "1. Preflight: engine reachable, ollama panel models present, eval worlds seeded,"
+    "   inside a git work tree, and the tree clean of SOURCE changes"
     "2. Generate (make eval-generate, k=$K)"
     "3. Panel judge (make eval-judge, --panel: mixtral:8x7b + qwen2.5:14b + llama3.1:8b)"
     "4. Deterministic verdicts (make eval-deterministic-verdicts)"
@@ -140,9 +159,40 @@ Test-EnginePrecondition "eval worlds seeded (demo + village + tavern representat
     return $true
 }
 
-Test-EnginePrecondition "working tree clean" {
-    $status = git status --porcelain
-    return [string]::IsNullOrWhiteSpace($status)
+# This precondition exists to attribute a run to a known engine SHA, so "clean"
+# means clean of SOURCE changes. The pipeline writes tracked artifacts as it runs
+# (judged.jsonl, reports, logs) and those do not change the engine. Without this
+# exclusion EVAL-P22B.2 -- the no-op false-positive check, which runs this script
+# AFTER a regeneration has already written judged.jsonl -- could never pass its
+# own preflight; project-harness/Run-OvernightCombined.ps1 documents that dirtiness
+# as by-design.
+$ArtifactPathPrefixes = @(
+    "evals/generations/",
+    "evals/reports/",
+    "project-harness/overnight_logs/"
+)
+
+Test-EnginePrecondition "inside a git work tree (so an empty status means clean, not 'no repo')" {
+    $inside = (& git rev-parse --is-inside-work-tree 2>$null | Out-String).Trim()
+    return $inside -eq "true"
+}
+
+Test-EnginePrecondition "working tree clean of source changes" {
+    $entries = @(git status --porcelain | Where-Object { $_.Trim() })
+    $dirty = @($entries | Where-Object {
+        $path = $_.Substring(3).Replace("\", "/").Trim('"')
+        $isArtifact = $false
+        foreach ($prefix in $ArtifactPathPrefixes) {
+            if ($path.StartsWith($prefix)) { $isArtifact = $true; break }
+        }
+        -not $isArtifact
+    })
+    if ($dirty.Count -gt 0) {
+        Write-Output "  dirty source paths (artifact dirs are exempt):"
+        foreach ($d in $dirty) { Write-Output "    $d" }
+        return $false
+    }
+    return $true
 }
 
 # ---------------------------------------------------------------------------

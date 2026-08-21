@@ -34,7 +34,14 @@ async def build_retrieval_stack() -> tuple[Any, Any]:
     Raises:
         Exception: Propagates any Neo4j or embedding store initialisation error.
     """
-    from npc_engine.config import get_settings
+    # The attr-defined suppression below is a resolution artifact, not a missing symbol:
+    # get_settings EXISTS at runtime (it is in dir(npc_engine.config)). mypy cannot see
+    # it when invoked as `mypy evals/` because
+    # the data-only directory src/npc_engine/config/ (it holds llm_config.yaml) shadows
+    # src/npc_engine/config.py as a namespace package. mypy.ini excludes that directory
+    # from CHECKING, which does not stop it winning import RESOLUTION here. Narrow
+    # suppression rather than a shared-config change; the shadowing itself is logged.
+    from npc_engine.config import get_settings  # type: ignore[attr-defined]
     from npc_engine.graph.infra.db import GraphDB
     from npc_engine.retrieval.embedding import EmbeddingIndex, create_vector_store
 
@@ -58,7 +65,8 @@ def neo4j_uri() -> str:
     Returns:
         The NEO4J_URI value from Settings.
     """
-    from npc_engine.config import get_settings
+    # Same shadowing artifact as build_retrieval_stack above.
+    from npc_engine.config import get_settings  # type: ignore[attr-defined]
 
     os.environ.setdefault("API_KEY_SECRET", "eval-key-placeholder")
     return str(get_settings().NEO4J_URI)

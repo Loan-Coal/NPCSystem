@@ -95,6 +95,16 @@ def make_memory_consolidation(client: httpx.Client) -> Callable[[], bool]:
 _TIME_SLOTS = ("midday", "afternoon", "evening", "night", "morning")
 
 
+def _as_dict(value: object) -> dict[str, Any] | None:
+    """Narrow a decoded-JSON value to a dict, or None when it is anything else.
+
+    The engine's responses are external input to the eval harness, so the shape is
+    validated on receipt rather than assumed -- and it keeps `resp.json()`'s Any
+    from leaking into an annotated return.
+    """
+    return value if isinstance(value, dict) else None
+
+
 def make_time_passage(client: httpx.Client) -> Callable[[], bool]:
     """5 time_of_day advances complete one full cycle; day 28 -> 1 increments the season.
 
@@ -113,13 +123,13 @@ def make_time_passage(client: httpx.Client) -> Callable[[], bool]:
         })
         if not is_ok(resp):
             return None
-        return resp.json().get("data", {}).get("world_state")
+        return _as_dict(resp.json().get("data", {}).get("world_state"))
 
     def _current_world_state() -> dict[str, Any] | None:
         resp = client.get(f"{GRAPH_PREFIX}/nodes/world_state/world")
         if not is_ok(resp):
             return None
-        return resp.json().get("data")
+        return _as_dict(resp.json().get("data"))
 
     def _run() -> bool:
         baseline = _current_world_state()
@@ -127,14 +137,18 @@ def make_time_passage(client: httpx.Client) -> Callable[[], bool]:
             return False
         starting_slot = baseline.get("time_of_day")
 
-        ws = None
+        ws: dict[str, Any] | None = None
         for _ in _TIME_SLOTS:
             ws = _advance("time_of_day")
             if ws is None:
                 return False
+        if ws is None:
+            return False  # _TIME_SLOTS empty: nothing advanced, so nothing to assert on
         if ws.get("time_of_day") != starting_slot:
             return False
         current_day = ws.get("day")
+        if not isinstance(current_day, int):
+            return False  # absent or non-numeric `day` would make the modulo below raise
         for _ in range((28 - current_day) % 28):
             ws = _advance("day")
             if ws is None:

@@ -243,4 +243,7 @@ def main(argv: list[str] | None = None) -> None:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # main() returns None by design (evals/__main__.py normalises that to exit 0);
+    # sys.exit(main()) would pass None through and type as an error.
+    main()
+    sys.exit(0)

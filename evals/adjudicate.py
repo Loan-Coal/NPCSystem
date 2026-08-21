@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Sequence
 
+from adjudicate_console import _format_row_prompt, _read_command
 from calibration_records import (
     LABELS_FILE,
     CalibrationLabel,
@@ -28,14 +29,6 @@ from calibration_records import (
 # ---------------------------------------------------------------------------
 
 VALID_COMMANDS: frozenset[str] = frozenset({"keep", "flip", "pass", "fail", "skip"})
-SHORTCUTS: dict[str, str] = {
-    "k": "keep", "f": "flip", "s": "skip",
-    # pass/fail: the direct-verdict commands for a row with no pre_label to
-    # compare against (EVAL-P20.3a / ISSUE-153 — drift clears pre_label to
-    # None). "p" for pass; "n" ("no") for fail, since "f" is already flip.
-    "p": "pass", "n": "fail",
-}
-
 
 # ---------------------------------------------------------------------------
 # Pure helpers
@@ -128,74 +121,6 @@ def apply_verdict(
 def _now_iso() -> str:
     """Return the current UTC time as an ISO-8601 string."""
     return datetime.now(tz=timezone.utc).isoformat()
-
-
-def _format_row_prompt(row: CalibrationLabel, index: int, total: int) -> str:
-    """Return a formatted display string for one adjudication row.
-
-    Shows criteria and, when present, player_message and observed — without
-    these an adjudicator judging an in_set/range/schema row cannot see the
-    response field the scorer actually inspects, since that field is absent
-    from output_text entirely.
-    """
-    lines = [f"\n[{index}/{total}] scorer={row.scorer}  record_id={row.record_id}"]
-    if row.needs_review and row.prior_human_verdict is not None:
-        prior_str = "PASS" if row.prior_human_verdict else "FAIL"
-        lines.append(
-            f"⚠ DRIFTED: content changed since last adjudication "
-            f"(prior human verdict: {prior_str})"
-        )
-    if row.player_message:
-        lines.append(f"player_message:\n  {row.player_message}")
-    lines.append(f"criteria:\n  {row.criteria or '(none recorded)'}")
-    if row.pre_label is None:
-        lines.append("pre_label : none (cleared on drift — no current reference opinion)")
-    else:
-        label_str = "PASS" if row.pre_label else "FAIL"
-        lines.append(f"pre_label : {label_str}")
-    lines.append(f"output_text:\n  {row.output_text}")
-    if row.observed:
-        lines.append(f"observed:\n  {row.observed}")
-    lines.append("")
-    if row.pre_label is None:
-        lines.append("  pass(p) / fail(n) / skip(s): ")
-    else:
-        lines.append("  keep(k) / flip(f) / skip(s): ")
-    return "\n".join(lines)
-
-
-def _read_command(
-    read_line: Callable[[], str],
-    print_fn: Callable[[str], None],
-    *,
-    has_pre_label: bool = True,
-) -> str:
-    """Read a valid adjudication command, looping until valid input received.
-
-    The accepted command set depends on whether the row has a pre_label:
-    'keep'/'flip' compare against it and are only offered when it is set;
-    'pass'/'fail' are the direct-verdict commands for a row whose pre_label
-    was cleared to None on drift (EVAL-P20.3a / ISSUE-153). 'skip' is always
-    accepted. Restricting the accepted set here (rather than relying on
-    apply_verdict's ValueError) keeps a mismatched command a re-prompt, not a
-    crash, mid-session.
-
-    Args:
-        read_line: Callable that returns one line of user input.
-        print_fn: Callable for printing retry prompts.
-        has_pre_label: Whether the current row's pre_label is set.
-    Returns:
-        Canonical command name: 'keep', 'flip', 'pass', 'fail', or 'skip'.
-    """
-    accepted = {"keep", "flip"} if has_pre_label else {"pass", "fail"}
-    accepted.add("skip")
-    hint = "keep/flip/skip or k/f/s" if has_pre_label else "pass/fail/skip or p/n/s"
-    while True:
-        raw = read_line().strip().lower()
-        command = SHORTCUTS.get(raw, raw)
-        if command in accepted:
-            return command
-        print_fn(f"  Invalid input {raw!r}. Enter {hint}.")
 
 
 def _replace_row(

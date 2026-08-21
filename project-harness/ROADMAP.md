@@ -3091,7 +3091,9 @@ can hold that role.
       The first trend row must be written by the **repaired** pipeline, so it carries Fleiss kappa,
       the per-criterion breakdown and the repeat-flip counts from row one — retrofitting a baseline
       row later loses kappa continuity from the very first measurement.
-      Validation: `evals/trend_store.jsonl` holds exactly one row; its `gen_id` names regeneration
+      Validation: `evals/trend/trend_v1.jsonl` (the path `trend_store.TREND_STORE_FILE` actually
+      writes — an earlier draft of this clause said `evals/trend_store.jsonl`, which does not exist and
+      would read as a false negative) holds exactly one row; its `gen_id` names regeneration
       #1; `harness_version` is a real hash, never the `legacy_pre_p18_1` sentinel; `fleiss_kappa`
       and `kappa_by_criterion` are populated.
 

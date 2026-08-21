@@ -134,7 +134,7 @@ def make_reputation_drift(client: httpx.Client) -> Callable[[], bool]:
         final = client.get(f"{GRAPH_PREFIX}/characters/{player_id}/reputation/{faction_id}")
         if not is_ok(final):
             return False
-        return final.json().get("data", {}).get("standing") == -30
+        return bool(final.json().get("data", {}).get("standing") == -30)
 
     return _run
 

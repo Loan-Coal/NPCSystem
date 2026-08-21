@@ -2483,3 +2483,37 @@ Makefile path and the ops-script path cannot diverge again.
    waits on `/health` - matching what `Run-OvernightCombined.ps1` already does. The two paths
    can still be invoked separately, but the guard in shared Python is what makes divergence
    non-destructive.
+
+## [FIXED] ISSUE-189: `make check` is red at HEAD on four gates, all in `evals/` and `tests/unit/`
+**Fixed:** 2026-08-20, in the metrics-pipeline closeout task (DEC-193). `make check` now exits 0.
+lint: E741 renamed. check-evals-rules: R001/R003 fixed by splitting `eval_records.py` and
+`adjudicate.py` and replacing two swallowed excepts; 10x R006 + 2x R002 re-baselined with
+justification (DEC-193 decision A). type-evals: all 28 errors fixed, baseline **ratcheted 16 -> 0**.
+check-test-quality: 9 substantive findings fixed or verified-and-waived, 28 frozen-model
+`pytest.raises(Exception)` waived (narrowing deferred as ISSUE-193). Two further failures that had
+been HIDDEN behind the lint short-circuit surfaced and were fixed: the roadmap phase-span tripwires
+had never been updated for `EVAL-P22B` (added 2026-08-18), and three `check_test_quality` meta-tests
+pinned the unfixed state.
+**Found:** 2026-08-20, while verifying the ISSUE-188 fix
+**Severity:** P2 (annoying) - it hides regressions, because `make check` cannot be used as a
+pass/fail gate until it is green again
+**Where:** `evals/sequence_order_effect.py:81`, `evals/` (15 rule violations), `evals/` type
+errors, `tests/unit/test_judge_runner.py` and 36 others
+**Description:** on a clean tree at `bc6fe36`, before any change in the ISSUE-188 task, four of
+`make check`'s gates already fail:
+- `lint`: `E741 Ambiguous variable name: l` at `evals/sequence_order_effect.py:81`
+- `check-evals-rules`: 15 NEW violations (R001 file length, R002 print(), R003, R006 function
+  length) across `evals/adjudicate.py`, `evals/eval_records.py`, `evals/judge_run_artifacts.py`,
+  `evals/sequence_rates.py`, `evals/summary.py` and others
+- `type-evals`: 28 mypy errors against a baseline of 16
+- `check-test-quality`: 37 issues
+`lint` fails first, so the rest of `make check` never runs and the breakage is easy to miss.
+The ISSUE-188 change touches only `Makefile` and `demo_game/`, none of which these gates scan;
+`lint` covers `src/ evals/`, `type` covers `src/` (green, 610 files), and `check-test-quality`
+reports zero `demo_game` items.
+**Why deferred:** single-task focus - this is `evals/` debt accumulated across EVAL-P12.4 and
+later phases, unrelated to the restore bug, and re-baselining or refactoring `evals/` in the
+hour before a 10-hour regeneration run is exactly the wrong time.
+**To fix:** fix `E741` (rename `l`), then work the `check-evals-rules` and `type-evals` deltas
+down or re-baseline them with a DECISIONS.md justification, then the 37 `check-test-quality`
+items. Do it as its own task, before the next phase that claims `make check` as its gate.

@@ -45,11 +45,25 @@ def _compute_kappas(rows_by_scorer: dict[str, list[dict[str, Any]]]) -> dict[str
         fp = sum(1 for r in rows if r.get("scorer_verdict") is True and r.get("human_verdict") is False)
         fn = sum(1 for r in rows if r.get("scorer_verdict") is False and r.get("human_verdict") is True)
         tn = sum(1 for r in rows if r.get("scorer_verdict") is False and r.get("human_verdict") is False)
-        try:
-            result[scorer] = _kappa_from_matrix(tp=tp, fp=fp, fn=fn, tn=tn)
-        except UndefinedKappaError:
-            pass
+        kappa = _kappa_or_none(tp=tp, fp=fp, fn=fn, tn=tn)
+        if kappa is not None:
+            result[scorer] = kappa
     return result
+
+
+def _kappa_or_none(*, tp: int, fp: int, fn: int, tn: int) -> float | None:
+    """Return kappa, or None when the confusion matrix leaves it undefined.
+
+    A degenerate matrix (one verdict class empty) has no defined kappa, and such a
+    scorer is omitted from the badge rather than shown as 0.0 -- a false precision
+    that would read as "measured and bad" instead of "not measurable". Converting
+    the raised UndefinedKappaError into an explicit sentinel here keeps that skip a
+    visible branch at the call site instead of a silently swallowed exception.
+    """
+    try:
+        return float(_kappa_from_matrix(tp=tp, fp=fp, fn=fn, tn=tn))
+    except UndefinedKappaError:
+        return None
 
 
 def _kappas_from_labels(labels_path: Path) -> dict[str, float]:
@@ -66,18 +80,32 @@ def _kappas_from_labels(labels_path: Path) -> dict[str, float]:
         return {}
     rows_by_scorer: dict[str, list[dict[str, Any]]] = {}
     for line in labels_path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped:
+        row = _adjudicated_row_or_none(line)
+        if row is None:
             continue
-        try:
-            row = json.loads(stripped)
-            if row.get("human_verdict") is None:
-                continue
-            scorer = str(row.get("scorer", ""))
-            rows_by_scorer.setdefault(scorer, []).append(row)
-        except json.JSONDecodeError:
-            pass
+        rows_by_scorer.setdefault(str(row.get("scorer", "")), []).append(row)
     return _compute_kappas(rows_by_scorer)
+
+
+def _adjudicated_row_or_none(line: str) -> dict[str, Any] | None:
+    """Parse one calibration line, or None if blank, malformed, or unadjudicated.
+
+    labels_v1.jsonl is a hand-edited file at a system boundary, so a single bad
+    line must not blank the whole badge. The skip is a returned sentinel rather
+    than a swallowed exception so the caller's `if row is None: continue` makes it
+    visible. ISSUE-192: the count of skipped rows is not surfaced anywhere, so silent
+    data loss here is still possible.
+    """
+    stripped = line.strip()
+    if not stripped:
+        return None
+    try:
+        row = json.loads(stripped)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(row, dict) or row.get("human_verdict") is None:
+        return None
+    return row
 
 
 # ---------------------------------------------------------------------------

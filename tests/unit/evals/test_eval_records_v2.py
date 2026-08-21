@@ -113,6 +113,7 @@ def test_run_config_seed_field_defaults_to_none() -> None:
 def test_retrieved_item_is_frozen() -> None:
     """RetrievedItem must be immutable (frozen=True)."""
     item = RetrievedItem(key="k", tier="unknown", priority=0, text="t")
+    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
     with pytest.raises(Exception):
         item.key = "new_key"  # type: ignore[misc]
 

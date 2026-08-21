@@ -47,10 +47,12 @@ def status_path_for(args: argparse.Namespace) -> Path | None:
         An explicit --status-out, else the conventional sibling of --json-out,
         else None when neither was given.
     """
+    # argparse.Namespace attributes are Any; both branches are really Paths, so
+    # construct explicitly rather than let an unchecked Any escape an annotated return.
     if args.status_out is not None:
-        return args.status_out
+        return Path(args.status_out)
     if args.json_out is not None:
-        return default_status_path(args.json_out)
+        return Path(default_status_path(args.json_out))
     return None
 
 

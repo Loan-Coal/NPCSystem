@@ -390,7 +390,11 @@ def run(
             else:
                 print("PASS" if result["passed"] else "FAIL")
             results.append(result)
-            if outcome not in ("skipped", "error"):
+            # `outcome is not None` is load-bearing, not defensive: outcome is
+            # `str | None`, and a None slipped past the tuple test straight into the
+            # summary's denominator -- the honest-denominator class of defect
+            # EVAL-P2.3 exists to prevent.
+            if outcome is not None and outcome not in ("skipped", "error"):
                 outcomes.append(outcome)
 
     summary = _build_summary(outcomes)

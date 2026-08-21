@@ -258,6 +258,7 @@ async def test_log_gossip_skips_missing_edge() -> None:
     ):
         await repo.log_gossip(src_id="a", dst_id="b", tick_id=1, trust_delta=1)
 
+    # quality-ok: reachability proven in this file: mock_update.assert_called_once fires on the same patch target in the sibling test
     mock_update.assert_not_called()
 
 

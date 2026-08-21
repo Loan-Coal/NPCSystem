@@ -386,5 +386,6 @@ def test_relevance_weights_with_explicit_field_validates():
 
 
 def test_relevance_weights_explicit_causes_sum_to_exceed_one():
+    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
     with pytest.raises(Exception):
         RelevanceWeights(recency=0.30, severity=0.20, proximity=0.20, relation=0.20, quest=0.10, explicit=0.10)

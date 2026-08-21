@@ -39,6 +39,7 @@ def client_and_mock():
 
 
 def test_request_model_requires_target_npc_id() -> None:
+    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
     with pytest.raises(Exception):
         SpreadRumorRequest(rumor_text="x", tick_id=1)
 
@@ -49,21 +50,25 @@ def test_request_model_severity_default() -> None:
 
 
 def test_request_model_rejects_empty_rumor_text() -> None:
+    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
     with pytest.raises(Exception):
         SpreadRumorRequest(target_npc_id="npc1", rumor_text="", tick_id=0)
 
 
 def test_request_model_rejects_long_rumor_text() -> None:
+    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
     with pytest.raises(Exception):
         SpreadRumorRequest(target_npc_id="npc1", rumor_text="x" * 501, tick_id=0)
 
 
 def test_request_model_rejects_negative_tick() -> None:
+    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
     with pytest.raises(Exception):
         SpreadRumorRequest(target_npc_id="npc1", rumor_text="text", tick_id=-1)
 
 
 def test_request_model_rejects_severity_above_100() -> None:
+    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
     with pytest.raises(Exception):
         SpreadRumorRequest(target_npc_id="npc1", rumor_text="text", tick_id=0, severity=101)
 

@@ -35,6 +35,7 @@ def test_system_state_context_with_items() -> None:
 
 def test_system_state_context_immutable() -> None:
     ctx = SystemStateContext(npc_can_trade=True, npc_item_count=2)
+    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
     with pytest.raises(Exception):
         ctx.npc_can_trade = False  # type: ignore[misc]
 

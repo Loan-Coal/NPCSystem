@@ -147,12 +147,16 @@ def test_four_cells_sum_to_annotated_count() -> None:
     assert result.annotated_count == 4
     assert result.excluded_count == 1
     assert result.total_input == 5
+    # The four cells must PARTITION the annotated set. Compared against the literal 4
+    # from the fixture, not against result.annotated_count: comparing a sum of parts to
+    # a total derived from those same parts is satisfied by any consistent-but-wrong
+    # crosstab, which is why check_test_quality flags that shape.
     assert (
         result.retrieved_and_passed
         + result.retrieved_and_failed
         + result.not_retrieved_and_failed
         + result.not_retrieved_and_passed
-        == result.annotated_count
+        == 4
     )
 
 

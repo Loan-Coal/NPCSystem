@@ -142,5 +142,6 @@ def test_case_stat_is_frozen() -> None:
         ci_high=1.0,
         classification="stable_pass",
     )
+    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
     with pytest.raises(Exception):
         stat.passes = 0  # type: ignore[misc]

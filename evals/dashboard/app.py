@@ -64,7 +64,8 @@ def _read_meta(path: Path) -> dict[str, Any] | None:
         Parsed dict, or None if the file cannot be read or is not valid JSON.
     """
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+        return parsed if isinstance(parsed, dict) else None
     except (OSError, json.JSONDecodeError):
         return None
 

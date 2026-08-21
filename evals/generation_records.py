@@ -36,15 +36,15 @@ LLM_JUDGE_KINDS: frozenset[str] = frozenset({"tone_judge", "affirms_judge"})
 
 def _criteria_for_tone(exp: dict) -> str:
     """Extract the judge criteria string from a tone_judge expectation."""
-    return exp.get("judge_prompt") or exp.get("description", "")
+    return str(exp.get("judge_prompt") or exp.get("description", ""))
 
 
 def _criteria_for_affirms(exp: dict) -> str:
     """Derive criteria for an affirms_judge expectation, mirroring matchers._eval_affirms_judge."""
     claim = exp.get("claim")
     if claim:
-        return _AFFIRMATION_CRITERIA_TMPL.format(claim=str(claim).strip())
-    return exp.get("description", "")
+        return str(_AFFIRMATION_CRITERIA_TMPL.format(claim=str(claim).strip()))
+    return str(exp.get("description", ""))
 
 
 # ---------------------------------------------------------------------------

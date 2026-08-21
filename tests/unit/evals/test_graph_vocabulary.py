@@ -169,5 +169,6 @@ def test_no_gen_dir_skips_cache_write(tmp_path: Path) -> None:
 def test_graph_vocabulary_is_frozen() -> None:
     """GraphVocabulary is immutable — attribute mutation raises an error."""
     vocab = GraphVocabulary(ids=frozenset({"id_1"}))
+    # quality-ok: the assertion is 'any mutation is rejected' and the two model families raise different types (pydantic v2 frozen -> ValidationError, frozen dataclass -> FrozenInstanceError); narrowing per-site is deferred, see ISSUES
     with pytest.raises(Exception):
         vocab.ids = frozenset()  # type: ignore[misc]

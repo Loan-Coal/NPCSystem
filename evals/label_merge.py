@@ -94,7 +94,7 @@ def load_existing_or_refuse(
             "  --merge            keep them and refresh the machine-derived fields\n"
             "  --force-overwrite  discard them (a .bak is written first)"
         )
-    return existing
+    return list(existing)
 
 
 def format_merge_report(result: MergeResult, out_path: Path, imported: int) -> str:

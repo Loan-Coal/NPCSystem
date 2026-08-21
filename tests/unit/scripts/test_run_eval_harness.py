@@ -84,6 +84,72 @@ def test_harness_accepts_a_custom_base_url_and_still_fails_loudly() -> None:
 
 
 # ---------------------------------------------------------------------------
+# The resolved repo root — the defect that made this script unrunnable
+# ---------------------------------------------------------------------------
+
+
+def _reported_repo_root(stdout: str) -> Path:
+    """Extract the root the script says it resolved, from its own output."""
+    for line in stdout.splitlines():
+        if line.startswith(_ROOT_PREFIX):
+            return Path(line[len(_ROOT_PREFIX) :].strip())
+    raise AssertionError(f"script never reported its repo root (prefix {_ROOT_PREFIX!r})")
+
+
+_ROOT_PREFIX = "Repo root: "
+
+
+def test_dry_run_reports_a_repo_root_that_holds_the_makefile() -> None:
+    """RED anchor: the script lived in scripts/ but resolved its root with TWO
+    `Split-Path -Parent` calls, landing on the PARENT of the repo. Every `make`
+    invocation then ran where there is no Makefile, so the run died at step 2 --
+    and no test caught it, because --DryRun exits before the make calls and the
+    precondition tests all fail at check 1. The resolved root must contain the
+    Makefile the script shells out to."""
+    result = _run("-DryRun", timeout=15)
+    assert result.returncode == 0
+    root = _reported_repo_root(result.stdout)
+    assert (root / "Makefile").is_file(), f"resolved root {root} holds no Makefile"
+
+
+def test_dry_run_reports_a_repo_root_that_is_a_git_repository() -> None:
+    """The same defect made the clean-tree precondition VACUOUS: `git status
+    --porcelain` outside a work tree writes to stderr and returns nothing on
+    stdout, so IsNullOrWhiteSpace($status) read True and 'working tree clean'
+    passed against a dirty tree. The root must be a real work tree."""
+    result = _run("-DryRun", timeout=15)
+    assert result.returncode == 0
+    root = _reported_repo_root(result.stdout)
+    assert (root / ".git").exists(), f"resolved root {root} is not a git repository"
+
+
+def test_repo_root_resolution_fails_loudly_when_it_finds_no_repo() -> None:
+    """A silently-wrong root is what caused this defect, so the resolution must
+    assert its result rather than trust the arithmetic."""
+    source = _SCRIPT.read_text(encoding="utf-8")
+    assert "Makefile" in source, "root resolution must verify it found the repo"
+
+
+def test_clean_tree_precondition_asserts_it_is_inside_a_work_tree() -> None:
+    """Empty `git status` output is ambiguous -- it means both 'clean' and 'not
+    a repository'. The precondition must disambiguate, so it can never again
+    report OK from outside a work tree."""
+    source = _SCRIPT.read_text(encoding="utf-8")
+    assert "--is-inside-work-tree" in source
+
+
+def test_clean_tree_precondition_ignores_harness_written_artifact_paths() -> None:
+    """The precondition exists to attribute a run to a known engine SHA, so it
+    must refuse a dirty SOURCE tree -- but the pipeline's own outputs do not
+    change the engine. Without this exclusion, step 10 of Run-OvernightCombined
+    (EVAL-P22B.2) can never run: by then step 7 has written the tracked
+    judged.jsonl, which that script documents as dirty-by-design."""
+    source = _SCRIPT.read_text(encoding="utf-8")
+    for artifact_dir in ("evals/generations/", "evals/reports/", "project-harness/overnight_logs/"):
+        assert artifact_dir in source, f"{artifact_dir} must be excluded from the clean-tree check"
+
+
+# ---------------------------------------------------------------------------
 # One baseline, used by both steps — EVAL-P23 Defect A
 # ---------------------------------------------------------------------------
 
