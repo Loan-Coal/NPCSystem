@@ -108,3 +108,41 @@ def test_pass_rate_all_pass() -> None:
 def test_pass_rate_none_pass() -> None:
     """pass_rate(0, n) == 0.0."""
     assert math.isclose(pass_rate(0, 5), 0.0)
+
+
+# ---------------------------------------------------------------------------
+# Degenerate intervals must be EXACT, not floating-point-approximate
+# ---------------------------------------------------------------------------
+
+
+def test_a_perfect_rate_has_an_upper_bound_of_exactly_one() -> None:
+    """At successes == trials the Wilson upper bound is exactly 1.0 in closed form:
+    centre and margin both reduce to (1 + z^2/2n) / (1 + z^2/n) + z^2/2n / (1 + z^2/n).
+    The arithmetic as written returns 0.9999999999999999 for 42 of the first 140 n,
+    and `min(1.0, ...)` cannot repair a value that is already below 1.0.
+
+    This is not cosmetic. regression_gate compares `candidate.ci_high < baseline.rate`,
+    so a battery scoring 100% on both sides of a comparison reads as a regression
+    against ITSELF at those n — the exact failure DEC-185 exists to prevent, returning
+    through float error rather than through the wrong comparison."""
+    off_by_an_ulp = [n for n in range(1, 501) if wilson_interval(n, n)[1] != 1.0]
+    assert off_by_an_ulp == [], (
+        f"{len(off_by_an_ulp)} of 500 denominators return ci_high != 1.0 for a perfect "
+        f"rate; first few: {off_by_an_ulp[:10]}"
+    )
+
+
+def test_a_zero_rate_has_a_lower_bound_of_exactly_zero() -> None:
+    """The mirror case: at successes == 0 the Wilson lower bound is exactly 0.0.
+    A gate reading `baseline.ci_low` would inherit the same class of error."""
+    off_by_an_ulp = [n for n in range(1, 501) if wilson_interval(0, n)[0] != 0.0]
+    assert off_by_an_ulp == []
+
+
+def test_clamping_the_degenerate_ends_leaves_every_other_interval_untouched() -> None:
+    """The clamp must apply ONLY at k==0 and k==n. Every interior interval keeps the
+    arithmetic it had, so no published number moves."""
+    for n in (7, 16, 78, 104):
+        for k in range(1, n):
+            low, high = wilson_interval(k, n)
+            assert 0.0 < low < high < 1.0

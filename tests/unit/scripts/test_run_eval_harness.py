@@ -13,6 +13,7 @@ Used by: make test (pytest discovery)
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -23,6 +24,18 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 _SCRIPT = _REPO_ROOT / "scripts" / "Run-EvalHarness.ps1"
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="PowerShell script, Windows-only")
+
+def _artifact_path_prefixes() -> list[str]:
+    """Parse $ArtifactPathPrefixes out of the real script.
+
+    Read from the script rather than duplicated here: a list that drifts from the one
+    the precondition actually applies would assert nothing.
+    """
+    source = _SCRIPT.read_text(encoding="utf-8")
+    block = re.search(r"\$ArtifactPathPrefixes\s*=\s*@\((.*?)\)", source, re.DOTALL)
+    assert block, "$ArtifactPathPrefixes not found in the script"
+    return re.findall(r'"([^"]+)"', block.group(1))
+
 
 
 def _run(*args: str, timeout: int = 30) -> subprocess.CompletedProcess:
@@ -203,3 +216,41 @@ def test_harness_reports_instrument_degraded_as_its_own_state() -> None:
     assert "SETUP ERROR" in source
     # the exit-code contract in .DESCRIPTION must document the new state too
     assert "3 = " in source
+
+
+def test_pipeline_written_artifacts_are_exempt_from_the_clean_tree_precondition() -> None:
+    """RED anchor for the step-10 blocker found 2026-08-25.
+
+    Run-OvernightCombined.ps1 step 8 writes evals/calibration/label_order_<gen>.* and
+    step 9 writes evals/trend/trend_v1.jsonl, then step 10 runs THIS script — whose
+    clean-tree precondition treats anything outside $ArtifactPathPrefixes as a source
+    change. Neither path is gitignored, so step 9 created the file that made step 10
+    abort one line later, and EVAL-P22B.2 could never pass.
+
+    These are outputs of the pipeline being run, not engine changes, so exempting them
+    does not weaken what the precondition is for (attributing the run to a known SHA).
+    evals/calibration/ as a WHOLE stays in scope on purpose: labels_v1.jsonl is a real
+    input to calibration, and an uncommitted edit to it must still fail preflight."""
+    prefixes = _artifact_path_prefixes()
+
+    exempt = [
+        "evals/generations/k3_abc1234_regen1/judged.jsonl",
+        "evals/reports/report.md",
+        "project-harness/overnight_logs/phase1.log",
+        "evals/trend/trend_v1.jsonl",
+        "evals/calibration/label_order_k3_abc1234_regen1.order.txt",
+        "evals/calibration/label_order_k3_abc1234_regen1.coverage_gaps.txt",
+    ]
+    for path in exempt:
+        assert any(path.startswith(p) for p in prefixes), f"{path} would abort preflight"
+
+    still_in_scope = [
+        "src/npc_engine/engines/dialogue/dialogue_handler.py",
+        "evals/cases/case_001_grieving_elder.yaml",
+        "evals/calibration/labels_v1.jsonl",  # a real calibration input, not an artifact
+        "scripts/Run-EvalHarness.ps1",
+    ]
+    for path in still_in_scope:
+        assert not any(path.startswith(p) for p in prefixes), (
+            f"{path} must still count as a source change"
+        )

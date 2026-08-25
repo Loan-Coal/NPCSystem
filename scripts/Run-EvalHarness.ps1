@@ -166,9 +166,18 @@ Test-EnginePrecondition "eval worlds seeded (demo + village + tavern representat
 # AFTER a regeneration has already written judged.jsonl -- could never pass its
 # own preflight; project-harness/Run-OvernightCombined.ps1 documents that dirtiness
 # as by-design.
+# evals/trend/ and the label_order_* files are written by steps 9 and 8 of
+# Run-OvernightCombined.ps1 respectively, immediately BEFORE that script runs this
+# one as its step 10. Neither is gitignored, so without these two entries step 9
+# created the file that made step 10 abort one line later, and EVAL-P22B.2 could
+# never pass (found 2026-08-25). evals/calibration/ as a whole stays in scope on
+# purpose: labels_v1.jsonl is a real input to calibration, and an uncommitted edit
+# to it must still fail preflight.
 $ArtifactPathPrefixes = @(
     "evals/generations/",
     "evals/reports/",
+    "evals/trend/",
+    "evals/calibration/label_order_",
     "project-harness/overnight_logs/"
 )
 

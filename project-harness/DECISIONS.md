@@ -4749,3 +4749,72 @@ unchanged before and after, on the same fixture: `699b3146276691bf`, length 545 
 value DEC-194 recorded. `test_no_profile_and_explicit_default_profile_are_byte_identical` still
 passes, and `test_receipt_variant_serializes_identically_to_the_plain_builder` adds the second
 half of the same guarantee: asking for a receipt does not move a byte of assembled context.
+
+
+---
+
+## DEC-196: two gate defects are fixed before main, not after — a gate that fires on a no-op
+## is worth less than no gate
+**Date:** 2026-08-25
+**Decided by:** the maintainer, this session, after being shown both defects and their blast
+radius ("fix it, then merge" on each). Found while sizing the first real overnight run, not by
+a test — both live in code that `make check` reports green.
+
+**Context.** The 167-commit metrics branch was ready to merge and the first `Run-OvernightCombined`
+run was being scoped. Two defects sat directly in the path of `EVAL-P22B.2`, the no-op
+false-positive check whose entire purpose is to establish that the gate does not fire on an
+unchanged engine.
+
+**Defect 1 — a perfect run regressed against itself at 42 of the first 140 denominators.**
+`rate_stats.wilson_interval(n, n)` returned `0.9999999999999999` rather than `1.0` for
+n ∈ {6, 21, 31, 38, 44, 48, 49, 51, 55, 57, 58, 60, 63, 65, 67, 70, 73, 74, 76, 81, 84, 90, 93,
+97, 100, 101, 104, ...}. In closed form the Wilson upper bound at p̂=1 is exactly 1
+((1 + z²/2n + z²/2n) / (1 + z²/n)); the deviation is pure floating-point error, and
+`min(1.0, ...)` cannot repair a value already below 1.0. `regression_gate._rate_regressed`
+compares `candidate.ci_high < baseline.rate`, so a battery scoring 100% on both sides of a
+comparison read as **a regression against itself** — DEC-185's failure mode returning through
+float error rather than through the wrong comparison, and invisible to the self-comparison test
+DEC-185 left behind because that test used one denominator (n=78) which happens to be safe.
+
+**Decision:** clamp in `wilson_interval` at `successes == trials` → `1.0` and `successes == 0`
+→ `0.0`. The root cause is there, the clamped values are the mathematically exact ones, and no
+interior interval moves (pinned by
+`test_clamping_the_degenerate_ends_leaves_every_other_interval_untouched`).
+*Rejected:* a tolerance in `_rate_regressed` — it would leave every other consumer of the
+interval reading a wrong bound, and "how big is epsilon" is a question with no principled answer
+when the correct value is known exactly.
+
+**Defect 2 — `EVAL-P22B.2` could never pass its own preflight.**
+`Run-OvernightCombined.ps1` step 8 writes `evals/calibration/label_order_<gen>.order.txt` and
+`.coverage_gaps.txt`; step 9 writes `evals/trend/trend_v1.jsonl`; step 10 then runs
+`scripts/Run-EvalHarness.ps1`, whose "working tree clean of source changes" precondition
+(DEC-193) exempted only `evals/generations/`, `evals/reports/` and
+`project-harness/overnight_logs/`. Neither new path is gitignored, so **step 9 created the file
+that made step 10 abort one line later** — deterministically, not as a race.
+
+**Decision:** add `evals/trend/` and the `evals/calibration/label_order_` prefix to
+`$ArtifactPathPrefixes`. Both are outputs of the pipeline being run, not engine changes, so the
+precondition's purpose — attributing a run to a known SHA — is untouched. **`evals/calibration/`
+as a whole deliberately stays in scope**: `labels_v1.jsonl` is a real input to calibration, and
+an uncommitted edit to it must still fail preflight. The prefix is narrow for exactly that reason.
+*Rejected:* gitignoring the trend store — it is a measurement record that must be committed
+(`EVAL-P22B.1`'s stated validation reads it back), and ignoring it would hide the very history
+the store exists to keep.
+
+**Why both were fixed before the merge rather than after.** A regression gate that fires on a run
+whose engine did not change is worse than no gate: it trains the reader to discount its verdicts,
+and `EVAL-P22B.2` exists precisely to prove that does not happen. Landing them on main first means
+the first gated verdict main ever produces cannot be a false positive from either cause.
+
+**Verification.** Both defects were reproduced as failing tests before either fix
+(`test_a_perfect_rate_has_an_upper_bound_of_exactly_one`,
+`test_a_perfect_run_never_regresses_against_itself_at_any_n` sweeping ten denominators including
+four unsafe ones, and
+`test_pipeline_written_artifacts_are_exempt_from_the_clean_tree_precondition`, which parses
+`$ArtifactPathPrefixes` out of the real script rather than duplicating the list). The neither-fires
+case is asserted too: `labels_v1.jsonl` and every source path must still count as dirty.
+
+**Measured context this does NOT change.** At today's battery sizes — guard n=78, capability n=16
+— `wilson_interval(n, n)` already returned exactly 1.0, so defect 1 would not have fired on
+tonight's run. It is a landmine under any battery resize (ISSUE-147 proposes 16 → ~35; 31 and 38
+are unsafe denominators), not a live fire. Defect 2 would have fired on the first attempt.

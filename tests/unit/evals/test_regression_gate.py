@@ -17,6 +17,7 @@ Used by: pytest (make test / make check)
 from __future__ import annotations
 
 from paired_stats import PairedResult
+from rate_stats import wilson_interval
 from regression_gate import check_regression, format_regression_report
 from trend_store import RateWithCI, TrendRow
 
@@ -180,3 +181,23 @@ def test_check_regression_docstring_states_the_implemented_rule() -> None:
     doc = (check_regression.__doc__ or "").lower()
     assert "upper bound" in doc
     assert "lower bound" not in doc  # the inverted rule must not be restated as the policy
+
+
+def test_a_perfect_run_never_regresses_against_itself_at_any_n() -> None:
+    """DEC-185's invariant, swept across denominators rather than asserted at one.
+
+    A battery that scores 100% twice in a row has not regressed, whatever its size.
+    Before the wilson_interval clamp this fired at n=104 (and 41 other denominators
+    under 500) because ci_high came back as 0.9999999999999999 — so the no-op
+    false-positive check (EVAL-P22B.2) would have reported REGRESSION on a run whose
+    engine did not change, which is the one verdict that would make every later
+    verdict worthless."""
+    for n in (6, 7, 16, 21, 31, 38, 78, 100, 104, 128):
+        low, high = wilson_interval(n, n)
+        perfect = RateWithCI(rate=1.0, ci_low=low, ci_high=high, n=n)
+        row = TrendRow(
+            gen_id="same", harness_version="v1", recorded_at="2026-08-25T00:00:00+00:00",
+            guard=perfect, capability=perfect, inconclusive_rate=0.0,
+        )
+        report = check_regression(row, row)
+        assert report.regressed is False, f"perfect run self-fired at n={n}: {report.findings}"
