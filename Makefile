@@ -287,12 +287,18 @@ eval-generate:
 
 # eval-judge: two-phase pipeline — judge pass (reads transcript written by eval-generate)
 # Pass GEN_ID=<id> to also write evals/generations/<id>/judged.jsonl (EVAL-P1.6).
+# Pass ARGS=--panel for the 3-model judge panel. $(ARGS) is forwarded because make
+# accepts ARGS= whether or not the recipe expands it: without the line below,
+# Run-EvalHarness.ps1's `ARGS=--panel` was silently dropped and every harness run
+# single-judged while its own logs said panel (DEC-197). Pinned by
+# tests/unit/scripts/test_makefile_arg_forwarding.py.
 eval-judge:
 	@echo "Running eval judge pass from transcript $(TRANSCRIPT) ..."
 	$(PYTHON) -m evals judge \
 		--transcript $(TRANSCRIPT) \
 		--reports evals/reports \
-		$(if $(GEN_ID),--json-out evals/generations/$(GEN_ID)/judged.jsonl,)
+		$(if $(GEN_ID),--json-out evals/generations/$(GEN_ID)/judged.jsonl,) \
+		$(ARGS)
 
 # eval-score: deterministic (no-LLM) scoring pass over a cached transcript.
 # Usage: make eval-score TRANSCRIPT=evals/generations/<run>/outputs.jsonl

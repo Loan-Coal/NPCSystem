@@ -9,12 +9,10 @@ Purpose: Glue between a completed generation run and the trend/regression
          scripts/Run-EvalHarness.ps1 (EVAL-P23.3), plus the --print-baseline
          resolution that harness calls BEFORE its compare step so both steps
          report on the same pair (EVAL-P23 Defect A).
-Dependencies: argparse, pathlib, sys; evals/summary (summarize_from_dir),
-         evals/calibration (run_calibration), evals/calibration_records
-         (read_calibration_labels), evals/eval_records (read_transcript),
-         evals/paired_stats (PairedResult — accepted, not computed here),
-         evals/run_status (read_run_status), evals/baseline_selection,
-         evals/instrument_gate, evals/trend_store, evals/regression_gate
+Dependencies: argparse, pathlib, sys; evals/trend_row_builder (build_trend_row,
+         comparability_key), evals/baseline_selection, evals/comparability
+         (ComparabilityKey, key_for), evals/instrument_gate, evals/trend_store,
+         evals/regression_gate
 Used by: scripts/Run-EvalHarness.ps1 (EVAL-P23.3)
 
 EXIT CODES (four states, not three — EVAL-P23 Defect E)
@@ -30,9 +28,7 @@ cannot be read as an engine result. Both reports are still printed.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evals"))
@@ -42,149 +38,25 @@ from baseline_selection import (  # noqa: E402
     select_baseline,
     select_named_baseline,
 )
-from calibration import run_calibration  # noqa: E402
-from calibration_records import LABELS_FILE, read_calibration_labels  # noqa: E402
-from eval_records import read_transcript  # noqa: E402
+from comparability import ComparabilityKey, key_for  # noqa: E402
 from instrument_gate import check_instrument, format_instrument_report  # noqa: E402
 from regression_gate import check_regression, format_regression_report  # noqa: E402
-from run_status import RunStatus, read_run_status  # noqa: E402
-from retrieval_summary import RETRIEVAL_METRICS_FILE  # noqa: E402
-from summary import summarize_from_dir  # noqa: E402
+from trend_row_builder import (  # noqa: E402
+    TRANSCRIPT_FILENAME,
+    build_trend_row,
+    comparability_key,
+)
 from trend_store import (  # noqa: E402
     TREND_STORE_FILE,
-    RateWithCI,
-    ScorerKappa,
     TrendRow,
     append_trend_row,
     read_trend_rows,
 )
 
-_UNKNOWN_HARNESS_VERSION: str = "unknown"
-_RUN_STATUS_FILENAME: str = "run_status.json"
-_TRANSCRIPT_FILENAME: str = "outputs.jsonl"
-
 _EXIT_OK: int = 0
 _EXIT_REGRESSION: int = 1
 _EXIT_SETUP_ERROR: int = 2
 _EXIT_INSTRUMENT_DEGRADED: int = 3
-
-
-def _rate_with_ci(rate: float | None, ci_low: float | None, ci_high: float | None, n: int) -> RateWithCI:
-    """Build a RateWithCI, tolerating an unmeasured (all-None) rate."""
-    return RateWithCI(rate=rate, ci_low=ci_low, ci_high=ci_high, n=n)
-
-
-def _harness_version(gen_dir: Path) -> str:
-    """Read harness_version from a gen_dir's meta.json, or a sentinel if absent."""
-    transcript = read_transcript(gen_dir / _TRANSCRIPT_FILENAME)
-    if transcript.config is None:
-        return _UNKNOWN_HARNESS_VERSION
-    return transcript.config.harness_version
-
-
-def _panel_status(gen_dir: Path, status_path: Path | None) -> RunStatus | None:
-    """Load the judge pass's run_status.json, or None when it isn't there.
-
-    The panel's agreement statistics are read off this file rather than
-    recomputed by re-joining outputs.jsonl with judged_panel_votes.jsonl: the
-    judge pass already did that join and wrote the result (DEC-189), and
-    duplicating it would let the two drift apart the way judged.jsonl's two
-    writers did (DEC-187).
-    """
-    return read_run_status(status_path or gen_dir / _RUN_STATUS_FILENAME)
-
-
-def build_trend_row(
-    gen_id: str,
-    gen_dir: Path,
-    *,
-    labels_path: Path = LABELS_FILE,
-    recorded_at: str | None = None,
-    status_path: Path | None = None,
-) -> TrendRow:
-    """Assemble a TrendRow from a completed run's on-disk artifacts.
-
-    Args:
-        gen_id: The generation id this row records.
-        gen_dir: Directory holding outputs.jsonl / judged.jsonl / deterministic_judged.jsonl.
-        labels_path: Calibration labels file to compute per-scorer kappa from.
-        recorded_at: ISO-8601 timestamp override (tests only); real callers
-            omit this and get the current time.
-        status_path: run_status.json override; defaults to gen_dir's own.
-    Returns:
-        A TrendRow ready for trend_store.append_trend_row. Panel agreement is
-        recorded chance-corrected (kappa with its interval, per criterion, plus
-        the repeat-flip split) as well as raw — raw pairwise agreement alone is
-        inflated by the pass base rate (DEC-188).
-    """
-    eval_summary = summarize_from_dir(gen_dir)
-    inconclusive_rate = (
-        eval_summary.inconclusive_failures / eval_summary.evaluated_cases
-        if eval_summary.evaluated_cases > 0
-        else None
-    )
-
-    labels = read_calibration_labels(labels_path) if labels_path.exists() else []
-    reports = run_calibration(labels, print_fn=lambda *_a, **_k: None) if labels else []
-    scorer_kappas = tuple(
-        ScorerKappa(scorer=r.scorer, kappa=r.kappa, ci_low=r.kappa_lo, ci_high=r.kappa_hi, n=r.counts.n)
-        for r in reports
-    )
-    status = _panel_status(gen_dir, status_path)
-
-    return TrendRow(
-        gen_id=gen_id,
-        harness_version=_harness_version(gen_dir),
-        recorded_at=recorded_at or datetime.now(timezone.utc).isoformat(),
-        guard=_rate_with_ci(
-            eval_summary.guard_rate, eval_summary.guard_ci_low, eval_summary.guard_ci_high,
-            eval_summary.guard_turns,
-        ),
-        capability=_rate_with_ci(
-            eval_summary.capability_rate, eval_summary.capability_ci_low,
-            eval_summary.capability_ci_high, eval_summary.capability_turns,
-        ),
-        inconclusive_rate=inconclusive_rate,
-        scorer_kappas=scorer_kappas,
-        panel_agreement_rate=status.raw_agreement if status else None,
-        panel_kappa=status.panel_kappa if status else None,
-        kappa_by_criterion=status.kappa_by_criterion if status else (),
-        repeat_flips=status.repeat_flips if status else None,
-        **_variant_fields(gen_dir),
-    )
-
-
-def _variant_fields(gen_dir: Path) -> dict[str, object]:
-    """Read the run's variant identity from meta.json, plus retrieval precision if measured.
-
-    Every value is optional: the store is append-only and holds rows written before these
-    fields existed, and a run generated without a retrieval pass simply has no precision.
-    Missing is recorded as None rather than skipped, so a gap is visible in the trend
-    rather than looking like continuity.
-    """
-    config: dict[str, object] = {}
-    meta_path = gen_dir / "meta.json"
-    if meta_path.exists():
-        try:
-            config = json.loads(meta_path.read_text(encoding="utf-8")).get("config", {})
-        except (json.JSONDecodeError, OSError):
-            config = {}
-
-    precision: float | None = None
-    metrics_path = gen_dir / RETRIEVAL_METRICS_FILE
-    if metrics_path.exists():
-        try:
-            precision = json.loads(metrics_path.read_text(encoding="utf-8")).get("mean_precision_at_k")
-        except (json.JSONDecodeError, OSError):
-            precision = None
-
-    return {
-        "retrieval_profile": config.get("retrieval_profile"),
-        "dialogue_prompt_hash": config.get("dialogue_prompt_hash"),
-        "git_sha": config.get("git_sha"),
-        "prompt_token_budget": config.get("prompt_token_budget"),
-        "mean_precision_at_k": precision,
-    }
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -217,12 +89,12 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _resolve(candidate_harness_version: str, requested_gen_id: str, store: Path) -> BaselineChoice:
+def _resolve(key: ComparabilityKey, requested_gen_id: str, store: Path) -> BaselineChoice:
     """Resolve the baseline for a run: the named row, or the latest comparable one."""
     rows = read_trend_rows(store)
     if requested_gen_id:
-        return select_named_baseline(requested_gen_id, candidate_harness_version, rows)
-    return select_baseline(candidate_harness_version, rows)
+        return select_named_baseline(requested_gen_id, key, rows)
+    return select_baseline(key, rows)
 
 
 def _print_baseline(args: argparse.Namespace) -> int:
@@ -236,11 +108,11 @@ def _print_baseline(args: argparse.Namespace) -> int:
         line is kept machine-readable (the id alone) because PowerShell captures
         it as a value; the human-readable naming happens at gate time.
     """
-    transcript = args.gen_dir / _TRANSCRIPT_FILENAME
+    transcript = args.gen_dir / TRANSCRIPT_FILENAME
     if not transcript.exists():
         print(f"Transcript not found: {transcript}", file=sys.stderr)
         return _EXIT_SETUP_ERROR
-    choice = _resolve(_harness_version(args.gen_dir), args.baseline_gen_id, args.trend_store)
+    choice = _resolve(comparability_key(args.gen_dir), args.baseline_gen_id, args.trend_store)
     print(choice.row.gen_id if choice.row is not None else "")
     return _EXIT_OK
 
@@ -282,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
     row = build_trend_row(args.gen_id, args.gen_dir)
     # Resolved BEFORE appending: afterwards the candidate is itself the most
     # recent comparable row, and a run would gate against itself.
-    choice = _resolve(row.harness_version, args.baseline_gen_id, args.trend_store)
+    choice = _resolve(key_for(row), args.baseline_gen_id, args.trend_store)
     append_trend_row(row, args.trend_store)
     print(f"Recorded trend row for gen_id={args.gen_id} -> {args.trend_store}")
     print(format_baseline_choice(choice, row.recorded_at))

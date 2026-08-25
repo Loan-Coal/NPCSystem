@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from panel_metric_records import CriterionKappa, PanelKappa, RepeatFlips
+from comparability import ComparabilityKey, key_for
 from trend_store import (
     DuplicateGenIdError,
     RateWithCI,
@@ -32,6 +33,7 @@ def _row(gen_id: str, **overrides: object) -> TrendRow:
     base: dict[str, object] = dict(
         gen_id=gen_id,
         harness_version="v1",
+        judge_identity="panel:llama3.1:8b+mixtral:8x7b",
         recorded_at="2026-08-17T00:00:00+00:00",
         guard=RateWithCI(rate=0.9, ci_low=0.8, ci_high=0.95, n=94),
         capability=RateWithCI(rate=0.85, ci_low=0.7, ci_high=0.92, n=48),
@@ -142,6 +144,10 @@ def test_rows_for_scorer_filters_across_runs(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _key(harness_version: str = "v1", judge: str = "panel:llama3.1:8b+mixtral:8x7b") -> ComparabilityKey:
+    return ComparabilityKey(harness_version=harness_version, judge_identity=judge)
+
+
 def test_latest_comparable_row_skips_rows_from_another_harness_version(tmp_path: Path) -> None:
     """harness_version hashes evals/cases/, prompts/eval/ and matchers.py, so a
     case or judge-criterion edit changes it. The most recent row under a
@@ -149,20 +155,56 @@ def test_latest_comparable_row_skips_rows_from_another_harness_version(tmp_path:
     path = tmp_path / "trend.jsonl"
     append_trend_row(_row("gen_a", harness_version="v1"), path)
     append_trend_row(_row("gen_b", harness_version="v2"), path)
-    chosen = latest_comparable_row("v1", path)
+    chosen = latest_comparable_row(_key("v1"), path)
     assert chosen is not None
     assert chosen.gen_id == "gen_a"
     assert latest_row(path).gen_id == "gen_b"  # latest_row keeps its meaning
 
 
+def test_latest_comparable_row_skips_rows_scored_by_another_judge(tmp_path: Path) -> None:
+    """DEC-190's constraint, which lived only in compare.py: two arms scored by
+    different instruments are not comparable. The trend gate is declared
+    AUTHORITATIVE over compare by Run-EvalHarness.ps1, so it checking only
+    harness_version let a panel-scored baseline gate a single-judge candidate —
+    the delta then contains the instrument change, not just the engine."""
+    path = tmp_path / "trend.jsonl"
+    append_trend_row(_row("gen_panel", judge_identity="panel:llama3.1:8b+mixtral:8x7b"), path)
+    append_trend_row(_row("gen_single", judge_identity="mixtral:8x7b"), path)
+
+    chosen = latest_comparable_row(_key(judge="panel:llama3.1:8b+mixtral:8x7b"), path)
+    assert chosen is not None
+    assert chosen.gen_id == "gen_panel"
+
+    single = latest_comparable_row(_key(judge="mixtral:8x7b"), path)
+    assert single is not None
+    assert single.gen_id == "gen_single"
+
+
+def test_a_row_with_no_recorded_judge_is_comparable_to_nothing(tmp_path: Path) -> None:
+    """An unknown instrument is refused rather than assumed to match. The store is
+    empty today, so strictness costs nothing and prevents a legacy row from
+    silently serving as a cross-instrument baseline later."""
+    path = tmp_path / "trend.jsonl"
+    append_trend_row(_row("gen_unknown", judge_identity=""), path)
+    assert latest_comparable_row(_key(), path) is None
+    assert latest_comparable_row(ComparabilityKey(harness_version="v1", judge_identity=""), path) is None
+
+
 def test_latest_comparable_row_is_none_when_nothing_matches(tmp_path: Path) -> None:
     path = tmp_path / "trend.jsonl"
     append_trend_row(_row("gen_a", harness_version="v1"), path)
-    assert latest_comparable_row("v3", path) is None
+    assert latest_comparable_row(_key("v3"), path) is None
 
 
 def test_latest_comparable_row_on_an_empty_store_is_none(tmp_path: Path) -> None:
-    assert latest_comparable_row("v1", tmp_path / "does_not_exist.jsonl") is None
+    assert latest_comparable_row(_key(), tmp_path / "does_not_exist.jsonl") is None
+
+
+def test_key_for_reads_both_dimensions_off_a_row(tmp_path: Path) -> None:
+    """The key a candidate is gated with comes from the candidate's own row, so the
+    two cannot disagree about what "comparable" meant."""
+    row = _row("gen_a", harness_version="hv", judge_identity="panel:a+b")
+    assert key_for(row) == ComparabilityKey(harness_version="hv", judge_identity="panel:a+b")
 
 
 # ---------------------------------------------------------------------------

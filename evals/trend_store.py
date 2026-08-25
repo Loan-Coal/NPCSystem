@@ -8,8 +8,9 @@ Purpose: Append-only JSONL trend storage — one row per run, keyed by gen_id.
          engine improving over six weeks" is currently unanswerable. This
          module is the append-only history regression_gate.py (EVAL-P23.2)
          and Run-EvalHarness.ps1 (EVAL-P23.3) read from.
-Dependencies: pydantic, pathlib, typing; panel_metric_records (PanelKappa,
-         CriterionKappa, RepeatFlips)
+Dependencies: pydantic, pathlib, typing; comparability (ComparabilityKey,
+         is_comparable), panel_metric_records (PanelKappa, CriterionKappa,
+         RepeatFlips)
 Used by: tests/unit/evals/test_trend_store.py; scripts/Run-EvalHarness.ps1
          (records a row after every harness run, EVAL-P23.3)
 """
@@ -21,6 +22,7 @@ from typing import Sequence
 
 from pydantic import BaseModel, ConfigDict
 
+from comparability import ComparabilityKey, is_comparable
 from panel_metric_records import CriterionKappa, PanelKappa, RepeatFlips
 
 TREND_STORE_FILE: Path = Path(__file__).parent / "trend" / "trend_v1.jsonl"
@@ -98,6 +100,11 @@ class TrendRow(BaseModel):
         harness_version: Identifies which code produced these numbers, so a
             harness change is visible in the trend rather than looking like
             engine drift.
+        judge_identity: The instrument that actually scored this run —
+            'panel:<sorted roster>' or a single model name, resolved from
+            run_status.json by judge_identity.resolve_judge_identity (DEC-190).
+            Empty when it could not be determined, which makes the row
+            comparable to nothing rather than comparable to anything.
         recorded_at: ISO-8601 timestamp of when this row was appended.
         guard: Guard battery rate with CI and n; None when no guard turns ran.
         capability: Capability battery rate with CI and n; None when none ran.
@@ -132,6 +139,7 @@ class TrendRow(BaseModel):
     gen_id: str
     harness_version: str
     recorded_at: str
+    judge_identity: str = ""
     guard: RateWithCI | None = None
     capability: RateWithCI | None = None
     inconclusive_rate: float | None = None
@@ -200,29 +208,27 @@ def latest_row(path: Path = TREND_STORE_FILE) -> TrendRow | None:
 
 
 def latest_comparable_row(
-    harness_version: str, path: Path = TREND_STORE_FILE
+    key: ComparabilityKey, path: Path = TREND_STORE_FILE
 ) -> TrendRow | None:
-    """Return the most recent row recorded under `harness_version`.
+    """Return the most recent row comparable with `key`.
 
-    `harness_version` hashes evals/cases/, prompts/eval/ and matchers.py, so
-    editing a case or a judge criterion changes it and makes older rows
-    incomparable — compare.py refuses exactly that pair. latest_row() cannot
-    make that distinction: it returns whatever was appended last, which let the
-    trend gate publish a confident verdict on a pair compare.py had already
-    declined to judge. This walks BACK past incomparable rows rather than
-    refusing outright, because a slightly older comparable baseline is a real
-    baseline; refusal is reserved for there being none at all.
+    latest_row() cannot make this distinction: it returns whatever was appended
+    last, comparable or not, which let the trend gate publish a confident verdict
+    on a pair compare.py had already declined to judge. This walks BACK past
+    incomparable rows rather than refusing outright, because a slightly older
+    comparable baseline is a real baseline; refusal is reserved for there being
+    none at all.
 
     Args:
-        harness_version: The candidate run's harness_version.
+        key: The candidate run's comparability key (see ComparabilityKey).
         path: Trend store JSONL path.
     Returns:
-        The last row whose harness_version matches, or None when no row does
-        (including an empty store). Callers must report which row was chosen
-        and how old it is — see baseline_selection.format_baseline_choice.
+        The last row satisfying is_comparable, or None when no row does
+        (including an empty store). Callers must report which row was chosen and
+        how old it is — see baseline_selection.format_baseline_choice.
     """
     for row in reversed(read_trend_rows(path)):
-        if row.harness_version == harness_version:
+        if is_comparable(row, key):
             return row
     return None
 

@@ -1,6 +1,6 @@
 # Regression Policy
 
-**Version:** 1.1
+**Version:** 1.2
 **Status:** Active
 **Applies to:** Trend comparisons via `evals/regression_gate.py` (EVAL-P23.2), consumed
 by `scripts/Run-EvalHarness.ps1` (EVAL-P23.3)
@@ -18,14 +18,27 @@ harness run can apply a looser standard by accident.
 
 ---
 
-## Which baseline (DEC-191)
+## Which baseline (DEC-191, extended by DEC-197)
 
-The baseline is the most recently recorded trend row **that shares the candidate's
-`harness_version`** (`trend_store.latest_comparable_row`, chosen and narrated by
-`evals/baseline_selection.py`). `harness_version` hashes `evals/cases/`, `prompts/eval/`
-and `matchers.py`, so editing a case or a judge criterion makes older rows incomparable —
-`compare.py` refuses that pair, and a gate that did not would return a confident verdict
-about two different instruments.
+The baseline is the most recently recorded trend row **comparable with the candidate on
+both dimensions of `ComparabilityKey`** (`evals/comparability.py`, applied by
+`trend_store.latest_comparable_row` and narrated by `evals/baseline_selection.py`):
+
+1. **`harness_version`** — hashes `evals/cases/`, `prompts/eval/` and `matchers.py`, so
+   editing a case or a judge criterion changes what is being measured.
+2. **`judge_identity`** — the instrument that actually scored the run (`panel:<sorted
+   roster>` or a single model name), resolved from `run_status.json` exactly as
+   `compare.py` resolves it (DEC-190). An **empty** judge identity matches nothing: an
+   unknown instrument is refused, never assumed to match.
+
+The second dimension was missing until DEC-197, and `Run-EvalHarness.ps1` declares this
+gate *authoritative over* `compare.py` — so a panel-scored baseline was gating a
+single-judge candidate, putting the instrument change inside the delta and reporting it as
+an engine verdict.
+
+`retrieval_profile`, `git_sha` and `dialogue_prompt_hash` are deliberately **not**
+comparability conditions: they are the independent variable, and refusing on them would
+refuse every A/B worth running (DEC-194).
 
 - When the newest row is incomparable, the gate **walks back** to the most recent one that
   is. A slightly older comparable baseline is a real baseline.
@@ -173,4 +186,5 @@ point of building a regression gate rather than a report a human has to remember
 | Date | Change |
 |------|--------|
 | 2026-08-17 | Initial policy, EVAL-P23.2 (EVAL-P20→P24 unblock plan, Phase A7) |
+| 2026-08-25 | v1.2 (DEC-197): the judge that actually scored a run is a comparability condition too, so the trend gate refuses a cross-instrument pair the way compare.py already did. |
 | 2026-08-18 | v1.1 (DEC-191): baseline is the latest *comparable* row and is narrated; instrument degradation is a separate verdict (exit 3); the trend records kappa rather than only raw agreement. |

@@ -4818,3 +4818,73 @@ case is asserted too: `labels_v1.jsonl` and every source path must still count a
 — `wilson_interval(n, n)` already returned exactly 1.0, so defect 1 would not have fired on
 tonight's run. It is a landmine under any battery resize (ISSUE-147 proposes 16 → ~35; 31 and 38
 are unsafe denominators), not a live fire. Defect 2 would have fired on the first attempt.
+
+---
+
+## DEC-197: the trend gate refuses a cross-instrument pair, and a Makefile target that
+## advertises ARGS must forward it
+**Date:** 2026-08-25
+**Decided by:** the maintainer, this session ("fix both"), on the same principle as DEC-196: a
+gate that can report a verdict it has not earned is worth less than no gate.
+
+**Context.** Assembling the exact command for the first `Run-OvernightCombined` run surfaced two
+defects that compound into one wrong answer.
+
+**Defect (a) — `make eval-judge` silently dropped `--panel`.** The recipe never expanded
+`$(ARGS)`. `make VAR=value` succeeds whether or not a recipe uses `VAR`, so
+`scripts/Run-EvalHarness.ps1`'s `ARGS=--panel` reached nothing, while the script's `.SYNOPSIS`
+("Panel judge: mixtral:8x7b + qwen2.5:14b + llama3.1:8b"), its plan line and its progress log all
+said a panel had run. **Every harness run since it shipped judged with a single judge.**
+Downstream: `run_status.json` carried no roster, `fleiss_kappa` was null, and the
+instrument-degraded verdict (exit 3, DEC-196) could never fire from a harness run — the whole
+third verdict was unreachable through that path. Proven with `make -n`, not inferred. Same family
+as ISSUE-127 (nothing catches a Makefile target that rots).
+
+**Defect (b) — the trend gate had no judge-identity comparability check.** `compare.py` has
+refused cross-instrument pairs since DEC-190. The trend gate — which `Run-EvalHarness.ps1`
+explicitly declares *authoritative over* compare — checked only `harness_version`, and `TrendRow`
+did not record the judge at all. DEC-191 fixed the harness-version half of comparability and left
+the judge half to `compare.py`, which the trend path does not go through.
+
+**How they compound.** `Run-OvernightCombined.ps1` step 7 panel-judges arm 1 by invoking
+`python -m evals judge --panel` directly (bypassing make, so it really does panel). Step 9 records
+that panel-scored baseline. Step 10 runs the harness, which by (a) single-judged. The gate then
+compared a panel baseline against a single-judge candidate with no refusal and reported the delta
+as an engine verdict — the exact confound DEC-190 exists to prevent, entering through the door
+DEC-190 did not cover.
+
+**Decision:**
+1. `eval-judge` forwards `$(ARGS)`. `tests/unit/scripts/test_makefile_arg_forwarding.py` runs
+   `make -n` and asserts every token of ARGS reaches the recipe, for every target documenting
+   `ARGS=`. It also pins that ARGS stays optional, since every existing caller omits it.
+2. `TrendRow` gains `judge_identity`, resolved by the existing
+   `judge_identity.resolve_judge_identity` — the pass that actually ran (`run_status.json`),
+   falling back to `meta.json`'s configured model, exactly as `compare.py` resolves it.
+3. Comparability becomes a two-dimensional key. `evals/comparability.py` owns
+   `ComparabilityKey(harness_version, judge_identity)`, `key_for(row)` and `is_comparable(row, key)`;
+   `trend_store.latest_comparable_row` and `baseline_selection` both apply that one predicate, so
+   the trend gate and `compare.py` can no longer disagree about what "comparable" means.
+4. **An unknown instrument matches nothing.** An empty `judge_identity` on either side is refused
+   rather than treated as a wildcard. The store is empty as of today, so strictness costs nothing
+   now and prevents an instrument-unknown row from silently serving as a baseline later.
+5. The refusal message names *which* dimension failed. The remedies differ by an order of
+   magnitude in cost: a judge mismatch means re-judging one arm; a `harness_version` mismatch means
+   re-running the engine for a fresh baseline. "Nothing comparable" is not an actionable sentence.
+
+**Deliberately NOT comparability conditions:** `retrieval_profile`, `git_sha`,
+`dialogue_prompt_hash`, `prompt_token_budget`. Those are the independent variable — the thing an
+A/B varies on purpose — and refusing on them would refuse every comparison worth making
+(DEC-194 decision 5).
+
+**Two file splits fell out of this, both at the 300-line cap and both on honest seams:**
+`evals/comparability.py` (storage is "what rows exist"; comparability is "which of them may be
+spoken about together" — a policy two other modules must apply identically) and
+`evals/trend_row_builder.py` (assembling a row from artifacts vs orchestrating record-then-gate;
+only the first is worth importing elsewhere). `scripts/record_trend_and_gate.py` re-exports
+`build_trend_row`, so its CLI and its callers are unchanged.
+
+**Consequence.** The false-positive check (`EVAL-P22B.2`) can now actually run: the harness
+panel-judges as advertised, and its candidate row is refused rather than silently compared if the
+instrument ever differs from the baseline's. The cost is a real constraint on the workflow, and an
+intentional one — the same trade DEC-190 recorded: it is cheaper to re-judge an arm than to act on
+a confounded verdict.

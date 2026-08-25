@@ -295,3 +295,67 @@ def test_stable_kappa_still_exits_zero(tmp_path: Path, capsys) -> None:
     exit_code = main(["--gen-id", "cand", "--gen-dir", str(gen_dir), "--trend-store", str(store)])
     assert exit_code == 0
     assert "INSTRUMENT STABLE" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# Judge identity on the row — DEC-197
+# ---------------------------------------------------------------------------
+
+
+def test_the_row_records_the_instrument_that_actually_scored_the_run(tmp_path: Path) -> None:
+    """Read from run_status.json, not meta.json's configured judge_model: since
+    --panel landed, one generation config can be scored either way under a
+    byte-identical meta.json (DEC-190). Without this the trend gate compared a
+    panel-scored baseline against a single-judge candidate and reported the
+    instrument change as an engine verdict."""
+    _require_real_artifact()
+    gen_dir = _copy_gen_dir(tmp_path)
+    _write_status(gen_dir, kappa=0.5256, ci_low=0.227, ci_high=0.730)
+
+    row = build_trend_row("cand", gen_dir, labels_path=_LABELS_PATH,
+                          recorded_at="2026-08-25T00:00:00+00:00")
+    # roster sorted, so seat ORDER cannot cause a spurious refusal while a
+    # changed seat still does (judge_identity.render_panel_identity)
+    assert row.judge_identity == "panel:llama3.1:8b+mixtral:8x7b+qwen2.5:14b"
+
+
+def test_a_single_judge_run_records_that_model_as_its_instrument(tmp_path: Path) -> None:
+    _require_real_artifact()
+    gen_dir = _copy_gen_dir(tmp_path)
+    (gen_dir / "run_status.json").write_text(
+        json.dumps({"status": "ok", "cases_passed": 1, "cases_total": 1,
+                    "judge_panel": [], "judge_model": "mixtral:8x7b"}),
+        encoding="utf-8",
+    )
+    row = build_trend_row("cand", gen_dir, labels_path=_LABELS_PATH,
+                          recorded_at="2026-08-25T00:00:00+00:00")
+    assert row.judge_identity == "mixtral:8x7b"
+
+
+def test_a_panel_baseline_does_not_gate_a_single_judge_candidate(tmp_path: Path, capsys) -> None:
+    """The end-to-end form of the compounding failure: Run-OvernightCombined step 9
+    records a panel-judged baseline, step 10's harness run single-judged (the
+    Makefile dropped --panel), and the gate compared them anyway. It must now refuse
+    and say the judge is what differs — re-judging an arm is cheap, re-running the
+    engine over a phantom regression is not."""
+    _require_real_artifact()
+    store = tmp_path / "trend.jsonl"
+    gen_dir = _copy_gen_dir(tmp_path)
+
+    _write_status(gen_dir, kappa=0.72, ci_low=0.60, ci_high=0.81)  # panel
+    append_trend_row(
+        build_trend_row("panel_baseline", gen_dir, labels_path=_LABELS_PATH,
+                        recorded_at="2026-08-01T00:00:00+00:00"),
+        store,
+    )
+    (gen_dir / "run_status.json").write_text(
+        json.dumps({"status": "ok", "cases_passed": 1, "cases_total": 1,
+                    "judge_panel": [], "judge_model": "mixtral:8x7b"}),
+        encoding="utf-8",
+    )
+    exit_code = main(["--gen-id", "single_cand", "--gen-dir", str(gen_dir),
+                      "--trend-store", str(store)])
+    out = capsys.readouterr().out
+    assert exit_code == 2
+    assert "NO COMPARABLE BASELINE" in out
+    assert "judge" in out.lower()
