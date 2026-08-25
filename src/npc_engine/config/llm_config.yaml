@@ -13,3 +13,48 @@ relevance_weights:
   proximity: 0.20
   relation: 0.20
   quest: 0.10
+
+# Retrieval profiles — the named A/B arms an eval run selects with
+# `evals generate --profiles default,<name>` or a per-request
+# DialogueRequest.retrieval_profile (DEC-194). Resolution is STRICT: an undeclared
+# name is HTTP 400, never a silent fallback, so an arm can never record a profile it
+# did not run.
+#
+# 'default' is NOT declared here and must not be: it is resolved from
+# Settings.RAG_TOP_K / Settings.CROSS_ENCODER_ENABLED by build_default_profile, which
+# is what keeps a no-profile turn byte-identical to a pre-profile one.
+#
+# Each arm below varies exactly ONE knob against that default (rag_top_k,
+# graph_rag_top_k and events_limit count as one knob — they are 'how much is
+# retrieved'). A two-knob arm produces a delta nobody can attribute, which is the
+# defect DEC-194 fixed when it split RAG_TOP_K's three call sites apart.
+#
+# The arms are deliberately DRASTIC. Measured resolution on the current batteries is a
+# >=6.4pp drop on guard (n=78) before the regression gate fires, with refusal_judge at
+# kappa 0.225 (ISSUE-184). A cautious arm cannot clear that floor; these are sized to
+# produce an effect the instrument can see, or to establish that there is none.
+# Pinned by tests/unit/config/test_shipped_retrieval_profiles.py.
+retrieval_profiles:
+  # Does tier-B retrieval change measured behaviour AT ALL? Nothing in this repo has
+  # established that. The strongest available contrast, and the one whose null result
+  # would be most informative: if guard and capability hold without retrieval, the
+  # engine's grounding is coming from somewhere else.
+  no_rag:
+    weight_profile: null
+    rag_top_k: 5
+    graph_rag_top_k: 5
+    events_limit: 5
+    cross_encoder_enabled: false
+    skip_rag: true
+
+  # Triple every top-k. Worth running against no_rag because PROMPT_TOKEN_BUDGET
+  # derives to its 512 clamp floor (RET-P0.3, DEC-175): more retrieved items may
+  # simply be trimmed before reaching the model, and the context receipt (DEC-195)
+  # now makes that visible per turn rather than leaving it inferred.
+  wide_rag:
+    weight_profile: null
+    rag_top_k: 15
+    graph_rag_top_k: 15
+    events_limit: 15
+    cross_encoder_enabled: false
+    skip_rag: false
