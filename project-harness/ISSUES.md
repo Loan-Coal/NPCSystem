@@ -16,6 +16,142 @@ Rules:
 
 ## Open
 
+## ISSUE-197: tier A is capped at 55% of the prompt budget and the unspent B/C share is never reclaimed
+**Found:** 2026-08-26, during the ISSUE-163 root-cause trace
+**Severity:** P1 (blocking) — it is the remaining half of the inner-life drop
+**Where:** `retrieval/context/context_budget_enforcer.py:305-308` (`tier_a_soft_cap`) and
+`:158-186` (`_fit_tier_a_pinned_pool`)
+**Description:** `fill_to_budget` sizes tier A at `min(tier_budget_tokens.tier_a,
+int(prompt_token_budget * tier_a_fraction))` = `min(4000, int(512 * 0.55))` = **281 tokens**,
+then `_fit_tier_a_pinned_pool` spends the pinned items out of that same 281 and offers the
+remainder to the ranked pool. Measured live on three NPCs (`what news`, no player):
+
+    npc              pinned  remainder  tierA spend  tierB  tierC  TOTAL  budget
+    mira_innkeeper      150        131          258      0      0    334     512
+    captain_sorn        131        150          277      0      0    353     512
+    vw_elder            127        154          242      0      0    318     512
+
+Tiers B and C spend **zero** tokens on every one of them — the vector store returns nothing
+for these queries — yet the 45% of the budget reserved for B and C is never handed back to
+tier A. So 160-190 tokens of the prompt budget go unspent while `memories`, `beliefs`,
+`secrets`, `believed_rumors` and `relation:player` are dropped for want of room. This is the
+"353 tokens against a 512 budget" observation: it is not proof that the budget is innocent,
+it is the fingerprint of this defect.
+**Why deferred:** ISSUE-163 is one root cause per fix, and the ranking defect was the
+higher-value half (beliefs 12.5% to 75% on its own). This one changes budget ALLOCATION and
+interacts with the post-serialization trim loop at the end of `fill_to_budget`, which evicts
+by ascending priority and can undo the gain — a prototype that reclaimed the leftover moved
+`captain_sorn` from 1 goal to 0. It needs its own measurement pass, not a rider.
+**To fix:** give tier A `prompt_token_budget - tier0 - (tokens B and C actually need,
+capped at their soft caps)`, floored at the configured `tier_a_fraction` so a RAG-heavy turn
+is unaffected. Then re-measure the 8-NPC probe; expect memories to become reachable for the
+NPCs whose memory item is under ~200 tokens. Pair with ISSUE-199 — with the 2188-token
+`location:` item fixed, the reclaimed budget buys proportionally more.
+
+## ISSUE-198: `LLMConfig.resolve_weights` never returns the configured `relevance_weights`
+**Found:** 2026-08-26, during the ISSUE-163 root-cause trace
+**Severity:** P2 (annoying) — live config that silently is not live
+**Where:** `schema/context_config_models.py:142-159` (`resolve_weights`), reached from
+`context_scoring.rank_tier_items`
+**Description:** `rank_tier_items` calls `resolve_weights(weight_profile or
+llm_config.default_weight_profile)`, and `default_weight_profile` defaults to `"default"`.
+`resolve_weights` looks `"default"` up in `weight_profiles` and then in
+`DEFAULT_WEIGHT_PROFILES` — where it hits — and returns THAT. The `relevance_weights:` block
+in `src/npc_engine/config/llm_config.yaml` is only reached when the profile name is falsy,
+which never happens on the dialogue path. The two happen to hold identical values today, so
+nothing is currently mis-scored; the hazard is that editing `relevance_weights:` in the YAML
+changes nothing and the next weight experiment silently measures the old weights.
+Found because `tests/unit/retrieval/test_context_scoring_phase6.py` builds `LLMConfig`s with
+tailored `relevance_weights` that never take effect — those tests were passing on the
+alphabetical tie-break in `rank_context_candidates`, not on the weights they declare.
+**Why deferred:** single-task focus; it is latent, not active.
+**To fix:** either drop `"default"` from `DEFAULT_WEIGHT_PROFILES` so the name falls through
+to `relevance_weights`, or delete the top-level `relevance_weights` field and make the
+default profile the only source. Then audit `test_context_scoring_phase6.py` — every config
+there declares weights that are currently ignored.
+
+## ISSUE-199: `location:` and `relation:player` context items are 4.3x and 1.0x the entire prompt budget
+**Found:** 2026-08-26, during the ISSUE-163 root-cause trace
+**Severity:** P1 (blocking) — the NPC's location context reaches NO prompt, for any NPC
+**Where:** `retrieval/graph_rag/subgraph_retriever.py:_location_items` and `_relation_item`;
+readers `graph/graph_reader.get_location_context` / `get_npc_player_edge`
+**Description:** measured token sizes of single tier-A items, against a 512-token TOTAL
+prompt budget: `location:loc_tavern` **2188**, `location:loc_guard_barracks` **2191**,
+`location:vw_village_square` **2191**, `relation:player` **500-505**. They rank at the very
+top of tier A (priorities 998 and 997 after ranking) and are then skipped by every budget
+pass, so the NPC never knows where it is standing beyond the location name folded into
+`npc.profile`. `_character_item` already documents this exact failure mode for the character
+node (RET-P0.5: `properties(c)` wholesale, including the 384-float embedding, measured at
+2014 tokens) and strips `NON_PROMPT_NODE_FIELDS`; the location and relation readers were
+never given the same treatment. This also accounts for `player_relation` being empty in
+836/975 eval rows — it is populated only when `subgraph_retriever` emits the PINNED
+priority-95 variant.
+**Why deferred:** one root cause per fix (ISSUE-163). These items are skipped, not
+truncating anything, so they are not the direct cause of the inner-life drop.
+**To fix:** strip `NON_PROMPT_NODE_FIELDS` in `_location_items` and `_relation_item` the way
+`_character_item` does, and project the location payload down to the fields a prompt can
+use (name, kind, description) rather than the whole node. Re-measure with the 8-NPC probe.
+
+## ISSUE-200: eight assembled tier-A item kinds have no slot in the serialized skeleton
+**Found:** 2026-08-26, during the ISSUE-163 root-cause trace
+**Severity:** P2 (annoying) — they spend prompt budget and then vanish
+**Where:** `retrieval/context/context_serializer.py:serialize_context` (fixed skeleton) vs
+`retrieval/context/context_builder.py:_build_tier_a_extended` and
+`retrieval/graph_rag/subgraph_retriever.py`
+**Description:** the serializer assembles a fixed skeleton from a known key list. Items keyed
+`secrets`, `owned_items`, `obligations`, `believed_rumors`, `traits`, `group_memberships`,
+`active_pledges` and `second_hop:*` are produced, ranked, and counted against the tier-A
+budget — and then have nowhere to go in the skeleton, so they are silently discarded at
+serialization. On `mira_innkeeper` that is `secrets` (106 tokens) and `believed_rumors` (29)
+competing for the same 131 tokens as `beliefs` and `memories` while being incapable of
+reaching the model. The reverse also holds: `propagated_reputation` is read from the mapping
+in `serialize_context` but NO producer anywhere emits that key, so the slot is structurally
+`[]` in 100% of rows — that is a dead slot, not a drop.
+**Why deferred:** single-task focus; fixing it means deciding the prompt schema, which is a
+prompt-contract change (`prompt_schema_version`), not a bug fix.
+**To fix:** decide per key — either add a skeleton slot (and bump `prompt_schema_version`) or
+stop assembling the item. Either way the budget stops being spent on invisible items. Delete
+the `propagated_reputation` read or wire `get_propagated_reputation_for_npc` into
+`_fetch_npc_profile_data`.
+
+## ISSUE-201: `npc.emotion` reports "neutral" while the NPC's character node says otherwise
+**Found:** 2026-08-26, during the ISSUE-163 root-cause trace
+**Severity:** P2 (annoying)
+**Where:** `engines/dialogue/dialogue_handler.py:452` (the `emotion_state` argument) and
+`retrieval/context/context_builder.py:176-181` (`_resolve_initial_state`)
+**Description:** `npc.emotion` is the default `{"current_mood": "neutral"}` in 100% of the
+975 eval rows. It is NOT a budget drop — the emotion item is pinned tier-0 and always
+reaches the model; the value itself is neutral. On `mira_innkeeper` the same prompt carries
+`npc.profile.emotion_valence = -100`, `emotion_arousal = 100`,
+`emotion_mood_label = "agitated"` from the character node, next to
+`npc.emotion.current_mood = "neutral"` — the prompt contradicts itself in adjacent fields.
+Two candidates, neither confirmed: the handler's `current_emotion` is read from the
+in-process emotion store rather than the persisted node, or the store is not seeded from the
+graph on a cold start. Also note the whole emotion snapshot is a ONE-KEY dict — valence,
+arousal and the mood label never reach the prompt through this path at all.
+**Why deferred:** different subsystem (emotion store / dialogue handler), different root
+cause from ISSUE-163; logging it separately as instructed rather than widening that fix.
+**To fix:** trace `current_emotion` in `dialogue_handler` back to its source, decide whether
+the character node or the emotion store is authoritative, and make the tier-0 snapshot carry
+valence/arousal/label rather than `current_mood` alone.
+
+## ISSUE-202: `retrieval_runner.main`'s docstring says it takes no options, and it takes two
+**Found:** 2026-08-26, during the six A/B plumbing fixes (item 2, Makefile forwarding)
+**Severity:** P3 (nice-to-fix)
+**Where:** `evals/retrieval_runner.py:269-276` (`main`'s docstring)
+**Description:** The docstring states "This runner takes no options today; any argument is
+rejected rather than ignored", documents `argv` as "Must be empty", and lists exit code "2 on
+unexpected arguments". All three are false: the parser directly below it declares `--gen-dir`
+and `--retrieval-profile`, and both are now passed by `make eval-retrieval` and by
+`Run-OvernightCombined.ps1` step 4b. Nothing returns 2. The prose is a leftover from before
+the flags were added.
+**Why deferred:** the task that found it was explicitly scoped "DO NOT change
+`evals/retrieval_runner.py` — its CLI already accepts both flags", and a docstring edit there
+would have put an unrelated file in one of the six commits.
+**To fix:** rewrite the summary to name both options, drop the "Must be empty" Args line and
+the phantom exit code 2, and describe the actual contract (0 success, 1 connectivity/setup
+failure). One-paragraph edit, no behaviour change.
+
 ## ISSUE-195: `retrieved_context` consumers not yet migrated to `context_receipt`
 **Found:** 2026-08-21, during the B/C3/C2 landing (DEC-195)
 **Severity:** P3 (nice-to-fix)
@@ -269,28 +405,70 @@ graph size, and it silently defeats reproducibility when it does bite.
 rumors, secrets, items, traits, reputation) and add a deterministic `ORDER BY` — id or an explicit
 score then id as a tiebreak — to those first. Add a check-rules rule for new prompt-feeding queries.
 
-## ISSUE-163: NPC memories are fetched from the graph but never reach the prompt
-**Found:** 2026-08-14, during `RET-P0` (verifying the ISSUE-145 fix end to end)
-**Severity:** P2 (annoying)
-**Where:** between `graph/memory/memory_queries.py` `CYPHER_GET_MEMORIES_FOR_CHARACTER` and
-`retrieval/context/context_builder.py:398-400` (`_build_tier_a_extended`) / `context_serializer.py`
-**Description:** After the RET-P0 budget and prompt-hygiene fixes, `captain_sorn`'s context is
-396 tokens against a 512 budget — there is headroom — yet `npc.memories` is `[]` in
-`GET /v1/admin/debug/retrieval`. The data exists and the production query returns it: running
-`CYPHER_GET_MEMORIES_FOR_CHARACTER` verbatim against the live graph returns 2 rows
-(`mem_captain_sorn_0`, `mem_captain_sorn_1`), both correctly labelled `:Memory` with real
-`content`. So this is **not** the ISSUE-145 budget cause and **not** missing seed data — the rows
-are dropped somewhere between the reader and the serialized skeleton. Note both rows have
-`vividness = 0`, so a truthiness filter on vividness, `annotate_memory_ages` returning empty, or
-the `PartialDialogueContextCache` profile slot are the three candidates.
-Distinguish from beliefs/goals, which are legitimately `[]` — `captain_sorn` has no
-`HOLDS_BELIEF`/`HAS_GOAL` edges in the seed at all.
-**Why deferred:** RET-P0 is scoped to budget starvation; single-task focus. The ISSUE-145
-acceptance criterion for profile and known-events is met and verified independently of this.
-**To fix:** Trace `get_memories_for_character` → `_fetch_npc_profile_data` →
-`_build_tier_a_extended` → `serialize_context` with a live `captain_sorn` payload; add a unit test
-asserting a `vividness=0` memory survives to the serialized `npc.memories` slot. Fold into RET-P2,
-which already touches this serialization path.
+## ISSUE-163: the NPC's own inner state is ranked below its surroundings and loses the tier-A budget
+**Found:** 2026-08-14, during `RET-P0` (verifying the ISSUE-145 fix end to end).
+**Rescoped:** 2026-08-26 — the original scope (memories only, `captain_sorn` only, three
+candidate causes) was too narrow, and two of its three candidates are now falsified.
+**Severity:** P1 (blocking) — every NPC in every world speaks without beliefs or memories.
+**Where:** `retrieval/context/context_scoring.py:_infer_proximity_hops` (the ranking cause,
+FIXED) and `retrieval/context/context_budget_enforcer.py:_fit_tier_a_pinned_pool` plus
+`fill_to_budget`'s `tier_a_soft_cap` (the budget cause, still open as ISSUE-197).
+**Measured scope (2026-08-26, live engine at 77688e7, 975-row transcript
+`evals/generations/k3_77688e7_regen1/outputs.jsonl`):** `npc.beliefs`, `npc.memories` and
+`npc.top_need` empty in 100% of rows; `npc.goals` empty in 76.7%; `npc.profile` populated in
+100%. Not memories only, and not one NPC: reproduced on `mira_innkeeper`, `captain_sorn`,
+`lira_fence`, `aldric_merchant`, `old_henryk`, `vw_elder`, `vw_farmer`, `tw_innkeeper`.
+
+**Root cause (ranking half — FIXED 2026-08-26).** `_infer_proximity_hops` recognised
+`character:`, `relation:`, `location:`, `nearby_npcs`, `event:`, `session` and `rag:`, and
+returned `max_proximity_hops` (2) for everything else. `beliefs`, `goals`, `memories`,
+`secrets`, `top_need` and the rest of the NPC's own state fell through to that default, so
+`_proximity_score` scored them `1 - 2/2 = 0.0` — the score of a node at the graph horizon —
+while `nearby_npcs` (strangers standing in the room, 1 hop) scored 0.5. With `proximity`
+weighted 0.20 that is a flat 0.10-0.20 penalty, and it put the NPC's own state at the BOTTOM
+of the ranked tier-A list. Live trace on `mira_innkeeper` before the fix:
+
+    tierA pinned = [character:mira_innkeeper, session] = 150 tokens
+    tier_a_soft_cap = min(4000, int(512 * 0.55)) = 281  ->  131 tokens left
+    ranked non-pinned: relation:player(505) location:loc_tavern(2188) nearby_npcs(91)
+                       event:0(17) event:1(54) memories(483) beliefs(130) goals(70)
+                       secrets(106) believed_rumors(29)
+    selected: nearby_npcs(91) + event:0(17) = 108  ->  23 tokens left
+    dropped:  relation:player, location, event:1, memories, beliefs, goals, secrets, rumors
+
+This explains the per-field pattern exactly, which is what pins it: `profile` is `character:`,
+a PINNED item, so it never competes and always arrives; `goals` is the smallest inner-life
+item (70-74 tokens) so it squeaks in for the NPCs whose pinned block is small enough
+(`captain_sorn`, `vw_elder`); `beliefs` (130-145) and `memories` (213-483) never fit.
+
+**Falsified candidates.** Both suspects named in the original entry are wrong, and the live
+trace shows why: `get_memories_for_character` returns 3/2/2 rows for mira/sorn/vw_elder with
+`vividness=0` intact, `rerank_by_keyword` returns 2 beliefs and 1 goal, and
+`annotate_memory_ages` produces a 483-token `memories` ContextItem that is present in the
+pre-budget merged context. There is no truthiness filter on `vividness` anywhere on the path,
+and `PartialDialogueContextCache` is not involved (the debug endpoint passes no cache at all
+and reproduces the drop). The rows survive every hop up to budget enforcement.
+**Also disproven:** "353 tokens against a 512 budget, so nothing is trimmed for space." The
+gap is not headroom — it is the fingerprint of the cause. Tier A is capped at 281 tokens
+(55% of 512) and tiers B/C spend 0, so ~160 tokens of the prompt budget go unspent WHILE
+tier-A items are being dropped. See ISSUE-197.
+
+**Fixed:** 2026-08-26 (ranking half only, DEC-198). `NPC_SELF_STATE_KEYS` in
+`retrieval/context/context_scoring.py` now maps the NPC's own state to
+`SELF_STATE_PROXIMITY_HOPS = 0`. Regression test:
+`tests/unit/retrieval/test_context_inner_life_reaches_prompt.py`.
+Live `GET /v1/admin/debug/retrieval?query=what+news`, 8 NPCs, before -> after:
+
+    npc.beliefs   1/8 (12.5%) -> 6/8 (75.0%)
+    npc.goals     2/8 (25.0%) -> 1/8 (12.5%)
+    npc.memories  0/8  (0.0%) -> 0/8  (0.0%)
+
+**Still open — do not archive this entry.** Beliefs now win the 131-token remainder, but that
+remainder is zero-sum: `captain_sorn` and `vw_elder` traded their goal for their beliefs, and
+memories still cannot fit (a single `mira_innkeeper` memories item is 483 tokens against a
+512-token prompt budget). The remaining work is ISSUE-197 (reclaim the unspent tier B/C
+budget), with ISSUE-199 keeping the fat `location:` and `relation:player` items off the top
+of the ranking.
 
 ## ISSUE-162: `make lint` is red on `main` — E741 ambiguous variable name in `sequence_order_effect.py`
 **Found:** 2026-08-14, during `RET-P0` (retrieval quality program)

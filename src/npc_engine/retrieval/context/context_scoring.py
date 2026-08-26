@@ -22,6 +22,33 @@ from npc_engine.schema.context_config_models import LLMConfig
 from npc_engine.world.time_utils import TimePoint, total_days
 
 
+NPC_SELF_STATE_KEYS: tuple[str, ...] = (
+    "beliefs",
+    "goals",
+    "memories",
+    "secrets",
+    "obligations",
+    "owned_items",
+    "believed_rumors",
+    "traits",
+    "group_memberships",
+    "active_pledges",
+    "player_memories",
+    "top_need",
+)
+"""Context keys carrying state that hangs directly off the NPC's own Character node.
+
+ISSUE-163: these fell through to the ``max_proximity_hops`` default, scoring proximity
+0.0 — the score of a node at the graph horizon — so an NPC's own beliefs and memories
+ranked below the strangers standing in the room with it (``nearby_npcs``, 1 hop, 0.5).
+Under the 281-token tier-A cap that ordering is the difference between reaching the
+prompt and being dropped.
+"""
+
+SELF_STATE_PROXIMITY_HOPS = 0
+"""An NPC's own state is zero hops from the NPC, the same as its character node."""
+
+
 def rank_tier_items(
     *,
     items: list[ContextItem],
@@ -191,6 +218,8 @@ def _infer_proximity_hops(key: str, max_proximity_hops: int) -> int:
     lowered = key.lower()
     if lowered.startswith("character:") or lowered.startswith("relation:"):
         return 0
+    if lowered.startswith(NPC_SELF_STATE_KEYS):
+        return SELF_STATE_PROXIMITY_HOPS
     if lowered.startswith("location:") or lowered.startswith("nearby_npcs"):
         return 1
     if lowered.startswith("event:"):
