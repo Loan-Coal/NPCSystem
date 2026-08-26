@@ -34,13 +34,22 @@ NON_PROMPT_NODE_FIELDS: frozenset[str] = frozenset({
     # Wall-clock-derived ticks. dialogue_handler stamps writes with
     # int(datetime.now().timestamp()), so these change on every call and are the
     # single largest source of prompt non-determinism (EVAL-P20.0 / DEC-176).
-    # `expires_at_tick` nests inside routine_override; _clean strips by key name at
-    # any depth, so the sibling `location_id` survives.
+    # `expires_at_tick` is stripped wherever it appears as a real key. NOTE it does NOT
+    # reach the one inside `routine_override`: that property is persisted as an opaque
+    # JSON *string*, so _clean walks past it and both keys survive into the prompt --
+    # verified live 2026-08-26 (ISSUE-207). The entry is still correct for every producer
+    # that emits the key structurally.
     "emotion_updated_at_tick",
     "expires_at_tick",
     # Lifecycle flags used by readers, not by dialogue.
     "is_active",
     "is_player",
+    # Audit trail on the RELATES_TO edge: one record per relation mutation, each with a
+    # wall-clock `timestamp` and a `tick_id`. Read only by mutation/ for rolling-window
+    # bounds. It duplicates values the edge already carries as trust/fear/affection, and
+    # measured 1,680 chars (~420 tokens) on a 6-interaction relation -- most of the
+    # ~505-token `relation:player` item that ISSUE-199 measured.
+    "delta_log",
 })
 """Node properties that must never be serialized into an LLM prompt.
 

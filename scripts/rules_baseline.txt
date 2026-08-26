@@ -1,6 +1,6 @@
 # Grandfathered CLAUDE.md rule violations - see scripts/check_rules.py.
 # The gate fails only on NEW violations. Shrink this file as debt is fixed
-# (run `make check-rules-update`). Never add a line by hand to dodge the gate.
+# (run the corresponding update target). Never add a line by hand to dodge the gate.
 R001|demo_game/client.py
 R001|demo_game/game_controller.py
 R001|demo_game/game_end_checker.py
@@ -132,7 +132,6 @@ R006|src/npc_engine/retrieval/context/context_relevance_engine.py::rank_context_
 R006|src/npc_engine/retrieval/context/context_scoring.py::rank_tier_items
 R006|src/npc_engine/retrieval/context/context_serializer.py::serialize_context
 R006|src/npc_engine/retrieval/dialogue_context/dialogue_context_adapter.py::Neo4jDialogueContextAdapter.build_context
-R006|src/npc_engine/retrieval/graph_rag/subgraph_retriever.py::retrieve_tier_a_context
 R006|src/npc_engine/scheduler/tick_scheduler.py::TickScheduler.__init__
 R006|src/npc_engine/schema/schema_loader.py::load_game_schema
 R006|src/npc_engine/scripts/guard_contract_test_sync.py::evaluate_contract_test_sync

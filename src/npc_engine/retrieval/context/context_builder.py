@@ -417,29 +417,29 @@ def _build_tier_a_extended(
     """Build extended Tier A items: reputation, quest, beliefs, memories, second-hop events, etc."""
     items: list[Any] = []
     if player_id and reputation_items:
-        items.append(ContextItem(key="reputation", text=serialize_json(reputation_items), tier="tierA", priority=85))
+        items.append(ContextItem(key="reputation", text=serialize_json(reputation_items, strip_fields=NON_PROMPT_NODE_FIELDS), tier="tierA", priority=85))
     if active_quest:
-        items.append(ContextItem(key="active_quest", text=serialize_json(active_quest), tier="tierA", priority=89, pinned=True))
+        items.append(ContextItem(key="active_quest", text=serialize_json(active_quest, strip_fields=NON_PROMPT_NODE_FIELDS), tier="tierA", priority=89, pinned=True))
     if player_relation_edge is not None:
         # ISSUE-070: subgraph_retriever also emits key="relation:player" (priority=95). merge_context dedups
         # by key keeping the higher priority, so the subgraph item wins deterministically when both are
         # present; this 88 applies only when subgraph_retriever produced no relation edge.
-        items.append(ContextItem(key="relation:player", text=serialize_json(player_relation_edge), tier="tierA", priority=88))
+        items.append(ContextItem(key="relation:player", text=serialize_json(player_relation_edge, strip_fields=NON_PROMPT_NODE_FIELDS), tier="tierA", priority=88))
     if memories:
         aged_memories = annotate_memory_ages(memories, game_time)
-        items.append(ContextItem(key="memories", text=serialize_json(aged_memories), tier="tierA", priority=90))
+        items.append(ContextItem(key="memories", text=serialize_json(aged_memories, strip_fields=NON_PROMPT_NODE_FIELDS), tier="tierA", priority=90))
     if beliefs:
-        items.append(ContextItem(key="beliefs", text=serialize_json(beliefs), tier="tierA", priority=88))
+        items.append(ContextItem(key="beliefs", text=serialize_json(beliefs, strip_fields=NON_PROMPT_NODE_FIELDS), tier="tierA", priority=88))
     if goals:
-        items.append(ContextItem(key="goals", text=serialize_json(goals), tier="tierA", priority=87))
+        items.append(ContextItem(key="goals", text=serialize_json(goals, strip_fields=NON_PROMPT_NODE_FIELDS), tier="tierA", priority=87))
     if owned_items:
-        items.append(ContextItem(key="owned_items", text=serialize_json(owned_items), tier="tierA", priority=86))
+        items.append(ContextItem(key="owned_items", text=serialize_json(owned_items, strip_fields=NON_PROMPT_NODE_FIELDS), tier="tierA", priority=86))
     if secrets:
-        items.append(ContextItem(key="secrets", text=serialize_json(secrets), tier="tierA", priority=84))
+        items.append(ContextItem(key="secrets", text=serialize_json(secrets, strip_fields=NON_PROMPT_NODE_FIELDS), tier="tierA", priority=84))
     if obligations:
-        items.append(ContextItem(key="obligations", text=serialize_json(obligations), tier="tierA", priority=83))
+        items.append(ContextItem(key="obligations", text=serialize_json(obligations, strip_fields=NON_PROMPT_NODE_FIELDS), tier="tierA", priority=83))
     for idx, evt in enumerate((second_hop_events or [])[:settings.MAX_SECOND_HOP_EVENTS]):
-        items.append(ContextItem(key=f"second_hop:{idx}:{npc_id}", text=serialize_json(evt, strip_nulls=True), tier="tierA", priority=74 - idx))
+        items.append(ContextItem(key=f"second_hop:{idx}:{npc_id}", text=serialize_json(evt, strip_nulls=True, strip_fields=NON_PROMPT_NODE_FIELDS), tier="tierA", priority=74 - idx))
     return items
 
 
@@ -454,7 +454,7 @@ def _build_tier_b_c_items(tier_b_results: list[Any]) -> tuple[Any, ...]:
     for index, row in enumerate(tier_b_results):
         item = ContextItem(
             key=f"rag:{row['id']}",
-            text=serialize_json(_to_json_safe(row["payload"])),
+            text=serialize_json(_to_json_safe(row["payload"]), strip_fields=NON_PROMPT_NODE_FIELDS),
             tier="tierB" if index < split_index else "tierC",
             priority=max(1, 60 - index),
         )
@@ -660,19 +660,10 @@ def _to_json_safe(value: Any) -> Any:
 
 
 # Backward-compatibility shims for tests that import these names directly.
-def _enforce_final_serialized_budget_with_context(context: MergedContext, budget: int) -> tuple[MergedContext, str]:
-    from .context_builder_helpers import enforce_final_serialized_budget_with_context
-    return enforce_final_serialized_budget_with_context(context=context, budget=budget)
-
-
 def _enforce_final_serialized_budget(context: MergedContext, budget: int) -> str:
     from .context_builder_helpers import enforce_final_serialized_budget_with_context
     _, serialized = enforce_final_serialized_budget_with_context(context=context, budget=budget)
     return serialized
-
-
-def _normalize_ratio(value: float) -> float:
-    return normalize_ratio(value)
 
 
 def _estimate_tokens(text: str) -> int:

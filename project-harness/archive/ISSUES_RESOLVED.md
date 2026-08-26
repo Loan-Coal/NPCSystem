@@ -2585,4 +2585,55 @@ its `weight_profiles`/`default_weight_profile` workaround removed — it declare
 **Residual, logged separately as ISSUE-203:** this does NOT make the dialogue path's weights
 YAML-tunable. `detect_dialogue_profile` returns `rpg_dialogue_social`/`rpg_dialogue_quest`,
 never `"default"`, so the block this fix unlocks is still not what dialogue resolves.
+## [FIXED] ISSUE-199: `location:` and `relation:player` context items are 4.3x and 1.0x the entire prompt budget
+**Found:** 2026-08-26, during the ISSUE-163 root-cause trace
+**Severity:** P1 (blocking) — the NPC's location context reaches NO prompt, for any NPC
+**Where:** `retrieval/graph_rag/subgraph_retriever.py:_location_items` and `_relation_item`;
+readers `graph/graph_reader.get_location_context` / `get_npc_player_edge`
+**Description:** measured token sizes of single tier-A items, against a 512-token TOTAL
+prompt budget: `location:loc_tavern` **2188**, `location:loc_guard_barracks` **2191**,
+`location:vw_village_square` **2191**, `relation:player` **500-505**. They rank at the very
+top of tier A (priorities 998 and 997 after ranking) and are then skipped by every budget
+pass, so the NPC never knows where it is standing beyond the location name folded into
+`npc.profile`. `_character_item` already documents this exact failure mode for the character
+node (RET-P0.5: `properties(c)` wholesale, including the 384-float embedding, measured at
+2014 tokens) and strips `NON_PROMPT_NODE_FIELDS`; the location and relation readers were
+never given the same treatment. This also accounts for `player_relation` being empty in
+836/975 eval rows — it is populated only when `subgraph_retriever` emits the PINNED
+priority-95 variant.
+**Why deferred:** one root cause per fix (ISSUE-163). These items are skipped, not
+truncating anything, so they are not the direct cause of the inner-life drop.
+**To fix:** strip `NON_PROMPT_NODE_FIELDS` in `_location_items` and `_relation_item` the way
+`_character_item` does, and project the location payload down to the fields a prompt can
+use (name, kind, description) rather than the whole node. Re-measure with the 8-NPC probe.
+**Escalated 2026-08-26 by P2 (DEC-201).** Now that the scorer reads array payloads, the NPC's
+own state scores real recency and severity while `relation:player` scores severity 0.0 (it
+carries no severity/urgency/confidence/emotional_charge field), so it lost the ranking and
+`player_relation` measured **0/8** on the 8-NPC probe, down from at least 1/8. That is the
+correct ordering — 505 of its ~505 tokens are a `delta_log` of six all-zero delta records —
+but it means the player relationship now reaches NO prompt at all until this is fixed. In a
+seeded world the values are all 0 so nothing is lost today; in a live game trust/fear/affection
+would be silently absent. This raises P3 from a token-efficiency fix to a correctness one.
+**Fixed:** 2026-08-26, in P3 (DEC-202). `NON_PROMPT_NODE_FIELDS` is now applied at every
+assembly site instead of only `_character_item` and the tier-0 items, and `delta_log` was
+added to the deny-list. Measured on the rebuilt image:
+
+    item                       before    after
+    location:loc_tavern         2188       45   tokens
+    relation:player              505       21   tokens
+
+    slot                      after P2  after P3
+    npc.profile.current_location  0/8      8/8
+    player_relation               0/8      6/8
+
+`current_location` was 0/975 across the entire eval transcript and is now populated for
+every NPC probed. Regression tests: `tests/unit/retrieval/test_context_payload_stripping.py`
+-- `test_every_assembled_tier_a_item_is_free_of_non_prompt_fields` is one assertion over
+every producer, so it also guards the site somebody adds next year.
+**Deviation from the plan, deliberate:** the plan called for a named `_LOCATION_PROMPT_FIELDS`
+projection on top of the strip ("stripping alone takes 2,188 -> ~180; projecting takes it to
+~40"). Measured, the strip alone reaches **45 tokens**, because the only keys a Location node
+carries are `id`, `name`, `descriptor`, `region`, `location_tag` plus the three stripped
+bookkeeping fields. A projection would save roughly one token (`id`) at the cost of a
+hand-maintained field list -- the exact churn P5's declaration table exists to remove. Not done.
 

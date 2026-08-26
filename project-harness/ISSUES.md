@@ -48,36 +48,6 @@ is unaffected. Then re-measure the 8-NPC probe; expect memories to become reacha
 NPCs whose memory item is under ~200 tokens. Pair with ISSUE-199 — with the 2188-token
 `location:` item fixed, the reclaimed budget buys proportionally more.
 
-## ISSUE-199: `location:` and `relation:player` context items are 4.3x and 1.0x the entire prompt budget
-**Found:** 2026-08-26, during the ISSUE-163 root-cause trace
-**Severity:** P1 (blocking) — the NPC's location context reaches NO prompt, for any NPC
-**Where:** `retrieval/graph_rag/subgraph_retriever.py:_location_items` and `_relation_item`;
-readers `graph/graph_reader.get_location_context` / `get_npc_player_edge`
-**Description:** measured token sizes of single tier-A items, against a 512-token TOTAL
-prompt budget: `location:loc_tavern` **2188**, `location:loc_guard_barracks` **2191**,
-`location:vw_village_square` **2191**, `relation:player` **500-505**. They rank at the very
-top of tier A (priorities 998 and 997 after ranking) and are then skipped by every budget
-pass, so the NPC never knows where it is standing beyond the location name folded into
-`npc.profile`. `_character_item` already documents this exact failure mode for the character
-node (RET-P0.5: `properties(c)` wholesale, including the 384-float embedding, measured at
-2014 tokens) and strips `NON_PROMPT_NODE_FIELDS`; the location and relation readers were
-never given the same treatment. This also accounts for `player_relation` being empty in
-836/975 eval rows — it is populated only when `subgraph_retriever` emits the PINNED
-priority-95 variant.
-**Why deferred:** one root cause per fix (ISSUE-163). These items are skipped, not
-truncating anything, so they are not the direct cause of the inner-life drop.
-**To fix:** strip `NON_PROMPT_NODE_FIELDS` in `_location_items` and `_relation_item` the way
-`_character_item` does, and project the location payload down to the fields a prompt can
-use (name, kind, description) rather than the whole node. Re-measure with the 8-NPC probe.
-**Escalated 2026-08-26 by P2 (DEC-201).** Now that the scorer reads array payloads, the NPC's
-own state scores real recency and severity while `relation:player` scores severity 0.0 (it
-carries no severity/urgency/confidence/emotional_charge field), so it lost the ranking and
-`player_relation` measured **0/8** on the 8-NPC probe, down from at least 1/8. That is the
-correct ordering — 505 of its ~505 tokens are a `delta_log` of six all-zero delta records —
-but it means the player relationship now reaches NO prompt at all until this is fixed. In a
-seeded world the values are all 0 so nothing is lost today; in a live game trust/fear/affection
-would be silently absent. This raises P3 from a token-efficiency fix to a correctness one.
-
 ## ISSUE-200: eight assembled tier-A item kinds have no slot in the serialized skeleton
 **Found:** 2026-08-26, during the ISSUE-163 root-cause trace
 **Severity:** P2 (annoying) — they spend prompt budget and then vanish
@@ -1505,3 +1475,49 @@ maximum over records using it. Regression test to add then: a two-record `active
 with a low-severity recently-sworn pledge first and a high-severity older one second, asserting
 the item scores the higher severity. The docstring on `_payload_for_scoring` carries the
 alignment table so the gap is visible at the call site until then.
+
+## ISSUE-207: `routine_override` smuggles a tick counter into every prompt inside a JSON string
+**Found:** 2026-08-26, during P3 while applying NON_PROMPT_NODE_FIELDS everywhere
+**Severity:** P2 (annoying) - a live prompt-determinism hole that the deny-list only appears
+to cover
+**Where:** `retrieval/context/context_utils.py:NON_PROMPT_NODE_FIELDS` (the
+`expires_at_tick` entry) vs `graph/scheduling/routine_queries.set_routine_override`
+**Description:** the deny-list carried the comment "`expires_at_tick` nests inside
+routine_override; _clean strips by key name at any depth, so the sibling `location_id`
+survives." That is false. `routine_override` is persisted as an **opaque JSON string**, not a
+nested map, so `_clean` -- which walks dicts and lists -- steps straight past it. Verified live
+2026-08-26: `mira_innkeeper`'s prompt carries
+`"routine_override": "{\"location_id\": \"home\", \"expires_at_tick\": 3371}"`, both keys
+intact, inside `npc.profile`. The comment has been corrected in place; the leak has not been
+fixed. It matters because the deny-list's own docstring records that wall-clock-derived tick
+fields were on their own sufficient to make 36 of 36 otherwise-identical eval records produce
+different `npc_response` text (EVAL-P20.0 / DEC-176) -- and this one is invisible to the very
+mechanism built to catch it.
+**Why deferred:** fixing it means either parsing the string to strip inside it (a special case
+in a generic cleaner) or changing how `set_routine_override` persists the property (a graph
+schema change, which CLAUDE.md requires approval for). Neither belongs in a payload-stripping
+pass.
+**To fix:** preferred - persist `routine_override` as a map so the existing deny-list reaches
+it, which also makes the field readable by Cypher. Cheaper alternative - drop
+`routine_override` from the character payload entirely for prompt purposes; nothing in the
+prompt teaches the model what a routine override is, so today it is pure noise AND pure
+non-determinism. Measure the eval-record reproducibility rate before and after; that is the
+metric this defect moves.
+
+## ISSUE-208: `active_pledges` loses its expiry tick to the global deny-list
+**Found:** 2026-08-26, during P3
+**Severity:** P3 (nice-to-fix) - no observable effect today
+**Where:** `retrieval/graph_rag/subgraph_retriever.py:_pledge_item`
+**Description:** `_pledge_item` hand-projects `expires_at_tick` as prompt content, and
+`expires_at_tick` is in `NON_PROMPT_NODE_FIELDS`, so P3's uniform strip now removes it. This
+was a deliberate choice over adding a per-producer exception (see DEC-202): a global deny-list
+with one carve-out is the kind of thing nobody remembers, and the carve-out would have to be
+re-justified at every future producer. Nothing observable changes because `active_pledges` has
+no slot in the serialized skeleton at all (ISSUE-200) - the item is assembled, ranked, charged
+to the tier-A budget, then discarded.
+**Why deferred:** whether a bare tick number is useful to the model is a prompt-schema question
+and cannot be answered until the key has a slot.
+**To fix:** decide with ISSUE-200 in P5. If pledges get a slot, either render the expiry as a
+relative phrase the model can use ("expires in 12 ticks") rather than an absolute counter it
+cannot compare, or drop it. If they do not get a slot, stop assembling the item and the
+question disappears.

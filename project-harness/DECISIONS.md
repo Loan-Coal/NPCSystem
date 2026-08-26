@@ -5095,3 +5095,80 @@ sworn pledge. The `_payload_for_scoring` docstring now carries the full alignmen
 six array producers rather than a prose claim about four of them, and the two unaligned cases
 are ISSUE-206, to be folded into P5 where the per-key field mapping becomes one column of the
 declaration table instead of a new hand-maintained dict.
+
+## DEC-202: the deny-list that said "every payload" now means it, and delta_log is on it
+**Date:** 2026-08-26
+**Decided by:** this session, P3 of the context-pipeline plan.
+
+**Context.** `context_utils.NON_PROMPT_NODE_FIELDS` describes itself as the enforcement point
+for CLAUDE.md's strict "Idempotent assembly" rule and instructs, in its own docstring, that it
+be applied to *every* payload serialized into prompt content. Two sites did: `_character_item`
+and the tier-0 items. Everything else passed graph rows to `serialize_json` bare. Graph readers
+return `properties(n)` wholesale, so each unstripped site paid for a 384-float `embedding` in
+prompt tokens and injected wall-clock timestamps that make the same turn produce a different
+prompt on a second run.
+
+**Decision 1 - apply the strip at all seventeen call sites, including the four that already
+hand-project.** `_trait_item`, `_group_item`, `_rumor_item` and `_pledge_item` build explicit
+field dicts and so cannot leak an `embedding` today. They get the strip anyway. Redundant for
+three of them, and that is the point: "every producer applies the same rule" is a rule someone
+can follow, whereas "every producer except the ones that project" is a rule someone has to
+re-derive. The single test
+`test_every_assembled_tier_a_item_is_free_of_non_prompt_fields` asserts it over all of them at
+once, at any nesting depth, so the seventeenth site added next year is covered without an
+eighteenth test.
+
+**Decision 2 - `delta_log` joins the deny-list.** It is the audit trail on the RELATES_TO edge,
+one record per relation mutation. It is read only by `mutation/` for rolling-window bounds
+validation, it duplicates values the edge already carries as `trust`/`fear`/`affection`, and
+every record holds a wall-clock `timestamp`. Measured 1,680 chars (~420 tokens) on a
+six-interaction relation -- most of the ~505-token `relation:player` item ISSUE-199 measured.
+Adding it to the global list rather than projecting the relation edge keeps the fix at the one
+place both emitters of `relation:player` pass through.
+
+**Decision 3 - the `active_pledges` collision resolves in favour of the global rule.**
+`_pledge_item` projects `expires_at_tick`, which is on the deny-list, so the strip removes it.
+The alternative was a per-producer exemption. Rejected on the same ground as Decision 1. Costs
+nothing observable: `active_pledges` has no serializer slot (ISSUE-200). Logged as ISSUE-208 so
+P5 decides it with the rest of the schema.
+
+**Decision 4 - no `_LOCATION_PROMPT_FIELDS` projection.** The plan called for one on top of the
+strip, estimating 2,188 -> ~180 with the strip and ~40 with a projection. Measured, the strip
+alone lands at **45 tokens**: a Location node carries only `id`, `name`, `descriptor`, `region`
+and `location_tag` once the three bookkeeping fields are gone. A projection would save about
+one token and add a hand-maintained field list -- the churn P5's declaration table exists to
+delete. Not done.
+
+**A false claim found and corrected, not fixed.** The deny-list's comment asserted that
+`expires_at_tick` inside `routine_override` is stripped because "_clean strips by key name at
+any depth". `routine_override` is persisted as an opaque JSON *string*, so `_clean` walks past
+it; verified live, `mira_innkeeper`'s prompt still carries both keys inside that string. The
+comment now says so. The leak is ISSUE-207, and it is the sharpest kind: a determinism hole
+invisible to the mechanism built to catch determinism holes.
+
+**Dead code removed** (verified zero references across `src/`, `tests/`, `evals/`, `demo_game/`,
+`e2e/`, `scripts/`): `subgraph_retriever.retrieve_tier_a_context`, whose deletion also removes
+the module's only `AsyncSession` and `graph_reader` imports and makes it pure assembly with no
+graph dependency at all; and `context_builder._enforce_final_serialized_budget_with_context`
+and `_normalize_ratio`. The plan listed the whole shim block at `context_builder.py:663-676` as
+dead -- it is not. `_enforce_final_serialized_budget` and `_estimate_tokens` are both imported
+by `context/__init__.py` and used by `test_context_builder.py`, and `_to_json_safe` is called
+inside `context_builder` itself. Only the two named above were unreferenced. The rules baseline
+ratcheted 136 -> 135.
+
+**Measured effect.** Rebuilt image, `GET /v1/admin/debug/retrieval?query=what+news`, the same
+8 NPCs used since ISSUE-163:
+
+    slot                          after P1   after P2   after P3
+    npc.beliefs                      3/8        8/8        8/8
+    npc.goals                        6/8        8/8        8/8
+    npc.memories                     3/8        4/8        4/8
+    npc.profile.current_location     0/8        0/8        8/8
+    player_relation                    -        0/8        6/8
+    assembled tokens               635-829    536-729    564-742
+
+`current_location` was empty in 975 of 975 rows of the last eval transcript. `player_relation`
+is the item P2 displaced by correctly ranking it below the NPC's own beliefs; at 21 tokens
+instead of 505 it no longer has to compete, which is why both now fit. `npc.memories` is
+unchanged at 4/8 and stays that way until ISSUE-197 (P4) hands tier A the budget tiers B and C
+never spend.
