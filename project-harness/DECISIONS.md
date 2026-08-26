@@ -5256,3 +5256,100 @@ endpoint -- that label had never been emitted by anything before this change.
 
 **Not fixed here, and not this issue:** `npc.top_need` stays 0/8 because the graph contains
 zero `Need` nodes and zero `HAS_NEED` edges. Verified against Neo4j directly. ISSUE-210.
+
+---
+
+## DEC-204: the window goes to the model's own ceiling so the budget stops being the thing
+## being measured, and the context system's unconstrained appetite is recorded
+**Date:** 2026-08-26
+**Decided by:** this session, P5 of the context-pipeline plan.
+
+**Context.** Every phase after this one changes what the retrieval pipeline *produces*: P6
+regenerates the serializer, P8 turns on tier B for the first time. At the shipped window
+(8192 → `PROMPT_TOKEN_BUDGET` 1312) the budget binds, so any of those changes would have been
+measured through an allocator that drops items — and a RAG regression and a budget regression
+are indistinguishable in the eval. Worse, the numbers were already colliding: tier A spends
+~950 tok/turn and, once tiers B and C actually fill, DEC-203's reclaim correctly hands their
+share back and caps tier A at its ~721 fraction floor. Turning RAG on would have cut inner
+life by ~23% and the cause would have been unattributable.
+
+**Decision 1 — raise `OLLAMA_CONTEXT_LENGTH` to 32768 in `.env`, and only in `.env`.**
+32768 is the ceiling `ollama show qwen2.5:7b` reports, not a round number: asking for more
+risks the silent clamp DEC-199 exists to catch. Derived budget `max(512, 32768 − 6880) =
+25888`. The **code** default in `config.py` stays 8192 — that is what makes the shipped
+configuration coherent and lets the window validator hard-fail outside dev. The 32768 is a
+local instrument, provisional, re-decided in P10.
+
+**Decision 2 — raise the absolute per-tier ceilings to 12000 / 8000 / 5000** (sum 25000 ≤
+25888). These are a hard `min()` applied on top of the fractional split, so they bind long
+before the fractions do: at 4000/3000/2000 tier A could never exceed 4000 whatever the
+window, and a window raise alone would have widened nothing.
+
+**Decision 3 — accept the RAM spill in advance, then record that it did not happen.**
+`ollama ps` after the change: **100% GPU, CONTEXT 32768**, resident 5.1 GB → 6.6 GB. The
+KV-cache growth fit on the card. This matters for P10: the trim decision is now a latency and
+budget question with no VRAM term in it.
+
+**Verification, in the order that matters.**
+
+*1 — no clamp (this gates everything else).* `prompt_eval_count` **varies** with input:
+6151–7095 across 16 dialogue turns at `num_ctx: 32768`, tracking `prompt_chars` 3738–6976
+monotonically. Zero truncation lines in the app log. A constant here is the exact failure
+DEC-199 caught at 4096.
+
+*2 — latency.* 8 turns each, same messages, warm model:
+
+    window    mean     median   min     max
+    8192      5.30s    5.10s    2.20s   10.55s
+    32768     6.49s    4.63s    2.51s   14.38s
+
+The spread is response-length variance, not window cost — the prompt is ~6.5k tokens either
+way, so the KV *allocation* is four times larger but the *compute* is unchanged. One caveat
+worth writing down: the first turn after a context-size change pays a **30s model reload**.
+Projected 975 rows ≈ 1.4–2.3 h, unchanged in kind. This is P10's latency budget.
+
+*3 — no regression (D8).* 8-NPC probe, rebuilt image at `9f57b23`:
+
+    npc.beliefs 8/8 · npc.goals 8/8 · npc.memories 8/8 · npc.profile.current_location 8/8
+
+`npc.top_need` stays 0/8 — still zero `Need` nodes in the graph (ISSUE-210), not a budget
+effect.
+
+**The unconstrained ceiling — P5's actual deliverable.** Controlled A/B: identical world
+state, identical image, the window and the tier ceilings the *only* difference (the 8192 run
+was re-measured after the dialogue turns, because turns mutate the graph and the first
+comparison was confounded by that).
+
+    npc                budget 1312   budget 25888   delta   what moved
+    mira_innkeeper           1063           1051     −12    content drift only
+    captain_sorn              757            757      +0    identical
+    lira_fence                986            988      +2    content drift only
+    aldric_merchant          1141           1133      −8    content drift only
+    old_henryk               1168           1213     +45    nearby_npcs 0 → 49
+    vw_elder                  742            742      +0    identical
+    vw_farmer                 681            681      +0    identical
+    tw_innkeeper              806            813      +7    content drift only
+
+    tier-A soft-cap drops     1              0
+    assembled per NPC     681–1168       681–1213 (mean 922)
+
+**Read this table carefully, because the headline is how little moved.** Exactly one item in
+eight NPCs was being lost to the budget: `old_henryk`'s `nearby_npcs`, the ISSUE-209 casualty
+DEC-203 recorded. Everything else is ±12 tokens of `npc_known_events` drifting between probes
+as the tick scheduler runs. **The context system's unconstrained appetite is ~1213 tokens at
+the ceiling — under 5% of the 25888 now available.**
+
+Two consequences follow, and both are load-bearing for the phases after this one.
+
+**The budget system is now inert, and that is the point.** Nothing is dropped, nothing is
+compressed, the trim loop never fires. This isolates RAG's effect in P8 — but it also means
+P9's effect gate must **not** be read as validating trimming behaviour, and an arm that
+depends on budget pressure will show no difference because there is no pressure.
+
+**P8 has room it did not have.** Tier B has 8000 tokens of ceiling and a live floor of zero
+spend. Whatever the hydrated corpus produces, it will not be the budget that stops it — which
+is precisely the confound this phase existed to remove.
+
+**Not changed:** no `src/` behaviour, no test expectations. `tests/unit/config`, `tests/unit/llm`
+and `tests/unit/retrieval` (601 tests) stay green — the shipped tier budgets are pinned by no
+test, and the window honesty test bounds constants that did not move.

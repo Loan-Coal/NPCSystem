@@ -1453,6 +1453,14 @@ after the greedy one, which recovers most of the gap for a fraction of the chang
 on the 8-NPC probe: the target is `nearby_npcs` back to 6/8 without losing any inner-life
 field. Do it after P7, so the RAG tiers are exercising the allocator too.
 
+**Update 2026-08-26 (P5, DEC-204).** Masked, not fixed. At `PROMPT_TOKEN_BUDGET` 25888 the
+cap never binds, so the symptom disappears: a controlled A/B (same world, same image, window
+the only difference) shows `old_henryk` regaining `nearby_npcs` 0 → 49 tokens, and the
+tier-A soft-cap drop count going 1 → 0. That is the ONLY item this bug was costing across
+eight NPCs. It will come back the moment P10 trims the window or P8's live tier B puts the
+allocator under pressure again, so the "measure on the 8-NPC probe" instruction above must
+be run at the POST-TRIM window, not at 32768 where it would pass vacuously.
+
 ## ISSUE-210: no seeder creates `Need` nodes, so `npc.top_need` is structurally empty
 **Found:** 2026-08-26, during P4's live verification
 **Severity:** P2 (annoying) - a prompt field that is empty in 100% of rows for a data reason

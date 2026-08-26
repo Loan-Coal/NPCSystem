@@ -1,9 +1,20 @@
 prompt_schema_version: "v1.4"
 compression_prompt_version: "v1.4"
+# Absolute per-tier ceilings, in tokens. These are a HARD min() applied on top of the
+# fractional split, so they bind long before the fractions do: at the old 4000/3000/2000
+# tier A could never exceed 4000 whatever the window, which made a window raise unable to
+# widen tier A at all (_tier_a_cap_with_reclaim takes min(tier_budget_tokens.tier_a, ...)).
+#
+# P5 (2026-08-26): raised to 12000/8000/5000, sum 25000, against the derived budget
+# max(512, 32768 - 6880) = 25888 at OLLAMA_CONTEXT_LENGTH=32768. Sum <= budget on purpose:
+# these ceilings must not be the thing that binds during the measurement window, because
+# P5 exists to observe what the context system asks for when NOTHING trims it.
+#
+# Provisional, re-decided in P10 alongside the window trim.
 tier_budget_tokens:
-  tier_a: 4000
-  tier_b: 3000
-  tier_c: 2000
+  tier_a: 12000
+  tier_b: 8000
+  tier_c: 5000
 session_turns_budget_tokens: 1200
 compression_trigger_ratio: 0.85
 max_proximity_hops: 2
