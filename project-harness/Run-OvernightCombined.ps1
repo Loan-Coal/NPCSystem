@@ -467,6 +467,29 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Log "Regeneration complete."
 
+# --- Step 4b: retrieval metrics for THIS arm ---------------------------------
+# trend_row_builder reads mean_precision_at_k from <gen_dir>/retrieval_metrics.json, and until
+# now nothing in any pipeline created that file -- so every trend row ever recorded carried
+# mean_precision_at_k=null. Measured here, right after generation, so the graph state it sees
+# is the state the arm was generated against.
+# Raw docker rather than `make eval-retrieval`, for the same reason step 3 bypasses
+# `make eval-world-reset`: the recipe's MSYS_NO_PATHCONV=1 prefix is a POSIX inline env-var
+# assignment and the cmd.exe make uses here cannot parse it (ISSUE-187). The --gen-dir is the
+# CONTAINER path because the runner executes inside the container.
+Write-Log "STEP 4b: retrieval metrics for $GenId ..."
+$ArmProfile = "default"
+$ArmMetaPath = Join-Path $GenDir "meta.json"
+if (Test-Path $ArmMetaPath) {
+    $ArmMeta = Get-Content $ArmMetaPath -Raw | ConvertFrom-Json
+    if ($ArmMeta.config.retrieval_profile) { $ArmProfile = $ArmMeta.config.retrieval_profile }
+}
+Write-Log "  attributing the measurement to retrieval_profile '$ArmProfile' (read from the arm's own meta.json)."
+$RetrievalLog = Join-Path $StampDir "retrieval_metrics_$Stamp.log"
+& docker compose run --rm -v "${RepoRoot}:/work" -w /work app `
+    python -m evals retrieval --gen-dir "/work/evals/generations/$GenId" `
+    --retrieval-profile $ArmProfile *>&1 | Tee-Object -FilePath $RetrievalLog
+Write-Log "evals retrieval finished with code $LASTEXITCODE (output: $RetrievalLog). Non-zero leaves mean_precision_at_k null in the trend row -- a finding to report in the morning, NOT a reason to discard an arm that already cost ~85 minutes."
+
 # --- Step 5: deterministic verdicts + conservation ---------------------------
 Write-Log "STEP 5/10: deterministic verdicts on $GenId (conservation runs at 7b, after the judge pass) ..."
 & $Python -m evals deterministic-verdicts `

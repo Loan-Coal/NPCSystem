@@ -19,6 +19,7 @@ which build was answering.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -69,3 +70,41 @@ def test_a_stale_build_aborts_the_run_rather_than_warning() -> None:
     following = source[boot_at : boot_at + 800]
     assert "LASTEXITCODE" in following, "the boot check's exit code must be inspected"
     assert "exit 3" in following, "a stale build must abort step 3, not merely log"
+
+
+# ---------------------------------------------------------------------------
+# Retrieval metrics — the file trend_row_builder reads and nothing ever wrote
+# ---------------------------------------------------------------------------
+
+
+def _retrieval_call_index(source: str) -> int:
+    """Index of the pipeline's retrieval-measurement invocation, or -1 when absent."""
+    return source.find("evals retrieval")
+
+
+def test_the_pipeline_measures_retrieval_between_generation_and_the_trend_row() -> None:
+    """RED anchor: trend_row_builder reads mean_precision_at_k from the gen dir's
+    retrieval_metrics.json, and NOTHING in any pipeline ever created that file -- so every
+    recorded row carried mean_precision_at_k=null. The measurement must happen after the
+    arm exists (step 4) and before the row is recorded (step 9), or it records nothing."""
+    source = _source()
+    call_at = _retrieval_call_index(source)
+    assert call_at != -1, "the pipeline never measures retrieval, so the trend row cannot carry it"
+    assert "--gen-dir" in source[call_at : call_at + 600], "the measurement must be persisted to the arm"
+
+    generate_at = source.index("STEP 4/10")
+    trend_at = source.index("Steps 9-10: EVAL-P22B")
+    assert generate_at < call_at < trend_at
+
+
+def test_a_retrieval_failure_is_reported_but_does_not_kill_the_run() -> None:
+    """By this point the run has already spent ~85 minutes generating. A missing precision
+    number is a finding to read in the morning, not a reason to discard the arm -- so the
+    exit code is logged like every sibling step and never acted on."""
+    source = _source()
+    call_at = _retrieval_call_index(source)
+    following = source[call_at : call_at + 600]
+    assert "LASTEXITCODE" in following, "the exit code must be logged, not swallowed"
+    assert re.search(r"(?m)^\s*exit\s+\d", following) is None, (
+        "a retrieval failure must not abort the run"
+    )
