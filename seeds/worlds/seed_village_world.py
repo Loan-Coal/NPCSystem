@@ -165,10 +165,20 @@ def build_event_payload(
     severity: int,
     is_public: bool = False,
     tick_id: int = 0,
+    src_character_id: str | None = None,
+    faction_id: str | None = None,
+    reputation_delta: int | None = None,
 ) -> dict:
-    """Return an Event node property dict ready for upsert_node."""
+    """Return an Event node property dict ready for upsert_node.
+
+    The last three arguments are what makes an Event readable as a REPUTATION event:
+    get_propagated_reputation_for_npc matches on event_type = 'reputation_change' AND
+    src_character_id = <player>, and returns faction_id / reputation_delta straight out of
+    the node. They are omitted entirely when unset rather than written as null, so an
+    ordinary event's payload is byte-identical to what it was before.
+    """
     now = _now()
-    return {
+    payload: dict = {
         "id": id,
         "summary": summary,
         "event_type": event_type,
@@ -179,6 +189,13 @@ def build_event_payload(
         "occurred_at": now,
         "last_graph_updated_at": now,
     }
+    if src_character_id is not None:
+        payload["src_character_id"] = src_character_id
+    if faction_id is not None:
+        payload["faction_id"] = faction_id
+    if reputation_delta is not None:
+        payload["reputation_delta"] = reputation_delta
+    return payload
 
 
 def _now() -> str:
@@ -376,6 +393,56 @@ _EVENTS = [
     ("vw_missing_child", "A young girl vanished near the forest edge three days ago", "mystery", "vw_village_square", 80, True),
 ]
 
+_REPUTATION_EVENT_TYPE = "reputation_change"
+"""Mirrors graph.reputation.reputation_event_seeder.REPUTATION_EVENT_TYPE.
+
+Mirrored rather than imported: the seeders talk to the engine over HTTP through
+EngineClient and deliberately do not import from npc_engine. Pinned by
+tests/unit/seeds/test_village_reputation_seed.py so the two cannot drift.
+"""
+
+_REPUTATION_PLAYER_ID = "player_demo"
+"""The player the seeded reputation acts are attributed to.
+
+player_demo and not player_eval: it is the only player Character the checked-in eval-world
+baseline contains, and get_propagated_reputation_for_npc matches the event's
+src_character_id against the TURN's player id -- so an act attributed to a player who does
+not exist is an act no NPC can ever recall.
+"""
+
+_REPUTATION_EVENTS = [
+    # (id, summary, location_id, severity, faction_id, reputation_delta)
+    #
+    # Two acts with opposite signs, so both of system_v1.yaml Rule 13's tone branches are
+    # reachable: cautious warmth for a positive delta, guarded suspicion for a negative one.
+    ("vw_player_helped_farmers",
+     "The traveller worked a full day clearing blighted rows in the south fields and took no coin for it",
+     "vw_farmland", 40, "vw_farmers", 25),
+    ("vw_player_crossed_the_council",
+     "The traveller was heard arguing with the village council and left before the matter was settled",
+     "vw_village_square", 45, "vw_village_council", -20),
+]
+"""Word-of-mouth reputation acts the player committed elsewhere, for Rule 13.
+
+Before these existed, context.propagated_reputation was [] in 975 of 975 recorded rows and
+Rule 13's ~19 lines were dead weight in every prompt (ISSUE-200 / DEC-205).
+"""
+
+_REPUTATION_KNOWS_ABOUT = [
+    # (npc_id, event_id, knowledge_state, distorted_summary)
+    #
+    # Rule 13 branches on knowledge_state: "rumor" MUST be hedged, "knows" is spoken as
+    # personal knowledge. One of each, so the difference is observable in a transcript, and
+    # the distorted summary is what that NPC would actually say.
+    ("vw_farmer", "vw_player_helped_farmers", "knows",
+     "The traveller worked the blighted rows beside me the whole day and would not take a coin."),
+    ("vw_healer", "vw_player_helped_farmers", "rumor",
+     "Word is some traveller put in a day on the south fields for nothing. That is what I heard, anyway."),
+    ("vw_guard", "vw_player_crossed_the_council", "rumor",
+     "I have heard there were words with the council, and that the traveller walked out mid-argument. Second-hand, mind."),
+]
+"""Which villagers heard which act, and in what words."""
+
 # KNOWS_ABOUT: (npc_id, event_id, knowledge_state, distortion_type, distortion_level, distorted_summary)
 _KNOWS_ABOUT = [
     ("vw_elder", "vw_crop_blight",
@@ -481,6 +548,24 @@ def seed_all(client: EngineClient) -> dict:
             ),
         ))
 
+    logger.info("[seed-village] reputation_change Events")
+    for evt_id, summary, location_id, severity, faction_id, delta in _REPUTATION_EVENTS:
+        _tally(_seed_node(
+            client,
+            "Event",
+            build_event_payload(
+                id=evt_id,
+                summary=summary,
+                event_type=_REPUTATION_EVENT_TYPE,
+                location_id=location_id,
+                severity=severity,
+                is_public=True,
+                src_character_id=_REPUTATION_PLAYER_ID,
+                faction_id=faction_id,
+                reputation_delta=delta,
+            ),
+        ))
+
     logger.info("[seed-village] world_state")
     client.upsert_node("world_state", build_world_state_payload(
         "age_of_peace",
@@ -495,6 +580,17 @@ def seed_all(client: EngineClient) -> dict:
             "knowledge_state": knowledge_state,
             "distortion_type": distortion_type,
             "distortion_level": distortion_level,
+            "distorted_summary": distorted_summary,
+            "learned_at_tick": 0,
+            "source_character_id": None,
+        }))
+
+    logger.info("[seed-village] KNOWS_ABOUT edges for the reputation acts")
+    for npc_id, event_id, knowledge_state, distorted_summary in _REPUTATION_KNOWS_ABOUT:
+        _tally(_seed_edge(client, "KNOWS_ABOUT", npc_id, event_id, {
+            "knowledge_state": knowledge_state,
+            "distortion_type": None,
+            "distortion_level": 0,
             "distorted_summary": distorted_summary,
             "learned_at_tick": 0,
             "source_character_id": None,
