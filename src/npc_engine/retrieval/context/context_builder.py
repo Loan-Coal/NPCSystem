@@ -48,6 +48,7 @@ from npc_engine.graph.reputation.reputation_queries import (
 )
 from npc_engine.graph.relations.trust_queries import get_second_hop_events, get_trust_scores_for_events
 from npc_engine.graph.quest.quest_queries import get_active_quest_for_player
+from npc_engine.schema.npc_profile_data_models import NpcProfileData
 from npc_engine.schema.retrieval_profile_models import RetrievalProfile
 
 from .context_budget_enforcer import ContextCompressionCache, fill_to_budget_with_report
@@ -259,24 +260,30 @@ async def _fetch_rag_results(
 async def _fetch_npc_profile_data(
     session: AsyncSession, npc_id: str, settings: Settings,
     player_id: str | None, location_id: str | None, profile: RetrievalProfile,
-) -> tuple[Any, ...]:
+) -> NpcProfileData:
     """Fetch NPC profile: location, events, reputation, memories, items, groups, rumors, traits, pledges.
+
+    Returns a named model rather than the 9-tuple this used to be: the tuple was unpacked
+    positionally 300 lines away and cached anonymously, so adding a read meant editing both
+    ends in lockstep and getting the order wrong was a silent mis-assignment.
 
     `events_limit` is a distinct profile field, not a RAG top-k, despite having shared
     Settings.RAG_TOP_K with vector and graph retrieval until this split.
     """
-    location_context = await get_location_context(session=session, location_id=location_id or "")
-    events = await get_events_for_npc(session=session, npc_id=npc_id, limit=profile.events_limit)
-    reputation_items = await get_reputation_context_for_npc(
-        session, npc_id=npc_id, player_id=player_id or "", threshold=settings.REPUTATION_CONTEXT_THRESHOLD,
+    return NpcProfileData(
+        location_context=await get_location_context(session=session, location_id=location_id or ""),
+        events=await get_events_for_npc(session=session, npc_id=npc_id, limit=profile.events_limit),
+        reputation_items=await get_reputation_context_for_npc(
+            session, npc_id=npc_id, player_id=player_id or "",
+            threshold=settings.REPUTATION_CONTEXT_THRESHOLD,
+        ),
+        memories=await get_memories_for_character(session, character_id=npc_id, k=3),
+        owned_items=await get_items_for_character(session, character_id=npc_id, k=10),
+        group_memberships=await get_groups_for_character_svc(session, character_id=npc_id),
+        believed_rumors=await get_rumors_for_character_svc(session, character_id=npc_id, min_confidence=30),
+        traits=await get_traits_svc(session, npc_id),
+        active_pledges=await get_pledges_for_character_svc(session, npc_id, active_only=True),
     )
-    memories = await get_memories_for_character(session, character_id=npc_id, k=3)
-    owned_items = await get_items_for_character(session, character_id=npc_id, k=10)
-    group_memberships = await get_groups_for_character_svc(session, character_id=npc_id)
-    believed_rumors = await get_rumors_for_character_svc(session, character_id=npc_id, min_confidence=30)
-    traits = await get_traits_svc(session, npc_id)
-    active_pledges = await get_pledges_for_character_svc(session, npc_id, active_only=True)
-    return (location_context, events, reputation_items, memories, owned_items, group_memberships, believed_rumors, traits, active_pledges)
 
 
 async def _fetch_beliefs_goals_data(session: AsyncSession, npc_id: str) -> tuple[Any, ...]:
@@ -293,7 +300,7 @@ async def _resolve_npc_context_with_cache(
     location_id: str | None, partial_cache: Any, profile_key: Any, bg_key: Any,
     cached_profile: Any, cached_bg: Any,
     player_message: str, retrieval_profile: RetrievalProfile,
-) -> tuple[Any, Any, Any, Any, Any]:
+) -> tuple[NpcProfileData, Any, Any, Any, Any]:
     """Fetch or restore profile+beliefs/goals with partial cache; return (profile_data, beliefs, goals, secrets, obligations)."""
     profile_miss = cached_profile is None
     bg_miss = cached_bg is None
@@ -618,16 +625,15 @@ async def build_serialized_context_with_receipt(
     location_id = await get_npc_location_id(session=session, npc_id=npc_id)
     tier_b_results = await _fetch_rag_results(session, embedding_index, settings, player_message, session_turns, known_event_ids, npc_id, current_game_time, skip_rag, active_profile)
     profile_data, beliefs, goals, secrets, obligations = await _resolve_npc_context_with_cache(session, npc_id, settings, player_id, location_id, partial_cache, profile_key, bg_key, cached_profile, cached_bg, player_message, active_profile)
-    location_context, events, reputation_items, memories, owned_items, group_memberships, believed_rumors, traits, active_pledges = profile_data
-    trust_scores, second_hop_events, active_quest, player_relation_edge, propagated_reputation = await _fetch_player_data(session, npc_id, player_id, events)
+    trust_scores, second_hop_events, active_quest, player_relation_edge, propagated_reputation = await _fetch_player_data(session, npc_id, player_id, profile_data.events)
     tier_b_results = await _maybe_cross_encode(settings, player_message, tier_b_results, active_profile)
     tier0 = _build_tier0_items(world_state, emotion_snapshot, system_state_context)
-    tier_a_raw = _build_tier_a_base(npc_id, character_bundle, events, location_id, location_context, group_memberships, believed_rumors, traits, active_pledges, session_turns)
-    tier_a_raw.extend(_build_tier_a_extended(player_id, reputation_items, active_quest, player_relation_edge, memories, beliefs, goals, owned_items, secrets, obligations, second_hop_events, settings, npc_id, current_game_time, propagated_reputation))
+    tier_a_raw = _build_tier_a_base(npc_id, character_bundle, profile_data.events, location_id, profile_data.location_context, profile_data.group_memberships, profile_data.believed_rumors, profile_data.traits, profile_data.active_pledges, session_turns)
+    tier_a_raw.extend(_build_tier_a_extended(player_id, profile_data.reputation_items, active_quest, player_relation_edge, profile_data.memories, beliefs, goals, profile_data.owned_items, secrets, obligations, second_hop_events, settings, npc_id, current_game_time, propagated_reputation))
     await _maybe_append_player_memory(session, npc_id, player_id, current_game_time, tier_a_raw)
     tier_b_raw, tier_c_raw, vector_scores = _build_tier_b_c_items(tier_b_results)
     tier_b_raw = await _maybe_append_top_need(session, npc_id, tier_b_raw)
-    event_key_trust = _build_event_trust_map(events, trust_scores, npc_id)
+    event_key_trust = _build_event_trust_map(profile_data.events, trust_scores, npc_id)
     serialized, receipt = _rank_and_serialize_tiers(
         tier0=tier0, tier_a_raw=tier_a_raw, tier_b_raw=tier_b_raw, tier_c_raw=tier_c_raw,
         vector_scores=vector_scores, event_key_trust=event_key_trust, llm_config=llm_config,
