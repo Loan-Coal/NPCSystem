@@ -18,6 +18,10 @@ from typing import Literal
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from npc_engine.config_prompt_window import (
+    PROMPT_WINDOW_OVERHEAD_TOKENS,
+    check_prompt_window_for_env,
+)
 from npc_engine.config_validators import (
     check_api_key_secret,
     check_api_v1_prefix,
@@ -59,6 +63,14 @@ RAG_RECENCY_DAYS_HARD: float = 72.0    # wall-clock: full decay over this many r
 
 # Content-rating ceiling type.  "mature" is fully permissive (no restrictions).
 ContentRating = Literal["everyone", "teen", "mature"]
+
+MIN_PROMPT_TOKEN_BUDGET = 512
+"""Floor for the derived context budget.
+
+Only reachable on a deliberately narrow window, which _validate_prompt_window refuses
+outside dev. It exists so dev still boots with a usable (if starved) budget rather than
+a negative one.
+"""
 
 
 class Settings(BaseSettings):
@@ -102,20 +114,25 @@ class Settings(BaseSettings):
     OPENAI_API_URL: str = "https://api.openai.com/v1"
     OPENAI_API_KEY: str | None = None
     # KV-cache window passed as num_ctx to Ollama on every request.
-    # system_v1.yaml is ~4200 tokens; dialogue prompt adds ~3200 tokens → total ~7400.
-    # Minimum recommended value: 8192. On RTX cards with ≥9GB VRAM this adds ~400 MB KV cache.
-    # On RTX 5070 Ti Laptop (9.5 GiB): 8192 fits with ~350 MB headroom.
-    # Set OLLAMA_CONTEXT_LENGTH=8192 (or higher) in .env; restart the engine to pick it up.
-    OLLAMA_CONTEXT_LENGTH: int = 4096
+    # Measured 2026-08-26 at the old 4096 default: every dialogue prompt was ~7,100 tokens
+    # and Ollama clamped prompt_eval_count to exactly 2,050 (= num_ctx/2) on every turn, so
+    # roughly 70% of each prompt -- most of the behavioural rules -- never reached the model.
+    # 8192 is the smallest window that holds SYSTEM_PROMPT_TOKEN_RESERVE plus a usable
+    # context budget. Verified 100% GPU residency at 16384 on a 9.5 GiB card (5.6 GB
+    # resident), so raising this further is a latency and budget decision, not a VRAM one.
+    OLLAMA_CONTEXT_LENGTH: int = 8192
 
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
     VECTOR_STORE_BACKEND: Literal["memory", "qdrant"] = "memory"
     QDRANT_URL: str | None = None
     EMBEDDING_REFRESH_ON_WRITE: bool = True
     EMBEDDING_RECONCILE_INTERVAL_SECONDS: int = 300
-    # Maximum tokens the context_builder may fill. Derived from OLLAMA_CONTEXT_LENGTH.
-    # Overhead = system_v1.yaml (~4200 tokens) + output cap (512) + prompt headers (~500) ≈ 5200.
-    # At OLLAMA_CONTEXT_LENGTH=8192 → budget ≈ 2992. Override in .env if you resize the system prompt.
+    # Maximum tokens the context_builder may fill. Derived as OLLAMA_CONTEXT_LENGTH minus
+    # PROMPT_WINDOW_OVERHEAD_TOKENS, which is a SUM OF NAMED RESERVES (see
+    # config_prompt_window.py), not a literal. The previous literal 5200 under-reserved by
+    # ~1,680 tokens, which made `required = window + 1680` true at EVERY window size -- so
+    # no window raise could have made the configuration coherent.
+    # At OLLAMA_CONTEXT_LENGTH=8192 → budget = 1312. Override in .env only deliberately.
     PROMPT_TOKEN_BUDGET: int = 0
     RAG_TOP_K: int = 5
     # Named retrieval configuration this deployment runs under (see
@@ -261,8 +278,27 @@ class Settings(BaseSettings):
             object.__setattr__(
                 self,
                 "PROMPT_TOKEN_BUDGET",
-                max(512, self.OLLAMA_CONTEXT_LENGTH - 5200),
+                max(MIN_PROMPT_TOKEN_BUDGET, self.OLLAMA_CONTEXT_LENGTH - PROMPT_WINDOW_OVERHEAD_TOKENS),
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_prompt_window(self) -> "Settings":
+        """Refuse a context window that cannot hold the prompt the engine will send.
+
+        Raises in staging/prod; warns in dev. DEC-175 deferred wiring this precisely
+        because the shipped defaults were incoherent and a hard failure would have
+        bricked local development. The window is raised in the same change, so the
+        shipped configuration now passes and the check can finally be load-bearing.
+
+        Raises:
+            PromptWindowError: In staging/prod when the components overflow the window.
+        """
+        check_prompt_window_for_env(
+            prompt_token_budget=self.PROMPT_TOKEN_BUDGET,
+            context_length=self.OLLAMA_CONTEXT_LENGTH,
+            env=self.ENV,
+        )
         return self
 
     @model_validator(mode="after")

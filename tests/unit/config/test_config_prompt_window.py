@@ -11,8 +11,11 @@ from __future__ import annotations
 
 import pytest
 
+from npc_engine.config import Settings
 from npc_engine.config_prompt_window import (
-    MEASURED_SYSTEM_PROMPT_TOKENS,
+    DIALOGUE_OUTPUT_TOKEN_RESERVE,
+    PROMPT_HEADER_RESERVE_TOKENS,
+    SYSTEM_PROMPT_TOKEN_RESERVE,
     PromptWindowBreakdown,
     check_prompt_window,
     describe_prompt_window,
@@ -59,14 +62,48 @@ class TestCheckPromptWindow:
         )
 
 
-class TestCurrentDefaultsAreIncoherent:
-    """Pins the defect RET-P6 exists to fix, so the fix is measurable."""
+class TestShippedDefaultsAreCoherent:
+    """The shipped window must hold the prompt the engine commits to sending.
 
-    def test_shipped_defaults_do_not_fit_the_default_window(self) -> None:
-        """The system prompt alone overflows OLLAMA_CONTEXT_LENGTH=4096 today."""
-        assert MEASURED_SYSTEM_PROMPT_TOKENS > 4096, (
-            "If this now fits, the system-prompt diet landed — update the expectation."
+    Replaces test_shipped_defaults_do_not_fit_the_default_window, which asserted
+    `MEASURED_SYSTEM_PROMPT_TOKENS > 4096` — a comparison between two LITERALS. It read
+    as a tripwire for the RET-P6 window raise but could never have fired, because neither
+    side was the live configuration. These read Settings, so they can.
+    """
+
+    def test_shipped_defaults_fit_the_default_window(self) -> None:
+        """Everything the engine sends must fit the shipped OLLAMA_CONTEXT_LENGTH."""
+        settings = Settings()
+
+        check_prompt_window(
+            system_prompt_tokens=SYSTEM_PROMPT_TOKEN_RESERVE,
+            prompt_token_budget=settings.PROMPT_TOKEN_BUDGET,
+            output_token_reserve=DIALOGUE_OUTPUT_TOKEN_RESERVE,
+            header_reserve=PROMPT_HEADER_RESERVE_TOKENS,
+            context_length=settings.OLLAMA_CONTEXT_LENGTH,
         )
+
+    def test_the_derived_budget_is_what_the_window_actually_leaves_over(self) -> None:
+        """PROMPT_TOKEN_BUDGET is the window minus every named reserve, never more."""
+        settings = Settings()
+        reserved = (
+            SYSTEM_PROMPT_TOKEN_RESERVE
+            + DIALOGUE_OUTPUT_TOKEN_RESERVE
+            + PROMPT_HEADER_RESERVE_TOKENS
+        )
+
+        assert settings.PROMPT_TOKEN_BUDGET == settings.OLLAMA_CONTEXT_LENGTH - reserved
+
+    def test_a_narrow_window_is_refused_outside_dev(self) -> None:
+        """Staging and prod must not boot on a window that truncates every prompt."""
+        with pytest.raises(PromptWindowError):
+            Settings(ENV="staging", NEO4J_PASSWORD="not-the-default", OLLAMA_CONTEXT_LENGTH=4096)
+
+    def test_a_narrow_window_only_warns_in_dev(self) -> None:
+        """Dev still boots on an incoherent window, or local work is bricked (DEC-175)."""
+        settings = Settings(ENV="dev", OLLAMA_CONTEXT_LENGTH=4096)
+
+        assert settings.OLLAMA_CONTEXT_LENGTH == 4096
 
     def test_describe_reports_the_overflow_without_raising(self) -> None:
         """The breakdown is inspectable for warning-only use in dev."""

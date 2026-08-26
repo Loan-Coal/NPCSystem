@@ -16,6 +16,7 @@ import httpx
 
 from npc_engine.config import get_settings
 from npc_engine.engines.llm.protocols import LLMClientProtocol
+from npc_engine.engines.llm.prompt_eval_log import log_prompt_eval
 from npc_engine.utils.errors import LLMRequestError, LLMTimeoutError
 
 
@@ -114,6 +115,7 @@ class OllamaAdapter(LLMClientProtocol):
             raise LLMRequestError(model=self.model_name(), detail="invalid_json_shape")
         if "error" in data:
             raise LLMRequestError(model=self.model_name(), detail=f"backend_error:{data['error']}")
+        log_prompt_eval(reply=data, options=options, model=self.model_name(), prompt=prompt, system=system)
         return str(data.get("response", ""))
 
     async def generate_structured(
@@ -179,6 +181,7 @@ class OllamaAdapter(LLMClientProtocol):
                 raise LLMRequestError(model=self.model_name(), detail="invalid_json_shape")
             if "error" in data:
                 raise LLMRequestError(model=self.model_name(), detail=f"backend_error:{data['error']}")
+            log_prompt_eval(reply=data, options=options, model=self.model_name(), prompt=prompt, system=system)
             parsed = json.loads(str(data.get("response", "")))
         except ValueError as error:
             raise LLMRequestError(model=self.model_name(), detail="invalid_json") from error
@@ -246,6 +249,8 @@ class OllamaAdapter(LLMClientProtocol):
                         continue
                     if "error" in chunk:
                         raise LLMRequestError(model=self.model_name(), detail=f"stream_backend_error:{chunk['error']}")
+                    if chunk.get("done") is True:
+                        log_prompt_eval(reply=chunk, options=options, model=self.model_name(), prompt=prompt, system=system)
                     token = str(chunk.get("response", ""))
                     if token != "":
                         yield token
