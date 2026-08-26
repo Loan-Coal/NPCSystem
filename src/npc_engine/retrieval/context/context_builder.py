@@ -54,6 +54,7 @@ from npc_engine.schema.retrieval_profile_models import RetrievalProfile
 from .context_budget_enforcer import ContextCompressionCache, fill_to_budget_with_report
 from .context_profile_resolver import resolve_profile_for_turn, resolved_profile_name
 from .context_receipt import ContextReceipt, build_context_receipt
+from .context_slots import slot_for_key
 from .context_builder_helpers import (
     expand_query,
     normalize_ratio,
@@ -496,6 +497,35 @@ def _build_event_trust_map(events: list[Any], trust_scores: dict[str, Any], npc_
     return event_key_trust
 
 
+def _drop_withheld_items(items: list[ContextItem]) -> list[ContextItem]:
+    """Remove items whose declared slot the serializer will not emit.
+
+    ISSUE-200's cost was not the missing serializer lines, it was that the keys were
+    produced, ranked and CHARGED to the prompt budget before being discarded -- roughly
+    110 tokens a turn bought and never delivered, while items that would have reached the
+    model were dropped for want of room.
+
+    Central on purpose. There are four producer modules and twenty-odd call sites; a check
+    inside each producer is what gets forgotten at the twenty-first, which is how ISSUE-200
+    happened in the first place.
+
+    Fails OPEN: a key no slot declares is kept, because dropping it would hide in production
+    exactly the defect `test_context_slot_contract` exists to surface in CI.
+
+    Args:
+        items: Raw context items from the producers, in production order.
+    Returns:
+        The same items, in the same order, minus those whose slot is withheld.
+    """
+    kept: list[ContextItem] = []
+    for item in items:
+        slot = slot_for_key(item.key)
+        if slot is not None and not slot.default_enabled:
+            continue
+        kept.append(item)
+    return kept
+
+
 def _rank_and_serialize_tiers(
     tier0: list[ContextItem], tier_a_raw: list[ContextItem], tier_b_raw: list[ContextItem],
     tier_c_raw: list[ContextItem],
@@ -509,12 +539,12 @@ def _rank_and_serialize_tiers(
     compression metrics already consume; the receipt is the same pair reported as data
     rather than as counters.
     """
-    tier_a = rank_tier_items(items=tier_a_raw, llm_config=llm_config, vector_scores=vector_scores,
+    tier_a = rank_tier_items(items=_drop_withheld_items(tier_a_raw), llm_config=llm_config, vector_scores=vector_scores,
                              trust_scores=event_key_trust, active_quest=active_quest, game_time=game_time,
                              weight_profile=weight_profile, explicit_node_ids=explicit_node_ids)
-    tier_b = rank_tier_items(items=tier_b_raw, llm_config=llm_config, vector_scores=vector_scores,
+    tier_b = rank_tier_items(items=_drop_withheld_items(tier_b_raw), llm_config=llm_config, vector_scores=vector_scores,
                              game_time=game_time, weight_profile=weight_profile, explicit_node_ids=explicit_node_ids)
-    tier_c = rank_tier_items(items=tier_c_raw, llm_config=llm_config, vector_scores=vector_scores,
+    tier_c = rank_tier_items(items=_drop_withheld_items(tier_c_raw), llm_config=llm_config, vector_scores=vector_scores,
                              game_time=game_time, weight_profile=weight_profile, explicit_node_ids=explicit_node_ids)
     merged = merge_context(tier0=tier0, tier_a=tier_a, tier_b=tier_b, tier_c=tier_c)
     report = fill_to_budget_with_report(
