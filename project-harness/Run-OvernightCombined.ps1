@@ -366,9 +366,15 @@ if ($paused.Count -gt 0) {
     Start-Sleep -Seconds 45
 }
 
-$dc = docker-compose up -d 2>&1 | Out-String
+# `up -d` alone will happily serve a STALE image. On 2026-08-25 it reused one built a week
+# earlier, so the engine under test was missing the three commits the A/B set out to measure --
+# and DialogueRequest, frozen but extra='ignore', silently DROPPED retrieval_profile rather
+# than rejecting it, so the run would have reported two identical arms as "retrieval has no
+# effect". Build the SHA step 1 captured; the assertion below proves it is what answers.
+$env:BUILD_SHA = $Sha
+$dc = docker-compose up -d --build app 2>&1 | Out-String
 Write-Log $dc
-if ($LASTEXITCODE -ne 0) { Write-Log "FATAL: docker-compose up -d failed."; exit 3 }
+if ($LASTEXITCODE -ne 0) { Write-Log "FATAL: docker-compose up -d --build app failed."; exit 3 }
 
 # DEC-186: stored epoch-sized ticks read as unreachably far in the future, which silently
 # disables routine overrides. The MERGE-idempotent seed targets do not clear them; this does.
@@ -413,6 +419,19 @@ if (-not (Wait-ApiHealthy -TimeoutSeconds 180)) {
     exit 3
 }
 Write-Log "Engine healthy again after the restore."
+
+# The build assertion, BEFORE anything is seeded or generated. e2e/scripts/boot_check.py already
+# implements exactly this check (poll /health, compare its reported version to --expect-sha) and
+# was in no pipeline at all. This is what turns 5h37m of false provenance into a 5s abort.
+Write-Log "Asserting the running build is $Sha (e2e/scripts/boot_check.py) ..."
+& $Python (Join-Path $RepoRoot "e2e/scripts/boot_check.py") `
+    --base-url "http://localhost:8000" --expect-sha $Sha --retries 1 2>&1 |
+    ForEach-Object { Write-Log $_ }
+if ($LASTEXITCODE -ne 0) {
+    Write-Log "FATAL: the running engine is NOT build $Sha. Refusing to seed or regenerate against an image whose provenance is unknown -- every metric from such a run is attributed to a commit that never ran."
+    exit 3
+}
+Write-Log "Running build confirmed: $Sha."
 
 foreach ($seedTarget in @("demo-seed", "seed-village-world", "seed-tavern-world")) {
     $seedOutput = & make $seedTarget 2>&1 | Out-String

@@ -143,6 +143,18 @@ def test_repo_root_resolution_fails_loudly_when_it_finds_no_repo() -> None:
     assert "Makefile" in source, "root resolution must verify it found the repo"
 
 
+def test_preflight_asserts_the_running_build_is_not_a_stale_image() -> None:
+    """RED anchor for the 2026-08-25 false-provenance run: `docker-compose up -d` served an
+    image built a week earlier, so the engine under test was missing the very commits the
+    A/B was measuring -- and DialogueRequest, frozen but not extra='forbid', silently
+    dropped retrieval_profile. Preflight must assert the running build's SHA against the
+    source SHA using the existing e2e/scripts/boot_check.py gate, which already implements
+    exactly this check and was in no pipeline."""
+    source = _SCRIPT.read_text(encoding="utf-8")
+    assert "boot_check.py" in source
+    assert "--expect-sha" in source
+
+
 def test_clean_tree_precondition_asserts_it_is_inside_a_work_tree() -> None:
     """Empty `git status` output is ambiguous -- it means both 'clean' and 'not
     a repository'. The precondition must disambiguate, so it can never again

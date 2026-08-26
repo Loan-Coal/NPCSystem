@@ -95,8 +95,9 @@ Set-Location $RepoRoot
 Write-Output "Repo root: $RepoRoot"
 
 $Plan = @(
-    "1. Preflight: engine reachable, ollama panel models present, eval worlds seeded,"
-    "   inside a git work tree, and the tree clean of SOURCE changes"
+    "1. Preflight: engine reachable, the RUNNING BUILD matches the source SHA (boot_check.py),"
+    "   ollama panel models present, eval worlds seeded, inside a git work tree, and the"
+    "   tree clean of SOURCE changes"
     "2. Generate (make eval-generate, k=$K)"
     "3. Panel judge (make eval-judge, --panel: mixtral:8x7b + qwen2.5:14b + llama3.1:8b)"
     "4. Deterministic verdicts (make eval-deterministic-verdicts)"
@@ -141,6 +142,18 @@ function Test-EnginePrecondition {
 Test-EnginePrecondition "engine reachable ($BaseUrl/health)" {
     $resp = Invoke-WebRequest -Uri "$BaseUrl/health" -TimeoutSec 5 -UseBasicParsing
     return $resp.StatusCode -eq 200
+}
+
+Test-EnginePrecondition "running build matches the source SHA (not a stale image)" {
+    # e2e/scripts/boot_check.py already implements exactly this check -- poll /health and
+    # compare its reported version to --expect-sha -- and was in no pipeline at all. The
+    # 2026-08-25 run generated 95 cases x k=3 against an image built a week earlier; the
+    # fields the A/B was measuring were silently DROPPED by the stale engine rather than
+    # rejected, so nothing downstream could tell. This script never builds: it asserts, and
+    # a mismatch is a precondition failure, before anything is generated.
+    $expected = (git rev-parse --short HEAD).Trim()
+    & python e2e/scripts/boot_check.py --base-url $BaseUrl --expect-sha $expected --retries 1
+    return $LASTEXITCODE -eq 0
 }
 
 Test-EnginePrecondition "ollama panel models present (mixtral:8x7b, qwen2.5:14b, llama3.1:8b)" {
