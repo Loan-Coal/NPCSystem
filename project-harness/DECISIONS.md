@@ -4968,3 +4968,42 @@ reading as continuity.
 for `judge_identity` alone and must stay cheap — `--print-baseline` answers "which row would
 this be gated against" before any summarise-and-calibrate work. Reading a transcript there
 would make a cheap probe expensive for a field it never looks at.
+
+## DEC-200: the eval-harness API key travels in `$env:API_KEY_SECRET`
+**Date:** 2026-08-26
+**Decided by:** this session, fixing the world-seeded preflight.
+**Drives:** `scripts/Run-EvalHarness.ps1`, `project-harness/Run-OvernightCombined.ps1`.
+
+**Context.** `Run-EvalHarness.ps1`'s "eval worlds seeded" precondition had two independent,
+both-fatal bugs, and had therefore never once passed:
+
+1. It sent the header `X-API-Key`. The engine requires `Authorization: Bearer`
+   (`src/npc_engine/auth/api_key.py:20`), so every probe 401'd, `Invoke-WebRequest` threw,
+   `Test-EnginePrecondition`'s catch swallowed the exception, and the run aborted blaming
+   *unseeded worlds* — a cause that was never true.
+2. It read `$env:API_KEY_SECRET`, which nothing exported.
+   `Run-OvernightCombined.ps1` reads the key from `.env` into a **local** `$ApiKey`, and that
+   read lived inside steps 1-8, so `-ResumeGenId` (which jumps straight to steps 9-10, where
+   step 10 launches this script) never even reached it.
+
+**Decision.** One transport: **`$env:API_KEY_SECRET`**.
+- `Run-OvernightCombined.ps1` resolves the key from `.env` **once, above the `-ResumeGenId`
+  branch**, and exports it. The child `powershell.exe` inherits this process's environment, so
+  both the full and the resumed path are covered. The local `$ApiKey` stays, for step 4's
+  `--api-key`.
+- `Run-EvalHarness.ps1` resolves `$env:API_KEY_SECRET` and, when it is empty, falls back to
+  the same `^API_KEY_SECRET=(.+)$` line in `.env` that the Makefile's own `API_KEY` variable
+  reads — so a standalone `make eval-harness`, which exports nothing, still works.
+
+**Why not a `-ApiKey` parameter.** It would add a parameter to the harness script, a second
+call-site convention in the overnight script, and a Makefile change for standalone use, to
+carry a value the environment already carries. The `.env` fallback is not a second mechanism:
+it is the same transport self-healing when no ancestor set it.
+
+**What was NOT done.** The precondition was not weakened to make it pass, and
+`src/npc_engine/auth/` was not touched. Bearer is correct; the caller was wrong. Verified
+live 2026-08-26: with `Authorization: Bearer`, `mira_innkeeper`, `vw_elder` and
+`tw_innkeeper` all return 200 from `/v1/npc/{id}/state`. A missing key now fails the
+precondition loudly and names itself, instead of sending no header and being reported as
+unseeded worlds. `tests/unit/scripts/test_run_eval_harness.py` pins the header name, so an
+edit back to `X-API-Key` fails a test.

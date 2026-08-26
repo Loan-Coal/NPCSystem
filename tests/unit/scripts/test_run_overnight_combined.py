@@ -108,3 +108,23 @@ def test_a_retrieval_failure_is_reported_but_does_not_kill_the_run() -> None:
     assert re.search(r"(?m)^\s*exit\s+\d", following) is None, (
         "a retrieval failure must not abort the run"
     )
+
+
+# ---------------------------------------------------------------------------
+# The API key the child powershell.exe inherits
+# ---------------------------------------------------------------------------
+
+
+def test_the_api_key_is_exported_before_the_resume_branch() -> None:
+    """RED anchor: the key was read from .env INSIDE steps 1-8 and kept in a local $ApiKey,
+    so Run-EvalHarness.ps1's preflight (which reads $env:API_KEY_SECRET) saw nothing -- and
+    -ResumeGenId, which runs step 10 directly, never reached the read at all.
+
+    The export must happen above the resume branch, or the resumed path still hands the child
+    an empty environment."""
+    source = _source()
+    assert "$env:API_KEY_SECRET" in source, "the key must reach the child process's environment"
+
+    export_at = source.index("$env:API_KEY_SECRET")
+    resume_at = source.index("if ($ResumeGenId) {")
+    assert export_at < resume_at, "the resume path must export the key too"

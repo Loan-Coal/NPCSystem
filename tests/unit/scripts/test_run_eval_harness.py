@@ -175,6 +175,56 @@ def test_clean_tree_precondition_ignores_harness_written_artifact_paths() -> Non
 
 
 # ---------------------------------------------------------------------------
+# The world-seeded preflight — two independent bugs, both fatal
+# ---------------------------------------------------------------------------
+
+
+def _world_seeded_precondition() -> str:
+    """The eval-worlds-seeded precondition's CODE, comments stripped.
+
+    Comments are dropped because the block explains the header bug in prose; asserting over
+    the raw text would let a comment satisfy — or violate — a claim about what is sent.
+    """
+    raw = _SCRIPT.read_text(encoding="utf-8").splitlines()
+    source = "\n".join(ln for ln in raw if not ln.strip().startswith("#"))
+    start = source.index('Test-EnginePrecondition "eval worlds seeded')
+    end = source.find("Test-EnginePrecondition", start + 1)
+    return source[start:] if end == -1 else source[start:end]
+
+
+def test_the_world_seeded_preflight_authenticates_with_a_bearer_token() -> None:
+    """RED anchor: it sent the header 'X-API-Key'. The engine requires
+    'Authorization: Bearer' (src/npc_engine/auth/api_key.py:20), so every request 401'd,
+    Invoke-WebRequest threw, Test-EnginePrecondition's catch swallowed it, and the failure
+    was reported as "eval worlds seeded" -- a precondition that has never once passed while
+    naming the wrong cause. Pinned so an edit back to X-API-Key fails a test."""
+    body = _world_seeded_precondition()
+    assert "Bearer" in body
+    assert "Authorization" in body
+    assert "X-API-Key" not in body
+
+
+def test_the_api_key_is_resolvable_without_an_exported_variable() -> None:
+    """The second, independent bug: it read $env:API_KEY_SECRET, which nothing exported --
+    Run-OvernightCombined kept the key in a local. Standalone `make eval-harness` exports
+    nothing either, so the key must also be resolvable from .env, the same line the Makefile
+    reads."""
+    source = _SCRIPT.read_text(encoding="utf-8")
+    assert "API_KEY_SECRET" in source
+    assert ".env" in source
+
+
+def test_a_missing_api_key_fails_the_precondition_instead_of_sending_no_header() -> None:
+    """Sending no header at all turns a configuration mistake into a 401 reported as
+    "worlds not seeded". An absent key must fail loudly, naming itself."""
+    body = _world_seeded_precondition()
+    assert re.search(r"if \(-not \$apiKey\)", body), (
+        "the precondition must guard on a missing key rather than sending an empty header"
+    )
+    assert "return $false" in body
+
+
+# ---------------------------------------------------------------------------
 # One baseline, used by both steps — EVAL-P23 Defect A
 # ---------------------------------------------------------------------------
 

@@ -234,6 +234,21 @@ function Write-CloseoutChecklist {
 Write-Log "=== Combined overnight run starting ==="
 Write-Log "Log file: $LogFile"
 
+# --- The API key, resolved ONCE and EXPORTED, above the resume branch (DEC-200) -----------
+# Read here rather than in step 3 because scripts/Run-EvalHarness.ps1 -- which step 10 runs in
+# a child powershell.exe -- resolves the key from $env:API_KEY_SECRET, and nothing ever
+# exported it: this script kept it in a local $ApiKey. Worse, that read lived INSIDE steps
+# 1-8, so -ResumeGenId (which jumps straight to steps 9-10) never reached it at all. The
+# child inherits this process's environment, so exporting here covers both paths.
+$ApiKey = "eval-key-change-me"
+$EnvFile = Join-Path $RepoRoot ".env"
+if (Test-Path $EnvFile) {
+    $match = Select-String -Path $EnvFile -Pattern '^API_KEY_SECRET=(.+)$' | Select-Object -First 1
+    if ($match) { $ApiKey = $match.Matches[0].Groups[1].Value.Trim() }
+}
+$env:API_KEY_SECRET = $ApiKey
+Write-Log "API key resolved from .env and exported as API_KEY_SECRET for child processes."
+
 # --- Resume path: steps 9-10 only, against an arm that already exists ---------
 # Deliberately does NOT re-check the clean tree. By the time steps 1-8 have run,
 # the tree is dirty by design (step 1 says so), so re-asserting it here would
@@ -437,13 +452,6 @@ foreach ($seedTarget in @("demo-seed", "seed-village-world", "seed-tavern-world"
     $seedOutput = & make $seedTarget 2>&1 | Out-String
     Write-Log $seedOutput
     if ($LASTEXITCODE -ne 0) { Write-Log "FATAL: 'make $seedTarget' failed."; exit 3 }
-}
-
-$ApiKey = "eval-key-change-me"
-$EnvFile = Join-Path $RepoRoot ".env"
-if (Test-Path $EnvFile) {
-    $match = Select-String -Path $EnvFile -Pattern '^API_KEY_SECRET=(.+)$' | Select-Object -First 1
-    if ($match) { $ApiKey = $match.Matches[0].Groups[1].Value.Trim() }
 }
 
 $GenId = "k3_${Sha}_regen1"

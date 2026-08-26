@@ -139,6 +139,21 @@ function Test-EnginePrecondition {
     Write-Output "Preflight OK: $Name"
 }
 
+function Resolve-ApiKey {
+    <#  The key travels in $env:API_KEY_SECRET (DEC-200). Run-OvernightCombined.ps1 exports it
+        before its resume branch, so the child powershell.exe this script runs in inherits it.
+        A standalone `make eval-harness` exports nothing, so fall back to the same .env line
+        the Makefile's own API_KEY variable reads. Resolved in one place so a missing key is
+        one loud precondition failure rather than three indistinguishable 401s. #>
+    if ($env:API_KEY_SECRET) { return $env:API_KEY_SECRET }
+    $envFile = Join-Path $RepoRoot ".env"
+    if (Test-Path $envFile) {
+        $match = Select-String -Path $envFile -Pattern '^API_KEY_SECRET=(.+)$' | Select-Object -First 1
+        if ($match) { return $match.Matches[0].Groups[1].Value.Trim() }
+    }
+    return ""
+}
+
 Test-EnginePrecondition "engine reachable ($BaseUrl/health)" {
     $resp = Invoke-WebRequest -Uri "$BaseUrl/health" -TimeoutSec 5 -UseBasicParsing
     return $resp.StatusCode -eq 200
@@ -162,9 +177,16 @@ Test-EnginePrecondition "ollama panel models present (mixtral:8x7b, qwen2.5:14b,
 }
 
 Test-EnginePrecondition "eval worlds seeded (demo + village + tavern representative NPCs)" {
-    $apiKey = $env:API_KEY_SECRET
-    $headers = @{}
-    if ($apiKey) { $headers["X-API-Key"] = $apiKey }
+    $apiKey = Resolve-ApiKey
+    if (-not $apiKey) {
+        Write-Output "  no API key found: export API_KEY_SECRET or set it in .env. Every /v1 route except /health answers 401 without one."
+        return $false
+    }
+    # The engine requires 'Authorization: Bearer' (src/npc_engine/auth/api_key.py:20). This
+    # sent 'X-API-Key', so every request 401'd, Invoke-WebRequest threw, and the catch in
+    # Test-EnginePrecondition reported the failure as "eval worlds seeded" -- naming a cause
+    # that was never true. This precondition had never once passed.
+    $headers = @{ Authorization = "Bearer $apiKey" }
     foreach ($npcId in @("mira_innkeeper", "vw_elder", "tw_innkeeper")) {
         $resp = Invoke-WebRequest -Uri "$BaseUrl/v1/npc/$npcId/state" -TimeoutSec 5 -UseBasicParsing -Headers $headers
         if ($resp.StatusCode -ne 200) { return $false }
