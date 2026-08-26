@@ -5007,3 +5007,91 @@ live 2026-08-26: with `Authorization: Bearer`, `mira_innkeeper`, `vw_elder` and
 precondition loudly and names itself, instead of sending no header and being reported as
 unseeded worlds. `tests/unit/scripts/test_run_eval_harness.py` pins the header name, so an
 edit back to `X-API-Key` fails a test.
+
+## DEC-201: the relevance scorer reads the payload shape its producers actually emit, and the
+## configured weights are the weights that run
+**Date:** 2026-08-26
+**Decided by:** this session, P2 of the context-pipeline plan ("make the scorer's config live").
+
+**Context.** Two defects, both latent-looking on paper, both measured live.
+
+**Defect 1 - every inner-life item scored recency 0.0 and severity 0.0.** `_build_candidate`
+parsed `item.text` with `parse_json_object`, whose contract is "a dict, or `{}`". Every item
+carrying an NPC's own state is serialized by `_build_tier_a_extended` as a JSON **array** of
+records - `beliefs`, `goals`, `memories`, `secrets`, `obligations`, `owned_items`,
+`reputation`, and likewise `traits`, `believed_rumors`, `nearby_npcs`. All of them parsed to
+`{}`. A belief held with confidence 92 scored severity 0.0; so did a goal at urgency 100 and a
+memory at emotional_charge -95. The four severity fallbacks in `_extract_severity_score`
+(`severity` -> secrets, `urgency` -> goals, `confidence` -> beliefs, `emotional_charge` ->
+memories) were each written FOR one of those items and could not be reached by any input the
+engine produces. Recency was lost the same way. Those items were therefore ranked on proximity
+and producer priority alone - and under the tier-A cap, ranking is what decides who reaches the
+model (ISSUE-163).
+
+**Defect 2 - `relevance_weights:` was a required YAML field nothing consulted (ISSUE-198).**
+`default_weight_profile` defaults to the name `"default"`; `resolve_weights` found that name in
+`DEFAULT_WEIGHT_PROFILES` and returned the Python literal. The two held identical numbers, which
+is precisely why nobody noticed.
+
+**Decision 1 - fix at the call site, not in `parse_json_object`.** Its "dict or `{}`" contract is
+correct and has many callers; widening it to unwrap arrays would change behaviour in code that
+has nothing to do with scoring. New private `_payload_for_scoring` in `context_scoring.py` owns
+the scorer's own notion of "the record to score".
+
+**Decision 2 - score the FIRST record of an array, not a merge or a maximum.** Arbitrary on its
+face, and defensible from the producers: `belief_queries` ORDER BY `confidence DESC`,
+`goal_queries` BY `urgency DESC`, `memory_queries` BY `vividness DESC`, `secret_queries` BY
+`severity DESC` - for three of those four the ordering key IS the field the severity fallback
+reads, so the first record is the strongest one. Where `rerank_by_keyword` has reordered
+beliefs, goals and secrets, the first record is instead the one most relevant to the player's
+message. Both are the producer's own idea of "best", and neither requires the scorer to know
+which producer it is looking at. A maximum over records was rejected: it needs a per-key table
+of which field to maximise, which is the hand-maintained mapping P5 exists to delete.
+
+**Decision 3 - remove `"default"` from `DEFAULT_WEIGHT_PROFILES` rather than delete the YAML
+field.** The alternative in ISSUE-198 was to drop `relevance_weights` and make the profile
+registry the only source. Rejected: `relevance_weights` is a REQUIRED field of `LLMConfig`, so
+deleting it is a breaking config-schema change for every `llm_config.yaml`, and it removes the
+only place a config can state a default without naming a profile.
+
+**Measured effect.** Rebuilt image, `GET /v1/admin/debug/retrieval?query=what+news`, the same
+8 NPCs as ISSUE-163 and DEC-198. Only P2 changed between the two columns:
+
+    field           after P1   after P2
+    npc.beliefs        3/8        8/8
+    npc.goals          6/8        8/8
+    npc.memories       3/8        4/8
+    npc.top_need       0/8        0/8
+    current_location   0/8        0/8
+    assembled tokens  635-829    536-729
+
+**Consequence, stated plainly - inner life went up and total tokens went DOWN.** That is not a
+paradox: the fat low-signal items lost the ranking to the small high-signal ones, so the budget
+pass now skips them. On `mira_innkeeper` the 505-token `relation:player` item was displaced by
+`nearby_npcs` (91) and `npc_known_events` (72), both of which had been empty. The cost is that
+`player_relation` measured **0/8**, down from at least 1/8: the relation payload carries no
+severity-family field at all, so it scores severity 0.0 while a belief scores 0.8. The ordering
+is right and the item is wrong - 505 of its ~505 tokens are a `delta_log` of six all-zero delta
+records. Recorded on ISSUE-199, which P3 fixes; until then the player relationship reaches no
+prompt. In the seeded worlds every trust/fear/affection value is 0, so nothing of substance is
+lost today.
+
+**Not done, deliberately.** The plan's third P2 bullet asked for the literal producer priority
+to be captured into `ContextRelevanceCandidate` so its meaning is fixed at capture. On
+inspection it is already fixed at capture: `relation` is computed in `_build_candidate` from the
+pre-rank item and frozen onto the candidate, and `rank_context_candidates` reads
+`candidate.relation`, never `candidate.item.priority`. Adding a `source_priority` field nothing
+reads would be churn, not anti-churn. The real invariant - that ranking an already-ranked list
+would flatten the relation term to a constant 1.0, because post-rank priorities are
+`max(1, 1000 - index)` and all clamp - is now a comment at the arithmetic in
+`_extract_relation_score`, next to the code it constrains.
+
+**Corrected after review, same day.** The producer audit above listed four array producers and
+called out `memories` as the one whose ordering key (`vividness`) is not the field the severity
+fallback reads (`emotional_charge`). It missed a fifth: `active_pledges` is
+`ORDER BY e.sworn_at_tick DESC` yet its records carry `severity`, which
+`_extract_severity_score` checks first -- so that item scores the severity of the most recently
+sworn pledge. The `_payload_for_scoring` docstring now carries the full alignment table for all
+six array producers rather than a prose claim about four of them, and the two unaligned cases
+are ISSUE-206, to be folded into P5 where the per-key field mapping becomes one column of the
+declaration table instead of a new hand-maintained dict.

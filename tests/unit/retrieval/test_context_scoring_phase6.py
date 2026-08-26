@@ -150,9 +150,10 @@ def test_active_quest_none_falls_back_to_key_check():
     )
     other = ContextItem(key="beliefs", text=json.dumps({"content": "x"}), tier="tierA", priority=50)
     # The quest weight must be the only live term for this assertion to isolate
-    # _quest_score. Top-level relevance_weights cannot carry it: resolve_weights() is
-    # called with default_weight_profile ("default"), which hits DEFAULT_WEIGHT_PROFILES
-    # and never reaches relevance_weights (ISSUE-198). A named profile does take effect.
+    # _quest_score. Top-level relevance_weights now carries it: ISSUE-198 is fixed, so
+    # the "default" profile name falls through to this block instead of being shadowed
+    # by a built-in. Before that fix this test needed a named profile to have any effect,
+    # and passed on the alphabetical tie-break rather than on the weights it declares.
     quest_only = RelevanceWeights(recency=0.0, severity=0.0, proximity=0.0, relation=0.0, quest=1.0)
     cfg = LLMConfig(
         prompt_schema_version="v1.4",
@@ -162,8 +163,6 @@ def test_active_quest_none_falls_back_to_key_check():
         compression_trigger_ratio=0.85,
         max_proximity_hops=2,
         relevance_weights=quest_only,
-        weight_profiles={"quest_only": quest_only},
-        default_weight_profile="quest_only",
     )
     ranked = rank_tier_items(
         items=[other, quest_item],

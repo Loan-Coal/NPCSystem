@@ -14,7 +14,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from npc_engine.common.json_utils import parse_json_object
+from npc_engine.common.json_utils import parse_json_list, parse_json_object
 from .context_merger import ContextItem
 from .context_relevance_engine import ContextRelevanceCandidate, rank_context_candidates
 from .context_utils import parse_node_identity
@@ -108,7 +108,7 @@ def _build_candidate(
     explicit_node_ids: frozenset[str] = frozenset(),
 ) -> ContextRelevanceCandidate:
     node_type, node_id = parse_node_identity(item.key)
-    payload = parse_json_object(item.text)
+    payload = _payload_for_scoring(item.text)
     return ContextRelevanceCandidate(
         node_type=node_type,
         node_id=node_id,
@@ -120,6 +120,50 @@ def _build_candidate(
         quest=_quest_score(item=item, active_quest=active_quest),
         explicit=1.0 if node_id in explicit_node_ids else 0.0,
     )
+
+
+# Which record represents an ARRAY payload, and why the first one is defensible.
+#
+# Every producer orders its rows by its own notion of importance, so the first record is the
+# one that producer considers strongest -- and where rerank_by_keyword has reordered beliefs,
+# goals and secrets, the first record is instead the one most relevant to the player's message.
+# Where the ordering key IS the field _extract_severity_score reads, the first record also
+# MAXIMISES the score, which is the strongest case for this choice:
+#
+#     beliefs          ORDER BY confidence DESC   -> reads confidence         aligned
+#     goals            ORDER BY urgency DESC      -> reads urgency            aligned
+#     secrets          ORDER BY severity DESC     -> reads severity           aligned
+#     believed_rumors  sorted by confidence DESC  -> reads confidence         aligned
+#     memories         ORDER BY vividness DESC    -> reads emotional_charge   NOT aligned
+#     active_pledges   ORDER BY sworn_at_tick     -> reads severity           NOT aligned
+#
+# The last two are accepted approximations, not oversights: their representative is the most
+# vivid memory and the most recently sworn pledge, whose severity-family value is whatever it
+# happens to be. See ISSUE-206. Taking a maximum over records would close the gap but needs a
+# per-key table of which field to maximise -- the hand-maintained mapping P5 exists to delete.
+def _payload_for_scoring(text: str) -> dict[str, Any]:
+    """Return the one record this item should be scored on, object- or array-shaped.
+
+    Every item carrying an NPC's inner life is a JSON ARRAY of records -- `beliefs`, `goals`,
+    `memories`, `secrets`, `obligations`, `owned_items`, `reputation`, `traits`,
+    `believed_rumors`, `nearby_npcs`. `parse_json_object` returns {} for an array, so all of
+    them scored recency 0.0 and severity 0.0 and were ranked on proximity and priority alone,
+    and the four severity fallbacks below could not be reached by any input the engine
+    actually produces. The comment above records which record is picked and why.
+
+    Args:
+        text: The item's serialized payload.
+    Returns:
+        The payload object, the first object in a payload array, or {} when the payload is
+        neither (a list of strings, an empty list, or unparseable text).
+    """
+    payload = parse_json_object(text)
+    if payload:
+        return payload
+    for row in parse_json_list(text):
+        if isinstance(row, dict):
+            return row
+    return {}
 
 
 def _extract_recency_score(
@@ -192,6 +236,11 @@ def _extract_relation_score(
 ) -> float:
     if item.tier == "tierB":
         return vector_scores.get(item.key, 0.0)
+    # item.priority here is the PRODUCER's literal priority (74-98), not a rank position.
+    # rank_context_candidates rewrites priority to max(1, 1000 - index) on its output, and
+    # every such value clamps to 1.0 through _normalize_ratio -- so ranking an already
+    # ranked list would flatten this term to a constant and silently delete the signal.
+    # Each tier is ranked exactly once, in _rank_and_serialize_tiers. Keep it that way.
     priority_score = _normalize_ratio(item.priority / 100.0)
     # 6.2: blend priority with trust toward the event's actor when available.
     if trust_scores and item.key.startswith("event:"):
@@ -208,7 +257,7 @@ def _quest_score(*, item: ContextItem, active_quest: dict[str, Any] | None = Non
     if active_quest is not None:
         ids_to_match = {active_quest.get("target_id"), active_quest.get("giver_id")} - {None}
         if ids_to_match:
-            payload = parse_json_object(item.text)
+            payload = _payload_for_scoring(item.text)
             if any(str(v) in ids_to_match for v in payload.values() if isinstance(v, str)):
                 return 1.0
     return 0.0

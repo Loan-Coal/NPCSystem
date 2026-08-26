@@ -18,8 +18,14 @@ from npc_engine.schema.retrieval_profile_models import (
 
 # Built-in weight profiles. Engines declare which profile to use via
 # relevance_weight_profile in their YAML config.
+#
+# There is deliberately NO "default" entry (ISSUE-198). `default_weight_profile` defaults
+# to the name "default", so an entry here would shadow the REQUIRED `relevance_weights:`
+# block in llm_config.yaml -- editing that block changed nothing, and the two held
+# identical numbers, so the shadowing was invisible. Its absence is what makes the YAML
+# the source of truth for the default. Pinned by
+# test_the_default_profile_name_resolves_to_the_yaml_relevance_weights.
 DEFAULT_WEIGHT_PROFILES: dict[str, dict[str, float]] = {
-    "default":              {"recency": 0.30, "severity": 0.20, "proximity": 0.20, "relation": 0.20, "quest": 0.10},
     "investigation":        {"recency": 0.15, "severity": 0.30, "proximity": 0.35, "relation": 0.10, "quest": 0.10},
     "political":            {"recency": 0.20, "severity": 0.20, "proximity": 0.15, "relation": 0.30, "quest": 0.15},
     "social":               {"recency": 0.30, "severity": 0.15, "proximity": 0.20, "relation": 0.25, "quest": 0.10},
@@ -142,8 +148,16 @@ class LLMConfig(BaseModel):
     def resolve_weights(self, profile: str | None = None) -> RelevanceWeights:
         """Return the RelevanceWeights for the given profile name.
 
-        Falls back to self.relevance_weights if the profile is None, empty,
-        or not found in weight_profiles or DEFAULT_WEIGHT_PROFILES.
+        Resolution order: this config's `weight_profiles`, then DEFAULT_WEIGHT_PROFILES,
+        then `relevance_weights`. A YAML `weight_profiles:` entry therefore overrides a
+        built-in of the same name, which is the only lever over the two profiles the
+        dialogue path actually uses (detect_dialogue_profile returns "rpg_dialogue_social"
+        or "rpg_dialogue_quest", never "default" -- see ISSUE-203).
+
+        Falls back to self.relevance_weights if the profile is None, empty, or found in
+        neither registry. Unlike resolve_retrieval_profile above, an unknown name is NOT
+        an error here: weight profiles only reorder context, so a typo degrades ranking
+        rather than misreporting which arm ran.
 
         Args:
             profile: Named weight profile (e.g. "investigation", "political").

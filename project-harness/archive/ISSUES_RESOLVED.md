@@ -2544,3 +2544,45 @@ queue), or they are not (and `EVAL-P22B` should be renumbered) — that is the r
 reordered or truncated queue) and update the fence-state snapshot at `:329` deliberately, per that
 test's own docstring. If no, renumber `EVAL-P22B` and update every reference to it (`ROADMAP.md`,
 `PROMPT_P23_UNBLOCK.md`, DEC entries).
+
+## [FIXED] ISSUE-198: `LLMConfig.resolve_weights` never returns the configured `relevance_weights`
+**Found:** 2026-08-26, during the ISSUE-163 root-cause trace
+**Severity:** P2 (annoying) — live config that silently is not live
+**Where:** `schema/context_config_models.py:142-159` (`resolve_weights`), reached from
+`context_scoring.rank_tier_items`
+**Description:** `rank_tier_items` calls `resolve_weights(weight_profile or
+llm_config.default_weight_profile)`, and `default_weight_profile` defaults to `"default"`.
+`resolve_weights` looks `"default"` up in `weight_profiles` and then in
+`DEFAULT_WEIGHT_PROFILES` — where it hits — and returns THAT. The `relevance_weights:` block
+in `src/npc_engine/config/llm_config.yaml` is only reached when the profile name is falsy,
+which never happens on the dialogue path. The two happen to hold identical values today, so
+nothing is currently mis-scored; the hazard is that editing `relevance_weights:` in the YAML
+changes nothing and the next weight experiment silently measures the old weights.
+Found because `tests/unit/retrieval/test_context_scoring_phase6.py` builds `LLMConfig`s with
+tailored `relevance_weights` that never take effect — those tests were passing on the
+alphabetical tie-break in `rank_context_candidates`, not on the weights they declare.
+**Why deferred:** single-task focus; it is latent, not active.
+**To fix:** either drop `"default"` from `DEFAULT_WEIGHT_PROFILES` so the name falls through
+to `relevance_weights`, or delete the top-level `relevance_weights` field and make the
+default profile the only source. Then audit `test_context_scoring_phase6.py` — every config
+there declares weights that are currently ignored.
+**Fixed:** 2026-08-26, in P2 (DEC-201). `"default"` removed from `DEFAULT_WEIGHT_PROFILES`,
+so the name falls through to the YAML `relevance_weights:` block. Zero behaviour change on
+the shipped config — the two held identical numbers, verified live:
+`cfg.resolve_weights(cfg.default_weight_profile) == cfg.relevance_weights` is True.
+Regression tests: `test_the_default_profile_name_resolves_to_the_yaml_relevance_weights`,
+`test_a_named_builtin_profile_still_resolves_to_its_builtin_weights` and
+`test_a_yaml_weight_profile_overrides_a_builtin_of_the_same_name` in
+`tests/unit/llm/test_llm_config.py`.
+**Audit result — the phase6 tests did NOT go red.** The entry predicted they would.
+Recomputed by hand and confirmed by run: `test_trust_score_boosts_low_priority_event`
+(0.38 vs 0.59 under its declared weights, 0.21 vs 0.28 under the built-ins) and
+`test_active_quest_boosts_item_referencing_giver` (1.0 vs 0.0, previously 0.28 vs 0.18)
+happened to hold the same ORDER under both weight sets, so they now pass for the reason
+they claim instead of by coincidence. `test_active_quest_none_falls_back_to_key_check` had
+its `weight_profiles`/`default_weight_profile` workaround removed — it declares plain
+`relevance_weights` again, which is the point of the fix.
+**Residual, logged separately as ISSUE-203:** this does NOT make the dialogue path's weights
+YAML-tunable. `detect_dialogue_profile` returns `rpg_dialogue_social`/`rpg_dialogue_quest`,
+never `"default"`, so the block this fix unlocks is still not what dialogue resolves.
+

@@ -48,28 +48,6 @@ is unaffected. Then re-measure the 8-NPC probe; expect memories to become reacha
 NPCs whose memory item is under ~200 tokens. Pair with ISSUE-199 — with the 2188-token
 `location:` item fixed, the reclaimed budget buys proportionally more.
 
-## ISSUE-198: `LLMConfig.resolve_weights` never returns the configured `relevance_weights`
-**Found:** 2026-08-26, during the ISSUE-163 root-cause trace
-**Severity:** P2 (annoying) — live config that silently is not live
-**Where:** `schema/context_config_models.py:142-159` (`resolve_weights`), reached from
-`context_scoring.rank_tier_items`
-**Description:** `rank_tier_items` calls `resolve_weights(weight_profile or
-llm_config.default_weight_profile)`, and `default_weight_profile` defaults to `"default"`.
-`resolve_weights` looks `"default"` up in `weight_profiles` and then in
-`DEFAULT_WEIGHT_PROFILES` — where it hits — and returns THAT. The `relevance_weights:` block
-in `src/npc_engine/config/llm_config.yaml` is only reached when the profile name is falsy,
-which never happens on the dialogue path. The two happen to hold identical values today, so
-nothing is currently mis-scored; the hazard is that editing `relevance_weights:` in the YAML
-changes nothing and the next weight experiment silently measures the old weights.
-Found because `tests/unit/retrieval/test_context_scoring_phase6.py` builds `LLMConfig`s with
-tailored `relevance_weights` that never take effect — those tests were passing on the
-alphabetical tie-break in `rank_context_candidates`, not on the weights they declare.
-**Why deferred:** single-task focus; it is latent, not active.
-**To fix:** either drop `"default"` from `DEFAULT_WEIGHT_PROFILES` so the name falls through
-to `relevance_weights`, or delete the top-level `relevance_weights` field and make the
-default profile the only source. Then audit `test_context_scoring_phase6.py` — every config
-there declares weights that are currently ignored.
-
 ## ISSUE-199: `location:` and `relation:player` context items are 4.3x and 1.0x the entire prompt budget
 **Found:** 2026-08-26, during the ISSUE-163 root-cause trace
 **Severity:** P1 (blocking) — the NPC's location context reaches NO prompt, for any NPC
@@ -91,6 +69,14 @@ truncating anything, so they are not the direct cause of the inner-life drop.
 **To fix:** strip `NON_PROMPT_NODE_FIELDS` in `_location_items` and `_relation_item` the way
 `_character_item` does, and project the location payload down to the fields a prompt can
 use (name, kind, description) rather than the whole node. Re-measure with the 8-NPC probe.
+**Escalated 2026-08-26 by P2 (DEC-201).** Now that the scorer reads array payloads, the NPC's
+own state scores real recency and severity while `relation:player` scores severity 0.0 (it
+carries no severity/urgency/confidence/emotional_charge field), so it lost the ranking and
+`player_relation` measured **0/8** on the 8-NPC probe, down from at least 1/8. That is the
+correct ordering — 505 of its ~505 tokens are a `delta_log` of six all-zero delta records —
+but it means the player relationship now reaches NO prompt at all until this is fixed. In a
+seeded world the values are all 0 so nothing is lost today; in a live game trust/fear/affection
+would be silently absent. This raises P3 from a token-efficiency fix to a correctness one.
 
 ## ISSUE-200: eight assembled tier-A item kinds have no slot in the serialized skeleton
 **Found:** 2026-08-26, during the ISSUE-163 root-cause trace
@@ -1430,3 +1416,92 @@ corpus" and "A/B baseline" is written down rather than rediscovered.
 **To fix:** no code change. When regeneration #1 lands, record its gen_id in ROADMAP as the
 baseline arm, and stop referring to `k3_73e6c36` as a baseline.
 
+## ISSUE-203: the two weight profiles the dialogue path actually uses cannot be tuned from YAML
+**Found:** 2026-08-26, during P2 while fixing ISSUE-198
+**Severity:** P2 (annoying) - blocks weight A/B arms; not wrong today, just unreachable
+**Where:** `retrieval/context/context_builder.py:622`, `retrieval/embedding/topic_classifier.py:24`,
+`schema/context_config_models.py:DEFAULT_WEIGHT_PROFILES`
+**Description:** ISSUE-198 made `relevance_weights:` live for the profile name `"default"`.
+Dialogue never asks for that name. `build_serialized_context_with_receipt` resolves
+`weight_profile or active_profile.weight_profile or detect_dialogue_profile(player_message)`,
+and `detect_dialogue_profile` always returns a non-empty string - `"rpg_dialogue_quest"` or
+`"rpg_dialogue_social"`. Both live only in the Python dict `DEFAULT_WEIGHT_PROFILES`, and
+`llm_config.yaml` declares no `weight_profiles:` block, so **the weights every dialogue turn
+is ranked by are a hardcoded Python literal.** `llm_config.default_weight_profile` is dead on
+this path for the same reason. Changing dialogue ranking today means editing Python and
+rebuilding the image, which is exactly the churn the A/B pipeline exists to avoid.
+The lever already exists and is untested-in-anger: `resolve_weights` checks
+`self.weight_profiles` BEFORE `DEFAULT_WEIGHT_PROFILES`, so a YAML entry of the same name wins.
+Pinned by `test_a_yaml_weight_profile_overrides_a_builtin_of_the_same_name`.
+**Why deferred:** P2 is scoped "minimal: fix the logged defects only", and declaring the two
+profiles in YAML duplicates numbers that already exist in Python - that needs a decision on
+which is canonical, not a drive-by edit.
+**To fix:** declare `weight_profiles:` in `src/npc_engine/config/llm_config.yaml` with
+`rpg_dialogue_social` and `rpg_dialogue_quest`, and decide whether `DEFAULT_WEIGHT_PROFILES`
+becomes a fallback-only registry or is deleted for those two names. Pairs naturally with P7's
+tier gating: `RetrievalProfile.weight_profile` is already a per-arm field, so once the names
+resolve from YAML a weight arm costs one config block and no code.
+
+## ISSUE-204: `e2e/scenarios/scenario_territorial_war.py` cannot be imported
+**Found:** 2026-08-26, during P2's full-suite run
+**Severity:** P3 (nice-to-fix) - invisible to `make test`, which runs `tests/` only
+**Where:** `e2e/scenarios/scenario_territorial_war.py:18`
+**Description:** `from npc_engine.graph.military_queries import get_armies_in_conflict` raises
+`ModuleNotFoundError`. The module moved to `npc_engine.graph.military.military_queries` in the
+graph-layer package split and this import was never updated. Collecting the repo root
+(`pytest -q` with no path) therefore aborts with a collection error before running anything -
+`Interrupted: 1 error during collection`. Confirmed pre-existing: reproduced with all P2 work
+stashed. `make test` targets `tests/` so CI never sees it, which is why it has survived.
+**Why deferred:** not P2's subsystem, and not P2's regression.
+**To fix:** one-line import update to `npc_engine.graph.military.military_queries`, then run
+the scenario to see whether the rest of it still matches `MilitaryEngine`'s contract (the file
+was last touched by `21145f3 test(military): rewrite stale scenario test...`, so it may have
+drifted further). Consider adding `e2e/` to a collect-only CI step so this class of rot fails
+fast instead of silently.
+
+## ISSUE-205: the architecture conformance gate matches concrete adapters by naive substring
+**Found:** 2026-08-26, during P1 (logged in P2)
+**Severity:** P3 (nice-to-fix) - false positives only; it cannot miss a real violation
+**Where:** `tests/unit/conformance/` - `test_engines_do_not_import_concrete_llm_adapters`
+**Description:** the gate scans engine source text for adapter names as bare substrings. The
+name `ollama_adapter` contains `llama_adapter`, so any mention of the real module path - in a
+docstring, a comment, or a log message - trips the check. Hit during P1: a new module's
+`Used by:` docstring line naming the Ollama adapter module failed the gate, and the docstring
+was reworded rather than the gate changed, because changing a conformance gate as a drive-by is
+worse than working around it. Same family as ISSUE-191.
+**Why deferred:** it is a test-infrastructure fix, and P1/P2 both had a one-word workaround.
+**To fix:** match on parsed `import`/`from` statements (`ast.walk` for `ast.Import` /
+`ast.ImportFrom`) instead of raw substrings. That also removes the need for every future
+docstring to avoid naming the module it documents.
+
+## ISSUE-206: two array-payload producers are ordered by a field the severity scorer does not read
+**Found:** 2026-08-26, during the P2 code review (DEC-201)
+**Severity:** P3 (nice-to-fix) - an approximate score, not a wrong one; both items are sparse
+**Where:** `retrieval/context/context_scoring.py:_payload_for_scoring` +
+`_extract_severity_score`, against `graph/memory/memory_queries.py:47,74` and
+`graph/political/pledge_queries.py:41` (via `retrieval/graph_rag/subgraph_retriever.py:129-134`)
+**Description:** DEC-201 chose "score the FIRST record of an array payload", justified by the
+producers ordering their rows by the very field `_extract_severity_score` reads. That holds for
+`beliefs` (confidence), `goals` (urgency), `secrets` (severity) and `believed_rumors`
+(confidence). It does NOT hold for two:
+  - `memories` is `ORDER BY m.vividness DESC` but the fallback reads `emotional_charge`, so the
+    representative is the most VIVID memory, not the most emotionally charged one. DEC-201
+    states this explicitly and accepted it.
+  - `active_pledges` is `ORDER BY e.sworn_at_tick DESC` and `_pledge_item` filters to active
+    pledges without re-sorting, yet each record carries a `severity` field that
+    `_extract_severity_score` checks FIRST. So the item's severity is that of the most recently
+    sworn pledge, not the most severe one. This one was NOT in DEC-201's producer audit and was
+    found by review afterwards - it looked unintentional, and it is the same class of gap.
+Neither can produce a wrong ordering by much: both items are small, sparse, and the value read
+is still a real severity-family number from a real record of the right kind.
+**Why deferred:** P2 is scoped "minimal: fix the logged defects only", and closing this properly
+means choosing between (a) re-sorting in the producer, which changes what the PROMPT shows, not
+just what the scorer sees, and (b) a per-key "which field to maximise" table, which is exactly
+the hand-maintained mapping P5's declaration table exists to delete. Doing it before P5 would
+build the thing P5 removes.
+**To fix:** prefer folding it into P5 - once `context_slots.py` declares each key, the severity
+field is one more column on the row already being added, and `_payload_for_scoring` can take a
+maximum over records using it. Regression test to add then: a two-record `active_pledges` array
+with a low-severity recently-sworn pledge first and a high-severity older one second, asserting
+the item scores the higher severity. The docstring on `_payload_for_scoring` carries the
+alignment table so the gap is visible at the call site until then.

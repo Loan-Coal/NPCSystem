@@ -10,7 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from npc_engine.schema.context_config_models import LLMConfig, RelevanceWeights, TierBudgetTokens
+from npc_engine.schema.context_config_models import (
+    DEFAULT_WEIGHT_PROFILES,
+    LLMConfig,
+    RelevanceWeights,
+    TierBudgetTokens,
+)
 from npc_engine.utils.errors import LLMConfigMisconfiguredError, LLMConfigValidationError
 
 
@@ -146,3 +151,68 @@ def test_load_llm_config_raises_validation_error_for_bad_weights(tmp_path: Path)
 
     with pytest.raises(LLMConfigValidationError):
         load_llm_config(config_path=str(config_path))
+
+
+# ── The configured weights must be the weights that are used (ISSUE-198) ─────
+
+
+def test_the_default_profile_name_resolves_to_the_yaml_relevance_weights() -> None:
+    """`relevance_weights:` is a REQUIRED field that nothing consulted.
+
+    `default_weight_profile` defaults to "default", `resolve_weights` looked that name
+    up in DEFAULT_WEIGHT_PROFILES and hit, and returned the hardcoded Python values --
+    so editing `relevance_weights:` in llm_config.yaml changed nothing. The two happened
+    to hold identical numbers, which is exactly why it went unnoticed.
+    """
+    declared = RelevanceWeights(recency=1.0, severity=0.0, proximity=0.0, relation=0.0, quest=0.0)
+    config = LLMConfig(
+        prompt_schema_version="v1.4",
+        compression_prompt_version="v1.4",
+        tier_budget_tokens=TierBudgetTokens(tier_a=4000, tier_b=3000, tier_c=2000),
+        session_turns_budget_tokens=1200,
+        compression_trigger_ratio=0.85,
+        max_proximity_hops=2,
+        relevance_weights=declared,
+    )
+    assert config.default_weight_profile == "default"
+    assert config.resolve_weights(config.default_weight_profile) == declared
+
+
+def test_a_named_builtin_profile_still_resolves_to_its_builtin_weights() -> None:
+    """Removing "default" must not make the other built-ins fall through too."""
+    config = LLMConfig(
+        prompt_schema_version="v1.4",
+        compression_prompt_version="v1.4",
+        tier_budget_tokens=TierBudgetTokens(tier_a=4000, tier_b=3000, tier_c=2000),
+        session_turns_budget_tokens=1200,
+        compression_trigger_ratio=0.85,
+        max_proximity_hops=2,
+        relevance_weights=RelevanceWeights(
+            recency=1.0, severity=0.0, proximity=0.0, relation=0.0, quest=0.0
+        ),
+    )
+    resolved = config.resolve_weights("rpg_dialogue_social")
+    assert resolved == RelevanceWeights(**DEFAULT_WEIGHT_PROFILES["rpg_dialogue_social"])
+
+
+def test_a_yaml_weight_profile_overrides_a_builtin_of_the_same_name() -> None:
+    """The lever an operator actually has over the two profiles dialogue uses.
+
+    detect_dialogue_profile() returns "rpg_dialogue_social"/"rpg_dialogue_quest", never
+    "default", so the test above does NOT make dialogue weights YAML-tunable on its own;
+    declaring the name under `weight_profiles:` is what does. See ISSUE-203.
+    """
+    override = RelevanceWeights(recency=0.0, severity=0.0, proximity=0.0, relation=1.0, quest=0.0)
+    config = LLMConfig(
+        prompt_schema_version="v1.4",
+        compression_prompt_version="v1.4",
+        tier_budget_tokens=TierBudgetTokens(tier_a=4000, tier_b=3000, tier_c=2000),
+        session_turns_budget_tokens=1200,
+        compression_trigger_ratio=0.85,
+        max_proximity_hops=2,
+        relevance_weights=RelevanceWeights(
+            recency=1.0, severity=0.0, proximity=0.0, relation=0.0, quest=0.0
+        ),
+        weight_profiles={"rpg_dialogue_social": override},
+    )
+    assert config.resolve_weights("rpg_dialogue_social") == override
