@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from compare import compare_runs, format_report, main
+from tier_attribution import NO_TIER_SPEND
 
 
 # ---------------------------------------------------------------------------
@@ -375,3 +376,56 @@ def test_self_comparison_without_meta_json_still_succeeds(tmp_path: Path) -> Non
     result = compare_runs(gen_dir, gen_dir)
 
     assert result.refusal_reason is None
+
+
+# ---------------------------------------------------------------------------
+# Per-tier attribution — where the context that produced the verdict came from
+# ---------------------------------------------------------------------------
+
+
+def _write_transcript(gen_dir: Path, tier_spend: list[dict]) -> None:
+    """Write a v2 gen-dir transcript whose single record carries one context receipt."""
+    gen_dir.mkdir(parents=True, exist_ok=True)
+    # No config block: RunConfig is a full reproducibility snapshot and this fixture is about
+    # receipts, not comparability. Both arms get the same (absent) identity, so they compare.
+    (gen_dir / "meta.json").write_text(
+        json.dumps({
+            "version": 2, "generated_at": "2026-08-26T00:00:00+00:00", "gen_id": "gen", "k": 3,
+        }),
+        encoding="utf-8",
+    )
+    record = {
+        "record_id": "case_shared:tone_judge:0", "source": "runner", "npc_id": "mira_innkeeper",
+        "player_id": "player_eval", "player_message": "hi", "npc_response": "hi",
+        "criteria": "warm", "judge_kind": "tone_judge", "expected_polarity": "pass_on_yes",
+        "context_receipt": {"retrieval_profile": "default", "tier_spend": tier_spend},
+    }
+    (gen_dir / "outputs.jsonl").write_text(json.dumps(record), encoding="utf-8")
+
+
+def test_report_attributes_each_arm_context_to_its_tiers(tmp_path: Path) -> None:
+    """RED anchor: the report named what DIFFERED between two arms but never said where the
+    context each arm ran on came from, so "aggressive beat default" could not be traced to a
+    tier. tier_spend on the engine's own receipt is the only honest source of that."""
+    before_dir = tmp_path / "before"
+    after_dir = tmp_path / "after"
+    for gen_dir, tokens in ((before_dir, 100), (after_dir, 900)):
+        _write_judged_jsonl(gen_dir, [_row("case_shared:tone_judge:0", passed=True)])
+        _write_transcript(gen_dir, [{"tier": "tierB", "items": 2, "tokens": tokens}])
+
+    lines = format_report(compare_runs(before_dir, after_dir))
+    report = "\n".join(lines)
+
+    assert "tierB 2 items / 100 tok" in report
+    assert "tierB 2 items / 900 tok" in report
+
+
+def test_an_arm_with_no_transcript_says_so_instead_of_printing_a_blank(tmp_path: Path) -> None:
+    """Older arms carry no receipts. A blank line reads as "not checked"; the report must
+    state the absence, the same way the Differs: line states "no declared difference"."""
+    gen_dir = tmp_path / "run"
+    _write_judged_jsonl(gen_dir, [_row("case_001:tone_judge:0", passed=True)])
+
+    report = "\n".join(format_report(compare_runs(gen_dir, gen_dir)))
+
+    assert NO_TIER_SPEND in report

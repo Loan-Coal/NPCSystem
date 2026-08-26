@@ -95,7 +95,9 @@ def _receipt_token_budget(gen_dir: Path) -> int | None:
             sorted(budgets),
         )
         return None
-    return budgets.pop()
+    # int(...): pydantic field access resolves as Any to mypy here, the same type-checker
+    # gap _harness_version documents with str(...) — not a real runtime ambiguity.
+    return int(budgets.pop())
 
 
 def _panel_status(gen_dir: Path, status_path: Path | None) -> RunStatus | None:
@@ -182,7 +184,6 @@ def build_trend_row(
     eval_summary = summarize_from_dir(gen_dir)
     guard, capability = _battery_rates(eval_summary)
     status = _panel_status(gen_dir, status_path)
-
     return TrendRow(
         gen_id=gen_id,
         harness_version=_harness_version(gen_dir),
@@ -195,9 +196,7 @@ def build_trend_row(
         panel_kappa=status.panel_kappa if status else None,
         kappa_by_criterion=status.kappa_by_criterion if status else (),
         repeat_flips=status.repeat_flips if status else None,
-        # Sourced from the engine's own receipts, not from _variant_fields' meta.json —
-        # and kept out of _variant_fields so comparability_key stays cheap.
-        prompt_token_budget=_receipt_token_budget(gen_dir),
+        prompt_token_budget=_receipt_token_budget(gen_dir),  # the engine's, not meta.json's
         **_variant_fields(gen_dir),
     )
 

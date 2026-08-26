@@ -9,7 +9,8 @@ Purpose: compare verb — load two generation directories, aggregate judged reco
          confident verdict when the two runs are not actually comparable: empty
          intersection, or a mismatched harness_version / judge_model / k (EVAL-P18.3).
 Dependencies: argparse, json, logging, pathlib, sys, collections; pydantic; case_stats (classify),
-              rate_stats (pass_rate, wilson_interval), paired_stats (paired_compare, PairedResult)
+              rate_stats (pass_rate, wilson_interval), paired_stats (paired_compare, PairedResult),
+              tier_attribution (read_tier_spend, format_tier_spend — per-arm context attribution)
 Used by: Makefile eval-compare target; tests/unit/evals/test_compare.py; evals/__main__.py
 """
 
@@ -30,6 +31,8 @@ from judge_identity import resolve_judge_identity
 from run_variance import VARIANT_FIELDS, describe_variant_delta
 from paired_stats import PairedResult, paired_compare
 from rate_stats import pass_rate, wilson_interval
+from context_receipt_record import TierSpendRecord
+from tier_attribution import format_tier_spend, read_tier_spend
 from verdict_sources import VerdictRow, load_unified_rows, source_counts
 
 # ---------------------------------------------------------------------------
@@ -144,6 +147,10 @@ class CompareResult(BaseModel):
     after_det_slots: int = 0
     before_meta: RunMeta
     after_meta: RunMeta
+    # Per-tier attribution of the context that ACTUALLY reached the model in each arm, from
+    # the engine's own receipts. Defaults to () so an arm with no transcript still builds.
+    before_tier_spend: tuple[TierSpendRecord, ...] = ()
+    after_tier_spend: tuple[TierSpendRecord, ...] = ()
     refusal_reason: str | None = None
 
 
@@ -409,6 +416,8 @@ def compare_runs(before_dir: Path, after_dir: Path) -> CompareResult:
         after_det_slots=after_sc.get("deterministic", 0),
         before_meta=before_meta,
         after_meta=after_meta,
+        before_tier_spend=read_tier_spend(before_dir),
+        after_tier_spend=read_tier_spend(after_dir),
         refusal_reason=_comparability_error(before_meta, after_meta, intersection_size),
     )
 
@@ -449,7 +458,9 @@ def _format_header(result: CompareResult) -> list[str]:
             f"Only in after ({len(result.only_in_after)}): {', '.join(result.only_in_after)}"
         )
     lines.append(_format_run_meta("before", result.before_meta))
+    lines.append(f"Tiers  (before): {format_tier_spend(result.before_tier_spend)}")
     lines.append(_format_run_meta("after", result.after_meta))
+    lines.append(f"Tiers  (after):  {format_tier_spend(result.after_tier_spend)}")
     if result.refusal_reason is not None:
         lines.append(f"REFUSED: {result.refusal_reason}")
     return lines
