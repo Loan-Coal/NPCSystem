@@ -129,7 +129,6 @@ R006|src/npc_engine/retrieval/context/context_budget_enforcer.py::enforce_contex
 R006|src/npc_engine/retrieval/context/context_builder_helpers.py::enforce_final_serialized_budget_with_context
 R006|src/npc_engine/retrieval/context/context_relevance_engine.py::rank_context_candidates
 R006|src/npc_engine/retrieval/context/context_scoring.py::rank_tier_items
-R006|src/npc_engine/retrieval/context/context_serializer.py::serialize_context
 R006|src/npc_engine/retrieval/dialogue_context/dialogue_context_adapter.py::Neo4jDialogueContextAdapter.build_context
 R006|src/npc_engine/scheduler/tick_scheduler.py::TickScheduler.__init__
 R006|src/npc_engine/schema/schema_loader.py::load_game_schema

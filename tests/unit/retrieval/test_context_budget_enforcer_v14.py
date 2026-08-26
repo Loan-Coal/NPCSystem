@@ -389,10 +389,15 @@ def test_fill_to_budget_tier0_overflow_raises() -> None:
 def test_fill_to_budget_drops_lowest_priority_first() -> None:
     """When serialized size exceeds budget, tier_c is dropped before tier_b before tier_a.
 
-    Uses "rag:" prefixed keys so items appear in npc_known_events in the serialized
+    Uses "rag:" prefixed keys so items appear in `retrieved_context` in the serialized
     output and actually contribute to serialized size. The base skeleton with world/session
     fits in the budget; adding compressed rag items pushes over it, so the post-hoc trim
     drops tier_c first, then tier_b.
+
+    The budget is calibrated to the EMPTY skeleton, which the generated serializer grew
+    from ~50 to 84 tokens by emitting every declared slot unconditionally (the schema
+    stability that stops two A/B arms differing in shape). Base + world + session is
+    89 tokens; one compressed rag item pushes past 110.
     """
     big = '{"summary":"' + "x" * 600 + '"}'  # valid JSON; after compression still ~90 chars in output
     context = MergedContext(
@@ -405,9 +410,9 @@ def test_fill_to_budget_drops_lowest_priority_first() -> None:
     )
     llm_config = _llm_config_large()
 
-    # Budget=80: base skeleton+world+session ≈ 58 tokens (fits); adding a compressed rag
-    # item (~90 chars in npc_known_events) pushes to ~81 tokens > 80, triggering the trim.
-    filled, _ = fill_to_budget(context=context, llm_config=llm_config, prompt_token_budget=80)
+    # Budget=110: base skeleton+world+session = 89 tokens (fits); adding a compressed rag
+    # item (~90 chars in retrieved_context) pushes past 110, triggering the trim.
+    filled, _ = fill_to_budget(context=context, llm_config=llm_config, prompt_token_budget=110)
 
     tier_keys = {item.key for item in filled.items}
     assert "world" in tier_keys

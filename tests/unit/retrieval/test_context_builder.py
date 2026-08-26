@@ -513,8 +513,11 @@ async def test_player_scoped_memory_in_context(monkeypatch) -> None:
         player_id="player_villain",
     )
     payload_other = json.loads(serialized_other)
-    assert payload_other.get("npc", {}).get("player_memories") is None, (
-        "Expected no 'player_memories' for a different player"
+    # The SLOT is always present now -- the generated serializer emits every declared slot
+    # unconditionally so the prompt's shape cannot vary between turns or between A/B arms.
+    # What must not leak is the CONTENT: another player's memories.
+    assert payload_other.get("npc", {}).get("player_memories") == [], (
+        "Expected no player memories for a different player"
     )
 
 
