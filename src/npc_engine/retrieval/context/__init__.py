@@ -28,9 +28,17 @@ from .context_relevance_engine import (
     MAX_COMPONENT_SCORE, MIN_COMPONENT_SCORE, score_candidate,
 )
 from .context_scoring import (
-    rank_tier_items, _build_candidate, _extract_recency_score,
-    _extract_relation_score, _extract_severity_score, _infer_proximity_hops,
-    _normalize_ratio, _quest_score,
+    rank_tier_items, _build_candidate,
+)
+# The four signal extractors moved to context_score_extractors when context_scoring passed
+# the 300-line cap. Aliased back to their old private names here so no caller had to change.
+from .context_score_extractors import (
+    extract_recency_score as _extract_recency_score,
+    extract_relation_score as _extract_relation_score,
+    extract_severity_score as _extract_severity_score,
+    infer_proximity_hops as _infer_proximity_hops,
+    normalize_ratio as _normalize_ratio,
+    quest_score as _quest_score,
 )
 from .context_serializer import serialize_context
 from .context_builder_helpers import enforce_final_serialized_budget_with_context, expand_query, keyword_overlap, rerank_by_keyword

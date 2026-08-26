@@ -19,11 +19,11 @@ from typing import Any
 
 import pytest
 
-from npc_engine.retrieval.context.context_scoring import (
-    _extract_recency_score,
-    _extract_severity_score,
-    _payload_for_scoring,
-    _quest_score,
+from npc_engine.retrieval.context.context_score_extractors import (
+    extract_recency_score as _extract_recency_score,
+    extract_severity_score as _extract_severity_score,
+    payload_for_scoring as _payload_for_scoring,
+    quest_score as _quest_score,
 )
 from npc_engine.retrieval.context.context_merger import ContextItem
 
