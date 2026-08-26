@@ -73,3 +73,42 @@ def test_the_judge_target_can_still_run_without_args() -> None:
     )
     assert result.returncode == 0
     assert "evals judge" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# eval-retrieval: the target that made mean_precision_at_k permanently null
+# ---------------------------------------------------------------------------
+
+
+def _dry_run_vars(target: str, variables: tuple[str, ...]) -> str:
+    """Return the recipe `make` would execute for a target driven by variables, not ARGS."""
+    result = subprocess.run(
+        ["make", "-n", target, *variables],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    return result.stdout
+
+
+def test_eval_retrieval_forwards_gen_id_as_a_container_path() -> None:
+    """RED anchor: the recipe ran `python -m evals retrieval` with NO arguments, so
+    retrieval_metrics.json was never written and every trend row carried
+    mean_precision_at_k=null -- retrieval quality was the one contract metric that could
+    not be trended, compared or gated.
+
+    The path must be the CONTAINER path: the target runs inside the app container because
+    neo4j publishes no host port (ISSUE-131), so a host path would not resolve there.
+    """
+    recipe = _dry_run_vars("eval-retrieval", ("GEN_ID=x", "RETRIEVAL_PROFILE=aggressive"))
+    assert "--gen-dir /work/evals/generations/x" in recipe, recipe
+    assert "--retrieval-profile aggressive" in recipe, recipe
+
+
+def test_eval_retrieval_stays_print_only_when_given_no_variables() -> None:
+    """Both variables are optional: `make eval-retrieval` alone must keep its original
+    print-the-numbers-and-persist-nothing behaviour, which several callers still rely on."""
+    recipe = _dry_run_vars("eval-retrieval", ())
+    assert "evals retrieval" in recipe
+    assert "--gen-dir" not in recipe
+    assert "--retrieval-profile" not in recipe

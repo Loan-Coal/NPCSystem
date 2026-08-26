@@ -268,9 +268,17 @@ eval-llm-demo:
 # eval-retrieval: measure retrieval precision@k/recall@k/MRR against demo world labels.
 # evals.engine_adapter connects to Neo4j directly (bolt), which needs the app
 # container's network (EVAL-P20.3a / ISSUE-131 — see the demo-snapshot comment above).
+# GEN_ID / RETRIEVAL_PROFILE are optional and forwarded to the runner's own flags, which
+# have always accepted them. Without them this ran with NO arguments, so
+# retrieval_metrics.json was never written and every trend row carried
+# mean_precision_at_k=null. GEN_ID becomes the CONTAINER path (/work/...), not the host
+# path: the recipe runs inside the app container, where the host path does not exist.
+# Usage: make eval-retrieval GEN_ID=k3_abc123 RETRIEVAL_PROFILE=default
 eval-retrieval:
 	MSYS_NO_PATHCONV=1 docker compose run --rm -v "$$PWD:/work" -w /work app \
-		python -m evals retrieval
+		python -m evals retrieval \
+		$(if $(GEN_ID),--gen-dir /work/evals/generations/$(GEN_ID),) \
+		$(if $(RETRIEVAL_PROFILE),--retrieval-profile $(RETRIEVAL_PROFILE),)
 
 # eval-generate: two-phase pipeline — generation pass (writes to evals/generations/<gen-id>/ or legacy transcript)
 # Pass ARGS="--k 2 --gen-id smoke" to enable k-repeat output.
