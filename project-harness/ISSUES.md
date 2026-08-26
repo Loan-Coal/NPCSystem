@@ -16,28 +16,6 @@ Rules:
 
 ## Open
 
-## ISSUE-200: eight assembled tier-A item kinds have no slot in the serialized skeleton
-**Found:** 2026-08-26, during the ISSUE-163 root-cause trace
-**Severity:** P2 (annoying) — they spend prompt budget and then vanish
-**Where:** `retrieval/context/context_serializer.py:serialize_context` (fixed skeleton) vs
-`retrieval/context/context_builder.py:_build_tier_a_extended` and
-`retrieval/graph_rag/subgraph_retriever.py`
-**Description:** the serializer assembles a fixed skeleton from a known key list. Items keyed
-`secrets`, `owned_items`, `obligations`, `believed_rumors`, `traits`, `group_memberships`,
-`active_pledges` and `second_hop:*` are produced, ranked, and counted against the tier-A
-budget — and then have nowhere to go in the skeleton, so they are silently discarded at
-serialization. On `mira_innkeeper` that is `secrets` (106 tokens) and `believed_rumors` (29)
-competing for the same 131 tokens as `beliefs` and `memories` while being incapable of
-reaching the model. The reverse also holds: `propagated_reputation` is read from the mapping
-in `serialize_context` but NO producer anywhere emits that key, so the slot is structurally
-`[]` in 100% of rows — that is a dead slot, not a drop.
-**Why deferred:** single-task focus; fixing it means deciding the prompt schema, which is a
-prompt-contract change (`prompt_schema_version`), not a bug fix.
-**To fix:** decide per key — either add a skeleton slot (and bump `prompt_schema_version`) or
-stop assembling the item. Either way the budget stops being spent on invisible items. Delete
-the `propagated_reputation` read or wire `get_propagated_reputation_for_npc` into
-`_fetch_npc_profile_data`.
-
 ## ISSUE-201: `npc.emotion` reports "neutral" while the NPC's character node says otherwise
 **Found:** 2026-08-26, during the ISSUE-163 root-cause trace
 **Severity:** P2 (annoying)
@@ -1347,38 +1325,6 @@ worse than working around it. Same family as ISSUE-191.
 `ast.ImportFrom`) instead of raw substrings. That also removes the need for every future
 docstring to avoid naming the module it documents.
 
-## ISSUE-206: two array-payload producers are ordered by a field the severity scorer does not read
-**Found:** 2026-08-26, during the P2 code review (DEC-201)
-**Severity:** P3 (nice-to-fix) - an approximate score, not a wrong one; both items are sparse
-**Where:** `retrieval/context/context_scoring.py:_payload_for_scoring` +
-`_extract_severity_score`, against `graph/memory/memory_queries.py:47,74` and
-`graph/political/pledge_queries.py:41` (via `retrieval/graph_rag/subgraph_retriever.py:129-134`)
-**Description:** DEC-201 chose "score the FIRST record of an array payload", justified by the
-producers ordering their rows by the very field `_extract_severity_score` reads. That holds for
-`beliefs` (confidence), `goals` (urgency), `secrets` (severity) and `believed_rumors`
-(confidence). It does NOT hold for two:
-  - `memories` is `ORDER BY m.vividness DESC` but the fallback reads `emotional_charge`, so the
-    representative is the most VIVID memory, not the most emotionally charged one. DEC-201
-    states this explicitly and accepted it.
-  - `active_pledges` is `ORDER BY e.sworn_at_tick DESC` and `_pledge_item` filters to active
-    pledges without re-sorting, yet each record carries a `severity` field that
-    `_extract_severity_score` checks FIRST. So the item's severity is that of the most recently
-    sworn pledge, not the most severe one. This one was NOT in DEC-201's producer audit and was
-    found by review afterwards - it looked unintentional, and it is the same class of gap.
-Neither can produce a wrong ordering by much: both items are small, sparse, and the value read
-is still a real severity-family number from a real record of the right kind.
-**Why deferred:** P2 is scoped "minimal: fix the logged defects only", and closing this properly
-means choosing between (a) re-sorting in the producer, which changes what the PROMPT shows, not
-just what the scorer sees, and (b) a per-key "which field to maximise" table, which is exactly
-the hand-maintained mapping P5's declaration table exists to delete. Doing it before P5 would
-build the thing P5 removes.
-**To fix:** prefer folding it into P5 - once `context_slots.py` declares each key, the severity
-field is one more column on the row already being added, and `_payload_for_scoring` can take a
-maximum over records using it. Regression test to add then: a two-record `active_pledges` array
-with a low-severity recently-sworn pledge first and a high-severity older one second, asserting
-the item scores the higher severity. The docstring on `_payload_for_scoring` carries the
-alignment table so the gap is visible at the call site until then.
-
 ## ISSUE-207: `routine_override` smuggles a tick counter into every prompt inside a JSON string
 **Found:** 2026-08-26, during P3 while applying NON_PROMPT_NODE_FIELDS everywhere
 **Severity:** P2 (annoying) - a live prompt-determinism hole that the deny-list only appears
@@ -1424,6 +1370,16 @@ and cannot be answered until the key has a slot.
 relative phrase the model can use ("expires in 12 ticks") rather than an absolute counter it
 cannot compare, or drop it. If they do not get a slot, stop assembling the item and the
 question disappears.
+
+**Update 2026-08-26 (P6, DEC-205).** Half-answered, and the remaining half is now a one-flag
+decision instead of an open design question. `active_pledges` HAS a declared slot --
+`npc.active_pledges`, severity_field `severity` -- but `default_enabled=False`, because no
+prompt rule teaches the model to read it. `_drop_withheld_items` now also stops the item
+being assembled and charged at all, so the "stop assembling the item" branch of the fix
+above is what actually happens today and the budget question is closed. The expiry-rendering
+question stays open and stays parked with the flag: whoever flips `default_enabled` to True
+must decide then whether a bare `expires_at_tick` is usable by the model or needs rendering
+as a relative phrase, and add the prompt rule in the same change.
 
 ## ISSUE-209: tier-A selection is not monotone in the tier-A cap
 **Found:** 2026-08-26, during P4 while guarding the ISSUE-197 reclaim

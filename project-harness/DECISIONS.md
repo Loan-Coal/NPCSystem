@@ -5353,3 +5353,115 @@ is precisely the confound this phase existed to remove.
 **Not changed:** no `src/` behaviour, no test expectations. `tests/unit/config`, `tests/unit/llm`
 and `tests/unit/retrieval` (601 tests) stay green — the shipped tier budgets are pinned by no
 test, and the window honesty test bounds constants that did not move.
+
+---
+
+## DEC-205: every context slot is declared once, and the serializer is generated from that
+## declaration instead of naming each key twice
+**Date:** 2026-08-26
+**Decided by:** this session, P6 of the context-pipeline plan.
+
+**Context.** Getting one fact about an NPC in front of the model took three edits in three
+files, and missing any one of them failed SILENTLY. All three had already shipped:
+
+| | what was forgotten | what happened |
+|---|---|---|
+| ISSUE-163 | the key in `NPC_SELF_STATE_KEYS` | scored proximity 0.0 — the score of a node at the graph horizon — so an NPC's own beliefs ranked below the strangers in the room |
+| ISSUE-200 | the line in `context_serializer` | produced, ranked, charged to the budget, discarded at the last step |
+| ISSUE-206 | which field the scorer reads | ordered by one field, scored on another |
+
+The premise of this phase was that a declaration table prevents all three. That premise is
+**confirmed rather than speculative** — each row above is a real, shipped bug, and the
+contract test written first found a fourth before any of the refactor landed.
+
+**Decision 1 — `CONTEXT_SLOTS`, a frozen tuple of 26 rows, is the single source of truth.**
+Each row carries key, tier, priority, pinned, skeleton path, shape, `extract_field`,
+`self_state`, `default_enabled` and `severity_field`. Pydantic validators reject rows whose
+columns contradict each other at import time, so an enabled slot with no path, or a prefix
+shape on a non-prefix key, cannot exist.
+
+**Decision 2 — the contract test reads the producer side with `ast`, not by running the
+pipeline.** A runtime probe only sees the keys THAT turn produced: an NPC with no secrets
+emits no `secrets` item, and the check would pass by accident. It scans the three producer
+modules for `ContextItem(key=...)` and `_pinned_tier0_item(key=...)`; a wrapper not named in
+`PRODUCER_FACTORIES` makes the test fail rather than quietly narrow its coverage. **It found
+`propagated_reputation` immediately** — a slot the serializer read and nothing wrote, `[]` in
+975 of 975 rows, while `system_v1.yaml` Rule 13 spent ~19 lines teaching the model how to
+read it. `get_propagated_reputation_for_npc` existed, was fully unit-tested, and had zero
+callers. Wired in at priority 84, just below direct reputation, because Rule 13 says to
+apply word-of-mouth only where Rule 2 has no entry.
+
+**Decision 3 — every enabled slot is emitted every turn.** `player_memories` was added only
+when the NPC had some, so two NPCs differing only in whether they had met the player produced
+prompts with different SCHEMAS. In an A/B run that is schema drift wearing a treatment
+effect's clothes — the arms differ structurally before anything has been measured.
+`npc.profile.current_location` was the same shape of bug. Cost: the empty skeleton grows
+from ~50 to 84 tokens. That is what schema stability is worth.
+
+**Decision 4 — `rag:*` leaves the anti-hallucination whitelist.** `serialize_context` was
+`"npc_known_events": [*known_events, *rag_events]`, and `system_v1.yaml` calls that list
+authoritative: *"Do NOT reference any event, person, or fact not present in
+context.npc_known_events."* `prompt_builder` promotes anything in it carrying
+`distorted_summary` into a `MY_ACCOUNT_N` line, which the prompt calls *"the exact words you
+would speak."* A retrieved node is not an event this NPC witnessed; concatenating the two
+manufactures memory. RAG now has its own `retrieved_context` slot (D10, half one). The prompt
+rule teaching what that slot IS lands in P8 with the corpus — until then the store is empty,
+so the slot is `[]` in every row and nothing untaught reaches the model.
+
+**Decision 5 — a withheld slot is dropped before ranking, not at serialization.** Declaring
+the eight remaining orphans with `default_enabled=False` turned a silent bug into a written
+decision, but on its own it did not stop the spending: they were still produced, ranked and
+charged. `_drop_withheld_items` filters against the table once, centrally — there are four
+producer modules and twenty-odd call sites, and a check inside each producer is what gets
+forgotten at the twenty-first, which is how ISSUE-200 happened. It fails OPEN: an undeclared
+key is kept, because dropping it would hide in production the exact defect the contract test
+exists to surface in CI. This is also the mechanism P8's `disabled_slots` A/B knob needs,
+already written and tested.
+
+**Decision 6 — severity is scored on the field the producer ordered by, maximised across
+records.** The old fallback chain was correct only where the `ORDER BY` happened to be the
+field it hit first — true for beliefs, goals, secrets and believed_rumors, false for memories
+(ordered by vividness, scored on emotional_charge) and active_pledges (ordered by
+sworn_at_tick, scored on severity). Taking the MAXIMUM of the declared field removes the
+dependency on producer ordering rather than documenting it (ISSUE-206). Recency still reads
+the first record, deliberately: `rerank_by_keyword` has reordered beliefs, goals and secrets
+by relevance to the player's message, so the first record is a choice made upstream on
+purpose.
+
+**Decision 7 — the nine profile reads get names.** `_fetch_npc_profile_data` returned
+`tuple[Any, ...]`, unpacked positionally 300 lines away and cached anonymously; adding a read
+meant editing both ends in lockstep and getting the order wrong was a silent mis-assignment.
+`NpcProfileData` is a frozen model. Payloads stay `Any` on purpose — re-validating them would
+make this the second place a node's shape is described, which is the duplication the whole
+phase removes.
+
+**Also:** `prompt_schema_version` and `compression_prompt_version` go to `v1.5`; the latter is
+part of the compression cache key, so stale entries invalidate for free.
+`context_scoring.py` crossed the 300-line cap and split at a real seam —
+`context_score_extractors.py` holds the pure functions of `(key, payload)`, `context_scoring`
+orchestrates them. `serialize_context` fell off the 40-line-function baseline, which is the
+refactor paying for itself in the ratchet file.
+
+**Measured live**, rebuilt image `a8f1dea`, same 8 NPCs, window 32768 / budget 25888:
+
+    npc.beliefs / goals / memories / profile.current_location    8/8 each   (D8 holds)
+    npc.top_need                                                 0/8        (ISSUE-210, unchanged)
+    tier-A items charged, 8 NPCs                                 88 -> 74
+    tier-A tokens charged, 8 NPCs                                7605 -> 6914   (-86 tok/NPC)
+    serialized per NPC                                           701-1224 (mean 945)
+    top-level skeleton keys                                      8 -> 11
+
+**The 86 tok/NPC is ISSUE-200's cost, finally measured.** It shows in the tier's SPEND, not
+in the prompt: those items never reached the serialized output, which is the whole bug. The
+prompt itself grew ~20 tok/NPC from the four now-unconditional slots.
+
+Golden diff on three NPCs, P5 vs P6: `+active_quest`, `+system_state`, `+retrieved_context`,
+`+npc.player_memories`, each at its empty default; every other slot moved by at most a few
+tokens of graph content drifting between captures. No slot lost content.
+
+**What this does NOT yet prove.** `active_quest` and `system_state` serialize at `{}` in the
+probe, because `GET /v1/admin/debug/retrieval` passes **no `player_id` and no
+`system_state_context`** — so it cannot produce either. Their content has been verified in
+unit tests and structurally in the live skeleton, but not end-to-end on a real turn. That is
+the same instrument gap the plan's review point 1 raises against the 8/8 headline, and P9
+closes it by giving the debug route the dialogue turn's parameters.

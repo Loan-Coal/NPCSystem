@@ -2778,3 +2778,100 @@ reserved for tiers that spend nothing).
 contains zero `Need` nodes and zero `HAS_NEED` edges -- verified directly against Neo4j on
 2026-08-26. No seeder creates them, so the field was never going to be populated by any
 amount of retrieval work. Logged as ISSUE-210.
+
+## [FIXED] ISSUE-200: eight assembled tier-A item kinds have no slot in the serialized skeleton
+**Found:** 2026-08-26, during the ISSUE-163 root-cause trace
+**Fixed:** 2026-08-26, in P6 (DEC-205)
+**Severity:** P2 (annoying) — they spend prompt budget and then vanish
+**Where:** `retrieval/context/context_serializer.py:serialize_context` (fixed skeleton) vs
+`retrieval/context/context_builder.py:_build_tier_a_extended` and
+`retrieval/graph_rag/subgraph_retriever.py`
+**Description:** the serializer assembles a fixed skeleton from a known key list. Items keyed
+`secrets`, `owned_items`, `obligations`, `believed_rumors`, `traits`, `group_memberships`,
+`active_pledges` and `second_hop:*` are produced, ranked, and counted against the tier-A
+budget — and then have nowhere to go in the skeleton, so they are silently discarded at
+serialization. On `mira_innkeeper` that is `secrets` (106 tokens) and `believed_rumors` (29)
+competing for the same 131 tokens as `beliefs` and `memories` while being incapable of
+reaching the model. The reverse also holds: `propagated_reputation` is read from the mapping
+in `serialize_context` but NO producer anywhere emits that key, so the slot is structurally
+`[]` in 100% of rows — that is a dead slot, not a drop.
+**Why deferred:** single-task focus; fixing it means deciding the prompt schema, which is a
+prompt-contract change (`prompt_schema_version`), not a bug fix.
+**To fix:** decide per key — either add a skeleton slot (and bump `prompt_schema_version`) or
+stop assembling the item. Either way the budget stops being spent on invisible items. Delete
+the `propagated_reputation` read or wire `get_propagated_reputation_for_npc` into
+`_fetch_npc_profile_data`.
+
+**How it was fixed.** All eleven keys are declared in `retrieval/context/context_slots.py`,
+each with a skeleton path, and `context_serializer` is generated from that table -- so a
+produced key can no longer be a key the serializer has never heard of. Split by outcome:
+
+* `system_state` and `active_quest` are now SERIALIZED. Both were pinned (priority 97 and 89)
+  and discarded, which is the sharpest form of this bug: the budget paid for them
+  unconditionally and the model could never see them. `system_state_v1.yaml` Rule 17 had been
+  teaching the model to read `system_state` the whole time, and Rule 11 told it to set
+  `action.target_id` to "the quest_id" without ever supplying one.
+* `propagated_reputation` -- the reverse case named in this entry, a slot read with no
+  producer -- was wired to `get_propagated_reputation_for_npc`, which existed and was fully
+  unit-tested with zero callers.
+* `secrets`, `owned_items`, `obligations`, `believed_rumors`, `traits`, `group_memberships`,
+  `active_pledges` and `second_hop:*` are declared with `default_enabled=False`, because no
+  prompt rule teaches the model to read them, AND `_drop_withheld_items` now removes them
+  before ranking so they no longer spend budget. Turning one on is one flag plus one prompt
+  rule; the path is already written down.
+
+**Measured:** tier-A items charged across the 8-NPC probe 88 -> 74, tier-A tokens charged
+7605 -> 6914, i.e. **86 tok/NPC reclaimed**. The saving is in the tier's SPEND, not in the
+prompt -- those items never reached the serialized output, which was the whole bug.
+
+## [FIXED] ISSUE-206: two array-payload producers are ordered by a field the severity scorer does not read
+**Found:** 2026-08-26, during the P2 code review (DEC-201)
+**Fixed:** 2026-08-26, in P6 (DEC-205)
+**Severity:** P3 (nice-to-fix) - an approximate score, not a wrong one; both items are sparse
+**Where:** `retrieval/context/context_scoring.py:_payload_for_scoring` +
+`_extract_severity_score`, against `graph/memory/memory_queries.py:47,74` and
+`graph/political/pledge_queries.py:41` (via `retrieval/graph_rag/subgraph_retriever.py:129-134`)
+**Description:** DEC-201 chose "score the FIRST record of an array payload", justified by the
+producers ordering their rows by the very field `_extract_severity_score` reads. That holds for
+`beliefs` (confidence), `goals` (urgency), `secrets` (severity) and `believed_rumors`
+(confidence). It does NOT hold for two:
+  - `memories` is `ORDER BY m.vividness DESC` but the fallback reads `emotional_charge`, so the
+    representative is the most VIVID memory, not the most emotionally charged one. DEC-201
+    states this explicitly and accepted it.
+  - `active_pledges` is `ORDER BY e.sworn_at_tick DESC` and `_pledge_item` filters to active
+    pledges without re-sorting, yet each record carries a `severity` field that
+    `_extract_severity_score` checks FIRST. So the item's severity is that of the most recently
+    sworn pledge, not the most severe one. This one was NOT in DEC-201's producer audit and was
+    found by review afterwards - it looked unintentional, and it is the same class of gap.
+Neither can produce a wrong ordering by much: both items are small, sparse, and the value read
+is still a real severity-family number from a real record of the right kind.
+**Why deferred:** P2 is scoped "minimal: fix the logged defects only", and closing this properly
+means choosing between (a) re-sorting in the producer, which changes what the PROMPT shows, not
+just what the scorer sees, and (b) a per-key "which field to maximise" table, which is exactly
+the hand-maintained mapping P5's declaration table exists to delete. Doing it before P5 would
+build the thing P5 removes.
+**To fix:** prefer folding it into P5 - once `context_slots.py` declares each key, the severity
+field is one more column on the row already being added, and `_payload_for_scoring` can take a
+maximum over records using it. Regression test to add then: a two-record `active_pledges` array
+with a low-severity recently-sworn pledge first and a high-severity older one second, asserting
+the item scores the higher severity. The docstring on `_payload_for_scoring` carries the
+alignment table so the gap is visible at the call site until then.
+
+**How it was fixed.** Option (b) from "To fix", but without the hand-maintained mapping the
+objection was about: `severity_field` is one more COLUMN on the CONTEXT_SLOTS row that was
+being added anyway, so there is no second dict to keep in step.
+`extract_severity_score_for_item` reads the declared field and takes its MAXIMUM across all
+records, which removes the dependency on producer ordering rather than documenting it -- so
+neither `memories` (ordered by vividness) nor `active_pledges` (ordered by sworn_at_tick) can
+be misrepresented by its first row again. Magnitude not sign, so a negative
+`emotional_charge` or `reputation_delta` counts like a positive one of the same size.
+
+A slot that declares no field, or whose records do not carry it, falls back to the old chain:
+a producer that stops emitting a field degrades instead of silently scoring the item zero.
+The four already-aligned slots are pinned by test to score exactly as before -- this is a
+fix, not a re-weighting. The suggested regression test exists verbatim:
+`test_a_pledge_is_scored_on_severity_not_on_when_it_was_sworn`.
+
+Recency still reads the FIRST record, deliberately: `rerank_by_keyword` has reordered beliefs,
+goals and secrets by relevance to the player's message, so there the first record is a choice
+something upstream made on purpose.
