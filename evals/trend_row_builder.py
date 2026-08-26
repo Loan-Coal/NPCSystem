@@ -4,7 +4,7 @@ Layer: evals (eval harness — not part of src/)
 Purpose: Assemble one TrendRow from a completed run's on-disk artifacts — the
          published rates, the calibration kappas, the panel's agreement statistics,
          the run's variant identity, and the instrument that actually scored it.
-Dependencies: datetime, json, pathlib; calibration (run_calibration),
+Dependencies: datetime, json, logging, pathlib; calibration (run_calibration),
          calibration_records (LABELS_FILE, read_calibration_labels), eval_records
          (read_transcript), judge_identity (resolve_judge_identity),
          retrieval_summary (RETRIEVAL_METRICS_FILE), run_status (read_run_status),
@@ -26,6 +26,7 @@ one is worth importing from anywhere else.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -47,6 +48,8 @@ _RUN_STATUS_FILENAME: str = "run_status.json"
 TRANSCRIPT_FILENAME: str = "outputs.jsonl"
 """The generation pass's transcript; also the file --print-baseline probes for."""
 
+_logger = logging.getLogger(__name__)
+
 def _rate_with_ci(rate: float | None, ci_low: float | None, ci_high: float | None, n: int) -> RateWithCI:
     """Build a RateWithCI, tolerating an unmeasured (all-None) rate."""
     return RateWithCI(rate=rate, ci_low=ci_low, ci_high=ci_high, n=n)
@@ -61,6 +64,38 @@ def _harness_version(gen_dir: Path) -> str:
     # otherwise) — the same type-checker gap regression_gate._rate_regressed
     # documents, not a real runtime ambiguity.
     return str(transcript.config.harness_version)
+
+
+def _receipt_token_budget(gen_dir: Path) -> int | None:
+    """Return the prompt token budget the ENGINE reported holding this run's turns to.
+
+    Read off the transcript's context receipts, never off meta.json: meta.json is written by
+    the CLIENT (run_config), and the budget belongs to the engine. A client-side stamp would
+    publish a number nothing verified — the same class of defect that let the 2026-08-25 arm
+    claim a SHA it never ran.
+
+    Args:
+        gen_dir: The completed run's generation directory.
+    Returns:
+        The single budget every receipt agrees on. None when no turn reported a receipt,
+        which is every arm generated before the field existed. None plus a warning when
+        turns disagree: that is a finding about the run, not a number to average away.
+    """
+    budgets = {
+        record.context_receipt.prompt_token_budget
+        for record in read_transcript(gen_dir / TRANSCRIPT_FILENAME).records
+        if record.context_receipt is not None
+    }
+    if not budgets:
+        return None
+    if len(budgets) > 1:
+        _logger.warning(
+            "context receipts disagree on prompt_token_budget in %s: %s — recording None",
+            gen_dir,
+            sorted(budgets),
+        )
+        return None
+    return budgets.pop()
 
 
 def _panel_status(gen_dir: Path, status_path: Path | None) -> RunStatus | None:
@@ -160,6 +195,9 @@ def build_trend_row(
         panel_kappa=status.panel_kappa if status else None,
         kappa_by_criterion=status.kappa_by_criterion if status else (),
         repeat_flips=status.repeat_flips if status else None,
+        # Sourced from the engine's own receipts, not from _variant_fields' meta.json —
+        # and kept out of _variant_fields so comparability_key stays cheap.
+        prompt_token_budget=_receipt_token_budget(gen_dir),
         **_variant_fields(gen_dir),
     )
 
@@ -218,6 +256,8 @@ def _variant_fields(gen_dir: Path) -> dict[str, object]:
         "retrieval_profile": config.get("retrieval_profile"),
         "dialogue_prompt_hash": config.get("dialogue_prompt_hash"),
         "git_sha": config.get("git_sha"),
-        "prompt_token_budget": config.get("prompt_token_budget"),
+        # prompt_token_budget is deliberately absent: it comes from the engine's context
+        # receipts (_receipt_token_budget), not from this client-written config block, where
+        # nothing ever wrote it and it read null on every row.
         "mean_precision_at_k": precision,
     }

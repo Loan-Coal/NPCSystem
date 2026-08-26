@@ -14,6 +14,7 @@ Used by: make test (pytest discovery)
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import sys
 from pathlib import Path
@@ -359,3 +360,80 @@ def test_a_panel_baseline_does_not_gate_a_single_judge_candidate(tmp_path: Path,
     assert exit_code == 2
     assert "NO COMPARABLE BASELINE" in out
     assert "judge" in out.lower()
+
+
+# ---------------------------------------------------------------------------
+# prompt_token_budget — the ENGINE's number, not the client's
+# ---------------------------------------------------------------------------
+
+
+def _receipt(budget: int) -> dict[str, object]:
+    """A minimal well-formed context_receipt reporting one prompt token budget."""
+    return {"retrieval_profile": "default", "prompt_token_budget": budget}
+
+
+def _set_receipt_budgets(gen_dir: Path, budgets: list[int]) -> None:
+    """Stamp a context_receipt onto the first len(budgets) records of outputs.jsonl."""
+    path = gen_dir / "outputs.jsonl"
+    lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    assert len(lines) >= len(budgets), "artifact has fewer records than the test needs"
+    for index, budget in enumerate(budgets):
+        record = json.loads(lines[index])
+        record["context_receipt"] = _receipt(budget)
+        lines[index] = json.dumps(record)
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _set_meta_config(gen_dir: Path, **fields: object) -> None:
+    """Overwrite keys in meta.json's config block."""
+    path = gen_dir / "meta.json"
+    meta = json.loads(path.read_text(encoding="utf-8"))
+    meta["config"] = {**meta.get("config", {}), **fields}
+    path.write_text(json.dumps(meta), encoding="utf-8")
+
+
+def test_prompt_token_budget_is_read_from_the_engines_receipts(tmp_path: Path) -> None:
+    """RED anchor: the row read prompt_token_budget from meta.json's config, where nothing
+    ever writes it, so it was permanently null.
+
+    meta.json is written by the CLIENT (evals/run_config.py); the budget belongs to the
+    ENGINE. A client-side stamp is exactly the failure that let the 2026-08-25 arm claim a
+    SHA it never ran, so the receipt must win even when meta.json asserts otherwise."""
+    _require_real_artifact()
+    gen_dir = _copy_gen_dir(tmp_path)
+    _set_meta_config(gen_dir, prompt_token_budget=99999)
+    _set_receipt_budgets(gen_dir, [512, 512, 512])
+
+    row = build_trend_row("receipts", gen_dir, labels_path=_LABELS_PATH,
+                          recorded_at="2026-08-26T00:00:00+00:00")
+
+    assert row.prompt_token_budget == 512
+
+
+def test_receipts_that_disagree_are_reported_rather_than_averaged(tmp_path: Path, caplog) -> None:
+    """Turns that report different budgets is a real finding about the run, not a number to
+    smooth over. Recording the mean, or the first, would publish a budget no turn was
+    actually held to."""
+    _require_real_artifact()
+    gen_dir = _copy_gen_dir(tmp_path)
+    _set_receipt_budgets(gen_dir, [512, 1024])
+
+    with caplog.at_level(logging.WARNING):
+        row = build_trend_row("disagree", gen_dir, labels_path=_LABELS_PATH,
+                              recorded_at="2026-08-26T00:00:00+00:00")
+
+    assert row.prompt_token_budget is None
+    assert "512" in caplog.text and "1024" in caplog.text
+
+
+def test_an_arm_with_no_receipts_still_builds_a_valid_row(tmp_path: Path) -> None:
+    """Every arm generated before the receipt shipped has none, and must keep producing a
+    row: a gap recorded as None is visible in the trend, where a crash is just an absence."""
+    _require_real_artifact()
+    gen_dir = _copy_gen_dir(tmp_path)
+
+    row = build_trend_row("no_receipts", gen_dir, labels_path=_LABELS_PATH,
+                          recorded_at="2026-08-26T00:00:00+00:00")
+
+    assert row.prompt_token_budget is None
+    assert row.guard is not None

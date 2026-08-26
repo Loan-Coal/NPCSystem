@@ -4888,3 +4888,83 @@ panel-judges as advertised, and its candidate row is refused rather than silentl
 instrument ever differs from the baseline's. The cost is a real constraint on the workflow, and an
 intentional one — the same trade DEC-190 recorded: it is cheaper to re-judge an arm than to act on
 a confounded verdict.
+
+## DEC-198: an NPC's own state is zero hops from the NPC, and the proximity fix ships before
+## the budget fix
+**Date:** 2026-08-26
+**Decided by:** this session, under the "one root cause per fix" instruction on the ISSUE-163
+investigation. Both halves are measured; only one shipped.
+
+**Context.** `npc.beliefs`, `npc.memories` and `npc.top_need` were empty in 100% of a 975-row
+transcript, `npc.goals` in 76.7%, while `npc.profile` was populated in 100%. A live hop-by-hop
+trace showed the rows surviving every read and rerank and being present in the pre-budget
+merged context, then being dropped at tier-A budget enforcement. Two independent defects
+produce that drop, and each is sufficient on its own to keep beliefs out of the prompt.
+
+**Defect 1 — the relevance scorer treats an NPC's own mind as maximally distant.**
+`_infer_proximity_hops` enumerated `character:`, `relation:`, `location:`, `nearby_npcs`,
+`event:`, `session` and `rag:`, and returned `max_proximity_hops` for anything else. Every
+key carrying the NPC's own state — `beliefs`, `goals`, `memories`, `secrets`, `top_need`,
+`traits`, `owned_items`, `obligations`, `believed_rumors`, `group_memberships`,
+`active_pledges`, `player_memories` — fell through to that default and scored proximity
+`1 - 2/2 = 0.0`, the score of a node at the graph horizon, while the strangers standing in
+the room with the NPC (`nearby_npcs`, 1 hop) scored 0.5.
+
+**Defect 2 — tier A is capped at 281 of 512 tokens and never gets the rest back.** Logged as
+ISSUE-197, not fixed here.
+
+**Decision 1 — zero hops, by a named constant, not a wider default.** The alternative was to
+flip the fall-through from `max_proximity_hops` to 0, which would also promote every future
+unrecognised key. An explicit `NPC_SELF_STATE_KEYS` tuple keeps the horizon default for keys
+nobody has classified, which is the safe direction for an unknown, and it makes the
+classification reviewable in one place. `second_hop:*` and `reputation` are deliberately NOT
+in the tuple: they describe other characters and the player, not the NPC.
+
+**Decision 2 — ship the ranking fix, defer the budget fix.** Both were prototyped and
+measured against the same 8-NPC live probe. The ranking fix alone moved `npc.beliefs` from
+1/8 to 6/8. The budget fix alone moved it to 3/8. The ranking fix is also a correctness
+claim with an unambiguous right answer — an NPC's beliefs are not two hops from the NPC —
+whereas the budget fix is an allocation change that interacts with the post-serialization
+trim loop and was unstable in the prototype (it cost `captain_sorn` its goal).
+
+**Consequence, stated plainly.** The 131-token remainder is zero-sum, so this fix TRADES:
+`captain_sorn` and `vw_elder` gave up their goal to gain their beliefs, and `npc.goals` fell
+from 2/8 to 1/8 while `npc.beliefs` rose from 1/8 to 6/8. `npc.memories` is still 0/8 — a
+single `mira_innkeeper` memories item is 483 tokens and cannot fit in a 512-token prompt
+budget under any ranking. Inner life does not stop being starved until ISSUE-197 (reclaim
+the unspent tier B/C budget) and ISSUE-199 (the 2188-token `location:` item) also land.
+
+## DEC-199: `prompt_token_budget` in a trend row comes from the engine's receipts, never
+## from meta.json
+**Date:** 2026-08-26
+**Decided by:** this session, wiring the six A/B plumbing fixes after the 2026-08-25
+false-provenance run. **Drives:** `evals/trend_row_builder.py`.
+
+**Context.** `trend_row_builder._variant_fields` read `prompt_token_budget` out of
+`meta.json`'s `config` block. Nothing has ever written that key, so every trend row ever
+recorded carried `null` — a field that looked measured and was not. The obvious fix is to
+have `evals/run_config.py` stamp it into `meta.json` at generation time.
+
+**Decision.** Derive it from the transcript's context receipts
+(`GenerationRecord.context_receipt.prompt_token_budget`) and remove it from `_variant_fields`.
+
+**Why not stamp meta.json.** `run_config` runs on the **client**. The budget is the
+**engine's** — it is the number `context_builder` actually held the assembly to. A
+client-side stamp asserts a value nothing verified, which is precisely the failure mode this
+whole batch exists to close: the 2026-08-25 arm claimed a git SHA that the container it
+talked to had never run, because the SHA was written by the caller rather than read from the
+callee. Re-creating that pattern in a new field would be the same bug with a different name.
+Importing `npc_engine.config.Settings` into `evals/` to read the budget locally is the same
+mistake wearing a library: it reports what a fresh process *would* configure, not what the
+running engine *did*.
+
+**Disagreement is a finding, not a number to smooth.** When receipts disagree the row records
+`None` and logs a warning naming the distinct values. Averaging them, or taking the first,
+would publish a budget no turn was actually held to. Absent receipts (every arm generated
+before the field existed) also record `None`, so a gap stays visible in the trend rather than
+reading as continuity.
+
+**Kept out of `_variant_fields` deliberately.** `comparability_key` calls `_variant_fields`
+for `judge_identity` alone and must stay cheap — `--print-baseline` answers "which row would
+this be gated against" before any summarise-and-calibrate work. Reading a transcript there
+would make a cheap probe expensive for a field it never looks at.
