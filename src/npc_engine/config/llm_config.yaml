@@ -1,5 +1,13 @@
-prompt_schema_version: "v1.4"
-compression_prompt_version: "v1.4"
+# P6 (2026-08-26): v1.4 -> v1.5. The serialized context SCHEMA changed -- it is now
+# generated from retrieval/context/context_slots.py, every declared slot is emitted
+# unconditionally (so the prompt's shape no longer varies with what an NPC happens to
+# have), `system_state` and `active_quest` reach the model for the first time, and RAG
+# hits moved out of `npc_known_events` into their own `retrieved_context` slot.
+#
+# compression_prompt_version is part of the compression cache key, so bumping it in the
+# same change invalidates every stale compressed payload for free.
+prompt_schema_version: "v1.5"
+compression_prompt_version: "v1.5"
 # Absolute per-tier ceilings, in tokens. These are a HARD min() applied on top of the
 # fractional split, so they bind long before the fractions do: at the old 4000/3000/2000
 # tier A could never exceed 4000 whatever the window, which made a window raise unable to
