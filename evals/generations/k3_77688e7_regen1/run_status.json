@@ -1,0 +1,47 @@
+{
+  "status": "gate_failed",
+  "cases_passed": 186,
+  "cases_total": 210,
+  "judge_panel": [
+    "mixtral:8x7b",
+    "qwen2.5:14b",
+    "llama3.1:8b"
+  ],
+  "judge_model": "",
+  "fleiss_kappa": 0.5807453416149063,
+  "kappa_ci_low": 0.41265693798740405,
+  "kappa_ci_high": 0.7328746724657437,
+  "kappa_n_items": 345,
+  "kappa_by_criterion": [
+    {
+      "judge_kind": "affirms_judge",
+      "kappa": 0.5193448848801339,
+      "n_items": 135,
+      "unanimous": 125
+    },
+    {
+      "judge_kind": "refusal_judge",
+      "kappa": 0.4222689075630257,
+      "n_items": 75,
+      "unanimous": 64
+    },
+    {
+      "judge_kind": "tone_judge",
+      "kappa": 0.7533996346661249,
+      "n_items": 135,
+      "unanimous": 129
+    }
+  ],
+  "repeat_flips": {
+    "records_with_flips": 19,
+    "unanimous_flips": 5,
+    "solo_flips": 7,
+    "n_records": 115
+  },
+  "raw_agreement": 0.9478260869565217,
+  "report_path": "evals\\reports\\20260825T231028Z.md",
+  "votes_path": "c:\\Users\\lohan\\Documents\\hackathons\\NPCSystem\\evals\\generations\\k3_77688e7_regen1\\judged_panel_votes.jsonl",
+  "duration_s": null,
+  "provenance": "",
+  "error": ""
+}

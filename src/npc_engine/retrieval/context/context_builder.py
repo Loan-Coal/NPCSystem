@@ -42,7 +42,10 @@ from npc_engine.graph.memory.memory_queries import (
     get_memories_for_character,
     get_player_memories_for_npc,
 )
-from npc_engine.graph.reputation.reputation_queries import get_reputation_context_for_npc
+from npc_engine.graph.reputation.reputation_queries import (
+    get_propagated_reputation_for_npc,
+    get_reputation_context_for_npc,
+)
 from npc_engine.graph.relations.trust_queries import get_second_hop_events, get_trust_scores_for_events
 from npc_engine.graph.quest.quest_queries import get_active_quest_for_player
 from npc_engine.schema.retrieval_profile_models import RetrievalProfile
@@ -322,15 +325,23 @@ async def _resolve_npc_context_with_cache(
 async def _fetch_player_data(
     session: AsyncSession, npc_id: str, player_id: str | None, events: list[Any],
 ) -> tuple[Any, ...]:
-    """Fetch trust scores, second-hop events, active quest, and player relation edge."""
+    """Fetch trust scores, second-hop events, active quest, relation edge, propagated rep.
+
+    All four player-scoped reads are skipped entirely on an anonymous turn: with no
+    player there is no relation, no quest and no reputation to propagate, so issuing the
+    round trips would buy nothing.
+    """
     event_ids = [str(e["id"]) for e in events if e.get("id")]
     trust_scores = await get_trust_scores_for_events(session, npc_id=npc_id, event_ids=event_ids)
     second_hop_events = await get_second_hop_events(session, npc_id=npc_id)
-    active_quest = await get_active_quest_for_player(session, player_id=player_id) if player_id else None
-    player_relation_edge: dict[str, Any] | None = None
-    if player_id:
-        player_relation_edge = await get_npc_player_edge(session, npc_id=npc_id, player_id=player_id)
-    return trust_scores, second_hop_events, active_quest, player_relation_edge
+    if not player_id:
+        return trust_scores, second_hop_events, None, None, []
+    active_quest = await get_active_quest_for_player(session, player_id=player_id)
+    player_relation_edge = await get_npc_player_edge(session, npc_id=npc_id, player_id=player_id)
+    propagated_reputation = await get_propagated_reputation_for_npc(
+        session, npc_id=npc_id, player_id=player_id
+    )
+    return trust_scores, second_hop_events, active_quest, player_relation_edge, propagated_reputation
 
 
 async def _maybe_cross_encode(
@@ -413,11 +424,16 @@ def _build_tier_a_extended(
     memories: list[Any], beliefs: list[Any], goals: list[Any], owned_items: list[Any],
     secrets: list[Any], obligations: list[Any],
     second_hop_events: list[Any], settings: Settings, npc_id: str, game_time: TimePoint | None = None,
+    propagated_reputation: list[Any] | None = None,
 ) -> list[ContextItem]:
     """Build extended Tier A items: reputation, quest, beliefs, memories, second-hop events, etc."""
     items: list[Any] = []
     if player_id and reputation_items:
         items.append(ContextItem(key="reputation", text=serialize_json(reputation_items, strip_fields=NON_PROMPT_NODE_FIELDS), tier="tierA", priority=85))
+    # Ranks just below direct reputation on purpose: system_v1.yaml Rule 13 says to apply
+    # word-of-mouth reputation ONLY where Rule 2's direct reputation has no entry.
+    if player_id and propagated_reputation:
+        items.append(ContextItem(key="propagated_reputation", text=serialize_json(propagated_reputation, strip_fields=NON_PROMPT_NODE_FIELDS), tier="tierA", priority=84))
     if active_quest:
         items.append(ContextItem(key="active_quest", text=serialize_json(active_quest, strip_fields=NON_PROMPT_NODE_FIELDS), tier="tierA", priority=89, pinned=True))
     if player_relation_edge is not None:
@@ -603,11 +619,11 @@ async def build_serialized_context_with_receipt(
     tier_b_results = await _fetch_rag_results(session, embedding_index, settings, player_message, session_turns, known_event_ids, npc_id, current_game_time, skip_rag, active_profile)
     profile_data, beliefs, goals, secrets, obligations = await _resolve_npc_context_with_cache(session, npc_id, settings, player_id, location_id, partial_cache, profile_key, bg_key, cached_profile, cached_bg, player_message, active_profile)
     location_context, events, reputation_items, memories, owned_items, group_memberships, believed_rumors, traits, active_pledges = profile_data
-    trust_scores, second_hop_events, active_quest, player_relation_edge = await _fetch_player_data(session, npc_id, player_id, events)
+    trust_scores, second_hop_events, active_quest, player_relation_edge, propagated_reputation = await _fetch_player_data(session, npc_id, player_id, events)
     tier_b_results = await _maybe_cross_encode(settings, player_message, tier_b_results, active_profile)
     tier0 = _build_tier0_items(world_state, emotion_snapshot, system_state_context)
     tier_a_raw = _build_tier_a_base(npc_id, character_bundle, events, location_id, location_context, group_memberships, believed_rumors, traits, active_pledges, session_turns)
-    tier_a_raw.extend(_build_tier_a_extended(player_id, reputation_items, active_quest, player_relation_edge, memories, beliefs, goals, owned_items, secrets, obligations, second_hop_events, settings, npc_id, current_game_time))
+    tier_a_raw.extend(_build_tier_a_extended(player_id, reputation_items, active_quest, player_relation_edge, memories, beliefs, goals, owned_items, secrets, obligations, second_hop_events, settings, npc_id, current_game_time, propagated_reputation))
     await _maybe_append_player_memory(session, npc_id, player_id, current_game_time, tier_a_raw)
     tier_b_raw, tier_c_raw, vector_scores = _build_tier_b_c_items(tier_b_results)
     tier_b_raw = await _maybe_append_top_need(session, npc_id, tier_b_raw)

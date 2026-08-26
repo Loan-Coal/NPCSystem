@@ -143,12 +143,16 @@ def _patch_graph_calls(monkeypatch, tier_a_items=None) -> None:
     async def fake_active_quest(session, *, player_id):
         return None
 
+    async def fake_propagated_reputation(session, *, npc_id, player_id, limit=5):
+        return []
+
     async def fake_npc_player_edge(session, *, npc_id, player_id):
         return None
 
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_trust_scores_for_events", fake_trust_scores)
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_second_hop_events", fake_second_hop)
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_active_quest_for_player", fake_active_quest)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_propagated_reputation_for_npc", fake_propagated_reputation)
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_npc_player_edge", fake_npc_player_edge)
 
     async def fake_player_memories(session, *, npc_id, player_id, k=5):

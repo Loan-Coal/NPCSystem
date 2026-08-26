@@ -118,6 +118,9 @@ def _patch_graph_calls(monkeypatch) -> None:
     async def fake_active_quest(session, *, player_id):
         return None
 
+    async def fake_propagated_reputation(session, *, npc_id, player_id, limit=5):
+        return []
+
     def fake_assemble(*, npc_id, character_bundle, events, location_id, location_context, group_memberships=None, believed_rumors=None, traits=None, active_pledges=None):
         return []
 
@@ -142,6 +145,7 @@ def _patch_graph_calls(monkeypatch) -> None:
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_trust_scores_for_events", fake_trust_scores)
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_second_hop_events", fake_second_hop)
     monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_active_quest_for_player", fake_active_quest)
+    monkeypatch.setattr("npc_engine.retrieval.context.context_builder.get_propagated_reputation_for_npc", fake_propagated_reputation)
 
     async def fake_needs(session, character_id):
         return []
