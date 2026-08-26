@@ -2636,4 +2636,145 @@ projection on top of the strip ("stripping alone takes 2,188 -> ~180; projecting
 carries are `id`, `name`, `descriptor`, `region`, `location_tag` plus the three stripped
 bookkeeping fields. A projection would save roughly one token (`id`) at the cost of a
 hand-maintained field list -- the exact churn P5's declaration table exists to remove. Not done.
+## [FIXED] ISSUE-197: tier A is capped at 55% of the prompt budget and the unspent B/C share is never reclaimed
+**Found:** 2026-08-26, during the ISSUE-163 root-cause trace
+**Severity:** P1 (blocking) — it is the remaining half of the inner-life drop
+**Where:** `retrieval/context/context_budget_enforcer.py:305-308` (`tier_a_soft_cap`) and
+`:158-186` (`_fit_tier_a_pinned_pool`)
+**Description:** `fill_to_budget` sizes tier A at `min(tier_budget_tokens.tier_a,
+int(prompt_token_budget * tier_a_fraction))` = `min(4000, int(512 * 0.55))` = **281 tokens**,
+then `_fit_tier_a_pinned_pool` spends the pinned items out of that same 281 and offers the
+remainder to the ranked pool. Measured live on three NPCs (`what news`, no player):
 
+    npc              pinned  remainder  tierA spend  tierB  tierC  TOTAL  budget
+    mira_innkeeper      150        131          258      0      0    334     512
+    captain_sorn        131        150          277      0      0    353     512
+    vw_elder            127        154          242      0      0    318     512
+
+Tiers B and C spend **zero** tokens on every one of them — the vector store returns nothing
+for these queries — yet the 45% of the budget reserved for B and C is never handed back to
+tier A. So 160-190 tokens of the prompt budget go unspent while `memories`, `beliefs`,
+`secrets`, `believed_rumors` and `relation:player` are dropped for want of room. This is the
+"353 tokens against a 512 budget" observation: it is not proof that the budget is innocent,
+it is the fingerprint of this defect.
+**Why deferred:** ISSUE-163 is one root cause per fix, and the ranking defect was the
+higher-value half (beliefs 12.5% to 75% on its own). This one changes budget ALLOCATION and
+interacts with the post-serialization trim loop at the end of `fill_to_budget`, which evicts
+by ascending priority and can undo the gain — a prototype that reclaimed the leftover moved
+`captain_sorn` from 1 goal to 0. It needs its own measurement pass, not a rider.
+**To fix:** give tier A `prompt_token_budget - tier0 - (tokens B and C actually need,
+capped at their soft caps)`, floored at the configured `tier_a_fraction` so a RAG-heavy turn
+is unaffected. Then re-measure the 8-NPC probe; expect memories to become reachable for the
+NPCs whose memory item is under ~200 tokens. Pair with ISSUE-199 — with the 2188-token
+`location:` item fixed, the reclaimed budget buys proportionally more.
+**Fixed:** 2026-08-26, in P4 (DEC-203). `_tier_a_cap_with_reclaim` sizes tier A at
+`min(tier_budget_tokens.tier_a, max(fraction_floor, budget - tier0 - actual_b - actual_c))`.
+The floor is what makes it safe: with B and C saturated the leftover is below the tier-A
+fraction by exactly tier0, so the cap is bit-identical to the old one and the compressible
+tiers lose nothing. Guarded by `test_tier_a_is_not_expanded_when_tiers_b_and_c_are_full` and
+`test_a_saturated_tier_b_keeps_every_item_it_was_given`, both written before a corpus exists
+to give the bug a symptom.
+
+**The prototype regression this entry predicted has a different cause than it recorded.**
+The entry blamed the post-serialization trim loop for "moving captain_sorn from 1 goal to 0".
+It is not the trim loop -- it is `_fit_tier_a_pinned_pool` itself. Greedy-with-skip selection
+is NOT monotone in the cap: with items [A=70, B=40, C=30] a cap of 100 selects {A, C} and a
+cap of 110 selects {A, B}, so C fit at the smaller cap and does not at the larger one. No
+serialization is involved. Pinned by
+`test_raising_the_tier_a_cap_can_still_drop_an_item_that_previously_fit` and logged as
+ISSUE-209; not fixed, because replacing greedy selection is ruled out by D2.
+
+Measured live on the 8-NPC probe, `GET /v1/admin/debug/retrieval?query=what+news`:
+
+    slot                          after P3   after P4
+    npc.beliefs                      8/8        8/8
+    npc.goals                        8/8        8/8
+    npc.memories                     4/8        8/8
+    npc.profile.current_location     8/8        8/8
+    player_relation                  6/8        6/8
+    nearby_npcs                      6/8        5/8
+    assembled tokens               564-742    644-1156
+## [FIXED] ISSUE-163: the NPC's own inner state is ranked below its surroundings and loses the tier-A budget
+**Found:** 2026-08-14, during `RET-P0` (verifying the ISSUE-145 fix end to end).
+**Rescoped:** 2026-08-26 — the original scope (memories only, `captain_sorn` only, three
+candidate causes) was too narrow, and two of its three candidates are now falsified.
+**Severity:** P1 (blocking) — every NPC in every world speaks without beliefs or memories.
+**Where:** `retrieval/context/context_scoring.py:_infer_proximity_hops` (the ranking cause,
+FIXED) and `retrieval/context/context_budget_enforcer.py:_fit_tier_a_pinned_pool` plus
+`fill_to_budget`'s `tier_a_soft_cap` (the budget cause, still open as ISSUE-197).
+**Measured scope (2026-08-26, live engine at 77688e7, 975-row transcript
+`evals/generations/k3_77688e7_regen1/outputs.jsonl`):** `npc.beliefs`, `npc.memories` and
+`npc.top_need` empty in 100% of rows; `npc.goals` empty in 76.7%; `npc.profile` populated in
+100%. Not memories only, and not one NPC: reproduced on `mira_innkeeper`, `captain_sorn`,
+`lira_fence`, `aldric_merchant`, `old_henryk`, `vw_elder`, `vw_farmer`, `tw_innkeeper`.
+
+**Root cause (ranking half — FIXED 2026-08-26).** `_infer_proximity_hops` recognised
+`character:`, `relation:`, `location:`, `nearby_npcs`, `event:`, `session` and `rag:`, and
+returned `max_proximity_hops` (2) for everything else. `beliefs`, `goals`, `memories`,
+`secrets`, `top_need` and the rest of the NPC's own state fell through to that default, so
+`_proximity_score` scored them `1 - 2/2 = 0.0` — the score of a node at the graph horizon —
+while `nearby_npcs` (strangers standing in the room, 1 hop) scored 0.5. With `proximity`
+weighted 0.20 that is a flat 0.10-0.20 penalty, and it put the NPC's own state at the BOTTOM
+of the ranked tier-A list. Live trace on `mira_innkeeper` before the fix:
+
+    tierA pinned = [character:mira_innkeeper, session] = 150 tokens
+    tier_a_soft_cap = min(4000, int(512 * 0.55)) = 281  ->  131 tokens left
+    ranked non-pinned: relation:player(505) location:loc_tavern(2188) nearby_npcs(91)
+                       event:0(17) event:1(54) memories(483) beliefs(130) goals(70)
+                       secrets(106) believed_rumors(29)
+    selected: nearby_npcs(91) + event:0(17) = 108  ->  23 tokens left
+    dropped:  relation:player, location, event:1, memories, beliefs, goals, secrets, rumors
+
+This explains the per-field pattern exactly, which is what pins it: `profile` is `character:`,
+a PINNED item, so it never competes and always arrives; `goals` is the smallest inner-life
+item (70-74 tokens) so it squeaks in for the NPCs whose pinned block is small enough
+(`captain_sorn`, `vw_elder`); `beliefs` (130-145) and `memories` (213-483) never fit.
+
+**Falsified candidates.** Both suspects named in the original entry are wrong, and the live
+trace shows why: `get_memories_for_character` returns 3/2/2 rows for mira/sorn/vw_elder with
+`vividness=0` intact, `rerank_by_keyword` returns 2 beliefs and 1 goal, and
+`annotate_memory_ages` produces a 483-token `memories` ContextItem that is present in the
+pre-budget merged context. There is no truthiness filter on `vividness` anywhere on the path,
+and `PartialDialogueContextCache` is not involved (the debug endpoint passes no cache at all
+and reproduces the drop). The rows survive every hop up to budget enforcement.
+**Also disproven:** "353 tokens against a 512 budget, so nothing is trimmed for space." The
+gap is not headroom — it is the fingerprint of the cause. Tier A is capped at 281 tokens
+(55% of 512) and tiers B/C spend 0, so ~160 tokens of the prompt budget go unspent WHILE
+tier-A items are being dropped. See ISSUE-197.
+
+**Fixed:** 2026-08-26 (ranking half only, DEC-198). `NPC_SELF_STATE_KEYS` in
+`retrieval/context/context_scoring.py` now maps the NPC's own state to
+`SELF_STATE_PROXIMITY_HOPS = 0`. Regression test:
+`tests/unit/retrieval/test_context_inner_life_reaches_prompt.py`.
+Live `GET /v1/admin/debug/retrieval?query=what+news`, 8 NPCs, before -> after:
+
+    npc.beliefs   1/8 (12.5%) -> 6/8 (75.0%)
+    npc.goals     2/8 (25.0%) -> 1/8 (12.5%)
+    npc.memories  0/8  (0.0%) -> 0/8  (0.0%)
+
+**Still open — do not archive this entry.** Beliefs now win the 131-token remainder, but that
+remainder is zero-sum: `captain_sorn` and `vw_elder` traded their goal for their beliefs, and
+memories still cannot fit (a single `mira_innkeeper` memories item is 483 tokens against a
+512-token prompt budget). The remaining work is ISSUE-197 (reclaim the unspent tier B/C
+budget), with ISSUE-199 keeping the fat `location:` and `relation:player` items off the top
+of the ranking.
+**Fixed:** 2026-08-26, fully, across four phases. The entry above says "Still open -- do not
+archive this entry" pending ISSUE-197 and ISSUE-199. Both have landed, and the field this
+issue was opened about is now populated for every NPC probed.
+
+    slot            77688e7    P1(window)  P2(scorer)  P3(strip)  P4(reclaim)
+    npc.beliefs      0/975         3/8         8/8        8/8         8/8
+    npc.goals      227/975         6/8         8/8        8/8         8/8
+    npc.memories     0/975         3/8         4/8        4/8         8/8
+    npc.top_need     0/975         0/8         0/8        0/8         0/8
+
+Four independent causes, each sufficient on its own, each fixed with its own regression test:
+DEC-198 (an NPC's own state scored at the graph horizon), DEC-199/P1 (the model was seeing
+2,050 tokens of a 7,100-token prompt), DEC-201 (array payloads scored recency and severity
+0.0), DEC-202 (the deny-list applied at two of seventeen sites), DEC-203 (45% of the budget
+reserved for tiers that spend nothing).
+
+**`npc.top_need` is NOT part of this issue and is not fixed.** It is 0/8 because the graph
+contains zero `Need` nodes and zero `HAS_NEED` edges -- verified directly against Neo4j on
+2026-08-26. No seeder creates them, so the field was never going to be populated by any
+amount of retrieval work. Logged as ISSUE-210.

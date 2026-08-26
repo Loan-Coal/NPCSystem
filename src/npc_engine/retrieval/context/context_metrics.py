@@ -10,7 +10,8 @@ Dependencies injected: None.
 
 from __future__ import annotations
 
-from typing import Literal
+from collections.abc import Sequence
+from typing import Literal, Protocol
 
 from .context_compression import COMPRESSION_SUFFIX
 from .context_merger import MergedContext
@@ -37,6 +38,20 @@ final_trim: dropped after serialization when the real JSON exceeded the budget.
 _NEVER_DROPPED_TIER = "tier0"
 
 
+class _AttributedDrop(Protocol):
+    """The shape record_attributed_drop_metrics reads off a DroppedItem.
+
+    Structural rather than a concrete import: context_receipt imports ContextDropReason
+    from this module, so importing DroppedItem back would close a cycle.
+    """
+
+    @property
+    def tier(self) -> str: ...
+
+    @property
+    def reason(self) -> ContextDropReason: ...
+
+
 def record_context_metrics(context: MergedContext) -> None:
     """Emit item-count and token-count metrics for each context tier.
 
@@ -61,31 +76,25 @@ def record_context_metrics(context: MergedContext) -> None:
         )
 
 
-def record_drop_metrics(
-    *,
-    pre_budget_context: MergedContext,
-    post_budget_context: MergedContext,
-    reason: ContextDropReason,
-) -> None:
-    """Emit a per-tier counter for every context item that did not reach the prompt.
+def record_attributed_drop_metrics(drops: Sequence[_AttributedDrop]) -> None:
+    """Emit one counter per (tier, reason) pair over already-attributed drops.
 
-    Without this, budget starvation is silent — the failure mode behind ISSUE-145,
-    where pinned items were dropped with no exception, log, or metric.
+    Without this, budget starvation is silent — the failure mode behind ISSUE-145, where
+    pinned items were dropped with no exception, log, or metric. Until P4 every drop was
+    reported as `prompt_budget` regardless of which stage removed it, so `tier_soft_cap`
+    and `final_trim` were declared above and never emitted by anything.
 
     Args:
-        pre_budget_context: Merged context before budget enforcement.
-        post_budget_context: Merged context after budget enforcement.
-        reason: Which stage of budget enforcement removed the items.
+        drops: Attributed drops from fill_to_budget_with_report.
     """
 
-    surviving_keys = {item.key for item in post_budget_context.items}
-    dropped_by_tier: dict[str, int] = {}
-    for item in pre_budget_context.items:
-        if item.key in surviving_keys or item.tier == _NEVER_DROPPED_TIER:
+    counts: dict[tuple[str, str], int] = {}
+    for drop in drops:
+        if drop.tier == _NEVER_DROPPED_TIER:
             continue
-        dropped_by_tier[item.tier] = dropped_by_tier.get(item.tier, 0) + 1
+        counts[(drop.tier, drop.reason)] = counts.get((drop.tier, drop.reason), 0) + 1
 
-    for tier, count in dropped_by_tier.items():
+    for (tier, reason), count in counts.items():
         increment_metric(
             metric=CONTEXT_ITEMS_DROPPED_METRIC,
             amount=float(count),

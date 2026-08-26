@@ -126,7 +126,6 @@ R006|src/npc_engine/graph/scheduling/schedule_service.py::ScheduleService.create
 R006|src/npc_engine/main.py::lifespan
 R006|src/npc_engine/retrieval/context/context_budget_enforcer.py::_fit_compressible_tier
 R006|src/npc_engine/retrieval/context/context_budget_enforcer.py::enforce_context_budget
-R006|src/npc_engine/retrieval/context/context_budget_enforcer.py::fill_to_budget
 R006|src/npc_engine/retrieval/context/context_builder_helpers.py::enforce_final_serialized_budget_with_context
 R006|src/npc_engine/retrieval/context/context_relevance_engine.py::rank_context_candidates
 R006|src/npc_engine/retrieval/context/context_scoring.py::rank_tier_items

@@ -47,7 +47,7 @@ from npc_engine.graph.relations.trust_queries import get_second_hop_events, get_
 from npc_engine.graph.quest.quest_queries import get_active_quest_for_player
 from npc_engine.schema.retrieval_profile_models import RetrievalProfile
 
-from .context_budget_enforcer import ContextCompressionCache, fill_to_budget
+from .context_budget_enforcer import ContextCompressionCache, fill_to_budget_with_report
 from .context_profile_resolver import resolve_profile_for_turn, resolved_profile_name
 from .context_receipt import ContextReceipt, build_context_receipt
 from .context_builder_helpers import (
@@ -63,7 +63,7 @@ from .context_metrics import (
     CONTEXT_CACHE_MISSES_METRIC,
     record_compression_metrics,
     record_context_metrics,
-    record_drop_metrics,
+    record_attributed_drop_metrics,
 )
 from .context_scoring import rank_tier_items
 from npc_engine.retrieval.graph_rag.graph_rag import graph_rag_retrieve
@@ -494,22 +494,18 @@ def _rank_and_serialize_tiers(
     tier_c = rank_tier_items(items=tier_c_raw, llm_config=llm_config, vector_scores=vector_scores,
                              game_time=game_time, weight_profile=weight_profile, explicit_node_ids=explicit_node_ids)
     merged = merge_context(tier0=tier0, tier_a=tier_a, tier_b=tier_b, tier_c=tier_c)
-    final_context, serialized = fill_to_budget(
+    report = fill_to_budget_with_report(
         context=merged, llm_config=llm_config,
         prompt_token_budget=settings.PROMPT_TOKEN_BUDGET, compression_cache=compression_cache,
     )
-    record_context_metrics(context=final_context)
-    record_compression_metrics(pre_budget_context=merged, post_budget_context=final_context)
-    record_drop_metrics(
-        pre_budget_context=merged,
-        post_budget_context=final_context,
-        reason="prompt_budget",
-    )
+    record_context_metrics(context=report.context)
+    record_compression_metrics(pre_budget_context=merged, post_budget_context=report.context)
+    record_attributed_drop_metrics(report.dropped)
     receipt = build_context_receipt(
-        profile_name=profile_name, pre_budget=merged, post_budget=final_context,
+        profile_name=profile_name, post_budget=report.context, dropped=report.dropped,
         prompt_token_budget=settings.PROMPT_TOKEN_BUDGET,
     )
-    return str(serialized), receipt
+    return str(report.serialized), receipt
 
 
 # ---------------------------------------------------------------------------

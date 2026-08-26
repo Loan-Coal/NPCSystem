@@ -13,7 +13,11 @@ from pydantic import ValidationError
 
 from npc_engine.config import Settings
 from npc_engine.retrieval.context.context_merger import ContextItem, MergedContext
-from npc_engine.retrieval.context.context_receipt import ContextReceipt, build_context_receipt
+from npc_engine.retrieval.context.context_receipt import (
+    ContextReceipt,
+    DroppedItem,
+    build_context_receipt,
+)
 
 from tests.unit.retrieval.test_context_builder import (
     FakeEmbeddingIndex,
@@ -24,6 +28,16 @@ from tests.unit.retrieval.test_context_builder import (
 
 def _item(key: str, tier: str, text: str = "x") -> ContextItem:
     return ContextItem(key=key, text=text, tier=tier, priority=10)  # type: ignore[arg-type]
+
+
+def _dropped(key: str, tier: str, reason: str = "prompt_budget") -> DroppedItem:
+    """One attributed drop, as fill_to_budget_with_report reports it.
+
+    build_context_receipt takes the drops as data rather than deriving them from a
+    pre/post set difference: only the enforcer knows which STAGE removed each item, and
+    that is lost the moment it is recomputed from two contexts (P4 / ISSUE-197).
+    """
+    return DroppedItem(key=key, tier=tier, reason=reason)  # type: ignore[arg-type]
 
 
 def _settings() -> Settings:
@@ -43,24 +57,26 @@ def _settings() -> Settings:
 
 def test_receipt_names_only_the_items_that_survived_the_budget() -> None:
     """The receipt is about what REACHED the model, not what the retriever ranked."""
-    pre = MergedContext(items=[_item("a", "tierA"), _item("b", "tierB"), _item("c", "tierC")])
     post = MergedContext(items=[_item("a", "tierA"), _item("b", "tierB")])
 
     receipt = build_context_receipt(
-        profile_name="default", pre_budget=pre, post_budget=post, prompt_token_budget=800,
+        profile_name="default", post_budget=post,
+        dropped=(_dropped("c", "tierC"),), prompt_token_budget=800,
     )
 
     assert receipt.item_keys == ("a", "b")
+    # dropped_keys is now computed from `dropped`, and must still read the same way for
+    # evals/context_receipt_record.py and every transcript already on disk.
     assert receipt.dropped_keys == ("c",)
     assert receipt.budget_trimmed is True
 
 
 def test_receipt_reports_no_trim_when_every_assembled_item_reached_the_model() -> None:
     """budget_trimmed False is a positive claim, not merely an empty dropped list."""
-    pre = MergedContext(items=[_item("a", "tierA")])
+    post = MergedContext(items=[_item("a", "tierA")])
 
     receipt = build_context_receipt(
-        profile_name="aggressive", pre_budget=pre, post_budget=pre, prompt_token_budget=800,
+        profile_name="aggressive", post_budget=post, dropped=(), prompt_token_budget=800,
     )
 
     assert receipt.budget_trimmed is False
@@ -70,13 +86,13 @@ def test_receipt_reports_no_trim_when_every_assembled_item_reached_the_model() -
 
 def test_receipt_spends_tokens_per_tier_and_totals_them() -> None:
     """Per-tier spend is what distinguishes 'RAG was retrieved' from 'RAG got budget'."""
-    pre = MergedContext(items=[
+    post = MergedContext(items=[
         _item("a", "tierA", text="a" * 40),
         _item("b", "tierB", text="b" * 80),
     ])
 
     receipt = build_context_receipt(
-        profile_name="default", pre_budget=pre, post_budget=pre, prompt_token_budget=800,
+        profile_name="default", post_budget=post, dropped=(), prompt_token_budget=800,
     )
 
     spend = {row.tier: row for row in receipt.tier_spend}
@@ -91,8 +107,8 @@ def test_receipt_lists_every_tier_even_when_empty() -> None:
     """An absent tier must read as zero spend, not as an unreported tier."""
     receipt = build_context_receipt(
         profile_name="default",
-        pre_budget=MergedContext(items=[_item("a", "tierA")]),
         post_budget=MergedContext(items=[_item("a", "tierA")]),
+        dropped=(),
         prompt_token_budget=800,
     )
 
@@ -103,8 +119,8 @@ def test_receipt_is_frozen() -> None:
     """Receipts are evidence; they must not be editable after the fact."""
     receipt = build_context_receipt(
         profile_name="default",
-        pre_budget=MergedContext(items=[]),
         post_budget=MergedContext(items=[]),
+        dropped=(),
         prompt_token_budget=800,
     )
     with pytest.raises(ValidationError):
@@ -191,3 +207,39 @@ async def test_pipeline_receipt_records_the_overridden_profile_name(monkeypatch)
 
     assert receipt is not None
     assert receipt.retrieval_profile == "default"
+
+
+def test_dropped_keys_projects_every_attributed_drop_in_order() -> None:
+    """dropped_keys is computed, so it cannot drift from `dropped` -- pin that it does not.
+
+    The field it replaced was stored alongside the drops, which is exactly how two
+    representations of the same fact fall out of step.
+    """
+    receipt = build_context_receipt(
+        profile_name="default",
+        post_budget=MergedContext(items=[_item("a", "tierA")]),
+        dropped=(
+            _dropped("memories", "tierA", "tier_soft_cap"),
+            _dropped("rag:r1", "tierB", "prompt_budget"),
+            _dropped("nearby_npcs", "tierA", "final_trim"),
+        ),
+        prompt_token_budget=800,
+    )
+
+    assert receipt.dropped_keys == ("memories", "rag:r1", "nearby_npcs")
+    assert receipt.budget_trimmed is True
+    assert [d.reason for d in receipt.dropped] == [
+        "tier_soft_cap", "prompt_budget", "final_trim",
+    ]
+
+
+def test_dropped_keys_survives_a_serialization_round_trip() -> None:
+    """It must stay in the JSON: evals/context_receipt_record.py reads it by that name."""
+    receipt = build_context_receipt(
+        profile_name="default",
+        post_budget=MergedContext(items=[]),
+        dropped=(_dropped("goals", "tierA"),),
+        prompt_token_budget=800,
+    )
+
+    assert receipt.model_dump()["dropped_keys"] == ("goals",)

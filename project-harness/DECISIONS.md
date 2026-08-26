@@ -5172,3 +5172,87 @@ is the item P2 displaced by correctly ranking it below the NPC's own beliefs; at
 instead of 505 it no longer has to compete, which is why both now fit. `npc.memories` is
 unchanged at 4/8 and stays that way until ISSUE-197 (P4) hands tier A the budget tiers B and C
 never spend.
+
+## DEC-203: tier A is sized from what tiers B and C actually leave behind, and every drop
+## now names the stage that caused it
+**Date:** 2026-08-26
+**Decided by:** this session, P4 of the context-pipeline plan (ISSUE-197).
+
+**Context.** `fill_to_budget` sized tier A at `min(tier_budget_tokens.tier_a,
+prompt_token_budget * tier_a_fraction)` regardless of what the compressible tiers were going
+to use. They use nothing -- `EmbeddingIndex.upsert()` has no production caller, so the vector
+store is empty on every turn -- and 45% of every prompt budget therefore sat reserved for
+tiers spending zero while tier-A items were dropped for want of room.
+
+**Decision 1 - reclaim the leftover, bounded by a floor and a ceiling.**
+
+    tier_a_soft_cap = min(tier_budget_tokens.tier_a,
+                          max(int(budget * tier_a_fraction),
+                              budget - tier0 - actual_b - actual_c))
+
+The FLOOR is the part that matters, and its safety is provable rather than hopeful.
+`_fit_compressible_tier` returns at most its own cap, so when B and C are saturated the
+leftover is `budget - tier0 - 0.45*budget`, which sits below the 0.55 floor by exactly
+`tier0`. `max()` therefore selects the floor and the cap is bit-identical to the old one, so
+the compressible tiers lose nothing they were ever going to get. That is what P7's arms
+depend on, and it is guarded by two tests written now, before a corpus exists to give the bug
+a symptom -- with an empty store a fix that stole RAG's budget would look perfect.
+
+**Decision 2 - no reserve for serialization overhead.** Considered and rejected on
+measurement. The empty serialized skeleton is 59 tokens, so a fixed reserve looks reasonable
+-- but the item-token sum OVER-counts the serialized size more often than it under-counts,
+because the eight orphan keys (ISSUE-200) are charged in full during the fill and contribute
+zero bytes to the output. A reserve would compound the error. The post-serialization trim
+loop stays the corrector; it is the only stage that measures the real thing.
+
+**Decision 3 - a new `fill_to_budget_with_report`, not a changed signature.** Per-item drop
+reasons need a third return value, and `fill_to_budget` has 15+ call sites across five test
+files plus `context/__init__.py`. CLAUDE.md requires approval to change a public interface
+with external callers. Added the reporting variant and left `fill_to_budget` as a pure
+projection of it, mirroring the `build_serialized_context` / `..._with_receipt` pair this
+codebase already uses. `test_the_wrapper_returns_exactly_what_the_report_carries` pins that
+the two cannot diverge.
+
+**Decision 4 - attribute drops by set difference between stages, not by threading a
+collector.** The three stages are strictly nested by key, so an item falls into exactly one
+bucket. This is exact rather than approximate because of a fact worth recording: the
+`tier_cap` skip inside `_fill_capped_tier` is **unreachable**. Tier B's items are already
+compressed to that same cap before they reach it, and tier C passes `tier_cap=None`. So no
+soft-cap drop can happen in a place the set difference would mis-attribute.
+
+**Decision 5 - `ContextReceipt.dropped_keys` becomes a computed field over `dropped`.** One
+source of truth. It still serializes under the same name, so `evals/context_receipt_record.py`
+(which ignores extra fields) and every transcript already on disk stay readable with no
+coordinated change.
+
+**Two things measurement contradicted.**
+
+The plan said to "reorder so B and C's need is known before tier A is sized". No reorder was
+needed: compression already runs first, and the tier-A cap was merely *computed* early and
+*used* late. Moving one expression was the whole change.
+
+The plan, following ISSUE-197, attributed the prototype regression ("moved captain_sorn from
+1 goal to 0") to the post-serialization trim loop. It is not the trim loop. Greedy-with-skip
+selection is not monotone in the cap -- `[A=70, B=40, C=30]` gives `{A, C}` at cap 100 and
+`{A, B}` at cap 110 -- and no serialization is involved. Logged as ISSUE-209 and pinned by a
+test, not fixed: replacing greedy selection is an allocator rewrite that D2 rules out.
+
+**Measured effect,** rebuilt image, same 8 NPCs used since ISSUE-163:
+
+    slot                          after P3   after P4
+    npc.beliefs                      8/8        8/8
+    npc.goals                        8/8        8/8
+    npc.memories                     4/8        8/8
+    npc.profile.current_location     8/8        8/8
+    player_relation                  6/8        6/8
+    nearby_npcs                      6/8        5/8
+    assembled tokens               564-742    644-1156
+
+`npc.memories` reaching 8/8 closes ISSUE-163 entirely. The `nearby_npcs` loss is one NPC:
+`old_henryk`, whose context is the fullest at 1,156 tokens, traded the strangers in the room
+for his own memories. That is ISSUE-209 in production, and it is the right trade.
+`context_items_dropped_total{tier=tiera,reason=tier_soft_cap}` now appears in the live metrics
+endpoint -- that label had never been emitted by anything before this change.
+
+**Not fixed here, and not this issue:** `npc.top_need` stays 0/8 because the graph contains
+zero `Need` nodes and zero `HAS_NEED` edges. Verified against Neo4j directly. ISSUE-210.

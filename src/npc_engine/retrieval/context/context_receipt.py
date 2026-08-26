@@ -20,12 +20,20 @@ module-level state, Settings, or the graph.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from .context_merger import ContextTier, MergedContext
+from .context_metrics import ContextDropReason
 from .context_utils import estimate_tokens
 
-__all__ = ["REPORTED_TIERS", "ContextReceipt", "TierSpend", "build_context_receipt"]
+__all__ = [
+    "REPORTED_TIERS",
+    "BudgetFillReport",
+    "ContextReceipt",
+    "DroppedItem",
+    "TierSpend",
+    "build_context_receipt",
+]
 
 REPORTED_TIERS: tuple[ContextTier, ...] = ("tier0", "tierA", "tierB", "tierC")
 """Every tier is reported, including empty ones.
@@ -34,6 +42,42 @@ An omitted tier reads as "not measured"; a tier reported at zero is a measuremen
 distinction matters because "tier B got no budget" is precisely the finding this record
 exists to surface.
 """
+
+
+class DroppedItem(BaseModel):
+    """One assembled item that did not reach the model, and which stage removed it.
+
+    Attributes:
+        key: The context item's key.
+        tier: The tier it was assembled into.
+        reason: Which stage of budget enforcement removed it.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    key: str
+    tier: ContextTier
+    reason: ContextDropReason
+
+
+class BudgetFillReport(BaseModel):
+    """The full result of one budget-enforcement pass, drops included.
+
+    `fill_to_budget` returns only the surviving context and its serialization, which is
+    all every caller needed before drop attribution existed. This is the same pass with
+    the evidence attached, so the two never diverge.
+
+    Attributes:
+        context: The context that survived enforcement.
+        serialized: That context's serialized prompt text.
+        dropped: Every assembled item that did not survive, attributed to one stage.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    context: MergedContext
+    serialized: str
+    dropped: tuple[DroppedItem, ...] = ()
 
 
 class TierSpend(BaseModel):
@@ -61,8 +105,8 @@ class ContextReceipt(BaseModel):
     Attributes:
         retrieval_profile: Resolved profile NAME this turn ran under — the A/B arm.
         item_keys: Keys of the context items that reached the model, in assembly order.
-        dropped_keys: Keys that were assembled and ranked but did not survive the prompt
-            token budget. The gap between this and item_keys is the whole point.
+        dropped: Every assembled item that did not survive, each attributed to the stage
+            that removed it. The gap between this and item_keys is the whole point.
         tier_spend: Per-tier item and token spend, one row per REPORTED_TIERS entry.
         total_tokens: Estimated tokens across every tier that reached the model.
         prompt_token_budget: The budget the assembly was held to, recorded so a receipt
@@ -74,11 +118,22 @@ class ContextReceipt(BaseModel):
 
     retrieval_profile: str
     item_keys: tuple[str, ...] = Field(default=())
-    dropped_keys: tuple[str, ...] = Field(default=())
+    dropped: tuple[DroppedItem, ...] = Field(default=())
     tier_spend: tuple[TierSpend, ...] = Field(default=())
     total_tokens: int = 0
     prompt_token_budget: int = 0
     budget_trimmed: bool = False
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def dropped_keys(self) -> tuple[str, ...]:
+        """The dropped keys alone, as this receipt reported them before P4.
+
+        Computed rather than stored so it cannot drift from `dropped`. It stays in the
+        serialized payload, which is what keeps `evals/context_receipt_record.py` and the
+        transcripts already on disk readable without a coordinated change.
+        """
+        return tuple(item.key for item in self.dropped)
 
 
 def _tier_spend(post_budget: MergedContext) -> tuple[TierSpend, ...]:
@@ -99,28 +154,30 @@ def _tier_spend(post_budget: MergedContext) -> tuple[TierSpend, ...]:
 def build_context_receipt(
     *,
     profile_name: str,
-    pre_budget: MergedContext,
     post_budget: MergedContext,
+    dropped: tuple[DroppedItem, ...],
     prompt_token_budget: int,
 ) -> ContextReceipt:
     """Describe one completed context assembly.
 
+    Takes the drops as data rather than deriving them from a pre/post set difference: the
+    enforcer knows which STAGE removed each item, and that distinction is lost the moment
+    it is recomputed from two contexts.
+
     Args:
         profile_name: Resolved retrieval-profile name for this turn.
-        pre_budget: Merged, ranked context before budget enforcement.
         post_budget: The context that actually reached the model.
+        dropped: Attributed drops, as reported by fill_to_budget_with_report.
         prompt_token_budget: Budget the enforcement was held to.
     Returns:
         A frozen ContextReceipt. Never raises: a receipt that fails to be produced would
         make the turn it describes unattributable, which is worse than a coarse receipt.
     """
-    surviving = {item.key for item in post_budget.items}
-    dropped = tuple(item.key for item in pre_budget.items if item.key not in surviving)
     spend = _tier_spend(post_budget)
     return ContextReceipt(
         retrieval_profile=profile_name,
         item_keys=tuple(item.key for item in post_budget.items),
-        dropped_keys=dropped,
+        dropped=dropped,
         tier_spend=spend,
         total_tokens=sum(row.tokens for row in spend),
         prompt_token_budget=prompt_token_budget,

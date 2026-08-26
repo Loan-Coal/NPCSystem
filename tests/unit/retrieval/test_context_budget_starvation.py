@@ -23,6 +23,16 @@ PRODUCTION_TIER_B_BUDGET = 3000
 PRODUCTION_TIER_C_BUDGET = 2000
 PRODUCTION_PROMPT_BUDGET = 512
 
+OVERSIZED_TIER_A_TOKENS = PRODUCTION_PROMPT_BUDGET + 100
+"""Larger than the WHOLE prompt budget, so no tier-A allocation can ever admit it.
+
+Previously 300, which was oversized only against the 281-token fraction cap a 512-token
+budget used to yield. P4 reclaims the share tiers B and C do not spend, lifting that cap to
+502 -- at which point a 300-token item fits and neither test below exercised the skip path
+any more. Sizing against the budget instead of against the cap makes these independent of
+how tier A is allocated, which is what they were always about.
+"""
+
 
 def _llm_config() -> LLMConfig:
     """Return an LLMConfig with production-shaped tier budgets."""
@@ -136,7 +146,7 @@ class TestOversizedItemDoesNotTruncateTail:
                     pinned=True,
                 ),
                 # Highest non-pinned priority AND too large to fit — must be skipped, not fatal.
-                ContextItem(key="owned_items", text=_sized("i", 300), tier="tierA", priority=95, pinned=False),
+                ContextItem(key="owned_items", text=_sized("i", OVERSIZED_TIER_A_TOKENS), tier="tierA", priority=95, pinned=False),
                 ContextItem(key="memories", text=_sized("m", 20), tier="tierA", priority=90, pinned=False),
                 ContextItem(key="beliefs", text=_sized("b", 20), tier="tierA", priority=88, pinned=False),
                 ContextItem(key="goals", text=_sized("g", 20), tier="tierA", priority=87, pinned=False),
@@ -159,7 +169,7 @@ class TestOversizedItemDoesNotTruncateTail:
         context = MergedContext(
             items=[
                 ContextItem(key="world", text=_sized("w", 10), tier="tier0", priority=100, pinned=True),
-                ContextItem(key="owned_items", text=_sized("i", 300), tier="tierA", priority=95, pinned=False),
+                ContextItem(key="owned_items", text=_sized("i", OVERSIZED_TIER_A_TOKENS), tier="tierA", priority=95, pinned=False),
                 ContextItem(key="goals", text=_sized("g", 20), tier="tierA", priority=87, pinned=False),
             ]
         )
@@ -215,21 +225,46 @@ class TestIssue145EndToEndSymptom:
         assert "goals" in surviving, "ISSUE-145: goals came back empty"
 
 
-class TestBudgetCeilingIsTheRemainingConstraint:
-    """ISSUE-145's second cause, which RET-P0 does NOT fix — documented, not asserted away.
+class TestTheFullNpcPayloadNowFitsTierA:
+    """ISSUE-145's second cause -- the ceiling RET-P0 could not lift -- now measured.
 
-    RET-P0 guarantees pinned survival and stops one oversized item truncating the tail.
-    It cannot create room that does not exist: at PROMPT_TOKEN_BUDGET=512 the tier-A
-    soft cap is 281 tokens, and a full NPC payload wants ~358. Raising the window is
-    RET-P6's job; this test pins the ceiling so that change is measurable.
+    The predecessor of this class computed `153 + 60 + 25 + 40 + 40 + 40 > int(512 * 0.55)`
+    from module-local literals. It never called fill_to_budget and never read Settings, so
+    it could not have observed either change it claimed to pin: it stayed green through P1
+    raising the context window and through P4 reclaiming the tier B/C share. Asserting
+    arithmetic against arithmetic is not a tripwire.
+
+    This asserts the behaviour instead: at the same 512-token budget, with tiers B and C
+    empty as they are on every turn today, a full-sized NPC payload reaches the prompt.
     """
 
-    def test_full_npc_payload_still_overflows_the_tier_a_cap_at_512(self) -> None:
-        """A full-sized NPC payload cannot fit tier A at the current production budget."""
-        full_payload_tokens = 153 + 60 + 25 + 40 + 40 + 40  # character, session, relation, mem, bel, goals
-        tier_a_soft_cap = int(PRODUCTION_PROMPT_BUDGET * 0.55)
-
-        assert tier_a_soft_cap == 281
-        assert full_payload_tokens > tier_a_soft_cap, (
-            "If this now fits, RET-P6 raised the budget — update the expected ceiling."
+    def test_a_full_npc_payload_reaches_the_prompt_at_the_production_budget(self) -> None:
+        """Red before P4: the 0.55 fraction capped tier A at 281 and the payload wants 358."""
+        context = MergedContext(
+            items=[
+                ContextItem(key="world", text=_sized("w", 90), tier="tier0", priority=100, pinned=True),
+                ContextItem(key="emotion", text=_sized("e", 10), tier="tier0", priority=95, pinned=True),
+                ContextItem(
+                    key="character:mira_innkeeper",
+                    text=_sized("c", 153),
+                    tier="tierA",
+                    priority=100,
+                    pinned=True,
+                ),
+                ContextItem(key="session", text=_sized("s", 60), tier="tierA", priority=99, pinned=True),
+                ContextItem(key="relation:player", text=_sized("r", 25), tier="tierA", priority=95),
+                ContextItem(key="memories", text=_sized("m", 40), tier="tierA", priority=90),
+                ContextItem(key="beliefs", text=_sized("b", 40), tier="tierA", priority=88),
+                ContextItem(key="goals", text=_sized("g", 40), tier="tierA", priority=87),
+            ]
         )
+
+        result, _ = fill_to_budget(
+            context=context,
+            llm_config=_llm_config(),
+            prompt_token_budget=PRODUCTION_PROMPT_BUDGET,
+        )
+
+        surviving = _keys(result)
+        for key in ("relation:player", "memories", "beliefs", "goals"):
+            assert key in surviving, f"{key} did not survive the tier-A allocation"
