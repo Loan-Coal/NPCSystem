@@ -54,6 +54,7 @@ from npc_engine.schema.retrieval_profile_models import RetrievalProfile
 from .context_budget_enforcer import ContextCompressionCache, fill_to_budget_with_report
 from .context_profile_resolver import resolve_profile_for_turn, resolved_profile_name
 from .context_receipt import ContextReceipt, build_context_receipt
+from .context_profile_policy import apply_slot_policy, tier_enabled
 from .context_slots import slot_for_key
 from .context_builder_helpers import (
     expand_query,
@@ -266,6 +267,8 @@ async def _fetch_rag_results(
     and faction MINUS its known events. An empty scope means no RAG, never all of it.
     """
     if skip_rag or profile.skip_rag:
+        return []
+    if not tier_enabled(profile, "tierB") and not tier_enabled(profile, "tierC"):
         return []
     rag_scope = await get_rag_scope_ids_for_npc(session, npc_id=npc_id) - (known_event_ids or set())
     if not rag_scope:
@@ -657,6 +660,62 @@ def _validated_profile_for_turn(
     return resolve_profile_for_turn(settings=settings, llm_config=llm_config, requested=requested)
 
 
+
+
+async def _build_all_tier_a_items(
+    session: AsyncSession, npc_id: str, player_id: str | None, settings: Settings,
+    character_bundle: Any, profile_data: NpcProfileData, session_turns: list[str],
+    location_id: str | None, beliefs: Any, goals: Any, secrets: Any, obligations: Any,
+    second_hop_events: Any, active_quest: Any, player_relation_edge: Any,
+    propagated_reputation: Any, game_time: TimePoint | None,
+) -> list[ContextItem]:
+    """Assemble every tier-A item: the base set, the extended set, and player memories."""
+    items = _build_tier_a_base(
+        npc_id, character_bundle, profile_data.events, location_id,
+        profile_data.location_context, profile_data.group_memberships,
+        profile_data.believed_rumors, profile_data.traits, profile_data.active_pledges,
+        session_turns,
+    )
+    items.extend(_build_tier_a_extended(
+        player_id, profile_data.reputation_items, active_quest, player_relation_edge,
+        profile_data.memories, beliefs, goals, profile_data.owned_items, secrets,
+        obligations, second_hop_events, settings, npc_id, game_time, propagated_reputation,
+    ))
+    await _maybe_append_player_memory(session, npc_id, player_id, game_time, items)
+    return items
+
+
+async def _apply_profile_policy(
+    session: AsyncSession, npc_id: str,
+    profile: RetrievalProfile, llm_config: LLMConfig, compression_cache: Any,
+    tier0: list[ContextItem], tier_a: list[ContextItem],
+    tier_b: list[ContextItem], tier_c: list[ContextItem],
+) -> tuple[list[ContextItem], list[ContextItem], list[ContextItem], list[ContextItem]]:
+    """Gate each tier on the arm and apply its slot policy; return the four lists.
+
+    A disabled tier is emptied HERE rather than at its producer so that exactly one
+    place decides it, and so that the serializer — which is unaware of profiles — goes
+    on emitting every declared slot's empty default. Schema stable, content varying.
+
+    `top_need` is fetched inside this gate because it is a tierB slot: a tier-A-only arm
+    must not pay for a graph read whose result it then discards.
+    """
+    if tier_enabled(profile, "tierB"):
+        tier_b = await _maybe_append_top_need(session, npc_id, tier_b)
+    cache = compression_cache if compression_cache is not None else ContextCompressionCache()
+    gated = [
+        items if tier_enabled(profile, tier) else []
+        for tier, items in (
+            ("tier0", tier0), ("tierA", tier_a), ("tierB", tier_b), ("tierC", tier_c)
+        )
+    ]
+    filtered = [
+        apply_slot_policy(items, profile=profile, llm_config=llm_config, compression_cache=cache)
+        for items in gated
+    ]
+    return filtered[0], filtered[1], filtered[2], filtered[3]
+
+
 async def build_serialized_context_with_receipt(
     session: AsyncSession, settings: Settings, llm_config: LLMConfig, embedding_index: EmbeddingIndexProtocol,
     npc_id: str, player_message: str, session_turns: list[str], emotion_state: dict[str, Any] | None = None,
@@ -681,11 +740,9 @@ async def build_serialized_context_with_receipt(
     trust_scores, second_hop_events, active_quest, player_relation_edge, propagated_reputation = await _fetch_player_data(session, npc_id, player_id, profile_data.events)
     tier_b_results = await _maybe_cross_encode(settings, player_message, tier_b_results, active_profile)
     tier0 = _build_tier0_items(world_state, emotion_snapshot, system_state_context)
-    tier_a_raw = _build_tier_a_base(npc_id, character_bundle, profile_data.events, location_id, profile_data.location_context, profile_data.group_memberships, profile_data.believed_rumors, profile_data.traits, profile_data.active_pledges, session_turns)
-    tier_a_raw.extend(_build_tier_a_extended(player_id, profile_data.reputation_items, active_quest, player_relation_edge, profile_data.memories, beliefs, goals, profile_data.owned_items, secrets, obligations, second_hop_events, settings, npc_id, current_game_time, propagated_reputation))
-    await _maybe_append_player_memory(session, npc_id, player_id, current_game_time, tier_a_raw)
+    tier_a_raw = await _build_all_tier_a_items(session, npc_id, player_id, settings, character_bundle, profile_data, session_turns, location_id, beliefs, goals, secrets, obligations, second_hop_events, active_quest, player_relation_edge, propagated_reputation, current_game_time)
     tier_b_raw, tier_c_raw, vector_scores = _build_tier_b_c_items(tier_b_results)
-    tier_b_raw = await _maybe_append_top_need(session, npc_id, tier_b_raw)
+    tier0, tier_a_raw, tier_b_raw, tier_c_raw = await _apply_profile_policy(session, npc_id, active_profile, llm_config, compression_cache, tier0, tier_a_raw, tier_b_raw, tier_c_raw)
     event_key_trust = _build_event_trust_map(profile_data.events, trust_scores, npc_id)
     serialized, receipt = _rank_and_serialize_tiers(
         tier0=tier0, tier_a_raw=tier_a_raw, tier_b_raw=tier_b_raw, tier_c_raw=tier_c_raw,

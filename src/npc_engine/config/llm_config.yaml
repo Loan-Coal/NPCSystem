@@ -65,6 +65,11 @@ retrieval_profiles:
     events_limit: 5
     cross_encoder_enabled: false
     skip_rag: true
+    # P8 §8.5: every declared arm carries the same `rag:` cap as the default, so the
+    # arm differs from default in exactly ONE field. Vary the cap only in an arm whose
+    # declared knob IS the cap.
+    slot_cap_overrides:
+      "rag:": 600
 
   # Triple every top-k. Worth running against no_rag because PROMPT_TOKEN_BUDGET
   # derives to its 512 clamp floor (RET-P0.3, DEC-175): more retrieved items may
@@ -77,3 +82,8 @@ retrieval_profiles:
     events_limit: 15
     cross_encoder_enabled: false
     skip_rag: false
+    # P8 §8.5: every declared arm carries the same `rag:` cap as the default, so the
+    # arm differs from default in exactly ONE field. Vary the cap only in an arm whose
+    # declared knob IS the cap.
+    slot_cap_overrides:
+      "rag:": 600
