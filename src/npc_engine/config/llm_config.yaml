@@ -53,7 +53,32 @@ relevance_weights:
 # the top-ks bound the vector search that fills tiers B and C. Grouping all three was
 # defensible only while every one of them was inert; P8 made tier B carry 2-3 items per
 # NPC (DEC-212), so that grouping now hides which tier carried an effect. Pinned by
-# test_no_declared_arm_varies_both_a_tier_a_and_a_tier_b_knob.
+# test_no_declared_arm_varies_both_a_tier_a_and_a_tier_b_knob, which since DEC-214 also
+# resolves `disabled_slots` to the tier of the slot it names.
+#
+# SUPPLY FIRST (DEC-214) — the rule, and the mistake it exists to prevent.
+#
+#   AN ARM MAY NOT BE DECLARED UNTIL ITS EXPOSURE HAS BEEN MEASURED.
+#
+# `wide_events` (events_limit 5 -> 15) and `wide_rag` (rag_top_k 5 -> 15) were declared
+# here and both produced item_keys BYTE-IDENTICAL to default on 2/2 probe cases. Neither
+# was a bug in the arm, the scope or the corpus: each RAISED A CEILING ABOVE ITS OWN
+# SUPPLY, so there was nothing for the raise to take. They were sized against JUDGE
+# RESOLUTION rather than against supply, which was the only axis available when they were
+# written — tierB.items was 0 on every run ever recorded (DEC-208), so "does this arm
+# change anything?" could not be asked at all.
+#
+# Measured on the clean eval baseline, 8-NPC roster, corpus_sha 2b19e47a1755354e:
+#
+#     knob           default   measured supply              headroom to RAISE
+#     events_limit         5   max 2 known by ANY Character  0 on 8/8
+#     rag_top_k            5   3-8 candidates per NPC        0 on 6/8
+#
+# So on this world a ceiling knob is an arm only when it is LOWERED. Every arm below
+# subtracts. The measured supply each arm was sized against is recorded in the
+# `retrieval_profile_exposure:` block after these profiles, and checked at design time by
+# tests/unit/config/test_declared_arm_exposure.py; gate 4 of `make eval-arm-probe` is the
+# runtime check that the recorded number is still true of the live world.
 #
 # WHAT IS INERT IN THIS BLOCK TODAY — read before designing an arm:
 #
@@ -77,10 +102,27 @@ relevance_weights:
 #     arm is therefore NOT an independent effect and must not be reported as one
 #     (DEC-209, "Recorded, not decided"; confirmed measured in DEC-212 as 2/3 and 2/2).
 #
+#   * `slot_cap_overrides` is applied PER ITEM, not per slot total
+#     (context_profile_policy.apply_slot_policy). Measured `rag:` spend is 133-233 tokens
+#     per NPC across 3-5 items, i.e. ~46 tokens PER ITEM against the default cap of 600.
+#     A cap only binds below ~45, and a cap that binds routes every rag item through
+#     byte truncation, which ISSUE-214 records as emitting invalid JSON. Not an arm until
+#     ISSUE-214 is fixed, and it is not this knob's job to fix it (DEC-214).
+#
+#   * `cross_encoder_enabled` REORDERS candidates, it does not change membership; its
+#     only effect on assembly is which half of the len//2 split each item lands in. It
+#     also downloads an ~80 MB model on first use (cross_encoder_reranker._MODEL_NAME).
+#     Untested as an arm and not declared as one.
+#
+#   * `enabled_tiers` minus tierB is a near-duplicate of `no_rag` on this world: it drops
+#     the same `rag:` items PLUS `top_need`, which is structurally empty (ISSUE-210), so
+#     the two arms would differ by nothing observable and cost two generation passes.
+#
 # The arms are deliberately DRASTIC. Measured resolution on the current batteries is a
 # >=6.4pp drop on guard (n=78) before the regression gate fires, with refusal_judge at
 # kappa 0.225 (ISSUE-184). A cautious arm cannot clear that floor; these are sized to
-# produce an effect the instrument can see, or to establish that there is none.
+# produce an effect the instrument can see, or to establish that there is none. On this
+# world "drastic" can only mean SUBTRACTIVE — see SUPPLY FIRST above.
 # Pinned by tests/unit/config/test_shipped_retrieval_profiles.py.
 retrieval_profiles:
   # Does tier-B retrieval change measured behaviour AT ALL? Nothing in this repo has
@@ -100,17 +142,26 @@ retrieval_profiles:
     slot_cap_overrides:
       "rag:": 600
 
-  # TIER B/C ARM. Triple the vector-search top-k and leave event fetching alone.
-  # At rag_top_k=15 the len//2 split gives tier B 7 items and tier C 8, against the
-  # default's 2 and 3 (DEC-212). Worth running against no_rag: it answers 'does MORE
-  # retrieval help', where no_rag answers 'does ANY retrieval help'.
+  # TIER B/C ARM. Cut the vector-search top-k below the smallest measured candidate set
+  # and leave event fetching alone. This REPLACES `wide_rag` (rag_top_k 15), which was
+  # retired for zero exposure: at a supply of 3-8 the default top-k of 5 already retrieves
+  # substantially everything in scope, so raising it added at most one item on two of
+  # eight NPCs and nothing at all on both probe cases.
   #
-  # `events_limit` is pinned AT the default 5 on purpose. It was 15 until P9; moving it
-  # made this a two-tier arm. See the ONE ARM, ONE TIER note above.
-  wide_rag:
+  # Down is the only direction this world offers. At rag_top_k=2 the len//2 split gives
+  # tier B 1 item and tier C 1, against the default's 2 and 3 — and because 2 is strictly
+  # below the minimum measured supply of 3, it binds on 8 of 8 NPCs rather than on the
+  # two that happen to have spare supply. Measured removal: 1-3 items per NPC.
+  #
+  # Run against no_rag it is a dose-response pair on one axis: no_rag asks 'does ANY
+  # retrieval matter', narrow_rag asks 'do two items suffice'.
+  #
+  # `events_limit` is pinned AT the default 5 on purpose — moving it would make this a
+  # two-tier arm. See the ONE ARM, ONE TIER note above.
+  narrow_rag:
     weight_profile: null
-    rag_top_k: 15
-    graph_rag_top_k: 15
+    rag_top_k: 2
+    graph_rag_top_k: 2
     events_limit: 5
     cross_encoder_enabled: false
     skip_rag: false
@@ -120,23 +171,29 @@ retrieval_profiles:
     slot_cap_overrides:
       "rag:": 600
 
-  # TIER A ARM — the half P9 split out of wide_rag. Triple the event row limit and
-  # leave the vector search at the default, so a delta here is attributable to tier-A
-  # `event:` items and to nothing else.
+  # TIER A ARM — the half P9 split out of wide_rag, now carried by a different knob.
+  # This REPLACES `wide_events` (events_limit 15), which was retired for structurally
+  # zero exposure: no Character in the eval world KNOWS_ABOUT more than 2 events, so the
+  # DEFAULT limit of 5 already exceeds supply and the knob is dead at any value >= 2.
+  # It was not resized, because there is no value of `events_limit` that is an arm here.
   #
-  # Note this arm may show NO effect for a structural reason rather than a null one:
-  # get_events_for_npc returns what the NPC actually KNOWS_ABOUT, and most eval-world
-  # NPCs know fewer than 5 events (7 of 22 know zero — DEC-209). Raising the limit from
-  # 5 to 15 cannot add a row that does not exist. The arm probe's item_keys diff is
-  # what distinguishes 'no effect' from 'no exposure'; read it before reading any
-  # judge verdict on this arm.
-  wide_events:
+  # `nearby_npcs` is the live tier-A replacement. It is a declared tier-A slot
+  # (context_slots.py, priority 91) measured POPULATED on 8 of 8 roster NPCs, so
+  # withholding it removes exactly one item per NPC — guaranteed exposure, and the reason
+  # the tier-A/tier-B split P9 performed survives the retirement of both additive arms.
+  #
+  # Schema is unchanged: apply_slot_policy drops the ITEM, and the generated serializer
+  # still emits the `nearby_npcs` key with its empty default. Two arms whose JSON differs
+  # in shape would be measuring schema drift, not retrieval.
+  no_nearby_npcs:
     weight_profile: null
     rag_top_k: 5
     graph_rag_top_k: 5
-    events_limit: 15
+    events_limit: 5
     cross_encoder_enabled: false
     skip_rag: false
+    disabled_slots:
+      - nearby_npcs
     # P8 §8.5: every declared arm carries the same `rag:` cap as the default, so the
     # arm differs from default in exactly ONE field. Vary the cap only in an arm whose
     # declared knob IS the cap.

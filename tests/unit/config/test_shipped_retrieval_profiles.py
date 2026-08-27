@@ -17,9 +17,30 @@ are what stop a later "while I'm here" edit from quietly reintroducing that.
 WHY THE ARMS ARE COARSE
 Measured resolution on the current batteries: the regression gate needs a >=6.4pp drop
 on guard (n=78) before it fires, and refusal_judge sits at kappa 0.225 (DEC-188,
-ISSUE-184). A subtle arm cannot clear that floor, so the first arms are deliberately
-drastic — skip retrieval entirely, or triple every top-k — chosen to produce an effect
-the instrument can actually see, or to prove there is none.
+ISSUE-184). A subtle arm cannot clear that floor, so the arms are deliberately drastic —
+chosen to produce an effect the instrument can actually see, or to prove there is none.
+
+WHY EVERY ARM SUBTRACTS (DEC-214)
+The arms were originally sized against JUDGE RESOLUTION alone, because tier B carried
+zero items on every run ever recorded (DEC-208) and "does this arm change anything?" was
+unanswerable. It is answerable now, and the answer for the two additive arms was NO:
+`wide_events` at events_limit=15 and `wide_rag` at rag_top_k=15 produced item_keys
+BYTE-IDENTICAL to default on 2/2 probe cases, because a raised ceiling cannot add an item
+that does not exist. Measured supply on the 8-NPC roster, clean eval world:
+
+    knob            default   measured supply        headroom to RAISE
+    events_limit          5   max 2 known by ANY      0 on 8/8
+    rag_top_k             5   3-8 per NPC             0 on 6/8
+
+So a ceiling knob on this world is only an arm when it is LOWERED. `narrow_rag` at 2 sits
+below the minimum measured supply of 3, which is what makes it bind on every NPC rather
+than on the two with spare supply. The rule this module now enforces:
+
+    AN ARM MAY NOT RAISE A CEILING ABOVE THE SUPPLY THAT WAS MEASURED FOR IT.
+
+Pinned by test_no_declared_arm_raises_a_ceiling_above_the_measured_supply. The measured
+numbers themselves are recorded in llm_config.yaml's `retrieval_profile_exposure:` block
+and checked by tests/unit/config/test_declared_arm_exposure.py.
 """
 
 from __future__ import annotations
@@ -44,11 +65,37 @@ _SHIPPED_CONFIG: str = "config/llm_config.yaml"
 
 # The arms this repo commits to shipping. Each entry is (name, the single field that
 # may differ from the default profile).
+#
+# RETIRED 2026-08-27 (DEC-214), both for zero measured exposure and NOT replaced by a
+# resized version of themselves:
+#   * wide_events (events_limit=15) — no Character in the eval world knows more than 2
+#     events, so the default limit of 5 already exceeds supply. Dead at any value >= 2.
+#   * wide_rag (rag_top_k=15) — the vector candidate set is 3-8 nodes, so the default
+#     top-k of 5 already retrieves substantially everything in scope.
 _DECLARED_ARMS: tuple[tuple[str, str], ...] = (
     ("no_rag", "skip_rag"),
-    ("wide_rag", "rag_top_k"),
-    ("wide_events", "events_limit"),
+    ("narrow_rag", "rag_top_k"),
+    ("no_nearby_npcs", "disabled_slots"),
 )
+
+_MIN_MEASURED_RAG_SUPPLY: int = 3
+"""Smallest vector-candidate set measured over the 8-NPC probe roster (DEC-214).
+
+bren_smith and vex_spymaster, on the clean eval baseline at corpus_sha 2b19e47a1755354e.
+A `rag_top_k` arm strictly below this binds on EVERY NPC; one at or above it binds only
+on the NPCs that happen to have spare supply, which is how `wide_rag` came to be inert.
+"""
+
+_MAX_MEASURED_EVENT_SUPPLY: int = 2
+"""Most events any Character in the eval world KNOWS_ABOUT (DEC-214).
+
+`MATCH (c:Character)-[:KNOWS_ABOUT]->(e:Event) RETURN c.id, count(e)` over all 23
+Characters: 16 know 1 or 2, 7 know none. This is why `events_limit` is not an arm at any
+value >= 2 and was retired rather than resized.
+"""
+
+_TIER_A_ARM_SLOT: str = "nearby_npcs"
+"""The tier-A slot the tier-A arm withholds. Occupancy measured 8/8 on the probe roster."""
 
 # Which TIER a profile knob moves. P8 made this distinction load-bearing: before it,
 # every one of these was inert (tierB.items was 0 on every run ever recorded), so
@@ -68,9 +115,31 @@ that is switched off would not be the arm it claims to be.
 """
 
 _CROSS_TIER_KNOBS: frozenset[str] = frozenset(
-    {"weight_profile", "enabled_tiers", "disabled_slots", "slot_cap_overrides"}
+    {"weight_profile", "enabled_tiers", "slot_cap_overrides"}
 )
-"""Knobs that are not a single tier's: ranking weights and the P8 tier/slot gates."""
+"""Knobs that are not a single tier's: ranking weights and the P8 tier/cap gates.
+
+`disabled_slots` was in this set until DEC-214 and is NOT any more. It is resolvable to a
+tier — every slot it can name declares one — and leaving it here let the tier-A arm opt
+itself out of the one-arm-one-tier rule by naming a knob neither side of the rule sees.
+"""
+
+_SLOT_RESOLVED_KNOBS: frozenset[str] = frozenset({"disabled_slots"})
+"""Knobs whose tier is decided by the SLOTS they name, not by the knob itself."""
+
+
+def _tiers_named_by_disabled_slots(arm: RetrievalProfile) -> frozenset[str]:
+    """Return the tiers of the slots this arm withholds, resolved from the declaration table.
+
+    A slot name nobody declares raises: it would silently withhold nothing, and an arm
+    that withholds nothing is not an arm.
+    """
+    from npc_engine.retrieval.context.context_slots import CONTEXT_SLOTS
+
+    by_key = {slot.key: slot.tier for slot in CONTEXT_SLOTS}
+    unknown = sorted(set(arm.disabled_slots) - set(by_key))
+    assert not unknown, f"disabled_slots names undeclared slot(s) {unknown}"
+    return frozenset(by_key[key] for key in arm.disabled_slots)
 
 
 def _default_profile() -> RetrievalProfile:
@@ -142,27 +211,65 @@ def test_the_no_rag_arm_really_skips_retrieval() -> None:
     assert _shipped_profiles()["no_rag"].skip_rag is True
 
 
-def test_the_wide_rag_arm_is_a_large_multiple_of_the_default_top_k() -> None:
-    """A 6 vs 5 arm would be indistinguishable from noise at this dataset's resolution.
-    Requiring at least a doubling keeps the declared arm honest about that.
+def test_the_narrow_rag_arm_sits_below_the_measured_supply_so_its_ceiling_binds() -> None:
+    """A ceiling knob is only an arm where it is BELOW supply, and this world's supply
+    is 3-8 candidates per NPC. At or above the minimum of 3 the arm would bind on some
+    NPCs and not others; strictly below it, it binds on all of them.
 
-    `events_limit` must stay AT the default here: widening it too would make this a
-    two-tier arm, which is the split P9 performed.
+    Also required to be a large step, for the same reason the retired `wide_rag` was:
+    a 4 vs 5 arm cannot clear the >=6.4pp judge floor. Down is the only direction this
+    world offers, so the multiple is inverted.
+
+    `events_limit` must stay AT the default here, or this becomes a two-tier arm.
     """
-    wide = _shipped_profiles()["wide_rag"]
-    assert wide.rag_top_k >= 2 * _DEFAULT_RAG_TOP_K
-    assert wide.graph_rag_top_k >= 2 * _DEFAULT_RAG_TOP_K
-    assert wide.events_limit == _DEFAULT_RAG_TOP_K
+    narrow = _shipped_profiles()["narrow_rag"]
+    assert narrow.rag_top_k < _MIN_MEASURED_RAG_SUPPLY, (
+        f"narrow_rag at rag_top_k={narrow.rag_top_k} does not bind on an NPC whose "
+        f"candidate set is only {_MIN_MEASURED_RAG_SUPPLY}"
+    )
+    assert narrow.rag_top_k * 2 <= _DEFAULT_RAG_TOP_K
+    assert narrow.graph_rag_top_k == narrow.rag_top_k
+    assert narrow.events_limit == _DEFAULT_RAG_TOP_K
+    assert narrow.skip_rag is False
 
 
-def test_the_wide_events_arm_widens_tier_a_and_leaves_the_vector_search_alone() -> None:
-    """The other half of P9's split: `events_limit` moves `get_events_for_npc`, which
-    fills tier-A `event:` items and never touches the vector store."""
-    wide = _shipped_profiles()["wide_events"]
-    assert wide.events_limit >= 2 * _DEFAULT_RAG_TOP_K
-    assert wide.rag_top_k == _DEFAULT_RAG_TOP_K
-    assert wide.graph_rag_top_k == _DEFAULT_RAG_TOP_K
-    assert wide.skip_rag is False
+def test_the_tier_a_arm_withholds_a_slot_the_whole_probe_roster_carries() -> None:
+    """The live replacement for the retired `wide_events` — P9 split a tier-A arm out of
+    `wide_rag` so a delta could be attributed to a tier, and retiring the dead arm
+    without replacing it would have discarded that split.
+
+    `nearby_npcs` is a tier-A slot (context_slots.py, priority 91) populated on 8 of 8
+    roster NPCs, so withholding it is guaranteed to remove exactly one item per NPC. The
+    vector search must be left entirely alone.
+    """
+    arm = _shipped_profiles()["no_nearby_npcs"]
+    assert arm.disabled_slots == frozenset({_TIER_A_ARM_SLOT})
+    assert arm.rag_top_k == _DEFAULT_RAG_TOP_K
+    assert arm.graph_rag_top_k == _DEFAULT_RAG_TOP_K
+    assert arm.events_limit == _DEFAULT_RAG_TOP_K
+    assert arm.skip_rag is False
+
+
+def test_no_declared_arm_raises_a_ceiling_above_the_measured_supply() -> None:
+    """THE RULE DEC-214 INSTALLS: an arm may not raise a limit past its measured supply.
+
+    `wide_events` and `wide_rag` were both declared before tier B carried anything, so
+    "does this arm change anything?" could not be asked; they were sized against judge
+    resolution instead and each turned out to be a ceiling above its own supply. This
+    catches a resized version of either at declaration time rather than at gate 4.
+    """
+    default = _default_profile()
+    for name, arm in _shipped_profiles().items():
+        assert arm.events_limit <= max(default.events_limit, _MAX_MEASURED_EVENT_SUPPLY), (
+            f"{name!r} raises events_limit to {arm.events_limit}, above both the default "
+            f"and the measured supply of {_MAX_MEASURED_EVENT_SUPPLY} events per NPC — "
+            f"it cannot add a row that does not exist"
+        )
+        assert arm.rag_top_k <= max(default.rag_top_k, _MIN_MEASURED_RAG_SUPPLY), (
+            f"{name!r} raises rag_top_k to {arm.rag_top_k}; the smallest measured "
+            f"candidate set is {_MIN_MEASURED_RAG_SUPPLY} and the default top-k is "
+            f"already {default.rag_top_k}, so the raise has no exposure"
+        )
 
 
 def test_no_declared_arm_varies_both_a_tier_a_and_a_tier_b_knob() -> None:
@@ -176,20 +283,27 @@ def test_no_declared_arm_varies_both_a_tier_a_and_a_tier_b_knob() -> None:
     the receipt cannot say which one carried the effect.
 
     The grouping was defensible only while all three knobs were inert. They are not.
+
+    DEC-214: `disabled_slots` is resolved to the tier of the slot it names, so the
+    tier-A arm is checked by this rule rather than sliding past it as a cross-tier knob.
     """
     default = _default_profile()
-    for name in _shipped_profiles():
-        arm = _shipped_profiles()[name]
+    for name, arm in _shipped_profiles().items():
         differing = {
             field
             for field in type(default).model_fields
             if getattr(arm, field) != getattr(default, field)
         }
-        tier_a = differing & _TIER_A_KNOBS
-        tier_b = differing & _TIER_B_KNOBS
-        assert not (tier_a and tier_b), (
-            f"{name!r} varies tier-A knob(s) {sorted(tier_a)} AND tier-B knob(s) "
-            f"{sorted(tier_b)}; a delta from this arm is unattributable to either tier"
+        tiers = frozenset()
+        if differing & _TIER_A_KNOBS:
+            tiers |= {"tierA"}
+        if differing & _TIER_B_KNOBS:
+            tiers |= {"tierB"}
+        if "disabled_slots" in differing:
+            tiers |= _tiers_named_by_disabled_slots(arm)
+        assert len(tiers) <= 1, (
+            f"{name!r} varies knobs {sorted(differing)}, which move tiers "
+            f"{sorted(tiers)}; a delta from this arm is unattributable to either tier"
         )
 
 
@@ -200,7 +314,7 @@ def test_every_declared_arm_varies_a_knob_this_test_module_has_classified() -> N
     the one-tier rule — the test would pass by finding nothing on both sides.
     """
     default = _default_profile()
-    classified = _TIER_A_KNOBS | _TIER_B_KNOBS | _CROSS_TIER_KNOBS
+    classified = _TIER_A_KNOBS | _TIER_B_KNOBS | _CROSS_TIER_KNOBS | _SLOT_RESOLVED_KNOBS
     unclassified = set(type(default).model_fields) - classified
     assert not unclassified, (
         f"RetrievalProfile fields {sorted(unclassified)} are not classified as tier-A, "
