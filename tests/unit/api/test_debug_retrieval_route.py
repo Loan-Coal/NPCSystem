@@ -52,11 +52,11 @@ _CONTEXT_JSON = json.dumps(_CONTEXT_PAYLOAD)
 
 @pytest.mark.asyncio
 async def test_debug_retrieval_returns_context_items() -> None:
-    """Happy path: patched build_serialized_context returns items in the response."""
+    """Happy path: the patched receipt entry point's slots reach the response."""
     with patch(
-        "npc_engine.api.routes.admin.debug_retrieval.build_serialized_context",
+        "npc_engine.api.routes.admin.debug_retrieval.build_serialized_context_with_receipt",
         new_callable=AsyncMock,
-        return_value=_CONTEXT_JSON,
+        return_value=(_CONTEXT_JSON, None),
     ):
         response = await get_debug_retrieval(
             npc_id="mira_innkeeper",
@@ -78,9 +78,9 @@ async def test_debug_retrieval_returns_context_items() -> None:
 async def test_debug_retrieval_total_tokens_is_non_negative() -> None:
     """total_tokens field must be a non-negative integer."""
     with patch(
-        "npc_engine.api.routes.admin.debug_retrieval.build_serialized_context",
+        "npc_engine.api.routes.admin.debug_retrieval.build_serialized_context_with_receipt",
         new_callable=AsyncMock,
-        return_value=_CONTEXT_JSON,
+        return_value=(_CONTEXT_JSON, None),
     ):
         response = await get_debug_retrieval(
             npc_id="mira_innkeeper",
@@ -99,9 +99,9 @@ async def test_debug_retrieval_total_tokens_is_non_negative() -> None:
 async def test_debug_retrieval_empty_context() -> None:
     """When context JSON is an empty object the handler returns zero items."""
     with patch(
-        "npc_engine.api.routes.admin.debug_retrieval.build_serialized_context",
+        "npc_engine.api.routes.admin.debug_retrieval.build_serialized_context_with_receipt",
         new_callable=AsyncMock,
-        return_value=json.dumps({}),
+        return_value=(json.dumps({}), None),
     ):
         response = await get_debug_retrieval(
             npc_id="old_henryk",
