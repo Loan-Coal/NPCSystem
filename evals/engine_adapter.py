@@ -21,6 +21,14 @@ from typing import Any
 
 _logger = logging.getLogger(__name__)
 
+_CORPUS_PAGE_LIMIT: int = 100_000
+"""One page large enough to hold any corpus this harness measures (currently 51 nodes).
+
+A guard, not a tuning value: paging here would let a silently truncated read report a
+smaller supply than the world holds, which is the exact class of error DEC-214 exists to
+stop. If a corpus ever approaches this, page it deliberately rather than raising this.
+"""
+
 
 async def build_retrieval_stack() -> tuple[Any, Any]:
     """Bootstrap and return the retrieval infrastructure needed by retrieval_runner.
@@ -158,6 +166,27 @@ async def rag_scope_ids(session: Any, npc_id: str) -> set[str]:
     from npc_engine.graph.graph_rag_queries import get_rag_scope_ids_for_npc
 
     return await get_rag_scope_ids_for_npc(session, npc_id=npc_id)
+
+
+async def embedded_node_ids(session: Any) -> set[str]:
+    """Return the id of every node that carries an embedding — the corpus, as ids.
+
+    This is the third term in the supply a tier-B arm is bounded by. The vector search
+    can only ever return `(scope - known) & corpus`, and the corpus holds only the three
+    embeddable node types, so the intersection is far smaller than the scope. Measuring
+    the scope alone is what made `wide_rag` look sizeable when its real candidate set was
+    3-8 nodes (DEC-214).
+
+    Args:
+        session: Active Neo4j AsyncSession.
+
+    Returns:
+        Set of node ID strings currently carrying an embedding.
+    """
+    from npc_engine.graph.infra.embedding_load_queries import select_embedded_nodes
+
+    rows = await select_embedded_nodes(session, skip=0, limit=_CORPUS_PAGE_LIMIT)
+    return {str(row["node_id"]) for row in rows}
 
 
 def declared_retrieval_profiles() -> dict[str, Any]:

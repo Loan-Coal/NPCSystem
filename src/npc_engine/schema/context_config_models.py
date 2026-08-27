@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from npc_engine.schema.arm_exposure_models import ArmExposureRecord
 from npc_engine.schema.retrieval_profile_models import (
     RetrievalProfile,
     resolve_retrieval_profile,
@@ -108,6 +109,12 @@ class LLMConfig(BaseModel):
     # Named retrieval configurations for A/B experiments. Unlike weight_profiles, an
     # unknown name here RAISES rather than falling back — see resolve_retrieval_profile.
     retrieval_profiles: dict[str, RetrievalProfile] = Field(default_factory=dict)
+    # The measured supply each declared arm was sized against (DEC-214). Separate from
+    # the profile itself because RetrievalProfile is what the ENGINE applies and this is
+    # what a HUMAN measured; folding provenance into the applied config would make an
+    # engine field of a fact about a world. Empty is allowed so a deployment that ships
+    # no arms needs no block; test_declared_arm_exposure requires one entry per arm.
+    retrieval_profile_exposure: dict[str, ArmExposureRecord] = Field(default_factory=dict)
     # Fraction of PROMPT_TOKEN_BUDGET allocated to each tier (soft caps).
     # tier_c receives the remainder: 1.0 - tier_a_fraction - tier_b_fraction.
     # Override per-engine in the engine's llm_config.yaml for tuning.

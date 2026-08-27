@@ -199,3 +199,53 @@ retrieval_profiles:
     # declared knob IS the cap.
     slot_cap_overrides:
       "rag:": 600
+
+# The measured supply each arm above was sized against — the artifact that should have
+# existed before any arm was ever declared (DEC-214). One entry per declared arm, and no
+# entry without an arm; both pinned by tests/unit/config/test_declared_arm_exposure.py,
+# which also rejects a record whose own arithmetic says the knob cannot take anything.
+#
+# HOW THESE WERE MEASURED, so they can be re-measured rather than trusted:
+#   rag supply     (scope - known) & corpus, per NPC, where
+#                  scope  = graph.graph_rag_queries.get_rag_scope_ids_for_npc
+#                  known  = graph.graph_reader.get_known_event_ids_for_npc
+#                  corpus = graph.infra.embedding_load_queries.select_embedded_nodes
+#                  -> `make eval-supply-report`
+#   event supply   MATCH (c:Character)-[:KNOWS_ABOUT]->(e:Event) RETURN c.id, count(e)
+#   slot occupancy GET /v1/admin/debug/retrieval receipts, item_keys by slot prefix
+#
+# Roster: the eight NPCs scripts/probe_inner_life.py measures, on the clean eval baseline
+# immediately after `make eval-world-reset`. A record is STALE, not wrong, once the live
+# corpus_sha stops matching — re-measure, do not edit the numbers to fit.
+retrieval_profile_exposure:
+  no_rag:
+    knob: skip_rag
+    direction: withhold
+    measured_supply_min: 3
+    measured_supply_max: 5
+    exposed_npcs: 8
+    roster_size: 8
+    measured_on_corpus_sha: "2b19e47a1755354e"
+    note: "removes every rag: item — 3-5 per NPC, 133-233 tokens; probe 2/2 cases"
+
+  narrow_rag:
+    knob: rag_top_k
+    direction: lower
+    default_ceiling: 5
+    arm_value: 2
+    measured_supply_min: 3
+    measured_supply_max: 8
+    exposed_npcs: 8
+    roster_size: 8
+    measured_on_corpus_sha: "2b19e47a1755354e"
+    note: "2 is below the minimum supply of 3, so it binds on 8/8 rather than on the two NPCs with spare supply; probe 2/2, tierB 2 -> 1"
+
+  no_nearby_npcs:
+    knob: disabled_slots
+    direction: withhold
+    measured_supply_min: 1
+    measured_supply_max: 1
+    exposed_npcs: 8
+    roster_size: 8
+    measured_on_corpus_sha: "2b19e47a1755354e"
+    note: "nearby_npcs measured populated 8/8; withholding removes exactly one tier-A item per NPC, -49 tokens; probe 2/2 cases"

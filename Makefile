@@ -18,7 +18,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         type-ratchet type-ratchet-update type-evals type-evals-update check-harness \
         test-cov-evals \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe probe-inner-life eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
         seed-tavern-world seed-village-world package eval-dashboard
@@ -294,6 +294,19 @@ eval-retrieval:
 # Usage: make probe-inner-life LABEL="post-P9"
 probe-inner-life:
 	API_KEY_SECRET="$(API_KEY)" $(PYTHON) scripts/probe_inner_life.py "$(or $(LABEL),unlabelled)" $(ARGS)
+
+# eval-supply-report: measured supply per ceiling knob, over the 8-NPC probe roster.
+# Run this BEFORE declaring an A/B arm (DEC-214). It answers the question the receipts
+# cannot: a receipt shows min(supply, ceiling) items, so a saturated default and a
+# generous world look identical, and that is how `wide_events` and `wide_rag` came to be
+# declared as arms with zero exposure.
+#
+# Runs INSIDE the app container: it reads Neo4j directly, and neo4j has no host port
+# mapping (see the eval-world-reset note below). No HTTP, no LLM, no writes.
+# Usage: make eval-supply-report [ARGS="--npc mira_innkeeper --npc lira_fence"]
+eval-supply-report:
+	MSYS_NO_PATHCONV=1 docker compose run --rm -v "$$PWD:/work" -w /work app \
+		python -m evals.arm_supply $(ARGS)
 
 # eval-arm-probe: the P9 gate. Four ordered gates over 2 cases x N arms at k=1 — config,
 # corpus, cache isolation, effect — diffing each arm's item_keys and tier_spend through

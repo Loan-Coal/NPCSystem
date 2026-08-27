@@ -13,6 +13,7 @@ R002|evals/adjudicate.py
 R002|evals/anti_hallucination_runner.py
 R002|evals/arm_probe.py
 R002|evals/arm_probe_report.py
+R002|evals/arm_supply.py
 R002|evals/calibration.py
 R002|evals/case_drafts.py
 R002|evals/compare.py
