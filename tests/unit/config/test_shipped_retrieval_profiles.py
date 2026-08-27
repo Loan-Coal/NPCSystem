@@ -47,7 +47,30 @@ _SHIPPED_CONFIG: str = "config/llm_config.yaml"
 _DECLARED_ARMS: tuple[tuple[str, str], ...] = (
     ("no_rag", "skip_rag"),
     ("wide_rag", "rag_top_k"),
+    ("wide_events", "events_limit"),
 )
+
+# Which TIER a profile knob moves. P8 made this distinction load-bearing: before it,
+# every one of these was inert (tierB.items was 0 on every run ever recorded), so
+# grouping them was harmless. See test_no_declared_arm_varies_both_a_tier_a_and_a_
+# tier_b_knob for why it is not harmless now.
+_TIER_A_KNOBS: frozenset[str] = frozenset({"events_limit"})
+"""Knobs that bound a DIRECT GRAPH READ feeding tier A (`get_events_for_npc`)."""
+
+_TIER_B_KNOBS: frozenset[str] = frozenset(
+    {"rag_top_k", "graph_rag_top_k", "cross_encoder_enabled", "skip_rag"}
+)
+"""Knobs that bound the VECTOR SEARCH feeding tiers B and C.
+
+`rag_top_k` and `graph_rag_top_k` stay ONE knob: they are the same quantity at two call
+sites and `GRAPH_RAG_ENABLED` picks which one fires, so an arm that widened only the one
+that is switched off would not be the arm it claims to be.
+"""
+
+_CROSS_TIER_KNOBS: frozenset[str] = frozenset(
+    {"weight_profile", "enabled_tiers", "disabled_slots", "slot_cap_overrides"}
+)
+"""Knobs that are not a single tier's: ranking weights and the P8 tier/slot gates."""
 
 
 def _default_profile() -> RetrievalProfile:
@@ -82,12 +105,16 @@ def test_the_engine_ships_the_declared_ab_arm(name: str, _varied: str) -> None:
 def test_each_arm_differs_from_default_in_exactly_one_field(name: str, varied: str) -> None:
     """One knob per arm, so a measured delta is attributable to that knob.
 
-    graph_rag_top_k and events_limit are allowed to move WITH rag_top_k: DEC-194 split
-    them apart precisely so they need not, but a 'wider retrieval' arm that widened
-    only the vector search would not be the arm it claims to be. They are treated as
-    one knob here and named as such.
+    graph_rag_top_k is allowed to move WITH rag_top_k: they are the same quantity at two
+    call sites, and GRAPH_RAG_ENABLED decides which one fires, so an arm that widened
+    only the switched-off one would not be the arm it claims to be.
+
+    `events_limit` was in this group until P9 and is NOT any more. It feeds tier A; the
+    other two feed tiers B and C. That distinction was harmless while tier B carried
+    zero items on every run ever recorded, and stopped being harmless when P8 made it
+    carry 2-3 (DEC-212). See test_no_declared_arm_varies_both_a_tier_a_and_a_tier_b_knob.
     """
-    top_k_group = {"rag_top_k", "graph_rag_top_k", "events_limit"}
+    top_k_group = {"rag_top_k", "graph_rag_top_k"}
     allowed = top_k_group if varied in top_k_group else {varied}
 
     arm = _shipped_profiles()[name]
@@ -117,11 +144,69 @@ def test_the_no_rag_arm_really_skips_retrieval() -> None:
 
 def test_the_wide_rag_arm_is_a_large_multiple_of_the_default_top_k() -> None:
     """A 6 vs 5 arm would be indistinguishable from noise at this dataset's resolution.
-    Requiring at least a doubling keeps the declared arm honest about that."""
+    Requiring at least a doubling keeps the declared arm honest about that.
+
+    `events_limit` must stay AT the default here: widening it too would make this a
+    two-tier arm, which is the split P9 performed.
+    """
     wide = _shipped_profiles()["wide_rag"]
     assert wide.rag_top_k >= 2 * _DEFAULT_RAG_TOP_K
     assert wide.graph_rag_top_k >= 2 * _DEFAULT_RAG_TOP_K
+    assert wide.events_limit == _DEFAULT_RAG_TOP_K
+
+
+def test_the_wide_events_arm_widens_tier_a_and_leaves_the_vector_search_alone() -> None:
+    """The other half of P9's split: `events_limit` moves `get_events_for_npc`, which
+    fills tier-A `event:` items and never touches the vector store."""
+    wide = _shipped_profiles()["wide_events"]
     assert wide.events_limit >= 2 * _DEFAULT_RAG_TOP_K
+    assert wide.rag_top_k == _DEFAULT_RAG_TOP_K
+    assert wide.graph_rag_top_k == _DEFAULT_RAG_TOP_K
+    assert wide.skip_rag is False
+
+
+def test_no_declared_arm_varies_both_a_tier_a_and_a_tier_b_knob() -> None:
+    """One arm, one TIER — otherwise the delta is split across two mechanisms.
+
+    P8 turned tier B on: `tierB.items` was 0 on every run ever recorded and is now 2-3
+    per NPC (DEC-212). That makes the old `{rag_top_k, graph_rag_top_k, events_limit}`
+    grouping unsafe. `events_limit` bounds `get_events_for_npc`, which produces tier-A
+    `event:` items; `rag_top_k` bounds the vector search, which produces tier-B and
+    tier-C `rag:` items. An arm moving both moves two tiers through two mechanisms and
+    the receipt cannot say which one carried the effect.
+
+    The grouping was defensible only while all three knobs were inert. They are not.
+    """
+    default = _default_profile()
+    for name in _shipped_profiles():
+        arm = _shipped_profiles()[name]
+        differing = {
+            field
+            for field in type(default).model_fields
+            if getattr(arm, field) != getattr(default, field)
+        }
+        tier_a = differing & _TIER_A_KNOBS
+        tier_b = differing & _TIER_B_KNOBS
+        assert not (tier_a and tier_b), (
+            f"{name!r} varies tier-A knob(s) {sorted(tier_a)} AND tier-B knob(s) "
+            f"{sorted(tier_b)}; a delta from this arm is unattributable to either tier"
+        )
+
+
+def test_every_declared_arm_varies_a_knob_this_test_module_has_classified() -> None:
+    """A knob nobody classified cannot be checked by the tier test above.
+
+    Without this, adding `disabled_slots` to an arm would silently opt that arm out of
+    the one-tier rule — the test would pass by finding nothing on both sides.
+    """
+    default = _default_profile()
+    classified = _TIER_A_KNOBS | _TIER_B_KNOBS | _CROSS_TIER_KNOBS
+    unclassified = set(type(default).model_fields) - classified
+    assert not unclassified, (
+        f"RetrievalProfile fields {sorted(unclassified)} are not classified as tier-A, "
+        f"tier-B or cross-tier, so test_no_declared_arm_varies_both_a_tier_a_and_a_"
+        f"tier_b_knob cannot see them"
+    )
 
 
 def test_an_undeclared_arm_is_still_refused() -> None:

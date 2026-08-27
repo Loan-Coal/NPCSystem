@@ -43,10 +43,39 @@ relevance_weights:
 # Settings.RAG_TOP_K / Settings.CROSS_ENCODER_ENABLED by build_default_profile, which
 # is what keeps a no-profile turn byte-identical to a pre-profile one.
 #
-# Each arm below varies exactly ONE knob against that default (rag_top_k,
-# graph_rag_top_k and events_limit count as one knob — they are 'how much is
-# retrieved'). A two-knob arm produces a delta nobody can attribute, which is the
-# defect DEC-194 fixed when it split RAG_TOP_K's three call sites apart.
+# Each arm below varies exactly ONE knob against that default. A two-knob arm produces
+# a delta nobody can attribute, which is the defect DEC-194 fixed when it split
+# RAG_TOP_K's three call sites apart.
+#
+# ONE ARM, ONE TIER (P9). `rag_top_k` and `graph_rag_top_k` count as one knob — same
+# quantity, two call sites, GRAPH_RAG_ENABLED picks which fires. `events_limit` does
+# NOT join them: it bounds get_events_for_npc, which fills tier-A `event:` items, while
+# the top-ks bound the vector search that fills tiers B and C. Grouping all three was
+# defensible only while every one of them was inert; P8 made tier B carry 2-3 items per
+# NPC (DEC-212), so that grouping now hides which tier carried an effect. Pinned by
+# test_no_declared_arm_varies_both_a_tier_a_and_a_tier_b_knob.
+#
+# WHAT IS INERT IN THIS BLOCK TODAY — read before designing an arm:
+#
+#   * `graph_rag_top_k` is INERT. Settings.GRAPH_RAG_ENABLED defaults False
+#     (config.py:240), so context_builder._fetch_rag_results takes the
+#     embedding_index.search branch and graph_rag_retrieve — the only reader of this
+#     field — is never called. It moves with `rag_top_k` so that turning GraphRAG on
+#     does not silently un-widen an arm; it contributes nothing on its own.
+#
+#   * `weight_profile` is INERT (ISSUE-203). detect_dialogue_profile returns
+#     "rpg_dialogue_social" or "rpg_dialogue_quest", neither declared in any YAML, so
+#     dialogue ranking weights resolve from the hardcoded Python dict
+#     DEFAULT_WEIGHT_PROFILES. An arm varying this field varies NOTHING until those two
+#     names are declared under a `weight_profiles:` block. Do not declare a weight arm
+#     before then — it would record a variant it did not run, which is what DEC-194's
+#     strict resolution exists to prevent.
+#
+#   * `rag_top_k` moves TIER B AND TIER C TOGETHER. _build_tier_b_c_items splits the
+#     result list at `max(1, len // 2)` (context_builder.py:502) — first half tier B,
+#     second half tier C. One mechanism, one knob, two tiers. A tier-C delta from this
+#     arm is therefore NOT an independent effect and must not be reported as one
+#     (DEC-209, "Recorded, not decided"; confirmed measured in DEC-212 as 2/3 and 2/2).
 #
 # The arms are deliberately DRASTIC. Measured resolution on the current batteries is a
 # >=6.4pp drop on guard (n=78) before the regression gate fires, with refusal_judge at
@@ -71,14 +100,40 @@ retrieval_profiles:
     slot_cap_overrides:
       "rag:": 600
 
-  # Triple every top-k. Worth running against no_rag because PROMPT_TOKEN_BUDGET
-  # derives to its 512 clamp floor (RET-P0.3, DEC-175): more retrieved items may
-  # simply be trimmed before reaching the model, and the context receipt (DEC-195)
-  # now makes that visible per turn rather than leaving it inferred.
+  # TIER B/C ARM. Triple the vector-search top-k and leave event fetching alone.
+  # At rag_top_k=15 the len//2 split gives tier B 7 items and tier C 8, against the
+  # default's 2 and 3 (DEC-212). Worth running against no_rag: it answers 'does MORE
+  # retrieval help', where no_rag answers 'does ANY retrieval help'.
+  #
+  # `events_limit` is pinned AT the default 5 on purpose. It was 15 until P9; moving it
+  # made this a two-tier arm. See the ONE ARM, ONE TIER note above.
   wide_rag:
     weight_profile: null
     rag_top_k: 15
     graph_rag_top_k: 15
+    events_limit: 5
+    cross_encoder_enabled: false
+    skip_rag: false
+    # P8 §8.5: every declared arm carries the same `rag:` cap as the default, so the
+    # arm differs from default in exactly ONE field. Vary the cap only in an arm whose
+    # declared knob IS the cap.
+    slot_cap_overrides:
+      "rag:": 600
+
+  # TIER A ARM — the half P9 split out of wide_rag. Triple the event row limit and
+  # leave the vector search at the default, so a delta here is attributable to tier-A
+  # `event:` items and to nothing else.
+  #
+  # Note this arm may show NO effect for a structural reason rather than a null one:
+  # get_events_for_npc returns what the NPC actually KNOWS_ABOUT, and most eval-world
+  # NPCs know fewer than 5 events (7 of 22 know zero — DEC-209). Raising the limit from
+  # 5 to 15 cannot add a row that does not exist. The arm probe's item_keys diff is
+  # what distinguishes 'no effect' from 'no exposure'; read it before reading any
+  # judge verdict on this arm.
+  wide_events:
+    weight_profile: null
+    rag_top_k: 5
+    graph_rag_top_k: 5
     events_limit: 15
     cross_encoder_enabled: false
     skip_rag: false

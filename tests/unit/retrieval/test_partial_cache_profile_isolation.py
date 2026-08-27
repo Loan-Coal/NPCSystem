@@ -9,7 +9,7 @@ timestamp collide, and the second one is served the first one's event list.
 
 That is not a hypothetical. The cache is a process-wide singleton shared by the HTTP and
 WebSocket paths, and `paired_arms` interleaves the arms within a single run --
-rep -> case -> profile -- so the default arm's 5 events are served to the wide_rag arm that
+rep -> case -> profile -- so the default arm's 5 events are served to the wide_events arm that
 asked for 15, and the run records a profile it did not actually retrieve under.
 
 **The ordering is the point.** With an empty vector store a contaminated cache has no
@@ -44,22 +44,27 @@ _DEFAULT_EVENTS_LIMIT = 5
 """What `build_default_profile` derives for the default arm."""
 
 _WIDE_EVENTS_LIMIT = 15
-"""What the shipped `wide_rag` arm asks for."""
+"""What the shipped `wide_events` arm asks for.
+
+This WAS `wide_events` until P9 split the arm in two: `events_limit` feeds tier A and the
+top-ks feed tiers B and C, so one arm may not move both. The cache-isolation defect this
+module pins is unchanged — `events_limit` is still the profile field read inside the value
+the profile cache stores, and `wide_events` is now the arm that varies it."""
 
 
 def _settings() -> Settings:
     return Settings(NEO4J_PASSWORD="not_the_default_pw", RAG_TOP_K=5)
 
 
-def _config_with_wide_rag() -> LLMConfig:
-    """The shipped `wide_rag` arm, declared against the harness config.
+def _config_with_wide_events() -> LLMConfig:
+    """The shipped `wide_events` arm, declared against the harness config.
 
     Its `events_limit` is the field that makes this a cache-isolation problem rather than a
     style question: it is read inside the value the profile cache stores.
     """
     base = _llm_config()
     return LLMConfig(**{**base.model_dump(), "retrieval_profiles": {
-        "wide_rag": RetrievalProfile(
+        "wide_events": RetrievalProfile(
             weight_profile=None, rag_top_k=15, graph_rag_top_k=15,
             events_limit=_WIDE_EVENTS_LIMIT, cross_encoder_enabled=False, skip_rag=False,
         ),
@@ -86,7 +91,7 @@ async def _build(
     return await build_serialized_context(
         session=None,  # type: ignore[arg-type]
         settings=_settings(),
-        llm_config=_config_with_wide_rag(),
+        llm_config=_config_with_wide_events(),
         embedding_index=FakeEmbeddingIndex(rows=[]),
         npc_id="npc_1",
         player_message="hello",
@@ -120,7 +125,7 @@ def test_two_profiles_do_not_share_a_profile_cache_key() -> None:
         npc_id="npc_1", npc_last_graph_updated_at="t0", profile_name="default"
     )
     wide = cache.build_profile_key(
-        npc_id="npc_1", npc_last_graph_updated_at="t0", profile_name="wide_rag"
+        npc_id="npc_1", npc_last_graph_updated_at="t0", profile_name="wide_events"
     )
     assert default != wide
 
@@ -129,10 +134,10 @@ def test_the_same_profile_twice_produces_the_same_key() -> None:
     """The guard against 'fixing' this by making the cache never hit."""
     cache = PartialDialogueContextCache(ttl_seconds=300)
     first = cache.build_profile_key(
-        npc_id="npc_1", npc_last_graph_updated_at="t0", profile_name="wide_rag"
+        npc_id="npc_1", npc_last_graph_updated_at="t0", profile_name="wide_events"
     )
     second = cache.build_profile_key(
-        npc_id="npc_1", npc_last_graph_updated_at="t0", profile_name="wide_rag"
+        npc_id="npc_1", npc_last_graph_updated_at="t0", profile_name="wide_events"
     )
     assert first == second
 
@@ -145,7 +150,7 @@ def test_the_beliefs_goals_key_deliberately_ignores_the_profile() -> None:
     """
     cache = PartialDialogueContextCache(ttl_seconds=300)
     key = cache.build_beliefs_goals_key(npc_id="npc_1", npc_last_graph_updated_at="t0")
-    assert "wide_rag" not in key and "default" not in key
+    assert "wide_events" not in key and "default" not in key
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +159,7 @@ def test_the_beliefs_goals_key_deliberately_ignores_the_profile() -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_wide_rag_turn_does_not_serve_the_default_arms_event_list(monkeypatch) -> None:
+async def test_a_wide_events_turn_does_not_serve_the_default_arms_event_list(monkeypatch) -> None:
     """RED before the fix: the second build never reaches the reader at all.
 
     Two builds, one shared cache, two different arms. The reader must be asked TWICE, with
@@ -164,7 +169,7 @@ async def test_a_wide_rag_turn_does_not_serve_the_default_arms_event_list(monkey
     seen: list[int] = []
 
     await _build(monkeypatch, cache, seen, retrieval_profile=None)
-    await _build(monkeypatch, cache, seen, retrieval_profile="wide_rag")
+    await _build(monkeypatch, cache, seen, retrieval_profile="wide_events")
 
     assert seen == [_DEFAULT_EVENTS_LIMIT, _WIDE_EVENTS_LIMIT], (
         f"expected the reader to be asked for {_DEFAULT_EVENTS_LIMIT} then "
@@ -182,8 +187,8 @@ async def test_the_same_profile_twice_still_hits_the_cache(monkeypatch) -> None:
     cache = PartialDialogueContextCache(ttl_seconds=300)
     seen: list[int] = []
 
-    await _build(monkeypatch, cache, seen, retrieval_profile="wide_rag")
-    await _build(monkeypatch, cache, seen, retrieval_profile="wide_rag")
+    await _build(monkeypatch, cache, seen, retrieval_profile="wide_events")
+    await _build(monkeypatch, cache, seen, retrieval_profile="wide_events")
 
     assert seen == [_WIDE_EVENTS_LIMIT], (
         f"the second identical turn should have been a cache hit; reader saw {seen}"
