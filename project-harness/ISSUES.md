@@ -1670,3 +1670,106 @@ builds it, or expose the handler's builder so both call sites share one construc
 a parity test asserting the probe and a dialogue turn produce the same tier-0 item COUNT
 for one fixture NPC. Verify by re-running the back-to-back comparison above: tier0 must
 read 3/93 on both sides.
+
+## ISSUE-224: `session_turn` on the retrieval probe rejects every value it is given
+**Found:** 2026-08-27, during P10 while measuring the assembled-context ceiling (DEC-215)
+**Severity:** P2 (annoying — a declared parameter of a measuring instrument is unusable,
+and its absence silently understates every ceiling the instrument reports)
+**Where:** `src/npc_engine/api/routes/admin/debug_retrieval.py:105`, the
+`session_turn: _SessionTurns | None = None` parameter (`_SessionTurns` is
+`Annotated[list[str], Query(...)]`, declared at :74)
+**Description:** P9 added `session_turn` to `GET /v1/admin/debug/retrieval` so the probe
+could assemble context the way a real dialogue turn does. It accepts nothing. Any value,
+at any repetition count, is rejected:
+
+    GET /v1/admin/debug/retrieval?npc_id=mira_innkeeper&query=what+news
+        &player_id=player_demo&session_turn=hello1
+    -> 422 {"field":"query.session_turn","reason":"Input should be a valid list"}
+
+Reproduced at 1, 2 and 5 repetitions; only the zero-repetition case (parameter omitted
+entirely) succeeds. The `| None = None` union around an `Annotated[list[str], Query(...)]`
+is what defeats FastAPI's repeated-query-parameter parsing.
+
+**Two consequences, and the second is the one that matters.**
+  * DEC-213 records "Parity with a dialogue turn is verified EXACT on tierA/tierB/tierC".
+    That parity was necessarily verified at ZERO session turns, because no other value is
+    reachable. It is a true statement about a narrower claim than it reads as.
+  * Session turns are tier-A items charged against the same prompt budget. Every ceiling
+    figure in DEC-215 therefore EXCLUDES session history and understates a real client
+    turn by however much a session costs. DEC-215 works around this by sizing the window
+    to hold the measured ceiling PLUS the full 1200-token `session_turns_budget_tokens`
+    allowance, which is a design bound rather than a measurement — see ISSUE-225 for why
+    even that bound is not enforced.
+**Why deferred:** it is an API-signature fix in `src/`, and P10's remaining work is a
+window trim whose gates would all have to re-run after it. The window chosen is large
+enough that the missing measurement cannot change the decision: at budget 5158 the
+measured ceiling of 1151 plus the entire session allowance is still under half the budget.
+**To fix:** drop the `| None` and give the parameter a list default —
+`session_turn: _SessionTurns = Query(default=[])` — or take the turns in a POST body.
+Add a route test asserting a two-repetition request returns 200 AND that the receipt's
+tier-A spend GROWS relative to the same request with none, so a parameter that parses but
+is ignored still fails. Then re-measure the ceiling table in DEC-215 with a full session
+and confirm the chosen window still holds it.
+
+## ISSUE-225: `session_turns_budget_tokens` is enforced only by a function nothing calls
+**Found:** 2026-08-27, during P10 while bounding the session contribution to the ceiling
+**Severity:** P2 (annoying — an unbounded quantity inside a bounded budget; no data is
+corrupted, but the cap that is supposed to stop it is decorative)
+**Where:** `src/npc_engine/retrieval/context/context_budget_enforcer.py:87` (the check),
+inside `enforce_context_budget`, which has no production callers
+**Description:** `llm_config.yaml` declares `session_turns_budget_tokens: 1200` and
+`enforce_context_budget` raises `ContextBudgetError` when the tier-A items keyed
+`session` exceed it. Nothing in production calls `enforce_context_budget`. The live path
+is `fill_to_budget_with_report`, reached from `context_builder.py:575`, and it performs no
+session check at all — it validates tier 0 (`_validated_tier0_tokens`) and nothing else.
+
+Verified repo-wide: every reference to `enforce_context_budget` outside its own module is
+either the `retrieval/context/__init__.py` re-export or a test
+(`test_context_budget_enforcer_v14.py`, `test_context_pinned_pool.py`). `src/`, `evals/`,
+`demo_game/` and `e2e/` contain no call.
+
+So session history is unbounded within tier A on the path that actually runs. With
+`DIALOGUE_SESSION_TURNS=10` and `MAX_PLAYER_MESSAGE_CHARS=1000`, ten turns of
+player message plus a 512-token reply is on the order of 7,600 tokens — well above the
+1,200 the config claims and above the whole assembled-context ceiling.
+
+It has not bitten because the eval harness never sends a `session_id`
+(`evals/generation_collection.py` omits it), so every measured turn in P8, P9, DEC-214 and
+DEC-215 has zero session history. A game client does send one.
+
+**Why deferred:** the fix is a behaviour change inside the budget enforcer, and D2's "no
+allocator rewrite" plus P10's own "gates re-run after any src/ change" make it the wrong
+thing to land inside a phase that is gating a regeneration. It is also not what P10 is
+for.
+**To fix:** decide whether `enforce_context_budget` is dead code to delete or a check to
+move. If the latter, lift the session sub-budget check into
+`fill_to_budget_with_report` alongside `_validated_tier0_tokens` — but note it currently
+RAISES, and `fill_to_budget` is documented as never failing a turn for budget reasons, so
+the session excess probably wants to be TRIMMED (oldest turn first) rather than raised on.
+Add a test that a session over the sub-budget is bounded on the live path, and a test that
+fails if `enforce_context_budget` regains zero callers while still being exported.
+
+## ISSUE-226: nothing identifies which build the running container came from
+**Found:** 2026-08-27, during P10 precondition verification (DEC-215 gate 2)
+**Severity:** P3 (nice-to-fix — the gate is satisfiable another way, but not the way it is
+written)
+**Where:** `GET /health`, which returns `{"status":"ok","version":"dev"}`
+**Description:** P10's precondition table states gate 2 as "running image == built image,
+checked by `/health` vs `git rev-parse --short HEAD`". `/health` reports the literal string
+`"dev"` and carries no commit, build time or image digest, so that comparison cannot be
+made. Nothing else exposes build identity either: `GET /v1/admin/system/metrics` returns
+counters only.
+
+The gate was satisfied in P10 the only way available — by rebuilding immediately before
+measuring (`docker compose up -d --build app`, container recreated, exit 0) and recording
+that. That is evidence of provenance by construction rather than by verification, and it
+cannot detect the specific failure the gate exists to catch: an operator who forgets the
+rebuild and measures a stale image. This project's notes call that "the classic false
+negative on this project", and there is currently no way to check for it.
+**Why deferred:** it is a src/ change to the health route inside a phase whose gates
+re-run on any src/ change, and P10 had a sound alternative (rebuild-then-measure in the
+same sequence, recorded).
+**To fix:** bake the commit sha into the image at build time (a `GIT_SHA` build arg into
+an env var) and return it from `/health` alongside `version`. Then gate 2 becomes a real
+comparison. Add a test that `/health` reports something other than a hardcoded literal
+when the env var is set.
