@@ -160,6 +160,23 @@ async def rag_scope_ids(session: Any, npc_id: str) -> set[str]:
     return await get_rag_scope_ids_for_npc(session, npc_id=npc_id)
 
 
+def declared_retrieval_profiles() -> dict[str, Any]:
+    """Return every A/B arm declared in the SHIPPED llm_config.yaml, by name.
+
+    Resolves the path through `Settings.LLM_CONFIG_PATH` — the same value
+    `api.dependencies_infra` passes — so the harness cannot enumerate a different set of
+    arms than the engine would resolve.
+
+    Returns:
+        Mapping of arm name to RetrievalProfile. 'default' is NOT included: it is
+        resolved from Settings by build_default_profile and is never declared.
+    """
+    from npc_engine.config import get_settings
+    from npc_engine.schema.llm_schema_loader import load_llm_config
+
+    return load_llm_config(config_path=get_settings().LLM_CONFIG_PATH).retrieval_profiles
+
+
 def resolve_retrieval_profile(name: str) -> Any:
     """Resolve a named A/B arm to the RetrievalProfile the engine would apply.
 
@@ -177,7 +194,6 @@ def resolve_retrieval_profile(name: str) -> Any:
         RetrievalProfileNotFoundError: When name is neither 'default' nor declared.
     """
     from npc_engine.config import get_settings
-    from npc_engine.schema.llm_schema_loader import load_llm_config
     from npc_engine.schema.retrieval_profile_models import (
         build_default_profile,
         resolve_retrieval_profile as _resolve,
@@ -186,7 +202,7 @@ def resolve_retrieval_profile(name: str) -> Any:
     settings = get_settings()
     return _resolve(
         name,
-        profiles=load_llm_config().retrieval_profiles,
+        profiles=declared_retrieval_profiles(),
         fallback=build_default_profile(
             rag_top_k=settings.RAG_TOP_K,
             cross_encoder_enabled=settings.CROSS_ENCODER_ENABLED,

@@ -18,7 +18,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         type-ratchet type-ratchet-update type-evals type-evals-update check-harness \
         test-cov-evals \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
         seed-tavern-world seed-village-world package eval-dashboard
@@ -279,6 +279,22 @@ eval-retrieval:
 		python -m evals retrieval \
 		$(if $(GEN_ID),--gen-dir /work/evals/generations/$(GEN_ID),) \
 		$(if $(RETRIEVAL_PROFILE),--retrieval-profile $(RETRIEVAL_PROFILE),)
+
+# eval-arm-probe: the P9 gate. Four ordered gates over 2 cases x N arms at k=1 — config,
+# corpus, cache isolation, effect — diffing each arm's item_keys and tier_spend through
+# GET /v1/admin/debug/retrieval, printing the corpus fingerprint and the per-arm-pairing
+# MDE, and exiting non-zero if any arm is indistinguishable from default.
+#
+# It is the thing standing between an operator and a ten-hour null result: it costs
+# seconds and it can say the paired generation is pointless while cancelling is still
+# free. Run it AFTER `make eval-world-reset`, and before any P10 generation.
+#
+# Runs on the HOST, not in the app container: gates 1 and 3 are pytest modules that need
+# the test tree, and the engine is reached over the published port. No LLM is called —
+# the debug route assembles context and returns the receipt without generating.
+# Usage: make eval-arm-probe [ARGS="--gate 4"]
+eval-arm-probe:
+	API_KEY_SECRET="$(API_KEY)" $(PYTHON) -m evals.arm_probe $(ARGS)
 
 # eval-generate: two-phase pipeline — generation pass (writes to evals/generations/<gen-id>/ or legacy transcript)
 # Pass ARGS="--k 2 --gen-id smoke" to enable k-repeat output.
