@@ -6634,7 +6634,7 @@ P10". This is that re-decision, and it moves the number that matters.
 - **Not 8192**: budget 1062 < ceiling 1151. It is the defect described above.
 - **Not 10240**: budget 3110 clears the ceiling but leaves only 759 tokens over the
   ceiling-plus-session figure. Session history is **unbounded on the live path**
-  (ISSUE-224, found this session), so a 32% margin against an unbounded quantity is not
+  (ISSUE-225, found this session), so a 32% margin against an unbounded quantity is not
   a margin.
 - **12288**: budget 5158 is **4.5x the measured roster ceiling**, and still 2.2x after
   adding the full 1200-token session allowance `llm_config.yaml` declares. Nothing is
@@ -6752,3 +6752,140 @@ still available to a later phase. `Settings.RAG_TOP_K` unchanged at 5, so DEC-19
 byte-identity holds. ISSUE-219, ISSUE-220, ISSUE-203, ISSUE-201 untouched. No arm added
 or removed. No `src/` ENGINE behaviour changed — the only `src/` edits are two
 configuration values and the comments around them.
+
+### VERIFICATION — appended after the change landed, measured not asserted
+
+Sequence: `docker compose up -d --build app` (exit 0, container recreated) ->
+`make eval-world-reset` (exit 0, 250 nodes / 236 relationships) -> rehydrate -> probes.
+Every figure below was produced this session against that image.
+
+**The trim is live on both paths.** The debug route and a real dialogue turn both report
+`prompt_token_budget: 5158`. `ollama ps`: **100% GPU, CONTEXT 12288, 5.4 GB resident** —
+down from the 6.6 GB DEC-204 recorded at 32768, so the trim returns 1.2 GB of VRAM.
+
+**The post-trim ceiling table is BYTE-IDENTICAL to the pre-trim one on all eight NPCs.**
+Same items, same tokens, same zero drops, at a budget of 5158 instead of 25638:
+
+    npc                tier0      tierA      tierB      tierC   summed   serial  CEILING  drops
+    captain_sorn        2/75      8/687       2/93      3/140      995      978      995      0
+    mira_innkeeper      2/75      8/857       2/85      3/134     1151     1130     1151      0
+    old_henryk          2/75      8/708       2/89       2/90      962      951      962      0
+    aldric_merchant     2/75      7/726       2/85      3/145     1031     1015     1031      0
+    lira_fence          2/75      8/731       2/90      3/131     1027     1011     1027      0
+    bren_smith          2/75      7/624       1/45       2/88      832      826      832      0
+    vex_spymaster       2/75      7/710       1/45       2/92      922      910      922      0
+    harwick_guard       2/75      7/644       2/96       2/95      910      896      910      0
+
+That identity is the whole argument for the trim being safe: a 5x smaller budget changed
+nothing, because the budget was never the binding constraint at either size.
+
+### GATE 11 — ISSUE-209 at the CHOSEN window, per NPC, as required
+
+**NOT re-opened on any of the eight.** Measured at the post-trim window, not at 32768
+where the answer would be vacuous — which is what ISSUE-209's own update demands.
+
+    captain_sorn NOT re-opened · mira_innkeeper NOT re-opened · old_henryk NOT re-opened
+    aldric_merchant NOT re-opened · lira_fence NOT re-opened · bren_smith NOT re-opened
+    vex_spymaster NOT re-opened · harwick_guard NOT re-opened
+    other drops (final_trim / tier B): none
+
+The measurement is the receipt's attributed drops, not an argument from cap sizes.
+ISSUE-209 fires only when tier A SKIPS an item — a `tier_soft_cap` or `prompt_budget`
+drop on a tierA key. There are zero drops of any kind on any NPC, so the greedy pool
+never skipped and selection is trivially monotone at this window. **ISSUE-214 is
+likewise still masked**: tier B and C spend is unchanged, so compression never fired and
+the byte-truncation path was never entered. Both remain OPEN and both remain dormant, by
+design — D2 forbids the allocator rewrite and this window was chosen to keep them
+dormant rather than to expose them.
+
+### The twelve preconditions, each with its evidence
+
+| # | Gate | Result | Evidence |
+|---|------|--------|----------|
+| 1 | `make check` green | **PASS, with a caveat that is not mine** | src 87.86%, 3964 passed / 36 skipped; evals 79.21%, 923 passed / 1 skipped. See the note below. |
+| 2 | running image == built image | **NOT VERIFIABLE AS WRITTEN** | `/health` returns `{"status":"ok","version":"dev"}` — no sha. Satisfied instead by rebuilding immediately before measuring. Filed as ISSUE-226. |
+| 3 | no clamp | **PASS** | `prompt_eval_count` takes 5 distinct values **6656, 6729, 6741, 6758, 6902** across 5 dialogue turns, rising monotonically with `prompt_chars` 4965 -> 5784. `num_ctx: 12288` on every line. **Zero truncation lines.** Max 6902 sits well inside 12288. |
+| 4 | latency acceptable | **MEASURED, and worse than DEC-204's** | 5 turns: 20.5 / 13.1 / 35.6 / 16.4 / 25.3 s, mean **22.2 s**. DEC-204 measured 5.3-6.5 s means at both 8192 and 32768. These turns immediately follow a context-size change, which DEC-204 records as costing a ~30 s model reload, and they include two deliberately long prompts. Projected over 975 rows: **~6.0 h per pass at this rate**, ~1.4-2.3 h at DEC-204's. A 3-arm paired run is the ~10 h figure either way. |
+| 5 | corpus live **and frozen** | **PASS** | `corpus_sha 2b19e47a1755354e...`, `item_count 51`, IDENTICAL at run start and at run end. Seventh independent reproduction. |
+| 6 | incremental upsert off | **FAIL** | **58 `vector_store.incremental_upsert` events**, and they are not from dialogue — the logger is `engines.gossip.gossip_handler`, so the TICK SCHEDULER emits them on an idle engine. `VECTOR_STORE_INCREMENTAL_UPSERT` defaults **True** in config.py:149 and is absent from `.env`. Detected exactly the way DEC-210 D3 requires — by the log line, not by reading `.env`. Not blocking, because no generation ran; **it WOULD have blocked one.** |
+| 7 | tier B reaches the model | **PASS** | `tierB items=2` on default receipts for every NPC; 1 for the two thinnest. Non-zero on 8/8. |
+| 8 | no regression (D8) | **PASS** | beliefs 8/8 · goals 8/8 · memories 8/8 · current_location 8/8 · retrieved_context 8/8 · nearby_npcs 7/8 · the three reputation slots 0/8. Identical to DEC-213's clean-baseline row on every field, before and after the trim. |
+| 9 | arms differ | **PASS** | `make eval-arm-probe` **exit 0**, all four gates, runtime 8.7 s, re-run after `eval-world-reset` on the rebuilt image. All three arms differ from default on 2/2 probe cases. |
+| 10 | baseline world | **PASS** | `make eval-world-reset` exit 0 immediately before both the pre-trim and post-trim measurement blocks. |
+| 11 | ISSUE-209 at the chosen window | **PASS — not re-opened, 8/8** | Section above. |
+| 12 | ledgers current | **PASS** | This entry; ISSUE-224/225/226 filed; `SYSTEM_PROMPT_TOKEN_RESERVE` re-measurement is P8/DEC-212's 5850, which is what makes the overhead 7130 and is the correction this entry carries. |
+
+**Ten of twelve pass. Gate 2 is unverifiable as written and was satisfied another way.
+Gate 6 FAILS.** Gate 6 is the one that would have stopped a generation, and it is worth
+being precise about why it does not stop P10: there is no generation. Before any future
+paired run, `VECTOR_STORE_INCREMENTAL_UPSERT=false` must be set in `.env` and the absence
+of the log line re-verified — and note that the emitter is the gossip tick, so quiescing
+the scheduler may be required as well. This is the DEC-206 precedent repeating exactly:
+a flag believed off, producing writes anyway.
+
+### The per-arm context delta — the descriptive result, obtained without the run
+
+All three arms, all eight NPCs, clean baseline, no LLM call. Deltas are `summed` tokens
+against default. Every arm is exposed on 8/8 with zero drops, which independently
+reproduces DEC-214's exposure claims over the full roster.
+
+    npc               default   no_rag         narrow_rag      no_memories
+    captain_sorn          995   762  (-233)    855  (-140)     782  (-213)
+    mira_innkeeper       1151   932  (-219)   1017  (-134)     824  (-327)
+    old_henryk            962   783  (-179)    872   (-90)     744  (-218)
+    aldric_merchant      1031   801  (-230)    886  (-145)     815  (-216)
+    lira_fence           1027   806  (-221)    896  (-131)     811  (-216)
+    bren_smith            832   699  (-133)    789   (-43)     619  (-213)
+    vex_spymaster         922   785  (-137)    875   (-47)     690  (-232)
+    harwick_guard         910   719  (-191)    815   (-95)     696  (-214)
+    ---------------------------------------------------------------------
+    range                       -133..-233     -43..-145       -213..-327
+
+`no_rag` -133..-233 and `no_memories` -213..-327 reproduce DEC-214's recorded ranges
+exactly. `narrow_rag` -43..-145 is measured over the whole roster here for the first time.
+**This table is the observation the ten-hour run was to provide, and it cost thirty
+seconds.**
+
+### Things that contradicted the plan or an earlier decision, stated plainly
+
+1. **DEC-204's 6,880 / 25,888 is stale in four places, not the three the plan named.**
+   The fourth is `config.py`'s `_derive_prompt_token_budget` docstring, still describing
+   the retired 5200 literal as the live breakdown. All four corrected.
+2. **`.env` is untracked**, so DEC-204's "the code default stays 8192, the 32768 is a
+   local instrument" left the SHIPPED configuration as the broken one. The trim had to
+   move the code default to mean anything.
+3. **P5's "Sum <= budget on purpose" is dropped**, with the reasoning above. A retained
+   invariant that forces tier_a's ceiling onto its own fraction floor would kill DEC-203's
+   reclaim.
+4. **DEC-213's tier-A/B/C parity claim is narrower than it reads.** It was necessarily
+   verified at zero session turns, because `session_turn` accepts no value at all
+   (ISSUE-224). The claim is true; its scope is not what a reader would assume.
+5. **`session_turns_budget_tokens` is enforced by a function with no callers**
+   (ISSUE-225), so the 1200 used in this entry's arithmetic is design intent, not a bound.
+6. **ISSUE-220 reproduced exactly**: the probe assembles tier0 2/75, a dialogue turn
+   3/93 — the 18-token gap, unchanged and untouched.
+7. **Latency is 3-4x DEC-204's measurement** (22.2 s mean vs 5.3-6.5 s). Not investigated;
+   it does not change any decision here, and the model-reload penalty DEC-204 itself
+   records is a sufficient candidate explanation. Recorded so it is not read as agreeing.
+
+### A note on `make check`, and on what else was in the working tree
+
+`make check` as a single invocation **exits 2** at `check-human-gates`, and the cause is
+NOT this phase: a concurrently-running session added ~169 uncommitted lines to
+`project-harness/ROADMAP.md` (a "Program 4 / EVAL-P25..P28" block) whose HUMAN GATE H13
+and H14 blocks are missing every required field. Verified by running the gate against the
+COMMITTED roadmap via the script's own `ROADMAP_FILE` override: **HUMAN GATES OK
+(12 gates)**, exit 0. Every target downstream of the aborted one was then run explicitly
+and all passed. The same session also added its own `ISSUE-223` to the working tree, which
+is why this phase's issues start at **224** — ids are never reused. None of that work was
+staged into any P10 commit (ISSUE-139); the ISSUES.md commit was made by filtering the
+diff to this phase's hunk alone.
+
+### Pre-merge checklist
+
+All new tests pass; all existing tests still pass (`make check` modulo the foreign
+roadmap block above). No file over 300 lines of non-test code
+(`scripts/probe_context_ceiling.py` is 263). Module and public docstrings present
+(`make check-docstrings` clean). No prompt strings outside `prompts/`. No layer rule
+violations (`make check-layers` clean). Deferred work is in ISSUE-224/225/226. Non-obvious
+choices are here. No temporary files created. No fixture regenerated.
