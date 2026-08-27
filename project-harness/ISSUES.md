@@ -1525,3 +1525,29 @@ JSON string, so the output is always parseable; keep the `...[compressed]#<sha>`
 inside the truncated value. Add a property test over `_ESSENTIAL_FIELDS` asserting
 `json.loads` succeeds for every node type at every target size. Do it with P10's trim,
 where compression actually fires, not before.
+
+## ISSUE-215: nothing stops a tool from rewriting line endings across the repo
+**Found:** 2026-08-27, during P8 close-out (self-inflicted, repaired in c69465e)
+**Severity:** P3 (nice-to-fix - no behaviour changes; it destroys diff reviewability)
+**Where:** repo root - no `.gitattributes`; `git config core.autocrlf` is `false`
+**Description:** the working tree is a MIX of line-ending styles, and two files are mixed
+internally (`DECISIONS.md` 5,029 CRLF / 588 LF; `ISSUES.md` 1,439 / 39). With no
+`.gitattributes` and `core.autocrlf=false`, git stores whatever bytes a tool writes. Any
+edit made with Python's default text mode on Windows silently converts a whole file to
+CRLF, and the commit then shows every line as changed.
+
+Happened for real in P8: `git diff a2b71f5..HEAD` reported 5,792 insertions / 2,709
+deletions across 59 files, in which system_v1.yaml's 13 genuinely-changed lines were
+unfindable. Repaired in c69465e (per-line for the two internally-mixed files), but only
+after the fact - and a reviewer who had read the intermediate commits would have been
+reading noise. This is ISSUE-139's failure mode in a different costume: the commit does
+not say what changed.
+**Why deferred:** the fix is a repo-wide `.gitattributes` with `* text=auto` plus a
+one-off `git add --renormalize .`, which rewrites the stored bytes of essentially every
+file in the repo. That is a large, history-noisy commit with checkout-time consequences,
+and it must not land inside a phase that is gating a regeneration - it would collide with
+exactly the diff-reviewability it is meant to protect.
+**To fix:** after P10's regeneration, add `.gitattributes` (`* text=auto`, plus `binary`
+for the fixtures), run `git add --renormalize .` as its own commit with no other content,
+and confirm `evals/fixtures/eval_world_baseline.json` is byte-stable across the
+renormalisation - a fixture whose bytes move invalidates comparability.
