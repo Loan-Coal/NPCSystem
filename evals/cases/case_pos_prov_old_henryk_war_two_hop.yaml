@@ -1,0 +1,45 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_prov_old_henryk_war_two_hop
+description: >
+  old_henryk's knowledge of northern_war_begins is two-hop and gossip-distorted, at
+  knowledge_state 'rumor'. Per docs/CASE_SET_POLICY.md hedging is a PASS for him, so the case
+  requires both the war facts he does hold and the borrowed-uncertainty framing.
+seed:
+  npc_id: old_henryk
+  player_id: player_eval
+  requires_world: demo
+relevant_node_ids:
+  - old_henryk
+  - northern_war_begins
+  - market_square
+input:
+  player_message: "What are travellers bringing in from outside the city?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "armies"
+      - "crossed"
+      - "border"
+      - "northern"
+  - kind: keyword_any
+    keywords:
+      - "i've heard"
+      - "i have heard"
+      - "they say"
+      - "word is"
+      - "apparently"
+      - "rumour"
+      - "rumor"
+      - "second-hand"
+      - "i'm told"
+      - "so i'm told"
+      - "supposedly"
+      - "i could not say"
+notes: >
+  Grounding: KNOWS_ABOUT(old_henryk, northern_war_begins), knowledge_state=rumor - verified
+  live. The distorted_summary's prefix varies between probes ('Long ago, ...', 'They say the
+  opposite happened: ...') while the core 'The northern armies have crossed the border' is
+  stable, so only the stable core supplies tokens. 'war' is excluded because the reference
+  always-hedge responder contains it. Gossip polarity; the direct polarity for this same event
+  is the existing case_pos_captain_sorn_war_knowledge.

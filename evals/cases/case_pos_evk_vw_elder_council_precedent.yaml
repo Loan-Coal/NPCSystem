@@ -1,0 +1,30 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_evk_vw_elder_council_precedent
+description: >
+  vw_elder remembers the raid of twenty years ago — the mill and three men lost. Asked whether
+  the village has faced anything like this before, that memory is the answer he holds and the
+  only place the scoring tokens exist.
+seed:
+  npc_id: vw_elder
+  player_id: player_eval
+  requires_world: village
+relevant_node_ids:
+  - vw_elder
+  - mem_vw_elder_0
+  - vw_village_square
+input:
+  player_message: "Has this village ever faced anything like its present troubles?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "mill"
+      - "twenty"
+      - "bandits"
+      - "three"
+      - "men"
+      - "lost"
+notes: >
+  Grounding: REMEMBERS(vw_elder, mem_vw_elder_0) — 'The last time bandits came, twenty years ago
+  - we lost the mill and three men before it was over.' Tokens are drawn from the memory text;
+  the prompt names no era, no casualty and no building.

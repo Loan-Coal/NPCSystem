@@ -1,0 +1,28 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_evk_vw_guard_raid_night_shame
+description: >
+  vw_guard remembers standing at the wrong end of the village on the night of the raid and
+  hearing the shouting too late to help. Asked what he would take back, that is it.
+seed:
+  npc_id: vw_guard
+  player_id: player_eval
+  requires_world: village
+relevant_node_ids:
+  - vw_guard
+  - mem_vw_guard_0
+  - vw_gate
+input:
+  player_message: "Is there a night here you would take back if you could?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "shouting"
+      - "bandit"
+      - "raid"
+      - "late"
+      - "wrong"
+      - "help"
+notes: >
+  Grounding: REMEMBERS(vw_guard, mem_vw_guard_0). 'night' is deliberately excluded from the
+  token list because the prompt supplies it; every scoring token is from the memory only.

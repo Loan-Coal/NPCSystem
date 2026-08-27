@@ -56,6 +56,38 @@ A `case_pos_*` case must satisfy all three of the following:
    hedge is deliberately stocked with the battery's own surface vocabulary — a bland
    "I could not say" scores 0.143 and would let the gate read green while proving nothing.
 
+## Before authoring: observability, then dimension
+
+Two documents gate a case before its YAML is written, and they are read in this order.
+
+1. **`docs/ENGINE_EVAL_COVERAGE.md`** (EVAL-P25.1) classifies every unit under
+   `src/npc_engine/engines/` as `dialogue_observable`, `state_observable` or
+   `not_observable`. **A case may only be grounded in a `dialogue_observable` engine.**
+   18 of 44 units qualify. A case authored against an engine whose output never reaches
+   the serialized dialogue context passes unconditionally, which pushes the battery's pass
+   base rate back toward 1.0 — and a base rate at the ceiling is what crushes kappa.
+   `make check-engine-coverage` fails when a unit exists with no classification row.
+
+2. **`docs/REASONING_DIMENSIONS.md`** (EVAL-P25.2) says what the case is allowed to claim
+   it measures. Each dimension carries its own assertion contract, on top of — never
+   instead of — the four requirements above:
+
+   | dimension | prefix | one-line contract |
+   |---|---|---|
+   | event knowledge | `case_pos_evk_*` | tokens from the one grounded node named in `relevant_node_ids` |
+   | causality | `case_pos_cause_*` | two nodes named; tokens from the **effect** node only, so recitation fails |
+   | rumour provenance | `case_pos_prov_*` | direct ⇒ facts **and** no hedging; gossip ⇒ facts **and** hedging |
+   | contextual variance | `case_pos_var_*` | a declared set sharing one `player_message`, disjoint token sets |
+   | multi-round coherence | `case_seq_*` | **declared only** — authored in EVAL-P27, no file exists |
+
+   The prefixes are compound (`case_pos_` + dimension) because every capability gate in
+   this repo keys off the literal string `case_pos_`. A bare `case_cause_*` file would be
+   a case that no gate checks. See DEC-220.
+
+**The base rate is the point.** A case every NPC passes is not a measurement: it inflates
+Pe and suppresses kappa. The battery's target pass band is 0.55–0.85 (EVAL-P25.3), and
+difficulty is therefore a product requirement, not a side effect.
+
 ## YAML contract
 
 Every `case_pos_*` file must include:
@@ -93,9 +125,17 @@ all 14 grounded demo NPCs have a case, so any NPC that loses one — or any newl
 NPC seeded without one — turns the module red.
 
 **Coverage is not capability.** The ratchet asks whether a case exists, never whether it
-passes. Nine of the sixteen cases currently FAIL against the live engine because the
+passes. Nine of the (then) sixteen cases FAIL against the live engine because the
 dialogue context arrives with no beliefs, goals or memories in it (ISSUE-145). That is the
 capability battery reporting a real defect, which is what it is for.
+
+**Count, as of EVAL-P26.2 (2026-08-27): 46 `case_pos_*` files** — 21 demo, 15 village, 10
+tavern; by dimension, 8 `evk`, 7 `cause`, 7 `prov`, 8 `var`, and 16 pre-dimension cases
+from EVAL-P20.2 and earlier. This closes ISSUE-147 (16 against a target of ~35) and gives
+the village and tavern worlds their first capability coverage. `make hedge-probe` over the
+whole set scores **6/46 = 0.130** against the 0.30 gate; all six are the EVAL-P20.2
+`GAMEABLE_BASELINE` cases, and none of the 30 authored here is beaten by the echo or by
+the canned hedge.
 
 ## Seeded NPCs with grounded knowledge
 
@@ -104,9 +144,9 @@ capability battery reporting a real defect, which is what it is for.
 | NPC ID | Grounding edges | Notes |
 |---|---|---|
 | `mira_innkeeper` | `KNOWS_ABOUT northern_war_begins` (gossip) | Epistemic hedging required |
-| `aldric_merchant` | `BELIEVES`, `HAS_GOAL`, `HAS_MEMORY` | Merchant/economic domain |
+| `aldric_merchant` | `BELIEVES`, `PURSUES`, `REMEMBERS` | Merchant/economic domain |
 | `captain_sorn` | `KNOWS_ABOUT northern_war_begins` (direct) | Confident, no hedging |
-| `lira_fence` | `KNOWS_ABOUT market_fire`, `HAS_GOAL`, `HAS_SECRET` | Criminal domain |
+| `lira_fence` | `KNOWS_ABOUT market_fire`, `PURSUES`, `KNOWS_SECRET` | Criminal domain |
 | `old_henryk` | `KNOWS_ABOUT northern_war_begins` (2-hop distorted) | Rambling, garbled OK |
 | `sera_barmaid` | `REMEMBERS mem_sera_barmaid_0` | EXP-223 · what she overheard, not her own secret |
 | `harwick_guard` | `BELIEVES bel_harwick_guard_71e419d6` | EXP-223 · the south gate unease |
@@ -130,11 +170,41 @@ instead.
 
 ### Village world (`requires_world: village`)
 
-Village NPCs with grounding are covered separately; see `seeds/worlds/seed_village_world.py`.
+Seeded by `make seed-village-world` (`seeds/worlds/seed_village_world.py`, `vw_` prefix).
+Every node id below was read back from the **live** graph on 2026-08-27 through
+`GET /v1/admin/{beliefs,goals,memories}/{npc_id}` and
+`GET /v1/admin/debug/retrieval`, not from the seed file.
+
+| NPC ID | Grounding used by a case | Provenance |
+|---|---|---|
+| `vw_elder` | `KNOWS_ABOUT vw_crop_blight`, `REMEMBERS mem_vw_elder_0`, `PURSUES goal_vw_elder_0` | blight is `knowledge_state: fact`, distortion 0 → **direct** |
+| `vw_guard` | `KNOWS_ABOUT vw_bandit_raid`, `REMEMBERS mem_vw_guard_0`, `BELIEVES bel_vw_guard_8621c1d5`, `PURSUES goal_vw_guard_0` | raid is `knowledge_state: rumor`, minimization/30 → **gossip** |
+| `vw_healer` | `KNOWS_ABOUT vw_missing_child`, `REMEMBERS mem_vw_healer_0`, `BELIEVES bel_vw_healer_11d0a838` | missing child is `knowledge_state: witnessed` → **direct** |
+| `vw_farmer` | `BELIEVES bel_vw_farmer_baaf2107`, `REMEMBERS mem_vw_farmer_1`, `PURSUES goal_vw_farmer_0` | inner life only |
+| `vw_fence` | `PURSUES goal_vw_fence_0` | holds **no** `KNOWS_ABOUT` edge — `npc_known_events` is empty for him, verified live |
 
 ### Tavern world (`requires_world: tavern`)
 
-Tavern NPCs with grounding are covered separately; see `seeds/worlds/seed_tavern_world.py`.
+Seeded by `make seed-tavern-world` (`seeds/worlds/seed_tavern_world.py`, `tw_` prefix).
+Same verification method and date.
+
+| NPC ID | Grounding used by a case | Provenance |
+|---|---|---|
+| `tw_innkeeper` | `KNOWS_ABOUT tw_theft_at_market`, `REMEMBERS mem_tw_innkeeper_0` | theft is `knowledge_state: witnessed` → **direct** |
+| `tw_merchant` | `KNOWS_ABOUT tw_market_fire`, `REMEMBERS mem_tw_merchant_0`, `BELIEVES bel_tw_merchant_49ec2506` | fire is `knowledge_state: rumor`, minimization/25 → **gossip** |
+| `tw_wanderer` | `KNOWS_ABOUT tw_travelling_performer`, `REMEMBERS mem_tw_wanderer_*`, `BELIEVES bel_tw_wanderer_a755159e`, `PURSUES goal_tw_wanderer_0` | performer is `knowledge_state: knows`, distortion 0 → **direct** |
+
+**Two live-vs-seed discrepancies, recorded because they change what is authorable.**
+
+- `tw_wanderer`'s performer edge is `knowledge_state: knows` carrying the plain event
+  summary. The seed file writes it as `"fact"` with a `"Mira Solen is here…"`
+  `distorted_summary`. The live text is what a case must be grounded in (ISSUE-234).
+- `tw_innkeeper`'s `KNOWS_ABOUT` edge does **not** retrieve on a general question:
+  `npc_known_events` came back empty for "What is the talk in here?" and for
+  "What has been happening in town lately?", and non-empty only once the message named
+  the market. `npc_known_events` is query-relevance filtered, so a capability case for
+  her must either name the topic or be grounded in inner life, which is always in
+  context (ISSUE-233).
 
 ## Authoring guidance
 

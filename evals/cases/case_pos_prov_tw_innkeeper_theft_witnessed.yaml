@@ -1,0 +1,45 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_prov_tw_innkeeper_theft_witnessed
+description: >
+  tw_innkeeper holds tw_theft_at_market at knowledge_state 'witnessed' — she saw the young man
+  in the grey cloak take the purse herself. Witnessed knowledge is direct, so she must name what
+  she saw and must not hedge.
+seed:
+  npc_id: tw_innkeeper
+  player_id: player_eval
+  requires_world: tavern
+relevant_node_ids:
+  - tw_innkeeper
+  - tw_theft_at_market
+  - tw_market
+input:
+  player_message: "Has there been any trouble at the market lately?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "cloak"
+      - "purse"
+      - "cloth"
+      - "bumped"
+      - "grey"
+      - "snatched"
+  - kind: keyword_none
+    keywords:
+      - "i've heard"
+      - "i have heard"
+      - "they say"
+      - "word is"
+      - "apparently"
+      - "rumour"
+      - "rumor"
+      - "second-hand"
+      - "i'm told"
+      - "so i'm told"
+      - "supposedly"
+      - "i could not say"
+notes: >
+  Grounding: KNOWS_ABOUT(tw_innkeeper, tw_theft_at_market), knowledge_state=witnessed - verified
+  live via GET /v1/admin/debug/retrieval. This exact player_message was used for that
+  verification because tw_innkeeper's event edge does not retrieve on a general question
+  (ISSUE-233); the market framing is what puts the event in her context at all.

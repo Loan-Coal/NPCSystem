@@ -1,0 +1,34 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_var_vw_healer_village_talk
+description: >
+  One member of the village variance set: asked the same question, vw_healer answers from the
+  missing child she witnessed and her belief about the forest.
+seed:
+  npc_id: vw_healer
+  player_id: player_eval
+  requires_world: village
+relevant_node_ids:
+  - vw_healer
+  - vw_missing_child
+  - bel_vw_healer_11d0a838
+input:
+  player_message: "What has this village been talking about lately?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "girl"
+      - "mother"
+      - "missing"
+      - "forest"
+      - "children"
+notes: >
+  Declared contextual-variance set (docs/REASONING_DIMENSIONS.md D4, cross-NPC register-contrast
+  category of docs/CASE_SET_POLICY.md). Members: case_pos_var_vw_elder_village_talk,
+  case_pos_var_vw_guard_village_talk, case_pos_var_vw_healer_village_talk. All three share this
+  player_message byte-for-byte on purpose. Each member scores only on tokens its own NPC's
+  grounded material supplies, and the three token sets are disjoint, so pasting one member's
+  correct response into another member's expectations fails. Grounding: KNOWS_ABOUT(vw_healer,
+  vw_missing_child) + BELIEVES(vw_healer, bel_vw_healer_11d0a838). 'mill' is excluded from this
+  member's tokens because vw_elder's own memory also names the mill, and a variance token must
+  be unique to its member.

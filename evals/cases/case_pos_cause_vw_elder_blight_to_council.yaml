@@ -1,0 +1,30 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_cause_vw_elder_blight_to_council
+description: >
+  The cause is the blight vw_elder holds directly; the effect is the goal it produced —
+  preventing panic from fracturing the council. The question asks for the consequence, and
+  reciting the blight alone does not answer it.
+seed:
+  npc_id: vw_elder
+  player_id: player_eval
+  requires_world: village
+relevant_node_ids:
+  - vw_elder
+  - vw_crop_blight
+  - goal_vw_elder_0
+input:
+  player_message: "If the worst of it becomes common knowledge, what do you expect happens here?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "panic"
+      - "council"
+      - "fracture"
+      - "fracturing"
+      - "prevent"
+notes: >
+  Grounding: cause = KNOWS_ABOUT(vw_elder, vw_crop_blight); effect = PURSUES(vw_elder,
+  goal_vw_elder_0). D2 contract: every scoring token comes from the EFFECT node only - 'blight',
+  'spreading', 'fields' and 'harvest' all appear in the cause text and are therefore ineligible,
+  so an NPC that recites the blight and stops fails.

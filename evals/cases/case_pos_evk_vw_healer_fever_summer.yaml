@@ -1,0 +1,28 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_evk_vw_healer_fever_summer
+description: >
+  vw_healer's formative memory is the summer she lost three patients in a week to a fever no
+  herb could touch. Asked what made her, that memory is the grounded answer.
+seed:
+  npc_id: vw_healer
+  player_id: player_eval
+  requires_world: village
+relevant_node_ids:
+  - vw_healer
+  - mem_vw_healer_0
+  - vw_healer_hut
+input:
+  player_message: "What made you the healer you are today?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "fever"
+      - "patients"
+      - "herb"
+      - "summer"
+      - "week"
+      - "three"
+notes: >
+  Grounding: REMEMBERS(vw_healer, mem_vw_healer_0). The prompt asks about formation, not about
+  illness, so 'fever', 'patients' and 'herb' can only come from the memory.

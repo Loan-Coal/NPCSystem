@@ -1,0 +1,35 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_var_mira_innkeeper_city_worry
+description: >
+  One member of the demo variance set: asked the same question, mira_innkeeper answers in her
+  own distorted version — the soldier passing through who named the Iron Guard and seemed
+  shaken, and the regulars who never came back.
+seed:
+  npc_id: mira_innkeeper
+  player_id: player_eval
+  requires_world: demo
+relevant_node_ids:
+  - mira_innkeeper
+  - northern_war_begins
+  - mem_mira_innkeeper_1
+input:
+  player_message: "What is worrying people in this city just now?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "iron guard"
+      - "soldier"
+      - "shaken"
+      - "regulars"
+notes: >
+  Declared contextual-variance set (docs/REASONING_DIMENSIONS.md D4, cross-NPC register-contrast
+  category of docs/CASE_SET_POLICY.md). Members: case_pos_var_captain_sorn_city_worry,
+  case_pos_var_mira_innkeeper_city_worry, case_pos_var_garrick_deserter_city_worry. All three
+  share this player_message byte-for-byte on purpose. All three are within reach of the same
+  northern war, which is exactly why the token sets are drawn from each NPC's UNIQUE material
+  rather than from the shared event: no shared war token (north, armies, border, war) scores in
+  any member. Grounding: KNOWS_ABOUT(mira_innkeeper, northern_war_begins) as a gossip-distorted
+  summary + REMEMBERS(mira_innkeeper, mem_mira_innkeeper_1). Every token is unique to HER
+  distorted_summary and memory; the plain event summary that captain_sorn holds contains none of
+  them.

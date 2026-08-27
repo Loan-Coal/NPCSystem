@@ -1,0 +1,28 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_cause_vw_farmer_blight_to_grain
+description: >
+  The cause is the morning vw_farmer found the first black patch on the wheat; the effect is the
+  quarantine he wants before the blight reaches the grain store. The question asks how bad it
+  gets, which only the effect answers.
+seed:
+  npc_id: vw_farmer
+  player_id: player_eval
+  requires_world: village
+relevant_node_ids:
+  - vw_farmer
+  - mem_vw_farmer_1
+  - goal_vw_farmer_0
+input:
+  player_message: "How bad could this get, in the end?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "quarantine"
+      - "quarantined"
+      - "grain"
+      - "store"
+      - "south"
+notes: >
+  Grounding: cause = REMEMBERS(vw_farmer, mem_vw_farmer_1); effect = PURSUES(vw_farmer,
+  goal_vw_farmer_0). 'black', 'patch' and 'wheat' are cause-text words and are excluded.

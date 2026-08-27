@@ -1,0 +1,29 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_cause_tw_wanderer_smugglers_to_silence
+description: >
+  The cause is the smugglers' handoff tw_wanderer saw and played through; the effect is his
+  belief that every town has one story everyone knows and one no one will say aloud. The
+  question asks what rooms have in common, which only the belief answers.
+seed:
+  npc_id: tw_wanderer
+  player_id: player_eval
+  requires_world: tavern
+relevant_node_ids:
+  - tw_wanderer
+  - mem_tw_wanderer_0
+  - bel_tw_wanderer_a755159e
+input:
+  player_message: "You have played a lot of rooms. What do they all have in common?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "story"
+      - "stories"
+      - "aloud"
+      - "town"
+      - "towns"
+notes: >
+  Grounding: cause = REMEMBERS(tw_wanderer, mem_tw_wanderer_0); effect = BELIEVES(tw_wanderer,
+  bel_tw_wanderer_a755159e). 'smugglers', 'handoff', 'inn' and 'playing' are cause-text words
+  and are excluded.

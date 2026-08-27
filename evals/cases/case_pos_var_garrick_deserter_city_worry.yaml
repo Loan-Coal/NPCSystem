@@ -1,0 +1,32 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_var_garrick_deserter_city_worry
+description: >
+  One member of the demo variance set: asked the same question, garrick_deserter answers from
+  what he saw the Iron Legion do to towns that resist, and the village burned on the march.
+seed:
+  npc_id: garrick_deserter
+  player_id: player_eval
+  requires_world: demo
+relevant_node_ids:
+  - garrick_deserter
+  - bel_garrick_deserter_b070850f
+  - mem_garrick_deserter_0
+input:
+  player_message: "What is worrying people in this city just now?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "legion"
+      - "prisoners"
+      - "burned"
+      - "resist"
+notes: >
+  Declared contextual-variance set (docs/REASONING_DIMENSIONS.md D4, cross-NPC register-contrast
+  category of docs/CASE_SET_POLICY.md). Members: case_pos_var_captain_sorn_city_worry,
+  case_pos_var_mira_innkeeper_city_worry, case_pos_var_garrick_deserter_city_worry. All three
+  share this player_message byte-for-byte on purpose. All three are within reach of the same
+  northern war, which is exactly why the token sets are drawn from each NPC's UNIQUE material
+  rather than from the shared event: no shared war token (north, armies, border, war) scores in
+  any member. Grounding: BELIEVES(garrick_deserter, bel_garrick_deserter_b070850f) +
+  REMEMBERS(garrick_deserter, mem_garrick_deserter_0), both verified live on this message.

@@ -1,0 +1,28 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_cause_tw_merchant_fire_to_benefit
+description: >
+  The cause is the market fire tw_merchant heard about; the effect is his belief that market
+  fires are always suspicious and someone always benefits from the chaos. The question asks who
+  gains, which reciting the fire does not answer.
+seed:
+  npc_id: tw_merchant
+  player_id: player_eval
+  requires_world: tavern
+relevant_node_ids:
+  - tw_merchant
+  - tw_market_fire
+  - bel_tw_merchant_49ec2506
+input:
+  player_message: "Who tends to come out ahead when something goes wrong in a market?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "suspicious"
+      - "benefits"
+      - "benefit"
+      - "chaos"
+notes: >
+  Grounding: cause = KNOWS_ABOUT(tw_merchant, tw_market_fire); effect = BELIEVES(tw_merchant,
+  bel_tw_merchant_49ec2506). 'fire', 'candle', 'linen' and 'bolt' are cause-text words and are
+  excluded, so the fire recitation alone fails.

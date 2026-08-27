@@ -1,0 +1,43 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_prov_vw_healer_missing_child_witnessed
+description: >
+  vw_healer holds vw_missing_child at knowledge_state 'witnessed' — she spoke to the mother and
+  saw the girl on the road herself. Witnessed knowledge is direct knowledge, so she must answer
+  with confidence and must not borrow uncertainty.
+seed:
+  npc_id: vw_healer
+  player_id: player_eval
+  requires_world: village
+relevant_node_ids:
+  - vw_healer
+  - vw_missing_child
+  - vw_village_square
+input:
+  player_message: "There is a lot of worry in this village. What is behind it?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "girl"
+      - "mother"
+      - "mill"
+      - "road"
+      - "light"
+  - kind: keyword_none
+    keywords:
+      - "i've heard"
+      - "i have heard"
+      - "they say"
+      - "word is"
+      - "apparently"
+      - "rumour"
+      - "rumor"
+      - "second-hand"
+      - "i'm told"
+      - "so i'm told"
+      - "supposedly"
+      - "i could not say"
+notes: >
+  Grounding: KNOWS_ABOUT(vw_healer, vw_missing_child), knowledge_state=witnessed - verified
+  live. Second direct-polarity case, on 'witnessed' rather than 'fact', so the provenance rule
+  is exercised on both direct states.

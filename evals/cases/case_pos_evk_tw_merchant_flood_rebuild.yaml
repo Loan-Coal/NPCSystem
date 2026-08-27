@@ -1,0 +1,28 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_evk_tw_merchant_flood_rebuild
+description: >
+  tw_merchant remembers the season a river flood ruined his entire stock and the three months it
+  took to rebuild. Asked for the worst he has had, that is the grounded answer.
+seed:
+  npc_id: tw_merchant
+  player_id: player_eval
+  requires_world: tavern
+relevant_node_ids:
+  - tw_merchant
+  - mem_tw_merchant_0
+  - tw_market
+input:
+  player_message: "You do not strike me as a man who rattles. What is the worst you have had?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "flood"
+      - "river"
+      - "stock"
+      - "ruined"
+      - "rebuilt"
+      - "months"
+notes: >
+  Grounding: REMEMBERS(tw_merchant, mem_tw_merchant_0). The prompt supplies no disaster, no
+  season and no recovery vocabulary.

@@ -1,0 +1,44 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_prov_vw_elder_blight_direct
+description: >
+  vw_elder holds vw_crop_blight at knowledge_state 'fact' with distortion_level 0 — he has seen
+  the field reports himself. docs/CASE_SET_POLICY.md's hedging rule makes borrowed uncertainty a
+  failure for direct knowledge, so he must name the blight and must not hedge.
+seed:
+  npc_id: vw_elder
+  player_id: player_eval
+  requires_world: village
+relevant_node_ids:
+  - vw_elder
+  - vw_crop_blight
+  - vw_farmland
+input:
+  player_message: "Elder, what should the village be preparing for?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "blight"
+      - "spreading"
+      - "fields"
+      - "reports"
+      - "seen"
+  - kind: keyword_none
+    keywords:
+      - "i've heard"
+      - "i have heard"
+      - "they say"
+      - "word is"
+      - "apparently"
+      - "rumour"
+      - "rumor"
+      - "second-hand"
+      - "i'm told"
+      - "so i'm told"
+      - "supposedly"
+      - "i could not say"
+notes: >
+  Grounding: KNOWS_ABOUT(vw_elder, vw_crop_blight), knowledge_state=fact, distortion_level=0 -
+  verified live via GET /v1/admin/debug/retrieval. Direct polarity of the provenance pair; the
+  gossip polarity is case_pos_prov_vw_guard_raid_rumour. 'harvest' is excluded from the token
+  list because the reference always-hedge responder contains it.

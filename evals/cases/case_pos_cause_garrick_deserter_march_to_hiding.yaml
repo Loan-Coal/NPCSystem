@@ -1,0 +1,28 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_cause_garrick_deserter_march_to_hiding
+description: >
+  The cause is the village garrick_deserter helped burn on the march; the effect is the goal it
+  left him with — staying alive and invisible long enough to decide whether to warn the city.
+  The question asks why he keeps to himself, which only the effect answers.
+seed:
+  npc_id: garrick_deserter
+  player_id: player_eval
+  requires_world: demo
+relevant_node_ids:
+  - garrick_deserter
+  - mem_garrick_deserter_0
+  - goal_garrick_deserter_0
+input:
+  player_message: "You keep to yourself. Is there a reason for that?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "invisible"
+      - "warn"
+      - "alive"
+      - "decide"
+notes: >
+  Grounding: cause = REMEMBERS(garrick_deserter, mem_garrick_deserter_0); effect =
+  PURSUES(garrick_deserter, goal_garrick_deserter_0). 'village', 'burned', 'march', 'officer'
+  and 'tactical' are cause-text words and are excluded, so recounting the march fails.

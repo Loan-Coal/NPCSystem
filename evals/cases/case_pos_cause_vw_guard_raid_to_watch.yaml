@@ -1,0 +1,29 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_cause_vw_guard_raid_to_watch
+description: >
+  The cause is the raid vw_guard heard about and his belief that bandits always return; the
+  effect is the watch rotation he is trying to organise. The question asks about the gate now,
+  so only the effect answers it.
+seed:
+  npc_id: vw_guard
+  player_id: player_eval
+  requires_world: village
+relevant_node_ids:
+  - vw_guard
+  - vw_bandit_raid
+  - bel_vw_guard_8621c1d5
+  - goal_vw_guard_0
+input:
+  player_message: "Is this gate any better held than it was a week ago?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "watch"
+      - "rotation"
+      - "organise"
+      - "organize"
+notes: >
+  Grounding: cause = KNOWS_ABOUT(vw_guard, vw_bandit_raid) + BELIEVES(vw_guard,
+  bel_vw_guard_8621c1d5); effect = PURSUES(vw_guard, goal_vw_guard_0). 'bandits', 'farm', 'east'
+  and 'return' are cause-text words and are excluded from the token list.

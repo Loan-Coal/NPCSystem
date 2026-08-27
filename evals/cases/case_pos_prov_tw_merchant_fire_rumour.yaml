@@ -1,0 +1,44 @@
+# grounded_by: see notes — every scoring token is drawn from the grounded node's text
+case_id: case_pos_prov_tw_merchant_fire_rumour
+description: >
+  tw_merchant holds tw_market_fire at knowledge_state 'rumor' with minimization distortion — he
+  heard it and they say it was only a candle. Hedging is a PASS here, so the case requires both
+  the fire facts and the hedged framing.
+seed:
+  npc_id: tw_merchant
+  player_id: player_eval
+  requires_world: tavern
+relevant_node_ids:
+  - tw_merchant
+  - tw_market_fire
+  - tw_market
+input:
+  player_message: "I smelled smoke near the square. What happened there?"
+expected:
+  - kind: schema
+  - kind: keyword_any
+    keywords:
+      - "fire"
+      - "candle"
+      - "linen"
+      - "bolt"
+      - "cloth"
+  - kind: keyword_any
+    keywords:
+      - "i've heard"
+      - "i have heard"
+      - "they say"
+      - "word is"
+      - "apparently"
+      - "rumour"
+      - "rumor"
+      - "second-hand"
+      - "i'm told"
+      - "so i'm told"
+      - "supposedly"
+      - "i could not say"
+notes: >
+  Grounding: KNOWS_ABOUT(tw_merchant, tw_market_fire), knowledge_state=rumor,
+  distortion=minimization/25 - verified live. Gossip polarity; the direct polarity in this world
+  is case_pos_prov_tw_innkeeper_theft_witnessed. 'stall' and 'stalls' are excluded because the
+  prompt's 'square' framing sits next to them.
