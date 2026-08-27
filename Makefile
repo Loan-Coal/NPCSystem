@@ -18,7 +18,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         type-ratchet type-ratchet-update type-evals type-evals-update check-harness \
         test-cov-evals \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-supply-report probe-inner-life probe-ceiling eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
         seed-tavern-world seed-village-world package eval-dashboard
@@ -294,6 +294,24 @@ eval-retrieval:
 # Usage: make probe-inner-life LABEL="post-P9"
 probe-inner-life:
 	API_KEY_SECRET="$(API_KEY)" $(PYTHON) scripts/probe_inner_life.py "$(or $(LABEL),unlabelled)" $(ARGS)
+
+# probe-ceiling: the 8-NPC assembled-context CEILING probe (P10/DEC-215). Reports what
+# context assembly COSTS per NPC, which is the number probe-inner-life cannot give — it
+# reports slot PRESENCE and never a token total. This is P10's primary trim input.
+#
+# Two totals are printed because the route returns two that differ: `summed` is the
+# receipt's per-item sum, `serial` is the serialized blob the budget is actually enforced
+# against. CEILING is the larger, because a window sized to the smaller has headroom that
+# does not exist. Parse pinned by tests/unit/scripts/test_probe_context_ceiling.py.
+#
+# It also answers P10 gate 11: per NPC, whether the CONFIGURED window re-opens ISSUE-209's
+# non-monotone tier-A skip. Run it at the POST-TRIM window — at a window where nothing is
+# dropped the answer is vacuous.
+#
+# No LLM is called; the debug route assembles context and returns the receipt.
+# Usage: make probe-ceiling LABEL="P10 16384" [ARGS="--retrieval-profile no_rag"]
+probe-ceiling:
+	API_KEY_SECRET="$(API_KEY)" $(PYTHON) scripts/probe_context_ceiling.py "$(or $(LABEL),unlabelled)" $(ARGS)
 
 # eval-supply-report: measured supply per ceiling knob, over the 8-NPC probe roster.
 # Run this BEFORE declaring an A/B arm (DEC-214). It answers the question the receipts
