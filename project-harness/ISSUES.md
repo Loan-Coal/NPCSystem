@@ -1437,3 +1437,42 @@ change with its own review, and it would alter every eval world's baseline mid-p
 and re-baseline. If no, delete `_maybe_append_top_need` and the `top_need` slot from the
 serializer, and stop paying for the read on every turn. Either way the prompt stops carrying a
 permanently-null field. Pairs with P5, which decides slot membership anyway.
+
+## ISSUE-211: P8's hydrator is specced to run before the only thing that writes embeddings
+**Found:** 2026-08-27, during P6's eval-world re-seed (DEC-206)
+**Severity:** P1 (blocking) — for P8 specifically; it would make that phase's deliverable
+(`item_count > 0`) unreachable while looking like a data problem
+**Where:** the P8 spec (`vector_store_hydrator.hydrate_once`, called from `main.py`), against
+`retrieval/embedding/embedding_reconciler.py:run_forever` and
+`evals/fixtures/eval_world_baseline.json`
+**Description:** P8 says to call `hydrate_once()` **awaited, in `main.py`, before the
+reconciler task**, reading `n.embedding` values "already persisted in Neo4j" with no
+re-encode. Two facts make that read empty:
+
+1. The checked-in eval-world baseline carries **no** `embedding` property on any node. DEC-206
+   strips them deliberately — they are derived data, they tripled the fixture, and baking them
+   in couples a world fixture to whatever `EMBEDDING_MODEL` produced them, which the
+   reconciler cannot detect because it compares timestamps, not model identity.
+2. `EmbeddingReconciler.run_forever` is the only thing that writes them, and it calls
+   `reconcile_once()` BEFORE its first sleep — so embeddings exist a few seconds AFTER the
+   reconciler task starts, which is strictly after the point P8 wants to read them.
+
+So immediately after `make eval-world-reset`, a hydrator running at P8's specified point
+reads zero rows and reports `nodes_read=0`. That failure looks exactly like "the world has no
+embeddings yet", which is true but is a race, not a data problem — and P8's verification step
+(`/v1/admin/debug/vector-store` → `item_count > 0`) would fail with no indication of why.
+
+The ordering in the plan was not arbitrary: it exists because
+`restore-with-app-stopped` waits only on `/health`, so a hydration running as a background
+task would race the eval run. That constraint still holds; only the position relative to the
+reconciler is wrong.
+**Why deferred:** it is P8's decision to make, and P6 is scoped to the declaration table.
+Logging it now so P8 does not spend the debugging time rediscovering it.
+**To fix:** pick one, in P8, and record which:
+  (a) await ONE `reconcile_once()` before `hydrate_once()`, both before the reconciler's
+      `run_forever` task — keeps "no re-encode", still finishes before `/health`, costs one
+      synchronous sweep at boot;
+  (b) let the hydrator encode what it finds unembedded, which duplicates the reconciler;
+  (c) put embeddings back in the baseline and accept the model-coupling DEC-206 rejected.
+(a) is the obvious one; it needs measuring, because the sweep is synchronous and
+`/health` gates the eval run.

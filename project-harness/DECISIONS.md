@@ -5465,3 +5465,98 @@ probe, because `GET /v1/admin/debug/retrieval` passes **no `player_id` and no
 unit tests and structurally in the live skeleton, but not end-to-end on a real turn. That is
 the same instrument gap the plan's review point 1 raises against the 8/8 headline, and P9
 closes it by giving the debug route the dialogue turn's parameters.
+
+---
+
+## DEC-206: the eval-world baseline is re-seeded to contain the reputation acts Rule 13
+## describes, and the regeneration procedure now names what must be OFF while it runs
+**Date:** 2026-08-27
+**Decided by:** this session, P6 of the context-pipeline plan; approach chosen by the human
+via `AskUserQuestion` ("wire it + seed the eval world", then "regenerate now").
+
+**Context.** DEC-205 wired `propagated_reputation`'s producer, but the slot stayed `[]`
+because `evals/fixtures/eval_world_baseline.json` held **zero** `Event` nodes with
+`event_type = 'reputation_change'`. The write path was never broken — `POST /v1/reputation`
+with `location_id` + `tick_id` creates one and `demo_game/runners/run_scenes.py` exercises it
+— no seeder ever called it. So `system_v1.yaml` Rule 13's ~19 lines were dead weight in every
+prompt ever generated.
+
+**Decision 1 — seed two acts with opposite signs and three `KNOWS_ABOUT` edges covering both
+knowledge states.** Rule 13 branches four ways: positive delta → cautious warmth, negative →
+guarded suspicion; `knowledge_state = "rumor"` → MUST hedge, `"knows"` → speak as personal
+knowledge. One act of each sign and one edge of each state makes all four branches reachable
+and the hedging requirement observable in a transcript rather than only in the prompt.
+
+**Decision 2 — attribute them to `player_demo`, not `player_eval`.**
+`CYPHER_PROPAGATED_REPUTATION_FOR_NPC` matches the event's `src_character_id` against **the
+turn's** player id, and `player_demo` is the only player `Character` the baseline contains.
+An act attributed to a player with no node is an act no NPC can ever recall.
+`test_the_attributed_player_exists_in_the_checked_in_baseline` asserts this against the
+fixture file itself, so a future seeder change cannot quietly break it.
+
+**Decision 3 — the regeneration procedure names what must be OFF, because the first attempt
+was wrong and the diff caught it.** DEC-179 says regenerate this fixture "only via a
+deliberate, logged re-seed, never by hand-editing", but it does not say the engine has to be
+quiet while you do it. It does. The first regeneration — restore → seed → snapshot with the
+app running normally — produced:
+
+    +2   Event (the intended ones)
+    +24  FactionStandingEvent      } written by the tick autopilot in the ~3 minutes
+    +5   Quest                     } between the restore and the snapshot
+    +1   Chapter                   }
+    +49  nodes gaining `embedding`   written by the embedding reconciler at startup
+
+which is precisely the accumulated run state DEC-179 exists to keep OUT ("the live graph held
+31,215 Quest nodes … not a usable baseline"). **That snapshot was discarded, not committed.**
+The procedure is now:
+
+1. `TICK_AUTOPILOT_ENABLED=false` in `.env`, restart. Verify zero `autopilot_tick_advanced`
+   lines before proceeding — the flag is worth nothing unverified.
+2. `make eval-world-reset`
+3. `make seed-village-world` (idempotent)
+4. snapshot to `evals/fixtures/eval_world_baseline.json`
+5. strip the derived embedding fields (below)
+6. remove the `.env` flag, restart, confirm ticking resumes
+7. **diff the fixture against its previous version and read every line of the diff**
+
+**Decision 4 — strip `embedding` / `last_embedding_indexed_at` from the fixture.**
+`EmbeddingReconciler.run_forever` calls `reconcile_once()` BEFORE its first sleep, so it
+writes vectors at process start no matter what the interval is; the flag in step 1 cannot
+prevent it. Keeping them tripled the fixture (154 KB → 576 KB) and would have coupled a
+world-state fixture to whatever `EMBEDDING_MODEL` was configured when it was taken — a
+mismatch the reconciler cannot detect, because it compares `last_embedding_indexed_at`
+against `last_graph_updated_at`, never model identity. This removes only fields the engine
+recomputes in seconds; it is part of the procedure, not a hand-edit of world content.
+
+**The committed diff, read in full:**
+
+    nodes  248 -> 250      +2 Event, reputation_change, vw_farmers +25 / vw_village_council -20
+    rels   233 -> 236      +3 KNOWS_ABOUT: vw_farmer, vw_healer (helped), vw_guard (crossed)
+    removed                none
+    changed props          world_village: seeder upserts world_state, timestamps refresh
+                           aldric_deliver_quest:player_demo: created_at/updated_at change FORM
+    file   154,347 -> 156,751 chars
+
+That last one deserves a note rather than a shrug. `created_at` went from
+`{"__neo4j_type__": "DateTime", "value": "..."}` to a plain ISO string — and that is
+`snapshot.py:_deserialize_value` doing exactly what its docstring says, converting type-tagged
+temporals back to plain strings on restore. The old fixture claimed a shape the restore had
+never actually produced. **The new fixture is idempotent under restore → snapshot where the
+old one was not**, which is a small gain in honesty, not a regression.
+
+**Verified end to end**, through the real context builder with `player_id="player_demo"`:
+
+    vw_farmer   [{faction_id: vw_farmers,          delta:  25, knowledge_state: knows}]
+    vw_guard    [{faction_id: vw_village_council,  delta: -20, knowledge_state: rumor}]
+    vw_healer   [{faction_id: vw_farmers,          delta:  25, knowledge_state: rumor}]
+    vw_elder    []
+
+All four fields Rule 13 reads by name are present, both signs and both knowledge states are
+represented, and the NPC who heard nothing correctly carries nothing. **This is the first time
+that slot has carried content in this project.**
+
+**Consequence for P8, and it contradicts the plan.** P8 specifies calling
+`hydrate_once()` **awaited, before the reconciler task**, reading `n.embedding` already
+persisted in Neo4j. After this change the baseline carries **no** embeddings, so at that
+point in startup there is nothing to read and the hydrator would report zero. P8 must either
+run after the reconciler's first sweep or encode what it needs. Logged as ISSUE-211.
