@@ -18,7 +18,7 @@ API_KEY  ?= $(shell $(PYTHON) -c "import re; m=re.search(r'^API_KEY_SECRET=(.+)'
         type-ratchet type-ratchet-update type-evals type-evals-update check-harness \
         test-cov-evals \
         verify-v13 verify-v14-p0 verify-v14-p1 verify-v14-p2 verify-v14-p3 verify-v14-p4 verify-v14-p5 \
-        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
+        eval eval-report eval-anti-hallucination eval-e2e eval-generate eval-judge eval-score eval-calibrate eval-adjudicate eval-retrieval eval-arm-probe probe-inner-life eval-compare eval-deterministic-verdicts eval-replay-criteria eval-sequence eval-harness check-dead-keywords mock-calibrate mock-calibrate-oracle measure-reset-fidelity label-export label-import scenarios scenario-edge scenario-demo demo-video eval-llm eval-llm-demo eval-combined draft-cases hedge-probe seed-probe seed-api smoke \
         demo demo-seed demo-run demo-village demo-tavern test-demo dashboard \
         demo-snapshot demo-restore eval-world-reset restore-with-app-stopped \
         seed-tavern-world seed-village-world package eval-dashboard
@@ -279,6 +279,21 @@ eval-retrieval:
 		python -m evals retrieval \
 		$(if $(GEN_ID),--gen-dir /work/evals/generations/$(GEN_ID),) \
 		$(if $(RETRIEVAL_PROFILE),--retrieval-profile $(RETRIEVAL_PROFILE),)
+
+# probe-inner-life: the 8-NPC inner-life probe (ISSUE-216). Reports which context slots
+# are actually POPULATED per NPC — the instrument behind every "beliefs 8/8, goals 8/8,
+# memories 8/8, current_location 8/8, was 0/975" figure from P0 to P8.
+#
+# It lived in a session scratchpad until P9, so it was rewritten from prose before each
+# use; in P8 the reconstruction parsed the wrong response shape and reported a false 0/8
+# before being corrected. Its parse is now pinned by
+# tests/unit/scripts/test_probe_inner_life.py.
+#
+# player_relation tracks LIVE world state (an ordinary dialogue turn creates a RELATES_TO
+# edge), so it is comparable across phases ONLY immediately after `make eval-world-reset`.
+# Usage: make probe-inner-life LABEL="post-P9"
+probe-inner-life:
+	API_KEY_SECRET="$(API_KEY)" $(PYTHON) scripts/probe_inner_life.py "$(or $(LABEL),unlabelled)" $(ARGS)
 
 # eval-arm-probe: the P9 gate. Four ordered gates over 2 cases x N arms at k=1 — config,
 # corpus, cache isolation, effect — diffing each arm's item_keys and tier_spend through
