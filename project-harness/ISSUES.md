@@ -1647,3 +1647,32 @@ player) from `get_rag_scope_ids_for_npc`, the same way `known_event_ids` is subt
 the caller. Add `test_the_rag_scope_never_contains_the_player_being_talked_to`. Verify with
 `make eval-arm-probe`: `rag:player_demo` must disappear from captain_sorn's default keys
 and the tier-B count drop from 2 to 2 with a different member, not to 1.
+
+## ISSUE-220: the retrieval probe still assembles one fewer tier-0 item than a dialogue turn
+**Found:** 2026-08-27, during P9 final verification (DEC-213)
+**Severity:** P3 (nice-to-fix - 1 item / 18 tokens; parity is otherwise exact)
+**Where:** `src/npc_engine/api/routes/admin/debug_retrieval.py::get_debug_retrieval`
+**Description:** P9 gave the probe the dialogue turn's `player_id`, `retrieval_profile`,
+session turns and cache parameters, and parity is now exact on the three tiers that
+matter. Measured back to back on the clean eval baseline, captain_sorn / "what news":
+
+    dialogue turn   tier0 3/93   tierA 8/687   tierB 2/93   tierC 3/140   total 1013
+    debug probe     tier0 2/75   tierA 8/687   tierB 2/93   tierC 3/140   total  995
+
+tierA, tierB and tierC agree exactly, including the `rag:` members. The residual is
+`system_state`: `build_serialized_context_with_receipt` takes a `system_state_context`
+argument, the dialogue handler passes one, and this route passes None. The slot is still
+EMITTED (P6 makes every declared slot unconditional), so the JSON schema the model sees is
+unchanged; it is emitted empty.
+
+Consequence is small but real: any P10 number quoted from the probe understates a real
+turn's tier-0 spend by ~18 tokens, and `system_state` is the one slot the probe cannot
+observe at all.
+**Why deferred:** it is a `src/` change, and P9's own hard rule is that no `src/` change
+lands after the gates run. Found DURING the final verification pass, after the gates.
+Fixing it now would re-arm the whole phase for 18 tokens.
+**To fix:** thread a `system_state_context` through the route the way the dialogue handler
+builds it, or expose the handler's builder so both call sites share one construction. Add
+a parity test asserting the probe and a dialogue turn produce the same tier-0 item COUNT
+for one fixture NPC. Verify by re-running the back-to-back comparison above: tier0 must
+read 3/93 on both sides.

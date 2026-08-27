@@ -5984,6 +5984,12 @@ declared.** That is a successful P9. The alternative was discovering it ten hour
 
 ### Gate 4, in full
 
+**These first numbers were taken on a world that had DRIFTED** — verification dialogue
+turns had run since the last reset. They are superseded by the clean-baseline table under
+"Gate 4 re-measured on the clean baseline" below, and are kept because the difference
+between them is itself the finding. I walked into DEC-212's own trap while writing the
+correction to it.
+
     npc            arm          tier0    tierA     tierB    tierC   total
     captain_sorn   default      2/76     9/727     2/93     3/123    1019
                    no_rag       2/76     9/727     0/0      0/0       803
@@ -6198,3 +6204,92 @@ the issue stays open.
 arm can produce an effect on this corpus), ISSUE-218 (`wide_events` has structurally zero
 exposure), ISSUE-219 (`rag:player_demo` — the player node is inside the RAG scope and is
 retrievable as context about the NPC).
+
+### Gate 4 re-measured on the CLEAN baseline — the authoritative numbers
+
+Re-run after `docker compose up -d --build app` and `make eval-world-reset`, with every
+`src/` change of this phase landed. `nodes_read=51`, `corpus_sha=2b19e47a1755354e...`.
+
+    captain_sorn   SUPPLY at default: event:=1  rag:=5
+      default      tier0 2/75  tierA 8/687  tierB 2/93  tierC 3/140   total 995
+      no_rag       tier0 2/75  tierA 8/687  tierB 0/0   tierC 0/0     total 762
+                   -[rag:lira_fence, rag:vex_spymaster, rag:harwick_guard,
+                     rag:loc_guard_barracks, rag:bren_smith]
+      wide_events  IDENTICAL to default
+      wide_rag     IDENTICAL to default
+    old_henryk     SUPPLY at default: event:=1  rag:=4
+      default      tier0 2/75  tierA 8/708  tierB 2/89  tierC 2/90    total 962
+      no_rag       tier0 2/75  tierA 8/708  tierB 0/0   tierC 0/0     total 783
+                   -[rag:loc_market_square, rag:aldric_merchant, rag:mira_innkeeper,
+                     rag:tilda_herbalist]
+      wide_events  IDENTICAL to default
+      wide_rag     IDENTICAL to default
+
+**On the clean baseline `wide_rag` differs on 0/2 cases, not 1/2.** The earlier
+`rag:bren_smith` gain, and the `rag:player_demo` item in captain_sorn's earlier default
+set, were both artifacts of a drifted world: dialogue turns create `RELATES_TO` edges,
+which enlarge the 1-hop scope, which enlarges the candidate set. Measured cleanly:
+
+    npc              known_ev  scope  IN CORPUS   headroom at top_k=15
+    captain_sorn            1     23          5          0
+    old_henryk              1     11          4          0
+    mira_innkeeper          1     14          6          1
+    lira_fence              1     19          8          3
+    bren_smith              0     12          3          0
+    aldric_merchant         0     16          5          0
+
+Default `rag_top_k` is 5. **Headroom is ZERO for four of six NPCs and for both probe
+cases.** Every NPC knows **1 or 0** events against an `events_limit` of 5, so
+`wide_events`'s headroom is zero for all of them.
+
+**Corrected verdict: TWO of the three declared arms have zero exposure on the clean
+baseline, not one.** Only `no_rag` differs, removing 5 and 4 `rag:` items and 233 and 179
+tokens. The recommendation stands and strengthens: **if P10 runs, run `default` vs
+`no_rag` only.**
+
+Arm probe runtime on the clean baseline: **8.9s** (37.4s on the first run, which included
+a cold rehydrate).
+
+### Probe/dialogue-turn parity, verified rather than asserted
+
+Back to back on the clean baseline, captain_sorn / "what news":
+
+    dialogue turn   tier0 3/93   tierA 8/687   tierB 2/93   tierC 3/140   total 1013
+    debug probe     tier0 2/75   tierA 8/687   tierB 2/93   tierC 3/140   total  995
+
+tierA, tierB and tierC agree EXACTLY, including the `rag:` members — which is what makes
+the probe a legitimate stand-in for a dialogue turn at 1/50th the cost (D16). The dialogue
+row also reproduces DEC-212's recorded captain_sorn row exactly.
+
+The one residual gap is `system_state`: the route passes no `system_state_context`. One
+item, ~18 tokens, slot still emitted (empty) so the schema is unchanged. Logged as
+**ISSUE-220** rather than fixed, because it was found DURING final verification, after the
+gates ran, and P9's own rule is that no `src/` change lands after that point. Fixing 18
+tokens is not worth re-arming the phase.
+
+### Final verification, measured
+
+    docker compose up -d --build app        exit 0
+    make check                              exit 0
+                                            src coverage 87.85% (P8: 87.84%)
+                                            3933 passed, 36 skipped
+                                            evals coverage 79.53% (gate 75%)
+    make eval-world-reset                   exit 0
+    POST /vector-store/rehydrate            nodes_read=51, sha 2b19e47a1755354e...
+    make eval-arm-probe                     exit 2 — gate 4 FAILS, as reported above
+    probe-inner-life (clean baseline)       beliefs 8/8 · goals 8/8 · memories 8/8
+                                            current_location 8/8 · retrieved_context 8/8
+                                            nearby_npcs 7/8
+                                            player_relation 0/8 · player_reputation 0/8
+                                            propagated_reputation 0/8  (the WORLD, not the
+                                            instrument — see contradiction 4 above)
+
+`make eval-arm-probe` exiting non-zero is the DESIGNED outcome of a real finding, not a
+broken target. Gates 1, 2 and 3 pass; gate 4 fails because two declared arms cannot
+produce a measurable difference on this world.
+
+**A src/ change DID land after the first gate run** — `read_vector_store_state` was over
+the 40-line cap and `make check` refused it. Per the phase's own rule the gates were
+therefore re-run from scratch after `docker compose up -d --build app`, and the numbers
+above are from that second run. The rule earned its keep: the re-run is where `wide_rag`
+turned out to have zero exposure too.
